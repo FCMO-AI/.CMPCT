@@ -140,3 +140,5 @@ jobs:
           PY
       - name: Committed golden direct-codec ABI gate
         run: python tests/native_golden_abi.py
+      - name: Committed golden chunk-map ABI gate
+        run: python tests/native_chunk_golden_abi.py
