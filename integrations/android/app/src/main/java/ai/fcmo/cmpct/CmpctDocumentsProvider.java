@@ -9,7 +9,6 @@ import android.provider.DocumentsProvider;
 import android.util.Base64;
 
 import java.io.FileNotFoundException;
-import java.io.FileOutputStream;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
@@ -204,8 +203,11 @@ public final class CmpctDocumentsProvider extends DocumentsProvider {
             long size,
             ParcelFileDescriptor writeSide,
             CancellationSignal signal) {
-        try (ParcelFileDescriptor ignored = writeSide;
-             FileOutputStream out = new FileOutputStream(writeSide.getFileDescriptor());
+        // Footnote: AutoCloseOutputStream owns the write-side descriptor. Wrapping the same raw file
+        // descriptor in a FileOutputStream while also closing ParcelFileDescriptor separately creates
+        // double-close races that are harmless on many devices but are not a sound provider contract.
+        try (ParcelFileDescriptor.AutoCloseOutputStream out =
+                     new ParcelFileDescriptor.AutoCloseOutputStream(writeSide);
              CmpctNative.Archive archive = new CmpctNative.Archive(record.file.getAbsolutePath())) {
             long offset = 0;
             while (offset < size) {
