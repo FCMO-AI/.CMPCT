@@ -39,6 +39,9 @@ jobs:
           root=Path('/tmp/cmpct-native-src');root.mkdir()
           (root/'dir').mkdir();(root/'dir'/'hello.txt').write_text('hello native CMPCT\n')
           (root/'payload.bin').write_bytes((b'abc123' * 100000))
+          # Incompressible direct content exercises the first native member/range path. The fixture is
+          # generated per run because byte identity is checked against the Python oracle, not a seed.
+          (root/'raw.bin').write_bytes(os.urandom(1024*1024))
           os.symlink('dir/hello.txt', root/'hello-link')
           PY
           python -m cmpct create /tmp/cmpct-native-src /tmp/native.cmpct >/tmp/python-build.json
@@ -58,6 +61,9 @@ jobs:
         run: |
           python - <<'PY'
           import ctypes
+          from pathlib import Path
+          from cmpct.reader import CMPCT
+
           lib=ctypes.CDLL('native/cmpct-core/target/release/libcmpct_core.so')
           handle=ctypes.c_void_p()
           lib.cmpct_open.argtypes=[ctypes.c_char_p,ctypes.POINTER(ctypes.c_void_p)]
@@ -66,15 +72,34 @@ jobs:
           lib.cmpct_entry_count.restype=ctypes.c_size_t
           lib.cmpct_entry_path.argtypes=[ctypes.c_void_p,ctypes.c_size_t,ctypes.c_void_p,ctypes.c_size_t,ctypes.POINTER(ctypes.c_size_t)]
           lib.cmpct_entry_path.restype=ctypes.c_int32
+          lib.cmpct_entry_read_range.argtypes=[ctypes.c_void_p,ctypes.c_size_t,ctypes.c_uint64,ctypes.c_void_p,ctypes.c_size_t,ctypes.POINTER(ctypes.c_size_t)]
+          lib.cmpct_entry_read_range.restype=ctypes.c_int32
           lib.cmpct_close.argtypes=[ctypes.c_void_p]
           assert lib.cmpct_open(b'/tmp/native.cmpct',ctypes.byref(handle))==0
           try:
-              assert lib.cmpct_entry_count(handle)==4
-              n=ctypes.c_size_t()
-              assert lib.cmpct_entry_path(handle,0,None,0,ctypes.byref(n))==0
-              buf=ctypes.create_string_buffer(n.value+1)
-              assert lib.cmpct_entry_path(handle,0,buf,len(buf),ctypes.byref(n))==0
-              assert buf.value
+              count=lib.cmpct_entry_count(handle)
+              assert count==5
+              paths=[]
+              for i in range(count):
+                  n=ctypes.c_size_t()
+                  assert lib.cmpct_entry_path(handle,i,None,0,ctypes.byref(n))==0
+                  buf=ctypes.create_string_buffer(n.value+1)
+                  assert lib.cmpct_entry_path(handle,i,buf,len(buf),ctypes.byref(n))==0
+                  paths.append(buf.value.decode())
+              raw_index=paths.index('raw.bin')
+              offset=333333
+              length=8192
+              out=ctypes.create_string_buffer(length)
+              got_n=ctypes.c_size_t()
+              assert lib.cmpct_entry_read_range(handle,raw_index,offset,out,length,ctypes.byref(got_n))==0
+              assert got_n.value==length
+              with CMPCT(Path('/tmp/native.cmpct')) as ar:
+                  want=ar.read_range('raw.bin',offset,length)
+              assert out.raw[:got_n.value]==want
+              # Bounds and unsupported representations are typed rather than becoming short reads.
+              assert lib.cmpct_entry_read_range(handle,raw_index,1024*1024-4,out,8,ctypes.byref(got_n))==-6
+              compressed_index=paths.index('payload.bin')
+              assert lib.cmpct_entry_read_range(handle,compressed_index,0,out,8,ctypes.byref(got_n))==-7
           finally:
               lib.cmpct_close(handle)
           PY
