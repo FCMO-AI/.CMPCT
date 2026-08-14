@@ -18,6 +18,14 @@ integrations on one parser/ABI rather than four divergent format implementations
 - cross-check the native view against a Python-built archive in CI, including a ctypes caller that uses
   the produced shared library rather than Rust internals.
 
+## CI acceptance gates
+
+A native-core change is not ready merely because it compiles. The permanent CI gate requires Rust
+formatting, clippy with warnings denied, unit tests, a release build, exact entry-view comparison against
+a revision-24 archive created by the Python oracle, and a non-Rust ctypes caller opening/enumerating the
+produced shared library. Future member/range APIs must extend these cross-language gates rather than
+replacing them with native-only tests.
+
 ## Deliberately not claimed yet
 
 This is **not yet the shipping archive handler**. It does not yet implement tail/journal recovery,
