@@ -153,7 +153,7 @@ fn map_field<'a>(value: &'a Value, key: &str) -> Result<&'a Value, CmpctError> {
 }
 
 fn canonical_path(raw: &str) -> Result<String, CmpctError> {
-    if raw.is_empty() || raw.as_bytes().len() > MAX_PATH_BYTES || raw.contains('\0') {
+    if raw.is_empty() || raw.len() > MAX_PATH_BYTES || raw.contains('\0') {
         return Err(CmpctError::Path(raw.into()));
     }
     if raw.starts_with('/') || raw.starts_with('\\') {
