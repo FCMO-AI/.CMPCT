@@ -140,6 +140,23 @@ jobs:
           PY
       - name: Native list/range CLI gate
         run: python tests/native_cli.py
+      - name: Native CLI vs ZIP semantic parity smoke
+        run: |
+          python benchmarks/native_cli_zip_parity.py \
+            --cmpct-native native/cmpct-core/target/release/cmpct-native \
+            --kind incompressible \
+            --size-mib 1 \
+            --repeats 3 \
+            --output /tmp/native-cli-zip-parity.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          result=json.loads(Path('/tmp/native-cli-zip-parity.json').read_text())
+          assert result['schema']=='cmpct-native-cli-zip-parity-v1'
+          assert result['semantic_equivalence']['operation']=='open archive and emit complete regular-file member bytes'
+          assert len(result['measurements_ms']['cmpct_raw'])==3
+          assert len(result['measurements_ms']['zip_raw'])==3
+          PY
       - name: Committed golden direct-codec ABI gate
         run: python tests/native_golden_abi.py
       - name: Committed golden chunk-map ABI gate
