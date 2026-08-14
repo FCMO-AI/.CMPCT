@@ -1,10 +1,9 @@
 //! Memory-safe read-only CMPCT core.
 //!
-//! This first native slice deliberately stops at the authenticated primary index. It gives platform
-//! handlers one small, shared implementation for opening a revision-24 archive and enumerating its
-//! logical tree without importing the Python encoder/mutator stack. Blob decoding and transactional
-//! generation recovery remain in the Python oracle until they are ported behind the same conformance
-//! gates.
+//! The native slice now authenticates the primary index, enumerates its logical tree, and can read
+//! bounded byte ranges from direct RAW members. That is deliberately narrower than the Python oracle:
+//! compressed codecs, chunk maps, sparse maps, virtual containers and transactional recovery remain
+//! behind explicit unsupported errors until each representation has its own conformance gate.
 
 use rmpv::Value;
 use serde::Serialize;
@@ -12,17 +11,23 @@ use sha2::{Digest, Sha256};
 use std::collections::HashSet;
 use std::ffi::CStr;
 use std::fs::File;
-use std::io::{Cursor, Read};
+use std::io::{Cursor, Read, Seek, SeekFrom};
 use std::os::raw::{c_char, c_int};
 use std::path::Path;
 use std::ptr;
+use std::sync::Mutex;
 use thiserror::Error;
 
 const MAGIC: &[u8; 8] = b"CMPCT24\0";
+const BLOB_MAGIC: &[u8; 4] = b"CMA4";
 const VERSION: u16 = 24;
 const HEADER_SIZE: usize = 68;
+const BLOB_HEADER_SIZE: usize = 64;
+const CODEC_RAW: u8 = 0;
+const STORAGE_BLOB: u64 = 0;
 const MAX_INDEX_BYTES: u64 = 256 * 1024 * 1024;
 const MAX_FILES: usize = 4_000_000;
+const MAX_BLOBS: usize = 4_000_000;
 const MAX_PATH_BYTES: usize = 1024 * 1024;
 
 #[derive(Debug, Error)]
@@ -47,6 +52,26 @@ pub enum CmpctError {
     Schema(String),
     #[error("unsafe or ambiguous logical path: {0}")]
     Path(String),
+    #[error("member representation is not implemented by the native read-only core")]
+    Unsupported,
+    #[error("requested member range is outside the logical file")]
+    Range,
+    #[error("physical blob header does not match the authenticated index")]
+    BlobHeader,
+}
+
+#[derive(Debug, Clone)]
+struct Blob {
+    offset: u64,
+    usize: u64,
+    csize: u64,
+    codec: u8,
+    meta_len: u32,
+}
+
+#[derive(Debug, Clone, Copy)]
+struct DirectBlob {
+    index: usize,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -56,12 +81,18 @@ pub struct Entry {
     pub mode: u32,
     pub mtime_ns: i64,
     pub size: u64,
+    #[serde(skip)]
+    direct_blob: Option<DirectBlob>,
 }
 
 #[derive(Debug)]
 pub struct Archive {
     revision: u16,
     entries: Vec<Entry>,
+    blobs: Vec<Blob>,
+    data_base: u64,
+    data_end: u64,
+    file: Mutex<File>,
 }
 
 impl Archive {
@@ -94,13 +125,13 @@ impl Archive {
         if compressed_len > MAX_INDEX_BYTES || uncompressed_len > MAX_INDEX_BYTES {
             return Err(CmpctError::IndexLimit);
         }
-        let primary_end = (HEADER_SIZE as u64)
+        let data_base = (HEADER_SIZE as u64)
             .checked_add(compressed_len)
             .ok_or(CmpctError::IndexLimit)?;
-        let base_data_end = primary_end
+        let data_end = data_base
             .checked_add(data_span)
             .ok_or(CmpctError::IndexLimit)?;
-        if primary_end > file_len || base_data_end > file_len {
+        if data_base > file_len || data_end > file_len {
             return Err(CmpctError::Truncated);
         }
 
@@ -126,8 +157,16 @@ impl Archive {
                 "trailing bytes after root index object".into(),
             ));
         }
-        let entries = parse_entries(&index)?;
-        Ok(Self { revision, entries })
+        let blobs = parse_blobs(&index, data_span)?;
+        let entries = parse_entries(&index, blobs.len())?;
+        Ok(Self {
+            revision,
+            entries,
+            blobs,
+            data_base,
+            data_end,
+            file: Mutex::new(file),
+        })
     }
 
     pub fn revision(&self) -> u16 {
@@ -137,6 +176,73 @@ impl Archive {
     pub fn entries(&self) -> &[Entry] {
         &self.entries
     }
+
+    /// Read a byte range from a direct RAW member without materializing the rest of the file.
+    ///
+    /// Footnote: range reads intentionally mirror the Python oracle's RAW fast path. We cross-check
+    /// the physical blob frame against the authenticated index before returning bytes, but do not
+    /// pretend a partial read verifies the whole-file CRC/SHA. Strong whole-file verification remains
+    /// a separate operation until authenticated chunk/range proofs are part of the format contract.
+    pub fn read_range(&self, entry_index: usize, start: u64, out: &mut [u8]) -> Result<usize, CmpctError> {
+        let entry = self.entries.get(entry_index).ok_or(CmpctError::Range)?;
+        let end = start
+            .checked_add(out.len() as u64)
+            .ok_or(CmpctError::Range)?;
+        if end > entry.size {
+            return Err(CmpctError::Range);
+        }
+        if out.is_empty() {
+            return Ok(0);
+        }
+        let direct = entry.direct_blob.ok_or(CmpctError::Unsupported)?;
+        let blob = self.blobs.get(direct.index).ok_or_else(|| {
+            CmpctError::Schema("direct member references missing blob".into())
+        })?;
+        if blob.codec != CODEC_RAW || blob.usize != entry.size || blob.csize != blob.usize {
+            return Err(CmpctError::Unsupported);
+        }
+
+        let blob_pos = self
+            .data_base
+            .checked_add(blob.offset)
+            .ok_or(CmpctError::BlobHeader)?;
+        let payload_pos = blob_pos
+            .checked_add(BLOB_HEADER_SIZE as u64)
+            .and_then(|v| v.checked_add(blob.meta_len as u64))
+            .ok_or(CmpctError::BlobHeader)?;
+        let payload_end = payload_pos
+            .checked_add(blob.csize)
+            .ok_or(CmpctError::BlobHeader)?;
+        if payload_end > self.data_end {
+            return Err(CmpctError::BlobHeader);
+        }
+
+        let mut file = self.file.lock().map_err(|_| CmpctError::BlobHeader)?;
+        file.seek(SeekFrom::Start(blob_pos))?;
+        let mut header = [0u8; BLOB_HEADER_SIZE];
+        file.read_exact(&mut header)?;
+        let physical_codec = header[4];
+        let physical_usize = le_u64(&header[8..16]);
+        let physical_csize = le_u64(&header[16..24]);
+        let physical_meta_len = le_u32(&header[24..28]);
+        if &header[0..4] != BLOB_MAGIC
+            || physical_codec != blob.codec
+            || physical_usize != blob.usize
+            || physical_csize != blob.csize
+            || physical_meta_len != blob.meta_len
+        {
+            return Err(CmpctError::BlobHeader);
+        }
+
+        let read_pos = payload_pos.checked_add(start).ok_or(CmpctError::Range)?;
+        file.seek(SeekFrom::Start(read_pos))?;
+        file.read_exact(out)?;
+        Ok(out.len())
+    }
+}
+
+fn le_u32(bytes: &[u8]) -> u32 {
+    u32::from_le_bytes(bytes.try_into().expect("fixed-width header slice"))
 }
 
 fn le_u64(bytes: &[u8]) -> u64 {
@@ -170,13 +276,70 @@ fn canonical_path(raw: &str) -> Result<String, CmpctError> {
     Ok(parts.join("/"))
 }
 
-fn parse_entries(index: &Value) -> Result<Vec<Entry>, CmpctError> {
+fn parse_blobs(index: &Value, data_span: u64) -> Result<Vec<Blob>, CmpctError> {
+    let rows = map_field(index, "blobs")?
+        .as_array()
+        .ok_or_else(|| CmpctError::Schema("blobs is not an array".into()))?;
+    if rows.len() > MAX_BLOBS {
+        return Err(CmpctError::Schema(
+            "blob count exceeds native handler limit".into(),
+        ));
+    }
+    let mut blobs = Vec::with_capacity(rows.len());
+    for (i, value) in rows.iter().enumerate() {
+        let row = value
+            .as_array()
+            .ok_or_else(|| CmpctError::Schema(format!("blob row {i} is not an array")))?;
+        if row.len() < 5 {
+            return Err(CmpctError::Schema(format!("blob row {i} is too short")));
+        }
+        let offset = row[0]
+            .as_u64()
+            .ok_or_else(|| CmpctError::Schema(format!("blob row {i} has invalid offset")))?;
+        let usize = row[1]
+            .as_u64()
+            .ok_or_else(|| CmpctError::Schema(format!("blob row {i} has invalid size")))?;
+        let csize = row[2]
+            .as_u64()
+            .ok_or_else(|| CmpctError::Schema(format!("blob row {i} has invalid compressed size")))?;
+        let codec = row[3]
+            .as_u64()
+            .filter(|v| *v <= u8::MAX as u64)
+            .ok_or_else(|| CmpctError::Schema(format!("blob row {i} has invalid codec")))?
+            as u8;
+        let meta_len = row[4]
+            .as_u64()
+            .filter(|v| *v <= u32::MAX as u64)
+            .ok_or_else(|| CmpctError::Schema(format!("blob row {i} has invalid metadata length")))?
+            as u32;
+        let end = offset
+            .checked_add(BLOB_HEADER_SIZE as u64)
+            .and_then(|v| v.checked_add(meta_len as u64))
+            .and_then(|v| v.checked_add(csize))
+            .ok_or_else(|| CmpctError::Schema(format!("blob row {i} overflows archive offsets")))?;
+        if end > data_span {
+            return Err(CmpctError::Schema(format!(
+                "blob row {i} extends past base data span"
+            )));
+        }
+        blobs.push(Blob {
+            offset,
+            usize,
+            csize,
+            codec,
+            meta_len,
+        });
+    }
+    Ok(blobs)
+}
+
+fn parse_entries(index: &Value, blob_count: usize) -> Result<Vec<Entry>, CmpctError> {
     let index_revision = map_field(index, "v")?
         .as_u64()
         .ok_or_else(|| CmpctError::Schema("index revision is not an unsigned integer".into()))?;
     if index_revision != VERSION as u64 {
         return Err(CmpctError::Revision(
-            index_revision.min(u16::MAX as u64) as u16
+            index_revision.min(u16::MAX as u64) as u16,
         ));
     }
 
@@ -221,12 +384,23 @@ fn parse_entries(index: &Value) -> Result<Vec<Entry>, CmpctError> {
         let size = row[4]
             .as_u64()
             .ok_or_else(|| CmpctError::Schema(format!("file row {i} has invalid size")))?;
+        let direct_blob = row[6].as_array().and_then(|storage| {
+            if storage.len() < 2 || storage[0].as_u64() != Some(STORAGE_BLOB) {
+                return None;
+            }
+            let index = storage[1].as_u64()?;
+            usize::try_from(index)
+                .ok()
+                .filter(|idx| *idx < blob_count)
+                .map(|index| DirectBlob { index })
+        });
         entries.push(Entry {
             path: path.to_owned(),
             kind,
             mode,
             mtime_ns,
             size,
+            direct_blob,
         });
     }
     Ok(entries)
@@ -242,6 +416,7 @@ pub enum CmpctStatus {
     Limit = -4,
     Utf8 = -5,
     Range = -6,
+    Unsupported = -7,
     Panic = -127,
 }
 
@@ -258,6 +433,8 @@ fn error_status(error: &CmpctError) -> CmpctStatus {
     match error {
         CmpctError::Io(_) | CmpctError::Truncated => CmpctStatus::Io,
         CmpctError::IndexLimit => CmpctStatus::Limit,
+        CmpctError::Range => CmpctStatus::Range,
+        CmpctError::Unsupported => CmpctStatus::Unsupported,
         _ => CmpctStatus::Format,
     }
 }
@@ -376,6 +553,47 @@ pub unsafe extern "C" fn cmpct_entry_path(
     ptr::copy_nonoverlapping(bytes.as_ptr(), buffer.cast::<u8>(), bytes.len());
     *buffer.add(bytes.len()) = 0;
     CmpctStatus::Ok as c_int
+}
+
+/// Read a bounded byte range from a direct RAW member.
+///
+/// `out_read` receives the number of bytes copied. A zero-length read may pass a null buffer.
+/// Representations not yet implemented by the native core return `CmpctStatus::Unsupported`.
+///
+/// # Safety
+/// `archive` must be live; `buffer` must be writable for `length` bytes when `length > 0`; and
+/// `out_read` must be writable for one `usize`.
+#[no_mangle]
+pub unsafe extern "C" fn cmpct_entry_read_range(
+    archive: *const Archive,
+    index: usize,
+    offset: u64,
+    buffer: *mut u8,
+    length: usize,
+    out_read: *mut usize,
+) -> c_int {
+    let Some(archive) = archive.as_ref() else {
+        return CmpctStatus::Null as c_int;
+    };
+    let Some(out_read) = out_read.as_mut() else {
+        return CmpctStatus::Null as c_int;
+    };
+    *out_read = 0;
+    if length > 0 && buffer.is_null() {
+        return CmpctStatus::Null as c_int;
+    }
+    let out = if length == 0 {
+        &mut []
+    } else {
+        std::slice::from_raw_parts_mut(buffer, length)
+    };
+    match archive.read_range(index, offset, out) {
+        Ok(n) => {
+            *out_read = n;
+            CmpctStatus::Ok as c_int
+        }
+        Err(error) => error_status(&error) as c_int,
+    }
 }
 
 #[cfg(test)]
