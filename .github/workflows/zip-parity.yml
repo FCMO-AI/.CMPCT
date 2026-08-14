@@ -1,9 +1,19 @@
 name: CMPCT ZIP parity benchmark
 
 on:
+  pull_request:
+    paths:
+      - 'src/cmpct/builder.py'
+      - 'src/cmpct/codec.py'
+      - 'benchmarks/**'
+      - '.github/workflows/zip-parity.yml'
   push:
-    branches:
-      - feat/zip-parity-portability
+    branches: [main]
+    paths:
+      - 'src/cmpct/builder.py'
+      - 'src/cmpct/codec.py'
+      - 'benchmarks/**'
+      - '.github/workflows/zip-parity.yml'
   workflow_dispatch:
 
 permissions:
@@ -98,4 +108,6 @@ jobs:
 
 # Footnote: shared hosted-runner timing is development evidence, not marketing. The important property
 # here is semantic symmetry: both formats are measured at the same process boundary and repetitions
-# are recorded, so a real ZIP advantage cannot hide behind benchmark orchestration overhead.
+# are recorded, so a real ZIP advantage cannot hide behind benchmark orchestration overhead. The
+# workflow is intentionally scoped to encoder/codec/corpus changes: compression claims should rerun
+# when representation policy changes without taxing unrelated parser or platform-integration PRs.
