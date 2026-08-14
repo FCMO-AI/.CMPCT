@@ -41,7 +41,7 @@ The first committed golden archive set now lives at `tests/conformance/v24-direc
 
 These vectors were deliberately hand-built from the revision-24 framing/schema rules rather than emitted by `cmpct.builder.Builder`. That distinction is important: builder-to-reader round trips prove internal agreement, while fixed bytes that are independent of the builder can expose parser drift across implementations. The JSON records the generator-tool provenance used to freeze the bytes; future readers must consume the existing archive bytes rather than regenerate fixtures around changed behavior.
 
-The Deflate vector now gates native raw-Deflate support through the C ABI, including strong content-hash failure behavior. `tests/conformance/v24-chunk-maps.json` adds builder-independent `S_CHUNKS` and `S_CDC` archives whose known ranges cross chunk boundaries and mix RAW/Zstd/Deflate physical blobs. `tests/conformance/v24-sparse.json` now freezes `S_SPARSE` semantics independently of the builder: its logical member contains leading/interior/trailing holes plus data extents backed by RAW, Zstd and raw Deflate blobs, with known ranges crossing hole/data and codec boundaries. Future golden sets still need dictionary Zstd, WAV/FLAC, packs, virtual ZIP recipes, links/metadata and committed transaction generations.
+The Deflate vector gates native raw-Deflate support through the C ABI, including strong content-hash failure behavior. `tests/conformance/v24-chunk-maps.json` adds builder-independent `S_CHUNKS` and `S_CDC` archives whose known ranges cross chunk boundaries and mix RAW/Zstd/Deflate physical blobs. `tests/conformance/v24-sparse.json` freezes `S_SPARSE` semantics independently of the builder: its logical member contains leading/interior/trailing holes plus data extents backed by RAW, Zstd and raw Deflate blobs, with known ranges crossing hole/data and codec boundaries. The Rust C ABI now consumes all three sets. Future golden sets still need dictionary Zstd, WAV/FLAC, packs, virtual ZIP recipes, links/metadata and committed transaction generations.
 
 ## Deliberate non-goals of this increment
 
@@ -55,7 +55,7 @@ In particular:
 - no property-based or coverage-guided fuzzer is committed yet;
 - golden revision-24 coverage is only partial: direct RAW/Zstd/Deflate, fixed/CDC chunk maps and sparse extents now exist, while other codecs/storage descriptions/generations remain missing;
 - nested recipes, chunk maps, sparse extents and journal operations still need byte-level mutation coverage in addition to the structural mutation matrix;
-- parser behavior has begun independent cross-checking: the Rust core authenticates/decodes the primary index, matches Python entry enumeration/path policy, cross-checks bounded direct RAW/Zstd/Deflate ranges, and independently validates/reads fixed and CDC chunk maps through the C ABI. Sparse now has a fixed acceptance oracle but is not yet implemented by the native reader; full structural parity, tail/journal recovery, remaining codecs, virtual storage and extraction are not yet independently validated.
+- parser behavior has begun independent cross-checking: the Rust core authenticates/decodes the primary index, matches Python entry enumeration/path policy, cross-checks bounded direct RAW/Zstd/Deflate ranges, independently validates/reads fixed and CDC chunk maps, and now independently validates/reads sparse extent maps through the C ABI. Full structural parity, tail/journal recovery, dictionary/audio codecs, virtual storage and extraction are not yet independently validated.
 
 ### Canonical lexical path aliases
 
@@ -65,20 +65,22 @@ This intentionally solves only host-independent lexical aliasing. Unicode normal
 
 The explicit preflight command is intentional for this first increment: it creates one testable, fuzzable safety boundary without silently adding latency to every existing reader hot path before the cost is measured.
 
-## Native direct-decode safety boundary
+## Native direct/map-decode safety boundary
 
-The shared Rust reader has bounded bridges for ordinary direct Zstd/raw Deflate and for fixed/CDC chunk maps. A direct compressed object cannot allocate/decode above 256 MiB and must match physical framing, exact decoded length and blob SHA-256 before a slice is returned. Fixed/CDC maps are checked for valid blob references, declared-length agreement and exact logical-size accounting before use; selective reads decode only intersecting chunks, and complete reads additionally verify the logical whole-file SHA-256. RAW partial reads remain range-local and deliberately do not claim whole-member verification of unseen bytes.
+The shared Rust reader has bounded bridges for ordinary direct Zstd/raw Deflate and for fixed/CDC/sparse maps. A direct compressed object cannot allocate/decode above 256 MiB and must match physical framing, exact decoded length and blob SHA-256 before a slice is returned. Fixed/CDC maps are checked for valid blob references, declared-length agreement and exact logical-size accounting before use; selective reads decode only intersecting chunks, and complete reads additionally verify the logical whole-file SHA-256.
 
-This is a representation-specific safety increment, not a replacement for full native preflight parity. Sparse, pack, virtual, dictionary/audio and journal structures still need independent native validation before the shared handler is representation-complete.
+Sparse maps additionally require sorted, non-overlapping extents within logical EOF and exact equality between each extent length and the sum of its referenced blob lengths. Sparse selective reads synthesize holes as zeroes and decode only stored chunks in touched extents. The fixed ABI gate proves this locality by corrupting a compressed blob in an untouched extent: a disjoint range still succeeds, while a range touching the corrupted extent fails. RAW partial reads remain range-local and deliberately do not claim whole-member verification of unseen bytes.
+
+This is a representation-specific safety increment, not a replacement for full native preflight parity. Pack, virtual, dictionary/audio and journal structures still need independent native validation before the shared handler is representation-complete.
 
 ## Next hardening sequence
 
-1. Make the Rust C ABI consume the committed sparse golden archive range-locally without materializing holes, then expand the golden revision-24 set to every remaining storage kind, codec and committed-generation shape.
+1. Expand the golden revision-24 set to dictionary Zstd, WAV/FLAC, packs, virtual ZIP recipes, links/metadata and committed-generation shapes, and make each implemented native representation cross the fixed C-ABI oracle rather than only Python-generated archives.
 2. Add property tests and a byte-level mutation/fuzz corpus for headers, MessagePack structures, blob framing, chunk maps, sparse maps, nested recipes, journal chains and path relationships.
 3. Add per-read/per-extract decompressed-byte and work budgets; then integrate bounded validation into the normal reader constructor under an explicit policy, including canonical path-collision rejection shared with extraction.
 4. Benchmark preflight/open overhead across tiny, source, media, sparse, nested and combined corpora.
 5. Turn validated structural maxima and canonical encodings into the normative byte-level spec.
-6. Expand the Rust/Python cross-check beyond authenticated primary-index enumeration plus direct RAW/Zstd/Deflate and fixed/CDC ranges to complete structural validation, tail/journal recovery, remaining codecs, sparse/virtual member reads and extraction before treating the native reader as an independent conformance implementation.
+6. Expand the Rust/Python cross-check beyond authenticated primary-index enumeration plus direct RAW/Zstd/Deflate and fixed/CDC/sparse ranges to complete structural validation, tail/journal recovery, remaining codecs, virtual member reads and extraction before treating the native reader as an independent conformance implementation.
 
 ## Revision rule
 
