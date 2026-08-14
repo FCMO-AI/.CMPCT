@@ -76,7 +76,7 @@ small and load optional codecs only when an archive actually requires them.
 
 For compressed direct members, an implementation may temporarily decode one bounded member to serve a
 range if the codec is not independently seekable, but it must never silently inflate the whole archive.
-The current native Zstd/Deflate bridge follows that rule and caps one direct decode at 256 MiB. Revision-24 fixed and CDC chunk maps are now range-local in the shared core: a request decodes only chunks intersecting the requested range, which is the required behavior for large compressed-file browsing.
+The current native Zstd/Deflate bridge follows that rule and caps one direct decode at 256 MiB. Revision-24 fixed and CDC chunk maps are range-local in the shared core: a request decodes only chunks intersecting the requested range. Revision-24 sparse maps are also range-local: holes are synthesized as zeroes while only stored chunks in intersecting extents are decoded, so browsing a sparse VM/disk image does not allocate or inflate its logical size.
 
 ## Android
 
@@ -97,6 +97,7 @@ The preferred Android integration is a `DocumentsProvider` backed by the native 
 - `queryChildDocuments` enumerates direct logical children from the CMPCT index;
 - `openDocument` streams a selected logical member through the native read/range API;
 - seek/range-capable members should not require whole-archive extraction;
+- sparse logical holes must stay cheap; callers requesting a small region must not materialize the whole sparse member;
 - virtual/reconstructed files remain ordinary readable documents to client apps;
 - write flags stay disabled until transactional mutation semantics are exposed safely through the
   native ABI.
@@ -191,13 +192,14 @@ Implemented today:
 - native range reads for direct RAW members without decoding unrelated bytes;
 - native bounded range reads for ordinary direct Zstd and raw Deflate members, with a 256 MiB per-direct-member decode ceiling, exact decompressed-length validation and SHA-256 verification before returning the requested slice;
 - native fixed/CDC chunk-map validation and range-local reads across mixed RAW/Zstd/Deflate chunks, with complete-member logical SHA-256 verification;
-- builder-independent direct-codec and chunk-map golden archives exercised through the produced shared library from a non-Rust caller, including corruption refusal.
+- native sparse-map validation and range-local hole/data reads, including exact extent accounting, complete-member logical SHA-256 verification, and a conformance test proving corruption in an untouched extent does not force unrelated data to be decoded;
+- builder-independent direct-codec, chunk-map and sparse golden archives exercised through the produced shared library from a non-Rust caller, including corruption refusal.
 
 `docs/NATIVE_CORE.md` is the detailed handoff for the native capability and its safety boundary.
 
 Not yet implemented and therefore **not to be claimed as shipped support**:
 
-- complete memory-safe native reader/writer ABI beyond primary-index/open/enumeration plus direct RAW/Zstd/Deflate and fixed/CDC reads: full hostile structural validation, recovery, remaining codecs/storage descriptions, streams, extraction and mutation are still pending;
+- complete memory-safe native reader/writer ABI beyond primary-index/open/enumeration plus direct RAW/Zstd/Deflate, fixed/CDC and sparse reads: full hostile structural validation, recovery, remaining codecs/storage descriptions, streams, extraction and mutation are still pending;
 - Android application/DocumentsProvider;
 - Windows shell/browser package;
 - Apple document/Quick Look package;
