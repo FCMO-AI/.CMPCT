@@ -302,7 +302,8 @@ impl Archive {
                 file.read_exact(out)?;
             }
             CODEC_ZSTD => {
-                let decoded = self.decode_direct_zstd(blob, &mut file, payload_pos, &expected_hash)?;
+                let decoded =
+                    self.decode_direct_zstd(blob, &mut file, payload_pos, &expected_hash)?;
                 let start = usize::try_from(start).map_err(|_| CmpctError::Range)?;
                 let end = start.checked_add(out.len()).ok_or(CmpctError::Range)?;
                 out.copy_from_slice(&decoded[start..end]);
@@ -412,7 +413,7 @@ fn parse_entries(index: &Value, blob_count: usize) -> Result<Vec<Entry>, CmpctEr
         .ok_or_else(|| CmpctError::Schema("index revision is not an unsigned integer".into()))?;
     if index_revision != VERSION as u64 {
         return Err(CmpctError::Revision(
-            index_revision.min(u16::MAX as u64) as u16,
+            index_revision.min(u16::MAX as u64) as u16
         ));
     }
 
