@@ -36,7 +36,9 @@ def make_corpora():
         sub=d/f'pkg{i%20:02d}'; sub.mkdir(exist_ok=True)
         code=('''from __future__ import annotations\n\ndef transform(value):\n    # shared boilerplate for codec/dictionary behavior\n    return {"index": %d, "value": value, "stable": True}\n'''%i)
         (sub/f'mod{i:04d}.py').write_text(code)
-    for i in range(100): (d/f'config{i:03d}.json').write_text(json.dumps({'service':'hermes','retry':3,'timeout':15,'idx':i,'features':['a','b','c']},indent=2))
+    # Footnote: synthetic benchmark fixtures use deliberately generic service names so public
+    # benchmark bytes cannot accidentally encode unrelated internal project provenance.
+    for i in range(100): (d/f'config{i:03d}.json').write_text(json.dumps({'service':'cmpct-demo','retry':3,'timeout':15,'idx':i,'features':['a','b','c']},indent=2))
 
     # 3) mixed media / already compressed + PCM
     d=CORP/'media'; d.mkdir()
