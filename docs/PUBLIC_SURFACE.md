@@ -51,6 +51,20 @@ The website build may consume only deliberately public project inputs. In partic
 - visual rules may be implemented directly without publishing private design-source documents or
   unrelated organizational lore.
 
+## Git-history rule
+
+Removing a file or name from the current tree does not remove it from older Git objects. Before the
+repository itself is made public, perform a dedicated full-history audit for private artifacts,
+private corpus records, credentials, personal data and unrelated internal provenance.
+
+If that audit finds publish-prohibited material in reachable history, the public-release procedure must
+rewrite/purge the affected history or publish from a sanitized repository lineage **before** changing
+repository visibility. Do not rewrite active private development history casually: coordinate the
+rewrite because branches, pull requests, tags and clones may need to be rebased or recreated.
+
+# Footnote: the website can safely be reviewed before the repository is public because its build is
+# generated only from the sanitized current tree. That does not make old Git objects safe to publish.
+
 ## Licensing rule
 
 While `LICENSING.md` says the Apache-2.0 proposal is non-final, public pages and package metadata must
@@ -63,4 +77,5 @@ history for known internal-provenance markers and private-path patterns. CI must
 tests and before any site publication.
 
 The guard is a tripwire, not a substitute for review. A new sensitive term that is not in the pattern
-list is still prohibited by this policy.
+list is still prohibited by this policy, and the current-tree guard cannot substitute for the full
+Git-history audit required before making the repository public.
