@@ -125,8 +125,10 @@ public final class CmpctAndroidSmokeTest extends InstrumentationTestCase {
         }
 
         byte[] member;
-        try (ParcelFileDescriptor pfd = provider.openDocument(childDocumentId, "r", null);
-             InputStream in = new ParcelFileDescriptor.AutoCloseInputStream(pfd)) {
+        ParcelFileDescriptor pfd = provider.openDocument(childDocumentId, "r", null);
+        // Footnote: AutoCloseInputStream owns pfd. Giving the same descriptor a second try-with-resource
+        // owner would make the test exercise a double-close artifact rather than provider correctness.
+        try (InputStream in = new ParcelFileDescriptor.AutoCloseInputStream(pfd)) {
             member = readAll(in);
         }
         assertEquals(64, member.length);
