@@ -13,6 +13,7 @@ android {
         targetSdk 37
         versionCode 24
         versionName '0.24-android-preview1'
+        testInstrumentationRunner 'android.test.InstrumentationTestRunner'
 
         ndk {
             abiFilters 'arm64-v8a', 'armeabi-v7a', 'x86_64', 'x86'
@@ -37,6 +38,11 @@ android {
             // Footnote: build-native.sh places the Rust cdylib into these ABI-specific directories;
             // Gradle then packages the same conformance-tested core used by desktop/native clients.
             jniLibs.srcDirs = ['src/main/jniLibs']
+        }
+        androidTest {
+            // Reuse builder-independent revision-24 byte oracles instead of inventing Android-only
+            // fixtures. One fixed archive must mean the same bytes to Python, Rust C ABI, and Android.
+            assets.srcDirs = ['../../../tests/conformance']
         }
     }
 
