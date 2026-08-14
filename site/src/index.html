@@ -18,6 +18,7 @@
       <span class="brand-caret" aria-hidden="true">^</span><span class="brand-name">.CMPCT</span>
     </a>
     <nav class="top-nav" aria-label="Primary navigation">
+      <a href="#status">Status</a>
       <a href="#engine">Engine</a>
       <a href="#lab">Lab</a>
       <a href="#benchmarks">Benchmarks</a>
@@ -61,6 +62,20 @@
       <div><strong>Content-aware</strong><span>Bytes choose representation, not folklore.</span></div>
       <div><strong>Seekable</strong><span>One file should not require the whole archive.</span></div>
       <div><strong>Recoverable</strong><span>Redundancy and generations are designed in.</span></div>
+    </section>
+
+    <section class="section" id="status">
+      <div class="section-intro">
+        <p class="section-index">00 · PROJECT STATE</p>
+        <h2>The site says what is true <em>now</em>, not what CMPCT hopes to become.</h2>
+        <p>CMPCT is still pre-1.0. The website is continuously validated but deliberately unpublished until a manual release decision. Public project material is separated from private development provenance, and Apache-2.0 is currently a proposal rather than an adopted license.</p>
+      </div>
+      <div class="feature-grid">
+        <article><span class="feature-mark">^</span><h3>Format revision __FORMAT_REVISION__</h3><p>The executable format is still a working pre-1.0 contract. Revision changes must update code, specification, conformance gates and the Browser Lab writer together.</p></article>
+        <article><span class="feature-mark">^</span><h3>Apache-2.0 proposed</h3><p>The full Apache License 2.0 text is staged for review, but CMPCT is not yet represented as finally licensed under it.</p><p><a href="https://github.com/FCMO-AI/.CMPCT/blob/main/LICENSING.md">Read licensing status ↗</a></p></article>
+        <article><span class="feature-mark">^</span><h3>Manual publication</h3><p>Ordinary pushes build and test the website without deploying it. Publication requires an explicit manual workflow decision.</p></article>
+        <article><span class="feature-mark">^</span><h3>Public-surface gate</h3><p>Release-facing project material must stand on its own without exposing unrelated private corpora, artifacts, people, credentials or system context.</p><p><a href="https://github.com/FCMO-AI/.CMPCT/blob/main/docs/PUBLIC_SURFACE.md">Read disclosure policy ↗</a></p></article>
+      </div>
     </section>
 
     <section class="section" id="engine">
@@ -196,7 +211,7 @@ python -m cmpct export-zip archive.cmpct legacy.zip</code></pre>
 
       <div class="benchmark-caveat">
         <span aria-hidden="true">^</span>
-        <p><strong>Development regression evidence, not a universal performance guarantee.</strong> The site reads committed benchmark records directly. Library and CLI/process-start layers stay separate, and semantic mismatches remain visible.</p>
+        <p><strong>Development regression evidence, not a universal performance guarantee.</strong> The site reads committed public benchmark records directly. Library and CLI/process-start layers stay separate, and semantic mismatches remain visible.</p>
       </div>
 
       <div class="benchmark-headline" id="benchmark-headline">
@@ -227,8 +242,8 @@ python -m cmpct export-zip archive.cmpct legacy.zip</code></pre>
     <section class="section agents-section" id="agents">
       <div class="section-intro">
         <p class="section-index">05 · AGENTS</p>
-        <h2>Zero chat history required.</h2>
-        <p>CMPCT's durable context lives in the repository. A new human or agent should be able to enter the project from the same reading order and distinguish current fact from old experiment.</p>
+        <h2>Zero private context required.</h2>
+        <p>CMPCT's durable context lives in the repository. A new human or agent should be able to enter the project from the same reading order, distinguish current fact from old experiment, and work without access to unrelated private systems or conversations.</p>
       </div>
 
       <div class="agent-layout">
@@ -239,7 +254,9 @@ python -m cmpct export-zip archive.cmpct legacy.zip</code></pre>
           <li><a href="https://github.com/FCMO-AI/.CMPCT/blob/main/docs/FORMAT.md"><span>04</span><strong>FORMAT.md</strong><small>On-disk contract</small></a></li>
           <li><a href="https://github.com/FCMO-AI/.CMPCT/blob/main/docs/RESEARCH_LOG.md"><span>05</span><strong>RESEARCH_LOG.md</strong><small>What was learned and rejected</small></a></li>
           <li><a href="https://github.com/FCMO-AI/.CMPCT/blob/main/docs/BENCHMARKS.md"><span>06</span><strong>BENCHMARKS.md</strong><small>Measurement discipline</small></a></li>
-          <li><a href="https://github.com/FCMO-AI/.CMPCT/blob/main/docs/ROADMAP.md"><span>07</span><strong>ROADMAP.md</strong><small>Path to 1.0</small></a></li>
+          <li><a href="https://github.com/FCMO-AI/.CMPCT/blob/main/docs/PUBLIC_SURFACE.md"><span>07</span><strong>PUBLIC_SURFACE.md</strong><small>Disclosure boundary</small></a></li>
+          <li><a href="https://github.com/FCMO-AI/.CMPCT/blob/main/LICENSING.md"><span>08</span><strong>LICENSING.md</strong><small>Non-final license proposal</small></a></li>
+          <li><a href="https://github.com/FCMO-AI/.CMPCT/blob/main/docs/ROADMAP.md"><span>09</span><strong>ROADMAP.md</strong><small>Path to 1.0</small></a></li>
         </ol>
         <div class="agent-machine-card">
           <p class="tool-kicker">MACHINE ENTRYPOINTS</p>
@@ -264,6 +281,7 @@ python -m cmpct export-zip archive.cmpct legacy.zip</code></pre>
         <article><span>P1</span><h3>Native completeness</h3><p>Finish remaining representations, streams, extraction, recovery and a shared writer surface.</p></article>
         <article><span>P1</span><h3>First-class archive UX</h3><p>Android, Windows, Apple and Linux integrations backed by one memory-safe core.</p></article>
         <article><span>P1</span><h3>Remote + encrypted</h3><p>Range-backed sources, partial verification and authenticated encryption without inheriting ZIP-era weaknesses.</p></article>
+        <article><span>GATE</span><h3>Public-release readiness</h3><p>Resolve licensing, provenance and disclosure review before publication; validate continuously without publishing accidentally.</p></article>
         <article><span>GATE</span><h3>Erase honest ZIP advantages</h3><p>Every reproducible equivalent-semantics loss is a defect, evidence-backed tradeoff or documented platform constraint.</p></article>
       </div>
     </section>
@@ -271,8 +289,8 @@ python -m cmpct export-zip archive.cmpct legacy.zip</code></pre>
 
   <footer class="site-footer">
     <div class="footer-brand"><span aria-hidden="true">^</span><strong>.CMPCT</strong></div>
-    <p>General-purpose archive/container research by FCMO-AI. Current site: v__CMPCT_VERSION__ · format revision __FORMAT_REVISION__.</p>
-    <div><a href="https://github.com/FCMO-AI/.CMPCT">GitHub</a><a href="https://github.com/FCMO-AI/.CMPCT/blob/main/docs/PRINCIPLES.md">Principles</a><a href="https://github.com/FCMO-AI/.CMPCT/blob/main/docs/HISTORY.md">History</a></div>
+    <p>General-purpose archive/container research by FCMO-AI. Current site: v__CMPCT_VERSION__ · format revision __FORMAT_REVISION__ · Apache-2.0 proposed, not adopted.</p>
+    <div><a href="https://github.com/FCMO-AI/.CMPCT">GitHub</a><a href="https://github.com/FCMO-AI/.CMPCT/blob/main/docs/PRINCIPLES.md">Principles</a><a href="https://github.com/FCMO-AI/.CMPCT/blob/main/docs/HISTORY.md">History</a><a href="https://github.com/FCMO-AI/.CMPCT/blob/main/LICENSING.md">Licensing</a></div>
   </footer>
 </body>
 </html>
