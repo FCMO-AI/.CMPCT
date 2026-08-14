@@ -87,7 +87,11 @@ Android is a first-class target, not a future compatibility note.
 The Android application should declare `ACTION_VIEW` handling for the CMPCT MIME aliases and accept
 readable `content:` URIs. The activity must inspect the revision magic itself before opening the
 archive. When a provider reports only a generic binary MIME type, the app should still permit explicit
-selection through the Storage Access Framework and validate by magic.
+selection through the Storage Access Framework and validate by magic. The association manifest must
+not advertise a generic `application/octet-stream` VIEW handler merely on the assumption that a URI
+path suffix can constrain arbitrary providers: Android path matching depends on an authority contract,
+so generic binary fallback stays in the explicit picker flow unless a concrete provider integration
+can be named and tested.
 
 ### Archive-as-directory behavior
 
@@ -187,6 +191,10 @@ Implemented today:
 - extraction and ZIP export;
 - a fair parity harness separating library and fresh-process timing;
 - Linux MIME registration source;
+- Windows `.cmpct`/ProgID association source that advertises the packaged native browser without silently replacing the user's chosen default application;
+- Apple exported `com.fcmo.cmpct.archive` UTType and document-role declaration source;
+- Android `ACTION_VIEW` association source for the canonical and compatibility CMPCT MIME names, with generic binary opening deliberately reserved for the explicit Storage Access Framework picker flow;
+- cross-platform metadata regression tests that keep extension/MIME/UTType/ProgID identities aligned and preserve the rule that routing metadata is never archive validation;
 - explicit portability contract and release gates;
 - a memory-safe Rust core under `native/cmpct-core/` that authenticates/decodes the revision-24 primary index, enumerates logical entries, rejects lexical path aliases, bounds the base blob table, cross-checks direct physical blob framing, and exposes a tested opaque C ABI;
 - native range reads for direct RAW members without decoding unrelated bytes;
@@ -195,7 +203,7 @@ Implemented today:
 - native sparse-map validation and range-local hole/data reads, including exact extent accounting, complete-member logical SHA-256 verification, and a conformance test proving corruption in an untouched extent does not force unrelated data to be decoded;
 - builder-independent direct-codec, chunk-map, sparse and Zstd-dictionary golden archives exercised through the produced shared library from a non-Rust caller, including dictionary/member corruption refusal for codec 3.
 
-`docs/NATIVE_CORE.md` is the detailed handoff for the native capability and its safety boundary.
+`docs/NATIVE_CORE.md` is the detailed handoff for the native capability and its safety boundary. `integrations/README.md` is the packaging-source handoff for the four platform association contracts.
 
 Not yet implemented and therefore **not to be claimed as shipped support**:
 
