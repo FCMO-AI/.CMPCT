@@ -26,6 +26,12 @@ Direct Zstd reads currently decode the complete member and compare SHA-256 to th
 
 Future range-proof or authenticated-chunk designs may allow strong verification of partial reads without touching the whole direct object; revision 24 does not currently provide such proofs.
 
+## Fixed conformance inputs
+
+`tests/conformance/v24-direct-codecs.json` now supplies the first builder-independent golden archives for the native implementation. The set freezes exact revision-24 archive bytes for direct RAW, ordinary Zstd and raw Deflate members and records archive SHA-256, logical SHA-256 and a known range answer for each member.
+
+The important property is provenance: these bytes were hand-assembled from the revision-24 framing/schema contract rather than written by the Python `Builder`. Native RAW/Zstd behavior can therefore be checked against a fixed format artifact instead of only against whatever the current Python encoder happens to emit. The Deflate vector is intentionally present before native Deflate support and is the next codec acceptance target.
+
 ## CI conformance gate
 
 `.github/workflows/native-core.yml` must keep the following gates green:
@@ -34,13 +40,14 @@ Future range-proof or authenticated-chunk designs may allow strong verification 
 2. native entry enumeration compared against a Python-built revision-24 archive;
 3. a non-Rust `ctypes` caller loading the produced shared library;
 4. RAW range bytes compared against the Python oracle;
-5. direct-Zstd range bytes compared against the Python oracle, with the fixture asserting that the selected member is physically codec 1 rather than accidentally RAW.
+5. direct-Zstd range bytes compared against the Python oracle, with the fixture asserting that the selected member is physically codec 1 rather than accidentally RAW;
+6. as the golden suite is wired into native CI, the same ABI must consume the committed RAW/Zstd vectors directly and the direct-Deflate milestone must pass the committed codec-4 vector before it is documented as implemented.
 
-A future representation is not considered implemented merely because a Rust function can decode it. It must cross the C ABI and agree with the Python oracle on a generated or golden conformance archive.
+A future representation is not considered implemented merely because a Rust function can decode it. It must cross the C ABI and agree with both the Python oracle where applicable and a committed golden archive once one exists for that representation.
 
 ## Next implementation order
 
-1. direct Deflate blobs, preserving the same bounded/full-integrity policy as direct Zstd;
+1. direct Deflate blobs, targeting the committed codec-4 golden archive and preserving the same bounded/full-integrity policy as direct Zstd;
 2. fixed and content-defined chunk maps with range-local decoding and whole-file verification paths;
 3. sparse extent reads without materializing holes;
 4. Zstd-dictionary and WAV/FLAC direct blobs;
