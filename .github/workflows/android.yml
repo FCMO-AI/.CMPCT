@@ -31,6 +31,11 @@ jobs:
         with:
           gradle-version: '9.5.0'
 
+      - name: Set up Android command-line SDK
+        uses: android-actions/setup-android@v4
+        with:
+          packages: ''
+
       - name: Install Rust Android targets
         run: |
           rustup target add \
@@ -42,7 +47,9 @@ jobs:
 
       - name: Install Android build and emulator packages
         run: |
-          yes | sdkmanager --licenses >/dev/null || true
+          # Footnote: setup-android owns cmdline-tools discovery/PATH. Do not assume GitHub runner
+          # images expose sdkmanager globally; that assumption caused the first Android gate to fail
+          # before compilation even began.
           sdkmanager \
             'platforms;android-37' \
             'build-tools;36.0.0' \
