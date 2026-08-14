@@ -1,0 +1,29 @@
+name: Pin native core dependencies once
+
+on:
+  push:
+    branches:
+      - native/read-only-index-core
+
+permissions:
+  contents: write
+
+jobs:
+  lock:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Generate Cargo lockfile and remove one-shot workflow
+        run: |
+          cd native/cmpct-core
+          cargo generate-lockfile
+          cd ../..
+          git rm .github/workflows/native-core-lock-once.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add native/cmpct-core/Cargo.lock
+          git commit -m 'Pin native core Rust dependencies'
+          git push origin HEAD:native/read-only-index-core
