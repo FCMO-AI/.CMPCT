@@ -138,3 +138,5 @@ jobs:
           finally:
               lib.cmpct_close(corrupt)
           PY
+      - name: Committed golden direct-codec ABI gate
+        run: python tests/native_golden_abi.py
