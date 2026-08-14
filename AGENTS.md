@@ -9,11 +9,12 @@ Before changing format behavior or encoder policy, read:
 1. `README.md`;
 2. `docs/CURRENT_STATE.md`;
 3. `docs/HARDENING.md`;
-4. `docs/FORMAT.md`;
-5. `docs/HISTORY.md`;
-6. `docs/RESEARCH_LOG.md`;
-7. `docs/BENCHMARKS.md`;
-8. `docs/ROADMAP.md`.
+4. `docs/PORTABILITY.md`;
+5. `docs/FORMAT.md`;
+6. `docs/HISTORY.md`;
+7. `docs/RESEARCH_LOG.md`;
+8. `docs/BENCHMARKS.md`;
+9. `docs/ROADMAP.md`.
 
 Do not depend on inaccessible chat history for project-critical context. If a new conclusion matters to future work, put it in the repository.
 
@@ -28,6 +29,9 @@ Do not depend on inaccessible chat history for project-critical context. If a ne
 - Keep the reader contract simpler than encoder heuristics: old archives must remain readable after encoder strategy changes once 1.0 is frozen.
 - Treat malformed archives as hostile input. Bounds, path and resource-limit checks are mandatory.
 - For parser/conformance work, keep `docs/HARDENING.md` current so unfinished safety assumptions do not disappear into chat or one-off tests.
+- Treat a fair, reproducible ZIP win as an engineering gap to investigate; never hide it by changing timing boundaries, workloads, or semantics.
+- Keep library-to-library and CLI/process-start benchmark layers separate so startup overhead cannot masquerade as codec/format performance.
+- Portability is a release gate: keep `docs/PORTABILITY.md` current and design platform integrations around one shared memory-safe archive-handler core rather than independent parsers.
 - Preserve fallback behavior when optional native helpers/codecs are absent.
 - Update `docs/FORMAT.md` in the same change as any on-disk format mutation.
 - Update `docs/HISTORY.md` and `docs/CURRENT_STATE.md` whenever a version/revision materially changes project behavior or the development frontier.
