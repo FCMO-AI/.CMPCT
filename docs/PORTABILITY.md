@@ -193,14 +193,15 @@ Implemented today:
 - native bounded range reads for ordinary direct Zstd, raw Deflate and Zstd-with-dictionary members, with a 256 MiB per-direct-member decode ceiling, exact decompressed-length validation and SHA-256 verification before returning the requested slice; codec-3 additionally authenticates and bounds the archive-selected dictionary blob;
 - native fixed/CDC chunk-map validation and range-local reads across mixed RAW/Zstd/Deflate chunks, with complete-member logical SHA-256 verification;
 - native sparse-map validation and range-local hole/data reads, including exact extent accounting, complete-member logical SHA-256 verification, and a conformance test proving corruption in an untouched extent does not force unrelated data to be decoded;
-- builder-independent direct-codec, chunk-map, sparse and Zstd-dictionary golden archives exercised through the produced shared library from a non-Rust caller, including dictionary/member corruption refusal for codec 3.
+- builder-independent direct-codec, chunk-map, sparse and Zstd-dictionary golden archives exercised through the produced shared library from a non-Rust caller, including dictionary/member corruption refusal for codec 3;
+- an Android revision-24 source preview under `integrations/android/` with bounded `ACTION_VIEW` registration, Storage Access Framework import, magic + native-index validation, a read-only `DocumentsProvider`, JNI reuse of the shared Rust core, range-streamed regular members, four ABI build wiring, and an Android 10 emulator conformance workflow against the canonical direct-codec golden archives.
 
-`docs/NATIVE_CORE.md` is the detailed handoff for the native capability and its safety boundary.
+`docs/NATIVE_CORE.md` is the detailed handoff for the native capability and its safety boundary. `integrations/android/README.md` defines the Android build and acceptance gate.
 
 Not yet implemented and therefore **not to be claimed as shipped support**:
 
 - complete memory-safe native reader/writer ABI beyond primary-index/open/enumeration plus direct RAW/Zstd/Deflate/Zstd-dictionary, fixed/CDC and sparse reads: full hostile structural validation, recovery, WAV-FLAC/remaining storage descriptions, streams, extraction and mutation are still pending;
-- Android application/DocumentsProvider;
+- Android production/device certification beyond the source preview and emulator gate, including the remaining native representations and physical ARM64 acceptance;
 - Windows shell/browser package;
 - Apple document/Quick Look package;
 - Linux browser/FUSE/GVfs integration;
