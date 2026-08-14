@@ -1,6 +1,6 @@
 # CMPCT design principles
 
-1. **General before local.** Hermes is a useful real-world corpus, never the format specification.
+1. **General before local.** Any real-world development corpus is evidence, never the format specification.
 2. **Lossless means byte-exact.** A logical file must reconstruct to the original bytes unless the
    user explicitly asks for a lossy transform outside the CMPCT core contract.
 3. **Measure, then select.** Representation choice is made from actual bytes and cost, not filename.
@@ -27,3 +27,6 @@
     corpora, including cases where it should deliberately decline to act.
 15. **Keep code notes.** Design footnotes in the reference implementation are intentional executable
     documentation and should not be silently deleted during refactors.
+16. **Public CMPCT stands alone.** Private corpus identities, unrelated internal projects, personal
+    information and private artifact provenance are not part of the format contract and must not leak
+    into the public repository/site surface.
