@@ -81,13 +81,25 @@ final class ArchiveRegistry {
 
         String id = hex(digest.digest());
         File destination = new File(directory, id + ".cmpct");
+        boolean created = false;
         if (!destination.exists()) {
             if (!staging.renameTo(destination)) {
                 staging.delete();
                 throw new IOException("Unable to commit imported CMPCT archive into app storage");
             }
+            created = true;
         } else {
             staging.delete();
+        }
+
+        try (CmpctNative.Archive archive = new CmpctNative.Archive(destination.getAbsolutePath())) {
+            if (archive.revision() != 24) throw new IOException("Unsupported CMPCT revision");
+        } catch (IOException e) {
+            // Footnote: never publish a root after magic-only validation. The shared native parser must
+            // authenticate/decode the index first; otherwise a corrupt file could survive as a broken
+            // DocumentsProvider root merely because its first eight bytes looked plausible.
+            if (created) destination.delete();
+            throw e;
         }
 
         String name = displayName(context, uri);
