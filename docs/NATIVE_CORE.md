@@ -21,7 +21,7 @@ The native core currently:
 - verifies the logical whole-file SHA-256 when a caller requests a complete fixed/CDC/sparse member, while selective reads retain per-touched-blob integrity semantics;
 - returns typed C statuses for null pointers, I/O/format errors, resource limits, out-of-range requests and unsupported representations.
 
-The compressed direct-member paths are intentionally correctness-first. Ordinary Zstd frames and raw Deflate streams are not intrinsically byte-seekable in revision 24, so a range request on one direct compressed member currently decodes that member in full. This is still materially better than requiring whole-archive extraction and is the correct bridge to native archive browsing. Large ordinary files are normally chunked by the encoder; fixed/CDC chunk maps are range-local in the native core, and sparse members now synthesize holes without decoding or allocating unrelated logical regions. A small read therefore stays proportional to touched stored data rather than to the whole member or archive.
+The compressed direct-member paths are intentionally correctness-first. Ordinary Zstd frames and raw Deflate streams are not intrinsically byte-seekable in revision 24, so a range request on one direct compressed member currently decodes that member in full. This is still materially better than requiring whole-archive extraction and is the correct bridge to native archive browsing. Large ordinary files are normally chunked by the encoder; fixed/CDC chunk maps are range-local in the native core, and sparse members synthesize holes without decoding or allocating unrelated logical regions. A small read therefore stays proportional to touched stored data rather than to the whole member or archive.
 
 ## Integrity boundary
 
@@ -45,6 +45,8 @@ The important property is provenance: these bytes were hand-assembled from the r
 
 `tests/conformance/v24-sparse.json` freezes `S_SPARSE` independently of the encoder. Its 64-byte logical member contains leading/interior/trailing holes plus two stored extents using RAW, Zstd and raw Deflate blobs. Known ranges cross hole/data and codec boundaries so an implementation cannot pass merely by returning stored extents contiguously.
 
+`tests/conformance/v24-zstd-dictionary.json` is now the fixed acceptance oracle for codec 3. It contains a RAW dictionary blob named by authenticated `dict_blob` metadata and a direct Zstd-with-dictionary member whose archive bytes, dictionary SHA-256, logical SHA-256 and known range answer are frozen independently of `Builder`. The Python reference already consumes these exact bytes. Native dictionary support is **not** implemented until the C ABI can consume this existing archive with bounded dictionary/member allocation and reject dictionary/member corruption without rewriting the fixture.
+
 ## CI conformance gate
 
 `.github/workflows/native-core.yml` must keep the following gates green:
@@ -58,15 +60,16 @@ The important property is provenance: these bytes were hand-assembled from the r
 7. committed fixed/CDC golden archives consumed through the C ABI for cross-boundary selective and complete reads, including rejection of a range touching a chunk whose physical content identity was corrupted;
 8. the committed sparse golden archive consumed through the C ABI for hole/data cross-boundary and complete reads, including an explicit locality proof: corruption in an untouched extent must not poison a disjoint range, while a range touching that compressed blob must fail.
 
-A future representation is not considered implemented merely because a Rust function can decode it. It must cross the C ABI and agree with both the Python oracle where applicable and a committed golden archive once one exists for that representation.
+The next gate to add is the committed dictionary archive itself. A future representation is not considered implemented merely because a Rust function can decode it. It must cross the C ABI and agree with both the Python oracle where applicable and a committed golden archive once one exists for that representation.
 
 ## Next implementation order
 
-1. Zstd-dictionary and WAV/FLAC direct blobs;
-2. virtual ZIP reconstruction/range access;
-3. sequential member streams and extraction APIs;
-4. full structural-preflight parity and decompression/work budgets;
-5. committed tail/journal recovery and prior-generation fallback;
-6. platform bindings using this API rather than format-specific parsing.
+1. implement bounded Zstd-with-dictionary direct blobs against `tests/conformance/v24-zstd-dictionary.json` and add that vector to permanent native CI;
+2. freeze and implement WAV/FLAC direct blobs;
+3. virtual ZIP reconstruction/range access;
+4. sequential member streams and extraction APIs;
+5. full structural-preflight parity and decompression/work budgets;
+6. committed tail/journal recovery and prior-generation fallback;
+7. platform bindings using this API rather than format-specific parsing.
 
 No item above requires a format revision unless implementing it reveals that revision-24 bytes are insufficient to express the required reader semantics. In that case the normal specification/version/conformance gate applies.
