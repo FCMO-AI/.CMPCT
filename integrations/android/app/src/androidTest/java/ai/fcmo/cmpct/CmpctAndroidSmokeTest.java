@@ -63,7 +63,7 @@ public final class CmpctAndroidSmokeTest extends InstrumentationTestCase {
         }
     }
 
-    public void testAndroidRoutesCmpctViewIntentsToMainActivity() {
+    public void testAndroidRoutesCmpctViewIntentsToMainActivityWithoutHijackingOtherBinaryFiles() {
         Context target = getInstrumentation().getTargetContext();
         PackageManager pm = target.getPackageManager();
 
@@ -75,10 +75,17 @@ public final class CmpctAndroidSmokeTest extends InstrumentationTestCase {
         // Footnote: real Android download/file providers commonly label unknown extensions as generic
         // binary. The bounded .cmpct path fallback is therefore part of the user-visible acceptance
         // contract, not merely manifest decoration.
-        Intent generic = new Intent(Intent.ACTION_VIEW)
+        Intent genericCmpct = new Intent(Intent.ACTION_VIEW)
                 .setDataAndType(Uri.parse("content://example/Download/archive.cmpct"), "application/octet-stream")
                 .addCategory(Intent.CATEGORY_BROWSABLE);
-        assertTrue("octet-stream .cmpct content URI must resolve to the installed handler", resolvesToCmpct(pm, generic));
+        assertTrue("octet-stream .cmpct content URI must resolve to the installed handler",
+                resolvesToCmpct(pm, genericCmpct));
+
+        Intent unrelatedBinary = new Intent(Intent.ACTION_VIEW)
+                .setDataAndType(Uri.parse("content://example/Download/archive.bin"), "application/octet-stream")
+                .addCategory(Intent.CATEGORY_BROWSABLE);
+        assertFalse("CMPCT must not advertise itself for unrelated generic binary content",
+                resolvesToCmpct(pm, unrelatedBinary));
     }
 
     public void testImportedArchiveBecomesBrowsableDocumentsProviderTreeAndStreamsMember() throws Exception {
