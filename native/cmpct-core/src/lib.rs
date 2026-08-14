@@ -425,7 +425,9 @@ impl Archive {
             let extent_end = extent
                 .offset
                 .checked_add(extent.logical_len)
-                .ok_or_else(|| CmpctError::Schema("sparse extent overflows logical offsets".into()))?;
+                .ok_or_else(|| {
+                    CmpctError::Schema("sparse extent overflows logical offsets".into())
+                })?;
             if extent_end <= start {
                 continue;
             }
@@ -437,7 +439,8 @@ impl Archive {
             let local_start = overlap_start - extent.offset;
             let length =
                 usize::try_from(overlap_end - overlap_start).map_err(|_| CmpctError::Range)?;
-            let dst_start = usize::try_from(overlap_start - start).map_err(|_| CmpctError::Range)?;
+            let dst_start =
+                usize::try_from(overlap_start - start).map_err(|_| CmpctError::Range)?;
             let dst_end = dst_start.checked_add(length).ok_or(CmpctError::Range)?;
             self.read_chunked_range(
                 &extent.chunks,
@@ -711,7 +714,9 @@ fn parse_storage(
                 )));
             }
             let rows = storage[1].as_array().ok_or_else(|| {
-                CmpctError::Schema(format!("file row {row_index} sparse extents are not an array"))
+                CmpctError::Schema(format!(
+                    "file row {row_index} sparse extents are not an array"
+                ))
             })?;
             if rows.len() > MAX_BLOBS {
                 return Err(CmpctError::Schema(format!(
