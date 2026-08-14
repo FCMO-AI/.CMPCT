@@ -4,6 +4,7 @@ import android.content.Context;
 import android.content.SharedPreferences;
 import android.database.Cursor;
 import android.net.Uri;
+import android.provider.DocumentsContract;
 import android.provider.OpenableColumns;
 
 import java.io.BufferedInputStream;
@@ -92,6 +93,11 @@ final class ArchiveRegistry {
         String name = displayName(context, uri);
         if (name == null || name.trim().isEmpty()) name = id.substring(0, 12) + ".cmpct";
         prefs(context).edit().putString(id, name).apply();
+
+        // Footnote: DocumentsUI caches roots. Tell it immediately when a new archive becomes a root,
+        // otherwise a successful import can remain invisible until the picker is restarted or refreshed.
+        context.getContentResolver().notifyChange(
+                DocumentsContract.buildRootsUri(context.getPackageName() + ".documents"), null);
         return new Record(id, name, destination);
     }
 
