@@ -33,7 +33,9 @@ def test_windows_association_targets_packaged_native_browser_without_hijacking_d
     assert "Capabilities\\FileAssociations" in text
     assert "@CMPCT_BROWSER_EXE@" in text
     assert "python" not in text.lower()
-    assert '"%1"' in text
+    # .reg string values escape embedded command-line quotes with backslashes;
+    # assert the serialized form rather than the post-registry command spelling.
+    assert '\\"%1\\"' in text
     extension_block = text.split(f"[HKEY_CURRENT_USER\\Software\\Classes\\.{EXTENSION}]", 1)[1].split("\n\n", 1)[0]
     assert '\n@="' not in extension_block
 
