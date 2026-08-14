@@ -5,19 +5,27 @@ on:
     branches: [main]
   pull_request:
   workflow_dispatch:
+    inputs:
+      publish:
+        description: "Publish the validated build to GitHub Pages"
+        required: true
+        default: false
+        type: boolean
 
 permissions:
   contents: read
-  pages: read
 
 concurrency:
-  group: cmpct-pages-${{ github.ref }}
+  group: cmpct-site-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
   build:
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    permissions:
+      contents: read
+      pages: read
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
@@ -32,6 +40,9 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: "22"
+
+      - name: Guard public project surface
+        run: python tools/check_public_surface.py
 
       - name: Install canonical CMPCT reader
         run: |
@@ -62,17 +73,17 @@ jobs:
           PY
 
       - name: Configure GitHub Pages
-        if: github.event_name != 'pull_request'
+        if: github.event_name == 'workflow_dispatch' && inputs.publish == true
         uses: actions/configure-pages@v5
 
       - name: Upload GitHub Pages artifact
-        if: github.event_name != 'pull_request'
+        if: github.event_name == 'workflow_dispatch' && inputs.publish == true
         uses: actions/upload-pages-artifact@v4
         with:
           path: _site
 
   deploy:
-    if: github.event_name != 'pull_request'
+    if: github.event_name == 'workflow_dispatch' && inputs.publish == true
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
@@ -86,6 +97,6 @@ jobs:
         id: deployment
         uses: actions/deploy-pages@v4
 
-# Footnote: private repositories require an explicit Pages metadata read for configure-pages. Build
-# and deployment remain separate so pull requests exercise the static build and browser-writer gate
-# without receiving deployment credentials; only canonical main/workflow-dispatch runs can publish.
+# Footnote: ordinary pushes and pull requests continuously validate the site, Browser Lab writer and
+# disclosure boundary without publishing anything. Publication is intentionally a separate manual
+# workflow-dispatch choice so presentation timing cannot be changed by an unrelated code merge.
