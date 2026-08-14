@@ -1,7 +1,7 @@
 //! Memory-safe read-only CMPCT core.
 //!
 //! The native slice authenticates the primary index, enumerates its logical tree, and can read
-//! bounded byte ranges from direct RAW/Zstd/Deflate members, revision-24 fixed/CDC chunk maps, and
+//! bounded byte ranges from direct RAW/Zstd/Deflate/Zstd-dictionary members, revision-24 fixed/CDC chunk maps, and
 //! sparse extents. RAW stays genuinely range-local; compressed direct members decode one bounded
 //! object, while chunked/sparse ranges decode only intersecting stored data. Virtual containers and
 //! transactional recovery remain behind explicit unsupported errors until each representation has its
@@ -28,6 +28,7 @@ const HEADER_SIZE: usize = 68;
 const BLOB_HEADER_SIZE: usize = 64;
 const CODEC_RAW: u8 = 0;
 const CODEC_ZSTD: u8 = 1;
+const CODEC_ZSTDDICT: u8 = 3;
 const CODEC_DEFLATE: u8 = 4;
 const STORAGE_BLOB: u64 = 0;
 const STORAGE_CHUNKS: u64 = 1;
@@ -124,6 +125,7 @@ pub struct Archive {
     revision: u16,
     entries: Vec<Entry>,
     blobs: Vec<Blob>,
+    dict_blob: Option<usize>,
     data_base: u64,
     data_end: u64,
     file: Mutex<File>,
@@ -192,11 +194,13 @@ impl Archive {
             ));
         }
         let blobs = parse_blobs(&index, data_span)?;
+        let dict_blob = parse_dictionary_blob(&index, &blobs)?;
         let entries = parse_entries(&index, &blobs)?;
         Ok(Self {
             revision,
             entries,
             blobs,
+            dict_blob,
             data_base,
             data_end,
             file: Mutex::new(file),
@@ -284,6 +288,72 @@ impl Archive {
         Ok(decoded)
     }
 
+    fn load_dictionary(&self, file: &mut File) -> Result<Vec<u8>, CmpctError> {
+        let index = self.dict_blob.ok_or_else(|| {
+            CmpctError::Schema("codec 3 member has no authenticated dict_blob".into())
+        })?;
+        let blob = self
+            .blobs
+            .get(index)
+            .ok_or_else(|| CmpctError::Schema("dictionary references missing blob".into()))?;
+        if blob.usize > MAX_DIRECT_DECODE_BYTES || blob.csize > MAX_DIRECT_DECODE_BYTES {
+            return Err(CmpctError::MemberLimit);
+        }
+        let (payload_pos, expected_hash) = self.checked_blob_layout(blob, file)?;
+        match blob.codec {
+            CODEC_RAW => {
+                if blob.csize != blob.usize {
+                    return Err(CmpctError::BlobHeader);
+                }
+                let len = usize::try_from(blob.usize).map_err(|_| CmpctError::MemberLimit)?;
+                file.seek(SeekFrom::Start(payload_pos))?;
+                let mut dictionary = vec![0u8; len];
+                file.read_exact(&mut dictionary)?;
+                if Sha256::digest(&dictionary).as_slice() != expected_hash {
+                    return Err(CmpctError::MemberHash);
+                }
+                Ok(dictionary)
+            }
+            CODEC_ZSTD => self.decode_zstd_blob(blob, file, payload_pos, &expected_hash),
+            CODEC_DEFLATE => self.decode_deflate_blob(blob, file, payload_pos, &expected_hash),
+            _ => Err(CmpctError::Unsupported),
+        }
+    }
+
+    fn decode_zstd_dictionary_blob(
+        &self,
+        blob: &Blob,
+        file: &mut File,
+        payload_pos: u64,
+        expected_hash: &[u8; 32],
+    ) -> Result<Vec<u8>, CmpctError> {
+        if blob.usize > MAX_DIRECT_DECODE_BYTES || blob.csize > MAX_DIRECT_DECODE_BYTES {
+            return Err(CmpctError::MemberLimit);
+        }
+        let compressed_len = usize::try_from(blob.csize).map_err(|_| CmpctError::MemberLimit)?;
+        let decoded_len = usize::try_from(blob.usize).map_err(|_| CmpctError::MemberLimit)?;
+        let dictionary = self.load_dictionary(file)?;
+        file.seek(SeekFrom::Start(payload_pos))?;
+        let mut compressed = vec![0u8; compressed_len];
+        file.read_exact(&mut compressed)?;
+
+        // Footnote: dict_blob is authenticated index metadata, but the dictionary bytes are a second
+        // archive-controlled dependency. Authenticate that blob first, then decode one bounded codec-3
+        // member and authenticate its complete content before exposing even a partial range.
+        let decoder =
+            zstd::stream::read::Decoder::with_dictionary(Cursor::new(compressed), &dictionary)?;
+        let mut limited = decoder.take(blob.usize.saturating_add(1));
+        let mut decoded = Vec::with_capacity(decoded_len);
+        limited.read_to_end(&mut decoded)?;
+        if decoded.len() != decoded_len {
+            return Err(CmpctError::MemberLength);
+        }
+        if Sha256::digest(&decoded).as_slice() != expected_hash {
+            return Err(CmpctError::MemberHash);
+        }
+        Ok(decoded)
+    }
+
     fn decode_deflate_blob(
         &self,
         blob: &Blob,
@@ -345,6 +415,13 @@ impl Archive {
             }
             CODEC_ZSTD => {
                 let decoded = self.decode_zstd_blob(blob, file, payload_pos, &expected_hash)?;
+                let start = usize::try_from(start).map_err(|_| CmpctError::Range)?;
+                let end = start.checked_add(out.len()).ok_or(CmpctError::Range)?;
+                out.copy_from_slice(&decoded[start..end]);
+            }
+            CODEC_ZSTDDICT => {
+                let decoded =
+                    self.decode_zstd_dictionary_blob(blob, file, payload_pos, &expected_hash)?;
                 let start = usize::try_from(start).map_err(|_| CmpctError::Range)?;
                 let end = start.checked_add(out.len()).ok_or(CmpctError::Range)?;
                 out.copy_from_slice(&decoded[start..end]);
@@ -604,6 +681,23 @@ fn parse_blobs(index: &Value, data_span: u64) -> Result<Vec<Blob>, CmpctError> {
         });
     }
     Ok(blobs)
+}
+
+fn parse_dictionary_blob(index: &Value, blobs: &[Blob]) -> Result<Option<usize>, CmpctError> {
+    let map = index
+        .as_map()
+        .ok_or_else(|| CmpctError::Schema("root index is not a map".into()))?;
+    let Some(value) = map
+        .iter()
+        .find_map(|(key, value)| (key.as_str() == Some("dict_blob")).then_some(value))
+    else {
+        return Ok(None);
+    };
+    if matches!(value, Value::Nil) {
+        return Ok(None);
+    }
+    let index = storage_blob_index(value, blobs.len(), "dictionary blob")?;
+    Ok(Some(index))
 }
 
 fn parse_hash(value: &Value, row_index: usize) -> Result<Option<[u8; 32]>, CmpctError> {
