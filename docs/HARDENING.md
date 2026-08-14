@@ -43,7 +43,7 @@ These vectors were deliberately hand-built from the revision-24 framing/schema r
 
 The Deflate vector gates native raw-Deflate support through the C ABI, including strong content-hash failure behavior. `tests/conformance/v24-chunk-maps.json` adds builder-independent `S_CHUNKS` and `S_CDC` archives whose known ranges cross chunk boundaries and mix RAW/Zstd/Deflate physical blobs. `tests/conformance/v24-sparse.json` freezes `S_SPARSE` semantics independently of the builder: its logical member contains leading/interior/trailing holes plus data extents backed by RAW, Zstd and raw Deflate blobs, with known ranges crossing hole/data and codec boundaries. The Rust C ABI now consumes all three sets.
 
-`tests/conformance/v24-zstd-dictionary.json` now freezes the codec-3 relationship independently of the encoder. The archive contains a RAW dictionary blob referenced by authenticated `dict_blob` metadata plus a direct Zstd-with-dictionary member whose compressed payload cannot be decoded as ordinary codec-1 Zstd. Its archive bytes, dictionary identity, logical identity and known range answer are fixed and already consumed by the Python reference reader. Native codec-3 support is not complete until the produced C ABI consumes these exact bytes and preserves the same bounded-integrity behavior as the existing compressed-codec paths.
+`tests/conformance/v24-zstd-dictionary.json` now freezes the codec-3 relationship independently of the encoder. The archive contains a RAW dictionary blob referenced by authenticated `dict_blob` metadata plus a direct Zstd-with-dictionary member whose compressed payload cannot be decoded as ordinary codec-1 Zstd. Its archive bytes, dictionary identity, logical identity and known range answer are fixed and already consumed by the Python reference reader. The produced C ABI now consumes these exact codec-3 bytes with bounded dictionary/member allocation and rejects corruption of either the dictionary payload or the member identity before returning content.
 
 Future golden sets still need WAV/FLAC, packs, virtual ZIP recipes, links/metadata and committed transaction generations.
 
@@ -59,7 +59,7 @@ In particular:
 - no property-based or coverage-guided fuzzer is committed yet;
 - golden revision-24 coverage is still partial: direct RAW/Zstd/Deflate, fixed/CDC chunk maps, sparse extents and direct Zstd-with-dictionary now exist, while other codecs/storage descriptions/generations remain missing;
 - nested recipes, chunk maps, sparse extents and journal operations still need byte-level mutation coverage in addition to the structural mutation matrix;
-- parser behavior has begun independent cross-checking: the Rust core authenticates/decodes the primary index, matches Python entry enumeration/path policy, cross-checks bounded direct RAW/Zstd/Deflate ranges, independently validates/reads fixed and CDC chunk maps, and independently validates/reads sparse extent maps through the C ABI. The fixed dictionary vector is ready as the next codec oracle, but native codec-3 decoding is not yet implemented. Full structural parity, tail/journal recovery, audio codecs, virtual storage and extraction are not yet independently validated.
+- parser behavior has begun independent cross-checking: the Rust core authenticates/decodes the primary index, matches Python entry enumeration/path policy, cross-checks bounded direct RAW/Zstd/Deflate ranges, independently validates/reads fixed and CDC chunk maps, and independently validates/reads sparse extent maps through the C ABI. The fixed dictionary vector is now consumed by native codec-3 decoding through the C ABI, including dictionary/member corruption refusal. Full structural parity, tail/journal recovery, audio codecs, virtual storage and extraction are not yet independently validated.
 
 ### Canonical lexical path aliases
 
@@ -75,11 +75,11 @@ The shared Rust reader has bounded bridges for ordinary direct Zstd/raw Deflate 
 
 Sparse maps additionally require sorted, non-overlapping extents within logical EOF and exact equality between each extent length and the sum of its referenced blob lengths. Sparse selective reads synthesize holes as zeroes and decode only stored chunks in touched extents. The fixed ABI gate proves this locality by corrupting a compressed blob in an untouched extent: a disjoint range still succeeds, while a range touching the corrupted extent fails. RAW partial reads remain range-local and deliberately do not claim whole-member verification of unseen bytes.
 
-This is a representation-specific safety increment, not a replacement for full native preflight parity. Pack, virtual, dictionary/audio and journal structures still need independent native validation before the shared handler is representation-complete. The codec-3 golden vector narrows the dictionary portion of that gap to one fixed acceptance target rather than an encoder-generated fixture.
+This is a representation-specific safety increment, not a replacement for full native preflight parity. Pack, virtual, audio and journal structures still need independent native validation before the shared handler is representation-complete. The dictionary portion is now gated by a fixed builder-independent codec-3 oracle rather than an encoder-generated fixture.
 
 ## Next hardening sequence
 
-1. Make native Zstd-with-dictionary consume `tests/conformance/v24-zstd-dictionary.json` through the C ABI with bounded dictionary/member allocation and corruption refusal; then freeze and implement WAV/FLAC.
+1. Freeze and implement WAV/FLAC through the same builder-independent C-ABI pattern now used for direct, chunk, sparse and Zstd-dictionary representations.
 2. Expand the golden revision-24 set to packs, virtual ZIP recipes, links/metadata and committed-generation shapes, and make each implemented native representation cross the fixed C-ABI oracle rather than only Python-generated archives.
 3. Add property tests and a byte-level mutation/fuzz corpus for headers, MessagePack structures, blob framing, chunk maps, sparse maps, nested recipes, journal chains and path relationships.
 4. Add per-read/per-extract decompressed-byte and work budgets; then integrate bounded validation into the normal reader constructor under an explicit policy, including canonical path-collision rejection shared with extraction.

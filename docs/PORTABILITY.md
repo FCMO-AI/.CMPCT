@@ -190,16 +190,16 @@ Implemented today:
 - explicit portability contract and release gates;
 - a memory-safe Rust core under `native/cmpct-core/` that authenticates/decodes the revision-24 primary index, enumerates logical entries, rejects lexical path aliases, bounds the base blob table, cross-checks direct physical blob framing, and exposes a tested opaque C ABI;
 - native range reads for direct RAW members without decoding unrelated bytes;
-- native bounded range reads for ordinary direct Zstd and raw Deflate members, with a 256 MiB per-direct-member decode ceiling, exact decompressed-length validation and SHA-256 verification before returning the requested slice;
+- native bounded range reads for ordinary direct Zstd, raw Deflate and Zstd-with-dictionary members, with a 256 MiB per-direct-member decode ceiling, exact decompressed-length validation and SHA-256 verification before returning the requested slice; codec-3 additionally authenticates and bounds the archive-selected dictionary blob;
 - native fixed/CDC chunk-map validation and range-local reads across mixed RAW/Zstd/Deflate chunks, with complete-member logical SHA-256 verification;
 - native sparse-map validation and range-local hole/data reads, including exact extent accounting, complete-member logical SHA-256 verification, and a conformance test proving corruption in an untouched extent does not force unrelated data to be decoded;
-- builder-independent direct-codec, chunk-map and sparse golden archives exercised through the produced shared library from a non-Rust caller, including corruption refusal.
+- builder-independent direct-codec, chunk-map, sparse and Zstd-dictionary golden archives exercised through the produced shared library from a non-Rust caller, including dictionary/member corruption refusal for codec 3.
 
 `docs/NATIVE_CORE.md` is the detailed handoff for the native capability and its safety boundary.
 
 Not yet implemented and therefore **not to be claimed as shipped support**:
 
-- complete memory-safe native reader/writer ABI beyond primary-index/open/enumeration plus direct RAW/Zstd/Deflate, fixed/CDC and sparse reads: full hostile structural validation, recovery, remaining codecs/storage descriptions, streams, extraction and mutation are still pending;
+- complete memory-safe native reader/writer ABI beyond primary-index/open/enumeration plus direct RAW/Zstd/Deflate/Zstd-dictionary, fixed/CDC and sparse reads: full hostile structural validation, recovery, WAV-FLAC/remaining storage descriptions, streams, extraction and mutation are still pending;
 - Android application/DocumentsProvider;
 - Windows shell/browser package;
 - Apple document/Quick Look package;

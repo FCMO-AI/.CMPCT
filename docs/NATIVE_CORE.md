@@ -13,7 +13,7 @@ The native core currently:
 - bounds the base blob table and cross-checks direct physical blob framing against authenticated index metadata;
 - enumerates entry path/kind/mode/mtime/size through Rust and an opaque C ABI;
 - reads genuinely range-local slices from direct RAW members;
-- reads bounded slices from ordinary direct Zstd and raw Deflate members by decoding at most one direct member, enforcing a 256 MiB direct-decode cap, verifying exact decompressed length and SHA-256, then copying only the requested range to the caller;
+- reads bounded slices from ordinary direct Zstd, raw Deflate and Zstd-with-dictionary members by decoding at most one direct member, enforcing a 256 MiB direct-decode cap, verifying exact decompressed length and SHA-256, then copying only the requested range to the caller; codec-3 reads also authenticate and bound the index-selected dictionary blob before decoding;
 - validates revision-24 fixed and content-defined chunk maps at open time, including blob references, per-chunk declared lengths and exact logical-size accounting;
 - reads fixed/CDC ranges by decoding only chunks that intersect the caller's requested interval, with mixed RAW/Zstd/Deflate chunks supported through the same blob decoder;
 - validates revision-24 sparse extent maps at open time, including sorted/non-overlapping extents, logical-file bounds, blob references and exact stored-byte accounting for every extent;
@@ -45,7 +45,7 @@ The important property is provenance: these bytes were hand-assembled from the r
 
 `tests/conformance/v24-sparse.json` freezes `S_SPARSE` independently of the encoder. Its 64-byte logical member contains leading/interior/trailing holes plus two stored extents using RAW, Zstd and raw Deflate blobs. Known ranges cross hole/data and codec boundaries so an implementation cannot pass merely by returning stored extents contiguously.
 
-`tests/conformance/v24-zstd-dictionary.json` is now the fixed acceptance oracle for codec 3. It contains a RAW dictionary blob named by authenticated `dict_blob` metadata and a direct Zstd-with-dictionary member whose archive bytes, dictionary SHA-256, logical SHA-256 and known range answer are frozen independently of `Builder`. The Python reference already consumes these exact bytes. Native dictionary support is **not** implemented until the C ABI can consume this existing archive with bounded dictionary/member allocation and reject dictionary/member corruption without rewriting the fixture.
+`tests/conformance/v24-zstd-dictionary.json` is now the fixed acceptance oracle for codec 3. It contains a RAW dictionary blob named by authenticated `dict_blob` metadata and a direct Zstd-with-dictionary member whose archive bytes, dictionary SHA-256, logical SHA-256 and known range answer are frozen independently of `Builder`. The Python reference already consumes these exact bytes. The native C ABI now consumes this existing archive with bounded dictionary/member allocation and rejects both dictionary-payload corruption and member-identity corruption without rewriting the fixture.
 
 ## CI conformance gate
 
@@ -58,18 +58,18 @@ The important property is provenance: these bytes were hand-assembled from the r
 5. direct-Zstd range bytes compared against the Python oracle, with the fixture asserting that the selected member is physically codec 1 rather than accidentally RAW;
 6. the committed RAW/Zstd/Deflate golden archives consumed directly through the same C ABI, including rejection of a Deflate archive whose physical content identity is corrupted while the raw Deflate stream itself remains decodable;
 7. committed fixed/CDC golden archives consumed through the C ABI for cross-boundary selective and complete reads, including rejection of a range touching a chunk whose physical content identity was corrupted;
-8. the committed sparse golden archive consumed through the C ABI for hole/data cross-boundary and complete reads, including an explicit locality proof: corruption in an untouched extent must not poison a disjoint range, while a range touching that compressed blob must fail.
+8. the committed sparse golden archive consumed through the C ABI for hole/data cross-boundary and complete reads, including an explicit locality proof: corruption in an untouched extent must not poison a disjoint range, while a range touching that compressed blob must fail;
+9. the committed Zstd-dictionary golden archive consumed through the C ABI for selective and complete reads, including refusal when either the authenticated dictionary payload or the codec-3 member identity is corrupted.
 
-The next gate to add is the committed dictionary archive itself. A future representation is not considered implemented merely because a Rust function can decode it. It must cross the C ABI and agree with both the Python oracle where applicable and a committed golden archive once one exists for that representation.
+The dictionary gate is now permanent. A future representation is not considered implemented merely because a Rust function can decode it. It must cross the C ABI and agree with both the Python oracle where applicable and a committed golden archive once one exists for that representation.
 
 ## Next implementation order
 
-1. implement bounded Zstd-with-dictionary direct blobs against `tests/conformance/v24-zstd-dictionary.json` and add that vector to permanent native CI;
-2. freeze and implement WAV/FLAC direct blobs;
-3. virtual ZIP reconstruction/range access;
-4. sequential member streams and extraction APIs;
-5. full structural-preflight parity and decompression/work budgets;
-6. committed tail/journal recovery and prior-generation fallback;
-7. platform bindings using this API rather than format-specific parsing.
+1. freeze and implement WAV/FLAC direct blobs;
+2. virtual ZIP reconstruction/range access;
+3. sequential member streams and extraction APIs;
+4. full structural-preflight parity and decompression/work budgets;
+5. committed tail/journal recovery and prior-generation fallback;
+6. platform bindings using this API rather than format-specific parsing.
 
 No item above requires a format revision unless implementing it reveals that revision-24 bytes are insufficient to express the required reader semantics. In that case the normal specification/version/conformance gate applies.
