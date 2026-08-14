@@ -17,7 +17,6 @@ machine-readable output records that mismatch rather than pretending the two for
 same filesystem model.
 """
 
-import argparse
 import json
 import os
 import shutil
@@ -37,6 +36,7 @@ HERE = Path(__file__).resolve().parent
 WORK = HERE / "_parity_work"
 CORP = WORK / "corpora"
 OUT = WORK / "out"
+ZIP_CLI_HELPER = HERE / "zip_cli_helper.py"
 REPS = int(os.environ.get("CMPCT_PARITY_REPS", "3"))
 
 
@@ -126,13 +126,16 @@ def _zip_cli_create(src: Path, out: Path) -> None:
         out.unlink()
     except FileNotFoundError:
         pass
-    _run_cli([sys.executable, str(Path(__file__).resolve()), "_zip-create", str(src), str(out)])
+    # Footnote: the helper has no CMPCT import, so ZIP pays only its own interpreter + zipfile startup.
+    # This prevents a superficially "fair" subprocess benchmark from secretly loading our package on
+    # ZIP's side and gifting CMPCT an artificial CLI win.
+    _run_cli([sys.executable, str(ZIP_CLI_HELPER), "create", str(src), str(out)])
 
 
 def _zip_cli_extract(archive: Path, dest: Path) -> None:
     shutil.rmtree(dest, ignore_errors=True)
     dest.mkdir()
-    _run_cli([sys.executable, str(Path(__file__).resolve()), "_zip-extract", str(archive), str(dest)])
+    _run_cli([sys.executable, str(ZIP_CLI_HELPER), "extract", str(archive), str(dest)])
 
 
 def _timed_layer(name: str, src: Path, layer: str) -> dict:
@@ -211,20 +214,5 @@ def run() -> dict:
     return result
 
 
-def main() -> None:
-    parser = argparse.ArgumentParser()
-    parser.add_argument("mode", nargs="?", default="bench", choices=("bench", "_zip-create", "_zip-extract"))
-    parser.add_argument("a", nargs="?")
-    parser.add_argument("b", nargs="?")
-    ns = parser.parse_args()
-    if ns.mode == "_zip-create":
-        _zip_create(Path(ns.a), Path(ns.b))
-        return
-    if ns.mode == "_zip-extract":
-        _zip_extract(Path(ns.a), Path(ns.b))
-        return
-    run()
-
-
 if __name__ == "__main__":
-    main()
+    run()
