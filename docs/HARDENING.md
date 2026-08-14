@@ -26,7 +26,8 @@ The additive `cmpct.validation` layer provides:
 - physical blob-header cross-checking against the logical blob table without decompressing payloads;
 - a library entry point: `preflight_archive(...)`;
 - a CLI entry point: `cmpct preflight archive.cmpct`;
-- adversarial regression tests covering oversized index/generation declarations, corrupt blob framing, truncated archives and latest-generation fallback.
+- adversarial regression tests covering oversized index/generation declarations, corrupt blob framing, truncated archives and latest-generation fallback;
+- a direct structural mutation matrix covering unknown codecs, blob policy limits, pack bounds, fixed/CDC chunk accounting, sparse extent accounting, missing virtual-ZIP recipes, duplicate paths, unsafe paths, hardlink targets/cycles and filesystem-metadata references.
 
 ### Default limits
 
@@ -45,8 +46,14 @@ In particular:
 - `read()` may intentionally materialize a complete logical file and therefore still needs a caller budget for untrusted archives;
 - no property-based or coverage-guided fuzzer is committed yet;
 - golden revision-24 binary conformance vectors are not committed yet;
-- nested recipes, chunk maps, sparse extents and journal operations need a larger mutation corpus;
+- nested recipes, chunk maps, sparse extents and journal operations still need byte-level mutation coverage in addition to the structural mutation matrix;
 - parser behavior has not yet been cross-checked against an independent implementation.
+
+### Known path-normalization collision to resolve
+
+The current structural validator converts backslashes to `/` when checking traversal components, but duplicate-path detection still keys the original path string. The extractor also converts backslashes to `/` before constructing destination paths. Therefore two distinct index strings such as `a/b` and `a\\b` can currently survive the structural duplicate check yet name the same extraction destination.
+
+This should be fixed as part of the normal-reader validation integration, with one canonical lexical path key shared by preflight and extraction. Do not paper over it with an expected-failure test: the desired regression must prove that colliding archive paths are rejected before any destination file is written. Platform-specific separator and Unicode normalization rules still belong in the normative specification.
 
 The explicit preflight command is intentional for this first increment: it creates one testable, fuzzable safety boundary without silently adding latency to every existing reader hot path before the cost is measured.
 
@@ -54,8 +61,8 @@ The explicit preflight command is intentional for this first increment: it creat
 
 1. Run the complete regression suite against this preflight layer and fix any false positives.
 2. Add golden revision-24 archives/vectors for every storage kind and codec.
-3. Add property tests and a mutation/fuzz corpus for headers, MessagePack structures, blob framing, chunk maps, sparse maps, nested recipes, journal chains and path relationships.
-4. Add per-read/per-extract decompressed-byte and work budgets; then integrate bounded validation into the normal reader constructor under an explicit policy.
+3. Add property tests and a byte-level mutation/fuzz corpus for headers, MessagePack structures, blob framing, chunk maps, sparse maps, nested recipes, journal chains and path relationships.
+4. Add per-read/per-extract decompressed-byte and work budgets; then integrate bounded validation into the normal reader constructor under an explicit policy, including canonical path-collision rejection shared with extraction.
 5. Benchmark preflight/open overhead across tiny, source, media, sparse, nested and combined corpora.
 6. Turn validated structural maxima and canonical encodings into the normative byte-level spec.
 7. Cross-check the Python parser with the future memory-safe native reader.
