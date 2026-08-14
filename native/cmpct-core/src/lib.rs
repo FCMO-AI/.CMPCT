@@ -183,7 +183,12 @@ impl Archive {
     /// the physical blob frame against the authenticated index before returning bytes, but do not
     /// pretend a partial read verifies the whole-file CRC/SHA. Strong whole-file verification remains
     /// a separate operation until authenticated chunk/range proofs are part of the format contract.
-    pub fn read_range(&self, entry_index: usize, start: u64, out: &mut [u8]) -> Result<usize, CmpctError> {
+    pub fn read_range(
+        &self,
+        entry_index: usize,
+        start: u64,
+        out: &mut [u8],
+    ) -> Result<usize, CmpctError> {
         let entry = self.entries.get(entry_index).ok_or(CmpctError::Range)?;
         let end = start
             .checked_add(out.len() as u64)
@@ -195,9 +200,10 @@ impl Archive {
             return Ok(0);
         }
         let direct = entry.direct_blob.ok_or(CmpctError::Unsupported)?;
-        let blob = self.blobs.get(direct.index).ok_or_else(|| {
-            CmpctError::Schema("direct member references missing blob".into())
-        })?;
+        let blob = self
+            .blobs
+            .get(direct.index)
+            .ok_or_else(|| CmpctError::Schema("direct member references missing blob".into()))?;
         if blob.codec != CODEC_RAW || blob.usize != entry.size || blob.csize != blob.usize {
             return Err(CmpctError::Unsupported);
         }
@@ -299,9 +305,9 @@ fn parse_blobs(index: &Value, data_span: u64) -> Result<Vec<Blob>, CmpctError> {
         let usize = row[1]
             .as_u64()
             .ok_or_else(|| CmpctError::Schema(format!("blob row {i} has invalid size")))?;
-        let csize = row[2]
-            .as_u64()
-            .ok_or_else(|| CmpctError::Schema(format!("blob row {i} has invalid compressed size")))?;
+        let csize = row[2].as_u64().ok_or_else(|| {
+            CmpctError::Schema(format!("blob row {i} has invalid compressed size"))
+        })?;
         let codec = row[3]
             .as_u64()
             .filter(|v| *v <= u8::MAX as u64)
@@ -310,8 +316,9 @@ fn parse_blobs(index: &Value, data_span: u64) -> Result<Vec<Blob>, CmpctError> {
         let meta_len = row[4]
             .as_u64()
             .filter(|v| *v <= u32::MAX as u64)
-            .ok_or_else(|| CmpctError::Schema(format!("blob row {i} has invalid metadata length")))?
-            as u32;
+            .ok_or_else(|| {
+                CmpctError::Schema(format!("blob row {i} has invalid metadata length"))
+            })? as u32;
         let end = offset
             .checked_add(BLOB_HEADER_SIZE as u64)
             .and_then(|v| v.checked_add(meta_len as u64))
@@ -339,7 +346,7 @@ fn parse_entries(index: &Value, blob_count: usize) -> Result<Vec<Entry>, CmpctEr
         .ok_or_else(|| CmpctError::Schema("index revision is not an unsigned integer".into()))?;
     if index_revision != VERSION as u64 {
         return Err(CmpctError::Revision(
-            index_revision.min(u16::MAX as u64) as u16,
+            index_revision.min(u16::MAX as u64) as u16
         ));
     }
 
