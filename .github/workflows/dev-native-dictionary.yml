@@ -1,0 +1,94 @@
+name: Bootstrap native dictionary implementation
+
+on:
+  push:
+    branches:
+      - feat/native-zstd-dictionary
+
+permissions:
+  contents: write
+
+jobs:
+  implement:
+    if: ${{ !contains(github.event.head_commit.message, '[native-dict-ready]') }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/native-zstd-dictionary
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Patch native core and permanent gate
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          p=Path('native/cmpct-core/src/lib.rs')
+          s=p.read_text()
+          def rep(old,new):
+              global s
+              if old not in s:
+                  raise SystemExit(f'missing patch anchor: {old[:100]!r}')
+              s=s.replace(old,new,1)
+
+          rep('bounded byte ranges from direct RAW/Zstd/Deflate members, revision-24 fixed/CDC chunk maps, and',
+              'bounded byte ranges from direct RAW/Zstd/Deflate/Zstd-dictionary members, revision-24 fixed/CDC chunk maps, and')
+          rep('const CODEC_ZSTD: u8 = 1;\nconst CODEC_DEFLATE: u8 = 4;',
+              'const CODEC_ZSTD: u8 = 1;\nconst CODEC_ZSTDDICT: u8 = 3;\nconst CODEC_DEFLATE: u8 = 4;')
+          rep('    blobs: Vec<Blob>,\n    data_base: u64,',
+              '    blobs: Vec<Blob>,\n    dict_blob: Option<usize>,\n    data_base: u64,')
+          rep('        let blobs = parse_blobs(&index, data_span)?;\n        let entries = parse_entries(&index, &blobs)?;',
+              '        let blobs = parse_blobs(&index, data_span)?;\n        let dict_blob = parse_dictionary_blob(&index, &blobs)?;\n        let entries = parse_entries(&index, &blobs)?;')
+          rep('            entries,\n            blobs,\n            data_base,',
+              '            entries,\n            blobs,\n            dict_blob,\n            data_base,')
+
+          anchor='''    fn decode_deflate_blob(\n        &self,\n        blob: &Blob,'''
+          insert='''    fn load_dictionary(&self, file: &mut File) -> Result<Vec<u8>, CmpctError> {\n        let index = self\n            .dict_blob\n            .ok_or_else(|| CmpctError::Schema("codec 3 member has no authenticated dict_blob".into()))?;\n        let blob = self\n            .blobs\n            .get(index)\n            .ok_or_else(|| CmpctError::Schema("dictionary references missing blob".into()))?;\n        if blob.usize > MAX_DIRECT_DECODE_BYTES || blob.csize > MAX_DIRECT_DECODE_BYTES {\n            return Err(CmpctError::MemberLimit);\n        }\n        let (payload_pos, expected_hash) = self.checked_blob_layout(blob, file)?;\n        match blob.codec {\n            CODEC_RAW => {\n                if blob.csize != blob.usize {\n                    return Err(CmpctError::BlobHeader);\n                }\n                let len = usize::try_from(blob.usize).map_err(|_| CmpctError::MemberLimit)?;\n                file.seek(SeekFrom::Start(payload_pos))?;\n                let mut dictionary = vec![0u8; len];\n                file.read_exact(&mut dictionary)?;\n                if Sha256::digest(&dictionary).as_slice() != expected_hash {\n                    return Err(CmpctError::MemberHash);\n                }\n                Ok(dictionary)\n            }\n            CODEC_ZSTD => self.decode_zstd_blob(blob, file, payload_pos, &expected_hash),\n            CODEC_DEFLATE => self.decode_deflate_blob(blob, file, payload_pos, &expected_hash),\n            _ => Err(CmpctError::Unsupported),\n        }\n    }\n\n    fn decode_zstd_dictionary_blob(\n        &self,\n        blob: &Blob,\n        file: &mut File,\n        payload_pos: u64,\n        expected_hash: &[u8; 32],\n    ) -> Result<Vec<u8>, CmpctError> {\n        if blob.usize > MAX_DIRECT_DECODE_BYTES || blob.csize > MAX_DIRECT_DECODE_BYTES {\n            return Err(CmpctError::MemberLimit);\n        }\n        let compressed_len = usize::try_from(blob.csize).map_err(|_| CmpctError::MemberLimit)?;\n        let decoded_len = usize::try_from(blob.usize).map_err(|_| CmpctError::MemberLimit)?;\n        let dictionary = self.load_dictionary(file)?;\n        file.seek(SeekFrom::Start(payload_pos))?;\n        let mut compressed = vec![0u8; compressed_len];\n        file.read_exact(&mut compressed)?;\n\n        // Footnote: dict_blob is authenticated index metadata, but the dictionary bytes are a second\n        // archive-controlled dependency. Authenticate that blob first, then decode one bounded codec-3\n        // member and authenticate its complete content before exposing even a partial range.\n        let decoder = zstd::stream::read::Decoder::with_dictionary(\n            Cursor::new(compressed),\n            &dictionary,\n        )?;\n        let mut limited = decoder.take(blob.usize.saturating_add(1));\n        let mut decoded = Vec::with_capacity(decoded_len);\n        limited.read_to_end(&mut decoded)?;\n        if decoded.len() != decoded_len {\n            return Err(CmpctError::MemberLength);\n        }\n        if Sha256::digest(&decoded).as_slice() != expected_hash {\n            return Err(CmpctError::MemberHash);\n        }\n        Ok(decoded)\n    }\n\n'''
+          if anchor not in s:
+              raise SystemExit('missing decoder insertion anchor')
+          s=s.replace(anchor,insert+anchor,1)
+
+          rep('''            CODEC_ZSTD => {\n                let decoded = self.decode_zstd_blob(blob, file, payload_pos, &expected_hash)?;\n                let start = usize::try_from(start).map_err(|_| CmpctError::Range)?;\n                let end = start.checked_add(out.len()).ok_or(CmpctError::Range)?;\n                out.copy_from_slice(&decoded[start..end]);\n            }\n            CODEC_DEFLATE => {''',
+              '''            CODEC_ZSTD => {\n                let decoded = self.decode_zstd_blob(blob, file, payload_pos, &expected_hash)?;\n                let start = usize::try_from(start).map_err(|_| CmpctError::Range)?;\n                let end = start.checked_add(out.len()).ok_or(CmpctError::Range)?;\n                out.copy_from_slice(&decoded[start..end]);\n            }\n            CODEC_ZSTDDICT => {\n                let decoded =\n                    self.decode_zstd_dictionary_blob(blob, file, payload_pos, &expected_hash)?;\n                let start = usize::try_from(start).map_err(|_| CmpctError::Range)?;\n                let end = start.checked_add(out.len()).ok_or(CmpctError::Range)?;\n                out.copy_from_slice(&decoded[start..end]);\n            }\n            CODEC_DEFLATE => {''')
+
+          parse_anchor='''fn parse_hash(value: &Value, row_index: usize) -> Result<Option<[u8; 32]>, CmpctError> {'''
+          parse_fn='''fn parse_dictionary_blob(index: &Value, blobs: &[Blob]) -> Result<Option<usize>, CmpctError> {\n    let map = index\n        .as_map()\n        .ok_or_else(|| CmpctError::Schema("root index is not a map".into()))?;\n    let Some(value) = map\n        .iter()\n        .find_map(|(key, value)| (key.as_str() == Some("dict_blob")).then_some(value))\n    else {\n        return Ok(None);\n    };\n    if matches!(value, Value::Nil) {\n        return Ok(None);\n    }\n    let index = storage_blob_index(value, blobs.len(), "dictionary blob")?;\n    Ok(Some(index))\n}\n\n'''
+          if parse_anchor not in s:
+              raise SystemExit('missing dictionary parser insertion anchor')
+          s=s.replace(parse_anchor,parse_fn+parse_anchor,1)
+          p.write_text(s)
+
+          wf=Path('.github/workflows/native-core.yml')
+          w=wf.read_text()
+          old='''      - name: Committed golden sparse ABI gate\n        run: python tests/native_sparse_golden_abi.py\n'''
+          new=old+'''      - name: Committed golden Zstd-dictionary ABI gate\n        run: python tests/native_dictionary_golden_abi.py\n'''
+          if 'native_dictionary_golden_abi.py' not in w:
+              if old not in w:
+                  raise SystemExit('missing permanent workflow anchor')
+              w=w.replace(old,new,1)
+              wf.write_text(w)
+          PY
+          cargo fmt --manifest-path native/cmpct-core/Cargo.toml
+      - name: Validate implementation before commit
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y zstd
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[test]'
+          cargo clippy --manifest-path native/cmpct-core/Cargo.toml --all-targets -- -D warnings
+          cargo test --manifest-path native/cmpct-core/Cargo.toml
+          cargo build --release --manifest-path native/cmpct-core/Cargo.toml
+          python tests/native_dictionary_golden_abi.py
+      - name: Commit validated implementation
+        run: |
+          git config user.name 'CMPCT automation'
+          git config user.email 'actions@users.noreply.github.com'
+          git add native/cmpct-core/src/lib.rs .github/workflows/native-core.yml tests/native_dictionary_golden_abi.py
+          if git diff --cached --quiet; then
+            exit 0
+          fi
+          git commit -m 'Implement bounded native Zstd-dictionary reads [native-dict-ready]'
+          git push origin HEAD:feat/native-zstd-dictionary
