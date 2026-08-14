@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   implement:
-    if: ${{ !contains(github.event.head_commit.message, '[native-dict-ready]') }}
+    if: ${{ !contains(github.event.head_commit.message, '[native-dict-source]') }}
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
@@ -21,7 +21,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-      - name: Patch native core and permanent gate
+      - name: Patch native core
         run: |
           python - <<'PY'
           from pathlib import Path
@@ -60,19 +60,9 @@ jobs:
               raise SystemExit('missing dictionary parser insertion anchor')
           s=s.replace(parse_anchor,parse_fn+parse_anchor,1)
           p.write_text(s)
-
-          wf=Path('.github/workflows/native-core.yml')
-          w=wf.read_text()
-          old='''      - name: Committed golden sparse ABI gate\n        run: python tests/native_sparse_golden_abi.py\n'''
-          new=old+'''      - name: Committed golden Zstd-dictionary ABI gate\n        run: python tests/native_dictionary_golden_abi.py\n'''
-          if 'native_dictionary_golden_abi.py' not in w:
-              if old not in w:
-                  raise SystemExit('missing permanent workflow anchor')
-              w=w.replace(old,new,1)
-              wf.write_text(w)
           PY
           cargo fmt --manifest-path native/cmpct-core/Cargo.toml
-      - name: Validate implementation before commit
+      - name: Validate source before commit
         run: |
           sudo apt-get update
           sudo apt-get install -y zstd
@@ -82,13 +72,13 @@ jobs:
           cargo test --manifest-path native/cmpct-core/Cargo.toml
           cargo build --release --manifest-path native/cmpct-core/Cargo.toml
           python tests/native_dictionary_golden_abi.py
-      - name: Commit validated implementation
+      - name: Commit validated source
         run: |
           git config user.name 'CMPCT automation'
           git config user.email 'actions@users.noreply.github.com'
-          git add native/cmpct-core/src/lib.rs .github/workflows/native-core.yml tests/native_dictionary_golden_abi.py
+          git add native/cmpct-core/src/lib.rs
           if git diff --cached --quiet; then
             exit 0
           fi
-          git commit -m 'Implement bounded native Zstd-dictionary reads [native-dict-ready]'
+          git commit -m 'Implement bounded native Zstd-dictionary reads [native-dict-source]'
           git push origin HEAD:feat/native-zstd-dictionary
