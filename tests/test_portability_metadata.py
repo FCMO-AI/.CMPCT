@@ -16,7 +16,9 @@ def test_linux_mime_registration_keeps_canonical_identity():
     path = ROOT / "integrations/linux/application-vnd.fcmo.cmpct.xml"
     text = path.read_text(encoding="utf-8")
     root = ET.fromstring(text)
-    assert root.attrib["type"] == MIME
+    mime_nodes = [node for node in root.iter() if node.tag.endswith("mime-type")]
+    assert len(mime_nodes) == 1
+    assert mime_nodes[0].attrib["type"] == MIME
     assert any(node.attrib.get("pattern") == f"*.{EXTENSION}" for node in root.iter() if node.tag.endswith("glob"))
     assert "CMPCT24" in text
 
