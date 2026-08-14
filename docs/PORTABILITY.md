@@ -76,9 +76,7 @@ small and load optional codecs only when an archive actually requires them.
 
 For compressed direct members, an implementation may temporarily decode one bounded member to serve a
 range if the codec is not independently seekable, but it must never silently inflate the whole archive.
-The current native Zstd bridge follows that rule and caps one direct decode at 256 MiB. The long-term
-path for large compressed files is the revision-24 chunk map: decode only chunks intersecting the
-requested range.
+The current native Zstd/Deflate bridge follows that rule and caps one direct decode at 256 MiB. Revision-24 fixed and CDC chunk maps are now range-local in the shared core: a request decodes only chunks intersecting the requested range, which is the required behavior for large compressed-file browsing.
 
 ## Android
 
@@ -191,14 +189,15 @@ Implemented today:
 - explicit portability contract and release gates;
 - a memory-safe Rust core under `native/cmpct-core/` that authenticates/decodes the revision-24 primary index, enumerates logical entries, rejects lexical path aliases, bounds the base blob table, cross-checks direct physical blob framing, and exposes a tested opaque C ABI;
 - native range reads for direct RAW members without decoding unrelated bytes;
-- native bounded range reads for ordinary direct Zstd members, with a 256 MiB per-direct-member decode ceiling, exact decompressed-length validation and SHA-256 verification before returning the requested slice;
-- CI that compares native entry enumeration plus RAW/Zstd range bytes against the Python oracle and exercises the produced shared library from a non-Rust caller.
+- native bounded range reads for ordinary direct Zstd and raw Deflate members, with a 256 MiB per-direct-member decode ceiling, exact decompressed-length validation and SHA-256 verification before returning the requested slice;
+- native fixed/CDC chunk-map validation and range-local reads across mixed RAW/Zstd/Deflate chunks, with complete-member logical SHA-256 verification;
+- builder-independent direct-codec and chunk-map golden archives exercised through the produced shared library from a non-Rust caller, including corruption refusal.
 
 `docs/NATIVE_CORE.md` is the detailed handoff for the native capability and its safety boundary.
 
 Not yet implemented and therefore **not to be claimed as shipped support**:
 
-- complete memory-safe native reader/writer ABI beyond primary-index/open/enumeration and direct RAW/Zstd reads: full hostile structural validation, recovery, remaining codecs/storage descriptions, streams, extraction and mutation are still pending;
+- complete memory-safe native reader/writer ABI beyond primary-index/open/enumeration plus direct RAW/Zstd/Deflate and fixed/CDC reads: full hostile structural validation, recovery, remaining codecs/storage descriptions, streams, extraction and mutation are still pending;
 - Android application/DocumentsProvider;
 - Windows shell/browser package;
 - Apple document/Quick Look package;
