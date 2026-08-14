@@ -46,3 +46,13 @@ android {
         }
     }
 }
+
+// Footnote: Android packaging must never silently fall back to a stale checked-in native library.
+// Rebuild the shared Rust core for all declared ABIs before CMake/JNI packaging on every app build.
+tasks.register('buildCmpctRust', Exec) {
+    workingDir rootProject.projectDir
+    commandLine 'bash', rootProject.file('build-native.sh').absolutePath
+}
+tasks.named('preBuild').configure {
+    dependsOn tasks.named('buildCmpctRust')
+}
