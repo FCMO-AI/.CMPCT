@@ -19,21 +19,24 @@ import java.nio.charset.StandardCharsets;
 public final class CmpctAndroidSmokeTest extends InstrumentationTestCase {
 
     public void testDirectCodecGoldenArchivesThroughAndroidBridge() throws Exception {
-        Context context = getInstrumentation().getTargetContext();
-        JSONObject root = new JSONObject(readAsset(context, "v24-direct-codecs.json"));
+        Context target = getInstrumentation().getTargetContext();
+        Context tests = getInstrumentation().getContext();
+        // Footnote: the canonical conformance JSON is packaged into the test APK, not the target APK.
+        // Read it from instrumentation context while all imported archives live in the real app context.
+        JSONObject root = new JSONObject(readAsset(tests, "v24-direct-codecs.json"));
         assertEquals(24, root.getInt("format_revision"));
         JSONArray vectors = root.getJSONArray("vectors");
 
         for (int i = 0; i < vectors.length(); i++) {
             JSONObject vector = vectors.getJSONObject(i);
             byte[] archiveBytes = Base64.decode(vector.getString("archive_base64"), Base64.DEFAULT);
-            File source = new File(context.getCacheDir(), "android-golden-" + i + ".cmpct");
+            File source = new File(target.getCacheDir(), "android-golden-" + i + ".cmpct");
             try (FileOutputStream out = new FileOutputStream(source)) {
                 out.write(archiveBytes);
                 out.getFD().sync();
             }
 
-            ArchiveRegistry.Record record = ArchiveRegistry.importArchive(context, Uri.fromFile(source));
+            ArchiveRegistry.Record record = ArchiveRegistry.importArchive(target, Uri.fromFile(source));
             try (CmpctNative.Archive archive = new CmpctNative.Archive(record.file.getAbsolutePath())) {
                 assertEquals(24, archive.revision());
                 assertEquals(1, archive.entryCount());
@@ -52,13 +55,13 @@ public final class CmpctAndroidSmokeTest extends InstrumentationTestCase {
     }
 
     public void testBadMagicNeverBecomesImportedRoot() throws Exception {
-        Context context = getInstrumentation().getTargetContext();
-        File bad = new File(context.getCacheDir(), "not-cmpct.cmpct");
+        Context target = getInstrumentation().getTargetContext();
+        File bad = new File(target.getCacheDir(), "not-cmpct.cmpct");
         try (FileOutputStream out = new FileOutputStream(bad)) {
             out.write("PK-not-a-cmpct-archive".getBytes(StandardCharsets.UTF_8));
         }
         try {
-            ArchiveRegistry.importArchive(context, Uri.fromFile(bad));
+            ArchiveRegistry.importArchive(target, Uri.fromFile(bad));
             fail("bad magic must be rejected before native parsing");
         } catch (java.io.IOException expected) {
             assertTrue(expected.getMessage().contains("CMPCT24"));
