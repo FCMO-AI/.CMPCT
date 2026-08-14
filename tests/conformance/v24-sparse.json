@@ -1,0 +1,32 @@
+{
+  "schema": "cmpct-v24-sparse-golden-v1",
+  "format_revision": 24,
+  "provenance": {
+    "construction": "hand-assembled from revision-24 framing/schema; not emitted by cmpct.builder.Builder",
+    "purpose": "freeze sparse extent semantics independently of the Python encoder before native implementation",
+    "notes": "64-byte logical file with holes plus two data extents; touched physical blobs use RAW, Zstd and raw Deflate"
+  },
+  "archive": {
+    "name": "v24-sparse-mixed.cmpct",
+    "bytes": 789,
+    "sha256": "196838899361c8355578d8642644d48f35e62551e21ee761b66ce1254f0099e6",
+    "base64": "Q01QQ1QyNAAYAAAA1wAAAAAAAADOAAAAAAAAAN8AAAAAAAAAzv31pC0TM6wme9hBk7OZxAAmeE4lc5yg+jpLnkWjPK0otS/9IM5xBgCHoXYYpWZpbGVzkZeqc3BhcnNlLmJpbgDNAaQAQMQgDq1Ma/erPDL4RSmFk3pIGGtkx+SCxP1Oz8oovUREPKmSA5KTBAiRAJMoDJIBAqVibG9ic5OVAAgIAACVSAYPAQCVzJcGCAQAp3JlY2lwZXOQqWRpY3RfYmxvYsCmZnNtZXRhg6Vvd25lcpIAAK9vd25lcl9vdmVycmlkZXOQpnhhdHRyc5CoZmVhdHVyZXOTrHNwYXJzZS1maWxlc6ZzaGEyNTaqZHVhbC1pbmRleENNQTQAAAAACAAAAAAAAAAIAAAAAAAAAAAAAAActtxomsIZfZJYJXsa6EY+QhTkzQpXi8FRfyQVkouRvkKD/EhBQkNERUZHSENNQTQBAAAABgAAAAAAAAAPAAAAAAAAAAAAAAAuiwiaQoBRAaycvsWX7vn8Lsud6Q9BoyADtbNUQoZpnZRoCz0otS/9IAYxAABpamtsbW5DTUE0BAAAAAYAAAAAAAAACAAAAAAAAAAAAAAAaBRgjvn+/mgxh7XDjcPyDEl4212VQvBKJmNebCtbj6+tK5RYCw0Lj4iMAgAotS/9IM5xBgCHoXYYpWZpbGVzkZeqc3BhcnNlLmJpbgDNAaQAQMQgDq1Ma/erPDL4RSmFk3pIGGtkx+SCxP1Oz8oovUREPKmSA5KTBAiRAJMoDJIBAqVibG9ic5OVAAgIAACVSAYPAQCVzJcGCAQAp3JlY2lwZXOQqWRpY3RfYmxvYsCmZnNtZXRhg6Vvd25lcpIAAK9vd25lcl9vdmVycmlkZXOQpnhhdHRyc5CoZmVhdHVyZXOTrHNwYXJzZS1maWxlc6ZzaGEyNTaqZHVhbC1pbmRleENNUFRGMjQAAAEAANcAAAAAAAAAzgAAAAAAAAAAAAAAAAAAAM799aQtEzOsJnvYQZOzmcQAJnhOJXOcoPo6S55Fozyt"
+  },
+  "member": {
+    "path": "sparse.bin",
+    "size": 64,
+    "sha256": "0ead4c6bf7ab3c32f8452985937a48186b64c7e482c4fd4ecfca28bd44443ca9",
+    "storage_kind": 3,
+    "extents": [
+      {"offset": 4, "length": 8, "blob_ids": [0]},
+      {"offset": 40, "length": 12, "blob_ids": [1, 2]}
+    ],
+    "blob_codecs": [0, 1, 4],
+    "ranges": [
+      {"offset": 0, "length": 16, "hex": "00000000414243444546474800000000", "sha256": "15cdf9f693bdc4c2be6729ab0cadf16f53ae4aa3ba19d7fe87b628175d19d699"},
+      {"offset": 36, "length": 20, "hex": "00000000696a6b6c6d6e55565758595a00000000", "sha256": "b7a0f4dd77760a860604713a62c274d108af7612e4f0df01892534f8921e6f6a"},
+      {"offset": 42, "length": 8, "hex": "6b6c6d6e55565758", "sha256": "1739e3c2403d6fac518f8044bad1116c24b50cbba11a0681230f8ec4d6fe39f3"},
+      {"offset": 12, "length": 28, "hex": "00000000000000000000000000000000000000000000000000000000", "sha256": "3addfb141cd7c9c4c6543a82191a3707ac29c7a041217782e61d4d91c691aee8"}
+    ]
+  }
+}
