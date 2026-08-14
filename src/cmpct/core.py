@@ -8,9 +8,11 @@ from .builder import Builder, Candidate
 from .reader import CMPCT
 from .transactions import (append_update, append_delete, append_rename, recover_blob_records,
                            compact_archive, tree_digest)
+from .validation import ParserLimits, ResourceLimitError, ValidationError, preflight_archive
 from .cli import main
 
 __all__ = [
     "Builder", "Candidate", "CMPCT", "append_update", "append_delete", "append_rename",
     "recover_blob_records", "compact_archive", "tree_digest", "main",
+    "ParserLimits", "ValidationError", "ResourceLimitError", "preflight_archive",
 ]
