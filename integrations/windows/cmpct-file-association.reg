@@ -1,0 +1,23 @@
+Windows Registry Editor Version 5.00
+
+; Revision-24 file association source for the packaged CMPCT browser.
+; The installer MUST replace @CMPCT_BROWSER_EXE@ with the absolute path to the
+; native browser executable. Keeping the placeholder explicit prevents a source
+; checkout or Python interpreter from becoming the production shell handler.
+
+[HKEY_CURRENT_USER\Software\Classes\.cmpct]
+@="FCMO.CMPCT.Archive"
+"Content Type"="application/vnd.fcmo.cmpct"
+"PerceivedType"="compressed"
+
+[HKEY_CURRENT_USER\Software\Classes\FCMO.CMPCT.Archive]
+@="CMPCT Archive"
+
+[HKEY_CURRENT_USER\Software\Classes\FCMO.CMPCT.Archive\DefaultIcon]
+@="\"@CMPCT_BROWSER_EXE@\",0"
+
+[HKEY_CURRENT_USER\Software\Classes\FCMO.CMPCT.Archive\shell]
+@="open"
+
+[HKEY_CURRENT_USER\Software\Classes\FCMO.CMPCT.Archive\shell\open\command]
+@="\"@CMPCT_BROWSER_EXE@\" \"%1\""
