@@ -35,6 +35,14 @@ The initial defaults are intentionally generous for legitimate pre-1.0 archives 
 
 A future normative specification must distinguish format maxima from implementation policy limits.
 
+## Fixed revision-24 conformance vectors
+
+The first committed golden archive set now lives at `tests/conformance/v24-direct-codecs.json`. It contains fixed byte-for-byte revision-24 archives for direct RAW, ordinary Zstd and raw Deflate members, together with archive SHA-256, logical SHA-256 and known byte-range answers.
+
+These vectors were deliberately hand-built from the revision-24 framing/schema rules rather than emitted by `cmpct.builder.Builder`. That distinction is important: builder-to-reader round trips prove internal agreement, while fixed bytes that are independent of the builder can expose parser drift across implementations. The JSON records the generator-tool provenance used to freeze the bytes; future readers must consume the existing archive bytes rather than regenerate fixtures around changed behavior.
+
+The Deflate vector intentionally lands before native Deflate support. It is the fixed target for that next native representation gate. Future golden sets still need to cover dictionary Zstd, WAV/FLAC, fixed chunks, CDC maps, sparse extents, packs, virtual ZIP recipes, links/metadata and committed transaction generations.
+
 ## Deliberate non-goals of this increment
 
 This is a structural preflight foundation, **not a claim that hostile-input work is finished**.
@@ -45,7 +53,7 @@ In particular:
 - payload decompression paths still need direct per-operation resource budgets;
 - `read()` may intentionally materialize a complete logical file and therefore still needs a caller budget for untrusted archives;
 - no property-based or coverage-guided fuzzer is committed yet;
-- golden revision-24 binary conformance vectors are not committed yet;
+- golden revision-24 coverage is only partial: direct RAW/Zstd/Deflate now exist, while other codecs/storage descriptions/generations remain missing;
 - nested recipes, chunk maps, sparse extents and journal operations still need byte-level mutation coverage in addition to the structural mutation matrix;
 - parser behavior has begun independent cross-checking: the Rust core authenticates/decodes the primary index, matches Python entry enumeration/path policy, and cross-checks bounded direct RAW and ordinary-Zstd range bytes through the C ABI. Full structural references, tail/journal recovery, remaining codecs, chunk/sparse/virtual storage and extraction are not yet independently validated.
 
@@ -65,13 +73,12 @@ This is a representation-specific safety increment, not a replacement for full n
 
 ## Next hardening sequence
 
-1. Run the complete regression suite against this preflight layer and fix any false positives.
-2. Add golden revision-24 archives/vectors for every storage kind and codec.
-3. Add property tests and a byte-level mutation/fuzz corpus for headers, MessagePack structures, blob framing, chunk maps, sparse maps, nested recipes, journal chains and path relationships.
-4. Add per-read/per-extract decompressed-byte and work budgets; then integrate bounded validation into the normal reader constructor under an explicit policy, including canonical path-collision rejection shared with extraction.
-5. Benchmark preflight/open overhead across tiny, source, media, sparse, nested and combined corpora.
-6. Turn validated structural maxima and canonical encodings into the normative byte-level spec.
-7. Expand the Rust/Python cross-check from authenticated primary-index enumeration plus direct RAW/Zstd member ranges to complete structural validation, tail/journal recovery, remaining codecs, chunk/sparse/virtual member reads and extraction before treating the native reader as an independent conformance implementation.
+1. Expand the committed golden revision-24 set from direct RAW/Zstd/Deflate to every storage kind, codec and committed-generation shape.
+2. Add property tests and a byte-level mutation/fuzz corpus for headers, MessagePack structures, blob framing, chunk maps, sparse maps, nested recipes, journal chains and path relationships.
+3. Add per-read/per-extract decompressed-byte and work budgets; then integrate bounded validation into the normal reader constructor under an explicit policy, including canonical path-collision rejection shared with extraction.
+4. Benchmark preflight/open overhead across tiny, source, media, sparse, nested and combined corpora.
+5. Turn validated structural maxima and canonical encodings into the normative byte-level spec.
+6. Expand the Rust/Python cross-check from authenticated primary-index enumeration plus direct RAW/Zstd member ranges to direct Deflate against the committed golden vector, then complete structural validation, tail/journal recovery, remaining codecs, chunk/sparse/virtual member reads and extraction before treating the native reader as an independent conformance implementation.
 
 ## Revision rule
 
