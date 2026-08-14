@@ -19,9 +19,12 @@ The native core currently:
 - validates revision-24 sparse extent maps at open time, including sorted/non-overlapping extents, logical-file bounds, blob references and exact stored-byte accounting for every extent;
 - reads sparse ranges by zero-filling logical holes and decoding only stored chunks in extents that intersect the caller's requested interval, without allocating the logical file size;
 - verifies the logical whole-file SHA-256 when a caller requests a complete fixed/CDC/sparse member, while selective reads retain per-touched-blob integrity semantics;
-- returns typed C statuses for null pointers, I/O/format errors, resource limits, out-of-range requests and unsupported representations.
+- returns typed C statuses for null pointers, I/O/format errors, resource limits, out-of-range requests and unsupported representations;
+- builds `cmpct-native`, a small read-only process surface for authenticated `info`, `list` and raw-byte `range` operations without importing the Python encoder/mutation stack. The CLI caps one requested output range at 64 MiB and deliberately inherits the core's representation/integrity policy rather than adding a second parser.
 
 The compressed direct-member paths are intentionally correctness-first. Ordinary Zstd frames and raw Deflate streams are not intrinsically byte-seekable in revision 24, so a range request on one direct compressed member currently decodes that member in full. This is still materially better than requiring whole-archive extraction and is the correct bridge to native archive browsing. Large ordinary files are normally chunked by the encoder; fixed/CDC chunk maps are range-local in the native core, and sparse members synthesize holes without decoding or allocating unrelated logical regions. A small read therefore stays proportional to touched stored data rather than to the whole member or archive.
+
+The native CLI is an implementation milestone, not yet a benchmark claim or shipping package. Its purpose is to make list/range launch paths independently measurable without CPython startup so future ZIP-parity records can compare CLI-vs-CLI on symmetric process boundaries.
 
 ## Integrity boundary
 
@@ -59,7 +62,8 @@ The important property is provenance: these bytes were hand-assembled from the r
 6. the committed RAW/Zstd/Deflate golden archives consumed directly through the same C ABI, including rejection of a Deflate archive whose physical content identity is corrupted while the raw Deflate stream itself remains decodable;
 7. committed fixed/CDC golden archives consumed through the C ABI for cross-boundary selective and complete reads, including rejection of a range touching a chunk whose physical content identity was corrupted;
 8. the committed sparse golden archive consumed through the C ABI for hole/data cross-boundary and complete reads, including an explicit locality proof: corruption in an untouched extent must not poison a disjoint range, while a range touching that compressed blob must fail;
-9. the committed Zstd-dictionary golden archive consumed through the C ABI for selective and complete reads, including refusal when either the authenticated dictionary payload or the codec-3 member identity is corrupted.
+9. the committed Zstd-dictionary golden archive consumed through the C ABI for selective and complete reads, including refusal when either the authenticated dictionary payload or the codec-3 member identity is corrupted;
+10. `cmpct-native info/list/range` cross-checked against the Python reader on the same archive, with missing-member and bounded-output failure behavior gated as well.
 
 The dictionary gate is now permanent. A future representation is not considered implemented merely because a Rust function can decode it. It must cross the C ABI and agree with both the Python oracle where applicable and a committed golden archive once one exists for that representation.
 
@@ -71,5 +75,7 @@ The dictionary gate is now permanent. A future representation is not considered 
 4. full structural-preflight parity and decompression/work budgets;
 5. committed tail/journal recovery and prior-generation fallback;
 6. platform bindings using this API rather than format-specific parsing.
+
+The native CLI should then be benchmarked against mature ZIP tools using CLI-vs-CLI/process-start semantics; do not mix its results with in-process library measurements.
 
 No item above requires a format revision unless implementing it reveals that revision-24 bytes are insufficient to express the required reader semantics. In that case the normal specification/version/conformance gate applies.
