@@ -1,0 +1,104 @@
+name: CMPCT path alias hardening
+
+on:
+  push:
+    branches:
+      - hardening/canonical-path-aliases
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  implement-and-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install test dependencies
+        run: python -m pip install -e '.[test]'
+      - name: Implement canonical lexical path policy
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          marker = Path('src/cmpct/path_policy.py')
+          if marker.exists():
+              print('path policy already implemented; validating existing tree')
+              raise SystemExit(0)
+
+          marker.write_text('''from __future__ import annotations\n\n\"\"\"Shared lexical path policy for portable, hostile-input-safe CMPCT logical paths.\n\nThe archive stores logical paths independent of host filesystem syntax. Every parser, extractor and\nplatform handler must therefore agree on one lexical key before touching a destination filesystem.\n\"\"\"\n\n\ndef canonical_logical_path(path: str, *, max_path_bytes: int | None = None) -> tuple[str, tuple[str, ...]]:\n    \"\"\"Return the canonical slash-separated key and path components.\n\n    Backslashes are treated as archive separators so ``a/b`` and ``a\\\\b`` cannot address the same\n    destination under different index keys. ``.`` is rejected rather than silently normalized because\n    accepting both spellings would create the same alias class. This is lexical only: Unicode and\n    platform-specific case normalization remain a future normative-format decision.\n    \"\"\"\n    if not isinstance(path, str):\n        raise ValueError('logical path is not text')\n    if '\\x00' in path:\n        raise ValueError('NUL in logical path')\n    encoded = path.encode('utf-8', 'surrogatepass')\n    if max_path_bytes is not None and len(encoded) > max_path_bytes:\n        raise ValueError('logical path exceeds parser limit')\n    normalized = path.replace('\\\\', '/')\n    if not normalized or normalized.startswith('/'):\n        raise ValueError('absolute or empty logical path')\n    parts = tuple(normalized.split('/'))\n    if any(part in ('', '.', '..') for part in parts):\n        raise ValueError('unsafe logical path component')\n    return '/'.join(parts), parts\n''')
+
+          vpath = Path('src/cmpct/validation.py')
+          text = vpath.read_text()
+          text = text.replace(
+              'from .codec import (\n',
+              'from .path_policy import canonical_logical_path\n\nfrom .codec import (\n',
+              1,
+          )
+          old = '''        path_bytes = path.encode("utf-8", "surrogatepass")\n        normalized = path.replace("\\\\", "/")\n        parts = normalized.split("/")\n        if (\n            not path\n            or len(path_bytes) > limits.max_path_bytes\n            or normalized.startswith("/")\n            or any(part in ("", "..") for part in parts)\n        ):\n            raise ValidationError(f"unsafe logical path {path!r}")\n        if path in seen_paths:\n            raise ValidationError(f"duplicate logical path {path!r}")\n        seen_paths.add(path)\n'''
+          new = '''        try:\n            canonical_path, _ = canonical_logical_path(path, max_path_bytes=limits.max_path_bytes)\n        except ValueError as exc:\n            raise ValidationError(f"unsafe logical path {path!r}: {exc}") from exc\n        # Footnote: duplicate detection is keyed by the same lexical spelling extraction uses. Without\n        # this, ``a/b`` and ``a\\\\b`` survive as distinct index strings but overwrite one destination.\n        if canonical_path in seen_paths:\n            raise ValidationError(f"duplicate canonical logical path {path!r}")\n        seen_paths.add(canonical_path)\n'''
+          if old not in text:
+              raise SystemExit('validation path block not found')
+          text = text.replace(old, new, 1)
+          text = text.replace(
+              '''        if kind == K_HARDLINK:\n            hardlinks[path] = storage[0]\n\n    for path, target in hardlinks.items():\n        if target not in seen_paths:\n            raise ValidationError(f"hardlink {path!r} targets missing path {target!r}")\n        walked = {path}\n        current = target\n''',
+              '''        if kind == K_HARDLINK:\n            try:\n                target_key, _ = canonical_logical_path(storage[0], max_path_bytes=limits.max_path_bytes)\n            except ValueError as exc:\n                raise ValidationError(f"hardlink {path!r} has unsafe target {storage[0]!r}: {exc}") from exc\n            hardlinks[canonical_path] = target_key\n\n    for path, target in hardlinks.items():\n        if target not in seen_paths:\n            raise ValidationError(f"hardlink {path!r} targets missing path {target!r}")\n        walked = {path}\n        current = target\n''',
+              1,
+          )
+          vpath.write_text(text)
+
+          rpath = Path('src/cmpct/reader.py')
+          text = rpath.read_text()
+          text = text.replace(
+              'from .codec import _hash_sparse, _wav_parts, _ld, _sz, _z, _zck\n',
+              'from .codec import _hash_sparse, _wav_parts, _ld, _sz, _z, _zck\nfrom .path_policy import canonical_logical_path\n',
+              1,
+          )
+          old = '''class CMPCT:\n    def __init__(self,path:Path):\n        self.path=Path(path);self.f=open(path,'rb');self._io_lock=threading.Lock();self.index,self.record_base=self._load_index();self.mm=mmap.mmap(self.f.fileno(),0,access=mmap.ACCESS_READ);self.files=self.index['files'];self.by={x[0]:x for x in self.files};\n        if len(self.by)!=len(self.files):raise IOError('duplicate logical path in CMPCT index')\n        self.blobs=self.index['blobs'];self.recipes=self.index['recipes'];self.dict_idx=self.index.get('dict_blob');self.fsmeta=self.index.get('fsmeta',{});self.cache={};self.vcache={};self._cache_lock=threading.Lock();self._zdict_lock=threading.Lock();self._dctx=None;self._ddict=None;self._dict_bytes=None;self._inflate_lock=threading.Lock();self._inflater=(_ld.libdeflate_alloc_decompressor() if _ld is not None else None);self._executor=None\n'''
+          new = '''class CMPCT:\n    def __init__(self,path:Path):\n        self.path=Path(path);self.f=open(path,'rb');self._io_lock=threading.Lock();self.index,self.record_base=self._load_index();self.mm=mmap.mmap(self.f.fileno(),0,access=mmap.ACCESS_READ);self.files=self.index['files'];self.by={x[0]:x for x in self.files};\n        if len(self.by)!=len(self.files):raise IOError('duplicate logical path in CMPCT index')\n        # Reject host-path aliases at ordinary open, not only at explicit preflight/extraction. This\n        # keeps Android/Windows/Linux/Apple handlers from observing a tree the extractor cannot map\n        # one-to-one onto a destination filesystem.\n        canonical_seen=set()\n        try:\n            for row in self.files:\n                key,_=canonical_logical_path(row[0])\n                if key in canonical_seen:raise IOError(f'duplicate canonical logical path: {row[0]!r}')\n                canonical_seen.add(key)\n        except ValueError as exc:\n            raise IOError(f'unsafe CMPCT logical path: {exc}') from exc\n        self.blobs=self.index['blobs'];self.recipes=self.index['recipes'];self.dict_idx=self.index.get('dict_blob');self.fsmeta=self.index.get('fsmeta',{});self.cache={};self.vcache={};self._cache_lock=threading.Lock();self._zdict_lock=threading.Lock();self._dctx=None;self._ddict=None;self._dict_bytes=None;self._inflate_lock=threading.Lock();self._inflater=(_ld.libdeflate_alloc_decompressor() if _ld is not None else None);self._executor=None\n'''
+          if old not in text:
+              raise SystemExit('reader init block not found')
+          text = text.replace(old, new, 1)
+          old = '''        # Validate every logical path once and reject symlink pivots before writing anything.\n        syms={x[0] for x in self.files if x[1]==K_SYMLINK}\n        clean=[]\n        for row in self.files:\n            rel=row[0]\n            if '\\x00' in rel:raise IOError('NUL in archive path')\n            if rel.startswith('/') or rel.startswith('\\\\'):\n                raise IOError(f'unsafe archive path: {rel!r}')\n            parts=tuple(x for x in rel.replace('\\\\','/').split('/') if x!='')\n            if not parts or any(x=='..' for x in parts):raise IOError(f'unsafe archive path: {rel!r}')\n            if safe_symlinks:\n                for i in range(1,len(parts)):\n                    if '/'.join(parts[:i]) in syms:raise IOError(f'archive symlink used as parent path: {rel!r}')\n            clean.append((row,parts,os.path.join(dest_s,*parts)))\n'''
+          new = '''        # Validate every logical path once and reject aliases/symlink pivots before writing anything.\n        canonical_rows=[];seen=set();syms=set()\n        for row in self.files:\n            rel=row[0]\n            try:key,parts=canonical_logical_path(rel)\n            except ValueError as exc:raise IOError(f'unsafe archive path: {rel!r}: {exc}') from exc\n            if key in seen:raise IOError(f'duplicate canonical archive path: {rel!r}')\n            seen.add(key);canonical_rows.append((row,key,parts))\n            if row[1]==K_SYMLINK:syms.add(key)\n        clean=[]\n        for row,key,parts in canonical_rows:\n            rel=row[0]\n            if safe_symlinks:\n                for i in range(1,len(parts)):\n                    if '/'.join(parts[:i]) in syms:raise IOError(f'archive symlink used as parent path: {rel!r}')\n            clean.append((row,parts,os.path.join(dest_s,*parts)))\n'''
+          if old not in text:
+              raise SystemExit('reader extraction path block not found')
+          text = text.replace(old, new, 1)
+          text = text.replace(
+              "                target=os.path.join(dest_s,*storage[0].split('/'))\n",
+              "                try:_,target_parts=canonical_logical_path(storage[0])\n                except ValueError as exc:raise IOError(f'unsafe hardlink target: {storage[0]!r}: {exc}') from exc\n                target=os.path.join(dest_s,*target_parts)\n",
+              1,
+          )
+          rpath.write_text(text)
+
+          tpath = Path('tests/test_path_policy.py')
+          tpath.write_text('''from __future__ import annotations\n\nfrom pathlib import Path\n\nimport pytest\n\nfrom cmpct.codec import K_DIR\nfrom cmpct.path_policy import canonical_logical_path\nfrom cmpct.reader import CMPCT\nfrom cmpct.validation import ParserLimits, ValidationError, _validate_index\n\n\ndef _index(paths: list[str]) -> dict:\n    return {\n        \"v\": 24,\n        \"files\": [[p, K_DIR, 0o755, 0, 0, b\"\", None] for p in paths],\n        \"blobs\": [],\n        \"recipes\": [],\n        \"fsmeta\": {\"owner\": [0, 0], \"owner_overrides\": [], \"xattrs\": []},\n    }\n\n\ndef test_backslash_and_slash_share_one_canonical_key():\n    assert canonical_logical_path(\"a/b\")[0] == canonical_logical_path(\"a\\\\b\")[0] == \"a/b\"\n\n\n@pytest.mark.parametrize(\"path\", [\"a/./b\", \"a//b\", \"../b\", \"/absolute\", \"\"] )\ndef test_alias_or_unsafe_components_are_rejected(path: str):\n    with pytest.raises(ValueError):\n        canonical_logical_path(path)\n\n\ndef test_preflight_structure_rejects_cross_separator_aliases():\n    with pytest.raises(ValidationError, match=\"duplicate canonical logical path\"):\n        _validate_index(_index([\"a/b\", \"a\\\\b\"]), record_base=0, archive_size=0, limits=ParserLimits())\n\n\ndef test_extractor_rejects_aliases_before_creating_members(tmp_path: Path):\n    ar = object.__new__(CMPCT)\n    ar.files = _index([\"a/b\", \"a\\\\b\"])[\"files\"]\n    destination = tmp_path / \"out\"\n    with pytest.raises(IOError, match=\"duplicate canonical archive path\"):\n        ar.extractall(destination, metadata=False)\n    assert destination.exists()\n    assert list(destination.iterdir()) == []\n''')
+
+          hpath = Path('docs/HARDENING.md')
+          text = hpath.read_text()
+          old = '''### Known path-normalization collision to resolve\n\nThe current structural validator converts backslashes to `/` when checking traversal components, but duplicate-path detection still keys the original path string. The extractor also converts backslashes to `/` before constructing destination paths. Therefore two distinct index strings such as `a/b` and `a\\\\b` can currently survive the structural duplicate check yet name the same extraction destination.\n\nThis should be fixed as part of the normal-reader validation integration, with one canonical lexical path key shared by preflight and extraction. Do not paper over it with an expected-failure test: the desired regression must prove that colliding archive paths are rejected before any destination file is written. Platform-specific separator and Unicode normalization rules still belong in the normative specification.\n'''
+          new = '''### Canonical lexical path aliases\n\nResolved in the current revision-24 implementation: preflight, ordinary reader open and extraction now share one lexical path key. Backslashes are treated as archive separators, `.`/`..`/empty components are rejected, and aliases such as `a/b` and `a\\\\b` are rejected before extraction creates any member. Hardlink targets use the same policy.\n\nThis intentionally solves only host-independent lexical aliasing. Unicode normalization, platform case-folding, Windows reserved names/device paths and other host-specific rules still belong in the normative specification and platform policy layer; they must not be guessed independently by each handler.\n'''
+          if old not in text:
+              raise SystemExit('hardening collision section not found')
+          hpath.write_text(text.replace(old, new, 1))
+          PY
+      - name: Run regression suite
+        run: python -m pytest -q
+      - name: Commit implementation when needed
+        run: |
+          if git diff --quiet && git diff --cached --quiet; then
+            echo 'No implementation diff to commit.'
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src/cmpct/path_policy.py src/cmpct/validation.py src/cmpct/reader.py tests/test_path_policy.py docs/HARDENING.md
+          git commit -m 'P0: reject canonical path aliases before extraction'
+          git push origin HEAD:hardening/canonical-path-aliases
