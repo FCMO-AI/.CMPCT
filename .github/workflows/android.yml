@@ -49,9 +49,9 @@ jobs:
         run: |
           # Footnote: setup-android owns cmdline-tools discovery/PATH. Do not assume GitHub runner
           # images expose sdkmanager globally; that assumption caused the first Android gate to fail
-          # before compilation even began.
+          # before compilation even began. API 36 is deliberately stable rather than preview API 37.
           sdkmanager \
-            'platforms;android-37' \
+            'platforms;android-36' \
             'build-tools;36.0.0' \
             'ndk;29.0.14206865' \
             'cmake;3.22.1' \
