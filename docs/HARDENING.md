@@ -49,11 +49,11 @@ In particular:
 - nested recipes, chunk maps, sparse extents and journal operations still need byte-level mutation coverage in addition to the structural mutation matrix;
 - parser behavior has not yet been cross-checked against an independent implementation.
 
-### Known path-normalization collision to resolve
+### Canonical lexical path aliases
 
-The current structural validator converts backslashes to `/` when checking traversal components, but duplicate-path detection still keys the original path string. The extractor also converts backslashes to `/` before constructing destination paths. Therefore two distinct index strings such as `a/b` and `a\\b` can currently survive the structural duplicate check yet name the same extraction destination.
+Resolved in the current revision-24 implementation: preflight, ordinary reader open and extraction now share one lexical path key. Backslashes are treated as archive separators, `.`/`..`/empty components are rejected, and aliases such as `a/b` and `a\\b` are rejected before extraction creates any member. Hardlink targets use the same policy.
 
-This should be fixed as part of the normal-reader validation integration, with one canonical lexical path key shared by preflight and extraction. Do not paper over it with an expected-failure test: the desired regression must prove that colliding archive paths are rejected before any destination file is written. Platform-specific separator and Unicode normalization rules still belong in the normative specification.
+This intentionally solves only host-independent lexical aliasing. Unicode normalization, platform case-folding, Windows reserved names/device paths and other host-specific rules still belong in the normative specification and platform policy layer; they must not be guessed independently by each handler.
 
 The explicit preflight command is intentional for this first increment: it creates one testable, fuzzable safety boundary without silently adding latency to every existing reader hot path before the cost is measured.
 
