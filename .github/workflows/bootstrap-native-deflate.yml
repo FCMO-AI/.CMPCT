@@ -1,0 +1,150 @@
+name: Bootstrap native Deflate implementation
+
+on:
+  push:
+    branches: [feat/native-deflate-v24]
+    paths: [.github/workflows/bootstrap-native-deflate.yml]
+
+permissions:
+  contents: write
+
+jobs:
+  implement:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/native-deflate-v24
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install reference dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y zstd
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[test]'
+      - name: Implement bounded native raw-Deflate reading
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          cargo = Path('native/cmpct-core/Cargo.toml')
+          text = cargo.read_text()
+          assert 'flate2 =' not in text
+          text = text.replace('zstd = "0.13"\n', 'zstd = "0.13"\nflate2 = { version = "1", default-features = false, features = ["rust_backend"] }\n')
+          cargo.write_text(text)
+
+          lib = Path('native/cmpct-core/src/lib.rs')
+          text = lib.read_text()
+          text = text.replace(
+              'use rmpv::Value;\n',
+              'use flate2::read::DeflateDecoder;\nuse rmpv::Value;\n',
+              1,
+          )
+          text = text.replace(
+              'const CODEC_ZSTD: u8 = 1;\n',
+              'const CODEC_ZSTD: u8 = 1;\nconst CODEC_DEFLATE: u8 = 4;\n',
+              1,
+          )
+
+          marker = '    /// Read a byte range from a supported direct member.\n'
+          assert marker in text
+          deflate_fn = '''    fn decode_direct_deflate(\n        &self,\n        blob: &Blob,\n        file: &mut File,\n        payload_pos: u64,\n        expected_hash: &[u8; 32],\n    ) -> Result<Vec<u8>, CmpctError> {\n        if blob.usize > MAX_DIRECT_DECODE_BYTES || blob.csize > MAX_DIRECT_DECODE_BYTES {\n            return Err(CmpctError::MemberLimit);\n        }\n        let compressed_len = usize::try_from(blob.csize).map_err(|_| CmpctError::MemberLimit)?;\n        let decoded_len = usize::try_from(blob.usize).map_err(|_| CmpctError::MemberLimit)?;\n        file.seek(SeekFrom::Start(payload_pos))?;\n        let mut compressed = vec![0u8; compressed_len];\n        file.read_exact(&mut compressed)?;\n\n        // Footnote: revision 24 stores codec 4 as raw RFC 1951 Deflate, without zlib/gzip framing.\n        // Keep the same correctness-first policy as direct Zstd: one bounded direct member is decoded\n        // completely and SHA-256-authenticated before any requested slice crosses the C ABI.\n        let decoder = DeflateDecoder::new(Cursor::new(compressed));\n        let mut limited = decoder.take(blob.usize.saturating_add(1));\n        let mut decoded = Vec::with_capacity(decoded_len);\n        limited.read_to_end(&mut decoded)?;\n        if decoded.len() != decoded_len {\n            return Err(CmpctError::MemberLength);\n        }\n        if Sha256::digest(&decoded).as_slice() != expected_hash {\n            return Err(CmpctError::MemberHash);\n        }\n        Ok(decoded)\n    }\n\n'''
+          text = text.replace(marker, deflate_fn + marker, 1)
+
+          old = '''            CODEC_ZSTD => {\n                let decoded =\n                    self.decode_direct_zstd(blob, &mut file, payload_pos, &expected_hash)?;\n                let start = usize::try_from(start).map_err(|_| CmpctError::Range)?;\n                let end = start.checked_add(out.len()).ok_or(CmpctError::Range)?;\n                out.copy_from_slice(&decoded[start..end]);\n            }\n            _ => return Err(CmpctError::Unsupported),\n'''
+          new = '''            CODEC_ZSTD => {\n                let decoded =\n                    self.decode_direct_zstd(blob, &mut file, payload_pos, &expected_hash)?;\n                let start = usize::try_from(start).map_err(|_| CmpctError::Range)?;\n                let end = start.checked_add(out.len()).ok_or(CmpctError::Range)?;\n                out.copy_from_slice(&decoded[start..end]);\n            }\n            CODEC_DEFLATE => {\n                let decoded =\n                    self.decode_direct_deflate(blob, &mut file, payload_pos, &expected_hash)?;\n                let start = usize::try_from(start).map_err(|_| CmpctError::Range)?;\n                let end = start.checked_add(out.len()).ok_or(CmpctError::Range)?;\n                out.copy_from_slice(&decoded[start..end]);\n            }\n            _ => return Err(CmpctError::Unsupported),\n'''
+          assert old in text
+          text = text.replace(old, new, 1)
+          text = text.replace(
+              'bounded byte ranges from direct RAW and ordinary Zstd members.',
+              'bounded byte ranges from direct RAW, ordinary Zstd, and raw Deflate members.',
+              1,
+          )
+          lib.write_text(text)
+
+          native = Path('docs/NATIVE_CORE.md')
+          text = native.read_text()
+          text = text.replace(
+              '- reads bounded slices from ordinary direct Zstd members by decoding at most one direct member, enforcing a 256 MiB direct-decode cap, verifying exact decompressed length and SHA-256, then copying only the requested range to the caller;\n',
+              '- reads bounded slices from ordinary direct Zstd and raw Deflate members by decoding at most one direct member, enforcing a 256 MiB direct-decode cap, verifying exact decompressed length and SHA-256, then copying only the requested range to the caller;\n',
+              1,
+          )
+          text = text.replace(
+              'The Deflate vector is intentionally present before native Deflate support and is the next codec acceptance target.',
+              'The Deflate vector is now consumed through the C ABI as the acceptance oracle for native codec-4 support.',
+              1,
+          )
+          text = text.replace(
+              '1. direct Deflate blobs, targeting the committed codec-4 golden archive and preserving the same bounded/full-integrity policy as direct Zstd;\n2. fixed and content-defined chunk maps',
+              '1. fixed and content-defined chunk maps',
+              1,
+          )
+          # Renumber the remaining ordered list after removing the completed Deflate item.
+          for old_n, new_n in [(9,8),(8,7),(7,6),(6,5),(5,4),(4,3),(3,2)]:
+              text = text.replace(f'{old_n}. ', f'{new_n}. ', 1)
+          native.write_text(text)
+
+          hardening = Path('docs/HARDENING.md')
+          text = hardening.read_text()
+          text = text.replace(
+              'The Deflate vector intentionally lands before native Deflate support. It is the fixed target for that next native representation gate.',
+              'The Deflate vector now gates native raw-Deflate support through the C ABI, including strong content-hash failure behavior.',
+              1,
+          )
+          text = text.replace(
+              'the Rust core authenticates/decodes the primary index, matches Python entry enumeration/path policy, and cross-checks bounded direct RAW and ordinary-Zstd range bytes through the C ABI.',
+              'the Rust core authenticates/decodes the primary index, matches Python entry enumeration/path policy, and cross-checks bounded direct RAW, ordinary-Zstd and raw-Deflate range bytes through the C ABI.',
+              1,
+          )
+          text = text.replace(
+              'to direct Deflate against the committed golden vector, then complete structural validation',
+              'to fixed/CDC chunk maps, then complete structural validation',
+              1,
+          )
+          hardening.write_text(text)
+
+          state = Path('docs/CURRENT_STATE.md')
+          text = state.read_text()
+          text = text.replace(
+              'The member-access surface reads genuinely range-local slices from direct RAW members and bounded ranges from ordinary direct Zstd members;',
+              'The member-access surface reads genuinely range-local slices from direct RAW members and bounded ranges from ordinary direct Zstd and raw Deflate members;',
+              1,
+          )
+          text = text.replace(
+              'Deflate/dictionary/WAV-FLAC direct blobs, chunked/sparse/virtual member access,',
+              'dictionary/WAV-FLAC direct blobs, chunked/sparse/virtual member access,',
+              1,
+          )
+          text = text.replace(
+              'reads direct RAW ranges without decoding unrelated data, and reads bounded ordinary direct-Zstd ranges with whole-member SHA-256 authentication. Next add direct Deflate, then fixed/CDC chunk maps',
+              'reads direct RAW ranges without decoding unrelated data, and reads bounded ordinary direct-Zstd/raw-Deflate ranges with whole-member SHA-256 authentication. Next add fixed/CDC chunk maps',
+              1,
+          )
+          state.write_text(text)
+
+          workflow = Path('.github/workflows/native-core.yml')
+          text = workflow.read_text()
+          assert 'Committed golden direct-codec ABI gate' not in text
+          text += '''\n      - name: Committed golden direct-codec ABI gate\n        run: python tests/native_golden_abi.py\n'''
+          workflow.write_text(text)
+          PY
+      - name: Format, lock and validate native core
+        working-directory: native/cmpct-core
+        run: |
+          cargo fmt
+          cargo clippy --all-targets -- -D warnings
+          cargo test
+          cargo build --release
+      - name: Run immutable golden ABI gate
+        run: python tests/native_golden_abi.py
+      - name: Commit implementation
+        run: |
+          git config user.name 'CMPCT automation'
+          git config user.email 'actions@users.noreply.github.com'
+          git add native/cmpct-core/Cargo.toml native/cmpct-core/Cargo.lock native/cmpct-core/src/lib.rs tests/native_golden_abi.py .github/workflows/native-core.yml docs/NATIVE_CORE.md docs/HARDENING.md docs/CURRENT_STATE.md
+          git commit -m 'Native: read bounded direct Deflate through C ABI'
+          git push origin HEAD:feat/native-deflate-v24
