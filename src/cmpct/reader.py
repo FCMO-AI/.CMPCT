@@ -9,7 +9,6 @@ import msgpack
 
 from .codec import *
 from .codec import _hash_sparse, _wav_parts, _ld, _sz, _z, _zck
-from .builder import Builder
 
 def _safe_output_path(dest:Path,rel:str)->Path:
     # Logical path validation is lexical and allocation-cheap. Absolute paths, NULs and parent
@@ -263,6 +262,60 @@ class CMPCT:
             return bytes(out)
         if storage[0]==S_VZIP:return range_vzip(self.recipes[storage[1]],self._blob,self._stream,start,length)
         return self.read(name)[start:end]
+
+    def _extract_chunked_verified(self,row,full:str):
+        """Stream a chunked logical file to disk and commit it only after whole-file verification.
+
+        Footnote: ``read()`` deliberately returns one contiguous ``bytes`` object for API callers, but
+        extraction does not need that ownership model. The old extraction path decoded every chunk,
+        joined the complete logical file, hashed the joined copy, and only then copied it again into the
+        destination. ZIP's streaming extractor never pays that extra whole-file allocation/copy. This
+        path preserves CMPCT's stronger SHA-256 check while hashing each decoded chunk as it is written.
+
+        The temporary file is created beside the final destination and atomically replaced only after
+        size + SHA verification. That retains the previous corruption behavior: a damaged archive cannot
+        truncate a pre-existing destination merely because streaming began before integrity was known.
+        """
+        rel,k,mode,mt,size,h,storage=row;sk=storage[0]
+        if sk==S_CHUNKS:
+            ids=list(storage[1]);lengths=[self.blobs[idx][1] for idx in ids]
+        elif sk==S_CDC:
+            lengths=[int(x[0]) for x in storage[1]];ids=[x[1] for x in storage[1]]
+        else:raise ValueError('chunked extraction requires fixed or CDC storage')
+
+        if len(ids)>=4:
+            if self._executor is None:self._executor=concurrent.futures.ThreadPoolExecutor(max_workers=min(8,os.cpu_count() or 4))
+            decoded=self._executor.map(self._blob,ids)
+        else:
+            decoded=(self._blob(idx) for idx in ids)
+
+        parent=os.path.dirname(full) or '.';prefix=f'.{os.path.basename(full)}.cmpct-part-'
+        fd,tmp=tempfile.mkstemp(prefix=prefix,dir=parent);committed=False
+        digest=hashlib.sha256();written=0
+        try:
+            # Match the ordinary extraction path's requested basic mode even though mkstemp starts at
+            # 0600. Extended metadata restoration still remains governed by extractall(metadata=...).
+            try:os.fchmod(fd,mode or 0o666)
+            except OSError:pass
+            for expected,b in zip(lengths,decoded):
+                if len(b)!=expected:raise IOError(f'chunk length failure while extracting {rel}')
+                digest.update(b);written+=len(b);view=memoryview(b)
+                while view:
+                    n=os.write(fd,view)
+                    if n<=0:raise IOError(f'short write while extracting {rel}')
+                    view=view[n:]
+            if written!=size or h is None or digest.digest()!=bytes(h):
+                raise IOError(f'file integrity failure: {rel}')
+            os.close(fd);fd=-1
+            os.replace(tmp,full);committed=True
+        finally:
+            if fd>=0:
+                try:os.close(fd)
+                except OSError:pass
+            if not committed:
+                try:os.unlink(tmp)
+                except FileNotFoundError:pass
+
     def _restore_extra_metadata(self,clean):
         """Restore sparse ownership overrides and xattrs after file materialization.
 
@@ -340,7 +393,9 @@ class CMPCT:
                     try:os.utime(full,ns=(mt,mt),follow_symlinks=False)
                     except OSError:pass
                 continue
-            if storage and storage[0]==S_SPARSE:
+            if storage and storage[0] in (S_CHUNKS,S_CDC):
+                self._extract_chunked_verified(row,full)
+            elif storage and storage[0]==S_SPARSE:
                 # Create the logical length first, then write only allocated data extents. The gaps
                 # remain filesystem holes instead of consuming disk blocks full of zeros.
                 fd=os.open(full,os.O_WRONLY|os.O_CREAT|os.O_TRUNC,mode or 0o666)
