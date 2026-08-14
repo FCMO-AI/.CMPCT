@@ -1,0 +1,84 @@
+name: Refresh native dictionary handoff
+
+on:
+  push:
+    branches:
+      - feat/native-zstd-dictionary
+
+permissions:
+  contents: write
+
+jobs:
+  docs:
+    if: ${{ !contains(github.event.head_commit.message, '[native-dict-docs]') }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/native-zstd-dictionary
+          fetch-depth: 0
+      - name: Update durable handoff
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          def patch(path, pairs):
+              p=Path(path); s=p.read_text()
+              for old,new in pairs:
+                  if old not in s:
+                      raise SystemExit(f'{path}: missing anchor {old[:120]!r}')
+                  s=s.replace(old,new,1)
+              p.write_text(s)
+
+          patch('docs/NATIVE_CORE.md', [
+              ('reads bounded slices from ordinary direct Zstd and raw Deflate members by decoding at most one direct member, enforcing a 256 MiB direct-decode cap, verifying exact decompressed length and SHA-256, then copying only the requested range to the caller;',
+               'reads bounded slices from ordinary direct Zstd, raw Deflate and Zstd-with-dictionary members by decoding at most one direct member, enforcing a 256 MiB direct-decode cap, verifying exact decompressed length and SHA-256, then copying only the requested range to the caller; codec-3 reads also authenticate and bound the index-selected dictionary blob before decoding;'),
+              ('Native dictionary support is **not** implemented until the C ABI can consume this existing archive with bounded dictionary/member allocation and reject dictionary/member corruption without rewriting the fixture.',
+               'The native C ABI now consumes this existing archive with bounded dictionary/member allocation and rejects both dictionary-payload corruption and member-identity corruption without rewriting the fixture.'),
+              ('8. the committed sparse golden archive consumed through the C ABI for hole/data cross-boundary and complete reads, including an explicit locality proof: corruption in an untouched extent must not poison a disjoint range, while a range touching that compressed blob must fail.',
+               '8. the committed sparse golden archive consumed through the C ABI for hole/data cross-boundary and complete reads, including an explicit locality proof: corruption in an untouched extent must not poison a disjoint range, while a range touching that compressed blob must fail;\n9. the committed Zstd-dictionary golden archive consumed through the C ABI for selective and complete reads, including refusal when either the authenticated dictionary payload or the codec-3 member identity is corrupted.'),
+              ('The next gate to add is the committed dictionary archive itself. A future representation is not considered implemented merely because a Rust function can decode it.',
+               'The dictionary gate is now permanent. A future representation is not considered implemented merely because a Rust function can decode it.'),
+              ('1. implement bounded Zstd-with-dictionary direct blobs against `tests/conformance/v24-zstd-dictionary.json` and add that vector to permanent native CI;\n2. freeze and implement WAV/FLAC direct blobs;',
+               '1. freeze and implement WAV/FLAC direct blobs;\n2. virtual ZIP reconstruction/range access;'),
+              ('3. virtual ZIP reconstruction/range access;\n4. sequential member streams and extraction APIs;\n5. full structural-preflight parity and decompression/work budgets;\n6. committed tail/journal recovery and prior-generation fallback;\n7. platform bindings using this API rather than format-specific parsing.',
+               '3. sequential member streams and extraction APIs;\n4. full structural-preflight parity and decompression/work budgets;\n5. committed tail/journal recovery and prior-generation fallback;\n6. platform bindings using this API rather than format-specific parsing.')
+          ])
+
+          patch('docs/HARDENING.md', [
+              ('Native codec-3 support is not complete until the produced C ABI consumes these exact bytes and preserves the same bounded-integrity behavior as the existing compressed-codec paths.',
+               'The produced C ABI now consumes these exact codec-3 bytes with bounded dictionary/member allocation and rejects corruption of either the dictionary payload or the member identity before returning content.'),
+              ('The fixed dictionary vector is ready as the next codec oracle, but native codec-3 decoding is not yet implemented. Full structural parity, tail/journal recovery, audio codecs, virtual storage and extraction are not yet independently validated.',
+               'The fixed dictionary vector is now consumed by native codec-3 decoding through the C ABI, including dictionary/member corruption refusal. Full structural parity, tail/journal recovery, audio codecs, virtual storage and extraction are not yet independently validated.'),
+              ('Pack, virtual, dictionary/audio and journal structures still need independent native validation before the shared handler is representation-complete. The codec-3 golden vector narrows the dictionary portion of that gap to one fixed acceptance target rather than an encoder-generated fixture.',
+               'Pack, virtual, audio and journal structures still need independent native validation before the shared handler is representation-complete. The dictionary portion is now gated by a fixed builder-independent codec-3 oracle rather than an encoder-generated fixture.'),
+              ('1. Make native Zstd-with-dictionary consume `tests/conformance/v24-zstd-dictionary.json` through the C ABI with bounded dictionary/member allocation and corruption refusal; then freeze and implement WAV/FLAC.',
+               '1. Freeze and implement WAV/FLAC through the same builder-independent C-ABI pattern now used for direct, chunk, sparse and Zstd-dictionary representations.')
+          ])
+
+          patch('docs/CURRENT_STATE.md', [
+              ('CI cross-checks the C ABI against Python plus builder-independent direct/chunk/sparse golden archives. Dictionary/WAV-FLAC direct blobs, virtual member access, sequential streams, journal recovery and full structural preflight parity remain unfinished.',
+               'CI cross-checks the C ABI against Python plus builder-independent direct/chunk/sparse/Zstd-dictionary golden archives. Codec-3 reads authenticate the index-selected dictionary blob and bound both dictionary and member decode work before returning content. WAV-FLAC direct blobs, virtual member access, sequential streams, journal recovery and full structural preflight parity remain unfinished.'),
+              ('native memory-safe high-performance core beyond authenticated primary-index enumeration plus direct RAW/Zstd/Deflate, fixed/CDC and sparse range reads: complete structural validation, committed-generation recovery, dictionary/WAV-FLAC codecs, virtual member access, sequential streams and extraction remain unfinished;',
+               'native memory-safe high-performance core beyond authenticated primary-index enumeration plus direct RAW/Zstd/Deflate/Zstd-dictionary, fixed/CDC and sparse range reads: complete structural validation, committed-generation recovery, WAV-FLAC codec support, virtual member access, sequential streams and extraction remain unfinished;'),
+              ('Next add dictionary/WAV-FLAC direct blobs and virtual ZIPs; then sequential member streams, committed-generation recovery and extraction.',
+               'Zstd-with-dictionary direct blobs now cross the fixed C-ABI oracle with dictionary/member corruption refusal. Next add WAV-FLAC direct blobs and virtual ZIPs; then sequential member streams, committed-generation recovery and extraction.')
+          ])
+
+          patch('docs/PORTABILITY.md', [
+              ('native bounded range reads for ordinary direct Zstd and raw Deflate members, with a 256 MiB per-direct-member decode ceiling, exact decompressed-length validation and SHA-256 verification before returning the requested slice;',
+               'native bounded range reads for ordinary direct Zstd, raw Deflate and Zstd-with-dictionary members, with a 256 MiB per-direct-member decode ceiling, exact decompressed-length validation and SHA-256 verification before returning the requested slice; codec-3 additionally authenticates and bounds the archive-selected dictionary blob;'),
+              ('builder-independent direct-codec, chunk-map and sparse golden archives exercised through the produced shared library from a non-Rust caller, including corruption refusal.',
+               'builder-independent direct-codec, chunk-map, sparse and Zstd-dictionary golden archives exercised through the produced shared library from a non-Rust caller, including dictionary/member corruption refusal for codec 3.'),
+              ('complete memory-safe native reader/writer ABI beyond primary-index/open/enumeration plus direct RAW/Zstd/Deflate, fixed/CDC and sparse reads: full hostile structural validation, recovery, remaining codecs/storage descriptions, streams, extraction and mutation are still pending;',
+               'complete memory-safe native reader/writer ABI beyond primary-index/open/enumeration plus direct RAW/Zstd/Deflate/Zstd-dictionary, fixed/CDC and sparse reads: full hostile structural validation, recovery, WAV-FLAC/remaining storage descriptions, streams, extraction and mutation are still pending;')
+          ])
+          PY
+      - name: Commit handoff
+        run: |
+          git config user.name 'CMPCT automation'
+          git config user.email 'actions@users.noreply.github.com'
+          git add docs/NATIVE_CORE.md docs/HARDENING.md docs/CURRENT_STATE.md docs/PORTABILITY.md
+          git commit -m 'Advance native frontier past dictionary codec [native-dict-docs]'
+          git push origin HEAD:feat/native-zstd-dictionary
