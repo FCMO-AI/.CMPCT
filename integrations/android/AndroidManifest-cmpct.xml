@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Merge this activity declaration into the shipping Android application.
+     The activity must verify CMPCT24\0 magic after opening the content URI;
+     MIME/extension association is routing metadata, never archive validation. -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+  <application>
+    <activity
+        android:name=".OpenCmpctActivity"
+        android:exported="true">
+      <intent-filter>
+        <action android:name="android.intent.action.VIEW" />
+        <category android:name="android.intent.category.DEFAULT" />
+        <category android:name="android.intent.category.BROWSABLE" />
+        <data android:scheme="content" android:mimeType="application/vnd.fcmo.cmpct" />
+        <data android:scheme="content" android:mimeType="application/x-cmpct" />
+        <data android:scheme="file" android:mimeType="application/vnd.fcmo.cmpct" />
+        <data android:scheme="file" android:mimeType="application/x-cmpct" />
+      </intent-filter>
+      <intent-filter>
+        <action android:name="android.intent.action.VIEW" />
+        <category android:name="android.intent.category.DEFAULT" />
+        <category android:name="android.intent.category.BROWSABLE" />
+        <!-- Some providers expose only a generic MIME type. This path narrows
+             routing by the canonical extension, but OpenCmpctActivity still
+             rejects files whose bytes do not carry revision-compatible magic. -->
+        <data android:scheme="content" android:mimeType="application/octet-stream" android:pathPattern=".*\\.cmpct" />
+      </intent-filter>
+    </activity>
+  </application>
+</manifest>
