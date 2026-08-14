@@ -23,7 +23,7 @@ This project is the first Android implementation of the portability contract in 
 Prerequisites:
 
 1. JDK 17;
-2. Android SDK / API 37 and Android Build Tools compatible with AGP 9.3;
+2. stable Android SDK / API 36 and Android Build Tools compatible with AGP 9.3;
 3. Android NDK r29 (`29.0.14206865` in the checked-in Gradle configuration);
 4. Rust + the four Android Rust targets;
 5. `cargo-ndk` (`cargo install cargo-ndk`);
@@ -62,6 +62,8 @@ The source existing is not the release claim. A release candidate must run on an
 8. unsupported native representations fail explicitly rather than returning guessed bytes;
 9. Android process restart preserves imported roots;
 10. the sample archive round-trips byte-exactly after member extraction.
+
+The emulator CI additionally asserts that a generic `application/octet-stream` URI ending in `.cmpct` resolves to CMPCT while an otherwise identical `.bin` URI does not. This protects the extension fallback from becoming a catch-all binary handler.
 
 ## Current limitations
 
