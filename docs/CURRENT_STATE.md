@@ -7,11 +7,12 @@ This document is the **zero-chat-history handoff** for a new agent. Read it toge
 - `docs/FORMAT.md` — current revision-24 on-disk contract;
 - `docs/HISTORY.md` — full surviving development/version history;
 - `docs/BENCHMARKS.md` and `benchmarks/history/` — benchmark discipline and raw historical records;
+- `docs/PORTABILITY.md` — ZIP-parity UX and first-class Android/desktop integration contract;
 - `docs/ROADMAP.md` — work required before a defensible 1.0.
 
 ## Project objective
 
-CMPCT is intended to become a **general-purpose lossless archive/container format and engine** for arbitrary computer files and filesystems. The target is not merely “smaller ZIP.” The target is a default archive choice with strong size, creation/extraction speed, random access, integrity, crash-safe updates, recovery, filesystem fidelity, remote-read potential, and codec agility.
+CMPCT is intended to become a **general-purpose lossless archive/container format and engine** for arbitrary computer files and filesystems. The target is not merely “smaller ZIP.” The target is a default archive choice with strong size, creation/extraction speed, random access, integrity, crash-safe updates, recovery, filesystem fidelity, remote-read potential, codec agility, and ordinary end-user portability.
 
 Hermes is one useful regression corpus because it mixes source, wheels, nested ZIPs, PCM audio, metadata and duplicates. **Hermes must never define the format or encoder policy.**
 
@@ -50,6 +51,12 @@ Everything created outside this repository is experimental until reconciled back
 `benchmarks/universal_bench.py`
 : Heterogeneous synthetic benchmark harness. Generated corpora/output are not canonical history; durable historical result records belong under `benchmarks/history/`.
 
+`benchmarks/zip_parity_bench.py`
+: Fair CMPCT-vs-ZIP regression harness that separates library-to-library timing from fresh-process CLI timing. It exists specifically to expose ZIP advantages without conflating them with benchmark orchestration overhead.
+
+`docs/PORTABILITY.md`
+: First-class archive integration contract for Android, Linux, Windows and Apple platforms. It is a release requirement, not a claim that those integrations already ship.
+
 ## Current format capabilities
 
 Revision 24 currently supports or prototypes:
@@ -86,10 +93,14 @@ These are more important than current encoder thresholds:
 8. **Recovery as a format property.** Critical metadata should have redundancy/scannability rather than relying on one irreplaceable central directory.
 9. **Codec agility.** Zstd is the general codec, not the definition of CMPCT.
 10. **No corpus overfitting.** Any threshold change needs at least one adversarial corpus where it could plausibly lose.
+11. **ZIP parity is a floor, not a benchmark trick.** A fair reproducible ZIP advantage in size, equivalent-semantics speed, selective access or usability is an engineering gap until evidence justifies otherwise.
+12. **Portability is part of the format product.** A technically superior archive that users cannot tap/double-click, browse or extract on ordinary systems is not yet a viable default replacement.
 
 ## What is proven enough to use as a development baseline
 
 The current Python reference implementation is able to create/read revision-24 archives and has smoke-tested round trips, range access, links/sparse behavior and CLI opening. Historical experiments also demonstrated the architectural feasibility of exact nested ZIP reconstruction, strong random access, transactional recovery and fast ZIP export.
+
+The fair ZIP-parity harness additionally demonstrates an important measurement rule: library-vs-library and process-start/CLI timing must remain separate. Early mixed-layer measurements overstated several ZIP speed advantages because CMPCT paid fresh-Python startup while ZIP ran inside an already-started benchmark process. Genuine remaining losses must be fixed, not hidden behind that correction.
 
 Treat those as **reference behavior**, not yet as a frozen interoperability standard.
 
@@ -108,7 +119,7 @@ A new agent should not mistake prototype breadth for completion. Major open area
 - remote HTTP/object-store range access with partial verification;
 - native memory-safe high-performance core;
 - scalable CDC without whole-file memory loading;
-- robust mount/file-manager integrations;
+- robust Android/Linux/Windows/Apple archive browsing, file association and mount/file-manager integrations defined by `docs/PORTABILITY.md`;
 - reversible preprocessing for already-compressed structures where licensing and exactness permit;
 - CI that reruns the universal benchmark on controlled hardware/software and archives raw results.
 
@@ -123,6 +134,7 @@ The current benchmark policy is:
 - record semantics (durability, metadata restoration, warm/cold cache, process startup, integrity work);
 - preserve losing cases;
 - never compare a richer CMPCT operation against a weaker ZIP operation without saying so;
+- never compare fresh-process CMPCT against in-process ZIP as if it were one timing layer;
 - never use one Hermes number as a general format claim.
 
 See `docs/HISTORY.md` and `benchmarks/history/2026-08-13-development-campaign.json` for the complete surviving first-campaign measurements.
@@ -135,7 +147,7 @@ Create golden revision-24 archives and byte-exact vectors for every storage desc
 
 ### Mission 2 — benchmark CI and reproducible result archive
 
-Run the universal corpus in controlled CI. Record CPU, OS, filesystem, Python/native library versions, cache state, codec settings, durability and metadata semantics. Commit every accepted benchmark dataset under `benchmarks/history/` with the commit SHA that produced it.
+Run the universal corpus in controlled CI. Record CPU, OS, filesystem, Python/native library versions, cache state, codec settings, durability and metadata semantics. Commit every accepted benchmark dataset under `benchmarks/history/` with the commit SHA that produced it. Keep `benchmarks/zip_parity_bench.py` as the explicit gate for every fair ZIP advantage.
 
 ### Mission 3 — deterministic mode and normative schema
 
@@ -143,11 +155,15 @@ Turn revision 24’s working format document into a byte-level interoperable con
 
 ### Mission 4 — native core
 
-Move parser/read/write hot paths into a memory-safe native implementation (Rust is a strong candidate) while keeping the Python implementation as readable executable specification and cross-check oracle. Native code must produce/consume conformance-identical archives.
+Move parser/read/write hot paths into a memory-safe native implementation (Rust is a strong candidate) while keeping the Python implementation as readable executable specification and cross-check oracle. Native code must produce/consume conformance-identical archives. The same core must expose the bounded list/stat/read/range/stream/extract surface required by platform handlers so portability does not fork format semantics.
 
 ### Mission 5 — size frontier without random-access regression
 
 Investigate reversible preprocessing for Deflate and other common compressed structures, but only with licensed/audited techniques and exact reconstruction. Also improve cheap candidate probing so expensive codecs are not run just to discover that RAW or ordinary Zstd wins.
+
+### Mission 6 — erase practical ZIP advantages and ship first-class archive UX
+
+Treat stable fair ZIP wins as performance defects. Prioritize creation/extraction hot paths, startup/import overhead, fused validation and native read-only startup until ZIP has no unexplained material advantage on the parity corpus. In parallel, implement the `docs/PORTABILITY.md` contract: Android DocumentsProvider/app integration, Linux MIME/browser integration, Windows file association/browser support, and Apple UTType/document integration, all backed by the shared native core. Do not claim platform support until the corresponding package passes conformance archives on that platform/emulator.
 
 ## Known historical traps
 
@@ -162,7 +178,8 @@ Do not reintroduce these without new evidence:
 - mandatory libdeflate/native helpers;
 - SHA-256 on every ordinary read;
 - ZIP physical layout as permanent canonical-storage overhead;
-- benchmark optimizations that only help Hermes.
+- benchmark optimizations that only help Hermes;
+- a permanent hidden ZIP shadow inside every CMPCT archive merely to gain legacy file-manager recognition.
 
 ## When to bump the format revision
 
@@ -178,4 +195,4 @@ Any format bump must update, in the same commit:
 
 ## Definition of a good next agent
 
-A good next agent should be comfortable saying **“this new idea loses on corpus X, so I am not merging it”**. CMPCT’s goal is not to accumulate clever codecs. It is to become the strongest boring default: small, fast, random-accessible, faithful, recoverable, secure, portable and independently implementable.
+A good next agent should be comfortable saying **“this new idea loses on corpus X, so I am not merging it”**. CMPCT’s goal is not to accumulate clever codecs. It is to become the strongest boring default: small, fast, random-accessible, faithful, recoverable, secure, portable, independently implementable, and ordinary to open on the devices people actually use.
