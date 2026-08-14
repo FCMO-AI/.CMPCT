@@ -49,7 +49,7 @@ Everything created outside this repository is experimental until reconciled back
 : Optional creation-time content-defined chunk boundary accelerator. The reader does not require it because boundaries are explicit in the archive.
 
 `native/cmpct-core/`
-: Memory-safe Rust read-only core seed. It authenticates and decodes the revision-24 primary index, applies the shared lexical path policy, enumerates logical entries, and exposes an opaque C ABI. CI cross-checks its view against the Python oracle and exercises the shared library from a non-Rust caller. Blob/member streaming, journal recovery and full structural preflight parity remain unfinished.
+: Memory-safe Rust read-only core seed. It authenticates and decodes the revision-24 primary index, applies the shared lexical path policy, enumerates logical entries, bounds the base blob table, and exposes an opaque C ABI. The first member-access primitive now reads bounded ranges from direct RAW members after cross-checking physical blob framing against authenticated index metadata. CI cross-checks entry enumeration and RAW range bytes against the Python oracle and exercises the shared library from a non-Rust caller. Compressed/chunked/sparse/virtual member access, sequential streams, journal recovery and full structural preflight parity remain unfinished.
 
 `benchmarks/universal_bench.py`
 : Heterogeneous synthetic benchmark harness. Generated corpora/output are not canonical history; durable historical result records belong under `benchmarks/history/`.
@@ -105,6 +105,8 @@ The current Python reference implementation is able to create/read revision-24 a
 
 The fair ZIP-parity harness additionally demonstrates an important measurement rule: library-vs-library and process-start/CLI timing must remain separate. Early mixed-layer measurements overstated several ZIP speed advantages because CMPCT paid fresh-Python startup while ZIP ran inside an already-started benchmark process. Genuine remaining losses must be fixed, not hidden behind that correction. The first five-repeat RAW-chunk extraction optimization reduced the remaining large-binary library extraction result from about 63.8 ms to 55.5 ms while ZIP measured 48.6 ms on the new shared-runner campaign; the ~14% residual is still an active parity defect, not a declared tradeoff.
 
+The native core now proves one end-to-end selective-content path across the C ABI: a non-Rust caller can open a Python-built revision-24 archive and read an arbitrary bounded slice from an incompressible direct RAW member, with the bytes checked against the Python oracle. The call rejects out-of-bounds ranges and unsupported compressed representations with typed statuses. This is a portability/conformance milestone, not yet a claim of representation-complete native reading.
+
 Treat those as **reference behavior**, not yet as a frozen interoperability standard.
 
 ## What is NOT yet production-grade or 1.0-ready
@@ -120,7 +122,7 @@ A new agent should not mistake prototype breadth for completion. Major open area
 - complete ACL/Windows/macOS metadata/path normalization rules;
 - split-volume and streaming/non-seekable creation;
 - remote HTTP/object-store range access with partial verification;
-- native memory-safe high-performance core beyond authenticated primary-index enumeration: member/range streaming, full structural reference validation, codec decoding, extraction and journal recovery remain unfinished;
+- native memory-safe high-performance core beyond authenticated primary-index enumeration and direct-RAW range reads: complete structural validation, committed-generation recovery, compressed/chunked/sparse/virtual member access, sequential streams, extraction and verification remain unfinished;
 - scalable CDC without whole-file memory loading;
 - robust Android/Linux/Windows/Apple archive browsing, file association and mount/file-manager integrations defined by `docs/PORTABILITY.md`;
 - reversible preprocessing for already-compressed structures where licensing and exactness permit;
@@ -158,7 +160,7 @@ Turn revision 24’s working format document into a byte-level interoperable con
 
 ### Mission 4 — native core
 
-Continue the memory-safe Rust core now present under `native/cmpct-core/` while keeping Python as the readable executable specification and cross-check oracle. The current native slice authenticates/decodes the primary index, applies lexical path policy, enumerates entries and exposes a tested C ABI; it is deliberately not yet a shipping handler. Next add full structural-reference validation, committed-generation recovery, codec/blob access, bounded member/range streaming and extraction. Native code must remain conformance-identical, and the same core must expose the list/stat/read/range/stream/extract surface required by platform handlers so portability does not fork format semantics.
+Continue the memory-safe Rust core now present under `native/cmpct-core/` while keeping Python as the readable executable specification and cross-check oracle. The current native slice authenticates/decodes the primary index, applies lexical path policy, enumerates entries, bounds base blobs, exposes a tested C ABI, and can read bounded ranges from direct RAW members. Next extend structural-reference validation and add representation-complete member/range access—Zstd/Deflate/dictionary/WAV-FLAC direct blobs, fixed/CDC chunks, sparse maps and virtual ZIPs—then sequential member streams, committed-generation recovery and extraction. Native code must remain conformance-identical, and the same core must expose the list/stat/read/range/stream/extract surface required by platform handlers so portability does not fork format semantics.
 
 ### Mission 5 — size frontier without random-access regression
 
