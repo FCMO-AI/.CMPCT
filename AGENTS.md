@@ -10,11 +10,12 @@ Before changing format behavior or encoder policy, read:
 2. `docs/CURRENT_STATE.md`;
 3. `docs/HARDENING.md`;
 4. `docs/PORTABILITY.md`;
-5. `docs/FORMAT.md`;
-6. `docs/HISTORY.md`;
-7. `docs/RESEARCH_LOG.md`;
-8. `docs/BENCHMARKS.md`;
-9. `docs/ROADMAP.md`.
+5. `docs/NATIVE_CORE.md` when native/portability work is in scope;
+6. `docs/FORMAT.md`;
+7. `docs/HISTORY.md`;
+8. `docs/RESEARCH_LOG.md`;
+9. `docs/BENCHMARKS.md`;
+10. `docs/ROADMAP.md`.
 
 Do not depend on inaccessible chat history for project-critical context. If a new conclusion matters to future work, put it in the repository.
 
@@ -32,6 +33,7 @@ Do not depend on inaccessible chat history for project-critical context. If a ne
 - Treat a fair, reproducible ZIP win as an engineering gap to investigate; never hide it by changing timing boundaries, workloads, or semantics.
 - Keep library-to-library and CLI/process-start benchmark layers separate so startup overhead cannot masquerade as codec/format performance.
 - Portability is a release gate: keep `docs/PORTABILITY.md` current and design platform integrations around one shared memory-safe archive-handler core rather than independent parsers.
+- Keep `docs/NATIVE_CORE.md` current when the shared native ABI gains a representation, safety boundary, or portability-relevant capability.
 - Preserve fallback behavior when optional native helpers/codecs are absent.
 - Update `docs/FORMAT.md` in the same change as any on-disk format mutation.
 - Update `docs/HISTORY.md` and `docs/CURRENT_STATE.md` whenever a version/revision materially changes project behavior or the development frontier.
