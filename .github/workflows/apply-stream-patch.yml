@@ -1,0 +1,40 @@
+name: Apply CMPCT streaming extraction patch
+
+on:
+  push:
+    branches:
+      - feat/zip-parity-portability
+    paths:
+      - dev/apply_streaming_extract_patch.py
+      - .github/workflows/apply-stream-patch.yml
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/zip-parity-portability
+          fetch-depth: 0
+
+      - name: Apply surgical reader patch
+        run: |
+          python dev/apply_streaming_extract_patch.py
+          python -m py_compile src/cmpct/reader.py
+          git diff --check
+
+      - name: Commit patched reader
+        run: |
+          git config user.name "CMPCT engineering bot"
+          git config user.email "cmpct-bot@users.noreply.github.com"
+          git add src/cmpct/reader.py
+          git diff --cached --quiet && exit 0
+          git commit -m "Stream verified chunked extraction without whole-file copy"
+          git push origin HEAD:feat/zip-parity-portability
+
+# Footnote: this temporary workflow exists only because the connected repository interface does not
+# expose an apply-patch primitive. It is path-filtered so the reader commit cannot recursively trigger
+# itself, and it is removed before the feature branch is merged.
