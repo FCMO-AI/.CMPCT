@@ -275,6 +275,28 @@ class CMPCT:
         if storage[0]==S_VZIP:return range_vzip(self.recipes[storage[1]],self._blob,self._stream,start,length)
         return self.read(name)[start:end]
 
+    def _raw_blob_view_for_extract(self,idx:int):
+        """Return a zero-copy mmap view for a RAW chunk used by verified extraction.
+
+        Footnote: chunked extraction already authenticates the complete logical file with SHA-256 before
+        atomically replacing the destination. Routing RAW chunks through ``_blob`` first copied every
+        mmap slice into Python bytes, CRC32-checked it, and retained it in the read cache, only for the
+        extractor to hash and write the same bytes again. The whole-file SHA is stronger than that
+        redundant per-chunk CRC for this staging path, so RAW chunks can stay mmap-backed while framing
+        is still cross-checked against the authenticated index. Ordinary random reads keep `_blob`'s
+        CRC/cache behavior unchanged.
+        """
+        off,us,cs,codec,ml=self.blobs[idx]
+        if codec!=CODEC_RAW:raise ValueError('RAW extraction view requested for compressed blob')
+        pos=self.record_base+off
+        if pos<0 or pos+BHDR.size>len(self.mm):raise IOError('blob header outside archive')
+        m,c,flags,res,rus,rcs,rml,rcrc,rh=BHDR.unpack_from(self.mm,pos)
+        if m!=BMAGIC or c!=CODEC_RAW or rus!=us or rcs!=cs or rml!=ml or rcs!=rus:
+            raise IOError('RAW blob header mismatch')
+        start=pos+BHDR.size+rml;end=start+rcs
+        if start<0 or end>len(self.mm):raise IOError('RAW blob payload outside archive')
+        return memoryview(self.mm)[start:end]
+
     def _extract_chunked_verified(self,row,full:str):
         """Stream a chunked logical file to disk and commit it only after whole-file verification.
 
@@ -295,7 +317,13 @@ class CMPCT:
             lengths=[int(x[0]) for x in storage[1]];ids=[x[1] for x in storage[1]]
         else:raise ValueError('chunked extraction requires fixed or CDC storage')
 
-        if len(ids)>=4:
+        # Fully incompressible chunked files are common in disk images, encrypted data and media. Keep
+        # those bytes mmap-backed all the way into SHA-256 + write(2); compressed/mixed files retain the
+        # parallel decoder because decompression, rather than copying, dominates their hot path.
+        raw_direct=bool(ids) and all(self.blobs[idx][3]==CODEC_RAW for idx in ids)
+        if raw_direct:
+            decoded=(self._raw_blob_view_for_extract(idx) for idx in ids)
+        elif len(ids)>=4:
             if self._executor is None:self._executor=concurrent.futures.ThreadPoolExecutor(max_workers=min(8,os.cpu_count() or 4))
             decoded=self._executor.map(self._blob,ids)
         else:
@@ -310,12 +338,19 @@ class CMPCT:
             try:os.fchmod(fd,mode or 0o666)
             except OSError:pass
             for expected,b in zip(lengths,decoded):
-                if len(b)!=expected:raise IOError(f'chunk length failure while extracting {rel}')
-                digest.update(b);written+=len(b);view=memoryview(b)
-                while view:
-                    n=os.write(fd,view)
-                    if n<=0:raise IOError(f'short write while extracting {rel}')
-                    view=view[n:]
+                try:
+                    if len(b)!=expected:raise IOError(f'chunk length failure while extracting {rel}')
+                    digest.update(b);written+=len(b);view=memoryview(b)
+                    try:
+                        while view:
+                            n=os.write(fd,view)
+                            if n<=0:raise IOError(f'short write while extracting {rel}')
+                            view=view[n:]
+                    finally:
+                        try:view.release()
+                        except ValueError:pass
+                finally:
+                    if raw_direct and isinstance(b,memoryview):b.release()
             if written!=size or h is None or digest.digest()!=bytes(h):
                 raise IOError(f'file integrity failure: {rel}')
             os.close(fd);fd=-1

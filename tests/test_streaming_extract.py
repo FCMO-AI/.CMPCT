@@ -64,3 +64,28 @@ def test_corrupt_chunk_does_not_replace_existing_destination(tmp_path: Path):
     # preserve that safety property, so bytes are staged beside the target and committed atomically.
     assert final.read_bytes() == b"KEEP-EXISTING"
     assert not list(out.glob(".*.cmpct-part-*"))
+
+
+def test_raw_chunk_extract_uses_mmap_without_populating_blob_cache(tmp_path: Path):
+    src = tmp_path / "src"
+    src.mkdir()
+    # Deterministic high-entropy bytes avoid an os.urandom-dependent regression while defeating the
+    # current Zstd candidate threshold strongly enough to select RAW chunks.
+    import random
+    rng = random.Random(0xC0DEC7)
+    payload = rng.randbytes(3 * 1024 * 1024)
+    (src / "random.bin").write_bytes(payload)
+    archive = tmp_path / "random.cmpct"
+    Builder(src).build(archive)
+
+    out = tmp_path / "out"
+    with CMPCT(archive) as ar:
+        storage = ar.by["random.bin"][6]
+        assert storage[0] in (S_CHUNKS, S_CDC)
+        ids = storage[1] if storage[0] == S_CHUNKS else [entry[1] for entry in storage[1]]
+        assert ids and all(ar.blobs[idx][3] == 0 for idx in ids)
+        ar.extractall(out, metadata=False)
+        # The extraction-only RAW path must not retain every chunk in the general random-read cache.
+        assert not any(idx in ar.cache for idx in ids)
+
+    assert (out / "random.bin").read_bytes() == payload
