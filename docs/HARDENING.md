@@ -47,7 +47,7 @@ In particular:
 - no property-based or coverage-guided fuzzer is committed yet;
 - golden revision-24 binary conformance vectors are not committed yet;
 - nested recipes, chunk maps, sparse extents and journal operations still need byte-level mutation coverage in addition to the structural mutation matrix;
-- parser behavior has not yet been cross-checked against an independent implementation.
+- parser behavior has only begun independent cross-checking: the Rust core now authenticates/decodes the primary index and matches Python entry enumeration/path policy in CI, but full structural references, tail/journal recovery, codecs and member reads are not yet independently validated.
 
 ### Canonical lexical path aliases
 
@@ -65,7 +65,7 @@ The explicit preflight command is intentional for this first increment: it creat
 4. Add per-read/per-extract decompressed-byte and work budgets; then integrate bounded validation into the normal reader constructor under an explicit policy, including canonical path-collision rejection shared with extraction.
 5. Benchmark preflight/open overhead across tiny, source, media, sparse, nested and combined corpora.
 6. Turn validated structural maxima and canonical encodings into the normative byte-level spec.
-7. Cross-check the Python parser with the future memory-safe native reader.
+7. Expand the now-started Rust/Python cross-check from authenticated primary-index enumeration to complete structural validation, tail/journal recovery, codecs, member/range reads and extraction before treating the native reader as an independent conformance implementation.
 
 ## Revision rule
 

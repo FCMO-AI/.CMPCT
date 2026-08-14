@@ -182,11 +182,12 @@ Implemented today:
 - extraction and ZIP export;
 - a fair parity harness separating library and fresh-process timing;
 - Linux MIME registration source;
-- explicit portability contract and release gates.
+- explicit portability contract and release gates;
+- an initial memory-safe Rust core under `native/cmpct-core/` that authenticates/decodes the revision-24 primary index, enumerates logical entries, rejects lexical path aliases, and exposes a tested opaque C ABI for open/close/revision/count/entry metadata/path. CI cross-checks it against the Python oracle and exercises the produced shared library from a non-Rust caller.
 
 Not yet implemented and therefore **not to be claimed as shipped support**:
 
-- memory-safe native reader/writer ABI;
+- complete memory-safe native reader/writer ABI beyond the implemented primary-index/open/enumeration seed (full hostile structural validation, recovery, member/range streaming, codec decoding, extraction and mutation are still pending);
 - Android application/DocumentsProvider;
 - Windows shell/browser package;
 - Apple document/Quick Look package;
