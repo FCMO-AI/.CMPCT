@@ -15,7 +15,7 @@ android {
         targetSdk 36
         versionCode 24
         versionName '0.24-android-preview1'
-        testInstrumentationRunner 'android.test.InstrumentationTestRunner'
+        testInstrumentationRunner 'androidx.test.runner.AndroidJUnitRunner'
 
         ndk {
             abiFilters 'arm64-v8a', 'armeabi-v7a', 'x86_64', 'x86'
@@ -53,6 +53,15 @@ android {
             minifyEnabled false
         }
     }
+}
+
+dependencies {
+    // Footnote: the legacy android.test instrumentation classes are no longer on the current SDK test
+    // compile classpath. Use AndroidX Test's current stable runner/core plus its JUnit4 extension so
+    // emulator/device assertions exercise the same supported instrumentation stack Android documents.
+    androidTestImplementation 'androidx.test:core:1.7.0'
+    androidTestImplementation 'androidx.test:runner:1.7.0'
+    androidTestImplementation 'androidx.test.ext:junit:1.3.0'
 }
 
 // Footnote: Android packaging must never silently fall back to a stale checked-in native library.
