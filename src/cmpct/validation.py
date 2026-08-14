@@ -461,7 +461,9 @@ def _validate_index(index: dict, record_base: int, archive_size: int, limits: Pa
         if not isinstance(mtime, int) or isinstance(mtime, bool):
             raise ValidationError(f"file {path!r} mtime must be an integer")
         size = _int(size, f"file {path!r} size")
-        if whole_hash is not None and (
+        # Revision 24 uses b'' as the directory hash sentinel; direct-file hashes are inherited from
+        # blob headers, while chunked/sparse rows carry a full 32-byte logical digest.
+        if whole_hash not in (None, b"") and (
             not isinstance(whole_hash, (bytes, bytearray)) or len(whole_hash) != 32
         ):
             raise ValidationError(f"file {path!r} logical hash must be 32 bytes")
