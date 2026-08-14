@@ -8,7 +8,7 @@ set_target_properties(cmpct_core PROPERTIES
 
 add_library(cmpct_android SHARED cmpct_jni.cpp)
 target_include_directories(cmpct_android PRIVATE
-    "${CMAKE_CURRENT_LIST_DIR}/../../../../../../../native/cmpct-core/include"
+    "${CMAKE_CURRENT_LIST_DIR}/../../../../../../native/cmpct-core/include"
 )
 
 # Footnote: the JNI layer contains no parser logic. It forwards ownership/enumeration/range calls to
