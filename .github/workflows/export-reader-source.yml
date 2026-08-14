@@ -1,0 +1,23 @@
+name: Export CMPCT reader source
+
+on:
+  push:
+    branches:
+      - feat/zip-parity-portability
+
+permissions:
+  contents: read
+
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cmpct-reader-source
+          path: src/cmpct/reader.py
+
+# Footnote: this temporary development workflow exports the exact branch source through the connected
+# CI channel so surgical edits can be based on the complete file rather than reconstructed snippets.
+# It carries no production behavior and should be removed before merge.
