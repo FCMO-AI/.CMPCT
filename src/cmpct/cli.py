@@ -5,14 +5,12 @@ import json
 import sys
 from pathlib import Path
 
-from .builder import Builder
-from .codec import K_DIR
-from .reader import CMPCT
-from .transactions import append_delete, append_rename, append_update, compact_archive, recover_blob_records
-from .validation import preflight_archive
-
 
 def main():
+    # Footnote: imports are intentionally command-local. A user opening or extracting an archive
+    # should not pay startup/import cost for the encoder, transaction mutator and hostile-preflight
+    # implementation before a single byte is read. ZIP's mature tooling has very low launch overhead;
+    # keeping these dependency cones separate is part of making CMPCT competitive as a boring default.
     ap = argparse.ArgumentParser(prog="cmpct")
     sp = ap.add_subparsers(dest="cmd", required=True)
 
@@ -71,29 +69,35 @@ def main():
     a = ap.parse_args()
 
     if a.cmd == "create":
+        from .builder import Builder
+
         print(json.dumps(Builder(Path(a.source)).build(Path(a.archive)), indent=2))
         return
-    if a.cmd == "update":
-        print(json.dumps(append_update(Path(a.archive), a.member, Path(a.source)), indent=2))
-        return
-    if a.cmd == "delete":
-        append_delete(Path(a.archive), a.member)
-        return
-    if a.cmd == "rename":
-        append_rename(Path(a.archive), a.old, a.new)
-        return
-    if a.cmd == "recover-blobs":
-        print(json.dumps(recover_blob_records(Path(a.archive)), indent=2))
-        return
-    if a.cmd == "compact":
-        print(json.dumps(compact_archive(Path(a.archive), Path(a.output)), indent=2))
+    if a.cmd in {"update", "delete", "rename", "recover-blobs", "compact"}:
+        from .transactions import append_delete, append_rename, append_update, compact_archive, recover_blob_records
+
+        if a.cmd == "update":
+            print(json.dumps(append_update(Path(a.archive), a.member, Path(a.source)), indent=2))
+        elif a.cmd == "delete":
+            append_delete(Path(a.archive), a.member)
+        elif a.cmd == "rename":
+            append_rename(Path(a.archive), a.old, a.new)
+        elif a.cmd == "recover-blobs":
+            print(json.dumps(recover_blob_records(Path(a.archive)), indent=2))
+        else:
+            print(json.dumps(compact_archive(Path(a.archive), Path(a.output)), indent=2))
         return
     if a.cmd == "preflight":
+        from .validation import preflight_archive
+
         # Footnote: preflight is intentionally an explicit command in this first parser-hardening
         # increment. That lets us fuzz and benchmark the structural gate before making every hot-path
         # open pay for it, while recover-blobs remains independent for severely damaged archives.
         print(json.dumps(preflight_archive(Path(a.archive)), indent=2))
         return
+
+    from .codec import K_DIR
+    from .reader import CMPCT
 
     with CMPCT(Path(a.archive)) as ar:
         if a.cmd == "info":
