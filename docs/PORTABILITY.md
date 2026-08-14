@@ -74,6 +74,12 @@ need to start CPython, import the encoder, load mutation code and initialize unr
 to list an archive. The native CLI and platform handlers must keep the read-only dependency cone
 small and load optional codecs only when an archive actually requires them.
 
+For compressed direct members, an implementation may temporarily decode one bounded member to serve a
+range if the codec is not independently seekable, but it must never silently inflate the whole archive.
+The current native Zstd bridge follows that rule and caps one direct decode at 256 MiB. The long-term
+path for large compressed files is the revision-24 chunk map: decode only chunks intersecting the
+requested range.
+
 ## Android
 
 Android is a first-class target, not a future compatibility note.
@@ -183,11 +189,16 @@ Implemented today:
 - a fair parity harness separating library and fresh-process timing;
 - Linux MIME registration source;
 - explicit portability contract and release gates;
-- an initial memory-safe Rust core under `native/cmpct-core/` that authenticates/decodes the revision-24 primary index, enumerates logical entries, rejects lexical path aliases, and exposes a tested opaque C ABI for open/close/revision/count/entry metadata/path. CI cross-checks it against the Python oracle and exercises the produced shared library from a non-Rust caller.
+- a memory-safe Rust core under `native/cmpct-core/` that authenticates/decodes the revision-24 primary index, enumerates logical entries, rejects lexical path aliases, bounds the base blob table, cross-checks direct physical blob framing, and exposes a tested opaque C ABI;
+- native range reads for direct RAW members without decoding unrelated bytes;
+- native bounded range reads for ordinary direct Zstd members, with a 256 MiB per-direct-member decode ceiling, exact decompressed-length validation and SHA-256 verification before returning the requested slice;
+- CI that compares native entry enumeration plus RAW/Zstd range bytes against the Python oracle and exercises the produced shared library from a non-Rust caller.
+
+`docs/NATIVE_CORE.md` is the detailed handoff for the native capability and its safety boundary.
 
 Not yet implemented and therefore **not to be claimed as shipped support**:
 
-- complete memory-safe native reader/writer ABI beyond the implemented primary-index/open/enumeration seed (full hostile structural validation, recovery, member/range streaming, codec decoding, extraction and mutation are still pending);
+- complete memory-safe native reader/writer ABI beyond primary-index/open/enumeration and direct RAW/Zstd reads: full hostile structural validation, recovery, remaining codecs/storage descriptions, streams, extraction and mutation are still pending;
 - Android application/DocumentsProvider;
 - Windows shell/browser package;
 - Apple document/Quick Look package;
