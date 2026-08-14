@@ -142,3 +142,5 @@ jobs:
         run: python tests/native_golden_abi.py
       - name: Committed golden chunk-map ABI gate
         run: python tests/native_chunk_golden_abi.py
+      - name: Committed golden sparse ABI gate
+        run: python tests/native_sparse_golden_abi.py
