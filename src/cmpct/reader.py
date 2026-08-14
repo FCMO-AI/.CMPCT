@@ -9,6 +9,7 @@ import msgpack
 
 from .codec import *
 from .codec import _hash_sparse, _wav_parts, _ld, _sz, _z, _zck
+from .path_policy import canonical_logical_path
 
 def _safe_output_path(dest:Path,rel:str)->Path:
     # Logical path validation is lexical and allocation-cheap. Absolute paths, NULs and parent
@@ -24,6 +25,17 @@ class CMPCT:
     def __init__(self,path:Path):
         self.path=Path(path);self.f=open(path,'rb');self._io_lock=threading.Lock();self.index,self.record_base=self._load_index();self.mm=mmap.mmap(self.f.fileno(),0,access=mmap.ACCESS_READ);self.files=self.index['files'];self.by={x[0]:x for x in self.files};
         if len(self.by)!=len(self.files):raise IOError('duplicate logical path in CMPCT index')
+        # Reject host-path aliases at ordinary open, not only at explicit preflight/extraction. This
+        # keeps Android/Windows/Linux/Apple handlers from observing a tree the extractor cannot map
+        # one-to-one onto a destination filesystem.
+        canonical_seen=set()
+        try:
+            for row in self.files:
+                key,_=canonical_logical_path(row[0])
+                if key in canonical_seen:raise IOError(f'duplicate canonical logical path: {row[0]!r}')
+                canonical_seen.add(key)
+        except ValueError as exc:
+            raise IOError(f'unsafe CMPCT logical path: {exc}') from exc
         self.blobs=self.index['blobs'];self.recipes=self.index['recipes'];self.dict_idx=self.index.get('dict_blob');self.fsmeta=self.index.get('fsmeta',{});self.cache={};self.vcache={};self._cache_lock=threading.Lock();self._zdict_lock=threading.Lock();self._dctx=None;self._ddict=None;self._dict_bytes=None;self._inflate_lock=threading.Lock();self._inflater=(_ld.libdeflate_alloc_decompressor() if _ld is not None else None);self._executor=None
     def close(self):
         if getattr(self,'mm',None):self.mm.close();self.mm=None
@@ -349,16 +361,18 @@ class CMPCT:
         total=sum(x[4] for x in self.files if x[1]!=K_DIR)
         if max_bytes is not None and total>max_bytes:raise IOError(f'archive expands to {total} bytes, above limit {max_bytes}')
 
-        # Validate every logical path once and reject symlink pivots before writing anything.
-        syms={x[0] for x in self.files if x[1]==K_SYMLINK}
-        clean=[]
+        # Validate every logical path once and reject aliases/symlink pivots before writing anything.
+        canonical_rows=[];seen=set();syms=set()
         for row in self.files:
             rel=row[0]
-            if '\x00' in rel:raise IOError('NUL in archive path')
-            if rel.startswith('/') or rel.startswith('\\'):
-                raise IOError(f'unsafe archive path: {rel!r}')
-            parts=tuple(x for x in rel.replace('\\','/').split('/') if x!='')
-            if not parts or any(x=='..' for x in parts):raise IOError(f'unsafe archive path: {rel!r}')
+            try:key,parts=canonical_logical_path(rel)
+            except ValueError as exc:raise IOError(f'unsafe archive path: {rel!r}: {exc}') from exc
+            if key in seen:raise IOError(f'duplicate canonical archive path: {rel!r}')
+            seen.add(key);canonical_rows.append((row,key,parts))
+            if row[1]==K_SYMLINK:syms.add(key)
+        clean=[]
+        for row,key,parts in canonical_rows:
+            rel=row[0]
             if safe_symlinks:
                 for i in range(1,len(parts)):
                     if '/'.join(parts[:i]) in syms:raise IOError(f'archive symlink used as parent path: {rel!r}')
@@ -376,7 +390,9 @@ class CMPCT:
             parent=os.path.dirname(full)
             if parent and not os.path.isdir(parent):os.makedirs(parent,exist_ok=True)
             if k==K_HARDLINK:
-                target=os.path.join(dest_s,*storage[0].split('/'))
+                try:_,target_parts=canonical_logical_path(storage[0])
+                except ValueError as exc:raise IOError(f'unsafe hardlink target: {storage[0]!r}: {exc}') from exc
+                target=os.path.join(dest_s,*target_parts)
                 if not os.path.exists(target):raise IOError(f'hardlink target not yet extracted: {storage[0]}')
                 try:os.unlink(full)
                 except FileNotFoundError:pass

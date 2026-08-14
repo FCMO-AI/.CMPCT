@@ -13,6 +13,8 @@ from pathlib import Path
 
 import msgpack
 
+from .path_policy import canonical_logical_path
+
 from .codec import (
     BHDR, BMAGIC, CODEC_DEFLATE, CODEC_RAW, CODEC_WAVFLAC, CODEC_ZSTD, CODEC_ZSTDDICT,
     FMAGIC, FTR, HDR, K_DIR, K_FILE, K_HARDLINK, K_SYMLINK, MAGIC,
@@ -442,19 +444,15 @@ def _validate_index(index: dict, record_base: int, archive_size: int, limits: Pa
         path, kind, mode, mtime, size, whole_hash, storage = row
         if not isinstance(path, str):
             raise ValidationError(f"file row {fi} path is not text")
-        path_bytes = path.encode("utf-8", "surrogatepass")
-        normalized = path.replace("\\", "/")
-        parts = normalized.split("/")
-        if (
-            not path
-            or len(path_bytes) > limits.max_path_bytes
-            or normalized.startswith("/")
-            or any(part in ("", "..") for part in parts)
-        ):
-            raise ValidationError(f"unsafe logical path {path!r}")
-        if path in seen_paths:
-            raise ValidationError(f"duplicate logical path {path!r}")
-        seen_paths.add(path)
+        try:
+            canonical_path, _ = canonical_logical_path(path, max_path_bytes=limits.max_path_bytes)
+        except ValueError as exc:
+            raise ValidationError(f"unsafe logical path {path!r}: {exc}") from exc
+        # Footnote: duplicate detection is keyed by the same lexical spelling extraction uses. Without
+        # this, ``a/b`` and ``a\\b`` survive as distinct index strings but overwrite one destination.
+        if canonical_path in seen_paths:
+            raise ValidationError(f"duplicate logical path (canonical alias) {path!r}")
+        seen_paths.add(canonical_path)
         if kind not in (K_FILE, K_DIR, K_SYMLINK, K_HARDLINK):
             raise ValidationError(f"file {path!r} has unknown kind {kind!r}")
         _int(mode, f"file {path!r} mode")
@@ -469,7 +467,11 @@ def _validate_index(index: dict, record_base: int, archive_size: int, limits: Pa
             raise ValidationError(f"file {path!r} logical hash must be 32 bytes")
         _validate_storage(path, kind, size, storage, blobs, recipes)
         if kind == K_HARDLINK:
-            hardlinks[path] = storage[0]
+            try:
+                target_key, _ = canonical_logical_path(storage[0], max_path_bytes=limits.max_path_bytes)
+            except ValueError as exc:
+                raise ValidationError(f"hardlink {path!r} has unsafe target {storage[0]!r}: {exc}") from exc
+            hardlinks[canonical_path] = target_key
 
     for path, target in hardlinks.items():
         if target not in seen_paths:
