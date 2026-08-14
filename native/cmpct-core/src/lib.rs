@@ -1,9 +1,10 @@
 //! Memory-safe read-only CMPCT core.
 //!
-//! The native slice now authenticates the primary index, enumerates its logical tree, and can read
-//! bounded byte ranges from direct RAW members. That is deliberately narrower than the Python oracle:
-//! compressed codecs, chunk maps, sparse maps, virtual containers and transactional recovery remain
-//! behind explicit unsupported errors until each representation has its own conformance gate.
+//! The native slice authenticates the primary index, enumerates its logical tree, and can read
+//! bounded byte ranges from direct RAW and ordinary Zstd members. RAW stays genuinely range-local;
+//! Zstd currently decodes and authenticates the complete direct member before slicing the requested
+//! range. Chunk maps, sparse maps, virtual containers and transactional recovery remain behind
+//! explicit unsupported errors until each representation has its own conformance gate.
 
 use rmpv::Value;
 use serde::Serialize;
@@ -24,8 +25,10 @@ const VERSION: u16 = 24;
 const HEADER_SIZE: usize = 68;
 const BLOB_HEADER_SIZE: usize = 64;
 const CODEC_RAW: u8 = 0;
+const CODEC_ZSTD: u8 = 1;
 const STORAGE_BLOB: u64 = 0;
 const MAX_INDEX_BYTES: u64 = 256 * 1024 * 1024;
+const MAX_DIRECT_DECODE_BYTES: u64 = 256 * 1024 * 1024;
 const MAX_FILES: usize = 4_000_000;
 const MAX_BLOBS: usize = 4_000_000;
 const MAX_PATH_BYTES: usize = 1024 * 1024;
@@ -40,6 +43,8 @@ pub enum CmpctError {
     Revision(u16),
     #[error("index exceeds native handler resource limit")]
     IndexLimit,
+    #[error("member exceeds native direct-decode resource limit")]
+    MemberLimit,
     #[error("archive is truncated")]
     Truncated,
     #[error("primary index decompressed to an unexpected length")]
@@ -58,6 +63,10 @@ pub enum CmpctError {
     Range,
     #[error("physical blob header does not match the authenticated index")]
     BlobHeader,
+    #[error("decoded member length does not match its authenticated declaration")]
+    MemberLength,
+    #[error("decoded member SHA-256 does not match its physical blob identity")]
+    MemberHash,
 }
 
 #[derive(Debug, Clone)]
@@ -177,12 +186,85 @@ impl Archive {
         &self.entries
     }
 
-    /// Read a byte range from a direct RAW member without materializing the rest of the file.
+    fn checked_blob_layout(
+        &self,
+        blob: &Blob,
+        file: &mut File,
+    ) -> Result<(u64, [u8; 32]), CmpctError> {
+        let blob_pos = self
+            .data_base
+            .checked_add(blob.offset)
+            .ok_or(CmpctError::BlobHeader)?;
+        let payload_pos = blob_pos
+            .checked_add(BLOB_HEADER_SIZE as u64)
+            .and_then(|v| v.checked_add(blob.meta_len as u64))
+            .ok_or(CmpctError::BlobHeader)?;
+        let payload_end = payload_pos
+            .checked_add(blob.csize)
+            .ok_or(CmpctError::BlobHeader)?;
+        if payload_end > self.data_end {
+            return Err(CmpctError::BlobHeader);
+        }
+
+        file.seek(SeekFrom::Start(blob_pos))?;
+        let mut header = [0u8; BLOB_HEADER_SIZE];
+        file.read_exact(&mut header)?;
+        let physical_codec = header[4];
+        let physical_usize = le_u64(&header[8..16]);
+        let physical_csize = le_u64(&header[16..24]);
+        let physical_meta_len = le_u32(&header[24..28]);
+        if &header[0..4] != BLOB_MAGIC
+            || physical_codec != blob.codec
+            || physical_usize != blob.usize
+            || physical_csize != blob.csize
+            || physical_meta_len != blob.meta_len
+        {
+            return Err(CmpctError::BlobHeader);
+        }
+        let mut hash = [0u8; 32];
+        hash.copy_from_slice(&header[32..64]);
+        Ok((payload_pos, hash))
+    }
+
+    fn decode_direct_zstd(
+        &self,
+        blob: &Blob,
+        file: &mut File,
+        payload_pos: u64,
+        expected_hash: &[u8; 32],
+    ) -> Result<Vec<u8>, CmpctError> {
+        if blob.usize > MAX_DIRECT_DECODE_BYTES || blob.csize > MAX_DIRECT_DECODE_BYTES {
+            return Err(CmpctError::MemberLimit);
+        }
+        let compressed_len = usize::try_from(blob.csize).map_err(|_| CmpctError::MemberLimit)?;
+        let decoded_len = usize::try_from(blob.usize).map_err(|_| CmpctError::MemberLimit)?;
+        file.seek(SeekFrom::Start(payload_pos))?;
+        let mut compressed = vec![0u8; compressed_len];
+        file.read_exact(&mut compressed)?;
+
+        // Footnote: compressed direct-range reads are correctness-first at this milestone. Zstd is
+        // not independently seekable here, so the native handler decodes exactly one direct member,
+        // caps the allocation before decoding, authenticates the complete bytes, then returns the
+        // requested slice. Large files are normally chunked by the encoder and will gain range-local
+        // decoding when native chunk-map support lands.
+        let decoder = zstd::stream::read::Decoder::new(Cursor::new(compressed))?;
+        let mut limited = decoder.take(blob.usize.saturating_add(1));
+        let mut decoded = Vec::with_capacity(decoded_len);
+        limited.read_to_end(&mut decoded)?;
+        if decoded.len() != decoded_len {
+            return Err(CmpctError::MemberLength);
+        }
+        if Sha256::digest(&decoded).as_slice() != expected_hash {
+            return Err(CmpctError::MemberHash);
+        }
+        Ok(decoded)
+    }
+
+    /// Read a byte range from a supported direct member.
     ///
-    /// Footnote: range reads intentionally mirror the Python oracle's RAW fast path. We cross-check
-    /// the physical blob frame against the authenticated index before returning bytes, but do not
-    /// pretend a partial read verifies the whole-file CRC/SHA. Strong whole-file verification remains
-    /// a separate operation until authenticated chunk/range proofs are part of the format contract.
+    /// RAW returns only the requested physical bytes after authenticated-index/header cross-checking.
+    /// Ordinary Zstd currently decodes and verifies the complete direct member before slicing; that
+    /// keeps hostile-input bounds and integrity semantics strict while the native chunk reader is built.
     pub fn read_range(
         &self,
         entry_index: usize,
@@ -204,45 +286,29 @@ impl Archive {
             .blobs
             .get(direct.index)
             .ok_or_else(|| CmpctError::Schema("direct member references missing blob".into()))?;
-        if blob.codec != CODEC_RAW || blob.usize != entry.size || blob.csize != blob.usize {
-            return Err(CmpctError::Unsupported);
-        }
-
-        let blob_pos = self
-            .data_base
-            .checked_add(blob.offset)
-            .ok_or(CmpctError::BlobHeader)?;
-        let payload_pos = blob_pos
-            .checked_add(BLOB_HEADER_SIZE as u64)
-            .and_then(|v| v.checked_add(blob.meta_len as u64))
-            .ok_or(CmpctError::BlobHeader)?;
-        let payload_end = payload_pos
-            .checked_add(blob.csize)
-            .ok_or(CmpctError::BlobHeader)?;
-        if payload_end > self.data_end {
+        if blob.usize != entry.size {
             return Err(CmpctError::BlobHeader);
         }
 
         let mut file = self.file.lock().map_err(|_| CmpctError::BlobHeader)?;
-        file.seek(SeekFrom::Start(blob_pos))?;
-        let mut header = [0u8; BLOB_HEADER_SIZE];
-        file.read_exact(&mut header)?;
-        let physical_codec = header[4];
-        let physical_usize = le_u64(&header[8..16]);
-        let physical_csize = le_u64(&header[16..24]);
-        let physical_meta_len = le_u32(&header[24..28]);
-        if &header[0..4] != BLOB_MAGIC
-            || physical_codec != blob.codec
-            || physical_usize != blob.usize
-            || physical_csize != blob.csize
-            || physical_meta_len != blob.meta_len
-        {
-            return Err(CmpctError::BlobHeader);
+        let (payload_pos, expected_hash) = self.checked_blob_layout(blob, &mut file)?;
+        match blob.codec {
+            CODEC_RAW => {
+                if blob.csize != blob.usize {
+                    return Err(CmpctError::BlobHeader);
+                }
+                let read_pos = payload_pos.checked_add(start).ok_or(CmpctError::Range)?;
+                file.seek(SeekFrom::Start(read_pos))?;
+                file.read_exact(out)?;
+            }
+            CODEC_ZSTD => {
+                let decoded = self.decode_direct_zstd(blob, &mut file, payload_pos, &expected_hash)?;
+                let start = usize::try_from(start).map_err(|_| CmpctError::Range)?;
+                let end = start.checked_add(out.len()).ok_or(CmpctError::Range)?;
+                out.copy_from_slice(&decoded[start..end]);
+            }
+            _ => return Err(CmpctError::Unsupported),
         }
-
-        let read_pos = payload_pos.checked_add(start).ok_or(CmpctError::Range)?;
-        file.seek(SeekFrom::Start(read_pos))?;
-        file.read_exact(out)?;
         Ok(out.len())
     }
 }
@@ -346,7 +412,7 @@ fn parse_entries(index: &Value, blob_count: usize) -> Result<Vec<Entry>, CmpctEr
         .ok_or_else(|| CmpctError::Schema("index revision is not an unsigned integer".into()))?;
     if index_revision != VERSION as u64 {
         return Err(CmpctError::Revision(
-            index_revision.min(u16::MAX as u64) as u16
+            index_revision.min(u16::MAX as u64) as u16,
         ));
     }
 
@@ -439,7 +505,7 @@ pub struct CmpctEntryInfo {
 fn error_status(error: &CmpctError) -> CmpctStatus {
     match error {
         CmpctError::Io(_) | CmpctError::Truncated => CmpctStatus::Io,
-        CmpctError::IndexLimit => CmpctStatus::Limit,
+        CmpctError::IndexLimit | CmpctError::MemberLimit => CmpctStatus::Limit,
         CmpctError::Range => CmpctStatus::Range,
         CmpctError::Unsupported => CmpctStatus::Unsupported,
         _ => CmpctStatus::Format,
@@ -562,7 +628,7 @@ pub unsafe extern "C" fn cmpct_entry_path(
     CmpctStatus::Ok as c_int
 }
 
-/// Read a bounded byte range from a direct RAW member.
+/// Read a bounded byte range from a supported direct member.
 ///
 /// `out_read` receives the number of bytes copied. A zero-length read may pass a null buffer.
 /// Representations not yet implemented by the native core return `CmpctStatus::Unsupported`.
