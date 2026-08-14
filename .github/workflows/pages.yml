@@ -8,6 +8,7 @@ on:
 
 permissions:
   contents: read
+  pages: read
 
 concurrency:
   group: cmpct-pages-${{ github.ref }}
@@ -85,6 +86,6 @@ jobs:
         id: deployment
         uses: actions/deploy-pages@v4
 
-# Footnote: build and deployment are separate on purpose. Pull requests exercise the entire static
-# build and browser-writer compatibility gate without receiving Pages credentials; only canonical
-# main/workflow-dispatch runs can publish the artifact.
+# Footnote: private repositories require an explicit Pages metadata read for configure-pages. Build
+# and deployment remain separate so pull requests exercise the static build and browser-writer gate
+# without receiving deployment credentials; only canonical main/workflow-dispatch runs can publish.
