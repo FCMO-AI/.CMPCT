@@ -1,10 +1,11 @@
 //! Memory-safe read-only CMPCT core.
 //!
 //! The native slice authenticates the primary index, enumerates its logical tree, and can read
-//! bounded byte ranges from direct RAW/Zstd/Deflate members and revision-24 fixed/CDC chunk maps.
-//! RAW stays genuinely range-local; compressed direct members decode one bounded object, while chunked
-//! ranges decode only intersecting chunks. Sparse maps, virtual containers and transactional recovery
-//! remain behind explicit unsupported errors until each representation has its own conformance gate.
+//! bounded byte ranges from direct RAW/Zstd/Deflate members, revision-24 fixed/CDC chunk maps, and
+//! sparse extents. RAW stays genuinely range-local; compressed direct members decode one bounded
+//! object, while chunked/sparse ranges decode only intersecting stored data. Virtual containers and
+//! transactional recovery remain behind explicit unsupported errors until each representation has its
+//! own conformance gate.
 
 use flate2::read::DeflateDecoder;
 use rmpv::Value;
@@ -30,6 +31,7 @@ const CODEC_ZSTD: u8 = 1;
 const CODEC_DEFLATE: u8 = 4;
 const STORAGE_BLOB: u64 = 0;
 const STORAGE_CHUNKS: u64 = 1;
+const STORAGE_SPARSE: u64 = 3;
 const STORAGE_CDC: u64 = 5;
 const MAX_INDEX_BYTES: u64 = 256 * 1024 * 1024;
 const MAX_DIRECT_DECODE_BYTES: u64 = 256 * 1024 * 1024;
@@ -89,10 +91,18 @@ struct ChunkRef {
 }
 
 #[derive(Debug, Clone)]
+struct SparseExtent {
+    offset: u64,
+    logical_len: u64,
+    chunks: Vec<ChunkRef>,
+}
+
+#[derive(Debug, Clone)]
 enum Storage {
     Unsupported,
     Direct(usize),
     Fixed(Vec<ChunkRef>),
+    Sparse(Vec<SparseExtent>),
     Cdc(Vec<ChunkRef>),
 }
 
@@ -260,8 +270,7 @@ impl Archive {
         // Footnote: compressed direct-range reads are correctness-first at this milestone. Zstd is
         // not independently seekable here, so the native handler decodes exactly one direct member,
         // caps the allocation before decoding, authenticates the complete bytes, then returns the
-        // requested slice. Large files are normally chunked by the encoder and will gain range-local
-        // decoding when native chunk-map support lands.
+        // requested slice. Large files are normally chunked by the encoder and use range-local maps.
         let decoder = zstd::stream::read::Decoder::new(Cursor::new(compressed))?;
         let mut limited = decoder.take(blob.usize.saturating_add(1));
         let mut decoded = Vec::with_capacity(decoded_len);
@@ -396,11 +405,55 @@ impl Archive {
         Ok(())
     }
 
-    /// Read a byte range from a supported direct or chunked member.
+    fn read_sparse_range(
+        &self,
+        extents: &[SparseExtent],
+        start: u64,
+        out: &mut [u8],
+        file: &mut File,
+    ) -> Result<(), CmpctError> {
+        let request_end = start
+            .checked_add(out.len() as u64)
+            .ok_or(CmpctError::Range)?;
+        out.fill(0);
+
+        // Footnote: holes are semantic zeros, not stored payload. Leave them zero-filled and decode
+        // only physical chunks belonging to data extents that intersect the requested range. This is
+        // what keeps native browsing of sparse VM/disk images proportional to touched data rather than
+        // to the logical file size.
+        for extent in extents {
+            let extent_end = extent
+                .offset
+                .checked_add(extent.logical_len)
+                .ok_or_else(|| CmpctError::Schema("sparse extent overflows logical offsets".into()))?;
+            if extent_end <= start {
+                continue;
+            }
+            if extent.offset >= request_end {
+                break;
+            }
+            let overlap_start = start.max(extent.offset);
+            let overlap_end = request_end.min(extent_end);
+            let local_start = overlap_start - extent.offset;
+            let length =
+                usize::try_from(overlap_end - overlap_start).map_err(|_| CmpctError::Range)?;
+            let dst_start = usize::try_from(overlap_start - start).map_err(|_| CmpctError::Range)?;
+            let dst_end = dst_start.checked_add(length).ok_or(CmpctError::Range)?;
+            self.read_chunked_range(
+                &extent.chunks,
+                local_start,
+                &mut out[dst_start..dst_end],
+                file,
+            )?;
+        }
+        Ok(())
+    }
+
+    /// Read a byte range from a supported direct, chunked, or sparse member.
     ///
     /// RAW returns only requested physical bytes after authenticated-index/header cross-checking.
-    /// Compressed direct members decode one bounded object; fixed/CDC maps decode only intersecting
-    /// chunks. A complete chunked read also verifies the logical whole-file SHA-256 stored in the index.
+    /// Compressed direct members decode one bounded object; fixed/CDC and sparse maps decode only
+    /// intersecting stored chunks. A complete logical-map read also verifies the whole-file SHA-256.
     pub fn read_range(
         &self,
         entry_index: usize,
@@ -435,6 +488,17 @@ impl Archive {
                 if start == 0 && end == entry.size {
                     let expected = entry.logical_hash.ok_or_else(|| {
                         CmpctError::Schema("chunked member is missing logical SHA-256".into())
+                    })?;
+                    if Sha256::digest(&*out).as_slice() != expected {
+                        return Err(CmpctError::MemberHash);
+                    }
+                }
+            }
+            Storage::Sparse(extents) => {
+                self.read_sparse_range(extents, start, out, &mut file)?;
+                if start == 0 && end == entry.size {
+                    let expected = entry.logical_hash.ok_or_else(|| {
+                        CmpctError::Schema("sparse member is missing logical SHA-256".into())
                     })?;
                     if Sha256::digest(&*out).as_slice() != expected {
                         return Err(CmpctError::MemberHash);
@@ -640,6 +704,104 @@ fn parse_storage(
             }
             Ok(Storage::Fixed(chunks))
         }
+        STORAGE_SPARSE => {
+            if storage.len() < 2 {
+                return Err(CmpctError::Schema(format!(
+                    "file row {row_index} sparse storage is too short"
+                )));
+            }
+            let rows = storage[1].as_array().ok_or_else(|| {
+                CmpctError::Schema(format!("file row {row_index} sparse extents are not an array"))
+            })?;
+            if rows.len() > MAX_BLOBS {
+                return Err(CmpctError::Schema(format!(
+                    "file row {row_index} sparse extent count exceeds native limit"
+                )));
+            }
+            let mut previous_end = 0u64;
+            let mut total_refs = 0usize;
+            let mut extents = Vec::with_capacity(rows.len());
+            for (extent_index, value) in rows.iter().enumerate() {
+                let extent = value.as_array().ok_or_else(|| {
+                    CmpctError::Schema(format!(
+                        "file row {row_index} sparse extent {extent_index} is not an array"
+                    ))
+                })?;
+                if extent.len() != 3 {
+                    return Err(CmpctError::Schema(format!(
+                        "file row {row_index} sparse extent {extent_index} has invalid shape"
+                    )));
+                }
+                let offset = extent[0].as_u64().ok_or_else(|| {
+                    CmpctError::Schema(format!(
+                        "file row {row_index} sparse extent {extent_index} has invalid offset"
+                    ))
+                })?;
+                let logical_len = extent[1].as_u64().filter(|v| *v > 0).ok_or_else(|| {
+                    CmpctError::Schema(format!(
+                        "file row {row_index} sparse extent {extent_index} has invalid length"
+                    ))
+                })?;
+                let extent_end = offset.checked_add(logical_len).ok_or_else(|| {
+                    CmpctError::Schema(format!(
+                        "file row {row_index} sparse extent {extent_index} overflows logical offsets"
+                    ))
+                })?;
+                if offset < previous_end || extent_end > logical_size {
+                    return Err(CmpctError::Schema(format!(
+                        "file row {row_index} sparse extent {extent_index} overlaps or exceeds file"
+                    )));
+                }
+                let ids = extent[2].as_array().ok_or_else(|| {
+                    CmpctError::Schema(format!(
+                        "file row {row_index} sparse extent {extent_index} chunks are not an array"
+                    ))
+                })?;
+                total_refs = total_refs.checked_add(ids.len()).ok_or_else(|| {
+                    CmpctError::Schema(format!(
+                        "file row {row_index} sparse blob-reference count overflows"
+                    ))
+                })?;
+                if total_refs > MAX_BLOBS {
+                    return Err(CmpctError::Schema(format!(
+                        "file row {row_index} sparse blob-reference count exceeds native limit"
+                    )));
+                }
+                let mut stored = 0u64;
+                let mut chunks = Vec::with_capacity(ids.len());
+                for (chunk_index, value) in ids.iter().enumerate() {
+                    let index = storage_blob_index(
+                        value,
+                        blobs.len(),
+                        &format!(
+                            "file row {row_index} sparse extent {extent_index} chunk {chunk_index}"
+                        ),
+                    )?;
+                    let chunk_len = blobs[index].usize;
+                    stored = stored.checked_add(chunk_len).ok_or_else(|| {
+                        CmpctError::Schema(format!(
+                            "file row {row_index} sparse extent {extent_index} stored bytes overflow"
+                        ))
+                    })?;
+                    chunks.push(ChunkRef {
+                        logical_len: chunk_len,
+                        index,
+                    });
+                }
+                if stored != logical_len {
+                    return Err(CmpctError::Schema(format!(
+                        "file row {row_index} sparse extent {extent_index} length mismatch"
+                    )));
+                }
+                extents.push(SparseExtent {
+                    offset,
+                    logical_len,
+                    chunks,
+                });
+                previous_end = extent_end;
+            }
+            Ok(Storage::Sparse(extents))
+        }
         STORAGE_CDC => {
             if storage.len() < 2 {
                 return Err(CmpctError::Schema(format!(
@@ -751,9 +913,13 @@ fn parse_entries(index: &Value, blobs: &[Blob]) -> Result<Vec<Entry>, CmpctError
             .ok_or_else(|| CmpctError::Schema(format!("file row {i} has invalid size")))?;
         let logical_hash = parse_hash(&row[5], i)?;
         let storage = parse_storage(&row[6], size, blobs, i)?;
-        if matches!(storage, Storage::Fixed(_) | Storage::Cdc(_)) && logical_hash.is_none() {
+        if matches!(
+            storage,
+            Storage::Fixed(_) | Storage::Sparse(_) | Storage::Cdc(_)
+        ) && logical_hash.is_none()
+        {
             return Err(CmpctError::Schema(format!(
-                "file row {i} chunked member is missing logical SHA-256"
+                "file row {i} logical-map member is missing SHA-256"
             )));
         }
         entries.push(Entry {
@@ -918,7 +1084,7 @@ pub unsafe extern "C" fn cmpct_entry_path(
     CmpctStatus::Ok as c_int
 }
 
-/// Read a bounded byte range from a supported direct or chunked member.
+/// Read a bounded byte range from a supported direct, chunked, or sparse member.
 ///
 /// `out_read` receives the number of bytes copied. A zero-length read may pass a null buffer.
 /// Representations not yet implemented by the native core return `CmpctStatus::Unsupported`.
