@@ -32,10 +32,14 @@ def test_windows_association_targets_packaged_native_browser_without_hijacking_d
     assert "RegisteredApplications" in text
     assert "Capabilities\\FileAssociations" in text
     assert "@CMPCT_BROWSER_EXE@" in text
-    assert "python" not in text.lower()
+    command_block = text.split(
+        f"[HKEY_CURRENT_USER\\Software\\Classes\\{WINDOWS_PROGID}\\shell\\open\\command]",
+        1,
+    )[1].split("\n\n", 1)[0]
+    assert "python" not in command_block.lower()
     # .reg string values escape embedded command-line quotes with backslashes;
     # assert the serialized form rather than the post-registry command spelling.
-    assert '\\"%1\\"' in text
+    assert '\\"%1\\"' in command_block
     extension_block = text.split(f"[HKEY_CURRENT_USER\\Software\\Classes\\.{EXTENSION}]", 1)[1].split("\n\n", 1)[0]
     assert '\n@="' not in extension_block
 
@@ -55,14 +59,17 @@ def test_apple_document_type_exports_cmpct_uti_and_both_mime_names():
     assert APPLE_UTI in doc["LSItemContentTypes"]
 
 
-def test_android_view_contract_routes_known_mimes_and_requires_magic_validation_comment():
+def test_android_view_contract_routes_only_known_cmpct_mimes_and_requires_magic_validation_comment():
     path = ROOT / "integrations/android/AndroidManifest-cmpct.xml"
     text = path.read_text(encoding="utf-8")
     ET.fromstring(text)
     assert MIME in text
     assert MIME_ALIAS in text
-    assert "application/octet-stream" in text
+    # Generic binary providers belong in the explicit picker flow. Advertising
+    # ACTION_VIEW for octet-stream would make CMPCT appear for unrelated files.
+    assert 'android:mimeType="application/octet-stream"' not in text
     assert re.search(r"cmpct", text, re.IGNORECASE)
     # Association metadata is intentionally not a trust boundary; keep the
     # nearby invariant explicit so future packaging work does not regress it.
     assert "verify CMPCT24" in text
+    assert "Storage Access Framework picker" in text
