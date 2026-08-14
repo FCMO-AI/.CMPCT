@@ -7,7 +7,7 @@ Implemented source contracts:
 - Linux: Shared MIME-info registration with `.cmpct` glob and `CMPCT24\0` magic.
 - Windows: per-user file association source with stable `FCMO.CMPCT.Archive` ProgID and a required packaged-native-browser substitution point.
 - Apple: exported `com.fcmo.cmpct.archive` UTType plus document-role declaration for macOS/iOS application packaging.
-- Android: `ACTION_VIEW` routing for the canonical/compatibility MIME names and a constrained octet-stream extension fallback.
+- Android: `ACTION_VIEW` routing for the canonical/compatibility CMPCT MIME names. Providers that expose only `application/octet-stream` stay in the explicit Storage Access Framework picker flow because Android URI path matching cannot safely constrain a generic MIME filter without a provider authority contract.
 
 These files are **not claims that platform applications ship yet**. They are deliberately handler-agnostic packaging contracts. The shipping browser/activity/document app must use the shared memory-safe native core and must validate archive magic/version after opening a file or URI; extension, MIME and UTType are routing metadata, not a security boundary.
 
