@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
-"""Build the CMPCT GitHub Pages site from canonical repository state.
+"""Build the CMPCT website from canonical repository state.
 
 The site intentionally derives version/revision/benchmark facts at build time instead of hard-coding
 marketing copy. This keeps the public surface tied to the same files agents and developers use, and
@@ -104,6 +104,17 @@ def _agent_manifest(version: str, revision: int, commit: str) -> dict[str, Any]:
         "canonical_repository": "FCMO-AI/.CMPCT",
         "canonical_branch": "main",
         "site_build_commit": commit,
+        "publication": {
+            "mode": "manual",
+            "status": "validation-only until explicitly published",
+        },
+        "licensing": {
+            "proposal": "Apache-2.0",
+            "adopted": False,
+            "guide": "LICENSING.md",
+            "proposed_text": "LICENSE-APACHE-2.0-PROPOSED.txt",
+        },
+        "public_surface_policy": "docs/PUBLIC_SURFACE.md",
         "reading_order": [
             "README.md",
             "AGENTS.md",
@@ -115,6 +126,8 @@ def _agent_manifest(version: str, revision: int, commit: str) -> dict[str, Any]:
             "docs/HISTORY.md",
             "docs/RESEARCH_LOG.md",
             "docs/BENCHMARKS.md",
+            "docs/PUBLIC_SURFACE.md",
+            "LICENSING.md",
             "docs/ROADMAP.md",
         ],
         "non_negotiables": [
@@ -122,6 +135,8 @@ def _agent_manifest(version: str, revision: int, commit: str) -> dict[str, Any]:
             "Content-driven representation selection; extensions are hints, never codec commands.",
             "Random access, filesystem fidelity, integrity, recovery and portability are product requirements.",
             "Benchmark claims must use equivalent semantics and preserve losing/adversarial cases.",
+            "Public project surfaces must not depend on or expose unrelated private provenance.",
+            "Apache-2.0 is proposed, not adopted, until LICENSING.md records the final adoption step.",
             "Pre-1.0 format behavior is not yet a frozen interoperability promise.",
         ],
     }
@@ -147,8 +162,10 @@ def _write_llms(out: Path, manifest: dict[str, Any]) -> None:
             "- agent.json",
             "- project-data.json",
             "",
-            "## Important qualification",
+            "## Important qualifications",
             "CMPCT is pre-1.0. Development benchmarks are reproducible regression evidence, not universal performance guarantees.",
+            "Apache-2.0 is a proposed license and has not yet been adopted as the canonical project license.",
+            "Website publication is manual; ordinary repository pushes validate the site but do not publish it.",
         ]
     )
     (out / "llms.txt").write_text("\n".join(lines) + "\n", encoding="utf-8")
