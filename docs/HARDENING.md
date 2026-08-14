@@ -47,7 +47,7 @@ In particular:
 - no property-based or coverage-guided fuzzer is committed yet;
 - golden revision-24 binary conformance vectors are not committed yet;
 - nested recipes, chunk maps, sparse extents and journal operations still need byte-level mutation coverage in addition to the structural mutation matrix;
-- parser behavior has only begun independent cross-checking: the Rust core now authenticates/decodes the primary index and matches Python entry enumeration/path policy in CI, but full structural references, tail/journal recovery, codecs and member reads are not yet independently validated.
+- parser behavior has begun independent cross-checking: the Rust core authenticates/decodes the primary index, matches Python entry enumeration/path policy, and cross-checks bounded direct RAW and ordinary-Zstd range bytes through the C ABI. Full structural references, tail/journal recovery, remaining codecs, chunk/sparse/virtual storage and extraction are not yet independently validated.
 
 ### Canonical lexical path aliases
 
@@ -57,6 +57,12 @@ This intentionally solves only host-independent lexical aliasing. Unicode normal
 
 The explicit preflight command is intentional for this first increment: it creates one testable, fuzzable safety boundary without silently adding latency to every existing reader hot path before the cost is measured.
 
+## Native direct-decode safety boundary
+
+The shared Rust reader now has a bounded bridge for ordinary direct Zstd members. It will not allocate or decode a direct compressed member above 256 MiB, checks physical blob framing against authenticated index metadata, requires the exact declared decompressed length, and verifies the decoded bytes against the blob SHA-256 before returning a requested range. RAW partial reads remain range-local and deliberately do not claim whole-member verification of unseen bytes.
+
+This is a representation-specific safety increment, not a replacement for full native preflight parity. Large ordinary files are normally chunked by the encoder; native chunk-map validation and range-local chunk decoding remain necessary so a small range request never needs a giant direct allocation merely because a future encoder policy changes.
+
 ## Next hardening sequence
 
 1. Run the complete regression suite against this preflight layer and fix any false positives.
@@ -65,7 +71,7 @@ The explicit preflight command is intentional for this first increment: it creat
 4. Add per-read/per-extract decompressed-byte and work budgets; then integrate bounded validation into the normal reader constructor under an explicit policy, including canonical path-collision rejection shared with extraction.
 5. Benchmark preflight/open overhead across tiny, source, media, sparse, nested and combined corpora.
 6. Turn validated structural maxima and canonical encodings into the normative byte-level spec.
-7. Expand the now-started Rust/Python cross-check from authenticated primary-index enumeration to complete structural validation, tail/journal recovery, codecs, member/range reads and extraction before treating the native reader as an independent conformance implementation.
+7. Expand the Rust/Python cross-check from authenticated primary-index enumeration plus direct RAW/Zstd member ranges to complete structural validation, tail/journal recovery, remaining codecs, chunk/sparse/virtual member reads and extraction before treating the native reader as an independent conformance implementation.
 
 ## Revision rule
 
