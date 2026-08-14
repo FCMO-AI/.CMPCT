@@ -30,6 +30,20 @@ def test_preflight_accepts_reference_archive(tmp_path: Path):
     assert summary["archive_bytes"] == archive.stat().st_size
 
 
+def test_preflight_accepts_canonical_directory_hash_sentinel(tmp_path: Path):
+    src = tmp_path / "src"
+    nested = src / "nested"
+    nested.mkdir(parents=True)
+    (nested / "child.txt").write_text("child")
+    archive = tmp_path / "directory.cmpct"
+    Builder(src).build(archive)
+
+    summary = preflight_archive(archive)
+
+    assert summary["version"] == 24
+    assert summary["files"] == 2  # one directory row + one file row in the revision-24 index
+
+
 def test_footer_resource_limit_is_checked_before_decode(tmp_path: Path):
     _, archive = _small_archive(tmp_path)
     data = bytearray(archive.read_bytes())
