@@ -4,13 +4,15 @@ plugins {
 
 android {
     namespace 'ai.fcmo.cmpct'
-    compileSdk 37
+    // Footnote: API 36 is the current stable Android platform. CMPCT uses no preview-only API 37
+    // surface, so pinning stable compile/target SDKs keeps CI and distribution reproducible.
+    compileSdk 36
     ndkVersion '29.0.14206865'
 
     defaultConfig {
         applicationId 'ai.fcmo.cmpct'
         minSdk 23
-        targetSdk 37
+        targetSdk 36
         versionCode 24
         versionName '0.24-android-preview1'
         testInstrumentationRunner 'android.test.InstrumentationTestRunner'
