@@ -88,7 +88,10 @@ jobs:
 
       - name: Start emulator
         run: |
-          nohup emulator \
+          # Footnote: sdkmanager installs the emulator under the SDK root, but setup-android does not
+          # promise that directory will be added to PATH after a later package install. Use the exact
+          # executable path so device acceptance cannot fail merely because command discovery drifted.
+          nohup "$ANDROID_SDK_ROOT/emulator/emulator" \
             -avd cmpct-api29 \
             -no-window \
             -no-audio \
