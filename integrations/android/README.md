@@ -1,6 +1,6 @@
 # CMPCT Android archive handler
 
-Status: **source-complete read-only preview for revision 24; device/emulator acceptance still required before calling Android support shipped.**
+Status: **revision-24 read-only preview now passes the Android 10 emulator gate; physical ARM64 and representation-complete device acceptance remain before calling Android support shipped.**
 
 This project is the first Android implementation of the portability contract in `docs/PORTABILITY.md`. It deliberately contains **no independent CMPCT parser**. Java/Kotlin-facing behavior goes through a small JNI shim which links the same memory-safe Rust `cmpct-core` used by other native clients.
 
@@ -48,22 +48,33 @@ gradle :app:assembleDebug
 
 `app:preBuild` also depends on `build-native.sh`, so normal Gradle packaging cannot silently reuse a stale Rust library.
 
-## Acceptance gate before “Android support” may be claimed
+## Emulator acceptance achieved
 
-The source existing is not the release claim. A release candidate must run on an Android emulator and at least one physical ARM64 device and prove all of the following with committed revision-24 conformance/sample archives:
+GitHub Actions now builds all four declared ABIs, inspects the packaged JNI ELF dependency table for host-path leakage, boots an Android 10 / API 29 x86_64 emulator, installs the app and runs AndroidX instrumentation tests. The current emulator gate proves:
 
-1. tapping/opening a `.cmpct` launches CMPCT when MIME/extension routing permits it;
-2. importing through the system picker succeeds from a `content:` URI;
-3. the archive appears as a root in Android's system document UI;
-4. nested directories enumerate correctly;
-5. a supported regular member opens in another application through the provider;
-6. a multi-chunk member streams byte-exactly without full-archive extraction;
-7. corrupt index/blob input fails closed;
+1. canonical CMPCT MIME routing resolves to the installed handler;
+2. generic `application/octet-stream` routing resolves for a `.cmpct` content URI but not for an otherwise-identical `.bin` URI;
+3. canonical revision-24 RAW/Zstd/Deflate golden archives open through Android → JNI → the shared Rust core and return byte-exact requested ranges;
+4. an imported archive becomes a `DocumentsProvider` root, its regular member is enumerable, and that member streams byte-exactly through the provider pipe;
+5. a bad-magic file is rejected before it can become an imported root;
+6. the packaged JNI library depends on `libcmpct_core.so` by relocatable basename rather than a build-machine filesystem path.
+
+The emulator gate is intentionally narrower than the production-device gate below. Passing it means the first-party Android routing/provider/native stack is executable, not that every revision-24 representation or every Android file manager is already certified.
+
+## Remaining acceptance gate before “Android support” may be called shipped
+
+A release candidate still needs at least one physical ARM64 Android device and broader committed sample archives to prove all of the following:
+
+1. tapping/opening a `.cmpct` launches CMPCT from real device file/download providers when MIME/extension routing permits it;
+2. importing through the system picker succeeds from representative real `content:` providers;
+3. the archive appears as a root in Android's system document UI after process/device restart;
+4. nested directories enumerate correctly in system DocumentsUI;
+5. supported regular members open in external applications through the provider;
+6. multi-chunk, CDC and sparse members stream byte-exactly without full-archive extraction;
+7. corrupt index/blob input fails closed across the native representations Android exposes;
 8. unsupported native representations fail explicitly rather than returning guessed bytes;
-9. Android process restart preserves imported roots;
-10. the sample archive round-trips byte-exactly after member extraction.
-
-The emulator CI additionally asserts that a generic `application/octet-stream` URI ending in `.cmpct` resolves to CMPCT while an otherwise identical `.bin` URI does not. This protects the extension fallback from becoming a catch-all binary handler.
+9. process restart preserves imported roots;
+10. representative archives round-trip byte-exactly after member extraction/streaming.
 
 ## Current limitations
 
