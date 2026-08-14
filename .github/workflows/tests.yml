@@ -1,0 +1,38 @@
+name: CMPCT tests
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install reference implementation and tests
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[test]'
+
+      - name: Run regression suite
+        run: python -m pytest -q
+
+      - name: Smoke-test CLI surface
+        run: python -m cmpct --help
+
+# Footnote: this workflow deliberately starts with correctness, not benchmark numbers. The roadmap's
+# reproducible benchmark CI needs controlled hardware/cache/provenance semantics; ordinary shared
+# GitHub runners are useful for regression testing but should not be laundered into performance claims.

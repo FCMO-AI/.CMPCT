@@ -8,11 +8,12 @@ Before changing format behavior or encoder policy, read:
 
 1. `README.md`;
 2. `docs/CURRENT_STATE.md`;
-3. `docs/FORMAT.md`;
-4. `docs/HISTORY.md`;
-5. `docs/RESEARCH_LOG.md`;
-6. `docs/BENCHMARKS.md`;
-7. `docs/ROADMAP.md`.
+3. `docs/HARDENING.md`;
+4. `docs/FORMAT.md`;
+5. `docs/HISTORY.md`;
+6. `docs/RESEARCH_LOG.md`;
+7. `docs/BENCHMARKS.md`;
+8. `docs/ROADMAP.md`.
 
 Do not depend on inaccessible chat history for project-critical context. If a new conclusion matters to future work, put it in the repository.
 
@@ -26,6 +27,7 @@ Do not depend on inaccessible chat history for project-critical context. If a ne
 - Prefer adding a losing/adversarial corpus over tuning a threshold to one successful corpus.
 - Keep the reader contract simpler than encoder heuristics: old archives must remain readable after encoder strategy changes once 1.0 is frozen.
 - Treat malformed archives as hostile input. Bounds, path and resource-limit checks are mandatory.
+- For parser/conformance work, keep `docs/HARDENING.md` current so unfinished safety assumptions do not disappear into chat or one-off tests.
 - Preserve fallback behavior when optional native helpers/codecs are absent.
 - Update `docs/FORMAT.md` in the same change as any on-disk format mutation.
 - Update `docs/HISTORY.md` and `docs/CURRENT_STATE.md` whenever a version/revision materially changes project behavior or the development frontier.
