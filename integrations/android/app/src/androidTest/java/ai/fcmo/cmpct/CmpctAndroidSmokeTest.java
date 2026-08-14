@@ -1,5 +1,11 @@
 package ai.fcmo.cmpct;
 
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
+
 import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
@@ -10,11 +16,15 @@ import android.database.Cursor;
 import android.net.Uri;
 import android.os.ParcelFileDescriptor;
 import android.provider.DocumentsContract;
-import android.test.InstrumentationTestCase;
 import android.util.Base64;
+
+import androidx.test.ext.junit.runners.AndroidJUnit4;
+import androidx.test.platform.app.InstrumentationRegistry;
 
 import org.json.JSONArray;
 import org.json.JSONObject;
+import org.junit.Test;
+import org.junit.runner.RunWith;
 
 import java.io.ByteArrayOutputStream;
 import java.io.File;
@@ -24,12 +34,13 @@ import java.nio.charset.StandardCharsets;
 import java.util.List;
 
 /** Device/emulator conformance smoke test for Android routing, DocumentsProvider and the JNI core. */
-@SuppressWarnings("deprecation")
-public final class CmpctAndroidSmokeTest extends InstrumentationTestCase {
+@RunWith(AndroidJUnit4.class)
+public final class CmpctAndroidSmokeTest {
 
-    public void testDirectCodecGoldenArchivesThroughAndroidBridge() throws Exception {
-        Context target = getInstrumentation().getTargetContext();
-        Context tests = getInstrumentation().getContext();
+    @Test
+    public void directCodecGoldenArchivesThroughAndroidBridge() throws Exception {
+        Context target = InstrumentationRegistry.getInstrumentation().getTargetContext();
+        Context tests = InstrumentationRegistry.getInstrumentation().getContext();
         // Footnote: the canonical conformance JSON is packaged into the test APK, not the target APK.
         // Read it from instrumentation context while all imported archives live in the real app context.
         JSONObject root = new JSONObject(readAsset(tests, "v24-direct-codecs.json"));
@@ -63,8 +74,9 @@ public final class CmpctAndroidSmokeTest extends InstrumentationTestCase {
         }
     }
 
-    public void testAndroidRoutesCmpctViewIntentsToMainActivityWithoutHijackingOtherBinaryFiles() {
-        Context target = getInstrumentation().getTargetContext();
+    @Test
+    public void androidRoutesCmpctViewIntentsWithoutHijackingOtherBinaryFiles() {
+        Context target = InstrumentationRegistry.getInstrumentation().getTargetContext();
         PackageManager pm = target.getPackageManager();
 
         Intent canonical = new Intent(Intent.ACTION_VIEW)
@@ -88,9 +100,10 @@ public final class CmpctAndroidSmokeTest extends InstrumentationTestCase {
                 resolvesToCmpct(pm, unrelatedBinary));
     }
 
-    public void testImportedArchiveBecomesBrowsableDocumentsProviderTreeAndStreamsMember() throws Exception {
-        Context target = getInstrumentation().getTargetContext();
-        Context tests = getInstrumentation().getContext();
+    @Test
+    public void importedArchiveBecomesBrowsableDocumentsProviderTreeAndStreamsMember() throws Exception {
+        Context target = InstrumentationRegistry.getInstrumentation().getTargetContext();
+        Context tests = InstrumentationRegistry.getInstrumentation().getContext();
         JSONObject vector = new JSONObject(readAsset(tests, "v24-direct-codecs.json"))
                 .getJSONArray("vectors").getJSONObject(0); // RAW 0..63 oracle.
         byte[] archiveBytes = Base64.decode(vector.getString("archive_base64"), Base64.DEFAULT);
@@ -120,7 +133,9 @@ public final class CmpctAndroidSmokeTest extends InstrumentationTestCase {
         assertNotNull("imported archive must appear as a DocumentsProvider root", rootDocumentId);
 
         String childDocumentId;
-        try (Cursor children = provider.queryChildDocuments(rootDocumentId, null, null)) {
+        // Footnote: API 26 added a Bundle overload with the same first two parameters. Cast null to
+        // String so this test deliberately exercises CMPCT's legacy-compatible sortOrder override.
+        try (Cursor children = provider.queryChildDocuments(rootDocumentId, null, (String) null)) {
             assertEquals(1, children.getCount());
             assertTrue(children.moveToFirst());
             assertEquals("raw.bin", children.getString(children.getColumnIndexOrThrow(
@@ -142,8 +157,9 @@ public final class CmpctAndroidSmokeTest extends InstrumentationTestCase {
         for (int i = 0; i < member.length; i++) assertEquals((byte) i, member[i]);
     }
 
-    public void testBadMagicNeverBecomesImportedRoot() throws Exception {
-        Context target = getInstrumentation().getTargetContext();
+    @Test
+    public void badMagicNeverBecomesImportedRoot() throws Exception {
+        Context target = InstrumentationRegistry.getInstrumentation().getTargetContext();
         File bad = new File(target.getCacheDir(), "not-cmpct.cmpct");
         try (FileOutputStream out = new FileOutputStream(bad)) {
             out.write("PK-not-a-cmpct-archive".getBytes(StandardCharsets.UTF_8));
