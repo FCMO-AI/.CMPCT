@@ -19,7 +19,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Apply native chunk patch
-        run: python dev/apply_native_chunk_patch.py
+        run: |
+          python dev/apply_native_chunk_patch.py
+          # Rust's Digest::digest generic takes its input by value. Reborrow the mutable output slice
+          # immutably so the full-file SHA gate does not consume the caller buffer before returning.
+          sed -i 's/Sha256::digest(out)/Sha256::digest(\&*out)/' native/cmpct-core/src/lib.rs
       - name: Format and test native core
         working-directory: native/cmpct-core
         run: |
