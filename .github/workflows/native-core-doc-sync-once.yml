@@ -1,0 +1,62 @@
+name: Sync native core docs once
+
+on:
+  push:
+    branches:
+      - native/read-only-index-core
+
+permissions:
+  contents: write
+
+jobs:
+  sync:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Update durable development context
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          p=Path('docs/CURRENT_STATE.md'); s=p.read_text()
+          s=s.replace(
+          "`native/cmpct_cdc.c`\n: Optional creation-time content-defined chunk boundary accelerator. The reader does not require it because boundaries are explicit in the archive.\n",
+          "`native/cmpct_cdc.c`\n: Optional creation-time content-defined chunk boundary accelerator. The reader does not require it because boundaries are explicit in the archive.\n\n`native/cmpct-core/`\n: Memory-safe Rust read-only core seed. It authenticates and decodes the revision-24 primary index, applies the shared lexical path policy, enumerates logical entries, and exposes an opaque C ABI. CI cross-checks its view against the Python oracle and exercises the shared library from a non-Rust caller. Blob/member streaming, journal recovery and full structural preflight parity remain unfinished.\n")
+          s=s.replace(
+          "- native memory-safe high-performance core;",
+          "- native memory-safe high-performance core beyond authenticated primary-index enumeration: member/range streaming, full structural reference validation, codec decoding, extraction and journal recovery remain unfinished;")
+          s=s.replace(
+          "Genuine remaining losses must be fixed, not hidden behind that correction.\n",
+          "Genuine remaining losses must be fixed, not hidden behind that correction. The first five-repeat RAW-chunk extraction optimization reduced the remaining large-binary library extraction result from about 63.8 ms to 55.5 ms while ZIP measured 48.6 ms on the new shared-runner campaign; the ~14% residual is still an active parity defect, not a declared tradeoff.\n")
+          s=s.replace(
+          "Move parser/read/write hot paths into a memory-safe native implementation (Rust is a strong candidate) while keeping the Python implementation as readable executable specification and cross-check oracle. Native code must produce/consume conformance-identical archives. The same core must expose the bounded list/stat/read/range/stream/extract surface required by platform handlers so portability does not fork format semantics.",
+          "Continue the memory-safe Rust core now present under `native/cmpct-core/` while keeping Python as the readable executable specification and cross-check oracle. The current native slice authenticates/decodes the primary index, applies lexical path policy, enumerates entries and exposes a tested C ABI; it is deliberately not yet a shipping handler. Next add full structural-reference validation, committed-generation recovery, codec/blob access, bounded member/range streaming and extraction. Native code must remain conformance-identical, and the same core must expose the list/stat/read/range/stream/extract surface required by platform handlers so portability does not fork format semantics.")
+          p.write_text(s)
+
+          p=Path('docs/PORTABILITY.md'); s=p.read_text()
+          s=s.replace(
+          "- explicit portability contract and release gates.\n",
+          "- explicit portability contract and release gates;\n- an initial memory-safe Rust core under `native/cmpct-core/` that authenticates/decodes the revision-24 primary index, enumerates logical entries, rejects lexical path aliases, and exposes a tested opaque C ABI for open/close/revision/count/entry metadata/path. CI cross-checks it against the Python oracle and exercises the produced shared library from a non-Rust caller.\n")
+          s=s.replace(
+          "- memory-safe native reader/writer ABI;",
+          "- complete memory-safe native reader/writer ABI beyond the implemented primary-index/open/enumeration seed (full hostile structural validation, recovery, member/range streaming, codec decoding, extraction and mutation are still pending);")
+          p.write_text(s)
+
+          p=Path('docs/HARDENING.md'); s=p.read_text()
+          s=s.replace(
+          "- parser behavior has not yet been cross-checked against an independent implementation.",
+          "- parser behavior has only begun independent cross-checking: the Rust core now authenticates/decodes the primary index and matches Python entry enumeration/path policy in CI, but full structural references, tail/journal recovery, codecs and member reads are not yet independently validated.")
+          s=s.replace(
+          "7. Cross-check the Python parser with the future memory-safe native reader.",
+          "7. Expand the now-started Rust/Python cross-check from authenticated primary-index enumeration to complete structural validation, tail/journal recovery, codecs, member/range reads and extraction before treating the native reader as an independent conformance implementation.")
+          p.write_text(s)
+          PY
+          git rm .github/workflows/native-core-doc-sync-once.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add docs/CURRENT_STATE.md docs/PORTABILITY.md docs/HARDENING.md
+          git commit -m 'Document native core and remaining parity frontier'
+          git push origin HEAD:native/read-only-index-core
