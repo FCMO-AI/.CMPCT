@@ -144,3 +144,5 @@ jobs:
         run: python tests/native_chunk_golden_abi.py
       - name: Committed golden sparse ABI gate
         run: python tests/native_sparse_golden_abi.py
+      - name: Committed golden Zstd-dictionary ABI gate
+        run: python tests/native_dictionary_golden_abi.py
