@@ -138,6 +138,8 @@ jobs:
           finally:
               lib.cmpct_close(corrupt)
           PY
+      - name: Native list/range CLI gate
+        run: python tests/native_cli.py
       - name: Committed golden direct-codec ABI gate
         run: python tests/native_golden_abi.py
       - name: Committed golden chunk-map ABI gate
