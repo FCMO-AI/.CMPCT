@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <application
+        android:allowBackup="false"
+        android:label="CMPCT"
+        android:theme="@android:style/Theme.Material.Light.NoActionBar">
+
+        <activity
+            android:name=".MainActivity"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+
+            <!-- Canonical MIME: providers that know CMPCT can launch the browser directly. -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="content" android:mimeType="application/vnd.fcmo.cmpct" />
+                <data android:scheme="file" android:mimeType="application/vnd.fcmo.cmpct" />
+            </intent-filter>
+
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="content" android:mimeType="application/x-cmpct" />
+                <data android:scheme="file" android:mimeType="application/x-cmpct" />
+            </intent-filter>
+
+            <!--
+              Footnote: many Android providers report unknown extensions as octet-stream. Restrict
+              that broad MIME to paths ending in .cmpct so CMPCT never claims every binary document.
+              MainActivity still validates CMPCT24\0 before importing anything.
+            -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data
+                    android:scheme="content"
+                    android:mimeType="application/octet-stream"
+                    android:pathPattern=".*\.cmpct" />
+                <data
+                    android:scheme="file"
+                    android:pathPattern=".*\.cmpct" />
+            </intent-filter>
+        </activity>
+
+        <provider
+            android:name=".CmpctDocumentsProvider"
+            android:authorities="${applicationId}.documents"
+            android:exported="true"
+            android:grantUriPermissions="true"
+            android:permission="android.permission.MANAGE_DOCUMENTS">
+            <intent-filter>
+                <action android:name="android.content.action.DOCUMENTS_PROVIDER" />
+            </intent-filter>
+        </provider>
+    </application>
+</manifest>
