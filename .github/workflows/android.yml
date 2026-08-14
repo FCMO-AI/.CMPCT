@@ -36,6 +36,19 @@ jobs:
         with:
           packages: ''
 
+      - name: Enable KVM for Android emulator
+        run: |
+          # Footnote: GitHub Linux runners expose Android hardware acceleration, but /dev/kvm access
+          # must be granted to the runner process. Without this, a headless emulator can stall before
+          # adb ever sees a device and hide application-level failures behind CI infrastructure noise.
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' \
+            | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+          test -e /dev/kvm
+          test -r /dev/kvm
+          test -w /dev/kvm
+
       - name: Install Rust Android targets
         run: |
           rustup target add \
@@ -83,9 +96,13 @@ jobs:
             -no-boot-anim \
             -gpu swiftshader_indirect \
             > "$RUNNER_TEMP/cmpct-emulator.log" 2>&1 &
-          adb wait-for-device
+          if ! timeout 180 adb wait-for-device; then
+            cat "$RUNNER_TEMP/cmpct-emulator.log" >&2
+            exit 1
+          fi
           for _ in $(seq 1 120); do
             if [ "$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')" = "1" ]; then
+              adb shell input keyevent 82 || true
               exit 0
             fi
             sleep 2
@@ -93,7 +110,7 @@ jobs:
           cat "$RUNNER_TEMP/cmpct-emulator.log" >&2
           exit 1
 
-      - name: Run revision-24 JNI conformance smoke tests
+      - name: Run revision-24 Android archive UX and JNI conformance tests
         working-directory: integrations/android
         run: |
           export ANDROID_NDK_HOME="$ANDROID_SDK_ROOT/ndk/29.0.14206865"
