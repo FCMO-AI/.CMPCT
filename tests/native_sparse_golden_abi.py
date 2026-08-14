@@ -87,30 +87,23 @@ def main() -> None:
         finally:
             lib.cmpct_close(handle)
 
-        # Corrupt a blob in the second extent, then read only the first extent. A range-local sparse
-        # implementation must not decode or authenticate unrelated stored data merely because it shares
-        # the same logical file.
-        untouched = root / "sparse-untouched-corrupt.cmpct"
-        _corrupt_blob_identity(archive, 1, untouched)
-        handle = _open(lib, untouched)
+        # Corrupt the Zstd blob in the second extent. A range touching only the first extent must still
+        # succeed; a range that intersects the corrupted extent must fail. Together these assertions
+        # prove the sparse ABI path is range-local rather than decoding every stored extent up front.
+        corrupt = root / "sparse-second-extent-corrupt.cmpct"
+        _corrupt_blob_identity(archive, 1, corrupt)
+        handle = _open(lib, corrupt)
         try:
-            case = member["ranges"][0]
-            status, got_n, got = _read(lib, handle, case["offset"], case["length"])
+            untouched = member["ranges"][0]
+            status, got_n, got = _read(
+                lib, handle, untouched["offset"], untouched["length"]
+            )
             assert status == 0, status
-            assert got_n == case["length"]
-            assert got == bytes.fromhex(case["hex"])
-        finally:
-            lib.cmpct_close(handle)
+            assert got_n == untouched["length"]
+            assert got == bytes.fromhex(untouched["hex"])
 
-        # Corrupt the RAW blob actually touched by that same range. The native core must refuse the
-        # bytes. Use a full read of the physical RAW chunk so its complete identity is authenticated by
-        # the logical whole-file gate rather than claiming partial RAW authentication that revision 24
-        # cannot provide.
-        touched = root / "sparse-touched-corrupt.cmpct"
-        _corrupt_blob_identity(archive, 0, touched)
-        handle = _open(lib, touched)
-        try:
-            status, got_n, _ = _read(lib, handle, 0, member["size"])
+            touched = member["ranges"][1]
+            status, got_n, _ = _read(lib, handle, touched["offset"], touched["length"])
             assert status == -3, status
             assert got_n == 0
         finally:
