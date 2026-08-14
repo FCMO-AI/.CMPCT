@@ -26,6 +26,10 @@ a revision-24 archive created by the Python oracle, and a non-Rust ctypes caller
 produced shared library. Future member/range APIs must extend these cross-language gates rather than
 replacing them with native-only tests.
 
+`Cargo.lock` is committed intentionally. The native handler is becoming a reproducible platform/runtime
+component, so conformance CI must not silently resolve a different dependency graph from one run to the
+next merely because a transitive crate published a newer compatible release.
+
 ## Deliberately not claimed yet
 
 This is **not yet the shipping archive handler**. It does not yet implement tail/journal recovery,
