@@ -15,14 +15,18 @@ Before changing format behavior or encoder policy, read:
 7. `docs/HISTORY.md`;
 8. `docs/RESEARCH_LOG.md`;
 9. `docs/BENCHMARKS.md`;
-10. `docs/ROADMAP.md`.
+10. `docs/PUBLIC_SURFACE.md`;
+11. `docs/ROADMAP.md`.
 
-Do not depend on inaccessible chat history for project-critical context. If a new conclusion matters to future work, put it in the repository.
+Do not depend on inaccessible chat history, private corpora, unrelated internal projects, or private
+artifact provenance for project-critical context. If a conclusion matters to future CMPCT work, put
+the generalized technical conclusion in this repository without importing unrelated confidential
+context.
 
 ## Development rules
 
-- Optimize for arbitrary computer files and filesystems, not Hermes specifically.
-- Hermes is one regression corpus only.
+- Optimize for arbitrary computer files and filesystems, not any one development corpus.
+- Private/internal corpora may be used locally for regression work, but their identity, contents and artifact names are not part of the public project contract.
 - Do not delete design footnotes/comments from code when rewriting or refactoring.
 - Every code fix should include concise nearby commentary explaining why the fix exists when the invariant is non-obvious.
 - Never claim a benchmark win without equivalent semantics and a reproducible test.
@@ -37,14 +41,24 @@ Do not depend on inaccessible chat history for project-critical context. If a ne
 - Preserve fallback behavior when optional native helpers/codecs are absent.
 - Update `docs/FORMAT.md` in the same change as any on-disk format mutation.
 - Update `docs/HISTORY.md` and `docs/CURRENT_STATE.md` whenever a version/revision materially changes project behavior or the development frontier.
-- Durable benchmark results belong under `benchmarks/history/`; do not leave the evidence only in terminal output, chat, or prose.
-- Preserve historical benchmark files; append new records instead of rewriting old results to match a new narrative.
+- Durable public benchmark results belong under `benchmarks/history/`; do not leave public evidence only in terminal output, chat, or prose.
+- Preserve public historical benchmark files; append new records instead of rewriting old results to match a new narrative.
 - Distinguish measured fact, inference, planned work and rejected experiment explicitly in documentation.
+- Keep the public repository/site free of unrelated internal project names, personal information, private URLs, credentials, customer data, private corpus identifiers and private artifact names. Follow `docs/PUBLIC_SURFACE.md`.
+- Do not describe the proposed Apache-2.0 license as adopted until the checklist in `LICENSING.md` is completed and the canonical license file is deliberately finalized.
 
 ## Benchmark rule
 
-Any change justified by size/speed should commit or reference a durable benchmark record containing, when available: source commit, format revision, corpus generator/hash/seed, environment, codec settings, cache/process-start semantics, metadata/integrity/durability semantics, repetitions and raw/summary measurements.
+Any change justified by size/speed should commit or reference a durable public benchmark record
+containing, when available: source commit, format revision, corpus generator/hash/seed, environment,
+codec settings, cache/process-start semantics, metadata/integrity/durability semantics, repetitions
+and raw/summary measurements.
+
+Private-corpus measurements may guide engineering internally, but public claims must be reproducible
+without access to private data.
 
 ## Versioning rule
 
-A new on-disk field/record/storage semantic required by readers normally requires a format revision bump. Encoder-only heuristic changes that still emit the same grammar do not, but they still require regression evidence and history/current-state updates when material.
+A new on-disk field/record/storage semantic required by readers normally requires a format revision
+bump. Encoder-only heuristic changes that still emit the same grammar do not, but they still require
+regression evidence and history/current-state updates when material.
