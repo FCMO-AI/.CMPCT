@@ -17,8 +17,16 @@
       "logical_sha256": "c2798f6e3c1590b2e87627cfc3652dddee29b1c4329e13dcdf0109c580be248a",
       "archive_sha256": "cff02f4546171358fdf2498370bab0da014e25c23efae6fdf947c9b6307816e9",
       "archive_bytes": 1025,
-      "chunk_codecs": [1, 4, 0],
-      "chunk_lengths": [264, 393, 341],
+      "chunk_codecs": [
+        1,
+        4,
+        0
+      ],
+      "chunk_lengths": [
+        264,
+        393,
+        341
+      ],
       "range": {
         "offset": 255,
         "length": 70,
@@ -31,10 +39,18 @@
       "storage_kind": 5,
       "logical_size": 1104,
       "logical_sha256": "e12c5f35853b8f6aa6caf7946e0525861f3ab0f8e0d4822879f0a1b735eb5f56",
-      "archive_sha256": "b7be6c6c348d0356d70bae6153326cdfc89b4fcd71cd695ba169ead9dc919115",
-      "archive_bytes": 1261,
-      "chunk_codecs": [4, 1, 0],
-      "chunk_lengths": [213, 525, 366],
+      "archive_sha256": "f862799c28f79d92123ee6311b4e0f726f6a50530d7caedfaca5b310179c47c7",
+      "archive_bytes": 1285,
+      "chunk_codecs": [
+        4,
+        1,
+        0
+      ],
+      "chunk_lengths": [
+        213,
+        525,
+        366
+      ],
       "range": {
         "offset": 204,
         "length": 70,
