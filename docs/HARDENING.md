@@ -41,7 +41,7 @@ The first committed golden archive set now lives at `tests/conformance/v24-direc
 
 These vectors were deliberately hand-built from the revision-24 framing/schema rules rather than emitted by `cmpct.builder.Builder`. That distinction is important: builder-to-reader round trips prove internal agreement, while fixed bytes that are independent of the builder can expose parser drift across implementations. The JSON records the generator-tool provenance used to freeze the bytes; future readers must consume the existing archive bytes rather than regenerate fixtures around changed behavior.
 
-The Deflate vector now gates native raw-Deflate support through the C ABI, including strong content-hash failure behavior. `tests/conformance/v24-chunk-maps.json` now adds builder-independent `S_CHUNKS` and `S_CDC` archives whose known ranges cross chunk boundaries and mix RAW/Zstd/Deflate physical blobs. Future golden sets still need dictionary Zstd, WAV/FLAC, sparse extents, packs, virtual ZIP recipes, links/metadata and committed transaction generations.
+The Deflate vector now gates native raw-Deflate support through the C ABI, including strong content-hash failure behavior. `tests/conformance/v24-chunk-maps.json` adds builder-independent `S_CHUNKS` and `S_CDC` archives whose known ranges cross chunk boundaries and mix RAW/Zstd/Deflate physical blobs. `tests/conformance/v24-sparse.json` now freezes `S_SPARSE` semantics independently of the builder: its logical member contains leading/interior/trailing holes plus data extents backed by RAW, Zstd and raw Deflate blobs, with known ranges crossing hole/data and codec boundaries. Future golden sets still need dictionary Zstd, WAV/FLAC, packs, virtual ZIP recipes, links/metadata and committed transaction generations.
 
 ## Deliberate non-goals of this increment
 
@@ -53,9 +53,9 @@ In particular:
 - payload decompression paths still need direct per-operation resource budgets;
 - `read()` may intentionally materialize a complete logical file and therefore still needs a caller budget for untrusted archives;
 - no property-based or coverage-guided fuzzer is committed yet;
-- golden revision-24 coverage is only partial: direct RAW/Zstd/Deflate plus fixed/CDC chunk maps now exist, while other codecs/storage descriptions/generations remain missing;
+- golden revision-24 coverage is only partial: direct RAW/Zstd/Deflate, fixed/CDC chunk maps and sparse extents now exist, while other codecs/storage descriptions/generations remain missing;
 - nested recipes, chunk maps, sparse extents and journal operations still need byte-level mutation coverage in addition to the structural mutation matrix;
-- parser behavior has begun independent cross-checking: the Rust core authenticates/decodes the primary index, matches Python entry enumeration/path policy, cross-checks bounded direct RAW/Zstd/Deflate ranges, and independently validates/reads fixed and CDC chunk maps through the C ABI. Full structural parity, tail/journal recovery, remaining codecs, sparse/virtual storage and extraction are not yet independently validated.
+- parser behavior has begun independent cross-checking: the Rust core authenticates/decodes the primary index, matches Python entry enumeration/path policy, cross-checks bounded direct RAW/Zstd/Deflate ranges, and independently validates/reads fixed and CDC chunk maps through the C ABI. Sparse now has a fixed acceptance oracle but is not yet implemented by the native reader; full structural parity, tail/journal recovery, remaining codecs, virtual storage and extraction are not yet independently validated.
 
 ### Canonical lexical path aliases
 
@@ -73,7 +73,7 @@ This is a representation-specific safety increment, not a replacement for full n
 
 ## Next hardening sequence
 
-1. Expand the committed golden revision-24 set from direct RAW/Zstd/Deflate plus fixed/CDC maps to every remaining storage kind, codec and committed-generation shape.
+1. Make the Rust C ABI consume the committed sparse golden archive range-locally without materializing holes, then expand the golden revision-24 set to every remaining storage kind, codec and committed-generation shape.
 2. Add property tests and a byte-level mutation/fuzz corpus for headers, MessagePack structures, blob framing, chunk maps, sparse maps, nested recipes, journal chains and path relationships.
 3. Add per-read/per-extract decompressed-byte and work budgets; then integrate bounded validation into the normal reader constructor under an explicit policy, including canonical path-collision rejection shared with extraction.
 4. Benchmark preflight/open overhead across tiny, source, media, sparse, nested and combined corpora.
