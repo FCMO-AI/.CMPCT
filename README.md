@@ -10,6 +10,9 @@ recovery, updates, and modern storage semantics—without optimizing for one app
 > The current executable prototype writes format revision **24**. No stability promise is made yet
 > for pre-1.0 archives; reproducibility and backward compatibility become mandatory at 1.0.
 
+> Licensing status: **Apache-2.0 is proposed, not yet adopted.** See `LICENSING.md` and
+> `LICENSE-APACHE-2.0-PROPOSED.txt`. The proposal must not be interpreted as a finalized public grant.
+
 ## What CMPCT is trying to do
 
 CMPCT is not "Zstd with a new extension". It is a content-aware archive layer that can choose the
@@ -64,13 +67,15 @@ A coding/research agent with no previous CMPCT context should read, in order:
 2. `AGENTS.md` — mandatory development rules;
 3. `docs/CURRENT_STATE.md` — zero-chat-history handoff and immediate frontier;
 4. `docs/FORMAT.md` — current revision-24 on-disk contract;
-5. `docs/HISTORY.md` — complete surviving version/prototype history;
+5. `docs/HISTORY.md` — surviving version/prototype history with private provenance generalized;
 6. `docs/RESEARCH_LOG.md` — experimental conclusions and rejected/superseded ideas;
 7. `docs/BENCHMARKS.md` — benchmark semantics and merge discipline;
-8. `benchmarks/history/` — machine-readable historical measurements;
-9. `docs/ROADMAP.md` — work remaining before 1.0.
+8. `benchmarks/history/` — machine-readable public benchmark measurements;
+9. `docs/PUBLIC_SURFACE.md` — public-repository/site disclosure boundary;
+10. `docs/ROADMAP.md` — work remaining before 1.0.
 
-A new agent should not need the original ChatGPT conversation to continue development safely.
+A new agent should not need private chat, private corpora, or unrelated project context to continue
+development safely.
 
 ## Repository map
 
@@ -80,27 +85,36 @@ A new agent should not need the original ChatGPT conversation to continue develo
 - `docs/FORMAT.md` — current on-disk contract and invariants.
 - `docs/HISTORY.md` — version history from precursor experiments through the canonical v0.24 baseline.
 - `docs/RESEARCH_LOG.md` — design decisions, failed ideas and experimental conclusions.
-- `docs/PRINCIPLES.md` — rules that prevent corpus-specific or Hermes-specific overfitting.
+- `docs/PRINCIPLES.md` — rules that prevent corpus-specific overfitting.
 - `docs/BENCHMARKS.md` — benchmark discipline and interpreted checkpoints.
-- `benchmarks/history/` — durable machine-readable benchmark records.
+- `docs/PUBLIC_SURFACE.md` — what may and may not enter the public-facing repository/site surface.
+- `benchmarks/history/` — durable public machine-readable benchmark records.
 - `docs/ROADMAP.md` — blockers between the prototype and a defensible 1.0.
-- `benchmarks/universal_bench.py` — heterogeneous corpus benchmark generator/harness.
+- `benchmarks/universal_bench.py` — heterogeneous synthetic benchmark generator/harness.
 - `tests/` — format and round-trip regression tests.
 
 ## Development history and benchmark provenance
 
 The project began as a sequence of Seekable-Zstd, indexed-Zstd, adaptive-framing and ZIP-family
-experiments before becoming the native content-aware CMPCT format. That history is preserved rather
-than rewritten into a clean fictional narrative.
+experiments before becoming the native content-aware CMPCT format. The technical history is preserved,
+but private corpus identities, private artifact names and unrelated project provenance are intentionally
+not part of the public project record.
 
-- `docs/HISTORY.md` accounts for every revision range through v0.24 and explicitly marks intermediate
-  revisions for which no independent release note survives.
+- `docs/HISTORY.md` accounts for every revision range through v0.24 while generalizing private
+  development provenance.
 - `docs/RESEARCH_LOG.md` records why major architectural choices were accepted or rejected.
-- `benchmarks/history/2026-08-13-development-campaign.json` preserves the complete surviving numeric
-  benchmark record from the original campaign in machine-readable form.
+- `benchmarks/history/` preserves public, reproducible regression evidence; private-corpus development
+  measurements are not used as public proof.
 
 Historical benchmark data is **not** automatically a public performance claim. Future CI should
-reproduce it under controlled hardware/software and append new result records rather than overwriting history.
+reproduce claims under controlled hardware/software and append new result records rather than
+rewriting history.
+
+## Public-surface rule
+
+CMPCT must stand on its own. The repository and website must not require or expose unrelated internal
+projects, private customer data, private corpora, personal information, chat transcripts, credentials,
+private artifact names, or private-system links. See `docs/PUBLIC_SURFACE.md` for the enforceable rule.
 
 ## Canonicality
 
@@ -113,5 +127,7 @@ relevant tests/conformance vectors and durable benchmark records in the same dev
 
 ## License
 
-No public/open-source license has been granted yet. Treat this private repository as FCMO-AI
-internal work until a license is deliberately selected.
+Apache License 2.0 is the **current proposed license**, not the final adopted license. The repository
+contains the unmodified proposed license text in `LICENSE-APACHE-2.0-PROPOSED.txt` plus an explicit
+adoption checklist in `LICENSING.md`. Until that process is completed, do not represent CMPCT as
+finally released under Apache-2.0.
