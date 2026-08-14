@@ -122,7 +122,9 @@ impl Archive {
         let index = rmpv::decode::read_value(&mut cursor)
             .map_err(|e| CmpctError::MessagePack(e.to_string()))?;
         if cursor.position() != index_bytes.len() as u64 {
-            return Err(CmpctError::Schema("trailing bytes after root index object".into()));
+            return Err(CmpctError::Schema(
+                "trailing bytes after root index object".into(),
+            ));
         }
         let entries = parse_entries(&index)?;
         Ok(Self { revision, entries })
@@ -173,14 +175,18 @@ fn parse_entries(index: &Value) -> Result<Vec<Entry>, CmpctError> {
         .as_u64()
         .ok_or_else(|| CmpctError::Schema("index revision is not an unsigned integer".into()))?;
     if index_revision != VERSION as u64 {
-        return Err(CmpctError::Revision(index_revision.min(u16::MAX as u64) as u16));
+        return Err(CmpctError::Revision(
+            index_revision.min(u16::MAX as u64) as u16
+        ));
     }
 
     let files = map_field(index, "files")?
         .as_array()
         .ok_or_else(|| CmpctError::Schema("files is not an array".into()))?;
     if files.len() > MAX_FILES {
-        return Err(CmpctError::Schema("file count exceeds native handler limit".into()));
+        return Err(CmpctError::Schema(
+            "file count exceeds native handler limit".into(),
+        ));
     }
 
     let mut seen = HashSet::with_capacity(files.len().min(65_536));
@@ -202,11 +208,13 @@ fn parse_entries(index: &Value) -> Result<Vec<Entry>, CmpctError> {
         let kind = row[1]
             .as_u64()
             .filter(|v| *v <= 3)
-            .ok_or_else(|| CmpctError::Schema(format!("file row {i} has invalid kind")))? as u8;
+            .ok_or_else(|| CmpctError::Schema(format!("file row {i} has invalid kind")))?
+            as u8;
         let mode = row[2]
             .as_u64()
             .filter(|v| *v <= u32::MAX as u64)
-            .ok_or_else(|| CmpctError::Schema(format!("file row {i} has invalid mode")))? as u32;
+            .ok_or_else(|| CmpctError::Schema(format!("file row {i} has invalid mode")))?
+            as u32;
         let mtime_ns = row[3]
             .as_i64()
             .ok_or_else(|| CmpctError::Schema(format!("file row {i} has invalid mtime")))?;
