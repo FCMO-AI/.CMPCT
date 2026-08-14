@@ -1,11 +1,12 @@
 //! Memory-safe read-only CMPCT core.
 //!
 //! The native slice authenticates the primary index, enumerates its logical tree, and can read
-//! bounded byte ranges from direct RAW and ordinary Zstd members. RAW stays genuinely range-local;
+//! bounded byte ranges from direct RAW, ordinary Zstd, and raw Deflate members. RAW stays genuinely range-local;
 //! Zstd currently decodes and authenticates the complete direct member before slicing the requested
 //! range. Chunk maps, sparse maps, virtual containers and transactional recovery remain behind
 //! explicit unsupported errors until each representation has its own conformance gate.
 
+use flate2::read::DeflateDecoder;
 use rmpv::Value;
 use serde::Serialize;
 use sha2::{Digest, Sha256};
@@ -26,6 +27,7 @@ const HEADER_SIZE: usize = 68;
 const BLOB_HEADER_SIZE: usize = 64;
 const CODEC_RAW: u8 = 0;
 const CODEC_ZSTD: u8 = 1;
+const CODEC_DEFLATE: u8 = 4;
 const STORAGE_BLOB: u64 = 0;
 const MAX_INDEX_BYTES: u64 = 256 * 1024 * 1024;
 const MAX_DIRECT_DECODE_BYTES: u64 = 256 * 1024 * 1024;
@@ -260,6 +262,38 @@ impl Archive {
         Ok(decoded)
     }
 
+    fn decode_direct_deflate(
+        &self,
+        blob: &Blob,
+        file: &mut File,
+        payload_pos: u64,
+        expected_hash: &[u8; 32],
+    ) -> Result<Vec<u8>, CmpctError> {
+        if blob.usize > MAX_DIRECT_DECODE_BYTES || blob.csize > MAX_DIRECT_DECODE_BYTES {
+            return Err(CmpctError::MemberLimit);
+        }
+        let compressed_len = usize::try_from(blob.csize).map_err(|_| CmpctError::MemberLimit)?;
+        let decoded_len = usize::try_from(blob.usize).map_err(|_| CmpctError::MemberLimit)?;
+        file.seek(SeekFrom::Start(payload_pos))?;
+        let mut compressed = vec![0u8; compressed_len];
+        file.read_exact(&mut compressed)?;
+
+        // Footnote: revision 24 codec 4 is raw RFC 1951 Deflate, without zlib/gzip framing.
+        // Decode one bounded direct member completely and authenticate its SHA-256 before any slice
+        // crosses the C ABI, matching the correctness-first policy used for direct Zstd.
+        let decoder = DeflateDecoder::new(Cursor::new(compressed));
+        let mut limited = decoder.take(blob.usize.saturating_add(1));
+        let mut decoded = Vec::with_capacity(decoded_len);
+        limited.read_to_end(&mut decoded)?;
+        if decoded.len() != decoded_len {
+            return Err(CmpctError::MemberLength);
+        }
+        if Sha256::digest(&decoded).as_slice() != expected_hash {
+            return Err(CmpctError::MemberHash);
+        }
+        Ok(decoded)
+    }
+
     /// Read a byte range from a supported direct member.
     ///
     /// RAW returns only the requested physical bytes after authenticated-index/header cross-checking.
@@ -304,6 +338,13 @@ impl Archive {
             CODEC_ZSTD => {
                 let decoded =
                     self.decode_direct_zstd(blob, &mut file, payload_pos, &expected_hash)?;
+                let start = usize::try_from(start).map_err(|_| CmpctError::Range)?;
+                let end = start.checked_add(out.len()).ok_or(CmpctError::Range)?;
+                out.copy_from_slice(&decoded[start..end]);
+            }
+            CODEC_DEFLATE => {
+                let decoded =
+                    self.decode_direct_deflate(blob, &mut file, payload_pos, &expected_hash)?;
                 let start = usize::try_from(start).map_err(|_| CmpctError::Range)?;
                 let end = start.checked_add(out.len()).ok_or(CmpctError::Range)?;
                 out.copy_from_slice(&decoded[start..end]);

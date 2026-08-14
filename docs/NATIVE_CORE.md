@@ -13,7 +13,7 @@ The native core currently:
 - bounds the base blob table and cross-checks direct physical blob framing against authenticated index metadata;
 - enumerates entry path/kind/mode/mtime/size through Rust and an opaque C ABI;
 - reads genuinely range-local slices from direct RAW members;
-- reads bounded slices from ordinary direct Zstd members by decoding at most one direct member, enforcing a 256 MiB direct-decode cap, verifying exact decompressed length and SHA-256, then copying only the requested range to the caller;
+- reads bounded slices from ordinary direct Zstd and raw Deflate members by decoding at most one direct member, enforcing a 256 MiB direct-decode cap, verifying exact decompressed length and SHA-256, then copying only the requested range to the caller;
 - returns typed C statuses for null pointers, I/O/format errors, resource limits, out-of-range requests and unsupported representations.
 
 The Zstd path is intentionally correctness-first. Ordinary Zstd frames are not intrinsically byte-seekable, so a range request on one direct compressed member currently decodes that member in full. This is still materially better than requiring whole-archive extraction and is the correct bridge to native archive browsing. Large ordinary files are normally chunked by the encoder; native fixed/CDC chunk-map support is the next step needed for range-local compressed large-file access.
@@ -30,7 +30,7 @@ Future range-proof or authenticated-chunk designs may allow strong verification 
 
 `tests/conformance/v24-direct-codecs.json` now supplies the first builder-independent golden archives for the native implementation. The set freezes exact revision-24 archive bytes for direct RAW, ordinary Zstd and raw Deflate members and records archive SHA-256, logical SHA-256 and a known range answer for each member.
 
-The important property is provenance: these bytes were hand-assembled from the revision-24 framing/schema contract rather than written by the Python `Builder`. Native RAW/Zstd behavior can therefore be checked against a fixed format artifact instead of only against whatever the current Python encoder happens to emit. The Deflate vector is intentionally present before native Deflate support and is the next codec acceptance target.
+The important property is provenance: these bytes were hand-assembled from the revision-24 framing/schema contract rather than written by the Python `Builder`. Native RAW/Zstd behavior can therefore be checked against a fixed format artifact instead of only against whatever the current Python encoder happens to emit. The Deflate vector is now consumed through the C ABI as the acceptance oracle for native codec-4 support.
 
 ## CI conformance gate
 
@@ -47,8 +47,7 @@ A future representation is not considered implemented merely because a Rust func
 
 ## Next implementation order
 
-1. direct Deflate blobs, targeting the committed codec-4 golden archive and preserving the same bounded/full-integrity policy as direct Zstd;
-2. fixed and content-defined chunk maps with range-local decoding and whole-file verification paths;
+1. fixed and content-defined chunk maps with range-local decoding and whole-file verification paths;
 3. sparse extent reads without materializing holes;
 4. Zstd-dictionary and WAV/FLAC direct blobs;
 5. virtual ZIP reconstruction/range access;

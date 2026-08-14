@@ -41,7 +41,7 @@ The first committed golden archive set now lives at `tests/conformance/v24-direc
 
 These vectors were deliberately hand-built from the revision-24 framing/schema rules rather than emitted by `cmpct.builder.Builder`. That distinction is important: builder-to-reader round trips prove internal agreement, while fixed bytes that are independent of the builder can expose parser drift across implementations. The JSON records the generator-tool provenance used to freeze the bytes; future readers must consume the existing archive bytes rather than regenerate fixtures around changed behavior.
 
-The Deflate vector intentionally lands before native Deflate support. It is the fixed target for that next native representation gate. Future golden sets still need to cover dictionary Zstd, WAV/FLAC, fixed chunks, CDC maps, sparse extents, packs, virtual ZIP recipes, links/metadata and committed transaction generations.
+The Deflate vector now gates native raw-Deflate support through the C ABI, including strong content-hash failure behavior. Future golden sets still need to cover dictionary Zstd, WAV/FLAC, fixed chunks, CDC maps, sparse extents, packs, virtual ZIP recipes, links/metadata and committed transaction generations.
 
 ## Deliberate non-goals of this increment
 
@@ -55,7 +55,7 @@ In particular:
 - no property-based or coverage-guided fuzzer is committed yet;
 - golden revision-24 coverage is only partial: direct RAW/Zstd/Deflate now exist, while other codecs/storage descriptions/generations remain missing;
 - nested recipes, chunk maps, sparse extents and journal operations still need byte-level mutation coverage in addition to the structural mutation matrix;
-- parser behavior has begun independent cross-checking: the Rust core authenticates/decodes the primary index, matches Python entry enumeration/path policy, and cross-checks bounded direct RAW and ordinary-Zstd range bytes through the C ABI. Full structural references, tail/journal recovery, remaining codecs, chunk/sparse/virtual storage and extraction are not yet independently validated.
+- parser behavior has begun independent cross-checking: the Rust core authenticates/decodes the primary index, matches Python entry enumeration/path policy, and cross-checks bounded direct RAW, ordinary-Zstd and raw-Deflate range bytes through the C ABI. Full structural references, tail/journal recovery, remaining codecs, chunk/sparse/virtual storage and extraction are not yet independently validated.
 
 ### Canonical lexical path aliases
 
@@ -78,7 +78,7 @@ This is a representation-specific safety increment, not a replacement for full n
 3. Add per-read/per-extract decompressed-byte and work budgets; then integrate bounded validation into the normal reader constructor under an explicit policy, including canonical path-collision rejection shared with extraction.
 4. Benchmark preflight/open overhead across tiny, source, media, sparse, nested and combined corpora.
 5. Turn validated structural maxima and canonical encodings into the normative byte-level spec.
-6. Expand the Rust/Python cross-check from authenticated primary-index enumeration plus direct RAW/Zstd member ranges to direct Deflate against the committed golden vector, then complete structural validation, tail/journal recovery, remaining codecs, chunk/sparse/virtual member reads and extraction before treating the native reader as an independent conformance implementation.
+6. Expand the Rust/Python cross-check from authenticated primary-index enumeration plus direct RAW/Zstd member ranges to fixed/CDC chunk maps, then complete structural validation, tail/journal recovery, remaining codecs, chunk/sparse/virtual member reads and extraction before treating the native reader as an independent conformance implementation.
 
 ## Revision rule
 
