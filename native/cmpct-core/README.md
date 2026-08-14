@@ -25,6 +25,12 @@ complete structural reference validation, blob decoding, member/range streaming,
 remote range sources or mutation. Those capabilities must be ported incrementally with golden archives
 and Python-oracle cross-checks before platform packages depend on them.
 
+The current `open` result is therefore an **authenticated primary-index view**, not the final hostile-
+archive trust decision. A platform shell/browser may use it for development and conformance work, but
+production handlers must not expose archive-controlled blob/storage references until the native core
+also validates those references and recovery semantics to the same or stronger policy as Python
+`preflight_archive`.
+
 The next ABI milestone is read-only member access: `list_children`, `stat`, bounded `read_range` and a
 sequential member stream. Blob decoding must preserve revision-24 codec fallback semantics and hostile
 resource limits; platform code must not bypass the core and parse archive internals itself.
