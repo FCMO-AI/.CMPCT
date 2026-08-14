@@ -1,0 +1,33 @@
+name: Temporary native sparse formatter
+
+on:
+  push:
+    branches:
+      - feat/native-sparse-ranges
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  format:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/native-sparse-ranges
+      - name: Format Rust source and commit canonical output
+        run: |
+          cargo fmt --manifest-path native/cmpct-core/Cargo.toml
+          if git diff --quiet; then
+            echo "Already formatted"
+            exit 0
+          fi
+          git config user.name "cmpct-ci"
+          git config user.email "cmpct-ci@users.noreply.github.com"
+          git add native/cmpct-core/src/lib.rs
+          git commit -m "Format native sparse implementation"
+          git push origin HEAD:feat/native-sparse-ranges
+
+# Footnote: this workflow is intentionally temporary. It exists only to have the pinned Rust toolchain
+# emit canonical formatting after the connector-authored implementation, and is removed before merge.
