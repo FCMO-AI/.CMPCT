@@ -80,11 +80,21 @@ jobs:
 
       - name: Create Android 10 emulator
         run: |
+          # Footnote: Android documents ANDROID_AVD_HOME as the first directory searched by
+          # `emulator -avd`. Pin both creation and launch to the same explicit CI directory instead
+          # of relying on whichever HOME/SDK-home convention a particular command-line-tools build
+          # happens to choose.
+          AVD_HOME="$RUNNER_TEMP/cmpct-avd"
+          mkdir -p "$AVD_HOME"
+          echo "ANDROID_AVD_HOME=$AVD_HOME" >> "$GITHUB_ENV"
+          export ANDROID_AVD_HOME="$AVD_HOME"
           echo no | avdmanager create avd \
             --force \
             --name cmpct-api29 \
             --package 'system-images;android-29;google_apis;x86_64' \
-            --device 'pixel_2'
+            --device 'pixel_2' \
+            --path "$AVD_HOME/cmpct-api29.avd"
+          "$ANDROID_SDK_ROOT/emulator/emulator" -list-avds | grep -Fx cmpct-api29
 
       - name: Start emulator
         run: |
