@@ -68,7 +68,8 @@ def main() -> None:
 
     lib = _load_lib()
     with tempfile.TemporaryDirectory(prefix="cmpct-native-vzip-") as td:
-        archive = Path(td) / "virtual.cmpct"
+        root = Path(td)
+        archive = root / "virtual.cmpct"
         archive.write_bytes(archive_bytes)
         handle = _open(lib, archive)
         try:
@@ -103,6 +104,26 @@ def main() -> None:
             # Bounds stay typed at the public ABI instead of becoming a short or partially filled read.
             status, got_n, _ = _read_range(lib, handle, vector["logical_size"] - 1, 2)
             assert status == -6, status
+            assert got_n == 0
+        finally:
+            lib.cmpct_close(handle)
+
+        # Mutate one byte of the fixed stored payload without touching authenticated index/recipe
+        # metadata. Partial RAW semantics intentionally authenticate only touched framing, but a full
+        # virtual-member read has the stronger recipe SHA-256 boundary and must therefore fail closed.
+        payload = b"hello-cmpct\n"
+        payload_pos = archive_bytes.find(payload)
+        assert payload_pos >= 0
+        assert archive_bytes.find(payload, payload_pos + 1) == -1, "fixed payload must be unique"
+        corrupt = bytearray(archive_bytes)
+        corrupt[payload_pos] ^= 1
+        corrupt_path = root / "virtual-corrupt-payload.cmpct"
+        corrupt_path.write_bytes(corrupt)
+
+        handle = _open(lib, corrupt_path)
+        try:
+            status, got_n, _ = _read_range(lib, handle, 0, vector["logical_size"])
+            assert status == -3, status
             assert got_n == 0
         finally:
             lib.cmpct_close(handle)
