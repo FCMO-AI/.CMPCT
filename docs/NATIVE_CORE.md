@@ -20,13 +20,13 @@ The native core currently:
 - reads sparse ranges by zero-filling logical holes and decoding only stored chunks in extents that intersect the caller's requested interval, without allocating the logical file size;
 - verifies the logical whole-file SHA-256 when a caller requests a complete fixed/CDC/sparse member, while selective reads retain per-touched-blob integrity semantics;
 - returns typed C statuses for null pointers, I/O/format errors, resource limits, out-of-range requests and unsupported representations;
-- builds `cmpct-native`, a small read-only process surface for authenticated `info`, `list` and raw-byte `range` operations without importing the Python encoder/mutation stack. The CLI caps one requested output range at 64 MiB and deliberately inherits the core's representation/integrity policy rather than adding a second parser.
+- builds `cmpct-native`, a small read-only process surface for authenticated `info`, `list`, `stat`, bounded whole-member `read`, and raw-byte `range` operations without importing the Python encoder/mutation stack. `stat` exposes one authenticated logical entry without forcing callers to parse the full JSON list; `read` emits one complete regular member to stdout with a 64 MiB process-surface allocation ceiling; `range` retains the same 64 MiB per-request output ceiling. These commands deliberately inherit the core's representation/integrity policy rather than adding a second parser.
 
 A reusable pure-Rust revision-24 WAV/FLAC reconstruction component now also lives in `native/cmpct-core/src/wavflac.rs`. It parses the authenticated codec-2 MessagePack metadata, validates FLAC channel/rate/bit-depth against that metadata, bounds reconstructed output by the caller-provided logical size, decodes PCM16/PCM32, and copies the original WAV prefix/suffix bytes verbatim. The component is compiled and exercised against the fixed builder-independent codec-2 oracle before being wired into archive dispatch. **Codec 2 is not yet exposed through the C ABI**, so platform handlers must still treat WAV/FLAC archive members as unsupported until that final integration lands.
 
 The compressed direct-member paths are intentionally correctness-first. Ordinary Zstd frames and raw Deflate streams are not intrinsically byte-seekable in revision 24, so a range request on one direct compressed member currently decodes that member in full. This is still materially better than requiring whole-archive extraction and is the correct bridge to native archive browsing. Large ordinary files are normally chunked by the encoder; fixed/CDC chunk maps are range-local in the native core, and sparse members synthesize holes without decoding or allocating unrelated logical regions. A small read therefore stays proportional to touched stored data rather than to the whole member or archive.
 
-The native CLI is an implementation milestone, not yet a benchmark claim or shipping package. Its purpose is to make list/range launch paths independently measurable without CPython startup so future ZIP-parity records can compare CLI-vs-CLI on symmetric process boundaries.
+The native CLI is an implementation milestone, not yet a benchmark claim or shipping package. Its purpose is to make metadata lookup, bounded member reads and selective range paths independently measurable without CPython startup so future ZIP-parity records can compare CLI-vs-CLI on symmetric process boundaries.
 
 ## Integrity boundary
 
@@ -62,7 +62,7 @@ The important property is provenance: fixed bytes are acceptance targets, not re
 6. builder-independent fixed/CDC chunk-map ABI vectors;
 7. builder-independent sparse ABI vectors, including untouched-corruption locality;
 8. builder-independent Zstd-dictionary ABI vectors, including dictionary/member corruption refusal;
-9. `cmpct-native info/list/range` cross-checked against Python plus CLI-vs-CLI ZIP semantic-parity smoke coverage;
+9. `cmpct-native info/list/stat/read/range` cross-checked against Python plus CLI-vs-CLI ZIP semantic-parity smoke coverage;
 10. builder-independent WAV/FLAC component reconstruction against `v24-wavflac.json`, including exact SHA/range agreement and malformed metadata rejection.
 
 The WAV/FLAC gate is a component milestone, not yet the final codec-2 ABI gate. The representation becomes native-handler complete only after the same frozen archive succeeds through `cmpct_entry_read_range` with physical hash corruption refusal.
@@ -71,7 +71,7 @@ The WAV/FLAC gate is a component milestone, not yet the final codec-2 ABI gate. 
 
 1. wire the tested WAV/FLAC component into direct-blob dispatch and cross the fixed codec-2 archive through the C ABI;
 2. virtual ZIP reconstruction/range access;
-3. sequential member streams and extraction APIs;
+3. sequential member streams and extraction APIs beyond the bounded whole-member process helper;
 4. full structural-preflight parity and decompression/work budgets;
 5. committed tail/journal recovery and prior-generation fallback;
 6. platform bindings using this API rather than format-specific parsing.
