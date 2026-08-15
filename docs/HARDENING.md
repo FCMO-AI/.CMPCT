@@ -47,7 +47,9 @@ The Deflate vector gates native raw-Deflate support through the C ABI, including
 
 `tests/conformance/v24-wavflac.json` freezes codec 2 independently of the builder. It contains an exact revision-24 archive carrying MessagePack reconstruction metadata plus a libsndfile-produced FLAC payload, with fixed archive/logical SHA-256 values and a known byte-range answer. The Rust component independently reconstructs the WAV, and native archive dispatch now consumes the same frozen archive through `cmpct_entry_read_range`, including complete-byte parity and physical logical-content hash corruption refusal.
 
-Future golden sets still need packs, virtual ZIP recipes, links/metadata and committed transaction generations.
+`tests/conformance/v24-virtual-zip.json` freezes the first `S_VZIP` recipe independently of the builder. It contains a hand-built revision-24 archive whose nested ZIP is reconstructed from an authenticated skeleton plus one stored payload, with fixed outer archive/logical ZIP/member identities and known byte-range answers. This first vector intentionally isolates recipe parsing, literal boundaries and range projection; additional independent vectors are still required for revision-24 Deflate stream modes 0/1/2 before native virtual-ZIP support is representation-complete.
+
+Future golden sets still need packs, links/metadata, committed transaction generations and the remaining virtual-ZIP Deflate stream modes.
 
 ## Deliberate non-goals of this increment
 
@@ -59,7 +61,7 @@ In particular:
 - payload decompression paths still need direct per-operation resource budgets;
 - `read()` may intentionally materialize a complete logical file and therefore still needs a caller budget for untrusted archives;
 - no property-based or coverage-guided fuzzer is committed yet;
-- golden revision-24 coverage is still partial: direct RAW/Zstd/Deflate/WAV-FLAC/Zstd-with-dictionary, fixed/CDC chunk maps and sparse extents exist, while packs, virtual ZIP recipes, links/metadata and committed generations remain missing;
+- golden revision-24 coverage is still partial: direct RAW/Zstd/Deflate/WAV-FLAC/Zstd-with-dictionary, fixed/CDC chunk maps, sparse extents and one stored-payload virtual-ZIP recipe exist, while packs, links/metadata, committed generations and virtual-ZIP Deflate stream modes remain missing;
 - nested recipes, chunk maps, sparse extents and journal operations still need byte-level mutation coverage in addition to the structural mutation matrix;
 - parser behavior has begun independent cross-checking: the Rust core authenticates/decodes the primary index, matches Python entry enumeration/path policy, cross-checks bounded direct RAW/Zstd/WAV-FLAC/Deflate/Zstd-dictionary ranges, independently validates/reads fixed and CDC chunk maps, and independently validates/reads sparse extent maps through the C ABI. Full structural parity, tail/journal recovery, virtual storage and extraction are not yet independently validated.
 
@@ -81,7 +83,7 @@ This is a representation-specific safety increment, not a replacement for full n
 
 ## Next hardening sequence
 
-1. Expand the golden revision-24 set to packs, virtual ZIP recipes, links/metadata and committed-generation shapes, beginning with virtual ZIP because it is the next native representation needed by archive handlers.
+1. Expand the golden revision-24 set from the first stored-payload virtual-ZIP oracle to packs, links/metadata, committed-generation shapes and independent virtual-ZIP Deflate stream-mode vectors; use the frozen `S_VZIP` archive as the first native virtual-storage acceptance target.
 2. Add property tests and a byte-level mutation/fuzz corpus for headers, MessagePack structures, blob framing, chunk maps, sparse maps, nested recipes, journal chains and path relationships.
 3. Add per-read/per-extract decompressed-byte and work budgets; then integrate bounded validation into the normal reader constructor under an explicit policy, including canonical path-collision rejection shared with extraction.
 4. Benchmark preflight/open overhead across tiny, source, media, sparse, nested and combined corpora.
