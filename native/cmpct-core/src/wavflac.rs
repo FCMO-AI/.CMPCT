@@ -49,8 +49,8 @@ fn as_bytes(value: &Value, name: &str) -> Result<Vec<u8>, WavFlacError> {
 
 fn parse_metadata(meta: &[u8]) -> Result<Metadata, WavFlacError> {
     let mut cursor = Cursor::new(meta);
-    let value = rmpv::decode::read_value(&mut cursor)
-        .map_err(|e| WavFlacError::Metadata(e.to_string()))?;
+    let value =
+        rmpv::decode::read_value(&mut cursor).map_err(|e| WavFlacError::Metadata(e.to_string()))?;
     if cursor.position() != meta.len() as u64 {
         return Err(WavFlacError::Metadata(
             "trailing bytes after codec-2 metadata".into(),
