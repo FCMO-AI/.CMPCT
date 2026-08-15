@@ -4,7 +4,7 @@ mod vzip;
 use rmpv::Value;
 use sha2::{Digest, Sha256};
 use std::io::Cursor;
-use vzip::{parse_recipe, ProjectionSegment};
+use vzip::{parse_recipe, ProjectionSegment, ProjectionSource};
 
 const HEADER_SIZE: usize = 68;
 const BLOB_HEADER_SIZE: usize = 64;
@@ -103,6 +103,7 @@ fn fixed_revision24_retained_exact_deflate_projects_without_recompression() {
         "mode 1 must project the exact-stream blob"
     );
     assert_eq!(recipe.payloads[0].logical_len, 14);
+    assert_eq!(recipe.payloads[0].source, ProjectionSource::LogicalBlob);
 
     let data_base = HEADER_SIZE + compressed_len;
     let raw_blobs: Vec<Vec<u8>> = blobs
@@ -126,6 +127,7 @@ fn fixed_revision24_retained_exact_deflate_projects_without_recompression() {
 
     let mut rebuilt = vec![0u8; logical_size as usize];
     for ProjectionSegment {
+        source,
         blob_index,
         blob_offset,
         output_offset,
@@ -134,6 +136,7 @@ fn fixed_revision24_retained_exact_deflate_projects_without_recompression() {
         .plan_range(0, logical_size)
         .expect("complete range plan")
     {
+        assert_eq!(source, ProjectionSource::LogicalBlob);
         let src_start = blob_offset as usize;
         let src_end = src_start + length as usize;
         let dst_start = output_offset as usize;
@@ -143,11 +146,10 @@ fn fixed_revision24_retained_exact_deflate_projects_without_recompression() {
     let want_hash = decode_hex(vector["logical_sha256"].as_str().unwrap());
     assert_eq!(Sha256::digest(&rebuilt).as_slice(), want_hash.as_slice());
 
-    // This 18-byte request crosses three skeleton bytes, all 14 retained RFC-1951 bytes, and one
-    // trailing skeleton byte. A handler therefore performs three tiny reads and no recompression.
     let plan = recipe.plan_range(36, 18).expect("cross-boundary plan");
     assert_eq!(plan.len(), 3);
     assert_eq!(plan[1].blob_index, 1);
+    assert_eq!(plan[1].source, ProjectionSource::LogicalBlob);
     assert_eq!(plan[1].length, 14);
     assert_eq!(
         raw_blobs[1],
