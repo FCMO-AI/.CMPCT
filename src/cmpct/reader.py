@@ -414,7 +414,7 @@ class CMPCT:
             clean.append((row,parts,os.path.join(dest_s,*parts)))
 
         # Build all directories first. Parents are guaranteed to exist before regular-file writes,
-        # eliminating hundreds of redundant stat/mkdir calls on source trees such as Hermes.
+        # eliminating hundreds of redundant stat/mkdir calls on large source trees.
         dirs=[]
         for row,parts,full in clean:
             if row[1]==K_DIR:
