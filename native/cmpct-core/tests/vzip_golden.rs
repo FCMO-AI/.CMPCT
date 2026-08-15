@@ -4,7 +4,7 @@ mod vzip;
 use rmpv::Value;
 use sha2::{Digest, Sha256};
 use std::io::Cursor;
-use vzip::{parse_stored_recipe, ProjectionSegment, VirtualZipRecipe};
+use vzip::{parse_stored_recipe, ProjectionSegment, VirtualZipError, VirtualZipRecipe};
 
 const HEADER_SIZE: usize = 68;
 const BLOB_HEADER_SIZE: usize = 64;
@@ -107,7 +107,7 @@ fn raw_blobs(archive: &[u8], index: &Value, compressed_len: usize) -> Vec<Vec<u8
         .collect()
 }
 
-fn recipe_from_index(index: &Value) -> VirtualZipRecipe {
+fn recipe_parts(index: &Value) -> (&Value, Vec<u64>, u64) {
     let files = map_field(index, "files").as_array().expect("file rows");
     let file = files[0].as_array().expect("file row");
     let logical_size = file[4].as_u64().expect("logical size");
@@ -121,7 +121,12 @@ fn recipe_from_index(index: &Value) -> VirtualZipRecipe {
         .iter()
         .map(|value| value.as_array().unwrap()[1].as_u64().unwrap())
         .collect();
-    parse_stored_recipe(&recipes[recipe_index], &blob_sizes, logical_size)
+    (&recipes[recipe_index], blob_sizes, logical_size)
+}
+
+fn recipe_from_index(index: &Value) -> VirtualZipRecipe {
+    let (recipe, blob_sizes, logical_size) = recipe_parts(index);
+    parse_stored_recipe(recipe, &blob_sizes, logical_size)
         .expect("fixed stored-payload virtual ZIP recipe")
 }
 
@@ -193,4 +198,28 @@ fn selective_projection_touches_only_intersecting_recipe_segments() {
     assert_eq!(tail_only[0].blob_index, recipe.skeleton_blob);
     assert_eq!(tail_only[0].length, 20);
     assert!(recipe.plan_range(127, 2).is_err());
+}
+
+#[test]
+fn malformed_recipe_accounting_and_ungated_deflate_fail_closed() {
+    let (_, _, index, _) = fixture();
+    let (recipe, blob_sizes, logical_size) = recipe_parts(&index);
+
+    let mut bad_literals = recipe.clone();
+    let row = bad_literals.as_array_mut().expect("recipe row");
+    row[1] = Value::Array(vec![Value::from(38u64), Value::from(77u64)]);
+    assert!(matches!(
+        parse_stored_recipe(&bad_literals, &blob_sizes, logical_size),
+        Err(VirtualZipError::Schema(_))
+    ));
+
+    let mut deflate = recipe.clone();
+    let row = deflate.as_array_mut().expect("recipe row");
+    let payloads = row[2].as_array_mut().expect("payload rows");
+    let payload = payloads[0].as_array_mut().expect("payload row");
+    payload[1] = Value::from(8u64);
+    assert_eq!(
+        parse_stored_recipe(&deflate, &blob_sizes, logical_size),
+        Err(VirtualZipError::UnsupportedPayload)
+    );
 }
