@@ -47,15 +47,33 @@ def main() -> None:
         assert native_entries == expected, (native_entries, expected)
         assert info_payload["entries"] == len(expected)
 
+        stat = run("stat", str(ARCHIVE), "payload.bin")
+        assert stat.returncode == 0, stat.stderr.decode()
+        assert json.loads(stat.stdout) == next(
+            row for row in expected if row["path"] == "payload.bin"
+        )
+
+        whole = run("read", str(ARCHIVE), "payload.bin")
+        assert whole.returncode == 0, whole.stderr.decode()
+        assert whole.stdout == archive.read("payload.bin")
+
         offset = 333_333
         length = 8_192
         ranged = run("range", str(ARCHIVE), "raw.bin", str(offset), str(length))
         assert ranged.returncode == 0, ranged.stderr.decode()
         assert ranged.stdout == archive.read_range("raw.bin", offset, length)
 
+    missing_stat = run("stat", str(ARCHIVE), "missing.bin")
+    assert missing_stat.returncode != 0
+    assert missing_stat.stdout == b""
+
     missing = run("range", str(ARCHIVE), "missing.bin", "0", "1")
     assert missing.returncode != 0
     assert missing.stdout == b""
+
+    directory_read = run("read", str(ARCHIVE), "dir")
+    assert directory_read.returncode != 0
+    assert directory_read.stdout == b""
 
     oversized = run("range", str(ARCHIVE), "raw.bin", "0", str(64 * 1024 * 1024 + 1))
     assert oversized.returncode != 0
