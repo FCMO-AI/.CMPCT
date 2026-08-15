@@ -317,12 +317,8 @@ impl Archive {
         // Footnote: codec 2 needs both archive-controlled reconstruction metadata and a FLAC stream.
         // Read exactly those bounded fields, reconstruct the complete logical WAV, then authenticate
         // the reconstructed bytes before exposing even a partial range through the platform ABI.
-        let decoded = wavflac::decode_wav_flac(
-            &compressed,
-            &meta,
-            blob.usize,
-            MAX_DIRECT_DECODE_BYTES,
-        )?;
+        let decoded =
+            wavflac::decode_wav_flac(&compressed, &meta, blob.usize, MAX_DIRECT_DECODE_BYTES)?;
         if Sha256::digest(&decoded).as_slice() != expected_hash {
             return Err(CmpctError::MemberHash);
         }
