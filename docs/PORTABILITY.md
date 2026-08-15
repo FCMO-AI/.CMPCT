@@ -76,7 +76,11 @@ small and load optional codecs only when an archive actually requires them.
 
 For compressed direct members, an implementation may temporarily decode one bounded member to serve a
 range if the codec is not independently seekable, but it must never silently inflate the whole archive.
-The current native Zstd/Deflate bridge follows that rule and caps one direct decode at 256 MiB. Revision-24 fixed and CDC chunk maps are range-local in the shared core: a request decodes only chunks intersecting the requested range. Revision-24 sparse maps are also range-local: holes are synthesized as zeroes while only stored chunks in intersecting extents are decoded, so browsing a sparse VM/disk image does not allocate or inflate its logical size.
+The current native Zstd/WAV-FLAC/Deflate paths follow that rule and cap one direct decode/reconstruction
+at 256 MiB. Revision-24 fixed and CDC chunk maps are range-local in the shared core: a request decodes
+only chunks intersecting the requested range. Revision-24 sparse maps are also range-local: holes are
+synthesized as zeroes while only stored chunks in intersecting extents are decoded, so browsing a
+sparse VM/disk image does not allocate or inflate its logical size.
 
 ## Android
 
@@ -196,10 +200,10 @@ Implemented today:
 - Android emulator conformance proving MIME/extension routing, magic refusal, RAW/Zstd/Deflate revision-24 archive reads through Android → JNI → Rust, provider enumeration/member streaming, and relocatable packaged native-library dependencies;
 - a memory-safe Rust core under `native/cmpct-core/` that authenticates/decodes the revision-24 primary index, enumerates logical entries, rejects lexical path aliases, bounds the base blob table, cross-checks direct physical blob framing, and exposes a tested opaque C ABI;
 - native range reads for direct RAW members without decoding unrelated bytes;
-- native bounded range reads for ordinary direct Zstd, raw Deflate and Zstd-with-dictionary members, with a 256 MiB per-direct-member decode ceiling, exact decompressed-length validation and SHA-256 verification before returning the requested slice; codec-3 additionally authenticates and bounds the archive-selected dictionary blob;
-- native fixed/CDC chunk-map validation and range-local reads across mixed RAW/Zstd/Deflate chunks, with complete-member logical SHA-256 verification;
+- native bounded range reads for ordinary direct Zstd, WAV/FLAC, raw Deflate and Zstd-with-dictionary members, with a 256 MiB per-direct-member decode/reconstruction ceiling, exact logical-length validation and SHA-256 verification before returning the requested slice; codec-3 additionally authenticates and bounds the archive-selected dictionary blob;
+- native fixed/CDC chunk-map validation and range-local reads across mixed supported blobs, with complete-member logical SHA-256 verification;
 - native sparse-map validation and range-local hole/data reads, including exact extent accounting, complete-member logical SHA-256 verification, and a conformance test proving corruption in an untouched extent does not force unrelated data to be decoded;
-- builder-independent direct-codec, chunk-map, sparse, Zstd-dictionary and WAV/FLAC golden archives; WAV/FLAC reconstruction is independently implemented in Rust as a bounded component but is not yet connected to archive dispatch/C ABI.
+- builder-independent direct-codec, chunk-map, sparse, Zstd-dictionary and WAV/FLAC golden archives, including WAV/FLAC archive reads through the public C ABI with fixed whole-file/range identity and physical-hash corruption refusal.
 
 `docs/NATIVE_CORE.md` is the detailed handoff for the native capability and its safety boundary.
 `integrations/android/README.md` is the Android-specific acceptance handoff and must remain the source
@@ -208,7 +212,7 @@ support.
 
 Not yet implemented and therefore **not to be claimed as shipped support**:
 
-- complete memory-safe native reader/writer ABI beyond primary-index/open/enumeration plus direct RAW/Zstd/Deflate/Zstd-dictionary, fixed/CDC and sparse reads: full hostile structural validation, recovery, WAV-FLAC archive dispatch, virtual/remaining storage descriptions, streams, extraction and mutation are still pending;
+- complete memory-safe native reader/writer ABI beyond primary-index/open/enumeration plus implemented direct codecs, fixed/CDC and sparse reads: full hostile structural validation, recovery, virtual/remaining storage descriptions, streams, extraction and mutation are still pending;
 - release-complete Android support: physical ARM64/device-provider validation and representation-complete native coverage remain required even though the canonical emulator-gated preview now exists;
 - Windows shell/browser package;
 - Apple document/Quick Look package;
