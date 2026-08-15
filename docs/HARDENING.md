@@ -47,9 +47,13 @@ The Deflate vector gates native raw-Deflate support through the C ABI, including
 
 `tests/conformance/v24-wavflac.json` freezes codec 2 independently of the builder. It contains an exact revision-24 archive carrying MessagePack reconstruction metadata plus a libsndfile-produced FLAC payload, with fixed archive/logical SHA-256 values and a known byte-range answer. The Rust component independently reconstructs the WAV, and native archive dispatch now consumes the same frozen archive through `cmpct_entry_read_range`, including complete-byte parity and physical logical-content hash corruption refusal.
 
-`tests/conformance/v24-virtual-zip.json` freezes the first `S_VZIP` recipe independently of the builder. It contains a hand-built revision-24 archive whose nested ZIP is reconstructed from an authenticated skeleton plus one stored payload, with fixed outer archive/logical ZIP/member identities and known byte-range answers. Native archive parsing now consumes this stored-payload recipe through `cmpct_entry_read_range`, while component tests retain the locality proof that a skeleton/payload/skeleton range touches only those intersecting slices. Additional independent vectors are still required for revision-24 Deflate stream modes 0/1/2 before native virtual-ZIP support is representation-complete.
+`tests/conformance/v24-virtual-zip.json` freezes the first `S_VZIP` recipe independently of the builder. It contains a hand-built revision-24 archive whose nested ZIP is reconstructed from an authenticated skeleton plus one stored payload, with fixed outer archive/logical ZIP/member identities and known byte-range answers. Native archive parsing consumes this stored-payload recipe through `cmpct_entry_read_range`, while component tests retain the locality proof that a skeleton/payload/skeleton range touches only those intersecting slices.
 
-Future golden sets still need packs, links/metadata, committed transaction generations and the remaining virtual-ZIP Deflate stream modes.
+`tests/conformance/v24-virtual-zip-deflate-mode1.json` freezes the next `S_VZIP` shape independently of the builder: ZIP method 8 with stream mode 1. The exact RFC-1951 stream is retained as a separate ordinary CMPCT blob and projected directly between skeleton literals. The fixed archive records outer/nested/member identities, exact Deflate bytes and cross-boundary ranges. Python reconstructs it byte-for-byte and validates it with the standard ZIP reader; the Rust planner selects the retained exact-stream blob without recompression; the public C ABI consumes the same frozen archive and rejects complete-member corruption.
+
+Independent virtual-ZIP vectors are still required for Deflate stream modes 0 and 2. Mode 0 requires access to the exact physical raw-Deflate payload of a codec-4 CMPCT blob rather than its decoded logical bytes. Mode 2 requires byte-for-byte zlib-compatible regeneration from raw content plus the recorded level; merely producing an equivalent Deflate stream is insufficient because the nested ZIP must reconstruct exactly.
+
+Future golden sets still need packs, links/metadata, committed transaction generations and the two remaining virtual-ZIP Deflate stream modes.
 
 ## Deliberate non-goals of this increment
 
@@ -61,9 +65,9 @@ In particular:
 - payload decompression paths still need direct per-operation resource budgets;
 - `read()` may intentionally materialize a complete logical file and therefore still needs a caller budget for untrusted archives;
 - no property-based or coverage-guided fuzzer is committed yet;
-- golden revision-24 coverage is still partial: direct RAW/Zstd/Deflate/WAV-FLAC/Zstd-with-dictionary, fixed/CDC chunk maps, sparse extents and one stored-payload virtual-ZIP recipe exist, while packs, links/metadata, committed generations and virtual-ZIP Deflate stream modes remain missing;
+- golden revision-24 coverage is still partial: direct RAW/Zstd/Deflate/WAV-FLAC/Zstd-with-dictionary, fixed/CDC chunk maps, sparse extents, stored-payload virtual ZIP and virtual-ZIP retained Deflate mode 1 exist, while packs, links/metadata, committed generations and virtual-ZIP Deflate modes 0/2 remain missing;
 - nested recipes, chunk maps, sparse extents and journal operations still need byte-level mutation coverage in addition to the structural mutation matrix;
-- parser behavior has begun independent cross-checking: the Rust core authenticates/decodes the primary index, matches Python entry enumeration/path policy, cross-checks bounded direct RAW/Zstd/WAV-FLAC/Deflate/Zstd-dictionary ranges, independently validates/reads fixed and CDC chunk maps plus sparse extent maps through the C ABI, and now independently parses/reads the stored-payload virtual-ZIP golden through the same public ABI. Full structural parity, tail/journal recovery, virtual-ZIP Deflate modes, packs and extraction are not yet independently validated.
+- parser behavior has begun independent cross-checking: the Rust core authenticates/decodes the primary index, matches Python entry enumeration/path policy, cross-checks bounded direct RAW/Zstd/WAV-FLAC/Deflate/Zstd-dictionary ranges, independently validates/reads fixed and CDC chunk maps plus sparse extent maps through the C ABI, and now independently parses/reads stored-payload and retained-exact-Deflate virtual-ZIP goldens through the same public ABI. Full structural parity, tail/journal recovery, virtual-ZIP Deflate modes 0/2, packs and extraction are not yet independently validated.
 
 ### Canonical lexical path aliases
 
@@ -75,22 +79,22 @@ The explicit preflight command is intentional for this first increment: it creat
 
 ## Native direct/map-decode safety boundary
 
-The shared Rust reader has bounded bridges for ordinary direct Zstd/WAV-FLAC/raw Deflate/Zstd-dictionary, fixed/CDC/sparse maps and the independently gated stored-payload virtual-ZIP recipe. A direct compressed/reconstructed object cannot allocate/decode above 256 MiB and must match physical framing, exact logical length and blob SHA-256 before a slice is returned. WAV/FLAC additionally requires codec metadata to parse cleanly and agree with FLAC stream channel/rate/bit-depth before reconstruction succeeds. Fixed/CDC maps are checked for valid blob references, declared-length agreement and exact logical-size accounting before use; selective reads decode only intersecting chunks, and complete reads additionally verify the logical whole-file SHA-256.
+The shared Rust reader has bounded bridges for ordinary direct Zstd/WAV-FLAC/raw Deflate/Zstd-dictionary, fixed/CDC/sparse maps and the independently gated stored-payload plus retained-Deflate-mode-1 virtual-ZIP recipes. A direct compressed/reconstructed object cannot allocate/decode above 256 MiB and must match physical framing, exact logical length and blob SHA-256 before a slice is returned. WAV/FLAC additionally requires codec metadata to parse cleanly and agree with FLAC stream channel/rate/bit-depth before reconstruction succeeds. Fixed/CDC maps are checked for valid blob references, declared-length agreement and exact logical-size accounting before use; selective reads decode only intersecting chunks, and complete reads additionally verify the logical whole-file SHA-256.
 
 Sparse maps additionally require sorted, non-overlapping extents within logical EOF and exact equality between each extent length and the sum of its referenced blob lengths. Sparse selective reads synthesize holes as zeroes and decode only stored chunks in touched extents. The fixed ABI gate proves this locality by corrupting a compressed blob in an untouched extent: a disjoint range still succeeds, while a range touching the corrupted extent fails. RAW partial reads remain range-local and deliberately do not claim whole-member verification of unseen bytes.
 
-Stored virtual ZIP validates recipe shape, skeleton/payload alternation, blob references, literal totals and logical size from authenticated metadata. Selective reads project only intersecting recipe slices and route them through the normal blob decoder; complete reads additionally verify the reconstructed nested ZIP against the recipe logical SHA-256. Revision-24 Deflate virtual payloads intentionally remain unsupported until modes 0/1/2 have independent fixed vectors.
+Supported virtual ZIP validates recipe shape, skeleton/payload alternation, blob references, literal totals and logical size from authenticated metadata. Selective reads project only intersecting recipe slices and route them through the normal blob decoder. ZIP_STORED uses the raw content blob; Deflate mode 1 uses the retained exact-stream blob directly, so it preserves exact nested-ZIP bytes without invoking a compressor. Complete reads additionally verify the reconstructed nested ZIP against the recipe logical SHA-256. Revision-24 Deflate modes 0 and 2 intentionally remain unsupported until their independent fixed vectors exist.
 
-This is a representation-specific safety increment, not a replacement for full native preflight parity. Packs, virtual-ZIP Deflate modes and journal structures still need independent native validation before the shared handler is representation-complete.
+This is a representation-specific safety increment, not a replacement for full native preflight parity. Packs, virtual-ZIP Deflate modes 0/2 and journal structures still need independent native validation before the shared handler is representation-complete.
 
 ## Next hardening sequence
 
-1. Expand the golden revision-24 set from the stored-payload virtual-ZIP C-ABI oracle to packs, links/metadata, committed-generation shapes and independent virtual-ZIP Deflate stream-mode vectors.
+1. Expand the golden revision-24 set to virtual-ZIP Deflate mode 0, then mode 2, plus packs, links/metadata and committed-generation shapes.
 2. Add property tests and a byte-level mutation/fuzz corpus for headers, MessagePack structures, blob framing, chunk maps, sparse maps, nested recipes, journal chains and path relationships.
 3. Add per-read/per-extract decompressed-byte and work budgets; then integrate bounded validation into the normal reader constructor under an explicit policy, including canonical path-collision rejection shared with extraction.
 4. Benchmark preflight/open overhead across tiny, source, media, sparse, nested and combined corpora.
 5. Turn validated structural maxima and canonical encodings into the normative byte-level spec.
-6. Expand the Rust/Python cross-check beyond authenticated primary-index enumeration plus implemented direct/map/first-virtual ranges to complete structural validation, representation-complete virtual member reads, extraction and tail/journal recovery before treating the native reader as an independent conformance implementation.
+6. Expand the Rust/Python cross-check beyond authenticated primary-index enumeration plus implemented direct/map/virtual ranges to complete structural validation, representation-complete virtual member reads, extraction and tail/journal recovery before treating the native reader as an independent conformance implementation.
 
 ## Revision rule
 
