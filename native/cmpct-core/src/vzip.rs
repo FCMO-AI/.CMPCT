@@ -1,8 +1,10 @@
 //! Revision-24 virtual-ZIP recipe validation and range planning.
 //!
-//! Stored ZIP payloads and retained-exact Deflate stream mode 1 are independently conformance-gated.
-//! Deflate modes 0 and 2 remain unsupported until each has its own builder-independent fixed vector;
-//! accepting them by inference would turn the Python implementation into the de-facto specification.
+//! ZIP_STORED plus all three revision-24 Deflate stream modes now have explicit source semantics:
+//! logical blob bytes, authenticated physical codec-4 bytes, retained exact stream bytes, or
+//! deterministic zlib regeneration from authenticated logical content. The planner never performs
+//! archive I/O itself; it records *what kind of bytes* a projection segment needs so archive dispatch
+//! can preserve the correct integrity boundary without guessing from a blob index.
 
 use rmpv::Value;
 use thiserror::Error;
@@ -11,34 +13,52 @@ const ZIP_STORED: u64 = 0;
 const ZIP_DEFLATED: u64 = 8;
 const STREAM_CANONICAL: u64 = 0;
 const STREAM_RETAINED_EXACT: u64 = 1;
+const STREAM_REGENERATED_ZLIB: u64 = 2;
 const MAX_VZIP_PAYLOADS: usize = 1_000_000;
 
 #[derive(Debug, Error, PartialEq, Eq)]
 pub enum VirtualZipError {
     #[error("invalid virtual-ZIP recipe: {0}")]
     Schema(String),
-    #[error("virtual-ZIP payload method/stream mode is not yet independently conformance-gated")]
+    #[error("virtual-ZIP payload method/stream mode is not supported by the native handler")]
     UnsupportedPayload,
     #[error("requested virtual-ZIP range is outside the logical file")]
     Range,
 }
 
+/// The byte source required by one virtual-ZIP projection segment.
+///
+/// Footnote: mode 0 and mode 2 deliberately cannot be represented as an ordinary logical blob read.
+/// Mode 0 needs the *physical* RFC-1951 payload stored inside a codec-4 blob; mode 2 needs an exact
+/// zlib-compatible RFC-1951 regeneration from authenticated logical content. Making this distinction a
+/// typed part of the plan prevents future platform adapters from silently decoding/recompressing the
+/// wrong thing and still returning a superficially valid but byte-different ZIP.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ProjectionSource {
+    LogicalBlob,
+    PhysicalDeflate,
+    RegeneratedDeflate { level: u8 },
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct StoredPayload {
-    /// Blob whose logical bytes are projected into the nested ZIP stream.
+    /// Blob associated with this payload source.
     ///
-    /// For ZIP_STORED this is the raw content blob. For Deflate mode 1 it is the retained opaque
-    /// exact-stream blob. The historical type name remains to avoid needless API churn while the
-    /// pre-1.0 virtual recipe surface is still being filled in representation by representation.
+    /// - ZIP_STORED: raw-content blob;
+    /// - mode 0: codec-4 content blob whose physical payload is projected;
+    /// - mode 1: retained exact-stream blob;
+    /// - mode 2: authenticated raw-content blob used as regeneration input.
     pub blob_index: usize,
     pub logical_len: u64,
+    pub source: ProjectionSource,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ProjectionSegment {
-    /// Physical CMPCT content blob supplying this logical segment.
+    pub source: ProjectionSource,
+    /// CMPCT blob associated with this segment's source.
     pub blob_index: usize,
-    /// Offset inside the logical, decoded blob bytes.
+    /// Offset inside the selected source byte stream.
     pub blob_offset: u64,
     /// Offset inside the caller's requested output range.
     pub output_offset: u64,
@@ -69,11 +89,23 @@ fn blob_index(value: &Value, blob_count: usize, label: &str) -> Result<usize, Vi
     Ok(index)
 }
 
-/// Parse and structurally validate the independently gated revision-24 virtual-ZIP recipe shapes.
+fn deflate_level(value: &Value, payload_index: usize) -> Result<u8, VirtualZipError> {
+    value
+        .as_i64()
+        .filter(|level| (0..=9).contains(level))
+        .map(|level| level as u8)
+        .ok_or_else(|| {
+            VirtualZipError::Schema(format!(
+                "payload descriptor {payload_index} has invalid zlib level"
+            ))
+        })
+}
+
+/// Parse and structurally validate revision-24 virtual-ZIP recipe shapes.
 ///
-/// `blob_sizes` are authenticated logical blob lengths from the primary index. The planner does not
-/// read archive bytes itself; the archive core remains responsible for physical framing and codec
-/// authentication when executing the returned projection segments.
+/// `blob_sizes` are authenticated logical blob lengths from the primary index. Physical codec/csize
+/// checks intentionally remain in archive dispatch because mode 0's projected length is a physical
+/// compressed length rather than the blob's logical length.
 pub fn parse_recipe(
     value: &Value,
     blob_sizes: &[u64],
@@ -145,41 +177,63 @@ pub fn parse_recipe(
         let stream_mode = payload[2].as_u64().ok_or_else(|| {
             VirtualZipError::Schema(format!("payload descriptor {index} has invalid stream mode"))
         })?;
+        let stream_blob = blob_index(
+            &payload[3],
+            blob_sizes.len(),
+            &format!("payload descriptor {index} stream blob"),
+        )?;
         let compressed_len = payload[4].as_u64().ok_or_else(|| {
             VirtualZipError::Schema(format!(
                 "payload descriptor {index} has invalid stored length"
             ))
         })?;
 
-        let projected_blob = match (method, stream_mode) {
+        let (projected_blob, source) = match (method, stream_mode) {
             (ZIP_STORED, STREAM_CANONICAL) => {
+                if stream_blob != content_blob {
+                    return Err(VirtualZipError::Schema(format!(
+                        "payload descriptor {index} stored stream reference disagrees with content blob"
+                    )));
+                }
                 if compressed_len != blob_sizes[content_blob] {
                     return Err(VirtualZipError::Schema(format!(
                         "payload descriptor {index} stored length disagrees with content blob"
                     )));
                 }
-                content_blob
+                (content_blob, ProjectionSource::LogicalBlob)
+            }
+            (ZIP_DEFLATED, STREAM_CANONICAL) => {
+                if stream_blob != content_blob {
+                    return Err(VirtualZipError::Schema(format!(
+                        "payload descriptor {index} canonical stream reference disagrees with content blob"
+                    )));
+                }
+                // Level is not needed to *read* mode 0, but validating it preserves the exact
+                // revision-24 descriptor contract and catches malformed archive-controlled metadata.
+                let _ = deflate_level(&payload[5], index)?;
+                (content_blob, ProjectionSource::PhysicalDeflate)
             }
             (ZIP_DEFLATED, STREAM_RETAINED_EXACT) => {
-                // Footnote: mode 1 stores the exact RFC-1951 stream as an ordinary CMPCT content
-                // blob. Projecting that blob is byte-preserving and requires no compressor parity;
-                // every touched byte still passes through the normal authenticated blob reader.
-                let stream_blob = blob_index(
-                    &payload[3],
-                    blob_sizes.len(),
-                    &format!("payload descriptor {index} retained stream blob"),
-                )?;
+                // Mode 1 stores the exact RFC-1951 stream as an ordinary logical CMPCT blob.
+                let _ = deflate_level(&payload[5], index)?;
                 if compressed_len != blob_sizes[stream_blob] {
                     return Err(VirtualZipError::Schema(format!(
                         "payload descriptor {index} compressed length disagrees with retained stream blob"
                     )));
                 }
-                stream_blob
+                (stream_blob, ProjectionSource::LogicalBlob)
             }
-            (ZIP_DEFLATED, _) => {
-                // Footnote: revision 24 also has canonical-physical-stream mode 0 and deterministic
-                // zlib-regeneration mode 2. They remain refused until fixed independent vectors exist.
-                return Err(VirtualZipError::UnsupportedPayload);
+            (ZIP_DEFLATED, STREAM_REGENERATED_ZLIB) => {
+                if stream_blob != content_blob {
+                    return Err(VirtualZipError::Schema(format!(
+                        "payload descriptor {index} regenerated stream reference disagrees with content blob"
+                    )));
+                }
+                let level = deflate_level(&payload[5], index)?;
+                (
+                    content_blob,
+                    ProjectionSource::RegeneratedDeflate { level },
+                )
             }
             _ => return Err(VirtualZipError::UnsupportedPayload),
         };
@@ -190,6 +244,7 @@ pub fn parse_recipe(
         payloads.push(StoredPayload {
             blob_index: projected_blob,
             logical_len: compressed_len,
+            source,
         });
     }
 
@@ -237,8 +292,8 @@ pub fn parse_recipe(
     })
 }
 
-/// Compatibility name for the first stored-only gate. New native archive dispatch should call
-/// `parse_recipe`, while older focused tests may keep using this wrapper until the pre-1.0 API settles.
+/// Compatibility name retained for older focused tests. All currently frozen revision-24 stream
+/// modes are parsed by the same implementation; the wrapper no longer means "stored-only".
 pub fn parse_stored_recipe(
     value: &Value,
     blob_sizes: &[u64],
@@ -248,11 +303,10 @@ pub fn parse_stored_recipe(
 }
 
 impl VirtualZipRecipe {
-    /// Plan only the blob slices needed for one logical virtual-ZIP range.
+    /// Plan only the source slices needed for one logical virtual-ZIP range.
     ///
-    /// The skeleton is itself one CMPCT blob containing the ZIP bytes between payload streams. A
-    /// selective request therefore alternates slices of that skeleton with already-byte-exact payload
-    /// stream slices and never needs to reconstruct unrelated portions of the nested archive.
+    /// Skeleton bytes always come from decoded logical blob bytes. Payload segments retain their typed
+    /// source so the executor can select logical, physical-Deflate, or regenerated-Deflate semantics.
     pub fn plan_range(
         &self,
         start: u64,
@@ -270,7 +324,8 @@ impl VirtualZipRecipe {
         let mut logical_cursor = 0u64;
         let mut skeleton_cursor = 0u64;
 
-        let mut append_overlap = |blob_index: usize,
+        let mut append_overlap = |source: ProjectionSource,
+                                  blob_index: usize,
                                   blob_base: u64,
                                   segment_len: u64,
                                   logical_start: u64|
@@ -281,9 +336,13 @@ impl VirtualZipRecipe {
             let overlap_start = start.max(logical_start);
             let overlap_end = request_end.min(logical_end);
             if overlap_start < overlap_end {
+                let source_offset = blob_base
+                    .checked_add(overlap_start - logical_start)
+                    .ok_or_else(|| VirtualZipError::Schema("projection source offset overflows".into()))?;
                 segments.push(ProjectionSegment {
+                    source,
                     blob_index,
-                    blob_offset: blob_base + (overlap_start - logical_start),
+                    blob_offset: source_offset,
                     output_offset: overlap_start - start,
                     length: overlap_end - overlap_start,
                 });
@@ -294,6 +353,7 @@ impl VirtualZipRecipe {
         for (index, payload) in self.payloads.iter().enumerate() {
             let literal_len = self.literal_lengths[index];
             append_overlap(
+                ProjectionSource::LogicalBlob,
                 self.skeleton_blob,
                 skeleton_cursor,
                 literal_len,
@@ -307,6 +367,7 @@ impl VirtualZipRecipe {
                 .ok_or_else(|| VirtualZipError::Schema("skeleton projection overflows".into()))?;
 
             append_overlap(
+                payload.source,
                 payload.blob_index,
                 0,
                 payload.logical_len,
@@ -321,6 +382,7 @@ impl VirtualZipRecipe {
             VirtualZipError::Schema("virtual-ZIP recipe has no trailing literal".into())
         })?;
         append_overlap(
+            ProjectionSource::LogicalBlob,
             self.skeleton_blob,
             skeleton_cursor,
             tail_len,
