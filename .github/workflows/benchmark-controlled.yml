@@ -40,11 +40,13 @@ jobs:
       - name: Install benchmark dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y zstd xz-utils libsndfile1
+          sudo apt-get install -y zstd xz-utils zlib1g-dev libsndfile1
           python -m pip install --upgrade pip
           python -m pip install -e '.[audio,test]'
       - name: Correctness before timing
         run: python -m pytest -q
+      - name: Build native release core for semantic process-parity smoke
+        run: cargo build --manifest-path native/cmpct-core/Cargo.toml --release
       - name: Hosted semantic parity smoke
         run: |
           mkdir -p benchmark-artifacts/hosted
@@ -53,7 +55,7 @@ jobs:
             --kind incompressible \
             --size-mib 1 \
             --repeats 3 \
-            --output benchmark-artifacts/hosted/native-cli-parity.json || true
+            --output benchmark-artifacts/hosted/native-cli-parity.json
           {
             echo "classification=hosted-smoke-not-performance-claim"
             echo "commit=$(git rev-parse HEAD)"
