@@ -166,14 +166,22 @@ fn apply_delta(index: &mut Value, delta: &Value) -> Result<(), RecoveryError> {
 
     for operation in operations {
         let row = operation.as_array().ok_or(RecoveryError::Malformed)?;
-        let opcode = row.first().and_then(Value::as_str).ok_or(RecoveryError::Malformed)?;
+        let opcode = row
+            .first()
+            .and_then(Value::as_str)
+            .ok_or(RecoveryError::Malformed)?;
         match opcode {
             "put" => {
                 let replacement = row.get(1).cloned().ok_or(RecoveryError::Malformed)?;
-                let path = file_row_path(&replacement).ok_or(RecoveryError::Malformed)?;
+                // Footnote: own the path before moving `replacement` into the canonical file table.
+                // Borrowing the path from the MessagePack row while replacing/pushing that same row
+                // is both unnecessary and rejected by Rust's aliasing rules.
+                let path = file_row_path(&replacement)
+                    .ok_or(RecoveryError::Malformed)?
+                    .to_owned();
                 if let Some(slot) = files
                     .iter_mut()
-                    .find(|candidate| file_row_path(candidate) == Some(path))
+                    .find(|candidate| file_row_path(candidate) == Some(path.as_str()))
                 {
                     *slot = replacement;
                 } else {
@@ -181,12 +189,21 @@ fn apply_delta(index: &mut Value, delta: &Value) -> Result<(), RecoveryError> {
                 }
             }
             "del" => {
-                let path = row.get(1).and_then(Value::as_str).ok_or(RecoveryError::Malformed)?;
+                let path = row
+                    .get(1)
+                    .and_then(Value::as_str)
+                    .ok_or(RecoveryError::Malformed)?;
                 files.retain(|candidate| file_row_path(candidate) != Some(path));
             }
             "ren" => {
-                let old = row.get(1).and_then(Value::as_str).ok_or(RecoveryError::Malformed)?;
-                let new = row.get(2).and_then(Value::as_str).ok_or(RecoveryError::Malformed)?;
+                let old = row
+                    .get(1)
+                    .and_then(Value::as_str)
+                    .ok_or(RecoveryError::Malformed)?;
+                let new = row
+                    .get(2)
+                    .and_then(Value::as_str)
+                    .ok_or(RecoveryError::Malformed)?;
                 let candidate = files
                     .iter_mut()
                     .find(|candidate| file_row_path(candidate) == Some(old))
