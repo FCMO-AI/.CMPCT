@@ -13,6 +13,9 @@ VECTORS = (
     ROOT / "tests/conformance/v24-virtual-zip.json",
     ROOT / "tests/conformance/v24-virtual-zip-deflate-mode1.json",
 )
+UNSUPPORTED_VECTORS = (
+    ROOT / "tests/conformance/v24-virtual-zip-deflate-mode0.json",
+)
 
 
 def _load_lib():
@@ -133,12 +136,40 @@ def _exercise_vector(lib, root: Path, fixture_path: Path) -> None:
         lib.cmpct_close(handle)
 
 
+def _exercise_explicitly_unsupported_vector(lib, root: Path, fixture_path: Path) -> None:
+    """Keep independently frozen representations visible at the public ABI before dispatch lands.
+
+    Footnote: a valid revision-24 archive containing an as-yet ungated native representation should
+    still open and enumerate. The member read must return the typed unsupported status, never a format
+    error or guessed reconstruction. This turns the remaining mode-0 wiring gap into an executable
+    contract instead of leaving it outside the native test surface.
+    """
+    vector = json.loads(fixture_path.read_text())["vector"]
+    archive_bytes = base64.b64decode(vector["archive_base64"])
+    assert hashlib.sha256(archive_bytes).hexdigest() == vector["archive_sha256"]
+
+    archive = root / f"{fixture_path.stem}-unsupported.cmpct"
+    archive.write_bytes(archive_bytes)
+    handle = _open(lib, archive)
+    try:
+        assert lib.cmpct_entry_count(handle) == 1
+        assert _entry_path(lib, handle, 0) == vector["name"]
+        status, got_n, got = _read_range(lib, handle, 0, vector["logical_size"])
+        assert status == -5, status
+        assert got_n == 0
+        assert got == b""
+    finally:
+        lib.cmpct_close(handle)
+
+
 def main() -> None:
     lib = _load_lib()
     with tempfile.TemporaryDirectory(prefix="cmpct-native-vzip-") as td:
         root = Path(td)
         for fixture_path in VECTORS:
             _exercise_vector(lib, root, fixture_path)
+        for fixture_path in UNSUPPORTED_VECTORS:
+            _exercise_explicitly_unsupported_vector(lib, root, fixture_path)
 
 
 if __name__ == "__main__":
