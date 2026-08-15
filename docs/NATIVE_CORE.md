@@ -19,6 +19,7 @@ The native core currently:
 - validates revision-24 sparse extent maps at open time, including sorted/non-overlapping extents, logical-file bounds, blob references and exact stored-byte accounting for every extent;
 - reads sparse ranges by zero-filling logical holes and decoding only stored chunks in extents that intersect the caller's requested interval, without allocating the logical file size;
 - verifies the logical whole-file SHA-256 when a caller requests a complete fixed/CDC/sparse member, while selective reads retain per-touched-blob integrity semantics;
+- contains a conformance-gated revision-24 virtual-ZIP range-planning component for the first builder-independent stored-payload recipe. It validates recipe/blob/literal accounting and converts a requested logical range into only the intersecting skeleton/payload blob slices. This component is **not yet wired into archive dispatch or the public C ABI**, and deliberately refuses Deflate payloads until their three stream modes have independent fixed vectors;
 - returns typed C statuses for null pointers, I/O/format errors, resource limits, out-of-range requests and unsupported representations;
 - builds `cmpct-native`, a small read-only process surface for authenticated `info`, `list`, `stat`, bounded whole-member `read`, and raw-byte `range` operations without importing the Python encoder/mutation stack. `stat` exposes one authenticated logical entry without forcing callers to parse the full JSON list; `read` emits one complete regular member to stdout with a 64 MiB process-surface allocation ceiling; `range` retains the same 64 MiB per-request output ceiling. These commands deliberately inherit the core's representation/integrity policy rather than adding a second parser.
 
@@ -38,6 +39,8 @@ Fixed/CDC selective reads authenticate every compressed chunk they touch before 
 
 Sparse selective reads use the same touched-blob policy while leaving holes as semantic zeroes. The committed sparse ABI gate proves locality by corrupting a compressed blob in an untouched extent and requiring a disjoint range to remain readable, then requiring a range that touches the corrupted extent to fail. A complete sparse read additionally verifies the logical whole-file SHA-256 across both stored extents and synthesized holes.
 
+The virtual-ZIP planner operates only on authenticated recipe/blob-length metadata and produces a list of blob slices; it performs no physical I/O itself. When archive dispatch consumes those slices, each touched blob must still flow through the existing physical-framing/codec integrity checks. A complete virtual member will additionally need the recipe's frozen logical SHA-256/CRC boundary enforced before native virtual-ZIP support is described as representation-complete.
+
 Future range-proof or authenticated-chunk designs may allow strong verification of partial reads without touching the whole direct object; revision 24 does not currently provide such proofs.
 
 ## Fixed conformance inputs
@@ -45,6 +48,8 @@ Future range-proof or authenticated-chunk designs may allow strong verification 
 `tests/conformance/v24-direct-codecs.json` supplies builder-independent golden archives for direct RAW, ordinary Zstd and raw Deflate. `tests/conformance/v24-chunk-maps.json` extends that boundary to `S_CHUNKS` and `S_CDC`, deliberately mixing RAW/Zstd/Deflate blobs across known cross-chunk ranges. `tests/conformance/v24-sparse.json` freezes sparse hole/data semantics independently of the encoder. `tests/conformance/v24-zstd-dictionary.json` is the fixed codec-3 acceptance oracle and includes corruption refusal for the authenticated dictionary/member relationship.
 
 `tests/conformance/v24-wavflac.json` freezes codec 2 independently of `cmpct.builder.Builder`. It contains one exact revision-24 archive with a libsndfile-produced FLAC payload plus MessagePack reconstruction metadata, along with archive SHA-256, logical WAV SHA-256 and a known byte-range answer. Python consumes the fixed archive directly. The Rust component gate reconstructs the frozen metadata/payload independently; the archive ABI gate then opens those exact archive bytes through the produced shared library, proves known-range and complete-member parity with the Python oracle, and rejects a physical logical-content SHA corruption before returning bytes.
+
+`tests/conformance/v24-virtual-zip.json` freezes the first `S_VZIP` recipe independently of `cmpct.builder.Builder`. It uses one ZIP_STORED payload so the initial Rust milestone isolates authenticated recipe shape, skeleton/literal accounting and range-local projection without conflating those rules with Deflate-stream regeneration. The Rust integration test consumes the exact fixed archive, rebuilds the nested ZIP to its frozen logical SHA-256, checks both known ranges, proves skeleton/payload/skeleton locality, and requires malformed accounting plus ungated Deflate payloads to fail closed. Independent vectors for revision-24 Deflate stream modes 0/1/2 are still required.
 
 The important property is provenance: fixed bytes are acceptance targets, not regenerated snapshots of the current encoder. A future representation is not considered implemented merely because two implementations agree on bytes emitted during the same test run.
 
@@ -62,15 +67,17 @@ The important property is provenance: fixed bytes are acceptance targets, not re
 8. builder-independent Zstd-dictionary ABI vectors, including dictionary/member corruption refusal;
 9. `cmpct-native info/list/stat/read/range` cross-checked against Python plus CLI-vs-CLI ZIP semantic-parity smoke coverage;
 10. builder-independent WAV/FLAC component reconstruction against `v24-wavflac.json`, including exact SHA/range agreement and malformed metadata rejection;
-11. builder-independent WAV/FLAC archive reads through `cmpct_entry_read_range`, including exact known-range/full-member parity and physical hash corruption refusal.
+11. builder-independent WAV/FLAC archive reads through `cmpct_entry_read_range`, including exact known-range/full-member parity and physical hash corruption refusal;
+12. builder-independent stored-payload virtual-ZIP planner coverage through the Rust integration test, including exact reconstruction/ranges, range locality and malformed/ungated-representation refusal.
 
 ## Next implementation order
 
-1. virtual ZIP reconstruction/range access;
-2. sequential member streams and extraction APIs beyond the bounded whole-member process helper;
-3. full structural-preflight parity and decompression/work budgets;
-4. committed tail/journal recovery and prior-generation fallback;
-5. platform bindings using this API rather than format-specific parsing.
+1. wire the conformance-gated stored-payload virtual-ZIP planner into authenticated archive parsing and `cmpct_entry_read_range`, enforcing complete-member logical identity;
+2. freeze independent revision-24 vectors for virtual-ZIP Deflate stream modes 0/1/2, then implement each mode without weakening range locality or exact reconstruction;
+3. sequential member streams and extraction APIs beyond the bounded whole-member process helper;
+4. full structural-preflight parity and decompression/work budgets;
+5. committed tail/journal recovery and prior-generation fallback;
+6. platform bindings using this API rather than format-specific parsing.
 
 The native CLI should continue to be benchmarked against mature ZIP tools using CLI-vs-CLI/process-start semantics; do not mix its results with in-process library measurements.
 
