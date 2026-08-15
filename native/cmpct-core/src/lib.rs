@@ -1,11 +1,13 @@
 //! Memory-safe read-only CMPCT core.
 //!
 //! The native slice authenticates the primary index, enumerates its logical tree, and can read
-//! bounded byte ranges from direct RAW/Zstd/Deflate/Zstd-dictionary members, revision-24 fixed/CDC chunk maps, and
-//! sparse extents. RAW stays genuinely range-local; compressed direct members decode one bounded
-//! object, while chunked/sparse ranges decode only intersecting stored data. Virtual containers and
-//! transactional recovery remain behind explicit unsupported errors until each representation has its
-//! own conformance gate.
+//! bounded byte ranges from direct RAW/Zstd/WAV-FLAC/Deflate/Zstd-dictionary members, revision-24
+//! fixed/CDC chunk maps, and sparse extents. RAW stays genuinely range-local; compressed direct
+//! members decode one bounded object, while chunked/sparse ranges decode only intersecting stored
+//! data. Virtual containers and transactional recovery remain behind explicit unsupported errors
+//! until each representation has its own conformance gate.
+
+mod wavflac;
 
 use flate2::read::DeflateDecoder;
 use rmpv::Value;
@@ -28,6 +30,7 @@ const HEADER_SIZE: usize = 68;
 const BLOB_HEADER_SIZE: usize = 64;
 const CODEC_RAW: u8 = 0;
 const CODEC_ZSTD: u8 = 1;
+const CODEC_WAV_FLAC: u8 = 2;
 const CODEC_ZSTDDICT: u8 = 3;
 const CODEC_DEFLATE: u8 = 4;
 const STORAGE_BLOB: u64 = 0;
@@ -74,6 +77,8 @@ pub enum CmpctError {
     MemberLength,
     #[error("decoded member SHA-256 does not match its physical blob identity")]
     MemberHash,
+    #[error("WAV-FLAC reconstruction failed: {0}")]
+    WavFlac(#[from] wavflac::WavFlacError),
 }
 
 #[derive(Debug, Clone)]
@@ -288,6 +293,42 @@ impl Archive {
         Ok(decoded)
     }
 
+    fn decode_wav_flac_blob(
+        &self,
+        blob: &Blob,
+        file: &mut File,
+        payload_pos: u64,
+        expected_hash: &[u8; 32],
+    ) -> Result<Vec<u8>, CmpctError> {
+        if blob.usize > MAX_DIRECT_DECODE_BYTES || blob.csize > MAX_DIRECT_DECODE_BYTES {
+            return Err(CmpctError::MemberLimit);
+        }
+        let meta_len = usize::try_from(blob.meta_len).map_err(|_| CmpctError::MemberLimit)?;
+        let compressed_len = usize::try_from(blob.csize).map_err(|_| CmpctError::MemberLimit)?;
+        let meta_pos = payload_pos
+            .checked_sub(blob.meta_len as u64)
+            .ok_or(CmpctError::BlobHeader)?;
+        file.seek(SeekFrom::Start(meta_pos))?;
+        let mut meta = vec![0u8; meta_len];
+        file.read_exact(&mut meta)?;
+        let mut compressed = vec![0u8; compressed_len];
+        file.read_exact(&mut compressed)?;
+
+        // Footnote: codec 2 needs both archive-controlled reconstruction metadata and a FLAC stream.
+        // Read exactly those bounded fields, reconstruct the complete logical WAV, then authenticate
+        // the reconstructed bytes before exposing even a partial range through the platform ABI.
+        let decoded = wavflac::decode_wav_flac(
+            &compressed,
+            &meta,
+            blob.usize,
+            MAX_DIRECT_DECODE_BYTES,
+        )?;
+        if Sha256::digest(&decoded).as_slice() != expected_hash {
+            return Err(CmpctError::MemberHash);
+        }
+        Ok(decoded)
+    }
+
     fn load_dictionary(&self, file: &mut File) -> Result<Vec<u8>, CmpctError> {
         let index = self.dict_blob.ok_or_else(|| {
             CmpctError::Schema("codec 3 member has no authenticated dict_blob".into())
@@ -415,6 +456,12 @@ impl Archive {
             }
             CODEC_ZSTD => {
                 let decoded = self.decode_zstd_blob(blob, file, payload_pos, &expected_hash)?;
+                let start = usize::try_from(start).map_err(|_| CmpctError::Range)?;
+                let end = start.checked_add(out.len()).ok_or(CmpctError::Range)?;
+                out.copy_from_slice(&decoded[start..end]);
+            }
+            CODEC_WAV_FLAC => {
+                let decoded = self.decode_wav_flac_blob(blob, file, payload_pos, &expected_hash)?;
                 let start = usize::try_from(start).map_err(|_| CmpctError::Range)?;
                 let end = start.checked_add(out.len()).ok_or(CmpctError::Range)?;
                 out.copy_from_slice(&decoded[start..end]);
@@ -1061,6 +1108,7 @@ fn error_status(error: &CmpctError) -> CmpctStatus {
     match error {
         CmpctError::Io(_) | CmpctError::Truncated => CmpctStatus::Io,
         CmpctError::IndexLimit | CmpctError::MemberLimit => CmpctStatus::Limit,
+        CmpctError::WavFlac(wavflac::WavFlacError::Limit) => CmpctStatus::Limit,
         CmpctError::Range => CmpctStatus::Range,
         CmpctError::Unsupported => CmpctStatus::Unsupported,
         _ => CmpctStatus::Format,
