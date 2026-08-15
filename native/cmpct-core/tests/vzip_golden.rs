@@ -4,7 +4,7 @@ mod vzip;
 use rmpv::Value;
 use sha2::{Digest, Sha256};
 use std::io::Cursor;
-use vzip::{parse_stored_recipe, ProjectionSegment, VirtualZipError, VirtualZipRecipe};
+use vzip::{parse_stored_recipe, ProjectionSegment, ProjectionSource, VirtualZipError, VirtualZipRecipe};
 
 const HEADER_SIZE: usize = 68;
 const BLOB_HEADER_SIZE: usize = 64;
@@ -36,24 +36,12 @@ fn decode_base64(input: &str) -> Vec<u8> {
     for block in bytes.chunks_exact(4) {
         let a = value(block[0]).expect("base64 digit") as u32;
         let b = value(block[1]).expect("base64 digit") as u32;
-        let c = if block[2] == b'=' {
-            0
-        } else {
-            value(block[2]).expect("base64 digit") as u32
-        };
-        let d = if block[3] == b'=' {
-            0
-        } else {
-            value(block[3]).expect("base64 digit") as u32
-        };
+        let c = if block[2] == b'=' { 0 } else { value(block[2]).expect("base64 digit") as u32 };
+        let d = if block[3] == b'=' { 0 } else { value(block[3]).expect("base64 digit") as u32 };
         let packed = (a << 18) | (b << 12) | (c << 6) | d;
         out.push((packed >> 16) as u8);
-        if block[2] != b'=' {
-            out.push((packed >> 8) as u8);
-        }
-        if block[3] != b'=' {
-            out.push(packed as u8);
-        }
+        if block[2] != b'=' { out.push((packed >> 8) as u8); }
+        if block[3] != b'=' { out.push(packed as u8); }
     }
     out
 }
@@ -133,12 +121,14 @@ fn recipe_from_index(index: &Value) -> VirtualZipRecipe {
 fn execute_plan(recipe: &VirtualZipRecipe, blobs: &[Vec<u8>], start: u64, length: u64) -> Vec<u8> {
     let mut out = vec![0u8; length as usize];
     for ProjectionSegment {
+        source,
         blob_index,
         blob_offset,
         output_offset,
         length,
     } in recipe.plan_range(start, length).expect("range plan")
     {
+        assert_eq!(source, ProjectionSource::LogicalBlob);
         let src_start = blob_offset as usize;
         let src_end = src_start + length as usize;
         let dst_start = output_offset as usize;
@@ -158,6 +148,7 @@ fn fixed_revision24_stored_virtual_zip_projects_exact_bytes() {
     assert_eq!(recipe.skeleton_blob, vector["recipe"]["skeleton_blob"].as_u64().unwrap() as usize);
     assert_eq!(recipe.literal_lengths, vec![39, 77]);
     assert_eq!(recipe.payloads.len(), 1);
+    assert_eq!(recipe.payloads[0].source, ProjectionSource::LogicalBlob);
     assert_eq!(recipe.logical_size, 128);
 
     let rebuilt = execute_plan(&recipe, &blobs, 0, recipe.logical_size);
@@ -180,15 +171,13 @@ fn fixed_revision24_stored_virtual_zip_projects_exact_bytes() {
 fn selective_projection_touches_only_intersecting_recipe_segments() {
     let (_, _, index, _) = fixture();
     let recipe = recipe_from_index(&index);
-
-    // Offset 36 crosses the last three bytes of the first skeleton literal, the complete 12-byte
-    // stored payload, and one byte of the trailing skeleton. A native handler therefore needs three
-    // small blob reads rather than materializing the 128-byte nested ZIP.
     let plan = recipe.plan_range(36, 16).expect("cross-boundary plan");
     assert_eq!(plan.len(), 3);
     assert_eq!(plan[0].blob_index, recipe.skeleton_blob);
+    assert_eq!(plan[0].source, ProjectionSource::LogicalBlob);
     assert_eq!(plan[0].length, 3);
     assert_eq!(plan[1].blob_index, recipe.payloads[0].blob_index);
+    assert_eq!(plan[1].source, ProjectionSource::LogicalBlob);
     assert_eq!(plan[1].length, 12);
     assert_eq!(plan[2].blob_index, recipe.skeleton_blob);
     assert_eq!(plan[2].length, 1);
