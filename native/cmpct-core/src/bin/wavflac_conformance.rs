@@ -18,9 +18,7 @@ fn hex(bytes: &[u8]) -> String {
 fn main() -> ExitCode {
     let args: Vec<String> = env::args().collect();
     if args.len() != 5 {
-        eprintln!(
-            "usage: cmpct-wavflac-conformance META.bin PAYLOAD.flac LOGICAL_SIZE OUTPUT.wav"
-        );
+        eprintln!("usage: cmpct-wavflac-conformance META.bin PAYLOAD.flac LOGICAL_SIZE OUTPUT.wav");
         return ExitCode::from(2);
     }
 
@@ -46,18 +44,14 @@ fn main() -> ExitCode {
         }
     };
 
-    let decoded = match wavflac::decode_wav_flac(
-        &compressed,
-        &meta,
-        logical_size,
-        256 * 1024 * 1024,
-    ) {
-        Ok(bytes) => bytes,
-        Err(error) => {
-            eprintln!("codec-2 reconstruction failed: {error}");
-            return ExitCode::from(1);
-        }
-    };
+    let decoded =
+        match wavflac::decode_wav_flac(&compressed, &meta, logical_size, 256 * 1024 * 1024) {
+            Ok(bytes) => bytes,
+            Err(error) => {
+                eprintln!("codec-2 reconstruction failed: {error}");
+                return ExitCode::from(1);
+            }
+        };
 
     if let Err(error) = fs::write(&args[4], &decoded) {
         eprintln!("cannot write reconstructed WAV: {error}");
