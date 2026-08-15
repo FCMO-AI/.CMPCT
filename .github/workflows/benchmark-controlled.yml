@@ -1,0 +1,155 @@
+name: CMPCT controlled benchmark evidence
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'src/**'
+      - 'native/**'
+      - 'benchmarks/**'
+      - 'tests/**'
+      - '.github/workflows/benchmark-controlled.yml'
+  pull_request:
+    paths:
+      - 'src/**'
+      - 'native/**'
+      - 'benchmarks/**'
+      - 'tests/**'
+      - '.github/workflows/benchmark-controlled.yml'
+  workflow_dispatch:
+    inputs:
+      run_controlled:
+        description: 'Also run the stable self-hosted benchmark machine'
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+jobs:
+  semantic-smoke:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install benchmark dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y zstd xz-utils libsndfile1
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[audio,test]'
+      - name: Correctness before timing
+        run: python -m pytest -q
+      - name: Hosted semantic parity smoke
+        run: |
+          mkdir -p benchmark-artifacts/hosted
+          python benchmarks/native_cli_zip_parity.py \
+            --cmpct-native native/cmpct-core/target/release/cmpct-native \
+            --kind incompressible \
+            --size-mib 1 \
+            --repeats 3 \
+            --output benchmark-artifacts/hosted/native-cli-parity.json || true
+          {
+            echo "classification=hosted-smoke-not-performance-claim"
+            echo "commit=$(git rev-parse HEAD)"
+            echo "runner=${RUNNER_NAME:-unknown}"
+            echo "python=$(python --version 2>&1)"
+            echo "kernel=$(uname -a)"
+            echo "cpu=$(lscpu | sed -n 's/^Model name:[[:space:]]*//p' | head -1)"
+          } > benchmark-artifacts/hosted/environment.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: cmpct-hosted-benchmark-smoke
+          path: benchmark-artifacts/hosted/
+          if-no-files-found: warn
+
+  controlled:
+    if: github.event_name == 'workflow_dispatch' && inputs.run_controlled
+    # Footnote: only a runner deliberately registered with this label may generate controlled CMPCT
+    # benchmark evidence. Shared GitHub hardware is useful for semantic regressions but must never be
+    # promoted into longitudinal performance claims whose CPU/storage/noise characteristics drift.
+    runs-on: [self-hosted, linux, x64, cmpct-benchmark-controlled]
+    timeout-minutes: 120
+    env:
+      PYTHONHASHSEED: '0'
+      CMPCT_PARITY_REPS: '7'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          clean: true
+      - name: Verify controlled runner contract
+        run: |
+          test -f /etc/cmpct-benchmark-runner-id
+          mkdir -p benchmark-artifacts/controlled
+          {
+            echo "classification=controlled-longitudinal-evidence"
+            echo "runner_id=$(cat /etc/cmpct-benchmark-runner-id)"
+            echo "commit=$(git rev-parse HEAD)"
+            echo "kernel=$(uname -a)"
+            echo "cpu_model=$(lscpu | sed -n 's/^Model name:[[:space:]]*//p' | head -1)"
+            echo "cpu_count=$(nproc)"
+            echo "governor=$(cat /sys/devices/system/cpu/cpu0/cpufreq/scaling_governor 2>/dev/null || echo unavailable)"
+            echo "filesystem=$(df -T . | tail -1)"
+            echo "mount=$(findmnt -T . -o SOURCE,FSTYPE,OPTIONS -n)"
+            echo "memory=$(free -b | awk '/^Mem:/ {print $2}')"
+            echo "python=$(python --version 2>&1)"
+            echo "zstd=$(zstd --version | head -1)"
+            echo "xz=$(xz --version | head -1)"
+          } | tee benchmark-artifacts/controlled/environment.txt
+      - name: Reject visibly unstable host state
+        run: |
+          # Footnote: do not create durable benchmark history while the dedicated host is swapping or
+          # under obvious load. This is a coarse admission gate; repeated raw timings remain preserved
+          # so subtler noise is visible rather than averaged away.
+          test "$(awk '/pswpout/ {print $2}' /proc/vmstat)" -ge 0
+          python - <<'PY'
+          import os
+          one, five, fifteen = os.getloadavg()
+          cpus = os.cpu_count() or 1
+          if one > cpus * 0.50 or five > cpus * 0.50:
+              raise SystemExit(f'controlled runner is too busy: load={one:.2f}/{five:.2f} cpus={cpus}')
+          PY
+      - name: Install exact project environment
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[audio,test]'
+      - name: Correctness gate
+        run: python -m pytest -q
+      - name: Build native release core
+        run: cargo build --manifest-path native/cmpct-core/Cargo.toml --release
+      - name: Run universal four-format benchmark
+        run: |
+          python benchmarks/universal_bench.py > benchmark-artifacts/controlled/universal.stdout.txt
+          cp benchmarks/_work/out/results.json benchmark-artifacts/controlled/universal.json
+      - name: Run fair ZIP parity benchmark
+        run: |
+          python benchmarks/zip_parity_bench.py > benchmark-artifacts/controlled/zip-parity.stdout.txt
+          cp benchmarks/_parity_work/out/zip-parity.json benchmark-artifacts/controlled/zip-parity.json
+      - name: Native process-boundary parity
+        run: |
+          python benchmarks/native_cli_zip_parity.py \
+            --cmpct-native native/cmpct-core/target/release/cmpct-native \
+            --kind incompressible \
+            --size-mib 16 \
+            --repeats 9 \
+            --output benchmark-artifacts/controlled/native-cli-parity.json
+      - name: Record artifact checksums
+        run: |
+          sha256sum benchmark-artifacts/controlled/* > benchmark-artifacts/controlled/SHA256SUMS
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cmpct-controlled-benchmark-${{ github.sha }}
+          path: benchmark-artifacts/controlled/
+          if-no-files-found: error
+          retention-days: 90
+
+# Footnote: this workflow deliberately separates correctness/semantic smoke from performance evidence.
+# A benchmark number becomes longitudinal evidence only on the named self-hosted runner contract, with
+# the exact commit, machine identity, CPU/filesystem state, tool versions, raw results and checksums
+# retained together. It never rewrites historical measurements to make a regression disappear.
