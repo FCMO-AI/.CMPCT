@@ -7,13 +7,14 @@
 //! and safe extraction so platform shells do not grow independent parsers.
 //!
 //! Footnote: revision 24 deliberately keeps the encoder and reader contracts separate. Native recovery
-//! follows committed generation footers rather than replaying encoder heuristics; virtual ZIP mode 0
-//! authenticates its exact physical RFC-1951 stream, while mode 2 verifies the complete reconstructed
-//! virtual member before exposing a selective slice because revision 24 stores no independent mode-2
-//! stream digest.
+//! follows committed generation footers rather than replaying encoder heuristics. Virtual ZIP modes 0
+//! and 2 have no universally required independent stream digest in the on-disk grammar, so selective
+//! reads of those modes authenticate a complete bounded virtual member before returning a slice. This
+//! trades some locality for exactness rather than returning an equivalent-but-byte-different ZIP.
 
 mod deflate_physical;
 mod deflate_regen;
+mod msgpack_guard;
 mod recovery;
 mod vzip;
 mod vzip_dispatch;
@@ -28,7 +29,7 @@ use std::ffi::CStr;
 use std::fs::{self, File};
 use std::io::{Cursor, Read, Seek, SeekFrom, Write};
 use std::os::raw::{c_char, c_int};
-use std::path::{Component, Path, PathBuf};
+use std::path::{Component, Path};
 use std::ptr;
 use std::sync::Mutex;
 use thiserror::Error;
@@ -59,13 +60,17 @@ const KIND_DIR: u8 = 1;
 const KIND_SYMLINK: u8 = 2;
 const KIND_HARDLINK: u8 = 3;
 const MAX_INDEX_BYTES: u64 = 256 * 1024 * 1024;
+const MAX_BLOB_BYTES: u64 = 1024 * 1024 * 1024;
 const MAX_DIRECT_DECODE_BYTES: u64 = 256 * 1024 * 1024;
 const MAX_RANGE_OUTPUT_BYTES: u64 = 64 * 1024 * 1024;
 const MAX_READ_WORK_BYTES: u64 = 512 * 1024 * 1024;
 const MAX_FILES: usize = 4_000_000;
 const MAX_BLOBS: usize = 4_000_000;
+const MAX_RECIPES: usize = 1_000_000;
 const MAX_PATH_BYTES: usize = 1024 * 1024;
 const MAX_GENERATIONS: usize = 4096;
+const MAX_MSGPACK_DEPTH: usize = 1024;
+const MAX_MSGPACK_NODES: u64 = 16_000_000;
 const STREAM_CHUNK_BYTES: usize = 8 * 1024 * 1024;
 const MAX_SYMLINK_TARGET_BYTES: u64 = 1024 * 1024;
 
@@ -175,6 +180,24 @@ pub struct Archive {
     file: Mutex<File>,
 }
 
+fn guard_index_messagepack(bytes: &[u8]) -> Result<(), CmpctError> {
+    msgpack_guard::validate(
+        bytes,
+        msgpack_guard::GuardLimits {
+            max_string_bytes: MAX_PATH_BYTES as u64,
+            max_binary_bytes: MAX_INDEX_BYTES,
+            max_array_items: MAX_FILES.max(MAX_BLOBS).max(MAX_RECIPES) as u64,
+            max_map_items: MAX_FILES.max(MAX_BLOBS).max(MAX_RECIPES) as u64,
+            max_depth: MAX_MSGPACK_DEPTH,
+            max_nodes: MAX_MSGPACK_NODES,
+        },
+    )
+    .map_err(|error| match error {
+        msgpack_guard::GuardError::Limit => CmpctError::IndexLimit,
+        _ => CmpctError::Schema(format!("MessagePack declaration guard: {error}")),
+    })
+}
+
 impl Archive {
     /// Open the newest valid committed revision-24 generation.
     ///
@@ -197,6 +220,11 @@ impl Archive {
         if revision != VERSION {
             return Err(CmpctError::Revision(revision));
         }
+        if header[10] != 0 || header[11] != 0 {
+            return Err(CmpctError::Schema(
+                "revision-24 header uses unsupported flags".into(),
+            ));
+        }
 
         let compressed_len = le_u64(&header[12..20]);
         let uncompressed_len = le_u64(&header[20..28]);
@@ -207,7 +235,10 @@ impl Archive {
         let data_base = (HEADER_SIZE as u64)
             .checked_add(compressed_len)
             .ok_or(CmpctError::IndexLimit)?;
-        if data_base > file_len {
+        let base_data_end = data_base
+            .checked_add(base_data_span)
+            .ok_or(CmpctError::IndexLimit)?;
+        if data_base > file_len || base_data_end > file_len {
             return Err(CmpctError::Truncated);
         }
 
@@ -226,12 +257,6 @@ impl Archive {
             }
             (recovered.index, recovered.committed_data_end)
         } else {
-            let data_end = data_base
-                .checked_add(base_data_span)
-                .ok_or(CmpctError::IndexLimit)?;
-            if data_end > file_len {
-                return Err(CmpctError::Truncated);
-            }
             file.seek(SeekFrom::Start(HEADER_SIZE as u64))?;
             let compressed_len_usize =
                 usize::try_from(compressed_len).map_err(|_| CmpctError::IndexLimit)?;
@@ -249,6 +274,7 @@ impl Archive {
             if Sha256::digest(&index_bytes).as_slice() != &header[36..68] {
                 return Err(CmpctError::IndexHash);
             }
+            guard_index_messagepack(&index_bytes)?;
             let mut cursor = Cursor::new(index_bytes.as_slice());
             let index = rmpv::decode::read_value(&mut cursor)
                 .map_err(|error| CmpctError::MessagePack(error.to_string()))?;
@@ -257,13 +283,14 @@ impl Archive {
                     "trailing bytes after root index object".into(),
                 ));
             }
-            (index, data_end)
+            (index, base_data_end)
         };
 
         let span = data_end
             .checked_sub(data_base)
             .ok_or_else(|| CmpctError::Schema("negative committed data span".into()))?;
         let blobs = parse_blobs(&index, span)?;
+        validate_recipes(&index, &blobs)?;
         let dict_blob = parse_dictionary_blob(&index, &blobs)?;
         let entries = parse_entries(&index, &blobs)?;
         validate_fsmeta(&index, entries.len())?;
@@ -312,11 +339,15 @@ impl Archive {
         let mut header = [0u8; BLOB_HEADER_SIZE];
         file.read_exact(&mut header)?;
         let physical_codec = header[4];
+        let physical_flags = header[5];
+        let physical_reserved = u16::from_le_bytes([header[6], header[7]]);
         let physical_usize = le_u64(&header[8..16]);
         let physical_csize = le_u64(&header[16..24]);
         let physical_meta_len = le_u32(&header[24..28]);
         if &header[0..4] != BLOB_MAGIC
             || physical_codec != blob.codec
+            || physical_flags != 0
+            || physical_reserved != 0
             || physical_usize != blob.usize
             || physical_csize != blob.csize
             || physical_meta_len != blob.meta_len
@@ -613,18 +644,14 @@ impl Archive {
         let mut compressed = vec![0u8; compressed_len];
         file.read_exact(&mut compressed)?;
 
-        // Footnote: canonical reused Deflate metadata records the exact stream SHA-256. Requiring that
-        // digest here is stronger than merely checking that a mutated equivalent stream decompresses
-        // to the same bytes, which matters because virtual ZIP promises byte-for-byte reconstruction.
-        let exact_hash = self
-            .exact_deflate_stream_hash(blob, file, payload_pos)?
-            .ok_or_else(|| {
-                CmpctError::Schema(
-                    "virtual-ZIP mode 0 requires an authenticated exact Deflate stream hash".into(),
-                )
-            })?;
-        if Sha256::digest(&compressed).as_slice() != exact_hash {
-            return Err(CmpctError::MemberHash);
+        // Some revision-24 encoders record the exact RFC-1951 stream SHA-256 as codec metadata. Use
+        // that stronger proof when present, but do not require it: the independent canonical mode-0
+        // oracle intentionally has meta_len=0. The surrounding virtual-member SHA authenticates exact
+        // stream bytes for complete reads and for the full-verify selective path below.
+        if let Some(exact_hash) = self.exact_deflate_stream_hash(blob, file, payload_pos)? {
+            if Sha256::digest(&compressed).as_slice() != exact_hash {
+                return Err(CmpctError::MemberHash);
+            }
         }
 
         deflate_physical::authenticated_range(
@@ -817,14 +844,15 @@ impl Archive {
         let request_end = start
             .checked_add(out.len() as u64)
             .ok_or(CmpctError::Range)?;
-        let has_regenerated = recipe.payloads.iter().any(|payload| {
+        let needs_complete_identity = recipe.payloads.iter().any(|payload| {
             matches!(
                 payload.source,
-                vzip::ProjectionSource::RegeneratedDeflate { .. }
+                vzip::ProjectionSource::PhysicalDeflate { .. }
+                    | vzip::ProjectionSource::RegeneratedDeflate { .. }
             )
         });
 
-        if has_regenerated && (start != 0 || request_end != recipe.logical_size) {
+        if needs_complete_identity && (start != 0 || request_end != recipe.logical_size) {
             if recipe.logical_size > MAX_DIRECT_DECODE_BYTES {
                 return Err(CmpctError::MemberLimit);
             }
@@ -880,7 +908,7 @@ impl Archive {
         match storage {
             Storage::Unsupported => Err(CmpctError::Unsupported),
             Storage::Direct(index) => self.blob_work(*index, length, false),
-            Storage::Pack { index, .. } => self.blob_work(*index, length, false),
+            Storage::Pack { index, .. } => self.blob_work(*index, length, true),
             Storage::Fixed(chunks) | Storage::Cdc(chunks) => self.chunked_work(chunks, start, length),
             Storage::Sparse(extents) => {
                 let request_end = start.checked_add(length).ok_or(CmpctError::Range)?;
@@ -914,19 +942,20 @@ impl Archive {
                     vzip::VirtualZipError::UnsupportedPayload => CmpctError::Unsupported,
                     vzip::VirtualZipError::Schema(message) => CmpctError::Schema(message),
                 })?;
-                let mut work = 0u64;
-                let partial_mode2 = recipe.payloads.iter().any(|payload| {
+                let partial_exact_stream = recipe.payloads.iter().any(|payload| {
                     matches!(
                         payload.source,
-                        vzip::ProjectionSource::RegeneratedDeflate { .. }
+                        vzip::ProjectionSource::PhysicalDeflate { .. }
+                            | vzip::ProjectionSource::RegeneratedDeflate { .. }
                     )
                 }) && (start != 0 || length != recipe.logical_size);
-                if partial_mode2 {
+                if partial_exact_stream {
                     return recipe
                         .logical_size
                         .checked_mul(2)
                         .ok_or(CmpctError::MemberLimit);
                 }
+                let mut work = 0u64;
                 for segment in segments {
                     let cost = match segment.source {
                         vzip::ProjectionSource::LogicalBlob => {
@@ -945,10 +974,14 @@ impl Archive {
                                 .checked_add(blob.csize)
                                 .ok_or(CmpctError::MemberLimit)?
                         }
-                        vzip::ProjectionSource::RegeneratedDeflate { expected_len, .. } => self
-                            .blob_work(segment.blob_index, self.blobs[segment.blob_index].usize, true)?
-                            .checked_add(expected_len)
-                            .ok_or(CmpctError::MemberLimit)?,
+                        vzip::ProjectionSource::RegeneratedDeflate { expected_len, .. } => {
+                            let blob = self.blobs.get(segment.blob_index).ok_or_else(|| {
+                                CmpctError::Schema("virtual ZIP references missing blob".into())
+                            })?;
+                            self.blob_work(segment.blob_index, blob.usize, true)?
+                                .checked_add(expected_len)
+                                .ok_or(CmpctError::MemberLimit)?
+                        }
                     };
                     work = work.checked_add(cost).ok_or(CmpctError::MemberLimit)?;
                 }
@@ -1053,8 +1086,21 @@ impl Archive {
                 if *length != entry.size {
                     return Err(CmpctError::BlobHeader);
                 }
-                let blob_start = offset.checked_add(start).ok_or(CmpctError::Range)?;
-                self.read_blob_range(*index, blob_start, out, &mut file)?;
+                // Footnote: packed file rows normally omit an independent file SHA. Authenticate the
+                // complete shared pack blob—even when it is RAW—then expose only this member's bounded
+                // slice. A corrupted sibling can therefore never cross the public ABI as trusted pack
+                // content merely because the requested slice itself happened to look plausible.
+                let decoded = self.read_blob_complete_authenticated(*index, &mut file)?;
+                let source_start_u64 = offset.checked_add(start).ok_or(CmpctError::Range)?;
+                let source_start =
+                    usize::try_from(source_start_u64).map_err(|_| CmpctError::Range)?;
+                let source_end = source_start
+                    .checked_add(out.len())
+                    .ok_or(CmpctError::Range)?;
+                if source_end > decoded.len() {
+                    return Err(CmpctError::Range);
+                }
+                out.copy_from_slice(&decoded[source_start..source_end]);
                 if start == 0 && end == entry.size {
                     if let Some(expected) = entry.logical_hash {
                         if Sha256::digest(&*out).as_slice() != expected {
@@ -1249,8 +1295,10 @@ fn parse_blobs(index: &Value, data_span: u64) -> Result<Vec<Blob>, CmpctError> {
         let row = value
             .as_array()
             .ok_or_else(|| CmpctError::Schema(format!("blob row {index} is not an array")))?;
-        if row.len() < 5 {
-            return Err(CmpctError::Schema(format!("blob row {index} is too short")));
+        if row.len() != 5 {
+            return Err(CmpctError::Schema(format!(
+                "blob row {index} must contain five fields"
+            )));
         }
         let offset = row[0]
             .as_u64()
@@ -1261,6 +1309,9 @@ fn parse_blobs(index: &Value, data_span: u64) -> Result<Vec<Blob>, CmpctError> {
         let csize = row[2].as_u64().ok_or_else(|| {
             CmpctError::Schema(format!("blob row {index} has invalid compressed size"))
         })?;
+        if usize > MAX_BLOB_BYTES || csize > MAX_BLOB_BYTES {
+            return Err(CmpctError::MemberLimit);
+        }
         let codec = row[3]
             .as_u64()
             .filter(|value| *value <= CODEC_DEFLATE as u64)
@@ -1268,7 +1319,7 @@ fn parse_blobs(index: &Value, data_span: u64) -> Result<Vec<Blob>, CmpctError> {
             as u8;
         let meta_len = row[4]
             .as_u64()
-            .filter(|value| *value <= u32::MAX as u64)
+            .filter(|value| *value <= u32::MAX as u64 && *value <= MAX_INDEX_BYTES)
             .ok_or_else(|| {
                 CmpctError::Schema(format!("blob row {index} has invalid metadata length"))
             })? as u32;
@@ -1303,6 +1354,34 @@ fn parse_blobs(index: &Value, data_span: u64) -> Result<Vec<Blob>, CmpctError> {
     Ok(blobs)
 }
 
+fn validate_recipes(index: &Value, blobs: &[Blob]) -> Result<(), CmpctError> {
+    let recipes = map_field(index, "recipes")?
+        .as_array()
+        .ok_or_else(|| CmpctError::Schema("recipes is not an array".into()))?;
+    if recipes.len() > MAX_RECIPES {
+        return Err(CmpctError::IndexLimit);
+    }
+    let blob_sizes: Vec<u64> = blobs.iter().map(|blob| blob.usize).collect();
+    for (recipe_index, recipe) in recipes.iter().enumerate() {
+        let row = recipe.as_array().ok_or_else(|| {
+            CmpctError::Schema(format!("recipe {recipe_index} is not an array"))
+        })?;
+        let logical_size = row.get(4).and_then(Value::as_u64).ok_or_else(|| {
+            CmpctError::Schema(format!("recipe {recipe_index} has invalid logical size"))
+        })?;
+        vzip::parse_recipe(recipe, &blob_sizes, logical_size).map_err(|error| match error {
+            vzip::VirtualZipError::UnsupportedPayload => CmpctError::Unsupported,
+            vzip::VirtualZipError::Schema(message) => {
+                CmpctError::Schema(format!("recipe {recipe_index}: {message}"))
+            }
+            vzip::VirtualZipError::Range => {
+                CmpctError::Schema(format!("recipe {recipe_index} has invalid range accounting"))
+            }
+        })?;
+    }
+    Ok(())
+}
+
 fn parse_dictionary_blob(index: &Value, blobs: &[Blob]) -> Result<Option<usize>, CmpctError> {
     let map = index
         .as_map()
@@ -1326,6 +1405,7 @@ fn parse_dictionary_blob(index: &Value, blobs: &[Blob]) -> Result<Option<usize>,
 fn parse_hash(value: &Value, row_index: usize) -> Result<Option<[u8; 32]>, CmpctError> {
     match value {
         Value::Nil => Ok(None),
+        Value::Binary(bytes) if bytes.is_empty() => Ok(None),
         Value::Binary(bytes) => {
             if bytes.len() != 32 {
                 return Err(CmpctError::Schema(format!(
@@ -1363,9 +1443,9 @@ fn parse_virtual_zip_storage(
     blobs: &[Blob],
     row_index: usize,
 ) -> Result<Storage, CmpctError> {
-    if storage.len() < 2 {
+    if storage.len() != 2 {
         return Err(CmpctError::Schema(format!(
-            "file row {row_index} virtual-ZIP storage is too short"
+            "file row {row_index} virtual-ZIP storage must contain two fields"
         )));
     }
     let recipe_index = storage[1].as_u64().ok_or_else(|| {
@@ -1429,9 +1509,9 @@ fn parse_storage(
     };
     match kind {
         STORAGE_BLOB => {
-            if storage.len() < 2 {
+            if storage.len() != 2 {
                 return Err(CmpctError::Schema(format!(
-                    "file row {row_index} direct storage is too short"
+                    "file row {row_index} direct storage must contain two fields"
                 )));
             }
             let index = storage_blob_index(
@@ -1447,9 +1527,9 @@ fn parse_storage(
             Ok(Storage::Direct(index))
         }
         STORAGE_CHUNKS => {
-            if storage.len() < 2 {
+            if storage.len() != 2 {
                 return Err(CmpctError::Schema(format!(
-                    "file row {row_index} fixed chunk storage is too short"
+                    "file row {row_index} fixed chunk storage must contain two fields"
                 )));
             }
             let ids = storage[1].as_array().ok_or_else(|| {
@@ -1483,9 +1563,9 @@ fn parse_storage(
         }
         STORAGE_VZIP => parse_virtual_zip_storage(index, storage, logical_size, blobs, row_index),
         STORAGE_SPARSE => {
-            if storage.len() < 2 {
+            if storage.len() != 2 {
                 return Err(CmpctError::Schema(format!(
-                    "file row {row_index} sparse storage is too short"
+                    "file row {row_index} sparse storage must contain two fields"
                 )));
             }
             let rows = storage[1].as_array().ok_or_else(|| {
@@ -1608,9 +1688,9 @@ fn parse_storage(
             })
         }
         STORAGE_CDC => {
-            if storage.len() < 2 {
+            if storage.len() != 2 {
                 return Err(CmpctError::Schema(format!(
-                    "file row {row_index} CDC storage is too short"
+                    "file row {row_index} CDC storage must contain two fields"
                 )));
             }
             let rows = storage[1].as_array().ok_or_else(|| {
@@ -1629,12 +1709,12 @@ fn parse_storage(
                         "file row {row_index} CDC chunk {chunk_index} is not an array"
                     ))
                 })?;
-                if pair.len() < 2 {
+                if pair.len() != 2 {
                     return Err(CmpctError::Schema(format!(
-                        "file row {row_index} CDC chunk {chunk_index} is too short"
+                        "file row {row_index} CDC chunk {chunk_index} has invalid shape"
                     )));
                 }
-                let logical_len = pair[0].as_u64().ok_or_else(|| {
+                let logical_len = pair[0].as_u64().filter(|value| *value > 0).ok_or_else(|| {
                     CmpctError::Schema(format!(
                         "file row {row_index} CDC chunk {chunk_index} has invalid length"
                     ))
@@ -1689,8 +1769,10 @@ fn parse_entries(index: &Value, blobs: &[Blob]) -> Result<Vec<Entry>, CmpctError
         let row = value
             .as_array()
             .ok_or_else(|| CmpctError::Schema(format!("file row {row_index} is not an array")))?;
-        if row.len() < 7 {
-            return Err(CmpctError::Schema(format!("file row {row_index} is too short")));
+        if row.len() != 7 {
+            return Err(CmpctError::Schema(format!(
+                "file row {row_index} must contain seven fields"
+            )));
         }
         let path = row[0]
             .as_str()
@@ -1719,7 +1801,7 @@ fn parse_entries(index: &Value, blobs: &[Blob]) -> Result<Vec<Entry>, CmpctError
         let storage = if kind == KIND_HARDLINK {
             parse_hardlink_storage(&row[6], row_index)?
         } else if kind == KIND_DIR {
-            if !matches!(row[6], Value::Nil) {
+            if !matches!(&row[6], Value::Nil) {
                 return Err(CmpctError::Schema(format!(
                     "directory row {row_index} must not carry storage"
                 )));
@@ -1729,6 +1811,11 @@ fn parse_entries(index: &Value, blobs: &[Blob]) -> Result<Vec<Entry>, CmpctError
             parse_storage(index, &row[6], size, blobs, row_index)?
         };
 
+        if kind == KIND_SYMLINK && !matches!(&storage, Storage::Direct(_)) {
+            return Err(CmpctError::Schema(format!(
+                "symlink row {row_index} must use direct blob storage"
+            )));
+        }
         if matches!(storage, Storage::Fixed(_) | Storage::Sparse(_) | Storage::Cdc(_))
             && logical_hash.is_none()
         {
@@ -1901,7 +1988,7 @@ fn validate_fsmeta(index: &Value, file_count: usize) -> Result<(), CmpctError> {
                     .as_array()
                     .filter(|pair| pair.len() == 2)
                     .ok_or_else(|| CmpctError::Schema("xattr pair has invalid shape".into()))?;
-                if pair[0].as_str().is_none() || !matches!(pair[1], Value::Binary(_)) {
+                if pair[0].as_str().is_none() || !matches!(&pair[1], Value::Binary(_)) {
                     return Err(CmpctError::Schema("xattr name/value has invalid type".into()));
                 }
             }
