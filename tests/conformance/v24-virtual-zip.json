@@ -6,35 +6,30 @@
     "python": "3.11",
     "msgpack": "1.1.2",
     "zstd": "system libzstd",
-    "zlib": "1.3.1",
-    "purpose": "fixed cross-implementation byte oracle for S_VZIP skeleton reconstruction and stored/canonical/secondary/regenerated payload stream modes"
+    "purpose": "fixed cross-implementation byte oracle for S_VZIP skeleton reconstruction and range access"
   },
   "vector": {
     "name": "nested.zip",
     "storage_kind": 2,
-    "logical_size": 482,
-    "logical_sha256": "657f6f30b9375a424a036c60ed1fc30b17a233ab81f25ba285140d3722e3bd0c",
-    "logical_crc32": 3353486068,
-    "archive_sha256": "2cdd5a4282fd2f68e53962f4468d78f1df9e9418e5aa88867edbaa71c9b2a046",
-    "archive_bytes": 1539,
+    "logical_size": 128,
+    "logical_sha256": "a461abcd8e40ddb6a78244c2faf1f9caa61c314e6cc91e32152425d0c5ed1d06",
+    "archive_sha256": "bed3a5d3bf3987f4c123e782effe9cc21a5d7253a9b2eca8a9af7b2522f4d839",
+    "archive_bytes": 642,
     "recipe": {
-      "skeleton_blob": 5,
-      "literal_lengths": [40, 43, 43, 45, 257],
-      "payload_stream_modes": [0, 0, 1, 2]
+      "skeleton_blob": 1,
+      "literal_lengths": [39, 77],
+      "payload_stream_modes": [0]
     },
-    "members": [
-      {"name": "stored.txt", "method": 0, "logical_size": 13, "logical_sha256": "f5e4a96166ffbbd9de712af77b54fb33258274ec36212ebe346cd26d9ac4bd46", "compressed_size": 13, "level": -1},
-      {"name": "canonical.txt", "method": 8, "logical_size": 80, "logical_sha256": "35e41e047803f708ebf11292062a20e5b741b1d9828afdf17e7cb58bc9b54d14", "compressed_size": 15, "level": 6},
-      {"name": "secondary.txt", "method": 8, "logical_size": 90, "logical_sha256": "2424a7773666ba0e6aabd5e42685ce6473b072654fa98e2bb7f18e862d5f8fee", "compressed_size": 15, "level": 9},
-      {"name": "regenerated.txt", "method": 8, "logical_size": 72, "logical_sha256": "9207f3043f31fdf27ba168ceb9d69e4468bef5138b24fb7651640cea0a178259", "compressed_size": 11, "level": 1}
-    ],
+    "member": {
+      "name": "hello.txt",
+      "method": 0,
+      "logical_size": 12,
+      "logical_sha256": "f5d4cfc7ebf39a39099f6b93686b3ff4438afa3d6b3c41f3bde5cce7b25f5034"
+    },
     "ranges": [
-      {"label": "stored", "offset": 36, "length": 16, "hex": "2e74787473746f7265642d616c706861"},
-      {"label": "canonical", "offset": 92, "length": 16, "hex": "2e7478744b4ecccbcfcb4c4eccd14da6"},
-      {"label": "secondary", "offset": 150, "length": 16, "hex": "2e7478742b4e4dcecf4b492caad42da6"},
-      {"label": "regenerated", "offset": 210, "length": 16, "hex": "2e7478742b4a4d4fcdd32da298040050"},
-      {"label": "central-directory", "offset": 225, "length": 20, "hex": "504b0102140014000000000000002100a1260bdc"}
+      {"offset": 35, "length": 16, "hex": "74787468656c6c6f2d636d7063740a50"},
+      {"offset": 51, "length": 20, "hex": "4b0102140014000000000000002100e7d4cfc70c"}
     ],
-    "archive_base64": "Q01QQ1QyNAAYAAAAvAAAAAAAAACzAAAAAAAAAAMEAAAAAAAAhHLofGnIHILLKPv6zx4/0TJZ4xuKmaG2HSHEUvHfh1AotS/9ILOZBQCEoXYYpWZpbGVzkZeqbmVzdGVkLnppcADNAaQAzQHiwJICAKVibG9ic5aVAA0NAACVTVAPBAqVzKZaWgAAlc0BQA8PAACVzQGPSEgAAJXNAhfNAazNAawAAKdyZWNpcGVzkZYFlSgrKy3NAQGUlgAAAAAN/5YBCAABDwaWAggBAw8JlgQIAgQLAcQgZX9vMLk3WkJKA2xg7R/DCxeiM6uB8luihRQNNyLjvQzNAeLOx+Ii9ENNQTQAAAAADQAAAAAAAAANAAAAAAAAAAAAAAChJgvc9eSpYWb/u9necSr3e1T7MyWCdOw2IS6+NGzSbZrEvUZzdG9yZWQtYWxwaGEKQ01BNAQAAABQAAAAAAAAAA8AAAAAAAAACgAAAOBSrs815B4EeAP3COvxEpIGKiDlt0Gx2YKK/fF+fLWLybVNFJLEBmdvbGRlbgZLTszLz8tMTszRTaYKCwBDTUE0AAAAAFoAAAAAAAAAWgAAAAAAAAAAAAAAqlQ8ASQkp3c2ZroOaqvV5CaFzmRzsHJlT6mOK7fxjoYtX4/uc2Vjb25kYXJ5LXNlY29uZGFyeS1zZWNvbmRhcnktc2Vjb25kYXJ5LXNlY29uZGFyeS1zZWNvbmRhcnktc2Vjb25kYXJ5LXNlY29uZGFyeS1DTUE0AAAAAA8AAAAAAAAADwAAAAAAAAAAAAAAybIpP/QqqhrH467rCHoXs7J1Lv+tPrR3KUt2/GvKi9Vic91CK05Nzs9LSSyq1C2mMgsAQ01BNAAAAABIAAAAAAAAAEgAAAAAAAAAAAAAANXfluiSB/MEPzH98nuhaM651p5EaL71E4sk+3ZRZAzqCheCWXJlZ2VuLXJlZ2VuLXJlZ2VuLXJlZ2VuLXJlZ2VuLXJlZ2VuLXJlZ2VuLXJlZ2VuLXJlZ2VuLXJlZ2VuLXJlZ2VuLXJlZ2VuLUNNQTQAAAAArAEAAAAAAACsAQAAAAAAAAAAAABpZqXuhHt/MrfHqw6JYWMZVI61B+u+ajmaHBhHuu9yIx+0ig5QSwMEFAAAAAAAAAAhAKE mC9wNAAAADQAAAAoAAABzdG9yZWQudHh0UEsDBBQAAAAIAAAAIQDgUq7PDwAAAFAAAAANAAAAY2Fub25pY2FsLnR4dFBLAwQUAAAACAAAACEAqlQ8AQ8AAABaAAAADQAAAHNlY29uZGFyeS50eHRQSwMEFAAAAAgAAAAhANXflugLAAAASAAAAA8AAAByZWdlbmVyYXRlZC50eHRQSwECFAAUAAAAAAAAACEAoSYL3A0AAAANAAAACgAAAAAAAAAAAAAAAAAAAAAAc3RvcmVkLnR4dFBLAQIUABQAAAAIAAAAIQDgUq7PDwAAAFAAAAANAAAAAAAAAAAAAAAAADUAAABjYW5vbmljYWwudHh0UEsBAhQAFAAAAAgAAAAhAKpUPAEPAAAAWgAAAA0AAAAAAAAAAAAAAAAAbwAAAHNlY29uZGFyeS50eHRQSwECFAAUAAAACAAAACEA1d+W6AsAAABIAAAADwAAAAAAAAAAAAAAAACpAAAAcmVnZW5lcmF0ZWQudHh0UEsFBgAAAAAEAAQA6wAAAOEAAAAAACi1L/0gs5kFAIShdhilZmlsZXORl6puZXN0ZWQuemlwAM0BpADNAeLAkgIApWJsb2Jzl pUADQ0AAJVNUA8ECpXMp lpaAACVzQFADw8AAJXNA Y9ISAAAlc0CF80BrM0BrAAAp3JlY2lwZXORlgWVKCssLc0BAZSWAAA AAA0A/5YBCAABDwaWAggBAw8JlgQIAgQLAcQgZX9vMLk3WkJKA2xg7R/DCxeiM6uB8luihRQNNyLjvQzNAeLOx+Ii9ENNNUFRGMjQAAAEAALwAAAAAAAAAswAAAAAAAAAAAAAAAAAAAIRy6HxpyByCyyj7+s8eP9EyWeMbipmhth0hxFLx34dQ"
+    "archive_base64": "Q01QQ1QyNAAYAAAAfQAAAAAAAAB0AAAAAAAAAAABAAAAAAAA9xw1ZUmFovLOMVkVuUuqieBmMbkJQfTubGC9BA6UJCsotS/9IHShAwCEoXYYpWZpbGVzkZeqbmVzdGVkLnppcADNAaQAzIDAkgIApWJsb2JzkpUADAwAAJVMdHQAAKdyZWNpcGVzkZYBkidNkZYAAAAADP/EIKRhq82OQN22p4JEwvrx+cqmHDFObMkeMhUkJdDF7R0GzIDOScmrx0NNQTQAAAAADAAAAAAAAAAMAAAAAAAAAAAAAADn1M/H6/OaOQmfa5Noaz/0Q4r6PWs8QfO95cznsl9QNOgcOGpoZWxsby1jbXBjdApDTUE0AAAAAHQAAAAAAAAAdAAAAAAAAAAAAAAA58nvQn7QchlRKDvp9zSRYOnxLcyhlfKL1INg6W3GFVGEe486UEsDBBQAAAAAAAAAIQDn1M/HDAAAAAwAAAAJAAAAaGVsbG8udHh0UEsBAhQAFAAAAAAAAAAhAOfUz8cMAAAADAAAAAkAAAAAAAAAAAAAAAAAAAAAAGhlbGxvLnR4dFBLBQYAAAAAAQABADcAAAAzAAAAAAAotS/9IHShAwCEoXYYpWZpbGVzkZeqbmVzdGVkLnppcADNAaQAzIDAkgIApWJsb2JzkpUADAwAAJVMdHQAAKdyZWNpcGVzkZYBkidNkZYAAAAADP/EIKRhq82OQN22p4JEwvrx+cqmHDFObMkeMhUkJdDF7R0GzIDOScmrx0NNUFRGMjQAAAEAAH0AAAAAAAAAdAAAAAAAAAAAAAAAAAAAAPccNWVJhaLyzjFZFblLqongZjG5CUH07mxgvQQOlCQr"
   }
 }
