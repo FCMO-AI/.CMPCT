@@ -169,3 +169,5 @@ jobs:
         run: python tests/native_wavflac_component.py
       - name: Committed WAV-FLAC archive ABI gate
         run: python tests/native_wavflac_abi.py
+      - name: Committed virtual-ZIP archive ABI gate
+        run: python tests/native_virtual_zip_abi.py
