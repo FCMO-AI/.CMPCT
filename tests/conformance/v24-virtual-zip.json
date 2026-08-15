@@ -24,7 +24,7 @@
       "name": "hello.txt",
       "method": 0,
       "logical_size": 12,
-      "logical_sha256": "f5d4cfc7ebf39a39099f6b93686b3ff4438afa3d6b3c41f3bde5cce7b25f5034"
+      "logical_sha256": "ebf39a39099f6b93686b3ff4438afa3d6b3c41f3bde5cce7b25f5034e81c386a"
     },
     "ranges": [
       {"offset": 35, "length": 16, "hex": "74787468656c6c6f2d636d7063740a50"},
