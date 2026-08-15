@@ -7,34 +7,34 @@
     "msgpack": "1.1.2",
     "zstd": "system libzstd",
     "zlib": "1.3.1",
-    "purpose": "fixed cross-implementation byte oracle for S_VZIP skeleton reconstruction, stored payloads, canonical Deflate stream reuse, retained secondary Deflate streams, and deterministic zlib regeneration"
+    "purpose": "fixed cross-implementation byte oracle for S_VZIP skeleton reconstruction and stored/canonical/secondary/regenerated payload stream modes"
   },
   "vector": {
     "name": "nested.zip",
     "storage_kind": 2,
-    "logical_size": 666,
-    "logical_sha256": "4c4cdcbb43fbe1a97204ac8acd187162359e4767c9be5567daa274adaabd6b71",
-    "logical_crc32": 1007378093,
-    "archive_sha256": "67d197e7b3f51a28247a91511834d009d5920504ccc341bfbf412f48caea027b",
-    "archive_bytes": 6381,
+    "logical_size": 482,
+    "logical_sha256": "657f6f30b9375a424a036c60ed1fc30b17a233ab81f25ba285140d3722e3bd0c",
+    "logical_crc32": 3353486068,
+    "archive_sha256": "2cdd5a4282fd2f68e53962f4468d78f1df9e9418e5aa88867edbaa71c9b2a046",
+    "archive_bytes": 1539,
     "recipe": {
       "skeleton_blob": 5,
       "literal_lengths": [40, 43, 43, 45, 257],
       "payload_stream_modes": [0, 0, 1, 2]
     },
     "members": [
-      {"name": "stored.txt", "method": 0, "logical_size": 96, "logical_sha256": "10a713387d7e62a8c0f6e55833e990e27df8289396eb84e78428ce0e1ec93329", "compressed_size": 96, "level": -1},
-      {"name": "canonical.txt", "method": 8, "logical_size": 2280, "logical_sha256": "815eec9adda1eddd848c4dabf76915c67b7fc8720d92e38d5efa78c5d2e533ed", "compressed_size": 40, "level": 6},
-      {"name": "secondary.txt", "method": 8, "logical_size": 2340, "logical_sha256": "a37fbd0fc99fdc7554192f937777ddeef6f6ccde0be07d386415e228aa23bcc0", "compressed_size": 47, "level": 9},
-      {"name": "regenerated.txt", "method": 8, "logical_size": 2500, "logical_sha256": "dc111335e09327f53ddae1ba2911e8ad31d1dd58a26f48c0911526d21f065c4f", "compressed_size": 55, "level": 1}
+      {"name": "stored.txt", "method": 0, "logical_size": 13, "logical_sha256": "f5e4a96166ffbbd9de712af77b54fb33258274ec36212ebe346cd26d9ac4bd46", "compressed_size": 13, "level": -1},
+      {"name": "canonical.txt", "method": 8, "logical_size": 80, "logical_sha256": "35e41e047803f708ebf11292062a20e5b741b1d9828afdf17e7cb58bc9b54d14", "compressed_size": 15, "level": 6},
+      {"name": "secondary.txt", "method": 8, "logical_size": 90, "logical_sha256": "2424a7773666ba0e6aabd5e42685ce6473b072654fa98e2bb7f18e862d5f8fee", "compressed_size": 15, "level": 9},
+      {"name": "regenerated.txt", "method": 8, "logical_size": 72, "logical_sha256": "9207f3043f31fdf27ba168ceb9d69e4468bef5138b24fb7651640cea0a178259", "compressed_size": 11, "level": 1}
     ],
     "ranges": [
-      {"label": "stored", "offset": 34, "length": 24, "hex": "642e74787473746f7265642d6d656d6265723a3a616c706861"},
-      {"label": "canonical", "offset": 173, "length": 24, "hex": "6c2e7478744b4ecccbcb4fcaccc94cd14d494dcb492c49b5b2"},
-      {"label": "secondary", "offset": 256, "length": 24, "hex": "792e747874edc8c109c0201000b0567e6b17b03dd2d080b1d0"},
-      {"label": "regenerated", "offset": 348, "length": 24, "hex": "642e747874edc8b109c0201000b0567e6b17603bd2808081d0"},
-      {"label": "central-directory", "offset": 405, "length": 32, "hex": "e3791200504b0102140014000000000000002100a749ac1760000000600000000a"}
+      {"label": "stored", "offset": 36, "length": 16, "hex": "2e74787473746f7265642d616c706861"},
+      {"label": "canonical", "offset": 92, "length": 16, "hex": "2e7478744b4ecccbcfcb4c4eccd14da6"},
+      {"label": "secondary", "offset": 150, "length": 16, "hex": "2e7478742b4e4dcecf4b492caad42da6"},
+      {"label": "regenerated", "offset": 210, "length": 16, "hex": "2e7478742b4a4d4fcdd32da298040050"},
+      {"label": "central-directory", "offset": 225, "length": 20, "hex": "504b0102140014000000000000002100a1260bdc"}
     ],
-    "archive_base64": "Q01QQ1QyNAAYAAAAyAAAAAAAAAC/AAAAAAAAANUXAAAAAAAAAPDFHO+pQEwyvr76Ju5TRUkFDZoHpaITRy0BcBMTAwCEoXYYpWZpbGVzkZeobmVzdGVkLnppcADNAaQAzaYAwpIAAKVibG9ic5aVAMxgAGAAAJVM4QDNCOgoBA2qQACVAAaZAStrd+/1XGYB+gYN3LkAAlMJCpQAGQBkAACVX8EAAgoCCqQLBElRsGzNRhQ0a0UWGQAAlWQKAGQAAAqncmVjaXBlc5GWBaVAKyyrLS7RSc9MUgCjKqQZDZWdhG2pjXj5Gg6+8D/EyxQzKfpxL5Vfar2nSipRsds8qAqtS/9YO6qNgAAiNTedISGKKd6Twv5xqpo5TwpjCVKl1RWN64lwCfTXnhHwPnZA42tcvM03BUzCYgtmu99QpU1LUrJwcpiyTHAuMNJeY50CnE5udjzH63pZXyAofGpe6eomblBYpE5q6N1Y7GiQIlneHZTdUQs+g+/uVPV6enBHV9BlInHVaL7+ri3SgE7jzfVoLOohKv9SjOvFoEYHTEieZn6XYyu/ICrgVIQVUHh/zRH/SsqiHO2DtE7oBIqfeKrmdCgQIMAETIPtE0QVLN1YQP/4y3C8wywMZRS3kgNkzb4ZnKkMO47h+wBKLUv/SA84QEAhKF2GKVmaWxlc5GXq25lc3RlZC56aXAAzQGkAM2mAMKSAAClYmxvYnOWlQDMYABgAACVTOEAzQjoKAQNqkAApQAGmQEra3fv9VxmAfoGDee5AAJTCQqUABkAZAAAlV/BAAIKAgqkCwRJUbs2TLRhQ0a0UWGQAAlWQKAGQAAAqncmVjaXBlc5GWBKVAKysr0UnPTFIAMyqkGQ2VnoR9qY14+RoOvvA/xMsUMyn6cS+VX2q9p0oqUbHbPKgKrUv/WDuqjYAAIjU3nSEhiineg8L+caqaOU8KYwlSpdUVjeuJcAn0154R8D52QONrXLzNNwVMwmILZrvfUKVNS1KycHKYskxwLjDSXmOdApxObnY8x+t6WV8gKHxqXunqJm5QWKRObujdWOxokCJZ3h2U3VELPoPv7lT1enpwR1fQZSJx1Wi+/q4t0oBO4831aCzqISr/UozrxaBGB0xInmZ+l2MrvyAq4FSEFVB4f80R/0rKohztg7RO6ASKn3iq5nQoECDATAAEyD7RNEFSzdWED/+MtwuMMsDGUUt5IDZM2+GZypDDuO4fsASi1L/0gO6qNgAAiNTedISGKKd6Twv5xqpo5TwpjCVKl1RWN64lwCfTXnhHwPkNNUFRGMjQAAAEAACAAAAAAAAAAvwAAAAAAAAAAAAAAAAAAAPDFHO+pQEwyvr76Ju5TRUkFDZoHpaITRy0BcBMTAwA="
+    "archive_base64": "Q01QQ1QyNAAYAAAAvAAAAAAAAACzAAAAAAAAAAMEAAAAAAAAhHLofGnIHILLKPv6zx4/0TJZ4xuKmaG2HSHEUvHfh1AotS/9ILOZBQCEoXYYpWZpbGVzkZeqbmVzdGVkLnppcADNAaQAzQHiwJICAKVibG9ic5aVAA0NAACVTVAPBAqVzKZaWgAAlc0BQA8PAACVzQGPSEgAAJXNAhfNAazNAawAAKdyZWNpcGVzkZYFlSgrKy3NAQGUlgAAAAAN/5YBCAABDwaWAggBAw8JlgQIAgQLAcQgZX9vMLk3WkJKA2xg7R/DCxeiM6uB8luihRQNNyLjvQzNAeLOx+Ii9ENNQTQAAAAADQAAAAAAAAANAAAAAAAAAAAAAAChJgvc9eSpYWb/u9necSr3e1T7MyWCdOw2IS6+NGzSbZrEvUZzdG9yZWQtYWxwaGEKQ01BNAQAAABQAAAAAAAAAA8AAAAAAAAACgAAAOBSrs815B4EeAP3COvxEpIGKiDlt0Gx2YKK/fF+fLWLybVNFJLEBmdvbGRlbgZLTszLz8tMTszRTaYKCwBDTUE0AAAAAFoAAAAAAAAAWgAAAAAAAAAAAAAAqlQ8ASQkp3c2ZroOaqvV5CaFzmRzsHJlT6mOK7fxjoYtX4/uc2Vjb25kYXJ5LXNlY29uZGFyeS1zZWNvbmRhcnktc2Vjb25kYXJ5LXNlY29uZGFyeS1zZWNvbmRhcnktc2Vjb25kYXJ5LXNlY29uZGFyeS1DTUE0AAAAAA8AAAAAAAAADwAAAAAAAAAAAAAAybIpP/QqqhrH467rCHoXs7J1Lv+tPrR3KUt2/GvKi9Vic91CK05Nzs9LSSyq1C2mMgsAQ01BNAAAAABIAAAAAAAAAEgAAAAAAAAAAAAAANXfluiSB/MEPzH98nuhaM651p5EaL71E4sk+3ZRZAzqCheCWXJlZ2VuLXJlZ2VuLXJlZ2VuLXJlZ2VuLXJlZ2VuLXJlZ2VuLXJlZ2VuLXJlZ2VuLXJlZ2VuLXJlZ2VuLXJlZ2VuLXJlZ2VuLUNNQTQAAAAArAEAAAAAAACsAQAAAAAAAAAAAABpZqXuhHt/MrfHqw6JYWMZVI61B+u+ajmaHBhHuu9yIx+0ig5QSwMEFAAAAAAAAAAhAKE mC9wNAAAADQAAAAoAAABzdG9yZWQudHh0UEsDBBQAAAAIAAAAIQDgUq7PDwAAAFAAAAANAAAAY2Fub25pY2FsLnR4dFBLAwQUAAAACAAAACEAqlQ8AQ8AAABaAAAADQAAAHNlY29uZGFyeS50eHRQSwMEFAAAAAgAAAAhANXflugLAAAASAAAAA8AAAByZWdlbmVyYXRlZC50eHRQSwECFAAUAAAAAAAAACEAoSYL3A0AAAANAAAACgAAAAAAAAAAAAAAAAAAAAAAc3RvcmVkLnR4dFBLAQIUABQAAAAIAAAAIQDgUq7PDwAAAFAAAAANAAAAAAAAAAAAAAAAADUAAABjYW5vbmljYWwudHh0UEsBAhQAFAAAAAgAAAAhAKpUPAEPAAAAWgAAAA0AAAAAAAAAAAAAAAAAbwAAAHNlY29uZGFyeS50eHRQSwECFAAUAAAACAAAACEA1d+W6AsAAABIAAAADwAAAAAAAAAAAAAAAACpAAAAcmVnZW5lcmF0ZWQudHh0UEsFBgAAAAAEAAQA6wAAAOEAAAAAACi1L/0gs5kFAIShdhilZmlsZXORl6puZXN0ZWQuemlwAM0BpADNAeLAkgIApWJsb2Jzl pUADQ0AAJVNUA8ECpXMp lpaAACVzQFADw8AAJXNA Y9ISAAAlc0CF80BrM0BrAAAp3JlY2lwZXORlgWVKCssLc0BAZSWAAA AAA0A/5YBCAABDwaWAggBAw8JlgQIAgQLAcQgZX9vMLk3WkJKA2xg7R/DCxeiM6uB8luihRQNNyLjvQzNAeLOx+Ii9ENNNUFRGMjQAAAEAALwAAAAAAAAAswAAAAAAAAAAAAAAAAAAAIRy6HxpyByCyyj7+s8eP9EyWeMbipmhth0hxFLx34dQ"
   }
 }
