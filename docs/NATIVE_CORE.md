@@ -22,6 +22,8 @@ The native core currently:
 - returns typed C statuses for null pointers, I/O/format errors, resource limits, out-of-range requests and unsupported representations;
 - builds `cmpct-native`, a small read-only process surface for authenticated `info`, `list` and raw-byte `range` operations without importing the Python encoder/mutation stack. The CLI caps one requested output range at 64 MiB and deliberately inherits the core's representation/integrity policy rather than adding a second parser.
 
+A reusable pure-Rust revision-24 WAV/FLAC reconstruction component now also lives in `native/cmpct-core/src/wavflac.rs`. It parses the authenticated codec-2 MessagePack metadata, validates FLAC channel/rate/bit-depth against that metadata, bounds reconstructed output by the caller-provided logical size, decodes PCM16/PCM32, and copies the original WAV prefix/suffix bytes verbatim. The component is compiled and exercised against the fixed builder-independent codec-2 oracle before being wired into archive dispatch. **Codec 2 is not yet exposed through the C ABI**, so platform handlers must still treat WAV/FLAC archive members as unsupported until that final integration lands.
+
 The compressed direct-member paths are intentionally correctness-first. Ordinary Zstd frames and raw Deflate streams are not intrinsically byte-seekable in revision 24, so a range request on one direct compressed member currently decodes that member in full. This is still materially better than requiring whole-archive extraction and is the correct bridge to native archive browsing. Large ordinary files are normally chunked by the encoder; fixed/CDC chunk maps are range-local in the native core, and sparse members synthesize holes without decoding or allocating unrelated logical regions. A small read therefore stays proportional to touched stored data rather than to the whole member or archive.
 
 The native CLI is an implementation milestone, not yet a benchmark claim or shipping package. Its purpose is to make list/range launch paths independently measurable without CPython startup so future ZIP-parity records can compare CLI-vs-CLI on symmetric process boundaries.
@@ -30,52 +32,50 @@ The native CLI is an implementation milestone, not yet a benchmark claim or ship
 
 Direct RAW partial reads cross-check authenticated index metadata and physical framing, but a partial RAW read does not claim to authenticate the unseen remainder of the member.
 
-Direct Zstd and raw Deflate reads currently decode the complete member and compare SHA-256 to the physical blob identity before returning requested bytes. A malformed stream, length mismatch or content-hash mismatch fails rather than returning unauthenticated content.
+Direct Zstd, Zstd-dictionary and raw Deflate reads currently decode the complete member and compare SHA-256 to the physical blob identity before returning requested bytes. A malformed stream, length mismatch or content-hash mismatch fails rather than returning unauthenticated content.
 
 Fixed/CDC selective reads authenticate every compressed chunk they touch before copying its overlap. RAW chunks remain genuinely range-local and, like direct RAW, do not claim authentication of unseen bytes. A complete fixed/CDC read additionally verifies the logical whole-file SHA-256 stored in the authenticated index.
 
 Sparse selective reads use the same touched-blob policy while leaving holes as semantic zeroes. The committed sparse ABI gate proves locality by corrupting a compressed blob in an untouched extent and requiring a disjoint range to remain readable, then requiring a range that touches the corrupted extent to fail. A complete sparse read additionally verifies the logical whole-file SHA-256 across both stored extents and synthesized holes.
 
+The standalone WAV/FLAC component validates codec metadata, FLAC stream properties and exact reconstructed length before returning bytes. Physical blob SHA-256 enforcement remains the responsibility of the archive core when codec 2 is connected to `read_blob_range`; the component gate intentionally does not pretend to authenticate archive framing by itself.
+
 Future range-proof or authenticated-chunk designs may allow strong verification of partial reads without touching the whole direct object; revision 24 does not currently provide such proofs.
 
 ## Fixed conformance inputs
 
-`tests/conformance/v24-direct-codecs.json` supplies builder-independent golden archives for the native implementation. The set freezes exact revision-24 archive bytes for direct RAW, ordinary Zstd and raw Deflate members and records archive SHA-256, logical SHA-256 and a known range answer for each member.
+`tests/conformance/v24-direct-codecs.json` supplies builder-independent golden archives for direct RAW, ordinary Zstd and raw Deflate. `tests/conformance/v24-chunk-maps.json` extends that boundary to `S_CHUNKS` and `S_CDC`, deliberately mixing RAW/Zstd/Deflate blobs across known cross-chunk ranges. `tests/conformance/v24-sparse.json` freezes sparse hole/data semantics independently of the encoder. `tests/conformance/v24-zstd-dictionary.json` is the fixed codec-3 acceptance oracle and includes corruption refusal for the authenticated dictionary/member relationship.
 
-The important property is provenance: these bytes were hand-assembled from the revision-24 framing/schema contract rather than written by the Python `Builder`. Native RAW/Zstd/Deflate behavior can therefore be checked against a fixed format artifact instead of only against whatever the current Python encoder happens to emit. The Deflate vector is consumed through the C ABI as the acceptance oracle for native codec-4 support.
+`tests/conformance/v24-wavflac.json` now freezes codec 2 independently of `cmpct.builder.Builder`. It contains one exact revision-24 archive with a libsndfile-produced FLAC payload plus MessagePack reconstruction metadata, along with archive SHA-256, logical WAV SHA-256 and a known byte-range answer. Python consumes the fixed archive directly. The Rust component gate extracts only the already-frozen metadata/payload bytes from that archive, reconstructs the logical WAV without Python audio decoding, and must match the fixed whole-file identity and known range exactly.
 
-`tests/conformance/v24-chunk-maps.json` extends that builder-independent boundary to `S_CHUNKS` and `S_CDC`. Both archives deliberately mix RAW, Zstd and raw Deflate chunks, and their known range answers cross a chunk boundary. The permanent C-ABI gate also corrupts a touched physical chunk identity and requires the native reader to refuse bytes.
-
-`tests/conformance/v24-sparse.json` freezes `S_SPARSE` independently of the encoder. Its 64-byte logical member contains leading/interior/trailing holes plus two stored extents using RAW, Zstd and raw Deflate blobs. Known ranges cross hole/data and codec boundaries so an implementation cannot pass merely by returning stored extents contiguously.
-
-`tests/conformance/v24-zstd-dictionary.json` is now the fixed acceptance oracle for codec 3. It contains a RAW dictionary blob named by authenticated `dict_blob` metadata and a direct Zstd-with-dictionary member whose archive bytes, dictionary SHA-256, logical SHA-256 and known range answer are frozen independently of `Builder`. The Python reference already consumes these exact bytes. The native C ABI now consumes this existing archive with bounded dictionary/member allocation and rejects both dictionary-payload corruption and member-identity corruption without rewriting the fixture.
+The important property is provenance: fixed bytes are acceptance targets, not regenerated snapshots of the current encoder. A future representation is not considered implemented merely because two implementations agree on bytes emitted during the same test run.
 
 ## CI conformance gate
 
-`.github/workflows/native-core.yml` must keep the following gates green:
+`.github/workflows/native-core.yml` keeps the following permanent gates:
 
 1. Rust formatting, clippy with warnings denied, unit tests and release build;
 2. native entry enumeration compared against a Python-built revision-24 archive;
 3. a non-Rust `ctypes` caller loading the produced shared library;
-4. RAW range bytes compared against the Python oracle;
-5. direct-Zstd range bytes compared against the Python oracle, with the fixture asserting that the selected member is physically codec 1 rather than accidentally RAW;
-6. the committed RAW/Zstd/Deflate golden archives consumed directly through the same C ABI, including rejection of a Deflate archive whose physical content identity is corrupted while the raw Deflate stream itself remains decodable;
-7. committed fixed/CDC golden archives consumed through the C ABI for cross-boundary selective and complete reads, including rejection of a range touching a chunk whose physical content identity was corrupted;
-8. the committed sparse golden archive consumed through the C ABI for hole/data cross-boundary and complete reads, including an explicit locality proof: corruption in an untouched extent must not poison a disjoint range, while a range touching that compressed blob must fail;
-9. the committed Zstd-dictionary golden archive consumed through the C ABI for selective and complete reads, including refusal when either the authenticated dictionary payload or the codec-3 member identity is corrupted;
-10. `cmpct-native info/list/range` cross-checked against the Python reader on the same archive, with missing-member and bounded-output failure behavior gated as well.
+4. direct RAW/Zstd range checks and corruption refusal;
+5. builder-independent RAW/Zstd/Deflate direct-codec ABI vectors;
+6. builder-independent fixed/CDC chunk-map ABI vectors;
+7. builder-independent sparse ABI vectors, including untouched-corruption locality;
+8. builder-independent Zstd-dictionary ABI vectors, including dictionary/member corruption refusal;
+9. `cmpct-native info/list/range` cross-checked against Python plus CLI-vs-CLI ZIP semantic-parity smoke coverage;
+10. builder-independent WAV/FLAC component reconstruction against `v24-wavflac.json`, including exact SHA/range agreement and malformed metadata rejection.
 
-The dictionary gate is now permanent. A future representation is not considered implemented merely because a Rust function can decode it. It must cross the C ABI and agree with both the Python oracle where applicable and a committed golden archive once one exists for that representation.
+The WAV/FLAC gate is a component milestone, not yet the final codec-2 ABI gate. The representation becomes native-handler complete only after the same frozen archive succeeds through `cmpct_entry_read_range` with physical hash corruption refusal.
 
 ## Next implementation order
 
-1. freeze and implement WAV/FLAC direct blobs;
+1. wire the tested WAV/FLAC component into direct-blob dispatch and cross the fixed codec-2 archive through the C ABI;
 2. virtual ZIP reconstruction/range access;
 3. sequential member streams and extraction APIs;
 4. full structural-preflight parity and decompression/work budgets;
 5. committed tail/journal recovery and prior-generation fallback;
 6. platform bindings using this API rather than format-specific parsing.
 
-The native CLI should then be benchmarked against mature ZIP tools using CLI-vs-CLI/process-start semantics; do not mix its results with in-process library measurements.
+The native CLI should continue to be benchmarked against mature ZIP tools using CLI-vs-CLI/process-start semantics; do not mix its results with in-process library measurements.
 
 No item above requires a format revision unless implementing it reveals that revision-24 bytes are insufficient to express the required reader semantics. In that case the normal specification/version/conformance gate applies.
