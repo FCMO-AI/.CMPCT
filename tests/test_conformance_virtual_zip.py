@@ -16,6 +16,10 @@ from cmpct.validation import preflight_archive
 VECTORS = (
     ("v24-virtual-zip.json", "cmpct-v24-golden-virtual-zip-v1"),
     (
+        "v24-virtual-zip-deflate-mode0.json",
+        "cmpct-v24-golden-virtual-zip-deflate-mode0-v1",
+    ),
+    (
         "v24-virtual-zip-deflate-mode1.json",
         "cmpct-v24-golden-virtual-zip-deflate-mode1-v1",
     ),
@@ -50,7 +54,12 @@ def test_fixed_virtual_zip_vector_is_byte_stable_and_structurally_valid(
     summary = preflight_archive(archive)
     assert summary["version"] == 24
     assert summary["files"] == 1
-    assert summary["blobs"] == (2 if record["member"]["method"] == 0 else 3)
+    stream_modes = record["recipe"]["payload_stream_modes"]
+    # Mode 0 deliberately reuses the codec-4 content blob's physical RFC-1951 payload, so unlike
+    # retained mode 1 it needs no second opaque stream blob. Keeping this count explicit catches an
+    # accidental permanent duplicate-stream representation before it becomes part of the format lore.
+    expected_blobs = 2 if record["member"]["method"] == 0 or stream_modes == [0] else 3
+    assert summary["blobs"] == expected_blobs
 
     with CMPCT(archive) as ar:
         row = ar.by[record["name"]]
@@ -59,7 +68,7 @@ def test_fixed_virtual_zip_vector_is_byte_stable_and_structurally_valid(
         recipe = ar.recipes[row[6][1]]
         assert recipe[0] == record["recipe"]["skeleton_blob"]
         assert recipe[1] == record["recipe"]["literal_lengths"]
-        assert [payload[2] for payload in recipe[2]] == record["recipe"]["payload_stream_modes"]
+        assert [payload[2] for payload in recipe[2]] == stream_modes
 
 
 @pytest.mark.parametrize(("filename", "schema"), VECTORS)
@@ -79,8 +88,8 @@ def test_fixed_virtual_zip_vector_reconstructs_and_ranges_exactly(
             assert got == bytes.fromhex(expected["hex"])
 
     # The reconstructed logical file must remain a standards-compatible ZIP, not merely a byte blob
-    # that happens to satisfy CMPCT's own recipe checks. The mode-1 vector additionally proves that the
-    # retained exact RFC-1951 bytes form the nested member stream accepted by an independent ZIP reader.
+    # that happens to satisfy CMPCT's own recipe checks. Mode 0 proves exact physical Deflate reuse;
+    # mode 1 proves that a separately retained exact RFC-1951 stream is accepted independently too.
     with zipfile.ZipFile(io.BytesIO(nested)) as zf:
         member = record["member"]
         raw = zf.read(member["name"])
