@@ -167,3 +167,5 @@ jobs:
         run: python tests/native_dictionary_golden_abi.py
       - name: Committed WAV-FLAC native component gate
         run: python tests/native_wavflac_component.py
+      - name: Committed WAV-FLAC archive ABI gate
+        run: python tests/native_wavflac_abi.py
