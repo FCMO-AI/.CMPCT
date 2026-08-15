@@ -7,38 +7,50 @@ import json
 import zipfile
 from pathlib import Path
 
+import pytest
+
 from cmpct.reader import CMPCT
 from cmpct.validation import preflight_archive
 
 
-VECTOR = Path(__file__).with_name("conformance") / "v24-virtual-zip.json"
+VECTORS = (
+    ("v24-virtual-zip.json", "cmpct-v24-golden-virtual-zip-v1"),
+    (
+        "v24-virtual-zip-deflate-mode1.json",
+        "cmpct-v24-golden-virtual-zip-deflate-mode1-v1",
+    ),
+)
 
 
-def _record() -> dict:
-    payload = json.loads(VECTOR.read_text())
-    assert payload["schema"] == "cmpct-v24-golden-virtual-zip-v1"
+def _record(filename: str, schema: str) -> dict:
+    vector = Path(__file__).with_name("conformance") / filename
+    payload = json.loads(vector.read_text())
+    assert payload["schema"] == schema
     assert payload["format_revision"] == 24
     return payload["vector"]
 
 
-def test_fixed_virtual_zip_vector_is_byte_stable_and_structurally_valid(tmp_path: Path) -> None:
+@pytest.mark.parametrize(("filename", "schema"), VECTORS)
+def test_fixed_virtual_zip_vector_is_byte_stable_and_structurally_valid(
+    tmp_path: Path, filename: str, schema: str
+) -> None:
     """Freeze S_VZIP bytes independently of the encoder before native implementation.
 
     Footnote: builder round-trips cannot detect shared mistakes in recipe emission and reconstruction.
-    This archive is hand-built from the revision-24 framing/schema and therefore remains an external
-    acceptance target when encoder heuristics change.
+    These archives are hand-built from revision-24 framing/schema rules and therefore remain external
+    acceptance targets when encoder heuristics change.
     """
-    record = _record()
+    record = _record(filename, schema)
     archive_bytes = base64.b64decode(record["archive_base64"], validate=True)
     assert len(archive_bytes) == record["archive_bytes"]
     assert hashlib.sha256(archive_bytes).hexdigest() == record["archive_sha256"]
 
-    archive = tmp_path / "golden-virtual-zip.cmpct"
+    archive = tmp_path / f"golden-{Path(filename).stem}.cmpct"
     archive.write_bytes(archive_bytes)
     summary = preflight_archive(archive)
     assert summary["version"] == 24
     assert summary["files"] == 1
-    assert summary["blobs"] == 2
+    assert summary["blobs"] == (2 if record["member"]["method"] == 0 else 3)
 
     with CMPCT(archive) as ar:
         row = ar.by[record["name"]]
@@ -50,9 +62,12 @@ def test_fixed_virtual_zip_vector_is_byte_stable_and_structurally_valid(tmp_path
         assert [payload[2] for payload in recipe[2]] == record["recipe"]["payload_stream_modes"]
 
 
-def test_fixed_virtual_zip_vector_reconstructs_and_ranges_exactly(tmp_path: Path) -> None:
-    record = _record()
-    archive = tmp_path / "golden-virtual-zip.cmpct"
+@pytest.mark.parametrize(("filename", "schema"), VECTORS)
+def test_fixed_virtual_zip_vector_reconstructs_and_ranges_exactly(
+    tmp_path: Path, filename: str, schema: str
+) -> None:
+    record = _record(filename, schema)
+    archive = tmp_path / f"golden-{Path(filename).stem}.cmpct"
     archive.write_bytes(base64.b64decode(record["archive_base64"], validate=True))
 
     with CMPCT(archive) as ar:
@@ -64,7 +79,8 @@ def test_fixed_virtual_zip_vector_reconstructs_and_ranges_exactly(tmp_path: Path
             assert got == bytes.fromhex(expected["hex"])
 
     # The reconstructed logical file must remain a standards-compatible ZIP, not merely a byte blob
-    # that happens to satisfy CMPCT's own recipe checks.
+    # that happens to satisfy CMPCT's own recipe checks. The mode-1 vector additionally proves that the
+    # retained exact RFC-1951 bytes form the nested member stream accepted by an independent ZIP reader.
     with zipfile.ZipFile(io.BytesIO(nested)) as zf:
         member = record["member"]
         raw = zf.read(member["name"])
