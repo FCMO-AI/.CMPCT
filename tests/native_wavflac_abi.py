@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import base64
 import ctypes
+import hashlib
 import json
 import tempfile
 from pathlib import Path
@@ -85,13 +86,13 @@ def main() -> None:
             assert got_n == len(want)
             assert got == want
 
-            # A complete C-ABI read must reconstruct exactly the same WAV bytes as the Python oracle.
-            with CMPCT(archive) as ar:
-                expected = ar.read(vector["name"])
+            # Footnote: whole-member acceptance is anchored to the frozen logical identity, not to a
+            # second decoder invoked during this test. That keeps the C-ABI gate independent of both
+            # the Python WAV/FLAC implementation and optional Python audio dependencies.
             status, got_n, got = _read_range(lib, handle, 0, vector["logical_size"])
             assert status == 0, status
-            assert got_n == len(expected)
-            assert got == expected
+            assert got_n == vector["logical_size"]
+            assert hashlib.sha256(got).hexdigest() == vector["logical_sha256"]
         finally:
             lib.cmpct_close(handle)
 
