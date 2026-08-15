@@ -1,0 +1,296 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <meta name="theme-color" content="#ffffff">
+  <meta name="description" content="CMPCT — an experimental content-aware archive/container built to make a better default than legacy ZIP across size, access, fidelity, integrity and recovery.">
+  <title>.CMPCT — a better archive is more than smaller</title>
+  <link rel="stylesheet" href="assets/styles.css">
+  <script type="module" src="assets/app.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <header class="site-header" data-header>
+    <a class="brand" href="#top" aria-label="CMPCT home">
+      <span class="brand-caret" aria-hidden="true">^</span><span class="brand-name">.CMPCT</span>
+    </a>
+    <nav class="top-nav" aria-label="Primary navigation">
+      <a href="#status">Status</a>
+      <a href="#engine">Engine</a>
+      <a href="#lab">Lab</a>
+      <a href="#benchmarks">Benchmarks</a>
+      <a href="#agents">Agents</a>
+    </nav>
+    <a class="header-action" href="https://github.com/FCMO-AI/.CMPCT">Repository <span aria-hidden="true">↗</span></a>
+  </header>
+
+  <main id="main">
+    <section class="hero" id="top">
+      <div class="hero-copy">
+        <p class="eyebrow"><span>FORMAT __FORMAT_REVISION__</span><span>PROJECT v__CMPCT_VERSION__</span><span>PRE-1.0</span></p>
+        <h1>A better archive is not just <em>smaller.</em></h1>
+        <p class="hero-lede">CMPCT is an experimental, lossless archive system that treats compression, indexing, selective access, filesystem fidelity, integrity, recovery and updates as one problem.</p>
+        <div class="hero-actions">
+          <a class="button button-primary" href="#lab"><span aria-hidden="true">^</span> Convert files</a>
+          <a class="button button-secondary" href="#engine">See how it works</a>
+        </div>
+        <p class="micro-note">Canonical source: <code>FCMO-AI/.CMPCT</code> · site build <code>__BUILD_COMMIT__</code></p>
+      </div>
+
+      <div class="hero-system" aria-label="Conceptual CMPCT architecture">
+        <div class="boundary boundary-input">
+          <span class="boundary-label">INPUT</span>
+          <div class="file-stack" aria-hidden="true">
+            <i></i><i></i><i></i>
+          </div>
+        </div>
+        <div class="crossing-caret" aria-hidden="true">^</div>
+        <div class="boundary boundary-system">
+          <span class="boundary-label">CMPCT</span>
+          <div class="system-lines" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
+          <div class="system-index">INDEX</div>
+        </div>
+        <p class="system-caption"><span>measure</span><span>select</span><span>index</span><span>recover</span></p>
+      </div>
+    </section>
+
+    <section class="principles-strip" aria-label="CMPCT essentials">
+      <div><strong>Byte-exact</strong><span>Lossless is a contract.</span></div>
+      <div><strong>Content-aware</strong><span>Bytes choose representation, not folklore.</span></div>
+      <div><strong>Seekable</strong><span>One file should not require the whole archive.</span></div>
+      <div><strong>Recoverable</strong><span>Redundancy and generations are designed in.</span></div>
+    </section>
+
+    <section class="section" id="status">
+      <div class="section-intro">
+        <p class="section-index">00 · PROJECT STATE</p>
+        <h2>The site says what is true <em>now</em>, not what CMPCT hopes to become.</h2>
+        <p>CMPCT is still pre-1.0. The website is configured as the public project surface and is continuously validated from canonical repository state. Public material is separated from private development provenance, and Apache-2.0 is currently a proposal rather than an adopted license.</p>
+      </div>
+      <div class="feature-grid">
+        <article><span class="feature-mark">^</span><h3>Format revision __FORMAT_REVISION__</h3><p>The executable format is still a working pre-1.0 contract. Revision changes must update code, specification, conformance gates and the Browser Lab writer together.</p></article>
+        <article><span class="feature-mark">^</span><h3>Apache-2.0 proposed</h3><p>The full Apache License 2.0 text is staged for review, but CMPCT is not yet represented as finally licensed under it.</p><p><a href="https://github.com/FCMO-AI/.CMPCT/blob/main/LICENSING.md">Read licensing status ↗</a></p></article>
+        <article><span class="feature-mark">^</span><h3>Public website</h3><p>Canonical main updates deploy only after disclosure, compatibility and Browser Lab validation gates pass.</p></article>
+        <article><span class="feature-mark">^</span><h3>Public-surface gate</h3><p>Public project material must stand on its own without exposing unrelated private corpora, artifacts, people, credentials or system context.</p><p><a href="https://github.com/FCMO-AI/.CMPCT/blob/main/docs/PUBLIC_SURFACE.md">Read disclosure policy ↗</a></p></article>
+      </div>
+    </section>
+
+    <section class="section" id="engine">
+      <div class="section-intro">
+        <p class="section-index">01 · ENGINE</p>
+        <h2>Compression is one decision inside a larger system.</h2>
+        <p>CMPCT separates the logical filesystem from physical storage. Identical payloads can converge on one blob; large files can be chunked; sparse holes stay holes; nested archives can be treated structurally when that is actually worthwhile.</p>
+      </div>
+
+      <div class="pipeline" aria-label="CMPCT representation pipeline">
+        <article class="pipeline-step">
+          <span class="step-no">01</span>
+          <h3>Scan</h3>
+          <p>Read the logical tree, metadata, links, sparse extents and candidate content.</p>
+          <code>path → object</code>
+        </article>
+        <article class="pipeline-step active">
+          <span class="step-no">02</span>
+          <h3>Measure</h3>
+          <p>Probe exact representations and make complexity earn its place.</p>
+          <code>bytes → evidence</code>
+        </article>
+        <article class="pipeline-step">
+          <span class="step-no">03</span>
+          <h3>Select</h3>
+          <p>RAW, Zstd, Deflate, dictionary, chunks, packs, sparse or virtual structures.</p>
+          <code>evidence → representation</code>
+        </article>
+        <article class="pipeline-step">
+          <span class="step-no">04</span>
+          <h3>Index</h3>
+          <p>Record the exact reader contract so future readers never need old encoder heuristics.</p>
+          <code>representation → archive</code>
+        </article>
+      </div>
+
+      <div class="feature-grid">
+        <article><span class="feature-mark">^</span><h3>Content-addressed deduplication</h3><p>Logical names and physical payloads are separate, so repeated exact content is stored once.</p></article>
+        <article><span class="feature-mark">^</span><h3>Range-oriented storage</h3><p>Fixed/CDC chunks and sparse maps preserve selective reads instead of forcing monolithic inflate.</p></article>
+        <article><span class="feature-mark">^</span><h3>Filesystem semantics</h3><p>Hardlinks, symlinks, sparse files, ownership and xattrs are data—not incidental baggage.</p></article>
+        <article><span class="feature-mark">^</span><h3>Layered integrity</h3><p>Cheap hot-path checks coexist with SHA-256 identity and strong verification.</p></article>
+        <article><span class="feature-mark">^</span><h3>Crash-safe generations</h3><p>Append transactions become committed only at a valid footer; prior generations remain recoverable.</p></article>
+        <article><span class="feature-mark">^</span><h3>Legacy exit, not legacy tax</h3><p>Export ordinary Deflate ZIP when a downstream system needs it without storing a permanent ZIP shadow.</p></article>
+      </div>
+    </section>
+
+    <section class="section section-dark" id="work-with-it">
+      <div class="section-intro inverse">
+        <p class="section-index">02 · WORK WITH IT</p>
+        <h2>The reference engine stays boring on purpose.</h2>
+        <p>Install the repository, create an archive, inspect it, verify it, extract it—or export ZIP at the compatibility boundary.</p>
+      </div>
+      <div class="terminal-card">
+        <div class="terminal-head"><span>quickstart.sh</span><button class="copy-button" data-copy-target="quickstart-code">Copy</button></div>
+        <pre id="quickstart-code"><code>python -m pip install -e .
+python -m cmpct create ./folder archive.cmpct
+python -m cmpct info archive.cmpct
+python -m cmpct list archive.cmpct
+python -m cmpct verify archive.cmpct
+python -m cmpct extract archive.cmpct ./restored
+python -m cmpct range archive.cmpct path/to/huge.bin 1048576 4096 -o slice.bin
+python -m cmpct export-zip archive.cmpct legacy.zip</code></pre>
+      </div>
+      <div class="command-grid">
+        <a href="https://github.com/FCMO-AI/.CMPCT/blob/main/docs/FORMAT.md"><span>Working format</span><strong>Read revision __FORMAT_REVISION__ ↗</strong></a>
+        <a href="https://github.com/FCMO-AI/.CMPCT/blob/main/docs/PORTABILITY.md"><span>ZIP parity</span><strong>Portability contract ↗</strong></a>
+        <a href="https://github.com/FCMO-AI/.CMPCT/blob/main/docs/HARDENING.md"><span>Hostile input</span><strong>Parser hardening ↗</strong></a>
+      </div>
+    </section>
+
+    <section class="section" id="lab">
+      <div class="section-intro">
+        <p class="section-index">03 · BROWSER LAB</p>
+        <h2>Turn ordinary files into a real <code>.cmpct</code> archive here.</h2>
+        <p>The portable writer runs entirely in your browser. Files stay on your device. It emits a deliberately conservative revision-24 subset that the canonical reader is expected to verify.</p>
+      </div>
+
+      <div class="lab-status" id="writer-status" role="status">
+        <span class="status-dot"></span>
+        <div><strong>Checking format compatibility…</strong><small>The browser writer will disable itself rather than guess after a format revision.</small></div>
+      </div>
+
+      <div class="lab-grid">
+        <article class="tool-card converter-card">
+          <div class="tool-head"><div><span class="tool-kicker">CREATE</span><h3>Portable CMPCT writer</h3></div><span class="tool-badge">LOCAL</span></div>
+          <div class="drop-zone" id="drop-zone" tabindex="0" role="button" aria-label="Drop files here or choose files">
+            <span class="drop-caret" aria-hidden="true">^</span>
+            <strong>Drop files here</strong>
+            <span>or choose files / a folder</span>
+          </div>
+          <input id="file-input" class="visually-hidden" type="file" multiple>
+          <input id="folder-input" class="visually-hidden" type="file" multiple webkitdirectory>
+          <div class="pick-actions">
+            <button class="button button-secondary" id="choose-files" type="button">Choose files</button>
+            <button class="button button-secondary" id="choose-folder" type="button">Choose folder</button>
+          </div>
+          <div class="selection-summary" id="selection-summary"><span>No files selected.</span></div>
+          <button class="button button-primary tool-primary" id="build-archive" type="button" disabled><span aria-hidden="true">^</span> Build .cmpct</button>
+          <div class="result-panel" id="build-result" hidden></div>
+          <p class="tool-footnote">Portable mode supports regular files, path indexing, SHA-256/CRC32, exact-content deduplication and RAW/Deflate storage. It does <strong>not</strong> preserve symlinks, sparse extents, uid/gid, xattrs, transactions, virtual ZIPs or the full encoder's representation search. For those semantics, use the CLI.</p>
+        </article>
+
+        <article class="tool-card inspector-card">
+          <div class="tool-head"><div><span class="tool-kicker">INSPECT</span><h3>Archive header lens</h3></div><span class="tool-badge">NO UPLOAD</span></div>
+          <p>Open any CMPCT file and inspect the fixed header without transmitting its contents.</p>
+          <label class="inspect-picker">
+            <input id="inspect-input" type="file" accept=".cmpct,application/vnd.fcmo.cmpct,application/x-cmpct">
+            <span>Choose a .cmpct file</span>
+          </label>
+          <dl class="inspect-output" id="inspect-output">
+            <div><dt>Magic</dt><dd>—</dd></div>
+            <div><dt>Version field</dt><dd>—</dd></div>
+            <div><dt>Primary index</dt><dd>—</dd></div>
+            <div><dt>Data span</dt><dd>—</dd></div>
+            <div><dt>Archive size</dt><dd>—</dd></div>
+          </dl>
+          <div class="truth-box"><strong>Why only the header?</strong><p>The canonical project explicitly prefers a future WASM build of the shared memory-safe core over growing an independent browser parser. This tool stays on the safe side of that boundary.</p></div>
+        </article>
+      </div>
+    </section>
+
+    <section class="section benchmark-section" id="benchmarks">
+      <div class="section-intro benchmark-intro">
+        <div>
+          <p class="section-index">04 · BENCHMARKS</p>
+          <h2>Measured evidence, including the places ZIP still wins.</h2>
+        </div>
+        <div class="benchmark-picker-wrap">
+          <label for="benchmark-record">Durable record</label>
+          <select id="benchmark-record"></select>
+        </div>
+      </div>
+
+      <div class="benchmark-caveat">
+        <span aria-hidden="true">^</span>
+        <p><strong>Development regression evidence, not a universal performance guarantee.</strong> The site reads committed public benchmark records directly. Library and CLI/process-start layers stay separate, and semantic mismatches remain visible.</p>
+      </div>
+
+      <div class="benchmark-headline" id="benchmark-headline">
+        <div><span>Format</span><strong>r__FORMAT_REVISION__</strong></div>
+        <div><span>Repetitions</span><strong>—</strong></div>
+        <div><span>Statistic</span><strong>—</strong></div>
+        <div><span>Runner</span><strong>—</strong></div>
+      </div>
+
+      <div class="benchmark-table-wrap">
+        <table class="benchmark-table">
+          <thead>
+            <tr>
+              <th>Corpus</th>
+              <th>Archive size</th>
+              <th>Library create</th>
+              <th>Library extract</th>
+              <th>CLI create</th>
+              <th>CLI extract</th>
+            </tr>
+          </thead>
+          <tbody id="benchmark-body"></tbody>
+        </table>
+      </div>
+      <div class="benchmark-notes" id="benchmark-notes"></div>
+    </section>
+
+    <section class="section agents-section" id="agents">
+      <div class="section-intro">
+        <p class="section-index">05 · AGENTS</p>
+        <h2>Zero private context required.</h2>
+        <p>CMPCT's durable context lives in the repository. A new human or agent should be able to enter the project from the same reading order, distinguish current fact from old experiment, and work without access to unrelated private systems or conversations.</p>
+      </div>
+
+      <div class="agent-layout">
+        <ol class="reading-order">
+          <li><a href="https://github.com/FCMO-AI/.CMPCT/blob/main/README.md"><span>01</span><strong>README.md</strong><small>Mission and project shape</small></a></li>
+          <li><a href="https://github.com/FCMO-AI/.CMPCT/blob/main/AGENTS.md"><span>02</span><strong>AGENTS.md</strong><small>Development rules</small></a></li>
+          <li><a href="https://github.com/FCMO-AI/.CMPCT/blob/main/docs/CURRENT_STATE.md"><span>03</span><strong>CURRENT_STATE.md</strong><small>Immediate frontier</small></a></li>
+          <li><a href="https://github.com/FCMO-AI/.CMPCT/blob/main/docs/FORMAT.md"><span>04</span><strong>FORMAT.md</strong><small>On-disk contract</small></a></li>
+          <li><a href="https://github.com/FCMO-AI/.CMPCT/blob/main/docs/RESEARCH_LOG.md"><span>05</span><strong>RESEARCH_LOG.md</strong><small>What was learned and rejected</small></a></li>
+          <li><a href="https://github.com/FCMO-AI/.CMPCT/blob/main/docs/BENCHMARKS.md"><span>06</span><strong>BENCHMARKS.md</strong><small>Measurement discipline</small></a></li>
+          <li><a href="https://github.com/FCMO-AI/.CMPCT/blob/main/docs/PUBLIC_SURFACE.md"><span>07</span><strong>PUBLIC_SURFACE.md</strong><small>Disclosure boundary</small></a></li>
+          <li><a href="https://github.com/FCMO-AI/.CMPCT/blob/main/LICENSING.md"><span>08</span><strong>LICENSING.md</strong><small>Non-final license proposal</small></a></li>
+          <li><a href="https://github.com/FCMO-AI/.CMPCT/blob/main/docs/ROADMAP.md"><span>09</span><strong>ROADMAP.md</strong><small>Path to 1.0</small></a></li>
+        </ol>
+        <div class="agent-machine-card">
+          <p class="tool-kicker">MACHINE ENTRYPOINTS</p>
+          <h3>Give agents structured context.</h3>
+          <a href="agent.json"><span>agent.json</span><small>Version, revision, reading order, invariants</small></a>
+          <a href="llms.txt"><span>llms.txt</span><small>Compact human-readable orientation</small></a>
+          <a href="project-data.json"><span>project-data.json</span><small>Canonical site + benchmark feed</small></a>
+          <button class="button button-secondary" data-copy-agent type="button">Copy bootstrap prompt</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="section roadmap-section" id="roadmap">
+      <div class="section-intro">
+        <p class="section-index">06 · FRONTIER</p>
+        <h2>What CMPCT does <em>not</em> get to pretend is finished.</h2>
+        <p>Pre-1.0 breadth is not production readiness. The project keeps the unfinished edges visible so future work attacks the actual gaps.</p>
+      </div>
+      <div class="roadmap-grid">
+        <article><span>P0</span><h3>Defensible parser</h3><p>Expand golden vectors, fuzzing, structural limits and hostile-input budgets.</p></article>
+        <article><span>P0</span><h3>Normative format</h3><p>Determinism, path rules, codec registry, metadata and compatibility policy before 1.0.</p></article>
+        <article><span>P1</span><h3>Native completeness</h3><p>Finish remaining representations, streams, extraction, recovery and a shared writer surface.</p></article>
+        <article><span>P1</span><h3>First-class archive UX</h3><p>Android, Windows, Apple and Linux integrations backed by one memory-safe core.</p></article>
+        <article><span>P1</span><h3>Remote + encrypted</h3><p>Range-backed sources, partial verification and authenticated encryption without inheriting ZIP-era weaknesses.</p></article>
+        <article><span>GATE</span><h3>Public-release discipline</h3><p>Keep licensing, provenance and disclosure status explicit; every public artifact must pass the project-surface gate.</p></article>
+        <article><span>GATE</span><h3>Erase honest ZIP advantages</h3><p>Every reproducible equivalent-semantics loss is a defect, evidence-backed tradeoff or documented platform constraint.</p></article>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="footer-brand"><span aria-hidden="true">^</span><strong>.CMPCT</strong></div>
+    <p>General-purpose archive/container research by FCMO-AI. Current site: v__CMPCT_VERSION__ · format revision __FORMAT_REVISION__ · Apache-2.0 proposed, not adopted.</p>
+    <div><a href="https://github.com/FCMO-AI/.CMPCT">GitHub</a><a href="https://github.com/FCMO-AI/.CMPCT/blob/main/docs/PRINCIPLES.md">Principles</a><a href="https://github.com/FCMO-AI/.CMPCT/blob/main/docs/HISTORY.md">History</a><a href="https://github.com/FCMO-AI/.CMPCT/blob/main/LICENSING.md">Licensing</a></div>
+  </footer>
+</body>
+</html>

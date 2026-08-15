@@ -1,0 +1,56 @@
+{
+  "schema": "cmpct-v24-golden-direct-codecs-v1",
+  "format_revision": 24,
+  "generation_provenance": {
+    "method": "hand-built from docs/FORMAT.md and revision-24 struct/schema constants; not emitted by cmpct.builder.Builder",
+    "python": "3.11",
+    "msgpack": "1.1.2",
+    "zstd": "1.5.7",
+    "zlib": "1.3.1",
+    "purpose": "fixed cross-implementation byte oracle for direct RAW, Zstd, and Deflate members"
+  },
+  "vectors": [
+    {
+      "name": "raw.bin",
+      "codec": 0,
+      "logical_size": 64,
+      "logical_sha256": "fdeab9acf3710362bd2658cdc9a29e8f9c757fcf9811603a8c447cd1d9151108",
+      "archive_sha256": "5d1638fbe6e7b185dbbb04d5cf37c6a49dd90bad8bebc156fa072a3195c1893d",
+      "archive_bytes": 386,
+      "range": {
+        "offset": 7,
+        "length": 19,
+        "hex": "0708090a0b0c0d0e0f10111213141516171819"
+      },
+      "archive_base64": "Q01QQ1QyNAAYAAAAPQAAAAAAAAA0AAAAAAAAAIAAAAAAAAAA7iAGrptkJliJ9cTAcAWIQapAtZJF7U1QOGO+9EdH5DAotS/9IDShAQCEoXYYpWZpbGVzkZencmF3LmJpbgDNAaQAQMCSAAClYmxvYnORlQBAQAAAp3JlY2lwZXOQQ01BNAAAAABAAAAAAAAAAEAAAAAAAAAAAAAAAIzODhD96rms83EDYr0mWM3Jop6PnHV/z5gRYDqMRHzR2RURCAABAgMEBQYHCAkKCwwNDg8QERITFBUWFxgZGhscHR4fICEiIyQlJicoKSorLC0uLzAxMjM0NTY3ODk6Ozw9Pj8otS/9IDShAQCEoXYYpWZpbGVzkZencmF3LmJpbgDNAaQAQMCSAAClYmxvYnORlQBAQAAAp3JlY2lwZXOQQ01QVEYyNAAAAQAAPQAAAAAAAAA0AAAAAAAAAAAAAAAAAAAA7iAGrptkJliJ9cTAcAWIQapAtZJF7U1QOGO+9EdH5DA="
+    },
+    {
+      "name": "zstd.txt",
+      "codec": 1,
+      "logical_size": 7400,
+      "logical_sha256": "d0bb12b33b4f9ecf7a110a1d35eb493574f6fe3162a0b076dd2fb8908ab22bc2",
+      "archive_sha256": "f6a4eeab710c4ddc1ccd6fd32161335c812d2bbb2e183adf77ddea01886d2f3e",
+      "archive_bytes": 390,
+      "range": {
+        "offset": 7,
+        "length": 19,
+        "hex": "7a7374642d766563746f723a3a616c7068612d"
+      },
+      "archive_base64": "Q01QQ1QyNAAYAAAAQgAAAAAAAAA5AAAAAAAAAHoAAAAAAAAAqtgZGUK9J/1fbrmjImP9uPbYNMTGu0dcuv+XO5BE+wcotS/9IDnJAQCEoXYYpWZpbGVzkZeoenN0ZC50eHQAzQGkAM0c6MCSAAClYmxvYnORlQDNHOg4AQKncmVjaXBlc5BDTUE0AQAAAOgcAAAAAAAAOAAAAAAAAAACAAAAxygJFNC7ErM7T57PehEKHTXrSTV09v4xYqCwdt0vuJCKsivCkQMotS/9YOgbdQEAVAJnb2xkZW4tenN0ZC12ZWN0b3I6OmFscGhhLWJldGEtZ2FtbWEKAQAFZtSrJyi1L/0gOckBAIShdhilZmlsZXORl6h6c3RkLnR4dADNAaQAzRzowJIAAKVibG9ic5GVAM0c6DgBAqdyZWNpcGVzkENNUFRGMjQAAAEAAEIAAAAAAAAAOQAAAAAAAAAAAAAAAAAAAKrYGRlCvSf9X265oyJj/bj22DTExrtHXLr/lzuQRPsH"
+    },
+    {
+      "name": "deflate.txt",
+      "codec": 4,
+      "logical_size": 6720,
+      "logical_sha256": "48bc2f0074a21465320eb2d61ab5b5f0ddd9119976ad82e3083737d7741a9447",
+      "archive_sha256": "91cd520c62f2d0ffce9e3c95dd46f76138d840bacd5ce9282b3c9efbc737e870",
+      "archive_bytes": 425,
+      "range": {
+        "offset": 7,
+        "length": 19,
+        "hex": "6465666c6174652d766563746f723a3a726570"
+      },
+      "archive_base64": "Q01QQ1QyNAAYAAAARQAAAAAAAAA8AAAAAAAAAJcAAAAAAAAAjtY9EUG3BJKxf22UK60JhmopiCFUU0oOAd0wXx14wTAotS/9IDzhAQCEoXYYpWZpbGVzkZerZGVmbGF0ZS50eHQAzQGkAM0aQMCSAAClYmxvYnORlQDNGkBNBAqncmVjaXBlc5BDTUE0BAAAAEAaAAAAAAAATQAAAAAAAAAKAAAAFrPul0i8LwB0ohRlMg6y1hq1tfDd2RGZdq2C4wg3N9d0GpRHksQGZ29sZGVuBu3KsQ2AMAxFwZ5dvEC2MeSTxsJRZEViewbhXX0jo+uxrju8ZFtX5WptacrLz5BNfyO9H4PJZDKZTCaTyWQymUwmk8lkMplMJpP5g/kBKLUv/SA84QEAhKF2GKVmaWxlc5GXq2RlZmxhdGUudHh0AM0BpADNGkDAkgAApWJsb2JzkZUAzRpATQQKp3JlY2lwZXOQQ01QVEYyNAAAAQAARQAAAAAAAAA8AAAAAAAAAAAAAAAAAAAAjtY9EUG3BJKxf22UK60JhmopiCFUU0oOAd0wXx14wTA="
+    }
+  ]
+}
