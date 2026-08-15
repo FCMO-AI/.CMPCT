@@ -105,8 +105,8 @@ def _agent_manifest(version: str, revision: int, commit: str) -> dict[str, Any]:
         "canonical_branch": "main",
         "site_build_commit": commit,
         "publication": {
-            "mode": "manual",
-            "status": "validation-only until explicitly published",
+            "mode": "public",
+            "status": "public website",
         },
         "licensing": {
             "proposal": "Apache-2.0",
@@ -165,7 +165,7 @@ def _write_llms(out: Path, manifest: dict[str, Any]) -> None:
             "## Important qualifications",
             "CMPCT is pre-1.0. Development benchmarks are reproducible regression evidence, not universal performance guarantees.",
             "Apache-2.0 is a proposed license and has not yet been adopted as the canonical project license.",
-            "Website publication is manual; ordinary repository pushes validate the site but do not publish it.",
+            "Website publication is active; canonical main updates publish only after validation gates pass.",
         ]
     )
     (out / "llms.txt").write_text("\n".join(lines) + "\n", encoding="utf-8")

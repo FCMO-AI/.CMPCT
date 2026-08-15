@@ -102,8 +102,8 @@ class Builder:
         # Many nested archives are a special case where *not* parsing them can be superior. Their
         # exact byte streams often share headers, names and compressor structure. Packing a cohort into
         # one modest Zstd block exploits that redundancy while the CMPCT index still gives each archive
-        # its own offset/length. We require a cohort of 8+ so smaller sets (such as Hermes' provenance
-        # archives) can still use structural virtualization/deduplication, which is better there.
+        # its own offset/length. We require a cohort of 8+ so smaller sets can still use structural
+        # virtualization/deduplication when that representation is better.
         if len(deferred)>=8:
             buf=bytearray();packed=[]
             for p,rel,st,mode in deferred:

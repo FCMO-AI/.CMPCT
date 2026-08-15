@@ -68,13 +68,13 @@
       <div class="section-intro">
         <p class="section-index">00 · PROJECT STATE</p>
         <h2>The site says what is true <em>now</em>, not what CMPCT hopes to become.</h2>
-        <p>CMPCT is still pre-1.0. The website is continuously validated but deliberately unpublished until a manual release decision. Public project material is separated from private development provenance, and Apache-2.0 is currently a proposal rather than an adopted license.</p>
+        <p>CMPCT is still pre-1.0. The website is configured as the public project surface and is continuously validated from canonical repository state. Public material is separated from private development provenance, and Apache-2.0 is currently a proposal rather than an adopted license.</p>
       </div>
       <div class="feature-grid">
         <article><span class="feature-mark">^</span><h3>Format revision __FORMAT_REVISION__</h3><p>The executable format is still a working pre-1.0 contract. Revision changes must update code, specification, conformance gates and the Browser Lab writer together.</p></article>
         <article><span class="feature-mark">^</span><h3>Apache-2.0 proposed</h3><p>The full Apache License 2.0 text is staged for review, but CMPCT is not yet represented as finally licensed under it.</p><p><a href="https://github.com/FCMO-AI/.CMPCT/blob/main/LICENSING.md">Read licensing status ↗</a></p></article>
-        <article><span class="feature-mark">^</span><h3>Manual publication</h3><p>Ordinary pushes build and test the website without deploying it. Publication requires an explicit manual workflow decision.</p></article>
-        <article><span class="feature-mark">^</span><h3>Public-surface gate</h3><p>Release-facing project material must stand on its own without exposing unrelated private corpora, artifacts, people, credentials or system context.</p><p><a href="https://github.com/FCMO-AI/.CMPCT/blob/main/docs/PUBLIC_SURFACE.md">Read disclosure policy ↗</a></p></article>
+        <article><span class="feature-mark">^</span><h3>Public website</h3><p>Canonical main updates deploy only after disclosure, compatibility and Browser Lab validation gates pass.</p></article>
+        <article><span class="feature-mark">^</span><h3>Public-surface gate</h3><p>Public project material must stand on its own without exposing unrelated private corpora, artifacts, people, credentials or system context.</p><p><a href="https://github.com/FCMO-AI/.CMPCT/blob/main/docs/PUBLIC_SURFACE.md">Read disclosure policy ↗</a></p></article>
       </div>
     </section>
 
@@ -281,7 +281,7 @@ python -m cmpct export-zip archive.cmpct legacy.zip</code></pre>
         <article><span>P1</span><h3>Native completeness</h3><p>Finish remaining representations, streams, extraction, recovery and a shared writer surface.</p></article>
         <article><span>P1</span><h3>First-class archive UX</h3><p>Android, Windows, Apple and Linux integrations backed by one memory-safe core.</p></article>
         <article><span>P1</span><h3>Remote + encrypted</h3><p>Range-backed sources, partial verification and authenticated encryption without inheriting ZIP-era weaknesses.</p></article>
-        <article><span>GATE</span><h3>Public-release readiness</h3><p>Resolve licensing, provenance and disclosure review before publication; validate continuously without publishing accidentally.</p></article>
+        <article><span>GATE</span><h3>Public-release discipline</h3><p>Keep licensing, provenance and disclosure status explicit; every public artifact must pass the project-surface gate.</p></article>
         <article><span>GATE</span><h3>Erase honest ZIP advantages</h3><p>Every reproducible equivalent-semantics loss is a defect, evidence-backed tradeoff or documented platform constraint.</p></article>
       </div>
     </section>
