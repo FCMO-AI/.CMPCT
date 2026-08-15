@@ -35,12 +35,24 @@ fn decode_base64(input: &str) -> Vec<u8> {
     for block in bytes.chunks_exact(4) {
         let a = value(block[0]).expect("base64 digit") as u32;
         let b = value(block[1]).expect("base64 digit") as u32;
-        let c = if block[2] == b'=' { 0 } else { value(block[2]).expect("base64 digit") as u32 };
-        let d = if block[3] == b'=' { 0 } else { value(block[3]).expect("base64 digit") as u32 };
+        let c = if block[2] == b'=' {
+            0
+        } else {
+            value(block[2]).expect("base64 digit") as u32
+        };
+        let d = if block[3] == b'=' {
+            0
+        } else {
+            value(block[3]).expect("base64 digit") as u32
+        };
         let packed = (a << 18) | (b << 12) | (c << 6) | d;
         out.push((packed >> 16) as u8);
-        if block[2] != b'=' { out.push((packed >> 8) as u8); }
-        if block[3] != b'=' { out.push(packed as u8); }
+        if block[2] != b'=' {
+            out.push((packed >> 8) as u8);
+        }
+        if block[3] != b'=' {
+            out.push(packed as u8);
+        }
     }
     out
 }
@@ -79,12 +91,17 @@ fn fixed_revision24_retained_exact_deflate_projects_without_recompression() {
     let logical_size = file[4].as_u64().unwrap();
     let storage = file[6].as_array().expect("storage row");
     let recipe_index = storage[1].as_u64().unwrap() as usize;
-    let recipes = map_field(&index, "recipes").as_array().expect("recipe rows");
+    let recipes = map_field(&index, "recipes")
+        .as_array()
+        .expect("recipe rows");
     let recipe = parse_recipe(&recipes[recipe_index], &blob_sizes, logical_size)
         .expect("retained exact Deflate mode-1 recipe");
 
     assert_eq!(recipe.payloads.len(), 1);
-    assert_eq!(recipe.payloads[0].blob_index, 1, "mode 1 must project the exact-stream blob");
+    assert_eq!(
+        recipe.payloads[0].blob_index, 1,
+        "mode 1 must project the exact-stream blob"
+    );
     assert_eq!(recipe.payloads[0].logical_len, 14);
 
     let data_base = HEADER_SIZE + compressed_len;
@@ -97,7 +114,10 @@ fn fixed_revision24_retained_exact_deflate_projects_without_recompression() {
             let compressed_len = row[2].as_u64().unwrap() as usize;
             let codec = row[3].as_u64().unwrap();
             let meta_len = row[4].as_u64().unwrap() as usize;
-            assert_eq!(codec, 0, "fixed mode-1 vector keeps its three CMPCT blobs RAW");
+            assert_eq!(
+                codec, 0,
+                "fixed mode-1 vector keeps its three CMPCT blobs RAW"
+            );
             assert_eq!(compressed_len, logical_len);
             let payload = data_base + offset + BLOB_HEADER_SIZE + meta_len;
             archive[payload..payload + logical_len].to_vec()
@@ -105,8 +125,14 @@ fn fixed_revision24_retained_exact_deflate_projects_without_recompression() {
         .collect();
 
     let mut rebuilt = vec![0u8; logical_size as usize];
-    for ProjectionSegment { blob_index, blob_offset, output_offset, length } in
-        recipe.plan_range(0, logical_size).expect("complete range plan")
+    for ProjectionSegment {
+        blob_index,
+        blob_offset,
+        output_offset,
+        length,
+    } in recipe
+        .plan_range(0, logical_size)
+        .expect("complete range plan")
     {
         let src_start = blob_offset as usize;
         let src_end = src_start + length as usize;
@@ -123,5 +149,8 @@ fn fixed_revision24_retained_exact_deflate_projects_without_recompression() {
     assert_eq!(plan.len(), 3);
     assert_eq!(plan[1].blob_index, 1);
     assert_eq!(plan[1].length, 14);
-    assert_eq!(raw_blobs[1], decode_hex(vector["member"]["exact_deflate_hex"].as_str().unwrap()));
+    assert_eq!(
+        raw_blobs[1],
+        decode_hex(vector["member"]["exact_deflate_hex"].as_str().unwrap())
+    );
 }
