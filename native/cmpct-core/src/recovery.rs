@@ -5,6 +5,9 @@
 //! is ignored by scanning backward for the newest footer whose complete parent chain validates. This
 //! module mirrors the Python reference semantics without depending on the primary index being readable.
 
+#[path = "msgpack_guard.rs"]
+mod msgpack_guard;
+
 use rmpv::Value;
 use sha2::{Digest, Sha256};
 use std::collections::HashSet;
@@ -19,6 +22,12 @@ const GENERATION_CHECKPOINT: u8 = 0;
 const GENERATION_DELTA: u8 = 1;
 const CODEC_RAW: u8 = 0;
 const CODEC_ZSTD: u8 = 1;
+const MAX_FILES: usize = 4_000_000;
+const MAX_BLOBS: usize = 4_000_000;
+const MAX_RECIPES: u64 = 1_000_000;
+const MAX_PATH_BYTES: u64 = 1024 * 1024;
+const MAX_MSGPACK_DEPTH: usize = 1024;
+const MAX_MSGPACK_NODES: u64 = 16_000_000;
 
 #[derive(Debug, Error)]
 pub enum RecoveryError {
@@ -66,6 +75,24 @@ fn map_value_mut<'a>(value: &'a mut Value, key: &str) -> Option<&'a mut Value> {
         .find_map(|(name, value)| (name.as_str() == Some(key)).then_some(value))
 }
 
+fn guard_messagepack(payload: &[u8], max_payload_bytes: u64) -> Result<(), RecoveryError> {
+    msgpack_guard::validate(
+        payload,
+        msgpack_guard::GuardLimits {
+            max_string_bytes: MAX_PATH_BYTES.max(1024 * 1024),
+            max_binary_bytes: max_payload_bytes,
+            max_array_items: MAX_FILES.max(MAX_BLOBS) as u64,
+            max_map_items: MAX_FILES.max(MAX_BLOBS).max(MAX_RECIPES as usize) as u64,
+            max_depth: MAX_MSGPACK_DEPTH,
+            max_nodes: MAX_MSGPACK_NODES,
+        },
+    )
+    .map_err(|error| match error {
+        msgpack_guard::GuardError::Limit => RecoveryError::Limit,
+        _ => RecoveryError::Malformed,
+    })
+}
+
 fn decode_payload(
     file: &mut File,
     footer_pos: u64,
@@ -83,10 +110,12 @@ fn decode_payload(
     }
     let kind = footer[8];
     let codec = footer[9];
+    let flags = footer[10];
+    let reserved = footer[11];
     if kind != GENERATION_CHECKPOINT && kind != GENERATION_DELTA {
         return Err(RecoveryError::Malformed);
     }
-    if codec != CODEC_RAW && codec != CODEC_ZSTD {
+    if codec != CODEC_RAW && codec != CODEC_ZSTD || flags != 0 || reserved != 0 {
         return Err(RecoveryError::Malformed);
     }
     let compressed_len = le_u64(&footer[12..20]);
@@ -98,7 +127,12 @@ fn decode_payload(
     if compressed_len > footer_pos {
         return Err(RecoveryError::Malformed);
     }
-    if previous_footer != 0 && previous_footer >= footer_pos {
+    if previous_footer != 0
+        && (previous_footer >= footer_pos
+            || previous_footer
+                .checked_add(FOOTER_SIZE)
+                .is_none_or(|end| end > file_len))
+    {
         return Err(RecoveryError::Malformed);
     }
     let payload_start = footer_pos - compressed_len;
@@ -130,6 +164,7 @@ fn decode_payload(
     {
         return Err(RecoveryError::Malformed);
     }
+    guard_messagepack(&payload_bytes, max_payload_bytes)?;
     let mut cursor = Cursor::new(payload_bytes.as_slice());
     let payload =
         rmpv::decode::read_value(&mut cursor).map_err(|_| RecoveryError::Malformed)?;
@@ -155,6 +190,9 @@ fn apply_delta(index: &mut Value, delta: &Value) -> Result<(), RecoveryError> {
     let blobs = map_value_mut(index, "blobs")
         .and_then(Value::as_array_mut)
         .ok_or(RecoveryError::Malformed)?;
+    if blobs.len().saturating_add(new_blobs.len()) > MAX_BLOBS {
+        return Err(RecoveryError::Limit);
+    }
     blobs.extend(new_blobs.iter().cloned());
 
     let operations = map_value(delta, "ops")
@@ -171,7 +209,7 @@ fn apply_delta(index: &mut Value, delta: &Value) -> Result<(), RecoveryError> {
             .and_then(Value::as_str)
             .ok_or(RecoveryError::Malformed)?;
         match opcode {
-            "put" => {
+            "put" if row.len() == 2 => {
                 let replacement = row.get(1).cloned().ok_or(RecoveryError::Malformed)?;
                 // Footnote: own the path before moving `replacement` into the canonical file table.
                 // Borrowing the path from the MessagePack row while replacing/pushing that same row
@@ -185,17 +223,20 @@ fn apply_delta(index: &mut Value, delta: &Value) -> Result<(), RecoveryError> {
                 {
                     *slot = replacement;
                 } else {
+                    if files.len() >= MAX_FILES {
+                        return Err(RecoveryError::Limit);
+                    }
                     files.push(replacement);
                 }
             }
-            "del" => {
+            "del" if row.len() == 2 => {
                 let path = row
                     .get(1)
                     .and_then(Value::as_str)
                     .ok_or(RecoveryError::Malformed)?;
                 files.retain(|candidate| file_row_path(candidate) != Some(path));
             }
-            "ren" => {
+            "ren" if row.len() == 3 => {
                 let old = row
                     .get(1)
                     .and_then(Value::as_str)
@@ -204,15 +245,16 @@ fn apply_delta(index: &mut Value, delta: &Value) -> Result<(), RecoveryError> {
                     .get(2)
                     .and_then(Value::as_str)
                     .ok_or(RecoveryError::Malformed)?;
-                let candidate = files
+                if let Some(candidate) = files
                     .iter_mut()
                     .find(|candidate| file_row_path(candidate) == Some(old))
-                    .ok_or(RecoveryError::Malformed)?;
-                let candidate = candidate.as_array_mut().ok_or(RecoveryError::Malformed)?;
-                if candidate.is_empty() {
-                    return Err(RecoveryError::Malformed);
+                {
+                    let candidate = candidate.as_array_mut().ok_or(RecoveryError::Malformed)?;
+                    if candidate.is_empty() {
+                        return Err(RecoveryError::Malformed);
+                    }
+                    candidate[0] = Value::from(new);
                 }
-                candidate[0] = Value::from(new);
             }
             _ => return Err(RecoveryError::Malformed),
         }
