@@ -68,16 +68,13 @@ fn trailing_range_does_not_touch_payload_source() {
     .unwrap();
 
     assert_eq!(out, logical[11..15]);
-    assert_eq!(
-        calls,
-        vec![(ProjectionSource::LogicalBlob, 0, 4, 4)]
-    );
+    assert_eq!(calls, vec![(ProjectionSource::LogicalBlob, 0, 4, 4)]);
 }
 
 #[test]
-fn typed_source_is_preserved_for_physical_and_regenerated_payloads() {
+fn typed_source_and_expected_length_are_preserved_for_deflate_payloads() {
     let (mut recipe, blobs, _logical) = fixture();
-    recipe.payloads[0].source = ProjectionSource::PhysicalDeflate;
+    recipe.payloads[0].source = ProjectionSource::PhysicalDeflate { expected_len: 7 };
     let mut physical_calls = Vec::new();
     let mut out = vec![0u8; 7];
     execute_range(&recipe, 4, &mut out, |source, index, offset, dst| {
@@ -87,9 +84,15 @@ fn typed_source_is_preserved_for_physical_and_regenerated_payloads() {
         Ok::<(), ()>(())
     })
     .unwrap();
-    assert_eq!(physical_calls[0].0, ProjectionSource::PhysicalDeflate);
+    assert_eq!(
+        physical_calls[0].0,
+        ProjectionSource::PhysicalDeflate { expected_len: 7 }
+    );
 
-    recipe.payloads[0].source = ProjectionSource::RegeneratedDeflate { level: 6 };
+    recipe.payloads[0].source = ProjectionSource::RegeneratedDeflate {
+        level: 6,
+        expected_len: 7,
+    };
     let mut regenerated_calls = Vec::new();
     execute_range(&recipe, 4, &mut out, |source, index, offset, dst| {
         regenerated_calls.push((source, index, offset, dst.len()));
@@ -100,7 +103,10 @@ fn typed_source_is_preserved_for_physical_and_regenerated_payloads() {
     .unwrap();
     assert_eq!(
         regenerated_calls[0].0,
-        ProjectionSource::RegeneratedDeflate { level: 6 }
+        ProjectionSource::RegeneratedDeflate {
+            level: 6,
+            expected_len: 7,
+        }
     );
 }
 
