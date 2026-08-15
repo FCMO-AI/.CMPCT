@@ -67,15 +67,16 @@ documentation/tests/benchmarks.
 : Memory-safe Rust read-only core. It authenticates and decodes the revision-24 primary index, applies
   the shared lexical path policy, enumerates logical entries, bounds the base blob table, and exposes
   an opaque C ABI. The member-access surface reads genuinely range-local slices from direct RAW
-  members, bounded ranges from ordinary direct Zstd/raw Deflate members, range-local fixed/CDC chunk
-  maps that decode only intersecting chunks, and sparse maps that synthesize holes while decoding only
-  stored chunks in intersecting extents. Native open validates fixed/CDC/sparse blob references,
-  declared lengths, sparse ordering/non-overlap and exact logical/extent byte accounting; complete
-  mapped reads additionally verify the logical whole-file SHA-256. CI cross-checks the C ABI against
-  Python plus builder-independent direct/chunk/sparse/Zstd-dictionary golden archives. Codec-3 reads
-  authenticate the index-selected dictionary blob and bound both dictionary and member decode work
-  before returning content. WAV-FLAC direct blobs, virtual member access, sequential streams, journal
-  recovery and full structural preflight parity remain unfinished.
+  members, bounded ranges from ordinary direct Zstd/WAV-FLAC/raw Deflate/Zstd-dictionary members,
+  range-local fixed/CDC chunk maps that decode only intersecting chunks, and sparse maps that synthesize
+  holes while decoding only stored chunks in intersecting extents. Native open validates fixed/CDC/
+  sparse blob references, declared lengths, sparse ordering/non-overlap and exact logical/extent byte
+  accounting; complete mapped reads additionally verify the logical whole-file SHA-256. Direct
+  compressed/reconstructed reads are capped at 256 MiB and authenticate complete logical bytes before
+  returning a slice; codec 2 additionally validates reconstruction metadata against FLAC stream
+  properties. CI cross-checks the C ABI against Python plus builder-independent direct/chunk/sparse/
+  Zstd-dictionary/WAV-FLAC golden archives. Virtual member access, sequential streams, journal recovery
+  and full structural preflight parity remain unfinished.
 
 `benchmarks/universal_bench.py`
 : Heterogeneous synthetic benchmark harness. Generated corpora/output are not canonical history;
@@ -154,15 +155,17 @@ result to about 55.5 ms while ZIP measured about 48.6 ms on the same shared-runn
 residual is still an active parity defect, not a declared tradeoff.
 
 The native core now proves direct, chunked and sparse selective-content paths across the C ABI. Direct
-RAW remains range-local; direct Zstd/raw Deflate are capped and whole-object authenticated before
-slicing. Fixed and CDC members are validated from authenticated index metadata and answer
-cross-boundary ranges by decoding only intersecting chunks. Sparse members validate sorted/non-
-overlapping extent maps and exact stored-byte accounting, synthesize holes as zeroes, and decode only
-stored chunks in extents intersecting the requested interval. Builder-independent golden archives
-mix RAW/Zstd/Deflate chunks; the sparse gate additionally proves that corruption in an untouched
-extent does not poison a disjoint range, while touching the corrupted compressed blob fails. Complete
-fixed/CDC/sparse reads enforce the logical whole-file SHA-256. This is a portability/conformance
-milestone, not yet a claim of representation-complete native reading.
+RAW remains range-local; direct Zstd/WAV-FLAC/raw Deflate/Zstd-dictionary are capped and whole-object
+authenticated before slicing. Codec 2 reconstructs the original WAV prefix/PCM/suffix byte-for-byte,
+validates FLAC stream properties against authenticated reconstruction metadata, and crosses the same
+fixed archive through the public C ABI with physical-hash corruption refusal. Fixed and CDC members
+are validated from authenticated index metadata and answer cross-boundary ranges by decoding only
+intersecting chunks. Sparse members validate sorted/non-overlapping extent maps and exact stored-byte
+accounting, synthesize holes as zeroes, and decode only stored chunks in extents intersecting the
+requested interval. Builder-independent golden archives cover direct RAW/Zstd/Deflate/WAV-FLAC/
+Zstd-dictionary plus fixed/CDC/sparse representations. Complete fixed/CDC/sparse reads enforce the
+logical whole-file SHA-256. This is a portability/conformance milestone, not yet a claim of
+representation-complete native reading.
 
 Treat those as **reference behavior**, not yet as a frozen interoperability standard.
 
@@ -179,7 +182,7 @@ A new agent should not mistake prototype breadth for completion. Major open area
 - complete ACL/Windows/macOS metadata/path normalization rules;
 - split-volume and streaming/non-seekable creation;
 - remote HTTP/object-store range access with partial verification;
-- native memory-safe high-performance core beyond authenticated primary-index enumeration plus direct RAW/Zstd/Deflate/Zstd-dictionary, fixed/CDC and sparse range reads: complete structural validation, committed-generation recovery, WAV-FLAC codec support, virtual member access, sequential streams and extraction remain unfinished;
+- native memory-safe high-performance core beyond authenticated primary-index enumeration plus implemented direct codecs, fixed/CDC and sparse range reads: complete structural validation, committed-generation recovery, virtual member access, sequential streams and extraction remain unfinished;
 - scalable CDC without whole-file memory loading;
 - robust Android/Linux/Windows/Apple archive browsing, file association and mount/file-manager integrations defined by `docs/PORTABILITY.md`;
 - reversible preprocessing for already-compressed structures where licensing and exactness permit;
@@ -230,14 +233,14 @@ encodings, ordering, path normalization, endianness, bounds, index schemas and d
 Continue the memory-safe Rust core now present under `native/cmpct-core/` while keeping Python as the
 readable executable specification and cross-check oracle. The current native slice authenticates/
 decodes the primary index, applies lexical path policy, enumerates entries, bounds base blobs, exposes
-a tested C ABI, reads direct RAW ranges without decoding unrelated data, reads bounded ordinary
-direct-Zstd/raw-Deflate ranges with whole-member authentication, and serves fixed/CDC/sparse maps
-range-locally across mixed codecs while preserving logical SHA checks for complete reads.
-Zstd-with-dictionary direct blobs cross the fixed C-ABI oracle with dictionary/member corruption
-refusal. Next add WAV-FLAC direct blobs and virtual ZIPs; then sequential member streams,
-committed-generation recovery and extraction. Native code must remain conformance-identical, and the
-same core must expose the list/stat/read/range/stream/extract surface required by platform handlers so
-portability does not fork format semantics.
+a tested C ABI, reads direct RAW ranges without decoding unrelated data, reads bounded ordinary direct
+Zstd/WAV-FLAC/raw-Deflate/Zstd-dictionary ranges with whole-member authentication, and serves
+fixed/CDC/sparse maps range-locally while preserving logical SHA checks for complete reads. Fixed
+builder-independent archives gate each implemented representation and corruption boundary. Next add
+virtual ZIP reconstruction/range access; then sequential member streams, extraction, full structural
+preflight parity and committed-generation recovery. Native code must remain conformance-identical, and
+the same core must expose the list/stat/read/range/stream/extract surface required by platform handlers
+so portability does not fork format semantics.
 
 ### Mission 5 — size frontier without random-access regression
 
