@@ -140,7 +140,7 @@ def zdd(data:bytes, usize:int, dictionary:bytes)->bytes:
 
 def _audio_modules():
     # Heavy scientific/audio modules are imported only when a file actually selects the FLAC codec.
-    # Fast-profile Hermes stores its mirrored WAVs as reusable Deflate streams and pays zero import cost.
+    # Fast profiles with reusable Deflate WAV streams pay zero heavy-module import cost.
     import numpy as np
     import soundfile as sf
     return np,sf
@@ -167,7 +167,7 @@ def wavflac_compress(raw:bytes):
     if bits==16:arr=np.frombuffer(pcm,dtype='<i2');sub='PCM_16'
     elif bits==32:arr=np.frombuffer(pcm,dtype='<i4');sub='PCM_32'
     elif bits==8:
-        # WAV PCM8 is unsigned while libsndfile integer arrays are signed; not used in the Hermes corpus.
+        # WAV PCM8 is unsigned while libsndfile integer arrays are signed; not enabled by the current exact WAV-FLAC path.
         return None
     else:
         # 24-bit exact handling is deliberately deferred rather than silently risking altered bytes.
@@ -176,7 +176,6 @@ def wavflac_compress(raw:bytes):
     bio=io.BytesIO();sf.write(bio,arr,rate,format='FLAC',subtype=sub,compression_level=1.0)
     meta=msgpack.packb([prefix,suffix,ch,rate,bits],use_bin_type=True)
     return bio.getvalue(),meta
-
 def wavflac_decompress(comp:bytes, meta:bytes)->bytes:
     np,sf=_audio_modules();prefix,suffix,ch,rate,bits=msgpack.unpackb(meta,raw=False)
     dtype='int16' if bits==16 else 'int32'
