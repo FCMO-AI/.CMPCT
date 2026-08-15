@@ -2,11 +2,13 @@
 //!
 //! The native slice authenticates the primary index, enumerates its logical tree, and can read
 //! bounded byte ranges from direct RAW/Zstd/WAV-FLAC/Deflate/Zstd-dictionary members, revision-24
-//! fixed/CDC chunk maps, and sparse extents. RAW stays genuinely range-local; compressed direct
-//! members decode one bounded object, while chunked/sparse ranges decode only intersecting stored
-//! data. Virtual containers and transactional recovery remain behind explicit unsupported errors
-//! until each representation has its own conformance gate.
+//! fixed/CDC chunk maps, sparse extents, and independently conformance-gated stored-payload virtual
+//! ZIP recipes. RAW stays genuinely range-local; compressed direct members decode one bounded object,
+//! while chunked/sparse/virtual ranges decode only intersecting stored data. Transactional recovery
+//! remains behind explicit unsupported errors until it has its own conformance gate.
 
+mod vzip;
+mod vzip_dispatch;
 mod wavflac;
 
 use flate2::read::DeflateDecoder;
@@ -35,6 +37,7 @@ const CODEC_ZSTDDICT: u8 = 3;
 const CODEC_DEFLATE: u8 = 4;
 const STORAGE_BLOB: u64 = 0;
 const STORAGE_CHUNKS: u64 = 1;
+const STORAGE_VZIP: u64 = 2;
 const STORAGE_SPARSE: u64 = 3;
 const STORAGE_CDC: u64 = 5;
 const MAX_INDEX_BYTES: u64 = 256 * 1024 * 1024;
@@ -108,6 +111,7 @@ enum Storage {
     Unsupported,
     Direct(usize),
     Fixed(Vec<ChunkRef>),
+    VirtualZip(vzip::VirtualZipRecipe),
     Sparse(Vec<SparseExtent>),
     Cdc(Vec<ChunkRef>),
 }
@@ -572,11 +576,43 @@ impl Archive {
         Ok(())
     }
 
-    /// Read a byte range from a supported direct, chunked, or sparse member.
+    fn read_virtual_zip_range(
+        &self,
+        recipe: &vzip::VirtualZipRecipe,
+        start: u64,
+        out: &mut [u8],
+        file: &mut File,
+    ) -> Result<(), CmpctError> {
+        // Footnote: the virtual recipe is authenticated index metadata, but projected payload bytes
+        // still have to cross the ordinary blob-framing/codec checks. Keeping that path centralized
+        // means virtual ZIP cannot accidentally become a weaker integrity implementation.
+        vzip_dispatch::execute_range(recipe, start, out, |blob_index, blob_offset, target| {
+            self.read_blob_range(blob_index, blob_offset, target, file)
+        })
+        .map_err(|error| match error {
+            vzip_dispatch::VirtualZipDispatchError::Plan(vzip::VirtualZipError::Range) => {
+                CmpctError::Range
+            }
+            vzip_dispatch::VirtualZipDispatchError::Plan(vzip::VirtualZipError::UnsupportedPayload) => {
+                CmpctError::Unsupported
+            }
+            vzip_dispatch::VirtualZipDispatchError::Plan(vzip::VirtualZipError::Schema(message)) => {
+                CmpctError::Schema(message)
+            }
+            vzip_dispatch::VirtualZipDispatchError::Blob(error) => error,
+            vzip_dispatch::VirtualZipDispatchError::InvalidProjection => CmpctError::Schema(
+                "virtual-ZIP projection did not cover the requested range exactly".into(),
+            ),
+            vzip_dispatch::VirtualZipDispatchError::LogicalHash => CmpctError::MemberHash,
+        })
+    }
+
+    /// Read a byte range from a supported direct, chunked, sparse, or stored-payload virtual member.
     ///
     /// RAW returns only requested physical bytes after authenticated-index/header cross-checking.
-    /// Compressed direct members decode one bounded object; fixed/CDC and sparse maps decode only
-    /// intersecting stored chunks. A complete logical-map read also verifies the whole-file SHA-256.
+    /// Compressed direct members decode one bounded object; fixed/CDC, sparse, and stored virtual-ZIP
+    /// paths read only intersecting stored regions. Complete mapped/virtual reads additionally verify
+    /// their logical SHA-256 identity.
     pub fn read_range(
         &self,
         entry_index: usize,
@@ -616,6 +652,9 @@ impl Archive {
                         return Err(CmpctError::MemberHash);
                     }
                 }
+            }
+            Storage::VirtualZip(recipe) => {
+                self.read_virtual_zip_range(recipe, start, out, &mut file)?;
             }
             Storage::Sparse(extents) => {
                 self.read_sparse_range(extents, start, out, &mut file)?;
@@ -776,7 +815,54 @@ fn storage_blob_index(value: &Value, blob_count: usize, label: &str) -> Result<u
     Ok(index)
 }
 
+fn parse_virtual_zip_storage(
+    index: &Value,
+    storage: &[Value],
+    logical_size: u64,
+    blobs: &[Blob],
+    row_index: usize,
+) -> Result<Storage, CmpctError> {
+    if storage.len() < 2 {
+        return Err(CmpctError::Schema(format!(
+            "file row {row_index} virtual-ZIP storage is too short"
+        )));
+    }
+    let recipe_index = storage[1].as_u64().ok_or_else(|| {
+        CmpctError::Schema(format!(
+            "file row {row_index} virtual-ZIP recipe index is invalid"
+        ))
+    })?;
+    let recipe_index = usize::try_from(recipe_index).map_err(|_| {
+        CmpctError::Schema(format!(
+            "file row {row_index} virtual-ZIP recipe index exceeds native width"
+        ))
+    })?;
+    let recipes = map_field(index, "recipes")?
+        .as_array()
+        .ok_or_else(|| CmpctError::Schema("recipes is not an array".into()))?;
+    let recipe_value = recipes.get(recipe_index).ok_or_else(|| {
+        CmpctError::Schema(format!(
+            "file row {row_index} virtual-ZIP references missing recipe"
+        ))
+    })?;
+    let blob_sizes: Vec<u64> = blobs.iter().map(|blob| blob.usize).collect();
+    match vzip::parse_stored_recipe(recipe_value, &blob_sizes, logical_size) {
+        Ok(recipe) => Ok(Storage::VirtualZip(recipe)),
+        // A well-shaped revision-24 recipe using a not-yet-gated Deflate stream mode should not make
+        // the whole archive unopenable. Preserve typed Unsupported at read time while malformed recipe
+        // structure still fails during authenticated index parsing.
+        Err(vzip::VirtualZipError::UnsupportedPayload) => Ok(Storage::Unsupported),
+        Err(vzip::VirtualZipError::Schema(message)) => Err(CmpctError::Schema(format!(
+            "file row {row_index} virtual-ZIP recipe: {message}"
+        ))),
+        Err(vzip::VirtualZipError::Range) => Err(CmpctError::Schema(format!(
+            "file row {row_index} virtual-ZIP recipe has invalid logical range accounting"
+        ))),
+    }
+}
+
 fn parse_storage(
+    index: &Value,
     value: &Value,
     logical_size: u64,
     blobs: &[Blob],
@@ -844,6 +930,7 @@ fn parse_storage(
             }
             Ok(Storage::Fixed(chunks))
         }
+        STORAGE_VZIP => parse_virtual_zip_storage(index, storage, logical_size, blobs, row_index),
         STORAGE_SPARSE => {
             if storage.len() < 2 {
                 return Err(CmpctError::Schema(format!(
@@ -1054,15 +1141,22 @@ fn parse_entries(index: &Value, blobs: &[Blob]) -> Result<Vec<Entry>, CmpctError
             .as_u64()
             .ok_or_else(|| CmpctError::Schema(format!("file row {i} has invalid size")))?;
         let logical_hash = parse_hash(&row[5], i)?;
-        let storage = parse_storage(&row[6], size, blobs, i)?;
+        let storage = parse_storage(index, &row[6], size, blobs, i)?;
         if matches!(
             storage,
-            Storage::Fixed(_) | Storage::Sparse(_) | Storage::Cdc(_)
+            Storage::Fixed(_) | Storage::VirtualZip(_) | Storage::Sparse(_) | Storage::Cdc(_)
         ) && logical_hash.is_none()
         {
             return Err(CmpctError::Schema(format!(
                 "file row {i} logical-map member is missing SHA-256"
             )));
+        }
+        if let Storage::VirtualZip(recipe) = &storage {
+            if logical_hash != Some(recipe.logical_sha256) {
+                return Err(CmpctError::Schema(format!(
+                    "file row {i} virtual-ZIP recipe SHA-256 disagrees with file identity"
+                )));
+            }
         }
         entries.push(Entry {
             path: path.to_owned(),
@@ -1227,7 +1321,7 @@ pub unsafe extern "C" fn cmpct_entry_path(
     CmpctStatus::Ok as c_int
 }
 
-/// Read a bounded byte range from a supported direct, chunked, or sparse member.
+/// Read a bounded byte range from a supported direct, chunked, sparse, or stored virtual-ZIP member.
 ///
 /// `out_read` receives the number of bytes copied. A zero-length read may pass a null buffer.
 /// Representations not yet implemented by the native core return `CmpctStatus::Unsupported`.
