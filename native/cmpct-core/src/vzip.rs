@@ -30,14 +30,14 @@ pub enum VirtualZipError {
 ///
 /// Footnote: mode 0 and mode 2 deliberately cannot be represented as an ordinary logical blob read.
 /// Mode 0 needs the *physical* RFC-1951 payload stored inside a codec-4 blob; mode 2 needs an exact
-/// zlib-compatible RFC-1951 regeneration from authenticated logical content. Making this distinction a
-/// typed part of the plan prevents future platform adapters from silently decoding/recompressing the
-/// wrong thing and still returning a superficially valid but byte-different ZIP.
+/// zlib-compatible RFC-1951 regeneration from authenticated logical content. The expected total
+/// stream length is carried in the source itself so a selective read cannot accidentally accept an
+/// authenticated but differently-sized stream and project only a matching prefix.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ProjectionSource {
     LogicalBlob,
-    PhysicalDeflate,
-    RegeneratedDeflate { level: u8 },
+    PhysicalDeflate { expected_len: u64 },
+    RegeneratedDeflate { level: u8, expected_len: u64 },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -211,7 +211,12 @@ pub fn parse_recipe(
                 // Level is not needed to *read* mode 0, but validating it preserves the exact
                 // revision-24 descriptor contract and catches malformed archive-controlled metadata.
                 let _ = deflate_level(&payload[5], index)?;
-                (content_blob, ProjectionSource::PhysicalDeflate)
+                (
+                    content_blob,
+                    ProjectionSource::PhysicalDeflate {
+                        expected_len: compressed_len,
+                    },
+                )
             }
             (ZIP_DEFLATED, STREAM_RETAINED_EXACT) => {
                 // Mode 1 stores the exact RFC-1951 stream as an ordinary logical CMPCT blob.
@@ -232,7 +237,10 @@ pub fn parse_recipe(
                 let level = deflate_level(&payload[5], index)?;
                 (
                     content_blob,
-                    ProjectionSource::RegeneratedDeflate { level },
+                    ProjectionSource::RegeneratedDeflate {
+                        level,
+                        expected_len: compressed_len,
+                    },
                 )
             }
             _ => return Err(VirtualZipError::UnsupportedPayload),
