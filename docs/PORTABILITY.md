@@ -116,9 +116,12 @@ has three layers:
 3. broader ecosystem recognition should be pursued upstream in commonly used file-manager/archive
    libraries once the native core and format specification are stable.
 
-The project should not claim "native Android support" until a real APK/AAB built from this repository
-can open a revision-24 conformance archive, browse its tree, stream at least one member, and extract it
-correctly on an emulator/device test.
+The canonical Android preview now satisfies the repository's first emulator-level acceptance step: a
+real APK is built, installed on an Android 10 emulator, opens revision-24 conformance archives through
+JNI into the shared Rust core, exposes an imported archive as a read-only `DocumentsProvider` root,
+and streams a member byte-exactly. This is deliberately **not** yet the same as shipped Android
+support. Physical ARM64 validation and broader representation/device coverage in
+`integrations/android/README.md` remain release gates.
 
 ## Linux / freedesktop desktops
 
@@ -187,20 +190,26 @@ Implemented today:
 - extraction and ZIP export;
 - a fair parity harness separating library and fresh-process timing;
 - Linux MIME registration source;
+- Windows `.cmpct` ProgID/OpenWith/Capabilities association contract and Apple exported UTType/document declarations;
 - explicit portability contract and release gates;
+- a canonical Android read-only preview under `integrations/android/` with `ACTION_VIEW`, Storage Access Framework import, a `DocumentsProvider`, JNI bindings to the shared Rust core, four declared Android ABIs, and an Android 10 emulator acceptance workflow;
+- Android emulator conformance proving MIME/extension routing, magic refusal, RAW/Zstd/Deflate revision-24 archive reads through Android → JNI → Rust, provider enumeration/member streaming, and relocatable packaged native-library dependencies;
 - a memory-safe Rust core under `native/cmpct-core/` that authenticates/decodes the revision-24 primary index, enumerates logical entries, rejects lexical path aliases, bounds the base blob table, cross-checks direct physical blob framing, and exposes a tested opaque C ABI;
 - native range reads for direct RAW members without decoding unrelated bytes;
 - native bounded range reads for ordinary direct Zstd, raw Deflate and Zstd-with-dictionary members, with a 256 MiB per-direct-member decode ceiling, exact decompressed-length validation and SHA-256 verification before returning the requested slice; codec-3 additionally authenticates and bounds the archive-selected dictionary blob;
 - native fixed/CDC chunk-map validation and range-local reads across mixed RAW/Zstd/Deflate chunks, with complete-member logical SHA-256 verification;
 - native sparse-map validation and range-local hole/data reads, including exact extent accounting, complete-member logical SHA-256 verification, and a conformance test proving corruption in an untouched extent does not force unrelated data to be decoded;
-- builder-independent direct-codec, chunk-map, sparse and Zstd-dictionary golden archives exercised through the produced shared library from a non-Rust caller, including dictionary/member corruption refusal for codec 3.
+- builder-independent direct-codec, chunk-map, sparse, Zstd-dictionary and WAV/FLAC golden archives; WAV/FLAC reconstruction is independently implemented in Rust as a bounded component but is not yet connected to archive dispatch/C ABI.
 
 `docs/NATIVE_CORE.md` is the detailed handoff for the native capability and its safety boundary.
+`integrations/android/README.md` is the Android-specific acceptance handoff and must remain the source
+of truth for the distinction between emulator-proven preview functionality and release-complete device
+support.
 
 Not yet implemented and therefore **not to be claimed as shipped support**:
 
-- complete memory-safe native reader/writer ABI beyond primary-index/open/enumeration plus direct RAW/Zstd/Deflate/Zstd-dictionary, fixed/CDC and sparse reads: full hostile structural validation, recovery, WAV-FLAC/remaining storage descriptions, streams, extraction and mutation are still pending;
-- Android application/DocumentsProvider;
+- complete memory-safe native reader/writer ABI beyond primary-index/open/enumeration plus direct RAW/Zstd/Deflate/Zstd-dictionary, fixed/CDC and sparse reads: full hostile structural validation, recovery, WAV-FLAC archive dispatch, virtual/remaining storage descriptions, streams, extraction and mutation are still pending;
+- release-complete Android support: physical ARM64/device-provider validation and representation-complete native coverage remain required even though the canonical emulator-gated preview now exists;
 - Windows shell/browser package;
 - Apple document/Quick Look package;
 - Linux browser/FUSE/GVfs integration;
