@@ -2,10 +2,11 @@
 //!
 //! The native slice authenticates the primary index, enumerates its logical tree, and can read
 //! bounded byte ranges from direct RAW/Zstd/WAV-FLAC/Deflate/Zstd-dictionary members, revision-24
-//! fixed/CDC chunk maps, sparse extents, and independently conformance-gated stored-payload virtual
-//! ZIP recipes. RAW stays genuinely range-local; compressed direct members decode one bounded object,
-//! while chunked/sparse/virtual ranges decode only intersecting stored data. Transactional recovery
-//! remains behind explicit unsupported errors until it has its own conformance gate.
+//! fixed/CDC chunk maps, sparse extents, micro-solid pack slices, and independently conformance-gated
+//! stored-payload virtual ZIP recipes. RAW stays genuinely range-local; compressed direct members
+//! decode one bounded object, while chunked/sparse/pack/virtual ranges touch only intersecting stored
+//! data. Transactional recovery remains behind explicit unsupported errors until it has its own
+//! conformance gate.
 
 mod vzip;
 mod vzip_dispatch;
@@ -39,6 +40,7 @@ const STORAGE_BLOB: u64 = 0;
 const STORAGE_CHUNKS: u64 = 1;
 const STORAGE_VZIP: u64 = 2;
 const STORAGE_SPARSE: u64 = 3;
+const STORAGE_PACK: u64 = 4;
 const STORAGE_CDC: u64 = 5;
 const MAX_INDEX_BYTES: u64 = 256 * 1024 * 1024;
 const MAX_DIRECT_DECODE_BYTES: u64 = 256 * 1024 * 1024;
@@ -113,6 +115,11 @@ enum Storage {
     Fixed(Vec<ChunkRef>),
     VirtualZip(vzip::VirtualZipRecipe),
     Sparse(Vec<SparseExtent>),
+    Pack {
+        index: usize,
+        offset: u64,
+        length: u64,
+    },
     Cdc(Vec<ChunkRef>),
 }
 
@@ -607,12 +614,12 @@ impl Archive {
         })
     }
 
-    /// Read a byte range from a supported direct, chunked, sparse, or stored-payload virtual member.
+    /// Read a byte range from a supported direct, chunked, sparse, packed, or virtual member.
     ///
     /// RAW returns only requested physical bytes after authenticated-index/header cross-checking.
-    /// Compressed direct members decode one bounded object; fixed/CDC, sparse, and stored virtual-ZIP
-    /// paths read only intersecting stored regions. Complete mapped/virtual reads additionally verify
-    /// their logical SHA-256 identity.
+    /// Compressed direct members decode one bounded object; fixed/CDC, sparse, pack, and stored
+    /// virtual-ZIP paths read only intersecting stored regions. Complete mapped/pack/virtual reads
+    /// additionally verify their logical SHA-256 identity when revision-24 metadata supplies one.
     pub fn read_range(
         &self,
         entry_index: usize,
@@ -655,6 +662,24 @@ impl Archive {
             }
             Storage::VirtualZip(recipe) => {
                 self.read_virtual_zip_range(recipe, start, out, &mut file)?;
+            }
+            Storage::Pack {
+                index,
+                offset,
+                length,
+            } => {
+                if *length != entry.size {
+                    return Err(CmpctError::BlobHeader);
+                }
+                let blob_start = offset.checked_add(start).ok_or(CmpctError::Range)?;
+                self.read_blob_range(*index, blob_start, out, &mut file)?;
+                if start == 0 && end == entry.size {
+                    if let Some(expected) = entry.logical_hash {
+                        if Sha256::digest(&*out).as_slice() != expected {
+                            return Err(CmpctError::MemberHash);
+                        }
+                    }
+                }
             }
             Storage::Sparse(extents) => {
                 self.read_sparse_range(extents, start, out, &mut file)?;
@@ -1031,6 +1056,40 @@ fn parse_storage(
             }
             Ok(Storage::Sparse(extents))
         }
+        STORAGE_PACK => {
+            if storage.len() != 4 {
+                return Err(CmpctError::Schema(format!(
+                    "file row {row_index} pack storage has invalid shape"
+                )));
+            }
+            let index = storage_blob_index(
+                &storage[1],
+                blobs.len(),
+                &format!("file row {row_index} pack blob"),
+            )?;
+            let offset = storage[2].as_u64().ok_or_else(|| {
+                CmpctError::Schema(format!("file row {row_index} pack offset is invalid"))
+            })?;
+            let length = storage[3].as_u64().ok_or_else(|| {
+                CmpctError::Schema(format!("file row {row_index} pack length is invalid"))
+            })?;
+            let pack_end = offset.checked_add(length).ok_or_else(|| {
+                CmpctError::Schema(format!("file row {row_index} pack range overflows"))
+            })?;
+            if length != logical_size || pack_end > blobs[index].usize {
+                return Err(CmpctError::Schema(format!(
+                    "file row {row_index} pack range disagrees with logical/blob size"
+                )));
+            }
+            // Footnote: S_PACK is an authenticated index-level slice of one ordinary blob. Keeping
+            // the source blob and checked offset/length explicit preserves tiny-file random access
+            // without teaching Android or any future platform shell a second archive grammar.
+            Ok(Storage::Pack {
+                index,
+                offset,
+                length,
+            })
+        }
         STORAGE_CDC => {
             if storage.len() < 2 {
                 return Err(CmpctError::Schema(format!(
@@ -1321,7 +1380,7 @@ pub unsafe extern "C" fn cmpct_entry_path(
     CmpctStatus::Ok as c_int
 }
 
-/// Read a bounded byte range from a supported direct, chunked, sparse, or stored virtual-ZIP member.
+/// Read a bounded byte range from a supported direct, chunked, sparse, packed, or virtual-ZIP member.
 ///
 /// `out_read` receives the number of bytes copied. A zero-length read may pass a null buffer.
 /// Representations not yet implemented by the native core return `CmpctStatus::Unsupported`.

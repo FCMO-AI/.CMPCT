@@ -163,6 +163,8 @@ jobs:
         run: python tests/native_chunk_golden_abi.py
       - name: Committed golden sparse ABI gate
         run: python tests/native_sparse_golden_abi.py
+      - name: Native micro-pack C-ABI gate
+        run: python tests/native_pack_abi.py native/cmpct-core/target/release/libcmpct_core.so
       - name: Committed golden Zstd-dictionary ABI gate
         run: python tests/native_dictionary_golden_abi.py
       - name: Committed WAV-FLAC native component gate
@@ -171,3 +173,7 @@ jobs:
         run: python tests/native_wavflac_abi.py
       - name: Committed virtual-ZIP archive ABI gate
         run: python tests/native_virtual_zip_abi.py
+
+# Footnote: the S_PACK gate is Builder-derived, so it is a regression/portability check rather than
+# an independent format oracle. A frozen builder-independent pack vector remains a separate conformance
+# task; this gate specifically prevents platform rebases from silently losing ordinary tiny-file reads.

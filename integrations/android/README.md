@@ -59,7 +59,7 @@ GitHub Actions now builds all four declared ABIs, inspects the packaged JNI ELF 
 5. a bad-magic file is rejected before it can become an imported root;
 6. the packaged JNI library depends on `libcmpct_core.so` by relocatable basename rather than a build-machine filesystem path.
 
-The emulator gate is intentionally narrower than the production-device gate below. Passing it means the first-party Android routing/provider/native stack is executable, not that every revision-24 representation or every Android file manager is already certified.
+The emulator gate is intentionally narrower than the production-device gate below. Passing it means the first-party Android routing/provider/native stack is executable, not that every revision-24 representation or every Android file manager is already certified. Micro-solid `S_PACK` reads are currently guarded in native-core CI rather than by a dedicated Android instrumentation vector.
 
 ## Remaining acceptance gate before “Android support” may be called shipped
 
@@ -70,7 +70,7 @@ A release candidate still needs at least one physical ARM64 Android device and b
 3. the archive appears as a root in Android's system document UI after process/device restart;
 4. nested directories enumerate correctly in system DocumentsUI;
 5. supported regular members open in external applications through the provider;
-6. multi-chunk, CDC and sparse members stream byte-exactly without full-archive extraction;
+6. multi-chunk, CDC, sparse and micro-solid packed members stream byte-exactly without full-archive extraction;
 7. corrupt index/blob input fails closed across the native representations Android exposes;
 8. unsupported native representations fail explicitly rather than returning guessed bytes;
 9. process restart preserves imported roots;
@@ -78,7 +78,7 @@ A release candidate still needs at least one physical ARM64 Android device and b
 
 ## Current limitations
 
-The Android layer can only expose representations the shared native core can read. As of revision 24, the Rust core implements ordinary direct RAW/Zstd/WAV-FLAC/raw-Deflate/Zstd-dictionary members, fixed/CDC/sparse range reads, and independently gated virtual-ZIP reconstruction for ZIP_STORED payloads plus retained-exact Deflate stream mode 1. Virtual-ZIP Deflate mode 0 has a fixed oracle and an authenticated physical-Deflate component but deliberately remains unsupported at archive dispatch until virtual projection segments can distinguish logical blob slices from exact physical codec-4 payload slices. Virtual-ZIP Deflate mode 2, native sequential-stream APIs, full native extraction, journal recovery, and remaining structural-preflight parity are still native-core work. The provider therefore remains read-only and treats unsupported representations as errors.
+The Android layer can only expose representations the shared native core can read. As of revision 24, the Rust core implements ordinary direct RAW/Zstd/WAV-FLAC/raw-Deflate/Zstd-dictionary members, fixed/CDC/sparse range reads, micro-solid `S_PACK` slices, and independently gated virtual-ZIP reconstruction for ZIP_STORED payloads plus retained-exact Deflate stream mode 1. `S_PACK` has a Builder-derived C-ABI regression/seek gate but still needs a builder-independent frozen pack archive for full conformance provenance. Virtual-ZIP Deflate mode 0 has a fixed oracle and an authenticated physical-Deflate component but deliberately remains unsupported at archive dispatch until virtual projection segments can distinguish logical blob slices from exact physical codec-4 payload slices. Virtual-ZIP Deflate mode 2, native sequential-stream APIs, full native extraction, journal recovery, and remaining structural-preflight parity are still native-core work. The provider therefore remains read-only and treats unsupported representations as errors.
 
 Android cannot make every unrelated third-party file manager understand a new format merely by installing this app. The first-party handler + Storage Access Framework solve direct opening/browsing on devices with the app installed; wider recognition still requires MIME-correct senders and, later, upstream archive/file-manager integrations.
 
