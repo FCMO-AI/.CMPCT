@@ -1,0 +1,100 @@
+name: CMPCT physical Android ARM64 acceptance
+
+on:
+  workflow_dispatch:
+    inputs:
+      device_serial:
+        description: 'adb serial of the dedicated physical ARM64 device (blank = exactly one connected device)'
+        required: false
+        default: ''
+
+permissions:
+  contents: read
+
+jobs:
+  physical-arm64:
+    # A runner gets this label only when it is physically attached to the dedicated acceptance device.
+    # This prevents an emulator or unrelated cloud ARM VM from satisfying the production-device gate.
+    runs-on: [self-hosted, linux, arm64, cmpct-android-physical]
+    timeout-minutes: 60
+    env:
+      ANDROID_SERIAL: ${{ inputs.device_serial }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          clean: true
+
+      - name: Prove a real ARM64 Android device is connected
+        run: |
+          adb start-server
+          if [ -z "${ANDROID_SERIAL}" ]; then
+            mapfile -t DEVICES < <(adb devices | awk 'NR>1 && $2=="device" {print $1}')
+            test "${#DEVICES[@]}" -eq 1
+            export ANDROID_SERIAL="${DEVICES[0]}"
+            echo "ANDROID_SERIAL=${ANDROID_SERIAL}" >> "$GITHUB_ENV"
+          fi
+          test "$(adb -s "$ANDROID_SERIAL" get-state)" = device
+          ABI="$(adb -s "$ANDROID_SERIAL" shell getprop ro.product.cpu.abi | tr -d '\r')"
+          test "$ABI" = arm64-v8a
+          # Footnote: emulators normally expose ro.kernel.qemu=1. The physical release gate refuses
+          # that property explicitly so passing the ordinary x86 emulator job can never masquerade as
+          # the real-device evidence required by the portability contract.
+          test "$(adb -s "$ANDROID_SERIAL" shell getprop ro.kernel.qemu | tr -d '\r')" != 1
+          {
+            echo "serial=$ANDROID_SERIAL"
+            echo "abi=$ABI"
+            echo "manufacturer=$(adb -s "$ANDROID_SERIAL" shell getprop ro.product.manufacturer | tr -d '\r')"
+            echo "model=$(adb -s "$ANDROID_SERIAL" shell getprop ro.product.model | tr -d '\r')"
+            echo "android=$(adb -s "$ANDROID_SERIAL" shell getprop ro.build.version.release | tr -d '\r')"
+            echo "sdk=$(adb -s "$ANDROID_SERIAL" shell getprop ro.build.version.sdk | tr -d '\r')"
+            echo "fingerprint=$(adb -s "$ANDROID_SERIAL" shell getprop ro.build.fingerprint | tr -d '\r')"
+          } | tee /tmp/cmpct-physical-device.txt
+
+      - name: Build current ARM64-capable APK and native core
+        working-directory: integrations/android
+        run: |
+          gradle --no-daemon :app:assembleDebug :app:assembleDebugAndroidTest
+
+      - name: Install and run complete representation/recovery instrumentation suite
+        working-directory: integrations/android
+        run: |
+          # connectedDebugAndroidTest uses ANDROID_SERIAL and therefore targets the physically proven
+          # device above. The same tests cover intent routing, DocumentsProvider streaming, direct and
+          # mapped codecs, independent S_PACK, all virtual-ZIP stream modes and journal recovery.
+          gradle --no-daemon :app:connectedDebugAndroidTest
+
+      - name: Exercise process restart and provider persistence
+        run: |
+          PACKAGE=ai.fcmo.cmpct
+          adb -s "$ANDROID_SERIAL" shell am force-stop "$PACKAGE"
+          adb -s "$ANDROID_SERIAL" shell monkey -p "$PACKAGE" -c android.intent.category.LAUNCHER 1 >/dev/null
+          adb -s "$ANDROID_SERIAL" shell am force-stop "$PACKAGE"
+          # The instrumentation suite owns byte-exact archive assertions; this step specifically proves
+          # the installed package can be killed/restarted on a real device without package corruption.
+          adb -s "$ANDROID_SERIAL" shell pm path "$PACKAGE" | grep -q '^package:'
+
+      - name: Collect physical-device evidence
+        if: always()
+        run: |
+          mkdir -p physical-evidence
+          cp /tmp/cmpct-physical-device.txt physical-evidence/device.txt || true
+          adb -s "$ANDROID_SERIAL" logcat -d -t 2000 > physical-evidence/logcat.txt || true
+          find integrations/android/app/build/reports/androidTests -type f -maxdepth 8 \
+            -exec cp --parents {} physical-evidence/ \; 2>/dev/null || true
+          {
+            echo "commit=$(git rev-parse HEAD)"
+            echo "run=${GITHUB_RUN_ID:-unknown}"
+            echo "timestamp=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          } > physical-evidence/provenance.txt
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: cmpct-physical-arm64-${{ github.sha }}
+          path: physical-evidence/
+          if-no-files-found: error
+          retention-days: 90
+
+# Footnote: merely owning an ARM64 build is not physical-device acceptance. This workflow is deliberately
+# manual and self-hosted because a real attached phone/tablet is an external hardware dependency. The
+# repository can define and enforce the gate; it cannot conjure the hardware or truthfully mark it passed.
