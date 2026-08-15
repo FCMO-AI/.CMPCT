@@ -224,11 +224,17 @@ fn fixed_mode0_and_mode2_recipes_preserve_non_logical_source_semantics() {
     ));
     let mode0 = recipe_from_index(&mode0_index);
     assert_eq!(mode0.payloads.len(), 1);
-    assert_eq!(mode0.payloads[0].source, ProjectionSource::PhysicalDeflate);
+    assert_eq!(
+        mode0.payloads[0].source,
+        ProjectionSource::PhysicalDeflate { expected_len: 14 }
+    );
     assert_eq!(mode0.payloads[0].logical_len, 14);
     let mode0_plan = mode0.plan_range(39, 14).unwrap();
     assert_eq!(mode0_plan.len(), 1);
-    assert_eq!(mode0_plan[0].source, ProjectionSource::PhysicalDeflate);
+    assert_eq!(
+        mode0_plan[0].source,
+        ProjectionSource::PhysicalDeflate { expected_len: 14 }
+    );
 
     let (_, _, mode2_index, _) = decode_fixture(include_str!(
         "../../../tests/conformance/v24-virtual-zip-deflate-mode2.json"
@@ -237,14 +243,20 @@ fn fixed_mode0_and_mode2_recipes_preserve_non_logical_source_semantics() {
     assert_eq!(mode2.payloads.len(), 1);
     assert_eq!(
         mode2.payloads[0].source,
-        ProjectionSource::RegeneratedDeflate { level: 6 }
+        ProjectionSource::RegeneratedDeflate {
+            level: 6,
+            expected_len: 14,
+        }
     );
     assert_eq!(mode2.payloads[0].logical_len, 14);
     let mode2_plan = mode2.plan_range(39, 14).unwrap();
     assert_eq!(mode2_plan.len(), 1);
     assert_eq!(
         mode2_plan[0].source,
-        ProjectionSource::RegeneratedDeflate { level: 6 }
+        ProjectionSource::RegeneratedDeflate {
+            level: 6,
+            expected_len: 14,
+        }
     );
 }
 
