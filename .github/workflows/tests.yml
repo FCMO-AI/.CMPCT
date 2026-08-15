@@ -28,7 +28,7 @@ jobs:
       - name: Install reference implementation and tests
         run: |
           python -m pip install --upgrade pip
-          python -m pip install -e '.[test]'
+          python -m pip install -e '.[test,audio]'
 
       - name: Run regression suite
         run: python -m pytest -q
@@ -36,6 +36,8 @@ jobs:
       - name: Smoke-test CLI surface
         run: python -m cmpct --help
 
-# Footnote: correctness and disclosure safety are both release prerequisites. This workflow does not
-# turn shared-runner timing into marketing evidence; reproducible performance claims still require the
-# benchmark provenance/semantic discipline documented under docs/BENCHMARKS.md.
+# Footnote: correctness and disclosure safety are both release prerequisites. Audio extras are
+# installed here because codec-2 WAV/FLAC is part of revision 24 and its fixed conformance archive
+# must be decoded in CI rather than silently skipped when optional runtime codecs are absent.
+# This workflow does not turn shared-runner timing into marketing evidence; reproducible performance
+# claims still require the benchmark provenance/semantic discipline documented under docs/BENCHMARKS.md.
