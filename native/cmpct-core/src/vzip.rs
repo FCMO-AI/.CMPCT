@@ -1,8 +1,9 @@
 //! Revision-24 virtual-ZIP recipe validation and range planning.
 //!
-//! Stored ZIP payloads, canonical physical Deflate stream mode 0, and retained-exact Deflate stream
-//! mode 1 have builder-independent fixed vectors. Mode 2 remains unsupported until native zlib
-//! regeneration is proven byte-identical against an independent oracle.
+//! Stored ZIP payloads and retained-exact Deflate stream mode 1 are live in archive dispatch.
+//! Canonical physical Deflate stream mode 0 has a builder-independent oracle and can now be planned
+//! with an explicit physical source kind, but the default parser deliberately keeps it unsupported
+//! until archive dispatch routes that source through the authenticated physical-Deflate reader.
 
 use rmpv::Value;
 use thiserror::Error;
@@ -25,16 +26,14 @@ pub enum VirtualZipError {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ProjectionSource {
-    /// Read decoded logical bytes through the ordinary authenticated blob-range path.
     LogicalBlob,
-    /// Read exact physical RFC-1951 bytes from a codec-4 blob after authenticating its logical content.
     PhysicalDeflate,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct StoredPayload {
     pub blob_index: usize,
-    pub projected_len: u64,
+    pub logical_len: u64,
     pub source: ProjectionSource,
 }
 
@@ -69,10 +68,11 @@ fn blob_index(value: &Value, blob_count: usize, label: &str) -> Result<usize, Vi
     Ok(index)
 }
 
-pub fn parse_recipe(
+fn parse_recipe_impl(
     value: &Value,
     blob_sizes: &[u64],
     entry_logical_size: u64,
+    allow_physical_deflate: bool,
 ) -> Result<VirtualZipRecipe, VirtualZipError> {
     let row = value
         .as_array()
@@ -155,12 +155,13 @@ pub fn parse_recipe(
                 }
                 (content_blob, ProjectionSource::LogicalBlob)
             }
-            (ZIP_DEFLATED, STREAM_CANONICAL) => {
-                // Footnote: mode 0 must project the exact physical payload of the codec-4 content
-                // blob. The archive layer validates that blob's codec/csize and authenticates its
-                // logical identity before exposing any compressed slice.
+            (ZIP_DEFLATED, STREAM_CANONICAL) if allow_physical_deflate => {
+                // Footnote: mode 0 projects the physical RFC-1951 payload, not decoded member bytes.
+                // Keeping this source kind explicit prevents an archive adapter from accidentally
+                // decode/recompressing and changing the byte-exact nested ZIP identity.
                 (content_blob, ProjectionSource::PhysicalDeflate)
             }
+            (ZIP_DEFLATED, STREAM_CANONICAL) => return Err(VirtualZipError::UnsupportedPayload),
             (ZIP_DEFLATED, STREAM_RETAINED_EXACT) => {
                 let stream_blob = blob_index(
                     &payload[3],
@@ -183,7 +184,7 @@ pub fn parse_recipe(
         })?;
         payloads.push(StoredPayload {
             blob_index: projected_blob,
-            projected_len: compressed_len,
+            logical_len: compressed_len,
             source,
         });
     }
@@ -230,6 +231,24 @@ pub fn parse_recipe(
         logical_size,
         logical_crc32,
     })
+}
+
+pub fn parse_recipe(
+    value: &Value,
+    blob_sizes: &[u64],
+    entry_logical_size: u64,
+) -> Result<VirtualZipRecipe, VirtualZipError> {
+    parse_recipe_impl(value, blob_sizes, entry_logical_size, false)
+}
+
+/// Parse the independently frozen mode-0 form for planner/component tests.
+/// Archive dispatch must not use this until it can route `PhysicalDeflate` segments correctly.
+pub fn parse_recipe_with_physical_deflate(
+    value: &Value,
+    blob_sizes: &[u64],
+    entry_logical_size: u64,
+) -> Result<VirtualZipRecipe, VirtualZipError> {
+    parse_recipe_impl(value, blob_sizes, entry_logical_size, true)
 }
 
 pub fn parse_stored_recipe(
@@ -301,11 +320,11 @@ impl VirtualZipRecipe {
                 payload.source,
                 payload.blob_index,
                 0,
-                payload.projected_len,
+                payload.logical_len,
                 logical_cursor,
             )?;
             logical_cursor = logical_cursor
-                .checked_add(payload.projected_len)
+                .checked_add(payload.logical_len)
                 .ok_or_else(|| VirtualZipError::Schema("logical projection overflows".into()))?;
         }
 
