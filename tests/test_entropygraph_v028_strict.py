@@ -67,6 +67,21 @@ def test_oversized_primary_metadata_declaration_uses_bounded_tail_recovery(tmp_p
     assert engine.strong_verify(archive)["ok"] is True
 
 
+def test_header_magic_damage_still_routes_to_authenticated_tail_recovery(tmp_path: Path):
+    engine = _engine(); source = _source(tmp_path); archive = tmp_path / "magic-damaged.cmpct"
+    engine._build_graph(source, archive)
+    data = bytearray(archive.read_bytes())
+    data[:8] = b"BROKEN!!"
+    archive.write_bytes(data)
+    # Footnote: the footer magic is only a dispatcher hint. The subsequent strict tail path still
+    # authenticates metadata, the physical Merkle leaves and the final logical tree before success.
+    verified = engine.strong_verify(archive)
+    assert verified["ok"] is True
+    restored = tmp_path / "restored"
+    engine.extract(archive, restored)
+    assert engine.treehash(restored) == engine.treehash(source)
+
+
 def test_oversized_physical_stored_size_is_rejected_before_payload_read(tmp_path: Path):
     engine = _engine(); source = _source(tmp_path); archive = tmp_path / "oversized-record.cmpct"
     engine._build_graph(source, archive)
