@@ -6,8 +6,8 @@ weighted read-amplification budget. The original selector treated "no feasible p
 pick the smallest byte result, which could choose a much larger pack and violate the contract.
 
 This module makes an independent-record layout an explicit candidate with amplification exactly 1.0,
-then admits only pack plans whose measured amplification is <= 8x. It deliberately reuses the same
-CMPNX8 grammar/reader and the same inherited-v0.25 portfolio fallback; only encoder policy changes.
+then admits only pack plans whose measured amplification is <= 8x. It also bounds metadata and physical
+record declarations before the local reader can allocate from attacker-controlled sizes.
 
 Footnote: keeping this as a narrow policy layer preserves the already-audited research grammar while
 making the failed hypothesis visible in repository history instead of silently rewriting the original
@@ -16,6 +16,8 @@ experiment after evidence existed.
 from __future__ import annotations
 
 import importlib.util
+import msgpack
+import os
 from pathlib import Path
 import sys
 
@@ -35,6 +37,13 @@ def _load_base():
 
 BASE = _load_base()
 READ_AMPLIFICATION_BUDGET = 8.0
+MAX_METADATA = 64 * 1024 * 1024
+MAX_RECORDS = 1_000_000
+
+# Save the already-tested grammar implementations before replacing their policy hooks. The delegated
+# extractor/strong verifier resolve module globals at call time, so patching `_open_graph` below safely
+# upgrades those callers without duplicating the reconstruction grammar.
+_ORIGINAL_EXTRACT = BASE._extract_graph
 
 
 def _independent_plan(nodes: list[bytes], root_ids: list[int]):
@@ -81,9 +90,127 @@ def strict_choose_pack_plan(nodes: list[bytes], sketches, root_ids: list[int]):
     return chosen, diagnostics
 
 
-# `_build_graph` resolves this symbol from its defining module at runtime. Patch the policy before any
-# delegated build so every caller of this strict engine receives the hard locality contract.
+def _decode_meta(comp: bytes, raw_size: int, expected_sha: bytes, expected_merkle: bytes,
+                 expected_count: int | None = None, declared_decode: int | None = None,
+                 declared_memory: int | None = None):
+    if len(comp) > MAX_METADATA or raw_size < 0 or raw_size > MAX_METADATA:
+        raise RuntimeError("EntropyGraph-II metadata exceeds strict parser limit")
+    raw = BASE.zd(comp, raw_size)
+    if BASE.H(raw) != expected_sha:
+        raise RuntimeError("metadata authentication")
+    meta = msgpack.unpackb(raw, raw=False, strict_map_key=False)
+    if meta.get("v") != 1 or int(meta.get("max_dependency_depth", 99)) > 1:
+        raise RuntimeError("unsupported graph metadata")
+    meta_decode = int(meta.get("max_decode_unit", BASE.MAX_DECODE_UNIT + 1))
+    meta_memory = int(meta.get("max_decoder_memory", BASE.MAX_DECODER_MEMORY + 1))
+    if meta_decode > BASE.MAX_DECODE_UNIT or (declared_decode is not None and meta_decode != declared_decode):
+        raise RuntimeError("archive decode ceiling exceeds implementation policy")
+    if meta_memory > BASE.MAX_DECODER_MEMORY or (declared_memory is not None and meta_memory != declared_memory):
+        raise RuntimeError("archive decoder-memory ceiling exceeds implementation policy")
+    leaves = list(meta.get("record_leaf_sha256", []))
+    offsets = list(meta.get("record_rel_offsets", []))
+    if len(leaves) > MAX_RECORDS or len(offsets) != len(leaves):
+        raise RuntimeError("record table exceeds strict parser limit")
+    if expected_count is not None and (expected_count > MAX_RECORDS or len(leaves) != expected_count):
+        raise RuntimeError("record-count mismatch")
+    if BASE._merkle_root(leaves) != expected_merkle:
+        raise RuntimeError("Merkle root mismatch")
+    previous = -1
+    for offset in offsets:
+        if not isinstance(offset, int) or offset < 0 or offset <= previous:
+            # Empty record tables are legal; otherwise generated physical records are strictly ordered.
+            raise RuntimeError("record offsets are not strictly increasing")
+        previous = offset
+    return meta, offsets
+
+
+def strict_open_graph(path: Path):
+    """Open CMPNX8 with bounded primary and tail metadata before decompression allocation."""
+    stream = path.open("rb")
+    primary_error: Exception | None = None
+    try:
+        header = stream.read(BASE.HDR.size)
+        if len(header) != BASE.HDR.size:
+            raise RuntimeError("short EntropyGraph-II header")
+        magic, mcs, mus, count, max_decode, max_memory, meta_sha, merkle = BASE.HDR.unpack(header)
+        if magic != BASE.MAG:
+            raise RuntimeError("not EntropyGraph-II")
+        if mcs > MAX_METADATA or mus > MAX_METADATA or count > MAX_RECORDS:
+            raise RuntimeError("primary metadata declaration exceeds strict parser limit")
+        if max_decode > BASE.MAX_DECODE_UNIT or max_memory > BASE.MAX_DECODER_MEMORY:
+            raise RuntimeError("archive resource declaration exceeds implementation policy")
+        comp = stream.read(mcs)
+        if len(comp) != mcs:
+            raise RuntimeError("short primary metadata")
+        meta, offsets = _decode_meta(comp, mus, meta_sha, merkle, count, max_decode, max_memory)
+        return stream, meta, BASE.HDR.size + mcs, offsets, merkle
+    except Exception as exc:
+        primary_error = exc
+
+    try:
+        if path.stat().st_size < BASE.FTR.size:
+            raise RuntimeError("short EntropyGraph-II footer")
+        stream.seek(-BASE.FTR.size, os.SEEK_END)
+        footer_offset = stream.tell()
+        footer = stream.read(BASE.FTR.size)
+        if len(footer) != BASE.FTR.size:
+            raise RuntimeError("short EntropyGraph-II footer")
+        magic, mcs, mus, meta_sha, merkle = BASE.FTR.unpack(footer)
+        if magic != BASE.TAIL or mcs > MAX_METADATA or mus > MAX_METADATA:
+            raise RuntimeError("tail metadata declaration exceeds strict parser limit")
+        meta_offset = footer_offset - mcs
+        if meta_offset < BASE.HDR.size:
+            raise RuntimeError("tail metadata offset")
+        stream.seek(meta_offset)
+        comp = stream.read(mcs)
+        if len(comp) != mcs:
+            raise RuntimeError("short tail metadata")
+        meta, offsets = _decode_meta(comp, mus, meta_sha, merkle)
+        return stream, meta, BASE.HDR.size + mcs, offsets, merkle
+    except Exception as tail_error:
+        stream.close()
+        raise RuntimeError(
+            f"no authenticated bounded metadata copy: primary={primary_error!r}; tail={tail_error!r}"
+        ) from tail_error
+
+
+def _preflight_physical_records(path: Path) -> None:
+    """Reject oversized/truncated physical declarations before payload reads allocate memory."""
+    stream, meta, record_start, offsets, _ = strict_open_graph(path)
+    file_size = path.stat().st_size
+    try:
+        for record_id, rel_offset in enumerate(offsets):
+            start = record_start + rel_offset
+            if start < record_start or start > file_size - BASE.PH.size:
+                raise RuntimeError("physical record header outside archive")
+            stream.seek(start)
+            header = stream.read(BASE.PH.size)
+            if len(header) != BASE.PH.size:
+                raise RuntimeError("short physical header")
+            codec, usize, csize, crc, logical_sha = BASE.PH.unpack(header)
+            if codec not in (BASE.CODEC_RAW, BASE.CODEC_ZSTD, BASE.CODEC_PREFLATE):
+                raise RuntimeError("unknown physical codec")
+            if usize > BASE.MAX_DECODE_UNIT:
+                raise RuntimeError("physical record exceeds declared decode unit")
+            if csize > BASE.MAX_DECODER_MEMORY:
+                raise RuntimeError("stored physical record exceeds decoder-memory ceiling")
+            payload_start = start + BASE.PH.size
+            if csize > file_size - payload_start:
+                raise RuntimeError("physical record payload exceeds archive bounds")
+    finally:
+        stream.close()
+
+
+def strict_extract_graph(path: Path, dst: Path) -> None:
+    _preflight_physical_records(path)
+    _ORIGINAL_EXTRACT(path, dst)
+
+
+# `_build_graph`, `_extract_graph` and `strong_verify` resolve these symbols from their defining module
+# at runtime. Patch policy before delegation so all strict callers inherit the bounded implementations.
 BASE._choose_pack_plan = strict_choose_pack_plan
+BASE._open_graph = strict_open_graph
+BASE._extract_graph = strict_extract_graph
 
 # Re-export the grammar and reader surface used by benchmarks/tests/remote tooling.
 MAG = BASE.MAG
@@ -103,8 +230,8 @@ zc = BASE.zc
 zd = BASE.zd
 _merkle_root = BASE._merkle_root
 _preflate_unpack = BASE._preflate_unpack
-_open_graph = BASE._open_graph
-_extract_graph = BASE._extract_graph
+_open_graph = strict_open_graph
+_extract_graph = strict_extract_graph
 
 
 def treehash(root: Path) -> str:
@@ -159,6 +286,7 @@ def extract(archive: Path, dst: Path) -> None:
 
 
 def strong_verify(archive: Path) -> dict:
+    # The delegated verifier now reaches strict_open_graph + strict_extract_graph through patched globals.
     return BASE.strong_verify(archive)
 
 
