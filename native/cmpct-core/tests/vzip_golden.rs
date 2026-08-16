@@ -1,3 +1,4 @@
+#[allow(dead_code)]
 #[path = "../src/vzip.rs"]
 mod vzip;
 
@@ -16,6 +17,13 @@ fn map_field<'a>(value: &'a Value, key: &str) -> &'a Value {
         .iter()
         .find_map(|(name, value)| (name.as_str() == Some(key)).then_some(value))
         .expect("index field")
+}
+
+fn array_mut(value: &mut Value) -> &mut Vec<Value> {
+    match value {
+        Value::Array(values) => values,
+        _ => panic!("expected MessagePack array"),
+    }
 }
 
 fn decode_base64(input: &str) -> Vec<u8> {
@@ -209,7 +217,7 @@ fn malformed_recipe_accounting_and_ungated_deflate_fail_closed() {
     let (recipe, blob_sizes, logical_size) = recipe_parts(&index);
 
     let mut bad_literals = recipe.clone();
-    let row = bad_literals.as_array_mut().expect("recipe row");
+    let row = array_mut(&mut bad_literals);
     row[1] = Value::Array(vec![Value::from(38u64), Value::from(77u64)]);
     assert!(matches!(
         parse_stored_recipe(&bad_literals, &blob_sizes, logical_size),
@@ -217,9 +225,9 @@ fn malformed_recipe_accounting_and_ungated_deflate_fail_closed() {
     ));
 
     let mut deflate = recipe.clone();
-    let row = deflate.as_array_mut().expect("recipe row");
-    let payloads = row[2].as_array_mut().expect("payload rows");
-    let payload = payloads[0].as_array_mut().expect("payload row");
+    let row = array_mut(&mut deflate);
+    let payloads = array_mut(&mut row[2]);
+    let payload = array_mut(&mut payloads[0]);
     payload[1] = Value::from(8u64);
     assert_eq!(
         parse_stored_recipe(&deflate, &blob_sizes, logical_size),
