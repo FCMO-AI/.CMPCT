@@ -36,7 +36,7 @@ jobs:
           sudo apt-get install -y zstd ffmpeg gcc libsndfile1
           # Competitors are evidence supplements rather than dependencies of CMPCT itself. Missing
           # packages are recorded as unavailable by the benchmark instead of failing the core gate.
-          for pkg in p7zip-full zpaq dwarfs; do sudo apt-get install -y "$pkg" || true; done
+          for pkg in p7zip-full zpaq dwarfs borgbackup; do sudo apt-get install -y "$pkg" || true; done
           python -m pip install --upgrade pip
           python -m pip install -e '.[audio,test]'
           python -m pip install pillow reportlab python-docx openpyxl python-pptx numpy
@@ -56,11 +56,14 @@ jobs:
       - name: Run public neutral and resemblance-hostile benchmark
         run: |
           mkdir -p benchmark-artifacts
+          # Footnote: tee is only an observability layer. pipefail preserves the benchmark's real exit
+          # status so the no-regression assertion cannot be accidentally converted into a green job.
+          set -o pipefail
           python benchmarks/entropygraph_v028_bench.py \
             --suite both \
             --competitors \
             --output benchmark-artifacts/entropygraph-v028.json \
-            | tee benchmark-artifacts/entropygraph-v028.stdout.txt
+            2>&1 | tee benchmark-artifacts/entropygraph-v028.stdout.txt
 
       - name: Public-surface guard
         run: python tools/check_public_surface.py
