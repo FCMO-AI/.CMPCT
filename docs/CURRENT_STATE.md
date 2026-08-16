@@ -3,9 +3,11 @@
 This document is the **zero-chat-history handoff** for a new agent. Read it together with:
 
 - `README.md` — project mission and quick start;
-- `AGENTS.md` — mandatory development behavior;
+- `AGENTS.md` — mandatory development and versioning behavior;
+- newest applicable note under `docs/releases/` — project-version milestone;
 - `docs/FORMAT.md` — current revision-24 on-disk contract;
-- `docs/HISTORY.md` — surviving development/version history with private provenance generalized;
+- `docs/HISTORY.md` — surviving format/development history with private provenance generalized;
+- `docs/ENTROPYGRAPH.md` — current v0.25 research frontier;
 - `docs/BENCHMARKS.md` and `benchmarks/history/` — benchmark discipline and public historical records;
 - `docs/PORTABILITY.md` — ZIP-parity UX and first-class Android/desktop integration contract;
 - `docs/NATIVE_CORE.md` — current shared native reader/ABI capability and next representation gates;
@@ -31,13 +33,45 @@ Repository: `FCMO-AI/.CMPCT`
 
 Branch: `main`
 
-Current canonical revision: **format revision 24 / project v0.24**
+Current project version: **v0.25.0**
+
+Current canonical executable format: **revision 24**
+
+Project version and format revision are intentionally independent. v0.25.0 materially advances the
+research/benchmark frontier but does not yet promote EntropyGraph's research-only `CMPNX5` grammar
+into the canonical revision-24 reader/writer.
 
 `main` HEAD is the canonical implementation state. Do not hard-code one historical commit as the
 permanent baseline in this handoff; every accepted change advances that baseline.
 
 Everything created outside this repository is experimental until reconciled back into `main` with
-documentation/tests/benchmarks.
+documentation/tests/benchmarks and a material project-version bump.
+
+## v0.25 EntropyGraph research frontier
+
+The v0.25 milestone adds a deliberately public, synthetic neutral/hostile corpus and an executable
+research engine under `experiments/entropygraph_v025.py`. It explores an authenticated reconstruction
+graph in which the encoder can choose which exact reversible representation should be physically
+stored instead of treating every requested file as an independent payload.
+
+The current research mechanisms include:
+
+- global exact compressed-stream federation across related ZIP-like containers;
+- entropy-oriented representation inversion, where a required compressed representation can become
+  the physical root and a loose logical file is materialized by a cheap exact decoder;
+- exact object interning across logical aliases/snapshots;
+- generic exact inverse edges for required gzip/xz/zstd/bzip2 sidecars and their loose plaintexts;
+- compact implicit micro-pack indexing for forests of tiny files;
+- adaptive same-family context audition capped at 512 KiB physical decode units;
+- hot/cold stream-root layout so latency-sensitive inverse views avoid a hidden multi-megabyte pool;
+- authenticated head/tail metadata recovery that is actually exercised by the research reader;
+- explicit strong verification of every physical pack plus the authenticated canonical tree root.
+
+These are **research-proven directions, not canonical format claims**. Promotion requires deliberate
+integration into the Python reference reader/writer, format schema, conformance vectors, hostile parser
+limits, native core, compatibility/export paths and platform integrations. The public benchmark record
+is `benchmarks/history/2026-08-16-entropygraph-v025.json`; private development corpora remain local
+regression inputs and do not appear in public evidence.
 
 ## Current implementation architecture
 
@@ -58,6 +92,14 @@ documentation/tests/benchmarks.
 
 `src/cmpct/cli.py`
 : User-facing commands including create/info/list/read/range/extract/verify/export-zip/recovery-related operations.
+
+`experiments/entropygraph_v025.py`
+: Executable research-only CMPNX5 reader/writer used to test new representation-graph mechanisms before
+  they are allowed to mutate the canonical on-disk grammar.
+
+`benchmarks/neutral_hostile_corpus_v1.py`
+: Deterministic-per-workload heterogeneous synthetic corpus generator covering developer, office,
+  media, analytics/database, logs, backups, incompressible, tiny-file, ML and large-binary workloads.
 
 `native/cmpct_cdc.c`
 : Optional creation-time content-defined chunk boundary accelerator. The reader does not require it
@@ -138,6 +180,7 @@ These are more important than current encoder thresholds:
 11. **ZIP parity is a floor, not a benchmark trick.** A fair reproducible ZIP advantage in size, equivalent-semantics speed, selective access or usability is an engineering gap until evidence justifies otherwise.
 12. **Portability is part of the format product.** A technically superior archive that users cannot tap/double-click, browse or extract on ordinary systems is not yet a viable default replacement.
 13. **Public CMPCT stands alone.** Private/unrelated system context is neither documentation nor benchmark evidence and must not enter the release-facing project surface.
+14. **Material work is versioned.** A substantive merged milestone must advance the project version even when the on-disk format revision stays unchanged.
 
 ## What is proven enough to use as a development baseline
 
@@ -171,7 +214,13 @@ an independent fixed archive and authenticated physical-stream component, with a
 intentionally gated. This is a portability/conformance milestone, not yet a claim of
 representation-complete native reading.
 
-Treat those as **reference behavior**, not yet as a frozen interoperability standard.
+The v0.25 EntropyGraph experiment additionally proves on its public neutral/hostile suite that global
+reconstruction relationships can materially improve aggregate storage without requiring a monolithic
+solid stream. It also proves that poor physical stream-pool topology can create selective-read
+regressions, which is why hot roots and the 512 KiB slab ceiling are part of the research design.
+Treat this as an integration target, not canonical revision-24 behavior.
+
+Treat canonical revision-24 behavior as **reference behavior**, not yet as a frozen interoperability standard.
 
 ## What is NOT yet production-grade or 1.0-ready
 
@@ -189,14 +238,19 @@ A new agent should not mistake prototype breadth for completion. Major open area
 - native memory-safe high-performance core beyond the implemented direct codecs, fixed/CDC, sparse, `S_PACK` and selected virtual-ZIP range reads: virtual-ZIP Deflate mode 0 dispatch and mode 2 exact regeneration, independent pack conformance, complete structural validation, committed-generation recovery, sequential streams and extraction remain unfinished;
 - scalable CDC without whole-file memory loading;
 - robust Android/Linux/Windows/Apple archive browsing, file association and mount/file-manager integrations defined by `docs/PORTABILITY.md`;
-- reversible preprocessing for already-compressed structures where licensing and exactness permit;
-- CI that reruns the universal benchmark on controlled hardware/software and archives raw results;
+- deliberate promotion or rejection of EntropyGraph storage semantics after canonical conformance/security integration;
+- CI that reruns the universal and neutral/hostile benchmarks on controlled hardware/software and archives raw results;
 - formal adoption or rejection of the proposed Apache-2.0 license after provenance review.
 
 ## Current benchmark interpretation
 
 Historical measurements show that the architecture can outperform ordinary Deflate ZIP dramatically
 on some workloads and narrowly on hostile already-compressed ones. They do **not** prove universal dominance.
+
+The v0.25 neutral/hostile record adds a broader adversarial checkpoint: its research candidate beat
+ZIP/Zstd-93 on 8/10 workloads and the solid tar+Zstd-19 diagnostic on 6/10 in that recorded environment,
+while deliberately preserving losses on media, ML artifacts, the large mixed binary and selected
+selective-read cases. Aggregate wins do not erase those losses.
 
 The current benchmark policy is:
 
@@ -209,7 +263,7 @@ The current benchmark policy is:
 - never use one private-corpus number as a general format claim;
 - never publish private corpus identity/artifact provenance merely to decorate the engineering history.
 
-See `docs/BENCHMARKS.md` and `benchmarks/history/` for public reproducible evidence.
+See `docs/BENCHMARKS.md`, `docs/ENTROPYGRAPH.md` and `benchmarks/history/` for public reproducible evidence.
 
 ## Immediate high-value development missions
 
@@ -222,10 +276,11 @@ important prerequisite before increasing format complexity.
 
 ### Mission 2 — benchmark CI and reproducible result archive
 
-Run the universal corpus in controlled CI. Record CPU, OS, filesystem, Python/native library versions,
-cache state, codec settings, durability and metadata semantics. Commit every accepted public benchmark
-dataset under `benchmarks/history/` with the commit SHA that produced it. Keep
-`benchmarks/zip_parity_bench.py` as the explicit gate for every fair ZIP advantage.
+Run the universal and neutral/hostile corpora in controlled CI. Record CPU, OS, filesystem,
+Python/native library versions, external encoder versions, cache state, codec settings, durability and
+metadata semantics. Commit every accepted public benchmark dataset under `benchmarks/history/` with
+the commit SHA that produced it. Keep `benchmarks/zip_parity_bench.py` as the explicit gate for every
+fair ZIP advantage.
 
 ### Mission 3 — deterministic mode and normative schema
 
@@ -248,11 +303,18 @@ extraction, full structural-preflight parity and committed-generation recovery. 
 conformance-identical, and the same core must expose the list/stat/read/range/stream/extract surface
 required by platform handlers so portability does not fork format semantics.
 
-### Mission 5 — size frontier without random-access regression
+### Mission 5 — integrate EntropyGraph without random-access regression
 
-Investigate reversible preprocessing for Deflate and other common compressed structures, but only with
-licensed/audited techniques and exact reconstruction. Also improve cheap candidate probing so
-expensive codecs are not run just to discover that RAW or ordinary Zstd wins.
+Promote EntropyGraph one representation at a time rather than copying the research grammar wholesale.
+First formalize the reconstruction DAG and dependency/resource bounds; then integrate exact object
+interning, compact micro-pack indexing, global virtual-container federation and inverse views behind
+explicit canonical storage descriptions. Every promoted edge must have independent golden vectors,
+hostile cycle/depth/bomb tests, bounded selective-read accounting, recovery behavior, ZIP export or
+compatibility semantics, and native-core parity before it can justify a format-revision bump.
+
+For exact DEFLATE shadow removal, investigate licensed/audited bit-exact reconstruction approaches only
+when the stored correction data plus replay latency beat retained-stream alternatives under the public
+hostile suite. Do not buy ratio with an unbounded recompression step.
 
 ### Mission 6 — erase practical ZIP advantages and ship first-class archive UX
 
@@ -266,10 +328,10 @@ that platform/emulator.
 
 ### Mission 7 — public-release readiness
 
-Keep `tools/check_public_surface.py` green, maintain the website as a self-contained project front door,
-finish third-party provenance review, and resolve the non-final Apache-2.0 proposal before public
-release. Publication must be an explicit action rather than an accidental side effect of ordinary
-`main` pushes.
+Keep `tools/check_public_surface.py` and `tools/check_version_discipline.py` green, maintain the website
+as a self-contained project front door, finish third-party provenance review, and resolve the non-final
+Apache-2.0 proposal before public release. Publication must be an explicit action rather than an
+accidental side effect of ordinary `main` pushes.
 
 ## Known historical traps
 
@@ -285,16 +347,22 @@ Do not reintroduce these without new evidence:
 - SHA-256 on every ordinary read;
 - ZIP physical layout as permanent canonical-storage overhead;
 - benchmark optimizations that only help one private development corpus;
-- a permanent hidden ZIP shadow inside every CMPCT archive merely to gain legacy file-manager recognition.
+- a permanent hidden ZIP shadow inside every CMPCT archive merely to gain legacy file-manager recognition;
+- global stream federation implemented as one giant decode unit;
+- exact recompression recipes promoted without replay-latency accounting.
 
-## When to bump the format revision
+## Project-version and format-revision rules
+
+Every material merged milestone must advance the project version and add the matching
+`docs/releases/vX.Y.Z.md` note. CI enforces this for material paths. A project-version bump does **not**
+by itself imply an on-disk format change.
 
 Bump the on-disk revision when a reader must understand a new physical field/record/storage-description/
-codec semantic to read newly created archives. Encoder-only heuristic changes that still emit the
-exact same revision-24 grammar do **not** require a format revision, but they do require benchmark/
-regression documentation.
+codec or reconstruction semantic to read newly created canonical archives. Encoder-only heuristic or
+research changes can keep revision 24 while still requiring a new project version, benchmark/regression
+evidence and a release note.
 
-Any format bump must update, in the same commit:
+Any format bump must update, in the same versioned change:
 
 - `docs/FORMAT.md`;
 - `docs/HISTORY.md`;
