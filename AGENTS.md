@@ -76,11 +76,14 @@ spectacle.
 - Update `docs/FORMAT.md` in the same change as any on-disk format mutation.
 - Update `docs/CURRENT_STATE.md` whenever a material milestone changes the canonical implementation, performance policy or research frontier.
 - Update `docs/HISTORY.md` when format lineage, a durable architectural decision, or a superseded design checkpoint needs historical explanation.
-- Every material CMPCT milestone must advance the project version and add `docs/releases/vX.Y.Z.md` in the same change. Do not leave substantive work represented only by a commit hash, chat, branch name, benchmark artifact, or PR number.
-- Every material CMPCT version must run the release performance gate and commit a fresh public benchmark record for that version under `benchmarks/history/` before merge.
-- A base-vs-candidate release comparison must use the exact same corpus tree and benchmark semantics. Never regenerate separate random corpora and call their archive-size difference a regression or improvement.
+- **Do not consume a numeric project version for presentation/process work.** Website polish, documentation cleanup, repository presentation, workflow ergonomics and similar non-format work use the root `SURFACE_REVISION` track (`x.x.a`, `x.x.b`, …).
+- A numeric CMPCT core release is reserved for a **material improvement to CMPCT itself**: archive/engine capability, compression or speed, reliability, recovery, portability/interoperability, or another product-level behavior that materially advances the format. Cosmetic, handoff-only, research-note-only or repository-niceness changes do not qualify.
+- After the historical v0.27.1 checkpoint, normal numeric core advancement moves the `MAJOR.MINOR` line and uses `PATCH=0` for packaging compatibility. Do not create patch-number churn for small work.
+- Every numeric core release must add `docs/releases/vX.Y.0.md`, run the release performance gate, and commit a fresh public benchmark record for that release under `benchmarks/history/` before merge.
+- A coherent surface milestone advances `SURFACE_REVISION` once, not once per commit. Multiple commits that collectively form the same presentation milestone may share the same surface revision.
+- A base-vs-candidate core-release comparison must use the exact same corpus tree and benchmark semantics. Never regenerate separate random corpora and call their archive-size difference a regression or improvement.
 - Deterministic CMPCT archive-size regression on the release parity corpus has **zero-byte tolerance**. If the candidate emits larger archives for the same input, fix it or deliberately redesign the benchmark contract before release; do not loosen the gate to make the PR green.
-- Confirmed create/extract slowdown outside the same-runner timing noise envelope blocks release. If the signal is ambiguous, improve measurement quality rather than declaring a win or regression from noise.
+- Confirmed create/extract slowdown outside the same-runner timing noise envelope blocks a core release. If the signal is ambiguous, improve measurement quality rather than declaring a win or regression from noise.
 - Durable public benchmark results belong under `benchmarks/history/`; do not leave public evidence only in terminal output, CI artifacts, chat, or prose.
 - Preserve public historical benchmark files; append new records instead of rewriting old results to match a new narrative.
 - The website's large performance claims must be derived from committed benchmark records. Do not hand-copy headline percentages into HTML/JavaScript.
@@ -96,7 +99,7 @@ spectacle.
 
 ## Benchmark rule
 
-Any material project version must commit a durable public benchmark record containing, when available:
+Any numeric core release must commit a durable public benchmark record containing, when available:
 source commit, project version, format revision, corpus generator/fingerprint/seed, direct comparison
 base, environment, codec settings, cache/process-start semantics, metadata/integrity/durability
 semantics, repetitions and raw/summary measurements.
@@ -104,9 +107,12 @@ semantics, repetitions and raw/summary measurements.
 Private-corpus measurements may guide engineering internally, but public claims must be reproducible
 without access to private data. Aggregate wins never authorize deleting a losing workload.
 
+Surface revisions do not create synthetic benchmark records merely to prove that HTML, CSS, docs or
+repository presentation changed. They may still run ordinary tests and the site build gate.
+
 ## Performance-release rule
 
-`.github/workflows/zip-parity.yml` is a release gate, not optional telemetry. Its direct comparison is
+`.github/workflows/zip-parity.yml` is a core-release gate, not optional telemetry. Its direct comparison is
 owned by the candidate harness: it generates one corpus, freezes its metadata, fingerprints it, and
 runs both the base and candidate CMPCT engines against that identical tree on one runner.
 
@@ -138,22 +144,32 @@ claims that a reviewer can falsify.
 
 ## Versioning rule
 
-CMPCT has two independent version axes:
+CMPCT now has three distinct axes. Do not collapse them into one counter:
 
-1. **Project version (`MAJOR.MINOR.PATCH`)** — advances for every material merged milestone: engine work,
-   encoder policy, benchmark/research frontier, portability/integration capability, hardening, website,
-   release tooling, engineering-process contract, or other substantive project behavior. The new
-   version must be recorded in `pyproject.toml`, `docs/releases/vX.Y.Z.md`, and a matching public
-   benchmark history record.
-2. **On-disk format revision** — advances only when a reader must understand a new field, record,
+1. **Core project version (`MAJOR.MINOR.PATCH`)** — the numeric release identity used by packaging and
+   durable benchmark records. It advances only when CMPCT itself receives a material format/engine
+   improvement: better capability, performance, reliability, recovery, portability/interoperability or
+   similarly meaningful product behavior. Under the prospective scarce-version policy, normal releases
+   advance `MAJOR.MINOR` and use `PATCH=0`. Historical versions such as v0.27.1 remain immutable evidence
+   of the older policy; do not rewrite them.
+2. **Surface revision (`MAJOR.MINOR.LETTER`)** — presentation/process identity stored in
+   `SURFACE_REVISION`, for example `0.27.a`. Site animation, copy/design, documentation cleanup,
+   repository presentation and workflow/process ergonomics belong here. A surface revision never changes
+   `pyproject.toml` merely to make the repository look nicer, and it does not require a fake benchmark
+   record. One coherent surface milestone gets one letter even if implementation spans several commits.
+3. **On-disk format revision** — advances only when a reader must understand a new field, record,
    storage description, codec semantic, or reconstruction rule to open newly written canonical archives.
 
-Therefore an encoder-only, research, site, engineering-process or release-engineering milestone can
-advance the project version while the canonical format revision stays unchanged. Conversely, every
-format-revision bump is necessarily a material project-version bump and must update `docs/FORMAT.md`,
-conformance vectors, `docs/CURRENT_STATE.md`, and the durable history/benchmark material appropriate to
-the change.
+A core release may leave the on-disk format revision unchanged when the material gain comes from encoder
+policy, performance, reliability or interoperability that preserves reader grammar. Conversely, every
+on-disk format-revision bump is necessarily a core release and must update `docs/FORMAT.md`, conformance
+vectors, `docs/CURRENT_STATE.md`, and the durable history/benchmark material appropriate to the change.
 
-There is no “minor enough to hide” exception for material work. If it changes what CMPCT can do, how
-it behaves, what it proves, how it is presented, the engineering standard, or the development frontier
-in a way worth merging, give it a version and benchmark that version.
+The numeric version is a **claim of product progress**, not a commit counter. Do not bump it to reward
+activity. If work improves only the public surface, use `x.x.a`. If work is useful engineering but not yet
+a material core milestone, it may land without inventing a release number and should remain clearly
+represented in code/tests/research history until it earns promotion.
+
+Footnote: `tools/check_version_discipline.py` enforces the separation. It rejects numeric bumps without
+archive/engine participation, requires benchmark/release evidence for a core release, validates the
+alphabetic surface line, and prevents surface work from masquerading as a new core version.
