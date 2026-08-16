@@ -4,35 +4,54 @@ This directory is the source for the CMPCT project website.
 
 ## Product role
 
-The site is the human/agent front door for CMPCT, but v0.26 makes one priority explicit: **the public
-experience is performance-first**. The first screen should create impact, the second should prove the
-claim, and the rest should earn trust through transparent engineering detail.
+The site is the human/agent front door for CMPCT, with one priority explicit: **the public experience is
+performance-first**. The first screen should create impact, the second should prove the claim, and the
+rest should earn trust through transparent engineering detail.
 
 The site exposes:
 
-- current project/version/format state;
+- current core project/version/format state plus the non-semantic surface revision;
 - the strongest committed research-frontier benchmark, clearly labeled when it is not canonical;
 - the latest canonical ZIP-parity evidence;
 - workload-level wins and losses;
-- release/version trajectory;
+- core-release trajectory;
 - the no-regression release policy;
 - Browser Lab creation and fixed-header inspection;
 - machine-readable orientation for agents.
 
 ## Visual behavior
 
-The v0.26 visual system is intentionally more dramatic than the original editorial prototype while
-remaining technical rather than decorative:
+The visual system is intentionally dramatic while remaining technical rather than decorative:
 
 - near-black technical canvas with high-contrast ivory text;
 - hot orange as the primary project signal and acid green only for verified wins/gates;
 - oversized benchmark typography and dense data hierarchy;
-- subtle grid/ruler/graph motion that communicates system structure;
+- animated hero depth, scan, orbit and particle fields with pointer-responsive parallax;
+- staged hero entrance, scroll reveals, benchmark-value pulses and restrained card elevation;
 - an animated information-graph diagram built from native HTML/CSS/SVG rather than decorative media;
-- responsive layouts and `prefers-reduced-motion` support;
+- responsive layouts and full `prefers-reduced-motion` support;
 - no externally hosted fonts, trackers, image dependencies, or design-source provenance.
 
+The motion layer lives in `assets/motion.css` and `assets/motion.js`. It is additive: benchmark data,
+navigation, Browser Lab and accessibility-critical behavior must remain functional if that layer never
+runs.
+
 The interface is allowed to feel ambitious. It is not allowed to invent numbers.
+
+## Core version vs surface revision
+
+Numeric project versions are reserved for material CMPCT archive/engine improvements. A nicer website,
+clearer documentation, repository presentation, workflow polish or other non-format work does not
+consume a numeric release number.
+
+Those changes use the root `SURFACE_REVISION` file, with the form `x.x.a`, `x.x.b`, and so on. The
+surface line follows the current project major/minor line. The current animated presentation milestone
+is **surface 0.27.a** while the core project remains **0.27.1** and the canonical on-disk format remains
+revision **24**.
+
+`site/enhance_site.py` applies the presentation layer after the canonical data build. This separation is
+intentional: visual work should not gain accidental authority over benchmark normalization or archive
+semantics.
 
 ## Performance-content contract
 
@@ -45,10 +64,10 @@ The current model distinguishes:
 1. **Canonical parity** — records emitted by `benchmarks/zip_parity_bench.py` for the executable reader/writer.
 2. **Research frontier** — broader EntropyGraph evidence that may lead the canonical format but is explicitly labeled as research until promoted through the format/conformance/native stack.
 
-Every material CMPCT update is benchmarked candidate-vs-base by `.github/workflows/zip-parity.yml`.
+Core release candidates are benchmarked candidate-vs-base by `.github/workflows/zip-parity.yml`.
 Deterministic archive-size regression has zero tolerance. Timing regressions are evaluated on the same
 runner with repeated medians and a small relative+absolute noise envelope so shared-runner jitter does
-not become a false product regression.
+not become a false product regression. Surface-only revisions do not manufacture benchmark records.
 
 ## Public-surface boundary
 
@@ -65,9 +84,16 @@ uploaded by the static site.
 `build_site.py` generates:
 
 - `project-data.json` — project state, normalized frontier evidence, canonical parity records and release history;
-- `agent.json` — machine-readable orientation and non-negotiable release rules;
+- `agent.json` — machine-readable orientation and non-negotiable core-release rules;
 - `llms.txt` — compact agent/human orientation;
 - build-time version/revision/commit markers in the page itself.
+
+`enhance_site.py` then adds:
+
+- the optional motion stylesheet and motion controller;
+- `surface-revision.txt`;
+- surface revision labeling in the page and machine-readable project state;
+- the public explanation that site/repository polish does not consume a numeric core version.
 
 Every validation build derives current CMPCT facts from repository state rather than copied marketing
 numbers.
@@ -87,11 +113,17 @@ re-test the writer; the website must never keep creating stale bytes under a new
 ```bash
 python tools/check_public_surface.py
 python site/build_site.py --out _site
+python site/enhance_site.py _site
 node --check site/src/assets/app.js
+node --check site/src/assets/motion.js
 python -m http.server 8000 -d _site
 ```
 
 ## Publication
 
 `.github/workflows/pages.yml` validates pull requests. Canonical `main` publishes through GitHub Pages
-after disclosure, site-data, JavaScript and Browser Lab compatibility gates pass.
+after disclosure, site-data, surface-revision, JavaScript and Browser Lab compatibility gates pass.
+
+Footnote: presentation changes are intentionally kept downstream of canonical evidence generation. A
+future redesign may replace the motion language completely without changing archive bytes, benchmark
+truth, the core project version, or the on-disk format revision.
