@@ -21,10 +21,11 @@ jobs:
         uses: actions/setup-python@v6
         with:
           python-version: "3.11"
-      - name: Enforce material version bump
+      - name: Enforce scarce core versions and surface revisions
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
         run: python tools/check_version_discipline.py --base-sha "$BASE_SHA"
 
-# Footnote: project versions track material development milestones.  The separate on-disk format
-# revision changes only when readers need new grammar/storage semantics.
+# Footnote: numeric project versions are reserved for material archive/engine improvements. Site,
+# documentation, workflow and repository-presentation milestones use SURFACE_REVISION (x.x.a, x.x.b,
+# ...) and do not consume a core release number or demand a synthetic benchmark record.
