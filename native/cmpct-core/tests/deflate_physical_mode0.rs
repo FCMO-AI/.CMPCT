@@ -35,12 +35,9 @@ fn mode0_exact_stream_range_is_returned_only_after_logical_authentication() {
 
 #[test]
 fn mode0_streaming_auth_handles_logical_objects_larger_than_the_auth_buffer() {
-    // Exercise multiple authentication-buffer turns. The implementation must not require a Vec sized
-    // to the decoded member merely to establish the logical SHA-256 before exposing physical bytes.
-    let mut logical = Vec::with_capacity(2 * 1024 * 1024);
-    for index in 0..(2 * 1024 * 1024) {
-        logical.push(((index * 31 + index / 97) & 0xff) as u8);
-    }
+    // Exercise many authentication-buffer turns. A highly compressible payload is intentional here:
+    // the assertion targets decoded-work memory, not compression ratio or compressor throughput.
+    let logical = vec![b'A'; 2 * 1024 * 1024];
     let mut encoder = DeflateEncoder::new(Vec::new(), Compression::new(6));
     encoder.write_all(&logical).unwrap();
     let compressed = encoder.finish().unwrap();
