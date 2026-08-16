@@ -57,10 +57,10 @@ jobs:
         run: |
           mkdir -p benchmark-artifacts
           # Footnote: every neutral/hostile workload receives the direct inherited-v0.25 comparison.
-          # Expensive third-party archival tools are intentionally moved to the aggregate step below;
-          # repeating ZPAQ/DwarFS/Borg fifteen times does not strengthen the causal CMPCT comparison.
+          # The strict policy adds a 1x independent-record floor, so no archive can buy ratio by
+          # exceeding the declared 8x weighted read-amplification budget when no solid pack is feasible.
           set -o pipefail
-          python benchmarks/entropygraph_v028_bench.py \
+          python benchmarks/entropygraph_v028_strict_bench.py \
             --suite both \
             --output benchmark-artifacts/entropygraph-v028.json \
             2>&1 | tee benchmark-artifacts/entropygraph-v028.stdout.txt
@@ -68,7 +68,7 @@ jobs:
       - name: Run aggregate structural competitor sweep
         run: |
           set -o pipefail
-          python benchmarks/entropygraph_v028_competitors.py \
+          python benchmarks/entropygraph_v028_strict_competitors.py \
             --output benchmark-artifacts/entropygraph-v028-structural-competitors.json \
             2>&1 | tee benchmark-artifacts/entropygraph-v028-structural-competitors.stdout.txt
 
@@ -84,7 +84,7 @@ jobs:
           from pathlib import Path
           r=json.loads(Path('benchmark-artifacts/entropygraph-v028.json').read_text())
           t=r['totals']
-          print('## EntropyGraph II')
+          print('## EntropyGraph II — strict locality')
           print(f"- candidate bytes: **{t['candidate_bytes']:,}**")
           print(f"- inherited v0.25 bytes: **{t['inherited_v025_bytes']:,}**")
           print(f"- improvement: **{t['smaller_than_v025_pct']:.3f}%**")
