@@ -17,6 +17,10 @@ def main():
     p = sp.add_parser("create")
     p.add_argument("source")
     p.add_argument("archive")
+    p.add_argument("--workers", type=int, default=None,
+                   help="deterministic candidate-encode worker count; default uses up to 8 logical CPUs")
+    p.add_argument("--reproducible", action="store_true",
+                   help="normalize host-owned metadata and use SOURCE_DATE_EPOCH for byte-reproducible builds")
 
     for command in ("info", "list", "verify", "preflight"):
         p = sp.add_parser(command)
@@ -71,7 +75,11 @@ def main():
     if a.cmd == "create":
         from .builder import Builder
 
-        print(json.dumps(Builder(Path(a.source)).build(Path(a.archive)), indent=2))
+        # Footnote: multithreading changes *when* candidates finish, never their materialization order.
+        # Reproducible mode is intentionally opt-in because normal CMPCT preserves ownership/xattrs;
+        # a build artifact cannot simultaneously normalize host metadata and claim to preserve it.
+        builder=Builder(Path(a.source),workers=a.workers,reproducible=a.reproducible)
+        print(json.dumps(builder.build(Path(a.archive)), indent=2))
         return
     if a.cmd in {"update", "delete", "rename", "recover-blobs", "compact"}:
         from .transactions import append_delete, append_rename, append_update, compact_archive, recover_blob_records

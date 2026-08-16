@@ -53,8 +53,12 @@ def test_graph_is_deterministic_and_byte_exact(tmp_path: Path):
     # assertion proves the graph path is exercised without demanding delta use on arbitrary inputs.
     assert stats_a["delta_nodes"] > 0
     assert stats_a["max_decode_unit"] == engine.MAX_DECODE_UNIT
+    assert stats_a["max_decoder_memory"] == engine.MAX_DECODER_MEMORY
     assert stats_a["adaptive_pack_limit"] <= engine.MAX_PACK
-    assert engine.strong_verify(first)["ok"] is True
+    verified=engine.strong_verify(first)
+    assert verified["ok"] is True
+    assert verified["max_decode_unit"]==engine.MAX_DECODE_UNIT
+    assert verified["max_decoder_memory"]==engine.MAX_DECODER_MEMORY
     restored = tmp_path / "restored"
     engine.extract(first, restored)
     assert engine.treehash(restored) == engine.treehash(source)
@@ -110,3 +114,18 @@ def test_tail_damage_does_not_mask_primary_success(tmp_path: Path):
     archive.write_bytes(payload)
     # A valid primary copy is authoritative; a damaged redundant tail must not poison normal reads.
     assert engine.strong_verify(archive)["ok"] is True
+
+
+def test_authenticated_decoder_memory_ceiling_is_policy_checked(tmp_path: Path):
+    engine=_engine();source=_source(tmp_path);archive=tmp_path/'too-much-memory.cmpct'
+    supported=engine.MAX_DECODER_MEMORY
+    try:
+        # Build a self-consistent research artifact whose authenticated metadata asks for more memory
+        # than this reader's policy. Resetting the implementation ceiling afterwards proves both the
+        # primary and recovery metadata paths reject it rather than trusting an unauthenticated header.
+        engine.MAX_DECODER_MEMORY=supported*2
+        engine._build_graph(source,archive)
+    finally:
+        engine.MAX_DECODER_MEMORY=supported
+    with pytest.raises(RuntimeError,match="metadata copy|memory"):
+        engine.strong_verify(archive)

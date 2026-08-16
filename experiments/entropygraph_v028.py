@@ -3,7 +3,7 @@
 This is deliberately not canonical revision-24 grammar.  It combines a bounded resemblance graph,
 FastCDC-style stable units, measured depth-1 deltas, similarity ordering, adaptive decode-unit packing,
 optional exact DEFLATE precompression through the pinned memory-safe preflate bridge, Merkle-authenticated
-physical records, O(1) metadata lookup, and a hard decoder-unit declaration.
+physical records, O(1) metadata lookup, and hard decode-size plus decoder-memory declarations.
 
 The encoder is a *portfolio*: it also builds the inherited v0.25 EntropyGraph candidate and emits that
 artifact unchanged whenever the new graph is not smaller.  Therefore a research size regression is not
@@ -44,8 +44,10 @@ HERE = Path(__file__).resolve().parent
 BASE_PATH = HERE / "entropygraph_v025.py"
 MAG = b"CMPNX8\0\0"
 TAIL = b"CMNX8T\0\0"
-# magic, metadata compressed/raw bytes, record count, declared maximum decode unit, metadata SHA, Merkle root
-HDR = struct.Struct("<8sQQIQ32s32s")
+# magic, metadata compressed/raw bytes, record count, maximum logical decode unit, decoder-memory
+# ceiling, metadata SHA, Merkle root. The two ceilings are separate because a compressed transform can
+# require more working memory than the logical object it eventually reconstructs.
+HDR = struct.Struct("<8sQQIQQ32s32s")
 FTR = struct.Struct("<8sQQ32s32s")
 PH = struct.Struct("<BQQI32s")  # codec, logical bytes, stored bytes, hot CRC32, logical SHA-256
 CODEC_RAW = 0
@@ -54,6 +56,7 @@ CODEC_PREFLATE = 2
 MAX_CHUNK = 512 * 1024
 MAX_PACK = 2 * 1024 * 1024
 MAX_DECODE_UNIT = 8 * 1024 * 1024
+MAX_DECODER_MEMORY = 96 * 1024 * 1024
 MIN_DELTA = 1024
 PREFLATE_EXTS = {".zip", ".jar", ".whl", ".docx", ".xlsx", ".pptx", ".png", ".pdf"}
 
@@ -175,7 +178,7 @@ def _pack_plan(nodes: list[bytes], sketches, root_ids: list[int], limit: int):
         raw = b"".join(nodes[i] for i in group)
         _, payload = _compress_record(raw)
         bytes_cost += PH.size + len(payload)
-        # Each independently requested member pays the containing pack decode cost.  This metric makes
+        # Each independently requested member pays the containing pack decode cost. This metric makes
         # the ratio/locality trade explicit instead of treating a large solid block as free context.
         for i in group:
             decoded_weight += len(raw)
@@ -337,6 +340,7 @@ def _build_graph(root: Path, out: Path) -> dict:
         "record_leaf_sha256": leaves,
         "tree_sha256": treehash(root),
         "max_decode_unit": MAX_DECODE_UNIT,
+        "max_decoder_memory": MAX_DECODER_MEMORY,
         "max_dependency_depth": 1,
         "pack_limit": pack_limit,
         "pack_read_amplification": read_amp,
@@ -346,7 +350,7 @@ def _build_graph(root: Path, out: Path) -> dict:
     meta_raw = msgpack.packb(meta, use_bin_type=True)
     meta_comp = zc(meta_raw, 12)
     with out.open("wb") as stream:
-        stream.write(HDR.pack(MAG, len(meta_comp), len(meta_raw), len(records), MAX_DECODE_UNIT, H(meta_raw), merkle))
+        stream.write(HDR.pack(MAG, len(meta_comp), len(meta_raw), len(records), MAX_DECODE_UNIT, MAX_DECODER_MEMORY, H(meta_raw), merkle))
         stream.write(meta_comp)
         for codec, usize, payload, crc, hh in records:
             stream.write(PH.pack(codec, usize, len(payload), crc, hh))
@@ -371,6 +375,7 @@ def _build_graph(root: Path, out: Path) -> dict:
         "preflate_wins": preflate_wins,
         "merkle_leaves": len(leaves),
         "max_decode_unit": MAX_DECODE_UNIT,
+        "max_decoder_memory": MAX_DECODER_MEMORY,
     }
 
 
@@ -405,7 +410,8 @@ def _open_graph(path: Path):
     stream = path.open("rb")
 
     def decode_meta(comp: bytes, raw_size: int, expected_sha: bytes, expected_merkle: bytes,
-                    expected_count: int | None = None, declared_decode: int | None = None):
+                    expected_count: int | None = None, declared_decode: int | None = None,
+                    declared_memory: int | None = None):
         raw = zd(comp, raw_size)
         if H(raw) != expected_sha:
             raise RuntimeError("metadata authentication")
@@ -413,8 +419,11 @@ def _open_graph(path: Path):
         if meta.get("v") != 1 or int(meta.get("max_dependency_depth", 99)) > 1:
             raise RuntimeError("unsupported graph metadata")
         meta_decode = int(meta.get("max_decode_unit", MAX_DECODE_UNIT + 1))
+        meta_memory = int(meta.get("max_decoder_memory", MAX_DECODER_MEMORY + 1))
         if meta_decode > MAX_DECODE_UNIT or (declared_decode is not None and meta_decode != declared_decode):
             raise RuntimeError("archive decode ceiling exceeds implementation policy")
+        if meta_memory > MAX_DECODER_MEMORY or (declared_memory is not None and meta_memory != declared_memory):
+            raise RuntimeError("archive decoder-memory ceiling exceeds implementation policy")
         leaves = list(meta.get("record_leaf_sha256", []))
         if expected_count is not None and len(leaves) != expected_count:
             raise RuntimeError("record-count mismatch")
@@ -434,15 +443,17 @@ def _open_graph(path: Path):
         header = stream.read(HDR.size)
         if len(header) != HDR.size:
             raise RuntimeError("short EntropyGraph-II header")
-        magic, mcs, mus, count, max_decode, meta_sha, merkle = HDR.unpack(header)
+        magic, mcs, mus, count, max_decode, max_memory, meta_sha, merkle = HDR.unpack(header)
         if magic != MAG:
             raise RuntimeError("not EntropyGraph-II")
         if max_decode > MAX_DECODE_UNIT:
             raise RuntimeError("archive decode ceiling exceeds implementation policy")
+        if max_memory > MAX_DECODER_MEMORY:
+            raise RuntimeError("archive decoder-memory ceiling exceeds implementation policy")
         comp = stream.read(mcs)
         if len(comp) != mcs:
             raise RuntimeError("short primary metadata")
-        meta, offsets = decode_meta(comp, mus, meta_sha, merkle, count, max_decode)
+        meta, offsets = decode_meta(comp, mus, meta_sha, merkle, count, max_decode, max_memory)
         return stream, meta, HDR.size + mcs, offsets, merkle
     except Exception as exc:
         primary_error = exc
@@ -575,7 +586,8 @@ def strong_verify(archive: Path) -> dict:
         got = treehash(dst)
     if got != meta["tree_sha256"]:
         raise RuntimeError("logical tree root mismatch")
-    return {"ok": True, "tree_sha256": got, "merkle_root": merkle.hex(), "records": len(offsets)}
+    return {"ok": True, "tree_sha256": got, "merkle_root": merkle.hex(), "records": len(offsets),
+            "max_decode_unit": meta["max_decode_unit"], "max_decoder_memory": meta["max_decoder_memory"]}
 
 
 def bench(root: Path, out: Path) -> dict:
