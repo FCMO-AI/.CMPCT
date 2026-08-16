@@ -112,9 +112,10 @@ When the same logical payload is needed both as a top-level file and inside a ne
 libdeflate made decoding faster, but the stored representation remains ordinary Deflate. Therefore
 libdeflate is an optional acceleration, not a format dependency.
 
-A future reversible Deflate preprocessor (preflate-class approach) may reduce the storage cost of exact
-Deflate streams by storing plaintext plus compact reconstruction information. This remains future work
-and must be licensed/audited and byte-exact.
+A reversible Deflate preprocessor can sometimes reduce the storage cost of exact Deflate streams by
+storing a transform that reconstructs the original bytes bit-exactly. v0.28 now experiments with this
+through a pinned memory-safe preflate bridge, but that transform remains **research-only** until its
+reader-visible contract, resource bounds and native portability are independently specified.
 
 ## Decision 9 — strong integrity belongs in the format, but not necessarily every hot read
 
@@ -211,6 +212,76 @@ Future benchmark records must state at minimum:
 - durability/fsync semantics;
 - repetitions/statistic used.
 
+## Decision 16 — near-equal information needs measured resemblance, not only exact CDC
+
+v0.25 removed large classes of **exact** redundancy, yet shifted-version and boundary-churn attacks
+showed that two objects can carry almost the same information without containing enough exact equal
+chunks for ordinary CDC to exploit.
+
+EntropyGraph II therefore adds bounded local sketches and LSH only as candidate discovery. Every
+candidate base/target pair is then encoded into a concrete COPY/LITERAL delta, compressed, charged for
+its metadata, and admitted only when the complete stored representation wins materially.
+
+The fixed public evidence validates the mechanism where expected:
+
+- shifted versions: **30,200,827 → 1,761,588 B (-94.17%)**;
+- repeated boundary churn: **866,651 → 89,945 B (-89.62%)**.
+
+False-neighbor and incompressible workloads do not receive a free pass; they fall back to the inherited
+representation when the graph loses.
+
+**Rule:** similarity can nominate work. It cannot prove correctness or compression value.
+
+## Decision 17 — resemblance dependencies stay depth-1
+
+Unlimited delta chains can save bytes but export hidden random-read latency, corruption fan-out,
+recovery complexity and decoder-memory requirements.
+
+v0.28 selects central bases by measured aggregate savings and forbids a selected base from itself being
+a delta target. A logical node is therefore direct or depends on exactly one direct base plus one delta.
+
+**Rule:** a byte win does not justify unbounded dependency depth. Deeper graphs need new evidence and a
+new explicit contract rather than becoming the default because the encoder can construct them.
+
+## Decision 18 — solid context is a budgeted resource, not a fixed virtue
+
+A universal 512 KiB context ceiling left some resemblance locality on the table, but simply increasing
+the window would repeat the old fixed-frame mistake in the other direction.
+
+EntropyGraph II auditions **64/128/256/512 KiB, 1 MiB and 2 MiB** physical packs, measures final bytes,
+and accounts for weighted decoded-bytes/logical-bytes read amplification. Wider context is accepted only
+when it materially earns bytes and remains within **8x**. Otherwise the encoder keeps the 512 KiB plan.
+
+**Rule:** context width is an optimization variable with an exported-read-cost budget, not a constant.
+
+## Decision 19 — representation portfolios can enforce a no-size-regression frontier
+
+A new research mechanism should not be forced into workloads merely to make the implementation visible.
+EntropyGraph II builds both its graph candidate and the inherited v0.25 candidate and selects the smaller
+complete artifact per workload.
+
+Across the fixed 15-workload public suite this yields **3 improved / 0 regressed / 12 exact inherited
+fallbacks**, for **137,557,457 B vs 166,816,028 B (-17.5394%)** overall.
+
+This exports extra creation CPU, which remains visible. A future conservative cost model may skip obvious
+losers, but prediction must not replace final byte measurement for candidates that are admitted.
+
+**Rule:** fallback can preserve the Pareto frontier, but its audition tax must be measured rather than
+pretended away.
+
+## Decision 20 — fresh-process parallelism must earn startup cost separately
+
+Deterministic parallel candidate encoding improved many in-process and large-workload creation timings,
+but the first post-reconciliation v0.28 ABBA gate found one confirmed fresh-process regression:
+media CLI creation measured **192.99 → 203.07 ms (+5.22%, +10.08 ms)** while the corresponding library
+path moved by less than 1 ms.
+
+The release candidate therefore keeps the in-process `Builder` parallel default but makes a fresh
+`cmpct create` serial unless `--workers N` is explicitly supplied.
+
+**Rule:** library throughput and process-start latency are separate products. Do not make every tiny CLI
+invocation pay thread-pool setup because parallelism helps a large in-process benchmark.
+
 ## Rejected or superseded ideas
 
 ### Fixed 256 KiB framing for all files
@@ -234,8 +305,8 @@ Superseded by policy that keeps them when they buy latency/compatibility value; 
 ### Store SHA-256 redundantly in every index layer
 Rejected as needless random metadata overhead. Keep one authoritative content hash and reference it.
 
-### Require libdeflate or native CDC to read archives
-Rejected. Optional accelerators must never become accidental format dependencies.
+### Require libdeflate, native CDC or preflate to read canonical r24 archives
+Rejected. Optional accelerators/research transforms must never become accidental canonical format dependencies.
 
 ### SHA-256 on every normal extraction
 Rejected as unnecessary hot-path cost. Strong verification is explicit.
@@ -243,15 +314,32 @@ Rejected as unnecessary hot-path cost. Strong verification is explicit.
 ### Optimize the format around one private development corpus
 Explicitly rejected. The universal/adversarial harness is mandatory for general policy changes.
 
+### Whole-file MinHash + unbounded whole-file binary deltas
+Rejected as the primary resemblance design. Large objects create base-memory debt and local insertions can destabilize whole-file similarity. Use bounded units and bounded source indexing.
+
+### Unlimited delta chains
+Rejected. They improve a scalar while exporting dependency/recovery/read debt. v0.28 caps graph depth at one.
+
+### Trust similarity score as a compression decision
+Rejected. Sketch collisions are expected. Concrete encoded bytes decide admission.
+
+### Always use the largest available solid pack
+Rejected. Wider context must win bytes and stay inside the read-amplification budget.
+
+### Rerun a barely failed performance gate until it turns green
+Rejected as process policy. Isolate the mechanism or improve measurement quality; do not use CI variance as a release strategy.
+
 ## Research directions still open
 
-- reversible preprocessing of Deflate and other already-compressed structures;
+- productionize proven EntropyGraph-II representations one reader-visible semantic at a time;
+- reduce portfolio audition cost with a conservative predictor that never overrides measured admission;
+- independently specify/audit exact Deflate preprocessing before any canonical transform registry entry;
+- vectorized/native entropy-coding research after structural redundancy is exhausted;
 - authenticated encryption with modern KDF/AEAD and metadata authentication;
-- remote/object-store partial reads and verification;
-- deterministic encoding;
-- native memory-safe parser/encoder core;
-- parallel create/extract/verify;
-- scalable streaming CDC;
+- production remote/object-store partial reads and verification;
+- complete cross-platform deterministic encoding contract;
+- representation-complete native memory-safe parser/encoder core;
+- scalable streaming CDC/resemblance discovery;
 - cross-archive optional content stores;
 - richer platform metadata and ACL semantics;
 - split-volume archives and non-seekable streaming creation;
