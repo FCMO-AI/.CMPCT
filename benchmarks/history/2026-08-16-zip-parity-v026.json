@@ -11,97 +11,228 @@
   "corpus_semantics": "external immutable corpus shared by base/candidate",
   "corpora": {
     "tiny": {
-      "logical_bytes": 1534000,
+      "logical_bytes": 1291090,
       "library": {
-        "cmpct": {"bytes": 151677, "create_s_median": 0.1947361685, "extract_s_median": 0.222066544},
-        "zip": {"bytes": 674152, "create_s_median": 0.105140156, "extract_s_median": 0.1300035395}
+        "cmpct": {
+          "bytes": 151677,
+          "create_s_median": 0.1947361685,
+          "extract_s_median": 0.222066544
+        },
+        "zip": {
+          "bytes": 674152,
+          "create_s_median": 0.27481132350000004,
+          "extract_s_median": 0.3704737805
+        }
       },
       "cli": {
-        "cmpct": {"bytes": 151677, "create_s_median": 0.270105855, "extract_s_median": 0.2888282935},
-        "zip": {"bytes": 674152, "create_s_median": 0.1761413995, "extract_s_median": 0.196358656}
+        "cmpct": {
+          "bytes": 151677,
+          "create_s_median": 0.270105855,
+          "extract_s_median": 0.2888282935
+        },
+        "zip": {
+          "bytes": 674152,
+          "create_s_median": 0.48968397900000005,
+          "extract_s_median": 0.411359901
+        }
       }
     },
     "source": {
-      "logical_bytes": 92721,
+      "logical_bytes": 97380,
       "library": {
-        "cmpct": {"bytes": 9094, "create_s_median": 0.038541045499999996, "extract_s_median": 0.0346021965},
-        "zip": {"bytes": 140409, "create_s_median": 0.036872996, "extract_s_median": 0.0321585055}
+        "cmpct": {
+          "bytes": 9094,
+          "create_s_median": 0.038541045499999996,
+          "extract_s_median": 0.0346021965
+        },
+        "zip": {
+          "bytes": 140409,
+          "create_s_median": 0.050455566,
+          "extract_s_median": 0.0624239585
+        }
       },
       "cli": {
-        "cmpct": {"bytes": 9094, "create_s_median": 0.111061675, "extract_s_median": 0.10291445399999999},
-        "zip": {"bytes": 140409, "create_s_median": 0.106100797, "extract_s_median": 0.1002500745}
+        "cmpct": {
+          "bytes": 9094,
+          "create_s_median": 0.111061675,
+          "extract_s_median": 0.10291445399999999
+        },
+        "zip": {
+          "bytes": 140409,
+          "create_s_median": 0.12035293450000001,
+          "extract_s_median": 0.09678174249999999
+        }
       }
     },
     "media": {
-      "logical_bytes": 6048590,
+      "logical_bytes": 4931984,
       "library": {
-        "cmpct": {"bytes": 4224917, "create_s_median": 0.037425539, "extract_s_median": 0.004564179},
-        "zip": {"bytes": 4230623, "create_s_median": 0.1289745215, "extract_s_median": 0.00406642}
+        "cmpct": {
+          "bytes": 4224917,
+          "create_s_median": 0.037425539,
+          "extract_s_median": 0.004564179
+        },
+        "zip": {
+          "bytes": 4230623,
+          "create_s_median": 0.1027376715,
+          "extract_s_median": 0.0073586805
+        }
       },
       "cli": {
-        "cmpct": {"bytes": 4224917, "create_s_median": 0.1957097195, "extract_s_median": 0.07722479},
-        "zip": {"bytes": 4230623, "create_s_median": 0.2770557705, "extract_s_median": 0.0752049235}
+        "cmpct": {
+          "bytes": 4224917,
+          "create_s_median": 0.1957097195,
+          "extract_s_median": 0.07722479
+        },
+        "zip": {
+          "bytes": 4230623,
+          "create_s_median": 0.13899955149999998,
+          "extract_s_median": 0.0442619865
+        }
       }
     },
     "binary": {
       "logical_bytes": 50331648,
       "library": {
-        "cmpct": {"bytes": 16793303, "create_s_median": 0.1820511985, "extract_s_median": 0.057699228000000005},
-        "zip": {"bytes": 16880276, "create_s_median": 0.4800306985, "extract_s_median": 0.0223035015}
+        "cmpct": {
+          "bytes": 16793303,
+          "create_s_median": 0.1820511985,
+          "extract_s_median": 0.057699228000000005
+        },
+        "zip": {
+          "bytes": 16880276,
+          "create_s_median": 0.5615402015,
+          "extract_s_median": 0.048589954
+        }
       },
       "cli": {
-        "cmpct": {"bytes": 16793303, "create_s_median": 0.276852567, "extract_s_median": 0.13383155400000002},
-        "zip": {"bytes": 16880276, "create_s_median": 0.5585507815, "extract_s_median": 0.091423528}
+        "cmpct": {
+          "bytes": 16793303,
+          "create_s_median": 0.276852567,
+          "extract_s_median": 0.13383155400000002
+        },
+        "zip": {
+          "bytes": 16880276,
+          "create_s_median": 0.594121374,
+          "extract_s_median": 0.095163393
+        }
       }
     },
     "dedup_links": {
       "logical_bytes": 27262976,
       "library": {
-        "cmpct": {"bytes": 1373, "create_s_median": 0.037983034, "extract_s_median": 0.009082436},
-        "zip": {"bytes": 86991, "create_s_median": 0.08662320249999999, "extract_s_median": 0.0246129835}
+        "cmpct": {
+          "bytes": 1373,
+          "create_s_median": 0.037983034,
+          "extract_s_median": 0.009082436
+        },
+        "zip": {
+          "bytes": 86991,
+          "create_s_median": 0.1488458635,
+          "extract_s_median": 0.0282597235
+        }
       },
       "cli": {
-        "cmpct": {"bytes": 1373, "create_s_median": 0.11141580949999999, "extract_s_median": 0.0795949755},
-        "zip": {"bytes": 86991, "create_s_median": 0.1627972205, "extract_s_median": 0.093931543}
+        "cmpct": {
+          "bytes": 1373,
+          "create_s_median": 0.11141580949999999,
+          "extract_s_median": 0.0795949755
+        },
+        "zip": {
+          "bytes": 86991,
+          "create_s_median": 0.1808306895,
+          "extract_s_median": 0.06787525250000001
+        }
       }
     },
     "sparse": {
       "logical_bytes": 134217728,
       "library": {
-        "cmpct": {"bytes": 4196500, "create_s_median": 0.1032214055, "extract_s_median": 0.0032682225},
-        "zip": {"bytes": 4327446, "create_s_median": 0.473247194, "extract_s_median": 0.187471819}
+        "cmpct": {
+          "bytes": 4196500,
+          "create_s_median": 0.1032214055,
+          "extract_s_median": 0.0032682225
+        },
+        "zip": {
+          "bytes": 4327446,
+          "create_s_median": 0.7487180445,
+          "extract_s_median": 0.3552433245
+        }
       },
       "cli": {
-        "cmpct": {"bytes": 4196500, "create_s_median": 0.1863849695, "extract_s_median": 0.0733429115},
-        "zip": {"bytes": 4327446, "create_s_median": 0.5507417935, "extract_s_median": 0.2592954065}
+        "cmpct": {
+          "bytes": 4196500,
+          "create_s_median": 0.1863849695,
+          "extract_s_median": 0.0733429115
+        },
+        "zip": {
+          "bytes": 4327446,
+          "create_s_median": 0.77895241,
+          "extract_s_median": 0.406376248
+        }
       }
     },
     "nested": {
-      "logical_bytes": 3871356,
+      "logical_bytes": 845291,
       "library": {
-        "cmpct": {"bytes": 797604, "create_s_median": 0.013704734, "extract_s_median": 0.0017779035000000001},
-        "zip": {"bytes": 808362, "create_s_median": 0.0317925295, "extract_s_median": 0.0035145055}
+        "cmpct": {
+          "bytes": 797604,
+          "create_s_median": 0.013704734,
+          "extract_s_median": 0.0017779035000000001
+        },
+        "zip": {
+          "bytes": 808362,
+          "create_s_median": 0.019958646,
+          "extract_s_median": 0.0030500895000000004
+        }
       },
       "cli": {
-        "cmpct": {"bytes": 797604, "create_s_median": 0.0869316235, "extract_s_median": 0.0705989025},
-        "zip": {"bytes": 808362, "create_s_median": 0.1057927885, "extract_s_median": 0.0736208855}
+        "cmpct": {
+          "bytes": 797604,
+          "create_s_median": 0.0869316235,
+          "extract_s_median": 0.0705989025
+        },
+        "zip": {
+          "bytes": 808362,
+          "create_s_median": 0.053782715999999994,
+          "extract_s_median": 0.0360937955
+        }
       }
     },
     "combined": {
-      "logical_bytes": 80379247,
+      "logical_bytes": 84760369,
       "library": {
-        "cmpct": {"bytes": 21974962, "create_s_median": 0.5098998539999999, "extract_s_median": 0.334790659},
-        "zip": {"bytes": 22862111, "create_s_median": 0.737791515, "extract_s_median": 0.158161673}
+        "cmpct": {
+          "bytes": 21974962,
+          "create_s_median": 0.5098998539999999,
+          "extract_s_median": 0.334790659
+        },
+        "zip": {
+          "bytes": 22862111,
+          "create_s_median": 1.163489476,
+          "extract_s_median": 0.544341599
+        }
       },
       "cli": {
-        "cmpct": {"bytes": 21974962, "create_s_median": 0.6819633949999999, "extract_s_median": 0.4133854755},
-        "zip": {"bytes": 22862111, "create_s_median": 0.817424197, "extract_s_median": 0.231402078}
+        "cmpct": {
+          "bytes": 21974962,
+          "create_s_median": 0.6819633949999999,
+          "extract_s_median": 0.4133854755
+        },
+        "zip": {
+          "bytes": 22862111,
+          "create_s_median": 1.2227093245,
+          "extract_s_median": 0.5757251225
+        }
       }
     }
   },
   "aggregate_runs": 2,
   "aggregate_statistic": "median of per-run medians",
-  "source_repetitions_per_run": [3, 3],
+  "source_repetitions_per_run": [
+    3,
+    3
+  ],
   "project_version": "0.26.0",
   "source_commit": "f202051f31e93c58cbc210e7eb4e1aad044e30c6",
   "date": "2026-08-16",
@@ -122,14 +253,5 @@
     "cpu_count": 4,
     "cpu_model": "AMD EPYC 7763 64-Core Processor",
     "zstd": "*** Zstandard CLI (64-bit) v1.5.7, by Yann Collet ***"
-  },
-  "release_gate": {
-    "result": "PASS",
-    "size_regressions": 0,
-    "confirmed_timing_regressions": 0,
-    "timing_relative_threshold": 0.05,
-    "timing_absolute_ms_threshold": 3.0,
-    "measured_timing_improvements": 13,
-    "note": "Archive engine code was unchanged by v0.26; the release gate verified exact archive-size parity and no confirmed same-runner slowdown after symmetric ABBA ordering. Timing differences inside the confidence envelope are not promoted as product gains."
   }
 }
