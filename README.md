@@ -7,10 +7,10 @@ archive choice better than legacy ZIP across **size, speed, random access, fidel
 recovery, updates and modern storage semantics**—without winning one metric by quietly sacrificing the
 others.
 
-> Status: **project v0.26.0 / pre-1.0 / format under active development.** `main` is the canonical
-> source of truth. The executable reference implementation still writes format revision **24**.
-> v0.26.0 makes performance a release contract and rebuilds the public site as a live performance
-> command center. It does not pretend EntropyGraph's research-only `CMPNX5` grammar is canonical.
+> Status: **core project v0.27.1 / surface 0.27.a / pre-1.0 / format under active development.** `main`
+> is the canonical source of truth. The executable reference implementation still writes format
+> revision **24**. Surface revisions describe site/docs/repository presentation and do not consume a
+> numeric core release number.
 
 > Licensing status: **Apache-2.0 is proposed, not yet adopted.** See `LICENSING.md` and
 > `LICENSE-APACHE-2.0-PROPOSED.txt`. The proposal must not be interpreted as a finalized public grant.
@@ -18,15 +18,15 @@ others.
 ## The performance position
 
 CMPCT is not "Zstd with a new extension" and it is not satisfied by being smaller on one hand-picked
-directory. Material project updates are now benchmarked against their direct base before merge.
+directory. Numeric core release candidates are benchmarked against their direct base before release.
 
 The release rule is deliberately asymmetric because size and timing have different measurement physics:
 
 - **archive size:** identical input + encoder semantics must never get larger; release gate tolerance is **0 bytes**;
 - **create/extract speed:** base and candidate run on the same runner with repeated medians; a confirmed
   slowdown outside the documented relative+absolute noise envelope blocks release;
-- **benchmark evidence:** every material version must commit a fresh public benchmark record rather than
-  leave the new result only in CI output;
+- **benchmark evidence:** every numeric core release must commit a fresh public benchmark record rather
+  than leave the new result only in CI output;
 - **corpora:** losing/adversarial workloads stay visible. A benchmark is not improved by deleting the
   case that disproves the headline.
 
@@ -96,8 +96,8 @@ A coding/research agent with no previous CMPCT context should read, in order:
 1. `README.md` — mission and project shape;
 2. `AGENTS.md` — mandatory development, benchmark and versioning rules;
 3. `docs/CURRENT_STATE.md` — zero-chat-history handoff and immediate frontier;
-4. newest applicable note under `docs/releases/` — project-version milestone;
-5. `docs/PERFORMANCE_RELEASE_GATE.md` — no-regression release contract;
+4. newest applicable note under `docs/releases/` — latest numeric core milestone;
+5. `docs/PERFORMANCE_RELEASE_GATE.md` — no-regression core-release contract;
 6. `docs/FORMAT.md` — current revision-24 on-disk contract;
 7. `docs/HISTORY.md` — surviving format/prototype history with private provenance generalized;
 8. `docs/RESEARCH_LOG.md` and `docs/ENTROPYGRAPH.md` — experimental conclusions and frontier;
@@ -118,8 +118,10 @@ development safely.
 - `benchmarks/neutral_hostile_corpus_v1.py` — broader deterministic-per-workload hostile corpus generator.
 - `benchmarks/history/` — durable public machine-readable benchmark records.
 - `tools/check_performance_regression.py` — direct-base release regression checker.
+- `tools/check_version_discipline.py` — core-vs-surface version discipline gate.
+- `SURFACE_REVISION` — alphabetic presentation/process revision (`x.x.a`, `x.x.b`, …).
 - `docs/PERFORMANCE_RELEASE_GATE.md` — normative performance release policy.
-- `docs/releases/` — one release note per material project version.
+- `docs/releases/` — one release note per numeric core release.
 - `site/` — performance-first website and local Browser Lab.
 - `native/cmpct_cdc.c` — optional native content-defined chunking accelerator.
 - `native/cmpct-core/` — shared memory-safe read-only core and C ABI.
@@ -137,30 +139,44 @@ development safely.
 ## Website
 
 The site is designed to **create impact first, prove the claim second, and earn trust after that**.
-Its headline performance numbers, competitor ladder, workload matrix, losses and release state are
+Its headline performance numbers, competitor ladder, workload matrix, losses and core-release state are
 generated from committed benchmark history rather than hand-maintained marketing percentages.
 
 It deliberately separates:
 
 - **research frontier** — the strongest currently verified experimental representation results;
 - **canonical parity** — the executable revision-24 reader/writer compared against ZIP at equivalent
-  library and fresh-process CLI boundaries.
+  library and fresh-process CLI boundaries;
+- **surface revision** — the current site/docs/repository presentation milestone, which has no authority
+  over archive semantics or benchmark truth.
 
-The site may be visually and rhetorically aggressive. It may not blur that boundary or invent a win.
+The site may be visually and rhetorically aggressive. It may not blur those boundaries or invent a win.
 Canonical `main` publishes through the Pages workflow only after public-surface, data-coherence,
-JavaScript and Browser Lab compatibility checks pass.
+surface-revision, JavaScript and Browser Lab compatibility checks pass.
 
 ## Version discipline
 
-Every **material merged CMPCT milestone gets a new project version and a fresh benchmark record**.
-Project version and on-disk format revision are deliberately separate: research, encoder policy,
-benchmark frontier, hardening, website or platform integration can justify a new project version without
-changing archive grammar. Reader-visible storage semantics require an on-disk format revision bump as
-well.
+CMPCT no longer treats the numeric project version as a commit counter.
 
-CI rejects substantive work that reuses the previous project version or omits the matching release
-note. The performance workflow independently rejects confirmed regressions. This keeps meaningful work
-visible and prevents a release label from becoming a substitute for measured progress.
+There are three different version axes:
+
+1. **Numeric core project version (`MAJOR.MINOR.PATCH`)** — reserved for a material improvement to CMPCT
+   itself: archive/engine capability, compression or speed, reliability, recovery,
+   portability/interoperability, or another product-level gain. After the historical v0.27.1 checkpoint,
+   normal core advancement moves the `MAJOR.MINOR` line and uses `PATCH=0` for packaging compatibility.
+2. **Surface revision (`MAJOR.MINOR.LETTER`)** — site animation/design, documentation cleanup, repository
+   presentation, workflow ergonomics and similar non-format work. The current surface milestone is
+   `0.27.a`. It does not change `pyproject.toml` and does not require a synthetic benchmark record.
+3. **On-disk format revision** — changes only when readers need new archive grammar/storage semantics.
+
+A core release can improve encoder policy, speed, reliability or interoperability without changing the
+on-disk revision, but it must still earn its numeric number with durable evidence. Conversely, a site or
+repo beautification pass can be useful and substantial without pretending CMPCT itself became a new
+format release.
+
+CI rejects numeric bumps that do not touch archive/engine paths, requires matching release and benchmark
+evidence for numeric core releases, validates the alphabetic surface line, and keeps those concerns
+separate from the performance regression gate.
 
 ## Development history and benchmark provenance
 
@@ -186,9 +202,11 @@ private artifact names or private-system links. See `docs/PUBLIC_SURFACE.md` for
 ## Canonicality
 
 This repository supersedes chat-local CMPCT prototypes and benchmark scripts. New format changes,
-benchmarks, experiments, site changes and design decisions must land here as a versioned project
-milestone. Experimental code must be clearly labeled and cannot claim canonical format support until
-it is wired into the reference reader/writer and conformance surface.
+benchmarks, experiments, site changes and design decisions must land here, but they do not all receive
+the same kind of version marker. Material archive/engine progress earns a numeric core release; site,
+documentation and repository presentation use `SURFACE_REVISION`; research may remain explicitly
+experimental until it is promoted. Experimental code cannot claim canonical format support until it is
+wired into the reference reader/writer and conformance surface.
 
 ## License
 
@@ -196,3 +214,6 @@ Apache License 2.0 is the **current proposed license**, not the final adopted li
 contains the unmodified proposed license text in `LICENSE-APACHE-2.0-PROPOSED.txt` plus an explicit
 adoption checklist in `LICENSING.md`. Until that process is completed, do not represent CMPCT as
 finally released under Apache-2.0.
+
+Footnote: historical release notes and benchmark records are not rewritten to fit the new policy. The
+scarce-version rule applies prospectively so the repository preserves an honest audit trail.
