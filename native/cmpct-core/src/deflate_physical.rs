@@ -19,7 +19,7 @@ pub enum PhysicalDeflateError {
     ResourceLimit,
     #[error("requested physical Deflate range is outside the compressed payload")]
     Range,
-    #[error("raw Deflate stream is malformed")]
+    #[error("raw Deflate stream is malformed or has trailing physical bytes")]
     Decode,
     #[error("decoded Deflate length disagrees with authenticated blob metadata")]
     LogicalLength,
@@ -33,7 +33,9 @@ pub enum PhysicalDeflateError {
 /// carries a logical identity for codec-4 blobs but no separate physical-stream hash, so mode 0 must
 /// decode the exact stream before trusting it. Authentication is deliberately streaming: logical
 /// bytes are counted and hashed through a fixed 64 KiB buffer rather than materializing an
-/// archive-controlled decoded member solely for verification.
+/// archive-controlled decoded member solely for verification. The decoder must also consume the
+/// complete physical payload; otherwise appended bytes could be exposed as trusted nested-ZIP bytes
+/// even though they were never covered by logical-content authentication.
 pub fn authenticated_range(
     compressed: &[u8],
     logical_size: u64,
@@ -79,6 +81,12 @@ pub fn authenticated_range(
     if decoded_len != logical_size {
         return Err(PhysicalDeflateError::LogicalLength);
     }
+
+    let decoder = limited.into_inner();
+    if decoder.total_in() != compressed_len {
+        return Err(PhysicalDeflateError::Decode);
+    }
+
     let actual_hash: [u8; 32] = hash.finalize().into();
     if &actual_hash != expected_logical_sha256 {
         return Err(PhysicalDeflateError::LogicalHash);
