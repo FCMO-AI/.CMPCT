@@ -19,11 +19,16 @@ jobs:
     timeout-minutes: 45
     env:
       CMPCT_PARITY_REPS: "5"
+      CMPCT_RELEASE_CORPUS: /tmp/cmpct-release-corpus
     steps:
-      - name: Check out full repository history
+      - name: Check out candidate repository history
         uses: actions/checkout@v6
         with:
           fetch-depth: 0
+          # Footnote: PR workflows normally check out GitHub's synthetic merge commit. Performance
+          # evidence should identify and execute the actual candidate head while still comparing it
+          # against the PR base; main pushes naturally use github.sha.
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
 
       - name: Set up Python 3.11
         uses: actions/setup-python@v6
@@ -55,16 +60,72 @@ jobs:
           echo "Candidate: $(git rev-parse HEAD)"
           echo "Base:      $BASE_SHA"
 
-      - name: Materialize base worktree
+      - name: Materialize base engine worktree
         run: git worktree add --detach /tmp/cmpct-performance-base "${{ steps.base.outputs.sha }}"
+
+      - name: Generate one immutable release corpus
+        run: |
+          python - <<'PY'
+          import hashlib, json, os, shutil, sys
+          from pathlib import Path
+
+          root = Path.cwd()
+          sys.path.insert(0, str(root / 'benchmarks'))
+          import universal_bench as universal
+
+          corpus = Path(os.environ['CMPCT_RELEASE_CORPUS'])
+          shutil.rmtree(corpus, ignore_errors=True)
+          corpus.mkdir(parents=True)
+          universal.CORP = corpus
+          universal.reset_rng()
+          universal.make_corpora()
+
+          # Footnote: normalize filesystem timestamps after generation. CMPCT preserves richer
+          # filesystem metadata than ZIP, so identical payload bytes alone are not enough to define an
+          # identical archive input. Base and candidate must see identical path metadata too.
+          fixed_ns = 1767225600 * 1_000_000_000  # 2026-01-01T00:00:00Z
+          paths = sorted(corpus.rglob('*'), key=lambda p: (len(p.parts), p.as_posix()), reverse=True)
+          for path in paths:
+              try:
+                  os.utime(path, ns=(fixed_ns, fixed_ns), follow_symlinks=False)
+              except (NotImplementedError, OSError):
+                  if not path.is_symlink():
+                      raise
+          os.utime(corpus, ns=(fixed_ns, fixed_ns))
+
+          h = hashlib.sha256()
+          files = 0
+          logical = 0
+          for path in sorted(corpus.rglob('*')):
+              rel = path.relative_to(corpus).as_posix().encode()
+              st = path.lstat()
+              h.update(len(rel).to_bytes(4, 'little')); h.update(rel)
+              h.update((st.st_mode & 0o177777).to_bytes(4, 'little'))
+              if path.is_symlink():
+                  target = os.readlink(path).encode()
+                  h.update(b'L'); h.update(len(target).to_bytes(4, 'little')); h.update(target)
+              elif path.is_file():
+                  data = path.read_bytes(); files += 1; logical += len(data)
+                  h.update(b'F'); h.update(len(data).to_bytes(8, 'little')); h.update(data)
+              elif path.is_dir():
+                  h.update(b'D')
+          manifest = {'tree_sha256': h.hexdigest(), 'files': files, 'logical_bytes': logical}
+          Path('benchmark-artifacts').mkdir(exist_ok=True)
+          Path('benchmark-artifacts/corpus.json').write_text(json.dumps(manifest, indent=2) + '\n')
+          print(json.dumps(manifest, indent=2))
+          PY
 
       - name: Capture shared-runner provenance
         run: |
-          mkdir -p benchmark-artifacts
           {
             echo "candidate_commit=$(git rev-parse HEAD)"
             echo "base_commit=${{ steps.base.outputs.sha }}"
-            echo "candidate_version=$(python -c 'import cmpct; print(cmpct.__version__)')"
+            echo "candidate_version=$(python - <<'PY'
+          import tomllib
+          with open('pyproject.toml','rb') as f: print(tomllib.load(f)['project']['version'])
+          PY
+          )"
+            echo "format_revision=$(PYTHONPATH=src python -c 'from cmpct.codec import VERSION; print(VERSION)')"
             echo "python=$(python --version 2>&1)"
             echo "uname=$(uname -a)"
             echo "filesystem=$(df -T . | tail -1)"
@@ -74,40 +135,52 @@ jobs:
             echo "zstd=$(zstd --version | head -1)"
           } | tee benchmark-artifacts/environment.txt
 
-      - name: Benchmark direct base
-        working-directory: /tmp/cmpct-performance-base/benchmarks
+      - name: Benchmark direct base on shared corpus
+        working-directory: benchmarks
         env:
           PYTHONPATH: /tmp/cmpct-performance-base/src
+          CMPCT_PARITY_CORPUS_ROOT: /tmp/cmpct-release-corpus
         run: |
-          python zip_parity_bench.py > "$GITHUB_WORKSPACE/benchmark-artifacts/base.stdout.txt"
-          cp _parity_work/out/zip-parity.json "$GITHUB_WORKSPACE/benchmark-artifacts/base.json"
+          python zip_parity_bench.py > ../benchmark-artifacts/base.stdout.txt
+          cp _parity_work/out/zip-parity.json ../benchmark-artifacts/base.json
 
-      - name: Benchmark candidate
+      - name: Benchmark candidate on shared corpus
         working-directory: benchmarks
         env:
           PYTHONPATH: ${{ github.workspace }}/src
+          CMPCT_PARITY_CORPUS_ROOT: /tmp/cmpct-release-corpus
           BASE_SHA: ${{ steps.base.outputs.sha }}
         run: |
           python zip_parity_bench.py > ../benchmark-artifacts/candidate.stdout.txt
           cp _parity_work/out/zip-parity.json ../benchmark-artifacts/candidate.raw.json
           python - <<'PY'
-          import json, os, subprocess
+          import json, os, platform, subprocess, tomllib
           from datetime import date
           from pathlib import Path
-          import tomllib
+          from cmpct.codec import VERSION
 
           root = Path.cwd().parent
-          src = root / 'benchmark-artifacts/candidate.raw.json'
-          data = json.loads(src.read_text())
+          data = json.loads((root / 'benchmark-artifacts/candidate.raw.json').read_text())
+          corpus = json.loads((root / 'benchmark-artifacts/corpus.json').read_text())
           with (root / 'pyproject.toml').open('rb') as fh:
               version = tomllib.load(fh)['project']['version']
-          data['project_version'] = version
-          data['source_commit'] = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=root, text=True).strip()
-          data['date'] = date.today().isoformat()
-          data['record_kind'] = 'release_candidate_regression_evidence'
-          data['harness'] = 'benchmarks/zip_parity_bench.py'
-          data['format_revision'] = 24
-          data['comparison_base_commit'] = os.environ.get('BASE_SHA', '')
+          data.update({
+              'project_version': version,
+              'source_commit': subprocess.check_output(['git','rev-parse','HEAD'], cwd=root, text=True).strip(),
+              'date': date.today().isoformat(),
+              'record_kind': 'release_candidate_regression_evidence',
+              'harness': 'benchmarks/zip_parity_bench.py',
+              'format_revision': VERSION,
+              'comparison_base_commit': os.environ.get('BASE_SHA',''),
+              'corpus_manifest': corpus,
+              'environment': {
+                  'python': platform.python_version(),
+                  'platform': platform.platform(),
+                  'cpu_count': os.cpu_count(),
+                  'cpu_model': subprocess.check_output(['bash','-lc', "lscpu | sed -n 's/^Model name:[[:space:]]*//p' | head -1"], text=True).strip(),
+                  'zstd': subprocess.check_output(['zstd','--version'], text=True).splitlines()[0],
+              },
+          })
           (root / 'benchmark-artifacts/candidate.json').write_text(json.dumps(data, indent=2) + '\n')
           PY
 
@@ -135,7 +208,7 @@ jobs:
           path: benchmark-artifacts/
           if-no-files-found: error
 
-# Footnote: release timing is never compared across unrelated historical machines. Base and candidate
-# run in the same job, with the same dependency set and repetition count. Archive size has zero
-# tolerance; timing gets a small two-dimensional noise envelope so shared-runner jitter cannot be
-# mistaken for a product regression. A slowdown outside that envelope blocks the update.
+# Footnote: the candidate harness owns the comparison semantics and generates exactly one immutable
+# corpus tree. Both base and candidate engines consume that same tree on the same runner. Archive size
+# therefore has a legitimate zero-byte tolerance, while timing keeps a small two-dimensional noise
+# envelope. A future harness change cannot accidentally compare two different synthetic worlds.
