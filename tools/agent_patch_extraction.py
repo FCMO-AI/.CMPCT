@@ -1,21 +1,28 @@
 from pathlib import Path
 
+
+def replace_once(text: str, old: str, new: str, label: str) -> str:
+    if old not in text:
+        raise SystemExit(f"missing anchor: {label}")
+    return text.replace(old, new, 1)
+
+
 lib_path = Path("native/cmpct-core/src/lib.rs")
 text = lib_path.read_text()
-
-const_old = "const STREAM_CHUNK_BYTES: usize = 8 * 1024 * 1024;\nconst MAX_SYMLINK_TARGET_BYTES: u64 = 1024 * 1024;"
-const_new = "const STREAM_CHUNK_BYTES: usize = 8 * 1024 * 1024;\nconst MAX_EXTRACT_OUTPUT_BYTES: u64 = 64 * 1024 * 1024 * 1024;\nconst MAX_SYMLINK_TARGET_BYTES: u64 = 1024 * 1024;"
-if const_old not in text:
-    raise SystemExit("constant anchor missing")
-text = text.replace(const_old, const_new, 1)
+text = replace_once(
+    text,
+    "const STREAM_CHUNK_BYTES: usize = 8 * 1024 * 1024;\nconst MAX_SYMLINK_TARGET_BYTES: u64 = 1024 * 1024;",
+    "const STREAM_CHUNK_BYTES: usize = 8 * 1024 * 1024;\nconst MAX_EXTRACT_OUTPUT_BYTES: u64 = 64 * 1024 * 1024 * 1024;\nconst MAX_SYMLINK_TARGET_BYTES: u64 = 1024 * 1024;",
+    "extraction budget constant",
+)
 
 start_marker = "    /// Safely extract the complete logical tree into an absent or empty destination directory.\n    pub fn extract_all("
 start = text.index(start_marker)
 end = text.index("\n}\n\nfn le_u32", start)
 replacement = r'''    fn extraction_materialized_bytes(&self) -> Result<u64, CmpctError> {
         self.entries.iter().try_fold(0u64, |total, entry| {
-            // Footnote: hardlinks share an inode and directories carry no payload. Symlink target
-            // bytes still count because they are materialized from archive-controlled content.
+            // Hardlinks reuse already-materialized file bytes and directories carry no payload.
+            // Symlink targets still count because archive-controlled bytes are materialized on disk.
             let bytes = match entry.kind {
                 KIND_FILE | KIND_SYMLINK => entry.size,
                 KIND_DIR | KIND_HARDLINK => 0,
@@ -51,8 +58,8 @@ replacement = r'''    fn extraction_materialized_bytes(&self) -> Result<u64, Cmp
             fs::create_dir_all(destination)?;
         }
 
-        // Create directory topology without restoring archive modes yet. A valid 0500/0000 parent
-        // must not become unwritable before its descendants have been materialized.
+        // Build directory topology before restoring archived permissions. Restrictive modes such as
+        // 0500 or 0000 must not make a parent unwritable before its descendants are populated.
         for entry in &self.entries {
             if entry.kind == KIND_DIR {
                 fs::create_dir_all(destination.join(&entry.path))?;
@@ -119,7 +126,7 @@ replacement = r'''    fn extraction_materialized_bytes(&self) -> Result<u64, Cmp
             fs::hard_link(source, output)?;
         }
 
-        // Restore restrictive directory modes only after every descendant exists, deepest-first.
+        // Restore restrictive directory modes only after every descendant exists, deepest first.
         let mut directories: Vec<&Entry> = self
             .entries
             .iter()
@@ -139,12 +146,15 @@ replacement = r'''    fn extraction_materialized_bytes(&self) -> Result<u64, Cmp
     }'''
 text = text[:start] + replacement + text[end:]
 
-# The original function already has #[no_mangle] immediately before its declaration. Reuse that
-# attribute for the newly inserted bounded symbol, then restore one attribute for the old symbol.
-abi_anchor = 'pub unsafe extern "C" fn cmpct_extract_all(\n    archive: *const Archive,\n    destination: *const c_char,\n) -> c_int {'
-if abi_anchor not in text:
-    raise SystemExit("ABI anchor missing")
-bounded_abi = r'''/// Extract with an explicit archive-wide payload-materialization ceiling.
+abi_anchor = '''/// Extract the complete archive into an absent or empty UTF-8 destination directory.
+#[no_mangle]
+pub unsafe extern "C" fn cmpct_extract_all(
+'''
+bounded_abi = '''/// Extract with an explicit archive-wide payload-materialization ceiling.
+///
+/// # Safety
+/// `archive` must be live and `destination` must point to a valid NUL-terminated UTF-8 string.
+#[no_mangle]
 pub unsafe extern "C" fn cmpct_extract_all_bounded(
     archive: *const Archive,
     destination: *const c_char,
@@ -166,79 +176,69 @@ pub unsafe extern "C" fn cmpct_extract_all_bounded(
     }
 }
 
+/// Extract the complete archive into an absent or empty UTF-8 destination directory.
+///
+/// # Safety
+/// `archive` must be live and `destination` must point to a valid NUL-terminated UTF-8 string.
 #[no_mangle]
+pub unsafe extern "C" fn cmpct_extract_all(
 '''
-text = text.replace(abi_anchor, bounded_abi + abi_anchor, 1)
+text = replace_once(text, abi_anchor, bounded_abi, "bounded extraction ABI")
 lib_path.write_text(text)
 
 header = Path("native/cmpct-core/include/cmpct.h")
 h = header.read_text()
-h_anchor = "int32_t cmpct_extract_all(const CmpctArchive *archive, const char *destination);"
-if h_anchor not in h:
-    raise SystemExit("header anchor missing")
-h_decl = (
-    "int32_t cmpct_extract_all_bounded(\n"
-    "    const CmpctArchive *archive,\n"
-    "    const char *destination,\n"
-    "    uint64_t max_materialized_bytes\n"
-    ");\n"
+h = replace_once(
+    h,
+    "int32_t cmpct_extract_all(const CmpctArchive *archive, const char *destination);",
+    "int32_t cmpct_extract_all_bounded(\n    const CmpctArchive *archive,\n    const char *destination,\n    uint64_t max_materialized_bytes\n);\nint32_t cmpct_extract_all(const CmpctArchive *archive, const char *destination);",
+    "C ABI header",
 )
-h = h.replace(h_anchor, h_decl + h_anchor, 1)
 header.write_text(h)
 
 test = Path("tests/native_stream_extract_abi.py")
 t = test.read_text()
-abi_test_anchor = "    lib.cmpct_extract_all.argtypes = [ctypes.c_void_p, ctypes.c_char_p]\n    lib.cmpct_extract_all.restype = ctypes.c_int32"
-if abi_test_anchor not in t:
-    raise SystemExit("test ABI anchor missing")
-t = t.replace(
-    abi_test_anchor,
-    "    lib.cmpct_extract_all_bounded.argtypes = [ctypes.c_void_p, ctypes.c_char_p, ctypes.c_uint64]\n"
-    "    lib.cmpct_extract_all_bounded.restype = ctypes.c_int32\n"
-    + abi_test_anchor,
-    1,
+t = replace_once(
+    t,
+    "    lib.cmpct_extract_all.argtypes = [ctypes.c_void_p, ctypes.c_char_p]\n    lib.cmpct_extract_all.restype = ctypes.c_int32",
+    "    lib.cmpct_extract_all_bounded.argtypes = [ctypes.c_void_p, ctypes.c_char_p, ctypes.c_uint64]\n    lib.cmpct_extract_all_bounded.restype = ctypes.c_int32\n    lib.cmpct_extract_all.argtypes = [ctypes.c_void_p, ctypes.c_char_p]\n    lib.cmpct_extract_all.restype = ctypes.c_int32",
+    "bounded ABI test binding",
 )
-
-tree_anchor = '        (root / "dir" / "small.txt").write_text("small native stream\\n")'
-if tree_anchor not in t:
-    raise SystemExit("tree anchor missing")
-t = t.replace(tree_anchor, tree_anchor + '\n        os.chmod(root / "dir", 0o500)', 1)
-
-extract_anchor = '            destination = Path(td) / "extracted"\n            assert lib.cmpct_extract_all(handle, str(destination).encode()) == 0'
-if extract_anchor not in t:
-    raise SystemExit("extract anchor missing")
-t = t.replace(
-    extract_anchor,
-    '            limited = Path(td) / "limited"\n'
-    '            assert lib.cmpct_extract_all_bounded(handle, str(limited).encode(), 1024) == -4\n'
-    '            assert not limited.exists()\n\n'
-    + extract_anchor,
-    1,
+t = replace_once(
+    t,
+    '        (root / "dir" / "small.txt").write_text("small native stream\\n")',
+    '        (root / "dir" / "small.txt").write_text("small native stream\\n")\n        os.chmod(root / "dir", 0o500)',
+    "restrictive directory fixture",
 )
-
-mode_anchor = '            assert (destination / "dir" / "small.txt").read_bytes() == (root / "dir" / "small.txt").read_bytes()'
-if mode_anchor not in t:
-    raise SystemExit("mode anchor missing")
-t = t.replace(
-    mode_anchor,
-    mode_anchor + '\n            assert (os.stat(destination / "dir").st_mode & 0o7777) == 0o500',
-    1,
+t = replace_once(
+    t,
+    '            destination = Path(td) / "extracted"\n            assert lib.cmpct_extract_all(handle, str(destination).encode()) == 0',
+    '            limited = Path(td) / "limited"\n            assert lib.cmpct_extract_all_bounded(handle, str(limited).encode(), 1024) == -4\n            assert not limited.exists()\n\n            destination = Path(td) / "extracted"\n            assert lib.cmpct_extract_all(handle, str(destination).encode()) == 0',
+    "pre-materialization limit regression",
+)
+t = replace_once(
+    t,
+    '            assert (destination / "dir" / "small.txt").read_bytes() == (root / "dir" / "small.txt").read_bytes()',
+    '            assert (destination / "dir" / "small.txt").read_bytes() == (root / "dir" / "small.txt").read_bytes()\n            assert (os.stat(destination / "dir").st_mode & 0o7777) == 0o500',
+    "directory mode restoration regression",
 )
 test.write_text(t)
 
-# PR #21 recovery was compiling the same guard module twice and used mutable helpers absent from the
-# pinned rmpv API. Fix those blockers without weakening any recovery checks.
+# Current branch recovery code still uses mutable rmpv helpers that are unavailable in the pinned API,
+# and imports the declaration guard as a second module. Fix those compile blockers without weakening it.
 recovery = Path("native/cmpct-core/src/recovery.rs")
 r = recovery.read_text()
 r = r.replace('#[path = "msgpack_guard.rs"]\nmod msgpack_guard;\n\n', 'use crate::msgpack_guard;\n\n', 1)
-old_map_mut = '''fn map_value_mut<'a>(value: &'a mut Value, key: &str) -> Option<&'a mut Value> {
+r = replace_once(
+    r,
+    '''fn map_value_mut<'a>(value: &'a mut Value, key: &str) -> Option<&'a mut Value> {
     value
         .as_map_mut()?
         .iter_mut()
         .find_map(|(name, value)| (name.as_str() == Some(key)).then_some(value))
 }
-'''
-new_map_mut = '''fn map_value_mut<'a>(value: &'a mut Value, key: &str) -> Option<&'a mut Value> {
+''',
+    '''fn map_value_mut<'a>(value: &'a mut Value, key: &str) -> Option<&'a mut Value> {
     let Value::Map(map) = value else {
         return None;
     };
@@ -252,9 +252,17 @@ fn array_mut(value: &mut Value) -> Option<&mut Vec<Value>> {
     };
     Some(values)
 }
-'''
-if old_map_mut not in r:
-    raise SystemExit("recovery mutable-map anchor missing")
-r = r.replace(old_map_mut, new_map_mut, 1)
+''',
+    "recovery mutable MessagePack helpers",
+)
+r = r.replace('.as_array_mut()', '.pipe(array_mut)') if False else r
+r = r.replace('candidate.as_array_mut().ok_or(RecoveryError::Malformed)?', 'array_mut(candidate).ok_or(RecoveryError::Malformed)?')
 r = r.replace('.and_then(Value::as_array_mut)', '.and_then(array_mut)')
 recovery.write_text(r)
+
+recovery_test = Path("native/cmpct-core/tests/recovery_golden.rs")
+rt = recovery_test.read_text()
+anchor = '#[path = "../src/recovery.rs"]\nmod recovery;\n'
+if '#[path = "../src/msgpack_guard.rs"]\nmod msgpack_guard;\n' not in rt:
+    rt = replace_once(rt, anchor, '#[path = "../src/msgpack_guard.rs"]\nmod msgpack_guard;\n\n' + anchor, "recovery test guard module")
+recovery_test.write_text(rt)
