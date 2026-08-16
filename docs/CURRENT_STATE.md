@@ -4,6 +4,7 @@ This document is the **zero-chat-history handoff** for a new agent. Read it toge
 
 - `README.md` — project mission, current performance position and quick start;
 - `AGENTS.md` — mandatory development, performance and versioning behavior;
+- `docs/AGI_ENGINEERING_STANDARD.md` — mandatory quality ratchet, invention protocol, evidence hierarchy and adversarial completion standard;
 - newest applicable note under `docs/releases/` — project-version milestone;
 - `docs/PERFORMANCE_RELEASE_GATE.md` — candidate-vs-base no-regression contract;
 - `docs/FORMAT.md` — current revision-24 on-disk contract;
@@ -35,17 +36,45 @@ Repository: `FCMO-AI/.CMPCT`
 
 Branch: `main`
 
-Current project version: **v0.26.0**
+Current project version: **v0.27.1**
 
 Current canonical executable format: **revision 24**
 
-Project version and format revision are intentionally independent. v0.26.0 changes the release
-contract, benchmark substrate and public website while leaving the canonical reader grammar at r24.
+Project version and format revision are intentionally independent. v0.27.0 introduced the mandatory
+AGI-grade engineering standard and material-PR evidence gate while preserving revision-24 archive
+semantics. v0.27.1 synchronizes this zero-chat handoff with that new canonical engineering contract.
+The v0.26 performance-release machinery remains the executable no-regression foundation, and
 EntropyGraph remains a research engine rather than a canonical revision-25 claim.
 
 `main` HEAD is the canonical implementation state. Everything created outside this repository is
 experimental until reconciled into `main` with the required version, tests, benchmark record and
 release documentation.
+
+## v0.27 engineering-quality contract
+
+Every material task is governed by `docs/AGI_ENGINEERING_STANDARD.md`. “AGI-grade” is an engineering
+quality shorthand, not a claim that a contributor, model or tool possesses AGI.
+
+The repository-level quality ratchet requires future work to:
+
+1. establish the observed problem/opportunity, direct baseline and invariants before implementation;
+2. identify the dominant cost/failure mechanism and state a falsifiable hypothesis plus practical
+   disproof test;
+3. consider meaningfully different solution classes for non-trivial work instead of reflexively taking
+   the first conventional implementation;
+4. prefer mechanism-level/Pareto improvements and independent evidence over threshold tuning or prose;
+5. preserve losing workloads, ambiguous results and rejected experiments that carry future information;
+6. perform adversarial self-review across pathological inputs, resource bounds, integrity, recovery,
+   locality, filesystem semantics and portability where relevant;
+7. account for hidden exported costs such as peak memory, bytes decoded, dependency depth, temporary
+   materialization and reader complexity;
+8. expose the completion dossier in the PR so a skeptical reviewer can falsify the claimed mechanism.
+
+`.github/workflows/engineering-evidence.yml` and `tools/check_pr_evidence.py` enforce the structural part
+of that contract for material PRs. They deliberately do not assign a synthetic “genius score”; technical
+quality remains grounded in tests, independent oracles, benchmark evidence and expert-level causal
+reasoning. Changes to workflow/policy surfaces are themselves material under version discipline so the
+quality gates cannot be silently weakened through a supposedly “docs-only” or CI-only change.
 
 ## v0.26 performance-release contract
 
@@ -217,6 +246,7 @@ Treat these as **reference behavior**, not yet as a frozen 1.0 interoperability 
 15. **Material work is benchmarked.** Every substantive version receives a direct-base benchmark and durable public record.
 16. **No silent performance regression.** Identical-input archive-size growth is zero-tolerance; confirmed same-runner slowdowns block release.
 17. **Evidence drives the website.** Public headline numbers are generated from committed records, not static copy.
+18. **Quality ratchet is mandatory.** Material work must expose its baseline, causal hypothesis, disproof surface, negative evidence and relevant hidden costs; green tests alone are not completion.
 
 ## What is not yet production-grade or 1.0-ready
 
@@ -297,9 +327,9 @@ conformance on the platform/emulator.
 
 ### Mission 7 — public-release readiness
 
-Keep disclosure, version, performance, site and native gates green; maintain the performance site as a
-self-contained front door; finish third-party provenance review; and resolve the license proposal before
-1.0/public release claims.
+Keep disclosure, engineering-evidence, version, performance, site and native gates green; maintain the
+performance site as a self-contained front door; finish third-party provenance review; and resolve the
+license proposal before 1.0/public release claims.
 
 ## Historical traps
 
@@ -329,7 +359,8 @@ release performance gate and commits a fresh public benchmark record for that ve
 
 Bump the on-disk revision only when a reader must understand a new field, record, storage description,
 codec or reconstruction semantic to read newly created canonical archives. Encoder, research, site,
-benchmark or release-tooling changes can keep r24 while still requiring a new project version.
+benchmark, engineering-policy or release-tooling changes can keep r24 while still requiring a new
+project version.
 
 Any format bump must additionally update:
 
@@ -344,6 +375,8 @@ Any format bump must additionally update:
 ## Definition of a good next agent
 
 A good next agent should be comfortable saying **“this change loses on workload X, so it does not
-merge yet.”** CMPCT’s goal is not to accumulate clever codecs or prettier charts. It is to become the
-strongest boring default: small, fast, random-accessible, faithful, recoverable, secure, portable,
-independently implementable and ordinary to open on the devices people use.
+merge yet.”** It should also be willing to change the model of a problem before lowering the standard
+of proof, as required by `docs/AGI_ENGINEERING_STANDARD.md`. CMPCT’s goal is not to accumulate clever
+codecs or prettier charts. It is to become the strongest boring default: small, fast,
+random-accessible, faithful, recoverable, secure, portable, independently implementable and ordinary
+to open on the devices people use.
