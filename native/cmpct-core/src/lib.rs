@@ -599,6 +599,26 @@ impl Archive {
         file.seek(SeekFrom::Start(meta_pos))?;
         let mut meta = vec![0u8; meta_len];
         file.read_exact(&mut meta)?;
+
+        // Footnote: exact-Deflate metadata is archive-controlled MessagePack just like the primary
+        // index and WAV metadata. Guard declarations before `rmpv` so an authenticated tiny metadata
+        // field cannot declare an absurd container/bin length and force allocation before semantics.
+        msgpack_guard::validate(
+            &meta,
+            msgpack_guard::GuardLimits {
+                max_string_bytes: 1024,
+                max_binary_bytes: MAX_INDEX_BYTES,
+                max_array_items: 64,
+                max_map_items: 64,
+                max_depth: 32,
+                max_nodes: 4096,
+            },
+        )
+        .map_err(|error| match error {
+            msgpack_guard::GuardError::Limit => CmpctError::MemberLimit,
+            _ => CmpctError::Schema(format!("invalid Deflate codec metadata: {error}")),
+        })?;
+
         let mut cursor = Cursor::new(meta.as_slice());
         let value = match rmpv::decode::read_value(&mut cursor) {
             Ok(value) if cursor.position() == meta.len() as u64 => value,
@@ -1013,6 +1033,33 @@ impl Archive {
         Ok(index)
     }
 
+    fn expected_entry_hash(&self, entry_index: usize) -> Result<Option<[u8; 32]>, CmpctError> {
+        let resolved_index = self.resolve_entry_index(entry_index)?;
+        let entry = self.entries.get(resolved_index).ok_or(CmpctError::Range)?;
+        if let Some(hash) = entry.logical_hash {
+            return Ok(Some(hash));
+        }
+        match &entry.storage {
+            Storage::Direct(index) => {
+                let blob = self.blobs.get(*index).ok_or_else(|| {
+                    CmpctError::Schema("direct member references missing blob".into())
+                })?;
+                let mut file = self.file.lock().map_err(|_| CmpctError::BlobHeader)?;
+                let (_, hash) = self.checked_blob_layout(blob, &mut file)?;
+                Ok(Some(hash))
+            }
+            Storage::VirtualZip(recipe) => Ok(Some(recipe.logical_sha256)),
+            // S_PACK has authenticated slice metadata but revision-24 pack rows commonly omit an
+            // independent member hash. Each range authenticates the complete shared pack blob instead.
+            Storage::Pack { .. } => Ok(None),
+            Storage::Fixed(_) | Storage::Sparse(_) | Storage::Cdc(_) => Err(CmpctError::Schema(
+                "mapped member is missing required logical SHA-256".into(),
+            )),
+            Storage::Hardlink(_) => unreachable!("hardlinks are resolved above"),
+            Storage::Unsupported => Err(CmpctError::Unsupported),
+        }
+    }
+
     /// Read one bounded logical range with a per-operation output and decode-work budget.
     pub fn read_range(
         &self,
@@ -1141,19 +1188,28 @@ impl Archive {
     }
 
     /// Copy one logical entry sequentially without requiring the caller to allocate its whole size.
+    /// A complete stream is SHA-checked at EOF whenever revision 24 provides a member identity.
     pub fn copy_entry_to<W: Write>(&self, entry_index: usize, writer: &mut W) -> Result<u64, CmpctError> {
         let entry = self.entries.get(entry_index).ok_or(CmpctError::Range)?;
         if entry.kind != KIND_FILE && entry.kind != KIND_SYMLINK && entry.kind != KIND_HARDLINK {
             return Err(CmpctError::Unsupported);
         }
+        let expected_hash = self.expected_entry_hash(entry_index)?;
+        let mut hasher = Sha256::new();
         let mut offset = 0u64;
         let mut buffer = vec![0u8; STREAM_CHUNK_BYTES];
         while offset < entry.size {
             let length = usize::try_from((entry.size - offset).min(STREAM_CHUNK_BYTES as u64))
                 .map_err(|_| CmpctError::MemberLimit)?;
             self.read_range(entry_index, offset, &mut buffer[..length])?;
+            hasher.update(&buffer[..length]);
             writer.write_all(&buffer[..length])?;
             offset += length as u64;
+        }
+        if let Some(expected) = expected_hash {
+            if hasher.finalize().as_slice() != expected {
+                return Err(CmpctError::MemberHash);
+            }
         }
         Ok(offset)
     }
@@ -1204,6 +1260,11 @@ impl Archive {
                     let len = usize::try_from(entry.size).map_err(|_| CmpctError::MemberLimit)?;
                     let mut bytes = vec![0u8; len];
                     self.read_range(index, 0, &mut bytes)?;
+                    if let Some(expected) = self.expected_entry_hash(index)? {
+                        if Sha256::digest(&bytes).as_slice() != expected {
+                            return Err(CmpctError::MemberHash);
+                        }
+                    }
                     let target = String::from_utf8(bytes).map_err(|_| {
                         CmpctError::Extraction(format!(
                             "symlink target for {} is not UTF-8",
@@ -2088,6 +2149,9 @@ pub struct CmpctStream {
     archive: *const Archive,
     entry_index: usize,
     offset: u64,
+    hasher: Sha256,
+    expected_hash: Option<[u8; 32]>,
+    verified: bool,
 }
 
 fn error_status(error: &CmpctError) -> CmpctStatus {
@@ -2280,10 +2344,17 @@ pub unsafe extern "C" fn cmpct_entry_stream_open(
     if entry.kind == KIND_DIR {
         return CmpctStatus::Unsupported as c_int;
     }
+    let expected_hash = match archive_ref.expected_entry_hash(index) {
+        Ok(hash) => hash,
+        Err(error) => return error_status(&error) as c_int,
+    };
     *out = Box::into_raw(Box::new(CmpctStream {
         archive,
         entry_index: index,
         offset: 0,
+        hasher: Sha256::new(),
+        expected_hash,
+        verified: false,
     }));
     CmpctStatus::Ok as c_int
 }
@@ -2312,7 +2383,18 @@ pub unsafe extern "C" fn cmpct_stream_read(
     let Some(entry) = archive.entries.get(stream.entry_index) else {
         return CmpctStatus::Range as c_int;
     };
-    if stream.offset >= entry.size || capacity == 0 {
+    if stream.offset >= entry.size {
+        if !stream.verified {
+            if let Some(expected) = stream.expected_hash {
+                if stream.hasher.clone().finalize().as_slice() != expected {
+                    return CmpctStatus::Format as c_int;
+                }
+            }
+            stream.verified = true;
+        }
+        return CmpctStatus::Ok as c_int;
+    }
+    if capacity == 0 {
         return CmpctStatus::Ok as c_int;
     }
     let length = capacity
@@ -2321,7 +2403,16 @@ pub unsafe extern "C" fn cmpct_stream_read(
     let out = std::slice::from_raw_parts_mut(buffer, length);
     match archive.read_range(stream.entry_index, stream.offset, out) {
         Ok(count) => {
+            stream.hasher.update(&out[..count]);
             stream.offset += count as u64;
+            if stream.offset == entry.size {
+                if let Some(expected) = stream.expected_hash {
+                    if stream.hasher.clone().finalize().as_slice() != expected {
+                        return CmpctStatus::Format as c_int;
+                    }
+                }
+                stream.verified = true;
+            }
             *out_read = count;
             CmpctStatus::Ok as c_int
         }
