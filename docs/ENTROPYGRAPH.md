@@ -1,133 +1,224 @@
-# CMPCT EntropyGraph — v0.25 research milestone
+# CMPCT EntropyGraph — v0.28 research frontier
 
 Date: 2026-08-16
 
+Project milestone: **v0.28.0**  
+Canonical executable/on-disk format: **revision 24 (unchanged)**  
+Research grammar: **CMPNX8 when EntropyGraph II wins; exact inherited CMPNX5 fallback otherwise**
+
 ## Result
 
-This pass deliberately stopped optimizing against any single development corpus and introduced a fixed, deterministic, hostile mixed-workload suite. The experimental engine now treats an archive as an authenticated reconstruction graph rather than merely a bag of independently compressed files.
+EntropyGraph II changes the remaining problem from exact duplicate elimination to **bounded resemblance
+reuse**. The research encoder now finds near-equal bounded objects, measures concrete reversible deltas,
+auditions physical context under an explicit read-amplification budget, and retains the inherited v0.25
+artifact whenever the new representation is not actually smaller.
 
-The fixed neutral/hostile suite contains **8,529 files / 172,447,100 logical bytes across 10 workloads**. CMPNX5 v0.25 research candidate stores **90,383,940 bytes (52.41% ratio; 47.59% saved)**. On the same exact trees:
+Across the fixed public neutral + resemblance-hostile suites the inherited v0.25 research engine stores
+**166,816,028 bytes**. The v0.28 portfolio stores **137,557,457 bytes**, a **17.5394% reduction**, with
+**3 workloads improved and 0 regressed**. The other **12/15 workloads are exact inherited fallbacks**;
+no average score is allowed to hide a losing representation.
 
-- ZIP + Zstandard method 93: 108,186,167 B
-- ZIP + Deflate-9: 111,420,511 B
-- solid tar + Zstandard-19 diagnostic: 97,097,211 B
+The three mechanism-level wins are:
 
-Therefore the candidate is **16.46% smaller than ZIP/Zstd-93**, **18.88% smaller than ZIP/Deflate-9**, and **6.91% smaller than the monolithic solid tar+Zstd-19 diagnostic in aggregate**. It wins 8/10 workloads against ZIP/Zstd-93 and 6/10 against solid tar+Zstd-19. Losses are retained in the report rather than hidden.
+- shifted near-duplicate versions: **30,200,827 → 1,761,588 bytes (-94.17%)**;
+- repeated one-byte boundary churn: **866,651 → 89,945 bytes (-89.62%)**;
+- ML artifacts: **13,879,065 → 13,836,439 bytes (-0.31%)**.
 
-Worst adversarial expansion is the intentionally incompressible/encrypted-like workload: **+0.1086%**. That remaining cost is chiefly the price of paths/index/recovery/integrity, not failed payload compression.
+The accepted public evidence is `benchmarks/history/2026-08-16-entropygraph-v028.json`. It retains all
+15 workload rows, source-tree fingerprints, inherited/candidate/raw-graph sizes, representation
+selection, creation and strong-verification costs, graph/locality statistics, structural competitor
+aggregates, unavailable tools, and the SHA-256 of the complete raw CI evidence artifact.
 
-## Fixed hostile corpus
+## Why v0.28 exists
 
-The corpus is generated with independent deterministic per-workload PRNG seeds. Each workload can be regenerated in isolation without changing its bytes.
+v0.25 proved that an archive can be treated as an authenticated reconstruction graph: exact streams,
+objects and inverse views can share physical roots rather than remaining isolated by filename/container.
+Its dominant remaining defect was that **near-equal information was still mostly distinct information**.
+Exact CDC helps when identical chunks survive edits, but does not exploit two bounded objects that are
+strongly similar without sharing a sufficiently large exact chunk.
 
-1. Developer repository: source, tests, package lock, compiled ELF binaries, simulated Git compressed objects.
-2. Office workspace: valid DOCX/XLSX/PPTX/PDF plus standalone JPEG/PNG assets.
-3. Media library: JPEG/PNG, valid H.264/AAC MP4, WAV, FLAC, MP3.
-4. Analytics/database: CSV, JSONL, SQLite, NumPy NPY/NPZ.
-5. Logs/telemetry: raw logs beside gzip/xz/zstd compressed rotations.
-6. Incremental backups: mostly shared snapshots plus a ZIP containing exact snapshot members.
-7. Incompressible/encrypted-like: random blobs and many random tiny objects.
-8. Many tiny files: 5,000 structured/random items.
-9. ML artifacts: q4-like weights, scales, tokenizer JSON, training log.
-10. Large mixed binary: a 32 MiB mixed-entropy disk-image-like object.
+EntropyGraph II therefore adds a resemblance layer without making similarity part of correctness.
+Similarity only nominates candidates. Final admission always depends on encoding the concrete reversible
+representation and measuring its complete stored cost.
 
-Promotion rule: every workload is reported; use byte-weighted and macro results; report the worst workload; never drop an inconvenient corpus.
+## EntropyGraph II mechanisms
 
-## New representation architecture
+### 1. Bounded FastCDC-style units
 
-### 1. Global compressed-stream federation
+Large logical files are divided into deterministic bounded units so insertions/deletions can rediscover
+nearby boundaries. The reader never needs the chunking heuristic: logical lengths and references are
+recorded explicitly.
 
-ZIP-like containers are inspected globally rather than judged only by local duplicate-stream savings. A document family can therefore share exact compressed member streams across DOCX/PPTX/XLSX siblings.
+### 2. Bounded similarity discovery
 
-### 2. Entropy-oriented representation inversion
+Each unit receives multiple local super-features. A bounded LSH search nominates only a small number of
+near-neighbors per target; hostile false-neighbor populations cannot trigger an unbounded all-pairs
+search.
 
-When two required logical objects are exact reversible views of the same information, the encoder is free to choose which direction is physically stored.
+### 3. Measured COPY/LITERAL deltas
 
-Example: if a standalone JPEG is exactly the plaintext of a Deflate member whose exact compressed stream is already required to reconstruct a PPTX, CMPCT stores the required Deflate stream once and materializes the loose JPEG by cheap inflation. It does **not** store the JPEG again or recompress it during extraction.
+Candidate base/target pairs are encoded with a rolling rsync-style COPY/LITERAL transform. A delta edge
+is accepted only when its compressed payload **plus record/metadata overhead** is materially smaller than
+the target's direct representation and copies a meaningful fraction of the target.
 
-This is generalized to exact compressed sidecars such as gzip/xz/zstd/bzip2 when a required compressed file deterministically decodes to another required loose file.
+Similarity score is never correctness evidence.
 
-### 3. Exact object interning
+### 4. Dependency depth = 1
 
-Identical logical payloads across snapshots are physically stored once. Aliases retain independent names but add no duplicate payload.
+Bases are selected by aggregate saving centrality and may not themselves be delta targets. This prevents
+ratio wins from becoming hidden recursive read/recovery chains. A target either decodes directly or from
+one independently decodable base plus one delta.
 
-### 4. Proof-carrying reconstruction graph
+### 5. Adaptive physical context
 
-Per-file SHA-256 values that duplicated already-authenticated truth were removed. Strong identity is instead formed by:
+Root objects are similarity-ordered and the encoder auditions pack ceilings from **64 KiB through 2
+MiB**. Wider context is accepted only when it wins bytes and the weighted selective-read amplification
+remains within **8x**. If a wider plan does not materially earn its cost, the encoder retains the 512 KiB
+baseline.
 
-- SHA-256 on every physical pack;
-- authenticated reconstruction metadata;
-- authenticated canonical tree root;
-- exact deterministic reconstruction recipes.
+Footnote: “2 MiB pack allowed” is not “2 MiB pack always used.” The pack width is a measured physical
+choice with an explicit locality budget, not a new universal constant.
 
-Normal extraction uses CRC32 as the hot corruption tier for ZIP-comparable cost. Explicit strong verification authenticates every physical pack and then reconstructs and checks the canonical tree hash.
+### 6. Exact DEFLATE precompression
 
-### 5. Implicit micro-pack index
+A pinned memory-safe bridge around `microsoft/preflate-rs` can invert supported DEFLATE-bearing files
+into an exactly reconstructible preflate representation. Every produced transform is immediately
+recreated through the inverse path and byte-compared before it can compete for storage.
 
-For tiny files physically concatenated in one pack, offsets are mathematical consequences of preceding lengths. The on-disk metadata stores the pack once and an ordered `(path, length)` table rather than repeating `plain -> slice -> pack -> offset -> length` for thousands of files.
+The bridge is an optional research transform. Canonical revision 24 does not depend on it.
 
-### 6. Adaptive bounded-context audition
+### 7. Merkle-authenticated physical records
 
-Each file family auditions 32/64/128/256/512 KiB same-family solid contexts with a cheap probe. Wider context is allowed only when it materially improves size, and 512 KiB is a hard physical decode ceiling.
+Physical payload hashes participate in a Merkle root while logical nodes/files retain exact SHA-256/CRC
+checks. This allows local corruption refusal without turning every ordinary read into a whole-archive
+verification pass.
 
-This reduced the developer workload from 790,184 B in the prior candidate to 746,524 B, and the 5,000-tiny-file workload to 420,322 B.
+### 8. Recovery that is operational
 
-### 7. Hot/cold stream roots
+Primary metadata and an authenticated tail copy are both real recovery paths. Deliberate primary
+metadata damage must recover from the tail; physical payload corruption must still fail closed rather
+than being confused with metadata recovery.
 
-Global stream federation originally created one multi-megabyte shared pool, which looked good in aggregate extraction but hurt single-file reads. CMPNX5 corrects this:
+### 9. Portfolio selection
 
-- latency-sensitive streams used to materialize loose inverse views become stream-aligned **hot roots**;
-- hot roots are stored directly in <=512 KiB slabs to avoid an extra decompression layer;
-- cold container-only streams may share bounded slabs and compete against cheap Zstd-3;
-- no stream federation pack exceeds the normal 512 KiB target.
+EntropyGraph II builds both the inherited v0.25 candidate and the new graph candidate for a workload.
+The smaller exact artifact wins. When resemblance loses, the inherited artifact is copied unchanged.
 
-Measured examples on the office workload:
+This makes “0 workload size regressions” a property of the representation tournament rather than an
+aggregate reporting trick. The tradeoff is extra encoder CPU, which remains recorded.
 
-- 495,699 B derived JPEG: CMPCT ~0.69 ms median vs ZIP/Zstd-93 ~0.37 ms;
-- 3,753,100 B PPTX: CMPCT ~1.55 ms vs ZIP/Zstd-93 ~5.50 ms.
+## Fixed public workload contract
 
-A derived 163,840 B backup blob measured ~0.120 ms for CMPCT vs ~0.123 ms for ZIP/Zstd-93.
+The research frontier now combines the original 10 deterministic neutral/hostile workloads with five
+resemblance-hostile attacks:
 
-### 8. Recovery that actually recovers
+1. developer repository;
+2. office workspace;
+3. media library;
+4. analytics/database;
+5. logs/telemetry;
+6. incremental backups;
+7. incompressible/encrypted-like data;
+8. many tiny files;
+9. ML artifacts;
+10. large mixed binary;
+11. shifted near-duplicate versions;
+12. false sketch neighbors with mostly random bodies;
+13. repeated one-byte boundary churn;
+14. related DEFLATE container family;
+15. incompressible resemblance-control objects.
 
-Earlier experimental artifacts wrote authenticated tail metadata but opened only the primary copy. CMPNX5 makes the redundant copy operational. The reader first authenticates primary metadata; on failure it reads and authenticates the tail copy, derives the pack-table start, and continues.
+Every workload remains visible. Promotion cannot delete an inconvenient row or weaken the selective-read
+contract to make an aggregate prettier.
 
-Two deliberate corruption tests passed full strong verification:
+## Structural competitor context
 
-- primary compressed metadata byte corrupted;
-- header magic corrupted.
+The v0.28 structural sweep archives each public suite as a complete recursive tree with ZIP/Deflate-9,
+solid tar+Zstd-19, 7z/LZMA2, ZPAQ method 5, Borg and DwarFS when available.
 
-## Where CMPCT still loses
+On the resemblance-hostile aggregate:
 
-The suite intentionally preserves these losses:
+- CMPCT EntropyGraph II: **47,197,165 B**;
+- tar+Zstd-19 solid: **47,065,652 B**;
+- ZPAQ method 5: **47,062,641 B**;
+- 7z/LZMA2: **47,430,344 B**;
+- Borg: **76,460,621 B**;
+- ZIP/Deflate-9: **76,690,799 B**.
 
-- Developer repository: solid tar+Zstd-19 remains ~3.5 KiB smaller than the candidate.
-- Media: solid tar+Zstd-19 remains ~3 KiB smaller; ZIP/Deflate-9 is also slightly smaller.
-- ML artifacts: ZIP/Zstd-93 and solid tar+Zstd-19 are both slightly smaller.
-- Large mixed binary: ZIP/Zstd-93 and solid tar+Zstd-19 are slightly smaller.
-- Analytics `features.npy` inverse view is much smaller in archive size but has ~15 ms selective materialization vs ~5.4 ms from ZIP in the current Python prototype because it requires decoding a multi-megabyte Deflate-derived representation across several bounded slabs.
+DwarFS was unavailable in the evidence runner and remains recorded as unavailable rather than omitted.
+These are **structural size comparisons, not semantic-parity claims**. A monolithic solid compressor and
+a bounded dependency/recovery graph export different random-access and failure costs.
 
-These are next targets, not exclusions.
+## Reliability and resource contract
 
-## Research context and next frontier
+The v0.28 campaign additionally exercises:
 
-Microsoft's `preflate-rs` demonstrates that exact DEFLATE bitstreams can be represented as plaintext plus compact reconstruction corrections and rebuilt bit-exactly. That validates a future avenue for removing deterministic DEFLATE shadows when inversion alone is not enough. This v12 prototype **does not implement Preflate**; its gains come from exact stream federation and directional inverse-view storage.
+- exact reconstruction and strong verification;
+- dependency depth <= 1;
+- declared physical decode-unit ceiling of **8 MiB**;
+- separate decoder working-memory ceiling;
+- <=8x weighted read amplification for admitted pack plans;
+- bounded candidate fan-out and delta output;
+- malformed-delta and malformed-graph fuzzing;
+- authenticated tail recovery;
+- local physical-leaf corruption refusal;
+- strict HTTP/range sources that cannot silently fetch the whole archive;
+- byte-identical one-worker vs multi-worker reproducible canonical creation.
 
-A second likely runtime upgrade is replacing stock Python/zlib inflation on hot Deflate views with `libdeflate`, whose upstream implementation is specifically optimized for whole-buffer DEFLATE decompression. That is an implementation speed opportunity rather than a change to the information model.
+## Canonical performance lesson from the campaign
 
-The larger design direction is to formalize CMPCT as an **information-graph compiler**:
+The first reconciled v0.28 release-gate run exposed one fresh-process regression: media CLI creation
+measured **192.99 → 203.07 ms (+5.22%, +10.08 ms)** even though the underlying library create path moved
+by less than 1 ms. The cause class was exported thread-pool startup on a small CLI workload.
 
-- nodes = required logical byte objects plus admissible latent representations;
-- edges = exact reversible transforms with measured storage/create/read costs;
-- roots = physically stored representations;
-- optimization = choose roots, transforms, pack topology, and dependency directions that minimize bytes under hard recovery, dependency-depth, create-time, full-extract, and selective-read budgets.
+The release candidate therefore keeps the in-process `Builder` parallel default, but a fresh
+`cmpct create` process remains serial unless the caller explicitly supplies `--workers N`. This protects
+small-command latency while preserving deterministic parallel creation for batch/large workloads. The
+fix is subject to a fresh direct-base ABBA gate; the failed result remains evidence rather than being
+explained away or hidden.
 
-The current heuristics are already a working approximation of that compiler. A future revision should make the cost graph explicit and solve the representation choice globally rather than through sequential local gates.
+## What remains research-only
 
-## Status
+CMPNX8 is **not** a reader-visible revision-24 extension. Existing r24 readers must never be handed
+CMPNX8 bytes under an r24 magic/version claim.
 
-Project **v0.25.0** publishes this work as a reproducible research milestone while the canonical executable format remains **revision 24**. `CMPNX5` is an experimental benchmark engine, not a claim that its reader-visible semantics are already canonical. Promotion still requires integration with filesystem fidelity, CLI/API, portability, fuzzing, conformance, and compatibility layers of the main implementation.
+Canonical promotion must happen representation-by-representation and requires:
+
+- precise byte-level grammar;
+- independent golden vectors;
+- hostile parser/resource tests;
+- recovery semantics;
+- native-core parity;
+- explicit ZIP export/compatibility behavior;
+- platform/browser implications;
+- a deliberate on-disk revision bump when readers actually need new semantics.
+
+## Historical v0.25 milestone retained
+
+The original v0.25 public neutral/hostile record remains
+`benchmarks/history/2026-08-16-entropygraph-v025.json`. On its 10-workload suite CMPNX5 stored
+**90,383,940 bytes**, **16.46% smaller than ZIP/Zstd-93**, **18.88% smaller than ZIP/Deflate-9**, and
+**6.91% smaller than the solid tar+Zstd-19 diagnostic** in aggregate. It won 8/10 workloads against
+ZIP/Zstd-93 and 6/10 against solid tar+Zstd-19 while preserving its losses.
+
+Those results remain important because v0.28 builds on—not retroactively rewrites—the v0.25 information
+model: exact compressed-stream federation, directional inverse views, exact object interning, compact
+micro-pack indexing, bounded context, hot/cold roots, authenticated metadata, and operational recovery.
+
+## Next frontier
+
+The strongest next step is **not deeper delta chains**. It is to productionize proven graph mechanisms
+one reader-visible representation at a time, while reducing portfolio audition cost without replacing
+final byte measurement for admitted candidates.
+
+After structural reuse is exhausted, a separate entropy-coding research track can evaluate rANS/context
+models or other native codecs against the same locality, decoder-complexity and hostile-resource budget.
+A codec that wins a synthetic ratio while exporting unbounded memory, fragile recovery or a giant reader
+is not a CMPCT improvement.
 
 ## Publication boundary
 
-Only the neutral/hostile generator, generalized engineering conclusions, and independently rerunnable public measurements belong in the repository. Private development corpora may continue to serve as local regression signals, but their names, paths, hashes, artifact filenames, contents, or organization-specific provenance must never enter public release notes or benchmark history.
+Only deterministic public corpora, generalized engineering conclusions, public benchmark artifacts and
+reproducible mechanisms belong in the repository. Private development corpora may remain local regression
+signals, but private names, paths, hashes, artifact filenames, contents or organization-specific
+provenance must never enter release notes, benchmark history, the public site or source comments.
