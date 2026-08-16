@@ -1,0 +1,114 @@
+name: Apply extraction hardening
+
+on:
+  push:
+    branches:
+      - frontier/full-completion-20260815
+
+permissions:
+  contents: write
+
+jobs:
+  harden:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: frontier/full-completion-20260815
+          fetch-depth: 0
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - name: Apply extraction safety patch
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          lib = Path('native/cmpct-core/src/lib.rs')
+          text = lib.read_text()
+
+          marker = 'const MAX_SYMLINK_TARGET_BYTES: u64 = 1024 * 1024;\n'
+          addition = marker + 'const MAX_EXTRACT_MATERIALIZED_BYTES: u64 = 64 * 1024 * 1024 * 1024;\n'
+          if 'MAX_EXTRACT_MATERIALIZED_BYTES' not in text:
+              assert marker in text
+              text = text.replace(marker, addition, 1)
+
+          old = '''    /// Safely extract the complete logical tree into an absent or empty destination directory.\n    pub fn extract_all(&self, destination: &Path) -> Result<(), CmpctError> {\n        self.preflight()?;\n        if destination.exists() {\n'''
+          new = '''    /// Safely extract the complete logical tree into an absent or empty destination directory.\n    pub fn extract_all(&self, destination: &Path) -> Result<(), CmpctError> {\n        self.extract_all_bounded(destination, MAX_EXTRACT_MATERIALIZED_BYTES)\n    }\n\n    /// Extract with an explicit aggregate materialization ceiling. Hardlinks and directories do not\n    /// double-count payload bytes; regular files and symlink targets do. The budget is checked before\n    /// destination creation so an oversized hostile archive fails without partial output.\n    pub fn extract_all_bounded(\n        &self,\n        destination: &Path,\n        max_materialized_bytes: u64,\n    ) -> Result<(), CmpctError> {\n        self.preflight()?;\n        let materialized = self.entries.iter().try_fold(0u64, |total, entry| {\n            if entry.kind == KIND_FILE || entry.kind == KIND_SYMLINK {\n                total.checked_add(entry.size).ok_or(CmpctError::MemberLimit)\n            } else {\n                Ok(total)\n            }\n        })?;\n        if materialized > max_materialized_bytes {\n            return Err(CmpctError::MemberLimit);\n        }\n        if destination.exists() {\n'''
+          if 'pub fn extract_all_bounded' not in text:
+              assert old in text
+              text = text.replace(old, new, 1)
+
+          old_dirs = '''            let output = destination.join(&entry.path);\n            fs::create_dir_all(&output)?;\n            apply_mode(&output, entry.mode)?;\n        }\n'''
+          new_dirs = '''            let output = destination.join(&entry.path);\n            fs::create_dir_all(&output)?;\n        }\n'''
+          if old_dirs in text:
+              text = text.replace(old_dirs, new_dirs, 1)
+
+          old_end = '''            fs::hard_link(source, output)?;\n        }\n        Ok(())\n    }\n}\n'''
+          new_end = '''            fs::hard_link(source, output)?;\n        }\n\n        // Restore restrictive directory modes only after descendants exist. Deepest-first ordering\n        // prevents a parent such as 0500 from blocking restoration of a child directory beneath it.\n        let mut directories: Vec<&Entry> = self\n            .entries\n            .iter()\n            .filter(|entry| entry.kind == KIND_DIR)\n            .collect();\n        directories.sort_by_key(|entry| std::cmp::Reverse(entry.path.matches('/').count()));\n        for entry in directories {\n            apply_mode(&destination.join(&entry.path), entry.mode)?;\n        }\n        Ok(())\n    }\n}\n'''
+          if 'Restore restrictive directory modes only after descendants exist' not in text:
+              assert old_end in text
+              text = text.replace(old_end, new_end, 1)
+
+          old_abi = '''    match archive.extract_all(Path::new(destination)) {\n        Ok(()) => CmpctStatus::Ok as c_int,\n        Err(error) => error_status(&error) as c_int,\n    }\n}\n\n#[cfg(test)]\n'''
+          new_abi = '''    match archive.extract_all(Path::new(destination)) {\n        Ok(()) => CmpctStatus::Ok as c_int,\n        Err(error) => error_status(&error) as c_int,\n    }\n}\n\n/// Extract with an explicit aggregate output-byte ceiling.\n///\n/// # Safety\n/// `archive` must be live and `destination` must point to a valid NUL-terminated UTF-8 string.\n#[no_mangle]\npub unsafe extern "C" fn cmpct_extract_all_bounded(\n    archive: *const Archive,\n    destination: *const c_char,\n    max_materialized_bytes: u64,\n) -> c_int {\n    let Some(archive) = archive.as_ref() else {\n        return CmpctStatus::Null as c_int;\n    };\n    if destination.is_null() {\n        return CmpctStatus::Null as c_int;\n    }\n    let destination = match CStr::from_ptr(destination).to_str() {\n        Ok(destination) => destination,\n        Err(_) => return CmpctStatus::Utf8 as c_int,\n    };\n    match archive.extract_all_bounded(Path::new(destination), max_materialized_bytes) {\n        Ok(()) => CmpctStatus::Ok as c_int,\n        Err(error) => error_status(&error) as c_int,\n    }\n}\n\n#[cfg(test)]\n'''
+          if 'pub unsafe extern "C" fn cmpct_extract_all_bounded' not in text:
+              assert old_abi in text
+              text = text.replace(old_abi, new_abi, 1)
+          lib.write_text(text)
+
+          test = Path('tests/native_stream_extract_abi.py')
+          t = test.read_text()
+          load_old = '''    lib.cmpct_extract_all.argtypes = [ctypes.c_void_p, ctypes.c_char_p]\n    lib.cmpct_extract_all.restype = ctypes.c_int32\n    return lib\n'''
+          load_new = '''    lib.cmpct_extract_all.argtypes = [ctypes.c_void_p, ctypes.c_char_p]\n    lib.cmpct_extract_all.restype = ctypes.c_int32\n    lib.cmpct_extract_all_bounded.argtypes = [ctypes.c_void_p, ctypes.c_char_p, ctypes.c_uint64]\n    lib.cmpct_extract_all_bounded.restype = ctypes.c_int32\n    return lib\n'''
+          if 'cmpct_extract_all_bounded.argtypes' not in t:
+              assert load_old in t
+              t = t.replace(load_old, load_new, 1)
+
+          setup_old = '''        (root / "dir").mkdir()\n        (root / "dir" / "small.txt").write_text("small native stream\\n")\n'''
+          setup_new = '''        (root / "dir").mkdir()\n        (root / "locked").mkdir()\n        (root / "locked" / "child.txt").write_text("permission-order\\n")\n        os.chmod(root / "locked", 0o500)\n        (root / "dir" / "small.txt").write_text("small native stream\\n")\n'''
+          if 'permission-order' not in t:
+              assert setup_old in t
+              t = t.replace(setup_old, setup_new, 1)
+
+          dest_old = '''            destination = Path(td) / "extracted"\n            assert lib.cmpct_extract_all(handle, str(destination).encode()) == 0\n'''
+          dest_new = '''            limited_destination = Path(td) / "limited"\n            # Aggregate refusal occurs before the destination exists, proving that repeated bounded\n            # member reads cannot be composed into unbounded extraction output.\n            assert lib.cmpct_extract_all_bounded(\n                handle, str(limited_destination).encode(), 1024\n            ) == -6\n            assert not limited_destination.exists()\n\n            destination = Path(td) / "extracted"\n            assert lib.cmpct_extract_all(handle, str(destination).encode()) == 0\n'''
+          if 'limited_destination' not in t:
+              assert dest_old in t
+              t = t.replace(dest_old, dest_new, 1)
+
+          assert_old = '''            assert os.readlink(destination / "dir" / "symlink.txt") == "../target.txt"\n\n            # Extraction intentionally refuses a non-empty destination instead of attempting an\n'''
+          assert_new = '''            assert os.readlink(destination / "dir" / "symlink.txt") == "../target.txt"\n            assert (destination / "locked" / "child.txt").read_text() == "permission-order\\n"\n            if os.name != "nt":\n                assert (os.stat(destination / "locked").st_mode & 0o777) == 0o500\n\n            # Extraction intentionally refuses a non-empty destination instead of attempting an\n'''
+          if 'st_mode & 0o777' not in t:
+              assert assert_old in t
+              t = t.replace(assert_old, assert_new, 1)
+          test.write_text(t)
+
+          header = Path('native/cmpct-core/include/cmpct.h')
+          h = header.read_text()
+          declaration = 'int32_t cmpct_extract_all_bounded(const cmpct_archive *archive, const char *destination, uint64_t max_materialized_bytes);\n'
+          if 'cmpct_extract_all_bounded' not in h:
+              needle = 'int32_t cmpct_extract_all(const cmpct_archive *archive, const char *destination);\n'
+              assert needle in h
+              h = h.replace(needle, needle + declaration, 1)
+              header.write_text(h)
+          PY
+      - name: Validate extraction hardening
+        run: |
+          python -m pip install -e .
+          cd native/cmpct-core
+          cargo fmt --check
+          cargo clippy --all-targets -- -D warnings
+          cargo test --all-targets
+          cargo build --release
+          cd ../..
+          python tests/native_stream_extract_abi.py
+      - name: Commit validated hardening
+        run: |
+          rm -f .github/workflows/apply-extraction-hardening.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add native/cmpct-core/src/lib.rs native/cmpct-core/include/cmpct.h tests/native_stream_extract_abi.py .github/workflows/apply-extraction-hardening.yml
+          git commit -m 'native: bound extraction and defer directory modes'
+          git push origin HEAD:frontier/full-completion-20260815
