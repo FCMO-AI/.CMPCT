@@ -19,7 +19,10 @@ fn config() -> PreflateContainerConfig {
         // compression bomb that needs more workspace is an unsupported transform, not an excuse to
         // allocate past the archive contract.
         max_chunk_size: MAX_INPUT_CHUNK,
-        total_plain_text_limit: MAX_PLAINTEXT_WORK,
+        // Footnote: upstream defines this one aggregate work counter as u64 while the per-buffer
+        // ceilings are usize. The explicit widening preserves the exact same 64 MiB byte value; it is
+        // a type-boundary conversion, not a larger allowance.
+        total_plain_text_limit: MAX_PLAINTEXT_WORK as u64,
         chunk_plain_text_limit: MAX_PLAINTEXT_WORK,
         validate_compression: false,
         max_chain_length: 4096,
