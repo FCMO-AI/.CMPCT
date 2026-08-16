@@ -24,13 +24,18 @@ jobs:
           sudo apt-get install -y zstd
           python -m pip install --upgrade pip
           python -m pip install -e '.[test]'
-      - name: Rust format, lint and tests
+      - name: Rust format
         working-directory: native/cmpct-core
-        run: |
-          cargo fmt --check
-          cargo clippy --all-targets -- -D warnings
-          cargo test
-          cargo build --release
+        run: cargo fmt --check
+      - name: Rust lint
+        working-directory: native/cmpct-core
+        run: cargo clippy --all-targets -- -D warnings
+      - name: Rust tests
+        working-directory: native/cmpct-core
+        run: cargo test
+      - name: Rust release build
+        working-directory: native/cmpct-core
+        run: cargo build --release
       - name: Cross-check native index against Python oracle
         run: |
           python - <<'PY'
