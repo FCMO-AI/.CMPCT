@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import importlib.util
 from pathlib import Path
-import struct
+import random
 import sys
 
 import pytest
@@ -23,14 +23,21 @@ def _engine():
 def _source(root: Path) -> Path:
     source = root / "source"
     source.mkdir()
-    base = (b"record|tenant=0042|status=active|payload=shared\n" * 4200)
+    # A deterministic high-entropy base plus sparse edits makes delta profitability causal and obvious:
+    # each direct Zstd object remains large while a COPY/LITERAL edge can encode only the edits. The
+    # previous repetitive-text fixture compressed so well independently that correctly rejecting the
+    # delta was sometimes the optimal policy.
+    rng = random.Random(0xC028D17A)
+    base = bytes(rng.getrandbits(8) for _ in range(220_000))
     for version in range(6):
         data = bytearray(base)
-        at = 17000 + version * 193
+        at = 17_000 + version * 193
         data[at:at] = (f"version={version};".encode() * 19)
-        data[75000 + version:75032 + version] = bytes([31 + version]) * 32
+        for patch in range(8):
+            pos = 43_000 + patch * 19_871 + version
+            data[pos:pos + 24] = bytes([(31 + version + patch) & 0xFF]) * 24
         (source / f"snapshot-{version:02d}.bin").write_bytes(data)
-    (source / "unique.bin").write_bytes(bytes((i * 73 + 11) & 255 for i in range(140_000)))
+    (source / "unique.bin").write_bytes(bytes(rng.getrandbits(8) for _ in range(140_000)))
     return source
 
 
@@ -42,6 +49,8 @@ def test_graph_is_deterministic_and_byte_exact(tmp_path: Path):
     stats_a = engine._build_graph(source, first)
     stats_b = engine._build_graph(source, second)
     assert first.read_bytes() == second.read_bytes()
+    # Footnote: this fixture is deliberately constructed to make a delta materially cheaper. The
+    # assertion proves the graph path is exercised without demanding delta use on arbitrary inputs.
     assert stats_a["delta_nodes"] > 0
     assert stats_a["max_decode_unit"] == engine.MAX_DECODE_UNIT
     assert stats_a["adaptive_pack_limit"] <= engine.MAX_PACK
