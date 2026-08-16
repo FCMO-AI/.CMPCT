@@ -220,7 +220,7 @@ nested archive handling, transactional updates, recovery, compatibility export a
 This is the point at which the project explicitly changed its evaluation target from beating one early
 workload to being an excellent default archive for arbitrary computer data.
 
-## v0.24 — current canonical baseline
+## v0.24 — current canonical on-disk baseline
 
 v0.24 is the **first revision imported into the official `FCMO-AI/.CMPCT` Git repository as canonical source**.
 
@@ -250,13 +250,115 @@ Revision 24 remains a **pre-1.0 working contract**. Format bytes may still chang
 The durable public parity records under `benchmarks/history/` use deterministic/synthetic corpora and
 record their environment/semantic caveats. They deliberately preserve cases where ZIP wins.
 
-The public evidence currently supports a nuanced conclusion:
+The public evidence supports a nuanced conclusion:
 
 - CMPCT has strong size/creation/extraction advantages on several structured workloads;
 - it can remain close to ZIP on already-compressed media;
 - sparse/link semantics can produce very large practical wins because richer filesystem meaning is preserved;
 - some CLI/process-start and large-binary extraction cases still favor mature ZIP tooling;
 - those losses remain engineering targets rather than being removed from the record.
+
+## v0.25 — EntropyGraph exact-information research milestone
+
+v0.25 did **not** change canonical revision-24 grammar. It introduced the CMPNX5 research engine and a
+fixed public 10-workload neutral/hostile suite to test the archive as an authenticated reconstruction
+graph rather than a bag of isolated compressed files.
+
+The research model added or consolidated:
+
+- global exact compressed-stream federation across related ZIP-like containers;
+- entropy-oriented reversible representation inversion;
+- exact object interning across snapshots/aliases;
+- exact inverse edges for required gzip/xz/zstd/bzip2 sidecars;
+- compact implicit micro-pack indexing;
+- bounded adaptive same-family context;
+- hot/cold physical roots for selective-read protection;
+- authenticated head/tail metadata recovery that was exercised rather than decorative;
+- explicit strong verification of physical packs and canonical logical tree state.
+
+The durable v0.25 record is `benchmarks/history/2026-08-16-entropygraph-v025.json`. CMPNX5 stored
+**90,383,940 B** on the 10-workload suite: **16.46% smaller than ZIP/Zstd-93**, **18.88% smaller than
+ZIP/Deflate-9**, and **6.91% smaller than solid tar+Zstd-19** in aggregate, while preserving losing
+workloads and selective-read defects.
+
+The critical remaining defect became clear: exact information reuse still treated most **near-equal**
+information as unrelated.
+
+## v0.26 — direct-base performance release contract
+
+v0.26 turned performance evidence into a merge gate. Base and candidate engines consume one identical
+deterministic corpus on the same runner; archive-size regressions have zero-byte tolerance, while timing
+uses a documented relative+absolute same-runner noise envelope. Accepted public candidate evidence must
+be committed under `benchmarks/history/` rather than left only in CI output.
+
+This interval also fixed a benchmark-substrate defect: separately regenerated random data and wall-clock
+ZIP timestamps could make identical engines appear a few bytes different. The correct response was to
+make the corpus deterministic and shared—not to loosen the size tolerance.
+
+## v0.27.0 / v0.27.1 — engineering quality ratchet and handoff consistency
+
+v0.27.0 added the repository-wide AGI engineering standard, falsifiability/evidence hierarchy and
+material-PR evidence dossier. The label describes engineering quality, not a claim that any contributor
+is AGI. v0.27.1 then repaired the canonical zero-chat handoff so future work would not inherit a stale
+project-version/quality-contract description.
+
+The important policy evolution after this checkpoint is the **scarce numeric core version** rule:
+presentation/process work uses `SURFACE_REVISION`; normal core progress advances the minor line and uses
+`PATCH=0`. Numeric versions are product-progress claims, not commit counters.
+
+## v0.28.0 — EntropyGraph II / Resemblance Compiler research milestone
+
+v0.28.0 again leaves canonical on-disk revision **24 unchanged**, but materially advances CMPCT's
+research engine and supporting systems.
+
+EntropyGraph II (CMPNX8 when selected) adds:
+
+- deterministic bounded FastCDC-style resemblance units;
+- bounded multi-band similarity candidate discovery;
+- measured reversible COPY/LITERAL deltas charged for compressed payload + metadata;
+- central-base selection with maximum dependency depth **1**;
+- similarity-ordered physical root packing auditioned from **64 KiB through 2 MiB**;
+- <=**8x weighted read amplification** for admitted pack plans;
+- optional pinned memory-safe exact DEFLATE precompression research;
+- Merkle-authenticated physical payload leaves plus logical SHA-256/CRC checks;
+- explicit decode-unit and decoder-memory ceilings;
+- authenticated tail recovery and local payload-corruption refusal;
+- strict remote range sources that cannot silently fetch the entire archive;
+- malformed graph/delta fuzz/resource tests;
+- deterministic parallel canonical creation with byte-identical one-worker/multi-worker reproducible output;
+- a measured portfolio that emits inherited v0.25 unchanged whenever resemblance is larger.
+
+The durable v0.28 research record is `benchmarks/history/2026-08-16-entropygraph-v028.json`. Across the
+fixed 15 neutral + resemblance-hostile workloads:
+
+- inherited v0.25: **166,816,028 B**;
+- v0.28 selected portfolio: **137,557,457 B**;
+- reduction: **17.5394%**;
+- workloads improved: **3**;
+- workloads regressed: **0**;
+- exact inherited fallbacks: **12**.
+
+The causal wins are concentrated on the intended mechanism:
+
+- shifted near-duplicate versions: **30,200,827 → 1,761,588 B (-94.17%)**;
+- repeated boundary churn: **866,651 → 89,945 B (-89.62%)**;
+- ML artifacts: **13,879,065 → 13,836,439 B (-0.31%)**.
+
+On the resemblance-hostile structural aggregate, CMPCT stores **47,197,165 B**, in the same size class
+as tar+Zstd-19 solid (**47,065,652 B**), ZPAQ m5 (**47,062,641 B**) and 7z/LZMA2 (**47,430,344 B**),
+while ZIP/Deflate stores **76,690,799 B**. These tools do not have identical selective-read/recovery
+semantics, so the record preserves the distinction rather than declaring a fake universal scalar winner.
+
+The first post-reconciliation direct-base ABBA run also recorded an important **failed** result: media
+fresh-process CLI creation regressed **192.99 → 203.07 ms (+5.22%, +10.08 ms)** even though its library
+path moved by less than 1 ms and twenty other timing cells improved. The release candidate changed the
+fresh CLI default to serial creation unless `--workers N` is explicitly requested, while preserving the
+in-process `Builder` parallel default. The failed evidence remains part of the durable engineering story;
+the acceptance threshold was not weakened.
+
+CMPNX8 remains research grammar. Canonical promotion must happen one reader-visible representation at a
+time with precise bytes, independent vectors, hostile parser/resource coverage, native parity, recovery
+and explicit ZIP/platform/export implications.
 
 ## Privacy/provenance transition
 
@@ -266,15 +368,16 @@ benchmarks are expected to be independently reproducible. See `docs/PUBLIC_SURFA
 
 ## Revision-history rule going forward
 
-For every material format/version change:
+For every material core format/version change:
 
 1. update `docs/FORMAT.md` if reader-visible bytes/semantics change;
 2. update this file with what changed and why;
 3. update `docs/CURRENT_STATE.md` so a zero-context agent has the current frontier;
-4. add/adjust conformance tests and golden vectors;
+4. add/adjust conformance tests and golden vectors where the reader contract changes;
 5. add durable public benchmark evidence when performance/size motivates the change;
 6. keep private provenance out of release-facing documentation/data;
-7. keep the Browser Lab writer hard-gated to the revision it actually implements.
+7. keep the Browser Lab writer hard-gated to the revision it actually implements;
+8. preserve failed/negative benchmark evidence when it changes design policy.
 
 History should preserve mistakes and losing experiments. It should not preserve unrelated confidential
 context merely because that context happened to be present during development.
