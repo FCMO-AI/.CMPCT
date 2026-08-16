@@ -2,7 +2,10 @@
 mod deflate_physical;
 
 use deflate_physical::{authenticated_range, PhysicalDeflateError};
+use flate2::write::DeflateEncoder;
+use flate2::Compression;
 use sha2::{Digest, Sha256};
+use std::io::Write;
 
 const MAX_OBJECT: u64 = 256 * 1024 * 1024;
 
@@ -28,6 +31,34 @@ fn mode0_exact_stream_range_is_returned_only_after_logical_authentication() {
     )
     .unwrap();
     assert_eq!(&out, &compressed[3..10]);
+}
+
+#[test]
+fn mode0_streaming_auth_handles_logical_objects_larger_than_the_auth_buffer() {
+    // Exercise multiple authentication-buffer turns. The implementation must not require a Vec sized
+    // to the decoded member merely to establish the logical SHA-256 before exposing physical bytes.
+    let mut logical = Vec::with_capacity(2 * 1024 * 1024);
+    for index in 0..(2 * 1024 * 1024) {
+        logical.push(((index * 31 + index / 97) & 0xff) as u8);
+    }
+    let mut encoder = DeflateEncoder::new(Vec::new(), Compression::new(6));
+    encoder.write_all(&logical).unwrap();
+    let compressed = encoder.finish().unwrap();
+    let expected_hash: [u8; 32] = Sha256::digest(&logical).into();
+
+    let start = compressed.len() / 3;
+    let length = 17usize.min(compressed.len() - start);
+    let mut out = vec![0u8; length];
+    authenticated_range(
+        &compressed,
+        logical.len() as u64,
+        &expected_hash,
+        start as u64,
+        &mut out,
+        MAX_OBJECT,
+    )
+    .unwrap();
+    assert_eq!(out, compressed[start..start + length]);
 }
 
 #[test]
