@@ -139,11 +139,12 @@ replacement = r'''    fn extraction_materialized_bytes(&self) -> Result<u64, Cmp
     }'''
 text = text[:start] + replacement + text[end:]
 
+# The original function already has #[no_mangle] immediately before its declaration. Reuse that
+# attribute for the newly inserted bounded symbol, then restore one attribute for the old symbol.
 abi_anchor = 'pub unsafe extern "C" fn cmpct_extract_all(\n    archive: *const Archive,\n    destination: *const c_char,\n) -> c_int {'
 if abi_anchor not in text:
     raise SystemExit("ABI anchor missing")
 bounded_abi = r'''/// Extract with an explicit archive-wide payload-materialization ceiling.
-#[no_mangle]
 pub unsafe extern "C" fn cmpct_extract_all_bounded(
     archive: *const Archive,
     destination: *const c_char,
@@ -165,6 +166,7 @@ pub unsafe extern "C" fn cmpct_extract_all_bounded(
     }
 }
 
+#[no_mangle]
 '''
 text = text.replace(abi_anchor, bounded_abi + abi_anchor, 1)
 lib_path.write_text(text)
@@ -223,3 +225,36 @@ t = t.replace(
     1,
 )
 test.write_text(t)
+
+# PR #21 recovery was compiling the same guard module twice and used mutable helpers absent from the
+# pinned rmpv API. Fix those blockers without weakening any recovery checks.
+recovery = Path("native/cmpct-core/src/recovery.rs")
+r = recovery.read_text()
+r = r.replace('#[path = "msgpack_guard.rs"]\nmod msgpack_guard;\n\n', 'use crate::msgpack_guard;\n\n', 1)
+old_map_mut = '''fn map_value_mut<'a>(value: &'a mut Value, key: &str) -> Option<&'a mut Value> {
+    value
+        .as_map_mut()?
+        .iter_mut()
+        .find_map(|(name, value)| (name.as_str() == Some(key)).then_some(value))
+}
+'''
+new_map_mut = '''fn map_value_mut<'a>(value: &'a mut Value, key: &str) -> Option<&'a mut Value> {
+    let Value::Map(map) = value else {
+        return None;
+    };
+    map.iter_mut()
+        .find_map(|(name, value)| (name.as_str() == Some(key)).then_some(value))
+}
+
+fn array_mut(value: &mut Value) -> Option<&mut Vec<Value>> {
+    let Value::Array(values) = value else {
+        return None;
+    };
+    Some(values)
+}
+'''
+if old_map_mut not in r:
+    raise SystemExit("recovery mutable-map anchor missing")
+r = r.replace(old_map_mut, new_map_mut, 1)
+r = r.replace('.and_then(Value::as_array_mut)', '.and_then(array_mut)')
+recovery.write_text(r)
