@@ -88,7 +88,7 @@ pub fn authenticated_range(
     }
 
     let actual_hash: [u8; 32] = hash.finalize().into();
-    if &actual_hash != expected_logical_sha256 {
+    if actual_hash != *expected_logical_sha256 {
         return Err(PhysicalDeflateError::LogicalHash);
     }
 
