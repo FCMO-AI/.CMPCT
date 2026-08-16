@@ -137,7 +137,9 @@ def build(root: Path, out: Path) -> dict:
         graph_stats = _build_graph(root, graph)
         if graph.stat().st_size < legacy.stat().st_size:
             shutil.copyfile(graph, out)
-            selected = "resemblance-strict"
+            # Preserve the benchmark schema's historical value; strictness is separately explicit in
+            # graph_stats so downstream reports do not miscount a successful resemblance selection.
+            selected = "resemblance"
         else:
             shutil.copyfile(legacy, out)
             selected = "entropygraph-v025-fallback"
