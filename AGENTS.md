@@ -8,15 +8,16 @@ Before changing format behavior or encoder policy, read:
 
 1. `README.md`;
 2. `docs/CURRENT_STATE.md`;
-3. `docs/HARDENING.md`;
-4. `docs/PORTABILITY.md`;
-5. `docs/NATIVE_CORE.md` when native/portability work is in scope;
-6. `docs/FORMAT.md`;
-7. `docs/HISTORY.md`;
-8. `docs/RESEARCH_LOG.md`;
-9. `docs/BENCHMARKS.md`;
-10. `docs/PUBLIC_SURFACE.md`;
-11. `docs/ROADMAP.md`.
+3. the newest applicable note under `docs/releases/`;
+4. `docs/HARDENING.md`;
+5. `docs/PORTABILITY.md`;
+6. `docs/NATIVE_CORE.md` when native/portability work is in scope;
+7. `docs/FORMAT.md`;
+8. `docs/HISTORY.md`;
+9. `docs/RESEARCH_LOG.md`;
+10. `docs/BENCHMARKS.md`;
+11. `docs/PUBLIC_SURFACE.md`;
+12. `docs/ROADMAP.md`.
 
 Do not depend on inaccessible chat history, private corpora, unrelated internal projects, or private
 artifact provenance for project-critical context. If a conclusion matters to future CMPCT work, put
@@ -40,7 +41,9 @@ context.
 - Keep `docs/NATIVE_CORE.md` current when the shared native ABI gains a representation, safety boundary, or portability-relevant capability.
 - Preserve fallback behavior when optional native helpers/codecs are absent.
 - Update `docs/FORMAT.md` in the same change as any on-disk format mutation.
-- Update `docs/HISTORY.md` and `docs/CURRENT_STATE.md` whenever a version/revision materially changes project behavior or the development frontier.
+- Update `docs/CURRENT_STATE.md` whenever a material milestone changes the canonical implementation or research frontier.
+- Update `docs/HISTORY.md` when format lineage, a durable architectural decision, or a superseded design checkpoint needs historical explanation.
+- Every material CMPCT milestone must advance the project version and add `docs/releases/vX.Y.Z.md` in the same change. Do not leave substantive work represented only by a commit hash, chat, branch name, benchmark artifact, or PR number.
 - Durable public benchmark results belong under `benchmarks/history/`; do not leave public evidence only in terminal output, chat, or prose.
 - Preserve public historical benchmark files; append new records instead of rewriting old results to match a new narrative.
 - Distinguish measured fact, inference, planned work and rejected experiment explicitly in documentation.
@@ -50,15 +53,28 @@ context.
 ## Benchmark rule
 
 Any change justified by size/speed should commit or reference a durable public benchmark record
-containing, when available: source commit, format revision, corpus generator/hash/seed, environment,
-codec settings, cache/process-start semantics, metadata/integrity/durability semantics, repetitions
-and raw/summary measurements.
+containing, when available: source commit, project version, format revision, corpus generator/hash/seed,
+environment, codec settings, cache/process-start semantics, metadata/integrity/durability semantics,
+repetitions and raw/summary measurements.
 
 Private-corpus measurements may guide engineering internally, but public claims must be reproducible
 without access to private data.
 
 ## Versioning rule
 
-A new on-disk field/record/storage semantic required by readers normally requires a format revision
-bump. Encoder-only heuristic changes that still emit the same grammar do not, but they still require
-regression evidence and history/current-state updates when material.
+CMPCT has two independent version axes:
+
+1. **Project version (`MAJOR.MINOR.PATCH`)** — advances for every material merged milestone: engine work,
+   encoder policy, benchmark/research frontier, portability/integration capability, hardening, or other
+   substantive project behavior. The new version must be recorded in `pyproject.toml` and
+   `docs/releases/vX.Y.Z.md`. CI enforces this rule for material paths.
+2. **On-disk format revision** — advances only when a reader must understand a new field, record,
+   storage description, codec semantic, or reconstruction rule to open newly written canonical archives.
+
+Therefore an encoder-only or research milestone can advance the project version while the canonical
+format revision stays unchanged. Conversely, every format-revision bump is necessarily a material
+project-version bump and must update `docs/FORMAT.md`, conformance vectors, `docs/CURRENT_STATE.md`,
+and the durable history/benchmark material appropriate to the change.
+
+There is no “minor enough to hide” exception for material work. If it changes what CMPCT can do,
+how it behaves, what it proves, or the development frontier in a way worth merging, give it a version.
