@@ -171,8 +171,6 @@ class RemoteGraph:
         # as soon as their requested interval is satisfied, but a full read must prove the node table
         # exactly accounts for the authenticated logical file size—neither truncated nor oversized.
         if end==size:
-            for node_id in desc[1]:
-                pass
             total=sum(int(self.nodes[node_id][3]) for node_id in desc[1])
             if total!=size:raise RuntimeError('remote file node accounting mismatch')
         if len(out)!=end-start:raise RuntimeError('remote node accounting mismatch')
