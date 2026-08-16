@@ -6,9 +6,10 @@ CMPCT is an experimental lossless archive system designed around a simple goal: 
 technical choice better than legacy ZIP across size, speed, random access, fidelity, integrity,
 recovery, updates, and modern storage semantics—without optimizing for one application or corpus.
 
-> Status: **pre-1.0 / format under active development.** `main` is the canonical source of truth.
-> The current executable prototype writes format revision **24**. No stability promise is made yet
-> for pre-1.0 archives; reproducibility and backward compatibility become mandatory at 1.0.
+> Status: **project v0.25.0 / pre-1.0 / format under active development.** `main` is the canonical
+> source of truth. The current executable reference implementation still writes format revision
+> **24**. v0.25.0 publishes the EntropyGraph research milestone without pretending its research-only
+> `CMPNX5` grammar is already a canonical revision-25 archive.
 
 > Licensing status: **Apache-2.0 is proposed, not yet adopted.** See `LICENSING.md` and
 > `LICENSE-APACHE-2.0-PROPOSED.txt`. The proposal must not be interpreted as a finalized public grant.
@@ -17,7 +18,7 @@ recovery, updates, and modern storage semantics—without optimizing for one app
 
 CMPCT is not "Zstd with a new extension". It is a content-aware archive layer that can choose the
 best exact representation for each object while preserving a single filesystem-like interface.
-Current prototype capabilities include:
+Current canonical prototype capabilities include:
 
 - content-addressed deduplication;
 - adaptive Zstandard and raw storage;
@@ -33,6 +34,12 @@ Current prototype capabilities include:
 - redundant head/tail indexes and self-describing blob records for salvage;
 - transactional append journal for update/delete/rename operations;
 - on-demand export to ordinary Deflate ZIP for legacy compatibility.
+
+Project v0.25.0 additionally publishes an **experimental EntropyGraph engine** that explores global
+compressed-stream federation, reversible representation inversion, exact object interning, compact
+micro-pack indexing, bounded adaptive context, hot/cold stream roots, and operational tail-metadata
+recovery. Those ideas are real executable research, but they remain gated from the canonical reader
+until they pass format integration, conformance, hardening, and portability requirements.
 
 The important rule is **content-driven selection, not extension-driven folklore**. If a specialized
 representation is slower or larger for the actual bytes, CMPCT should not use it.
@@ -64,34 +71,49 @@ archive; chunk boundaries are explicitly recorded on disk.
 A coding/research agent with no previous CMPCT context should read, in order:
 
 1. `README.md` — mission and project shape;
-2. `AGENTS.md` — mandatory development rules;
+2. `AGENTS.md` — mandatory development and versioning rules;
 3. `docs/CURRENT_STATE.md` — zero-chat-history handoff and immediate frontier;
-4. `docs/FORMAT.md` — current revision-24 on-disk contract;
-5. `docs/HISTORY.md` — surviving version/prototype history with private provenance generalized;
-6. `docs/RESEARCH_LOG.md` — experimental conclusions and rejected/superseded ideas;
-7. `docs/BENCHMARKS.md` — benchmark semantics and merge discipline;
-8. `benchmarks/history/` — machine-readable public benchmark measurements;
-9. `docs/PUBLIC_SURFACE.md` — public-repository/site disclosure boundary;
-10. `docs/ROADMAP.md` — work remaining before 1.0.
+4. newest applicable note under `docs/releases/` — project-version milestone;
+5. `docs/FORMAT.md` — current revision-24 on-disk contract;
+6. `docs/HISTORY.md` — surviving format/prototype history with private provenance generalized;
+7. `docs/RESEARCH_LOG.md` and `docs/ENTROPYGRAPH.md` — experimental conclusions and frontier;
+8. `docs/BENCHMARKS.md` — benchmark semantics and merge discipline;
+9. `benchmarks/history/` — machine-readable public benchmark measurements;
+10. `docs/PUBLIC_SURFACE.md` — public-repository/site disclosure boundary;
+11. `docs/ROADMAP.md` — work remaining before 1.0.
 
 A new agent should not need private chat, private corpora, or unrelated project context to continue
 development safely.
 
 ## Repository map
 
-- `src/cmpct/` — working v0.24 reference implementation and executable format documentation.
+- `src/cmpct/` — canonical revision-24 reference implementation.
+- `experiments/entropygraph_v025.py` — executable v0.25 research engine; not canonical archive grammar.
+- `benchmarks/neutral_hostile_corpus_v1.py` — deterministic-per-workload heterogeneous hostile corpus generator.
+- `benchmarks/history/` — durable public machine-readable benchmark records, including v0.25 EntropyGraph evidence.
+- `docs/releases/` — one release note per material project version.
 - `native/cmpct_cdc.c` — optional native content-defined chunking accelerator.
 - `docs/CURRENT_STATE.md` — current handoff/frontier for a zero-context developer or agent.
 - `docs/FORMAT.md` — current on-disk contract and invariants.
-- `docs/HISTORY.md` — version history from precursor experiments through the canonical v0.24 baseline.
+- `docs/HISTORY.md` — format and design lineage through the canonical revision-24 baseline.
+- `docs/ENTROPYGRAPH.md` — v0.25 generalized research results and integration boundary.
 - `docs/RESEARCH_LOG.md` — design decisions, failed ideas and experimental conclusions.
 - `docs/PRINCIPLES.md` — rules that prevent corpus-specific overfitting.
 - `docs/BENCHMARKS.md` — benchmark discipline and interpreted checkpoints.
 - `docs/PUBLIC_SURFACE.md` — what may and may not enter the public-facing repository/site surface.
-- `benchmarks/history/` — durable public machine-readable benchmark records.
 - `docs/ROADMAP.md` — blockers between the prototype and a defensible 1.0.
-- `benchmarks/universal_bench.py` — heterogeneous synthetic benchmark generator/harness.
 - `tests/` — format and round-trip regression tests.
+
+## Version discipline
+
+Every **material merged CMPCT milestone gets a new project version**. Project version and on-disk format
+revision are deliberately separate: research, encoder policy, benchmark frontier, hardening or platform
+integration can justify a new project version without changing archive grammar. Reader-visible storage
+semantics require an on-disk format revision bump as well.
+
+CI checks material paths and rejects a merge that reuses the previous project version or lacks the
+matching `docs/releases/vX.Y.Z.md` note. This keeps substantive work visible to humans and agents instead
+of leaving it stranded in chat, scratch artifacts, or unversioned commits.
 
 ## Development history and benchmark provenance
 
@@ -100,15 +122,13 @@ experiments before becoming the native content-aware CMPCT format. The technical
 but private corpus identities, private artifact names and unrelated project provenance are intentionally
 not part of the public project record.
 
-- `docs/HISTORY.md` accounts for every revision range through v0.24 while generalizing private
-  development provenance.
-- `docs/RESEARCH_LOG.md` records why major architectural choices were accepted or rejected.
-- `benchmarks/history/` preserves public, reproducible regression evidence; private-corpus development
-  measurements are not used as public proof.
+Public benchmark history must be independently reproducible or generated from deliberately public,
+synthetic inputs. Private development corpora may still be useful local regression signals, but their
+names, hashes, paths, contents, and artifact provenance are not public evidence.
 
-Historical benchmark data is **not** automatically a public performance claim. Future CI should
-reproduce claims under controlled hardware/software and append new result records rather than
-rewriting history.
+Historical benchmark data is **not** automatically a public performance claim. CI and release notes
+should preserve losing workloads and the exact semantics of each comparison rather than rewriting the
+record around whichever result looks best.
 
 ## Public-surface rule
 
@@ -119,11 +139,9 @@ private artifact names, or private-system links. See `docs/PUBLIC_SURFACE.md` fo
 ## Canonicality
 
 This repository supersedes chat-local CMPCT prototypes and benchmark scripts. New format changes,
-benchmarks, experiments and design decisions should land here and be tied to a format revision or an
-explicit experimental feature flag.
-
-Any material version/format change should update the format spec, history/current-state documents,
-relevant tests/conformance vectors and durable benchmark records in the same development cycle.
+benchmarks, experiments and design decisions must land here as a versioned project milestone.
+Experimental code must be clearly labeled and cannot claim canonical format support until it is wired
+into the reference reader/writer and conformance surface.
 
 ## License
 
