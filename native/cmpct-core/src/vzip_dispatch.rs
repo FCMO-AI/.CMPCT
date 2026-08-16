@@ -79,10 +79,11 @@ where
     let end = start
         .checked_add(length)
         .ok_or(VirtualZipDispatchError::InvalidProjection)?;
-    if start == 0 && end == recipe.logical_size {
-        if Sha256::digest(&*out).as_slice() != recipe.logical_sha256 {
-            return Err(VirtualZipDispatchError::LogicalHash);
-        }
+    if start == 0
+        && end == recipe.logical_size
+        && Sha256::digest(&*out).as_slice() != recipe.logical_sha256
+    {
+        return Err(VirtualZipDispatchError::LogicalHash);
     }
     Ok(())
 }
