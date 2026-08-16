@@ -67,8 +67,9 @@ pub fn authenticated_range(
         if read == 0 {
             break;
         }
+        let read_u64 = u64::try_from(read).map_err(|_| PhysicalDeflateError::ResourceLimit)?;
         decoded_len = decoded_len
-            .checked_add(read as u64)
+            .checked_add(read_u64)
             .ok_or(PhysicalDeflateError::ResourceLimit)?;
         if decoded_len > logical_size {
             return Err(PhysicalDeflateError::LogicalLength);
@@ -78,7 +79,8 @@ pub fn authenticated_range(
     if decoded_len != logical_size {
         return Err(PhysicalDeflateError::LogicalLength);
     }
-    if hash.finalize().as_slice() != expected_logical_sha256 {
+    let actual_hash: [u8; 32] = hash.finalize().into();
+    if &actual_hash != expected_logical_sha256 {
         return Err(PhysicalDeflateError::LogicalHash);
     }
 
