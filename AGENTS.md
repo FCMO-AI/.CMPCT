@@ -6,24 +6,56 @@ This repository is the canonical CMPCT project.
 
 Before changing format behavior, encoder policy, performance, portability or the public site, read:
 
-1. `README.md`;
-2. `docs/CURRENT_STATE.md`;
-3. the newest applicable note under `docs/releases/`;
-4. `docs/PERFORMANCE_RELEASE_GATE.md`;
-5. `docs/HARDENING.md`;
-6. `docs/PORTABILITY.md`;
-7. `docs/NATIVE_CORE.md` when native/portability work is in scope;
-8. `docs/FORMAT.md`;
-9. `docs/HISTORY.md`;
-10. `docs/RESEARCH_LOG.md` and `docs/ENTROPYGRAPH.md`;
-11. `docs/BENCHMARKS.md`;
-12. `docs/PUBLIC_SURFACE.md`;
-13. `docs/ROADMAP.md`.
+1. `docs/AGI_ENGINEERING_STANDARD.md` — mandatory quality ratchet, invention protocol, evidence hierarchy and completion standard;
+2. `README.md`;
+3. `docs/CURRENT_STATE.md`;
+4. the newest applicable note under `docs/releases/`;
+5. `docs/PERFORMANCE_RELEASE_GATE.md`;
+6. `docs/HARDENING.md`;
+7. `docs/PORTABILITY.md`;
+8. `docs/NATIVE_CORE.md` when native/portability work is in scope;
+9. `docs/FORMAT.md`;
+10. `docs/HISTORY.md`;
+11. `docs/RESEARCH_LOG.md` and `docs/ENTROPYGRAPH.md`;
+12. `docs/BENCHMARKS.md`;
+13. `docs/PUBLIC_SURFACE.md`;
+14. `docs/ROADMAP.md`.
 
 Do not depend on inaccessible chat history, private corpora, unrelated internal projects, or private
 artifact provenance for project-critical context. If a conclusion matters to future CMPCT work, put
 the generalized technical conclusion in this repository without importing unrelated confidential
 context.
+
+## AGI-grade engineering is the default, not a special mode
+
+`docs/AGI_ENGINEERING_STANDARD.md` is normative for every material task.
+
+“AGI-grade” is a quality standard, not a capability claim. It means that future work must combine
+strong systems reasoning, explicit hypotheses, adversarial self-review, independent evidence and
+measurable improvement with the same seriousness as the best work already merged into CMPCT.
+
+Every material task must apply the **quality ratchet**: preserve all verified strengths of the inherited
+state while improving at least one meaningful dimension or producing a durable negative result that
+prevents wasted future work. Green tests alone are not sufficient evidence of excellent engineering.
+
+For non-trivial work, agents are expected to:
+
+- establish the baseline and invariant before editing;
+- identify the actual dominant cost or failure mechanism;
+- consider multiple solution classes rather than reflexively implementing the first conventional fix;
+- use primary literature, standards and mature implementations when outside evidence can materially
+  change the design;
+- prefer mechanism-level and Pareto improvements over corpus-specific threshold tuning;
+- define a practical disproof test for the core hypothesis;
+- attack the strongest surviving assumption with an adversarial test;
+- preserve losses and ambiguous evidence rather than narrating them away;
+- leave the repository with enough context that a new agent can understand not only *what* changed,
+  but *why the mechanism should be trusted*.
+
+When a problem appears impossible under the current framing, change the model of the problem before
+lowering the standard of proof. “Engineering miracle” means discovering a better representation,
+invariant or cost model that makes a previously difficult tradeoff tractable—not adding complexity for
+spectacle.
 
 ## Development rules
 
@@ -56,6 +88,11 @@ context.
 - Distinguish measured fact, inference, planned work and rejected experiment explicitly in documentation.
 - Keep the public repository/site free of unrelated internal project names, personal information, private URLs, credentials, customer data, private corpus identifiers and private artifact names. Follow `docs/PUBLIC_SURFACE.md`.
 - Do not describe the proposed Apache-2.0 license as adopted until the checklist in `LICENSING.md` is completed and the canonical license file is deliberately finalized.
+- Treat complexity as a cost. A clever design that cannot be bounded, explained, independently tested or ported is not an acceptable miracle.
+- Do not merely patch the reported example when the failure mechanism can be generalized into an invariant or property test.
+- When a mature competitor wins fairly, preserve the loss, explain the mechanism if known, and turn an actionable weakness into a prioritized engineering target.
+- For substantial representation work, account for archive bytes, creation/extraction cost, peak memory, selective-read bytes/decoded work, dependency depth, integrity/recovery work and portability burden. Do not optimize one scalar by silently exporting cost elsewhere.
+- Before completion, perform the adversarial self-review and completion dossier defined in `docs/AGI_ENGINEERING_STANDARD.md`.
 
 ## Benchmark rule
 
@@ -83,22 +120,40 @@ physics:
 
 See `docs/PERFORMANCE_RELEASE_GATE.md` for the full contract.
 
+## Material-PR evidence dossier
+
+Every material PR should make the following explicit in its body or linked durable records:
+
+- **Problem/baseline:** the exact defect or opportunity and the inherited behavior;
+- **Insight/hypothesis:** the mechanism expected to improve it and the invariant preserved;
+- **Alternatives:** meaningful solution classes considered and why rejected paths lost;
+- **Evidence:** tests, independent oracles, benchmark records and raw/durable result locations;
+- **Losses/ambiguity:** workloads, platforms or metrics that remain worse, unchanged or inconclusive;
+- **Safety/compatibility:** hostile inputs, resource limits, recovery, path semantics, format/ABI impact;
+- **Performance:** size, latency, memory/selective-work consequences where relevant;
+- **Future leverage:** the highest-value new capability or unresolved defect exposed by the work.
+
+The repository PR template mirrors this structure. Do not fill it with generic prose; use concrete
+claims that a reviewer can falsify.
+
 ## Versioning rule
 
 CMPCT has two independent version axes:
 
 1. **Project version (`MAJOR.MINOR.PATCH`)** — advances for every material merged milestone: engine work,
    encoder policy, benchmark/research frontier, portability/integration capability, hardening, website,
-   release tooling, or other substantive project behavior. The new version must be recorded in
-   `pyproject.toml`, `docs/releases/vX.Y.Z.md`, and a matching public benchmark history record.
+   release tooling, engineering-process contract, or other substantive project behavior. The new
+   version must be recorded in `pyproject.toml`, `docs/releases/vX.Y.Z.md`, and a matching public
+   benchmark history record.
 2. **On-disk format revision** — advances only when a reader must understand a new field, record,
    storage description, codec semantic, or reconstruction rule to open newly written canonical archives.
 
-Therefore an encoder-only, research, site or release-engineering milestone can advance the project
-version while the canonical format revision stays unchanged. Conversely, every format-revision bump is
-necessarily a material project-version bump and must update `docs/FORMAT.md`, conformance vectors,
-`docs/CURRENT_STATE.md`, and the durable history/benchmark material appropriate to the change.
+Therefore an encoder-only, research, site, engineering-process or release-engineering milestone can
+advance the project version while the canonical format revision stays unchanged. Conversely, every
+format-revision bump is necessarily a material project-version bump and must update `docs/FORMAT.md`,
+conformance vectors, `docs/CURRENT_STATE.md`, and the durable history/benchmark material appropriate to
+the change.
 
 There is no “minor enough to hide” exception for material work. If it changes what CMPCT can do, how
-it behaves, what it proves, how it is presented, or the development frontier in a way worth merging,
-give it a version and benchmark that version.
+it behaves, what it proves, how it is presented, the engineering standard, or the development frontier
+in a way worth merging, give it a version and benchmark that version.
