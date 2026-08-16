@@ -12,7 +12,8 @@ import tomllib
 
 ROOT = Path(__file__).resolve().parents[1]
 MATERIAL_PREFIXES = (
-    "src/", "native/", "integrations/", "benchmarks/", "experiments/", "site/", "tools/"
+    "src/", "native/", "integrations/", "benchmarks/", "experiments/", "site/", "tools/",
+    ".github/workflows/",
 )
 MATERIAL_SINGLETONS = {
     "pyproject.toml", "AGENTS.md", "README.md", "LICENSING.md",
@@ -128,7 +129,7 @@ def main() -> int:
 if __name__ == "__main__":
     raise SystemExit(main())
 
-# Footnote: the explicitly listed policy/handoff documents are material because changing the rules
-# future agents inherit can materially change CMPCT even when no engine byte changes in that commit.
-# Release notes and benchmark history remain evidence artifacts and are filtered above to avoid a
-# recursive "version the version record" loop.
+# Footnote: the explicitly listed policy/handoff documents and workflow directory are material because
+# changing the rules future agents inherit or the gates those rules rely on can materially change CMPCT
+# even when no archive-engine byte changes in that commit. Release notes and benchmark history remain
+# evidence artifacts and are filtered above to avoid a recursive "version the version record" loop.
