@@ -1,0 +1,135 @@
+{
+  "schema": "cmpct-zip-parity-v1",
+  "repetitions": 3,
+  "timing_statistic": "median",
+  "cache_semantics": "warm/ordinary filesystem cache; no cache dropping between repetitions",
+  "integrity_semantics": {
+    "cmpct": "normal reader/extractor integrity checks",
+    "zip": "Python zipfile normal CRC behavior"
+  },
+  "filesystem_semantic_mismatch": "CMPCT preserves links/sparse/uid-gid/xattrs in the archive; this Python ZIP baseline dereferences symlinks and does not preserve the richer filesystem semantics.",
+  "corpus_semantics": "external immutable corpus shared by base/candidate",
+  "corpora": {
+    "tiny": {
+      "logical_bytes": 1534000,
+      "library": {
+        "cmpct": {"bytes": 151677, "create_s_median": 0.1947361685, "extract_s_median": 0.222066544},
+        "zip": {"bytes": 674152, "create_s_median": 0.105140156, "extract_s_median": 0.1300035395}
+      },
+      "cli": {
+        "cmpct": {"bytes": 151677, "create_s_median": 0.270105855, "extract_s_median": 0.2888282935},
+        "zip": {"bytes": 674152, "create_s_median": 0.1761413995, "extract_s_median": 0.196358656}
+      }
+    },
+    "source": {
+      "logical_bytes": 92721,
+      "library": {
+        "cmpct": {"bytes": 9094, "create_s_median": 0.038541045499999996, "extract_s_median": 0.0346021965},
+        "zip": {"bytes": 140409, "create_s_median": 0.036872996, "extract_s_median": 0.0321585055}
+      },
+      "cli": {
+        "cmpct": {"bytes": 9094, "create_s_median": 0.111061675, "extract_s_median": 0.10291445399999999},
+        "zip": {"bytes": 140409, "create_s_median": 0.106100797, "extract_s_median": 0.1002500745}
+      }
+    },
+    "media": {
+      "logical_bytes": 6048590,
+      "library": {
+        "cmpct": {"bytes": 4224917, "create_s_median": 0.037425539, "extract_s_median": 0.004564179},
+        "zip": {"bytes": 4230623, "create_s_median": 0.1289745215, "extract_s_median": 0.00406642}
+      },
+      "cli": {
+        "cmpct": {"bytes": 4224917, "create_s_median": 0.1957097195, "extract_s_median": 0.07722479},
+        "zip": {"bytes": 4230623, "create_s_median": 0.2770557705, "extract_s_median": 0.0752049235}
+      }
+    },
+    "binary": {
+      "logical_bytes": 50331648,
+      "library": {
+        "cmpct": {"bytes": 16793303, "create_s_median": 0.1820511985, "extract_s_median": 0.057699228000000005},
+        "zip": {"bytes": 16880276, "create_s_median": 0.4800306985, "extract_s_median": 0.0223035015}
+      },
+      "cli": {
+        "cmpct": {"bytes": 16793303, "create_s_median": 0.276852567, "extract_s_median": 0.13383155400000002},
+        "zip": {"bytes": 16880276, "create_s_median": 0.5585507815, "extract_s_median": 0.091423528}
+      }
+    },
+    "dedup_links": {
+      "logical_bytes": 27262976,
+      "library": {
+        "cmpct": {"bytes": 1373, "create_s_median": 0.037983034, "extract_s_median": 0.009082436},
+        "zip": {"bytes": 86991, "create_s_median": 0.08662320249999999, "extract_s_median": 0.0246129835}
+      },
+      "cli": {
+        "cmpct": {"bytes": 1373, "create_s_median": 0.11141580949999999, "extract_s_median": 0.0795949755},
+        "zip": {"bytes": 86991, "create_s_median": 0.1627972205, "extract_s_median": 0.093931543}
+      }
+    },
+    "sparse": {
+      "logical_bytes": 134217728,
+      "library": {
+        "cmpct": {"bytes": 4196500, "create_s_median": 0.1032214055, "extract_s_median": 0.0032682225},
+        "zip": {"bytes": 4327446, "create_s_median": 0.473247194, "extract_s_median": 0.187471819}
+      },
+      "cli": {
+        "cmpct": {"bytes": 4196500, "create_s_median": 0.1863849695, "extract_s_median": 0.0733429115},
+        "zip": {"bytes": 4327446, "create_s_median": 0.5507417935, "extract_s_median": 0.2592954065}
+      }
+    },
+    "nested": {
+      "logical_bytes": 3871356,
+      "library": {
+        "cmpct": {"bytes": 797604, "create_s_median": 0.013704734, "extract_s_median": 0.0017779035000000001},
+        "zip": {"bytes": 808362, "create_s_median": 0.0317925295, "extract_s_median": 0.0035145055}
+      },
+      "cli": {
+        "cmpct": {"bytes": 797604, "create_s_median": 0.0869316235, "extract_s_median": 0.0705989025},
+        "zip": {"bytes": 808362, "create_s_median": 0.1057927885, "extract_s_median": 0.0736208855}
+      }
+    },
+    "combined": {
+      "logical_bytes": 80379247,
+      "library": {
+        "cmpct": {"bytes": 21974962, "create_s_median": 0.5098998539999999, "extract_s_median": 0.334790659},
+        "zip": {"bytes": 22862111, "create_s_median": 0.737791515, "extract_s_median": 0.158161673}
+      },
+      "cli": {
+        "cmpct": {"bytes": 21974962, "create_s_median": 0.6819633949999999, "extract_s_median": 0.4133854755},
+        "zip": {"bytes": 22862111, "create_s_median": 0.817424197, "extract_s_median": 0.231402078}
+      }
+    }
+  },
+  "aggregate_runs": 2,
+  "aggregate_statistic": "median of per-run medians",
+  "source_repetitions_per_run": [3, 3],
+  "project_version": "0.26.0",
+  "source_commit": "f202051f31e93c58cbc210e7eb4e1aad044e30c6",
+  "date": "2026-08-16",
+  "record_kind": "release_candidate_regression_evidence",
+  "harness": "benchmarks/zip_parity_bench.py",
+  "release_design": "ABBA; median of two 3-repetition run medians per engine",
+  "format_revision": 24,
+  "comparison_base_commit": "38512c890a7cf5c1f664557dced5abdd7fbf310f",
+  "corpus_manifest": {
+    "tree_sha256": "b0cc877945eb66602e9ac5e3d7626d3935462aed616ac6011de1afd57858688f",
+    "files": 7713,
+    "logical_bytes": 303738466,
+    "fixed_mtime_ns": 1767225600000000000
+  },
+  "environment": {
+    "python": "3.11.15",
+    "platform": "Linux-6.17.0-1022-azure-x86_64-with-glibc2.39",
+    "cpu_count": 4,
+    "cpu_model": "AMD EPYC 7763 64-Core Processor",
+    "zstd": "*** Zstandard CLI (64-bit) v1.5.7, by Yann Collet ***"
+  },
+  "release_gate": {
+    "result": "PASS",
+    "size_regressions": 0,
+    "confirmed_timing_regressions": 0,
+    "timing_relative_threshold": 0.05,
+    "timing_absolute_ms_threshold": 3.0,
+    "measured_timing_improvements": 13,
+    "note": "Archive engine code was unchanged by v0.26; the release gate verified exact archive-size parity and no confirmed same-runner slowdown after symmetric ABBA ordering. Timing differences inside the confidence envelope are not promoted as product gains."
+  }
+}
