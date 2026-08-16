@@ -6,6 +6,7 @@ on:
       - frontier/full-completion-20260815
     paths:
       - .github/workflows/agent-extraction-hardening.yml
+      - tools/agent_patch_extraction.py
 
 permissions:
   contents: write
