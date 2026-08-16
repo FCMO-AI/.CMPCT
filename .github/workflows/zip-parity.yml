@@ -1,26 +1,38 @@
-name: CMPCT ZIP parity benchmark
+name: CMPCT release performance gate
 
 on:
+  pull_request:
   push:
-    branches:
-      - feat/zip-parity-portability
+    branches: [main]
   workflow_dispatch:
 
 permissions:
   contents: read
 
+concurrency:
+  group: cmpct-performance-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  parity:
+  performance:
     runs-on: ubuntu-latest
-    timeout-minutes: 40
+    timeout-minutes: 45
     env:
+      # Footnote: each engine is run twice in ABBA order, so 3 repetitions/run yields six timed
+      # observations per metric per engine while controlling first/second-order runner drift.
       CMPCT_PARITY_REPS: "3"
+      CMPCT_RELEASE_CORPUS: /tmp/cmpct-release-corpus
     steps:
-      - name: Check out repository
-        uses: actions/checkout@v4
+      - name: Check out candidate repository history
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          # PR workflows normally check out a synthetic merge commit. Performance evidence should
+          # identify and execute the actual candidate head while still comparing against the PR base.
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
 
       - name: Set up Python 3.11
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: "3.11"
           cache: pip
@@ -35,12 +47,81 @@ jobs:
       - name: Correctness gate
         run: python -m pytest -q
 
-      - name: Capture provenance
+      - name: Resolve direct comparison base
+        id: base
+        env:
+          EVENT_BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          if [ -n "$EVENT_BASE" ] && [ "$EVENT_BASE" != "0000000000000000000000000000000000000000" ]; then
+            BASE_SHA="$EVENT_BASE"
+          else
+            BASE_SHA="$(git rev-parse HEAD^)"
+          fi
+          echo "sha=$BASE_SHA" >> "$GITHUB_OUTPUT"
+          echo "Candidate: $(git rev-parse HEAD)"
+          echo "Base:      $BASE_SHA"
+
+      - name: Materialize base engine worktree
+        run: git worktree add --detach /tmp/cmpct-performance-base "${{ steps.base.outputs.sha }}"
+
+      - name: Generate one immutable release corpus
         run: |
           mkdir -p benchmark-artifacts
+          python - <<'PY'
+          import hashlib, json, os, shutil, sys
+          from pathlib import Path
+
+          root = Path.cwd()
+          sys.path.insert(0, str(root / 'benchmarks'))
+          import universal_bench as universal
+
+          corpus = Path(os.environ['CMPCT_RELEASE_CORPUS'])
+          shutil.rmtree(corpus, ignore_errors=True)
+          corpus.mkdir(parents=True)
+          universal.CORP = corpus
+          universal.reset_rng()
+          universal.make_corpora()
+
+          # CMPCT preserves richer metadata than ZIP. Identical payload bytes alone therefore do not
+          # define identical archive input; freeze controllable timestamps before either engine runs.
+          fixed_ns = 1767225600 * 1_000_000_000  # 2026-01-01T00:00:00Z
+          paths = sorted(corpus.rglob('*'), key=lambda p: (len(p.parts), p.as_posix()), reverse=True)
+          for path in paths:
+              try:
+                  os.utime(path, ns=(fixed_ns, fixed_ns), follow_symlinks=False)
+              except (NotImplementedError, OSError):
+                  if not path.is_symlink():
+                      raise
+          os.utime(corpus, ns=(fixed_ns, fixed_ns))
+
+          h = hashlib.sha256(); files = 0; logical = 0
+          for path in sorted(corpus.rglob('*')):
+              rel = path.relative_to(corpus).as_posix().encode(); st = path.lstat()
+              h.update(len(rel).to_bytes(4, 'little')); h.update(rel)
+              h.update((st.st_mode & 0o177777).to_bytes(4, 'little'))
+              h.update(st.st_mtime_ns.to_bytes(8, 'little', signed=True))
+              if path.is_symlink():
+                  target = os.readlink(path).encode(); h.update(b'L')
+                  h.update(len(target).to_bytes(4, 'little')); h.update(target)
+              elif path.is_file():
+                  data = path.read_bytes(); files += 1; logical += len(data); h.update(b'F')
+                  h.update(len(data).to_bytes(8, 'little')); h.update(data)
+              elif path.is_dir():
+                  h.update(b'D')
+          manifest = {'tree_sha256': h.hexdigest(), 'files': files, 'logical_bytes': logical,
+                      'fixed_mtime_ns': fixed_ns}
+          Path('benchmark-artifacts/corpus.json').write_text(json.dumps(manifest, indent=2) + '\n')
+          print(json.dumps(manifest, indent=2))
+          PY
+
+      - name: Capture shared-runner provenance
+        run: |
+          CANDIDATE_VERSION="$(sed -n 's/^version = "\([^"]*\)"/\1/p' pyproject.toml | head -1)"
           {
-            echo "commit=$(git rev-parse HEAD)"
-            echo "version=$(python -c 'import cmpct; print(cmpct.__version__)')"
+            echo "candidate_commit=$(git rev-parse HEAD)"
+            echo "base_commit=${{ steps.base.outputs.sha }}"
+            echo "candidate_version=$CANDIDATE_VERSION"
+            echo "format_revision=$(PYTHONPATH=src python -c 'from cmpct.codec import VERSION; print(VERSION)')"
             echo "python=$(python --version 2>&1)"
             echo "uname=$(uname -a)"
             echo "filesystem=$(df -T . | tail -1)"
@@ -50,52 +131,110 @@ jobs:
             echo "zstd=$(zstd --version | head -1)"
           } | tee benchmark-artifacts/environment.txt
 
-      - name: Run fair ZIP parity benchmark
+      - name: Benchmark A — direct base
         working-directory: benchmarks
+        env:
+          PYTHONPATH: /tmp/cmpct-performance-base/src
+          CMPCT_PARITY_CORPUS_ROOT: /tmp/cmpct-release-corpus
         run: |
-          python zip_parity_bench.py | tee ../benchmark-artifacts/zip-parity.stdout.txt
-          cp _parity_work/out/zip-parity.json ../benchmark-artifacts/zip-parity.json
+          python zip_parity_bench.py > ../benchmark-artifacts/base-a.stdout.txt
+          cp _parity_work/out/zip-parity.json ../benchmark-artifacts/base-a.json
 
-      - name: Summarize parity gates
+      - name: Benchmark B — candidate
+        working-directory: benchmarks
+        env:
+          PYTHONPATH: ${{ github.workspace }}/src
+          CMPCT_PARITY_CORPUS_ROOT: /tmp/cmpct-release-corpus
+        run: |
+          python zip_parity_bench.py > ../benchmark-artifacts/candidate-a.stdout.txt
+          cp _parity_work/out/zip-parity.json ../benchmark-artifacts/candidate-a.json
+
+      - name: Benchmark B — candidate repeat
+        working-directory: benchmarks
+        env:
+          PYTHONPATH: ${{ github.workspace }}/src
+          CMPCT_PARITY_CORPUS_ROOT: /tmp/cmpct-release-corpus
+        run: |
+          python zip_parity_bench.py > ../benchmark-artifacts/candidate-b.stdout.txt
+          cp _parity_work/out/zip-parity.json ../benchmark-artifacts/candidate-b.json
+
+      - name: Benchmark A — direct base repeat
+        working-directory: benchmarks
+        env:
+          PYTHONPATH: /tmp/cmpct-performance-base/src
+          CMPCT_PARITY_CORPUS_ROOT: /tmp/cmpct-release-corpus
+        run: |
+          python zip_parity_bench.py > ../benchmark-artifacts/base-b.stdout.txt
+          cp _parity_work/out/zip-parity.json ../benchmark-artifacts/base-b.json
+
+      - name: Aggregate symmetric ABBA runs
+        run: |
+          python tools/aggregate_parity_runs.py --out benchmark-artifacts/base.json \
+            benchmark-artifacts/base-a.json benchmark-artifacts/base-b.json
+          python tools/aggregate_parity_runs.py --out benchmark-artifacts/candidate.raw.json \
+            benchmark-artifacts/candidate-a.json benchmark-artifacts/candidate-b.json
+
+      - name: Enrich candidate benchmark record
+        env:
+          BASE_SHA: ${{ steps.base.outputs.sha }}
         run: |
           python - <<'PY'
-          import json
+          import json, os, platform, subprocess, tomllib
+          from datetime import date
           from pathlib import Path
+          from cmpct.codec import VERSION
 
-          data = json.loads(Path('benchmark-artifacts/zip-parity.json').read_text())
-          lines = [
-              '# CMPCT vs ZIP parity',
-              '',
-              'Three-repetition median. Library and CLI timings are intentionally separate.',
-              '',
-          ]
-          for layer in ('library', 'cli'):
-              lines += [
-                  f'## {layer}',
-                  '',
-                  '| corpus | size CMPCT/ZIP | create CMPCT/ZIP ms | extract CMPCT/ZIP ms |',
-                  '|---|---:|---:|---:|',
-              ]
-              for name, row in data['corpora'].items():
-                  c = row[layer]['cmpct']
-                  z = row[layer]['zip']
-                  lines.append(
-                      f"| {name} | {c['bytes']}/{z['bytes']} | "
-                      f"{c['create_s_median']*1000:.2f}/{z['create_s_median']*1000:.2f} | "
-                      f"{c['extract_s_median']*1000:.2f}/{z['extract_s_median']*1000:.2f} |"
-                  )
-              lines.append('')
-          Path('benchmark-artifacts/SUMMARY.md').write_text('\n'.join(lines))
-          print('\n'.join(lines))
+          root = Path.cwd()
+          data = json.loads((root / 'benchmark-artifacts/candidate.raw.json').read_text())
+          corpus = json.loads((root / 'benchmark-artifacts/corpus.json').read_text())
+          with (root / 'pyproject.toml').open('rb') as fh:
+              version = tomllib.load(fh)['project']['version']
+          data.update({
+              'project_version': version,
+              'source_commit': subprocess.check_output(['git','rev-parse','HEAD'], cwd=root, text=True).strip(),
+              'date': date.today().isoformat(),
+              'record_kind': 'release_candidate_regression_evidence',
+              'harness': 'benchmarks/zip_parity_bench.py',
+              'release_design': 'ABBA; median of two 3-repetition run medians per engine',
+              'format_revision': VERSION,
+              'comparison_base_commit': os.environ.get('BASE_SHA',''),
+              'corpus_manifest': corpus,
+              'environment': {
+                  'python': platform.python_version(),
+                  'platform': platform.platform(),
+                  'cpu_count': os.cpu_count(),
+                  'cpu_model': subprocess.check_output(['bash','-lc', "lscpu | sed -n 's/^Model name:[[:space:]]*//p' | head -1"], text=True).strip(),
+                  'zstd': subprocess.check_output(['zstd','--version'], text=True).splitlines()[0],
+              },
+          })
+          (root / 'benchmark-artifacts/candidate.json').write_text(json.dumps(data, indent=2) + '\n')
           PY
 
-      - name: Upload parity artifact
+      - name: Reject performance regressions
+        run: |
+          python tools/check_performance_regression.py \
+            --base benchmark-artifacts/base.json \
+            --candidate benchmark-artifacts/candidate.json \
+            --timing-relative 0.05 \
+            --timing-absolute-ms 3 \
+            --summary benchmark-artifacts/PERFORMANCE_GATE.md
+
+      - name: Publish performance summary
+        if: always()
+        run: |
+          if [ -f benchmark-artifacts/PERFORMANCE_GATE.md ]; then
+            cat benchmark-artifacts/PERFORMANCE_GATE.md >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Upload release benchmark evidence
+        if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: cmpct-zip-parity
+          name: cmpct-release-performance-${{ github.sha }}
           path: benchmark-artifacts/
           if-no-files-found: error
 
-# Footnote: shared hosted-runner timing is development evidence, not marketing. The important property
-# here is semantic symmetry: both formats are measured at the same process boundary and repetitions
-# are recorded, so a real ZIP advantage cannot hide behind benchmark orchestration overhead.
+# Footnote: the candidate harness owns comparison semantics and generates exactly one immutable corpus.
+# ABBA ordering (base/candidate/candidate/base) counters first-vs-second runner drift without relaxing
+# the gate. Archive size remains zero-tolerance; timing must show a repeatable same-runner slowdown that
+# clears both confidence thresholds before a release is blocked.

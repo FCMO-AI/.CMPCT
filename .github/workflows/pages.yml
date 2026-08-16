@@ -22,16 +22,16 @@ jobs:
       pages: read
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Set up Python 3.11
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: "3.11"
           cache: pip
 
       - name: Set up Node for browser-writer gate
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: "22"
 
@@ -43,8 +43,26 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -e .
 
-      - name: Build canonical site data
+      - name: Build canonical performance site
         run: python site/build_site.py --out _site
+
+      - name: Gate generated performance data
+        run: |
+          python - <<'PY'
+          import json, tomllib
+          from pathlib import Path
+
+          data = json.loads(Path('_site/project-data.json').read_text())
+          with Path('pyproject.toml').open('rb') as fh:
+              version = tomllib.load(fh)['project']['version']
+          assert data['project']['project_version'] == version
+          assert data['frontier'], 'performance site requires a committed research-frontier record'
+          assert len(data['frontier']['competitors']) >= 4
+          assert data['frontier']['workloads'], 'frontier workload matrix must not be empty'
+          assert data['parity_records'], 'canonical ZIP-parity evidence must remain visible'
+          assert data['release_history'][0]['version'] == version, 'latest release note must match project version'
+          print('performance site data: coherent')
+          PY
 
       - name: Check browser JavaScript
         run: |
@@ -91,5 +109,6 @@ jobs:
         id: deployment
         uses: actions/deploy-pages@v4
 
-# Footnote: canonical main publishes automatically, but only after the complete tracked-tree disclosure
-# guard, static build, JavaScript checks and canonical-reader Browser Lab compatibility gate pass.
+# Footnote: main publishes automatically only after disclosure, generated benchmark-data coherence,
+# JavaScript syntax, and canonical-reader Browser Lab compatibility gates pass. The homepage's large
+# performance numbers are therefore built from committed evidence rather than hand-maintained copy.

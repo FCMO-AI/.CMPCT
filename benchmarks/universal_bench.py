@@ -6,8 +6,21 @@ WORK=HERE/'_work'
 CORP=WORK/'corpora'; OUT=WORK/'out'
 CMPCT_MODULE='cmpct'
 
+# Footnote: benchmark payload bytes must be reproducible. `os.urandom()` made two unchanged encoder
+# builds receive different inputs and therefore made a zero-byte regression gate mathematically
+# meaningless. This PRNG is *benchmark data generation only*; it is not a cryptographic primitive.
+_RNG=random.Random(0xC0DEC0DE5EED)
+
+def reset_rng():
+    global _RNG
+    _RNG=random.Random(0xC0DEC0DE5EED)
+
+def randbytes(n):
+    return _RNG.randbytes(n)
+
 def reset():
     shutil.rmtree(WORK, ignore_errors=True); CORP.mkdir(parents=True); OUT.mkdir()
+    reset_rng()
 
 def patterned(n, seed=b'cmpct'):
     block=(seed+b' :: alpha beta gamma delta epsilon 0123456789\n')*64
@@ -21,7 +34,16 @@ def wav_file(path, sec=3, rate=16000, freq=440):
             v=int(22000*math.sin(2*math.pi*freq*i/rate)); frames += struct.pack('<h',v)
         w.writeframes(frames)
 
+def _zip_write_bytes(zf, name, payload):
+    # Footnote: ZipFile.writestr(name, ...) otherwise stamps the current wall-clock time into every
+    # nested member. A fixed legal DOS timestamp makes the nested corpus byte-for-byte reproducible.
+    info=zipfile.ZipInfo(name, date_time=(2026,1,1,0,0,0))
+    info.compress_type=zipfile.ZIP_DEFLATED
+    info.external_attr=0o100644 << 16
+    zf.writestr(info,payload,compress_type=zipfile.ZIP_DEFLATED,compresslevel=6)
+
 def make_corpora():
+    reset_rng()
     # 1) many tiny unique text + duplicates
     d=CORP/'tiny'; d.mkdir()
     for i in range(3000):
@@ -43,15 +65,15 @@ def make_corpora():
     # 3) mixed media / already compressed + PCM
     d=CORP/'media'; d.mkdir()
     for i in range(8): wav_file(d/f'tone{i}.wav', sec=2+(i%3), freq=220+55*i)
-    # zlib-compressed and random pseudo-media should mostly be STORE-like
+    # zlib-compressed and deterministic pseudo-media should mostly be STORE-like.
     import zlib
     for i in range(8):
-        raw=os.urandom(512*1024)
+        raw=randbytes(512*1024)
         (d/f'already{i}.binz').write_bytes(zlib.compress(raw,9))
 
     # 4) incompressible + compressible large files
     d=CORP/'binary'; d.mkdir()
-    (d/'random16m.bin').write_bytes(os.urandom(16*1024*1024))
+    (d/'random16m.bin').write_bytes(randbytes(16*1024*1024))
     (d/'pattern32m.bin').write_bytes(patterned(32*1024*1024,b'large-pattern'))
 
     # 5) duplicates and filesystem semantics
@@ -68,16 +90,16 @@ def make_corpora():
     with open(p,'wb') as f:
         f.truncate(128*1024*1024)
         for off in (0, 31*1024*1024, 64*1024*1024, 120*1024*1024):
-            f.seek(off); f.write(os.urandom(1024*1024))
+            f.seek(off); f.write(randbytes(1024*1024))
 
     # 7) nested archives with shared payloads
     d=CORP/'nested'; d.mkdir(); shared=patterned(256*1024,b'nested-shared')
     for i in range(12):
         zp=d/f'nested{i:02d}.zip'
         with zipfile.ZipFile(zp,'w',compression=zipfile.ZIP_DEFLATED,compresslevel=6) as z:
-            z.writestr('shared.dat',shared)
-            for j in range(20): z.writestr(f'docs/{j:02d}.txt', patterned(8*1024, f'{i}-{j}'.encode()))
-            z.writestr('unique.bin',os.urandom(64*1024))
+            _zip_write_bytes(z,'shared.dat',shared)
+            for j in range(20): _zip_write_bytes(z,f'docs/{j:02d}.txt',patterned(8*1024, f'{i}-{j}'.encode()))
+            _zip_write_bytes(z,'unique.bin',randbytes(64*1024))
 
     # 8) combined realistic universal tree (hardlinks maintained for duplicate base file)
     d=CORP/'combined'; d.mkdir()
