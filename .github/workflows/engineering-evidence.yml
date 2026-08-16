@@ -1,0 +1,28 @@
+name: CMPCT engineering evidence
+
+on:
+  pull_request:
+    types: [opened, synchronize, edited, reopened, ready_for_review]
+
+permissions:
+  contents: read
+
+jobs:
+  evidence:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out candidate history
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Validate material-PR evidence dossier
+        run: |
+          python tools/check_pr_evidence.py \
+            --base-sha "${{ github.event.pull_request.base.sha }}" \
+            --event "$GITHUB_EVENT_PATH"
+
+# Footnote: this gate validates that material work exposes a falsifiable evidence surface. It does not
+# assign a numeric “genius” score; benchmark, conformance, safety and expert review remain the actual
+# arbiters of technical quality.

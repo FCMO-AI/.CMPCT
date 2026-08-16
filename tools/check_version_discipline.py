@@ -12,12 +12,16 @@ import tomllib
 
 ROOT = Path(__file__).resolve().parents[1]
 MATERIAL_PREFIXES = (
-    "src/", "native/", "integrations/", "benchmarks/", "experiments/", "site/", "tools/"
+    "src/", "native/", "integrations/", "benchmarks/", "experiments/", "site/", "tools/",
+    ".github/workflows/",
 )
 MATERIAL_SINGLETONS = {
     "pyproject.toml", "AGENTS.md", "README.md", "LICENSING.md",
-    "docs/FORMAT.md", "docs/HARDENING.md", "docs/NATIVE_CORE.md", "docs/PORTABILITY.md",
-    "docs/PERFORMANCE_RELEASE_GATE.md",
+    ".github/PULL_REQUEST_TEMPLATE.md",
+    "docs/AGI_ENGINEERING_STANDARD.md", "docs/FORMAT.md", "docs/HARDENING.md",
+    "docs/NATIVE_CORE.md", "docs/PORTABILITY.md", "docs/PERFORMANCE_RELEASE_GATE.md",
+    "docs/CURRENT_STATE.md", "docs/HISTORY.md", "docs/RESEARCH_LOG.md", "docs/ENTROPYGRAPH.md",
+    "docs/BENCHMARKS.md", "docs/PUBLIC_SURFACE.md", "docs/ROADMAP.md",
 }
 
 
@@ -124,3 +128,8 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
+
+# Footnote: the explicitly listed policy/handoff documents and workflow directory are material because
+# changing the rules future agents inherit or the gates those rules rely on can materially change CMPCT
+# even when no archive-engine byte changes in that commit. Release notes and benchmark history remain
+# evidence artifacts and are filtered above to avoid a recursive "version the version record" loop.
