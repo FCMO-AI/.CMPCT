@@ -167,9 +167,14 @@ class RemoteGraph:
                 out.extend(raw[left:right])
             logical=node_end
             if logical>=end:break
-        if logical<size and end==size:
-            # A full-to-EOF request must prove the node table accounts for the authenticated file size.
-            for node_id in desc[1][len(desc[1]):]:logical+=int(self.nodes[node_id][3])
+        # Footnote: a full-to-EOF read is also a structural accounting check. Partial reads may stop
+        # as soon as their requested interval is satisfied, but a full read must prove the node table
+        # exactly accounts for the authenticated logical file size—neither truncated nor oversized.
+        if end==size:
+            for node_id in desc[1]:
+                pass
+            total=sum(int(self.nodes[node_id][3]) for node_id in desc[1])
+            if total!=size:raise RuntimeError('remote file node accounting mismatch')
         if len(out)!=end-start:raise RuntimeError('remote node accounting mismatch')
         return bytes(out)
     def read(self,path:str)->bytes:
