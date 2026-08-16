@@ -155,7 +155,10 @@ fn fixed_revision24_stored_virtual_zip_projects_exact_bytes() {
     let recipe = recipe_from_index(&index);
     let blobs = raw_blobs(&archive, &index, compressed_len);
 
-    assert_eq!(recipe.skeleton_blob, vector["recipe"]["skeleton_blob"].as_u64().unwrap() as usize);
+    assert_eq!(
+        recipe.skeleton_blob,
+        vector["recipe"]["skeleton_blob"].as_u64().unwrap() as usize
+    );
     assert_eq!(recipe.literal_lengths, vec![39, 77]);
     assert_eq!(recipe.payloads.len(), 1);
     assert_eq!(recipe.logical_size, 128);

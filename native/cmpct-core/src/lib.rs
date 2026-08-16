@@ -600,12 +600,12 @@ impl Archive {
             vzip_dispatch::VirtualZipDispatchError::Plan(vzip::VirtualZipError::Range) => {
                 CmpctError::Range
             }
-            vzip_dispatch::VirtualZipDispatchError::Plan(vzip::VirtualZipError::UnsupportedPayload) => {
-                CmpctError::Unsupported
-            }
-            vzip_dispatch::VirtualZipDispatchError::Plan(vzip::VirtualZipError::Schema(message)) => {
-                CmpctError::Schema(message)
-            }
+            vzip_dispatch::VirtualZipDispatchError::Plan(
+                vzip::VirtualZipError::UnsupportedPayload,
+            ) => CmpctError::Unsupported,
+            vzip_dispatch::VirtualZipDispatchError::Plan(vzip::VirtualZipError::Schema(
+                message,
+            )) => CmpctError::Schema(message),
             vzip_dispatch::VirtualZipDispatchError::Blob(error) => error,
             vzip_dispatch::VirtualZipDispatchError::InvalidProjection => CmpctError::Schema(
                 "virtual-ZIP projection did not cover the requested range exactly".into(),

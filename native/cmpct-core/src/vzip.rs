@@ -143,7 +143,9 @@ pub fn parse_recipe(
             VirtualZipError::Schema(format!("payload descriptor {index} has invalid ZIP method"))
         })?;
         let stream_mode = payload[2].as_u64().ok_or_else(|| {
-            VirtualZipError::Schema(format!("payload descriptor {index} has invalid stream mode"))
+            VirtualZipError::Schema(format!(
+                "payload descriptor {index} has invalid stream mode"
+            ))
         })?;
         let compressed_len = payload[4].as_u64().ok_or_else(|| {
             VirtualZipError::Schema(format!(
@@ -201,9 +203,9 @@ pub fn parse_recipe(
             "recipe logical size disagrees with file entry".into(),
         ));
     }
-    let projected_size = skeleton_total.checked_add(payload_total).ok_or_else(|| {
-        VirtualZipError::Schema("virtual-ZIP projected size overflows".into())
-    })?;
+    let projected_size = skeleton_total
+        .checked_add(payload_total)
+        .ok_or_else(|| VirtualZipError::Schema("virtual-ZIP projected size overflows".into()))?;
     if projected_size != logical_size {
         return Err(VirtualZipError::Schema(
             "skeleton plus payload lengths do not equal logical size".into(),
@@ -306,12 +308,7 @@ impl VirtualZipRecipe {
                 .checked_add(literal_len)
                 .ok_or_else(|| VirtualZipError::Schema("skeleton projection overflows".into()))?;
 
-            append_overlap(
-                payload.blob_index,
-                0,
-                payload.logical_len,
-                logical_cursor,
-            )?;
+            append_overlap(payload.blob_index, 0, payload.logical_len, logical_cursor)?;
             logical_cursor = logical_cursor
                 .checked_add(payload.logical_len)
                 .ok_or_else(|| VirtualZipError::Schema("logical projection overflows".into()))?;
