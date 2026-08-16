@@ -187,7 +187,17 @@ jobs:
       - name: Committed WAV-FLAC archive ABI gate
         run: python tests/native_wavflac_abi.py
       - name: Committed virtual-ZIP archive ABI gate
-        run: python tests/native_virtual_zip_abi.py
+        run: |
+          set -o pipefail
+          python tests/native_virtual_zip_abi.py 2>&1 | tee "$GITHUB_WORKSPACE/native-virtual-zip-abi.log"
+      - name: Upload virtual-ZIP ABI diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-virtual-zip-abi
+          path: native-virtual-zip-abi.log
+          if-no-files-found: error
+          retention-days: 7
 
 # Footnote: the S_PACK gate is Builder-derived, so it is a regression/portability check rather than
 # an independent format oracle. A frozen builder-independent pack vector remains a separate conformance
