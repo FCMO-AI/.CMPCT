@@ -24,7 +24,12 @@ RESTRICTED = {
     "private voice-system marker": "Voice" + "Script",
     "private vision-system marker": "Roz " + "Vision",
     "private model-plan marker": "Claude " + "Max",
+    "private model marker": "Cor" + "ax",
+    "private model marker 2": "Orn" + "ith",
+    "private model-plan marker 2": "D" + "Spark",
     "private design-source provenance": "FCMO " + "identity",
+    "private artifact-style prefix": "FCMO" + "_",
+    "private benchmark scratch marker": "fcmo" + "_bench",
     "container scratch/private upload path": "/mnt/" + "data/",
 }
 
