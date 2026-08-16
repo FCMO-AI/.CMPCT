@@ -8,10 +8,19 @@ use std::fs::{self, File};
 use std::io::{BufReader, BufWriter, Read, Write};
 use std::path::{Path, PathBuf};
 
+const MAX_INPUT_CHUNK: usize = 8 * 1024 * 1024;
+const MAX_PLAINTEXT_WORK: usize = 64 * 1024 * 1024;
+
 fn config() -> PreflateContainerConfig {
     PreflateContainerConfig {
-        // Footnote: analysis is allowed to reject an unprofitable/unsupported stream, but any emitted
-        // bridge payload must be independently reconstructed and byte-compared below before acceptance.
+        // Footnote: the research archive declares a 96 MiB decoder-memory ceiling. Preflate's own
+        // potentially expanded plaintext workspace is therefore capped at 64 MiB, leaving explicit
+        // headroom for the 8 MiB reconstructed object, correction data and bounded I/O buffers. A
+        // compression bomb that needs more workspace is an unsupported transform, not an excuse to
+        // allocate past the archive contract.
+        max_chunk_size: MAX_INPUT_CHUNK,
+        total_plain_text_limit: MAX_PLAINTEXT_WORK,
+        chunk_plain_text_limit: MAX_PLAINTEXT_WORK,
         validate_compression: false,
         max_chain_length: 4096,
         ..PreflateContainerConfig::default()
@@ -23,7 +32,7 @@ fn recreate(input: &Path, output: &Path, cfg: &PreflateContainerConfig) -> Resul
     let mut writer = BufWriter::new(File::create(output).map_err(|e| format!("create output: {e}"))?);
     let mut decoder = RecreateContainerProcessor::new(cfg.chunk_plain_text_limit);
     decoder
-        .copy_to_end_size(&mut reader, &mut writer, usize::MAX)
+        .copy_to_end_size(&mut reader, &mut writer, MAX_INPUT_CHUNK)
         .map_err(|e| format!("preflate recreate: {e:?}"))?;
     writer.flush().map_err(|e| format!("flush output: {e}"))?;
     Ok(())
@@ -53,11 +62,15 @@ fn equal_files(a: &Path, b: &Path) -> Result<bool, String> {
 
 fn pack(input: &Path, output: &Path) -> Result<(), String> {
     let cfg = config();
+    let input_len = fs::metadata(input).map_err(|e| format!("stat input: {e}"))?.len();
+    if input_len > MAX_INPUT_CHUNK as u64 {
+        return Err(format!("input exceeds {} byte bridge ceiling", MAX_INPUT_CHUNK));
+    }
     let mut reader = BufReader::new(File::open(input).map_err(|e| format!("open input: {e}"))?);
     let mut writer = BufWriter::new(File::create(output).map_err(|e| format!("create output: {e}"))?);
     let mut encoder = PreflateContainerProcessor::new(&cfg, 12, false);
     encoder
-        .copy_to_end_size(&mut reader, &mut writer, usize::MAX)
+        .copy_to_end_size(&mut reader, &mut writer, MAX_INPUT_CHUNK)
         .map_err(|e| format!("preflate pack: {e:?}"))?;
     writer.flush().map_err(|e| format!("flush output: {e}"))?;
 
