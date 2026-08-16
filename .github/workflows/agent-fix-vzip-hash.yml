@@ -22,23 +22,18 @@ jobs:
           from pathlib import Path
           path = Path('native/cmpct-core/src/lib.rs')
           text = path.read_text()
-          old = '''        if matches!(
+          marker = '''        if matches!(
               storage,
               Storage::Fixed(_) | Storage::VirtualZip(_) | Storage::Sparse(_) | Storage::Cdc(_)
           ) && logical_hash.is_none()
-          {
-              return Err(CmpctError::Schema(format!(
-                  "file row {i} logical-map member is missing SHA-256"
-              )));
-          }
-          if let Storage::VirtualZip(recipe) = &storage {
-              if logical_hash != Some(recipe.logical_sha256) {
-                  return Err(CmpctError::Schema(format!(
-                      "file row {i} virtual-ZIP recipe SHA-256 disagrees with file identity"
-                  )));
-              }
-          }
           '''
+          # Match by semantic anchors rather than formatter-sensitive whitespace.
+          anchor = 'Storage::Fixed(_) | Storage::VirtualZip(_) | Storage::Sparse(_) | Storage::Cdc(_)'
+          anchor_pos = text.index(anchor)
+          start = text.rfind('        if matches!(', 0, anchor_pos)
+          end = text.index('        entries.push(', anchor_pos)
+          if start < 0:
+              raise SystemExit('logical-map hash guard not found')
           new = '''        if matches!(storage, Storage::Fixed(_) | Storage::Sparse(_) | Storage::Cdc(_))
               && logical_hash.is_none()
           {
@@ -59,9 +54,7 @@ jobs:
               }
           }
           '''
-          if old not in text:
-              raise SystemExit('expected parse_entries block not found')
-          path.write_text(text.replace(old, new, 1))
+          path.write_text(text[:start] + new + text[end:])
           PY
       - name: Format and validate native virtual-ZIP ABI
         run: |
