@@ -53,17 +53,24 @@ jobs:
           python -m pytest -q tests/test_resemblance.py
           python -m pytest -q
 
-      - name: Run public neutral and resemblance-hostile benchmark
+      - name: Run per-workload causal frontier
         run: |
           mkdir -p benchmark-artifacts
-          # Footnote: tee is only an observability layer. pipefail preserves the benchmark's real exit
-          # status so the no-regression assertion cannot be accidentally converted into a green job.
+          # Footnote: every neutral/hostile workload receives the direct inherited-v0.25 comparison.
+          # Expensive third-party archival tools are intentionally moved to the aggregate step below;
+          # repeating ZPAQ/DwarFS/Borg fifteen times does not strengthen the causal CMPCT comparison.
           set -o pipefail
           python benchmarks/entropygraph_v028_bench.py \
             --suite both \
-            --competitors \
             --output benchmark-artifacts/entropygraph-v028.json \
             2>&1 | tee benchmark-artifacts/entropygraph-v028.stdout.txt
+
+      - name: Run aggregate structural competitor sweep
+        run: |
+          set -o pipefail
+          python benchmarks/entropygraph_v028_competitors.py \
+            --output benchmark-artifacts/entropygraph-v028-structural-competitors.json \
+            2>&1 | tee benchmark-artifacts/entropygraph-v028-structural-competitors.stdout.txt
 
       - name: Public-surface guard
         run: python tools/check_public_surface.py
