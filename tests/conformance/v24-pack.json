@@ -1,0 +1,45 @@
+{
+  "schema": "cmpct-v24-golden-pack-v1",
+  "format_revision": 24,
+  "generation_provenance": {
+    "method": "hand-built from revision-24 header/index/blob/footer constants; not emitted by cmpct.builder.Builder",
+    "python": "3.13.5",
+    "msgpack": "1.1.2",
+    "zstd": "system libzstd",
+    "purpose": "fixed cross-implementation byte oracle for S_PACK slice semantics"
+  },
+  "vector": {
+    "archive_sha256": "52545b2ebe477a28cd93cfe54288333858e094b12321038677a254594e1e106e",
+    "archive_bytes": 440,
+    "pack_blob": 0,
+    "pack_logical_size": 60,
+    "pack_sha256": "2dd85bf7bebc13192bf0d778338994c25a2749c1e737aeda55ce4e849b41402b",
+    "files": [
+      {
+        "name": "a.txt",
+        "offset": 0,
+        "length": 10,
+        "sha256": "3d6bb55caf1340c34cbee40b37332a37bab480333d4ea7a2210fed13c3bc78c7",
+        "hex": "616c7068612d6f6e650a",
+        "ranges": [{"offset": 2, "length": 5, "hex": "7068612d6f"}]
+      },
+      {
+        "name": "b.txt",
+        "offset": 10,
+        "length": 18,
+        "sha256": "2647e5dc12f292535df6713b6ba27c01a09389d8de9896a5d872e9fc7c8be254",
+        "hex": "626574612d74776f2d636f6e74656e74730a",
+        "ranges": [{"offset": 2, "length": 5, "hex": "74612d7477"}]
+      },
+      {
+        "name": "c.bin",
+        "offset": 28,
+        "length": 32,
+        "sha256": "630dcd2966c4336691125448bbb25b4ff412a49c732db2c8abc1b8581bd710dd",
+        "hex": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+        "ranges": [{"offset": 2, "length": 5, "hex": "0203040506"}]
+      }
+    ],
+    "archive_base64": "Q01QQ1QyNAAYAAAAWgAAAAAAAABaAAAAAAAAAHwAAAAAAAAA/K4j5gS9DaSdNmeWFoMSlaVXflsVZP7raCMkvDJ61EEotS/9IFqNAgBEBIShdhilZmlsZXOTl6VhLnR4dADNAaQACsCUBAAACpelYhIKEpelYy5iaW4gHCClYmxvYnORlQA8PAAAp3JlY2lwZXOQBAAgBLgD9saK+QRDTUE0AAAAADwAAAAAAAAAPAAAAAAAAAAAAAAAHK3ysy3YW/e+vBMZK/DXeDOJlMJaJ0nB5zeu2lXOToSbQUArYWxwaGEtb25lCmJldGEtdHdvLWNvbnRlbnRzCgABAgMEBQYHCAkKCwwNDg8QERITFBUWFxgZGhscHR4fKLUv/SBajQIARASEoXYYpWZpbGVzk5elYS50eHQAzQGkAArAlAQAAAqXpWISChKXpWMuYmluIBwgpWJsb2JzkZUAPDwAAKdyZWNpcGVzkAQAIAS4A/bGivkEQ01QVEYyNAAAAQAAWgAAAAAAAABaAAAAAAAAAAAAAAAAAAAA/K4j5gS9DaSdNmeWFoMSlaVXflsVZP7raCMkvDJ61EE="
+  }
+}

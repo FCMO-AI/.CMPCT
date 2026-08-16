@@ -4,7 +4,9 @@ mod vzip;
 use rmpv::Value;
 use sha2::{Digest, Sha256};
 use std::io::Cursor;
-use vzip::{parse_stored_recipe, ProjectionSegment, VirtualZipError, VirtualZipRecipe};
+use vzip::{
+    parse_stored_recipe, ProjectionSegment, ProjectionSource, VirtualZipError, VirtualZipRecipe,
+};
 
 const HEADER_SIZE: usize = 68;
 const BLOB_HEADER_SIZE: usize = 64;
@@ -66,11 +68,8 @@ fn decode_hex(input: &str) -> Vec<u8> {
         .collect()
 }
 
-fn fixture() -> (serde_json::Value, Vec<u8>, Value, usize) {
-    let fixture: serde_json::Value = serde_json::from_str(include_str!(
-        "../../../tests/conformance/v24-virtual-zip.json"
-    ))
-    .expect("virtual ZIP fixture JSON");
+fn decode_fixture(path: &str) -> (serde_json::Value, Vec<u8>, Value, usize) {
+    let fixture: serde_json::Value = serde_json::from_str(path).expect("virtual ZIP fixture JSON");
     let vector = &fixture["vector"];
     let archive = decode_base64(vector["archive_base64"].as_str().expect("archive base64"));
     assert_eq!(&archive[..8], b"CMPCT24\0");
@@ -82,6 +81,12 @@ fn fixture() -> (serde_json::Value, Vec<u8>, Value, usize) {
     let mut cursor = Cursor::new(index_bytes.as_slice());
     let index = rmpv::decode::read_value(&mut cursor).expect("MessagePack primary index");
     (fixture, archive, index, compressed_len)
+}
+
+fn fixture() -> (serde_json::Value, Vec<u8>, Value, usize) {
+    decode_fixture(include_str!(
+        "../../../tests/conformance/v24-virtual-zip.json"
+    ))
 }
 
 fn raw_blobs(archive: &[u8], index: &Value, compressed_len: usize) -> Vec<Vec<u8>> {
@@ -126,19 +131,25 @@ fn recipe_parts(index: &Value) -> (&Value, Vec<u64>, u64) {
 
 fn recipe_from_index(index: &Value) -> VirtualZipRecipe {
     let (recipe, blob_sizes, logical_size) = recipe_parts(index);
-    parse_stored_recipe(recipe, &blob_sizes, logical_size)
-        .expect("fixed stored-payload virtual ZIP recipe")
+    parse_stored_recipe(recipe, &blob_sizes, logical_size).expect("fixed virtual ZIP recipe")
 }
 
-fn execute_plan(recipe: &VirtualZipRecipe, blobs: &[Vec<u8>], start: u64, length: u64) -> Vec<u8> {
+fn execute_logical_plan(
+    recipe: &VirtualZipRecipe,
+    blobs: &[Vec<u8>],
+    start: u64,
+    length: u64,
+) -> Vec<u8> {
     let mut out = vec![0u8; length as usize];
     for ProjectionSegment {
+        source,
         blob_index,
         blob_offset,
         output_offset,
         length,
     } in recipe.plan_range(start, length).expect("range plan")
     {
+        assert_eq!(source, ProjectionSource::LogicalBlob);
         let src_start = blob_offset as usize;
         let src_end = src_start + length as usize;
         let dst_start = output_offset as usize;
@@ -155,12 +166,16 @@ fn fixed_revision24_stored_virtual_zip_projects_exact_bytes() {
     let recipe = recipe_from_index(&index);
     let blobs = raw_blobs(&archive, &index, compressed_len);
 
-    assert_eq!(recipe.skeleton_blob, vector["recipe"]["skeleton_blob"].as_u64().unwrap() as usize);
+    assert_eq!(
+        recipe.skeleton_blob,
+        vector["recipe"]["skeleton_blob"].as_u64().unwrap() as usize
+    );
     assert_eq!(recipe.literal_lengths, vec![39, 77]);
     assert_eq!(recipe.payloads.len(), 1);
+    assert_eq!(recipe.payloads[0].source, ProjectionSource::LogicalBlob);
     assert_eq!(recipe.logical_size, 128);
 
-    let rebuilt = execute_plan(&recipe, &blobs, 0, recipe.logical_size);
+    let rebuilt = execute_logical_plan(&recipe, &blobs, 0, recipe.logical_size);
     let want_hash = decode_hex(vector["logical_sha256"].as_str().unwrap());
     assert_eq!(Sha256::digest(&rebuilt).as_slice(), want_hash.as_slice());
     assert_eq!(Sha256::digest(&rebuilt).as_slice(), recipe.logical_sha256);
@@ -172,7 +187,7 @@ fn fixed_revision24_stored_virtual_zip_projects_exact_bytes() {
         let offset = range["offset"].as_u64().unwrap();
         let length = range["length"].as_u64().unwrap();
         let want = decode_hex(range["hex"].as_str().unwrap());
-        assert_eq!(execute_plan(&recipe, &blobs, offset, length), want);
+        assert_eq!(execute_logical_plan(&recipe, &blobs, offset, length), want);
     }
 }
 
@@ -183,12 +198,14 @@ fn selective_projection_touches_only_intersecting_recipe_segments() {
 
     // Offset 36 crosses the last three bytes of the first skeleton literal, the complete 12-byte
     // stored payload, and one byte of the trailing skeleton. A native handler therefore needs three
-    // small blob reads rather than materializing the 128-byte nested ZIP.
+    // small source reads rather than materializing the complete nested ZIP.
     let plan = recipe.plan_range(36, 16).expect("cross-boundary plan");
     assert_eq!(plan.len(), 3);
     assert_eq!(plan[0].blob_index, recipe.skeleton_blob);
+    assert_eq!(plan[0].source, ProjectionSource::LogicalBlob);
     assert_eq!(plan[0].length, 3);
     assert_eq!(plan[1].blob_index, recipe.payloads[0].blob_index);
+    assert_eq!(plan[1].source, ProjectionSource::LogicalBlob);
     assert_eq!(plan[1].length, 12);
     assert_eq!(plan[2].blob_index, recipe.skeleton_blob);
     assert_eq!(plan[2].length, 1);
@@ -201,7 +218,50 @@ fn selective_projection_touches_only_intersecting_recipe_segments() {
 }
 
 #[test]
-fn malformed_recipe_accounting_and_ungated_deflate_fail_closed() {
+fn fixed_mode0_and_mode2_recipes_preserve_non_logical_source_semantics() {
+    let (_, _, mode0_index, _) = decode_fixture(include_str!(
+        "../../../tests/conformance/v24-virtual-zip-deflate-mode0.json"
+    ));
+    let mode0 = recipe_from_index(&mode0_index);
+    assert_eq!(mode0.payloads.len(), 1);
+    assert_eq!(
+        mode0.payloads[0].source,
+        ProjectionSource::PhysicalDeflate { expected_len: 14 }
+    );
+    assert_eq!(mode0.payloads[0].logical_len, 14);
+    let mode0_plan = mode0.plan_range(39, 14).unwrap();
+    assert_eq!(mode0_plan.len(), 1);
+    assert_eq!(
+        mode0_plan[0].source,
+        ProjectionSource::PhysicalDeflate { expected_len: 14 }
+    );
+
+    let (_, _, mode2_index, _) = decode_fixture(include_str!(
+        "../../../tests/conformance/v24-virtual-zip-deflate-mode2.json"
+    ));
+    let mode2 = recipe_from_index(&mode2_index);
+    assert_eq!(mode2.payloads.len(), 1);
+    assert_eq!(
+        mode2.payloads[0].source,
+        ProjectionSource::RegeneratedDeflate {
+            level: 6,
+            expected_len: 14,
+        }
+    );
+    assert_eq!(mode2.payloads[0].logical_len, 14);
+    let mode2_plan = mode2.plan_range(39, 14).unwrap();
+    assert_eq!(mode2_plan.len(), 1);
+    assert_eq!(
+        mode2_plan[0].source,
+        ProjectionSource::RegeneratedDeflate {
+            level: 6,
+            expected_len: 14,
+        }
+    );
+}
+
+#[test]
+fn malformed_recipe_accounting_and_unknown_modes_fail_closed() {
     let (_, _, index, _) = fixture();
     let (recipe, blob_sizes, logical_size) = recipe_parts(&index);
 
@@ -213,13 +273,14 @@ fn malformed_recipe_accounting_and_ungated_deflate_fail_closed() {
         Err(VirtualZipError::Schema(_))
     ));
 
-    let mut deflate = recipe.clone();
-    let row = deflate.as_array_mut().expect("recipe row");
+    let mut unknown_mode = recipe.clone();
+    let row = unknown_mode.as_array_mut().expect("recipe row");
     let payloads = row[2].as_array_mut().expect("payload rows");
     let payload = payloads[0].as_array_mut().expect("payload row");
     payload[1] = Value::from(8u64);
+    payload[2] = Value::from(99u64);
     assert_eq!(
-        parse_stored_recipe(&deflate, &blob_sizes, logical_size),
+        parse_stored_recipe(&unknown_mode, &blob_sizes, logical_size),
         Err(VirtualZipError::UnsupportedPayload)
     );
 }

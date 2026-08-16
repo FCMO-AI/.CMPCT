@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
-"""Cross-check the small native read CLI against the Python revision-24 oracle."""
+"""Cross-check the native read/preflight/extract CLI against the Python revision-24 oracle."""
 
 from __future__ import annotations
 
 import json
+import shutil
 import subprocess
 from pathlib import Path
 
@@ -41,6 +42,7 @@ def main() -> None:
                 "mode": row[2],
                 "mtime_ns": row[3],
                 "size": row[4],
+                "link_target": row[6][0] if row[1] == 3 else None,
             }
             for row in archive.files
         ]
@@ -53,6 +55,15 @@ def main() -> None:
             row for row in expected if row["path"] == "payload.bin"
         )
 
+        preflight = run("preflight", str(ARCHIVE))
+        assert preflight.returncode == 0, preflight.stderr.decode()
+        preflight_payload = json.loads(preflight.stdout)
+        assert preflight_payload == {
+            "entries": len(expected),
+            "preflight": "ok",
+            "revision": 24,
+        }
+
         whole = run("read", str(ARCHIVE), "payload.bin")
         assert whole.returncode == 0, whole.stderr.decode()
         assert whole.stdout == archive.read("payload.bin")
@@ -62,6 +73,21 @@ def main() -> None:
         ranged = run("range", str(ARCHIVE), "raw.bin", str(offset), str(length))
         assert ranged.returncode == 0, ranged.stderr.decode()
         assert ranged.stdout == archive.read_range("raw.bin", offset, length)
+
+        # Native extraction is deliberately checked with the same ordinary builder archive used for
+        # C-ABI parity. This keeps the CLI test focused on command wiring while the dedicated ABI gate
+        # covers hardlinks/symlinks and large sequential streams in more depth.
+        destination = Path("/tmp/cmpct-native-cli-extract")
+        shutil.rmtree(destination, ignore_errors=True)
+        extracted = run("extract", str(ARCHIVE), str(destination))
+        assert extracted.returncode == 0, extracted.stderr.decode()
+        extracted_payload = json.loads(extracted.stdout)
+        assert extracted_payload["extract"] == "ok"
+        assert extracted_payload["revision"] == 24
+        for row in archive.files:
+            if row[1] != 0:
+                continue
+            assert (destination / row[0]).read_bytes() == archive.read(row[0])
 
     missing_stat = run("stat", str(ARCHIVE), "missing.bin")
     assert missing_stat.returncode != 0

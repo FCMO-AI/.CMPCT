@@ -12,9 +12,8 @@ LIB = ROOT / "native/cmpct-core/target/release/libcmpct_core.so"
 VECTORS = (
     ROOT / "tests/conformance/v24-virtual-zip.json",
     ROOT / "tests/conformance/v24-virtual-zip-deflate-mode1.json",
-)
-UNSUPPORTED_VECTORS = (
     ROOT / "tests/conformance/v24-virtual-zip-deflate-mode0.json",
+    ROOT / "tests/conformance/v24-virtual-zip-deflate-mode2.json",
 )
 
 
@@ -67,6 +66,31 @@ def _read_range(lib, handle, offset: int, length: int):
     return status, got.value, out.raw[: got.value]
 
 
+def _stream_mode(vector: dict) -> int:
+    modes = vector.get("recipe", {}).get("payload_stream_modes")
+    if modes:
+        return int(modes[0])
+    # The first stored-payload fixture predates the explicit field but is canonically mode 0 STORED.
+    return 0
+
+
+def _physical_corruption_target(vector: dict) -> bytes:
+    method = int(vector["member"]["method"])
+    if method == 0:
+        # ZIP_STORED projects the logical member bytes directly.
+        return b"hello-cmpct\n"
+    mode = _stream_mode(vector)
+    if mode in (0, 1):
+        # Mode 0 stores the exact stream as the physical codec-4 payload; mode 1 stores it as a
+        # retained ordinary blob. Corrupting those bytes exercises the source actually projected.
+        return bytes.fromhex(vector["member"]["exact_deflate_hex"])
+    if mode == 2:
+        # Mode 2 stores no duplicate RFC-1951 stream. Its source is authenticated logical content,
+        # which the native core must validate before asking stock zlib to regenerate exact bytes.
+        return b"hello-cmpct\n"
+    raise AssertionError(f"unknown fixed stream mode {mode}")
+
+
 def _exercise_vector(lib, root: Path, fixture_path: Path) -> None:
     vector = json.loads(fixture_path.read_text())["vector"]
     archive_bytes = base64.b64decode(vector["archive_base64"])
@@ -79,9 +103,8 @@ def _exercise_vector(lib, root: Path, fixture_path: Path) -> None:
         assert lib.cmpct_entry_count(handle) == 1
         assert _entry_path(lib, handle, 0) == vector["name"]
 
-        # The frozen ranges deliberately include a skeleton/payload/skeleton crossing and a
-        # central-directory-only read. Stored and retained-Deflate payloads must therefore share the
-        # same range-local projection behavior through the public handler ABI.
+        # Every frozen range crosses or isolates meaningful recipe boundaries. All four revision-24
+        # payload forms therefore share one externally identical seekable virtual-member contract.
         for range_vector in vector["ranges"]:
             want = bytes.fromhex(range_vector["hex"])
             status, got_n, got = _read_range(
@@ -90,15 +113,14 @@ def _exercise_vector(lib, root: Path, fixture_path: Path) -> None:
                 range_vector["offset"],
                 range_vector["length"],
             )
-            assert status == 0, status
+            assert status == 0, (fixture_path.name, status)
             assert got_n == len(want)
             assert got == want
 
-        # Footnote: complete-member acceptance is anchored to each builder-independent nested-ZIP
-        # identity rather than Python reconstruction. This makes the public ABI a true second
-        # implementation boundary instead of a round-trip agreement test.
+        # Complete-member acceptance is anchored to builder-independent nested-ZIP identity rather
+        # than Python reconstruction. This is the cross-implementation byte-exactness boundary.
         status, got_n, got = _read_range(lib, handle, 0, vector["logical_size"])
-        assert status == 0, status
+        assert status == 0, (fixture_path.name, status)
         assert got_n == vector["logical_size"]
         assert hashlib.sha256(got).hexdigest() == vector["logical_sha256"]
         assert got[:4] == b"PK\x03\x04"
@@ -107,57 +129,25 @@ def _exercise_vector(lib, root: Path, fixture_path: Path) -> None:
 
         # Bounds stay typed at the public ABI instead of becoming a short or partially filled read.
         status, got_n, _ = _read_range(lib, handle, vector["logical_size"] - 1, 2)
-        assert status == -6, status
+        assert status == -6, (fixture_path.name, status)
         assert got_n == 0
     finally:
         lib.cmpct_close(handle)
 
-    # Corrupt the actual projected payload bytes without touching authenticated index/recipe metadata.
-    # Partial RAW-blob semantics intentionally authenticate only touched framing, but a complete
-    # virtual-member read has the stronger recipe SHA-256 boundary and must therefore fail closed.
-    if vector["member"]["method"] == 0:
-        payload = b"hello-cmpct\n"
-    else:
-        payload = bytes.fromhex(vector["member"]["exact_deflate_hex"])
-    payload_pos = archive_bytes.find(payload)
-    assert payload_pos >= 0
-    assert archive_bytes.find(payload, payload_pos + 1) == -1, "fixed payload must be unique"
+    target = _physical_corruption_target(vector)
+    payload_pos = archive_bytes.find(target)
+    assert payload_pos >= 0, (fixture_path.name, target.hex())
+    assert archive_bytes.find(target, payload_pos + 1) == -1, "fixed corruption target must be unique"
     corrupt = bytearray(archive_bytes)
     corrupt[payload_pos] ^= 1
-    corrupt_path = root / f"{fixture_path.stem}-corrupt-payload.cmpct"
+    corrupt_path = root / f"{fixture_path.stem}-corrupt-source.cmpct"
     corrupt_path.write_bytes(corrupt)
 
     handle = _open(lib, corrupt_path)
     try:
         status, got_n, _ = _read_range(lib, handle, 0, vector["logical_size"])
-        assert status == -3, status
+        assert status == -3, (fixture_path.name, status)
         assert got_n == 0
-    finally:
-        lib.cmpct_close(handle)
-
-
-def _exercise_explicitly_unsupported_vector(lib, root: Path, fixture_path: Path) -> None:
-    """Keep independently frozen representations visible at the public ABI before dispatch lands.
-
-    Footnote: a valid revision-24 archive containing an as-yet ungated native representation should
-    still open and enumerate. The member read must return the typed unsupported status, never a format
-    error or guessed reconstruction. This turns the remaining mode-0 wiring gap into an executable
-    contract instead of leaving it outside the native test surface.
-    """
-    vector = json.loads(fixture_path.read_text())["vector"]
-    archive_bytes = base64.b64decode(vector["archive_base64"])
-    assert hashlib.sha256(archive_bytes).hexdigest() == vector["archive_sha256"]
-
-    archive = root / f"{fixture_path.stem}-unsupported.cmpct"
-    archive.write_bytes(archive_bytes)
-    handle = _open(lib, archive)
-    try:
-        assert lib.cmpct_entry_count(handle) == 1
-        assert _entry_path(lib, handle, 0) == vector["name"]
-        status, got_n, got = _read_range(lib, handle, 0, vector["logical_size"])
-        assert status == -5, status
-        assert got_n == 0
-        assert got == b""
     finally:
         lib.cmpct_close(handle)
 
@@ -168,8 +158,6 @@ def main() -> None:
         root = Path(td)
         for fixture_path in VECTORS:
             _exercise_vector(lib, root, fixture_path)
-        for fixture_path in UNSUPPORTED_VECTORS:
-            _exercise_explicitly_unsupported_vector(lib, root, fixture_path)
 
 
 if __name__ == "__main__":
