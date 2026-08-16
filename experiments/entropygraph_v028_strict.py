@@ -40,9 +40,9 @@ READ_AMPLIFICATION_BUDGET = 8.0
 MAX_METADATA = 64 * 1024 * 1024
 MAX_RECORDS = 1_000_000
 
-# Save the already-tested grammar implementations before replacing their policy hooks. The delegated
-# extractor/strong verifier resolve module globals at call time, so patching `_open_graph` below safely
-# upgrades those callers without duplicating the reconstruction grammar.
+# Save the already-tested grammar implementation before replacing policy hooks. The delegated
+# extractor resolves module globals at call time, so patching `_open_graph` below upgrades that caller
+# without duplicating reconstruction grammar.
 _ORIGINAL_EXTRACT = BASE._extract_graph
 
 
@@ -206,8 +206,28 @@ def strict_extract_graph(path: Path, dst: Path) -> None:
     _ORIGINAL_EXTRACT(path, dst)
 
 
-# `_build_graph`, `_extract_graph` and `strong_verify` resolve these symbols from their defining module
-# at runtime. Patch policy before delegation so all strict callers inherit the bounded implementations.
+def _looks_like_cmpnx8(path: Path) -> bool:
+    """Recognize CMPNX8 from either surviving metadata copy.
+
+    Footnote: tail recovery is useful only if dispatch can reach it after primary-header damage. The
+    footer magic is merely a routing hint; strict_open_graph still authenticates metadata/Merkle state
+    before any logical bytes are returned.
+    """
+    try:
+        with path.open("rb") as stream:
+            if stream.read(8) == BASE.MAG:
+                return True
+            if path.stat().st_size < BASE.FTR.size:
+                return False
+            stream.seek(-BASE.FTR.size, os.SEEK_END)
+            footer = stream.read(BASE.FTR.size)
+        return len(footer) == BASE.FTR.size and BASE.FTR.unpack(footer)[0] == BASE.TAIL
+    except (OSError, ValueError):
+        return False
+
+
+# `_build_graph` and the delegated extractor resolve these symbols from their defining module at call
+# time. Patch policy before delegation so strict callers inherit bounded implementations.
 BASE._choose_pack_plan = strict_choose_pack_plan
 BASE._open_graph = strict_open_graph
 BASE._extract_graph = strict_extract_graph
@@ -282,12 +302,36 @@ def build(root: Path, out: Path) -> dict:
 
 
 def extract(archive: Path, dst: Path) -> None:
-    return BASE.extract(archive, dst)
+    if _looks_like_cmpnx8(archive):
+        strict_extract_graph(archive, dst)
+        return
+    BASE.BASE.OUT = archive
+    BASE.BASE.extract(dst)
 
 
 def strong_verify(archive: Path) -> dict:
-    # The delegated verifier now reaches strict_open_graph + strict_extract_graph through patched globals.
-    return BASE.strong_verify(archive)
+    if not _looks_like_cmpnx8(archive):
+        BASE.BASE.OUT = archive
+        return BASE.BASE.strong_verify()
+    import tempfile
+
+    stream, meta, record_start, offsets, merkle = strict_open_graph(archive)
+    stream.close()
+    with tempfile.TemporaryDirectory(prefix="cmpct-v028-strict-verify-") as td:
+        dst = Path(td)
+        strict_extract_graph(archive, dst)
+        got = treehash(dst)
+    if got != meta["tree_sha256"]:
+        raise RuntimeError("logical tree root mismatch")
+    return {
+        "ok": True,
+        "tree_sha256": got,
+        "merkle_root": merkle.hex(),
+        "records": len(offsets),
+        "max_decode_unit": meta["max_decode_unit"],
+        "max_decoder_memory": meta["max_decoder_memory"],
+        "recovered_via_tail_possible": True,
+    }
 
 
 def bench(root: Path, out: Path) -> dict:
