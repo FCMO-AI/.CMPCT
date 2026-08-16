@@ -3,9 +3,9 @@ from __future__ import annotations
 
 """Apply the non-semantic CMPCT presentation layer to a built static site.
 
-Footnote: this deliberately runs *after* build_site.py. Visual motion and surface-revision labeling are
-presentation concerns; keeping them out of the canonical benchmark/data builder reduces the chance that
-a cosmetic pass can accidentally alter archive evidence or Browser Lab behavior.
+Footnote: this deliberately runs *after* build_site.py. Visual motion, surface polish and surface-revision
+labeling are presentation concerns; keeping them out of the canonical benchmark/data builder reduces the
+chance that a cosmetic pass can accidentally alter archive evidence or Browser Lab behavior.
 """
 
 import argparse
@@ -47,6 +47,13 @@ def patch_index(output: Path, version: str, surface: str) -> None:
             '<link rel="stylesheet" href="assets/styles.css">\n'
             '  <!-- Footnote: motion.css is optional presentation; styles.css remains the structural baseline. -->\n'
             '  <link rel="stylesheet" href="assets/motion.css">',
+        )
+    if "assets/polish.css" not in html:
+        html = html.replace(
+            '<link rel="stylesheet" href="assets/motion.css">',
+            '<link rel="stylesheet" href="assets/motion.css">\n'
+            '  <!-- Footnote: polish.css contains visually verified responsive/accessibility corrections only. -->\n'
+            '  <link rel="stylesheet" href="assets/polish.css">',
         )
     if "assets/motion.js" not in html:
         html = html.replace(
