@@ -113,8 +113,8 @@ jobs:
                   "/// Close a sequential stream handle.\n///\n/// # Safety\n/// `stream` must be null or a live pointer returned by `cmpct_entry_stream_open`, and must not be closed twice.\n#[no_mangle]\npub unsafe extern \"C\" fn cmpct_stream_close(stream: *mut CmpctStream) {",
               "/// Extract with an explicit archive-wide payload-materialization ceiling.\n":
                   "/// Extract with an explicit archive-wide payload-materialization ceiling.\n///\n/// # Safety\n/// `archive` must be live and `destination` must point to a valid NUL-terminated UTF-8 string.\n",
-              "/// Extract the complete archive into an absent or empty UTF-8 destination directory.\n":
-                  "/// Extract the complete archive into an absent or empty UTF-8 destination directory.\n///\n/// # Safety\n/// `archive` must be live and `destination` must point to a valid NUL-terminated UTF-8 string.\n",
+              "#[no_mangle]\npub unsafe extern \"C\" fn cmpct_extract_all(\n":
+                  "/// Extract the complete archive using the native default materialization ceiling.\n///\n/// # Safety\n/// `archive` must be live and `destination` must point to a valid NUL-terminated UTF-8 string.\n#[no_mangle]\npub unsafe extern \"C\" fn cmpct_extract_all(\n",
           }
           for old, new in replacements.items():
               if old not in s:
