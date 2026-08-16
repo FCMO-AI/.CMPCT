@@ -74,6 +74,9 @@ def _read_range(lib, handle, offset: int, length: int):
 
 def _exercise_vector(lib, root: Path, fixture_path: Path) -> None:
     vector = json.loads(fixture_path.read_text())["vector"]
+    # Pin the fixture contract itself: these are S_VZIP acceptance vectors, not generic archives that
+    # merely happen to contain nested ZIP bytes. That keeps parser-identity regressions visible.
+    assert vector["storage_kind"] == 2, vector["storage_kind"]
     archive_bytes = base64.b64decode(vector["archive_base64"])
     assert hashlib.sha256(archive_bytes).hexdigest() == vector["archive_sha256"]
 
@@ -150,6 +153,7 @@ def _exercise_explicitly_unsupported_vector(lib, root: Path, fixture_path: Path)
     contract instead of leaving it outside the native test surface.
     """
     vector = json.loads(fixture_path.read_text())["vector"]
+    assert vector["storage_kind"] == 2, vector["storage_kind"]
     archive_bytes = base64.b64decode(vector["archive_base64"])
     assert hashlib.sha256(archive_bytes).hexdigest() == vector["archive_sha256"]
 
