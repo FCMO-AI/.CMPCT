@@ -23,6 +23,20 @@ jobs:
           python-version: '3.11'
       - name: Apply extraction hardening
         run: python tools/agent_patch_extraction.py
+      - name: Fix pinned rmpv mutable-array compatibility
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path("native/cmpct-core/src/recovery.rs")
+          text = path.read_text()
+          old = "let candidate = candidate.as_array_mut().ok_or(RecoveryError::Malformed)?;"
+          new = "let candidate = array_mut(candidate).ok_or(RecoveryError::Malformed)?;"
+          if old not in text:
+              raise SystemExit("recovery rename mutable-array anchor missing")
+          path.write_text(text.replace(old, new, 1))
+          PY
       - name: Format and validate focused frontier
         shell: bash
         run: |
