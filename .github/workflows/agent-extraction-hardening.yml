@@ -47,12 +47,13 @@ jobs:
           r = recovery.read_text()
           r = r.replace("    pub footer_pos: u64,\n    pub delta_depth: usize,\n", "", 1)
           r = r.replace("                footer_pos,\n                delta_depth: depth,\n", "", 1)
+          r = r.replace("    for depth in 0..=max_generations {", "    for _depth in 0..=max_generations {", 1)
           recovery.write_text(r)
 
           regen = Path("native/cmpct-core/src/deflate_regen.rs")
           d = regen.read_text()
           unavailable = '    #[error("stock zlib regeneration backend is unavailable on this target")]\n    Unavailable,'
-          replacement = '    #[cfg(not(unix))]\n    #[error("stock zlib regeneration backend is unavailable on this target")]\n    Unavailable,'
+          replacement = '    #[cfg_attr(unix, allow(dead_code))]\n    #[error("stock zlib regeneration backend is unavailable on this target")]\n    Unavailable,'
           if unavailable not in d:
               raise SystemExit("Deflate Unavailable anchor missing")
           regen.write_text(d.replace(unavailable, replacement, 1))
