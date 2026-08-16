@@ -36,7 +36,8 @@ pub fn execute_range<E, F>(
 where
     F: FnMut(usize, u64, &mut [u8]) -> Result<(), E>,
 {
-    let length = u64::try_from(out.len()).map_err(|_| VirtualZipDispatchError::InvalidProjection)?;
+    let length =
+        u64::try_from(out.len()).map_err(|_| VirtualZipDispatchError::InvalidProjection)?;
     let segments = recipe.plan_range(start, length)?;
     if out.is_empty() {
         return Ok(());
@@ -47,8 +48,8 @@ where
     for segment in segments {
         let output_offset = usize::try_from(segment.output_offset)
             .map_err(|_| VirtualZipDispatchError::InvalidProjection)?;
-        let segment_len =
-            usize::try_from(segment.length).map_err(|_| VirtualZipDispatchError::InvalidProjection)?;
+        let segment_len = usize::try_from(segment.length)
+            .map_err(|_| VirtualZipDispatchError::InvalidProjection)?;
         let output_end = output_offset
             .checked_add(segment_len)
             .ok_or(VirtualZipDispatchError::InvalidProjection)?;
@@ -78,10 +79,11 @@ where
     let end = start
         .checked_add(length)
         .ok_or(VirtualZipDispatchError::InvalidProjection)?;
-    if start == 0 && end == recipe.logical_size {
-        if Sha256::digest(&*out).as_slice() != recipe.logical_sha256 {
-            return Err(VirtualZipDispatchError::LogicalHash);
-        }
+    if start == 0
+        && end == recipe.logical_size
+        && Sha256::digest(&*out).as_slice() != recipe.logical_sha256
+    {
+        return Err(VirtualZipDispatchError::LogicalHash);
     }
     Ok(())
 }

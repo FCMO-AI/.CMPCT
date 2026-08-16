@@ -17,6 +17,11 @@ UNSUPPORTED_VECTORS = (
     ROOT / "tests/conformance/v24-virtual-zip-deflate-mode0.json",
 )
 
+CMPCT_OK = 0
+CMPCT_FORMAT = -3
+CMPCT_RANGE = -6
+CMPCT_UNSUPPORTED = -7
+
 
 def _load_lib():
     lib = ctypes.CDLL(str(LIB))
@@ -48,15 +53,15 @@ def _load_lib():
 def _open(lib, path: Path):
     handle = ctypes.c_void_p()
     status = lib.cmpct_open(str(path).encode(), ctypes.byref(handle))
-    assert status == 0, (path, status)
+    assert status == CMPCT_OK, (path, status)
     return handle
 
 
 def _entry_path(lib, handle, index: int) -> str:
     needed = ctypes.c_size_t()
-    assert lib.cmpct_entry_path(handle, index, None, 0, ctypes.byref(needed)) == 0
+    assert lib.cmpct_entry_path(handle, index, None, 0, ctypes.byref(needed)) == CMPCT_OK
     buf = ctypes.create_string_buffer(needed.value + 1)
-    assert lib.cmpct_entry_path(handle, index, buf, len(buf), ctypes.byref(needed)) == 0
+    assert lib.cmpct_entry_path(handle, index, buf, len(buf), ctypes.byref(needed)) == CMPCT_OK
     return buf.value.decode()
 
 
@@ -69,6 +74,9 @@ def _read_range(lib, handle, offset: int, length: int):
 
 def _exercise_vector(lib, root: Path, fixture_path: Path) -> None:
     vector = json.loads(fixture_path.read_text())["vector"]
+    # Pin the fixture contract itself: these are S_VZIP acceptance vectors, not generic archives that
+    # merely happen to contain nested ZIP bytes. That keeps parser-identity regressions visible.
+    assert vector["storage_kind"] == 2, vector["storage_kind"]
     archive_bytes = base64.b64decode(vector["archive_base64"])
     assert hashlib.sha256(archive_bytes).hexdigest() == vector["archive_sha256"]
 
@@ -90,7 +98,7 @@ def _exercise_vector(lib, root: Path, fixture_path: Path) -> None:
                 range_vector["offset"],
                 range_vector["length"],
             )
-            assert status == 0, status
+            assert status == CMPCT_OK, status
             assert got_n == len(want)
             assert got == want
 
@@ -98,7 +106,7 @@ def _exercise_vector(lib, root: Path, fixture_path: Path) -> None:
         # identity rather than Python reconstruction. This makes the public ABI a true second
         # implementation boundary instead of a round-trip agreement test.
         status, got_n, got = _read_range(lib, handle, 0, vector["logical_size"])
-        assert status == 0, status
+        assert status == CMPCT_OK, status
         assert got_n == vector["logical_size"]
         assert hashlib.sha256(got).hexdigest() == vector["logical_sha256"]
         assert got[:4] == b"PK\x03\x04"
@@ -107,7 +115,7 @@ def _exercise_vector(lib, root: Path, fixture_path: Path) -> None:
 
         # Bounds stay typed at the public ABI instead of becoming a short or partially filled read.
         status, got_n, _ = _read_range(lib, handle, vector["logical_size"] - 1, 2)
-        assert status == -6, status
+        assert status == CMPCT_RANGE, status
         assert got_n == 0
     finally:
         lib.cmpct_close(handle)
@@ -130,7 +138,7 @@ def _exercise_vector(lib, root: Path, fixture_path: Path) -> None:
     handle = _open(lib, corrupt_path)
     try:
         status, got_n, _ = _read_range(lib, handle, 0, vector["logical_size"])
-        assert status == -3, status
+        assert status == CMPCT_FORMAT, status
         assert got_n == 0
     finally:
         lib.cmpct_close(handle)
@@ -145,6 +153,7 @@ def _exercise_explicitly_unsupported_vector(lib, root: Path, fixture_path: Path)
     contract instead of leaving it outside the native test surface.
     """
     vector = json.loads(fixture_path.read_text())["vector"]
+    assert vector["storage_kind"] == 2, vector["storage_kind"]
     archive_bytes = base64.b64decode(vector["archive_base64"])
     assert hashlib.sha256(archive_bytes).hexdigest() == vector["archive_sha256"]
 
@@ -155,7 +164,9 @@ def _exercise_explicitly_unsupported_vector(lib, root: Path, fixture_path: Path)
         assert lib.cmpct_entry_count(handle) == 1
         assert _entry_path(lib, handle, 0) == vector["name"]
         status, got_n, got = _read_range(lib, handle, 0, vector["logical_size"])
-        assert status == -5, status
+        # CmpctStatus::Unsupported is -7. Keep the C-facing test anchored to the public enum instead
+        # of accidentally treating UTF-8 failure (-5) as representation refusal.
+        assert status == CMPCT_UNSUPPORTED, status
         assert got_n == 0
         assert got == b""
     finally:

@@ -2,7 +2,10 @@
 mod deflate_physical;
 
 use deflate_physical::{authenticated_range, PhysicalDeflateError};
+use flate2::write::DeflateEncoder;
+use flate2::Compression;
 use sha2::{Digest, Sha256};
+use std::io::Write;
 
 const MAX_OBJECT: u64 = 256 * 1024 * 1024;
 
@@ -31,7 +34,32 @@ fn mode0_exact_stream_range_is_returned_only_after_logical_authentication() {
 }
 
 #[test]
-fn mode0_corruption_and_wrong_identity_fail_closed() {
+fn mode0_streaming_auth_handles_logical_objects_larger_than_the_auth_buffer() {
+    // Exercise many authentication-buffer turns. A highly compressible payload is intentional here:
+    // the assertion targets decoded-work memory, not compression ratio or compressor throughput.
+    let logical = vec![b'A'; 2 * 1024 * 1024];
+    let mut encoder = DeflateEncoder::new(Vec::new(), Compression::new(6));
+    encoder.write_all(&logical).unwrap();
+    let compressed = encoder.finish().unwrap();
+    let expected_hash: [u8; 32] = Sha256::digest(&logical).into();
+
+    let start = compressed.len() / 3;
+    let length = 17usize.min(compressed.len() - start);
+    let mut out = vec![0u8; length];
+    authenticated_range(
+        &compressed,
+        logical.len() as u64,
+        &expected_hash,
+        start as u64,
+        &mut out,
+        MAX_OBJECT,
+    )
+    .unwrap();
+    assert_eq!(out, compressed[start..start + length]);
+}
+
+#[test]
+fn mode0_corruption_wrong_identity_and_trailing_bytes_fail_closed() {
     let mut compressed = hex_bytes("cb48cdc9c9d74dce2d482ee10200");
     let logical = b"hello-cmpct\n";
     let expected_hash: [u8; 32] = Sha256::digest(logical).into();
@@ -66,6 +94,24 @@ fn mode0_corruption_and_wrong_identity_fail_closed() {
             MAX_OBJECT,
         ),
         Err(PhysicalDeflateError::LogicalHash)
+    );
+
+    // A valid Deflate stream followed by archive-controlled bytes must not authenticate those extra
+    // bytes merely because the logical member itself still hashes correctly. Mode 0 exposes physical
+    // RFC-1951 bytes into a byte-exact nested ZIP, so every exposed compressed byte must belong to the
+    // authenticated Deflate stream.
+    let mut trailing = compressed.clone();
+    trailing.extend_from_slice(b"JUNK");
+    assert_eq!(
+        authenticated_range(
+            &trailing,
+            logical.len() as u64,
+            &expected_hash,
+            0,
+            &mut out,
+            MAX_OBJECT,
+        ),
+        Err(PhysicalDeflateError::Decode)
     );
 }
 

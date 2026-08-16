@@ -13,8 +13,8 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
         with:
           python-version: '3.11'
           cache: pip
@@ -24,13 +24,28 @@ jobs:
           sudo apt-get install -y zstd
           python -m pip install --upgrade pip
           python -m pip install -e '.[test]'
-      - name: Rust format, lint and tests
+      - name: Rust format
+        working-directory: native/cmpct-core
+        run: cargo fmt --check
+      - name: Rust lint
         working-directory: native/cmpct-core
         run: |
-          cargo fmt --check
-          cargo clippy --all-targets -- -D warnings
-          cargo test
-          cargo build --release
+          set -o pipefail
+          cargo clippy --all-targets --message-format=short -- -D warnings 2>&1 | tee "$GITHUB_WORKSPACE/clippy.log"
+      - name: Upload Rust lint diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-core-clippy
+          path: clippy.log
+          if-no-files-found: error
+          retention-days: 7
+      - name: Rust tests
+        working-directory: native/cmpct-core
+        run: cargo test
+      - name: Rust release build
+        working-directory: native/cmpct-core
+        run: cargo build --release
       - name: Cross-check native index against Python oracle
         run: |
           python - <<'PY'
@@ -172,7 +187,17 @@ jobs:
       - name: Committed WAV-FLAC archive ABI gate
         run: python tests/native_wavflac_abi.py
       - name: Committed virtual-ZIP archive ABI gate
-        run: python tests/native_virtual_zip_abi.py
+        run: |
+          set -o pipefail
+          python tests/native_virtual_zip_abi.py 2>&1 | tee "$GITHUB_WORKSPACE/native-virtual-zip-abi.log"
+      - name: Upload virtual-ZIP ABI diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-virtual-zip-abi
+          path: native-virtual-zip-abi.log
+          if-no-files-found: error
+          retention-days: 7
 
 # Footnote: the S_PACK gate is Builder-derived, so it is a regression/portability check rather than
 # an independent format oracle. A frozen builder-independent pack vector remains a separate conformance
