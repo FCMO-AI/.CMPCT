@@ -32,7 +32,7 @@ pub enum PhysicalDeflateError {
 /// `max_object_bytes` applies independently to both the compressed and decoded sizes. Revision 24
 /// carries a logical identity for codec-4 blobs but no separate physical-stream hash, so mode 0 must
 /// decode the exact stream before trusting it. Authentication is deliberately streaming: logical
-/// bytes are counted and hashed through a fixed 64 KiB buffer rather than materializing an
+/// bytes are counted and hashed through a fixed 64 KiB heap buffer rather than materializing an
 /// archive-controlled decoded member solely for verification. The decoder must also consume the
 /// complete physical payload; otherwise appended bytes could be exposed as trusted nested-ZIP bytes
 /// even though they were never covered by logical-content authentication.
@@ -61,7 +61,7 @@ pub fn authenticated_range(
     let mut limited = decoder.take(logical_size.saturating_add(1));
     let mut hash = Sha256::new();
     let mut decoded_len = 0u64;
-    let mut buffer = [0u8; AUTH_BUFFER_BYTES];
+    let mut buffer = vec![0u8; AUTH_BUFFER_BYTES];
     loop {
         let read = limited
             .read(&mut buffer)
