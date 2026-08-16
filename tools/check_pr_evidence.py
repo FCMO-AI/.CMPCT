@@ -10,9 +10,17 @@ import re
 import subprocess
 import sys
 
-from check_version_discipline import MATERIAL_PREFIXES, MATERIAL_SINGLETONS
+from check_version_discipline import CORE_PREFIXES, SURFACE_PREFIXES, SURFACE_SINGLETONS
 
 ROOT = Path(__file__).resolve().parents[1]
+
+# Footnote: the version-discipline refactor split the old MATERIAL_* constants into core/surface
+# categories. Evidence classification is intentionally broader than numeric-version classification:
+# research engines, benchmark policy and enforcement tools can materially change what CMPCT claims or
+# accepts even when canonical bytes stay revision 24. Keeping this mapping local avoids coupling the
+# checker back to names whose release semantics are different.
+MATERIAL_PREFIXES = CORE_PREFIXES + SURFACE_PREFIXES + ("experiments/", "benchmarks/", "tools/")
+MATERIAL_SINGLETONS = set(SURFACE_SINGLETONS) | {"pyproject.toml"}
 
 REQUIRED_SECTIONS = (
     "Problem and baseline",
