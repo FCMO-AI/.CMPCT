@@ -45,17 +45,22 @@ jobs:
 
           recovery = Path("native/cmpct-core/src/recovery.rs")
           r = recovery.read_text()
-          guard_import = "use crate::msgpack_guard;\n\n"
-          guard_module = '#[path = "msgpack_guard.rs"]\nmod msgpack_guard;\n\n'
-          if guard_import not in r:
+          if "use crate::msgpack_guard;\n\n" not in r:
               raise SystemExit("recovery guard import anchor missing")
-          r = r.replace(guard_import, guard_module, 1)
           r = r.replace(
               "    pub footer_pos: u64,\n    pub delta_depth: usize,\n",
               "    // Exposed for recovery conformance diagnostics; production open currently consumes only the index.\n    #[allow(dead_code)]\n    pub footer_pos: u64,\n    #[allow(dead_code)]\n    pub delta_depth: usize,\n",
               1,
           )
           recovery.write_text(r)
+
+          recovery_test = Path("native/cmpct-core/tests/recovery_golden.rs")
+          t = recovery_test.read_text()
+          test_anchor = '#[path = "../src/recovery.rs"]\nmod recovery;\n'
+          test_prefix = '#[path = "../src/msgpack_guard.rs"]\nmod msgpack_guard;\n\n' + test_anchor
+          if test_anchor not in t:
+              raise SystemExit("recovery golden module anchor missing")
+          recovery_test.write_text(t.replace(test_anchor, test_prefix, 1))
 
           regen = Path("native/cmpct-core/src/deflate_regen.rs")
           d = regen.read_text()
@@ -68,16 +73,16 @@ jobs:
           vzip = Path("native/cmpct-core/src/vzip.rs")
           v = vzip.read_text()
           wrapper = '''/// Compatibility name retained for older focused tests. All currently frozen revision-24 stream
-          /// modes are parsed by the same implementation; the wrapper no longer means "stored-only".
-          pub fn parse_stored_recipe(
-              value: &Value,
-              blob_sizes: &[u64],
-              entry_logical_size: u64,
-          ) -> Result<VirtualZipRecipe, VirtualZipError> {
-              parse_recipe(value, blob_sizes, entry_logical_size)
-          }
+/// modes are parsed by the same implementation; the wrapper no longer means "stored-only".
+pub fn parse_stored_recipe(
+    value: &Value,
+    blob_sizes: &[u64],
+    entry_logical_size: u64,
+) -> Result<VirtualZipRecipe, VirtualZipError> {
+    parse_recipe(value, blob_sizes, entry_logical_size)
+}
 
-          '''
+'''
           if wrapper not in v:
               raise SystemExit("unused vzip compatibility wrapper anchor missing")
           vzip.write_text(v.replace(wrapper, "", 1))
