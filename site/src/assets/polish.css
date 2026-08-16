@@ -1,0 +1,156 @@
+/* CMPCT surface visual-QA hardening — 0.27.b.
+   Footnote: these overrides correct issues reproduced at 1920, 1440, 820, 390 and 360px widths.
+   They intentionally preserve the existing information architecture and benchmark-derived content;
+   the goal is better composition, navigation and legibility rather than a cosmetic rewrite. */
+
+/* Anchored sections must clear the sticky navigation instead of hiding their own headings beneath it. */
+.section[id], .hero[id] { scroll-margin-top: 88px; }
+
+/* Keep keyboard focus unambiguous across links, buttons, selectors and custom file controls. */
+a:focus-visible,
+button:focus-visible,
+select:focus-visible,
+.inspect-picker:focus-within {
+  outline: 2px solid var(--acid);
+  outline-offset: 3px;
+}
+.top-nav a { position: relative; }
+.top-nav a::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -8px;
+  height: 1px;
+  background: var(--hot);
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform .18s ease;
+}
+.top-nav a:hover::after,
+.top-nav a:focus-visible::after { transform: scaleX(1); }
+
+/* The initial hero should expose both the thesis and the proof on normal desktop displays.
+   Footnote: widening the copy lane and lowering only the headline scale avoids sacrificing the
+   score card below the fold while keeping the deliberately oversized editorial character. */
+@media (min-width: 1101px) {
+  .hero-grid {
+    grid-template-columns: minmax(0,1.48fr) minmax(350px,.52fr);
+    gap: clamp(36px,4.7vw,76px);
+  }
+  .hero-copy h1 {
+    font-size: clamp(3.6rem,6.15vw,7.35rem);
+    line-height: .86;
+    word-spacing: .045em;
+  }
+  .hero-score { min-height: 400px; }
+  .hero-score strong {
+    font-size: clamp(5rem,7vw,6.8rem);
+    letter-spacing: -.075em;
+  }
+}
+
+/* Negative display tracking should never erase the visual space between words. */
+.hero-copy h1 { word-spacing: .045em; }
+
+/* Small technical copy remains subordinate without falling into near-invisible grey. */
+.truth-line { color: #807c74; }
+.hero-metrics span,
+.arena-head span,
+.card-head,
+.ladder-label small,
+.ladder-value small,
+.workload-cell span,
+.workload-cell small,
+.graph-node small,
+.mechanism-grid p,
+.metric-pair i,
+.benchmark-table small,
+.tool-footnote,
+.inspect-output dt,
+.release-node span,
+.release-node p,
+.site-footer>div p,
+.footer-note { color: #858179; }
+.hero-metrics small { color: #8b877f; }
+.footer-note { color: #77736c; }
+.site-footer nav a { color: #aaa69d; }
+
+/* Let the workload matrix use the height its paired defect card already occupies instead of leaving
+   a conspicuous unused slab at the bottom of the card. */
+.matrix-card { display: flex; flex-direction: column; }
+.workload-matrix { flex: 1; grid-auto-rows: 1fr; }
+
+/* Give aggregate values enough room that qualifications do not end with orphaned one-word lines. */
+@media (min-width: 761px) {
+  .ladder-row { grid-template-columns: 190px minmax(180px,1fr) 168px; }
+}
+
+/* A disabled archive build is a dormant control, not a muddy orange primary action. */
+.tool-primary:disabled,
+.button-hot.tool-primary:disabled {
+  opacity: 1;
+  background: #151515;
+  border-color: #303030;
+  color: #68645e;
+  box-shadow: none;
+}
+.tool-primary:disabled::after { display: none; }
+
+/* Scrollable data surfaces gain a stronger edge cue without adding fake content or changing data. */
+.benchmark-table-wrap,
+.release-rail {
+  scrollbar-width: thin;
+  scrollbar-color: #554237 #171717;
+}
+
+/* The full release chip crowds the 760–960px header and can force the GitHub affordance to wrap.
+   Footnote: the same version remains visible in the hero metadata; hiding only the duplicate chip keeps
+   the tablet navigation on one clean line without removing information. */
+.header-action { white-space: nowrap; }
+@media (min-width: 761px) and (max-width: 960px) {
+  .site-header { gap: 18px; }
+  .release-chip { display: none; }
+}
+
+@media (max-width: 760px) {
+  /* Footnote: 16vw looked dramatic but forced unnecessary vertical depth and collapsed word spacing
+     at 360–390px. This still reads as display type while returning useful content sooner. */
+  .hero-copy h1 {
+    font-size: clamp(3rem,14.2vw,4.85rem);
+    line-height: .91;
+    letter-spacing: -.062em;
+    word-spacing: .075em;
+  }
+  .hero-copy h1 em {
+    line-height: .92;
+    letter-spacing: -.045em;
+    word-spacing: .03em;
+  }
+
+  /* Replace wrapping slash separators with a deliberate 2×2 metadata grid. */
+  .truth-line {
+    display: grid;
+    grid-template-columns: repeat(2,minmax(0,1fr));
+    gap: 10px 14px;
+    line-height: 1.35;
+  }
+  .truth-line span+span:before { content: none; margin: 0; }
+
+  /* The diagram already communicates the mechanism; the cards below should not consume a second
+     screen each merely to preserve desktop whitespace. */
+  .mechanism-grid article {
+    min-height: 0;
+    padding: 24px 22px 26px;
+  }
+  .mechanism-grid h3 { margin: 28px 0 10px; }
+
+  .tool-footnote { font-size: .69rem; line-height: 1.65; }
+  .ladder-value small { line-height: 1.35; }
+
+  /* A visible clipped edge is intentional here: it tells touch users that the wide evidence surface
+     continues horizontally, while snap points make release-history swipes land cleanly. */
+  .benchmark-table-wrap { border-right-color: #5a3524; }
+  .release-rail { scroll-snap-type: x proximity; }
+  .release-node { scroll-snap-align: start; }
+}
