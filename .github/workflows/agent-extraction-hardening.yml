@@ -24,14 +24,26 @@ jobs:
       - name: Apply extraction hardening
         run: python tools/agent_patch_extraction.py
       - name: Format and validate focused frontier
+        shell: bash
         run: |
-          cargo fmt --manifest-path native/cmpct-core/Cargo.toml
-          python -m pip install --upgrade pip
-          python -m pip install -e '.[audio,test]'
-          cargo clippy --manifest-path native/cmpct-core/Cargo.toml --all-targets -- -D warnings
-          cargo test --manifest-path native/cmpct-core/Cargo.toml
-          cargo build --manifest-path native/cmpct-core/Cargo.toml --release
-          python tests/native_stream_extract_abi.py
+          set -o pipefail
+          {
+            cargo fmt --manifest-path native/cmpct-core/Cargo.toml
+            python -m pip install --upgrade pip
+            python -m pip install -e '.[audio,test]'
+            cargo clippy --manifest-path native/cmpct-core/Cargo.toml --all-targets -- -D warnings
+            cargo test --manifest-path native/cmpct-core/Cargo.toml
+            cargo build --manifest-path native/cmpct-core/Cargo.toml --release
+            python tests/native_stream_extract_abi.py
+          } 2>&1 | tee extraction-hardening-validation.log
+      - name: Upload validation diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: extraction-hardening-validation
+          path: extraction-hardening-validation.log
+          if-no-files-found: error
+          retention-days: 7
       - name: Commit validated hardening
         run: |
           rm .github/workflows/agent-extraction-hardening.yml tools/agent_patch_extraction.py
