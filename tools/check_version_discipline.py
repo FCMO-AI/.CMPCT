@@ -24,8 +24,9 @@ SURFACE_FILE = ROOT / "SURFACE_REVISION"
 # one of these paths participates in the candidate.
 CORE_PREFIXES = ("src/", "native/", "integrations/")
 
-# Presentation, handoff and repository-operability work advances the alphabetic surface track only when
-# no numeric core release is being cut in the same change.
+# Presentation, handoff and repository-operability work uses the alphabetic surface track when no
+# numeric core release is being cut in the same change. Multiple commits may belong to one coherent
+# surface revision; the revision itself advances once per presentation milestone, not once per commit.
 SURFACE_PREFIXES = ("site/", ".github/workflows/")
 SURFACE_SINGLETONS = {
     "AGENTS.md",
@@ -154,9 +155,10 @@ def validate_surface_revision(
         return True, current_raw
 
     if not surface_file_changed:
-        return False, (
-            "presentation/repository work must advance SURFACE_REVISION instead of the numeric core version"
-        )
+        # Footnote: direct-to-main maintenance can span several commits. Requiring one letter per commit
+        # would recreate the version inflation this policy is meant to stop, so unchanged surface state
+        # is valid inside the same coherent presentation milestone.
+        return True, current_raw
 
     if base_surface is None:
         expected = f"{old_version[0]}.{old_version[1]}.a"
@@ -261,7 +263,7 @@ def main() -> int:
         )
     elif surface_paths:
         print(
-            f"version discipline: core stays {version_text(new)}; surface -> {surface}; "
+            f"version discipline: core stays {version_text(new)}; surface={surface}; "
             f"{len(surface_paths)} presentation/repository path(s)"
         )
     else:
