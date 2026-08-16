@@ -1,15 +1,15 @@
 """CMPCT EntropyGraph II / Resemblance Compiler research engine.
 
-This is deliberately not canonical revision-24 grammar. It combines a bounded resemblance graph,
+This is deliberately not canonical revision-24 grammar.  It combines a bounded resemblance graph,
 FastCDC-style stable units, measured depth-1 deltas, similarity ordering, adaptive decode-unit packing,
 optional exact DEFLATE precompression through the pinned memory-safe preflate bridge, Merkle-authenticated
 physical records, O(1) metadata lookup, and a hard decoder-unit declaration.
 
-The encoder is a portfolio: it also builds the inherited v0.25 EntropyGraph candidate and emits that
-artifact unchanged whenever the new graph is not smaller. Therefore a research size regression is not
+The encoder is a *portfolio*: it also builds the inherited v0.25 EntropyGraph candidate and emits that
+artifact unchanged whenever the new graph is not smaller.  Therefore a research size regression is not
 papered over with a threshold; the inherited engine remains an exact fallback representation.
 
-Footnote: portfolio selection spends extra creation CPU. The benchmark reports that exported cost. A
+Footnote: portfolio selection spends extra creation CPU.  The benchmark reports that exported cost.  A
 future learned/analytic cost model may skip obviously losing auditions, but prediction is never allowed
 to replace final byte measurement when a candidate is admitted.
 """
@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import argparse
 import binascii
+import hashlib
 import importlib.util
 import json
 import msgpack
@@ -46,7 +47,7 @@ TAIL = b"CMNX8T\0\0"
 # magic, metadata compressed/raw bytes, record count, declared maximum decode unit, metadata SHA, Merkle root
 HDR = struct.Struct("<8sQQIQ32s32s")
 FTR = struct.Struct("<8sQQ32s32s")
-PH = struct.Struct("<BQQI32s")
+PH = struct.Struct("<BQQI32s")  # codec, logical bytes, stored bytes, hot CRC32, logical SHA-256
 CODEC_RAW = 0
 CODEC_ZSTD = 1
 CODEC_PREFLATE = 2
@@ -156,15 +157,15 @@ def _pack_plan(nodes: list[bytes], sketches, root_ids: list[int], limit: int):
     current: list[int] = []
     current_len = 0
     for node_id in order:
-        size = len(nodes[node_id])
-        if size > limit:
+        n = len(nodes[node_id])
+        if n > limit:
             if current:
                 groups.append(current); current = []; current_len = 0
             groups.append([node_id])
             continue
-        if current and current_len + size > limit:
+        if current and current_len + n > limit:
             groups.append(current); current = []; current_len = 0
-        current.append(node_id); current_len += size
+        current.append(node_id); current_len += n
     if current:
         groups.append(current)
     bytes_cost = 0
@@ -174,26 +175,26 @@ def _pack_plan(nodes: list[bytes], sketches, root_ids: list[int], limit: int):
         raw = b"".join(nodes[i] for i in group)
         _, payload = _compress_record(raw)
         bytes_cost += PH.size + len(payload)
-        # Footnote: each independently requested member pays the containing pack decode cost. This
-        # metric prevents a large solid block from appearing to provide context for free.
-        for node_id in group:
+        # Each independently requested member pays the containing pack decode cost.  This metric makes
+        # the ratio/locality trade explicit instead of treating a large solid block as free context.
+        for i in group:
             decoded_weight += len(raw)
-            logical_weight += max(1, len(nodes[node_id]))
+            logical_weight += max(1, len(nodes[i]))
     amplification = decoded_weight / max(1, logical_weight)
     return bytes_cost, amplification, groups
 
 
 def _choose_pack_plan(nodes: list[bytes], sketches, root_ids: list[int]):
     trials = []
-    for limit_kib in (64, 128, 256, 512, 1024, 2048):
-        limit = limit_kib * 1024
-        cost, amp, groups = _pack_plan(nodes, sketches, root_ids, limit)
-        trials.append((cost, amp, limit, groups))
+    for limit in (64, 128, 256, 512, 1024, 2048):
+        value = limit * 1024
+        cost, amp, groups = _pack_plan(nodes, sketches, root_ids, value)
+        trials.append((cost, amp, value, groups))
     feasible = [row for row in trials if row[1] <= 8.0]
     chosen = min(feasible or trials, key=lambda row: (row[0], row[1], row[2]))
     baseline = next(row for row in trials if row[2] == 512 * 1024)
-    # Footnote: wider context must earn a material byte win. Otherwise retain 512 KiB to avoid paying
-    # locality debt for metadata crumbs or a tie caused by compression framing.
+    # Footnote: wider context must earn a material byte win. Otherwise retain 512 KiB even if an equal
+    # result happens to sort first, preventing locality churn for metadata crumbs.
     if chosen[2] > 512 * 1024 and baseline[0] - chosen[0] < max(1024, baseline[0] // 1000):
         chosen = baseline
     return chosen, [{"limit": limit, "bytes": cost, "read_amp": amp} for cost, amp, limit, _ in trials]
@@ -221,29 +222,25 @@ def _build_graph(root: Path, out: Path) -> dict:
         else:
             normal_files.append(file_id)
 
-    # Logical files become bounded CDC nodes. Large files cannot create an unbounded delta/base object
-    # even if their content is pathologically boundary-resistant.
+    # Logical files become bounded CDC nodes. Small files remain whole; large files cannot create an
+    # unbounded delta/base object even if their content is pathologically boundary-resistant.
     node_bytes: list[bytes] = []
     node_hash_to_id: dict[bytes, int] = {}
     file_nodes: dict[int, list[int]] = {}
     exact_aliases = 0
     for file_id in normal_files:
         raw = raws[file_id]
-        if len(raw) > MAX_CHUNK:
-            chunks = fastcdc(raw, min_size=32 * 1024, avg_size=128 * 1024, max_size=MAX_CHUNK)
-            spans = [(chunk.offset, chunk.length) for chunk in chunks]
-        else:
-            spans = [(0, len(raw))]
+        chunks = fastcdc(raw, min_size=32 * 1024, avg_size=128 * 1024, max_size=MAX_CHUNK) if len(raw) > MAX_CHUNK else [type("C", (), {"offset": 0, "length": len(raw)})()]
         refs = []
-        for offset, length in spans:
-            part = raw[offset:offset + length]
-            digest = H(part)
-            node_id = node_hash_to_id.get(digest)
+        for chunk in chunks:
+            part = raw[chunk.offset:chunk.offset + chunk.length]
+            hh = H(part)
+            node_id = node_hash_to_id.get(hh)
             if node_id is not None and node_bytes[node_id] == part:
                 exact_aliases += 1
             else:
                 node_id = len(node_bytes)
-                node_hash_to_id[digest] = node_id
+                node_hash_to_id[hh] = node_id
                 node_bytes.append(part)
             refs.append(node_id)
         file_nodes[file_id] = refs
@@ -261,7 +258,9 @@ def _build_graph(root: Path, out: Path) -> dict:
             continue
         auditions += 1
         result = delta_encode(base, target, block=64, max_base_index=MAX_CHUNK)
-        _, payload = _compress_record(result.payload, 12)
+        codec, payload = _compress_record(result.payload, 12)
+        # Delta records are independent physical units; account for their header and a conservative
+        # metadata allowance before calling an edge a win.
         delta_cost = PH.size + len(payload) + 24
         saving = direct_costs[edge.target] - delta_cost
         if saving >= max(128, direct_costs[edge.target] // 50) and result.stats.copied_bytes >= len(target) // 4:
@@ -274,6 +273,8 @@ def _build_graph(root: Path, out: Path) -> dict:
             })
 
     assignment = choose_central_bases(len(node_bytes), measured)
+    # If centrality selected a base for which another measured edge happened to carry better economics,
+    # retain only the selected concrete edge. Bases themselves are never delta targets by construction.
     delta_nodes = set(assignment)
     root_ids = [i for i in range(len(node_bytes)) if i not in delta_nodes]
     (pack_cost, read_amp, pack_limit, groups), pack_trials = _choose_pack_plan(node_bytes, sketches, root_ids)
@@ -285,13 +286,14 @@ def _build_graph(root: Path, out: Path) -> dict:
         if payload is None:
             codec, payload = _compress_record(logical)
         assert payload is not None
-        records.append((codec, len(logical), payload, binascii.crc32(logical) & 0xFFFFFFFF, H(logical)))
+        rec = (codec, len(logical), payload, binascii.crc32(logical) & 0xFFFFFFFF, H(logical))
+        records.append(rec)
         return len(records) - 1
 
+    # Similarity-ordered root packs are the physical bases. Each member keeps an O(1) slice descriptor.
     for group in groups:
         raw = b"".join(node_bytes[i] for i in group)
-        codec, payload = _compress_record(raw)
-        record_id = add_record(codec, raw, payload)
+        record_id = add_record(*((lambda cp: (cp[0], raw, cp[1]))(_compress_record(raw))))
         offset = 0
         for node_id in group:
             length = len(node_bytes[node_id])
@@ -311,8 +313,11 @@ def _build_graph(root: Path, out: Path) -> dict:
         raw = raws[file_id]
         if file_id in preflate_files:
             packed = preflate_files[file_id]
+            # Physical identity is the reconstructed file, while the Merkle leaf authenticates the
+            # preflate payload itself before any decoder is invoked.
+            record_id = len(records)
             records.append((CODEC_PREFLATE, len(raw), packed, binascii.crc32(raw) & 0xFFFFFFFF, H(raw)))
-            file_desc[rel] = ["preflate", len(records) - 1, len(raw), H(raw)]
+            file_desc[rel] = ["preflate", record_id, len(raw), H(raw)]
         else:
             file_desc[rel] = ["nodes", file_nodes[file_id], len(raw), H(raw)]
 
@@ -343,9 +348,10 @@ def _build_graph(root: Path, out: Path) -> dict:
     with out.open("wb") as stream:
         stream.write(HDR.pack(MAG, len(meta_comp), len(meta_raw), len(records), MAX_DECODE_UNIT, H(meta_raw), merkle))
         stream.write(meta_comp)
-        for codec, usize, payload, crc, digest in records:
-            stream.write(PH.pack(codec, usize, len(payload), crc, digest))
+        for codec, usize, payload, crc, hh in records:
+            stream.write(PH.pack(codec, usize, len(payload), crc, hh))
             stream.write(payload)
+        # Recovery metadata remains a real byte cost; the tail authenticates the same Merkle root.
         stream.write(meta_comp)
         stream.write(FTR.pack(TAIL, len(meta_comp), len(meta_raw), H(meta_raw), merkle))
     return {
@@ -397,29 +403,73 @@ def build(root: Path, out: Path) -> dict:
 
 def _open_graph(path: Path):
     stream = path.open("rb")
-    header = stream.read(HDR.size)
-    if len(header) != HDR.size:
-        stream.close(); raise RuntimeError("short EntropyGraph-II header")
-    magic, mcs, mus, count, max_decode, meta_sha, merkle = HDR.unpack(header)
-    if magic != MAG:
-        stream.close(); raise RuntimeError("not EntropyGraph-II")
-    if max_decode > MAX_DECODE_UNIT:
-        stream.close(); raise RuntimeError("archive decode ceiling exceeds implementation policy")
-    comp = stream.read(mcs)
-    raw = zd(comp, mus)
-    if H(raw) != meta_sha:
-        stream.close(); raise RuntimeError("metadata authentication")
-    meta = msgpack.unpackb(raw, raw=False, strict_map_key=False)
-    if meta.get("v") != 1 or int(meta.get("max_dependency_depth", 99)) > 1:
-        stream.close(); raise RuntimeError("unsupported graph metadata")
-    leaves = list(meta.get("record_leaf_sha256", []))
-    if len(leaves) != count or _merkle_root(leaves) != merkle:
-        stream.close(); raise RuntimeError("Merkle root mismatch")
-    record_start = HDR.size + mcs
-    offsets = list(meta.get("record_rel_offsets", []))
-    if len(offsets) != count:
-        stream.close(); raise RuntimeError("record table mismatch")
-    return stream, meta, record_start, offsets, merkle
+
+    def decode_meta(comp: bytes, raw_size: int, expected_sha: bytes, expected_merkle: bytes,
+                    expected_count: int | None = None, declared_decode: int | None = None):
+        raw = zd(comp, raw_size)
+        if H(raw) != expected_sha:
+            raise RuntimeError("metadata authentication")
+        meta = msgpack.unpackb(raw, raw=False, strict_map_key=False)
+        if meta.get("v") != 1 or int(meta.get("max_dependency_depth", 99)) > 1:
+            raise RuntimeError("unsupported graph metadata")
+        meta_decode = int(meta.get("max_decode_unit", MAX_DECODE_UNIT + 1))
+        if meta_decode > MAX_DECODE_UNIT or (declared_decode is not None and meta_decode != declared_decode):
+            raise RuntimeError("archive decode ceiling exceeds implementation policy")
+        leaves = list(meta.get("record_leaf_sha256", []))
+        if expected_count is not None and len(leaves) != expected_count:
+            raise RuntimeError("record-count mismatch")
+        if _merkle_root(leaves) != expected_merkle:
+            raise RuntimeError("Merkle root mismatch")
+        offsets = list(meta.get("record_rel_offsets", []))
+        if len(offsets) != len(leaves):
+            raise RuntimeError("record table mismatch")
+        return meta, offsets
+
+    # Footnote: the tail copy is an operational recovery path, not decorative redundancy. Primary
+    # damage is allowed to fail closed into the authenticated footer copy, reproducing the recovery
+    # invariant already learned by the inherited EntropyGraph engine.
+    primary_error: Exception | None = None
+    try:
+        stream.seek(0)
+        header = stream.read(HDR.size)
+        if len(header) != HDR.size:
+            raise RuntimeError("short EntropyGraph-II header")
+        magic, mcs, mus, count, max_decode, meta_sha, merkle = HDR.unpack(header)
+        if magic != MAG:
+            raise RuntimeError("not EntropyGraph-II")
+        if max_decode > MAX_DECODE_UNIT:
+            raise RuntimeError("archive decode ceiling exceeds implementation policy")
+        comp = stream.read(mcs)
+        if len(comp) != mcs:
+            raise RuntimeError("short primary metadata")
+        meta, offsets = decode_meta(comp, mus, meta_sha, merkle, count, max_decode)
+        return stream, meta, HDR.size + mcs, offsets, merkle
+    except Exception as exc:
+        primary_error = exc
+
+    try:
+        stream.seek(-FTR.size, os.SEEK_END)
+        footer_offset = stream.tell()
+        footer = stream.read(FTR.size)
+        if len(footer) != FTR.size:
+            raise RuntimeError("short EntropyGraph-II footer")
+        magic, mcs, mus, meta_sha, merkle = FTR.unpack(footer)
+        if magic != TAIL:
+            raise RuntimeError("tail magic")
+        meta_offset = footer_offset - mcs
+        if meta_offset < HDR.size:
+            raise RuntimeError("tail metadata offset")
+        stream.seek(meta_offset)
+        comp = stream.read(mcs)
+        if len(comp) != mcs:
+            raise RuntimeError("short tail metadata")
+        meta, offsets = decode_meta(comp, mus, meta_sha, merkle)
+        # The physical record table begins at the same fixed header + compressed-metadata boundary;
+        # tail recovery does not need any untrusted offset from the damaged primary header.
+        return stream, meta, HDR.size + mcs, offsets, merkle
+    except Exception as tail_error:
+        stream.close()
+        raise RuntimeError(f"no authenticated metadata copy: primary={primary_error!r}; tail={tail_error!r}") from tail_error
 
 
 def _extract_graph(path: Path, dst: Path) -> None:
@@ -472,7 +522,8 @@ def _extract_graph(path: Path, dst: Path) -> None:
             raw = pack[offset:offset + length]
         elif desc[0] == "delta":
             _, base_id, record_id, length, expected = desc
-            if nodes[base_id][0] != "direct":
+            base_desc = nodes[base_id]
+            if base_desc[0] != "direct":
                 raise RuntimeError("delta dependency depth")
             raw_delta = record(record_id)
             raw = delta_decode(node(base_id), raw_delta, expected_size=length, max_output=MAX_CHUNK)
@@ -516,7 +567,7 @@ def strong_verify(archive: Path) -> dict:
     if magic != MAG:
         BASE.OUT = archive
         return BASE.strong_verify()
-    stream, meta, _, offsets, merkle = _open_graph(archive)
+    stream, meta, record_start, offsets, merkle = _open_graph(archive)
     stream.close()
     with tempfile.TemporaryDirectory(prefix="cmpct-v028-verify-") as td:
         dst = Path(td)
