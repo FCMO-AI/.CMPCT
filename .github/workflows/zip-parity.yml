@@ -116,10 +116,11 @@ jobs:
 
       - name: Capture shared-runner provenance
         run: |
+          CANDIDATE_VERSION="$(sed -n 's/^version = "\([^"]*\)"/\1/p' pyproject.toml | head -1)"
           {
             echo "candidate_commit=$(git rev-parse HEAD)"
             echo "base_commit=${{ steps.base.outputs.sha }}"
-            echo "candidate_version=$(python -c \"import tomllib; print(tomllib.load(open('pyproject.toml','rb'))['project']['version'])\")"
+            echo "candidate_version=$CANDIDATE_VERSION"
             echo "format_revision=$(PYTHONPATH=src python -c 'from cmpct.codec import VERSION; print(VERSION)')"
             echo "python=$(python --version 2>&1)"
             echo "uname=$(uname -a)"
