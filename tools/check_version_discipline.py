@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
-"""Enforce that material CMPCT work is represented by a new project version."""
+"""Enforce that material CMPCT work is versioned *and* leaves durable performance evidence."""
 
 import argparse
+import json
 from pathlib import Path
-import re
 import subprocess
 import sys
 import tomllib
@@ -17,8 +17,8 @@ MATERIAL_PREFIXES = (
 MATERIAL_SINGLETONS = {
     "pyproject.toml", "AGENTS.md", "README.md", "LICENSING.md",
     "docs/FORMAT.md", "docs/HARDENING.md", "docs/NATIVE_CORE.md", "docs/PORTABILITY.md",
+    "docs/PERFORMANCE_RELEASE_GATE.md",
 }
-RELEASE_RE = re.compile(r"^docs/releases/v(\d+\.\d+\.\d+)\.md$")
 
 
 def run(*args: str) -> str:
@@ -35,6 +35,23 @@ def version_from_bytes(raw: bytes) -> tuple[int, int, int]:
 
 def current_version() -> tuple[int, int, int]:
     return version_from_bytes((ROOT / "pyproject.toml").read_bytes())
+
+
+def matching_benchmark_records(changed: list[str], version_text: str) -> list[str]:
+    matches: list[str] = []
+    for rel in changed:
+        if not (rel.startswith("benchmarks/history/") and rel.endswith(".json")):
+            continue
+        path = ROOT / rel
+        if not path.is_file():
+            continue
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            continue
+        if str(data.get("project_version") or "") == version_text:
+            matches.append(rel)
+    return matches
 
 
 def main() -> int:
@@ -55,9 +72,12 @@ def main() -> int:
         return 2
 
     material = [p for p in changed if p in MATERIAL_SINGLETONS or p.startswith(MATERIAL_PREFIXES)]
-    # Footnote: a release note by itself is evidence of a version, not a reason to demand another
-    # version.  Generated history records still count because benchmark/research output is material work.
-    material = [p for p in material if not p.startswith("docs/releases/")]
+    # Footnote: release notes and benchmark records prove/describe a milestone; they do not themselves
+    # recursively demand another version. The underlying code/site/tool change already triggered it.
+    material = [
+        p for p in material
+        if not p.startswith("docs/releases/") and not p.startswith("benchmarks/history/")
+    ]
     if not material:
         print("version discipline: no material CMPCT paths changed")
         return 0
@@ -85,9 +105,19 @@ def main() -> int:
         print(f"{expected_release} must explicitly declare project version {version_text}", file=sys.stderr)
         return 1
 
+    benchmark_records = matching_benchmark_records(changed, version_text)
+    if not benchmark_records:
+        print(
+            f"material CMPCT version {version_text} requires a fresh changed JSON record under "
+            "benchmarks/history/ with project_version set to this version",
+            file=sys.stderr,
+        )
+        print("Run the release performance gate, validate it, then commit the accepted candidate record.", file=sys.stderr)
+        return 1
+
     print(
         f"version discipline: {'.'.join(map(str, old))} -> {version_text}; "
-        f"{len(material)} material path(s) accounted for"
+        f"{len(material)} material path(s); benchmark={benchmark_records[0]}"
     )
     return 0
 
