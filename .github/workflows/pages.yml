@@ -44,29 +44,37 @@ jobs:
           python -m pip install -e .
 
       - name: Build canonical performance site
-        run: python site/build_site.py --out _site
+        run: |
+          python site/build_site.py --out _site
+          python site/enhance_site.py _site
 
       - name: Gate generated performance data
         run: |
           python - <<'PY'
-          import json, tomllib
+          import json, re, tomllib
           from pathlib import Path
 
           data = json.loads(Path('_site/project-data.json').read_text())
           with Path('pyproject.toml').open('rb') as fh:
               version = tomllib.load(fh)['project']['version']
+          surface = Path('SURFACE_REVISION').read_text().strip()
+          assert re.fullmatch(r'\d+\.\d+\.[a-z]+', surface), surface
           assert data['project']['project_version'] == version
+          assert data['project']['surface_revision'] == surface
+          assert f'surface {surface}' in Path('_site/index.html').read_text()
+          assert Path('_site/surface-revision.txt').read_text().strip() == surface
           assert data['frontier'], 'performance site requires a committed research-frontier record'
           assert len(data['frontier']['competitors']) >= 4
           assert data['frontier']['workloads'], 'frontier workload matrix must not be empty'
           assert data['parity_records'], 'canonical ZIP-parity evidence must remain visible'
-          assert data['release_history'][0]['version'] == version, 'latest release note must match project version'
-          print('performance site data: coherent')
+          assert data['release_history'][0]['version'] == version, 'latest core release note must match project version'
+          print(f'performance site data: coherent; surface={surface}')
           PY
 
       - name: Check browser JavaScript
         run: |
           node --check site/src/assets/app.js
+          node --check site/src/assets/motion.js
           node --check site/src/assets/cmpct-browser-writer.js
 
       - name: Gate browser-written archive through canonical reader
@@ -110,5 +118,6 @@ jobs:
         uses: actions/deploy-pages@v4
 
 # Footnote: main publishes automatically only after disclosure, generated benchmark-data coherence,
-# JavaScript syntax, and canonical-reader Browser Lab compatibility gates pass. The homepage's large
-# performance numbers are therefore built from committed evidence rather than hand-maintained copy.
+# presentation-revision coherence, JavaScript syntax, and canonical-reader Browser Lab compatibility
+# gates pass. Motion remains additive; the homepage's performance numbers still come only from
+# committed evidence rather than hand-maintained copy.
