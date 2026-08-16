@@ -86,6 +86,7 @@ jobs:
         working-directory: benchmarks
         env:
           PYTHONPATH: ${{ github.workspace }}/src
+          BASE_SHA: ${{ steps.base.outputs.sha }}
         run: |
           python zip_parity_bench.py > ../benchmark-artifacts/candidate.stdout.txt
           cp _parity_work/out/zip-parity.json ../benchmark-artifacts/candidate.raw.json
@@ -109,9 +110,6 @@ jobs:
           data['comparison_base_commit'] = os.environ.get('BASE_SHA', '')
           (root / 'benchmark-artifacts/candidate.json').write_text(json.dumps(data, indent=2) + '\n')
           PY
-        env:
-          PYTHONPATH: ${{ github.workspace }}/src
-          BASE_SHA: ${{ steps.base.outputs.sha }}
 
       - name: Reject performance regressions
         run: |
