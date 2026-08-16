@@ -1,3 +1,4 @@
+#[allow(dead_code)]
 #[path = "../src/vzip.rs"]
 mod vzip;
 #[path = "../src/vzip_dispatch.rs"]
