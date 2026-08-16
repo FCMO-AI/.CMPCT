@@ -1,0 +1,272 @@
+name: Agent extraction hardening
+
+on:
+  push:
+    branches: [frontier/full-completion-20260815]
+    paths:
+      - '.github/workflows/agent-extraction-hardening.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  harden:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: frontier/full-completion-20260815
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - name: Patch extraction safety and regressions
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          lib_path = Path('native/cmpct-core/src/lib.rs')
+          text = lib_path.read_text()
+          const_old = 'const STREAM_CHUNK_BYTES: usize = 8 * 1024 * 1024;\nconst MAX_SYMLINK_TARGET_BYTES: u64 = 1024 * 1024;'
+          const_new = 'const STREAM_CHUNK_BYTES: usize = 8 * 1024 * 1024;\nconst MAX_EXTRACT_OUTPUT_BYTES: u64 = 64 * 1024 * 1024 * 1024;\nconst MAX_SYMLINK_TARGET_BYTES: u64 = 1024 * 1024;'
+          if const_old not in text:
+              raise SystemExit('expected extraction constants anchor missing')
+          text = text.replace(const_old, const_new, 1)
+
+          start = text.index('    /// Safely extract the complete logical tree into an absent or empty destination directory.\n    pub fn extract_all(')
+          end = text.index('\n}\n\nfn le_u32', start)
+          replacement = r'''    fn extraction_materialized_bytes(&self) -> Result<u64, CmpctError> {
+        self.entries.iter().try_fold(0u64, |total, entry| {
+            // Footnote: hardlinks share an existing inode and directories carry no payload. Symlink
+            // target bytes are tiny but still count because extraction materializes them from archive data.
+            let bytes = match entry.kind {
+                KIND_FILE | KIND_SYMLINK => entry.size,
+                KIND_DIR | KIND_HARDLINK => 0,
+                _ => return Err(CmpctError::Unsupported),
+            };
+            total.checked_add(bytes).ok_or(CmpctError::MemberLimit)
+        })
+    }
+
+    /// Safely extract the complete logical tree with an explicit archive-wide materialization budget.
+    pub fn extract_all_bounded(
+        &self,
+        destination: &Path,
+        max_materialized_bytes: u64,
+    ) -> Result<(), CmpctError> {
+        self.preflight()?;
+        let materialized = self.extraction_materialized_bytes()?;
+        if materialized > max_materialized_bytes {
+            return Err(CmpctError::MemberLimit);
+        }
+        if destination.exists() {
+            if !destination.is_dir() {
+                return Err(CmpctError::Extraction(
+                    "destination exists and is not a directory".into(),
+                ));
+            }
+            if fs::read_dir(destination)?.next().is_some() {
+                return Err(CmpctError::Extraction(
+                    "destination must be empty to preserve no-follow extraction safety".into(),
+                ));
+            }
+        } else {
+            fs::create_dir_all(destination)?;
+        }
+
+        // Create directory topology first, but deliberately do not restore archive permissions yet.
+        // A valid archive may contain 0500/0000 parents; applying those modes before descendants are
+        // materialized would make extraction fail halfway through on ordinary Unix filesystems.
+        for entry in &self.entries {
+            if entry.kind == KIND_DIR {
+                fs::create_dir_all(destination.join(&entry.path))?;
+            }
+        }
+
+        for (index, entry) in self.entries.iter().enumerate() {
+            let output = destination.join(&entry.path);
+            match entry.kind {
+                KIND_FILE => {
+                    if let Some(parent) = output.parent() {
+                        fs::create_dir_all(parent)?;
+                    }
+                    let mut target = File::create(&output)?;
+                    self.copy_entry_to(index, &mut target)?;
+                    target.sync_all()?;
+                    apply_mode(&output, entry.mode)?;
+                }
+                KIND_SYMLINK => {
+                    if entry.size > MAX_SYMLINK_TARGET_BYTES {
+                        return Err(CmpctError::MemberLimit);
+                    }
+                    let len = usize::try_from(entry.size).map_err(|_| CmpctError::MemberLimit)?;
+                    let mut bytes = vec![0u8; len];
+                    self.read_range(index, 0, &mut bytes)?;
+                    if let Some(expected) = self.expected_entry_hash(index)? {
+                        if Sha256::digest(&bytes).as_slice() != expected {
+                            return Err(CmpctError::MemberHash);
+                        }
+                    }
+                    let target = String::from_utf8(bytes).map_err(|_| {
+                        CmpctError::Extraction(format!(
+                            "symlink target for {} is not UTF-8",
+                            entry.path
+                        ))
+                    })?;
+                    validate_symlink_target(&entry.path, &target)?;
+                    if let Some(parent) = output.parent() {
+                        fs::create_dir_all(parent)?;
+                    }
+                    create_symlink(&target, &output)?;
+                }
+                KIND_DIR | KIND_HARDLINK => {}
+                _ => return Err(CmpctError::Unsupported),
+            }
+        }
+
+        // Hardlinks are created after ordinary files/symlinks so lexical ordering never makes a link
+        // depend on a target that has not been materialized yet. Chains resolve to the final file.
+        for (index, entry) in self.entries.iter().enumerate() {
+            if entry.kind != KIND_HARDLINK {
+                continue;
+            }
+            let resolved = self.resolve_entry_index(index)?;
+            let target_entry = self.entries.get(resolved).ok_or(CmpctError::Range)?;
+            if target_entry.kind != KIND_FILE {
+                return Err(CmpctError::Extraction(
+                    "hardlink does not resolve to a regular file".into(),
+                ));
+            }
+            let source = destination.join(&target_entry.path);
+            let output = destination.join(&entry.path);
+            if let Some(parent) = output.parent() {
+                fs::create_dir_all(parent)?;
+            }
+            fs::hard_link(source, output)?;
+        }
+
+        // Restore restrictive directory modes only after every descendant exists, deepest-first.
+        // This mirrors archive semantics without letting a parent mode block its own extraction.
+        let mut directories: Vec<&Entry> = self
+            .entries
+            .iter()
+            .filter(|entry| entry.kind == KIND_DIR)
+            .collect();
+        directories.sort_by_key(|entry| std::cmp::Reverse(entry.path.matches('/').count()));
+        for entry in directories {
+            apply_mode(&destination.join(&entry.path), entry.mode)?;
+        }
+        Ok(())
+    }
+
+    /// Extract with the native handler's conservative default budget. Callers that intentionally
+    /// materialize larger archives can opt into a larger explicit limit through the bounded ABI.
+    pub fn extract_all(&self, destination: &Path) -> Result<(), CmpctError> {
+        self.extract_all_bounded(destination, MAX_EXTRACT_OUTPUT_BYTES)
+    }'''
+          text = text[:start] + replacement + text[end:]
+
+          abi_anchor = '''pub unsafe extern "C" fn cmpct_extract_all(\n    archive: *const Archive,\n    destination: *const c_char,\n) -> c_int {'''
+          if abi_anchor not in text:
+              raise SystemExit('extract ABI anchor missing')
+          bounded_abi = r'''/// Extract with an explicit archive-wide payload-materialization ceiling.
+#[no_mangle]
+pub unsafe extern "C" fn cmpct_extract_all_bounded(
+    archive: *const Archive,
+    destination: *const c_char,
+    max_materialized_bytes: u64,
+) -> c_int {
+    let Some(archive) = archive.as_ref() else {
+        return CmpctStatus::Null as c_int;
+    };
+    if destination.is_null() {
+        return CmpctStatus::Null as c_int;
+    }
+    let destination = match CStr::from_ptr(destination).to_str() {
+        Ok(destination) => destination,
+        Err(_) => return CmpctStatus::Utf8 as c_int,
+    };
+    match archive.extract_all_bounded(Path::new(destination), max_materialized_bytes) {
+        Ok(()) => CmpctStatus::Ok as c_int,
+        Err(error) => error_status(&error) as c_int,
+    }
+}
+
+'''
+          text = text.replace(abi_anchor, bounded_abi + abi_anchor, 1)
+          lib_path.write_text(text)
+
+          header = Path('native/cmpct-core/include/cmpct.h')
+          h = header.read_text()
+          h_anchor = 'int32_t cmpct_extract_all(const CmpctArchive *archive, const char *destination);'
+          if h_anchor not in h:
+              raise SystemExit('header extraction anchor missing')
+          h = h.replace(
+              h_anchor,
+              'int32_t cmpct_extract_all_bounded(\n'
+              '    const CmpctArchive *archive,\n'
+              '    const char *destination,\n'
+              '    uint64_t max_materialized_bytes\n'
+              ');\n'
+              + h_anchor,
+              1,
+          )
+          header.write_text(h)
+
+          test = Path('tests/native_stream_extract_abi.py')
+          t = test.read_text()
+          t_anchor = '    lib.cmpct_extract_all.argtypes = [ctypes.c_void_p, ctypes.c_char_p]\n    lib.cmpct_extract_all.restype = ctypes.c_int32'
+          if t_anchor not in t:
+              raise SystemExit('test ABI anchor missing')
+          t = t.replace(
+              t_anchor,
+              '    lib.cmpct_extract_all_bounded.argtypes = [ctypes.c_void_p, ctypes.c_char_p, ctypes.c_uint64]\n'
+              '    lib.cmpct_extract_all_bounded.restype = ctypes.c_int32\n'
+              + t_anchor,
+              1,
+          )
+          tree_anchor = '        (root / "dir" / "small.txt").write_text("small native stream\\n")'
+          if tree_anchor not in t:
+              raise SystemExit('test tree anchor missing')
+          t = t.replace(
+              tree_anchor,
+              tree_anchor + '\n        os.chmod(root / "dir", 0o500)',
+              1,
+          )
+          extract_anchor = '            destination = Path(td) / "extracted"\n            assert lib.cmpct_extract_all(handle, str(destination).encode()) == 0'
+          if extract_anchor not in t:
+              raise SystemExit('test extraction anchor missing')
+          t = t.replace(
+              extract_anchor,
+              '            limited = Path(td) / "limited"\n'
+              '            assert lib.cmpct_extract_all_bounded(handle, str(limited).encode(), 1024) == -4\n'
+              '            assert not limited.exists()\n\n'
+              + extract_anchor,
+              1,
+          )
+          mode_anchor = '            assert (destination / "dir" / "small.txt").read_bytes() == (root / "dir" / "small.txt").read_bytes()'
+          if mode_anchor not in t:
+              raise SystemExit('mode assertion anchor missing')
+          t = t.replace(
+              mode_anchor,
+              mode_anchor + '\n            assert (os.stat(destination / "dir").st_mode & 0o7777) == 0o500',
+              1,
+          )
+          test.write_text(t)
+          PY
+          cargo fmt --manifest-path native/cmpct-core/Cargo.toml
+      - name: Validate focused extraction frontier
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[audio,test]'
+          cargo clippy --manifest-path native/cmpct-core/Cargo.toml --all-targets -- -D warnings
+          cargo test --manifest-path native/cmpct-core/Cargo.toml
+          cargo build --manifest-path native/cmpct-core/Cargo.toml --release
+          python tests/native_stream_extract_abi.py
+      - name: Commit validated hardening and remove helper
+        run: |
+          rm .github/workflows/agent-extraction-hardening.yml
+          git config user.name 'CMPCT automation'
+          git config user.email 'actions@users.noreply.github.com'
+          git add native/cmpct-core/src/lib.rs native/cmpct-core/include/cmpct.h tests/native_stream_extract_abi.py .github/workflows/agent-extraction-hardening.yml
+          git commit -m 'Harden native extraction resource and mode handling'
+          git push origin HEAD:frontier/full-completion-20260815
