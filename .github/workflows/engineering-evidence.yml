@@ -19,10 +19,22 @@ jobs:
 
       - name: Validate material-PR evidence dossier
         run: |
+          mkdir -p evidence-artifacts
+          set -o pipefail
           python tools/check_pr_evidence.py \
             --base-sha "${{ github.event.pull_request.base.sha }}" \
-            --event "$GITHUB_EVENT_PATH"
+            --event "$GITHUB_EVENT_PATH" \
+            2>&1 | tee evidence-artifacts/engineering-evidence.txt
+
+      - name: Retain evidence diagnostic
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: engineering-evidence-${{ github.sha }}
+          path: evidence-artifacts/engineering-evidence.txt
+          if-no-files-found: warn
 
 # Footnote: this gate validates that material work exposes a falsifiable evidence surface. It does not
 # assign a numeric “genius” score; benchmark, conformance, safety and expert review remain the actual
-# arbiters of technical quality.
+# arbiters of technical quality. The retained diagnostic makes a failed structural gate independently
+# inspectable without weakening the failure exit code.
