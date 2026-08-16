@@ -1,0 +1,30 @@
+name: CMPCT version discipline
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  version-discipline:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check out full history
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+      - name: Enforce material version bump
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: python tools/check_version_discipline.py --base-sha "$BASE_SHA"
+
+# Footnote: project versions track material development milestones.  The separate on-disk format
+# revision changes only when readers need new grammar/storage semantics.
