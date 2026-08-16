@@ -98,6 +98,34 @@ def _optional_tool(name: str, root: Path, output: Path, command: list[str], sema
             "semantics": semantics}
 
 
+def _borg(root: Path, repo: Path) -> dict:
+    exe = shutil.which("borg")
+    semantics = (
+        "Borg single-snapshot repository with encryption disabled and zstd compression; repository bytes include "
+        "Borg indexes/metadata and therefore are structural backup evidence, not standalone-archive parity"
+    )
+    if not exe:
+        return {"available": False, "reason": "borg executable unavailable", "semantics": semantics}
+    started = time.perf_counter()
+    env = dict(os.environ)
+    env["BORG_UNKNOWN_UNENCRYPTED_REPO_ACCESS_IS_OK"] = "yes"
+    try:
+        init = subprocess.run([exe, "init", "--encryption=none", str(repo)], cwd=root, env=env,
+                              stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=120)
+        if init.returncode != 0:
+            return {"available": False, "reason": init.stderr.decode(errors="replace")[-500:], "semantics": semantics}
+        create = subprocess.run([exe, "create", "--compression", "zstd,19", f"{repo}::bench", "."], cwd=root, env=env,
+                                stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=600)
+    except subprocess.TimeoutExpired:
+        return {"available": False, "reason": "timeout after 600s", "semantics": semantics}
+    if create.returncode != 0:
+        return {"available": False, "reason": create.stderr.decode(errors="replace")[-500:], "semantics": semantics}
+    # Footnote: measure actual repository file bytes rather than parsing a human-formatted Borg statistic.
+    # This keeps the harness version-tolerant and makes the extra repository metadata cost visible.
+    stored = sum(p.stat().st_size for p in repo.rglob("*") if p.is_file())
+    return {"available": True, "bytes": stored, "create_s": time.perf_counter() - started, "semantics": semantics}
+
+
 def _competitors(root: Path, temp: Path) -> dict:
     result = {
         "zip_deflate9": _zip_deflate(root, temp / "out.zip"),
@@ -120,6 +148,7 @@ def _competitors(root: Path, temp: Path) -> dict:
         "DwarFS read-only filesystem image; structural competitor, not ordinary mutable archive parity",
         600,
     )
+    result["borg"] = _borg(root, temp / "borg-repo")
     return result
 
 
