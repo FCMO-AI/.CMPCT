@@ -59,7 +59,7 @@ fn mode0_streaming_auth_handles_logical_objects_larger_than_the_auth_buffer() {
 }
 
 #[test]
-fn mode0_corruption_and_wrong_identity_fail_closed() {
+fn mode0_corruption_wrong_identity_and_trailing_bytes_fail_closed() {
     let mut compressed = hex_bytes("cb48cdc9c9d74dce2d482ee10200");
     let logical = b"hello-cmpct\n";
     let expected_hash: [u8; 32] = Sha256::digest(logical).into();
@@ -94,6 +94,24 @@ fn mode0_corruption_and_wrong_identity_fail_closed() {
             MAX_OBJECT,
         ),
         Err(PhysicalDeflateError::LogicalHash)
+    );
+
+    // A valid Deflate stream followed by archive-controlled bytes must not authenticate those extra
+    // bytes merely because the logical member itself still hashes correctly. Mode 0 exposes physical
+    // RFC-1951 bytes into a byte-exact nested ZIP, so every exposed compressed byte must belong to the
+    // authenticated Deflate stream.
+    let mut trailing = compressed.clone();
+    trailing.extend_from_slice(b"JUNK");
+    assert_eq!(
+        authenticated_range(
+            &trailing,
+            logical.len() as u64,
+            &expected_hash,
+            0,
+            &mut out,
+            MAX_OBJECT,
+        ),
+        Err(PhysicalDeflateError::Decode)
     );
 }
 
