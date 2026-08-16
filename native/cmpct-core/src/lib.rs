@@ -1203,7 +1203,7 @@ fn parse_entries(index: &Value, blobs: &[Blob]) -> Result<Vec<Entry>, CmpctError
         let storage = parse_storage(index, &row[6], size, blobs, i)?;
         if matches!(
             storage,
-            Storage::Fixed(_) | Storage::VirtualZip(_) | Storage::Sparse(_) | Storage::Cdc(_)
+            Storage::Fixed(_) | Storage::Sparse(_) | Storage::Cdc(_)
         ) && logical_hash.is_none()
         {
             return Err(CmpctError::Schema(format!(
@@ -1211,10 +1211,15 @@ fn parse_entries(index: &Value, blobs: &[Blob]) -> Result<Vec<Entry>, CmpctError
             )));
         }
         if let Storage::VirtualZip(recipe) = &storage {
-            if logical_hash != Some(recipe.logical_sha256) {
-                return Err(CmpctError::Schema(format!(
-                    "file row {i} virtual-ZIP recipe SHA-256 disagrees with file identity"
-                )));
+            // Footnote: revision 24 authenticates the reconstructed nested ZIP in the recipe itself.
+            // A duplicate file-row SHA is optional for this representation; when present it is an
+            // additional consistency check and must agree with the authoritative recipe identity.
+            if let Some(file_hash) = logical_hash {
+                if file_hash != recipe.logical_sha256 {
+                    return Err(CmpctError::Schema(format!(
+                        "file row {i} virtual-ZIP recipe SHA-256 disagrees with file identity"
+                    )));
+                }
             }
         }
         entries.push(Entry {
