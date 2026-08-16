@@ -1,0 +1,12 @@
+[package]
+name = "cmpct-preflate-bridge"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.89"
+license = "Apache-2.0"
+publish = false
+
+# Footnote: pin the exact audited upstream commit. A moving git branch would make CMPCT research
+# artifacts depend on whatever reconstruction grammar happened to be current on build day.
+[dependencies]
+preflate-container = { git = "https://github.com/microsoft/preflate-rs", rev = "3bcd33441849a8a25d2b26077128f4e3a88d071b", package = "preflate-container", default-features = false }
