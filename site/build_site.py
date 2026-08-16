@@ -61,17 +61,226 @@ def _version_key(value: str | None) -> tuple[int, int, int]:
         return (0, 0, 0)
 
 
+def _lead_pct(candidate: Any, competitor: Any) -> float | None:
+    try:
+        c = float(candidate)
+        other = float(competitor)
+    except (TypeError, ValueError):
+        return None
+    if other <= 0:
+        return None
+    return 100.0 * (other - c) / other
+
+
+def _sum_numeric(rows: list[dict[str, Any]], key: str) -> int:
+    total = 0
+    for row in rows:
+        value = row.get(key)
+        if isinstance(value, (int, float)):
+            total += int(value)
+    return total
+
+
+def _structural_summary(record: dict[str, Any] | None) -> dict[str, Any]:
+    """Normalize the expensive aggregate structural-competitor sweep.
+
+    Footnote: a competitor is surfaced only when it was available for every recorded aggregate suite.
+    Summing a tool over one suite while silently omitting another would manufacture a flattering total.
+    """
+    if not record:
+        return {"candidate_bytes": None, "competitors": [], "semantics": []}
+    rows = [row for row in record.get("rows", []) if isinstance(row, dict)]
+    if not rows:
+        return {"candidate_bytes": None, "competitors": [], "semantics": []}
+    candidate = sum(int(row.get("cmpct_bytes") or 0) for row in rows)
+    mapping = {
+        "zip_deflate9": ("ZIP + Deflate-9", "ZIP / Deflate", "competitor"),
+        "tar_zstd19_solid": ("solid tar + Zstandard-19", "tar / Zstd solid", "diagnostic"),
+        "seven_zip_lzma2": ("7z + LZMA2", "7z / LZMA2", "competitor"),
+        "zpaq_m5": ("ZPAQ method 5", "ZPAQ / m5", "competitor"),
+        "dwarfs": ("DwarFS image", "DwarFS", "structural"),
+        "borg": ("Borg repository + Zstandard", "Borg / Zstd", "structural"),
+    }
+    competitors: list[dict[str, Any]] = []
+    semantics: list[str] = []
+    for key, (name, short, role) in mapping.items():
+        observations = []
+        available = True
+        for row in rows:
+            item = (row.get("competitors") or {}).get(key) or {}
+            if not item.get("available") or not isinstance(item.get("bytes"), (int, float)):
+                available = False
+                break
+            observations.append(item)
+        if not available or not observations:
+            continue
+        stored = sum(int(item["bytes"]) for item in observations)
+        competitors.append(
+            {
+                "name": name,
+                "short": short,
+                "bytes": stored,
+                "lead_pct": _lead_pct(candidate, stored),
+                "role": role,
+            }
+        )
+        notes = sorted({str(item.get("semantics") or "").strip() for item in observations if item.get("semantics")})
+        if notes:
+            semantics.append(f"{short}: {' | '.join(notes)}")
+    return {"candidate_bytes": candidate, "competitors": competitors, "semantics": semantics}
+
+
+def _v028_frontier(
+    path: Path, data: dict[str, Any], structural: dict[str, Any] | None
+) -> dict[str, Any] | None:
+    rows = [row for row in data.get("rows", []) if isinstance(row, dict)]
+    totals = data.get("totals") or {}
+    if not rows or not isinstance(totals, dict):
+        return None
+    candidate_bytes = totals.get("candidate_bytes")
+    inherited_bytes = totals.get("inherited_v025_bytes")
+    logical_bytes = _sum_numeric(rows, "logical_bytes")
+    file_count = _sum_numeric(rows, "files")
+    saved_pct = _lead_pct(candidate_bytes, logical_bytes)
+    primary_lead = totals.get("smaller_than_v025_pct")
+    project_version = data.get("project_version")
+    structural_summary = _structural_summary(structural)
+
+    competitors: list[dict[str, Any]] = [
+        {
+            "name": "CMPCT EntropyGraph II — strict",
+            "short": "CMPCT v0.28",
+            "bytes": candidate_bytes,
+            "lead_pct": 0.0,
+            "role": "candidate",
+        },
+        {
+            "name": "Inherited EntropyGraph v0.25 engine",
+            "short": "CMPCT v0.25",
+            "bytes": inherited_bytes,
+            "lead_pct": primary_lead,
+            "role": "baseline",
+        },
+    ]
+    # The structural sweep rebuilds the same two public suite trees as aggregate archives. Require byte
+    # agreement before using its third-party ladder; otherwise preserve the causal record and expose the
+    # mismatch as negative evidence rather than joining incomparable totals.
+    structural_mismatch = False
+    if structural_summary.get("candidate_bytes") is not None:
+        structural_mismatch = int(structural_summary["candidate_bytes"]) != int(candidate_bytes or -1)
+        if not structural_mismatch:
+            competitors.extend(structural_summary.get("competitors") or [])
+
+    normalized_rows: list[dict[str, Any]] = []
+    for row in rows:
+        candidate = row.get("candidate_bytes")
+        inherited = row.get("inherited_v025_bytes")
+        delta = _lead_pct(candidate, inherited)
+        improved = isinstance(delta, (int, float)) and delta > 0
+        normalized = dict(row)
+        normalized["comparison_pct"] = delta
+        normalized["comparison_label"] = (
+            "smaller than inherited v0.25" if improved else "exact inherited fallback parity"
+        )
+        normalized_rows.append(normalized)
+
+    known_losses = []
+    for row in normalized_rows:
+        if row.get("selected") != "resemblance":
+            known_losses.append(
+                f"{str(row.get('name') or 'workload').replace('_', ' ')}: the strict CMPNX8 graph did not beat inherited v0.25, so the exact fallback was retained."
+            )
+    for competitor in competitors:
+        lead = competitor.get("lead_pct")
+        if competitor.get("role") != "candidate" and isinstance(lead, (int, float)) and lead < 0:
+            known_losses.append(
+                f"Aggregate structural sweep: {competitor['short']} stored {abs(lead):.2f}% fewer bytes than CMPCT under its recorded semantics."
+            )
+    if structural_mismatch:
+        known_losses.append(
+            "Structural competitor record did not reproduce the causal candidate byte total; its ladder is withheld rather than mixed into the headline."
+        )
+    known_losses.append(
+        "The research portfolio deliberately pays extra creation CPU by building inherited and new candidates; canonical r24 create speed is reported separately by the release-parity gate."
+    )
+
+    best_rows = sorted(
+        (row for row in normalized_rows if isinstance(row.get("comparison_pct"), (int, float))),
+        key=lambda row: float(row.get("comparison_pct") or 0),
+        reverse=True,
+    )
+    hero_metrics = [
+        ["VS ENTROPYGRAPH v0.25", primary_lead, "expanded neutral + hostile suite", "pct"],
+        ["SIZE REGRESSIONS", int(totals.get("workloads_regressed") or 0), f"of {len(rows)} workloads", "count"],
+        ["DEPTH-1 DELTA NODES", int(totals.get("delta_nodes") or 0), "accepted resemblance edges", "count"],
+        ["PREFLATE WINS", int(totals.get("preflate_wins") or 0), "exact container transforms", "count"],
+    ]
+    if best_rows:
+        hero_metrics[1] = [
+            str(best_rows[0].get("name") or "best workload").replace("_", " ").upper(),
+            best_rows[0].get("comparison_pct"),
+            "largest measured v0.25 reduction",
+            "pct",
+        ]
+
+    return {
+        "file": path.name,
+        "date": data.get("date") or _date_from_name(path),
+        "kind": "research-frontier",
+        "project_version": project_version,
+        "canonical_format_revision": data.get("canonical_format_revision"),
+        "candidate": data.get("candidate") or {},
+        "contract": data.get("contract") or {},
+        "logical_bytes": logical_bytes,
+        "files": file_count,
+        "workload_count": len(rows),
+        "archive_bytes": candidate_bytes,
+        "ratio": (float(candidate_bytes) / logical_bytes) if logical_bytes and candidate_bytes is not None else None,
+        "saved_pct": saved_pct,
+        "primary_lead_pct": primary_lead,
+        "primary_comparison": "inherited EntropyGraph v0.25",
+        "wins_primary": int(totals.get("workloads_improved") or 0),
+        "regressions": int(totals.get("workloads_regressed") or 0),
+        "hero_metrics": hero_metrics,
+        "competitors": competitors,
+        "workloads": normalized_rows,
+        "workload_comparison_label": "vs inherited v0.25",
+        "known_losses": known_losses,
+        "selective_reads": [],
+        "design_changes": [
+            "bounded FastCDC resemblance nodes + LSH candidate discovery",
+            "measured depth-1 rolling COPY/LITERAL deltas",
+            "strict <=8x weighted read-amplification pack policy with independent 1x floor",
+            "Merkle-authenticated physical records + operational tail recovery",
+            "bounded exact Preflate whole-container transform",
+            "strict HTTP range-reader research path",
+        ],
+        "structural_semantics": structural_summary.get("semantics") or [],
+    }
+
+
 def _load_public_benchmarks() -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     parity: list[dict[str, Any]] = []
     frontier: list[dict[str, Any]] = []
     if not HISTORY.exists():
         return parity, frontier
 
+    raw_records: list[tuple[Path, dict[str, Any]]] = []
+    structural_by_version: dict[str, dict[str, Any]] = {}
     for path in sorted(HISTORY.glob("*.json")):
         try:
             data = json.loads(path.read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError):
             continue
+        if not isinstance(data, dict):
+            continue
+        raw_records.append((path, data))
+        if data.get("schema") == "cmpct-entropygraph-v028-structural-competitors-v1":
+            version = str(data.get("project_version") or "")
+            if version:
+                structural_by_version[version] = data
+
+    for path, data in raw_records:
         schema = data.get("schema")
         if schema == "cmpct-zip-parity-v1" and isinstance(data.get("corpora"), dict):
             data = dict(data)
@@ -137,6 +346,11 @@ def _load_public_benchmarks() -> tuple[list[dict[str, Any]], list[dict[str, Any]
                     "design_changes": data.get("design_changes") or [],
                 }
             )
+        elif schema == "cmpct-entropygraph-v028-benchmark-v1":
+            version = str(data.get("project_version") or "")
+            normalized = _v028_frontier(path, data, structural_by_version.get(version))
+            if normalized:
+                frontier.append(normalized)
 
     parity.sort(
         key=lambda r: (
