@@ -45,9 +45,16 @@ jobs:
 
           recovery = Path("native/cmpct-core/src/recovery.rs")
           r = recovery.read_text()
-          r = r.replace("    pub footer_pos: u64,\n    pub delta_depth: usize,\n", "", 1)
-          r = r.replace("                footer_pos,\n                delta_depth: depth,\n", "", 1)
-          r = r.replace("    for depth in 0..=max_generations {", "    for _depth in 0..=max_generations {", 1)
+          guard_import = "use crate::msgpack_guard;\n\n"
+          guard_module = '#[path = "msgpack_guard.rs"]\nmod msgpack_guard;\n\n'
+          if guard_import not in r:
+              raise SystemExit("recovery guard import anchor missing")
+          r = r.replace(guard_import, guard_module, 1)
+          r = r.replace(
+              "    pub footer_pos: u64,\n    pub delta_depth: usize,\n",
+              "    // Exposed for recovery conformance diagnostics; production open currently consumes only the index.\n    #[allow(dead_code)]\n    pub footer_pos: u64,\n    #[allow(dead_code)]\n    pub delta_depth: usize,\n",
+              1,
+          )
           recovery.write_text(r)
 
           regen = Path("native/cmpct-core/src/deflate_regen.rs")
@@ -95,6 +102,11 @@ jobs:
           if nested not in x:
               raise SystemExit("vzip collapsible-if anchor missing")
           dispatch.write_text(x.replace(nested, collapsed, 1))
+
+          cli = Path("native/cmpct-core/src/bin/cmpct.rs")
+          c = cli.read_text()
+          c = c.replace("use std::fs::File;\n", "", 1)
+          cli.write_text(c)
 
           lib = Path("native/cmpct-core/src/lib.rs")
           s = lib.read_text()
