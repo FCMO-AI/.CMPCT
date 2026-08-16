@@ -68,7 +68,7 @@ pub fn authenticated_range(
             break;
         }
         decoded_len = decoded_len
-            .checked_add(u64::try_from(read).map_err(|_| PhysicalDeflateError::ResourceLimit)?)
+            .checked_add(read as u64)
             .ok_or(PhysicalDeflateError::ResourceLimit)?;
         if decoded_len > logical_size {
             return Err(PhysicalDeflateError::LogicalLength);
