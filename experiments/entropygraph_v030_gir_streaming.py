@@ -125,7 +125,7 @@ def _consume_file(
             target.parent.mkdir(parents=True, exist_ok=True)
             output = target.open("wb")
         for node_id in node_ids:
-            # Footnote: no node cache is intentional.  A repeated logical reference is read exactly when its
+            # Footnote: no node cache is intentional. A repeated logical reference is read exactly when its
             # logical bytes are consumed, keeping working memory O(MAX_CHUNK) rather than O(unique archive).
             raw = session.node(node_id)
             written += len(raw)
@@ -182,6 +182,19 @@ def strong_verify(archive: Path) -> dict:
         return {"ok": False, "error": repr(exc), "engine": "Geometry-IR-v1", "reader": "Geometry-IR-streaming-v1"}
 
 
+def _remove_backup_best_effort(backup: Path) -> None:
+    """Remove an obsolete pre-publication backup without turning successful publication into false failure."""
+    try:
+        if backup.is_dir() and not backup.is_symlink():
+            shutil.rmtree(backup)
+        else:
+            backup.unlink(missing_ok=True)
+    except OSError:
+        # Footnote: once the fully verified replacement is published, cleanup failure is not archive failure.
+        # Leaving a uniquely named backup is safer than reporting extraction failure after state already moved.
+        pass
+
+
 def extract(archive: Path, dst: Path) -> None:
     if not _is_gir(archive):
         gir.BASE.extract(archive, dst)
@@ -195,25 +208,23 @@ def extract(archive: Path, dst: Path) -> None:
     try:
         _stream_archive(archive, staging)
 
-        # Footnote: extraction first verifies the complete staged tree.  Only then does it move the previous
-        # destination aside and publish the new directory.  If publication itself fails, the old destination
+        # Footnote: extraction first verifies the complete staged tree. Only then does it move the previous
+        # destination aside and publish the new directory. If publication itself fails, the old destination
         # is restored rather than being destroyed before archive verification has completed.
         if dst.exists() or dst.is_symlink():
             os.replace(dst, backup)
             moved_old = True
         os.replace(staging, dst)
         installed_new = True
-        if moved_old:
-            if backup.is_dir() and not backup.is_symlink():
-                shutil.rmtree(backup)
-            else:
-                backup.unlink(missing_ok=True)
     except Exception:
         if not installed_new:
             shutil.rmtree(staging, ignore_errors=True)
         if moved_old and not (dst.exists() or dst.is_symlink()) and (backup.exists() or backup.is_symlink()):
             os.replace(backup, dst)
         raise
+    else:
+        if moved_old:
+            _remove_backup_best_effort(backup)
 
 
 def build(root: Path, out: Path) -> dict:
