@@ -1,0 +1,88 @@
+{
+  "schema": "cmpct-v029-pack-budget-attempt6-reject-v1",
+  "date": "2026-08-17",
+  "claim_boundary": "attempt-6 Locality Budget Compiler inherited-frontier result; preregistered research gate REJECT; no v0.29.0 claim",
+  "source_commit": "1db5ad1c106b3c6634efd3f188cd90d737283673",
+  "workflow_run": 32001987135,
+  "artifact": {
+    "id": 9279539626,
+    "digest": "sha256:7e7ce355fe94e5ba434eb565bbba041d71094a0f91c89e6c7d8fc33828746b05"
+  },
+  "preregistered_gate": {
+    "additional_saving_vs_attempt5_gte_pct_of_v028": 0.05,
+    "workloads_improved_vs_attempt5_gte": 2,
+    "workload_regressions_vs_attempt5_eq": 0,
+    "weighted_pack_read_amplification_lte": 8.0,
+    "per_member_pack_read_amplification_lte": 8.0,
+    "baseline_identity_drift_rows_eq": 0
+  },
+  "totals": {
+    "workloads": 15,
+    "v028_bytes": 137556533,
+    "attempt5_bytes": 137507932,
+    "candidate_bytes": 137439837,
+    "attempt5_saving_vs_v028_bytes": 48601,
+    "candidate_saving_vs_v028_bytes": 116696,
+    "additional_saving_vs_attempt5_bytes": 68095,
+    "additional_saving_vs_attempt5_pct_of_v028": 0.04950328313377889,
+    "candidate_smaller_than_v028_pct": 0.08483493837402836,
+    "workloads_improved_vs_attempt5": 3,
+    "workloads_regressed_vs_attempt5": 0,
+    "pack_budget_selected_rows": 3,
+    "baseline_tree_drift_rows": 0,
+    "v028_byte_drift_rows": 0,
+    "attempt5_byte_drift_rows": 0,
+    "max_pack_budget_weighted_read_amp": 4.924616546044881,
+    "max_pack_budget_worst_member_amp": 7.920141464448448,
+    "max_selected_additional_recipe_read_amplification": 0.06773645177560665,
+    "max_pack_budget_exact_cost_probes": 586,
+    "oracle_portfolio_create_s": 2145.634200998,
+    "embedded_v028_portfolio_create_s": 367.68846348299974,
+    "median_oracle_create_ratio_vs_v028": 4.1521263366461545,
+    "research_gate_pass": false
+  },
+  "winning_rows": [
+    {
+      "suite": "neutral_hostile_v1",
+      "name": "09_ml_artifacts",
+      "v028_bytes": 13836439,
+      "attempt5_bytes": 13836439,
+      "candidate_bytes": 13769390,
+      "saving_vs_attempt5_bytes": 67049,
+      "pack_budget_root_saving_vs_global": 68945,
+      "weighted_read_amp": 3.173624566067899,
+      "worst_member_amp": 7.790890767000247,
+      "exact_cost_probes": 346
+    },
+    {
+      "suite": "resemblance_hostile_v1",
+      "name": "01_shifted_versions",
+      "v028_bytes": 1761588,
+      "attempt5_bytes": 1723056,
+      "candidate_bytes": 1722633,
+      "saving_vs_attempt5_bytes": 423,
+      "pack_budget_root_saving_vs_global": 221,
+      "weighted_read_amp": 3.702898496252713,
+      "worst_member_amp": 6.161471002134183,
+      "exact_cost_probes": 30
+    },
+    {
+      "suite": "resemblance_hostile_v1",
+      "name": "03_boundary_churn",
+      "v028_bytes": 89945,
+      "attempt5_bytes": 79876,
+      "candidate_bytes": 79253,
+      "saving_vs_attempt5_bytes": 623,
+      "pack_budget_root_saving_vs_global": 623,
+      "weighted_read_amp": 1.9199679315084013,
+      "worst_member_amp": 3.3538433219447152,
+      "exact_cost_probes": 5
+    }
+  ],
+  "decision": {
+    "research_gate": "REJECT",
+    "threshold_relaxed_after_result": false,
+    "mechanism_erased": false,
+    "reason": "The candidate missed the frozen 0.05% additional aggregate saving gate despite three zero-regression wins. The result is retained as useful negative evidence and may motivate separately preregistered structural/product tests, but it does not become a pass retroactively."
+  }
+}
