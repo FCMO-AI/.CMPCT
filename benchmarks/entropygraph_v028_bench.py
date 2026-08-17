@@ -86,14 +86,29 @@ def _optional_tool(name: str, root: Path, output: Path, command: list[str], sema
     exe = shutil.which(name)
     if not exe:
         return {"available": False, "reason": f"{name} executable unavailable", "semantics": semantics}
+
+    # Footnote: subprocesses run with `cwd=root`, so every output path passed to an external tool must be
+    # absolute. The old helper embedded a relative `temp/out.*` path in the command; 7z/ZPAQ/DwarFS then
+    # wrote that path relative to the corpus directory while Python checked it relative to the runner.
+    # `{output}` makes the path contract explicit and prevents that split-brain measurement from returning
+    # a false "unavailable" result after a successful compression run.
+    root = root.resolve()
+    output = output.resolve()
+    output.parent.mkdir(parents=True, exist_ok=True)
     started = time.perf_counter()
-    cmd = [exe if part == "{exe}" else part for part in command]
+    cmd = [
+        exe if part == "{exe}" else str(output) if part == "{output}" else part
+        for part in command
+    ]
     try:
         proc = subprocess.run(cmd, cwd=root, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=timeout)
     except subprocess.TimeoutExpired:
         return {"available": False, "reason": f"timeout after {timeout}s", "semantics": semantics}
     if proc.returncode != 0 or not output.exists():
-        return {"available": False, "reason": proc.stderr.decode(errors="replace")[-500:], "semantics": semantics}
+        stderr = proc.stderr.decode(errors="replace")[-500:]
+        stdout = proc.stdout.decode(errors="replace")[-500:]
+        reason = stderr or stdout or f"exit={proc.returncode}; expected output missing at {output}"
+        return {"available": False, "reason": reason, "semantics": semantics}
     return {"available": True, "bytes": output.stat().st_size, "create_s": time.perf_counter() - started,
             "semantics": semantics}
 
@@ -106,6 +121,14 @@ def _borg(root: Path, repo: Path) -> dict:
     )
     if not exe:
         return {"available": False, "reason": "borg executable unavailable", "semantics": semantics}
+
+    # Footnote: Borg receives the same absolute-path treatment as file-producing competitors. With a
+    # relative repository plus `cwd=root`, Borg correctly created a repository *inside the corpus tree*
+    # while Python later measured a different nonexistent path. Resolving before init/create makes the
+    # repository identity stable and keeps Borg's own indexes/metadata in the measured byte total.
+    root = root.resolve()
+    repo = repo.resolve()
+    repo.parent.mkdir(parents=True, exist_ok=True)
     started = time.perf_counter()
     env = dict(os.environ)
     env["BORG_UNKNOWN_UNENCRYPTED_REPO_ACCESS_IS_OK"] = "yes"
@@ -123,6 +146,13 @@ def _borg(root: Path, repo: Path) -> dict:
     # Footnote: measure actual repository file bytes rather than parsing a human-formatted Borg statistic.
     # This keeps the harness version-tolerant and makes the extra repository metadata cost visible.
     stored = sum(p.stat().st_size for p in repo.rglob("*") if p.is_file())
+    if stored <= 0:
+        return {
+            "available": False,
+            "reason": f"borg completed but repository measurement was non-positive at {repo}",
+            "create_s": time.perf_counter() - started,
+            "semantics": semantics,
+        }
     return {"available": True, "bytes": stored, "create_s": time.perf_counter() - started, "semantics": semantics}
 
 
@@ -133,18 +163,18 @@ def _competitors(root: Path, temp: Path) -> dict:
     }
     result["seven_zip_lzma2"] = _optional_tool(
         "7z", root, temp / "out.7z",
-        ["{exe}", "a", "-t7z", "-mx=9", "-mmt=1", str(temp / "out.7z"), "."],
+        ["{exe}", "a", "-t7z", "-mx=9", "-mmt=1", "{output}", "."],
         "7z/LZMA2 maximum-ish standalone archive; tool defaults otherwise recorded by environment",
     )
     result["zpaq_m5"] = _optional_tool(
         "zpaq", root, temp / "out.zpaq",
-        ["{exe}", "a", str(temp / "out.zpaq"), ".", "-m5"],
+        ["{exe}", "a", "{output}", ".", "-m5"],
         "ZPAQ method 5; high-ratio archival competitor with materially different speed/random-access semantics",
         600,
     )
     result["dwarfs"] = _optional_tool(
         "mkdwarfs", root, temp / "out.dwarfs",
-        ["{exe}", "-i", ".", "-o", str(temp / "out.dwarfs"), "-l", "9"],
+        ["{exe}", "-i", ".", "-o", "{output}", "-l", "9"],
         "DwarFS read-only filesystem image; structural competitor, not ordinary mutable archive parity",
         600,
     )
