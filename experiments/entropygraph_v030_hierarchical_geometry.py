@@ -91,6 +91,9 @@ def primary_candidates(raw: bytes) -> list[int]:
         count = len(pos)
         if count < 64 or count + 1 > MAX_ROWS:
             continue
+
+        # Only complete recurrence intervals are statistically comparable.  Prefix/suffix fragments are
+        # left-censored/right-censored by the bounded node and must not steer structural nomination.
         gaps = [right - left - 1 for left, right in zip(pos, pos[1:])]
         if not gaps:
             continue
@@ -163,6 +166,8 @@ def _parse_shape(raw: bytes, primary: int, secondary: int) -> tuple[list[list[by
 
     cell_scans = len(fields) * max_fields
     if cell_scans > MAX_CELL_SCANS:
+        # Footnote: an expensive proposed transform is a losing candidate, not invalid user data.  Writers
+        # decline it and preserve the ordinary direct/Geometry fallback; readers enforce the same bound.
         raise ValueError("Hierarchical Geometry cell-work budget exceeded")
     return fields, max_fields, descriptors
 
@@ -356,6 +361,8 @@ def audition(raw: bytes) -> dict:
     return best
 
 
+# Footnote: exported limits are part of the research contract so tests/benchmarks can assert the resource
+# budget without duplicating magic numbers and accidentally drifting from the implementation.
 RESOURCE_LIMITS = {
     "max_rows": MAX_ROWS,
     "max_fields_per_row": MAX_FIELDS_PER_ROW,
