@@ -3,7 +3,8 @@
 This layer changes **no CMPNX14 writer bytes**.  It imports the existing cell-bounded GIR safety entrypoint,
 then strengthens only reader admission: MessagePack container/scalar limits, exact metadata schema checks,
 one-node-to-one-record ownership, safe paths, bounded legacy materialization, and a contiguous physical table
-whose last record must end exactly where the authenticated duplicate metadata begins.
+whose last record must end exactly where the authenticated duplicate metadata begins when that redundant tail
+is intact.
 
 Footnote: hashes authenticate bytes, not resource behavior.  An attacker can author perfectly authenticated
 metadata that is expensive or structurally ambiguous.  These checks therefore run before payload decode and
@@ -198,7 +199,7 @@ def _validate_meta_schema(
         node_sizes.append(logical_size)
 
     if sorted(record_ids) != list(range(len(nodes))):
-        # Footnote: CMPNX14 writer v1 emits exactly one physical record per logical node.  Rejecting aliases
+        # Footnote: CMPNX14 writer v1 emits exactly one physical record per logical node. Rejecting aliases
         # prevents a hostile reader-only grammar from breaking locality/accounting without paying writer cost.
         raise RuntimeError("GIR v1 requires a one-to-one node/physical record mapping")
 
@@ -228,7 +229,7 @@ def _validate_meta_schema(
             raise RuntimeError("GIR file node sizes do not match declared logical size")
         total_logical += logical_size
         if total_logical > MAX_TOTAL_MATERIALIZED_BYTES:
-            # Footnote: this cap belongs to the legacy whole-archive materializer.  A streaming CMPNX14
+            # Footnote: this cap belongs to the legacy whole-archive materializer. A streaming CMPNX14
             # extractor can later lift it while preserving the same storage grammar and per-node bounds.
             raise RuntimeError("GIR archive materialization budget exceeded")
 
@@ -258,38 +259,60 @@ def _decode_meta(
     return meta, offsets
 
 
-def _physical_region_end(stream: BinaryIO) -> int:
-    """Return the first byte of duplicate tail metadata, validating the footer declaration."""
+def _physical_region_end(stream: BinaryIO) -> int | None:
+    """Return intact duplicate-metadata start, or ``None`` when only the redundant tail is damaged.
+
+    Footnote: the primary and tail metadata copies exist to survive one-copy damage. Hardening must not turn
+    the tail footer into a new single point of failure. If the tail declaration is intact we can prove an exact
+    physical boundary; if it is damaged, an authenticated primary copy still permits strict contiguous,
+    in-file record validation while ignoring the unusable redundant suffix.
+    """
     here = stream.tell()
     try:
         stream.seek(0, os.SEEK_END)
         file_size = stream.tell()
         if file_size < gir.FTR.size:
-            raise RuntimeError("short GIR archive footer")
+            return None
         stream.seek(file_size - gir.FTR.size)
         footer = stream.read(gir.FTR.size)
-        magic, tail_mcs, tail_mus, _, _ = gir.FTR.unpack(footer)
-        if magic != gir.TAIL or tail_mcs > gir.MAX_DECODE_UNIT or tail_mus > gir.MAX_DECODE_UNIT:
-            raise RuntimeError("invalid GIR tail declaration")
+        if len(footer) != gir.FTR.size:
+            return None
+        try:
+            magic, tail_mcs, tail_mus, _, _ = gir.FTR.unpack(footer)
+        except Exception:
+            return None
+        if (
+            magic != gir.TAIL
+            or not _is_int(tail_mcs)
+            or not _is_int(tail_mus)
+            or tail_mcs < 0
+            or tail_mus < 0
+            or tail_mcs > gir.MAX_DECODE_UNIT
+            or tail_mus > gir.MAX_DECODE_UNIT
+        ):
+            return None
         end = file_size - gir.FTR.size - tail_mcs
         if end < gir.HDR.size:
-            raise RuntimeError("GIR tail metadata overlaps physical region")
+            return None
         return end
     finally:
         stream.seek(here)
 
 
 def _validate_physical_table(stream: BinaryIO, record_start: int, offsets: list[int]) -> None:
-    """Prove records are in-bounds, non-aliased, gapless, and stop before duplicate metadata."""
+    """Prove records are in-bounds, non-aliased and gapless; bind exact tail boundary when available."""
     here = stream.tell()
     try:
-        physical_end = _physical_region_end(stream)
-        if record_start < gir.HDR.size or record_start > physical_end:
+        stream.seek(0, os.SEEK_END)
+        file_size = stream.tell()
+        exact_physical_end = _physical_region_end(stream)
+        admissible_end = exact_physical_end if exact_physical_end is not None else file_size
+        if record_start < gir.HDR.size or record_start > admissible_end:
             raise RuntimeError("GIR physical table start out of archive bounds")
         final_end = record_start
         for index, offset in enumerate(offsets):
             absolute = record_start + offset
-            if absolute < record_start or absolute + gir.PH.size > physical_end:
+            if absolute < record_start or absolute + gir.PH.size > admissible_end:
                 raise RuntimeError("GIR physical record header outside archive")
             stream.seek(absolute)
             header = stream.read(gir.PH.size)
@@ -302,20 +325,22 @@ def _validate_physical_table(stream: BinaryIO, record_start: int, offsets: list[
                 raise RuntimeError("GIR physical record exceeds resource bound")
             _sha32(logical_sha, "physical hash")
             end = offset + gir.PH.size + csize
-            if record_start + end > physical_end:
+            if record_start + end > admissible_end:
                 raise RuntimeError("GIR physical payload outside archive")
             if index + 1 < len(offsets) and end != offsets[index + 1]:
                 raise RuntimeError("GIR physical record table is not contiguous")
             final_end = record_start + end
-        if final_end != physical_end:
-            # Empty archives legitimately have no records; their record_start must still touch tail metadata.
+        if exact_physical_end is not None and final_end != exact_physical_end:
+            # An intact tail gives us a canonical exact endpoint; gaps before duplicate metadata are invalid.
             raise RuntimeError("GIR physical table does not terminate at duplicate metadata")
+        if exact_physical_end is None and final_end > file_size:
+            raise RuntimeError("GIR physical table exceeds archive bounds")
     finally:
         stream.seek(here)
 
 
 def _open(path):
-    # ``gir._open`` resolves ``gir._decode_meta`` dynamically.  Patching that global makes both the primary
+    # ``gir._open`` resolves ``gir._decode_meta`` dynamically. Patching that global makes both the primary
     # and duplicate-tail recovery path share the bounded parser without cloning recovery logic.
     stream, meta, record_start, offsets = _original_open(path)
     try:
@@ -329,7 +354,7 @@ def _open(path):
 gir._decode_meta = _decode_meta
 gir._open = _open
 
-# Re-export the hardened API.  Build bytes and candidate selection remain exactly the CMPNX14 implementation.
+# Re-export the hardened API. Build bytes and candidate selection remain exactly the CMPNX14 implementation.
 build = gir.build
 _build_gir = gir._build_gir
 extract = gir.extract
