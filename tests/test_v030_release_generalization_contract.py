@@ -12,9 +12,11 @@ def test_accepted_v029_row_reconstruction_is_exact() -> None:
 
 
 def test_numeric_revision_floor_does_not_get_easier_on_smaller_v029_substrate() -> None:
-    # Footnote: v0.29 is slightly smaller than v0.28.  A naive percentage-only rule would therefore lower
-    # the absolute hurdle.  v0.30 keeps the older 0.5% absolute floor as a scarcity/quality ratchet.
-    assert gate.MIN_RELEASE_SAVING_BYTES == 687_753
+    # Footnote: v0.29 is slightly smaller than v0.28. A naive percentage-only rule would lower the absolute
+    # hurdle. The existing campaign explicitly carried 687,783 B forward, so v0.30 inherits that stricter
+    # number rather than reverse-engineering a more convenient threshold from the current aggregate.
+    assert gate.INHERITED_ABSOLUTE_REVISION_FLOOR == 687_783
+    assert gate.MIN_RELEASE_SAVING_BYTES == 687_783
     assert gate.MIN_RELEASE_SAVING_BYTES >= (gate.EXPECTED_V029_TOTAL + 199) // 200
     assert gate.MIN_IMPROVED_ROWS == 3
     assert gate.MAX_MEMBER_READ_AMP == 8.0
