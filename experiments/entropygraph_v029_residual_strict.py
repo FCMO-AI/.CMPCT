@@ -1,12 +1,12 @@
 """Stable evidence wrapper for CMPCT attempt #5 Residual Program Packing.
 
-The older ``entropygraph_v029_mosaic_strict.py`` remains pinned to attempt #4 and is therefore a safe,
-immutable parent for the post-placement compiler.  This separate wrapper exposes attempt #5 to tests and
-benchmarks without creating a circular import or rewriting the attempt-4 evidence boundary.
+The accepted attempt-5 mechanism remains in ``entropygraph_v029_residual_pack.py``. The active research
+entry point now loads ``entropygraph_v029_residual_fast.py``, a narrow portfolio scheduler that can skip
+one measured dead-end class without changing the accepted graph grammar or any multi-file candidate.
 
-Footnote: keeping one strict wrapper per measured mechanism makes failure history reproducible.  An
-attempt-5 red can be investigated without silently changing the executable entry point that produced the
-preserved attempt-4 result.
+Footnote: keeping the accepted mechanism and the later scheduling optimization in separate files makes
+both evidence states reproducible. If the fast-reject policy fails generalization, the attempt-5 byte
+mechanism can still be reproduced from its original source commit.
 """
 from __future__ import annotations
 
@@ -17,13 +17,13 @@ from pathlib import Path
 import sys
 
 HERE = Path(__file__).resolve().parent
-IMPL_PATH = HERE / "entropygraph_v029_residual_pack.py"
+IMPL_PATH = HERE / "entropygraph_v029_residual_fast.py"
 
 
 def _load_impl():
-    spec = importlib.util.spec_from_file_location("cmpct_entropygraph_v029_residual_pack_strict", IMPL_PATH)
+    spec = importlib.util.spec_from_file_location("cmpct_entropygraph_v029_residual_fast_strict", IMPL_PATH)
     if spec is None or spec.loader is None:
-        raise RuntimeError("cannot load attempt-5 Residual Program Packing engine")
+        raise RuntimeError("cannot load attempt-5 optimized Residual Program Packing engine")
     module = importlib.util.module_from_spec(spec)
     sys.modules[spec.name] = module
     spec.loader.exec_module(module)

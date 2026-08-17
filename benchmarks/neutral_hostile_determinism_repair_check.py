@@ -3,14 +3,16 @@ from __future__ import annotations
 """Two-pass proof and v0.28 byte capture for the neutral/hostile determinism repair.
 
 Only the three workloads that drifted during the first v0.29 inherited-frontier run are regenerated.
-Each is built twice from scratch, normalized by `neutral_hostile_determinism_repair_v1`, and required to
-produce the same exact logical tree hash before a repaired v0.28 baseline artifact is measured.
+Each is built twice from scratch, normalized by `neutral_hostile_determinism_repair_v1`, and compared at
+both tree and individual-file level before a repaired v0.28 baseline artifact is measured.
 
-Footnote: this script never mutates `2026-08-16-entropygraph-v028.json`. Its output is a new evidence
-class: a benchmark-substrate repair manifest that can be adopted explicitly by later gates.
+Footnote: a nondeterministic round no longer raises before evidence is written. The JSON records exact
+per-file hash/size differences and marks the workload rejected; the workflow's separate enforce step
+still fails. That preserves forensic evidence without weakening the acceptance contract.
 """
 
 import argparse
+import hashlib
 import importlib.util
 import json
 from pathlib import Path
@@ -45,9 +47,29 @@ BUILDERS = {
 }
 
 
-def _stats(path: Path) -> tuple[int, int]:
-    files = [p for p in path.rglob("*") if p.is_file()]
-    return len(files), sum(p.stat().st_size for p in files)
+def _file_manifest(path: Path) -> dict[str, dict]:
+    out = {}
+    for file in sorted(p for p in path.rglob("*") if p.is_file()):
+        raw = file.read_bytes()
+        out[file.relative_to(path).as_posix()] = {
+            "bytes": len(raw),
+            "sha256": hashlib.sha256(raw).hexdigest(),
+        }
+    return out
+
+
+def _shape(manifest: dict[str, dict]) -> tuple[int, int]:
+    return len(manifest), sum(int(row["bytes"]) for row in manifest.values())
+
+
+def _diff(first: dict[str, dict], second: dict[str, dict]) -> list[dict]:
+    rows = []
+    for rel in sorted(set(first) | set(second)):
+        a = first.get(rel); b = second.get(rel)
+        if a == b:
+            continue
+        rows.append({"path": rel, "first": a, "second": b})
+    return rows
 
 
 def _old_rows() -> dict[str, dict]:
@@ -68,49 +90,68 @@ def run(work_root: Path) -> dict:
     for name, builder in BUILDERS.items():
         rounds = []
         for index in (1, 2):
-            round_root = work_root / f"round-{index}" / name
-            round_root.parent.mkdir(parents=True, exist_ok=True)
-            # Builder APIs expect the suite root and create their named workload below it.
-            builder(round_root.parent)
-            workload = round_root.parent / name
+            suite_root = work_root / f"round-{index}"
+            suite_root.mkdir(parents=True, exist_ok=True)
+            builder(suite_root)
+            workload = suite_root / name
             R.normalize_workload(workload)
-            files, logical = _stats(workload)
+            manifest = _file_manifest(workload)
+            files, logical = _shape(manifest)
             rounds.append({
                 "tree_sha256": N.tree_hash(workload),
                 "files": files,
                 "logical_bytes": logical,
                 "path": workload,
+                "file_manifest": manifest,
             })
 
-        if rounds[0]["tree_sha256"] != rounds[1]["tree_sha256"]:
-            raise RuntimeError(f"determinism repair failed tree identity for {name}: {rounds}")
-        if rounds[0]["logical_bytes"] != rounds[1]["logical_bytes"] or rounds[0]["files"] != rounds[1]["files"]:
-            raise RuntimeError(f"determinism repair failed shape identity for {name}: {rounds}")
-
-        archive = work_root / "v028" / f"{name}.cmpct"
-        archive.parent.mkdir(parents=True, exist_ok=True)
-        result = V028.build(rounds[0]["path"], archive)
-        verify = V028.strong_verify(archive)
-        if not verify.get("ok") or verify.get("tree_sha256") != rounds[0]["tree_sha256"]:
-            raise RuntimeError(f"repaired v0.28 verification failed for {name}")
-
+        file_differences = _diff(rounds[0]["file_manifest"], rounds[1]["file_manifest"])
+        deterministic = (
+            rounds[0]["tree_sha256"] == rounds[1]["tree_sha256"]
+            and rounds[0]["logical_bytes"] == rounds[1]["logical_bytes"]
+            and rounds[0]["files"] == rounds[1]["files"]
+            and not file_differences
+        )
         previous = old[name]
-        rows.append({
+        row = {
             "name": name,
+            "deterministic": deterministic,
             "files": rounds[0]["files"],
             "logical_bytes": rounds[0]["logical_bytes"],
             "tree_sha256": rounds[0]["tree_sha256"],
             "second_build_tree_sha256": rounds[1]["tree_sha256"],
-            "v028_candidate_bytes": int(result["archive_bytes"]),
-            "v028_selected": result["selected"],
-            "v028_graph_bytes": int(result["graph_bytes"]),
-            "v028_inherited_bytes": int(result["legacy_bytes"]),
+            "second_build_logical_bytes": rounds[1]["logical_bytes"],
+            "file_differences": file_differences,
             "historical_tree_sha256": previous["tree_sha256"],
             "historical_candidate_bytes": int(previous["candidate_bytes"]),
             "historical_logical_bytes": int(previous["logical_bytes"]),
-            "repair_changes_tree": rounds[0]["tree_sha256"] != previous["tree_sha256"],
-            "repair_candidate_byte_delta": int(result["archive_bytes"]) - int(previous["candidate_bytes"]),
-        })
+        }
+
+        if deterministic:
+            archive = work_root / "v028" / f"{name}.cmpct"
+            archive.parent.mkdir(parents=True, exist_ok=True)
+            result = V028.build(rounds[0]["path"], archive)
+            verify = V028.strong_verify(archive)
+            if not verify.get("ok") or verify.get("tree_sha256") != rounds[0]["tree_sha256"]:
+                raise RuntimeError(f"repaired v0.28 verification failed for {name}")
+            row.update({
+                "v028_candidate_bytes": int(result["archive_bytes"]),
+                "v028_selected": result["selected"],
+                "v028_graph_bytes": int(result["graph_bytes"]),
+                "v028_inherited_bytes": int(result["legacy_bytes"]),
+                "repair_changes_tree": rounds[0]["tree_sha256"] != previous["tree_sha256"],
+                "repair_candidate_byte_delta": int(result["archive_bytes"]) - int(previous["candidate_bytes"]),
+            })
+        else:
+            row.update({
+                "v028_candidate_bytes": None,
+                "v028_selected": None,
+                "v028_graph_bytes": None,
+                "v028_inherited_bytes": None,
+                "repair_changes_tree": None,
+                "repair_candidate_byte_delta": None,
+            })
+        rows.append(row)
 
     return {
         "schema": "cmpct-neutral-hostile-v1-determinism-repair-manifest-v1",
@@ -122,6 +163,7 @@ def run(work_root: Path) -> dict:
             "candidate_and_baseline_consume_same_repaired_tree": True,
             "historical_record_rewritten": False,
         },
+        "accepted": all(row["deterministic"] and row["v028_candidate_bytes"] for row in rows),
         "rows": rows,
     }
 

@@ -63,31 +63,43 @@ jobs:
           r=json.loads(Path('benchmark-artifacts/neutral-hostile-v1-determinism-repair.json').read_text())
           assert r['schema'] == 'cmpct-neutral-hostile-v1-determinism-repair-manifest-v1'
           assert len(r['rows']) == 3
+          assert r['accepted'] is True, r
           for row in r['rows']:
+              assert row['deterministic'] is True, row
               assert row['tree_sha256'] == row['second_build_tree_sha256'], row
-              assert row['v028_candidate_bytes'] > 0, row
+              assert row['v028_candidate_bytes'] and row['v028_candidate_bytes'] > 0, row
           print(json.dumps(r, indent=2))
           PY
 
       - name: Summarize repair identity
+        if: always()
         run: |
-          python - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          if [ -f benchmark-artifacts/neutral-hostile-v1-determinism-repair.json ]; then
+            python - <<'PY' >> "$GITHUB_STEP_SUMMARY"
           import json
           from pathlib import Path
           r=json.loads(Path('benchmark-artifacts/neutral-hostile-v1-determinism-repair.json').read_text())
           print('## Neutral/hostile v1 determinism repair')
+          print(f"- accepted: **{r['accepted']}**")
           for row in r['rows']:
-              print(f"- **{row['name']}**: tree `{row['tree_sha256'][:16]}…`, v0.28={row['v028_candidate_bytes']:,} B, historical delta={row['repair_candidate_byte_delta']:+,} B")
+              print(f"- **{row['name']}**: deterministic={row['deterministic']}, first=`{row['tree_sha256'][:16]}…`, second=`{row['second_build_tree_sha256'][:16]}…`, file diffs={len(row['file_differences'])}")
+              for diff in row['file_differences'][:8]:
+                  print(f"  - `{diff['path']}`: {diff['first']} -> {diff['second']}")
+              if row['v028_candidate_bytes'] is not None:
+                  print(f"  - repaired v0.28: **{row['v028_candidate_bytes']:,} B**, historical delta={row['repair_candidate_byte_delta']:+,} B")
           print('- Historical v0.28 evidence remains unchanged; this is a separate substrate-repair identity.')
           PY
+          fi
 
       - name: Upload repair evidence
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: cmpct-neutral-hostile-determinism-repair-${{ github.sha }}
           path: benchmark-artifacts/neutral-hostile-v1-determinism-repair.json
+          if-no-files-found: warn
 
 # Footnote: this workflow is intentionally independent from the v0.29 compression gate. Its only job is
 # to prove that repaired benchmark inputs reproduce byte-for-byte twice before a new baseline manifest
-# can be adopted. A red here means the substrate remains untrustworthy; compression thresholds do not
-# get relaxed to accommodate it.
+# can be adopted. A red here preserves per-file drift evidence; compression thresholds do not get
+# relaxed to accommodate an untrustworthy substrate.
