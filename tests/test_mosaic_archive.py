@@ -9,6 +9,7 @@ import pytest
 ROOT = Path(__file__).resolve().parents[1]
 ENGINE_PATH = ROOT / "experiments" / "entropygraph_v029_mosaic_strict.py"
 CORPUS_PATH = ROOT / "benchmarks" / "mosaic_hostile_corpus_v1.py"
+STRESS_PATH = ROOT / "benchmarks" / "mosaic_stress_corpus_v2.py"
 
 
 def _load(path: Path, name: str):
@@ -22,6 +23,7 @@ def _load(path: Path, name: str):
 
 ENGINE = _load(ENGINE_PATH, "cmpct_mosaic_archive_test_engine")
 CORPUS = _load(CORPUS_PATH, "cmpct_mosaic_archive_test_corpus")
+STRESS = _load(STRESS_PATH, "cmpct_mosaic_archive_test_stress")
 
 
 def _workload(tmp_path: Path) -> Path:
@@ -35,7 +37,7 @@ def test_strict_full_artifact_reconstructs_and_uses_mosaic(tmp_path: Path):
     archive = tmp_path / "mosaic.cmpct"
     stats = ENGINE.build_graph(source, archive)
 
-    # Footnote: this bypasses the outer v0.28 fallback on purpose.  Conformance tests need to exercise
+    # Footnote: this bypasses the outer v0.28 fallback on purpose. Conformance tests need to exercise
     # the new grammar even when a future portfolio policy would choose an inherited artifact instead.
     assert archive.read_bytes()[:8] == ENGINE.MAG
     assert stats["mosaic_nodes"] >= 1
@@ -49,6 +51,31 @@ def test_strict_full_artifact_reconstructs_and_uses_mosaic(tmp_path: Path):
     assert ENGINE.BASE.treehash(restored) == ENGINE.BASE.treehash(source)
 
 
+def test_direct_leaf_merge_can_promote_without_depth_two(tmp_path: Path):
+    suite = tmp_path / "stress"
+    STRESS.shifted_reordered_merge(suite)
+    source = suite / "02_shifted_reordered_merge"
+    archive = tmp_path / "leaf-mosaic.cmpct"
+    stats = ENGINE.build_graph(source, archive)
+
+    # Attempt #1 produced zero mosaic auditions here because v0.28 kept the merge target direct. The
+    # v2 mechanism must discover it independently and may promote it only as a leaf, never as a base
+    # another delta depends on.
+    assert stats["mosaic_leaf_nodes"] >= 1
+    assert stats["max_mosaic_read_amplification"] <= ENGINE.MAX_READ_AMP
+    assert ENGINE.strong_verify(archive)["ok"] is True
+
+    stream, meta, *_ = ENGINE.BASE._open_mosaic(archive)
+    stream.close()
+    nodes = meta["nodes"]
+    for desc in nodes:
+        if desc[0] != "mosaic":
+            continue
+        base_ids = desc[1]
+        assert 2 <= len(base_ids) <= 4
+        assert all(nodes[base_id][0] == "direct" for base_id in base_ids)
+
+
 def test_primary_metadata_damage_recovers_from_authenticated_tail(tmp_path: Path):
     source = _workload(tmp_path)
     archive = tmp_path / "recover.cmpct"
@@ -58,7 +85,7 @@ def test_primary_metadata_damage_recovers_from_authenticated_tail(tmp_path: Path
     raw = bytearray(archive.read_bytes())
     _, meta_comp_size, *_ = ENGINE.HDR.unpack(raw[: ENGINE.HDR.size])
     assert meta_comp_size > 4
-    # Damage only the primary compressed metadata.  Header sizes remain intact so the reader can locate
+    # Damage only the primary compressed metadata. Header sizes remain intact so the reader can locate
     # physical records after authenticating the redundant tail metadata copy.
     raw[ENGINE.HDR.size + 3] ^= 0x5A
     archive.write_bytes(raw)
@@ -80,7 +107,7 @@ def test_physical_leaf_corruption_fails_closed(tmp_path: Path):
     raw[first_header + ENGINE.PH.size] ^= 0x01
     archive.write_bytes(raw)
 
-    # Footnote: metadata recovery is not payload forgiveness.  A corrupt Merkle-authenticated physical
+    # Footnote: metadata recovery is not payload forgiveness. A corrupt Merkle-authenticated physical
     # leaf must fail even though a healthy tail metadata copy still exists.
     with pytest.raises(RuntimeError):
         ENGINE.strong_verify(archive)
