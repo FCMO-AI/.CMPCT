@@ -1,4 +1,4 @@
-/* CMPCT surface visual-QA hardening — 0.27.b.
+/* CMPCT surface visual-QA hardening — 0.28.c.
    Footnote: these overrides correct issues reproduced at 1920, 1440, 820, 390 and 360px widths.
    They intentionally preserve the existing information architecture and benchmark-derived content;
    the goal is better composition, navigation and legibility rather than a cosmetic rewrite. */
@@ -76,6 +76,16 @@ select:focus-visible,
 .footer-note { color: #77736c; }
 .site-footer nav a { color: #aaa69d; }
 
+/* The canonical ZIP table is intentionally an operational surface, not a second compression-ratio
+   boast. This note visually separates its purpose from the Zstd category frontier above it. */
+.parity-purpose {
+  max-width: 760px;
+  margin: 20px 0 0;
+  color: #8e8a82;
+  font-size: .86rem;
+  line-height: 1.65;
+}
+
 /* Let the workload matrix use the height its paired defect card already occupies instead of leaving
    a conspicuous unused slab at the bottom of the card. */
 .matrix-card { display: flex; flex-direction: column; }
@@ -145,6 +155,7 @@ select:focus-visible,
   }
   .mechanism-grid h3 { margin: 28px 0 10px; }
 
+  .parity-purpose { font-size: .78rem; }
   .tool-footnote { font-size: .69rem; line-height: 1.65; }
   .ladder-value small { line-height: 1.35; }
 
