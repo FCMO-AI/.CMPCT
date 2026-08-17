@@ -1,0 +1,137 @@
+name: CMPCT v0.29 shared dictionary context ceiling
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-v029-shared-dictionary-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  dictionary-oracle:
+    runs-on: ubuntu-latest
+    timeout-minutes: 70
+    env:
+      CMPCT_PREFLATE_BRIDGE: ${{ github.workspace }}/native/preflate-bridge/target/release/cmpct-preflate-bridge
+    steps:
+      - name: Check out candidate
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install deterministic hostile-corpus dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y zstd ffmpeg gcc libsndfile1
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[audio,test]'
+          python -m pip install numpy==2.4.6
+
+      - name: Build pinned memory-safe Preflate bridge
+        run: |
+          rustup toolchain install 1.89.0 --profile minimal
+          cargo +1.89.0 build --release --manifest-path native/preflate-bridge/Cargo.toml
+
+      - name: Generate one hostile aggregate
+        run: |
+          mkdir -p benchmark-artifacts
+          python - <<'PY'
+          import importlib.util
+          from pathlib import Path
+          import sys
+          path=Path('benchmarks/resemblance_hostile_corpus_v1.py')
+          spec=importlib.util.spec_from_file_location('cmpct_dictionary_hostile', path)
+          assert spec and spec.loader
+          mod=importlib.util.module_from_spec(spec); sys.modules[spec.name]=mod; spec.loader.exec_module(mod)
+          mod.build(Path('benchmark-artifacts/resemblance-hostile'))
+          PY
+
+      - name: Measure shared-dictionary physical ceiling
+        run: |
+          set -o pipefail
+          python experiments/entropygraph_v029_shared_dictionary_oracle.py \
+            benchmark-artifacts/resemblance-hostile \
+            --work-root benchmark-artifacts/CMPCT_V029_Shared_Dictionary_Oracle \
+            --output benchmark-artifacts/mosaic-v029-shared-dictionary-oracle.json \
+            2>&1 | tee benchmark-artifacts/mosaic-v029-shared-dictionary-oracle.stdout.txt
+
+      - name: Enforce oracle integrity without forcing a positive hypothesis
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          r=json.loads(Path('benchmark-artifacts/mosaic-v029-shared-dictionary-oracle.json').read_text())
+          assert r['schema'] == 'cmpct-v029-shared-dictionary-context-oracle-v1'
+          assert r['source_archive']['bytes'] > 0, r
+          assert r['source_archive']['records'] > 0, r
+          assert r['policy']['dictionary_storage_counted'] is True
+          assert r['policy']['dictionary_roundtrip_verified_per_record'] is True
+          for row in r['results']:
+              if not row.get('available'):
+                  continue
+              assert row['dictionary_bytes'] > 0, row
+              assert row['dictionary_storage_charge_bytes'] > row['dictionary_bytes'], row
+              assert row['payload_saving_bytes'] >= 0, row
+              assert row['net_saving_bytes'] == row['payload_saving_bytes'] - row['dictionary_storage_charge_bytes'], row
+              assert row['locality']['weighted_direct_pack_read_amp'] <= 8.0, row
+              assert row['locality']['max_dependent_node_read_amp'] <= 8.0, row
+              assert row['locality']['max_additional_dictionary_read_amp'] <= 2.0, row
+          # Footnote: the research result may be REJECT.  CI verifies accounting, locality and exact
+          # round-trips; it does not mutate the frozen >=128 KiB gate to manufacture a green hypothesis.
+          print(json.dumps({'best': r['best'], 'research_gate_pass': r['research_gate_pass']}, indent=2))
+          PY
+
+      - name: Focused dictionary API and locality tests
+        run: python -m pytest -q tests/test_v029_shared_dictionary_oracle.py
+
+      - name: Public-surface guard
+        run: python tools/check_public_surface.py
+
+      - name: Summarize shared dictionary ceiling
+        if: always()
+        run: |
+          if [ -f benchmark-artifacts/mosaic-v029-shared-dictionary-oracle.json ]; then
+            python - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          import json
+          from pathlib import Path
+          r=json.loads(Path('benchmark-artifacts/mosaic-v029-shared-dictionary-oracle.json').read_text())
+          print('## CMPCT v0.29 — shared dictionary record-context ceiling')
+          s=r['source_archive']
+          print(f"- attempt-5 source archive: **{s['bytes']:,} B**, records **{s['records']}**, direct candidates **{s['dictionary_candidate_records']}**")
+          if r['best']:
+              b=r['best']; l=b['locality']
+              print(f"- best trained dictionary: **{b['dictionary_bytes']:,} B**")
+              print(f"- profitable/admissible direct records: **{b['locality_admissible_profitable_records']}**")
+              print(f"- payload saving before dictionary cost: **{b['payload_saving_bytes']:,} B**")
+              print(f"- dictionary + metadata charge: **{b['dictionary_storage_charge_bytes']:,} B**")
+              print(f"- net saving: **{b['net_saving_bytes']:,} B**")
+              print(f"- weighted pack / max dependent / added dict amp: **{l['weighted_direct_pack_read_amp']:.3f}x / {l['max_dependent_node_read_amp']:.3f}x / {l['max_additional_dictionary_read_amp']:.3f}x**")
+          print(f"- frozen >=128 KiB / >=8-record gate: **{'PASS' if r['research_gate_pass'] else 'REJECT'}**")
+          print('- The oracle emits exact attempt-5 bytes; PASS authorizes an implementation experiment only.')
+          PY
+          fi
+
+      - name: Upload shared dictionary evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cmpct-v029-shared-dictionary-${{ github.sha }}
+          path: |
+            benchmark-artifacts/mosaic-v029-shared-dictionary-oracle.json
+            benchmark-artifacts/mosaic-v029-shared-dictionary-oracle.stdout.txt
+          if-no-files-found: warn
+
+# Footnote: this is a physical-context ceiling oracle, not a format implementation.  It keeps attempt-5
+# record boundaries and output bytes unchanged while measuring whether an authenticated shared dictionary
+# can plausibly justify new reader/native/recovery surface.
