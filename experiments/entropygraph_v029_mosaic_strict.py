@@ -1,17 +1,14 @@
 """Stable strict evidence entry point for CMPCT multi-root mosaic research.
 
-The branch preserves every full-artifact mechanism as a separate executable attempt:
+Attempt #4 is the current evidence engine:
 
-- `entropygraph_v029_mosaic.py` — attempt #1, inherited-delta targets only;
-- `entropygraph_v029_mosaic_leaf.py` — attempt #2, bounded direct-leaf eligibility;
-- `entropygraph_v029_mosaic_packaware.py` — attempt #3, partial roots + physical pack-marginal admission.
+- attempts #1–#3 remain separate executable research files and durable failed records;
+- `entropygraph_v029_mosaic_placement.py` implements the preregistered Placement Compiler;
+- canonical revision 24 remains untouched.
 
-This wrapper now points tests and benchmark evidence at attempt #3. The full-artifact acceptance gate is
-unchanged; switching the implementation under a stable evidence path prevents benchmark scripts from
-silently drifting to a different file while keeping failed attempts directly reproducible.
-
-Footnote: attempt #3 reuses the same CMPNX9 reader/recovery grammar as attempts #1/#2. It changes only
-candidate retention and physical admission economics; canonical revision 24 remains untouched.
+Footnote: benchmark/test paths import this wrapper rather than a numbered attempt directly. Switching the
+implementation happens only after the attempt design is documented in repository history, so a CI run
+cannot unknowingly measure a half-written mechanism.
 """
 from __future__ import annotations
 
@@ -22,13 +19,13 @@ from pathlib import Path
 import sys
 
 HERE = Path(__file__).resolve().parent
-IMPL_PATH = HERE / "entropygraph_v029_mosaic_packaware.py"
+IMPL_PATH = HERE / "entropygraph_v029_mosaic_placement.py"
 
 
 def _load_impl():
-    spec = importlib.util.spec_from_file_location("cmpct_entropygraph_v029_mosaic_packaware_strict", IMPL_PATH)
+    spec = importlib.util.spec_from_file_location("cmpct_entropygraph_v029_mosaic_placement_strict", IMPL_PATH)
     if spec is None or spec.loader is None:
-        raise RuntimeError("cannot load pack-aware mosaic full-artifact engine")
+        raise RuntimeError("cannot load Mosaic Placement Compiler")
     module = importlib.util.module_from_spec(spec)
     sys.modules[spec.name] = module
     spec.loader.exec_module(module)
@@ -36,14 +33,13 @@ def _load_impl():
 
 
 IMPL = _load_impl()
-# Compatibility handle used by tests/benchmarks for the shared tree-hash and authenticated CMPNX9 reader.
 BASE = IMPL.PARENT
-
-MAG = BASE.MAG
-HDR = BASE.HDR
-FTR = BASE.FTR
-PH = BASE.PH
-MAX_READ_AMP = BASE.MAX_READ_AMP
+MAG = IMPL.MAG
+HDR = IMPL.HDR
+FTR = IMPL.FTR
+PH = IMPL.PH
+MAX_READ_AMP = IMPL.MAX_READ_AMP
+MAX_DEDICATED_COPACK = IMPL.MAX_DEDICATED_COPACK
 
 
 def build(root: Path, out: Path) -> dict:
@@ -51,7 +47,7 @@ def build(root: Path, out: Path) -> dict:
 
 
 def build_graph(root: Path, out: Path) -> dict:
-    return IMPL.build_graph(root, out)
+    return IMPL._build_graph(root, out)
 
 
 def extract(archive: Path, dst: Path) -> None:
@@ -66,8 +62,12 @@ def bench(root: Path, out: Path) -> dict:
     return IMPL.bench(root, out)
 
 
+def _open(archive: Path):
+    return IMPL._open(archive)
+
+
 def _main() -> None:
-    parser = argparse.ArgumentParser(description="CMPCT strict multi-root mosaic full-artifact engine")
+    parser = argparse.ArgumentParser(description="CMPCT strict multi-root Mosaic Placement Compiler")
     sub = parser.add_subparsers(dest="cmd", required=True)
     p = sub.add_parser("pack"); p.add_argument("source", type=Path); p.add_argument("archive", type=Path)
     p = sub.add_parser("extract"); p.add_argument("archive", type=Path); p.add_argument("destination", type=Path)

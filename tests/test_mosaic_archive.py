@@ -26,104 +26,137 @@ CORPUS = _load(CORPUS_PATH, "cmpct_mosaic_archive_test_corpus")
 STRESS = _load(STRESS_PATH, "cmpct_mosaic_archive_test_stress")
 
 
-def _workload(tmp_path: Path) -> Path:
+def _v1_two_parent(tmp_path: Path) -> Path:
     suite = tmp_path / "suite"
     CORPUS.two_parent_branch_merge(suite)
     return suite / "01_two_parent_branch_merge"
 
 
-def test_strict_full_artifact_reconstructs_and_uses_mosaic(tmp_path: Path):
-    source = _workload(tmp_path)
-    archive = tmp_path / "mosaic.cmpct"
-    stats = ENGINE.build_graph(source, archive)
+def _stress(tmp_path: Path, builder, name: str) -> Path:
+    suite = tmp_path / name
+    builder(suite)
+    return suite / name
 
-    # Footnote: this bypasses the outer v0.28 fallback on purpose. Conformance tests need to exercise
-    # the new grammar even when a future portfolio policy would choose an inherited artifact instead.
+
+def test_placement_archive_reconstructs_and_uses_mosaic(tmp_path: Path):
+    source = _v1_two_parent(tmp_path)
+    archive = tmp_path / "placement.cmpct"
+    stats = ENGINE.build_graph(source, archive)
     assert archive.read_bytes()[:8] == ENGINE.MAG
     assert stats["mosaic_nodes"] >= 1
     assert stats["max_mosaic_read_amplification"] <= ENGINE.MAX_READ_AMP
-    verified = ENGINE.strong_verify(archive)
-    assert verified["ok"] is True
-    assert verified["tree_sha256"] == ENGINE.BASE.treehash(source)
+    assert ENGINE.strong_verify(archive)["tree_sha256"] == ENGINE.BASE.treehash(source)
 
     restored = tmp_path / "restored"
     ENGINE.extract(archive, restored)
     assert ENGINE.BASE.treehash(restored) == ENGINE.BASE.treehash(source)
 
 
-def test_pack_marginal_gate_rejects_a_paper_leaf_win(tmp_path: Path):
-    suite = tmp_path / "stress"
-    STRESS.shifted_reordered_merge(suite)
-    source = suite / "02_shifted_reordered_merge"
-    archive = tmp_path / "pack-marginal.cmpct"
+def test_shifted_reordered_stays_in_better_solid_representation(tmp_path: Path):
+    source = _stress(tmp_path, STRESS.shifted_reordered_merge, "02_shifted_reordered_merge")
+    archive = tmp_path / "shifted.cmpct"
     stats = ENGINE.build_graph(source, archive)
 
-    # Attempt #2 discovered this target and estimated ~246 KiB of mosaic record savings against
-    # standalone direct storage, yet the complete graph became ~1.9 KiB larger because v0.28's solid
-    # root pack had already captured the same redundancy. Attempt #3 must still discover/tournament the
-    # target, but it must not remove the direct leaf unless *physical pack marginal bytes* pay for the
-    # complete mosaic record.
-    assert stats["leaf_pack_tournaments"] >= 1
-    assert stats["leaf_pack_rejections"] >= 1
-    assert stats["mosaic_leaf_nodes"] == 0
+    # The focused diagnostic proved both external mosaic and same-pack preconditioning lose here. The
+    # Placement Compiler must still discover/evaluate the target, but it must not manufacture a win.
+    assert stats["mosaic_auditions"] >= 1
+    assert stats["pack_local_mosaic_nodes"] == 0
+    assert stats["copack_mosaic_nodes"] == 0
     assert ENGINE.strong_verify(archive)["ok"] is True
 
 
-def test_jointly_useful_partial_root_survives_one_root_loss(tmp_path: Path):
-    suite = tmp_path / "source-like"
-    STRESS.source_like_merge(suite)
-    source = suite / "04_source_like_merge"
-    archive = tmp_path / "partial-root.cmpct"
+def test_source_like_uses_pack_local_semantic_recipe(tmp_path: Path):
+    source = _stress(tmp_path, STRESS.source_like_merge, "04_source_like_merge")
+    archive = tmp_path / "source-like.cmpct"
     stats = ENGINE.build_graph(source, archive)
 
-    # This is the actual preserved v2 counterexample: root 0's one-root target costs 5,818 B, while
-    # root 1 costs 5,888 B versus 5,878 B direct—10 B worse despite copying ~195 KiB. Together they
-    # produce an 805 B primitive mosaic. Attempt #2 discarded root 1 because saving<=0 and therefore
-    # never auditioned the complete mosaic. Attempt #3 must retain that exact-copy contribution.
-    assert stats["partial_roots_retained"] >= 1
-    assert stats["leaf_candidates"] >= 1
-    assert stats["leaf_pack_tournaments"] >= 1
+    # Oracle diagnosis measured +128 B after charging descriptor overhead only when the recipe replaces
+    # the raw target *inside the already-required solid pack*. Attempt #4 must exercise that embodiment.
+    assert stats["pack_local_trials"] >= 1
+    assert stats["pack_local_mosaic_nodes"] >= 1
+    assert stats["max_mosaic_read_amplification"] <= ENGINE.MAX_READ_AMP
+    assert ENGINE.strong_verify(archive)["ok"] is True
+
+    stream, meta, *_ = ENGINE._open(archive)
+    stream.close()
+    assert any(desc[0] == "pack_mosaic" for desc in meta["nodes"])
+
+
+def test_root_diversity_can_copack_required_direct_bases(tmp_path: Path):
+    source = _stress(tmp_path, STRESS.root_diversity_pressure, "09_root_diversity_pressure")
+    archive = tmp_path / "diversity.cmpct"
+    stats = ENGINE.build_graph(source, archive)
+
+    # The oracle found ~62.8 KiB marginal headroom but the best four roots spanned two generic packs.
+    # A dedicated base co-pack is allowed only inside the existing 2 MiB / 8x locality contract.
+    assert stats["copack_trials"] >= 1
+    assert stats["copack_mosaic_nodes"] >= 1
     assert stats["max_mosaic_read_amplification"] <= ENGINE.MAX_READ_AMP
     assert ENGINE.strong_verify(archive)["ok"] is True
 
 
+def test_small_target_relative_floor_can_upgrade_single_delta(tmp_path: Path):
+    source = _stress(tmp_path, STRESS.small_metadata_control, "10_small_metadata_control")
+    archive = tmp_path / "small.cmpct"
+    stats = ENGINE.build_graph(source, archive)
+
+    # The 2 KiB target already has a valid inherited single delta. The missing second root copied only
+    # ~540 B, so a 4 KiB absolute mosaic contribution floor made it impossible to nominate. Attempt #4
+    # uses the preregistered target-relative floor and still requires a complete measured record win.
+    assert stats["small_mosaic_upgrades"] >= 1
+    assert stats["mosaic_upgrade_nodes"] >= 1
+    assert stats["max_mosaic_read_amplification"] <= ENGINE.MAX_READ_AMP
+    assert ENGINE.strong_verify(archive)["ok"] is True
+
+
+def test_false_neighbor_and_incompressible_controls_do_not_create_mosaic(tmp_path: Path):
+    false_source = _stress(tmp_path, STRESS.false_neighbors_control, "07_false_neighbors_control")
+    incompressible_source = _stress(tmp_path, STRESS.incompressible_control, "08_incompressible_control")
+    false_archive = tmp_path / "false.cmpct"
+    random_archive = tmp_path / "random.cmpct"
+    false_stats = ENGINE.build_graph(false_source, false_archive)
+    random_stats = ENGINE.build_graph(incompressible_source, random_archive)
+    assert false_stats["mosaic_nodes"] == 0
+    assert random_stats["mosaic_nodes"] == 0
+    assert ENGINE.strong_verify(false_archive)["ok"] is True
+    assert ENGINE.strong_verify(random_archive)["ok"] is True
+
+
 def test_all_mosaic_dependencies_remain_direct(tmp_path: Path):
-    source = _workload(tmp_path)
+    source = _v1_two_parent(tmp_path)
     archive = tmp_path / "flat.cmpct"
     ENGINE.build_graph(source, archive)
-    stream, meta, *_ = ENGINE.BASE._open_mosaic(archive)
+    stream, meta, *_ = ENGINE._open(archive)
     stream.close()
     nodes = meta["nodes"]
     for desc in nodes:
-        if desc[0] != "mosaic":
+        if desc[0] == "mosaic":
+            base_ids = desc[1]
+        elif desc[0] == "pack_mosaic":
+            base_ids = desc[4]
+        else:
             continue
-        base_ids = desc[1]
         assert 2 <= len(base_ids) <= 4
         assert all(nodes[base_id][0] == "direct" for base_id in base_ids)
 
 
 def test_primary_metadata_damage_recovers_from_authenticated_tail(tmp_path: Path):
-    source = _workload(tmp_path)
+    source = _v1_two_parent(tmp_path)
     archive = tmp_path / "recover.cmpct"
-    stats = ENGINE.build_graph(source, archive)
-    assert stats["mosaic_nodes"] >= 1
-
+    ENGINE.build_graph(source, archive)
     raw = bytearray(archive.read_bytes())
     _, meta_comp_size, *_ = ENGINE.HDR.unpack(raw[: ENGINE.HDR.size])
     assert meta_comp_size > 4
-    # Damage only the primary compressed metadata. Header sizes remain intact so the reader can locate
-    # physical records after authenticating the redundant tail metadata copy.
     raw[ENGINE.HDR.size + 3] ^= 0x5A
     archive.write_bytes(raw)
     assert ENGINE.strong_verify(archive)["ok"] is True
 
 
 def test_physical_leaf_corruption_fails_closed(tmp_path: Path):
-    source = _workload(tmp_path)
+    source = _v1_two_parent(tmp_path)
     archive = tmp_path / "corrupt.cmpct"
     ENGINE.build_graph(source, archive)
-
-    stream, meta, record_start, offsets, _ = ENGINE.BASE._open_mosaic(archive)
+    stream, meta, record_start, offsets, _ = ENGINE._open(archive)
     stream.close()
     assert offsets
     raw = bytearray(archive.read_bytes())
@@ -132,15 +165,12 @@ def test_physical_leaf_corruption_fails_closed(tmp_path: Path):
     assert csize > 0
     raw[first_header + ENGINE.PH.size] ^= 0x01
     archive.write_bytes(raw)
-
-    # Footnote: metadata recovery is not payload forgiveness. A corrupt Merkle-authenticated physical
-    # leaf must fail even though a healthy tail metadata copy still exists.
     with pytest.raises(RuntimeError):
         ENGINE.strong_verify(archive)
 
 
 def test_outer_portfolio_never_exceeds_v028_artifact(tmp_path: Path):
-    source = _workload(tmp_path)
+    source = _v1_two_parent(tmp_path)
     archive = tmp_path / "portfolio.cmpct"
     result = ENGINE.build(source, archive)
     assert result["archive_bytes"] <= result["v028_bytes"]
