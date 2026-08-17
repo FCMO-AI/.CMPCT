@@ -51,7 +51,7 @@ jobs:
       - name: Gate generated performance data
         run: |
           python - <<'PY'
-          import json, re, tomllib
+          import json, math, re, tomllib
           from pathlib import Path
 
           data = json.loads(Path('_site/project-data.json').read_text())
@@ -65,11 +65,96 @@ jobs:
           assert Path('_site/surface-revision.txt').read_text().strip() == surface
           assert data['frontier'], 'performance site requires a committed research-frontier record'
           assert data['frontier']['project_version'] == version, 'public frontier must follow the current core release'
+
           if version == '0.28.0':
-              assert data['frontier'].get('render_contract') == 'entropygraph-v028'
-              assert data['frontier']['regressions_primary'] == 0
-              assert data['frontier']['wins_primary'] >= 1
-              assert data['frontier']['primary_comparator']['short'] == 'EntropyGraph v0.25'
+              frontier = data['frontier']
+              assert frontier.get('render_contract') == 'entropygraph-v028'
+              assert frontier['regressions_primary'] == 0
+              assert frontier['wins_primary'] >= 1
+              assert frontier['primary_comparator']['short'] == 'EntropyGraph v0.25'
+
+              overall = frontier['overall_comparison']
+              release = frontier['release_delta']
+              rows = overall['competitors']
+              by_short = {row['short']: row for row in rows}
+              candidate_rows = [row for row in rows if row.get('role') == 'candidate']
+              assert len(candidate_rows) == 1
+              assert overall['candidate_bytes'] == candidate_rows[0]['bytes']
+              assert overall['headline_comparator_short'] in by_short
+              assert overall['headline_comparator_short'] != release['baseline_short']
+              assert 'ZIP / Deflate' in by_short
+              assert '7z / LZMA2' in by_short
+              assert 'tar / Zstd solid' in by_short
+              assert all(row['short'] != release['baseline_short'] for row in rows)
+
+              # Footnote: these two candidate totals intentionally represent different aggregation
+              # contracts. Equality is not required; accidentally using one for both is the bug this
+              # gate exists to catch.
+              assert overall['candidate_bytes'] != release['candidate_bytes']
+              assert release['baseline_bytes'] == frontier['primary_comparator']['bytes']
+              expected_release = (release['baseline_bytes'] - release['candidate_bytes']) / release['baseline_bytes'] * 100.0
+              assert math.isclose(release['lead_pct'], expected_release, rel_tol=0, abs_tol=1e-12)
+              for row in rows:
+                  if row.get('role') == 'candidate':
+                      continue
+                  expected = (row['bytes'] - overall['candidate_bytes']) / row['bytes'] * 100.0
+                  assert math.isclose(row['lead_pct'], expected, rel_tol=0, abs_tol=1e-12), row['short']
+
+              renderer = Path('site/src/assets/frontier-v028.js').read_text()
+              assert 'overall_comparison' in renderer
+              assert 'release_delta' in renderer
+              assert 'v0.28 RELEASE DELTA' in renderer
+
+          elif version == '0.29.0':
+              frontier = data['frontier']
+              assert frontier.get('render_contract') == 'mosaic-v029'
+              assert frontier['regressions_primary'] == 0
+              assert frontier['wins_primary'] >= 1
+              assert frontier['primary_comparator']['short'] == 'CMPCT v0.28'
+              assert frontier['candidate'].get('engine_identity') == 'attempt5-residual-program-packing'
+
+              overall = frontier['overall_comparison']
+              release = frontier['release_delta']
+              scheduler = frontier['scheduler']
+              rows = overall['competitors']
+              by_short = {row['short']: row for row in rows}
+              candidate_rows = [row for row in rows if row.get('role') == 'candidate']
+              assert len(candidate_rows) == 1
+              assert overall['candidate_bytes'] == candidate_rows[0]['bytes']
+              assert overall['headline_comparator_short'] in by_short
+              assert '7z / LZMA2' in by_short
+              assert 'ZPAQ m5' in by_short
+              assert 'tar / Zstd solid' in by_short
+              assert all(row['short'] != release['baseline_short'] for row in rows)
+
+              expected_release = (release['baseline_bytes'] - release['candidate_bytes']) / release['baseline_bytes'] * 100.0
+              assert release['baseline_bytes'] == frontier['primary_comparator']['bytes']
+              assert math.isclose(release['lead_pct'], expected_release, rel_tol=0, abs_tol=1e-12)
+              assert release['saving_bytes'] > 0
+
+              # Footnote: the original scheduler experiment was byte-identical but targeted obsolete
+              # attempt #1. The public release must therefore prove both archive identity *and engine
+              # identity*, and its hostile candidate must strictly beat embedded v0.28 on the same tree.
+              assert scheduler['accepted_engine'] == 'attempt5-residual-program-packing'
+              assert scheduler['byte_identical'] is True
+              assert scheduler['research_gate_pass'] is True
+              assert scheduler['every_pair_gate_pass'] is True
+              assert scheduler['archive_bytes'] < scheduler['v028_bytes']
+              assert scheduler['archive_bytes'] == overall['candidate_bytes']
+              assert scheduler['wallclock_improvement_pct'] >= 20.0
+              assert scheduler['wallclock_saved_s'] >= 5.0
+
+              for row in rows:
+                  if row.get('role') == 'candidate':
+                      continue
+                  expected = (row['bytes'] - overall['candidate_bytes']) / row['bytes'] * 100.0
+                  assert math.isclose(row['lead_pct'], expected, rel_tol=0, abs_tol=1e-12), row['short']
+
+              renderer = Path('site/src/assets/frontier-v029.js').read_text()
+              assert 'mosaic-v029' in renderer
+              assert 'v0.29 RELEASE DELTA' in renderer
+              assert 'CREATE WALL TIME' in renderer
+
           assert len(data['frontier']['competitors']) >= 4
           assert data['frontier']['workloads'], 'frontier workload matrix must not be empty'
           assert data['parity_records'], 'canonical ZIP-parity evidence must remain visible'
@@ -82,6 +167,7 @@ jobs:
           node --check site/src/assets/app.js
           node --check site/src/assets/motion.js
           node --check site/src/assets/frontier-v028.js
+          node --check site/src/assets/frontier-v029.js
           node --check site/src/assets/cmpct-browser-writer.js
 
       - name: Gate browser-written archive through canonical reader
@@ -126,5 +212,6 @@ jobs:
 
 # Footnote: main publishes automatically only after disclosure, generated benchmark-data coherence,
 # presentation-revision coherence, JavaScript syntax, and canonical-reader Browser Lab compatibility
-# gates pass. EntropyGraph II gets an explicit schema/comparator check so a future site refactor cannot
-# silently relabel the inherited frontier or a structural competitor as a different archive format.
+# gates pass. Each research release keeps its external-format arena separate from its direct-base delta;
+# v0.29 additionally pins the scheduler to accepted attempt #5 so stale byte-identical experiments cannot
+# be promoted by accident.
