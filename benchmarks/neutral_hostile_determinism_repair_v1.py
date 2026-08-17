@@ -16,20 +16,12 @@ same repaired tree. A repair is accepted only after two independent regeneration
 hashes, so a new timestamp bug cannot quietly become a compression 'improvement'.
 """
 
+import functools
 import gzip
 import io
 from pathlib import Path
 import re
 import zipfile
-
-# ReportLab exposes an explicit reproducible-output switch. The repair module is loaded before the
-# affected builders run, so setting it here removes timestamp/random-ID variation at the source instead
-# of relying only on brittle post-hoc PDF surgery.
-try:
-    from reportlab import rl_config as _reportlab_config
-    _reportlab_config.invariant = 1
-except ImportError:  # pragma: no cover - benchmark dependency is present in the proving workflow.
-    _reportlab_config = None
 
 FIXED_ZIP_DATE = (2020, 1, 1, 0, 0, 0)
 FIXED_W3CDTF = b"2020-01-01T00:00:00Z"
@@ -45,13 +37,43 @@ _PDF_DATE_RE = re.compile(rb"D:\d{14}(?:[+\-Z']\d{0,4}'?)?")
 _PDF_ID_RE = re.compile(rb"/ID\s*\[\s*<([0-9A-Fa-f]+)>\s*<([0-9A-Fa-f]+)>\s*\]")
 
 
+def install_generation_hooks(neutral_module) -> None:
+    """Force deterministic producer modes without editing the historical v1 generator.
+
+    ReportLab's ``Canvas`` has an explicit ``invariant`` argument. The historical corpus builder imports
+    the ``reportlab.pdfgen.canvas`` module and calls ``canvas.Canvas(...)`` without that argument, so a
+    wrapper at the exact imported constructor boundary is both narrower and more reliable than mutating
+    process-global settings after modules have initialized.
+    """
+    canvas_module = getattr(neutral_module, "canvas", None)
+    if canvas_module is None or not hasattr(canvas_module, "Canvas"):
+        raise RuntimeError("neutral hostile generator no longer exposes reportlab canvas module")
+    current = canvas_module.Canvas
+    if getattr(current, "_cmpct_invariant_wrapper", False):
+        return
+
+    @functools.wraps(current)
+    def stable_canvas(*args, **kwargs):
+        # Footnote: ``setdefault`` respects an explicit future corpus choice while making the historical
+        # no-argument call reproducible. It does not alter page contents, compression, or layout policy.
+        kwargs.setdefault("invariant", 1)
+        return current(*args, **kwargs)
+
+    stable_canvas._cmpct_invariant_wrapper = True
+    canvas_module.Canvas = stable_canvas
+
+
 def _stable_xml(data: bytes) -> bytes:
     """Replace volatile W3CDTF values while preserving the surrounding package XML."""
     return _W3CDTF_RE.sub(FIXED_W3CDTF, data)
 
 
 def _stable_pdf(path: Path) -> None:
-    """Normalize residual ReportLab date/ID fields in-place without shifting xref offsets."""
+    """Normalize residual ReportLab date/ID fields in-place without shifting xref offsets.
+
+    Invariant generation is the primary fix. This pass remains as defense in depth in case a producer
+    revision retains deterministic-but-environment-specific metadata fields outside its invariant mode.
+    """
     data = path.read_bytes()
 
     def date_repl(match: re.Match[bytes]) -> bytes:
