@@ -54,7 +54,9 @@ def test_prefixgraph_selective_member_roundtrip_and_stats(tmp_path: Path) -> Non
     stats = pg.build(source, archive)
     assert stats["prefix_records"] > 0
 
-    target = next(rel for rel in files if rel != files.keys().__iter__().__next__())
+    # Footnote: choose a stable non-first family member so the test exercises a likely depth-1 target without
+    # depending on dict-view iterator mechanics. PrefixGraph's own oracle separately proves prefix selection.
+    target = sorted(files)[1]
     raw, read_stats = member.read_member(archive, target, with_stats=True)
     assert raw == files[target]
     assert read_stats["representation"] == "prefixgraph"
