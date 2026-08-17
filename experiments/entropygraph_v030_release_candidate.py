@@ -2,12 +2,13 @@
 
 This module is the first system-level v0.30 selector.  It does **not** add independent research savings
 arithmetically.  Instead it builds complete, independently verifiable artifacts and publishes the exact
-smallest eligible one:
+smallest *release-eligible* one:
 
 1. ``G04.build`` produces the monotone Mosaic path: accepted v0.29 fallback plus the full G0-G4 pre-fallback
    Geometry overlay, so this candidate can never be larger than accepted v0.29.
 2. PrefixGraph is auditioned only when its public oracle contract can represent the exact live tree.
-3. The smaller complete artifact wins; exact ties conservatively retain the G0-G4/v0.29 path.
+3. A PrefixGraph artifact must additionally satisfy the release-wide <=8x per-member decoded-context law.
+4. The smaller admitted complete artifact wins; exact ties conservatively retain the G0-G4/v0.29 path.
 
 The tournament is intentionally useful before PrefixGraph is internalized as a native Mosaic graph edge.  It
 answers the release-system question honestly—what complete archive would v0.30 choose for this workload?—while
@@ -30,6 +31,8 @@ import time
 
 from experiments import entropygraph_v030_geometry_overlay_g04 as G04
 from experiments import entropygraph_v030_prefixgraph as PG
+
+MAX_MEMBER_READ_AMP = 8.0
 
 
 def treehash(root: Path) -> str:
@@ -55,6 +58,45 @@ def _prefixgraph_eligibility(root: Path, expected_tree: str) -> tuple[bool, str 
     if pg_tree != expected_tree:
         return False, "tree-identity-contract-mismatch"
     return True, None
+
+
+def _prefixgraph_locality(archive: Path) -> dict:
+    """Measure the conservative decoded-context amplification needed for one PrefixGraph member.
+
+    A prefix-coded target requires its own logical output plus the complete raw direct anchor as Zstd history.
+    Counting both is deliberately stricter than physical compressed-byte traffic: it captures the memory/work
+    context the selective read must materialize and matches CMPCT's policy that context cannot be made free by
+    compressing it well.  Direct members are 1.0x.  Depth remains exactly 0/1.
+    """
+    meta, _payloads = PG._read(archive)
+    records = meta["records"]
+    worst = 0.0
+    prefix_records = 0
+    rows: list[dict] = []
+    for index, desc in enumerate(records):
+        if not isinstance(desc, list) or len(desc) != 6:
+            raise RuntimeError("malformed PrefixGraph record during locality accounting")
+        kind, base, usize, _csize, _payload_sha, _logical_sha = desc
+        usize = int(usize)
+        if kind == "direct":
+            amp = 1.0
+        elif kind == "prefix":
+            base = int(base)
+            if not 0 <= base < len(records) or records[base][0] != "direct":
+                raise RuntimeError("PrefixGraph locality saw non-direct depth-1 base")
+            anchor_usize = int(records[base][2])
+            amp = (max(0, usize) + max(0, anchor_usize)) / max(1, usize)
+            prefix_records += 1
+        else:
+            raise RuntimeError("unknown PrefixGraph record during locality accounting")
+        worst = max(worst, amp)
+        rows.append({"record": index, "kind": kind, "decoded_context_amplification": amp})
+    return {
+        "max_member_read_amplification": worst,
+        "prefix_records": prefix_records,
+        "passed": worst <= MAX_MEMBER_READ_AMP,
+        "rows": rows,
+    }
 
 
 def _verify_component(path: Path, expected_tree: str, verifier, label: str) -> dict:
@@ -124,18 +166,25 @@ def build(root: Path, out: Path) -> dict:
         if g04_bytes > v029_bytes:
             raise RuntimeError("monotone G0-G4 candidate exceeded accepted v0.29 floor")
 
-        pg_eligible, pg_reject_reason = _prefixgraph_eligibility(root, expected_tree)
+        pg_contract_eligible, pg_reject_reason = _prefixgraph_eligibility(root, expected_tree)
+        pg_admitted = False
         pg_stats = None
         pg_verify = None
+        pg_locality = None
         pg_bytes = None
-        if pg_eligible:
+        if pg_contract_eligible:
             pg_stats = PG.build(root, pg_path)
             pg_verify = _verify_component(pg_path, expected_tree, PG.strong_verify, "PrefixGraph candidate")
             pg_bytes = pg_path.stat().st_size
+            pg_locality = _prefixgraph_locality(pg_path)
+            pg_admitted = bool(pg_locality["passed"])
+            if not pg_admitted:
+                pg_reject_reason = "locality-ceiling"
 
         # Exact ties stay on the richer inherited path.  Approximate nomination may decide which PrefixGraph
-        # anchors are tried, but it never decides this complete-artifact tournament.
-        if pg_bytes is not None and pg_bytes < g04_bytes:
+        # anchors are tried, but it never decides this complete-artifact tournament.  A smaller PrefixGraph
+        # that violates locality is retained as diagnostic evidence but cannot become the released artifact.
+        if pg_admitted and pg_bytes is not None and pg_bytes < g04_bytes:
             selected_path = pg_path
             selected = "prefixgraph"
             selected_verify = pg_verify
@@ -161,9 +210,11 @@ def build(root: Path, out: Path) -> dict:
             "v029_bytes": v029_bytes,
             "g04_bytes": g04_bytes,
             "g04_selected": g04_stats["selected"],
-            "prefixgraph_eligible": pg_eligible,
+            "prefixgraph_contract_eligible": pg_contract_eligible,
+            "prefixgraph_admitted": pg_admitted,
             "prefixgraph_reject_reason": pg_reject_reason,
             "prefixgraph_bytes": pg_bytes,
+            "prefixgraph_locality": pg_locality,
             "saving_vs_v029_bytes": v029_bytes - selected_bytes,
             "saving_vs_g04_bytes": g04_bytes - selected_bytes,
             "tree_sha256": expected_tree,
@@ -171,6 +222,11 @@ def build(root: Path, out: Path) -> dict:
             "selection_materialization": "same-filesystem-atomic-move",
             "selection_extra_payload_write_bytes": 0,
             "max_dependency_depth": int(pg_stats.get("max_dependency_depth", 0)) if selected == "prefixgraph" else 0,
+            "max_selected_member_read_amplification": (
+                float(pg_locality["max_member_read_amplification"])
+                if selected == "prefixgraph" and pg_locality is not None
+                else float(g04_stats.get("max_selected_member_read_amplification", 0.0))
+            ),
             "g04": g04_stats,
             "prefixgraph": pg_stats,
             "g04_strong_verify": g04_verify,
