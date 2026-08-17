@@ -30,7 +30,7 @@ jobs:
       - name: Install pinned corpus dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y zstd ffmpeg gcc libsndfile1
+          sudo apt-get install -y zstd gcc libsndfile1
           python -m pip install --upgrade pip
           python -m pip install -e '.[audio,test]'
           python -m pip install pillow==12.3.0 reportlab==5.0.0 python-docx==1.2.0 openpyxl==3.1.5 python-pptx==1.0.2 numpy==2.4.6
@@ -74,4 +74,4 @@ jobs:
           path: benchmark-artifacts/neutral-hostile-v1-determinism-repair-v4.json
           if-no-files-found: warn
 
-# Footnote: this workflow proves a replacement benchmark identity; it does not rewrite historical v0.28 evidence or change canonical format bytes.
+# Footnote: the portable media identity deliberately no longer requires FFmpeg installation. Historical v0.28 evidence remains immutable.
