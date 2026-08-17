@@ -8,7 +8,7 @@ import sys
 import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
-ENGINE_PATH = ROOT / "experiments" / "entropygraph_v029_residual_strict.py"
+ENGINE_PATH = ROOT / "experiments" / "entropygraph_v029_strict_reconcile.py"
 CORPUS_PATH = ROOT / "benchmarks" / "mosaic_hostile_corpus_v1.py"
 STRESS_PATH = ROOT / "benchmarks" / "mosaic_stress_corpus_v2.py"
 
@@ -83,6 +83,15 @@ def _rewrite_authenticated_metadata(archive: Path, mutate) -> None:
         out.write(ENGINE.FTR.pack(ENGINE.IMPL.TAIL, len(comp), len(raw), meta_sha, merkle))
 
 
+def _assert_locality(stats: dict) -> None:
+    # Footnote: attempt #5 originally gated mosaic-target locality and residual-recipe locality but not
+    # ordinary root-pack locality. Keep all three bounds visible in every graph-focused test so a future
+    # selector refactor cannot reintroduce the ~23.68x loophole silently.
+    assert stats["pack_read_amplification"] <= ENGINE.MAX_READ_AMP
+    assert stats["max_mosaic_read_amplification"] <= ENGINE.MAX_READ_AMP
+    assert stats.get("max_additional_recipe_read_amplification", 0.0) <= ENGINE.MAX_ADDITIONAL_RECIPE_AMP
+
+
 def test_placement_archive_reconstructs_and_uses_mosaic(tmp_path: Path):
     source = _v1_two_parent(tmp_path)
     archive = tmp_path / "placement.cmpct"
@@ -91,7 +100,7 @@ def test_placement_archive_reconstructs_and_uses_mosaic(tmp_path: Path):
     # CMPNX10 placement artifacts instead of paying a gratuitous CMPNX11 metadata/version envelope.
     assert archive.read_bytes()[:8] in {ENGINE.MAG, ENGINE.PLACEMENT_MAG}
     assert stats["mosaic_nodes"] >= 1
-    assert stats["max_mosaic_read_amplification"] <= ENGINE.MAX_READ_AMP
+    _assert_locality(stats)
     assert ENGINE.strong_verify(archive)["tree_sha256"] == ENGINE.BASE.treehash(source)
 
     restored = tmp_path / "restored"
@@ -109,6 +118,7 @@ def test_shifted_reordered_stays_in_better_solid_representation(tmp_path: Path):
     assert stats["mosaic_auditions"] >= 1
     assert stats["pack_local_mosaic_nodes"] == 0
     assert stats["copack_mosaic_nodes"] == 0
+    _assert_locality(stats)
     assert ENGINE.strong_verify(archive)["ok"] is True
 
 
@@ -121,7 +131,7 @@ def test_source_like_uses_pack_local_semantic_recipe(tmp_path: Path):
     # the raw target *inside the already-required solid pack*. Attempt #4 must exercise that embodiment.
     assert stats["pack_local_trials"] >= 1
     assert stats["pack_local_mosaic_nodes"] >= 1
-    assert stats["max_mosaic_read_amplification"] <= ENGINE.MAX_READ_AMP
+    _assert_locality(stats)
     assert ENGINE.strong_verify(archive)["ok"] is True
 
     stream, meta, *_ = ENGINE._open(archive)
@@ -138,7 +148,7 @@ def test_root_diversity_can_copack_required_direct_bases(tmp_path: Path):
     # A dedicated base co-pack is allowed only inside the existing 2 MiB / 8x locality contract.
     assert stats["copack_trials"] >= 1
     assert stats["copack_mosaic_nodes"] >= 1
-    assert stats["max_mosaic_read_amplification"] <= ENGINE.MAX_READ_AMP
+    _assert_locality(stats)
     assert ENGINE.strong_verify(archive)["ok"] is True
 
 
@@ -152,7 +162,7 @@ def test_small_target_relative_floor_can_upgrade_single_delta(tmp_path: Path):
     # uses the preregistered target-relative floor and still requires a complete measured record win.
     assert stats["small_mosaic_upgrades"] >= 1
     assert stats["mosaic_upgrade_nodes"] >= 1
-    assert stats["max_mosaic_read_amplification"] <= ENGINE.MAX_READ_AMP
+    _assert_locality(stats)
     assert ENGINE.strong_verify(archive)["ok"] is True
 
 
@@ -165,6 +175,8 @@ def test_false_neighbor_and_incompressible_controls_do_not_create_mosaic(tmp_pat
     random_stats = ENGINE.build_graph(incompressible_source, random_archive)
     assert false_stats["mosaic_nodes"] == 0
     assert random_stats["mosaic_nodes"] == 0
+    _assert_locality(false_stats)
+    _assert_locality(random_stats)
     assert ENGINE.strong_verify(false_archive)["ok"] is True
     assert ENGINE.strong_verify(random_archive)["ok"] is True
 
@@ -172,7 +184,8 @@ def test_false_neighbor_and_incompressible_controls_do_not_create_mosaic(tmp_pat
 def test_all_mosaic_dependencies_remain_direct(tmp_path: Path):
     source = _v1_two_parent(tmp_path)
     archive = tmp_path / "flat.cmpct"
-    ENGINE.build_graph(source, archive)
+    stats = ENGINE.build_graph(source, archive)
+    _assert_locality(stats)
     stream, meta, *_ = ENGINE._open(archive)
     stream.close()
     nodes = meta["nodes"]
@@ -197,7 +210,7 @@ def test_compressed_stream_avalan_uses_bounded_residual_program_packs(tmp_path: 
     assert stats["residual_pack_records"] >= 1
     assert stats["residual_packed_delta_nodes"] >= 2
     assert stats["residual_raw_bytes"] <= stats["residual_pack_records"] * ENGINE.MAX_RESIDUAL_PACK
-    assert stats["max_additional_recipe_read_amplification"] <= ENGINE.MAX_ADDITIONAL_RECIPE_AMP
+    _assert_locality(stats)
     assert ENGINE.strong_verify(archive)["ok"] is True
 
     stream, meta, record_start, offsets, _ = ENGINE._open(archive)
@@ -228,6 +241,7 @@ def test_single_delta_control_cannot_manufacture_residual_pack(tmp_path: Path):
     stats = ENGINE.build_graph(source, archive)
     assert stats["residual_pack_records"] == 0
     assert stats["residual_packed_delta_nodes"] == 0
+    _assert_locality(stats)
     assert ENGINE.strong_verify(archive)["ok"] is True
 
 
@@ -236,6 +250,7 @@ def test_authenticated_malformed_residual_recipe_slice_fails_bounds(tmp_path: Pa
     archive = tmp_path / "bad-slice.cmpct"
     stats = ENGINE.build_graph(source, archive)
     assert stats["residual_packed_delta_nodes"] >= 2
+    _assert_locality(stats)
 
     def mutate(meta):
         for desc in meta["nodes"]:
@@ -256,6 +271,7 @@ def test_primary_metadata_damage_recovers_from_authenticated_tail(tmp_path: Path
     archive = tmp_path / "recover.cmpct"
     stats = ENGINE.build_graph(source, archive)
     assert stats["residual_pack_records"] >= 1
+    _assert_locality(stats)
     raw = bytearray(archive.read_bytes())
     _, meta_comp_size, *_ = ENGINE.HDR.unpack(raw[: ENGINE.HDR.size])
     assert meta_comp_size > 4
@@ -269,6 +285,7 @@ def test_residual_physical_leaf_corruption_fails_closed(tmp_path: Path):
     archive = tmp_path / "corrupt-residual.cmpct"
     stats = ENGINE.build_graph(source, archive)
     assert stats["residual_pack_records"] >= 1
+    _assert_locality(stats)
 
     stream, meta, record_start, offsets, _ = ENGINE._open(archive)
     stream.close()
@@ -287,7 +304,8 @@ def test_residual_physical_leaf_corruption_fails_closed(tmp_path: Path):
 def test_physical_leaf_corruption_fails_closed(tmp_path: Path):
     source = _v1_two_parent(tmp_path)
     archive = tmp_path / "corrupt.cmpct"
-    ENGINE.build_graph(source, archive)
+    stats = ENGINE.build_graph(source, archive)
+    _assert_locality(stats)
     stream, meta, record_start, offsets, _ = ENGINE._open(archive)
     stream.close()
     assert offsets
@@ -307,4 +325,7 @@ def test_outer_portfolio_never_exceeds_v028_artifact(tmp_path: Path):
     result = ENGINE.build(source, archive)
     assert result["archive_bytes"] <= result["v028_bytes"]
     assert result["selected"] in {"mosaic", "v028-fallback"}
+    assert result["strict_v028_reconciled"] is True
+    if result["selected"] == "mosaic":
+        _assert_locality(result["mosaic"])
     assert ENGINE.strong_verify(archive)["ok"] is True
