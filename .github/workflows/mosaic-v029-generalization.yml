@@ -1,0 +1,117 @@
+name: CMPCT v0.29 inherited-frontier generalization
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-v029-generalization-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  generalize:
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    env:
+      CMPCT_PREFLATE_BRIDGE: ${{ github.workspace }}/native/preflate-bridge/target/release/cmpct-preflate-bridge
+    steps:
+      - name: Check out candidate
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install deterministic benchmark dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y zstd ffmpeg gcc libsndfile1
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[audio,test]'
+          python -m pip install pillow reportlab python-docx openpyxl python-pptx numpy
+
+      - name: Build pinned memory-safe Preflate bridge
+        run: |
+          rustup toolchain install 1.89.0 --profile minimal
+          cargo +1.89.0 build --release --manifest-path native/preflate-bridge/Cargo.toml
+
+      - name: Measure exact 15-workload v0.28 frontier
+        run: |
+          mkdir -p benchmark-artifacts
+          set -o pipefail
+          python benchmarks/mosaic_v029_generalization_bench.py \
+            --work-root benchmark-artifacts/CMPCT_V029_Generalization \
+            --output benchmark-artifacts/mosaic-v029-generalization.json \
+            2>&1 | tee benchmark-artifacts/mosaic-v029-generalization.stdout.txt
+
+      - name: Enforce preregistered generalization gate
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          r=json.loads(Path('benchmark-artifacts/mosaic-v029-generalization.json').read_text())
+          t=r['totals']
+          print(json.dumps(t, indent=2))
+          assert r['claim_boundary'].startswith('attempt-5 generalization versus exact embedded v0.28')
+          assert t['workloads'] == 15, t
+          assert t['baseline_tree_drift_rows'] == 0, t
+          assert t['baseline_byte_drift_rows'] == 0, t
+          assert t['v028_bytes'] == 137_557_457, t
+          assert t['workloads_regressed'] == 0, t
+          assert t['candidate_bytes'] < t['v028_bytes'], t
+          assert t['workloads_improved'] >= 1, t
+          assert t['max_mosaic_read_amplification'] <= 8.0, t
+          assert t['max_additional_recipe_read_amplification'] <= 2.0, t
+          assert t['creation_ratio_vs_v028'] <= 3.0, t
+          # Footnote: these values were fixed in MOSAIC_V029_GENERALIZATION.md before this workflow's
+          # first measurement. A red result changes/optimizes the mechanism; it does not relax the gate.
+          PY
+
+      - name: Full regression suite
+        run: python -m pytest -q
+
+      - name: Public-surface guard
+        run: python tools/check_public_surface.py
+
+      - name: Summarize inherited-frontier result
+        if: always()
+        run: |
+          if [ -f benchmark-artifacts/mosaic-v029-generalization.json ]; then
+            python - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          import json
+          from pathlib import Path
+          r=json.loads(Path('benchmark-artifacts/mosaic-v029-generalization.json').read_text()); t=r['totals']
+          print('## CMPCT attempt #5 — inherited v0.28 frontier')
+          print(f"- exact v0.28 bytes: **{t['v028_bytes']:,}**")
+          print(f"- attempt-5 portfolio bytes: **{t['candidate_bytes']:,}**")
+          print(f"- improvement: **{t['smaller_than_v028_pct']:.5f}%**")
+          print(f"- improved / regressed workloads: **{t['workloads_improved']} / {t['workloads_regressed']}**")
+          print(f"- research representation selected: **{t['research_selected']}/15**")
+          print(f"- baseline tree/byte drift rows: **{t['baseline_tree_drift_rows']} / {t['baseline_byte_drift_rows']}**")
+          print(f"- residual packs / packed delta nodes: **{t['residual_pack_records']} / {t['residual_packed_delta_nodes']}**")
+          print(f"- max mosaic amplification: **{t['max_mosaic_read_amplification']:.3f}x**")
+          print(f"- max additional recipe amplification: **{t['max_additional_recipe_read_amplification']:.4f}x**")
+          print(f"- aggregate creation ratio vs embedded v0.28: **{t['creation_ratio_vs_v028']:.3f}x**")
+          PY
+          fi
+
+      - name: Upload generalization evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cmpct-v029-generalization-${{ github.sha }}
+          path: |
+            benchmark-artifacts/mosaic-v029-generalization.json
+            benchmark-artifacts/mosaic-v029-generalization.stdout.txt
+          if-no-files-found: warn
+
+# Footnote: this gate still does not assign project version 0.29.0. A green run earns the separately
+# preregistered structural-competitor sweep and then a canonical/native/recovery release proposal.
