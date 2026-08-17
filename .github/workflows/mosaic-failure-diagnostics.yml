@@ -1,0 +1,100 @@
+name: CMPCT mosaic failure diagnostics
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-mosaic-diagnostics-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 18
+    steps:
+      - name: Check out candidate
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install diagnostic dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libzstd1
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[test]'
+
+      - name: Run v2 mechanism decomposition
+        run: |
+          mkdir -p benchmark-artifacts
+          python benchmarks/mosaic_v029_failure_diagnostics.py \
+            --work-root benchmark-artifacts/CMPCT_Mosaic_Failure_Diagnostics \
+            --output benchmark-artifacts/mosaic-v029-failure-diagnostics.json
+
+      - name: Run locality-legal upper-bound oracle
+        run: |
+          python benchmarks/mosaic_v029_locality_oracle.py \
+            --work-root benchmark-artifacts/CMPCT_Mosaic_Locality_Oracle \
+            --output benchmark-artifacts/mosaic-v029-locality-oracle.json
+
+      - name: Run residual-program pack oracle
+        run: |
+          python benchmarks/mosaic_v029_residual_pack_oracle.py \
+            --work-root benchmark-artifacts/CMPCT_Mosaic_Residual_Pack_Oracle \
+            --output benchmark-artifacts/mosaic-v029-residual-pack-oracle.json
+
+      - name: Summarize likely next mechanism
+        run: |
+          python - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          import json
+          from pathlib import Path
+          r=json.loads(Path('benchmark-artifacts/mosaic-v029-failure-diagnostics.json').read_text())
+          print('## Mosaic failure decomposition')
+          for workload in r['rows']:
+              for target in workload['targets']:
+                  oracle=target.get('pack_local_precondition_oracle') or {}
+                  all_m=target.get('best_all_named_roots_mosaic')
+                  direct_m=target.get('best_direct_named_roots_mosaic')
+                  marginal=(target.get('pack_marginal') or {}).get('marginal_target_pack_bytes')
+                  print(f"- **{workload['name']}** target {target['target_id']}: direct={target['target_is_direct']}, assigned_base={target['assigned_base']}, pack_marginal={marginal}, direct-root mosaic={direct_m and direct_m['bytes']}, all-root mosaic={all_m and all_m['bytes']}, same-pack precondition net={oracle.get('net_estimated_saving')}")
+
+          loc=json.loads(Path('benchmark-artifacts/mosaic-v029-locality-oracle.json').read_text())
+          s=loc['summary']
+          print('## Locality-legal upper bound')
+          print(f"- material legal targets: **{s['material_locality_legal_targets']}**")
+          print(f"- material legal workloads: **{s['material_locality_legal_workloads']}**")
+          print(f"- net physical saving upper bound: **{s['net_physical_saving_upper_bound_bytes']:,} B**")
+          for row in s['material_targets']:
+              print(f"- **{row['workload']}** target {row['target_id']}: net={row['net_physical_saving']:,} B, amp={row['physical_read_amplification']:.3f}x, roots={row['base_ids']}")
+
+          residual=json.loads(Path('benchmark-artifacts/mosaic-v029-residual-pack-oracle.json').read_text())
+          s=residual['summary']
+          print('## Residual-program pack upper bound')
+          print(f"- projected new complete-artifact wins beyond attempt #4: **{s['projected_new_complete_artifact_wins']}**")
+          print(f"- workloads: **{s['projected_new_win_workloads']}**")
+          print(f"- projected new saving versus v0.28: **{s['projected_new_saving_vs_v028_bytes']:,} B**")
+          print(f"- max additional recipe-pack amplification: **{s['max_additional_recipe_read_amplification']:.3f}x**")
+          PY
+
+      - name: Upload diagnostics
+        uses: actions/upload-artifact@v4
+        with:
+          name: cmpct-mosaic-failure-diagnostics-${{ github.sha }}
+          path: |
+            benchmark-artifacts/mosaic-v029-failure-diagnostics.json
+            benchmark-artifacts/mosaic-v029-locality-oracle.json
+            benchmark-artifacts/mosaic-v029-residual-pack-oracle.json
+
+# Footnote: this workflow intentionally has no pass/fail compression threshold. It is a causal probe,
+# and its exhaustive root combinations / residual projections are oracle upper bounds only. Release and
+# research gates remain in mosaic-v029.yml and are not weakened by this diagnostic surface.

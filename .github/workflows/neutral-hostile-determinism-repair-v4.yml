@@ -1,0 +1,68 @@
+name: CMPCT neutral-hostile determinism repair v4 (archived)
+
+# Repair-v4 passed same-run/path-local proof but failed a fresh hosted-runner comparison.  It remains
+# manually reproducible as negative evidence; automatic PR execution moved to the stricter v5 workflow.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  reproduce-v4:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      CMPCT_PREFLATE_BRIDGE: ${{ github.workspace }}/native/preflate-bridge/target/release/cmpct-preflate-bridge
+    steps:
+      - name: Check out candidate
+        uses: actions/checkout@v6
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install pinned corpus dependencies including media producer
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y zstd ffmpeg gcc libsndfile1
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[audio,test]'
+          python -m pip install \
+            pillow==12.3.0 \
+            reportlab==5.0.0 \
+            python-docx==1.2.0 \
+            openpyxl==3.1.5 \
+            python-pptx==1.0.2 \
+            numpy==2.4.6
+
+      - name: Build pinned memory-safe Preflate bridge
+        run: |
+          rustup toolchain install 1.89.0 --profile minimal
+          cargo +1.89.0 build --release --manifest-path native/preflate-bridge/Cargo.toml
+
+      - name: Reproduce within-run v4 proof
+        run: |
+          mkdir -p benchmark-artifacts
+          python benchmarks/neutral_hostile_determinism_repair_v4_check.py \
+            --work-root benchmark-artifacts/CMPCT_Neutral_Hostile_Determinism_Repair_v4 \
+            --output benchmark-artifacts/neutral-hostile-v1-determinism-repair-v4.json
+
+      - name: Focused v4 wrapper tests
+        run: python -m pytest -q tests/test_neutral_media_determinism_repair_v4.py
+
+      - name: Public-surface guard
+        run: python tools/check_public_surface.py
+
+      - name: Upload archived v4 reproduction
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cmpct-neutral-hostile-determinism-repair-v4-reproduction-${{ github.sha }}
+          path: benchmark-artifacts/neutral-hostile-v1-determinism-repair-v4.json
+          if-no-files-found: warn
+
+# Footnote: a green manual v4 run proves only same-run determinism.  It cannot override the preserved
+# cross-host REJECT record or become an accepted benchmark identity.

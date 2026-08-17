@@ -1,0 +1,37 @@
+{
+  "schema": "cmpct-v029-reference-context-rejection-v1",
+  "date": "2026-08-17",
+  "status": "REJECT",
+  "claim_boundary": "Detached ceiling experiment only; no reader-visible grammar was implemented and attempt-5 archive bytes were unchanged.",
+  "workflow": {
+    "run_id": 32018372138,
+    "job_id": 95352613720,
+    "artifact_id": 9284512535,
+    "artifact_sha256": "09f472a532f424c5a134527a741b80ee204a0c3aafcc6de6a1986480c814f4a8",
+    "conclusion": "success"
+  },
+  "frozen_policy": {
+    "max_lsh_candidates_per_target": 8,
+    "max_context_slice_bytes": 131072,
+    "all_pairs_fallback": false,
+    "context_targets_may_be_logical_bases": false,
+    "context_targets_may_be_context_anchors": false,
+    "max_total_read_amplification": 8.0,
+    "max_context_only_read_amplification": 4.0,
+    "min_net_saving_bytes": 131072,
+    "min_targets": 8
+  },
+  "result": {
+    "selected_targets": 0,
+    "net_saving_bytes": 0,
+    "chain_free": true,
+    "logical_base_free": true,
+    "max_total_read_amplification": 0.0,
+    "max_context_only_read_amplification": 0.0,
+    "research_gate_pass": false,
+    "focused_tests": "4 passed",
+    "public_surface_guard": "clean"
+  },
+  "decision": "Terminate Zstd cross-record-context tuning. The global shared-dictionary oracle and the stronger one-hop reference-context oracle both failed frozen gates; do not relax thresholds, deepen dependency chains or add all-pairs rescue search. Move the research frontier to independently decodable large-payload backend choices with explicit memory/CPU accounting.",
+  "next_experiment": "bounded LZMA2 physical-record backend oracle"
+}

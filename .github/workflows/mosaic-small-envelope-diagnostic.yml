@@ -1,0 +1,66 @@
+name: CMPCT small mosaic envelope diagnostic
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-mosaic-small-envelope-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out candidate
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install diagnostic dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libzstd1
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[test]'
+
+      - name: Decompose small-target envelopes
+        run: |
+          mkdir -p benchmark-artifacts
+          python benchmarks/mosaic_v029_small_envelope_diag.py \
+            --work-root benchmark-artifacts/CMPCT_Mosaic_Small_Envelope_Diagnostic \
+            --output benchmark-artifacts/mosaic-v029-small-envelope.json
+
+      - name: Summarize byte accounting
+        run: |
+          python - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          import json
+          from pathlib import Path
+          r=json.loads(Path('benchmark-artifacts/mosaic-v029-small-envelope.json').read_text())
+          print('## Small mosaic envelope decomposition')
+          print(f"- v0.28 portfolio selected: **{r['portfolio']['v028_selected']}** at **{r['portfolio']['v028_archive_bytes']:,} B**")
+          print(f"- CMPNX5: **{r['v025']['total_bytes']:,} B**; raw CMPNX8 graph: **{r['v028_graph']['total_bytes']:,} B**; CMPNX10 placement graph: **{r['placement']['total_bytes']:,} B**")
+          print(f"- CMPNX10 record area: **{r['placement']['record_area_bytes']:,} B**; duplicated compressed metadata: **{r['placement']['metadata_compressed_two_copies_bytes']:,} B**; fixed header/footer: **{r['placement']['header_bytes'] + r['placement']['footer_bytes']:,} B**")
+          o=r['compact_metadata_oracle']
+          print(f"- compact-metadata oracle: **{o['hypothetical_total_bytes']:,} B**, saving **{o['saving_vs_current_placement_bytes']:,} B**; beats v0.28 portfolio: **{o['would_beat_v028_portfolio']}**")
+          print(f"- placement minus CMPNX5: **{r['comparisons']['placement_vs_v025_bytes']:+,} B**; record-area delta: **{r['comparisons']['placement_record_area_vs_v025_bytes']:+,} B**; metadata-copy delta: **{r['comparisons']['placement_two_metadata_copies_vs_v025_bytes']:+,} B**; header/footer delta: **{r['comparisons']['placement_fixed_header_footer_vs_v025_bytes']:+,} B**")
+          PY
+
+      - name: Upload diagnostic
+        uses: actions/upload-artifact@v4
+        with:
+          name: cmpct-mosaic-small-envelope-${{ github.sha }}
+          path: benchmark-artifacts/mosaic-v029-small-envelope.json
+
+# Footnote: this workflow has no compression pass/fail threshold. It decomposes a preserved failed
+# workload so a later mechanism can be preregistered from measured cause rather than tuned to a score.

@@ -1,0 +1,110 @@
+name: CMPCT neutral-hostile determinism repair
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-neutral-hostile-determinism-repair-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  prove:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    env:
+      CMPCT_PREFLATE_BRIDGE: ${{ github.workspace }}/native/preflate-bridge/target/release/cmpct-preflate-bridge
+    steps:
+      - name: Check out candidate
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install pinned corpus dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y zstd gcc libsndfile1
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[audio,test]'
+          python -m pip install \
+            pillow==12.3.0 \
+            reportlab==5.0.0 \
+            python-docx==1.2.0 \
+            openpyxl==3.1.5 \
+            python-pptx==1.0.2 \
+            numpy==2.4.6
+
+      - name: Build pinned memory-safe Preflate bridge
+        run: |
+          rustup toolchain install 1.89.0 --profile minimal
+          cargo +1.89.0 build --release --manifest-path native/preflate-bridge/Cargo.toml
+
+      - name: Prove cross-path two-pass repair and measure v0.28
+        run: |
+          mkdir -p benchmark-artifacts
+          python benchmarks/neutral_hostile_determinism_repair_check.py \
+            --work-root benchmark-artifacts/CMPCT_Neutral_Hostile_Determinism_Repair \
+            --output benchmark-artifacts/neutral-hostile-v1-determinism-repair.json
+
+      - name: Enforce repair contract
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          r=json.loads(Path('benchmark-artifacts/neutral-hostile-v1-determinism-repair.json').read_text())
+          assert r['schema'] == 'cmpct-neutral-hostile-v1-determinism-repair-manifest-v3'
+          assert r['requirements']['two_cross_path_regenerations_match'] is True
+          assert r['requirements']['content_derived_reportlab_xobject_identity'] is True
+          assert r['requirements']['broad_pdf_fixture_replacement_rejected'] is True
+          assert len(r['rows']) == 3
+          assert r['accepted'] is True, r
+          for row in r['rows']:
+              assert row['deterministic'] is True, row
+              assert row['tree_sha256'] == row['second_build_tree_sha256'], row
+              assert not row['file_differences'], row
+              assert row['v028_candidate_bytes'] and row['v028_candidate_bytes'] > 0, row
+          print(json.dumps(r, indent=2))
+          PY
+
+      - name: Summarize repair identity
+        if: always()
+        run: |
+          if [ -f benchmark-artifacts/neutral-hostile-v1-determinism-repair.json ]; then
+            python - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          import json
+          from pathlib import Path
+          r=json.loads(Path('benchmark-artifacts/neutral-hostile-v1-determinism-repair.json').read_text())
+          print('## Neutral/hostile v1 cross-path determinism repair')
+          print(f"- accepted: **{r['accepted']}**")
+          for row in r['rows']:
+              print(f"- **{row['name']}**: deterministic={row['deterministic']}, first=`{row['tree_sha256'][:16]}…`, second=`{row['second_build_tree_sha256'][:16]}…`, file diffs={len(row['file_differences'])}")
+              if row['raw_pdf_rounds']:
+                  a,b=row['raw_pdf_rounds']
+                  print(f"  - cross-path raw PDF: {a['bytes']:,} / {b['bytes']:,} B; hashes equal={a['sha256']==b['sha256']}")
+              if row['v028_candidate_bytes'] is not None:
+                  print(f"  - repaired v0.28: **{row['v028_candidate_bytes']:,} B**, historical delta={row['repair_candidate_byte_delta']:+,} B")
+          print('- Historical v0.28 evidence remains immutable; broad PDF substitution was explicitly rejected.')
+          PY
+          fi
+
+      - name: Upload repair and PDF forensic evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cmpct-neutral-hostile-determinism-repair-${{ github.sha }}
+          path: |
+            benchmark-artifacts/neutral-hostile-v1-determinism-repair.json
+            benchmark-artifacts/CMPCT_Neutral_Hostile_Determinism_Repair/forensics/*.pdf
+          if-no-files-found: warn
+
+# Footnote: cross-path byte identity is part of the acceptance contract. ReportLab resource names are
+# deliberately made content-derived so temporary CI directories cannot perturb the benchmark tree.

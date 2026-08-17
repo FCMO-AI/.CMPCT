@@ -1,0 +1,59 @@
+{
+  "schema": "cmpct-v029-attempt7-crossbase-structural-reject-v1",
+  "date": "2026-08-17",
+  "claim_boundary": "attempt-7 Cross-Base Residual Program Packing same-run hostile structural result; REJECT; no v0.29.0 claim",
+  "source_commit": "36417ebeedf2081a32ce1090351ad06b3b461a1a",
+  "workflow_run": 32007466854,
+  "artifact": {
+    "id": 9280765170,
+    "digest": "sha256:b97329f46231164fddb46d64b1ee69316b6d09165f6a5b63742ae1789a802765"
+  },
+  "corpus": {
+    "suite": "resemblance_hostile_v1_aggregate",
+    "files": 724,
+    "logical_bytes": 93526384,
+    "tree_sha256": "ad01e5ea8f8b083b2a37dae963c61238e0189db4ab91455628578973dbdbb53c"
+  },
+  "candidate": {
+    "v028_bytes": 47197165,
+    "attempt5_bytes": 47147764,
+    "attempt7_bytes": 47146461,
+    "saving_vs_attempt5_bytes": 1303,
+    "selected": "crossbase-residual",
+    "attempt5_selected": "mosaic",
+    "max_additional_recipe_read_amplification": 0.992383092003016,
+    "strong_verify_median_s": 0.44034870999996656,
+    "crossbase_plan": {
+      "selected_crossbase_plan": true,
+      "strategy": "recipe-prefix",
+      "limit": 65536,
+      "estimated_net_saving": 35252,
+      "max_amp": 0.992383092003016,
+      "mixed_base_groups": 1,
+      "mixed_base_members": 186,
+      "eligible_groups": 1
+    },
+    "causal_crossbase_selection": true
+  },
+  "same_run_competitors": {
+    "zip_deflate9_bytes": 76690799,
+    "tar_zstd19_solid_bytes": 47065652,
+    "seven_zip_lzma2_bytes": 47430343,
+    "zpaq_m5_bytes": 47062639,
+    "borg_bytes": 76461311
+  },
+  "comparison": {
+    "strongest_required_bytes": 47062639,
+    "margin_below_strongest_bytes": -83822,
+    "required_margin_bytes": 16384,
+    "structural_gate_pass": false
+  },
+  "decision": {
+    "research_gate": "REJECT",
+    "threshold_relaxed_after_result": false,
+    "mechanism_erased": false,
+    "further_attempt7_tuning_authorized": false,
+    "reason": "The new mechanism was genuinely exercised: one 64 KiB recipe-prefix group mixed all 186 packed residual members across direct bases, and the unchanged attempt-5 reader verified the selected archive. Despite an estimated planner saving of 35,252 B, exact complete-artifact saving was only 1,303 B, leaving CMPCT 83,822 B larger than same-run ZPAQ and far short of the frozen 16 KiB winning margin. The encoder-only same-base restriction is therefore not the material structural bottleneck.",
+    "next_hypothesis": "measure the reversible compression ceiling from separating canonical delta opcode/length/address streams from literal bytes before considering any reader-visible columnar grammar"
+  }
+}
