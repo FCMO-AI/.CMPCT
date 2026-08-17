@@ -48,6 +48,92 @@ def _tree_stats(root: Path) -> tuple[int, int]:
     return len(files), sum(path.stat().st_size for path in files)
 
 
+def _storage_probe(path: Path) -> dict:
+    """Measure a tool-produced repository without assuming it is a flat tree of regular files.
+
+    Footnote: the first structural-competitor run exposed a real harness bug here: Borg completed but
+    the inherited `Path.rglob(...).is_file()` probe reported zero bytes. The repair deliberately uses
+    lstat-style accounting, does not follow symlinked directories, records both apparent and allocated
+    bytes, and requires at least one regular file before a repository can become comparable evidence.
+    """
+    if not path.exists() and not path.is_symlink():
+        return {
+            "path_exists": False,
+            "entries": 0,
+            "regular_files": 0,
+            "symlinks": 0,
+            "apparent_bytes": 0,
+            "allocated_bytes": 0,
+        }
+
+    entries = 0
+    regular_files = 0
+    symlinks = 0
+    apparent_bytes = 0
+    allocated_bytes = 0
+    stack = [path]
+    while stack:
+        current = stack.pop()
+        try:
+            st = current.lstat()
+        except OSError:
+            continue
+        entries += 1
+        allocated_bytes += int(getattr(st, "st_blocks", 0)) * 512
+        if current.is_symlink():
+            symlinks += 1
+            apparent_bytes += int(st.st_size)
+            continue
+        if current.is_dir():
+            try:
+                stack.extend(current.iterdir())
+            except OSError:
+                continue
+            continue
+        if current.is_file():
+            regular_files += 1
+            apparent_bytes += int(st.st_size)
+
+    return {
+        "path_exists": True,
+        "entries": entries,
+        "regular_files": regular_files,
+        "symlinks": symlinks,
+        "apparent_bytes": apparent_bytes,
+        "allocated_bytes": allocated_bytes,
+    }
+
+
+def _repair_measurement(name: str, row: dict, output_path: Path) -> dict:
+    """Turn an invalid optional competitor measurement into explicit negative evidence.
+
+    Footnote: optional competitors are not allowed to abort CMPCT's own acceptance gate. A tool that is
+    installed and exits successfully but cannot be measured is *not* silently dropped: the raw row is
+    retained, a second filesystem probe is attached, and only a defensible positive byte count can keep
+    the row `available=True` for structural comparison.
+    """
+    if not row.get("available") or int(row.get("bytes", 0)) > 0:
+        return row
+
+    repaired = dict(row)
+    probe = _storage_probe(output_path)
+    repaired["measurement_probe"] = probe
+    if probe["regular_files"] > 0 and probe["apparent_bytes"] > 0:
+        repaired["bytes"] = int(probe["apparent_bytes"])
+        repaired["measurement_repaired"] = True
+        repaired["measurement_status"] = "recovered_from_filesystem_probe"
+        return repaired
+
+    repaired["available"] = False
+    repaired["tool_executed"] = True
+    repaired["measurement_status"] = "invalid_zero_byte_measurement"
+    repaired["reason"] = (
+        f"{name} executed successfully but produced no defensible positive repository-byte measurement; "
+        "the result is retained as measurement failure rather than aborting or fabricating a competitor size"
+    )
+    return repaired
+
+
 def _version_output(executable: str, args: list[str]) -> str | None:
     try:
         proc = subprocess.run(
@@ -112,9 +198,18 @@ def _run_suite(engine, helper, suite_name: str, root: Path, work: Path) -> dict:
     competitor_dir = work / f"{suite_name}-competitors"
     competitor_dir.mkdir(parents=True, exist_ok=True)
     competitors = helper._competitors(root, competitor_dir)
+
+    # Footnote: the inherited helper predates the structural sweep and can return an execution-success
+    # row whose byte probe is not comparable on a particular tool/version. Repair only the measurement
+    # boundary here; never alter the competitor payload, command, corpus, or CMPCT acceptance threshold.
+    if "borg" in competitors:
+        competitors["borg"] = _repair_measurement(
+            "borg", competitors["borg"], competitor_dir / "borg-repo"
+        )
+
     for name, row in competitors.items():
-        # Footnote: unavailable competitors remain first-class rows. Available competitors must retain
-        # a positive byte measurement and a semantic description before any public comparison can use it.
+        # Footnote: unavailable or unmeasurable competitors remain first-class rows. Any row still marked
+        # available must retain a positive byte measurement and semantic description before comparison.
         if row.get("available"):
             if int(row.get("bytes", 0)) <= 0:
                 raise RuntimeError(f"available competitor {name} returned no byte measurement")
@@ -208,11 +303,18 @@ def run(work_root: Path, source_commit: str | None) -> dict:
             "available_competitor_measurements": sum(
                 1 for row in rows for competitor in row["competitors"].values() if competitor.get("available")
             ),
+            "competitor_measurement_failures": sum(
+                1
+                for row in rows
+                for competitor in row["competitors"].values()
+                if competitor.get("measurement_status") == "invalid_zero_byte_measurement"
+            ),
         },
         "method": {
             "aggregation": "each deterministic public suite is archived once as one complete recursive tree",
             "neutral_substrate": "portable repair-v3 applied before every tool sees the neutral aggregate",
             "competitor_availability_is_hard_gate": False,
+            "invalid_measurements_are_retained": True,
             "semantic_mismatches_recorded": True,
             "ranking_policy": "no scalar winner; compare exact bytes/time only within each recorded tool semantics",
         },
