@@ -53,7 +53,25 @@ def test_coarsener_can_spend_read_budget_selectively_without_losing_roots(monkey
     assert diag["worst_member_amp"] == 3.0
 
 
-def test_budgeted_selector_never_worsens_global_plan_or_weighted_budget() -> None:
+def test_coarsener_rejects_byte_win_that_exceeds_per_member_8x(monkeypatch) -> None:
+    mod = _module()
+    nodes = [b"x" * 1024, b"y" * (9 * 1024)]
+    groups = [[0], [1]]
+
+    # Footnote: a merged 10 KiB record would be only 2x in the historical weighted metric but 10x for
+    # the 1 KiB member. Make that unsafe merge look overwhelmingly attractive in bytes and verify the
+    # planner still keeps the two independent groups.
+    monkeypatch.setattr(mod, "_record_cost", lambda raw: 1 if len(raw) > 9 * 1024 else 100)
+    candidate, diag = mod._coarsen_source_plan(nodes, [0, 1], groups, 1024, original_worst=1.0)
+    assert candidate is not None
+    cost, amp, _, selected_groups = candidate
+    assert cost == 200
+    assert amp == 1.0
+    assert selected_groups == [[0], [1]]
+    assert diag["worst_member_amp"] == 1.0
+
+
+def test_budgeted_selector_never_worsens_bytes_and_new_plan_obeys_both_read_budgets() -> None:
     mod = _module()
     nodes = [
         (b"alpha-line\n" * 7000) + bytes([index]) * 4096
@@ -65,10 +83,11 @@ def test_budgeted_selector_never_worsens_global_plan_or_weighted_budget() -> Non
     chosen, trials = mod._choose_pack_plan_budgeted(nodes, sketches, root_ids)
 
     assert chosen[0] <= original[0]
-    assert chosen[1] <= mod.MAX_READ_AMP
     assert chosen[2] <= mod.MAX_PACK_BYTES
     assert sorted(node_id for group in chosen[3] for node_id in group) == root_ids
-    assert mod._worst_member_amp(chosen[3], nodes) <= max(
-        mod.MAX_READ_AMP, mod._worst_member_amp(original[3], nodes)
-    ) + 1e-12
-    assert any(row.get("strategy") == "pack-budget-summary" for row in trials)
+    summary = next(row for row in trials if row.get("strategy") == "pack-budget-summary")
+    if summary.get("selected"):
+        assert chosen[1] <= mod.MAX_READ_AMP
+        assert mod._worst_member_amp(chosen[3], nodes) <= mod.MAX_READ_AMP + 1e-12
+    else:
+        assert chosen == original

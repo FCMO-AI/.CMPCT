@@ -65,6 +65,9 @@ def _measure_workload(suite: str, path: Path, archive_dir: Path, preserved: dict
     attempt5_bytes = int(result["attempt5_bytes"])
     preserved_attempt5_bytes = int(expected_attempt5["candidate_bytes"])
     allocator_stats = result["pack_budget_graph_stats"].get("pack_budget", {})
+    allocator_selected = bool(allocator_stats.get("selected"))
+    allocator_worst = float(allocator_stats.get("worst_member_amp", 0.0))
+    original_worst = float(allocator_stats.get("original_worst_member_amp", 0.0))
     selected_stats = result["mosaic"]
     embedded_v028_create = float(result["v028"].get("portfolio_create_s", 0.0))
     return {
@@ -91,17 +94,12 @@ def _measure_workload(suite: str, path: Path, archive_dir: Path, preserved: dict
         "pack_budget_graph_bytes": int(result["pack_budget_graph_bytes"]),
         "pack_budget_root_saving_vs_global": int(allocator_stats.get("saving_vs_global", 0)),
         "pack_budget_source_limit": allocator_stats.get("source_limit"),
-        "pack_budget_weighted_read_amp": float(allocator_stats.get("read_amp", 0.0)),
-        "pack_budget_worst_member_amp": float(allocator_stats.get("worst_member_amp", 0.0)),
-        "pack_budget_original_worst_member_amp": float(
-            next(
-                (
-                    row.get("worst_member_amp", 0.0)
-                    for row in result["pack_budget_graph_stats"].get("pack_trials", [])
-                    if row.get("strategy") == "pack-budget-summary" and not row.get("selected")
-                ),
-                allocator_stats.get("worst_member_amp", 0.0),
-            )
+        "pack_budget_evaluated_weighted_read_amp": float(allocator_stats.get("read_amp", 0.0)),
+        "pack_budget_weighted_read_amp": float(allocator_stats.get("read_amp", 0.0)) if allocator_selected else 0.0,
+        "pack_budget_worst_member_amp": allocator_worst if allocator_selected else 0.0,
+        "pack_budget_original_worst_member_amp": original_worst,
+        "pack_budget_worst_member_over_budget": bool(
+            allocator_selected and allocator_worst > ENGINE.MAX_READ_AMP + 1e-12
         ),
         "pack_read_amplification": float(selected_stats.get("pack_read_amplification", 0.0)),
         "max_mosaic_read_amplification": float(selected_stats.get("max_mosaic_read_amplification", 0.0)),
@@ -114,7 +112,6 @@ def _measure_workload(suite: str, path: Path, archive_dir: Path, preserved: dict
         "oracle_create_ratio_vs_v028": (
             float(result["portfolio_create_s"]) / embedded_v028_create if embedded_v028_create > 0 else None
         ),
-        "strong_verify_median_s": float(verified.get("strong_verify_median_s", 0.0)),
         "build_wall_s": wall,
     }
 
@@ -150,6 +147,7 @@ def run(work_root: Path) -> dict:
                 "pack_budget_selected": row["pack_budget_selected"],
                 "root_pack_saving": row["pack_budget_root_saving_vs_global"],
                 "weighted_read_amp": row["pack_budget_weighted_read_amp"],
+                "worst_member_amp": row["pack_budget_worst_member_amp"],
             }), flush=True)
 
     v028_total = sum(row["v028_bytes"] for row in rows)
@@ -157,9 +155,18 @@ def run(work_root: Path) -> dict:
     candidate_total = sum(row["candidate_bytes"] for row in rows)
     additional = attempt5_total - candidate_total
     total_saving_vs_v028 = v028_total - candidate_total
+    identity_green = all(
+        row["attempt5_bytes_match"] and row["v028_bytes_match"] and row["baseline_tree_match"] for row in rows
+    )
+    no_regression = all(row["candidate_bytes"] <= row["attempt5_bytes"] for row in rows)
+    locality_green = (
+        all(not row["pack_budget_worst_member_over_budget"] for row in rows)
+        and max((row["pack_budget_weighted_read_amp"] for row in rows), default=0.0) <= ENGINE.MAX_READ_AMP
+    )
     research_pass = (
-        all(row["attempt5_bytes_match"] and row["v028_bytes_match"] and row["baseline_tree_match"] for row in rows)
-        and all(row["candidate_bytes"] <= row["attempt5_bytes"] for row in rows)
+        identity_green
+        and no_regression
+        and locality_green
         and additional >= int(v028_total * 0.0005)
         and sum(row["candidate_bytes"] < row["attempt5_bytes"] for row in rows) >= 2
     )
@@ -176,10 +183,12 @@ def run(work_root: Path) -> dict:
         "workloads_improved_vs_attempt5": sum(row["candidate_bytes"] < row["attempt5_bytes"] for row in rows),
         "workloads_regressed_vs_attempt5": sum(row["candidate_bytes"] > row["attempt5_bytes"] for row in rows),
         "pack_budget_selected_rows": sum(row["pack_budget_selected"] for row in rows),
+        "pack_budget_worst_member_over_budget_rows": sum(row["pack_budget_worst_member_over_budget"] for row in rows),
         "baseline_tree_drift_rows": sum(not row["baseline_tree_match"] for row in rows),
         "v028_byte_drift_rows": sum(not row["v028_bytes_match"] for row in rows),
         "attempt5_byte_drift_rows": sum(not row["attempt5_bytes_match"] for row in rows),
         "max_pack_budget_weighted_read_amp": max((row["pack_budget_weighted_read_amp"] for row in rows), default=0.0),
+        "max_pack_budget_worst_member_amp": max((row["pack_budget_worst_member_amp"] for row in rows), default=0.0),
         "max_selected_mosaic_read_amplification": max((row["max_mosaic_read_amplification"] for row in rows), default=0.0),
         "max_selected_additional_recipe_read_amplification": max(
             (row["max_additional_recipe_read_amplification"] for row in rows), default=0.0
@@ -201,6 +210,7 @@ def run(work_root: Path) -> dict:
             "additional_saving_vs_attempt5_gte_pct_of_v028": 0.05,
             "workloads_improved_vs_attempt5_gte": 2,
             "weighted_pack_read_amplification_lte": 8.0,
+            "per_member_pack_read_amplification_lte": 8.0,
         },
         "rows": rows,
         "totals": totals,

@@ -19,14 +19,17 @@ A bounded partition solver can use the **same <=8x weighted read budget** more e
 from each existing global plan and selectively coarsening only adjacent similarity-ordered groups whose
 exact compressed-byte saving pays for their extra decoded bytes.
 
-The current global plan remains a legal no-op fallback. Therefore the mechanism can improve physical
-root-pack bytes without requiring a new reader grammar, deeper dependencies, new integrity semantics or
-a larger 2 MiB decode unit.
+Attempt #6 deliberately adds a stronger bound than the inherited planner: any *newly selected* physical
+partition must also remain **<=8x for every direct-root member individually**. The current attempt-5
+archive remains a byte-for-byte fallback when the stricter partition cannot win safely.
+
+The mechanism can therefore improve physical root-pack bytes without requiring a new reader grammar,
+deeper dependencies, new integrity semantics or a larger 2 MiB decode unit.
 
 **Disproof:** reject the mechanism if it cannot improve at least two inherited-frontier workloads by an
-additional 0.05% of the exact aggregate v0.28 bytes, if any accepted attempt-5 row grows, if the weighted
-read budget exceeds 8x, if worst-member locality becomes worse than the already-selected global plan, or
-if bounded search caps are exceeded on the rows where savings are claimed.
+additional 0.05% of the exact aggregate v0.28 bytes, if any accepted attempt-5 row grows, if weighted or
+per-member read amplification exceeds 8x on a newly selected partition, or if bounded search caps are
+exceeded on rows where savings are claimed.
 
 ## Why this attempt precedes other ideas
 
@@ -56,8 +59,7 @@ The experiment:
 - keeps only exact non-dominated `(decoded bytes, stored bytes)` states;
 - rejects a source plan rather than approximating if the Pareto frontier exceeds 4,096 states;
 - bounds source plans to 512 groups and one merge to at most 64 source groups;
-- never allows a selected plan to worsen the current plan's worst-member physical amplification (or 8x,
-  whichever is larger);
+- requires every newly selected group to be <=8x for every member as well as <=8x in the workload-weighted metric;
 - keeps the historical global plan on ties;
 - builds the accepted attempt-5 archive separately and uses it as the final byte-for-byte fallback.
 
@@ -75,7 +77,7 @@ same repaired 15-workload inherited frontier:
 - additional aggregate saving versus attempt #5: **>=0.05% of exact v0.28 aggregate bytes**;
 - additional workloads improved versus attempt #5: **>=2**;
 - allocator weighted pack read amplification: **<=8x**;
-- worst-member physical amplification: no worse than the accepted global plan;
+- allocator per-member physical amplification: **<=8x** on every newly selected partition;
 - selected archive strong-verifies with the unchanged attempt-5 reader.
 
 Passing this gate does **not** authorize v0.29.0.

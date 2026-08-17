@@ -109,12 +109,17 @@ def _prune_pareto(states: list[_State]) -> list[_State] | None:
 
 def _coarsen_source_plan(nodes: list[bytes], root_ids: list[int], base_groups: list[list[int]],
                          source_limit: int, original_worst: float) -> tuple[tuple[int, float, int, list[list[int]]] | None, dict]:
-    """Find a lower-byte contiguous coarsening under the inherited weighted read budget.
+    """Find a lower-byte contiguous coarsening under weighted *and per-member* read budgets.
 
     The search never reorders roots: v0.28's similarity order is the semantic starting point. It only
     decides which adjacent existing groups should share one physical record. This makes the current
     global plan a reachable no-op state while allowing different regions to spend different amounts of
     locality budget.
+
+    Footnote: attempt #6 strengthens the inherited locality contract. A newly selected partition must be
+    <=8x not only in the historical weighted metric but for every direct-root member individually. The
+    accepted attempt-5 artifact remains the final fallback when the inherited global plan itself has a
+    worse individual-member ratio or when no stricter partition wins bytes.
     """
     if not base_groups or len(base_groups) > MAX_BASE_GROUPS:
         return None, {"source_limit": source_limit, "skipped": "base-group-cap", "base_groups": len(base_groups)}
@@ -122,7 +127,7 @@ def _coarsen_source_plan(nodes: list[bytes], root_ids: list[int], base_groups: l
     logical = sum(max(1, len(nodes[node_id])) for node_id in root_ids)
     max_decoded = int(MAX_READ_AMP * logical)
     source_worst = _worst_member_amp(base_groups, nodes)
-    allowed_worst = max(MAX_READ_AMP, original_worst)
+    allowed_worst = MAX_READ_AMP
     n = len(base_groups)
     frontiers: list[list[_State]] = [[] for _ in range(n + 1)]
     frontiers[0] = [_State(0, 0, 0.0, None, ())]
@@ -172,9 +177,15 @@ def _coarsen_source_plan(nodes: list[bytes], root_ids: list[int], base_groups: l
                 "skipped": "pareto-state-cap",
                 "position": end,
                 "base_groups": n,
+                "original_worst_member_amp": original_worst,
             }
         if not pruned:
-            return None, {"source_limit": source_limit, "skipped": "no-feasible-partition", "position": end}
+            return None, {
+                "source_limit": source_limit,
+                "skipped": "no-feasible-partition",
+                "position": end,
+                "original_worst_member_amp": original_worst,
+            }
         frontiers[end] = pruned
 
     best = min(frontiers[n], key=lambda row: (row.cost, row.decoded, row.worst_member_amp))
@@ -192,6 +203,7 @@ def _coarsen_source_plan(nodes: list[bytes], root_ids: list[int], base_groups: l
     return (best.cost, amp, max_group, groups), {
         "source_limit": source_limit,
         "source_worst_member_amp": source_worst,
+        "original_worst_member_amp": original_worst,
         "bytes": best.cost,
         "read_amp": amp,
         "worst_member_amp": best.worst_member_amp,
@@ -202,7 +214,7 @@ def _coarsen_source_plan(nodes: list[bytes], root_ids: list[int], base_groups: l
 
 
 def _choose_pack_plan_budgeted(nodes: list[bytes], sketches, root_ids: list[int]):
-    """Strictly dominate the current global-ceiling audition when the exact bytes permit it."""
+    """Strictly dominate the current global-ceiling audition when exact bytes and locality permit it."""
     original, original_trials = _ORIGINAL_CHOOSE(nodes, sketches, root_ids)
     original_cost, original_amp, original_limit, original_groups = original
     original_worst = _worst_member_amp(original_groups, nodes)
@@ -212,6 +224,7 @@ def _choose_pack_plan_budgeted(nodes: list[bytes], sketches, root_ids: list[int]
         "bytes": original_cost,
         "read_amp": original_amp,
         "worst_member_amp": original_worst,
+        "original_worst_member_amp": original_worst,
         "groups": len(original_groups),
         "max_group_bytes": max((_group_raw_bytes(group, nodes) for group in original_groups), default=0),
         "saving_vs_global": 0,
@@ -222,13 +235,14 @@ def _choose_pack_plan_budgeted(nodes: list[bytes], sketches, root_ids: list[int]
 
     for limit_kib in BASE_LIMITS:
         source_limit = limit_kib * 1024
-        source_cost, source_amp, source_groups = _ORIGINAL_PACK_PLAN(nodes, sketches, root_ids, source_limit)
+        _, source_amp, source_groups = _ORIGINAL_PACK_PLAN(nodes, sketches, root_ids, source_limit)
         if source_amp > MAX_READ_AMP:
             diagnostics.append({
                 "strategy": "read-budget-partition",
                 "source_limit": source_limit,
                 "skipped": "source-plan-over-weighted-budget",
                 "source_read_amp": source_amp,
+                "original_worst_member_amp": original_worst,
             })
             continue
         candidate, diag = _coarsen_source_plan(
@@ -241,8 +255,9 @@ def _choose_pack_plan_budgeted(nodes: list[bytes], sketches, root_ids: list[int]
         cost, amp, max_group, groups = candidate
         worst = float(diag["worst_member_amp"])
         # Footnote: ties stay with the historical plan. Spending locality or changing physical boundaries
-        # for zero byte gain would create churn with no user-visible benefit.
-        if cost < best[0] and amp <= MAX_READ_AMP and worst <= max(MAX_READ_AMP, original_worst) + 1e-12:
+        # for zero byte gain would create churn with no user-visible benefit. Any *new* plan must satisfy
+        # the stronger per-member <=8x bound; the old attempt-5 artifact remains the fallback otherwise.
+        if cost < best[0] and amp <= MAX_READ_AMP and worst <= MAX_READ_AMP + 1e-12:
             best = (cost, amp, max_group, groups)
             best_diag = dict(diag)
             best_diag.update({
@@ -282,6 +297,9 @@ def _build_budget_graph(root: Path, out: Path) -> dict:
         "strategy": "pack-budget-summary",
         "selected": False,
         "saving_vs_global": 0,
+        "read_amp": 0.0,
+        "worst_member_amp": 0.0,
+        "original_worst_member_amp": 0.0,
     }
     return stats
 
