@@ -6,7 +6,7 @@
   "status": "pre-1.0 / active development",
   "canonical_repository": "FCMO-AI/.CMPCT",
   "canonical_branch": "main",
-  "site_build_commit": "f6bbdee3380ea6e04d8e31de1b393e612bb425fc",
+  "site_build_commit": "0cf01f2330f4d3cf3ef9105c74f79e8a797ab00c",
   "publication": {
     "mode": "static-gh-pages",
     "status": "generated public website",
