@@ -47,6 +47,7 @@ jobs:
             tests/test_v030_geometry_overlay_g04.py \
             tests/test_v030_prefixgraph.py \
             tests/test_v030_release_reader.py \
+            tests/test_v030_release_reader_policy.py \
             tests/test_v030_release_candidate.py \
             tests/test_v030_release_generalization_contract.py
 
@@ -56,15 +57,16 @@ jobs:
             experiments/entropygraph_v030_geometry_overlay_g04.py \
             experiments/entropygraph_v030_prefixgraph.py \
             experiments/entropygraph_v030_release_reader.py \
+            experiments/entropygraph_v030_release_reader_policy.py \
             experiments/entropygraph_v030_release_candidate.py \
             benchmarks/v030_release_generalization.py
 
-      - name: Run exact repaired 15-workload v0.30 system gate
+      - name: Run exact repaired 15-workfload v0.30 system gate
         run: |
           mkdir -p benchmark-artifacts
           set -o pipefail
           python benchmarks/v030_release_generalization.py \
-            --work-root benchmark-artifacts/v030-release-generalization-work \
+            --work_root benchmark-artifacts/v030-release-generalization-work \
             --output benchmark-artifacts/v030-release-generalization.json \
             2>&1 | tee benchmark-artifacts/v030-release-generalization.stdout.txt
 
