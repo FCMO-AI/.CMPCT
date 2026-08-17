@@ -206,8 +206,8 @@ t = replace_once(
 )
 t = replace_once(
     t,
-    '        (root / "dir" / "small.txt").write_text("small native stream\\n")',
-    '        (root / "dir" / "small.txt").write_text("small native stream\\n")\n        os.chmod(root / "dir", 0o500)',
+    '        os.symlink("../target.txt", root / "dir" / "symlink.txt")',
+    '        os.symlink("../target.txt", root / "dir" / "symlink.txt")\n        # Build the complete source fixture before making the directory intentionally non-writable.\n        # The regression is about extraction ordering, not whether fixture setup can write into 0500.\n        os.chmod(root / "dir", 0o500)',
     "restrictive directory fixture",
 )
 t = replace_once(
