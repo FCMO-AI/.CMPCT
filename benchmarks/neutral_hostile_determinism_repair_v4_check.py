@@ -7,8 +7,8 @@ three inside v4 would add time without adding a new claim, so this proof imports
 verbatim and regenerates only ``03_media_library`` twice under different parent directories.
 
 For media, round two deliberately mutates every excluded external-codec placeholder *before*
-normalization. If the two normalized 14-JPEG + 10-PNG + 1-WAV trees still match, the v4 identity is
-independent of the exact bytes at the historically FFmpeg-controlled paths.
+normalization. The durable record stores hashes both before and after that mutation. If the two normalized
+14-JPEG + 10-PNG + 1-WAV trees still match, the v4 identity is demonstrably independent of those bytes.
 
 Footnote: importing accepted v3 evidence is not baseline regeneration. The v3 history file is treated as
 an immutable dependency and its schema/acceptance/row set are checked before use. Only the new media row
@@ -30,6 +30,7 @@ V028_PATH = ROOT / "experiments" / "entropygraph_v028_strict.py"
 OLD_HISTORY = ROOT / "benchmarks" / "history" / "2026-08-16-entropygraph-v028.json"
 V3_HISTORY = ROOT / "benchmarks" / "history" / "2026-08-17-neutral-hostile-determinism-repair-v3.json"
 V3_NAMES = ("02_office_workspace", "05_logs_and_telemetry", "06_incremental_backups")
+MUTATION = b"CMPCT-EXCLUDED-CODEC-INDEPENDENCE-PROBE-v4"
 
 
 def _load(path: Path, name: str):
@@ -104,6 +105,10 @@ def _historical_media() -> dict:
     raise RuntimeError("historical media baseline row missing")
 
 
+def _identity(raw: bytes) -> dict:
+    return {"bytes": len(raw), "sha256": hashlib.sha256(raw).hexdigest()}
+
+
 def _build_media_round(work_root: Path, index: int) -> dict:
     suite_root = work_root / f"media-round-{index}"
     shutil.rmtree(suite_root, ignore_errors=True)
@@ -112,17 +117,17 @@ def _build_media_round(work_root: Path, index: int) -> dict:
     workload = suite_root / R.MEDIA_WORKLOAD
 
     excluded_before = {}
+    excluded_after_mutation = {}
     for member in R.VOLATILE_MEDIA:
         path = workload / member
         raw = path.read_bytes()
-        excluded_before[member] = {
-            "bytes": len(raw),
-            "sha256": hashlib.sha256(raw).hexdigest(),
-        }
+        excluded_before[member] = _identity(raw)
         if index == 2:
             # Footnote: the second round changes every excluded byte source before normalization. The
-            # measured tree must still be identical, proving those bytes cannot influence the v4 identity.
-            path.write_bytes(raw + b"CMPCT-EXCLUDED-CODEC-INDEPENDENCE-PROBE-v4")
+            # post-mutation identity is persisted so the evidence proves the perturbation really occurred.
+            mutated = raw + MUTATION + member.encode("ascii")
+            path.write_bytes(mutated)
+            excluded_after_mutation[member] = _identity(mutated)
 
     R.normalize_workload(workload)
     manifest = _file_manifest(workload)
@@ -134,17 +139,29 @@ def _build_media_round(work_root: Path, index: int) -> dict:
         "logical_bytes": logical,
         "file_manifest": manifest,
         "excluded_before_normalization": excluded_before,
+        "excluded_after_mutation": excluded_after_mutation,
+        "mutation_applied": index == 2,
     }
 
 
 def _prove_media(work_root: Path) -> dict:
     rounds = [_build_media_round(work_root, 1), _build_media_round(work_root, 2)]
     differences = _diff(rounds[0]["file_manifest"], rounds[1]["file_manifest"])
+    mutation_proven = bool(
+        rounds[1]["mutation_applied"]
+        and set(rounds[1]["excluded_after_mutation"]) == set(R.VOLATILE_MEDIA)
+        and all(
+            rounds[1]["excluded_before_normalization"][member]
+            != rounds[1]["excluded_after_mutation"][member]
+            for member in R.VOLATILE_MEDIA
+        )
+    )
     deterministic = (
         rounds[0]["tree_sha256"] == rounds[1]["tree_sha256"]
         and rounds[0]["files"] == rounds[1]["files"]
         and rounds[0]["logical_bytes"] == rounds[1]["logical_bytes"]
         and not differences
+        and mutation_proven
     )
     previous = _historical_media()
     row = {
@@ -162,6 +179,9 @@ def _prove_media(work_root: Path) -> dict:
             rounds[0]["excluded_before_normalization"],
             rounds[1]["excluded_before_normalization"],
         ],
+        "excluded_after_mutation_round2": rounds[1]["excluded_after_mutation"],
+        "excluded_mutation_proven": mutation_proven,
+        "mutation_suffix_sha256": hashlib.sha256(MUTATION).hexdigest(),
         "historical_tree_sha256": previous["tree_sha256"],
         "historical_candidate_bytes": int(previous["candidate_bytes"]),
         "historical_logical_bytes": int(previous["logical_bytes"]),
@@ -203,6 +223,7 @@ def run(work_root: Path) -> dict:
     rows = [inherited[0], media, inherited[1], inherited[2]]
     accepted = bool(
         media["deterministic"]
+        and media["excluded_mutation_proven"]
         and media["files"] == 25
         and media["tree_sha256"] == media["second_build_tree_sha256"]
         and not media["file_differences"]
@@ -220,6 +241,7 @@ def run(work_root: Path) -> dict:
         },
         "requirements": {
             "media_two_cross_path_regenerations_match": True,
+            "excluded_media_mutation_explicitly_proven": True,
             "candidate_and_baseline_consume_same_repaired_media_tree": True,
             "historical_record_rewritten": False,
             "repair_v3_composed_not_rewritten": True,
