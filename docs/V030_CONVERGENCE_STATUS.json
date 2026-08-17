@@ -1,0 +1,13 @@
+{
+  "schema": "cmpct-v030-convergence-status-v1",
+  "release_authority": false,
+  "integration_branch": "agent/v030-authoritative-integration",
+  "geometry_reactor_head": "583c0c351ea50a80f4ed8ce7216515f2faf25aec",
+  "flat_overlay_v2_head": "d15e6971c440db75bd8590770a1e86e86b5a7d17",
+  "flat_overlay_is_full_g0_g4": false,
+  "prefixgraph_green_head": "8f48b715812afd4a27ef320a3b1d0520d7a9de0a",
+  "hardening_head": "24c40510fb39edbb78e083a9d65acaeef7dc4d8e",
+  "build_rehab_head": "67a240601408047e71960145a6c2865785cc0fdc",
+  "generic_zero_copy_head": "21a64d7af6fdcf20f42dfb837ea9fb09642f723d",
+  "full_15_workload_release_gate": "open"
+}
