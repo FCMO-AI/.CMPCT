@@ -74,6 +74,7 @@ jobs:
           assert t['pack_budget_worst_member_over_budget_rows'] == 0, t
           assert t['max_pack_budget_weighted_read_amp'] <= 8.0, t
           assert t['max_pack_budget_worst_member_amp'] <= 8.0, t
+          assert t['max_selected_pack_read_amplification'] <= 8.0, t
           assert t['max_selected_mosaic_read_amplification'] <= 8.0, t
           assert t['max_selected_additional_recipe_read_amplification'] <= 2.0, t
           # Footnote: `research_gate_pass` is deliberately *not* asserted. A well-executed falsification
@@ -104,6 +105,8 @@ jobs:
           print(f"- budgeted rows selected: **{t['pack_budget_selected_rows']}**")
           print(f"- max allocator weighted read amp: **{t['max_pack_budget_weighted_read_amp']:.3f}x**")
           print(f"- max allocator per-member read amp: **{t['max_pack_budget_worst_member_amp']:.3f}x**")
+          print(f"- max final selected pack read amp: **{t['max_selected_pack_read_amplification']:.3f}x**")
+          print(f"- max exact cost probes in one row: **{t['max_pack_budget_exact_cost_probes']}**")
           print(f"- preregistered research gate: **{'PASS' if t['research_gate_pass'] else 'REJECT'}**")
           PY
           fi

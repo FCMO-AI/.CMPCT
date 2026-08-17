@@ -15,21 +15,33 @@ selective-read units.
 
 ## Hypothesis
 
-A bounded partition solver can use the **same <=8x weighted read budget** more efficiently by starting
-from each existing global plan and selectively coarsening only adjacent similarity-ordered groups whose
-exact compressed-byte saving pays for their extra decoded bytes.
+A bounded physical planner can spend the **same <=8x read budget** more efficiently by preserving the
+inherited similarity order but merging only adjacent root groups whose exact compressed-byte saving pays
+for the extra decoded context.
 
-Attempt #6 deliberately adds a stronger bound than the inherited planner: any *newly selected* physical
-partition must also remain **<=8x for every direct-root member individually**. The current attempt-5
-archive remains a byte-for-byte fallback when the stricter partition cannot win safely.
+Attempt #6 starts from independent direct roots and auditions two deterministic policies: one prioritizes
+absolute stored-byte saving, the other saving per additional decoded byte. Exact final archive bytes—not
+the heuristic score—decide whether either candidate can replace attempt #5.
 
-The mechanism can therefore improve physical root-pack bytes without requiring a new reader grammar,
-deeper dependencies, new integrity semantics or a larger 2 MiB decode unit.
+Any newly selected physical partition must remain **<=8x both in the workload-weighted metric and for
+every direct-root member individually**. The current attempt-5 archive remains a byte-for-byte fallback
+when the stricter planner cannot win safely.
 
 **Disproof:** reject the mechanism if it cannot improve at least two inherited-frontier workloads by an
-additional 0.05% of the exact aggregate v0.28 bytes, if any accepted attempt-5 row grows, if weighted or
-per-member read amplification exceeds 8x on a newly selected partition, or if bounded search caps are
+additional 0.05% of the exact aggregate v0.28 bytes, if any accepted attempt-5 row grows, if weighted,
+per-member or final selected pack read amplification exceeds 8x, or if bounded search/probe caps are
 exceeded on rows where savings are claimed.
+
+## Pre-evidence design correction
+
+The first code draft used a dynamic program over many possible contiguous intervals. It was rejected in
+review **before any attempt-6 benchmark result existed** because its bounded worst case still implied too
+many level-19 compression probes on medium workloads. Git history preserves that draft.
+
+The active oracle uses agglomerative adjacent merges with an exact cost cache. Re-scanning old neighbor
+pairs is cheap because their compressed cost is cached; after a merge, only the new local boundaries need
+new physical compression measurements in practice. This keeps the experiment falsifiable without turning
+encoder brute force into the source of an apparent compression win.
 
 ## Why this attempt precedes other ideas
 
@@ -50,21 +62,23 @@ leaving the attempt-5 reader completely unchanged.
 
 ## Solver contract
 
-The experiment:
+The active experiment:
 
-- preserves v0.28's similarity ordering;
-- starts from each existing global pack plan that already satisfies the <=8x weighted budget;
-- allows only contiguous coarsening up to the existing 2 MiB physical ceiling;
-- measures every proposed merged record with the real compressor before using its byte cost;
-- keeps only exact non-dominated `(decoded bytes, stored bytes)` states;
-- rejects a source plan rather than approximating if the Pareto frontier exceeds 4,096 states;
-- bounds source plans to 512 groups and one merge to at most 64 source groups;
-- requires every newly selected group to be <=8x for every member as well as <=8x in the workload-weighted metric;
-- keeps the historical global plan on ties;
+- preserves v0.28's direct-root similarity ordering exactly;
+- starts each strategy from independent root groups;
+- considers only adjacent physical merges;
+- measures each newly encountered group with the real compressor before using its byte cost;
+- accepts only strictly positive stored-byte merges;
+- never exceeds the existing 2 MiB physical ceiling;
+- tracks the exact historical weighted decoded-byte metric and keeps it <=8x;
+- requires every newly selected group to be <=8x for every member individually;
+- caps one strategy at 2,048 roots and 8,208 exact physical-cost probes;
+- auditions two deterministic priorities (`bytes` and `efficiency`) and lets exact final bytes choose;
+- keeps the historical global plan on exact ties;
 - builds the accepted attempt-5 archive separately and uses it as the final byte-for-byte fallback.
 
-Footnote: the search cap is a safety boundary, not a tuning parameter. A capped row is negative evidence;
-the benchmark must not silently increase the cap only on workloads where doing so improves the result.
+Footnote: search/probe caps are safety boundaries, not tuning parameters. A capped row is negative
+evidence; the benchmark must not raise a cap only because a particular workload would then improve.
 
 ## Preregistered research gate
 
@@ -77,9 +91,11 @@ same repaired 15-workload inherited frontier:
 - additional aggregate saving versus attempt #5: **>=0.05% of exact v0.28 aggregate bytes**;
 - additional workloads improved versus attempt #5: **>=2**;
 - allocator weighted pack read amplification: **<=8x**;
-- allocator per-member physical amplification: **<=8x** on every newly selected partition;
+- allocator per-member physical amplification: **<=8x**;
+- final selected pack read amplification after Mosaic placement: **<=8x**;
 - selected archive strong-verifies with the unchanged attempt-5 reader.
 
+The 0.05% threshold is enforced exactly as the integer relation `additional_bytes * 2000 >= v028_bytes`.
 Passing this gate does **not** authorize v0.29.0.
 
 ## Revision-worthiness ratchet

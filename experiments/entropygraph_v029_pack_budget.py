@@ -4,9 +4,14 @@ Attempt #5 chooses one global direct-root pack ceiling per workload from 64 KiB 
 simple, but it spends locality budget uniformly: one region cannot remain in small selective-read packs
 while another region spends otherwise unused read budget on a larger context that compresses better.
 
-This experiment changes only encoder-side physical partitioning. It preserves attempt #5's exact graph
-grammar, depth-1 dependencies, residual-program format, integrity/recovery semantics and 2 MiB physical
-pack ceiling. The accepted attempt-5 archive is built first and remains an exact byte-for-byte fallback.
+Attempt #6 replaces that single knob with a bounded agglomerative physical planner. Direct roots keep the
+same similarity order, begin as independent physical groups, and may merge only with an adjacent group
+when the exact stored bytes improve and both weighted and per-member read amplification remain <=8x.
+Two deterministic merge priorities are auditioned; exact final bytes choose between them and the accepted
+attempt-5 archive remains a byte-for-byte fallback.
+
+This changes only encoder-side physical partitioning. It preserves attempt #5's exact graph grammar,
+depth-1 dependencies, residual-program format, integrity/recovery semantics and 2 MiB physical ceiling.
 
 Footnote: this file deliberately imports the accepted attempt-5 implementation instead of copying it.
 The only monkey-patched seam is v0.28's `_choose_pack_plan`, and that patch exists only while constructing
@@ -16,7 +21,6 @@ attempt-5 reader before it can count as evidence.
 from __future__ import annotations
 
 import argparse
-from dataclasses import dataclass
 import importlib.util
 import json
 from pathlib import Path
@@ -48,22 +52,15 @@ BASE = A5.BASE
 
 MAX_READ_AMP = 8.0
 MAX_PACK_BYTES = 2 * 1024 * 1024
-BASE_LIMITS = (64, 128, 256, 512, 1024, 2048)  # KiB; same audition envelope as v0.28.
-MAX_BASE_GROUPS = 512
-MAX_MERGED_BASE_GROUPS = 64
-MAX_PARETO_STATES = 4096
+MAX_ROOTS = 2048
+MAX_EXACT_COST_PROBES = 4 * MAX_ROOTS + 16
+MERGE_STRATEGIES = ("bytes", "efficiency")
 
 _ORIGINAL_CHOOSE = V028._choose_pack_plan
-_ORIGINAL_PACK_PLAN = V028._pack_plan
 
 
-@dataclass(frozen=True)
-class _State:
-    decoded: int
-    cost: int
-    worst_member_amp: float
-    previous: "_State | None"
-    group: tuple[int, ...]
+class _ProbeCap(RuntimeError):
+    """Raised when an oracle strategy would exceed its preregistered exact-cost probe budget."""
 
 
 def treehash(root: Path) -> str:
@@ -75,7 +72,7 @@ def _record_cost(raw: bytes) -> int:
     return V028.PH.size + len(payload)
 
 
-def _group_raw_bytes(group: list[int] | tuple[int, ...], nodes: list[bytes]) -> int:
+def _group_raw_bytes(group: tuple[int, ...] | list[int], nodes: list[bytes]) -> int:
     return sum(len(nodes[node_id]) for node_id in group)
 
 
@@ -88,182 +85,196 @@ def _worst_member_amp(groups: list[list[int]] | list[tuple[int, ...]], nodes: li
     return worst
 
 
-def _prune_pareto(states: list[_State]) -> list[_State] | None:
-    """Keep only states for which neither read cost nor stored bytes is jointly worse.
+def _ordered_roots(sketches, root_ids: list[int]) -> list[int]:
+    """Return v0.28's similarity order mapped back to global node ids."""
+    local = V028.similarity_order([sketches[node_id] for node_id in root_ids])
+    return [root_ids[index] for index in local]
 
-    Footnote: exceeding the hard state cap rejects this source plan instead of approximating it. A
-    benchmark optimizer must not silently drop inconvenient states and then describe the result as an
-    exact byte optimum. Other source limits and the unchanged attempt-5 fallback remain available.
+
+def _group_metrics(ids: tuple[int, ...], nodes: list[bytes], cache: dict[tuple[int, ...], dict]) -> dict:
+    cached = cache.get(ids)
+    if cached is not None:
+        return cached
+    if len(cache) >= MAX_EXACT_COST_PROBES:
+        raise _ProbeCap("exact physical-cost probe cap reached")
+    raw_bytes = _group_raw_bytes(ids, nodes)
+    raw = b"".join(nodes[node_id] for node_id in ids)
+    result = {
+        "ids": ids,
+        "raw_bytes": raw_bytes,
+        "members": len(ids),
+        "cost": _record_cost(raw),
+        "worst_member_amp": max(
+            (raw_bytes / max(1, len(nodes[node_id])) for node_id in ids), default=0.0
+        ),
+    }
+    cache[ids] = result
+    return result
+
+
+def _score(strategy: str, saving: int, added_decoded: int, index: int):
+    if strategy == "bytes":
+        return (saving, -added_decoded, -index)
+    if strategy == "efficiency":
+        # Footnote: `added_decoded` is the locality price of a merge. A zero-price merge is ordered first;
+        # the exact saving and stable left index still break ties deterministically.
+        efficiency = float("inf") if added_decoded == 0 else saving / added_decoded
+        return (efficiency, saving, -added_decoded, -index)
+    raise RuntimeError(f"unknown locality-budget merge strategy: {strategy}")
+
+
+def _agglomerate(nodes: list[bytes], ordered_roots: list[int], strategy: str):
+    """Greedily merge adjacent similarity groups under exact byte and locality accounting.
+
+    Only adjacent groups are eligible, so the inherited similarity ordering never changes. Every new
+    physical record is measured with the real compressor before selection. Because a merge can only add
+    locality cost, the planner tracks the exact weighted decoded-byte total and rejects any group whose
+    smallest member would experience >8x physical read amplification.
+
+    The cost cache is high leverage: after each accepted merge only its two new neighbor pairings are new
+    physical candidates in principle. The simple scan below may revisit old pairs, but those are cache
+    hits rather than new level-19 compression probes.
     """
-    states.sort(key=lambda row: (row.decoded, row.cost, row.worst_member_amp))
-    kept: list[_State] = []
-    best_cost = None
-    for row in states:
-        if best_cost is None or row.cost < best_cost:
-            kept.append(row)
-            best_cost = row.cost
-    if len(kept) > MAX_PARETO_STATES:
-        return None
-    return kept
+    if len(ordered_roots) > MAX_ROOTS:
+        return None, {
+            "strategy": strategy,
+            "selected": False,
+            "skipped": "root-cap",
+            "roots": len(ordered_roots),
+            "max_roots": MAX_ROOTS,
+        }
+    if not ordered_roots:
+        return (0, 0.0, 0, []), {
+            "strategy": strategy,
+            "selected": False,
+            "skipped": None,
+            "roots": 0,
+            "merges": 0,
+            "exact_cost_probes": 0,
+            "bytes": 0,
+            "read_amp": 0.0,
+            "worst_member_amp": 0.0,
+            "max_group_bytes": 0,
+        }
 
+    cache: dict[tuple[int, ...], dict] = {}
+    groups = [(node_id,) for node_id in ordered_roots]
+    try:
+        singleton = [_group_metrics(group, nodes, cache) for group in groups]
+    except _ProbeCap:
+        raise RuntimeError("singleton roots exceeded exact-cost probe cap")
 
-def _coarsen_source_plan(nodes: list[bytes], root_ids: list[int], base_groups: list[list[int]],
-                         source_limit: int, original_worst: float) -> tuple[tuple[int, float, int, list[list[int]]] | None, dict]:
-    """Find a lower-byte contiguous coarsening under weighted *and per-member* read budgets.
-
-    The search never reorders roots: v0.28's similarity order is the semantic starting point. It only
-    decides which adjacent existing groups should share one physical record. This makes the current
-    global plan a reachable no-op state while allowing different regions to spend different amounts of
-    locality budget.
-
-    Footnote: attempt #6 strengthens the inherited locality contract. A newly selected partition must be
-    <=8x not only in the historical weighted metric but for every direct-root member individually. The
-    accepted attempt-5 artifact remains the final fallback when the inherited global plan itself has a
-    worse individual-member ratio or when no stricter partition wins bytes.
-    """
-    if not base_groups or len(base_groups) > MAX_BASE_GROUPS:
-        return None, {"source_limit": source_limit, "skipped": "base-group-cap", "base_groups": len(base_groups)}
-
-    logical = sum(max(1, len(nodes[node_id])) for node_id in root_ids)
+    logical = sum(max(1, len(nodes[node_id])) for node_id in ordered_roots)
+    decoded = sum(row["raw_bytes"] * row["members"] for row in singleton)
     max_decoded = int(MAX_READ_AMP * logical)
-    source_worst = _worst_member_amp(base_groups, nodes)
-    allowed_worst = MAX_READ_AMP
-    n = len(base_groups)
-    frontiers: list[list[_State]] = [[] for _ in range(n + 1)]
-    frontiers[0] = [_State(0, 0, 0.0, None, ())]
-    interval_cache: dict[tuple[int, int], tuple[tuple[int, ...], int, int, float]] = {}
+    total_cost = sum(row["cost"] for row in singleton)
+    merges = 0
 
-    def interval(start: int, end: int):
-        key = (start, end)
-        cached = interval_cache.get(key)
-        if cached is not None:
-            return cached
-        ids = tuple(node_id for group in base_groups[start:end] for node_id in group)
-        raw_bytes = _group_raw_bytes(ids, nodes)
-        if raw_bytes > MAX_PACK_BYTES:
-            interval_cache[key] = (ids, raw_bytes, -1, float("inf"))
-            return interval_cache[key]
-        raw = b"".join(nodes[node_id] for node_id in ids)
-        cost = _record_cost(raw)
-        worst = max((raw_bytes / max(1, len(nodes[node_id])) for node_id in ids), default=0.0)
-        interval_cache[key] = (ids, raw_bytes, cost, worst)
-        return interval_cache[key]
-
-    for end in range(1, n + 1):
-        candidates: list[_State] = []
-        lower = max(0, end - MAX_MERGED_BASE_GROUPS)
-        for start in range(end - 1, lower - 1, -1):
-            ids, raw_bytes, segment_cost, segment_worst = interval(start, end)
-            if raw_bytes > MAX_PACK_BYTES:
-                break
-            if segment_worst > allowed_worst + 1e-12:
-                continue
-            segment_decoded = raw_bytes * len(ids)
-            for previous in frontiers[start]:
-                decoded = previous.decoded + segment_decoded
-                if decoded > max_decoded:
+    while len(groups) > 1:
+        best = None
+        try:
+            for index in range(len(groups) - 1):
+                left_ids = groups[index]
+                right_ids = groups[index + 1]
+                left = _group_metrics(left_ids, nodes, cache)
+                right = _group_metrics(right_ids, nodes, cache)
+                merged_ids = left_ids + right_ids
+                raw_bytes = left["raw_bytes"] + right["raw_bytes"]
+                if raw_bytes > MAX_PACK_BYTES:
                     continue
-                candidates.append(_State(
-                    decoded=decoded,
-                    cost=previous.cost + segment_cost,
-                    worst_member_amp=max(previous.worst_member_amp, segment_worst),
-                    previous=previous,
-                    group=ids,
-                ))
-        pruned = _prune_pareto(candidates)
-        if pruned is None:
+                merged = _group_metrics(merged_ids, nodes, cache)
+                if merged["worst_member_amp"] > MAX_READ_AMP + 1e-12:
+                    continue
+                saving = left["cost"] + right["cost"] - merged["cost"]
+                if saving <= 0:
+                    continue
+                old_decoded = (
+                    left["raw_bytes"] * left["members"] + right["raw_bytes"] * right["members"]
+                )
+                new_decoded = merged["raw_bytes"] * merged["members"]
+                added_decoded = new_decoded - old_decoded
+                if decoded + added_decoded > max_decoded:
+                    continue
+                score = _score(strategy, saving, added_decoded, index)
+                if best is None or score > best[0]:
+                    best = (score, index, merged_ids, saving, added_decoded)
+        except _ProbeCap:
             return None, {
-                "source_limit": source_limit,
-                "skipped": "pareto-state-cap",
-                "position": end,
-                "base_groups": n,
-                "original_worst_member_amp": original_worst,
+                "strategy": strategy,
+                "selected": False,
+                "skipped": "exact-cost-probe-cap",
+                "roots": len(ordered_roots),
+                "merges": merges,
+                "exact_cost_probes": len(cache),
+                "max_exact_cost_probes": MAX_EXACT_COST_PROBES,
             }
-        if not pruned:
-            return None, {
-                "source_limit": source_limit,
-                "skipped": "no-feasible-partition",
-                "position": end,
-                "original_worst_member_amp": original_worst,
-            }
-        frontiers[end] = pruned
 
-    best = min(frontiers[n], key=lambda row: (row.cost, row.decoded, row.worst_member_amp))
-    groups: list[list[int]] = []
-    cursor: _State | None = best
-    while cursor is not None and cursor.previous is not None:
-        groups.append(list(cursor.group))
-        cursor = cursor.previous
-    groups.reverse()
-    if sorted(node_id for group in groups for node_id in group) != sorted(root_ids):
-        raise RuntimeError("locality-budget partition lost or duplicated a root")
+        if best is None:
+            break
+        _, index, merged_ids, saving, added_decoded = best
+        groups[index : index + 2] = [merged_ids]
+        total_cost -= saving
+        decoded += added_decoded
+        merges += 1
 
-    max_group = max((_group_raw_bytes(group, nodes) for group in groups), default=0)
-    amp = best.decoded / max(1, logical)
-    return (best.cost, amp, max_group, groups), {
-        "source_limit": source_limit,
-        "source_worst_member_amp": source_worst,
-        "original_worst_member_amp": original_worst,
-        "bytes": best.cost,
-        "read_amp": amp,
-        "worst_member_amp": best.worst_member_amp,
-        "groups": len(groups),
-        "max_group_bytes": max_group,
+    group_lists = [list(group) for group in groups]
+    if sorted(node_id for group in group_lists for node_id in group) != sorted(ordered_roots):
+        raise RuntimeError("locality-budget agglomeration lost or duplicated a root")
+    read_amp = decoded / max(1, logical)
+    worst = _worst_member_amp(group_lists, nodes)
+    max_group = max((_group_raw_bytes(group, nodes) for group in group_lists), default=0)
+    if read_amp > MAX_READ_AMP + 1e-12 or worst > MAX_READ_AMP + 1e-12:
+        raise RuntimeError("agglomerative planner violated its read-amplification contract")
+    return (total_cost, read_amp, max_group, group_lists), {
+        "strategy": strategy,
+        "selected": False,
         "skipped": None,
+        "roots": len(ordered_roots),
+        "merges": merges,
+        "exact_cost_probes": len(cache),
+        "bytes": total_cost,
+        "read_amp": read_amp,
+        "worst_member_amp": worst,
+        "max_group_bytes": max_group,
     }
 
 
 def _choose_pack_plan_budgeted(nodes: list[bytes], sketches, root_ids: list[int]):
-    """Strictly dominate the current global-ceiling audition when exact bytes and locality permit it."""
+    """Tournament two bounded locality spend policies against the exact inherited global plan."""
     original, original_trials = _ORIGINAL_CHOOSE(nodes, sketches, root_ids)
     original_cost, original_amp, original_limit, original_groups = original
     original_worst = _worst_member_amp(original_groups, nodes)
     best = original
     best_diag = {
-        "source_limit": original_limit,
+        "strategy": "global-limit-fallback",
+        "selected": False,
+        "skipped": None,
         "bytes": original_cost,
         "read_amp": original_amp,
         "worst_member_amp": original_worst,
         "original_worst_member_amp": original_worst,
-        "groups": len(original_groups),
         "max_group_bytes": max((_group_raw_bytes(group, nodes) for group in original_groups), default=0),
         "saving_vs_global": 0,
-        "selected": False,
-        "strategy": "global-limit-fallback",
     }
     diagnostics = []
+    order = _ordered_roots(sketches, root_ids)
 
-    for limit_kib in BASE_LIMITS:
-        source_limit = limit_kib * 1024
-        _, source_amp, source_groups = _ORIGINAL_PACK_PLAN(nodes, sketches, root_ids, source_limit)
-        if source_amp > MAX_READ_AMP:
-            diagnostics.append({
-                "strategy": "read-budget-partition",
-                "source_limit": source_limit,
-                "skipped": "source-plan-over-weighted-budget",
-                "source_read_amp": source_amp,
-                "original_worst_member_amp": original_worst,
-            })
-            continue
-        candidate, diag = _coarsen_source_plan(
-            nodes, root_ids, [list(group) for group in source_groups], source_limit, original_worst
-        )
-        diag["strategy"] = "read-budget-partition"
+    for strategy in MERGE_STRATEGIES:
+        candidate, diag = _agglomerate(nodes, order, strategy)
+        diag["original_worst_member_amp"] = original_worst
         diagnostics.append(diag)
         if candidate is None:
             continue
         cost, amp, max_group, groups = candidate
         worst = float(diag["worst_member_amp"])
-        # Footnote: ties stay with the historical plan. Spending locality or changing physical boundaries
-        # for zero byte gain would create churn with no user-visible benefit. Any *new* plan must satisfy
-        # the stronger per-member <=8x bound; the old attempt-5 artifact remains the fallback otherwise.
+        # Footnote: exact ties remain on the established global planner. New physical boundaries must buy
+        # real bytes and satisfy both read budgets; otherwise attempt #5 remains untouched.
         if cost < best[0] and amp <= MAX_READ_AMP and worst <= MAX_READ_AMP + 1e-12:
             best = (cost, amp, max_group, groups)
             best_diag = dict(diag)
             best_diag.update({
-                "saving_vs_global": original_cost - cost,
                 "selected": True,
-                "strategy": "read-budget-partition",
+                "saving_vs_global": original_cost - cost,
             })
 
     trials = [dict(row, strategy="global-limit") for row in original_trials]
@@ -271,7 +282,7 @@ def _choose_pack_plan_budgeted(nodes: list[bytes], sketches, root_ids: list[int]
         trial = dict(row)
         trial["selected"] = bool(
             best_diag.get("selected")
-            and row.get("source_limit") == best_diag.get("source_limit")
+            and row.get("strategy") == best_diag.get("strategy")
             and row.get("bytes") == best_diag.get("bytes")
         )
         trials.append(trial)

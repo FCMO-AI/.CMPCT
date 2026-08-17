@@ -67,7 +67,6 @@ def _measure_workload(suite: str, path: Path, archive_dir: Path, preserved: dict
     allocator_stats = result["pack_budget_graph_stats"].get("pack_budget", {})
     allocator_selected = bool(allocator_stats.get("selected"))
     allocator_worst = float(allocator_stats.get("worst_member_amp", 0.0))
-    original_worst = float(allocator_stats.get("original_worst_member_amp", 0.0))
     selected_stats = result["mosaic"]
     embedded_v028_create = float(result["v028"].get("portfolio_create_s", 0.0))
     return {
@@ -93,11 +92,10 @@ def _measure_workload(suite: str, path: Path, archive_dir: Path, preserved: dict
         "pack_budget_selected": bool(result["pack_budget_selected"]),
         "pack_budget_graph_bytes": int(result["pack_budget_graph_bytes"]),
         "pack_budget_root_saving_vs_global": int(allocator_stats.get("saving_vs_global", 0)),
-        "pack_budget_source_limit": allocator_stats.get("source_limit"),
-        "pack_budget_evaluated_weighted_read_amp": float(allocator_stats.get("read_amp", 0.0)),
+        "pack_budget_strategy": allocator_stats.get("strategy"),
+        "pack_budget_exact_cost_probes": int(allocator_stats.get("exact_cost_probes", 0)),
         "pack_budget_weighted_read_amp": float(allocator_stats.get("read_amp", 0.0)) if allocator_selected else 0.0,
         "pack_budget_worst_member_amp": allocator_worst if allocator_selected else 0.0,
-        "pack_budget_original_worst_member_amp": original_worst,
         "pack_budget_worst_member_over_budget": bool(
             allocator_selected and allocator_worst > ENGINE.MAX_READ_AMP + 1e-12
         ),
@@ -145,6 +143,7 @@ def run(work_root: Path) -> dict:
                 "candidate": row["candidate_bytes"],
                 "saving_vs_attempt5": row["saving_vs_attempt5_bytes"],
                 "pack_budget_selected": row["pack_budget_selected"],
+                "strategy": row["pack_budget_strategy"],
                 "root_pack_saving": row["pack_budget_root_saving_vs_global"],
                 "weighted_read_amp": row["pack_budget_weighted_read_amp"],
                 "worst_member_amp": row["pack_budget_worst_member_amp"],
@@ -162,12 +161,14 @@ def run(work_root: Path) -> dict:
     locality_green = (
         all(not row["pack_budget_worst_member_over_budget"] for row in rows)
         and max((row["pack_budget_weighted_read_amp"] for row in rows), default=0.0) <= ENGINE.MAX_READ_AMP
+        and max((row["pack_read_amplification"] for row in rows if row["pack_budget_selected"]), default=0.0)
+            <= ENGINE.MAX_READ_AMP
     )
     research_pass = (
         identity_green
         and no_regression
         and locality_green
-        and additional >= int(v028_total * 0.0005)
+        and additional * 2000 >= v028_total
         and sum(row["candidate_bytes"] < row["attempt5_bytes"] for row in rows) >= 2
     )
     totals = {
@@ -189,10 +190,14 @@ def run(work_root: Path) -> dict:
         "attempt5_byte_drift_rows": sum(not row["attempt5_bytes_match"] for row in rows),
         "max_pack_budget_weighted_read_amp": max((row["pack_budget_weighted_read_amp"] for row in rows), default=0.0),
         "max_pack_budget_worst_member_amp": max((row["pack_budget_worst_member_amp"] for row in rows), default=0.0),
+        "max_selected_pack_read_amplification": max(
+            (row["pack_read_amplification"] for row in rows if row["pack_budget_selected"]), default=0.0
+        ),
         "max_selected_mosaic_read_amplification": max((row["max_mosaic_read_amplification"] for row in rows), default=0.0),
         "max_selected_additional_recipe_read_amplification": max(
             (row["max_additional_recipe_read_amplification"] for row in rows), default=0.0
         ),
+        "max_pack_budget_exact_cost_probes": max((row["pack_budget_exact_cost_probes"] for row in rows), default=0),
         "oracle_portfolio_create_s": sum(row["portfolio_create_s"] for row in rows),
         "embedded_v028_portfolio_create_s": sum(row["embedded_v028_portfolio_create_s"] for row in rows),
         "median_oracle_create_ratio_vs_v028": statistics.median(
@@ -211,6 +216,7 @@ def run(work_root: Path) -> dict:
             "workloads_improved_vs_attempt5_gte": 2,
             "weighted_pack_read_amplification_lte": 8.0,
             "per_member_pack_read_amplification_lte": 8.0,
+            "final_selected_pack_read_amplification_lte": 8.0,
         },
         "rows": rows,
         "totals": totals,
