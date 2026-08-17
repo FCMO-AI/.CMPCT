@@ -66,16 +66,19 @@ jobs:
             --repetitions 4 \
             2>&1 | tee benchmark-artifacts/mosaic-v029-parallel-portfolio.stdout.txt
 
-      - name: Enforce byte identity, balanced order, frozen speed gate, and repeatability
+      - name: Enforce accepted-engine identity, byte identity, frozen speed gate, and repeatability
         run: |
           python - <<'PY'
           import json
           from pathlib import Path
           r=json.loads(Path('benchmark-artifacts/mosaic-v029-parallel-portfolio.json').read_text())
-          assert r['schema'] == 'cmpct-v029-parallel-portfolio-oracle-v2'
+          assert r['schema'] == 'cmpct-v029-parallel-portfolio-oracle-v3'
+          assert r['accepted_engine'] == 'attempt5-residual-program-packing'
           p=r['policy']
           assert p['scheduling_only'] is True
           assert p['spawned_workers'] == 2
+          assert p['parallel_scope'] == 'multi-file-only'
+          assert p['single_file_policy'] == 'preserve-accepted-fast-reject-sequentially'
           assert p['exact_archive_identity_required'] is True
           assert p['minimum_wallclock_improvement_pct'] == 20.0
           assert p['minimum_absolute_improvement_s'] == 5.0
@@ -85,7 +88,14 @@ jobs:
           assert p['median_must_pass'] is True
           assert len(r['rows']) == 4
           assert [row['execution_order'] for row in r['rows']] == p['paired_order']
+          assert all(row['accepted_engine'] == r['accepted_engine'] for row in r['rows'])
+          assert all(row['scheduler_mode'] == 'parallel-independent-portfolio' for row in r['rows'])
           assert all(row['byte_identical'] for row in r['rows'])
+          # Footnote: the fixed hostile aggregate is a known accepted attempt-5 winner. Requiring a
+          # strict win over its embedded v0.28 artifact prevents a stale research engine from producing
+          # byte-identical scheduler evidence while silently benchmarking the wrong portfolio again.
+          assert all(row['selected'] == 'mosaic' for row in r['rows'])
+          assert all(row['archive_bytes'] < row['v028_bytes'] for row in r['rows'])
           assert all(row['pair_gate_pass'] for row in r['rows'])
           assert r['median_gate_pass'] is True
           assert r['research_gate_pass'] is True
@@ -101,7 +111,10 @@ jobs:
           import json
           from pathlib import Path
           r=json.loads(Path('benchmark-artifacts/mosaic-v029-parallel-portfolio.json').read_text())
-          print('## CMPCT v0.29 — byte-identical parallel portfolio')
+          first=r['rows'][0]
+          print('## CMPCT v0.29 — accepted attempt-5 byte-identical parallel portfolio')
+          print(f"- engine: **{r['accepted_engine']}**")
+          print(f"- selected aggregate: **{first['archive_bytes']:,} B** vs v0.28 **{first['v028_bytes']:,} B**")
           print(f"- balanced order: **{' / '.join(row['execution_order'] for row in r['rows'])}**")
           print(f"- repetitions: **{len(r['rows'])}**")
           print(f"- sequential median: **{r['sequential_median_s']:.2f} s**")
