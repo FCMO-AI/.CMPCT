@@ -7,7 +7,7 @@ archive choice better than legacy ZIP across **size, speed, random access, fidel
 recovery, updates and modern storage semantics**—without winning one metric by quietly sacrificing the
 others.
 
-> Status: **core project v0.28.0 / surface 0.28.a / pre-1.0 / format under active development.** `main`
+> Status: **core project v0.28.0 / surface 0.28.c / pre-1.0 / format under active development.** `main`
 > is the canonical source of truth. The executable reference implementation still writes format
 > revision **24**. Surface revisions describe site/docs/repository presentation and do not consume a
 > numeric core release number.
@@ -26,15 +26,24 @@ directory. Numeric core release candidates are benchmarked against their direct 
 
 The release rule is deliberately asymmetric because size and timing have different measurement physics:
 
-- **archive size:** identical input + encoder semantics must never get larger; release gate tolerance is **0 bytes**;
+- **archive size:** identical input + encoder semantics must never get larger at release promotion; gate tolerance is **0 bytes**;
 - **create/extract speed:** base and candidate run on the same runner with repeated medians; a confirmed
-  slowdown outside the documented relative+absolute noise envelope blocks release;
+  slowdown outside the documented relative+absolute noise envelope blocks promotion;
 - **benchmark evidence:** every numeric core release must commit a fresh public benchmark record rather
   than leave the new result only in CI output;
 - **corpora:** losing/adversarial workloads stay visible. A benchmark is not improved by deleting the
   case that disproves the headline.
 
-See `docs/PERFORMANCE_RELEASE_GATE.md` for the normative release policy.
+That strict final floor is **not an exploration ban**. A reproducible mechanism-level breakthrough may
+be preserved as research even when it temporarily regresses another performance dimension. The project
+then opens explicit regression debt and works to retain the breakthrough while restoring the damaged
+metric before promotion. The preferred sequence is adaptive portfolio/fallback selection, isolate the
+exported cost, change the representation boundary, then counter-invent against the new bottleneck.
+Correctness, byte-exact losslessness, authentication, hostile-input safety and truthful benchmark
+semantics are never borrowable metrics.
+
+See `docs/PERFORMANCE_RELEASE_GATE.md` for the normative release policy and
+`docs/BREAKTHROUGH_REHABILITATION.md` for the exploration-to-promotion protocol.
 
 ### v0.28 research frontier
 
@@ -55,8 +64,18 @@ in the same size class as solid tar+Zstd-19 (**47,065,652 B**), ZPAQ method 5 (*
 comparisons, **not semantic-parity claims**: solid archives export different selective-read and recovery
 costs. DwarFS was unavailable on the evidence runner and remains recorded as unavailable.
 
-The durable record is `benchmarks/history/2026-08-16-entropygraph-v028.json`. Historical v0.25 evidence
-remains preserved rather than rewritten.
+The public category frontier is deliberately harder than a ZIP-only boast. Fresh same-lifetime v0.28
+measurements archive every workload independently with CMPCT, solid tar+Zstd-19 and ZIP/Deflate-9. Across
+those 15 rows CMPCT stores **137,555,039 B** versus **143,861,222 B** for solid Zstd-19 and
+**188,084,175 B** for ZIP/Deflate-9: **4.3835% smaller than solid Zstd-19** and **26.8652% smaller than
+ZIP/Deflate-9** in the independent-workload aggregate. CMPCT wins **7/15** categories against solid
+Zstd and loses **8/15**; the losing rows remain public. Notable Zstd wins include office workspace
+(**28.37% smaller**), analytics/database (**34.38%**), logs/telemetry (**18.42%**) and many tiny files
+(**5.94%**). The hardest recorded Zstd loss is boundary churn, where CMPCT is **23.07% larger**.
+
+The durable records are `benchmarks/history/2026-08-16-entropygraph-v028.json` for release/structural
+evidence and `benchmarks/history/2026-08-17-entropygraph-v028-category.json` for exact-tree category
+evidence. Historical v0.25 evidence remains preserved rather than rewritten.
 
 ## What CMPCT can do today
 
@@ -94,7 +113,9 @@ Those mechanisms remain gated from the canonical reader until they pass format i
 conformance, hardening, native parity and portability requirements.
 
 The important rule is **content-driven selection, not extension-driven folklore**. If a specialized
-representation is slower or larger for the actual bytes, CMPCT should not use it.
+representation is slower or larger for the actual bytes, CMPCT should not use it in the promoted
+configuration. During research, a dramatic mechanism may remain preserved with explicit regression debt
+while its losing region is rehabilitated rather than reflexively deleting the discovery.
 
 ## Quick start
 
@@ -134,16 +155,17 @@ A coding/research agent with no previous CMPCT context should read, in order:
 3. `AGENTS.md` — mandatory development, benchmark and versioning rules;
 4. `docs/CURRENT_STATE.md` — zero-chat-history handoff and immediate frontier;
 5. newest applicable note under `docs/releases/` — latest numeric core milestone;
-6. `docs/PERFORMANCE_RELEASE_GATE.md` — no-regression core-release contract;
-7. `docs/FORMAT.md` — current revision-24 on-disk contract;
-8. `docs/HISTORY.md` — surviving format/prototype history with private provenance generalized;
-9. `docs/ENTROPYGRAPH.md` and `docs/ENTROPYGRAPH_II_CAMPAIGN.md` — current research frontier and gates;
-10. `docs/HARDENING.md` — hostile parser/resource state;
-11. `docs/PORTABILITY.md` and `docs/NATIVE_CORE.md` — product integration and shared reader-core state;
-12. `docs/RESEARCH_LOG.md` — failed ideas and experimental conclusions;
-13. `docs/BENCHMARKS.md` and `benchmarks/history/` — benchmark semantics and durable public records;
-14. `docs/PUBLIC_SURFACE.md` — public-repository/site disclosure boundary;
-15. `docs/ROADMAP.md` — work remaining before 1.0.
+6. `docs/PERFORMANCE_RELEASE_GATE.md` — no-regression core-release promotion contract;
+7. `docs/BREAKTHROUGH_REHABILITATION.md` — how to preserve a high-upside research seed and pay its regression debt before promotion;
+8. `docs/FORMAT.md` — current revision-24 on-disk contract;
+9. `docs/HISTORY.md` — surviving format/prototype history with private provenance generalized;
+10. `docs/ENTROPYGRAPH.md` and `docs/ENTROPYGRAPH_II_CAMPAIGN.md` — current research frontier and gates;
+11. `docs/HARDENING.md` — hostile parser/resource state;
+12. `docs/PORTABILITY.md` and `docs/NATIVE_CORE.md` — product integration and shared reader-core state;
+13. `docs/RESEARCH_LOG.md` — failed ideas and experimental conclusions;
+14. `docs/BENCHMARKS.md` and `benchmarks/history/` — benchmark semantics and durable public records;
+15. `docs/PUBLIC_SURFACE.md` — public-repository/site disclosure boundary;
+16. `docs/ROADMAP.md` — work remaining before 1.0.
 
 A new agent should not need private chat, private corpora, or unrelated project context to continue
 development safely.
@@ -167,6 +189,7 @@ development safely.
 - `tools/check_pr_evidence.py` — material-PR evidence-dossier gate.
 - `SURFACE_REVISION` — alphabetic presentation/process revision (`x.x.a`, `x.x.b`, …).
 - `docs/PERFORMANCE_RELEASE_GATE.md` — normative performance release policy.
+- `docs/BREAKTHROUGH_REHABILITATION.md` — normative exploration/regression-debt rehabilitation policy.
 - `docs/releases/` — one release note per numeric core release.
 - `site/` — performance-first website, evidence adapters and local Browser Lab.
 - `native/cmpct_cdc.c` — optional native content-defined chunking accelerator.
@@ -187,20 +210,21 @@ development safely.
 ## Website
 
 The site is designed to **create impact first, prove the claim second, and earn trust after that**.
-Its headline performance numbers, competitor ladder, workload matrix, losses and core-release state are
+Its headline performance numbers, competitor ladder, category frontier, losses and core-release state are
 generated from committed benchmark history rather than hand-maintained marketing percentages.
 
-For v0.28 the public adapter explicitly declares **EntropyGraph v0.25** as the primary research baseline
-and keeps ZIP/Deflate, 7z/LZMA2, solid tar/Zstd, ZPAQ and Borg under their actual names. A stale UI schema
-is not allowed to rename one competitor into another merely to keep an old hero label filled in.
+For v0.28 the public surface deliberately gives four benchmark views different jobs:
 
-The site deliberately separates:
+- **whole-suite research arena** — current CMPCT versus matched external archive tools. ZIP/Deflate is the familiar headline comparator and solid Zstd-19 is prominently shown beside it as the serious compression-size baseline;
+- **category frontier** — every exact workload is independently compared against solid Zstd-19, with ZIP/Deflate retained as secondary context. Green and red cells both remain visible;
+- **canonical ZIP execution parity** — the executable revision-24 reader/writer compared against ZIP at equivalent library and fresh-process CLI archive-size/create/extract boundaries;
+- **release delta** — current research candidate versus its inherited direct base, kept as causal release evidence rather than overwriting the competitive category view.
 
-- **research frontier** — the strongest currently verified experimental representation results;
-- **canonical parity** — the executable revision-24 reader/writer compared against ZIP at equivalent
-  library and fresh-process CLI boundaries;
-- **surface revision** — the current site/docs/repository presentation milestone, which has no authority
-  over archive semantics or benchmark truth.
+Whole-suite and independent-workload totals are intentionally not mixed: aggregation changes physical
+context and deduplication opportunity. Fresh category evidence also records its own exact tree identity
+because some generated office/media producer metadata can vary across separate runs. The category
+baseline therefore measures CMPCT and Zstd/ZIP during the same workload lifetime instead of pretending
+a later regeneration is byte-identical.
 
 The site may be visually and rhetorically aggressive. It may not blur those boundaries or invent a win.
 Canonical `main` publishes through the Pages workflow only after public-surface, data-coherence,
@@ -218,7 +242,7 @@ There are three different version axes:
    normal core advancement moves the `MAJOR.MINOR` line and uses `PATCH=0` for packaging compatibility.
 2. **Surface revision (`MAJOR.MINOR.LETTER`)** — site animation/design, documentation cleanup, repository
    presentation, workflow ergonomics and similar non-format work. The current surface milestone is
-   `0.28.a`. It does not independently change `pyproject.toml` and does not require a synthetic benchmark
+   `0.28.c`. It does not independently change `pyproject.toml` and does not require a synthetic benchmark
    record.
 3. **On-disk format revision** — changes only when readers need new archive grammar/storage semantics.
 
