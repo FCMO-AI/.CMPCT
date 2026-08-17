@@ -12,11 +12,12 @@ The site exposes:
 
 - current core project/version/format state plus the non-semantic surface revision;
 - the strongest committed research-frontier benchmark, clearly labeled when it is not canonical;
-- current matched cross-format comparisons separately from direct-base release deltas;
-- the latest canonical ZIP-parity evidence;
+- current matched structural cross-format comparisons;
+- a fresh exact-tree per-category frontier against solid Zstandard;
+- direct-base release deltas as separate causal evidence;
+- the latest canonical ZIP execution-parity evidence with archive-size/create/extract timing;
 - workload-level wins and losses;
-- core-release trajectory;
-- the no-regression release policy;
+- core-release trajectory and breakthrough-rehabilitation release philosophy;
 - Browser Lab creation and fixed-header inspection;
 - machine-readable orientation for agents.
 
@@ -46,8 +47,8 @@ clearer documentation, repository presentation, workflow polish or other non-for
 consume a numeric release number.
 
 Those changes use the root `SURFACE_REVISION` file, with the form `x.x.a`, `x.x.b`, and so on. The
-surface line follows the current project major/minor line. The current benchmark-semantics repair is
-**surface 0.28.b** while the core project remains **0.28.0** and the canonical on-disk format remains
+surface line follows the current project major/minor line. This category-evidence/policy milestone is on
+the **0.29 surface line** while the core remains **0.29.0** and the canonical on-disk format remains
 revision **24**.
 
 `site/enhance_site.py` applies the presentation layer after the canonical data build. This separation is
@@ -60,23 +61,32 @@ semantics.
 model. The homepage must never hand-copy a headline percentage that can drift away from the benchmark
 record.
 
-The current model distinguishes three questions:
+The current model distinguishes four questions:
 
-1. **Canonical parity** — records emitted by `benchmarks/zip_parity_bench.py` for the executable reader/writer.
-2. **Research-frontier cross-format position** — current research-engine measurements against external archive tools on matched aggregate trees. This is the homepage performance arena.
-3. **Direct-base release delta** — candidate-vs-inherited-engine evidence used to decide whether a specific research release actually moved its own frontier forward.
+1. **Whole-suite structural research position / arena** — current research-engine measurements against external archive tools on a matched aggregate tree. ZIP/Deflate is the familiar adoption headline; solid Zstd-19 is elevated beside it as the serious size comparator, even when CMPCT loses.
+2. **Per-category storage frontier** — current CMPCT versus solid tar+Zstd-19 on each exact individual workload tree, with ZIP/Deflate measured on that same live tree as secondary context. This powers the workload tiles.
+3. **Canonical ZIP execution parity** — `benchmarks/zip_parity_bench.py` records for the executable reader/writer, with separate library and fresh-process CLI archive-size/create/extract measurements. This powers the spreadsheet-like table lower on the page.
+4. **Direct-base release delta** — candidate-vs-inherited-engine evidence used to decide whether a research release moved its own frontier forward. This remains release causality and must never overwrite the competitive category view.
 
-Footnote: those last two views are deliberately separate. A release may be judged causally against its
-immediate base while users still need the enduring product question answered: how does current CMPCT
-compare with other formats? The site must not overwrite one with the other. It must also never compare
-a sum of separately-created workload archives with competitors measured as whole-suite archives;
-aggregation semantics must match on both sides of a displayed percentage.
+Footnote: all four views are deliberately separate. Whole-suite aggregation can exploit different
+context/deduplication opportunities than a sum of independently-created workload archives, so those
+numbers are not interchangeable. Likewise, solid tar+Zstd is a serious **size** baseline with different
+random-access/recovery semantics, not fictional feature parity. The lower ZIP table asks an operational
+execution question, not a second storage-frontier question.
+
+The category record is accepted only when it covers every current workload and declares that CMPCT,
+ZIP/Deflate-9 and solid tar+Zstd-19 were measured during the same generated-tree lifetime. Some valid
+synthetic office/media producers can embed run-varying metadata, so a later regeneration is not treated
+as byte-identical merely because it came from the same generator. Row-local tree hashes preserve the
+actual category provenance.
 
 Core release candidates are benchmarked candidate-vs-base by `.github/workflows/zip-parity.yml` and the
-research-specific workflows. Deterministic archive-size regression has zero tolerance. Timing
-regressions are evaluated on the same runner with repeated medians and a small relative+absolute noise
-envelope so shared-runner jitter does not become a false product regression. Surface-only revisions do
-not manufacture benchmark records.
+research-specific workflows. Deterministic archive-size regression has zero tolerance **at promotion**.
+A verified mechanism-level breakthrough may remain explicit research with regression debt while the
+project preserves its gain and rehabilitates the damaged metric; it does not become the released
+baseline until applicable debt is closed. See `docs/BREAKTHROUGH_REHABILITATION.md`. Timing regressions
+use the same-runner relative+absolute noise envelope. Surface-only revisions do not manufacture core
+release records.
 
 ## Public-surface boundary
 
@@ -102,7 +112,9 @@ uploaded by the static site.
 - the optional motion stylesheet and motion controller;
 - `surface-revision.txt`;
 - surface revision labeling in the page and machine-readable project state;
-- the EntropyGraph-II evidence adapter that keeps matched cross-format position and release delta separate;
+- schema-specific v0.28/v0.29 evidence adapters;
+- distinct public copy for the structural arena, Zstd category matrix and canonical ZIP execution table;
+- the machine-readable rule that no-regression is a release-promotion boundary rather than an exploration ban;
 - the public explanation that site/repository polish does not consume a numeric core version.
 
 Every validation build derives current CMPCT facts from repository state rather than copied marketing
@@ -126,7 +138,7 @@ python site/build_site.py --out _site
 python site/enhance_site.py _site
 node --check site/src/assets/app.js
 node --check site/src/assets/motion.js
-node --check site/src/assets/frontier-v028.js
+node --check site/src/assets/frontier-v029.js
 python -m http.server 8000 -d _site
 ```
 

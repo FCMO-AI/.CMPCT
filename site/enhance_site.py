@@ -64,19 +64,13 @@ def patch_index(output: Path, version: str, surface: str) -> None:
             '<script type="module" src="assets/app.js"></script>\n'
             '  <script type="module" src="assets/motion.js"></script>',
         )
-    if "assets/frontier-v028.js" not in html:
+    frontier_script = "assets/frontier-v029.js" if version == "0.29.0" else "assets/frontier-v028.js"
+    if frontier_script not in html:
         html = html.replace(
             '<script type="module" src="assets/motion.js"></script>',
             '<script type="module" src="assets/motion.js"></script>\n'
-            '  <!-- Footnote: schema adapter changes labels only after evidence declares the v0.28 contract. -->\n'
-            '  <script type="module" src="assets/frontier-v028.js"></script>',
-        )
-    if "assets/frontier-v029.js" not in html:
-        html = html.replace(
-            '<script type="module" src="assets/frontier-v028.js"></script>',
-            '<script type="module" src="assets/frontier-v028.js"></script>\n'
-            '  <!-- Footnote: v0.29 is additive; its renderer activates only for the explicit Mosaic evidence schema. -->\n'
-            '  <script type="module" src="assets/frontier-v029.js"></script>',
+            f'  <!-- Footnote: schema adapter changes labels only after evidence declares the release contract. -->\n'
+            f'  <script type="module" src="{frontier_script}"></script>',
         )
 
     html = re.sub(
@@ -90,6 +84,40 @@ def patch_index(output: Path, version: str, surface: str) -> None:
         f'<span>Project v{version}</span><span>Surface {surface}</span><span>Canonical format',
         1,
     )
+
+    # Footnote: the public performance blocks now answer different questions instead of repeating one
+    # release delta. The arena is a matched structural cross-format snapshot; the tiles are exact-tree
+    # Zstd category evidence; and the later table is canonical CMPCT-vs-ZIP execution parity.
+    html = html.replace(
+        'The frontier view uses the broad neutral/hostile suite: developer trees, office containers, media, analytics, logs, backups, incompressible data, tiny files, ML artifacts and a mixed binary image. Losses stay visible.',
+        'The arena compares current CMPCT with external formats on a matched structural tree. ZIP remains the familiar adoption baseline, while solid Zstd-19 is shown prominently as the serious size baseline—even when CMPCT loses. The category frontier below asks the harder per-workload Zstd question. Losses stay visible.',
+        1,
+    )
+    html = html.replace(
+        '<div class="card-head"><span>WORKLOAD MATRIX</span><strong id="workload-score">—</strong></div>',
+        '<div class="card-head"><span>CATEGORY FRONTIER · SOLID ZSTD-19</span><strong id="workload-score">—</strong></div>',
+        1,
+    )
+    html = html.replace(
+        '<div><p class="eyebrow">04 / CANONICAL PARITY</p><h2>Where the executable engine<br><em>beats ZIP—and where it does not.</em></h2></div>',
+        '<div><p class="eyebrow">04 / CANONICAL ZIP EXECUTION PARITY</p><h2>Shipping CMPCT vs ZIP.<br><em>Size, create, extract.</em></h2><p class="parity-purpose">This table is operational parity for the canonical reader/writer at library and fresh-process CLI boundaries. It is intentionally separate from the Zstd category-size frontier above.</p></div>',
+        1,
+    )
+
+    # Footnote: no-regression remains strict at promotion. The wording now makes explicit that research
+    # may preserve a miracle-grade seed with measured debt instead of deleting the idea at the first red
+    # cell. The debt still has to be rehabilitated before the seed becomes the released baseline.
+    html = html.replace(
+        '<strong>No silent performance regression.</strong>',
+        '<strong>Discover boldly. Promote without regression.</strong>',
+        1,
+    )
+    html = html.replace(
+        'Every material update is benchmarked against its direct base. Deterministic archive-size regression: <b>0 bytes allowed</b>. Confirmed speed regression outside the same-runner noise envelope: <b>release blocked</b>.',
+        'Breakthrough research may expose a temporary measured tradeoff; it is preserved as explicit regression debt, not promoted as the new baseline. For release: deterministic archive-size regression is <b>0 bytes allowed</b>, and confirmed speed debt outside the same-runner noise envelope must be <b>rehabilitated before promotion</b>.',
+        1,
+    )
+
     html = html.replace(
         'Every material step<br><em>gets a version and a benchmark.</em>',
         'Core releases must<br><em>earn the number.</em>',
@@ -124,6 +152,13 @@ def patch_machine_state(output: Path, surface: str) -> None:
             "presentation-only work advances the alphabetic surface revision instead."
         )
         rules = [new_rule if rule == old_rule else rule for rule in rules]
+        breakthrough_rule = (
+            "No-regression is a core-release promotion boundary, not an exploration ban: preserve a "
+            "verified breakthrough seed with explicit regression debt, then rehabilitate the debt while "
+            "retaining the gain before promotion."
+        )
+        if breakthrough_rule not in rules:
+            rules.append(breakthrough_rule)
         agent["non_negotiables"] = rules
         agent_path.write_text(json.dumps(agent, indent=2) + "\n", encoding="utf-8")
 
@@ -143,7 +178,7 @@ def patch_machine_state(output: Path, surface: str) -> None:
         )
         text = text.replace(
             "Performance is a release contract: material updates are benchmarked against their direct base and deterministic size regressions are rejected.",
-            "Performance is a core-release contract: numeric versions are reserved for material CMPCT improvements, while presentation-only work uses the alphabetic surface track. Deterministic size regressions remain rejected for core release candidates.",
+            "Performance is a core-release contract: breakthrough research may carry explicit regression debt, but promotion requires rehabilitation while retaining the breakthrough. Presentation-only work uses the alphabetic surface track.",
             1,
         )
         llms_path.write_text(text, encoding="utf-8")
@@ -152,9 +187,8 @@ def patch_machine_state(output: Path, surface: str) -> None:
 def enhance(output: Path) -> None:
     version = project_version()
     surface = surface_revision(version)
-    # Footnote: adapters run oldest-to-newest. v0.28 remains available for historical/current 0.28
-    # builds, while an explicit v0.29 public record supersedes it only when that newer schema exists.
-    # Missing/corrupt new evidence therefore cannot erase the last accepted frontier silently.
+    # Footnote: adapters are schema-selective. Running both keeps historical build compatibility while
+    # only the record matching the current project version is allowed to become the public frontier.
     patch_v028_project_data(output)
     patch_v029_project_data(output)
     patch_index(output, version, surface)
