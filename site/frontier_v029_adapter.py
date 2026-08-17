@@ -71,6 +71,12 @@ def _matched_competitors(record: dict[str, Any]) -> tuple[int, int, int, list[di
             }
         )
     for raw in list(structural.get("competitors") or []):
+        # Footnote: the public structural record may include its candidate in the same comparator array
+        # for standalone readability. The normalized site already inserts exactly one authoritative
+        # candidate row above, so carrying that source row through would create two candidates and make
+        # a malformed comparison ladder look superficially valid until the Pages coherence gate runs.
+        if raw.get("role") == "candidate":
+            continue
         size = raw.get("bytes")
         if not isinstance(size, int) or size <= 0 or not candidate:
             continue
