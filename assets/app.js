@@ -5,7 +5,7 @@
 const replacements = new Map([
   ["__CMPCT_VERSION__", "0.29.0"],
   ["__FORMAT_REVISION__", "24"],
-  ["__BUILD_COMMIT__", "f6bbdee3380e"],
+  ["__BUILD_COMMIT__", "0cf01f2330f4"],
 ]);
 const walker = document.createTreeWalker(document.documentElement, NodeFilter.SHOW_TEXT);
 while (walker.nextNode()) {
