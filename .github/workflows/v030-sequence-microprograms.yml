@@ -42,7 +42,8 @@ jobs:
           pytest -q \
             tests/test_v030_geometry_safe.py \
             tests/test_v030_hierarchical_geometry.py \
-            tests/test_v030_sequence_microprograms.py
+            tests/test_v030_sequence_microprograms.py \
+            tests/test_v030_sequence_microprograms_hardening.py
 
       - name: Run exact incremental LTM payload oracle
         run: |
@@ -50,6 +51,7 @@ jobs:
           # Footnote: the benchmark incumbent is the actual G3/G4 payload on each same balanced node. LTM1
           # therefore has to produce new bytes beyond Geometry, and its lexint contribution is re-priced with
           # the latent-integer codelet disabled so generic dictionary/period wins cannot borrow novelty credit.
+          # Decoder allocation/signed-width hardening runs first and is a non-negotiable prerequisite.
           set -o pipefail
           python benchmarks/sequence_microprograms_v030_probe.py \
             --work-root benchmark-artifacts/ltm-work \
