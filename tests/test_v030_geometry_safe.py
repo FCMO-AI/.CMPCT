@@ -19,7 +19,7 @@ def test_safe_facade_preserves_golden_delimiter_bytes() -> None:
 
 def test_inverse_rejects_large_rectangle_before_materialization() -> None:
     # 65,536 logical rows with a 65-byte max row can fit under the 512 KiB declared-byte budget while
-    # forcing >4.2 million rectangular cell checks.  The safe facade rejects that shape before rows are
+    # forcing >4.2 million rectangular cell checks. The safe facade rejects that shape before rows are
     # allocated or the transpose loop starts.
     count = 65_536
     lengths = [65] + [1] * (count - 1)
@@ -36,8 +36,12 @@ def test_inverse_rejects_large_rectangle_before_materialization() -> None:
 
 
 def test_writer_rejects_excessive_rectangle_as_candidate_not_data() -> None:
-    # Regular source construction is not required here: the contract under test is that a candidate
-    # geometry can be declined without changing the original bytes or weakening fallback behavior.
-    raw = b"A" * (core.MAX_CHUNK - 2) + b",B"
+    # 510,015 source bytes remain below the inherited node ceiling, yet 16 rows times the 300,000-byte
+    # longest row would force 4.8 million cell checks. This attacks CPU amplification without relying on
+    # malformed declared sizes.
+    parts = [b"A" * 300_000] + [b"B" * 14_000] * 15
+    raw = b",".join(parts)
+    assert len(raw) <= core.MAX_CHUNK
+    assert len(parts) * max(map(len, parts)) > safe.MAX_DELIMITER_CELL_SCANS
     with pytest.raises(ValueError, match="cell-work budget"):
         core.delimiter_forward(raw, ord(","))
