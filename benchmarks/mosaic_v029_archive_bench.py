@@ -2,17 +2,18 @@ from __future__ import annotations
 
 """Full-artifact benchmark for the bounded multi-root + residual-placement research campaign.
 
-For every deterministic workload the strict attempt-5 engine builds:
+For every deterministic workload the strict-reconciled attempt-5 engine builds:
 
-1. the complete v0.28 portfolio artifact;
+1. the complete **released strict v0.28** portfolio artifact;
 2. the complete research graph, where attempt #4 placement is preserved and attempt #5 may additionally
    co-pack bounded one-base reconstruction programs;
-3. an outer portfolio that copies v0.28 byte-for-byte whenever the research graph is not smaller.
+3. an outer portfolio that copies strict v0.28 byte-for-byte whenever the research graph is not smaller.
 
-Footnote: the benchmark schema and frozen acceptance thresholds intentionally remain the same as attempts
-#1–#4. Switching the strict engine does not create a new baseline or remove previously losing workloads;
-it asks whether the new physical representation clears the exact gate that attempt #4 missed by one v2
-workload.
+Footnote: attempt #5 originally passed the encoded full-artifact thresholds but a post-pass audit found
+that its lineage still used the pre-strict v0.28 root-pack selector, allowing ~23.68x ordinary pack
+amplification on the compressed-stream workload.  This benchmark keeps every original byte/coverage
+threshold and adds the already-inherited <=8x *ordinary pack* locality requirement.  A loss caused by
+that repair is mechanism evidence, not a reason to weaken either locality or the frozen coverage gate.
 """
 
 import argparse
@@ -28,13 +29,13 @@ from mosaic_hostile_corpus_v1 import build as build_v1
 from mosaic_stress_corpus_v2 import build as build_v2
 
 ROOT = Path(__file__).resolve().parents[1]
-ENGINE_PATH = ROOT / "experiments" / "entropygraph_v029_residual_strict.py"
+ENGINE_PATH = ROOT / "experiments" / "entropygraph_v029_strict_reconcile.py"
 
 
 def _load_engine():
     spec = importlib.util.spec_from_file_location("cmpct_mosaic_full_archive_bench_engine", ENGINE_PATH)
     if spec is None or spec.loader is None:
-        raise RuntimeError("cannot load strict attempt-5 research engine")
+        raise RuntimeError("cannot load strict-reconciled attempt-5 research engine")
     module = importlib.util.module_from_spec(spec)
     sys.modules[spec.name] = module
     spec.loader.exec_module(module)
@@ -69,6 +70,7 @@ def _measure_workload(path: Path, scratch: Path) -> dict:
         "name": path.name,
         "tree_sha256": ENGINE.BASE.treehash(path),
         "selected": result["selected"],
+        "strict_v028_reconciled": bool(result.get("strict_v028_reconciled")),
         "v028_bytes": int(result["v028_bytes"]),
         "mosaic_graph_bytes": int(result["mosaic_graph_bytes"]),
         "candidate_bytes": int(result["archive_bytes"]),
@@ -115,6 +117,9 @@ def _measure_suite(label: str, builder, root: Path, scratch: Path) -> dict:
             "mosaic_nodes": sum(row["mosaic_nodes"] for row in rows),
             "residual_pack_records": sum(row["residual_pack_records"] for row in rows),
             "residual_packed_delta_nodes": sum(row["residual_packed_delta_nodes"] for row in rows),
+            "max_pack_read_amplification": max(
+                (row["pack_read_amplification"] for row in rows), default=0.0
+            ),
             "max_mosaic_read_amplification": max(
                 (row["max_mosaic_read_amplification"] for row in rows), default=0.0
             ),
@@ -142,9 +147,9 @@ def run(work_root: Path) -> dict:
     return {
         "schema": "cmpct-mosaic-v029-full-artifact-v1",
         "claim_boundary": (
-            "complete research artifacts versus complete v0.28 portfolio artifacts; canonical revision 24 unchanged"
+            "complete strict-reconciled research artifacts versus complete released-strict v0.28 portfolio artifacts; canonical revision 24 unchanged"
         ),
-        "engine": "experiments/entropygraph_v029_residual_strict.py",
+        "engine": "experiments/entropygraph_v029_strict_reconcile.py",
         "suites": {"v1": v1, "v2": v2},
         "combined": {
             "v028_bytes": base,
@@ -157,6 +162,9 @@ def run(work_root: Path) -> dict:
             "mosaic_nodes": sum(row["mosaic_nodes"] for row in all_rows),
             "residual_pack_records": sum(row["residual_pack_records"] for row in all_rows),
             "residual_packed_delta_nodes": sum(row["residual_packed_delta_nodes"] for row in all_rows),
+            "max_pack_read_amplification": max(
+                (row["pack_read_amplification"] for row in all_rows), default=0.0
+            ),
             "max_mosaic_read_amplification": max(
                 (row["max_mosaic_read_amplification"] for row in all_rows), default=0.0
             ),
