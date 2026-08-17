@@ -1,0 +1,51 @@
+{
+  "schema": "cmpct-v029-generalization-reproducibility-failure-v1",
+  "date": "2026-08-17",
+  "source_commit": "1db5ad1c106b3c6634efd3f188cd90d737283673",
+  "workflow_run": 32001987083,
+  "artifact": {
+    "id": 9278953103,
+    "digest": "sha256:0e80d4000b2ee405b799542bfda6c053a8d46873963e9b28b70f75a20c62b872"
+  },
+  "workflow_conclusion": "failure",
+  "failed_gate": "preserved inherited-frontier identity",
+  "totals": {
+    "workloads": 15,
+    "measured_v028_bytes": 137554118,
+    "measured_candidate_bytes": 137505517,
+    "measured_smaller_than_v028_pct": 0.035332275548449955,
+    "workloads_improved": 2,
+    "workloads_regressed": 0,
+    "baseline_tree_drift_rows": 1,
+    "baseline_byte_drift_rows": 1,
+    "attempt5_portfolio_create_s": 538.7444895199998,
+    "embedded_v028_portfolio_create_s": 248.95925059900006,
+    "creation_ratio_vs_v028": 2.163986629232582
+  },
+  "drift": {
+    "suite": "neutral_hostile_v1",
+    "name": "03_media_library",
+    "preserved_tree_sha256": "1966d025d334e4bf6ea38656188708d400f26b6ca53bb581b497357dcdbf869a",
+    "measured_tree_sha256": "fd2b09eb2f90a9c738ad73d20dd0a109dbfe7d4cb55257f9b44285579dbb1572",
+    "preserved_logical_bytes": 28847997,
+    "measured_logical_bytes": 28845629,
+    "preserved_v028_bytes": 28725614,
+    "measured_v028_bytes": 28723199,
+    "v028_byte_delta": -2415,
+    "candidate_selected": "v028-fallback"
+  },
+  "interpretation": {
+    "compression_regression": false,
+    "attempt5_gain_disproved": false,
+    "reproducibility_failure": true,
+    "note": "The aggregate 48,601-byte attempt-5 saving still reproduces algebraically on the changed same-run substrate, but the media row no longer matches the preserved benchmark identity and therefore this run cannot replace accepted generalization evidence.",
+    "producer_risk": "03_media_library is the neutral workload containing three files emitted by the external FFmpeg/x264/LAME/FLAC stack; that producer identity is not pinned by the historical generator.",
+    "next_step": "Prove repair-v4 using a portable 14 JPEG + 10 PNG + 1 WAV media core independent of those external-codec outputs, then establish a new exact v0.28 identity before rerunning candidate generalization."
+  },
+  "evidence_policy": {
+    "failed_run_preserved": true,
+    "historical_generalization_record_rewritten": false,
+    "candidate_thresholds_changed": false,
+    "candidate_algorithm_changed_to_fit_drift": false
+  }
+}
