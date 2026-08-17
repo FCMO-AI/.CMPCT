@@ -1,14 +1,15 @@
 from __future__ import annotations
 
-"""Inherited-frontier falsification harness for the v0.29 Locality Budget Compiler.
+"""Inherited-frontier falsification harness for the v0.29 Locality Budget Compiler on repair-v4.
 
-This is deliberately a research comparison against the accepted attempt-5 bytes, not a new version gate.
-The same repaired 15-workload frontier is regenerated through the existing generalization harness, then
-every row is checked against the durable attempt-5 evidence before any additional saving is counted.
+This is a research comparison against accepted attempt-5 generalization-v3 bytes, not a new version gate.
+The same 15-workload frontier is regenerated through the v3 generalization harness, then every row is
+checked against durable attempt-5 evidence before any additional saving is counted.
 
-Footnote: the experimental engine itself rebuilds attempt #5 and uses it as an exact artifact fallback.
-That makes zero regression causal rather than statistical: a losing locality partition cannot replace a
-smaller accepted archive merely because the new mechanism was exercised.
+Footnote: repair-v4 makes the aggregate corpus smaller by removing unpinned external-codec outputs. The
+performance ratchet therefore preserves the *old absolute* 0.05%-of-v2 hurdle: at least 68,779 additional
+bytes must be saved even though 0.05% of the new aggregate is smaller. Substrate repair cannot make the
+mechanism easier to pass.
 """
 
 import argparse
@@ -23,7 +24,8 @@ import time
 ROOT = Path(__file__).resolve().parents[1]
 ENGINE_PATH = ROOT / "experiments" / "entropygraph_v029_pack_budget.py"
 GENERAL_PATH = ROOT / "benchmarks" / "mosaic_v029_generalization_bench.py"
-ATTEMPT5_HISTORY = ROOT / "benchmarks" / "history" / "2026-08-17-mosaic-v029-generalization-v2.json"
+ATTEMPT5_HISTORY = ROOT / "benchmarks" / "history" / "2026-08-17-mosaic-v029-generalization-v3.json"
+ABSOLUTE_ADDITIONAL_SAVING_FLOOR = 68_779
 
 
 def _load(path: Path, name: str):
@@ -42,8 +44,16 @@ GENERAL = _load(GENERAL_PATH, "cmpct_v029_pack_budget_generalization")
 
 def _attempt5_rows() -> dict[tuple[str, str], dict]:
     record = json.loads(ATTEMPT5_HISTORY.read_text(encoding="utf-8"))
-    if record.get("schema") != "cmpct-v029-generalization-v2":
-        raise RuntimeError("unexpected attempt-5 generalization history schema")
+    if record.get("schema") != "cmpct-v029-generalization-v3":
+        raise RuntimeError("unexpected attempt-5 generalization-v3 history schema")
+    totals = record.get("totals", {})
+    if (
+        totals.get("v028_bytes") != 129_471_502
+        or totals.get("baseline_tree_drift_rows") != 0
+        or totals.get("baseline_byte_drift_rows") != 0
+        or totals.get("workloads_regressed") != 0
+    ):
+        raise RuntimeError("attempt-5 generalization-v3 history is not a stable green frontier")
     return {(row["suite"], row["name"]): row for row in record["rows"]}
 
 
@@ -86,7 +96,7 @@ def _measure_workload(suite: str, path: Path, archive_dir: Path, preserved: dict
         "attempt5_bytes_match": attempt5_bytes == preserved_attempt5_bytes,
         "candidate_bytes": int(result["archive_bytes"]),
         "saving_vs_attempt5_bytes": attempt5_bytes - int(result["archive_bytes"]),
-        "saving_vs_v028_bytes": int(result["v028_bytes"]) - int(result["archive_bytes"]),
+        "saving_vs_v028_bytes": int(result["v028_bytes"] - result["archive_bytes"]),
         "selected": result["selected"],
         "attempt5_selected": result["attempt5_selected"],
         "pack_budget_selected": bool(result["pack_budget_selected"]),
@@ -121,7 +131,7 @@ def run(work_root: Path) -> dict:
     attempt5 = _attempt5_rows()
     neutral = GENERAL._load(ROOT / "benchmarks" / "neutral_hostile_corpus_v1.py", "cmpct_v029_budget_neutral")
     hostile = GENERAL._load(ROOT / "benchmarks" / "resemblance_hostile_corpus_v1.py", "cmpct_v029_budget_hostile")
-    repair = GENERAL._load(GENERAL.REPAIR_PATH, "cmpct_v029_budget_repair")
+    repair = GENERAL._load(GENERAL.REPAIR_PATH, "cmpct_v029_budget_repair_v4")
     repair.install_generation_hooks(neutral)
 
     rows = []
@@ -154,6 +164,8 @@ def run(work_root: Path) -> dict:
     candidate_total = sum(row["candidate_bytes"] for row in rows)
     additional = attempt5_total - candidate_total
     total_saving_vs_v028 = v028_total - candidate_total
+    current_pct_floor = (v028_total + 1999) // 2000
+    required_additional = max(ABSOLUTE_ADDITIONAL_SAVING_FLOOR, current_pct_floor)
     identity_green = all(
         row["attempt5_bytes_match"] and row["v028_bytes_match"] and row["baseline_tree_match"] for row in rows
     )
@@ -168,7 +180,7 @@ def run(work_root: Path) -> dict:
         identity_green
         and no_regression
         and locality_green
-        and additional * 2000 >= v028_total
+        and additional >= required_additional
         and sum(row["candidate_bytes"] < row["attempt5_bytes"] for row in rows) >= 2
     )
     totals = {
@@ -180,6 +192,9 @@ def run(work_root: Path) -> dict:
         "candidate_saving_vs_v028_bytes": total_saving_vs_v028,
         "additional_saving_vs_attempt5_bytes": additional,
         "additional_saving_vs_attempt5_pct_of_v028": additional / max(1, v028_total) * 100.0,
+        "current_0_05pct_floor_bytes": current_pct_floor,
+        "preserved_absolute_floor_bytes": ABSOLUTE_ADDITIONAL_SAVING_FLOOR,
+        "required_additional_saving_bytes": required_additional,
         "candidate_smaller_than_v028_pct": total_saving_vs_v028 / max(1, v028_total) * 100.0,
         "workloads_improved_vs_attempt5": sum(row["candidate_bytes"] < row["attempt5_bytes"] for row in rows),
         "workloads_regressed_vs_attempt5": sum(row["candidate_bytes"] > row["attempt5_bytes"] for row in rows),
@@ -206,13 +221,14 @@ def run(work_root: Path) -> dict:
         "research_gate_pass": research_pass,
     }
     return {
-        "schema": "cmpct-v029-pack-budget-oracle-v1",
-        "claim_boundary": "attempt-6 Locality Budget Compiler oracle versus accepted attempt-5 bytes; no v0.29.0 claim",
+        "schema": "cmpct-v029-pack-budget-oracle-v2",
+        "claim_boundary": "attempt-6 Locality Budget Compiler oracle versus accepted generalization-v3 attempt-5 bytes; no v0.29.0 claim",
         "engine": "experiments/entropygraph_v029_pack_budget.py",
         "preregistered_research_gate": {
             "attempt5_and_v028_identity_drift_rows_eq": 0,
             "workload_regressions_vs_attempt5_eq": 0,
             "additional_saving_vs_attempt5_gte_pct_of_v028": 0.05,
+            "preserved_absolute_additional_saving_floor_bytes": ABSOLUTE_ADDITIONAL_SAVING_FLOOR,
             "workloads_improved_vs_attempt5_gte": 2,
             "weighted_pack_read_amplification_lte": 8.0,
             "per_member_pack_read_amplification_lte": 8.0,
@@ -225,7 +241,7 @@ def run(work_root: Path) -> dict:
 
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--work-root", type=Path, default=Path("CMPCT_V029_Pack_Budget"))
+    parser.add_argument("--work-root", type=Path, default=Path("CMPCT_V029_Pack_Budget_v2"))
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
     result = run(args.work_root)
