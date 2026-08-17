@@ -1,10 +1,6 @@
 # CMPCT material-change evidence dossier
 
-<!--
-This template is an engineering instrument, not paperwork. Delete sections that truly do not apply,
-but do not replace falsifiable evidence with generic assurances. Read docs/AGI_ENGINEERING_STANDARD.md
-before completing a material PR.
--->
+<!-- Read docs/AGI_ENGINEERING_STANDARD.md and docs/BREAKTHROUGH_REHABILITATION.md before completing a material PR. -->
 
 ## Problem and baseline
 
@@ -17,11 +13,9 @@ before completing a material PR.
 
 - **Mechanism:** Why should this change improve the system?
 - **Disproof test:** What practical result would show that explanation is wrong?
-- **Quality-ratchet movement:** Which verified dimension becomes better, and which important dimensions must remain no worse?
+- **Quality-ratchet movement:** Which verified dimension becomes better, and which important dimensions must be restored before promotion?
 
 ## Alternatives considered
-
-<!-- For non-trivial work, include meaningfully different solution classes, not cosmetic variants. -->
 
 1. **Alternative:** — rejected/retained because:
 2. **Alternative:** — rejected/retained because:
@@ -37,12 +31,23 @@ before completing a material PR.
 
 ## Losses, ambiguity and negative evidence
 
-<!-- Put the uncomfortable evidence here. A PR with no losses may say why that is expected. -->
-
 - Workloads/metrics that became worse:
 - Results that are statistically or semantically ambiguous:
 - Known cases where a competitor still wins:
 - Rejected experiment(s) worth preserving for future agents:
+
+## Breakthrough regression debt, when applicable
+
+<!-- A miracle-grade seed may be preserved with debt, but it is not release-ready. -->
+
+- **Breakthrough metric:** baseline → seed, absolute/relative gain:
+- **Regressed metric(s):** baseline → seed, absolute/relative loss:
+- **Scope:** workloads / operations / platforms affected:
+- **Suspected exported cost:**
+- **Rehabilitation hypotheses:** portfolio/fallback, cost isolation, representation redesign, counter-invention:
+- **Gain-retention test:**
+- **Promotion exit condition:**
+- **Debt status:** open / closed / N/A
 
 ## Safety, integrity and resource accounting
 
@@ -61,8 +66,6 @@ before completing a material PR.
 - Platform-specific assumptions or tests:
 
 ## Performance accounting
-
-<!-- Use N/A only when the operation genuinely cannot affect the dimension. -->
 
 - Archive bytes:
 - Create latency / CPU:
@@ -83,16 +86,12 @@ before completing a material PR.
 - [ ] I preserved existing design footnotes/comments unless their rationale was demonstrably obsolete and retained elsewhere.
 - [ ] Non-obvious fixes/invariants have concise nearby “why” comments.
 - [ ] A fair competitor loss was not hidden by weakening semantics, deleting workloads or moving timing boundaries.
-- [ ] Material work advances `pyproject.toml`, adds the matching release note, and commits a fresh matching benchmark-history record.
-- [ ] Deterministic archive-size parity/improvement and same-runner timing requirements passed without weakening the release gate.
+- [ ] If this began as a breakthrough seed with regression debt, the original large gain still survives and every promotion-blocking debt item is closed.
+- [ ] Material work advances the core version/release note/history only when promoted as a numeric core release.
+- [ ] Deterministic archive-size parity/improvement and same-runner timing requirements passed without weakening the release gate before release promotion.
 - [ ] The repository state alone contains enough evidence/context for a skeptical new contributor to understand why this work should be trusted.
 
 ## Future leverage
 
 - **What this unlocks:**
 - **Highest-value unresolved defect exposed by this work:**
-
-<!--
-Final question: If a skeptical expert received only this repository state, the benchmark artifacts and
-the tests, would they independently conclude CMPCT became better for the claimed reason?
--->
