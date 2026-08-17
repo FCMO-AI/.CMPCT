@@ -51,20 +51,45 @@ def test_strict_full_artifact_reconstructs_and_uses_mosaic(tmp_path: Path):
     assert ENGINE.BASE.treehash(restored) == ENGINE.BASE.treehash(source)
 
 
-def test_direct_leaf_merge_can_promote_without_depth_two(tmp_path: Path):
+def test_pack_marginal_gate_rejects_a_paper_leaf_win(tmp_path: Path):
     suite = tmp_path / "stress"
     STRESS.shifted_reordered_merge(suite)
     source = suite / "02_shifted_reordered_merge"
-    archive = tmp_path / "leaf-mosaic.cmpct"
+    archive = tmp_path / "pack-marginal.cmpct"
     stats = ENGINE.build_graph(source, archive)
 
-    # Attempt #1 produced zero mosaic auditions here because v0.28 kept the merge target direct. The
-    # v2 mechanism must discover it independently and may promote it only as a leaf, never as a base
-    # another delta depends on.
-    assert stats["mosaic_leaf_nodes"] >= 1
+    # Attempt #2 discovered this target and estimated ~246 KiB of mosaic record savings against
+    # standalone direct storage, yet the complete graph became ~1.9 KiB larger because v0.28's solid
+    # root pack had already captured the same redundancy. Attempt #3 must still discover/tournament the
+    # target, but it must not remove the direct leaf unless *physical pack marginal bytes* pay for the
+    # complete mosaic record.
+    assert stats["leaf_pack_tournaments"] >= 1
+    assert stats["leaf_pack_rejections"] >= 1
+    assert stats["mosaic_leaf_nodes"] == 0
+    assert ENGINE.strong_verify(archive)["ok"] is True
+
+
+def test_jointly_useful_partial_roots_survive_one_root_losses(tmp_path: Path):
+    suite = tmp_path / "diversity"
+    STRESS.root_diversity_pressure(suite)
+    source = suite / "09_root_diversity_pressure"
+    archive = tmp_path / "partial-roots.cmpct"
+    stats = ENGINE.build_graph(source, archive)
+
+    # The target draws 32 KiB regions from five independent roots. A one-root delta leaves most of the
+    # target literal and can lose to direct storage, but several such roots are jointly useful. The
+    # discovery layer must therefore retain bounded exact-copy evidence even when one-root saving <= 0.
+    assert stats["partial_roots_retained"] >= 2
+    assert stats["leaf_candidates"] >= 1
+    assert stats["leaf_pack_tournaments"] >= 1
     assert stats["max_mosaic_read_amplification"] <= ENGINE.MAX_READ_AMP
     assert ENGINE.strong_verify(archive)["ok"] is True
 
+
+def test_all_mosaic_dependencies_remain_direct(tmp_path: Path):
+    source = _workload(tmp_path)
+    archive = tmp_path / "flat.cmpct"
+    ENGINE.build_graph(source, archive)
     stream, meta, *_ = ENGINE.BASE._open_mosaic(archive)
     stream.close()
     nodes = meta["nodes"]
