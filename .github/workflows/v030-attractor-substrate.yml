@@ -45,16 +45,18 @@ jobs:
 
       - name: Run substrate integrity/recovery/resource tests
         run: |
-          pytest -q tests/test_v030_attractor_substrate.py
+          pytest -q \
+            tests/test_v030_attractor_substrate.py \
+            tests/test_v030_attractor_substrate_safe.py
 
       - name: Run exact complete-artifact substrate oracle
         run: |
           mkdir -p benchmark-artifacts
           # Footnote: accepted v0.29, CMPNX15 and solid tar+Zstd-19 all consume each same live repaired tree.
-          # The seed is allowed to expose read-amplification debt, but archive bytes, integrity, metadata and
-          # the <=8 MiB physical decode ceiling are charged/enforced now rather than deferred.
+          # The hardened entrypoint preflights logical materialization bounds before strong verification.
+          # Read amplification may remain explicit breakthrough debt; the <=8 MiB decode unit is never relaxed.
           set -o pipefail
-          python benchmarks/attractor_substrate_v030_probe.py \
+          python benchmarks/attractor_substrate_v030_safe_entrypoint.py \
             --work-root benchmark-artifacts/substrate-work \
             --output benchmark-artifacts/attractor-substrate-v030.json \
             2>&1 | tee benchmark-artifacts/attractor-substrate-v030.stdout.txt
