@@ -1,0 +1,66 @@
+name: CMPCT v0.30 GIR hardening
+
+on:
+  push:
+    branches:
+      - agent/v030-gir-hardening
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-v030-gir-hardening-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  gir-hardening:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      PYTHONPATH: ${{ github.workspace }}
+    steps:
+      - name: Check out GIR hardening branch
+        uses: actions/checkout@v6
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install test dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[test]'
+
+      - name: Record exact evidence runtime
+        run: python benchmarks/evidence_runtime_fingerprint.py
+
+      - name: Run Geometry IR transform and adversarial reader tests
+        run: |
+          python -m pytest -q \
+            tests/test_v030_geometry.py \
+            tests/test_v030_geometry_safe.py \
+            tests/test_v030_hierarchical_geometry.py \
+            tests/test_v030_gir.py \
+            tests/test_v030_gir_guarded.py \
+            tests/test_v030_evidence_runtime_fingerprint.py
+
+      - name: Compile research modules
+        run: |
+          python -m py_compile \
+            experiments/entropygraph_v030_geometry.py \
+            experiments/entropygraph_v030_geometry_safe.py \
+            experiments/entropygraph_v030_hierarchical_geometry.py \
+            experiments/entropygraph_v030_gir.py \
+            experiments/entropygraph_v030_gir_safe.py \
+            experiments/entropygraph_v030_gir_guarded.py \
+            benchmarks/evidence_runtime_fingerprint.py
+
+      - name: Public-surface guard
+        run: python tools/check_public_surface.py
+
+# Footnote: this workflow deliberately excludes the 15-workload compression gate.  Its authority is reader
+# safety only: it proves that stricter metadata/layout admission preserves CMPNX14 bytes and recovery while
+# keeping security iteration from cancelling or contaminating the expensive exact-byte reactor measurement.
