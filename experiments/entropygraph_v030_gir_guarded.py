@@ -260,12 +260,12 @@ def _decode_meta(
 
 
 def _physical_region_end(stream: BinaryIO) -> int | None:
-    """Return intact duplicate-metadata start, or ``None`` when only the redundant tail is damaged.
+    """Return the authenticated duplicate-metadata start, or ``None`` if that copy is damaged.
 
-    Footnote: the primary and tail metadata copies exist to survive one-copy damage. Hardening must not turn
-    the tail footer into a new single point of failure. If the tail declaration is intact we can prove an exact
-    physical boundary; if it is damaged, an authenticated primary copy still permits strict contiguous,
-    in-file record validation while ignoring the unusable redundant suffix.
+    Footnote: a syntactically plausible footer is not enough to become an authority over valid primary
+    metadata.  We authenticate and schema-check the duplicate metadata itself before using its offset as an
+    exact physical boundary.  This preserves two-way redundancy even when corruption changes the footer into
+    another superficially valid set of lengths.
     """
     here = stream.tell()
     try:
@@ -278,7 +278,7 @@ def _physical_region_end(stream: BinaryIO) -> int | None:
         if len(footer) != gir.FTR.size:
             return None
         try:
-            magic, tail_mcs, tail_mus, _, _ = gir.FTR.unpack(footer)
+            magic, tail_mcs, tail_mus, tail_sha, merkle = gir.FTR.unpack(footer)
         except Exception:
             return None
         if (
@@ -294,13 +294,21 @@ def _physical_region_end(stream: BinaryIO) -> int | None:
         end = file_size - gir.FTR.size - tail_mcs
         if end < gir.HDR.size:
             return None
+        stream.seek(end)
+        comp = stream.read(tail_mcs)
+        if len(comp) != tail_mcs:
+            return None
+        try:
+            _decode_meta(comp, tail_mus, tail_sha, merkle)
+        except Exception:
+            return None
         return end
     finally:
         stream.seek(here)
 
 
 def _validate_physical_table(stream: BinaryIO, record_start: int, offsets: list[int]) -> None:
-    """Prove records are in-bounds, non-aliased and gapless; bind exact tail boundary when available."""
+    """Prove records are in-bounds, non-aliased and gapless; bind exact authenticated tail when available."""
     here = stream.tell()
     try:
         stream.seek(0, os.SEEK_END)
@@ -331,7 +339,7 @@ def _validate_physical_table(stream: BinaryIO, record_start: int, offsets: list[
                 raise RuntimeError("GIR physical record table is not contiguous")
             final_end = record_start + end
         if exact_physical_end is not None and final_end != exact_physical_end:
-            # An intact tail gives us a canonical exact endpoint; gaps before duplicate metadata are invalid.
+            # An authenticated tail gives us a canonical exact endpoint; gaps before duplicate metadata fail.
             raise RuntimeError("GIR physical table does not terminate at duplicate metadata")
         if exact_physical_end is None and final_end > file_size:
             raise RuntimeError("GIR physical table exceeds archive bounds")
