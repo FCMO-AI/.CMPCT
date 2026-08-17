@@ -1,16 +1,17 @@
-"""Strict evidence wrapper for the second CMPCT multi-root mosaic full-artifact experiment.
+"""Stable strict evidence entry point for CMPCT multi-root mosaic research.
 
-Attempt #1 used this wrapper to compensate for descriptors that listed more roots than COPY opcodes
-actually needed.  Attempt #2 fixes that mismatch in the representation itself: mosaic payloads are
-re-encoded until the descriptor contains only roots that are genuinely referenced, and locality then
-charges every descriptor root exactly as the reader materializes it.
+The branch preserves every full-artifact mechanism as a separate executable attempt:
 
-This wrapper now points the benchmark/conformance surface at ``entropygraph_v029_mosaic_leaf.py`` while
-leaving attempt #1 intact for reproducibility.  The wrapper remains useful as the stable evidence entry
-point so benchmark scripts and tests do not quietly switch experimental engines by importing a new file.
+- `entropygraph_v029_mosaic.py` — attempt #1, inherited-delta targets only;
+- `entropygraph_v029_mosaic_leaf.py` — attempt #2, bounded direct-leaf eligibility;
+- `entropygraph_v029_mosaic_packaware.py` — attempt #3, partial roots + physical pack-marginal admission.
 
-Footnote: no threshold or canonical-format behavior changes here. The preregistered full-artifact gate
-continues to compare the strict evidence entry point against complete v0.28 artifacts.
+This wrapper now points tests and benchmark evidence at attempt #3. The full-artifact acceptance gate is
+unchanged; switching the implementation under a stable evidence path prevents benchmark scripts from
+silently drifting to a different file while keeping failed attempts directly reproducible.
+
+Footnote: attempt #3 reuses the same CMPNX9 reader/recovery grammar as attempts #1/#2. It changes only
+candidate retention and physical admission economics; canonical revision 24 remains untouched.
 """
 from __future__ import annotations
 
@@ -21,13 +22,13 @@ from pathlib import Path
 import sys
 
 HERE = Path(__file__).resolve().parent
-IMPL_PATH = HERE / "entropygraph_v029_mosaic_leaf.py"
+IMPL_PATH = HERE / "entropygraph_v029_mosaic_packaware.py"
 
 
 def _load_impl():
-    spec = importlib.util.spec_from_file_location("cmpct_entropygraph_v029_mosaic_leaf_strict", IMPL_PATH)
+    spec = importlib.util.spec_from_file_location("cmpct_entropygraph_v029_mosaic_packaware_strict", IMPL_PATH)
     if spec is None or spec.loader is None:
-        raise RuntimeError("cannot load leaf-mosaic full-artifact engine")
+        raise RuntimeError("cannot load pack-aware mosaic full-artifact engine")
     module = importlib.util.module_from_spec(spec)
     sys.modules[spec.name] = module
     spec.loader.exec_module(module)
@@ -35,8 +36,7 @@ def _load_impl():
 
 
 IMPL = _load_impl()
-# Compatibility handle used by the research tests/benchmarks for the inherited tree-hash and raw reader
-# oracle. It points at attempt #1's complete reader, which attempt #2 deliberately reuses unchanged.
+# Compatibility handle used by tests/benchmarks for the shared tree-hash and authenticated CMPNX9 reader.
 BASE = IMPL.PARENT
 
 MAG = BASE.MAG
@@ -51,7 +51,6 @@ def build(root: Path, out: Path) -> dict:
 
 
 def build_graph(root: Path, out: Path) -> dict:
-    """Build attempt #2 CMPNX9 directly, bypassing outer v0.28 fallback for conformance tests."""
     return IMPL.build_graph(root, out)
 
 
