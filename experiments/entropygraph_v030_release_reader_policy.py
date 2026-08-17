@@ -1,18 +1,23 @@
 """Promotion-policy facade for the streamed CMPCT v0.30 release reader.
 
-``entropygraph_v030_release_reader`` owns the bounded streaming mechanics.  This facade deliberately owns the
+``entropygraph_v030_release_reader`` owns the bounded streaming mechanics. This facade deliberately owns the
 stricter *promotion* admission rules that should not be hidden inside transform/graph code:
 
 - canonical PrefixGraph path order must match the tree-hash order;
 - direct PrefixGraph bases are exactly integer ``-1`` (no string/float coercion);
 - dependency-depth/resource declarations use exact numeric types rather than permissive ``int()``/``float()``
   conversions;
-- G0-G4 locality/decode/memory declarations must be finite, non-boolean numeric/integer values within policy.
+- G0-G4 locality declarations must be finite, non-boolean values within policy;
+- optional duplicate decode/memory metadata declarations, when present, must match exact integer policy.
+
+The authenticated G0-G4 header remains authoritative for decode-unit and decoder-memory ceilings. The facade
+therefore never requires those values to be redundantly present in metadata; it only tightens their type if a
+future writer chooses to duplicate them there.
 
 The facade installs these validators into the streamed reader once, then delegates verification/extraction.
-This works because metadata decoders resolve their validator globals at call time.  Writer bytes are untouched.
+This works because metadata decoders resolve their validator globals at call time. Writer bytes are untouched.
 
-Footnote: keeping promotion policy as a narrow adapter is intentional during convergence.  After the format is
+Footnote: keeping promotion policy as a narrow adapter is intentional during convergence. After the format is
 frozen, these checks can be folded into the owning reader without changing archive bytes; until then, one
 single-sourced streamed implementation is safer than maintaining two almost-identical decoders.
 """
@@ -37,17 +42,21 @@ def _strict_g04_validate(meta: object, expected_count: int | None = None) -> dic
     if float(amp) > R.MAX_MEMBER_READ_AMP:
         raise RuntimeError("G0-G4 locality declaration exceeds release policy")
 
-    max_decode = result.get("max_decode_unit")
-    if not isinstance(max_decode, int) or isinstance(max_decode, bool) or max_decode < 1:
-        raise RuntimeError("G0-G4 decode-unit declaration must be an exact positive integer")
-    if max_decode > R.G04.MAX_DECODE_UNIT:
-        raise RuntimeError("G0-G4 decode-unit declaration exceeds release policy")
+    # Footnote: max-decode/max-memory are authenticated in the fixed archive header. Metadata duplication is
+    # optional. If duplicated, forbid coercive strings/floats/bools and require the duplicate to stay in policy.
+    if "max_decode_unit" in result:
+        max_decode = result["max_decode_unit"]
+        if not isinstance(max_decode, int) or isinstance(max_decode, bool) or max_decode < 1:
+            raise RuntimeError("G0-G4 decode-unit metadata declaration must be an exact positive integer")
+        if max_decode > R.G04.MAX_DECODE_UNIT:
+            raise RuntimeError("G0-G4 decode-unit metadata declaration exceeds release policy")
 
-    max_memory = result.get("max_decoder_memory")
-    if not isinstance(max_memory, int) or isinstance(max_memory, bool) or max_memory < 1:
-        raise RuntimeError("G0-G4 decoder-memory declaration must be an exact positive integer")
-    if max_memory > R.G04.MAX_DECODER_MEMORY:
-        raise RuntimeError("G0-G4 decoder-memory declaration exceeds release policy")
+    if "max_decoder_memory" in result:
+        max_memory = result["max_decoder_memory"]
+        if not isinstance(max_memory, int) or isinstance(max_memory, bool) or max_memory < 1:
+            raise RuntimeError("G0-G4 decoder-memory metadata declaration must be an exact positive integer")
+        if max_memory > R.G04.MAX_DECODER_MEMORY:
+            raise RuntimeError("G0-G4 decoder-memory metadata declaration exceeds release policy")
     return result
 
 
@@ -55,7 +64,7 @@ def _strict_pg_validate(meta: object) -> dict:
     result = _BASE_PG_VALIDATE(meta)
     rels = result["files"]
 
-    # The PrefixGraph writer already emits sorted paths.  Requiring that canonical order at read time prevents
+    # The PrefixGraph writer already emits sorted paths. Requiring that canonical order at read time prevents
     # an attacker from making logical tree identity depend on arbitrary metadata ordering even though all
     # individual file digests remain valid.
     if rels != sorted(rels):
