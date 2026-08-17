@@ -26,9 +26,7 @@ import importlib.util
 import json
 from pathlib import Path
 import shutil
-import statistics
 import sys
-import tempfile
 import time
 
 HERE = Path(__file__).resolve().parent
@@ -107,9 +105,7 @@ class ZstdDictionaryAPI:
         source = ctypes.create_string_buffer(blob)
         sizes = (ctypes.c_size_t * len(samples))(*(len(sample) for sample in samples))
         out = ctypes.create_string_buffer(capacity)
-        written = int(self.z.ZDICT_trainFromBuffer(
-            out, capacity, source, sizes, len(samples)
-        ))
+        written = int(self.z.ZDICT_trainFromBuffer(out, capacity, source, sizes, len(samples)))
         if self.z.ZDICT_isError(written):
             name = (self.z.ZDICT_getErrorName(written) or b"unknown zdict error").decode("utf-8", "replace")
             return None, name
@@ -188,11 +184,7 @@ def _read_records(archive: Path) -> tuple[dict, list[dict]]:
 
 
 def _direct_record_ids(meta: dict) -> set[int]:
-    return {
-        int(desc[1])
-        for desc in meta["nodes"]
-        if desc[0] == "direct"
-    }
+    return {int(desc[1]) for desc in meta["nodes"] if desc[0] == "direct"}
 
 
 def _node_target_len(desc: list) -> int:
@@ -245,13 +237,11 @@ def _training_samples(records: list[dict], direct_ids: set[int]) -> list[bytes]:
 
 
 def _locality_filter(meta: dict, records: list[dict], candidate_ids: set[int], dict_size: int) -> tuple[set[int], dict]:
-    """Conservatively remove direct records whose shared dictionary would violate locality policy."""
+    """Conservatively remove direct records whose shared dictionary would violate new locality debt."""
     raw_sizes = {row["record_id"]: row["logical_bytes"] for row in records}
     nodes = meta["nodes"]
     allowed = set(candidate_ids)
 
-    # Precompute every target's current physical materialization. Dependencies are depth-1 by format
-    # contract, so this is exact for the current research grammar rather than a recursive estimate.
     usage = []
     for node_id, desc in enumerate(nodes):
         deps = _node_record_dependencies(meta, node_id)
@@ -259,58 +249,53 @@ def _locality_filter(meta: dict, records: list[dict], candidate_ids: set[int], d
         target_len = max(1, _node_target_len(desc))
         usage.append((node_id, deps, current, target_len))
 
-    # Footnote: requiring dictionary-only overhead <=2x for *every* target that touches a coded direct
-    # record is stricter than amortizing it across a session cache. It keeps the oracle honest for cold
-    # random access and lets a future implementation become faster without depending on cache luck.
+    # Footnote: dictionary overhead is charged only to targets that actually touch a newly dictionary-
+    # coded direct record. Existing attempt-5 targets that never consume the new context are not allowed
+    # to fail this oracle merely because their inherited materialization policy differs from Mosaic's.
     for _, deps, _, target_len in usage:
-        if dict_size / target_len > MAX_ADDITIONAL_DICT_AMP:
+        if deps & allowed and dict_size / target_len > MAX_ADDITIONAL_DICT_AMP:
             allowed.difference_update(deps & allowed)
 
-    max_dep_amp = 0.0
-    max_extra_amp = 0.0
     for _, deps, current, target_len in usage:
-        touches = bool(deps & allowed)
-        candidate = current + (dict_size if touches else 0)
-        max_dep_amp = max(max_dep_amp, candidate / target_len)
-        if touches:
-            max_extra_amp = max(max_extra_amp, dict_size / target_len)
-            if candidate / target_len > MAX_READ_AMP:
-                # Remove every candidate record involved in this violating target. Conservative but
-                # deterministic: the oracle prefers a smaller valid set over a combinatorial optimizer.
-                allowed.difference_update(deps & allowed)
-
-    # Recompute after removals.
-    max_dep_amp = 0.0
-    max_extra_amp = 0.0
-    for _, deps, current, target_len in usage:
-        touches = bool(deps & allowed)
-        candidate = current + (dict_size if touches else 0)
-        if touches:
-            max_extra_amp = max(max_extra_amp, dict_size / target_len)
-        max_dep_amp = max(max_dep_amp, candidate / target_len)
+        if deps & allowed and (current + dict_size) / target_len > MAX_READ_AMP:
+            # Conservative deterministic removal avoids a post-result combinatorial rescue optimizer.
+            allowed.difference_update(deps & allowed)
 
     # Preserve the existing weighted direct-pack envelope while charging the dictionary once per cold
-    # direct member request. The accepted v0.28/attempt-5 pack policy uses weighted rather than per-member
-    # direct-pack amplification, so this mirrors that contract instead of inventing a stricter baseline.
-    direct_members = []
-    for desc in nodes:
-        if desc[0] == "direct":
-            direct_members.append((int(desc[1]), max(1, int(desc[3]))))
-    weighted_decoded = sum(raw_sizes[record_id] + (dict_size if record_id in allowed else 0)
-                           for record_id, _ in direct_members)
+    # direct member request. This mirrors v0.28/attempt-5's direct-pack accounting contract.
+    direct_members = [
+        (int(desc[1]), max(1, int(desc[3])))
+        for desc in nodes if desc[0] == "direct"
+    ]
     weighted_logical = sum(length for _, length in direct_members)
+    weighted_decoded = sum(
+        raw_sizes[record_id] + (dict_size if record_id in allowed else 0)
+        for record_id, _ in direct_members
+    )
     weighted_pack_amp = weighted_decoded / max(1, weighted_logical)
-
     if weighted_pack_amp > MAX_READ_AMP:
-        # If the global direct-pack envelope would be violated, the size oracle cannot claim any coding
-        # set. A later optimizer is not allowed to rescue the result after seeing bytes.
         allowed.clear()
-        weighted_pack_amp = sum(raw_sizes[record_id] for record_id, _ in direct_members) / max(1, weighted_logical)
+        weighted_decoded = sum(raw_sizes[record_id] for record_id, _ in direct_members)
+        weighted_pack_amp = weighted_decoded / max(1, weighted_logical)
+
+    # Final metrics intentionally cover only targets touched by the new dictionary dependency. This
+    # isolates *added* locality debt from inherited attempt-5 behavior while the weighted pack metric
+    # above still protects the whole direct-root population.
+    max_touched_dep_amp = 0.0
+    max_extra_amp = 0.0
+    touched_nodes = 0
+    for _, deps, current, target_len in usage:
+        if not deps & allowed:
+            continue
+        touched_nodes += 1
+        max_touched_dep_amp = max(max_touched_dep_amp, (current + dict_size) / target_len)
+        max_extra_amp = max(max_extra_amp, dict_size / target_len)
 
     return allowed, {
         "weighted_direct_pack_read_amp": weighted_pack_amp,
-        "max_dependent_node_read_amp": max_dep_amp,
+        "max_dependent_node_read_amp": max_touched_dep_amp,
         "max_additional_dictionary_read_amp": max_extra_amp,
+        "dictionary_touched_nodes": touched_nodes,
     }
 
 
@@ -330,7 +315,6 @@ def measure(root: Path, work_root: Path) -> dict:
     api = ZstdDictionaryAPI()
     results = []
 
-    record_by_id = {row["record_id"]: row for row in records}
     candidate_pool = [
         row for row in records
         if row["record_id"] in direct_ids and row["codec"] != CODEC_PREFLATE
