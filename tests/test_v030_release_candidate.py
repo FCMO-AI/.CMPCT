@@ -5,7 +5,7 @@ from pathlib import Path
 from experiments import entropygraph_v030_release_candidate as rc
 
 
-def _fake_verify(tree: str, engine: str):
+def _fake_verify(tree: str, engine: str = "strict-reader"):
     return {"ok": True, "tree_sha256": tree, "engine": engine}
 
 
@@ -18,6 +18,12 @@ def _locality(amp: float = 2.0):
     }
 
 
+def _patch_reader(monkeypatch, tree: str) -> None:
+    # Footnote: both pre-selection admission and post-publication verification now go through this one reader
+    # authority. Tests patch that authority directly rather than accidentally proving legacy G04/PG readers.
+    monkeypatch.setattr(rc.READER, "strong_verify", lambda path: _fake_verify(tree))
+
+
 def test_complete_artifact_tournament_selects_smaller_prefixgraph(tmp_path: Path, monkeypatch) -> None:
     root = tmp_path / "src"
     root.mkdir()
@@ -25,6 +31,7 @@ def test_complete_artifact_tournament_selects_smaller_prefixgraph(tmp_path: Path
     out = tmp_path / "result.cmpct"
     tree = rc.PG.treehash(root)
     monkeypatch.setattr(rc, "treehash", lambda candidate: tree)
+    _patch_reader(monkeypatch, tree)
 
     def fake_g04_build(candidate, path):
         path.write_bytes(rc.G04.MAG + b"g" * 992)
@@ -35,11 +42,8 @@ def test_complete_artifact_tournament_selects_smaller_prefixgraph(tmp_path: Path
         return {"max_dependency_depth": 1}
 
     monkeypatch.setattr(rc.G04, "build", fake_g04_build)
-    monkeypatch.setattr(rc.G04, "strong_verify", lambda path: _fake_verify(tree, "g04"))
     monkeypatch.setattr(rc.PG, "build", fake_pg_build)
-    monkeypatch.setattr(rc.PG, "strong_verify", lambda path: _fake_verify(tree, "pg"))
     monkeypatch.setattr(rc, "_prefixgraph_locality", lambda path: _locality(2.0))
-    monkeypatch.setattr(rc, "strong_verify", lambda path: _fake_verify(tree, "selected"))
 
     stats = rc.build(root, out)
     assert stats["selected"] == "prefixgraph"
@@ -54,6 +58,7 @@ def test_complete_artifact_tournament_selects_smaller_prefixgraph(tmp_path: Path
     assert stats["prefixgraph_admitted"] is True
     assert stats["selection_materialization"] == "same-filesystem-atomic-move"
     assert stats["selection_extra_payload_write_bytes"] == 0
+    assert stats["reader_authority"] == "v030-release-streaming-policy-v1"
     assert out.read_bytes().startswith(rc.PG.MAGIC)
     assert not any(path.name.startswith(".cmpct-v030-release-candidate-") for path in tmp_path.iterdir())
 
@@ -65,6 +70,7 @@ def test_exact_tie_conservatively_retains_g04_path(tmp_path: Path, monkeypatch) 
     out = tmp_path / "result.cmpct"
     tree = rc.PG.treehash(root)
     monkeypatch.setattr(rc, "treehash", lambda candidate: tree)
+    _patch_reader(monkeypatch, tree)
 
     def fake_g04_build(candidate, path):
         path.write_bytes(rc.G04.MAG + b"g" * 992)
@@ -75,11 +81,8 @@ def test_exact_tie_conservatively_retains_g04_path(tmp_path: Path, monkeypatch) 
         return {"max_dependency_depth": 1}
 
     monkeypatch.setattr(rc.G04, "build", fake_g04_build)
-    monkeypatch.setattr(rc.G04, "strong_verify", lambda path: _fake_verify(tree, "g04"))
     monkeypatch.setattr(rc.PG, "build", fake_pg_build)
-    monkeypatch.setattr(rc.PG, "strong_verify", lambda path: _fake_verify(tree, "pg"))
     monkeypatch.setattr(rc, "_prefixgraph_locality", lambda path: _locality(2.0))
-    monkeypatch.setattr(rc, "strong_verify", lambda path: _fake_verify(tree, "selected"))
 
     stats = rc.build(root, out)
     assert stats["selected"] == "g04-overlay"
@@ -95,6 +98,7 @@ def test_smaller_prefixgraph_with_locality_debt_cannot_win(tmp_path: Path, monke
     out = tmp_path / "result.cmpct"
     tree = rc.PG.treehash(root)
     monkeypatch.setattr(rc, "treehash", lambda candidate: tree)
+    _patch_reader(monkeypatch, tree)
 
     def fake_g04_build(candidate, path):
         path.write_bytes(rc.G04.MAG + b"g" * 992)
@@ -105,11 +109,8 @@ def test_smaller_prefixgraph_with_locality_debt_cannot_win(tmp_path: Path, monke
         return {"max_dependency_depth": 1}
 
     monkeypatch.setattr(rc.G04, "build", fake_g04_build)
-    monkeypatch.setattr(rc.G04, "strong_verify", lambda path: _fake_verify(tree, "g04"))
     monkeypatch.setattr(rc.PG, "build", fake_pg_build)
-    monkeypatch.setattr(rc.PG, "strong_verify", lambda path: _fake_verify(tree, "pg"))
     monkeypatch.setattr(rc, "_prefixgraph_locality", lambda path: _locality(8.01))
-    monkeypatch.setattr(rc, "strong_verify", lambda path: _fake_verify(tree, "selected"))
 
     stats = rc.build(root, out)
     assert stats["prefixgraph_bytes"] == 800
@@ -127,15 +128,14 @@ def test_ineligible_prefixgraph_is_not_built(tmp_path: Path, monkeypatch) -> Non
     tree = rc.PG.treehash(root)
     monkeypatch.setattr(rc, "treehash", lambda candidate: tree)
     monkeypatch.setattr(rc, "_prefixgraph_eligibility", lambda candidate, expected: (False, "test-ineligible"))
+    _patch_reader(monkeypatch, tree)
 
     def fake_g04_build(candidate, path):
         path.write_bytes(rc.G04.MAG + b"g" * 92)
         return {"v029_bytes": 120, "selected": "geometry-overlay-g04", "max_selected_member_read_amplification": 1.0}
 
     monkeypatch.setattr(rc.G04, "build", fake_g04_build)
-    monkeypatch.setattr(rc.G04, "strong_verify", lambda path: _fake_verify(tree, "g04"))
     monkeypatch.setattr(rc.PG, "build", lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("PG built")))
-    monkeypatch.setattr(rc, "strong_verify", lambda path: _fake_verify(tree, "selected"))
 
     stats = rc.build(root, out)
     assert stats["selected"] == "g04-overlay"
