@@ -1,0 +1,125 @@
+name: Publish v0.29 category evidence
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: read
+
+concurrency:
+  group: cmpct-v029-category-publish-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  publish:
+    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out PR head
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Reuse successful exact-tree category artifact
+        id: publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_RUN: "32054868772"
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          target='benchmarks/history/2026-08-17-mosaic-v029-category.json'
+          if [ -f "$target" ]; then
+            echo 'created=false' >> "$GITHUB_OUTPUT"
+            echo 'Durable v0.29 category record already exists; nothing to publish.'
+            exit 0
+          fi
+
+          mkdir -p /tmp/cmpct-v029-category
+          # Footnote: select the newest non-expired artifact from the successful source run rather than
+          # hard-coding an artifact ID. GitHub may replace artifact IDs when a workflow job is re-run.
+          artifact_json="$(gh api "repos/${REPOSITORY}/actions/runs/${SOURCE_RUN}/artifacts" --paginate \
+            --jq '[.artifacts[] | select(.expired == false)] | sort_by(.created_at) | last')"
+          artifact_id="$(python -c 'import json,sys; print(json.load(sys.stdin)["id"])' <<<"$artifact_json")"
+          artifact_digest="$(python -c 'import json,sys; print(json.load(sys.stdin).get("digest") or "")' <<<"$artifact_json")"
+          artifact_name="$(python -c 'import json,sys; print(json.load(sys.stdin)["name"])' <<<"$artifact_json")"
+          [ -n "$artifact_id" ] || { echo 'No active category artifact found' >&2; exit 1; }
+
+          gh api "repos/${REPOSITORY}/actions/artifacts/${artifact_id}/zip" > /tmp/cmpct-v029-category/artifact.zip
+          unzip -q /tmp/cmpct-v029-category/artifact.zip -d /tmp/cmpct-v029-category/extracted
+          summary='/tmp/cmpct-v029-category/extracted/mosaic-v029-category-summary.json'
+          raw='/tmp/cmpct-v029-category/extracted/mosaic-v029-category-raw.json'
+          [ -s "$summary" ] && [ -s "$raw" ]
+
+          python - "$summary" "$raw" "$target" "$artifact_id" "$artifact_digest" "$artifact_name" <<'PY'
+          import json, sys
+          from pathlib import Path
+
+          summary_path, raw_path, target, artifact_id, artifact_digest, artifact_name = sys.argv[1:]
+          summary = json.loads(Path(summary_path).read_text())
+          raw = json.loads(Path(raw_path).read_text())
+          rows = summary['rows']
+          totals = summary['totals']
+          contract = summary['benchmark_contract']
+
+          assert summary['schema'] == 'cmpct-v029-category-frontier-ci-v1'
+          assert len(rows) == 15
+          assert contract['same_lifetime_measurement'] is True
+          assert contract['all_workloads_required'] is True
+          assert totals['wins_vs_tar_zstd19'] + totals['losses_vs_tar_zstd19'] + totals['ties_vs_tar_zstd19'] == 15
+
+          record = {
+              'schema': 'cmpct-public-mosaic-v029-category-v1',
+              'date': '2026-08-17',
+              'project_version': '0.29.0',
+              'canonical_format_revision': 24,
+              'candidate': {
+                  'name': 'Mosaic / Residual Program Packing attempt #5',
+                  'engine_identity': 'attempt5-residual-program-packing',
+                  'status': 'accepted v0.29 research frontier; canonical revision 24 unchanged',
+              },
+              'source': {
+                  'benchmark_commit': summary['head_sha'],
+                  'workflow_run_id': 32054868772,
+                  'artifact_id': int(artifact_id),
+                  'artifact_digest': artifact_digest,
+                  'artifact_name': artifact_name,
+                  'raw_record': Path(raw_path).name,
+                  'summary_record': Path(summary_path).name,
+                  'harness': 'benchmarks/mosaic_v029_generalization_bench.py --category-baselines',
+                  'raw_schema': raw.get('schema'),
+              },
+              'benchmark_contract': contract,
+              'rows': rows,
+              'totals': totals,
+          }
+          Path(target).parent.mkdir(parents=True, exist_ok=True)
+          Path(target).write_text(json.dumps(record, indent=2) + '\n')
+          print(json.dumps(totals, indent=2))
+          PY
+
+          python tools/check_public_surface.py
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add "$target"
+          git commit -m 'bench: publish exact-tree v0.29 Zstd category evidence'
+          if [ -n "${GITHUB_HEAD_REF:-}" ]; then
+            git push origin "HEAD:${GITHUB_HEAD_REF}"
+          else
+            git push origin HEAD
+          fi
+          echo 'created=true' >> "$GITHUB_OUTPUT"
+
+      - name: Explain durable evidence boundary
+        run: |
+          echo '### Durable category evidence' >> "$GITHUB_STEP_SUMMARY"
+          echo '- source run: `32054868772`' >> "$GITHUB_STEP_SUMMARY"
+          echo '- exact-tree rule: CMPCT, ZIP/Deflate-9 and solid tar+Zstd-19 measured during one workload lifetime' >> "$GITHUB_STEP_SUMMARY"
+          echo '- publication target: `benchmarks/history/2026-08-17-mosaic-v029-category.json`' >> "$GITHUB_STEP_SUMMARY"
+
+# Footnote: this workflow exists only to make already-successful public benchmark evidence durable in
+# repository history. It never edits engine code, benchmark bytes, or comparator results. A later engine
+# change must rerun the category benchmark rather than republishing this record under a new claim.
