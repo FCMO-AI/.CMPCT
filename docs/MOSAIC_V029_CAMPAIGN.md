@@ -21,7 +21,9 @@ enough of the result.
 ### Unknown
 
 Whether multi-root COPY references save enough real stored bytes after opcode/root metadata and locality
-cost to justify their extra reader complexity. This campaign exists to answer that experimentally.
+cost to justify their extra reader complexity, and whether primitive savings survive complete archive
+root storage, packing, authentication and recovery overhead. This campaign exists to answer both
+questions experimentally.
 
 ### Non-goals
 
@@ -30,7 +32,7 @@ cost to justify their extra reader complexity. This campaign exists to answer th
 - increasing read amplification merely to win a ratio headline;
 - calling a target-only primitive benchmark an archive-format win;
 - changing canonical revision-24 grammar before independent conformance/native/recovery work exists;
-- assigning project version 0.29.0 before material evidence exists.
+- assigning project version 0.29.0 before material full-artifact evidence exists.
 
 ## Hypothesis
 
@@ -49,8 +51,8 @@ The concept does **not** advance if any of the following survives implementation
    direct/best-single-root floor on the fixed v1 mosaic suite;
 2. fewer than three fixed workloads select a genuine >=2-root representation;
 3. any fixed workload is forced above its v0.28-style optimistic floor;
-4. a selected target exceeds 8x conservative read amplification when every referenced root is charged
-   as a complete independently decoded node;
+4. a selected target exceeds 8x conservative read amplification when every root the reader materializes
+   is charged as a complete independently decoded node;
 5. decoding can recurse through another delta or dependency depth can exceed 1;
 6. aggregate indexed source bytes or checksum-collision fanout is unbounded;
 7. malformed root slots/offsets/lengths can read outside declared sources or output limits;
@@ -58,7 +60,7 @@ The concept does **not** advance if any of the following survives implementation
 
 A failed gate is useful evidence. Do not reduce these thresholds merely to create v0.29.
 
-## First implementation tranche
+## Primitive implementation tranche
 
 `src/cmpct/mosaic.py`
 : Separate research primitive with LITERAL and `(root slot, offset, length)` COPY operations. Maximum
@@ -79,7 +81,7 @@ A failed gate is useful evidence. Do not reduce these thresholds merely to creat
 : Exact reconstruction, deterministic multi-root use, flat dependency semantics, source/output bounds,
   malformed references and checksum-collision pressure.
 
-## Measurement contract
+## Primitive measurement contract
 
 For each target:
 
@@ -89,7 +91,7 @@ For each target:
 4. rank at most four candidate roots for mosaic encoding;
 5. encode and immediately decode/byte-compare the mosaic payload;
 6. charge physical-record overhead plus explicit per-root metadata;
-7. conservatively charge every actually referenced root's full logical bytes to read amplification;
+7. conservatively charge every root the primitive representation actually requires;
 8. select mosaic only if it uses >=2 roots, remains <=8x, copies >=1/3 of the target, and beats the
    optimistic floor by at least max(128 bytes, 1%);
 9. otherwise emit the floor unchanged.
@@ -133,7 +135,7 @@ small target.
 harder corpus is not allowed to silently change how the optimistic single-root floor, per-root metadata,
 exact decode check or read amplification are calculated.
 
-Before running v2, the additional stress gate is fixed at:
+Before running v2, the additional stress gate was fixed at:
 
 - **>10% aggregate target-representation improvement** versus the optimistic direct/best-single floor;
 - **>=3 improved workloads**;
@@ -141,28 +143,84 @@ Before running v2, the additional stress gate is fixed at:
 - **0 regressions** under measured fallback;
 - **<=8x maximum conservative read amplification**.
 
-The v2 threshold is deliberately stricter than v1's 5% gate because the first experiment showed that
-the mechanism is capable of very large gains on clean composites. If v2 fails, fix or reject the
-mechanism; do not lower this threshold after seeing the result.
+The untouched v2 result passed:
 
-## If the primitive survives v2
+- optimistic target floor: **1,156,075 B**;
+- selected mosaic/fallback target bytes: **777,886 B**;
+- improvement: **32.7132%**;
+- mosaic-selected workloads: **6/10**;
+- regressed workloads: **0**;
+- maximum conservative read amplification: **5.1240x**.
 
-Surviving both primitive gates earns **another experiment**, not immediately v0.29.0. The next tranche
-must integrate mosaic targets into an EntropyGraph writer and pay all archive-level costs: root
-centrality/packing, metadata/recovery duplication, Merkle leaves, remote selective reads, native-reader
-semantics and the existing 15-workload v0.28 suite plus the new mosaic suites.
+Durable summary: `benchmarks/history/2026-08-17-mosaic-v029-stress-v2.json`.
 
-Only a full-artifact improvement under those constraints can justify a scarce project-version proposal.
+The v2 result is more informative than v1: a record-store merge with reordering and sparse rewrites still
+improves **16.9%**, while compressed-stream avalanche, strong-single-parent, false-neighbor and
+incompressible controls all fall back. The 8-root diversity attack also proves the 4-root cap can leave
+reuse on the table without forcing candidate fanout wider.
+
+## Full-artifact tranche — pre-registered before first archive run
+
+Primitive wins are not enough. `experiments/entropygraph_v029_mosaic.py` integrates mosaic target nodes
+into a complete EntropyGraph research artifact while deliberately preserving v0.28's root centrality and
+physical pack decision. It does **not** redesign root placement to flatter the new representation.
+
+`experiments/entropygraph_v029_mosaic_strict.py` is the evidence engine. The current reader materializes
+all roots listed in a mosaic descriptor before decoding, so the strict wrapper charges **every listed
+root**, not merely roots that emitted COPY opcodes. This closes an under-accounting issue discovered by
+adversarial review before the first full-archive benchmark.
+
+`tests/test_mosaic_archive.py` exercises the new research grammar directly: exact reconstruction, strong
+verification, authenticated-tail metadata recovery, physical Merkle-leaf corruption refusal, and the
+outer v0.28 fallback invariant.
+
+`benchmarks/mosaic_v029_archive_bench.py` builds complete artifacts for every v1 and v2 workload. For
+each workload it builds the complete v0.28 portfolio and the complete strict mosaic graph from the same
+source tree, then emits the smaller artifact. Exact v0.28 bytes therefore remain a per-workload fallback.
+
+### Full-artifact acceptance gate — fixed before measurement
+
+The first full-artifact run is accepted only if **all** of the following hold:
+
+- v2 complete-artifact bytes are **>2.0% smaller** than complete v0.28 portfolio artifacts;
+- v1+v2 combined complete-artifact bytes are **>3.0% smaller** than complete v0.28 artifacts;
+- at least **4/10 v2 workloads** improve as complete artifacts;
+- at least **5 workloads combined** select a complete mosaic artifact;
+- **0 workload size regressions** under exact v0.28 fallback;
+- every selected mosaic target remains **<=8x descriptor-actual read amplification**;
+- every candidate passes strong logical-tree verification;
+- direct grammar tests prove primary-metadata recovery and payload-corruption refusal.
+
+Why the percentage gate is lower than the primitive 32.7% v2 result: the full archive must store the
+independent roots themselves, pack them, authenticate physical records, duplicate recovery metadata and
+encode the complete file tree. Target-only savings are therefore mathematically diluted. Pretending the
+root bytes disappear would be the exact benchmark error this tranche is meant to prevent.
+
+**This threshold is now frozen before the first full-artifact result. A red result changes the mechanism,
+not the threshold.**
+
+## If the full-artifact gate wins
+
+A green full-artifact gate earns a **generalization tranche**, not immediately v0.29.0. The strict mosaic
+portfolio must then run against the existing 15-workload v0.28 neutral/resemblance suite, preserve all
+existing losses/fallbacks, and compare structural aggregates against archive competitors. Creation CPU,
+strong-verification latency, descriptor/root fanout and remote selective-read behavior must remain
+visible.
+
+Only after the existing frontier and the new mosaic workloads are reconciled can a scarce v0.29.0
+proposal be considered.
 
 ## If it loses
 
 Preserve the record and inspect the failure mechanism:
 
-- opcode/root-reference overhead dominates → investigate coalesced root dictionaries or segment maps;
+- opcode/root-reference overhead dominates → investigate compact root dictionaries or segment maps;
 - candidate ranking misses useful roots → improve bounded discovery, not all-pairs search;
 - source read amplification dominates → investigate smaller independent root units or target-local root
   slices without weakening integrity;
-- best single base already explains merges → multi-root complexity is not warranted;
+- full root/archive bytes dilute target savings below materiality → mosaic may remain an optional niche
+  transform rather than a core-version feature;
+- best single base already explains real merges → multi-root complexity is not warranted;
 - false-neighbor work dominates creation CPU → build a conservative rejection model before more codecs.
 
 A negative result that eliminates a seductive architecture is progress, but it does not consume a

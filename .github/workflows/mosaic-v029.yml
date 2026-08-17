@@ -14,7 +14,7 @@ concurrency:
 jobs:
   mosaic-frontier:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
     steps:
       - name: Check out candidate
         uses: actions/checkout@v6
@@ -35,9 +35,11 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -e '.[test]'
 
-      - name: Unit and hostile bounds
-        run: |
-          python -m pytest -q tests/test_mosaic.py tests/test_resemblance.py
+      - name: Primitive unit and hostile bounds
+        run: python -m pytest -q tests/test_mosaic.py tests/test_resemblance.py
+
+      - name: Full-artifact grammar and recovery tests
+        run: python -m pytest -q tests/test_mosaic_archive.py
 
       - name: Measure v1 optimistic single-root floor versus mosaic
         run: |
@@ -53,16 +55,13 @@ jobs:
           python - <<'PY'
           import json
           from pathlib import Path
-
-          data = json.loads(Path('benchmark-artifacts/mosaic-v029-v1.json').read_text())
-          totals = data['totals']
-          print(json.dumps(totals, indent=2))
+          data=json.loads(Path('benchmark-artifacts/mosaic-v029-v1.json').read_text()); t=data['totals']
           assert data['claim_boundary'].startswith('multi-root target representation only')
-          assert totals['workloads_regressed'] == 0, totals
-          assert totals['mosaic_selected'] >= 3, totals
-          assert totals['workloads_improved'] >= 3, totals
-          assert totals['smaller_than_floor_pct'] > 5.0, totals
-          assert totals['max_read_amplification'] <= 8.0, totals
+          assert t['workloads_regressed'] == 0, t
+          assert t['mosaic_selected'] >= 3, t
+          assert t['workloads_improved'] >= 3, t
+          assert t['smaller_than_floor_pct'] > 5.0, t
+          assert t['max_read_amplification'] <= 8.0, t
           PY
 
       - name: Measure noisy v2 stress corpus
@@ -78,19 +77,42 @@ jobs:
           python - <<'PY'
           import json
           from pathlib import Path
-
-          data = json.loads(Path('benchmark-artifacts/mosaic-v029-v2.json').read_text())
-          totals = data['totals']
-          print(json.dumps(totals, indent=2))
+          data=json.loads(Path('benchmark-artifacts/mosaic-v029-v2.json').read_text()); t=data['totals']
           assert data['claim_boundary'].startswith('noisy multi-root target representation only')
-          assert totals['workloads_regressed'] == 0, totals
-          assert totals['mosaic_selected'] >= 3, totals
-          assert totals['workloads_improved'] >= 3, totals
-          assert totals['smaller_than_floor_pct'] > 10.0, totals
-          assert totals['max_read_amplification'] <= 8.0, totals
-          # Footnote: v2's >10% gate was written into MOSAIC_V029_CAMPAIGN.md before this workflow ever
-          # ran the v2 corpus.  A red result must change the mechanism or end the experiment; editing the
-          # threshold downward after observing the result would turn research into scorekeeping.
+          assert t['workloads_regressed'] == 0, t
+          assert t['mosaic_selected'] >= 3, t
+          assert t['workloads_improved'] >= 3, t
+          assert t['smaller_than_floor_pct'] > 10.0, t
+          assert t['max_read_amplification'] <= 8.0, t
+          PY
+
+      - name: Measure complete v0.28 versus strict mosaic artifacts
+        run: |
+          set -o pipefail
+          python benchmarks/mosaic_v029_archive_bench.py \
+            --work-root benchmark-artifacts/CMPCT_Mosaic_Full_Artifact \
+            --output benchmark-artifacts/mosaic-v029-full-artifact.json \
+            2>&1 | tee benchmark-artifacts/mosaic-v029-full-artifact.stdout.txt
+
+      - name: Enforce preregistered full-artifact gate
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          data=json.loads(Path('benchmark-artifacts/mosaic-v029-full-artifact.json').read_text())
+          v2=data['suites']['v2']['totals']; combined=data['combined']
+          print('v2', json.dumps(v2, indent=2)); print('combined', json.dumps(combined, indent=2))
+          assert data['claim_boundary'].startswith('complete research artifacts versus complete v0.28')
+          assert v2['workloads_regressed'] == 0, v2
+          assert combined['workloads_regressed'] == 0, combined
+          assert v2['smaller_than_v028_pct'] > 2.0, v2
+          assert combined['smaller_than_v028_pct'] > 3.0, combined
+          assert v2['workloads_improved'] >= 4, v2
+          assert combined['mosaic_selected'] >= 5, combined
+          assert combined['max_mosaic_read_amplification'] <= 8.0, combined
+          # Footnote: these complete-artifact thresholds were frozen in MOSAIC_V029_CAMPAIGN.md before
+          # this workflow first measured the strict CMPNX9 engine. A red result changes the mechanism,
+          # not these numbers.
           PY
 
       - name: Existing regression suite
@@ -105,19 +127,29 @@ jobs:
           python - <<'PY' >> "$GITHUB_STEP_SUMMARY"
           import json
           from pathlib import Path
-          for label, name in [('v1 clean-composite', 'mosaic-v029-v1.json'), ('v2 noisy stress', 'mosaic-v029-v2.json')]:
+          for label, name, key in [
+              ('v1 primitive', 'mosaic-v029-v1.json', 'totals'),
+              ('v2 noisy primitive', 'mosaic-v029-v2.json', 'totals'),
+          ]:
               path=Path('benchmark-artifacts')/name
-              if not path.exists():
-                  continue
-              r=json.loads(path.read_text()); t=r['totals']
+              if not path.exists(): continue
+              t=json.loads(path.read_text())[key]
               print(f'## Multi-root mosaic — {label}')
               print(f"- candidate target bytes: **{t['candidate_bytes']:,}**")
-              print(f"- optimistic single-root/direct floor: **{t['v028_optimistic_floor_bytes']:,}**")
+              print(f"- baseline target bytes: **{t['v028_optimistic_floor_bytes']:,}**")
               print(f"- improvement: **{t['smaller_than_floor_pct']:.3f}%**")
-              print(f"- mosaic-selected targets: **{t['mosaic_selected']}/{t['targets']}**")
-              print(f"- improved workloads: **{t['workloads_improved']}**")
-              print(f"- regressed workloads: **{t['workloads_regressed']}**")
-              print(f"- maximum conservative read amplification: **{t['max_read_amplification']:.3f}x**")
+              print(f"- selected: **{t['mosaic_selected']}/{t['targets']}**")
+              print(f"- regressions: **{t['workloads_regressed']}**")
+              print(f"- max amplification: **{t['max_read_amplification']:.3f}x**")
+          path=Path('benchmark-artifacts/mosaic-v029-full-artifact.json')
+          if path.exists():
+              r=json.loads(path.read_text()); v2=r['suites']['v2']['totals']; c=r['combined']
+              print('## Multi-root mosaic — complete artifacts')
+              print(f"- v2: **{v2['candidate_bytes']:,} B** vs **{v2['v028_bytes']:,} B** ({v2['smaller_than_v028_pct']:.3f}% smaller)")
+              print(f"- combined: **{c['candidate_bytes']:,} B** vs **{c['v028_bytes']:,} B** ({c['smaller_than_v028_pct']:.3f}% smaller)")
+              print(f"- combined mosaic-selected workloads: **{c['mosaic_selected']}/{c['workloads']}**")
+              print(f"- combined regressions: **{c['workloads_regressed']}**")
+              print(f"- max descriptor-actual amplification: **{c['max_mosaic_read_amplification']:.3f}x**")
           PY
 
       - name: Upload research evidence
@@ -130,8 +162,10 @@ jobs:
             benchmark-artifacts/mosaic-v029-v1.stdout.txt
             benchmark-artifacts/mosaic-v029-v2.json
             benchmark-artifacts/mosaic-v029-v2.stdout.txt
+            benchmark-artifacts/mosaic-v029-full-artifact.json
+            benchmark-artifacts/mosaic-v029-full-artifact.stdout.txt
           if-no-files-found: warn
 
-# Footnote: green here proves only that several independent roots can materially improve target-delta
-# representation under hard bounds on both a clean composite suite and a noisier stress suite. It does
-# not bump pyproject.toml, does not modify canonical r24, and does not authorize a v0.29 release.
+# Footnote: green here still does not authorize a v0.29 release. It proves the mechanism at primitive
+# and complete-artifact levels only on the mosaic-specific suites. The existing v0.28 frontier and
+# structural competitors must be reconciled in a separate generalization tranche before versioning.
