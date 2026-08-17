@@ -37,7 +37,7 @@ def test_media_ffmpeg_wrapper_injects_output_scoped_determinism_controls(monkeyp
     assert len(calls) == 1
     rendered = calls[0]
     assert rendered[-1] == "out.flac"
-    assert rendered[-7:-1] == ["-bitexact", "-threads", "1", "-map_metadata", "-1",]
+    assert rendered[-6:-1] == ["-bitexact", "-threads", "1", "-map_metadata", "-1"]
 
 
 def test_media_ffmpeg_wrapper_is_idempotent(monkeypatch) -> None:
