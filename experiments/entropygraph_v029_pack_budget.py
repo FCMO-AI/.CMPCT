@@ -126,10 +126,14 @@ def _score(strategy: str, saving: int, added_decoded: int, index: int):
 def _agglomerate(nodes: list[bytes], ordered_roots: list[int], strategy: str):
     """Greedily merge adjacent similarity groups under exact byte and locality accounting.
 
-    Only adjacent groups are eligible, so the inherited similarity ordering never changes. Every new
-    physical record is measured with the real compressor before selection. Because a merge can only add
-    locality cost, the planner tracks the exact weighted decoded-byte total and rejects any group whose
+    Only adjacent groups are eligible, so the inherited similarity ordering never changes. Every *legal*
+    new physical record is measured with the real compressor before selection. Because a merge can only
+    add locality cost, the planner tracks the exact weighted decoded-byte total and rejects any group whose
     smallest member would experience >8x physical read amplification.
+
+    Footnote: per-member locality is derivable from raw group size and the smallest member, so impossible
+    >8x candidates are rejected before level-19 compression. This changes no admissible merge decision; it
+    only prevents expensive byte probes for records the locality contract could never permit.
 
     The cost cache is high leverage: after each accepted merge only its two new neighbor pairings are new
     physical candidates in principle. The simple scan below may revisit old pairs, but those are cache
@@ -182,9 +186,18 @@ def _agglomerate(nodes: list[bytes], ordered_roots: list[int], strategy: str):
                 raw_bytes = left["raw_bytes"] + right["raw_bytes"]
                 if raw_bytes > MAX_PACK_BYTES:
                     continue
-                merged = _group_metrics(merged_ids, nodes, cache)
-                if merged["worst_member_amp"] > MAX_READ_AMP + 1e-12:
+
+                # Footnote: the future group's worst member is the smallest logical member. This bound
+                # needs no compression result, so reject it before spending an exact physical-cost probe.
+                smallest_member = min(
+                    min((len(nodes[node_id]) for node_id in left_ids), default=1),
+                    min((len(nodes[node_id]) for node_id in right_ids), default=1),
+                )
+                prospective_worst = raw_bytes / max(1, smallest_member)
+                if prospective_worst > MAX_READ_AMP + 1e-12:
                     continue
+
+                merged = _group_metrics(merged_ids, nodes, cache)
                 saving = left["cost"] + right["cost"] - merged["cost"]
                 if saving <= 0:
                     continue

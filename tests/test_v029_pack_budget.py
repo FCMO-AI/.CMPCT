@@ -44,10 +44,16 @@ def test_agglomerator_spends_read_budget_only_for_exact_byte_wins(monkeypatch) -
 def test_agglomerator_rejects_attractive_merge_above_per_member_8x(monkeypatch) -> None:
     mod = _module()
     nodes = [b"x" * 1024, b"y" * (9 * 1024)]
+    probe_lengths = []
 
     # Footnote: the merged 10 KiB record is only 2x in the historical weighted metric but 10x for the
-    # 1 KiB member. Make that unsafe record nearly free and verify locality still wins the argument.
-    monkeypatch.setattr(mod, "_record_cost", lambda raw: 1 if len(raw) > 9 * 1024 else 100)
+    # 1 KiB member. Make that unsafe record nearly free and verify locality rejects it *before* the
+    # compressor is called, so the exact-cost budget is reserved for physically admissible candidates.
+    def fake_cost(raw: bytes) -> int:
+        probe_lengths.append(len(raw))
+        return 1 if len(raw) > 9 * 1024 else 100
+
+    monkeypatch.setattr(mod, "_record_cost", fake_cost)
     candidate, diag = mod._agglomerate(nodes, [0, 1], "bytes")
     assert candidate is not None
     cost, amp, _, selected_groups = candidate
@@ -55,6 +61,8 @@ def test_agglomerator_rejects_attractive_merge_above_per_member_8x(monkeypatch) 
     assert amp == 1.0
     assert selected_groups == [[0], [1]]
     assert diag["worst_member_amp"] == 1.0
+    assert diag["exact_cost_probes"] == 2
+    assert sorted(probe_lengths) == [1024, 9 * 1024]
 
 
 def test_efficiency_strategy_is_deterministic_and_bounded(monkeypatch) -> None:
