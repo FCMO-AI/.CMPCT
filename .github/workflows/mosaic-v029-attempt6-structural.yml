@@ -1,0 +1,124 @@
+name: CMPCT v0.29 attempt6 structural crossing
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-v029-attempt6-structural-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  attempt6-structural:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      CMPCT_PREFLATE_BRIDGE: ${{ github.workspace }}/native/preflate-bridge/target/release/cmpct-preflate-bridge
+    steps:
+      - name: Check out candidate
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install hostile corpus and same-run competitors
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y zstd ffmpeg gcc libsndfile1
+          for pkg in p7zip-full zpaq borgbackup; do sudo apt-get install -y "$pkg" || true; done
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[audio,test]'
+          python -m pip install numpy==2.4.6
+
+      - name: Build pinned memory-safe Preflate bridge
+        run: |
+          rustup toolchain install 1.89.0 --profile minimal
+          cargo +1.89.0 build --release --manifest-path native/preflate-bridge/Cargo.toml
+
+      - name: Run preregistered same-run structural oracle
+        run: |
+          mkdir -p benchmark-artifacts
+          set -o pipefail
+          python benchmarks/mosaic_v029_pack_budget_structural_oracle.py \
+            --source-commit '${{ github.event.pull_request.head.sha || github.sha }}' \
+            --work-root benchmark-artifacts/CMPCT_V029_Attempt6_Structural \
+            --output benchmark-artifacts/mosaic-v029-attempt6-structural.json \
+            2>&1 | tee benchmark-artifacts/mosaic-v029-attempt6-structural.stdout.txt
+
+      - name: Enforce safety and evidence integrity, not the research outcome
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          r=json.loads(Path('benchmark-artifacts/mosaic-v029-attempt6-structural.json').read_text())
+          c=r['candidate']
+          assert r['schema'] == 'cmpct-v029-attempt6-structural-crossing-v1'
+          assert r['claim_boundary'].startswith('attempt-6 structural oracle only')
+          assert c['attempt6_bytes'] <= c['attempt5_bytes'], c
+          assert c['locality_green'] is True, c
+          assert c['max_mosaic_read_amplification'] <= 8.0, c
+          assert c['max_additional_recipe_read_amplification'] <= 2.0, c
+          assert c['pack_budget_weighted_read_amp'] <= 8.0, c
+          assert c['pack_budget_worst_member_amp'] <= 8.0, c
+          for name, row in r['competitors'].items():
+              if row.get('available'):
+                  assert row['bytes'] > 0, (name, row)
+                  assert row.get('semantics'), (name, row)
+          # Footnote: crossing PASS/REJECT is deliberately not asserted.  A safe same-run miss must be
+          # uploaded as durable evidence rather than being mislabeled as a broken CI implementation.
+          print(json.dumps({'candidate': c, 'comparison': r['comparison']}, indent=2))
+          PY
+
+      - name: Focused attempt-6 planner tests
+        run: python -m pytest -q tests/test_v029_pack_budget.py
+
+      - name: Public-surface guard
+        run: python tools/check_public_surface.py
+
+      - name: Summarize structural crossing
+        if: always()
+        run: |
+          if [ -f benchmark-artifacts/mosaic-v029-attempt6-structural.json ]; then
+            python - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          import json
+          from pathlib import Path
+          r=json.loads(Path('benchmark-artifacts/mosaic-v029-attempt6-structural.json').read_text())
+          c=r['candidate']; x=r['comparison']
+          print('## CMPCT attempt #6 — same-run hostile structural crossing')
+          print(f"- v0.28: **{c['v028_bytes']:,} B**")
+          print(f"- attempt #5: **{c['attempt5_bytes']:,} B**")
+          print(f"- attempt #6: **{c['attempt6_bytes']:,} B** ({c['saving_vs_attempt5_bytes']:+,} B vs #5)")
+          for name in ('tar_zstd19_solid','seven_zip_lzma2','zpaq_m5','borg'):
+              row=r['competitors'].get(name,{})
+              if row.get('available'):
+                  print(f"- {name}: **{row['bytes']:,} B**")
+              else:
+                  print(f"- {name}: unavailable ({row.get('reason','not reported')})")
+          print(f"- gap to tar+Zstd-19: **{x['gap_to_tar_zstd19_bytes']:+,} B**" if x['gap_to_tar_zstd19_bytes'] is not None else '- tar+Zstd gap unavailable')
+          print(f"- gap to ZPAQ m5: **{x['gap_to_zpaq_m5_bytes']:+,} B**" if x['gap_to_zpaq_m5_bytes'] is not None else '- ZPAQ gap unavailable')
+          print(f"- preregistered structural crossing: **{'PASS' if x['structural_crossing_pass'] else 'REJECT'}**")
+          print('- The inherited-frontier attempt-6 gate remains REJECT regardless of this result.')
+          PY
+          fi
+
+      - name: Upload structural oracle evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cmpct-v029-attempt6-structural-${{ github.sha }}
+          path: |
+            benchmark-artifacts/mosaic-v029-attempt6-structural.json
+            benchmark-artifacts/mosaic-v029-attempt6-structural.stdout.txt
+          if-no-files-found: warn
+
+# Footnote: this is a falsification oracle, not a release workflow.  It cannot assign a version or alter
+# canonical revision-24 bytes; its only authority is to produce a same-run structural measurement.
