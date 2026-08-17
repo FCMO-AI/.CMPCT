@@ -23,6 +23,7 @@ from pathlib import Path
 import shutil
 import statistics
 import sys
+import tempfile
 import time
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -30,6 +31,7 @@ ENGINE_PATH = ROOT / "experiments" / "entropygraph_v029_residual_strict.py"
 V028_HISTORY = ROOT / "benchmarks" / "history" / "2026-08-16-entropygraph-v028.json"
 REPAIR_HISTORY = ROOT / "benchmarks" / "history" / "2026-08-17-neutral-hostile-determinism-repair-v5.json"
 REPAIR_PATH = ROOT / "benchmarks" / "neutral_hostile_determinism_repair_v5.py"
+CATEGORY_BASE_PATH = ROOT / "benchmarks" / "entropygraph_v028_bench.py"
 
 
 def _load(path: Path, name: str):
@@ -43,6 +45,7 @@ def _load(path: Path, name: str):
 
 
 ENGINE = _load(ENGINE_PATH, "cmpct_v029_generalization_engine_v3")
+CATEGORY_BASE = _load(CATEGORY_BASE_PATH, "cmpct_v029_category_baseline_helpers")
 
 
 def _tree_stats(root: Path) -> tuple[int, int]:
@@ -74,7 +77,36 @@ def _preserved_rows() -> dict[tuple[str, str], dict]:
     return rows
 
 
-def _measure_workload(suite: str, path: Path, archive_dir: Path, preserved: dict) -> dict:
+def _category_baselines(path: Path) -> dict:
+    """Measure the website's per-category ZIP/Zstd baselines on this exact live tree.
+
+    Footnote: do not regenerate this workload later merely to run competitors. Valid synthetic office and
+    media producers can carry run-varying container metadata even when their semantic generator is fixed.
+    Measuring CMPCT, ZIP/Deflate-9 and solid tar+Zstd-19 during one workload lifetime gives every row one
+    exact tree identity and prevents a polished category percentage from comparing different bytes.
+    """
+    with tempfile.TemporaryDirectory(prefix="cmpct-v029-category-") as td:
+        temp = Path(td)
+        zip_row = CATEGORY_BASE._zip_deflate(path, temp / "category.zip")
+        zstd_row = CATEGORY_BASE._solid_tar_zstd(path, temp / "category.tar.zst")
+    if not zip_row.get("available"):
+        raise RuntimeError(f"ZIP/Deflate-9 category baseline unavailable for {path.name}")
+    if not zstd_row.get("available"):
+        raise RuntimeError(
+            f"solid tar+Zstd-19 category baseline unavailable for {path.name}: "
+            f"{zstd_row.get('reason', 'unknown reason')}"
+        )
+    return {"zip_deflate9": zip_row, "tar_zstd19_solid": zstd_row}
+
+
+def _measure_workload(
+    suite: str,
+    path: Path,
+    archive_dir: Path,
+    preserved: dict,
+    *,
+    with_category_baselines: bool = False,
+) -> dict:
     archive_dir.mkdir(parents=True, exist_ok=True)
     archive = archive_dir / f"{path.name}.cmpct"
     files, logical = _tree_stats(path)
@@ -89,10 +121,15 @@ def _measure_workload(suite: str, path: Path, archive_dir: Path, preserved: dict
     if not verified.get("ok") or verified["tree_sha256"] != tree:
         raise RuntimeError(f"attempt-5 strong verification failed for {suite}/{path.name}")
 
+    # Footnote: competitor measurement happens before the generated workload can be removed or rebuilt.
+    # This keeps category evidence causally tied to the exact same tree hash as the candidate row while
+    # leaving the accepted v0.29 archive bytes and release-gate semantics untouched.
+    category = _category_baselines(path) if with_category_baselines else None
+
     stats = result["mosaic"]
     embedded_v028_create = float(result["v028"].get("portfolio_create_s", 0.0))
     baseline_bytes_match = int(result["v028_bytes"]) == int(expected["candidate_bytes"])
-    return {
+    row = {
         "suite": suite,
         "name": path.name,
         "baseline_identity": expected["baseline_identity"],
@@ -126,9 +163,12 @@ def _measure_workload(suite: str, path: Path, archive_dir: Path, preserved: dict
         ),
         "build_wall_s": wall,
     }
+    if category is not None:
+        row["category_baselines"] = category
+    return row
 
 
-def run(work_root: Path) -> dict:
+def run(work_root: Path, *, with_category_baselines: bool = False) -> dict:
     shutil.rmtree(work_root, ignore_errors=True)
     work_root.mkdir(parents=True)
     preserved = _preserved_rows()
@@ -147,9 +187,15 @@ def run(work_root: Path) -> dict:
         if label == "neutral_hostile_v1":
             repair.normalize_root(root)
         for workload in sorted(path for path in root.iterdir() if path.is_dir()):
-            row = _measure_workload(label, workload, work_root / "archives" / label, preserved)
+            row = _measure_workload(
+                label,
+                workload,
+                work_root / "archives" / label,
+                preserved,
+                with_category_baselines=with_category_baselines,
+            )
             rows.append(row)
-            print(json.dumps({
+            event = {
                 "suite": label,
                 "name": workload.name,
                 "baseline_identity": row["baseline_identity"],
@@ -160,7 +206,11 @@ def run(work_root: Path) -> dict:
                 "baseline_tree_match": row["baseline_tree_match"],
                 "baseline_bytes_match": row["baseline_bytes_match"],
                 "create_ratio": row["create_ratio_vs_v028"],
-            }), flush=True)
+            }
+            if row.get("category_baselines"):
+                event["category_zip_bytes"] = row["category_baselines"]["zip_deflate9"]["bytes"]
+                event["category_zstd_bytes"] = row["category_baselines"]["tar_zstd19_solid"]["bytes"]
+            print(json.dumps(event), flush=True)
 
     v028_total = sum(row["v028_bytes"] for row in rows)
     candidate_total = sum(row["candidate_bytes"] for row in rows)
@@ -197,6 +247,19 @@ def run(work_root: Path) -> dict:
             row["create_ratio_vs_v028"] for row in rows if row["create_ratio_vs_v028"] is not None
         ),
     }
+    category_contract = None
+    if with_category_baselines:
+        category_contract = {
+            "aggregation": "each fixed public workload is archived independently",
+            "same_lifetime_measurement": True,
+            "primary_baseline": "solid tar + Zstandard-19",
+            "secondary_baseline": "ZIP + Deflate-9",
+            "semantic_qualification": (
+                "solid tar+Zstd-19 is a storage-size baseline with different selective-access and recovery "
+                "semantics; ZIP/Deflate-9 is a familiar secondary archive baseline"
+            ),
+            "all_workloads_required": True,
+        }
     return {
         "schema": "cmpct-v029-generalization-v3",
         "claim_boundary": (
@@ -207,6 +270,7 @@ def run(work_root: Path) -> dict:
             "benchmarks/history/2026-08-16-entropygraph-v028.json",
             "benchmarks/history/2026-08-17-neutral-hostile-determinism-repair-v5.json",
         ],
+        "category_baseline_contract": category_contract,
         "rows": rows,
         "totals": totals,
     }
@@ -216,8 +280,13 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--work-root", type=Path, default=Path("CMPCT_V029_Generalization_v3"))
     parser.add_argument("--output", type=Path)
+    parser.add_argument(
+        "--category-baselines",
+        action="store_true",
+        help="measure ZIP/Deflate-9 and solid tar+Zstd-19 on each exact live workload tree",
+    )
     args = parser.parse_args()
-    result = run(args.work_root)
+    result = run(args.work_root, with_category_baselines=args.category_baselines)
     text = json.dumps(result, indent=2)
     print(json.dumps(result["totals"], indent=2))
     if args.output:
