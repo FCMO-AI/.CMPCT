@@ -66,11 +66,23 @@ def test_content_driven_nomination_finds_structural_separators() -> None:
         )
     raw = ("\n".join(rows) + "\n").encode()
     primaries = H.primary_candidates(raw)
+    # Footnote: frequent letters in fixed tokens (`api/jobs/latency`) recur at nearly the same phase as the
+    # true record boundary.  The censored prefix/suffix of a bounded node must not let those interior bytes
+    # crowd every boundary candidate out of the four-slot search budget.
     assert ord("\n") in primaries or ord(".") in primaries
     nominated = set()
     for primary in primaries:
         nominated.update(H.secondary_candidates(raw.split(bytes((primary,))), primary))
     assert ord("=") in nominated
+
+
+def test_primary_nomination_is_deterministic_and_bounded_on_opaque_bytes() -> None:
+    raw = bytes((index * 73 + 19) & 255 for index in range(200_000))
+    first = H.primary_candidates(raw)
+    second = H.primary_candidates(raw)
+    assert first == second
+    assert len(first) <= H.MAX_PRIMARY_CANDIDATES
+    assert len(set(first)) == len(first)
 
 
 def test_audition_is_exact_fallback_and_finds_large_structured_win() -> None:
