@@ -37,6 +37,41 @@ This subtree is CMPCT's public proof surface. Before modifying it, read:
 - A workflow may audit or validate publication, but do not restore `actions/deploy-pages` as the default serving path
   without an explicit architecture decision.
 
+## Mandatory publication triggers
+
+A static-site promotion is required after merge whenever a change affects any public output or the data that drives it. This includes:
+
+- `site/**` source, renderer, Browser Lab, accessibility, design or copy changes;
+- `SURFACE_REVISION`;
+- a numeric CMPCT project-version change;
+- a canonical on-disk format-revision change;
+- a new or superseding durable public benchmark record under `benchmarks/history/`;
+- release/frontier/current-state changes that alter what the website should say;
+- capability authority, benchmark-policy, or public-evidence schema/normalization changes.
+
+Do not decide that publication is unnecessary merely because HTML itself did not change. The website is evidence-driven, so new release/evidence state can change the generated artifact without a source-template edit.
+
+## Definition of done for site-affecting work
+
+Site-affecting work is **not complete** when the PR merely merges to `main`. Completion requires:
+
+1. merge the canonical source/evidence change to `main`;
+2. materialize the site from that exact resulting `main` commit;
+3. run every required gate in `../docs/GH_PAGES_DEPLOYMENT.md`;
+4. promote the complete generated tree to `gh-pages` without merging the source tree into it;
+5. write/update `deployment.json` so its `source_commit`, project version, surface revision, format revision and evidence schema identify the promoted state;
+6. verify the live public URL serves that receipt and the expected visible markers/data.
+
+If `gh-pages/deployment.json` still identifies an older site-relevant source state, the website is stale and the task remains incomplete. A green CI run, a merged PR, or a populated `gh-pages` branch is not equivalent to a verified live deployment.
+
+If the agent lacks permission to promote or cannot verify the live site, it must explicitly report the exact missing publication step and must not claim the site is current, deployed, released, or live.
+
+## New-version rule
+
+Every new numeric CMPCT release must update the public site as part of release completion. The promoted site must expose the new project version and its current committed evidence while retaining the canonical-vs-research boundary and visible losses. Never leave a newly released CMPCT version on `main` while knowingly serving an older version/frontier on `gh-pages`.
+
 A future agent should be able to replace the current benchmark record with the next release's evidence and
 see the hero, arena, loss board and receipt update without rewriting the page. Publication should then be a
 validated static promotion, not a second implementation of the website.
+
+Footnote: `gh-pages` is deliberately a deployment branch, not a development branch. Keeping the two roles separate makes rollback and provenance simple while allowing all substantive validation to remain attached to canonical `main`.
