@@ -41,6 +41,12 @@ jobs:
             --work-root benchmark-artifacts/CMPCT_Mosaic_Failure_Diagnostics \
             --output benchmark-artifacts/mosaic-v029-failure-diagnostics.json
 
+      - name: Run locality-legal upper-bound oracle
+        run: |
+          python benchmarks/mosaic_v029_locality_oracle.py \
+            --work-root benchmark-artifacts/CMPCT_Mosaic_Locality_Oracle \
+            --output benchmark-artifacts/mosaic-v029-locality-oracle.json
+
       - name: Summarize likely next mechanism
         run: |
           python - <<'PY' >> "$GITHUB_STEP_SUMMARY"
@@ -55,14 +61,25 @@ jobs:
                   direct_m=target.get('best_direct_named_roots_mosaic')
                   marginal=(target.get('pack_marginal') or {}).get('marginal_target_pack_bytes')
                   print(f"- **{workload['name']}** target {target['target_id']}: direct={target['target_is_direct']}, assigned_base={target['assigned_base']}, pack_marginal={marginal}, direct-root mosaic={direct_m and direct_m['bytes']}, all-root mosaic={all_m and all_m['bytes']}, same-pack precondition net={oracle.get('net_estimated_saving')}")
+
+          loc=json.loads(Path('benchmark-artifacts/mosaic-v029-locality-oracle.json').read_text())
+          s=loc['summary']
+          print('## Locality-legal upper bound')
+          print(f"- material legal targets: **{s['material_locality_legal_targets']}**")
+          print(f"- material legal workloads: **{s['material_locality_legal_workloads']}**")
+          print(f"- net physical saving upper bound: **{s['net_physical_saving_upper_bound_bytes']:,} B**")
+          for row in s['material_targets']:
+              print(f"- **{row['workload']}** target {row['target_id']}: net={row['net_physical_saving']:,} B, amp={row['physical_read_amplification']:.3f}x, roots={row['base_ids']}")
           PY
 
       - name: Upload diagnostics
         uses: actions/upload-artifact@v4
         with:
           name: cmpct-mosaic-failure-diagnostics-${{ github.sha }}
-          path: benchmark-artifacts/mosaic-v029-failure-diagnostics.json
+          path: |
+            benchmark-artifacts/mosaic-v029-failure-diagnostics.json
+            benchmark-artifacts/mosaic-v029-locality-oracle.json
 
-# Footnote: this workflow intentionally has no pass/fail compression threshold.  It is a causal probe,
-# and its small exhaustive root combinations are an oracle upper bound only.  Release/research gates
-# remain in mosaic-v029.yml and are not weakened by this diagnostic surface.
+# Footnote: this workflow intentionally has no pass/fail compression threshold. It is a causal probe,
+# and its small exhaustive root combinations are oracle upper bounds only. Release/research gates remain
+# in mosaic-v029.yml and are not weakened by this diagnostic surface.
