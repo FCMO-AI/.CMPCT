@@ -12,6 +12,7 @@ The site exposes:
 
 - current core project/version/format state plus the non-semantic surface revision;
 - the strongest committed research-frontier benchmark, clearly labeled when it is not canonical;
+- current matched cross-format comparisons separately from direct-base release deltas;
 - the latest canonical ZIP-parity evidence;
 - workload-level wins and losses;
 - core-release trajectory;
@@ -45,8 +46,8 @@ clearer documentation, repository presentation, workflow polish or other non-for
 consume a numeric release number.
 
 Those changes use the root `SURFACE_REVISION` file, with the form `x.x.a`, `x.x.b`, and so on. The
-surface line follows the current project major/minor line. The current animated presentation milestone
-is **surface 0.27.a** while the core project remains **0.27.1** and the canonical on-disk format remains
+surface line follows the current project major/minor line. The current benchmark-semantics repair is
+**surface 0.28.b** while the core project remains **0.28.0** and the canonical on-disk format remains
 revision **24**.
 
 `site/enhance_site.py` applies the presentation layer after the canonical data build. This separation is
@@ -59,15 +60,23 @@ semantics.
 model. The homepage must never hand-copy a headline percentage that can drift away from the benchmark
 record.
 
-The current model distinguishes:
+The current model distinguishes three questions:
 
 1. **Canonical parity** — records emitted by `benchmarks/zip_parity_bench.py` for the executable reader/writer.
-2. **Research frontier** — broader EntropyGraph evidence that may lead the canonical format but is explicitly labeled as research until promoted through the format/conformance/native stack.
+2. **Research-frontier cross-format position** — current research-engine measurements against external archive tools on matched aggregate trees. This is the homepage performance arena.
+3. **Direct-base release delta** — candidate-vs-inherited-engine evidence used to decide whether a specific research release actually moved its own frontier forward.
 
-Core release candidates are benchmarked candidate-vs-base by `.github/workflows/zip-parity.yml`.
-Deterministic archive-size regression has zero tolerance. Timing regressions are evaluated on the same
-runner with repeated medians and a small relative+absolute noise envelope so shared-runner jitter does
-not become a false product regression. Surface-only revisions do not manufacture benchmark records.
+Footnote: those last two views are deliberately separate. A release may be judged causally against its
+immediate base while users still need the enduring product question answered: how does current CMPCT
+compare with other formats? The site must not overwrite one with the other. It must also never compare
+a sum of separately-created workload archives with competitors measured as whole-suite archives;
+aggregation semantics must match on both sides of a displayed percentage.
+
+Core release candidates are benchmarked candidate-vs-base by `.github/workflows/zip-parity.yml` and the
+research-specific workflows. Deterministic archive-size regression has zero tolerance. Timing
+regressions are evaluated on the same runner with repeated medians and a small relative+absolute noise
+envelope so shared-runner jitter does not become a false product regression. Surface-only revisions do
+not manufacture benchmark records.
 
 ## Public-surface boundary
 
@@ -93,6 +102,7 @@ uploaded by the static site.
 - the optional motion stylesheet and motion controller;
 - `surface-revision.txt`;
 - surface revision labeling in the page and machine-readable project state;
+- the EntropyGraph-II evidence adapter that keeps matched cross-format position and release delta separate;
 - the public explanation that site/repository polish does not consume a numeric core version.
 
 Every validation build derives current CMPCT facts from repository state rather than copied marketing
@@ -116,6 +126,7 @@ python site/build_site.py --out _site
 python site/enhance_site.py _site
 node --check site/src/assets/app.js
 node --check site/src/assets/motion.js
+node --check site/src/assets/frontier-v028.js
 python -m http.server 8000 -d _site
 ```
 
