@@ -1,0 +1,72 @@
+name: CMPCT Pages publish
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# Footnote: publication is deliberately kept separate from heavyweight site validation.
+# PR CI already performs package installation, browser-writer compatibility, JavaScript syntax,
+# benchmark arithmetic and public-proof checks. Once a commit is on main, this workflow's job is
+# only to deterministically rebuild the approved static surface from committed repository evidence,
+# re-run the lightweight proof contract, and publish it. This keeps deployment from becoming a
+# second full CI pipeline and reduces the chance that unrelated validation work delays the live site.
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-pages-publish-main
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pages: read
+    steps:
+      - name: Check out approved main
+        uses: actions/checkout@v6
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+
+      - name: Build deterministic public site
+        run: |
+          python tools/check_public_surface.py
+          python site/build_site.py --out _site
+          python site/enhance_site.py _site
+
+      - name: Verify public-proof contract
+        run: python site/tests/proof_surface_contract.py _site
+
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload GitHub Pages artifact
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: _site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    permissions:
+      pages: write
+      id-token: write
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
+
+# Footnote: the canonical site remains https://fcmo-ai.github.io/.CMPCT/ and remains GitHub-only.
+# This workflow does not weaken benchmark or Browser Lab validation; it removes duplicated heavyweight
+# checks from the publication critical path. The authoritative validation contract remains in
+# site-proof-contract.yml and the repository's other required CI gates.
