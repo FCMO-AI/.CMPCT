@@ -1,0 +1,83 @@
+name: CMPCT v0.30 canonical r25 Geometry gate
+
+on:
+  push:
+    branches:
+      - agent/v030-production-candidate
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-v030-canonical-r25-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  canonical-r25:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    env:
+      PYTHONPATH: ${{ github.workspace }}
+    steps:
+      - name: Check out production candidate
+        uses: actions/checkout@v6
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install deterministic dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y zstd gcc libsndfile1
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[audio,test]'
+          python -m pip install pillow reportlab python-docx openpyxl python-pptx numpy
+
+      - name: Run local representation and canonical semantic tests
+        run: |
+          pytest -q \
+            tests/test_v030_geometry_safe.py \
+            tests/test_v030_hierarchical_geometry.py \
+            tests/test_v030_g5_entropy_lanes.py \
+            tests/test_v030_canonical_v25_geometry.py
+
+      - name: Run canonical same-live-tree focused gate
+        run: |
+          mkdir -p benchmark-artifacts
+          # Footnote: this is the first v0.30 gate whose baseline is the real canonical r24 Builder/Reader
+          # semantics rather than a research-only tree grammar. r25 must preserve the logical index and beat
+          # complete r24 archive bytes on all three exact focused trees without hiding behind portfolio fallback.
+          set -o pipefail
+          python benchmarks/canonical_v25_geometry_probe.py \
+            --work-root benchmark-artifacts/r25-work \
+            --output benchmark-artifacts/canonical-r25-geometry.json \
+            2>&1 | tee benchmark-artifacts/canonical-r25-geometry.stdout.txt
+
+      - name: Re-enforce frozen production-candidate contract
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          data=json.loads(Path('benchmark-artifacts/canonical-r25-geometry.json').read_text())
+          rows=data['rows']; totals=data['totals']; contract=data['contract']
+          assert data['schema']=='cmpct-v030-canonical-r25-geometry-focused-v1'
+          assert len(rows)==3
+          assert all(row['saving_vs_r24_bytes'] >= contract['minimum_each_workload_saving_bytes'] for row in rows)
+          assert all(row['r25_bytes'] < row['r24_bytes'] for row in rows)
+          assert totals['saving_vs_r24_bytes'] >= contract['minimum_aggregate_saving_bytes']
+          assert totals['structural_geometry_chunks'] > 0
+          assert totals['mechanism_gate'] is True
+          print(json.dumps(totals, indent=2, sort_keys=True))
+          PY
+
+      - name: Upload production-candidate evidence even on failure
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: cmpct-v030-canonical-r25-geometry
+          path: benchmark-artifacts/
+          if-no-files-found: warn
