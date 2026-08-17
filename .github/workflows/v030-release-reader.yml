@@ -38,10 +38,12 @@ jobs:
         run: |
           python -m py_compile \
             experiments/entropygraph_v030_geometry_overlay_g04.py \
+            experiments/entropygraph_v030_geometry_overlay_g04_publish.py \
             experiments/entropygraph_v030_prefixgraph.py \
             experiments/entropygraph_v030_release_reader.py \
             experiments/entropygraph_v030_release_reader_policy.py \
-            experiments/entropygraph_v030_release_candidate.py
+            experiments/entropygraph_v030_release_candidate.py \
+            experiments/entropygraph_v030_release.py
 
       - name: Run direct-reader, promotion-policy, recovery, locality and publication tests
         run: |
@@ -50,6 +52,7 @@ jobs:
             tests/test_v030_hierarchical_geometry.py \
             tests/test_v030_geometry_overlay.py \
             tests/test_v030_geometry_overlay_g04.py \
+            tests/test_v030_g04_publish.py \
             tests/test_v030_prefixgraph.py \
             tests/test_v030_release_reader.py \
             tests/test_v030_release_reader_policy.py \
