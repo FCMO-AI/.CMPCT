@@ -158,13 +158,18 @@ def _category_snapshot(project_version: str | None, frontier_rows: list[dict[str
     if found is None:
         return {}
     path, record = found
+    contract = record.get("benchmark_contract") or record.get("contract") or {}
     rows = list(record.get("rows") or [])
     by_key = {(str(row.get("suite") or ""), str(row.get("name") or "")): row for row in rows}
     expected = {(str(row.get("suite") or ""), str(row.get("name") or "")) for row in frontier_rows}
 
-    # Footnote: category boasting is all-or-nothing. If one workload is missing, duplicated under the
-    # wrong suite, or belongs to another frontier, suppress the category surface rather than selectively
-    # publishing only the rows where CMPCT looks strongest.
+    # Footnote: category boasting is all-or-nothing and accepts only the benchmark contract that measured
+    # CMPCT and both external baselines during the same generated-tree lifetime. Some valid synthetic
+    # producer formats can embed run-varying metadata, so a fresh category run need not reproduce an old
+    # release-delta tree hash. The category record's own tree hash proves the three archives in that row
+    # shared one tree; the workload-key set proves that the record covers the current frontier scope.
+    if contract.get("same_lifetime_measurement") is not True:
+        return {}
     if len(by_key) != len(rows) or set(by_key) != expected:
         return {}
 
@@ -175,11 +180,8 @@ def _category_snapshot(project_version: str | None, frontier_rows: list[dict[str
         candidate = int(row.get("cmpct_bytes") or 0)
         zstd = int(row.get("tar_zstd19_solid_bytes") or 0)
         zip_bytes = int(row.get("zip_deflate9_bytes") or 0)
-        if candidate <= 0 or zstd <= 0 or zip_bytes <= 0:
-            return {}
-        # The durable category record repeats tree identity so the renderer cannot accidentally combine
-        # a current CMPCT row with a competitor archive from a different generated tree.
-        if str(row.get("tree_sha256") or "") != str(source.get("tree_sha256") or ""):
+        tree_sha256 = str(row.get("tree_sha256") or "")
+        if candidate <= 0 or zstd <= 0 or zip_bytes <= 0 or not tree_sha256:
             return {}
         normalized_rows.append(
             {
@@ -187,7 +189,7 @@ def _category_snapshot(project_version: str | None, frontier_rows: list[dict[str
                 "name": key[1],
                 "files": int(row.get("files") or source.get("files") or 0),
                 "logical_bytes": int(row.get("logical_bytes") or source.get("logical_bytes") or 0),
-                "tree_sha256": row.get("tree_sha256"),
+                "tree_sha256": tree_sha256,
                 "cmpct_bytes": candidate,
                 "zstd_bytes": zstd,
                 "zip_deflate_bytes": zip_bytes,
@@ -215,7 +217,7 @@ def _category_snapshot(project_version: str | None, frontier_rows: list[dict[str
         "losses_vs_zstd": sum(row["cmpct_bytes"] > row["zstd_bytes"] for row in normalized_rows),
         "ties_vs_zstd": sum(row["cmpct_bytes"] == row["zstd_bytes"] for row in normalized_rows),
         "rows": normalized_rows,
-        "contract": record.get("benchmark_contract") or record.get("contract") or {},
+        "contract": contract,
     }
 
 
