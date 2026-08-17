@@ -36,7 +36,10 @@ jobs:
           sudo apt-get install -y zstd ffmpeg gcc libsndfile1
           python -m pip install --upgrade pip
           python -m pip install -e '.[audio,test]'
-          python -m pip install numpy==2.4.6
+          # Footnote: the public neutral/hostile generator imports these deterministic document/image
+          # producers even when this oracle ultimately selects only the ML workload.  Keeping the exact
+          # generator dependency surface installed avoids replacing the corpus with a hand-built proxy.
+          python -m pip install numpy==2.4.6 pillow reportlab python-docx openpyxl python-pptx
 
       - name: Build pinned memory-safe Preflate bridge
         run: |
