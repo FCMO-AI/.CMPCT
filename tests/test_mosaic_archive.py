@@ -69,17 +69,18 @@ def test_pack_marginal_gate_rejects_a_paper_leaf_win(tmp_path: Path):
     assert ENGINE.strong_verify(archive)["ok"] is True
 
 
-def test_jointly_useful_partial_roots_survive_one_root_losses(tmp_path: Path):
-    suite = tmp_path / "diversity"
-    STRESS.root_diversity_pressure(suite)
-    source = suite / "09_root_diversity_pressure"
-    archive = tmp_path / "partial-roots.cmpct"
+def test_jointly_useful_partial_root_survives_one_root_loss(tmp_path: Path):
+    suite = tmp_path / "source-like"
+    STRESS.source_like_merge(suite)
+    source = suite / "04_source_like_merge"
+    archive = tmp_path / "partial-root.cmpct"
     stats = ENGINE.build_graph(source, archive)
 
-    # The target draws 32 KiB regions from five independent roots. A one-root delta leaves most of the
-    # target literal and can lose to direct storage, but several such roots are jointly useful. The
-    # discovery layer must therefore retain bounded exact-copy evidence even when one-root saving <= 0.
-    assert stats["partial_roots_retained"] >= 2
+    # This is the actual preserved v2 counterexample: root 0's one-root target costs 5,818 B, while
+    # root 1 costs 5,888 B versus 5,878 B direct—10 B worse despite copying ~195 KiB. Together they
+    # produce an 805 B primitive mosaic. Attempt #2 discarded root 1 because saving<=0 and therefore
+    # never auditioned the complete mosaic. Attempt #3 must retain that exact-copy contribution.
+    assert stats["partial_roots_retained"] >= 1
     assert stats["leaf_candidates"] >= 1
     assert stats["leaf_pack_tournaments"] >= 1
     assert stats["max_mosaic_read_amplification"] <= ENGINE.MAX_READ_AMP
