@@ -63,10 +63,10 @@ jobs:
             benchmark-artifacts/resemblance-hostile \
             --work-root benchmark-artifacts/CMPCT_V029_Parallel_Portfolio \
             --output benchmark-artifacts/mosaic-v029-parallel-portfolio.json \
-            --repetitions 1 \
+            --repetitions 3 \
             2>&1 | tee benchmark-artifacts/mosaic-v029-parallel-portfolio.stdout.txt
 
-      - name: Enforce byte-identity and frozen speed gate
+      - name: Enforce byte-identity, frozen speed gate, and repeatability
         run: |
           python - <<'PY'
           import json
@@ -79,7 +79,15 @@ jobs:
           assert p['exact_archive_identity_required'] is True
           assert p['minimum_wallclock_improvement_pct'] == 20.0
           assert p['minimum_absolute_improvement_s'] == 5.0
+          assert p['repetitions'] == 3
+          assert len(r['rows']) == 3
           assert all(row['byte_identical'] for row in r['rows'])
+          for row in r['rows']:
+              saved = row['sequential_s'] - row['parallel_s']
+              pct = saved / max(row['sequential_s'], 1e-9) * 100.0
+              assert saved >= p['minimum_absolute_improvement_s'], row
+              assert pct >= p['minimum_wallclock_improvement_pct'], row
+          assert r['research_gate_pass'] is True
           print(json.dumps(r, indent=2))
           PY
 
@@ -93,11 +101,13 @@ jobs:
           from pathlib import Path
           r=json.loads(Path('benchmark-artifacts/mosaic-v029-parallel-portfolio.json').read_text())
           print('## CMPCT v0.29 — byte-identical parallel portfolio')
-          print(f"- sequential creation: **{r['sequential_median_s']:.2f} s**")
-          print(f"- parallel creation: **{r['parallel_median_s']:.2f} s**")
-          print(f"- wall-clock saved: **{r['wallclock_saved_s']:.2f} s ({r['wallclock_improvement_pct']:.2f}%)**")
+          print(f"- repetitions: **{len(r['rows'])}**")
+          print(f"- sequential median: **{r['sequential_median_s']:.2f} s**")
+          print(f"- parallel median: **{r['parallel_median_s']:.2f} s**")
+          print(f"- median wall-clock saved: **{r['wallclock_saved_s']:.2f} s ({r['wallclock_improvement_pct']:.2f}%)**")
           print(f"- archive identity: **{'PASS' if all(row['byte_identical'] for row in r['rows']) else 'FAIL'}**")
-          print(f"- frozen >=20% and >=5 s gate: **{'PASS' if r['research_gate_pass'] else 'REJECT'}**")
+          print(f"- every repetition >=20% and >=5 s: **PASS**")
+          print(f"- median frozen gate: **{'PASS' if r['research_gate_pass'] else 'REJECT'}**")
           PY
 
       - name: Upload scheduler evidence
