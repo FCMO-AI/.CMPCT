@@ -43,6 +43,27 @@ def test_anchor_tournament_is_complete_costed(tmp_path: Path) -> None:
     assert archive.stat().st_size == stats["archive_bytes"]
 
 
+def test_direct_zstd_floor_is_compressed_once_per_file(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    source = tmp_path / "source"; _similar_family(source)
+    archive = tmp_path / "family.cmpct"
+    original = pg._compress
+    calls = 0
+
+    def counted(raw: bytes) -> bytes:
+        nonlocal calls
+        calls += 1
+        return original(raw)
+
+    monkeypatch.setattr(pg, "_compress", counted)
+    stats = pg.build(source, archive)
+    # Footnote: anchor auditions are intentionally numerous, but their direct Zstd floor is invariant.
+    # Locking calls==files prevents a future refactor from silently restoring O(files * anchors) duplicate
+    # direct compression work while leaving the serialized bytes deceptively unchanged.
+    assert stats["anchor_auditions"] == 5
+    assert calls == stats["files"] == 5
+    assert pg.strong_verify(archive)["tree_sha256"] == pg.treehash(source)
+
+
 def test_payload_tamper_is_rejected(tmp_path: Path) -> None:
     source = tmp_path / "source"; _similar_family(source)
     archive = tmp_path / "family.cmpct"; pg.build(source, archive)
