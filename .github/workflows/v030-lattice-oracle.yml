@@ -1,0 +1,146 @@
+name: CMPCT v0.30 Lattice ML oracle
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-v030-lattice-oracle-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ml-lattice-oracle:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      CMPCT_PREFLATE_BRIDGE: ${{ github.workspace }}/native/preflate-bridge/target/release/cmpct-preflate-bridge
+    steps:
+      - name: Check out candidate
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install deterministic dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y zstd ffmpeg gcc libsndfile1
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[audio,test]'
+          python -m pip install numpy==2.4.6
+
+      - name: Build pinned memory-safe Preflate bridge
+        run: |
+          rustup toolchain install 1.89.0 --profile minimal
+          cargo +1.89.0 build --release --manifest-path native/preflate-bridge/Cargo.toml
+
+      - name: Generate exact portable ML workload
+        run: |
+          mkdir -p benchmark-artifacts
+          python - <<'PY'
+          import importlib.util
+          from pathlib import Path
+          import sys
+
+          def load(path, name):
+              spec=importlib.util.spec_from_file_location(name, Path(path))
+              assert spec and spec.loader
+              mod=importlib.util.module_from_spec(spec); sys.modules[name]=mod; spec.loader.exec_module(mod)
+              return mod
+
+          neutral=load('benchmarks/neutral_hostile_corpus_v1.py', 'cmpct_v030_lattice_neutral')
+          repair=load('benchmarks/neutral_hostile_determinism_repair_v5.py', 'cmpct_v030_lattice_repair')
+          repair.install_generation_hooks(neutral)
+          root=Path('benchmark-artifacts/neutral')
+          neutral.build(root)
+          repair.normalize_root(root)
+          target=root/'09_ml_artifacts'
+          assert target.is_dir(), sorted(p.name for p in root.iterdir())
+          print(target)
+          PY
+
+      - name: Compile and run conservative Lattice oracle
+        run: |
+          set -o pipefail
+          python -m py_compile experiments/lattice_v030_oracle.py
+          python experiments/lattice_v030_oracle.py \
+            benchmark-artifacts/neutral/09_ml_artifacts \
+            --work-root benchmark-artifacts/CMPCT_V030_Lattice_ML \
+            --output benchmark-artifacts/v030-lattice-ml.json \
+            2>&1 | tee benchmark-artifacts/v030-lattice-ml.stdout.txt
+
+      - name: Enforce mechanism disproof gate
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          r=json.loads(Path('benchmark-artifacts/v030-lattice-ml.json').read_text())
+          assert r['schema'] == 'cmpct-v030-lattice-oracle-v1', r
+          o=r['oracle']
+          assert o['worst_member_amp'] <= 8.0 + 1e-12, o
+          assert o['max_group_bytes'] <= 8 * 1024 * 1024, o
+          assert r['accepted_build']['archive_bytes'] == r['accepted_v029_bytes'], r
+          verdict={
+              'accepted_v029_bytes': r['accepted_v029_bytes'],
+              'conservative_oracle_bytes': r['oracle_candidate_bytes_conservative'],
+              'saving_vs_accepted_v029': r['saving_vs_accepted_v029_bytes'],
+              'singleton_transform_saving': o['singleton_transform_saving_bytes'],
+              'additional_fusion_saving': o['additional_fusion_saving_bytes'],
+              'transformed_members': o['transformed_members'],
+              'fusions': len(o['fusions']),
+              'worst_member_amp': o['worst_member_amp'],
+              'max_group_bytes': o['max_group_bytes'],
+              'passes_64k_single_workload_seed_gate': r['saving_vs_accepted_v029_bytes'] >= 64 * 1024,
+          }
+          Path('benchmark-artifacts/v030-lattice-ml-verdict.json').write_text(json.dumps(verdict, indent=2)+'\n')
+          print(json.dumps(verdict, indent=2))
+          # Footnote: unlike a promotion gate, this workflow intentionally fails a disproven seed.  The
+          # campaign preregistered >=64 KiB on at least one workload before exact emitter work is justified.
+          assert verdict['passes_64k_single_workload_seed_gate'], verdict
+          PY
+
+      - name: Public-surface guard
+        run: python tools/check_public_surface.py
+
+      - name: Summarize Lattice oracle
+        if: always()
+        run: |
+          if [ -f benchmark-artifacts/v030-lattice-ml-verdict.json ]; then
+            python - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          import json
+          from pathlib import Path
+          v=json.loads(Path('benchmark-artifacts/v030-lattice-ml-verdict.json').read_text())
+          print('## CMPCT v0.30 — Lattice ML oracle')
+          print(f"- accepted v0.29: **{v['accepted_v029_bytes']:,} B**")
+          print(f"- conservative Lattice oracle: **{v['conservative_oracle_bytes']:,} B**")
+          print(f"- saving: **{v['saving_vs_accepted_v029']:,} B**")
+          print(f"- lane-only saving: **{v['singleton_transform_saving']:,} B**")
+          print(f"- elastic-fusion saving: **{v['additional_fusion_saving']:,} B**")
+          print(f"- max cold-read amplification: **{v['worst_member_amp']:.3f}x**")
+          print(f"- seed gate: **{'PASS' if v['passes_64k_single_workload_seed_gate'] else 'FAIL'}**")
+          PY
+          fi
+
+      - name: Upload Lattice evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cmpct-v030-lattice-ml-${{ github.sha }}
+          path: |
+            benchmark-artifacts/v030-lattice-ml.json
+            benchmark-artifacts/v030-lattice-ml-verdict.json
+            benchmark-artifacts/v030-lattice-ml.stdout.txt
+          if-no-files-found: warn
+
+# Footnote: this is deliberately a one-workload causal gate.  The expensive 15-workload generalization
+# matrix becomes justified only after the mechanism earns its preregistered >=64 KiB single-workload seed
+# threshold against the real accepted v0.29 artifact; otherwise the hypothesis is rejected cheaply.
