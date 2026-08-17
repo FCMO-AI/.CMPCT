@@ -111,7 +111,7 @@ jobs:
               assert frontier['candidate'].get('engine_identity') == 'attempt5-residual-program-packing'
 
               overall = frontier['overall_comparison']
-              category = frontier['category_comparison']
+              category = frontier.get('category_comparison') or {}
               release = frontier['release_delta']
               scheduler = frontier['scheduler']
               rows = overall['competitors']
@@ -137,50 +137,57 @@ jobs:
               # release delta have different aggregation/causality contracts. None may borrow another's
               # candidate bytes simply because the totals happen to be close.
               assert overall['candidate_bytes'] != release['candidate_bytes']
-              assert category['candidate_bytes'] != overall['candidate_bytes']
-              assert category['baseline_short'] == 'tar / Zstd solid'
-              assert category['secondary_short'] == 'ZIP / Deflate'
-              assert category['contract'].get('same_lifetime_measurement') is True
-              assert category['contract'].get('all_workloads_required') is True
 
-              category_rows = category['rows']
-              assert len(category_rows) == category['workloads'] == frontier['workload_count'] == 15
-              frontier_keys = {(row['suite'], row['name']) for row in frontier['workloads']}
-              category_keys = {(row['suite'], row['name']) for row in category_rows}
-              assert len(category_keys) == len(category_rows)
-              assert category_keys == frontier_keys
+              # Footnote: category evidence is a separately published exact-tree artifact. Its absence
+              # must suppress the category claim rather than break publication or recycle stale numbers.
+              # When it exists, keep the original all-or-nothing provenance and arithmetic checks.
+              if category:
+                  assert category['candidate_bytes'] != overall['candidate_bytes']
+                  assert category['baseline_short'] == 'tar / Zstd solid'
+                  assert category['secondary_short'] == 'ZIP / Deflate'
+                  assert category['contract'].get('same_lifetime_measurement') is True
+                  assert category['contract'].get('all_workloads_required') is True
 
-              candidate_total = zstd_total = zip_total = 0
-              wins = losses = ties = 0
-              for row in category_rows:
-                  candidate = int(row['cmpct_bytes'])
-                  zstd = int(row['zstd_bytes'])
-                  zip_bytes = int(row['zip_deflate_bytes'])
-                  assert candidate > 0 and zstd > 0 and zip_bytes > 0
-                  assert re.fullmatch(r'[0-9a-f]{64}', str(row['tree_sha256']))
-                  expected_zstd = (zstd - candidate) / zstd * 100.0
-                  expected_zip = (zip_bytes - candidate) / zip_bytes * 100.0
-                  assert math.isclose(row['cmpct_vs_zstd_pct'], expected_zstd, rel_tol=0, abs_tol=1e-12), row['name']
-                  assert math.isclose(row['cmpct_vs_zip_deflate_pct'], expected_zip, rel_tol=0, abs_tol=1e-12), row['name']
-                  candidate_total += candidate
-                  zstd_total += zstd
-                  zip_total += zip_bytes
-                  wins += candidate < zstd
-                  losses += candidate > zstd
-                  ties += candidate == zstd
+                  category_rows = category['rows']
+                  assert len(category_rows) == category['workloads'] == frontier['workload_count'] == 15
+                  frontier_keys = {(row['suite'], row['name']) for row in frontier['workloads']}
+                  category_keys = {(row['suite'], row['name']) for row in category_rows}
+                  assert len(category_keys) == len(category_rows)
+                  assert category_keys == frontier_keys
 
-              assert category['candidate_bytes'] == candidate_total
-              assert category['zstd_bytes'] == zstd_total
-              assert category['zip_deflate_bytes'] == zip_total
-              assert category['wins_vs_zstd'] == wins
-              assert category['losses_vs_zstd'] == losses
-              assert category['ties_vs_zstd'] == ties
-              assert wins + losses + ties == category['workloads']
-              assert wins > 0 and losses > 0, 'credible category frontier must preserve both wins and losses'
-              expected_category_zstd = (zstd_total - candidate_total) / zstd_total * 100.0
-              expected_category_zip = (zip_total - candidate_total) / zip_total * 100.0
-              assert math.isclose(category['lead_vs_zstd_pct'], expected_category_zstd, rel_tol=0, abs_tol=1e-12)
-              assert math.isclose(category['lead_vs_zip_deflate_pct'], expected_category_zip, rel_tol=0, abs_tol=1e-12)
+                  candidate_total = zstd_total = zip_total = 0
+                  wins = losses = ties = 0
+                  for row in category_rows:
+                      candidate = int(row['cmpct_bytes'])
+                      zstd = int(row['zstd_bytes'])
+                      zip_bytes = int(row['zip_deflate_bytes'])
+                      assert candidate > 0 and zstd > 0 and zip_bytes > 0
+                      assert re.fullmatch(r'[0-9a-f]{64}', str(row['tree_sha256']))
+                      expected_zstd = (zstd - candidate) / zstd * 100.0
+                      expected_zip = (zip_bytes - candidate) / zip_bytes * 100.0
+                      assert math.isclose(row['cmpct_vs_zstd_pct'], expected_zstd, rel_tol=0, abs_tol=1e-12), row['name']
+                      assert math.isclose(row['cmpct_vs_zip_deflate_pct'], expected_zip, rel_tol=0, abs_tol=1e-12), row['name']
+                      candidate_total += candidate
+                      zstd_total += zstd
+                      zip_total += zip_bytes
+                      wins += candidate < zstd
+                      losses += candidate > zstd
+                      ties += candidate == zstd
+
+                  assert category['candidate_bytes'] == candidate_total
+                  assert category['zstd_bytes'] == zstd_total
+                  assert category['zip_deflate_bytes'] == zip_total
+                  assert category['wins_vs_zstd'] == wins
+                  assert category['losses_vs_zstd'] == losses
+                  assert category['ties_vs_zstd'] == ties
+                  assert wins + losses + ties == category['workloads']
+                  assert wins > 0 and losses > 0, 'credible category frontier must preserve both wins and losses'
+                  expected_category_zstd = (zstd_total - candidate_total) / zstd_total * 100.0
+                  expected_category_zip = (zip_total - candidate_total) / zip_total * 100.0
+                  assert math.isclose(category['lead_vs_zstd_pct'], expected_category_zstd, rel_tol=0, abs_tol=1e-12)
+                  assert math.isclose(category['lead_vs_zip_deflate_pct'], expected_category_zip, rel_tol=0, abs_tol=1e-12)
+              else:
+                  assert not any(row.get('cmpct_vs_zstd_pct') is not None for row in frontier['workloads'])
 
               # Footnote: current v0.29 is slightly larger than solid Zstd and ZPAQ on the matched hostile
               # structural aggregate. Keep those negative facts intact; the serious-baseline rhetoric is
@@ -219,6 +226,7 @@ jobs:
               assert 'Discover boldly. Promote without regression.' in index
               assert any('promotion boundary' in str(rule) for rule in data['project']['non_negotiables'])
 
+          assert data.get('public_evidence', {}).get('schema') == 'cmpct-public-evidence-v1'
           assert len(data['frontier']['competitors']) >= 4
           assert data['frontier']['workloads'], 'frontier workload matrix must not be empty'
           assert data['parity_records'], 'canonical ZIP-parity evidence must remain visible'
@@ -230,6 +238,7 @@ jobs:
         run: |
           node --check site/src/assets/app.js
           node --check site/src/assets/motion.js
+          node --check site/src/assets/experience.js
           node --check site/src/assets/frontier-v028.js
           node --check site/src/assets/frontier-v029.js
           node --check site/src/assets/cmpct-browser-writer.js
@@ -276,5 +285,5 @@ jobs:
 
 # Footnote: main publishes automatically only after disclosure, generated benchmark-data coherence,
 # presentation-revision coherence, JavaScript syntax, and canonical-reader Browser Lab compatibility
-# gates pass. v0.29 proves structural external position, exact-tree Zstd categories, direct-base release
-# causality and canonical ZIP execution parity as separate public evidence surfaces.
+# gates pass. Structural external position, optional exact-tree Zstd categories, direct-base release
+# causality and canonical ZIP execution parity remain separate public evidence surfaces.
