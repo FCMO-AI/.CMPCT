@@ -50,11 +50,25 @@ PH = BASE.PH
 MAX_READ_AMP = BASE.MAX_READ_AMP
 MAX_RESIDUAL_PACK = BASE.MAX_RESIDUAL_PACK
 MAX_ADDITIONAL_RECIPE_AMP = BASE.MAX_ADDITIONAL_RECIPE_AMP
-# Footnote: hostile metadata tests intentionally reach through the strict wrapper to these low-level
-# primitives. Re-export them unchanged so scheduling optimization cannot narrow the tested grammar API.
+# Footnote: hostile metadata tests intentionally reach through the strict wrapper to low-level grammar
+# primitives. Keep the common names explicit for readability, then delegate every other unknown module
+# attribute to the accepted attempt-5 engine via ``__getattr__`` below. The optimization is therefore a
+# transparent scheduling decorator rather than a forked/narrowed grammar API.
 H = BASE.H
 zc = BASE.zc
 zd = BASE.zd
+MAX_DECODE_UNIT = BASE.MAX_DECODE_UNIT
+MAX_DECODER_MEMORY = BASE.MAX_DECODER_MEMORY
+
+
+def __getattr__(name: str):
+    """Delegate unmodified grammar/runtime attributes to the accepted attempt-5 engine.
+
+    Footnote: Python calls module-level ``__getattr__`` only after ordinary lookup fails, so the handful
+    of scheduling functions defined below still override the parent while parser constants, codecs,
+    hashes, Merkle helpers and future hostile-test hooks remain exactly those of the preserved engine.
+    """
+    return getattr(BASE, name)
 
 
 def _logical_file_count(root: Path) -> int:
