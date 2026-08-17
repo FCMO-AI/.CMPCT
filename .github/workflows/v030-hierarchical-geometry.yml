@@ -1,0 +1,91 @@
+name: CMPCT v0.30 Hierarchical Geometry logs oracle
+
+on:
+  push:
+    branches:
+      - agent/lattice-v030-breakthrough
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-v030-hierarchical-geometry-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  hierarchical-geometry-logs:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      PYTHONPATH: ${{ github.workspace }}
+    steps:
+      - name: Check out research branch
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install exact corpus dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y zstd ffmpeg gcc libsndfile1
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[audio,test]'
+          python -m pip install pillow reportlab python-docx openpyxl python-pptx numpy
+
+      - name: Run independent transform vectors and hostile bounds
+        run: |
+          python -m py_compile experiments/entropygraph_v030_hierarchical_geometry.py
+          pytest -q tests/test_v030_hierarchical_geometry.py
+
+      - name: Run exact repaired logs payload oracle
+        run: |
+          mkdir -p benchmark-artifacts
+          set -o pipefail
+          python benchmarks/hierarchical_geometry_v030_probe.py \
+            --work-root benchmark-artifacts/hierarchical-geometry-work \
+            --output benchmark-artifacts/hierarchical-geometry-logs.json \
+            2>&1 | tee benchmark-artifacts/hierarchical-geometry-logs.stdout.txt
+
+      - name: Enforce frozen mechanism threshold
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          data=json.loads(Path('benchmark-artifacts/hierarchical-geometry-logs.json').read_text())
+          totals=data['totals']; contract=data['contract']; rows=data['rows']
+          assert data['schema']=='cmpct-v030-hierarchical-geometry-logs-probe-v1'
+          assert data['source_tree_sha256']=='7356b866d7b99bfce2dd1fc6ef86d61d09c9d8a38a2ff3fec7d9a92e46020931'
+          assert totals['raw_files']==contract['expected_raw_files']==6
+          assert totals['chunks']==contract['expected_chunks']==30
+          assert all(row['candidate_bytes'] <= row['direct_zstd19_bytes'] for row in rows)
+          assert all(row['selected']=='hierarchical' for row in rows)
+          assert all(len(row['logical_sha256'])==64 for row in rows)
+          assert totals['saving_bytes'] >= contract['minimum_total_saving_bytes'] == 655360
+          assert totals['min_selected_chunk_saving_bytes'] >= contract['minimum_each_selected_chunk_saving_bytes'] == 16384
+          assert totals['mechanism_gate'] is True
+          assert max(row['exact_finalists'] for row in rows) <= data['resource_limits']['max_exact_finalists']
+          print(json.dumps(totals, indent=2, sort_keys=True))
+          PY
+
+      - name: Public-surface guard
+        run: python tools/check_public_surface.py
+
+      - name: Upload detached payload evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cmpct-v030-hierarchical-geometry-${{ github.sha }}
+          path: |
+            benchmark-artifacts/hierarchical-geometry-logs.json
+            benchmark-artifacts/hierarchical-geometry-logs.stdout.txt
+          if-no-files-found: warn
+
+# Footnote: a green run only retains the Hierarchical Geometry mechanism for integration research.  It does
+# not authorize numeric v0.30, canonical grammar changes, site claims or merge to main.
