@@ -20,8 +20,18 @@ import multiprocessing as mp
 from pathlib import Path
 import shutil
 import statistics
+import sys
 import tempfile
 import time
+
+# This file is intentionally runnable as a script from the repository root in CI.
+# Python otherwise places ``experiments/`` rather than the repository root on
+# sys.path, making the package import below fail even though module execution
+# (``python -m experiments...``) works. Keep direct and module execution
+# equivalent so the benchmark command itself cannot become an environment trap.
+REPO_ROOT = Path(__file__).resolve().parents[1]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
 
 from experiments import entropygraph_v029_mosaic as mosaic
 
