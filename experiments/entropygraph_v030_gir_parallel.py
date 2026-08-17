@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import hashlib
 import multiprocessing as mp
+import os
 from pathlib import Path
 import queue as queue_module
 import tempfile
@@ -119,7 +120,6 @@ def build(root: Path, out: Path) -> dict:
         chosen_sha = str(by_kind["gir" if selected == "gir" else "v029"]["archive_sha256"])
         # No copy: the chosen inode is transferred to the destination path.  The losing candidate remains in
         # the private temporary directory and is deleted by cleanup after publication.
-        import os
         os.replace(chosen_path, out)
         if out.stat().st_size != (gir_bytes if selected == "gir" else v029_bytes) or _sha256(out) != chosen_sha:
             raise RuntimeError("parallel GIR publication changed selected artifact bytes")
