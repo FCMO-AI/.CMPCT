@@ -51,18 +51,22 @@ jobs:
             echo "$unexpected" >&2
             exit 1
           fi
-      - name: Validate focused frontier
+      - name: Validate extraction behavior
         shell: bash
         run: |
           set -o pipefail
           {
             python -m pip install --upgrade pip
             python -m pip install -e '.[audio,test]'
-            cargo clippy --manifest-path native/cmpct-core/Cargo.toml --all-targets -- -D warnings
             cargo test --manifest-path native/cmpct-core/Cargo.toml --all-targets
             cargo build --manifest-path native/cmpct-core/Cargo.toml --release
             python tests/native_stream_extract_abi.py
           } 2>&1 | tee extraction-hardening-validation.log
+      - name: Enforce strict native lint
+        shell: bash
+        run: |
+          set -o pipefail
+          cargo clippy --manifest-path native/cmpct-core/Cargo.toml --all-targets -- -D warnings 2>&1 | tee -a extraction-hardening-validation.log
       - name: Upload validation diagnostics
         if: failure()
         uses: actions/upload-artifact@v4
