@@ -46,15 +46,16 @@ jobs:
 
       - name: Run Geometry independent inverse and hostile-boundary tests
         run: |
-          pytest -q tests/test_v030_lattice.py tests/test_v030_geometry.py
+          pytest -q tests/test_v030_lattice.py tests/test_v030_geometry.py tests/test_v030_geometry_safe.py
 
       - name: Run exact-tree 15-workload Geometry gate
         run: |
           mkdir -p benchmark-artifacts
           # Footnote: accepted v0.29 and Geometry consume the same still-live generated tree inside one
-          # benchmark call.  Complete-artifact fallback is enforced per workload before aggregation.
+          # benchmark call. Complete-artifact fallback is enforced per workload before aggregation, and
+          # the safe entrypoint installs the same bounded ragged-transpose helpers used by the reader.
           set -o pipefail
-          python benchmarks/geometry_v030_generalization_bench.py \
+          python benchmarks/geometry_v030_safe_entrypoint.py \
             --work-root benchmark-artifacts/geometry-v030-work \
             --output benchmark-artifacts/geometry-v030-generalization.json \
             2>&1 | tee benchmark-artifacts/geometry-v030.stdout.txt
@@ -93,6 +94,6 @@ jobs:
             benchmark-artifacts/geometry-v030.stdout.txt
           if-no-files-found: warn
 
-# Footnote: this workflow proves only the research storage mechanism.  Green does not authorize v0.30:
+# Footnote: this workflow proves only the research storage mechanism. Green does not authorize v0.30:
 # creation/extraction/memory debt, malformed-input fuzzing, native/shared-reader support and the unchanged
 # numeric release gate remain mandatory rehabilitation work before promotion.
