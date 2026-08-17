@@ -45,6 +45,7 @@ jobs:
             tests/test_v030_hierarchical_geometry.py \
             tests/test_v030_gir.py \
             tests/test_v030_gir_guarded.py \
+            tests/test_v030_gir_streaming.py \
             tests/test_v030_evidence_runtime_fingerprint.py
 
       - name: Compile research modules
@@ -56,11 +57,13 @@ jobs:
             experiments/entropygraph_v030_gir.py \
             experiments/entropygraph_v030_gir_safe.py \
             experiments/entropygraph_v030_gir_guarded.py \
+            experiments/entropygraph_v030_gir_streaming.py \
             benchmarks/evidence_runtime_fingerprint.py
 
       - name: Public-surface guard
         run: python tools/check_public_surface.py
 
-# Footnote: this workflow deliberately excludes the 15-workload compression gate.  Its authority is reader
-# safety only: it proves that stricter metadata/layout admission preserves CMPNX14 bytes and recovery while
-# keeping security iteration from cancelling or contaminating the expensive exact-byte reactor measurement.
+# Footnote: this workflow deliberately excludes the 15-workload compression gate. Its authority is reader
+# safety only: it proves that stricter metadata/layout admission and node-streamed verification/extraction
+# preserve CMPNX14 bytes/recovery while security iteration cannot cancel or contaminate exact-byte reactor
+# measurement.
