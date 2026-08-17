@@ -1,0 +1,85 @@
+name: CMPCT v0.30 Sequence Microprogram child oracle
+
+on:
+  push:
+    branches:
+      - agent/v030-sequence-microprograms
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-v030-sequence-microprograms-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  sequence-microprograms:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      PYTHONPATH: ${{ github.workspace }}
+    steps:
+      - name: Check out sequence research head
+        uses: actions/checkout@v6
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install deterministic benchmark dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y zstd
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[test]'
+          python -m pip install pillow reportlab python-docx openpyxl python-pptx numpy
+
+      - name: Run inherited Geometry and LTM safety/inverse tests
+        run: |
+          pytest -q \
+            tests/test_v030_geometry_safe.py \
+            tests/test_v030_hierarchical_geometry.py \
+            tests/test_v030_sequence_microprograms.py
+
+      - name: Run exact incremental LTM payload oracle
+        run: |
+          mkdir -p benchmark-artifacts
+          # Footnote: the benchmark incumbent is the actual G3/G4 payload on each same balanced node. LTM1
+          # therefore has to produce new bytes beyond Geometry, and its lexint contribution is re-priced with
+          # the latent-integer codelet disabled so generic dictionary/period wins cannot borrow novelty credit.
+          set -o pipefail
+          python benchmarks/sequence_microprograms_v030_probe.py \
+            --work-root benchmark-artifacts/ltm-work \
+            --output benchmark-artifacts/sequence-microprograms-v030.json \
+            2>&1 | tee benchmark-artifacts/sequence-microprograms-v030.stdout.txt
+
+      - name: Enforce frozen incremental mechanism contract
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          data = json.loads(Path('benchmark-artifacts/sequence-microprograms-v030.json').read_text())
+          totals = data['totals']
+          contract = data['contract']
+          assert data['schema'] == 'cmpct-v030-sequence-microprograms-probe-v1'
+          assert totals['files_regressed'] == 0
+          assert totals['saving_vs_g3g4_bytes'] >= contract['minimum_aggregate_saving_bytes']
+          assert totals['max_single_file_saving_bytes'] >= contract['minimum_single_file_saving_bytes']
+          assert totals['latent_integer_extra_bytes'] >= contract['minimum_latent_integer_extra_bytes']
+          assert totals['selected_chunks'] > 0
+          assert totals['codelets']['lexint'] > 0
+          assert totals['residualized_models'] > 0
+          assert totals['mechanism_gate'] is True
+          print(json.dumps(totals, indent=2, sort_keys=True))
+          PY
+
+      - name: Upload sequence research evidence even on failure
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: cmpct-v030-sequence-microprograms-child
+          path: benchmark-artifacts/
+          if-no-files-found: warn
