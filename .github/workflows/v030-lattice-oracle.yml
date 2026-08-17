@@ -37,7 +37,7 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -e '.[audio,test]'
           # Footnote: the public neutral/hostile generator imports these deterministic document/image
-          # producers even when this oracle ultimately selects only the ML workload.  Keeping the exact
+          # producers even when this oracle ultimately selects only the ML workload. Keeping the exact
           # generator dependency surface installed avoids replacing the corpus with a hand-built proxy.
           python -m pip install numpy==2.4.6 pillow reportlab python-docx openpyxl python-pptx
 
@@ -74,8 +74,10 @@ jobs:
       - name: Compile and run conservative Lattice oracle
         run: |
           set -o pipefail
-          python -m py_compile experiments/lattice_v030_oracle.py
-          python experiments/lattice_v030_oracle.py \
+          python -m py_compile experiments/lattice_v030_oracle.py experiments/lattice_v030_oracle_safe.py
+          # Footnote: the safe entrypoint preserves inherited over-8x physical groups unchanged instead
+          # of aborting the entire experiment. No transform/cost/gate threshold is changed.
+          python experiments/lattice_v030_oracle_safe.py \
             benchmark-artifacts/neutral/09_ml_artifacts \
             --work-root benchmark-artifacts/CMPCT_V030_Lattice_ML \
             --output benchmark-artifacts/v030-lattice-ml.json \
@@ -106,7 +108,7 @@ jobs:
           }
           Path('benchmark-artifacts/v030-lattice-ml-verdict.json').write_text(json.dumps(verdict, indent=2)+'\n')
           print(json.dumps(verdict, indent=2))
-          # Footnote: unlike a promotion gate, this workflow intentionally fails a disproven seed.  The
+          # Footnote: unlike a promotion gate, this workflow intentionally fails a disproven seed. The
           # campaign preregistered >=64 KiB on at least one workload before exact emitter work is justified.
           assert verdict['passes_64k_single_workload_seed_gate'], verdict
           PY
@@ -144,6 +146,6 @@ jobs:
             benchmark-artifacts/v030-lattice-ml.stdout.txt
           if-no-files-found: warn
 
-# Footnote: this is deliberately a one-workload causal gate.  The expensive 15-workload generalization
+# Footnote: this is deliberately a one-workload causal gate. The expensive 15-workload generalization
 # matrix becomes justified only after the mechanism earns its preregistered >=64 KiB single-workload seed
 # threshold against the real accepted v0.29 artifact; otherwise the hypothesis is rejected cheaply.
