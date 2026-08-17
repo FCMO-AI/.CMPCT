@@ -1,0 +1,119 @@
+name: CMPCT v0.29 locality budget oracle
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-v029-pack-budget-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  pack-budget:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      CMPCT_PREFLATE_BRIDGE: ${{ github.workspace }}/native/preflate-bridge/target/release/cmpct-preflate-bridge
+    steps:
+      - name: Check out candidate
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install deterministic benchmark dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y zstd ffmpeg gcc libsndfile1
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[audio,test]'
+          python -m pip install \
+            pillow==12.3.0 \
+            reportlab==5.0.0 \
+            python-docx==1.2.0 \
+            openpyxl==3.1.5 \
+            python-pptx==1.0.2 \
+            numpy==2.4.6
+
+      - name: Build pinned memory-safe Preflate bridge
+        run: |
+          rustup toolchain install 1.89.0 --profile minimal
+          cargo +1.89.0 build --release --manifest-path native/preflate-bridge/Cargo.toml
+
+      - name: Run Locality Budget Compiler oracle
+        run: |
+          mkdir -p benchmark-artifacts
+          set -o pipefail
+          python benchmarks/mosaic_v029_pack_budget_bench.py \
+            --work-root benchmark-artifacts/CMPCT_V029_Pack_Budget \
+            --output benchmark-artifacts/mosaic-v029-pack-budget.json \
+            2>&1 | tee benchmark-artifacts/mosaic-v029-pack-budget.stdout.txt
+
+      - name: Enforce identity and safety invariants
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          r=json.loads(Path('benchmark-artifacts/mosaic-v029-pack-budget.json').read_text())
+          t=r['totals']
+          assert r['schema'] == 'cmpct-v029-pack-budget-oracle-v1'
+          assert t['workloads'] == 15, t
+          assert t['baseline_tree_drift_rows'] == 0, t
+          assert t['v028_byte_drift_rows'] == 0, t
+          assert t['attempt5_byte_drift_rows'] == 0, t
+          assert t['workloads_regressed_vs_attempt5'] == 0, t
+          assert t['max_pack_budget_weighted_read_amp'] <= 8.0, t
+          assert t['max_selected_mosaic_read_amplification'] <= 8.0, t
+          assert t['max_selected_additional_recipe_read_amplification'] <= 2.0, t
+          # Footnote: `research_gate_pass` is deliberately *not* asserted. A well-executed falsification
+          # that misses the preregistered byte threshold is durable negative evidence, not broken CI.
+          print(json.dumps(t, indent=2))
+          PY
+
+      - name: Focused planner tests
+        run: python -m pytest -q tests/test_v029_pack_budget.py
+
+      - name: Public-surface guard
+        run: python tools/check_public_surface.py
+
+      - name: Summarize Locality Budget result
+        if: always()
+        run: |
+          if [ -f benchmark-artifacts/mosaic-v029-pack-budget.json ]; then
+            python - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          import json
+          from pathlib import Path
+          r=json.loads(Path('benchmark-artifacts/mosaic-v029-pack-budget.json').read_text()); t=r['totals']
+          print('## CMPCT v0.29 — Locality Budget Compiler oracle')
+          print(f"- exact v0.28 bytes: **{t['v028_bytes']:,}**")
+          print(f"- accepted attempt-5 bytes: **{t['attempt5_bytes']:,}**")
+          print(f"- budgeted candidate bytes: **{t['candidate_bytes']:,}**")
+          print(f"- additional saving vs attempt #5: **{t['additional_saving_vs_attempt5_bytes']:,} B**")
+          print(f"- improved / regressed vs attempt #5: **{t['workloads_improved_vs_attempt5']} / {t['workloads_regressed_vs_attempt5']}**")
+          print(f"- budgeted rows selected: **{t['pack_budget_selected_rows']}**")
+          print(f"- max allocator weighted read amp: **{t['max_pack_budget_weighted_read_amp']:.3f}x**")
+          print(f"- preregistered research gate: **{'PASS' if t['research_gate_pass'] else 'REJECT'}**")
+          PY
+          fi
+
+      - name: Upload Locality Budget evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cmpct-v029-pack-budget-${{ github.sha }}
+          path: |
+            benchmark-artifacts/mosaic-v029-pack-budget.json
+            benchmark-artifacts/mosaic-v029-pack-budget.stdout.txt
+          if-no-files-found: warn
+
+# Footnote: this workflow is a falsification oracle. It cannot assign project version 0.29.0 and does
+# not alter canonical revision-24 bytes, native readers, recovery semantics or public release claims.
