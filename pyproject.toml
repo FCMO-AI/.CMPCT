@@ -1,13 +1,13 @@
 [build-system]
-requires = ["setuptools>=75"]
+requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "cmpct"
-version = "0.28.0"
-description = "Experimental general-purpose content-aware archive format and engine"
-requires-python = ">=3.11"
-dependencies = ["msgpack>=1.0"]
+version = "0.29.0"
+description = "Compact archive format prototype with adaptive codecs, deduplication, streaming access, and recovery metadata"
+requires-python = ">=3.10"
+dependencies = ["zstandard>=0.22", "msgpack>=1.0"]
 
 [project.optional-dependencies]
 audio = ["numpy>=1.26", "soundfile>=0.12"]
@@ -21,3 +21,6 @@ package-dir = {"" = "src"}
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
