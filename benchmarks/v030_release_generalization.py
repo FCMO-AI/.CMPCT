@@ -10,7 +10,8 @@ Release-worthiness is intentionally stricter than a research oracle:
 - 0 exact-tree or accepted-v0.29 baseline drift rows;
 - 0 candidate byte regressions;
 - at least 3 workloads strictly improved;
-- at least 0.5% aggregate saving versus accepted v0.29, while retaining the older v0.28 0.5% absolute floor;
+- at least 0.5% aggregate saving versus accepted v0.29, while retaining the inherited 687,783-byte absolute
+  revision floor so a slightly smaller/repaired substrate cannot make a numeric revision easier to earn;
 - every selected representation <=8x per-member decoded-context amplification;
 - every selected artifact strong-verifies to the frozen source tree.
 
@@ -20,7 +21,7 @@ and external-competitor gates remain mandatory.
 
 Footnote: accepted v0.29 changed only two rows versus v0.28 on this corpus. We reconstruct the exact row floor
 from durable evidence: those two winners use their accepted v0.29 bytes and every other row retains its exact
-v0.28 artifact byte count.
+v0.28 artifact byte count. The absolute revision hurdle is an inherited policy input, not recomputed downward.
 """
 
 import argparse
@@ -36,9 +37,11 @@ from experiments import entropygraph_v030_release_candidate as RC
 
 EXPECTED_V029_TOTAL = 137_501_815
 LEGACY_V028_REVISION_FLOOR_BASE = 137_550_416
+INHERITED_ABSOLUTE_REVISION_FLOOR = 687_783
 MIN_RELEASE_SAVING_BYTES = max(
     math.ceil(EXPECTED_V029_TOTAL * 0.005),
     math.ceil(LEGACY_V028_REVISION_FLOOR_BASE * 0.005),
+    INHERITED_ABSOLUTE_REVISION_FLOOR,
 )
 MIN_IMPROVED_ROWS = 3
 MAX_MEMBER_READ_AMP = 8.0
@@ -258,6 +261,7 @@ def run(work_root: Path) -> dict:
             "expected_v029_aggregate_bytes": EXPECTED_V029_TOTAL,
             "minimum_release_saving_bytes": MIN_RELEASE_SAVING_BYTES,
             "minimum_release_saving_pct": 0.5,
+            "inherited_absolute_revision_floor_bytes": INHERITED_ABSOLUTE_REVISION_FLOOR,
             "minimum_improved_rows": MIN_IMPROVED_ROWS,
             "maximum_member_read_amplification": MAX_MEMBER_READ_AMP,
             "regression_tolerance_bytes": 0,
