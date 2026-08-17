@@ -7,6 +7,10 @@ artifact and Geometry from that same still-live tree and emits the smaller compl
 that looks spectacular in isolation therefore cannot create a workload regression or borrow a historical
 baseline generated from different producer bytes.
 
+Four neutral/hostile workloads use the accepted repair-v5 portable identity before either contender sees
+the tree.  This keeps the v0.30 research gate aligned with the exact 15-workload substrate used by the
+accepted v0.29 generalization evidence instead of silently reviving nondeterministic media-producer bytes.
+
 Footnote: this remains a research-seed gate.  It can prove a storage mechanism and open explicit creation-
 time debt; numeric promotion still requires rehabilitation and the unchanged direct-base release gate.
 """
@@ -18,6 +22,7 @@ import shutil
 import time
 
 from benchmarks import neutral_hostile_corpus_v1 as neutral
+from benchmarks import neutral_hostile_determinism_repair_v5 as repair
 from benchmarks import resemblance_hostile_corpus_v1 as resemblance
 from experiments import entropygraph_v030_geometry as geometry
 
@@ -62,7 +67,13 @@ def _run_workload(suite: str, root: Path, work_root: Path) -> dict:
 def run(work_root: Path) -> dict:
     shutil.rmtree(work_root, ignore_errors=True); work_root.mkdir(parents=True)
     neutral_root = work_root / "corpora" / "neutral"; resemblance_root = work_root / "corpora" / "resemblance"
-    print("building neutral/hostile v1", flush=True); neutral_manifest = neutral.build(neutral_root)
+
+    # Footnote: repair-v5 hooks must be installed before generation, and normalization must finish before
+    # either accepted v0.29 or Geometry is built.  Applying it to only one contender would manufacture a
+    # gain; applying it here changes only benchmark identity and keeps both archives on byte-identical input.
+    repair.install_generation_hooks(neutral)
+    print("building neutral/hostile v1 (portable repair-v5 identity)", flush=True); neutral_manifest = neutral.build(neutral_root)
+    repair.normalize_root(neutral_root)
     print("building resemblance-hostile v1", flush=True); resemblance_manifest = resemblance.build(resemblance_root)
     rows: list[dict] = []
     for root in sorted(path for path in neutral_root.iterdir() if path.is_dir()):
@@ -90,13 +101,14 @@ def run(work_root: Path) -> dict:
         "claim_boundary": "Breakthrough seed only; accepted v0.29 exact workload fallback; canonical r24 unchanged.",
         "benchmark_contract": {
             "direct_base": "accepted v0.29 release engine built from the same live workload tree",
+            "benchmark_identity": "accepted neutral-hostile repair-v5 plus historical resemblance-hostile v1",
             "archive_size_regression_tolerance_bytes": 0, "expected_workloads": EXPECTED_WORKLOADS,
             "minimum_aggregate_breakthrough_saving_bytes": MIN_AGGREGATE_SAVING,
             "minimum_single_workload_breakthrough_saving_bytes": MIN_SINGLE_WORKLOAD_SAVING,
             "correctness": "strong tree SHA-256 must equal the source tree on every emitted artifact",
             "timing": "diagnostic in seed stage; all confirmed debt must close before numeric promotion",
         },
-        "generators": {"neutral": {"schema": neutral_manifest.get("schema"), "seed": neutral_manifest.get("seed")},
+        "generators": {"neutral": {"schema": neutral_manifest.get("schema"), "seed": neutral_manifest.get("seed"), "identity": "repair-v5"},
                        "resemblance": {"schema": resemblance_manifest.get("schema"), "seed": resemblance_manifest.get("seed")}},
         "rows": rows, "totals": totals,
     }
