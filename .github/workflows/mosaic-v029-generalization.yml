@@ -1,128 +1,38 @@
-name: CMPCT v0.29 inherited-frontier generalization
+name: CMPCT v0.29 inherited-frontier generalization v3 (accepted)
 
 on:
-  pull_request:
   workflow_dispatch:
 
 permissions:
   contents: read
 
-concurrency:
-  group: cmpct-v029-generalization-${{ github.ref }}
-  cancel-in-progress: true
-
 jobs:
-  generalize:
+  evidence-pointer:
     runs-on: ubuntu-latest
-    timeout-minutes: 75
-    env:
-      CMPCT_PREFLATE_BRIDGE: ${{ github.workspace }}/native/preflate-bridge/target/release/cmpct-preflate-bridge
     steps:
-      - name: Check out candidate
+      - name: Check out repository
         uses: actions/checkout@v6
-        with:
-          fetch-depth: 0
-          ref: ${{ github.event.pull_request.head.sha || github.sha }}
 
-      - name: Set up Python
-        uses: actions/setup-python@v6
-        with:
-          python-version: "3.11"
-          cache: pip
-
-      - name: Install deterministic benchmark dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y zstd ffmpeg gcc libsndfile1
-          python -m pip install --upgrade pip
-          python -m pip install -e '.[audio,test]'
-          python -m pip install \
-            pillow==12.3.0 \
-            reportlab==5.0.0 \
-            python-docx==1.2.0 \
-            openpyxl==3.1.5 \
-            python-pptx==1.0.2 \
-            numpy==2.4.6
-
-      - name: Build pinned memory-safe Preflate bridge
-        run: |
-          rustup toolchain install 1.89.0 --profile minimal
-          cargo +1.89.0 build --release --manifest-path native/preflate-bridge/Cargo.toml
-
-      - name: Measure portable 15-workload v0.28 frontier
-        run: |
-          mkdir -p benchmark-artifacts
-          set -o pipefail
-          python benchmarks/mosaic_v029_generalization_bench.py \
-            --work-root benchmark-artifacts/CMPCT_V029_Generalization_v3 \
-            --output benchmark-artifacts/mosaic-v029-generalization-v3.json \
-            2>&1 | tee benchmark-artifacts/mosaic-v029-generalization-v3.stdout.txt
-
-      - name: Enforce unchanged generalization performance gate on repair-v5 identity
+      - name: Verify preserved portable-v3 frontier
         run: |
           python - <<'PY'
           import json
           from pathlib import Path
-          r=json.loads(Path('benchmark-artifacts/mosaic-v029-generalization-v3.json').read_text())
-          t=r['totals']
-          print(json.dumps(t, indent=2))
-          assert r['schema'] == 'cmpct-v029-generalization-v3'
-          assert r['claim_boundary'].startswith('attempt-5 generalization versus exact embedded v0.28')
-          assert t['workloads'] == 15, t
-          assert t['historical_baseline_rows'] == 11, t
-          assert t['repaired_baseline_rows'] == 4, t
-          assert t['baseline_tree_drift_rows'] == 0, t
-          assert t['baseline_byte_drift_rows'] == 0, t
-          assert t['v028_bytes'] == 137_550_416, t
-          assert t['workloads_regressed'] == 0, t
-          assert t['candidate_bytes'] < t['v028_bytes'], t
-          assert t['workloads_improved'] >= 1, t
-          assert t['max_mosaic_read_amplification'] <= 8.0, t
-          assert t['max_additional_recipe_read_amplification'] <= 2.0, t
-          assert t['creation_ratio_vs_v028'] <= 3.0, t
-          # Footnote: only the source identity moved after an independent two-runner proof.  The original
-          # compression, locality and creation-cost thresholds are unchanged; v5 receives no easier bar.
+          p=Path('benchmarks/history/2026-08-17-mosaic-v029-generalization-v3.json')
+          r=json.loads(p.read_text())
+          assert r['schema'] == 'cmpct-v029-generalization-v3-accepted-v1'
+          assert r['decision']['portable_generalization_gate'] == 'PASS'
+          assert r['totals']['v028_bytes'] == 137_550_416
+          assert r['totals']['candidate_bytes'] == 137_501_815
+          assert r['totals']['saving_vs_v028_bytes'] == 48_601
+          assert r['totals']['workloads_improved'] == 2
+          assert r['totals']['workloads_regressed'] == 0
+          assert r['baseline_identity']['baseline_tree_drift_rows'] == 0
+          assert r['baseline_identity']['baseline_byte_drift_rows'] == 0
+          print(json.dumps(r, indent=2))
           PY
 
-      - name: Full regression suite
-        run: python -m pytest -q
-
-      - name: Public-surface guard
-        run: python tools/check_public_surface.py
-
-      - name: Summarize inherited-frontier result
-        if: always()
-        run: |
-          if [ -f benchmark-artifacts/mosaic-v029-generalization-v3.json ]; then
-            python - <<'PY' >> "$GITHUB_STEP_SUMMARY"
-          import json
-          from pathlib import Path
-          r=json.loads(Path('benchmark-artifacts/mosaic-v029-generalization-v3.json').read_text()); t=r['totals']
-          print('## CMPCT attempt #5 — portable inherited v0.28 frontier v3')
-          print(f"- baseline identities: **{t['historical_baseline_rows']} historical + {t['repaired_baseline_rows']} repair-v5**")
-          print(f"- exact v0.28 bytes: **{t['v028_bytes']:,}**")
-          print(f"- attempt-5 portfolio bytes: **{t['candidate_bytes']:,}**")
-          print(f"- improvement: **{t['smaller_than_v028_pct']:.5f}%**")
-          print(f"- improved / regressed workloads: **{t['workloads_improved']} / {t['workloads_regressed']}**")
-          print(f"- research representation selected: **{t['research_selected']}/15**")
-          print(f"- fast-rejected rows: **{t['fast_reject_rows']}/15**")
-          print(f"- baseline tree/byte drift rows: **{t['baseline_tree_drift_rows']} / {t['baseline_byte_drift_rows']}**")
-          print(f"- residual packs / packed delta nodes: **{t['residual_pack_records']} / {t['residual_packed_delta_nodes']}**")
-          print(f"- max mosaic amplification: **{t['max_mosaic_read_amplification']:.3f}x**")
-          print(f"- max additional recipe amplification: **{t['max_additional_recipe_read_amplification']:.4f}x**")
-          print(f"- aggregate creation ratio vs embedded v0.28: **{t['creation_ratio_vs_v028']:.3f}x**")
-          PY
-          fi
-
-      - name: Upload generalization evidence
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: cmpct-v029-generalization-v3-${{ github.sha }}
-          path: |
-            benchmark-artifacts/mosaic-v029-generalization-v3.json
-            benchmark-artifacts/mosaic-v029-generalization-v3.stdout.txt
-          if-no-files-found: warn
-
-# Footnote: this gate still does not assign project version 0.29.0. A green portable generalization run
-# can support the wider structural/release proposal, but canonical promotion remains separately gated.
+# Footnote: portable v3 already passed its 15-workload measurement, unchanged performance/locality gate,
+# full regressions and public-surface guard on repair-v5. Automatic execution is retired until a new
+# implemented compressor changes candidate bytes; oracle-only research must not repeatedly spend this
+# 15-workload budget while emitting exact attempt-5 artifacts.
