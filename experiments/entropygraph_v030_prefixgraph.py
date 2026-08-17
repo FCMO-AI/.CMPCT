@@ -45,13 +45,21 @@ def H(data: bytes) -> bytes:
     return hashlib.sha256(data).digest()
 
 
-def treehash(root: Path) -> str:
+def _treehash_parts(rels: list[str], raws: list[bytes]) -> str:
     h = hashlib.sha256()
-    for path in sorted(p for p in root.rglob("*") if p.is_file()):
-        rel = path.relative_to(root).as_posix().encode("utf-8"); data = path.read_bytes()
-        h.update(len(rel).to_bytes(4, "little")); h.update(rel)
+    for rel, data in sorted(zip(rels, raws, strict=True), key=lambda item: item[0]):
+        rb = rel.encode("utf-8")
+        h.update(len(rb).to_bytes(4, "little")); h.update(rb)
         h.update(len(data).to_bytes(8, "little")); h.update(data)
     return h.hexdigest()
+
+
+def treehash(root: Path) -> str:
+    files = sorted(p for p in root.rglob("*") if p.is_file())
+    return _treehash_parts(
+        [path.relative_to(root).as_posix() for path in files],
+        [path.read_bytes() for path in files],
+    )
 
 
 def _compress(raw: bytes) -> bytes:
@@ -84,6 +92,7 @@ def _serialize_candidate(
     rels: list[str],
     raws: list[bytes],
     direct_payloads: list[bytes],
+    expected_tree: str,
     anchor: int | None,
 ) -> tuple[bytes, dict]:
     if len(raws) > MAX_FILES:
@@ -112,7 +121,7 @@ def _serialize_candidate(
     meta = {
         "v": 1,
         "engine": "PrefixGraph-depth1-v1",
-        "tree_sha256": None,
+        "tree_sha256": expected_tree,
         "files": rels,
         "records": records,
         "anchor": -1 if anchor is None else anchor,
@@ -145,16 +154,17 @@ def build(root: Path, out: Path) -> dict:
     raws = [p.read_bytes() for p in files]
     if any(len(raw) > MAX_FILE_BYTES for raw in raws):
         raise ValueError("PrefixGraph research seed file ceiling exceeded")
+    expected_tree = _treehash_parts(rels, raws)
 
     # Footnote: the direct Zstd-19 floor is anchor-independent.  Compute it exactly once and share those
     # immutable payload bytes across the anchor tournament; recomputing it for every anchor changes no
     # candidate bytes but multiplies encoder CPU by roughly the audition count.
     direct_payloads = [_compress(raw) for raw in raws]
     candidates: list[tuple[bytes, dict]] = []
-    all_direct, direct_stats = _serialize_candidate(rels, raws, direct_payloads, None)
+    all_direct, direct_stats = _serialize_candidate(rels, raws, direct_payloads, expected_tree, None)
     candidates.append((all_direct, direct_stats))
     for anchor in _anchor_indices(len(raws)):
-        candidates.append(_serialize_candidate(rels, raws, direct_payloads, anchor))
+        candidates.append(_serialize_candidate(rels, raws, direct_payloads, expected_tree, anchor))
 
     # Footnote: anchor nomination is allowed to be approximate for large families, but admission is not.
     # The complete duplicated-metadata archive length is the objective; payload-only estimates never win.
@@ -168,7 +178,7 @@ def build(root: Path, out: Path) -> dict:
         "anchor_auditions": len(candidates) - 1,
         "files": len(files),
         "logical_bytes": sum(map(len, raws)),
-        "tree_sha256": treehash(root),
+        "tree_sha256": expected_tree,
         "create_s": time.perf_counter() - started,
         "max_dependency_depth": 1 if stats["prefix_records"] else 0,
     })
@@ -198,6 +208,9 @@ def _read(path: Path) -> tuple[dict, list[bytes]]:
         raise RuntimeError("unsupported PrefixGraph metadata")
     if len(records) != len(rels) or not 1 <= len(records) <= MAX_FILES:
         raise RuntimeError("PrefixGraph record-count mismatch")
+    expected_tree = meta.get("tree_sha256")
+    if not isinstance(expected_tree, str) or len(expected_tree) != 64:
+        raise RuntimeError("PrefixGraph tree identity declaration")
 
     footer_off = len(data) - FOOTER.size
     tail, tail_mcs, tail_mus, tail_sha = FOOTER.unpack_from(data, footer_off)
@@ -265,12 +278,18 @@ def extract(archive: Path, dst: Path) -> None:
 
 
 def strong_verify(archive: Path) -> dict:
-    files, _ = _materialize(archive)
+    files, meta = _materialize(archive)
     with tempfile.TemporaryDirectory(prefix="cmpct-prefixgraph-verify-") as td:
         root = Path(td)
         for rel, raw in files.items():
             target = root.joinpath(*_safe_relpath(rel).parts); target.parent.mkdir(parents=True, exist_ok=True); target.write_bytes(raw)
-        return {"ok": True, "files": len(files), "tree_sha256": treehash(root), "engine": "PrefixGraph-depth1-v1"}
+        got = treehash(root)
+    # Footnote: per-file hashes prove local reconstruction, while the authenticated tree declaration binds
+    # filenames, ordering, sizes and contents into one source identity.  Both must agree before verification
+    # can report success; the outer benchmark remains an independent comparison to the live source tree.
+    if got != meta.get("tree_sha256"):
+        raise RuntimeError("PrefixGraph tree identity mismatch")
+    return {"ok": True, "files": len(files), "tree_sha256": got, "engine": "PrefixGraph-depth1-v1"}
 
 
 def _main() -> None:
