@@ -1,0 +1,112 @@
+name: CMPCT v0.30 Geometry IR focused complete gate
+
+on:
+  push:
+    branches:
+      - agent/lattice-v030-breakthrough
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-v030-gir-focused-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  gir-focused-complete:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    env:
+      PYTHONPATH: ${{ github.workspace }}
+      CMPCT_PREFLATE_BRIDGE: ${{ github.workspace }}/native/preflate-bridge/target/release/cmpct-preflate-bridge
+    steps:
+      - name: Check out frozen research head
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install deterministic corpus dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y zstd ffmpeg gcc libsndfile1
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[audio,test]'
+          python -m pip install pillow reportlab python-docx openpyxl python-pptx numpy
+
+      - name: Build pinned memory-safe Preflate bridge
+        run: |
+          rustup toolchain install 1.89.0 --profile minimal
+          cargo +1.89.0 build --release --manifest-path native/preflate-bridge/Cargo.toml
+
+      - name: Run GIR transform and archive adversarial tests
+        run: |
+          python -m py_compile \
+            experiments/entropygraph_v030_hierarchical_geometry.py \
+            experiments/entropygraph_v030_gir.py \
+            experiments/entropygraph_v030_gir_safe.py
+          pytest -q \
+            tests/test_v030_hierarchical_geometry.py \
+            tests/test_v030_geometry_safe.py \
+            tests/test_v030_gir.py
+
+      - name: Run three-workload complete-artifact gate
+        run: |
+          mkdir -p benchmark-artifacts
+          set -o pipefail
+          python benchmarks/gir_v030_focused_complete.py \
+            --work-root benchmark-artifacts/gir-focused-work \
+            --output benchmark-artifacts/gir-focused-complete.json \
+            2>&1 | tee benchmark-artifacts/gir-focused-complete.stdout.txt
+
+      - name: Enforce frozen GIR survival contract
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          data=json.loads(Path('benchmark-artifacts/gir-focused-complete.json').read_text())
+          rows=data['rows']; totals=data['totals']; contract=data['contract']
+          expected={
+              '05_logs_and_telemetry':'7356b866d7b99bfce2dd1fc6ef86d61d09c9d8a38a2ff3fec7d9a92e46020931',
+              '04_analytics_and_database':'6d0854fe058a95258588b89dca653ac8f00c61f815c6127b179e86cc58b1789d',
+              '09_ml_artifacts':'efc09910fea8ef67d24cd8957d3d576df3a7cc7f10f14585e3a3ae269017901d',
+          }
+          assert data['schema']=='cmpct-v030-gir-focused-complete-v1'
+          assert contract['minimum_each_workload_saving_bytes']==262144
+          assert contract['minimum_aggregate_saving_bytes']==2097152
+          assert contract['size_regression_tolerance_bytes']==0
+          assert len(rows)==3 and {row['name'] for row in rows}==set(expected)
+          assert all(row['tree_sha256']==expected[row['name']] for row in rows)
+          assert all(row['strong_verify']['v029']['ok'] and row['strong_verify']['gir']['ok'] for row in rows)
+          assert all(row['gir_smaller_than_v029'] and row['row_gate'] for row in rows)
+          assert totals['workloads_improved']==3 and totals['workloads_regressed']==0
+          assert totals['rows_passing_minimum']==3
+          assert totals['saving_vs_v029_bytes']>=2097152
+          assert totals['hierarchical_nodes']>0 and totals['prefix_plane_nodes']>0
+          assert totals['mechanism_gate'] is True
+          print(json.dumps(totals, indent=2, sort_keys=True))
+          PY
+
+      - name: Public-surface guard
+        run: python tools/check_public_surface.py
+
+      - name: Upload complete GIR evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cmpct-v030-gir-focused-${{ github.sha }}
+          path: |
+            benchmark-artifacts/gir-focused-complete.json
+            benchmark-artifacts/gir-focused-complete.stdout.txt
+          if-no-files-found: warn
+
+# Footnote: green means only that CMPNX14's *complete* framing survives three preregistered public workloads.
+# It does not authorize main, v0.30, canonical grammar changes, site claims, or skipping the 15-workload and
+# performance/native/portability rehabilitation gates.
