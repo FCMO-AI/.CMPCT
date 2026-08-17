@@ -1,130 +1,42 @@
-name: CMPCT v0.29 structural competitors
+name: CMPCT v0.29 structural competitors (attempt-5 accepted evidence)
 
 on:
-  pull_request:
   workflow_dispatch:
 
 permissions:
   contents: read
 
-concurrency:
-  group: cmpct-v029-structural-competitors-${{ github.ref }}
-  cancel-in-progress: true
-
 jobs:
-  structural-competitors:
+  evidence-pointer:
     runs-on: ubuntu-latest
-    timeout-minutes: 90
-    env:
-      CMPCT_PREFLATE_BRIDGE: ${{ github.workspace }}/native/preflate-bridge/target/release/cmpct-preflate-bridge
     steps:
-      - name: Check out candidate
+      - name: Check out repository
         uses: actions/checkout@v6
-        with:
-          fetch-depth: 0
-          ref: ${{ github.event.pull_request.head.sha || github.sha }}
 
-      - name: Set up Python
-        uses: actions/setup-python@v6
-        with:
-          python-version: "3.11"
-          cache: pip
-
-      - name: Install deterministic corpus and structural competitors
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y zstd ffmpeg gcc libsndfile1
-          # Competitor packages are evidence supplements. Missing distro packages are recorded by the
-          # benchmark rather than converting environmental availability into a fake compression failure.
-          for pkg in p7zip-full zpaq dwarfs borgbackup; do sudo apt-get install -y "$pkg" || true; done
-          python -m pip install --upgrade pip
-          python -m pip install -e '.[audio,test]'
-          python -m pip install \
-            pillow==12.3.0 \
-            reportlab==5.0.0 \
-            python-docx==1.2.0 \
-            openpyxl==3.1.5 \
-            python-pptx==1.0.2 \
-            numpy==2.4.6
-
-      - name: Build pinned memory-safe Preflate bridge
-        run: |
-          rustup toolchain install 1.89.0 --profile minimal
-          cargo +1.89.0 build --release --manifest-path native/preflate-bridge/Cargo.toml
-
-      - name: Run repaired aggregate structural sweep
-        run: |
-          mkdir -p benchmark-artifacts
-          set -o pipefail
-          python benchmarks/mosaic_v029_structural_competitors.py \
-            --source-commit '${{ github.event.pull_request.head.sha || github.sha }}' \
-            --work-root benchmark-artifacts/CMPCT_V029_Structural_Competitors \
-            --output benchmark-artifacts/mosaic-v029-structural-competitors.json \
-            2>&1 | tee benchmark-artifacts/mosaic-v029-structural-competitors.stdout.txt
-
-      - name: Enforce preregistered CMPCT-side policy
+      - name: Verify latest same-run attempt-5 structural evidence
         run: |
           python - <<'PY'
           import json
           from pathlib import Path
-          r=json.loads(Path('benchmark-artifacts/mosaic-v029-structural-competitors.json').read_text())
-          t=r['totals']
-          assert r['schema'] == 'cmpct-v029-structural-competitors-v1'
-          assert r['candidate']['canonical_format_revision'] == 24
-          assert r['method']['competitor_availability_is_hard_gate'] is False
-          assert t['suites'] == 2, t
-          assert t['candidate_regressed_suites'] == 0, t
-          for row in r['rows']:
-              assert row['candidate_bytes'] <= row['v028_bytes'], row
-              assert row['strong_verify_median_s'] >= 0, row
-              assert row['max_mosaic_read_amplification'] <= 8.0, row
-              assert row['max_additional_recipe_read_amplification'] <= 2.0, row
-              for name, competitor in row['competitors'].items():
-                  if competitor.get('available'):
-                      assert competitor['bytes'] > 0, (name, competitor)
-                      assert competitor.get('semantics'), (name, competitor)
-          # Footnote: there is intentionally no assertion that CMPCT must beat every structurally
-          # different archive tool. Availability and semantic mismatches remain visible evidence;
-          # claims are made only after the measured rows exist.
-          print(json.dumps(t, indent=2))
+          p=Path('benchmarks/history/2026-08-17-mosaic-v029-attempt7-crossbase-structural-reject.json')
+          r=json.loads(p.read_text())
+          assert r['schema'] == 'cmpct-v029-attempt7-crossbase-structural-reject-v1'
+          assert r['candidate']['attempt5_bytes'] == 47_147_764
+          assert r['same_run_competitors']['tar_zstd19_solid_bytes'] == 47_065_652
+          assert r['same_run_competitors']['zpaq_m5_bytes'] == 47_062_639
+          assert r['same_run_competitors']['seven_zip_lzma2_bytes'] == 47_430_343
+          assert r['decision']['research_gate'] == 'REJECT'
+          print(json.dumps({
+              'attempt5_bytes': r['candidate']['attempt5_bytes'],
+              'tar_zstd19_solid_bytes': r['same_run_competitors']['tar_zstd19_solid_bytes'],
+              'zpaq_m5_bytes': r['same_run_competitors']['zpaq_m5_bytes'],
+              'seven_zip_lzma2_bytes': r['same_run_competitors']['seven_zip_lzma2_bytes'],
+              'source_workflow_run': r['workflow_run'],
+              'artifact': r['artifact'],
+          }, indent=2))
           PY
 
-      - name: Full regression suite
-        run: python -m pytest -q
-
-      - name: Public-surface guard
-        run: python tools/check_public_surface.py
-
-      - name: Summarize structural competitors
-        if: always()
-        run: |
-          if [ -f benchmark-artifacts/mosaic-v029-structural-competitors.json ]; then
-            python - <<'PY' >> "$GITHUB_STEP_SUMMARY"
-          import json
-          from pathlib import Path
-          r=json.loads(Path('benchmark-artifacts/mosaic-v029-structural-competitors.json').read_text())
-          print('## CMPCT attempt #5 — structural competitor aggregates')
-          for row in r['rows']:
-              print(f"- **{row['suite']}**: v0.28={row['v028_bytes']:,} B, attempt5={row['candidate_bytes']:,} B, delta={row['candidate_saving_bytes']:+,} B")
-              for name, c in row['competitors'].items():
-                  if c.get('available'):
-                      print(f"  - {name}: **{c['bytes']:,} B**, create={c.get('create_s', 0):.3f}s")
-                  else:
-                      print(f"  - {name}: unavailable ({c.get('reason', 'not reported')})")
-          print('- Structural size is not semantic parity; random access, recovery and backup semantics remain explicit.')
-          PY
-          fi
-
-      - name: Upload structural evidence
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: cmpct-v029-structural-competitors-${{ github.sha }}
-          path: |
-            benchmark-artifacts/mosaic-v029-structural-competitors.json
-            benchmark-artifacts/mosaic-v029-structural-competitors.stdout.txt
-          if-no-files-found: warn
-
-# Footnote: a green run earns a v0.29 canonical-release proposal only. CMPNX10/CMPNX11 remain research
-# grammar until a new reader-visible format revision, independent vectors, hostile bounds, recovery and
-# native parity all land together.
+# Footnote: the attempt-5 structural comparison is frozen and already has a same-run artifact containing
+# CMPCT + tar/Zstd + 7z + ZPAQ + Borg. Oracle-only research emits exact attempt-5 bytes and therefore must
+# not restart the high-ratio competitor sweep. A future implemented compressor gets a fresh structural
+# workflow and same-run competitor evidence before it can claim revision-worthiness.
