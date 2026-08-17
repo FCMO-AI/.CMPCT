@@ -1,16 +1,15 @@
 from __future__ import annotations
 
-"""Two-pass proof and v0.28 byte capture for the neutral/hostile determinism repair.
+"""Cross-path determinism proof and repaired v0.28 byte capture.
 
-Only the three workloads that drifted during the first v0.29 inherited-frontier run are regenerated.
-Each workload is built twice from scratch at the *same absolute workspace path*, normalized by
-``neutral_hostile_determinism_repair_v1``, and compared at tree and individual-file level before the
-repaired v0.28 baseline is accepted.
+The three historically drifting neutral/hostile workloads are regenerated under two *different* parent
+directories.  The repair is accepted only when both normalized trees are byte-identical.  This is stronger
+than the earlier same-path proof and makes the baseline portable across CI work directories.
 
-Footnote: the earlier proof used ``round-1`` and ``round-2`` directories.  ReportLab hashes image source
-paths into XObject resource names, so changing the parent directory changed otherwise identical PDF page
-streams and created false nondeterminism.  Reusing one path while deleting the tree between rounds tests
-producer reproducibility without changing a legitimate path-dependent serialization input.
+Footnote: ReportLab filenames legitimately influenced internal XObject names in the historical builder.
+``neutral_hostile_determinism_repair_v1.install_generation_hooks`` changes only that resource-name input
+from filename identity to image-content identity.  Raw PDFs are retained before metadata normalization so
+the remaining producer differences can be inspected rather than hidden.
 """
 
 import argparse
@@ -40,6 +39,7 @@ def _load(path: Path, name: str):
 
 N = _load(NEUTRAL_PATH, "cmpct_neutral_v1_for_repair")
 R = _load(REPAIR_PATH, "cmpct_neutral_v1_repair")
+R.install_generation_hooks(N)
 V028 = _load(V028_PATH, "cmpct_v028_for_repaired_baseline")
 
 BUILDERS = {
@@ -88,18 +88,16 @@ def run(work_root: Path) -> dict:
     work_root.mkdir(parents=True)
     old = _old_rows()
     rows = []
-    scratch = work_root / "scratch"
     forensic_root = work_root / "forensics"
 
     for name, builder in BUILDERS.items():
         rounds = []
         for index in (1, 2):
-            # Reuse the identical path for both rounds.  ReportLab resource naming legitimately depends
-            # on image source paths; changing the path would be a different input, not nondeterminism.
-            shutil.rmtree(scratch, ignore_errors=True)
-            scratch.mkdir(parents=True, exist_ok=True)
-            builder(scratch)
-            workload = scratch / name
+            suite_root = work_root / f"round-{index}"
+            shutil.rmtree(suite_root, ignore_errors=True)
+            suite_root.mkdir(parents=True, exist_ok=True)
+            builder(suite_root)
+            workload = suite_root / name
 
             raw_pdf = None
             if name == "02_office_workspace":
@@ -118,6 +116,7 @@ def run(work_root: Path) -> dict:
             manifest = _file_manifest(workload)
             files, logical = _shape(manifest)
             rounds.append({
+                "path": workload,
                 "tree_sha256": N.tree_hash(workload),
                 "files": files,
                 "logical_bytes": logical,
@@ -136,7 +135,7 @@ def run(work_root: Path) -> dict:
         row = {
             "name": name,
             "deterministic": deterministic,
-            "regeneration_workspace": scratch.as_posix(),
+            "regeneration_workspaces": [rounds[0]["path"].parent.as_posix(), rounds[1]["path"].parent.as_posix()],
             "files": rounds[0]["files"],
             "logical_bytes": rounds[0]["logical_bytes"],
             "tree_sha256": rounds[0]["tree_sha256"],
@@ -150,14 +149,11 @@ def run(work_root: Path) -> dict:
         }
 
         if deterministic:
-            # The second regeneration currently occupies the same scratch path and is byte-identical to
-            # round one, so it is the correct tree on which to measure the repaired v0.28 baseline.
-            workload = scratch / name
             archive = work_root / "v028" / f"{name}.cmpct"
             archive.parent.mkdir(parents=True, exist_ok=True)
-            result = V028.build(workload, archive)
+            result = V028.build(rounds[0]["path"], archive)
             verify = V028.strong_verify(archive)
-            if not verify.get("ok") or verify.get("tree_sha256") != rounds[1]["tree_sha256"]:
+            if not verify.get("ok") or verify.get("tree_sha256") != rounds[0]["tree_sha256"]:
                 raise RuntimeError(f"repaired v0.28 verification failed for {name}")
             row.update({
                 "v028_candidate_bytes": int(result["archive_bytes"]),
@@ -179,13 +175,13 @@ def run(work_root: Path) -> dict:
         rows.append(row)
 
     return {
-        "schema": "cmpct-neutral-hostile-v1-determinism-repair-manifest-v2",
+        "schema": "cmpct-neutral-hostile-v1-determinism-repair-manifest-v3",
         "date": "2026-08-17",
-        "claim_boundary": "benchmark-substrate determinism repair only; historical v0.28 evidence remains immutable",
+        "claim_boundary": "portable benchmark-substrate determinism repair only; historical v0.28 evidence remains immutable",
         "normalizer": "benchmarks/neutral_hostile_determinism_repair_v1.py",
         "requirements": {
-            "two_independent_regenerations_match": True,
-            "same_absolute_regeneration_path": True,
+            "two_cross_path_regenerations_match": True,
+            "content_derived_reportlab_xobject_identity": True,
             "candidate_and_baseline_consume_same_repaired_tree": True,
             "historical_record_rewritten": False,
             "broad_pdf_fixture_replacement_rejected": True,
