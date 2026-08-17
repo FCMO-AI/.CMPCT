@@ -53,28 +53,18 @@ jobs:
           python -m pytest -q tests/test_resemblance.py
           python -m pytest -q
 
-      - name: Run per-workload causal frontier
+      - name: Run per-workload causal frontier and category baselines
         run: |
           mkdir -p benchmark-artifacts
           # Footnote: every neutral/hostile workload receives the direct inherited-v0.25 comparison.
-          # The strict policy adds a 1x independent-record floor, so no archive can buy ratio by
-          # exceeding the declared 8x weighted read-amplification budget when no solid pack is feasible.
+          # ZIP/Deflate-9 and solid tar+Zstd-19 are measured during that same workload lifetime so the
+          # public category matrix cannot accidentally compare CMPCT with a separately regenerated tree.
           set -o pipefail
           python benchmarks/entropygraph_v028_strict_bench.py \
             --suite both \
+            --category-baselines \
             --output benchmark-artifacts/entropygraph-v028.json \
             2>&1 | tee benchmark-artifacts/entropygraph-v028.stdout.txt
-
-      - name: Run per-workload category baselines
-        run: |
-          # Footnote: these measurements exist for the website's category frontier only. They archive
-          # each exact workload independently against ZIP/Deflate-9 and solid tar+Zstd-19, so they are
-          # intentionally not substituted for the separate whole-suite structural comparison below.
-          set -o pipefail
-          python benchmarks/entropygraph_v028_category_baselines.py \
-            --frontier benchmark-artifacts/entropygraph-v028.json \
-            --output benchmark-artifacts/entropygraph-v028-category-baselines.json \
-            2>&1 | tee benchmark-artifacts/entropygraph-v028-category-baselines.stdout.txt
 
       - name: Run aggregate structural competitor sweep
         run: |
@@ -93,6 +83,7 @@ jobs:
             python - <<'PY' >> "$GITHUB_STEP_SUMMARY"
           import json
           from pathlib import Path
+
           r=json.loads(Path('benchmark-artifacts/entropygraph-v028.json').read_text())
           t=r['totals']
           print('## EntropyGraph II — strict locality')
@@ -104,19 +95,21 @@ jobs:
           print(f"- resemblance selected: **{t['resemblance_selected']}**")
           print(f"- accepted delta nodes: **{t['delta_nodes']}**")
           print(f"- preflate wins: **{t['preflate_wins']}**")
-          PY
-          fi
-          if [ -f benchmark-artifacts/entropygraph-v028-category-baselines.json ]; then
-            python - <<'PY' >> "$GITHUB_STEP_SUMMARY"
-          import json
-          from pathlib import Path
-          r=json.loads(Path('benchmark-artifacts/entropygraph-v028-category-baselines.json').read_text())
-          t=r['totals']
-          print('## Public category baselines')
-          print(f"- Zstd-19 category wins: **{t['wins_vs_tar_zstd19']}/{t['workloads']}**")
-          print(f"- Zstd-19 category losses: **{t['losses_vs_tar_zstd19']}**")
-          print(f"- independent-workload aggregate lead vs Zstd-19: **{t['cmpct_smaller_than_tar_zstd19_pct']:.3f}%**")
-          print(f"- independent-workload aggregate lead vs ZIP/Deflate-9: **{t['cmpct_smaller_than_zip_deflate9_pct']:.3f}%**")
+
+          rows=[row for row in r.get('rows',[]) if row.get('category_baselines')]
+          if rows:
+              def total(key):
+                  return sum(int(row['category_baselines'][key]['bytes']) for row in rows)
+              candidate=sum(int(row['candidate_bytes']) for row in rows)
+              zstd=total('tar_zstd19_solid')
+              zip_bytes=total('zip_deflate9')
+              zstd_wins=sum(int(row['candidate_bytes']) < int(row['category_baselines']['tar_zstd19_solid']['bytes']) for row in rows)
+              zstd_losses=sum(int(row['candidate_bytes']) > int(row['category_baselines']['tar_zstd19_solid']['bytes']) for row in rows)
+              print('## Public category baselines')
+              print(f"- Zstd-19 category wins: **{zstd_wins}/{len(rows)}**")
+              print(f"- Zstd-19 category losses: **{zstd_losses}**")
+              print(f"- independent-workload aggregate lead vs Zstd-19: **{(zstd-candidate)/zstd*100:.3f}%**")
+              print(f"- independent-workload aggregate lead vs ZIP/Deflate-9: **{(zip_bytes-candidate)/zip_bytes*100:.3f}%**")
           PY
           fi
 
