@@ -1,33 +1,17 @@
-"""Safety/correctness facade for the bounded v0.30 Representation Superoptimizer extractor.
+"""Compatibility facade for the hardened v0.30 Representation Superoptimizer extractor.
 
-The initial research draft used ``row.__dict__`` in ``Problem.baseline``. ``Extraction`` is a slotted frozen
-dataclass and intentionally has no instance dictionary, so that convenience path was invalid.  The optimizer's
-`evaluate`, exact extraction and beam extraction were not affected, but benchmark/test callers should not carry
-a latent audit-surface failure.
+The initial research draft used ``row.__dict__`` in ``Problem.baseline`` even though ``Extraction`` is a slotted
+frozen dataclass.  That first repair lived here to preserve derivation history.  The owning module has now been
+production-hardened: baseline construction is native, declared targets cannot disappear through policy filtering,
+resource/cost declarations are canonical, and component-wise exact extraction can emit an explicit optimality
+certificate.
 
-Footnote: keeping this repair in a facade preserves the exact first draft for research history.  If the shared-
-cost mechanism survives its phase-ordering falsifiers, the correction should be folded into the owning module
-before any parent integration.
+Footnote: keeping this facade means existing benchmark/test imports do not fork merely because correctness moved
+to its rightful owner.  There is no runtime monkeypatch now; all aliases point directly at the hardened module.
 """
 from __future__ import annotations
 
 from experiments import representation_superoptimizer_v030 as RSO
-
-
-def _baseline(self: RSO.Problem) -> RSO.Extraction:
-    row = self.evaluate(frozenset())
-    return RSO.Extraction(
-        total_bytes=row.total_bytes,
-        facility_bytes=row.facility_bytes,
-        private_bytes=row.private_bytes,
-        opened=row.opened,
-        selected=row.selected,
-        method="baseline",
-        states_evaluated=1,
-    )
-
-
-RSO.Problem.baseline = _baseline
 
 Policy = RSO.Policy
 Facility = RSO.Facility
@@ -36,4 +20,5 @@ Extraction = RSO.Extraction
 Problem = RSO.Problem
 exact_extract = RSO.exact_extract
 beam_extract = RSO.beam_extract
+extract_with_certificate = RSO.extract_with_certificate
 explain = RSO.explain
