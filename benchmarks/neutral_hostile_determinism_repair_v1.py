@@ -22,6 +22,15 @@ from pathlib import Path
 import re
 import zipfile
 
+# ReportLab exposes an explicit reproducible-output switch. The repair module is loaded before the
+# affected builders run, so setting it here removes timestamp/random-ID variation at the source instead
+# of relying only on brittle post-hoc PDF surgery.
+try:
+    from reportlab import rl_config as _reportlab_config
+    _reportlab_config.invariant = 1
+except ImportError:  # pragma: no cover - benchmark dependency is present in the proving workflow.
+    _reportlab_config = None
+
 FIXED_ZIP_DATE = (2020, 1, 1, 0, 0, 0)
 FIXED_W3CDTF = b"2020-01-01T00:00:00Z"
 OFFICE_SUFFIXES = {".docx", ".xlsx", ".pptx"}
@@ -42,10 +51,7 @@ def _stable_xml(data: bytes) -> bytes:
 
 
 def _stable_pdf(path: Path) -> None:
-    """Normalize ReportLab's volatile creation/modification dates and document IDs in-place.
-
-    Replacement strings preserve matched byte lengths so the PDF cross-reference offsets remain valid.
-    """
+    """Normalize residual ReportLab date/ID fields in-place without shifting xref offsets."""
     data = path.read_bytes()
 
     def date_repl(match: re.Match[bytes]) -> bytes:
@@ -58,8 +64,8 @@ def _stable_pdf(path: Path) -> None:
         right = b"0" * len(match.group(2))
         raw = match.group(0)
         rebuilt = b"/ID [<" + left + b"><" + right + b">]"
-        # Footnote: ReportLab's ID syntax may contain different whitespace. Pad with spaces rather than
-        # changing file length; PDF whitespace is semantically insignificant outside streams.
+        # PDF whitespace is semantically insignificant outside streams; length preservation keeps the
+        # already-written cross-reference offsets valid.
         return (rebuilt + b" " * len(raw))[: len(raw)]
 
     data = _PDF_DATE_RE.sub(date_repl, data)
@@ -82,7 +88,7 @@ def _stable_zip(path: Path) -> None:
             stable.create_system = 3
             stable.external_attr = info.external_attr
             stable.internal_attr = info.internal_attr
-            stable.flag_bits = info.flag_bits & 0x800  # retain UTF-8 naming, discard transient flags
+            stable.flag_bits = info.flag_bits & 0x800
             stable.comment = b""
             stable.extra = b""
             if info.compress_type == zipfile.ZIP_DEFLATED:
@@ -106,8 +112,8 @@ def _repair_logs(workload: Path) -> None:
         raw_path = workload / gz_path.name[:-3]
         if not raw_path.exists():
             raise RuntimeError(f"missing deterministic gzip source for {gz_path.name}")
-        # Footnote: gzip.compress defaults to wall-clock mtime. mtime=0 makes the same log bytes emit
-        # the same gzip member header on every run without changing the workload's compression shape.
+        # gzip.compress defaults to wall-clock mtime. mtime=0 fixes the member header while preserving
+        # the workload's actual compressed-data shape.
         gz_path.write_bytes(gzip.compress(raw_path.read_bytes(), compresslevel=6, mtime=0))
 
 
