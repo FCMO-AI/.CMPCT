@@ -58,6 +58,8 @@ def _load_lib():
     ]
     lib.cmpct_stream_read.restype = ctypes.c_int32
     lib.cmpct_stream_close.argtypes = [ctypes.c_void_p]
+    lib.cmpct_extract_all_bounded.argtypes = [ctypes.c_void_p, ctypes.c_char_p, ctypes.c_uint64]
+    lib.cmpct_extract_all_bounded.restype = ctypes.c_int32
     lib.cmpct_extract_all.argtypes = [ctypes.c_void_p, ctypes.c_char_p]
     lib.cmpct_extract_all.restype = ctypes.c_int32
     return lib
@@ -104,6 +106,9 @@ def main() -> None:
         (root / "target.txt").write_text("hardlink-target\n")
         os.link(root / "target.txt", root / "hardlink.txt")
         os.symlink("../target.txt", root / "dir" / "symlink.txt")
+        # Build the complete source fixture before making the directory intentionally non-writable.
+        # The regression is about extraction ordering, not whether fixture setup can write into 0500.
+        os.chmod(root / "dir", 0o500)
 
         archive_path = Path(td) / "tree.cmpct"
         Builder(root).build(archive_path)
@@ -123,9 +128,14 @@ def main() -> None:
             small_index = paths.index("dir/small.txt")
             assert _stream(lib, handle, small_index, 3) == (root / "dir" / "small.txt").read_bytes()
 
+            limited = Path(td) / "limited"
+            assert lib.cmpct_extract_all_bounded(handle, str(limited).encode(), 1024) == -4
+            assert not limited.exists()
+
             destination = Path(td) / "extracted"
             assert lib.cmpct_extract_all(handle, str(destination).encode()) == 0
             assert (destination / "dir" / "small.txt").read_bytes() == (root / "dir" / "small.txt").read_bytes()
+            assert (os.stat(destination / "dir").st_mode & 0o7777) == 0o500
             assert (destination / "large.bin").read_bytes() == (root / "large.bin").read_bytes()
             assert (destination / "target.txt").read_bytes() == b"hardlink-target\n"
             assert (destination / "hardlink.txt").read_bytes() == b"hardlink-target\n"

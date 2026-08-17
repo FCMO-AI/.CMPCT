@@ -1,3 +1,6 @@
+#[path = "../src/msgpack_guard.rs"]
+mod msgpack_guard;
+
 #[path = "../src/recovery.rs"]
 mod recovery;
 
@@ -23,12 +26,24 @@ fn decode_base64(input: &str) -> Vec<u8> {
     for block in bytes.chunks_exact(4) {
         let a = value(block[0]).unwrap() as u32;
         let b = value(block[1]).unwrap() as u32;
-        let c = if block[2] == b'=' { 0 } else { value(block[2]).unwrap() as u32 };
-        let d = if block[3] == b'=' { 0 } else { value(block[3]).unwrap() as u32 };
+        let c = if block[2] == b'=' {
+            0
+        } else {
+            value(block[2]).unwrap() as u32
+        };
+        let d = if block[3] == b'=' {
+            0
+        } else {
+            value(block[3]).unwrap() as u32
+        };
         let packed = (a << 18) | (b << 12) | (c << 6) | d;
         out.push((packed >> 16) as u8);
-        if block[2] != b'=' { out.push((packed >> 8) as u8); }
-        if block[3] != b'=' { out.push(packed as u8); }
+        if block[2] != b'=' {
+            out.push((packed >> 8) as u8);
+        }
+        if block[3] != b'=' {
+            out.push(packed as u8);
+        }
     }
     out
 }
@@ -69,14 +84,10 @@ fn exercise(vector: &serde_json::Value, field: &str, label: &str) {
     let bytes = decode_base64(vector[field].as_str().unwrap());
     let path = temporary_archive(&bytes, label);
     let mut file = File::open(&path).unwrap();
-    let recovered = recovery::latest_committed_index(
-        &mut file,
-        bytes.len() as u64,
-        16 * 1024 * 1024,
-        128,
-    )
-    .unwrap()
-    .expect("at least the original committed checkpoint must survive");
+    let recovered =
+        recovery::latest_committed_index(&mut file, bytes.len() as u64, 16 * 1024 * 1024, 128)
+            .unwrap()
+            .expect("at least the original committed checkpoint must survive");
     fs::remove_file(path).unwrap();
 
     let expected_files: Vec<String> = vector["expected_files"]
@@ -87,39 +98,43 @@ fn exercise(vector: &serde_json::Value, field: &str, label: &str) {
         .collect();
     assert_eq!(recovered_names(&recovered.index), expected_files);
     assert_eq!(
-        map_field(&recovered.index, "blobs").as_array().unwrap().len(),
+        map_field(&recovered.index, "blobs")
+            .as_array()
+            .unwrap()
+            .len(),
         vector["expected_blob_count"].as_u64().unwrap() as usize
     );
-    assert_eq!(recovered.footer_pos, vector["latest_footer_pos"].as_u64().unwrap());
+    assert_eq!(
+        recovered.footer_pos,
+        vector["latest_footer_pos"].as_u64().unwrap()
+    );
     assert_eq!(recovered.delta_depth, 1);
     assert!(recovered.committed_data_end < recovered.footer_pos);
 }
 
 #[test]
 fn fixed_revision24_generation_chain_recovers_latest_valid_state() {
-    let fixture: serde_json::Value = serde_json::from_str(include_str!(
-        "../../../tests/conformance/v24-recovery.json"
-    ))
-    .unwrap();
+    let fixture: serde_json::Value =
+        serde_json::from_str(include_str!("../../../tests/conformance/v24-recovery.json")).unwrap();
     let vector = &fixture["vector"];
     exercise(vector, "valid_archive_base64", "valid");
 }
 
 #[test]
 fn corrupt_primary_index_does_not_hide_valid_tail_generation() {
-    let fixture: serde_json::Value = serde_json::from_str(include_str!(
-        "../../../tests/conformance/v24-recovery.json"
-    ))
-    .unwrap();
-    exercise(&fixture["vector"], "primary_corrupt_base64", "primary-corrupt");
+    let fixture: serde_json::Value =
+        serde_json::from_str(include_str!("../../../tests/conformance/v24-recovery.json")).unwrap();
+    exercise(
+        &fixture["vector"],
+        "primary_corrupt_base64",
+        "primary-corrupt",
+    );
 }
 
 #[test]
 fn torn_or_invalid_newest_append_falls_back_to_prior_commit() {
-    let fixture: serde_json::Value = serde_json::from_str(include_str!(
-        "../../../tests/conformance/v24-recovery.json"
-    ))
-    .unwrap();
+    let fixture: serde_json::Value =
+        serde_json::from_str(include_str!("../../../tests/conformance/v24-recovery.json")).unwrap();
     let vector = &fixture["vector"];
     exercise(vector, "torn_tail_base64", "torn-tail");
     exercise(

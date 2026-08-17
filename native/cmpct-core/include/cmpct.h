@@ -87,6 +87,11 @@ void cmpct_stream_close(CmpctStream *stream);
  * The native extractor preflights first, refuses lexical/path escape, verifies supported payload
  * integrity through the shared reader, and materializes hardlinks only after their final target.
  */
+int32_t cmpct_extract_all_bounded(
+    const CmpctArchive *archive,
+    const char *destination,
+    uint64_t max_materialized_bytes
+);
 int32_t cmpct_extract_all(const CmpctArchive *archive, const char *destination);
 
 #ifdef __cplusplus

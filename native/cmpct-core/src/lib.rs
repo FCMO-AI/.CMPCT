@@ -72,6 +72,7 @@ const MAX_GENERATIONS: usize = 4096;
 const MAX_MSGPACK_DEPTH: usize = 1024;
 const MAX_MSGPACK_NODES: u64 = 16_000_000;
 const STREAM_CHUNK_BYTES: usize = 8 * 1024 * 1024;
+const MAX_EXTRACT_OUTPUT_BYTES: u64 = 64 * 1024 * 1024 * 1024;
 const MAX_SYMLINK_TARGET_BYTES: u64 = 1024 * 1024;
 
 #[derive(Debug, Error)]
@@ -646,10 +647,9 @@ impl Archive {
         out: &mut [u8],
         file: &mut File,
     ) -> Result<(), CmpctError> {
-        let blob = self
-            .blobs
-            .get(blob_index)
-            .ok_or_else(|| CmpctError::Schema("virtual ZIP references missing Deflate blob".into()))?;
+        let blob = self.blobs.get(blob_index).ok_or_else(|| {
+            CmpctError::Schema("virtual ZIP references missing Deflate blob".into())
+        })?;
         if blob.codec != CODEC_DEFLATE || blob.csize != expected_stream_len {
             return Err(CmpctError::Schema(
                 "virtual-ZIP mode-0 stream length/codec disagrees with physical blob".into(),
@@ -777,7 +777,9 @@ impl Archive {
             let extent_end = extent
                 .offset
                 .checked_add(extent.logical_len)
-                .ok_or_else(|| CmpctError::Schema("sparse extent overflows logical offsets".into()))?;
+                .ok_or_else(|| {
+                    CmpctError::Schema("sparse extent overflows logical offsets".into())
+                })?;
             if extent_end <= start {
                 continue;
             }
@@ -809,20 +811,22 @@ impl Archive {
         out: &mut [u8],
         file: &mut File,
     ) -> Result<(), CmpctError> {
-        vzip_dispatch::execute_range(recipe, start, out, |source, blob_index, blob_offset, target| {
-            match source {
+        vzip_dispatch::execute_range(
+            recipe,
+            start,
+            out,
+            |source, blob_index, blob_offset, target| match source {
                 vzip::ProjectionSource::LogicalBlob => {
                     self.read_blob_range(blob_index, blob_offset, target, file)
                 }
-                vzip::ProjectionSource::PhysicalDeflate { expected_len } => {
-                    self.read_physical_deflate_range(
+                vzip::ProjectionSource::PhysicalDeflate { expected_len } => self
+                    .read_physical_deflate_range(
                         blob_index,
                         expected_len,
                         blob_offset,
                         target,
                         file,
-                    )
-                }
+                    ),
                 vzip::ProjectionSource::RegeneratedDeflate {
                     level,
                     expected_len,
@@ -834,18 +838,18 @@ impl Archive {
                     target,
                     file,
                 ),
-            }
-        })
+            },
+        )
         .map_err(|error| match error {
             vzip_dispatch::VirtualZipDispatchError::Plan(vzip::VirtualZipError::Range) => {
                 CmpctError::Range
             }
-            vzip_dispatch::VirtualZipDispatchError::Plan(vzip::VirtualZipError::UnsupportedPayload) => {
-                CmpctError::Unsupported
-            }
-            vzip_dispatch::VirtualZipDispatchError::Plan(vzip::VirtualZipError::Schema(message)) => {
-                CmpctError::Schema(message)
-            }
+            vzip_dispatch::VirtualZipDispatchError::Plan(
+                vzip::VirtualZipError::UnsupportedPayload,
+            ) => CmpctError::Unsupported,
+            vzip_dispatch::VirtualZipDispatchError::Plan(vzip::VirtualZipError::Schema(
+                message,
+            )) => CmpctError::Schema(message),
             vzip_dispatch::VirtualZipDispatchError::Source(error) => error,
             vzip_dispatch::VirtualZipDispatchError::InvalidProjection => CmpctError::Schema(
                 "virtual-ZIP projection did not cover the requested range exactly".into(),
@@ -889,7 +893,12 @@ impl Archive {
         self.execute_virtual_zip_projection(recipe, start, out, file)
     }
 
-    fn blob_work(&self, blob_index: usize, requested: u64, full_auth: bool) -> Result<u64, CmpctError> {
+    fn blob_work(
+        &self,
+        blob_index: usize,
+        requested: u64,
+        full_auth: bool,
+    ) -> Result<u64, CmpctError> {
         let blob = self
             .blobs
             .get(blob_index)
@@ -902,7 +911,12 @@ impl Archive {
             .ok_or(CmpctError::MemberLimit)
     }
 
-    fn chunked_work(&self, chunks: &[ChunkRef], start: u64, length: u64) -> Result<u64, CmpctError> {
+    fn chunked_work(
+        &self,
+        chunks: &[ChunkRef],
+        start: u64,
+        length: u64,
+    ) -> Result<u64, CmpctError> {
         let request_end = start.checked_add(length).ok_or(CmpctError::Range)?;
         let mut logical_pos = 0u64;
         let mut work = 0u64;
@@ -929,7 +943,9 @@ impl Archive {
             Storage::Unsupported => Err(CmpctError::Unsupported),
             Storage::Direct(index) => self.blob_work(*index, length, false),
             Storage::Pack { index, .. } => self.blob_work(*index, length, true),
-            Storage::Fixed(chunks) | Storage::Cdc(chunks) => self.chunked_work(chunks, start, length),
+            Storage::Fixed(chunks) | Storage::Cdc(chunks) => {
+                self.chunked_work(chunks, start, length)
+            }
             Storage::Sparse(extents) => {
                 let request_end = start.checked_add(length).ok_or(CmpctError::Range)?;
                 let mut work = 0u64;
@@ -957,11 +973,13 @@ impl Archive {
                 Ok(work)
             }
             Storage::VirtualZip(recipe) => {
-                let segments = recipe.plan_range(start, length).map_err(|error| match error {
-                    vzip::VirtualZipError::Range => CmpctError::Range,
-                    vzip::VirtualZipError::UnsupportedPayload => CmpctError::Unsupported,
-                    vzip::VirtualZipError::Schema(message) => CmpctError::Schema(message),
-                })?;
+                let segments = recipe
+                    .plan_range(start, length)
+                    .map_err(|error| match error {
+                        vzip::VirtualZipError::Range => CmpctError::Range,
+                        vzip::VirtualZipError::UnsupportedPayload => CmpctError::Unsupported,
+                        vzip::VirtualZipError::Schema(message) => CmpctError::Schema(message),
+                    })?;
                 let partial_exact_stream = recipe.payloads.iter().any(|payload| {
                     matches!(
                         payload.source,
@@ -1015,11 +1033,8 @@ impl Archive {
 
     fn resolve_entry_index(&self, mut index: usize) -> Result<usize, CmpctError> {
         let mut seen = HashSet::new();
-        while let Storage::Hardlink(target) = &self
-            .entries
-            .get(index)
-            .ok_or(CmpctError::Range)?
-            .storage
+        while let Storage::Hardlink(target) =
+            &self.entries.get(index).ok_or(CmpctError::Range)?.storage
         {
             if !seen.insert(index) {
                 return Err(CmpctError::Schema("hardlink cycle".into()));
@@ -1189,7 +1204,11 @@ impl Archive {
 
     /// Copy one logical entry sequentially without requiring the caller to allocate its whole size.
     /// A complete stream is SHA-checked at EOF whenever revision 24 provides a member identity.
-    pub fn copy_entry_to<W: Write>(&self, entry_index: usize, writer: &mut W) -> Result<u64, CmpctError> {
+    pub fn copy_entry_to<W: Write>(
+        &self,
+        entry_index: usize,
+        writer: &mut W,
+    ) -> Result<u64, CmpctError> {
         let entry = self.entries.get(entry_index).ok_or(CmpctError::Range)?;
         if entry.kind != KIND_FILE && entry.kind != KIND_SYMLINK && entry.kind != KIND_HARDLINK {
             return Err(CmpctError::Unsupported);
@@ -1214,9 +1233,30 @@ impl Archive {
         Ok(offset)
     }
 
-    /// Safely extract the complete logical tree into an absent or empty destination directory.
-    pub fn extract_all(&self, destination: &Path) -> Result<(), CmpctError> {
+    fn extraction_materialized_bytes(&self) -> Result<u64, CmpctError> {
+        self.entries.iter().try_fold(0u64, |total, entry| {
+            // Hardlinks reuse already-materialized file bytes and directories carry no payload.
+            // Symlink targets still count because archive-controlled bytes are materialized on disk.
+            let bytes = match entry.kind {
+                KIND_FILE | KIND_SYMLINK => entry.size,
+                KIND_DIR | KIND_HARDLINK => 0,
+                _ => return Err(CmpctError::Unsupported),
+            };
+            total.checked_add(bytes).ok_or(CmpctError::MemberLimit)
+        })
+    }
+
+    /// Extract the complete tree with an explicit archive-wide materialization budget.
+    pub fn extract_all_bounded(
+        &self,
+        destination: &Path,
+        max_materialized_bytes: u64,
+    ) -> Result<(), CmpctError> {
         self.preflight()?;
+        if self.extraction_materialized_bytes()? > max_materialized_bytes {
+            return Err(CmpctError::MemberLimit);
+        }
+
         if destination.exists() {
             if !destination.is_dir() {
                 return Err(CmpctError::Extraction(
@@ -1232,13 +1272,12 @@ impl Archive {
             fs::create_dir_all(destination)?;
         }
 
+        // Build directory topology before restoring archived permissions. Restrictive modes such as
+        // 0500 or 0000 must not make a parent unwritable before its descendants are populated.
         for entry in &self.entries {
-            if entry.kind != KIND_DIR {
-                continue;
+            if entry.kind == KIND_DIR {
+                fs::create_dir_all(destination.join(&entry.path))?;
             }
-            let output = destination.join(&entry.path);
-            fs::create_dir_all(&output)?;
-            apply_mode(&output, entry.mode)?;
         }
 
         for (index, entry) in self.entries.iter().enumerate() {
@@ -1282,8 +1321,6 @@ impl Archive {
             }
         }
 
-        // Hardlinks are created after ordinary files/symlinks so lexical ordering never makes a link
-        // depend on a target that has not been materialized yet. Chains resolve to the final file.
         for (index, entry) in self.entries.iter().enumerate() {
             if entry.kind != KIND_HARDLINK {
                 continue;
@@ -1302,7 +1339,24 @@ impl Archive {
             }
             fs::hard_link(source, output)?;
         }
+
+        // Restore restrictive directory modes only after every descendant exists, deepest first.
+        let mut directories: Vec<&Entry> = self
+            .entries
+            .iter()
+            .filter(|entry| entry.kind == KIND_DIR)
+            .collect();
+        directories.sort_by_key(|entry| std::cmp::Reverse(entry.path.matches('/').count()));
+        for entry in directories {
+            apply_mode(&destination.join(&entry.path), entry.mode)?;
+        }
         Ok(())
+    }
+
+    /// Extract using the native handler's conservative default ceiling. Callers that deliberately
+    /// materialize larger trees can opt into a larger explicit budget through the bounded ABI.
+    pub fn extract_all(&self, destination: &Path) -> Result<(), CmpctError> {
+        self.extract_all_bounded(destination, MAX_EXTRACT_OUTPUT_BYTES)
     }
 }
 
@@ -1424,9 +1478,9 @@ fn validate_recipes(index: &Value, blobs: &[Blob]) -> Result<(), CmpctError> {
     }
     let blob_sizes: Vec<u64> = blobs.iter().map(|blob| blob.usize).collect();
     for (recipe_index, recipe) in recipes.iter().enumerate() {
-        let row = recipe.as_array().ok_or_else(|| {
-            CmpctError::Schema(format!("recipe {recipe_index} is not an array"))
-        })?;
+        let row = recipe
+            .as_array()
+            .ok_or_else(|| CmpctError::Schema(format!("recipe {recipe_index} is not an array")))?;
         let logical_size = row.get(4).and_then(Value::as_u64).ok_or_else(|| {
             CmpctError::Schema(format!("recipe {recipe_index} has invalid logical size"))
         })?;
@@ -1435,9 +1489,9 @@ fn validate_recipes(index: &Value, blobs: &[Blob]) -> Result<(), CmpctError> {
             vzip::VirtualZipError::Schema(message) => {
                 CmpctError::Schema(format!("recipe {recipe_index}: {message}"))
             }
-            vzip::VirtualZipError::Range => {
-                CmpctError::Schema(format!("recipe {recipe_index} has invalid range accounting"))
-            }
+            vzip::VirtualZipError::Range => CmpctError::Schema(format!(
+                "recipe {recipe_index} has invalid range accounting"
+            )),
         })?;
     }
     Ok(())
@@ -1549,9 +1603,9 @@ fn parse_hardlink_storage(value: &Value, row_index: usize) -> Result<Storage, Cm
             "hardlink row {row_index} storage must contain one target path"
         )));
     }
-    let target = row[0]
-        .as_str()
-        .ok_or_else(|| CmpctError::Schema(format!("hardlink row {row_index} target is not UTF-8")))?;
+    let target = row[0].as_str().ok_or_else(|| {
+        CmpctError::Schema(format!("hardlink row {row_index} target is not UTF-8"))
+    })?;
     Ok(Storage::Hardlink(canonical_path(target)?))
 }
 
@@ -1594,7 +1648,9 @@ fn parse_storage(
                 )));
             }
             let ids = storage[1].as_array().ok_or_else(|| {
-                CmpctError::Schema(format!("file row {row_index} fixed chunks are not an array"))
+                CmpctError::Schema(format!(
+                    "file row {row_index} fixed chunks are not an array"
+                ))
             })?;
             if ids.len() > MAX_BLOBS {
                 return Err(CmpctError::Schema(format!(
@@ -1630,7 +1686,9 @@ fn parse_storage(
                 )));
             }
             let rows = storage[1].as_array().ok_or_else(|| {
-                CmpctError::Schema(format!("file row {row_index} sparse extents are not an array"))
+                CmpctError::Schema(format!(
+                    "file row {row_index} sparse extents are not an array"
+                ))
             })?;
             if rows.len() > MAX_BLOBS {
                 return Err(CmpctError::Schema(format!(
@@ -1656,11 +1714,15 @@ fn parse_storage(
                         "file row {row_index} sparse extent {extent_index} has invalid offset"
                     ))
                 })?;
-                let logical_len = extent[1].as_u64().filter(|value| *value > 0).ok_or_else(|| {
-                    CmpctError::Schema(format!(
+                let logical_len =
+                    extent[1]
+                        .as_u64()
+                        .filter(|value| *value > 0)
+                        .ok_or_else(|| {
+                            CmpctError::Schema(format!(
                         "file row {row_index} sparse extent {extent_index} has invalid length"
                     ))
-                })?;
+                        })?;
                 let extent_end = offset.checked_add(logical_len).ok_or_else(|| {
                     CmpctError::Schema(format!(
                         "file row {row_index} sparse extent {extent_index} overflows"
@@ -1812,7 +1874,7 @@ fn parse_entries(index: &Value, blobs: &[Blob]) -> Result<Vec<Entry>, CmpctError
         .ok_or_else(|| CmpctError::Schema("index revision is not an unsigned integer".into()))?;
     if index_revision != VERSION as u64 {
         return Err(CmpctError::Revision(
-            index_revision.min(u16::MAX as u64) as u16,
+            index_revision.min(u16::MAX as u64) as u16
         ));
     }
     let files = map_field(index, "files")?
@@ -1877,8 +1939,10 @@ fn parse_entries(index: &Value, blobs: &[Blob]) -> Result<Vec<Entry>, CmpctError
                 "symlink row {row_index} must use direct blob storage"
             )));
         }
-        if matches!(storage, Storage::Fixed(_) | Storage::Sparse(_) | Storage::Cdc(_))
-            && logical_hash.is_none()
+        if matches!(
+            storage,
+            Storage::Fixed(_) | Storage::Sparse(_) | Storage::Cdc(_)
+        ) && logical_hash.is_none()
         {
             return Err(CmpctError::Schema(format!(
                 "file row {row_index} mapped member is missing SHA-256"
@@ -2019,10 +2083,14 @@ fn validate_fsmeta(index: &Value, file_count: usize) -> Result<(), CmpctError> {
                 .as_u64()
                 .and_then(|value| usize::try_from(value).ok())
                 .filter(|index| *index < file_count)
-                .ok_or_else(|| CmpctError::Schema("owner override references missing file".into()))?;
+                .ok_or_else(|| {
+                    CmpctError::Schema("owner override references missing file".into())
+                })?;
             let _ = file_index;
             if row[1].as_u64().is_none() || row[2].as_u64().is_none() {
-                return Err(CmpctError::Schema("owner override uid/gid is invalid".into()));
+                return Err(CmpctError::Schema(
+                    "owner override uid/gid is invalid".into(),
+                ));
             }
         }
     }
@@ -2050,7 +2118,9 @@ fn validate_fsmeta(index: &Value, file_count: usize) -> Result<(), CmpctError> {
                     .filter(|pair| pair.len() == 2)
                     .ok_or_else(|| CmpctError::Schema("xattr pair has invalid shape".into()))?;
                 if pair[0].as_str().is_none() || !matches!(&pair[1], Value::Binary(_)) {
-                    return Err(CmpctError::Schema("xattr name/value has invalid type".into()));
+                    return Err(CmpctError::Schema(
+                        "xattr name/value has invalid type".into(),
+                    ));
                 }
             }
         }
@@ -2427,7 +2497,36 @@ pub unsafe extern "C" fn cmpct_stream_close(stream: *mut CmpctStream) {
     }
 }
 
+/// Extract with an explicit archive-wide payload-materialization ceiling.
+///
+/// # Safety
+/// `archive` must be live and `destination` must point to a valid NUL-terminated UTF-8 string.
+#[no_mangle]
+pub unsafe extern "C" fn cmpct_extract_all_bounded(
+    archive: *const Archive,
+    destination: *const c_char,
+    max_materialized_bytes: u64,
+) -> c_int {
+    let Some(archive) = archive.as_ref() else {
+        return CmpctStatus::Null as c_int;
+    };
+    if destination.is_null() {
+        return CmpctStatus::Null as c_int;
+    }
+    let destination = match CStr::from_ptr(destination).to_str() {
+        Ok(destination) => destination,
+        Err(_) => return CmpctStatus::Utf8 as c_int,
+    };
+    match archive.extract_all_bounded(Path::new(destination), max_materialized_bytes) {
+        Ok(()) => CmpctStatus::Ok as c_int,
+        Err(error) => error_status(&error) as c_int,
+    }
+}
+
 /// Extract the complete archive into an absent or empty UTF-8 destination directory.
+///
+/// # Safety
+/// `archive` must be live and `destination` must point to a valid NUL-terminated UTF-8 string.
 #[no_mangle]
 pub unsafe extern "C" fn cmpct_extract_all(
     archive: *const Archive,

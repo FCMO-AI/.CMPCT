@@ -5,8 +5,7 @@
 //! is ignored by scanning backward for the newest footer whose complete parent chain validates. This
 //! module mirrors the Python reference semantics without depending on the primary index being readable.
 
-#[path = "msgpack_guard.rs"]
-mod msgpack_guard;
+use crate::msgpack_guard;
 
 use rmpv::Value;
 use sha2::{Digest, Sha256};
@@ -69,10 +68,18 @@ fn map_value<'a>(value: &'a Value, key: &str) -> Option<&'a Value> {
 }
 
 fn map_value_mut<'a>(value: &'a mut Value, key: &str) -> Option<&'a mut Value> {
-    value
-        .as_map_mut()?
-        .iter_mut()
+    let Value::Map(map) = value else {
+        return None;
+    };
+    map.iter_mut()
         .find_map(|(name, value)| (name.as_str() == Some(key)).then_some(value))
+}
+
+fn array_mut(value: &mut Value) -> Option<&mut Vec<Value>> {
+    let Value::Array(values) = value else {
+        return None;
+    };
+    Some(values)
 }
 
 fn guard_messagepack(payload: &[u8], max_payload_bytes: u64) -> Result<(), RecoveryError> {
@@ -136,8 +143,7 @@ fn decode_payload(
         return Err(RecoveryError::Malformed);
     }
     let payload_start = footer_pos - compressed_len;
-    let compressed_len_usize =
-        usize::try_from(compressed_len).map_err(|_| RecoveryError::Limit)?;
+    let compressed_len_usize = usize::try_from(compressed_len).map_err(|_| RecoveryError::Limit)?;
     file.seek(SeekFrom::Start(payload_start))?;
     let mut encoded = vec![0u8; compressed_len_usize];
     file.read_exact(&mut encoded)?;
@@ -166,8 +172,7 @@ fn decode_payload(
     }
     guard_messagepack(&payload_bytes, max_payload_bytes)?;
     let mut cursor = Cursor::new(payload_bytes.as_slice());
-    let payload =
-        rmpv::decode::read_value(&mut cursor).map_err(|_| RecoveryError::Malformed)?;
+    let payload = rmpv::decode::read_value(&mut cursor).map_err(|_| RecoveryError::Malformed)?;
     if cursor.position() != payload_bytes.len() as u64 {
         return Err(RecoveryError::Malformed);
     }
@@ -188,7 +193,7 @@ fn apply_delta(index: &mut Value, delta: &Value) -> Result<(), RecoveryError> {
         .and_then(Value::as_array)
         .ok_or(RecoveryError::Malformed)?;
     let blobs = map_value_mut(index, "blobs")
-        .and_then(Value::as_array_mut)
+        .and_then(array_mut)
         .ok_or(RecoveryError::Malformed)?;
     if blobs.len().saturating_add(new_blobs.len()) > MAX_BLOBS {
         return Err(RecoveryError::Limit);
@@ -199,7 +204,7 @@ fn apply_delta(index: &mut Value, delta: &Value) -> Result<(), RecoveryError> {
         .and_then(Value::as_array)
         .ok_or(RecoveryError::Malformed)?;
     let files = map_value_mut(index, "files")
-        .and_then(Value::as_array_mut)
+        .and_then(array_mut)
         .ok_or(RecoveryError::Malformed)?;
 
     for operation in operations {
@@ -249,7 +254,7 @@ fn apply_delta(index: &mut Value, delta: &Value) -> Result<(), RecoveryError> {
                     .iter_mut()
                     .find(|candidate| file_row_path(candidate) == Some(old))
                 {
-                    let candidate = candidate.as_array_mut().ok_or(RecoveryError::Malformed)?;
+                    let candidate = array_mut(candidate).ok_or(RecoveryError::Malformed)?;
                     if candidate.is_empty() {
                         return Err(RecoveryError::Malformed);
                     }
@@ -321,7 +326,8 @@ pub fn latest_committed_index(
     let mut carry = Vec::new();
 
     while pos > 0 {
-        let read_len = usize::try_from(pos.min(SCAN_BLOCK as u64)).map_err(|_| RecoveryError::Limit)?;
+        let read_len =
+            usize::try_from(pos.min(SCAN_BLOCK as u64)).map_err(|_| RecoveryError::Limit)?;
         pos -= read_len as u64;
         file.seek(SeekFrom::Start(pos))?;
         let mut chunk = vec![0u8; read_len];
@@ -334,9 +340,7 @@ pub fn latest_committed_index(
                 .windows(FOOTER_MAGIC.len())
                 .rposition(|window| window == FOOTER_MAGIC);
             let Some(index) = found else { break };
-            let absolute = pos
-                .checked_add(index as u64)
-                .ok_or(RecoveryError::Limit)?;
+            let absolute = pos.checked_add(index as u64).ok_or(RecoveryError::Limit)?;
             if absolute
                 .checked_add(FOOTER_SIZE)
                 .is_some_and(|end| end <= file_len)
