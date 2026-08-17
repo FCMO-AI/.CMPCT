@@ -17,13 +17,20 @@ class Candidate:
     raw:bytes; hints:set; deflates:dict
 
 class Builder:
-    def __init__(self,root:Path, deflate_reuse_min:int|None=None):
+    def __init__(self,root:Path, deflate_reuse_min:int|None=None, *, workers:int|None=None, reproducible:bool=False, reproducible_epoch_ns:int|None=None):
         self.root=Path(root);self.cands:{}={};self.files=[];self.recipes=[];self.dictionary=b'';self.dict_hash=None;self.canonical_deflate={};self.secondary_stream_hashes=set();self.inode_first={};self.meta_by_rel={}
         # Exact Deflate streams below this size are regenerated from raw data + a one-byte zlib level.
         # 0 reproduces v0.17's maximum-speed policy; a huge value is the compact policy.
         self.deflate_reuse_min=int(os.environ.get('CMPCT_DEFLATE_REUSE_MIN','65536')) if deflate_reuse_min is None else int(deflate_reuse_min)
         self.micro_pack_target=int(os.environ.get('CMPCT_MICRO_PACK_TARGET',str(256*1024)))
         self.micro_pack_max_file=int(os.environ.get('CMPCT_MICRO_PACK_MAX_FILE',str(32*1024)))
+        default_workers=max(1,min(8,os.cpu_count() or 1))
+        self.encode_workers=max(1,int(os.environ.get('CMPCT_ENCODE_WORKERS',str(default_workers)))) if workers is None else max(1,int(workers))
+        self.reproducible=bool(reproducible)
+        if reproducible_epoch_ns is None:
+            source_epoch=int(os.environ.get('SOURCE_DATE_EPOCH','0') or '0')
+            reproducible_epoch_ns=max(0,source_epoch)*1_000_000_000
+        self.reproducible_epoch_ns=max(0,int(reproducible_epoch_ns))
     def add_content(self,raw:bytes,hint='',deflate_stream:bytes|None=None):
         h=sha(raw);c=self.cands.get(h)
         if c is None:
@@ -42,7 +49,15 @@ class Builder:
         attributes are only emitted for paths that actually have them. This keeps normal archives tiny
         while preserving Linux/macOS metadata that ZIP commonly drops. Unsupported filesystems simply
         produce an empty metadata record; no archive operation depends on xattr availability.
+
+        Footnote: reproducible mode intentionally normalizes host-owned metadata to a portable zero
+        owner/no-xattr profile. That is an explicit build-artifact mode, not the fidelity-preserving
+        default. Without this distinction, two machines could encode identical source bytes differently
+        solely because their uid/gid or CI filesystem xattrs differ.
         """
+        if self.reproducible:
+            self.meta_by_rel[rel]=(0,0,{})
+            return
         xa={}
         if hasattr(os,'listxattr'):
             try:
@@ -119,6 +134,10 @@ class Builder:
                 else:
                     rid=len(self.recipes);self.recipes.append(recipe);storage=[S_VZIP,rid]
                 rawsha=sha(p.read_bytes());self.files.append([rel,K_FILE,mode,st.st_mtime_ns,st.st_size,rawsha,storage])
+        if self.reproducible:
+            # Footnote: normalize after every storage path has been discovered so directories, links,
+            # sparse files and deferred virtual containers all receive exactly the same epoch policy.
+            for row in self.files:row[3]=self.reproducible_epoch_ns
         self.files.sort(key=lambda x:x[0])
 
     def _build_micro_packs(self):
@@ -242,10 +261,19 @@ class Builder:
         return CODEC_RAW,raw,b''
     def build(self,out:Path):
         self.scan();self._build_micro_packs();self._prepare_deflate_reuse();self._train_dictionary()
-        # Materialize candidates in deterministic hash order. This makes identical logical trees reproducible.
+        # Candidate compression is parallel but materialization is not. ``Executor.map`` yields results
+        # in the exact sorted-hash input order, so worker scheduling cannot perturb blob ids, offsets or
+        # final bytes. A one-worker build is therefore a byte-for-byte oracle for the multithreaded path.
+        ordered=[(h,self.cands[h]) for h in sorted(self.cands)]
+        def encode(item):
+            h,c=item;codec,comp,meta=self._encode_candidate(h,c);return h,c,codec,comp,meta
+        if self.encode_workers>1 and len(ordered)>1:
+            with concurrent.futures.ThreadPoolExecutor(max_workers=self.encode_workers,thread_name_prefix='cmpct-encode') as pool:
+                encoded=list(pool.map(encode,ordered))
+        else:encoded=[encode(item) for item in ordered]
         blobs=[];records=[];offset=0;href={}
-        for h in sorted(self.cands):
-            c=self.cands[h];codec,comp,meta=self._encode_candidate(h,c);raw=c.raw
+        for h,c,codec,comp,meta in encoded:
+            raw=c.raw
             rec=BHDR.pack(BMAGIC,codec,0,0,len(raw),len(comp),len(meta),binascii.crc32(raw)&0xffffffff,h)+meta+comp
             idx=len(blobs);href[h]=idx;blobs.append([offset,len(raw),len(comp),codec,len(meta)]);records.append(rec);offset+=len(rec)
         def mapref(x):return href[bytes(x)]
@@ -293,4 +321,4 @@ class Builder:
         header=HDR.pack(MAGIC,VERSION,0,len(ic),len(ib),len(data),ih)
         footer=FTR.pack(FMAGIC,0,1,0,0,len(ic),len(ib),0,ih)
         out=Path(out);out.write_bytes(header+ic+data+ic+footer)
-        return {'bytes':out.stat().st_size,'logical_bytes':sum(x[4] for x in files if x[1]!=K_DIR),'unique_blobs':len(blobs),'logical_files':sum(x[1]!=K_DIR for x in files),'recipes':len(recipes),'index_raw':len(ib),'index_comp':len(ic),'data_bytes':len(data)}
+        return {'bytes':out.stat().st_size,'logical_bytes':sum(x[4] for x in files if x[1]!=K_DIR),'unique_blobs':len(blobs),'logical_files':sum(x[1]!=K_DIR for x in files),'recipes':len(recipes),'index_raw':len(ib),'index_comp':len(ic),'data_bytes':len(data),'encode_workers':self.encode_workers,'reproducible':self.reproducible}

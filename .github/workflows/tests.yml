@@ -31,7 +31,18 @@ jobs:
           python -m pip install -e '.[test,audio]'
 
       - name: Run regression suite
-        run: python -m pytest -q
+        run: |
+          mkdir -p test-artifacts
+          set -o pipefail
+          python -m pytest -q 2>&1 | tee test-artifacts/pytest.txt
+
+      - name: Retain regression diagnostic
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pytest-${{ github.sha }}
+          path: test-artifacts/pytest.txt
+          if-no-files-found: warn
 
       - name: Smoke-test CLI surface
         run: python -m cmpct --help
@@ -41,3 +52,5 @@ jobs:
 # must be decoded in CI rather than silently skipped when optional runtime codecs are absent.
 # This workflow does not turn shared-runner timing into marketing evidence; reproducible performance
 # claims still require the benchmark provenance/semantic discipline documented under docs/BENCHMARKS.md.
+# The retained pytest stream is diagnostic evidence only; `set -o pipefail` preserves the real pytest
+# exit code so logging can never convert a red suite into a green one.

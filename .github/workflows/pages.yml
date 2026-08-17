@@ -64,6 +64,12 @@ jobs:
           assert f'surface {surface}' in Path('_site/index.html').read_text()
           assert Path('_site/surface-revision.txt').read_text().strip() == surface
           assert data['frontier'], 'performance site requires a committed research-frontier record'
+          assert data['frontier']['project_version'] == version, 'public frontier must follow the current core release'
+          if version == '0.28.0':
+              assert data['frontier'].get('render_contract') == 'entropygraph-v028'
+              assert data['frontier']['regressions_primary'] == 0
+              assert data['frontier']['wins_primary'] >= 1
+              assert data['frontier']['primary_comparator']['short'] == 'EntropyGraph v0.25'
           assert len(data['frontier']['competitors']) >= 4
           assert data['frontier']['workloads'], 'frontier workload matrix must not be empty'
           assert data['parity_records'], 'canonical ZIP-parity evidence must remain visible'
@@ -75,6 +81,7 @@ jobs:
         run: |
           node --check site/src/assets/app.js
           node --check site/src/assets/motion.js
+          node --check site/src/assets/frontier-v028.js
           node --check site/src/assets/cmpct-browser-writer.js
 
       - name: Gate browser-written archive through canonical reader
@@ -119,5 +126,5 @@ jobs:
 
 # Footnote: main publishes automatically only after disclosure, generated benchmark-data coherence,
 # presentation-revision coherence, JavaScript syntax, and canonical-reader Browser Lab compatibility
-# gates pass. Motion remains additive; the homepage's performance numbers still come only from
-# committed evidence rather than hand-maintained copy.
+# gates pass. EntropyGraph II gets an explicit schema/comparator check so a future site refactor cannot
+# silently relabel the inherited frontier or a structural competitor as a different archive format.

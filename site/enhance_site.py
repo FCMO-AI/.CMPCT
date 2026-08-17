@@ -14,6 +14,8 @@ import re
 import tomllib
 from pathlib import Path
 
+from frontier_v028_adapter import patch_project_data
+
 ROOT = Path(__file__).resolve().parents[1]
 SURFACE_FILE = ROOT / "SURFACE_REVISION"
 
@@ -61,6 +63,13 @@ def patch_index(output: Path, version: str, surface: str) -> None:
             '<script type="module" src="assets/app.js"></script>\n'
             '  <script type="module" src="assets/motion.js"></script>',
         )
+    if "assets/frontier-v028.js" not in html:
+        html = html.replace(
+            '<script type="module" src="assets/motion.js"></script>',
+            '<script type="module" src="assets/motion.js"></script>\n'
+            '  <!-- Footnote: schema adapter changes labels only after evidence declares the v0.28 contract. -->\n'
+            '  <script type="module" src="assets/frontier-v028.js"></script>',
+        )
 
     html = re.sub(
         r'<span class="release-chip">v[^<]+? · r(\d+)</span>',
@@ -81,6 +90,11 @@ def patch_index(output: Path, version: str, surface: str) -> None:
     html = html.replace(
         'Project versions move whenever substantive work lands. Format revision moves only when readers need new on-disk semantics. The performance gate runs either way.',
         'Numeric project versions move only when CMPCT itself gains a material format/engine capability, performance improvement, reliability gain or interoperability improvement. Site, documentation and repository presentation use the alphabetic surface track (x.x.a, x.x.b, …) and do not consume a core version number.',
+        1,
+    )
+    html = html.replace(
+        'BOUNDED PACKS<small>≤ 512 KiB context</small>',
+        'BOUNDED PACKS<small>64 KiB–2 MiB audition</small>',
         1,
     )
 
@@ -130,6 +144,10 @@ def patch_machine_state(output: Path, surface: str) -> None:
 def enhance(output: Path) -> None:
     version = project_version()
     surface = surface_revision(version)
+    # Footnote: normalize the newest evidence before presentation code reads project-data.json. Older
+    # v0.25 records remain in history; the adapter only promotes a newer committed v0.28 record when
+    # its explicit schema is present, so a missing/corrupt record fails soft to the old frontier.
+    patch_project_data(output)
     patch_index(output, version, surface)
     patch_machine_state(output, surface)
 

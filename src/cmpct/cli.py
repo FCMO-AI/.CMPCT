@@ -17,6 +17,10 @@ def main():
     p = sp.add_parser("create")
     p.add_argument("source")
     p.add_argument("archive")
+    p.add_argument("--workers", type=int, default=None,
+                   help="deterministic candidate-encode workers; CLI default is 1 to avoid fresh-process thread startup, pass N to opt in")
+    p.add_argument("--reproducible", action="store_true",
+                   help="normalize host-owned metadata and use SOURCE_DATE_EPOCH for byte-reproducible builds")
 
     for command in ("info", "list", "verify", "preflight"):
         p = sp.add_parser(command)
@@ -71,7 +75,15 @@ def main():
     if a.cmd == "create":
         from .builder import Builder
 
-        print(json.dumps(Builder(Path(a.source)).build(Path(a.archive)), indent=2))
+        # Footnote: Builder's library API keeps its parallel default because long-running/in-process
+        # callers amortize thread-pool setup and measured workloads often benefit strongly. A fresh
+        # `cmpct create` process is different: the v0.28 ABBA gate found a small media tree paying a
+        # ~10 ms thread-startup tax while its actual library work moved by <1 ms. Keep CLI creation
+        # serial unless the caller explicitly requests workers; this restores the low-latency default
+        # without deleting deterministic parallel creation for batch/large-workload users.
+        workers=1 if a.workers is None else a.workers
+        builder=Builder(Path(a.source),workers=workers,reproducible=a.reproducible)
+        print(json.dumps(builder.build(Path(a.archive)), indent=2))
         return
     if a.cmd in {"update", "delete", "rename", "recover-blobs", "compact"}:
         from .transactions import append_delete, append_rename, append_update, compact_archive, recover_blob_records

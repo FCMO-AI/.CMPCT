@@ -1,0 +1,109 @@
+name: CMPCT EntropyGraph II research gate
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-entropygraph-v028-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  resemblance-frontier:
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    env:
+      CMPCT_PREFLATE_BRIDGE: ${{ github.workspace }}/native/preflate-bridge/target/release/cmpct-preflate-bridge
+    steps:
+      - name: Check out candidate
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install deterministic benchmark dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y zstd ffmpeg gcc libsndfile1
+          # Competitors are evidence supplements rather than dependencies of CMPCT itself. Missing
+          # packages are recorded as unavailable by the benchmark instead of failing the core gate.
+          for pkg in p7zip-full zpaq dwarfs borgbackup; do sudo apt-get install -y "$pkg" || true; done
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[audio,test]'
+          python -m pip install pillow reportlab python-docx openpyxl python-pptx numpy
+
+      - name: Build pinned memory-safe Preflate bridge
+        run: |
+          rustup toolchain install 1.89.0 --profile minimal
+          # The upstream git dependency is pinned to one commit in Cargo.toml. A lockfile is generated
+          # during this research build and the resolved tree is captured in Actions logs/evidence.
+          cargo +1.89.0 build --release --manifest-path native/preflate-bridge/Cargo.toml
+
+      - name: Unit and hostile mechanism gates
+        run: |
+          python -m pytest -q tests/test_resemblance.py
+          python -m pytest -q
+
+      - name: Run per-workload causal frontier
+        run: |
+          mkdir -p benchmark-artifacts
+          # Footnote: every neutral/hostile workload receives the direct inherited-v0.25 comparison.
+          # The strict policy adds a 1x independent-record floor, so no archive can buy ratio by
+          # exceeding the declared 8x weighted read-amplification budget when no solid pack is feasible.
+          set -o pipefail
+          python benchmarks/entropygraph_v028_strict_bench.py \
+            --suite both \
+            --output benchmark-artifacts/entropygraph-v028.json \
+            2>&1 | tee benchmark-artifacts/entropygraph-v028.stdout.txt
+
+      - name: Run aggregate structural competitor sweep
+        run: |
+          set -o pipefail
+          python benchmarks/entropygraph_v028_strict_competitors.py \
+            --output benchmark-artifacts/entropygraph-v028-structural-competitors.json \
+            2>&1 | tee benchmark-artifacts/entropygraph-v028-structural-competitors.stdout.txt
+
+      - name: Public-surface guard
+        run: python tools/check_public_surface.py
+
+      - name: Summarize research frontier
+        if: always()
+        run: |
+          if [ -f benchmark-artifacts/entropygraph-v028.json ]; then
+            python - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          import json
+          from pathlib import Path
+          r=json.loads(Path('benchmark-artifacts/entropygraph-v028.json').read_text())
+          t=r['totals']
+          print('## EntropyGraph II — strict locality')
+          print(f"- candidate bytes: **{t['candidate_bytes']:,}**")
+          print(f"- inherited v0.25 bytes: **{t['inherited_v025_bytes']:,}**")
+          print(f"- improvement: **{t['smaller_than_v025_pct']:.3f}%**")
+          print(f"- improved workloads: **{t['workloads_improved']}**")
+          print(f"- regressed workloads: **{t['workloads_regressed']}**")
+          print(f"- resemblance selected: **{t['resemblance_selected']}**")
+          print(f"- accepted delta nodes: **{t['delta_nodes']}**")
+          print(f"- preflate wins: **{t['preflate_wins']}**")
+          PY
+          fi
+
+      - name: Upload research evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cmpct-entropygraph-v028-${{ github.sha }}
+          path: benchmark-artifacts/
+          if-no-files-found: warn
+
+# Footnote: this workflow does not promote CMPNX8 into canonical revision 24. It proves the research
+# mechanism first. Promotion still requires a reader-visible format revision, independent vectors,
+# hostile parser bounds, recovery/native parity and the normal canonical performance-release gate.

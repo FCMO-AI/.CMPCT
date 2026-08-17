@@ -7,10 +7,14 @@ archive choice better than legacy ZIP across **size, speed, random access, fidel
 recovery, updates and modern storage semantics**—without winning one metric by quietly sacrificing the
 others.
 
-> Status: **core project v0.27.1 / surface 0.27.a / pre-1.0 / format under active development.** `main`
+> Status: **core project v0.28.0 / surface 0.28.a / pre-1.0 / format under active development.** `main`
 > is the canonical source of truth. The executable reference implementation still writes format
 > revision **24**. Surface revisions describe site/docs/repository presentation and do not consume a
 > numeric core release number.
+
+> v0.28.0 is the **EntropyGraph II / Resemblance Compiler research milestone**. Its CMPNX8 research
+> grammar is not being smuggled under revision-24 magic; canonical reader/writer semantics remain r24
+> until graph representations independently earn a future format revision.
 
 > Licensing status: **Apache-2.0 is proposed, not yet adopted.** See `LICENSING.md` and
 > `LICENSE-APACHE-2.0-PROPOSED.txt`. The proposal must not be interpreted as a finalized public grant.
@@ -32,16 +36,31 @@ The release rule is deliberately asymmetric because size and timing have differe
 
 See `docs/PERFORMANCE_RELEASE_GATE.md` for the normative release policy.
 
-The broader v0.25 EntropyGraph neutral/hostile checkpoint remains the current research frontier: on its
-fixed 10-workload synthetic suite, the experimental candidate recorded **16.46% smaller aggregate
-storage than ZIP/Zstd-93**, **18.88% smaller than ZIP/Deflate-9**, and **6.91% smaller than a monolithic
-solid tar+Zstd-19 diagnostic**, while retaining the workloads where it lost. Those are research-engine
-results, not a claim that the canonical revision-24 reader already implements every EntropyGraph storage
-semantic.
+### v0.28 research frontier
+
+The fixed v0.28 neutral + resemblance-hostile portfolio contains **15 deterministic workloads**. The
+inherited v0.25 EntropyGraph engine stores **166,816,028 bytes**; EntropyGraph II stores
+**137,557,457 bytes**, **17.5394% smaller**, with **3 workloads improved and 0 regressed**. The other
+**12/15 workloads are exact inherited fallbacks** rather than losses hidden inside an average.
+
+The mechanism-level wins are concentrated where resemblance reuse predicts them:
+
+- shifted near-duplicate versions: **30,200,827 → 1,761,588 bytes (-94.17%)**;
+- repeated boundary churn: **866,651 → 89,945 bytes (-89.62%)**;
+- ML artifacts: **13,879,065 → 13,836,439 bytes (-0.31%)**.
+
+On the resemblance-hostile structural aggregate the selected CMPCT candidate stores **47,197,165 B**,
+in the same size class as solid tar+Zstd-19 (**47,065,652 B**), ZPAQ method 5 (**47,062,641 B**) and
+7z/LZMA2 (**47,430,344 B**), while ZIP/Deflate-9 stores **76,690,799 B**. These are structural size
+comparisons, **not semantic-parity claims**: solid archives export different selective-read and recovery
+costs. DwarFS was unavailable on the evidence runner and remains recorded as unavailable.
+
+The durable record is `benchmarks/history/2026-08-16-entropygraph-v028.json`. Historical v0.25 evidence
+remains preserved rather than rewritten.
 
 ## What CMPCT can do today
 
-Current canonical prototype capabilities include:
+Current canonical revision-24 prototype capabilities include:
 
 - content-addressed deduplication;
 - adaptive Zstandard and raw storage;
@@ -56,13 +75,23 @@ Current canonical prototype capabilities include:
 - CRC32 hot-path corruption checks plus SHA-256 strong verification;
 - redundant head/tail indexes and self-describing blob records for salvage;
 - transactional append journal for update/delete/rename operations;
-- on-demand export to ordinary Deflate ZIP for legacy compatibility.
+- on-demand export to ordinary Deflate ZIP for legacy compatibility;
+- opt-in reproducible creation and deterministic parallel candidate encoding.
 
-The EntropyGraph research engine additionally explores global compressed-stream federation, reversible
-representation inversion, exact object interning, compact micro-pack indexing, bounded adaptive
-context, hot/cold stream roots and operational tail-metadata recovery. Those mechanisms remain gated
-from the canonical reader until they pass format integration, conformance, hardening and portability
-requirements.
+The EntropyGraph II research engine additionally explores:
+
+- bounded FastCDC-style resemblance units;
+- bounded multi-band similarity candidate search;
+- measured depth-1 COPY/LITERAL deltas;
+- adaptive similarity-ordered physical context from 64 KiB through 2 MiB under <=8x weighted read
+  amplification;
+- exact optional DEFLATE precompression through a pinned memory-safe bridge;
+- Merkle-authenticated physical records and authenticated tail recovery;
+- strict remote range sources that cannot silently fetch entire archives;
+- inherited-v0.25 portfolio fallback whenever the graph candidate is larger.
+
+Those mechanisms remain gated from the canonical reader until they pass format integration,
+conformance, hardening, native parity and portability requirements.
 
 The important rule is **content-driven selection, not extension-driven folklore**. If a specialized
 representation is slower or larger for the actual bytes, CMPCT should not use it.
@@ -72,6 +101,8 @@ representation is slower or larger for the actual bytes, CMPCT should not use it
 ```bash
 python -m pip install -e .
 python -m cmpct create ./folder archive.cmpct
+python -m cmpct create ./folder reproducible.cmpct --reproducible
+python -m cmpct create ./large-folder parallel.cmpct --workers 8
 python -m cmpct info archive.cmpct
 python -m cmpct list archive.cmpct
 python -m cmpct verify archive.cmpct
@@ -79,6 +110,11 @@ python -m cmpct extract archive.cmpct ./restored
 python -m cmpct range archive.cmpct path/to/huge.bin 1048576 4096 -o slice.bin
 python -m cmpct export-zip archive.cmpct legacy.zip
 ```
+
+Fresh-process CLI creation is intentionally serial unless `--workers N` is supplied. The v0.28 release
+gate found that thread-pool startup could cost a small media tree ~10 ms while its library work barely
+changed. The in-process `Builder` API keeps deterministic parallel creation by default, where callers can
+amortize setup and large workloads showed material gains.
 
 For the optional native content-defined chunker on Linux:
 
@@ -93,18 +129,21 @@ archive; chunk boundaries are explicitly recorded on disk.
 
 A coding/research agent with no previous CMPCT context should read, in order:
 
-1. `README.md` — mission and project shape;
-2. `AGENTS.md` — mandatory development, benchmark and versioning rules;
-3. `docs/CURRENT_STATE.md` — zero-chat-history handoff and immediate frontier;
-4. newest applicable note under `docs/releases/` — latest numeric core milestone;
-5. `docs/PERFORMANCE_RELEASE_GATE.md` — no-regression core-release contract;
-6. `docs/FORMAT.md` — current revision-24 on-disk contract;
-7. `docs/HISTORY.md` — surviving format/prototype history with private provenance generalized;
-8. `docs/RESEARCH_LOG.md` and `docs/ENTROPYGRAPH.md` — experimental conclusions and frontier;
-9. `docs/BENCHMARKS.md` — benchmark semantics and interpretation discipline;
-10. `benchmarks/history/` — durable public machine-readable benchmark measurements;
-11. `docs/PUBLIC_SURFACE.md` — public-repository/site disclosure boundary;
-12. `docs/ROADMAP.md` — work remaining before 1.0.
+1. `docs/AGI_ENGINEERING_STANDARD.md` — quality ratchet, falsifiability and evidence hierarchy;
+2. `README.md` — mission and project shape;
+3. `AGENTS.md` — mandatory development, benchmark and versioning rules;
+4. `docs/CURRENT_STATE.md` — zero-chat-history handoff and immediate frontier;
+5. newest applicable note under `docs/releases/` — latest numeric core milestone;
+6. `docs/PERFORMANCE_RELEASE_GATE.md` — no-regression core-release contract;
+7. `docs/FORMAT.md` — current revision-24 on-disk contract;
+8. `docs/HISTORY.md` — surviving format/prototype history with private provenance generalized;
+9. `docs/ENTROPYGRAPH.md` and `docs/ENTROPYGRAPH_II_CAMPAIGN.md` — current research frontier and gates;
+10. `docs/HARDENING.md` — hostile parser/resource state;
+11. `docs/PORTABILITY.md` and `docs/NATIVE_CORE.md` — product integration and shared reader-core state;
+12. `docs/RESEARCH_LOG.md` — failed ideas and experimental conclusions;
+13. `docs/BENCHMARKS.md` and `benchmarks/history/` — benchmark semantics and durable public records;
+14. `docs/PUBLIC_SURFACE.md` — public-repository/site disclosure boundary;
+15. `docs/ROADMAP.md` — work remaining before 1.0.
 
 A new agent should not need private chat, private corpora, or unrelated project context to continue
 development safely.
@@ -112,29 +151,38 @@ development safely.
 ## Repository map
 
 - `src/cmpct/` — canonical revision-24 reference implementation.
-- `experiments/entropygraph_v025.py` — executable EntropyGraph research engine; not canonical archive grammar.
+- `src/cmpct/resemblance.py` — reusable bounded similarity/delta primitives used by EntropyGraph II.
+- `experiments/entropygraph_v025.py` — historical CMPNX5 engine and v0.28 exact fallback.
+- `experiments/entropygraph_v028.py` — EntropyGraph II CMPNX8 research engine.
+- `experiments/entropygraph_v028_strict.py` — strict-locality EntropyGraph II portfolio.
+- `experiments/entropygraph_v028_remote.py` — strict range-source research reader.
 - `benchmarks/universal_bench.py` — deterministic heterogeneous canonical benchmark corpus generator.
-- `benchmarks/zip_parity_bench.py` — fair CMPCT/ZIP parity harness and shared-corpus release-gate harness.
-- `benchmarks/neutral_hostile_corpus_v1.py` — broader deterministic-per-workload hostile corpus generator.
+- `benchmarks/zip_parity_bench.py` — fair CMPCT/ZIP parity and shared-corpus release-gate harness.
+- `benchmarks/neutral_hostile_corpus_v1.py` — deterministic neutral/hostile research suite.
+- `benchmarks/resemblance_hostile_corpus_v1.py` — shifted-version/false-neighbor/boundary-churn attack suite.
 - `benchmarks/history/` — durable public machine-readable benchmark records.
+- `fuzz/` — malformed canonical/graph/delta resource and parser attacks.
 - `tools/check_performance_regression.py` — direct-base release regression checker.
 - `tools/check_version_discipline.py` — core-vs-surface version discipline gate.
+- `tools/check_pr_evidence.py` — material-PR evidence-dossier gate.
 - `SURFACE_REVISION` — alphabetic presentation/process revision (`x.x.a`, `x.x.b`, …).
 - `docs/PERFORMANCE_RELEASE_GATE.md` — normative performance release policy.
 - `docs/releases/` — one release note per numeric core release.
-- `site/` — performance-first website and local Browser Lab.
+- `site/` — performance-first website, evidence adapters and local Browser Lab.
 - `native/cmpct_cdc.c` — optional native content-defined chunking accelerator.
+- `native/preflate-bridge/` — optional pinned exact-DEFLATE research transform bridge.
 - `native/cmpct-core/` — shared memory-safe read-only core and C ABI.
 - `docs/CURRENT_STATE.md` — current handoff/frontier for a zero-context developer or agent.
 - `docs/FORMAT.md` — current on-disk contract and invariants.
 - `docs/HISTORY.md` — format and design lineage through the canonical revision-24 baseline.
-- `docs/ENTROPYGRAPH.md` — generalized research results and integration boundary.
+- `docs/ENTROPYGRAPH.md` — current generalized research results and integration boundary.
+- `docs/ENTROPYGRAPH_II_CAMPAIGN.md` — v0.28 falsifiable design/evidence map.
 - `docs/RESEARCH_LOG.md` — design decisions, failed ideas and experimental conclusions.
 - `docs/PRINCIPLES.md` — rules that prevent corpus-specific overfitting.
 - `docs/BENCHMARKS.md` — benchmark discipline and interpreted checkpoints.
 - `docs/PUBLIC_SURFACE.md` — what may and may not enter the public-facing repository/site surface.
 - `docs/ROADMAP.md` — blockers between the prototype and a defensible 1.0.
-- `tests/` — format and round-trip regression tests.
+- `tests/` — format, round-trip, resemblance, strict-locality and reproducibility regression tests.
 
 ## Website
 
@@ -142,7 +190,11 @@ The site is designed to **create impact first, prove the claim second, and earn 
 Its headline performance numbers, competitor ladder, workload matrix, losses and core-release state are
 generated from committed benchmark history rather than hand-maintained marketing percentages.
 
-It deliberately separates:
+For v0.28 the public adapter explicitly declares **EntropyGraph v0.25** as the primary research baseline
+and keeps ZIP/Deflate, 7z/LZMA2, solid tar/Zstd, ZPAQ and Borg under their actual names. A stale UI schema
+is not allowed to rename one competitor into another merely to keep an old hero label filled in.
+
+The site deliberately separates:
 
 - **research frontier** — the strongest currently verified experimental representation results;
 - **canonical parity** — the executable revision-24 reader/writer compared against ZIP at equivalent
@@ -156,7 +208,7 @@ surface-revision, JavaScript and Browser Lab compatibility checks pass.
 
 ## Version discipline
 
-CMPCT no longer treats the numeric project version as a commit counter.
+CMPCT does not treat the numeric project version as a commit counter.
 
 There are three different version axes:
 
@@ -166,12 +218,14 @@ There are three different version axes:
    normal core advancement moves the `MAJOR.MINOR` line and uses `PATCH=0` for packaging compatibility.
 2. **Surface revision (`MAJOR.MINOR.LETTER`)** — site animation/design, documentation cleanup, repository
    presentation, workflow ergonomics and similar non-format work. The current surface milestone is
-   `0.27.a`. It does not change `pyproject.toml` and does not require a synthetic benchmark record.
+   `0.28.a`. It does not independently change `pyproject.toml` and does not require a synthetic benchmark
+   record.
 3. **On-disk format revision** — changes only when readers need new archive grammar/storage semantics.
 
 A core release can improve encoder policy, speed, reliability or interoperability without changing the
-on-disk revision, but it must still earn its numeric number with durable evidence. Conversely, a site or
-repo beautification pass can be useful and substantial without pretending CMPCT itself became a new
+on-disk revision, but it must still earn its numeric number with durable evidence. A research milestone
+can likewise advance the project line while keeping experimental bytes explicitly non-canonical. A site
+or repo beautification pass can be useful and substantial without pretending CMPCT itself became a new
 format release.
 
 CI rejects numeric bumps that do not touch archive/engine paths, requires matching release and benchmark
