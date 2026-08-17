@@ -40,6 +40,24 @@ def _source_for_magic(magic: bytes):
     return None
 
 
+def _storage_attr(source, name: str):
+    """Resolve low-level storage constants without expanding the Placement stable wrapper API.
+
+    Footnote: ``entropygraph_v029_mosaic_strict`` intentionally exposes reader/build entry points but not
+    every implementation constant.  The verification adapter needs the exact historical tail magic and
+    resource declarations only to serialize a temporary source-grammar view; logical verification remains
+    delegated through the wrapper's public ``strong_verify`` function.
+    """
+    if hasattr(source, name):
+        return getattr(source, name)
+    impl = getattr(source, "IMPL", None)
+    if impl is not None and hasattr(impl, name):
+        return getattr(impl, name)
+    if hasattr(A5, name):
+        return getattr(A5, name)
+    raise RuntimeError(f"source grammar does not expose required storage constant {name}")
+
+
 def _read_source_records(path: Path) -> tuple[str, object, dict, list[tuple[int, int, bytes, int, bytes]]]:
     with path.open("rb") as probe:
         magic = probe.read(8)
@@ -94,14 +112,17 @@ def _write_source_verification_view(meta: dict, originals: list[bytes], out: Pat
     clean["record_rel_offsets"] = offsets; clean["record_leaf_sha256"] = leaves
     merkle = O._merkle_root(leaves)
     meta_raw = msgpack.packb(clean, use_bin_type=True); meta_comp = O.zc(meta_raw, 12)
+    max_decode = _storage_attr(source, "MAX_DECODE_UNIT")
+    max_memory = _storage_attr(source, "MAX_DECODER_MEMORY")
+    tail = _storage_attr(source, "TAIL")
     with out.open("wb") as stream:
-        stream.write(source.HDR.pack(source.MAG, len(meta_comp), len(meta_raw), len(records), source.MAX_DECODE_UNIT,
-                                     source.MAX_DECODER_MEMORY, H(meta_raw), merkle))
+        stream.write(source.HDR.pack(source.MAG, len(meta_comp), len(meta_raw), len(records), max_decode,
+                                     max_memory, H(meta_raw), merkle))
         stream.write(meta_comp)
         for codec, usize, payload, crc, logical_sha in records:
             stream.write(PH.pack(codec, usize, len(payload), crc, logical_sha)); stream.write(payload)
         stream.write(meta_comp)
-        stream.write(source.FTR.pack(source.TAIL, len(meta_comp), len(meta_raw), H(meta_raw), merkle))
+        stream.write(source.FTR.pack(tail, len(meta_comp), len(meta_raw), H(meta_raw), merkle))
     return source
 
 
