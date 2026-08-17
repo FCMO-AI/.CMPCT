@@ -1,6 +1,9 @@
 name: CMPCT v0.30 Geometry breakthrough
 
 on:
+  push:
+    branches:
+      - agent/lattice-v030-breakthrough
   pull_request:
   workflow_dispatch:
 
@@ -94,6 +97,6 @@ jobs:
             benchmark-artifacts/geometry-v030.stdout.txt
           if-no-files-found: warn
 
-# Footnote: this workflow proves only the research storage mechanism. Green does not authorize v0.30:
-# creation/extraction/memory debt, malformed-input fuzzing, native/shared-reader support and the unchanged
-# numeric release gate remain mandatory rehabilitation work before promotion.
+# Footnote: the branch-scoped push trigger exists to isolate this long research measurement from the
+# repository's broad PR fan-out. Reopening the PR still runs the ordinary full suite before any promotion.
+# Green here proves only the research storage mechanism; it never bypasses the numeric release gate.
