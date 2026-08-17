@@ -83,6 +83,40 @@ def test_corrupt_payload_never_replaces_existing_destination(tmp_path: Path) -> 
     assert list(destination.iterdir()) == [sentinel]
 
 
+def test_publication_failure_restores_previous_destination(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _, archive = _fixture(tmp_path)
+    destination = tmp_path / "destination"
+    destination.mkdir()
+    sentinel = destination / "keep.txt"
+    sentinel.write_text("old verified state", encoding="utf-8")
+
+    real_replace = streaming.os.replace
+    replace_calls = 0
+
+    def fail_only_new_publication(src, dst):
+        nonlocal replace_calls
+        replace_calls += 1
+        # Call 1 moves the verified old destination to its private backup. Call 2 publishes the fully
+        # verified staging tree. Fail precisely there; call 3 must restore the backup to the public path.
+        if replace_calls == 2:
+            raise OSError("injected GIR publication failure")
+        return real_replace(src, dst)
+
+    monkeypatch.setattr(streaming.os, "replace", fail_only_new_publication)
+    with pytest.raises(OSError, match="injected GIR publication failure"):
+        streaming.extract(archive, destination)
+
+    # Footnote: this is stronger than the corruption test above. The old tree has already moved off its
+    # public name when failure occurs, so success proves the rollback branch actually restores user state.
+    assert replace_calls == 3
+    assert sentinel.read_text(encoding="utf-8") == "old verified state"
+    assert list(destination.iterdir()) == [sentinel]
+    assert not list(tmp_path.glob(".destination.gir-stage-*"))
+    assert not list(tmp_path.glob(".destination.gir-backup-*"))
+
+
 def test_streaming_strong_verify_reports_corruption_without_raising(tmp_path: Path) -> None:
     _, archive = _fixture(tmp_path)
     stream, _, record_start, offsets = g._open(archive)
