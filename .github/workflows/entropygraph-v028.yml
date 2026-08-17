@@ -65,6 +65,17 @@ jobs:
             --output benchmark-artifacts/entropygraph-v028.json \
             2>&1 | tee benchmark-artifacts/entropygraph-v028.stdout.txt
 
+      - name: Run per-workload category baselines
+        run: |
+          # Footnote: these measurements exist for the website's category frontier only. They archive
+          # each exact workload independently against ZIP/Deflate-9 and solid tar+Zstd-19, so they are
+          # intentionally not substituted for the separate whole-suite structural comparison below.
+          set -o pipefail
+          python benchmarks/entropygraph_v028_category_baselines.py \
+            --frontier benchmark-artifacts/entropygraph-v028.json \
+            --output benchmark-artifacts/entropygraph-v028-category-baselines.json \
+            2>&1 | tee benchmark-artifacts/entropygraph-v028-category-baselines.stdout.txt
+
       - name: Run aggregate structural competitor sweep
         run: |
           set -o pipefail
@@ -93,6 +104,19 @@ jobs:
           print(f"- resemblance selected: **{t['resemblance_selected']}**")
           print(f"- accepted delta nodes: **{t['delta_nodes']}**")
           print(f"- preflate wins: **{t['preflate_wins']}**")
+          PY
+          fi
+          if [ -f benchmark-artifacts/entropygraph-v028-category-baselines.json ]; then
+            python - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          import json
+          from pathlib import Path
+          r=json.loads(Path('benchmark-artifacts/entropygraph-v028-category-baselines.json').read_text())
+          t=r['totals']
+          print('## Public category baselines')
+          print(f"- Zstd-19 category wins: **{t['wins_vs_tar_zstd19']}/{t['workloads']}**")
+          print(f"- Zstd-19 category losses: **{t['losses_vs_tar_zstd19']}**")
+          print(f"- independent-workload aggregate lead vs Zstd-19: **{t['cmpct_smaller_than_tar_zstd19_pct']:.3f}%**")
+          print(f"- independent-workload aggregate lead vs ZIP/Deflate-9: **{t['cmpct_smaller_than_zip_deflate9_pct']:.3f}%**")
           PY
           fi
 
