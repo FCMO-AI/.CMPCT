@@ -1,24 +1,25 @@
 """Authoritative v0.30 complete-artifact release-candidate tournament.
 
-This module is the first system-level v0.30 selector.  It does **not** add independent research savings
-arithmetically.  Instead it builds complete, independently verifiable artifacts and publishes the exact
+This module is the system-level v0.30 selector. It does **not** add independent research savings
+arithmetically. Instead it builds complete, independently verifiable artifacts and publishes the exact
 smallest *release-eligible* one:
 
 1. ``G04.build`` produces the monotone Mosaic path: accepted v0.29 fallback plus the full G0-G4 pre-fallback
    Geometry overlay, so this candidate can never be larger than accepted v0.29.
 2. PrefixGraph is auditioned only when its public oracle contract can represent the exact live tree.
 3. A PrefixGraph artifact must additionally satisfy the release-wide <=8x per-member decoded-context law.
-4. The smaller admitted complete artifact wins; exact ties conservatively retain the G0-G4/v0.29 path.
+4. Every candidate is admitted and the final published winner is reverified through the strict bounded streamed
+   release-reader policy, not through a research whole-archive materialization adapter.
+5. The smaller admitted complete artifact wins; exact ties conservatively retain the G0-G4/v0.29 path.
 
-The tournament is intentionally useful before PrefixGraph is internalized as a native Mosaic graph edge.  It
+The tournament is intentionally useful before PrefixGraph is internalized as a native Mosaic graph edge. It
 answers the release-system question honestly—what complete archive would v0.30 choose for this workload?—while
-keeping the stronger single-grammar composition goal as an optimization/promotion path.  No combined
-Geometry+PrefixGraph saving is claimed unless a future one-artifact ablation proves it.
+keeping the stronger single-grammar composition goal as an optimization path. No combined Geometry+PrefixGraph
+saving is claimed unless a future one-artifact ablation proves it.
 
 Footnote: candidates are created in a sibling temporary directory and the winner is published with
-``os.replace``.  We strong-verify the selected destination after publication rather than hashing the entire
-archive into memory; the final verification therefore catches publication corruption without adding an
-archive-sized RAM spike merely to prove the rename behaved like a rename.
+``os.replace``. Final verification is streamed, so publication integrity no longer requires an archive-sized
+RAM copy merely to prove that a same-filesystem rename preserved the selected bytes.
 """
 from __future__ import annotations
 
@@ -31,6 +32,7 @@ import time
 
 from experiments import entropygraph_v030_geometry_overlay_g04 as G04
 from experiments import entropygraph_v030_prefixgraph as PG
+from experiments import entropygraph_v030_release_reader_policy as READER
 
 MAX_MEMBER_READ_AMP = 8.0
 
@@ -51,8 +53,8 @@ def _prefixgraph_eligibility(root: Path, expected_tree: str) -> tuple[bool, str 
     if any(path.stat().st_size > PG.MAX_FILE_BYTES for path in files):
         return False, "file-size-ceiling"
 
-    # Footnote: PrefixGraph's oracle was deliberately self-contained.  Until its tree-identity routine is
-    # unified with the owning release reader, exact equality here prevents a semantically narrower tree hash
+    # Footnote: PrefixGraph's oracle was deliberately self-contained. Until its tree-identity routine is
+    # unified with the owning graph grammar, exact equality here prevents a semantically narrower tree hash
     # from entering the release tournament by accident.
     pg_tree = PG.treehash(root)
     if pg_tree != expected_tree:
@@ -61,12 +63,12 @@ def _prefixgraph_eligibility(root: Path, expected_tree: str) -> tuple[bool, str 
 
 
 def _prefixgraph_locality(archive: Path) -> dict:
-    """Measure the conservative decoded-context amplification needed for one PrefixGraph member.
+    """Measure conservative decoded-context amplification needed for one PrefixGraph member.
 
     A prefix-coded target requires its own logical output plus the complete raw direct anchor as Zstd history.
     Counting both is deliberately stricter than physical compressed-byte traffic: it captures the memory/work
     context the selective read must materialize and matches CMPCT's policy that context cannot be made free by
-    compressing it well.  Direct members are 1.0x.  Depth remains exactly 0/1.
+    compressing it well. Direct members are 1.0x. Depth remains exactly 0/1.
     """
     meta, _payloads = PG._read(archive)
     records = meta["records"]
@@ -99,54 +101,31 @@ def _prefixgraph_locality(archive: Path) -> dict:
     }
 
 
-def _verify_component(path: Path, expected_tree: str, verifier, label: str) -> dict:
-    result = verifier(path)
+def _verify_component(path: Path, expected_tree: str, label: str) -> dict:
+    result = READER.strong_verify(path)
     if not result.get("ok") or result.get("tree_sha256") != expected_tree:
-        raise RuntimeError(f"{label} failed exact logical-tree verification")
+        raise RuntimeError(f"{label} failed strict streamed logical-tree verification: {result!r}")
     return result
 
 
 def strong_verify(archive: Path) -> dict:
-    with archive.open("rb") as stream:
-        magic = stream.read(8)
-    if magic == PG.MAGIC:
-        result = PG.strong_verify(archive)
-        result = dict(result)
-        result["release_candidate_representation"] = "prefixgraph"
-        return result
-    result = G04.strong_verify(archive)
-    result = dict(result)
-    result["release_candidate_representation"] = (
-        "g04-overlay" if magic == G04.MAG else "accepted-v029-fallback"
-    )
+    result = dict(READER.strong_verify(archive))
+    if result.get("ok"):
+        with archive.open("rb") as stream:
+            magic = stream.read(8)
+        result["release_candidate_representation"] = (
+            "prefixgraph"
+            if magic == PG.MAGIC
+            else "g04-overlay"
+            if magic == G04.MAG
+            else "accepted-v029-fallback"
+        )
     return result
 
 
-def extract(archive: Path, dst: Path) -> None:
-    """Extract any representation currently admitted by the release-candidate tournament.
-
-    G0-G4 still uses a conservative research adapter: inverse physical Geometry, materialize a temporary
-    authoritative Mosaic view, and delegate extraction to that source grammar.  This preserves exact semantics
-    for integration testing.  The streamed/native direct reader remains a promotion gate, not something this
-    adapter pretends to have already solved.
-    """
-    with archive.open("rb") as stream:
-        magic = stream.read(8)
-    if magic == PG.MAGIC:
-        PG.extract(archive, dst)
-        return
-    if magic != G04.MAG:
-        G04.BASE.extract(archive, dst)
-        return
-
-    meta, originals = G04._decode_overlay_records(archive)
-    clean = dict(meta)
-    for key in ("hierarchical_geometry", "hierarchical_geometry_magic"):
-        clean.pop(key, None)
-    with tempfile.TemporaryDirectory(prefix="cmpct-v030-g04-extract-") as td:
-        view = Path(td) / "source-view.cmpct"
-        source = G04.strict._write_source_verification_view(clean, originals, view)
-        source.extract(view, dst)
+def extract(archive: Path, dst: Path, *, max_output_bytes: int = READER.DEFAULT_MAX_EXTRACT_BYTES) -> None:
+    """Extract through the bounded streamed/transactional release reader."""
+    READER.extract(archive, dst, max_output_bytes=max_output_bytes)
 
 
 def build(root: Path, out: Path) -> dict:
@@ -160,7 +139,7 @@ def build(root: Path, out: Path) -> dict:
         pg_path = temp / "prefixgraph.cmpct"
 
         g04_stats = G04.build(root, g04_path)
-        g04_verify = _verify_component(g04_path, expected_tree, G04.strong_verify, "G0-G4 candidate")
+        g04_verify = _verify_component(g04_path, expected_tree, "G0-G4 candidate")
         g04_bytes = g04_path.stat().st_size
         v029_bytes = int(g04_stats["v029_bytes"])
         if g04_bytes > v029_bytes:
@@ -174,15 +153,15 @@ def build(root: Path, out: Path) -> dict:
         pg_bytes = None
         if pg_contract_eligible:
             pg_stats = PG.build(root, pg_path)
-            pg_verify = _verify_component(pg_path, expected_tree, PG.strong_verify, "PrefixGraph candidate")
+            pg_verify = _verify_component(pg_path, expected_tree, "PrefixGraph candidate")
             pg_bytes = pg_path.stat().st_size
             pg_locality = _prefixgraph_locality(pg_path)
             pg_admitted = bool(pg_locality["passed"])
             if not pg_admitted:
                 pg_reject_reason = "locality-ceiling"
 
-        # Exact ties stay on the richer inherited path.  Approximate nomination may decide which PrefixGraph
-        # anchors are tried, but it never decides this complete-artifact tournament.  A smaller PrefixGraph
+        # Exact ties stay on the richer inherited path. Approximate nomination may decide which PrefixGraph
+        # anchors are tried, but it never decides this complete-artifact tournament. A smaller PrefixGraph
         # that violates locality is retained as diagnostic evidence but cannot become the released artifact.
         if pg_admitted and pg_bytes is not None and pg_bytes < g04_bytes:
             selected_path = pg_path
@@ -200,7 +179,7 @@ def build(root: Path, out: Path) -> dict:
         os.replace(selected_path, out)
         final_verify = strong_verify(out)
         if not final_verify.get("ok") or final_verify.get("tree_sha256") != expected_tree:
-            raise RuntimeError("published v0.30 release candidate failed strong verification")
+            raise RuntimeError("published v0.30 release candidate failed strict streamed verification")
         if out.stat().st_size != selected_bytes:
             raise RuntimeError("published v0.30 release candidate size changed during atomic publication")
 
@@ -233,6 +212,7 @@ def build(root: Path, out: Path) -> dict:
             "prefixgraph_strong_verify": pg_verify,
             "selected_strong_verify": selected_verify,
             "final_strong_verify": final_verify,
+            "reader_authority": "v030-release-streaming-policy-v1",
             "claim_boundary": (
                 "complete-artifact system tournament; PrefixGraph and G0-G4 savings are not added or claimed "
                 "simultaneously unless a future one-artifact composition proves them"
@@ -251,13 +231,14 @@ def _main() -> None:
     p = sub.add_parser("extract")
     p.add_argument("archive", type=Path)
     p.add_argument("destination", type=Path)
+    p.add_argument("--max-output-bytes", type=int, default=READER.DEFAULT_MAX_EXTRACT_BYTES)
     args = parser.parse_args()
     if args.cmd == "pack":
         print(json.dumps(build(args.source, args.archive), indent=2, default=str))
     elif args.cmd == "verify":
         print(json.dumps(strong_verify(args.archive), indent=2, default=str))
     else:
-        extract(args.archive, args.destination)
+        extract(args.archive, args.destination, max_output_bytes=args.max_output_bytes)
         print(json.dumps({"ok": True}, indent=2))
 
 
