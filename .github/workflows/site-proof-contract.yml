@@ -5,6 +5,7 @@ on:
     paths:
       - "site/**"
       - "docs/SITE_PUBLIC_PROOF_STANDARD.md"
+      - "docs/GH_PAGES_DEPLOYMENT.md"
       - "benchmarks/history/**"
       - "SURFACE_REVISION"
       - "pyproject.toml"
@@ -14,6 +15,7 @@ on:
     paths:
       - "site/**"
       - "docs/SITE_PUBLIC_PROOF_STANDARD.md"
+      - "docs/GH_PAGES_DEPLOYMENT.md"
       - "benchmarks/history/**"
       - "SURFACE_REVISION"
       - "pyproject.toml"
@@ -56,6 +58,9 @@ jobs:
       - name: Validate stable public evidence and required proof surfaces
         run: python site/tests/proof_surface_contract.py _site
 
+      - name: Preserve release-level evidence invariants
+        run: python site/tests/release_evidence_contract.py
+
       - name: Check browser code
         run: |
           node --check site/src/assets/app.js
@@ -77,3 +82,7 @@ jobs:
               assert archive.read('copy/repeated.txt') == archive.read('docs/repeated.txt')
               assert archive.read('unique.txt') == b'small independent file\n'
           PY
+
+# Footnote: Actions validates the canonical source and generated proof artifact, but it does not own
+# publication. The public server consumes the already-generated gh-pages tree so runner congestion can
+# delay validation feedback without preventing an explicitly promoted static site from being served.
