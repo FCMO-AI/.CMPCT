@@ -54,6 +54,7 @@ jobs:
           assert r['accepted'] is True, r
           assert len(r['rows']) == 4, r
           assert r['requirements']['media_identity_independent_of_external_ffmpeg_outputs'] is True
+          assert r['requirements']['excluded_media_mutation_explicitly_proven'] is True
           assert r['evidence_dependencies']['repair_v4_rows_freshly_proven'] == ['03_media_library'], r
           assert set(r['evidence_dependencies']['repair_v3_rows_imported']) == {
               '02_office_workspace', '05_logs_and_telemetry', '06_incremental_backups'
@@ -66,10 +67,13 @@ jobs:
           media=next(row for row in r['rows'] if row['name']=='03_media_library')
           assert media['repair_v4_source'] == 'fresh-cross-path-media-proof', media
           assert media['files'] == 25, media
+          assert media['excluded_mutation_proven'] is True, media
           assert len(media['excluded_before_normalization']) == 2, media
-          assert set(media['excluded_before_normalization'][0]) == {
-              'clip_h264.mp4', 'field_recording.flac', 'field_recording.mp3'
-          }, media
+          names={'clip_h264.mp4', 'field_recording.flac', 'field_recording.mp3'}
+          assert set(media['excluded_before_normalization'][0]) == names, media
+          assert set(media['excluded_after_mutation_round2']) == names, media
+          for name in names:
+              assert media['excluded_before_normalization'][1][name] != media['excluded_after_mutation_round2'][name], media
           print(json.dumps(r, indent=2))
           PY
       - name: Public-surface guard
