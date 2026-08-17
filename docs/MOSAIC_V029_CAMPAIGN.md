@@ -165,14 +165,10 @@ Primitive wins are not enough. `experiments/entropygraph_v029_mosaic.py` integra
 into a complete EntropyGraph research artifact while deliberately preserving v0.28's root centrality and
 physical pack decision. It does **not** redesign root placement to flatter the new representation.
 
-`experiments/entropygraph_v029_mosaic_strict.py` is the evidence engine. The current reader materializes
-all roots listed in a mosaic descriptor before decoding, so the strict wrapper charges **every listed
-root**, not merely roots that emitted COPY opcodes. This closes an under-accounting issue discovered by
-adversarial review before the first full-archive benchmark.
-
-`tests/test_mosaic_archive.py` exercises the new research grammar directly: exact reconstruction, strong
-verification, authenticated-tail metadata recovery, physical Merkle-leaf corruption refusal, and the
-outer v0.28 fallback invariant.
+`experiments/entropygraph_v029_mosaic_strict.py` is the stable evidence entry point. Every listed mosaic
+root is charged exactly as the reader materializes it. `tests/test_mosaic_archive.py` exercises exact
+reconstruction, strong verification, authenticated-tail metadata recovery, physical Merkle-leaf
+corruption refusal, dependency depth, and the outer v0.28 fallback invariant.
 
 `benchmarks/mosaic_v029_archive_bench.py` builds complete artifacts for every v1 and v2 workload. For
 each workload it builds the complete v0.28 portfolio and the complete strict mosaic graph from the same
@@ -196,8 +192,96 @@ independent roots themselves, pack them, authenticate physical records, duplicat
 encode the complete file tree. Target-only savings are therefore mathematically diluted. Pretending the
 root bytes disappear would be the exact benchmark error this tranche is meant to prevent.
 
-**This threshold is now frozen before the first full-artifact result. A red result changes the mechanism,
-not the threshold.**
+**This threshold was frozen before the first full-artifact result. Every subsequent attempt must clear
+these exact same thresholds. A red result changes the mechanism, not the gate.**
+
+## Full-artifact attempt #1 — failed, preserved, and causally useful
+
+Source commit: `24187acd739d62988e01c086078a58bd4c007d65`  
+Workflow run: `31983309529`  
+Durable summary: `benchmarks/history/2026-08-17-mosaic-v029-full-artifact-attempt1.json`
+
+Attempt #1 completed the benchmark correctly and **failed the pre-registered acceptance gate**:
+
+- v1 complete artifacts: **6,240,113 → 5,911,835 B (-5.2608%)**, 3/8 improved, 0 regressed;
+- v2 complete artifacts: **8,589,119 → 8,428,504 B (-1.8700%)**, only 1/10 improved, 0 regressed;
+- combined: **14,829,232 → 14,340,339 B (-3.2968%)**, 4/18 improved, 0 regressed;
+- maximum descriptor-actual read amplification: **4.0005x**.
+
+So attempt #1 passed the combined >3% size bar and the zero-regression/locality requirements, but it
+missed **three independent gates**: v2 was below >2%, only one v2 workload improved instead of four, and
+only four workloads combined selected mosaic instead of five.
+
+The failure is not explained by archive root bytes alone. The per-workload record exposed a more specific
+mechanism defect:
+
+- v2 `02_shifted_reordered_merge`: **0 mosaic auditions**;
+- v2 `03_record_store_conflict_merge`: **0 mosaic auditions** despite one inherited single-delta node;
+- v2 `04_source_like_merge`: **0 mosaic auditions**;
+- v2 `09_root_diversity_pressure`: **0 mosaic auditions**;
+- v1 `03_reordered_two_parent_merge`: **0 mosaic auditions**.
+
+Those are precisely workloads that won at primitive level. Attempt #1 only auditioned mosaic for targets
+that v0.28 had already accepted as one-base delta targets. A true multi-parent merge can be too unlike
+**any single parent** to cross that inherited gate, which made the integration logically backwards for
+the new information model.
+
+Footnote: attempt #1 is retained as executable `experiments/entropygraph_v029_mosaic.py` plus its durable
+failed evidence record. Attempt #2 does not rewrite that history.
+
+## Full-artifact attempt #2 — causal eligibility repair, gate unchanged
+
+Attempt #2 is implemented separately in `experiments/entropygraph_v029_mosaic_leaf.py`; the stable
+`experiments/entropygraph_v029_mosaic_strict.py` evidence wrapper now points at it. The change targets the
+observed failure mechanism rather than the acceptance threshold.
+
+### 1. Preserve the inherited v0.28 central assignment
+
+v0.28's same-band LSH candidate set still exclusively determines the inherited single-delta central-base
+assignment. New mosaic discovery **cannot** rewrite that assignment and then count the rewritten baseline
+as a mosaic gain.
+
+### 2. Add bounded position-independent discovery
+
+Mosaic supplements same-band LSH with content features that may collide across band positions, because
+reordering can move inherited regions from one part of a target to another. Buckets remain bounded.
+For graphs with at most **64 nodes**, attempt #2 also uses a hard-bounded exhaustive correctness floor of
+at most **16 prior candidates per target**. That is capped O(64×16), not an unbounded all-pairs path.
+Larger graphs use only bounded feature buckets.
+
+### 3. Permit direct **leaf** nodes to become mosaic targets
+
+A direct node that v0.28 did not turn into a single delta may now be auditioned for mosaic **only if no
+selected v0.28 delta uses it as a base**. Existing selected bases are protected. Candidate roots must
+remain direct. Promoted leaf targets are removed from the direct-root set before packing.
+
+This changes eligibility without permitting depth 2: every single or mosaic target still depends only on
+independent direct roots.
+
+### 4. Compact descriptors to roots actually used
+
+Attempt #1 could carry a wider candidate-root list than the COPY stream actually referenced. Attempt #2
+re-encodes until the descriptor contains only roots that emit COPY bytes. Metadata cost, reader
+materialization, and read-amplification accounting therefore refer to exactly the same root set.
+
+### 5. Re-check locality after real physical packing
+
+Tentative leaf mosaics are first screened conservatively, then roots are physically packed. Any leaf
+mosaic whose **actual descriptor/root pack** amplification exceeds 8x is rejected, restored as direct,
+and packing is recomputed until stable.
+
+### 6. Regression test the exact attempt-1 blind spot
+
+`tests/test_mosaic_archive.py` now requires the v2 shifted/reordered merge—which attempt #1 never even
+auditioned—to produce at least one mosaic leaf while every referenced base remains direct and the archive
+strong-verifies.
+
+### Attempt #2 acceptance rule
+
+**Unchanged.** Attempt #2 must clear the exact frozen full-artifact gate above. No percentage, workload,
+selection, locality, verification, or fallback threshold has been relaxed. If attempt #2 still fails, its
+new evidence determines whether candidate discovery, partial-root profitability, chunk boundaries, or
+physical packing is the next mechanism to challenge.
 
 ## If the full-artifact gate wins
 
@@ -215,12 +299,15 @@ proposal be considered.
 Preserve the record and inspect the failure mechanism:
 
 - opcode/root-reference overhead dominates → investigate compact root dictionaries or segment maps;
-- candidate ranking misses useful roots → improve bounded discovery, not all-pairs search;
+- candidate ranking misses useful roots → improve bounded discovery, not unbounded all-pairs search;
+- a component root is individually unprofitable but jointly useful → consider retaining bounded partial
+  candidates based on copied information even when their one-root delta loses;
 - source read amplification dominates → investigate smaller independent root units or target-local root
   slices without weakening integrity;
 - full root/archive bytes dilute target savings below materiality → mosaic may remain an optional niche
   transform rather than a core-version feature;
-- best single base already explains real merges → multi-root complexity is not warranted;
+- chunk boundaries split multi-parent information into nodes that each see only one root → challenge the
+  unit model rather than deepening the dependency graph;
 - false-neighbor work dominates creation CPU → build a conservative rejection model before more codecs.
 
 A negative result that eliminates a seductive architecture is progress, but it does not consume a
