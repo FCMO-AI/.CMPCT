@@ -1,0 +1,77 @@
+{
+  "schema": "cmpct-mosaic-v029-full-artifact-attempt4-summary-v1",
+  "date": "2026-08-17",
+  "source_commit": "b9c423d82038419da78d9b77ceb136199b9941fd",
+  "workflow_run": 31985253924,
+  "artifact": {
+    "id": 9273586912,
+    "zip_sha256": "b497040656a0b6a2dc100682e80c5e0d1e80a30459a6bc12bc76d12e72540b90"
+  },
+  "accepted": false,
+  "frozen_gate": {
+    "v2_smaller_than_v028_pct_gt": 2.0,
+    "combined_smaller_than_v028_pct_gt": 3.0,
+    "v2_workloads_improved_gte": 4,
+    "combined_mosaic_selected_gte": 5,
+    "workloads_regressed_eq": 0,
+    "max_descriptor_read_amplification_lte": 8.0
+  },
+  "failure_reason": "Placement Compiler cleared every frozen full-artifact requirement except v2 workload coverage: 3/10 improved instead of >=4/10. The percentage, combined coverage, no-regression and locality gates all passed.",
+  "causal_findings": [
+    "all attempt-4 primitive tests and all 10 placement/recovery/corruption tests passed before full-artifact measurement",
+    "v2 complete-artifact size crossed the frozen >2% threshold for the first time: 8,589,119 -> 8,365,894 B (-2.5989%)",
+    "combined complete-artifact size improved to 14,829,232 -> 14,179,369 B (-4.3823%) with 7/18 workload wins and zero regressions",
+    "root-diversity became a real complete-artifact win after locality-aware root co-packing: 1,671,174 -> 1,608,554 B (-3.7471%) at 5.1233x mosaic read amplification",
+    "source-like became a tiny but real complete-artifact win through pack-local semantic preconditioning: 9,488 -> 9,472 B (-0.1686%); the 112-byte local estimated saving was mostly consumed by complete research-grammar metadata",
+    "small-metadata now forms a valid 210-byte multi-root target representation and a mosaic node, but the complete CMPNX10 graph is 5,747 B versus 4,637 B for v0.28, so exact portfolio fallback correctly rejects it despite 515 bytes of target-record saving",
+    "shifted/reordered and record-conflict remain negative under complete marginal physics and are correctly left unchanged",
+    "the only frozen gate still failing is v2 workload coverage, so any next attempt must find one additional honest complete-artifact win without reducing the >=4 requirement"
+  ],
+  "v1_totals": {
+    "v028_bytes": 6240113,
+    "candidate_bytes": 5813475,
+    "smaller_than_v028_pct": 6.83702362441193,
+    "workloads": 8,
+    "workloads_improved": 4,
+    "workloads_regressed": 0,
+    "mosaic_selected": 4,
+    "mosaic_nodes": 4,
+    "max_mosaic_read_amplification": 4.000457763671875,
+    "portfolio_create_s": 24.466280798
+  },
+  "v2_totals": {
+    "v028_bytes": 8589119,
+    "candidate_bytes": 8365894,
+    "smaller_than_v028_pct": 2.5989277829309385,
+    "workloads": 10,
+    "workloads_improved": 3,
+    "workloads_regressed": 0,
+    "mosaic_selected": 3,
+    "mosaic_nodes": 4,
+    "max_mosaic_read_amplification": 5.1233375,
+    "portfolio_create_s": 51.33898094599992
+  },
+  "combined": {
+    "v028_bytes": 14829232,
+    "candidate_bytes": 14179369,
+    "smaller_than_v028_pct": 4.382310560654793,
+    "workloads": 18,
+    "workloads_improved": 7,
+    "workloads_regressed": 0,
+    "mosaic_selected": 7,
+    "mosaic_nodes": 8,
+    "max_mosaic_read_amplification": 5.1233375
+  },
+  "v2_rows": [
+    {"name":"01_noisy_two_parent_merge","selected":"mosaic","v028_bytes":823844,"mosaic_graph_bytes":663255,"candidate_bytes":663255,"saving_vs_v028_pct":19.4926466661164,"mosaic_nodes":1,"mosaic_auditions":1,"estimated_saving_bytes":160699,"max_mosaic_read_amplification":2.0198333740234373},
+    {"name":"02_shifted_reordered_merge","selected":"v028-fallback","v028_bytes":502014,"mosaic_graph_bytes":502138,"candidate_bytes":502014,"saving_vs_v028_pct":0.0,"mosaic_nodes":0,"mosaic_auditions":2},
+    {"name":"03_record_store_conflict_merge","selected":"v028-fallback","v028_bytes":552652,"mosaic_graph_bytes":552770,"candidate_bytes":552652,"saving_vs_v028_pct":0.0,"mosaic_nodes":0,"mosaic_auditions":0},
+    {"name":"04_source_like_merge","selected":"mosaic","v028_bytes":9488,"mosaic_graph_bytes":9472,"candidate_bytes":9472,"saving_vs_v028_pct":0.16863406408094433,"mosaic_nodes":1,"mosaic_auditions":1,"estimated_saving_bytes":112,"max_mosaic_read_amplification":2.0111489106677007},
+    {"name":"05_compressed_stream_avalan","selected":"v028-fallback","v028_bytes":531664,"mosaic_graph_bytes":531782,"candidate_bytes":531664,"saving_vs_v028_pct":0.0,"mosaic_nodes":0,"mosaic_auditions":0},
+    {"name":"06_single_parent_noisy_control","selected":"v028-fallback","v028_bytes":1316776,"mosaic_graph_bytes":1316868,"candidate_bytes":1316776,"saving_vs_v028_pct":0.0,"mosaic_nodes":0,"mosaic_auditions":0},
+    {"name":"07_false_neighbors_control","selected":"v028-fallback","v028_bytes":1537677,"mosaic_graph_bytes":1538981,"candidate_bytes":1537677,"saving_vs_v028_pct":0.0,"mosaic_nodes":0,"mosaic_auditions":0},
+    {"name":"08_incompressible_control","selected":"v028-fallback","v028_bytes":1639193,"mosaic_graph_bytes":1640191,"candidate_bytes":1639193,"saving_vs_v028_pct":0.0,"mosaic_nodes":0,"mosaic_auditions":0},
+    {"name":"09_root_diversity_pressure","selected":"mosaic","v028_bytes":1671174,"mosaic_graph_bytes":1608554,"candidate_bytes":1608554,"saving_vs_v028_pct":3.747066433537142,"mosaic_nodes":1,"mosaic_auditions":1,"estimated_saving_bytes":62858,"max_mosaic_read_amplification":5.1233375},
+    {"name":"10_small_metadata_control","selected":"v028-fallback","v028_bytes":4637,"mosaic_graph_bytes":5747,"candidate_bytes":4637,"saving_vs_v028_pct":0.0,"mosaic_nodes":1,"mosaic_auditions":1,"estimated_saving_bytes":515,"max_mosaic_read_amplification":2.05712890625}
+  ]
+}
