@@ -1,0 +1,15 @@
+[package]
+name = "cmpct-r25-geometry"
+version = "0.1.0"
+edition = "2021"
+license = "Apache-2.0"
+description = "Independent memory-safe conformance decoder for CMPCT revision-25 Geometry and recovery footer"
+
+[lib]
+crate-type = ["rlib"]
+
+[dependencies]
+rmpv = "1.3"
+sha2 = "0.10"
+thiserror = "2"
+zstd = "0.13"
