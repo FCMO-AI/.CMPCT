@@ -80,12 +80,13 @@ def test_schema_rejects_physical_record_aliasing() -> None:
 def test_physical_table_rejects_overlap_or_gap() -> None:
     raw = b"x"
     header = g.PH.pack(g.CODEC_RAW, 1, 1, binascii.crc32(raw) & 0xFFFFFFFF, g.H(raw))
-    table = header + raw + header + raw
+    record_start = g.HDR.size
+    table = b"\x00" * record_start + header + raw + header + raw
     # Correct second offset is PH.size+1; PH.size points one byte into the first record and must fail before
     # any payload decompression. This single invariant rejects both overlap and non-canonical gap layouts.
     stream = io.BytesIO(table)
     with pytest.raises(RuntimeError, match="not contiguous"):
-        guarded._validate_physical_table(stream, 0, [0, g.PH.size])
+        guarded._validate_physical_table(stream, record_start, [0, g.PH.size])
 
 
 def test_guarded_reader_accepts_writer_bytes_without_grammar_change(tmp_path: Path) -> None:
