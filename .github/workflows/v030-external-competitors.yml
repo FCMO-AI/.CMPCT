@@ -1,0 +1,96 @@
+name: CMPCT v0.30 external competitor frontier
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'experiments/entropygraph_v030_*.py'
+      - 'benchmarks/v030_external_competitors.py'
+      - '.github/workflows/v030-external-competitors.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-v030-external-frontier-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+
+jobs:
+  external-frontier:
+    runs-on: ubuntu-latest
+    timeout-minutes: 480
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+
+      - name: Install CMPCT and external compressors
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y zstd p7zip-full zpaq gcc
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[test]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
+          zstd --version
+          (7z i | head -n 4) || true
+          zpaq 2>&1 | head -n 4 || true
+
+      - name: Compile authority and matrix
+        run: |
+          python -m py_compile \
+            experiments/entropygraph_v030_authoritative.py \
+            experiments/entropygraph_v030_release_admission.py \
+            benchmarks/v030_external_competitors.py
+
+      - name: Run exact repaired 15-workload competitor matrix
+        run: |
+          mkdir -p benchmark-artifacts
+          python benchmarks/v030_external_competitors.py \
+            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-external-work" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-external-competitors.json"
+
+      - name: Independently enforce external frontier contract
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          data=json.loads(Path('benchmark-artifacts/v030-external-competitors.json').read_text())
+          gate=data['gate']; agg=data['aggregates']
+          assert data['schema']=='cmpct-v030-external-competitors-v1'
+          assert gate['exact_workload_count'] is True
+          assert gate['all_cmpct_trees_verified'] is True
+          assert gate['all_zip_trees_verified'] is True
+          assert agg['all']['7z_lzma2_max_solid']['complete_for_suite'] is True
+          assert agg['all']['tar_zstd19_solid']['complete_for_suite'] is True
+          assert agg['all']['zpaq_method5']['complete_for_suite'] is True
+          assert gate['aggregate_beats_zip'] is True
+          assert gate['aggregate_beats_7z_when_available'] is True
+          assert gate['neutral_beats_solid_zstd19'] is True
+          assert gate['hostile_closes_solid_zstd19_frontier'] is True
+          assert gate['hostile_closes_zpaq5_frontier_when_available'] is True
+          assert gate['passed'] is True
+          PY
+
+      - name: Public-surface guard
+        if: always()
+        run: python tools/check_public_surface.py
+
+      - name: Upload external frontier evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: v030-external-frontier-${{ github.sha }}
+          path: benchmark-artifacts/v030-external-competitors.json
+          if-no-files-found: warn
+          retention-days: 90
+
+# Footnote: solid tar+Zstd and ZPAQ are size competitors here, not random-access peers. The workflow requires
+# those tools to be installed so the historical hostile frontier cannot disappear behind an 'optional' result.
