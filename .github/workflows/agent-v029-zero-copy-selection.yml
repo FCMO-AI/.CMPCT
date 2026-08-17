@@ -41,13 +41,13 @@ jobs:
           if old not in s:
               raise SystemExit('temporary-directory anchor not found')
           s = s.replace(old, new, 1)
-          old = '''        shutil.copyfile(chosen, out)\n        by_kind = {result["kind"]: result for result in results}\n'''
-          new = '''        # ``chosen`` and ``out`` now share a filesystem, so ``os.replace`` publishes the exact\n        # winning inode without another archive-sized payload copy. Temporary loser cleanup remains\n        # scoped to the TemporaryDirectory.\n        os.replace(chosen, out)\n        by_kind = {result["kind"]: result for result in results}\n'''
+          old = '''        if attempt5_path.stat().st_size < v028_path.stat().st_size:\n            chosen = attempt5_path\n            selected = "mosaic"\n        else:\n            chosen = v028_path\n            selected = "v028-fallback"\n        shutil.copyfile(chosen, out)\n        by_kind = {result["kind"]: result for result in results}\n'''
+          new = '''        # Snapshot candidate metadata before publication: ``os.replace`` intentionally removes the\n        # winner's old temporary path, so post-publication bookkeeping must not stat that path.\n        v028_bytes = v028_path.stat().st_size\n        attempt5_bytes = attempt5_path.stat().st_size\n        if attempt5_bytes < v028_bytes:\n            chosen = attempt5_path\n            selected = "mosaic"\n        else:\n            chosen = v028_path\n            selected = "v028-fallback"\n        # ``chosen`` and ``out`` now share a filesystem, so ``os.replace`` publishes the exact\n        # winning inode without another archive-sized payload copy. Temporary loser cleanup remains\n        # scoped to the TemporaryDirectory.\n        os.replace(chosen, out)\n        by_kind = {result["kind"]: result for result in results}\n'''
           if old not in s:
               raise SystemExit('selection-copy anchor not found')
           s = s.replace(old, new, 1)
-          old = '''            "scheduler_mode": "parallel-independent-portfolio",\n            "accepted_engine": ACCEPTED_ENGINE,\n'''
-          new = '''            "scheduler_mode": "parallel-independent-portfolio",\n            "selection_materialization": "same-filesystem-atomic-move",\n            "selection_extra_payload_write_bytes": 0,\n            "accepted_engine": ACCEPTED_ENGINE,\n'''
+          old = '''            "v028_bytes": v028_path.stat().st_size,\n            "attempt5_graph_bytes": attempt5_path.stat().st_size,\n            "scheduler_mode": "parallel-independent-portfolio",\n            "accepted_engine": ACCEPTED_ENGINE,\n'''
+          new = '''            "v028_bytes": v028_bytes,\n            "attempt5_graph_bytes": attempt5_bytes,\n            "scheduler_mode": "parallel-independent-portfolio",\n            "selection_materialization": "same-filesystem-atomic-move",\n            "selection_extra_payload_write_bytes": 0,\n            "accepted_engine": ACCEPTED_ENGINE,\n'''
           if old not in s:
               raise SystemExit('result-metadata anchor not found')
           s = s.replace(old, new, 1)
@@ -69,6 +69,10 @@ jobs:
           assert 'shutil.copyfile(chosen, out)' not in source
           assert 'os.replace(chosen, out)' in source
           assert 'dir=out.parent' in source
+          assert 'v028_bytes = v028_path.stat().st_size' in source
+          assert 'attempt5_bytes = attempt5_path.stat().st_size' in source
+          assert '"v028_bytes": v028_bytes' in source
+          assert '"attempt5_graph_bytes": attempt5_bytes' in source
           assert 'selection_extra_payload_write_bytes": 0' in source
           PY
           python -m pytest -q 2>&1 | tee zero-copy-pytest.log
