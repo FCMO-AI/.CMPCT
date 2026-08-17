@@ -91,8 +91,8 @@ def test_physical_table_rejects_gap_before_next_record() -> None:
     ph = g.PH.pack(g.CODEC_RAW, 1, 1, binascii.crc32(raw) & 0xFFFFFFFF, g.H(raw))
     record_start = g.HDR.size
     first_end = g.PH.size + len(raw)
-    # Two valid record bodies separated by one unowned byte.  The tail declaration itself is structurally
-    # valid, so the guard must prove exact physical ownership rather than merely sorted offsets.
+    # Two valid record bodies separated by one unowned byte. The guard must prove exact ownership between
+    # adjacent records even when no usable duplicate metadata exists to provide the archive-level endpoint.
     body = ph + raw + b"!" + ph + raw
     footer = g.FTR.pack(g.TAIL, 0, 0, g.H(b""), g._merkle_root([]))
     stream = io.BytesIO((b"\0" * record_start) + body + footer)
@@ -100,19 +100,23 @@ def test_physical_table_rejects_gap_before_next_record() -> None:
         guarded._validate_physical_table(stream, record_start, [0, first_end + 1])
 
 
-def test_valid_primary_survives_corrupted_redundant_footer(tmp_path: Path) -> None:
-    source = tmp_path / "source"
+def _build_recovery_fixture(tmp_path: Path, name: str) -> tuple[Path, Path]:
+    source = tmp_path / f"source-{name}"
     source.mkdir()
     payload = (b"tenant=17,status=active,score=0.125\n" * 5000) + bytes(range(256)) * 40
     (source / "records.bin").write_bytes(payload)
-    archive = tmp_path / "gir.cmpct"
+    archive = tmp_path / f"{name}.cmpct"
     guarded._build_gir(source, archive)
+    return source, archive
 
+
+def test_valid_primary_survives_corrupted_redundant_footer(tmp_path: Path) -> None:
+    source, archive = _build_recovery_fixture(tmp_path, "bad-tail-magic")
     data = bytearray(archive.read_bytes())
     data[-g.FTR.size] ^= 0x01  # corrupt only the duplicate-tail footer magic
     archive.write_bytes(data)
 
-    # Footnote: redundancy must remain two-way.  Hardening may ignore an unusable tail when the primary
+    # Footnote: redundancy must remain two-way. Hardening may ignore an unusable tail when the primary
     # metadata copy is authenticated; it must not accidentally turn the redundant footer into a single point
     # of failure for an otherwise complete archive.
     verified = guarded.strong_verify(archive)
@@ -120,11 +124,28 @@ def test_valid_primary_survives_corrupted_redundant_footer(tmp_path: Path) -> No
     assert verified["tree_sha256"] == guarded.treehash(source)
 
 
+def test_valid_primary_survives_plausible_but_unauthenticated_tail_lengths(tmp_path: Path) -> None:
+    source, archive = _build_recovery_fixture(tmp_path, "plausible-tail-corruption")
+    data = bytearray(archive.read_bytes())
+    footer_at = len(data) - g.FTR.size
+    magic, mcs, mus, meta_sha, merkle = g.FTR.unpack(bytes(data[footer_at:]))
+    assert magic == g.TAIL and mcs > 4
+    # Keep the correct magic and in-policy integer fields but shift the claimed metadata start by one byte.
+    # A syntax-only boundary validator would treat this corrupted footer as authoritative and reject a valid
+    # primary copy; authenticating the tail first must instead demote it to an unusable redundant suffix.
+    data[footer_at:] = g.FTR.pack(magic, mcs - 1, mus, meta_sha, merkle)
+    archive.write_bytes(data)
+
+    verified = guarded.strong_verify(archive)
+    assert verified["ok"] is True
+    assert verified["tree_sha256"] == guarded.treehash(source)
+
+
 def test_valid_tail_still_recovers_corrupted_primary_metadata(tmp_path: Path) -> None:
-    source = tmp_path / "source"
+    source = tmp_path / "source-tail-recovery"
     source.mkdir()
     (source / "records.bin").write_bytes((b"worker=07 route=/api/jobs latency=19\n" * 4000))
-    archive = tmp_path / "gir.cmpct"
+    archive = tmp_path / "tail-recovery.cmpct"
     guarded._build_gir(source, archive)
 
     data = bytearray(archive.read_bytes())
