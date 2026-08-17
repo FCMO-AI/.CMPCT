@@ -1,0 +1,99 @@
+{
+  "schema": "cmpct-v029-generalization-attempt1-failed-summary-v1",
+  "date": "2026-08-17",
+  "source_commit": "4cd406cde9e67af4730ac378706d4720a5c64876",
+  "workflow_run": 31986802152,
+  "artifact": {
+    "id": 9274380894,
+    "zip_sha256": "16b4122cd4334ae6d8d42732b9537215b7c6a808bb876b6c351196ef956d5ac6"
+  },
+  "accepted": false,
+  "result": "The first inherited-frontier generalization pass failed its preregistered gate. It nevertheless exposed two genuine residual-packing wins, three deterministic-baseline drift rows, and excessive aggregate creation cost. The result is diagnostic only and must not be used as v0.29 release evidence.",
+  "totals": {
+    "workloads": 15,
+    "v028_bytes_regenerated": 137557451,
+    "candidate_bytes": 137508850,
+    "nominal_smaller_than_regenerated_v028_pct": 0.035331419451789636,
+    "nominal_saving_bytes": 48601,
+    "workloads_improved": 2,
+    "workloads_regressed": 0,
+    "research_selected": 2,
+    "baseline_tree_drift_rows": 3,
+    "baseline_byte_drift_rows": 3,
+    "attempt5_portfolio_create_s": 1346.2764826040004,
+    "embedded_v028_portfolio_create_s": 370.9107159499998,
+    "creation_ratio_vs_v028": 3.6296510850484127,
+    "median_workload_creation_ratio_vs_v028": 1.991078796199319
+  },
+  "real_candidate_signals": [
+    {
+      "suite": "resemblance_hostile_v1",
+      "name": "01_shifted_versions",
+      "v028_bytes": 1761588,
+      "candidate_bytes": 1723056,
+      "saving_bytes": 38532,
+      "mechanism": "Residual Program Packing",
+      "residual_pack_records": 9,
+      "residual_packed_delta_nodes": 153,
+      "max_additional_recipe_read_amplification": 0.06773645177560665,
+      "create_ratio_vs_v028": 2.2618455173717913
+    },
+    {
+      "suite": "resemblance_hostile_v1",
+      "name": "03_boundary_churn",
+      "v028_bytes": 89945,
+      "candidate_bytes": 79876,
+      "saving_bytes": 10069,
+      "mechanism": "Residual Program Packing",
+      "residual_pack_records": 3,
+      "residual_packed_delta_nodes": 33,
+      "max_additional_recipe_read_amplification": 0.013324737548828125,
+      "create_ratio_vs_v028": 6.113953358584438
+    }
+  ],
+  "baseline_drift": [
+    {
+      "name": "02_office_workspace",
+      "preserved_tree_sha256": "6f29703d2d60dc4aa2ab281f27a35529f7d0a02727c5cb0b8c9af56a046bd412",
+      "regenerated_tree_sha256": "6980eefff8eee806c54433080c571e51cadad5f4fee2a30baed11d603261eb24",
+      "preserved_v028_bytes": 5954952,
+      "regenerated_v028_bytes": 5954950
+    },
+    {
+      "name": "05_logs_and_telemetry",
+      "preserved_tree_sha256": "fcd7ebb838a902c887e42da5eb4142567fe2f9ce805fabaef03fe20fd8d83417",
+      "regenerated_tree_sha256": "4ed00ac8bca74323d5169b753834cc10d8033b44270a5c6ed7160e87d46c9c63",
+      "preserved_v028_bytes": 3550611,
+      "regenerated_v028_bytes": 3550609
+    },
+    {
+      "name": "06_incremental_backups",
+      "preserved_tree_sha256": "dd21498c36637c0f49b9e5c6a69d43b48a0072d217876692890835827d9d60d9",
+      "regenerated_tree_sha256": "b809f22250076c996511dde999b3368488754462aa0d61ff423b2516047a15ae",
+      "preserved_v028_bytes": 8223840,
+      "regenerated_v028_bytes": 8223838
+    }
+  ],
+  "creation_hotspots": [
+    {
+      "name": "10_large_mixed_binary",
+      "selected": "v028-fallback",
+      "candidate_saving_bytes": 0,
+      "attempt5_create_s": 559.17458352,
+      "embedded_v028_create_s": 24.540229845,
+      "create_ratio_vs_v028": 22.78603693004653,
+      "interpretation": "bounded mosaic discovery spent extreme CPU on a workload whose research graph lost; early rejection/graph-shape budgeting is required before promotion"
+    },
+    {
+      "name": "03_boundary_churn",
+      "selected": "mosaic",
+      "candidate_saving_bytes": 10069,
+      "create_ratio_vs_v028": 6.113953358584438,
+      "interpretation": "real residual-packing byte win but creation path is too expensive for release-quality generalization"
+    }
+  ],
+  "additional_invalidation": {
+    "ordinary_pack_locality_gap": "The attempt-5 mosaic-specific pass also omitted the released-v0.28 <=8x ordinary root-pack gate; compressed_stream_avalan reported ~23.68x. Strict-baseline reconciliation is therefore mandatory before any attempt-5 acceptance status can support promotion."
+  },
+  "next_step": "Use the strict-v0.28 reconciliation wrapper, repair deterministic corpus drift, gate ordinary pack locality <=8x, and reduce wasted candidate-discovery CPU—especially on large_mixed_binary—without changing the preserved byte/coverage thresholds."
+}
