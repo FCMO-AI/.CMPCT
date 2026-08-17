@@ -24,11 +24,23 @@ jobs:
       - uses: actions/checkout@v6
         with:
           ref: frontier/full-completion-20260815
+          fetch-depth: 0
       - uses: actions/setup-python@v6
         with:
           python-version: '3.11'
       - name: Apply extraction hardening
         run: python tools/agent_patch_extraction.py
+      - name: Prove mutation scope is limited
+        shell: bash
+        run: |
+          set -euo pipefail
+          git status --short
+          unexpected="$({ git diff --name-only; git ls-files --others --exclude-standard; } | sort -u | grep -Ev '^(native/cmpct-core/src/lib\.rs|native/cmpct-core/src/recovery\.rs|native/cmpct-core/include/cmpct\.h|native/cmpct-core/tests/recovery_golden\.rs|tests/native_stream_extract_abi\.py)$' || true)"
+          if [ -n "$unexpected" ]; then
+            echo 'Extraction patch touched files outside its declared safety surface:' >&2
+            echo "$unexpected" >&2
+            exit 1
+          fi
       - name: Format and validate focused frontier
         shell: bash
         run: |
@@ -51,10 +63,14 @@ jobs:
           if-no-files-found: error
           retention-days: 7
       - name: Commit validated hardening
+        shell: bash
         run: |
+          set -euo pipefail
           rm .github/workflows/agent-extraction-hardening.yml tools/agent_patch_extraction.py
           git config user.name 'CMPCT automation'
           git config user.email 'actions@users.noreply.github.com'
           git add -A
+          git diff --cached --check
+          git diff --cached --quiet && exit 0
           git commit -m 'Harden native extraction resource and mode handling'
           git push origin HEAD:frontier/full-completion-20260815
