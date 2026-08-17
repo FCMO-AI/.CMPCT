@@ -7,19 +7,21 @@ corrupted primary declaration could therefore make a healthy tail index insuffic
 This successor keeps the same logical r25 index and Geometry blob grammar while replacing only the fresh-build
 footer with a self-locating form:
 
-``magic, kind, codec, flags, reserved, index_csize, index_usize, prev_footer, record_base, index_sha256``.
+``magic, kind, codec, flags, reserved, index_csize, index_usize, prev_footer, record_base, tail_certificate``.
 
-The reader validates the authenticated tail index, the explicit record base, and the complete canonical blob
-extent table before returning an index.  If the tail is damaged, an independently valid primary header/index
-can still recover the archive.  If both are valid they must describe the same record base and identical index.
+The tail certificate is domain-separated SHA-256 over every recovery-critical scalar plus the decoded index
+bytes.  The reader therefore does not merely trust a record offset because it happens to sit beside an index
+hash: changing ``record_base`` or any framing field invalidates the certificate.  After that cryptographic
+binding, the complete authenticated blob table must independently prove one contiguous physical region from
+``record_base`` to the tail-index copy.
 
-Footnote: the footer's ``record_base`` is not trusted merely because it sits next to an index hash.  It is
-accepted only when every authenticated blob descriptor forms one contiguous region beginning there and ending
-exactly where the authenticated tail-index copy begins.  This turns a corrupted offset into a failed recovery
-rather than a seek into attacker-chosen bytes.
+The primary path retains the canonical header's SHA-256 over the decoded index.  If both primary and tail are
+valid they must resolve to identical indexes and the same record base.  Either independently valid path may
+recover a fresh archive when the other one is damaged.
 
-This is still an evidence reader/writer until the same footer/codec is implemented in ``src/cmpct`` and the
-memory-safe native reader.  Transaction generations remain a separate release gate.
+Footnote: this is still an evidence reader/writer until the same footer/codec is implemented in ``src/cmpct``
+and the memory-safe native reader. Transaction generations remain a separate release gate; this fresh-build
+contract refuses nonzero ``prev_footer`` rather than approximating journal semantics.
 """
 from __future__ import annotations
 
@@ -35,6 +37,8 @@ from cmpct.codec import BHDR, HDR, sha, zd
 from experiments import canonical_v25_geometry as V25
 
 V25_FTR = struct.Struct("<8sBBBBQQQQ32s")
+TAIL_CERT_DOMAIN = b"CMPCT25-TAIL-CERT-V1\0"
+TAIL_CERT_SCALARS = struct.Struct("<BBBBQQQQ")
 MAX_INDEX_COMPRESSED = 256 * 1024 * 1024
 MAX_INDEX_RAW = 256 * 1024 * 1024
 
@@ -66,7 +70,7 @@ def _canonical_blob_span(index: dict, record_base: int, data_end: int) -> int:
     return cursor
 
 
-def _decode_index(encoded: bytes, codec: int, usize: int, digest: bytes) -> dict:
+def _decode_index_payload(encoded: bytes, codec: int, usize: int) -> tuple[bytes, dict]:
     if type(usize) is not int or usize < 0 or usize > MAX_INDEX_RAW:
         raise IOError("r25 index raw size exceeds bound")
     if codec == 0:
@@ -75,15 +79,41 @@ def _decode_index(encoded: bytes, codec: int, usize: int, digest: bytes) -> dict
         raw = zd(encoded, usize)
     else:
         raise IOError("unsupported r25 index codec")
-    if len(raw) != usize or sha(raw) != bytes(digest):
-        raise IOError("r25 index authentication failure")
+    if len(raw) != usize:
+        raise IOError("r25 index decoded-size mismatch")
     try:
         index = msgpack.unpackb(raw, raw=False, strict_map_key=False)
     except Exception as exc:
         raise IOError("malformed r25 index") from exc
     if not isinstance(index, dict) or int(index.get("v", 0)) != V25.V25_VERSION:
         raise IOError("r25 index version mismatch")
+    return raw, index
+
+
+def _decode_primary_index(encoded: bytes, usize: int, digest: bytes) -> dict:
+    raw, index = _decode_index_payload(encoded, 1, usize)
+    if sha(raw) != bytes(digest):
+        raise IOError("r25 primary index authentication failure")
     return index
+
+
+def _tail_certificate(
+    *,
+    kind: int,
+    codec: int,
+    flags: int,
+    reserved: int,
+    csize: int,
+    usize: int,
+    prev: int,
+    record_base: int,
+    index_raw: bytes,
+) -> bytes:
+    scalars = TAIL_CERT_SCALARS.pack(
+        int(kind), int(codec), int(flags), int(reserved),
+        int(csize), int(usize), int(prev), int(record_base),
+    )
+    return sha(TAIL_CERT_DOMAIN + scalars + index_raw)
 
 
 def _try_primary(stream, file_size: int):
@@ -104,7 +134,7 @@ def _try_primary(stream, file_size: int):
     encoded = stream.read(csize)
     if len(encoded) != csize:
         raise IOError("short r25 primary index")
-    index = _decode_index(encoded, 1, int(usize), digest)
+    index = _decode_primary_index(encoded, int(usize), digest)
     _canonical_blob_span(index, record_base, data_end)
     return index, record_base
 
@@ -117,7 +147,7 @@ def _try_tail(stream, file_size: int):
     raw_footer = stream.read(V25_FTR.size)
     if len(raw_footer) != V25_FTR.size:
         raise IOError("short r25 recovery footer")
-    magic, kind, codec, flags, reserved, csize, usize, prev, record_base, digest = V25_FTR.unpack(raw_footer)
+    magic, kind, codec, flags, reserved, csize, usize, prev, record_base, certificate = V25_FTR.unpack(raw_footer)
     if magic != V25.V25_FMAGIC or kind != 0 or flags != 0 or reserved != 0 or prev != 0:
         raise IOError("unsupported r25 recovery footer declaration")
     if csize > MAX_INDEX_COMPRESSED or usize > MAX_INDEX_RAW or csize > footer_pos:
@@ -129,20 +159,27 @@ def _try_tail(stream, file_size: int):
     encoded = stream.read(csize)
     if len(encoded) != csize:
         raise IOError("short r25 tail index")
-    index = _decode_index(encoded, int(codec), int(usize), digest)
+    index_raw, index = _decode_index_payload(encoded, int(codec), int(usize))
+    expected = _tail_certificate(
+        kind=int(kind), codec=int(codec), flags=int(flags), reserved=int(reserved),
+        csize=int(csize), usize=int(usize), prev=int(prev), record_base=int(record_base),
+        index_raw=index_raw,
+    )
+    if bytes(certificate) != expected:
+        raise IOError("r25 tail recovery certificate mismatch")
     _canonical_blob_span(index, int(record_base), tail_index_start)
     return index, int(record_base)
 
 
 def compile_r24_to_r25(source: Path, out: Path) -> dict:
-    """Build the historical r25 physical candidate, then replace its footer with the self-locating contract."""
+    """Build the historical r25 physical candidate, then replace its footer with the bound recovery contract."""
     with tempfile.TemporaryDirectory(prefix="cmpct-r25-selflocating-") as td:
         old_path = Path(td) / "historical-r25.cmpct"
         stats = _original_compile(source, old_path)
         data = old_path.read_bytes()
         if len(data) < V25.FTR.size + HDR.size:
             raise RuntimeError("historical r25 candidate is unexpectedly short")
-        magic, kind, codec, flags, reserved, csize, usize, prev, digest = V25.FTR.unpack_from(
+        magic, kind, codec, flags, reserved, csize, usize, prev, _old_digest = V25.FTR.unpack_from(
             data, len(data) - V25.FTR.size
         )
         if magic != V25.V25_FMAGIC or kind != 0 or prev != 0:
@@ -151,9 +188,19 @@ def compile_r24_to_r25(source: Path, out: Path) -> dict:
         if hmagic != V25.V25_MAGIC or hver != V25.V25_VERSION:
             raise RuntimeError("historical r25 header identity drift")
         record_base = HDR.size + int(primary_csize)
+        old_footer_pos = len(data) - V25.FTR.size
+        tail_index_start = old_footer_pos - int(csize)
+        if tail_index_start < record_base:
+            raise RuntimeError("historical r25 tail index overlaps physical data")
+        tail_encoded = data[tail_index_start:old_footer_pos]
+        index_raw, _index = _decode_index_payload(tail_encoded, int(codec), int(usize))
+        certificate = _tail_certificate(
+            kind=int(kind), codec=int(codec), flags=int(flags), reserved=int(reserved),
+            csize=int(csize), usize=int(usize), prev=0, record_base=record_base, index_raw=index_raw,
+        )
         new_footer = V25_FTR.pack(
             V25.V25_FMAGIC, kind, codec, flags, reserved,
-            int(csize), int(usize), 0, record_base, digest,
+            int(csize), int(usize), 0, record_base, certificate,
         )
         out.write_bytes(data[:-V25.FTR.size] + new_footer)
     result = dict(stats)
@@ -161,6 +208,7 @@ def compile_r24_to_r25(source: Path, out: Path) -> dict:
         "archive_bytes": out.stat().st_size,
         "saving_vs_r24_bytes": source.stat().st_size - out.stat().st_size,
         "self_locating_tail": True,
+        "tail_certificate_binds_record_base": True,
         "record_base_in_footer": record_base,
         "recovery_footer_bytes": V25_FTR.size,
     })
