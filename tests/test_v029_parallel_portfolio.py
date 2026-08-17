@@ -20,6 +20,8 @@ def test_parallel_scheduler_preserves_exact_selected_archive(tmp_path: Path) -> 
     # self-consistent bytes, so byte equality alone is not sufficient protection against stale engines.
     assert par["accepted_engine"] == ACCEPTED_ENGINE == "attempt5-residual-program-packing"
     assert par["scheduler_mode"] == "parallel-independent-portfolio"
+    assert par["selection_materialization"] == "same-filesystem-atomic-move"
+    assert par["selection_extra_payload_write_bytes"] == 0
     assert par["selected"] == seq["selected"]
     assert par["archive_bytes"] == seq["archive_bytes"]
     assert par["v028_bytes"] == seq["v028_bytes"]
