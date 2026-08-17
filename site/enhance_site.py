@@ -14,7 +14,8 @@ import re
 import tomllib
 from pathlib import Path
 
-from frontier_v028_adapter import patch_project_data
+from frontier_v028_adapter import patch_project_data as patch_v028_project_data
+from frontier_v029_adapter import patch_project_data as patch_v029_project_data
 
 ROOT = Path(__file__).resolve().parents[1]
 SURFACE_FILE = ROOT / "SURFACE_REVISION"
@@ -69,6 +70,13 @@ def patch_index(output: Path, version: str, surface: str) -> None:
             '<script type="module" src="assets/motion.js"></script>\n'
             '  <!-- Footnote: schema adapter changes labels only after evidence declares the v0.28 contract. -->\n'
             '  <script type="module" src="assets/frontier-v028.js"></script>',
+        )
+    if "assets/frontier-v029.js" not in html:
+        html = html.replace(
+            '<script type="module" src="assets/frontier-v028.js"></script>',
+            '<script type="module" src="assets/frontier-v028.js"></script>\n'
+            '  <!-- Footnote: v0.29 is additive; its renderer activates only for the explicit Mosaic evidence schema. -->\n'
+            '  <script type="module" src="assets/frontier-v029.js"></script>',
         )
 
     html = re.sub(
@@ -144,10 +152,11 @@ def patch_machine_state(output: Path, surface: str) -> None:
 def enhance(output: Path) -> None:
     version = project_version()
     surface = surface_revision(version)
-    # Footnote: normalize the newest evidence before presentation code reads project-data.json. Older
-    # v0.25 records remain in history; the adapter only promotes a newer committed v0.28 record when
-    # its explicit schema is present, so a missing/corrupt record fails soft to the old frontier.
-    patch_project_data(output)
+    # Footnote: adapters run oldest-to-newest. v0.28 remains available for historical/current 0.28
+    # builds, while an explicit v0.29 public record supersedes it only when that newer schema exists.
+    # Missing/corrupt new evidence therefore cannot erase the last accepted frontier silently.
+    patch_v028_project_data(output)
+    patch_v029_project_data(output)
     patch_index(output, version, surface)
     patch_machine_state(output, surface)
 
