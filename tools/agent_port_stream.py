@@ -1,0 +1,150 @@
+from pathlib import Path
+
+lib = Path("native/cmpct-core/src/lib.rs")
+text = lib.read_text()
+entry_anchor = "#[repr(C)]\npub struct CmpctEntryInfo {"
+stream_struct = """#[repr(C)]
+pub struct CmpctStream {
+    archive: *const Archive,
+    index: usize,
+    offset: u64,
+}
+
+"""
+assert entry_anchor in text
+assert "pub struct CmpctStream" not in text
+text = text.replace(entry_anchor, stream_struct + entry_anchor, 1)
+
+end_anchor = """    match archive.read_range(index, offset, out) {
+        Ok(n) => {
+            *out_read = n;
+            CmpctStatus::Ok as c_int
+        }
+        Err(error) => error_status(&error) as c_int,
+    }
+}
+
+#[cfg(test)]"""
+stream_fns = """    match archive.read_range(index, offset, out) {
+        Ok(n) => {
+            *out_read = n;
+            CmpctStatus::Ok as c_int
+        }
+        Err(error) => error_status(&error) as c_int,
+    }
+}
+
+/// Open a forward-only sequential stream for one logical entry.
+///
+/// The stream is deliberately a thin cursor over the same authenticated `read_range` path used by
+/// random access, so platform integrations do not need a second decoder or integrity policy.
+///
+/// # Safety
+/// `archive` must remain live until the returned stream is closed; `out` must be writable.
+#[no_mangle]
+pub unsafe extern "C" fn cmpct_entry_stream_open(
+    archive: *const Archive,
+    index: usize,
+    out: *mut *mut CmpctStream,
+) -> c_int {
+    let Some(archive_ref) = archive.as_ref() else {
+        return CmpctStatus::Null as c_int;
+    };
+    let Some(out) = out.as_mut() else {
+        return CmpctStatus::Null as c_int;
+    };
+    *out = ptr::null_mut();
+    if archive_ref.entries.get(index).is_none() {
+        return CmpctStatus::Range as c_int;
+    }
+    *out = Box::into_raw(Box::new(CmpctStream {
+        archive,
+        index,
+        offset: 0,
+    }));
+    CmpctStatus::Ok as c_int
+}
+
+/// Read the next bytes from a sequential stream. EOF is `CMPCT_OK` with `out_read == 0`.
+///
+/// # Safety
+/// `stream` must be live; `buffer` must be writable for `length` bytes when non-null; `out_read`
+/// must be writable; and the parent archive must remain live for the stream lifetime.
+#[no_mangle]
+pub unsafe extern "C" fn cmpct_stream_read(
+    stream: *mut CmpctStream,
+    buffer: *mut u8,
+    length: usize,
+    out_read: *mut usize,
+) -> c_int {
+    let Some(stream) = stream.as_mut() else {
+        return CmpctStatus::Null as c_int;
+    };
+    let Some(out_read) = out_read.as_mut() else {
+        return CmpctStatus::Null as c_int;
+    };
+    *out_read = 0;
+    if length > 0 && buffer.is_null() {
+        return CmpctStatus::Null as c_int;
+    }
+    let Some(archive) = stream.archive.as_ref() else {
+        return CmpctStatus::Null as c_int;
+    };
+    let out = if length == 0 {
+        &mut []
+    } else {
+        std::slice::from_raw_parts_mut(buffer, length)
+    };
+    match archive.read_range(stream.index, stream.offset, out) {
+        Ok(read) => {
+            let Some(next) = stream.offset.checked_add(read as u64) else {
+                return CmpctStatus::Range as c_int;
+            };
+            stream.offset = next;
+            *out_read = read;
+            CmpctStatus::Ok as c_int
+        }
+        Err(error) => error_status(&error) as c_int,
+    }
+}
+
+/// # Safety
+/// `stream` must be returned by `cmpct_entry_stream_open` and closed exactly once.
+#[no_mangle]
+pub unsafe extern "C" fn cmpct_stream_close(stream: *mut CmpctStream) {
+    if !stream.is_null() {
+        drop(Box::from_raw(stream));
+    }
+}
+
+#[cfg(test)]"""
+assert end_anchor in text
+text = text.replace(end_anchor, stream_fns, 1)
+lib.write_text(text)
+
+header = Path("native/cmpct-core/include/cmpct.h")
+h = header.read_text()
+assert "typedef struct CmpctStream CmpctStream;" not in h
+h = h.replace(
+    "typedef struct CmpctArchive CmpctArchive;\n",
+    "typedef struct CmpctArchive CmpctArchive;\ntypedef struct CmpctStream CmpctStream;\n",
+    1,
+)
+decl_anchor = """int32_t cmpct_entry_read_range(
+    const CmpctArchive *archive,
+    size_t index,
+    uint64_t offset,
+    uint8_t *buffer,
+    size_t length,
+    size_t *out_read
+);
+"""
+declarations = decl_anchor + """
+/* Forward-only sequential reading over the same authenticated native range path. */
+int32_t cmpct_entry_stream_open(const CmpctArchive *archive, size_t index, CmpctStream **out);
+int32_t cmpct_stream_read(CmpctStream *stream, uint8_t *buffer, size_t length, size_t *out_read);
+void cmpct_stream_close(CmpctStream *stream);
+"""
+assert decl_anchor in h
+h = h.replace(decl_anchor, declarations, 1)
+header.write_text(h)
