@@ -20,9 +20,9 @@ meaningful pool is the compressed payload of the large direct/root records.
 ## Hypothesis
 
 Keep attempt #5's exact physical record boundaries and logical graph, but let profitable direct/root
-zstd records share one small archive-global trained dictionary. Zstandard's dictionary API is explicitly
-designed to improve independently compressed small/medium records by supplying useful history at the
-start of each frame; unlike making root packs larger, this can add cross-record context without merging
+records—including a currently RAW record when profitable—use zstd with one small archive-global trained
+dictionary. Zstandard's dictionary API supplies useful history at the start of otherwise independent
+frames; unlike making root packs larger, this can add cross-record compression context without merging
 random-access units.
 
 The oracle trains candidate dictionaries at **8, 16, 32, 64, 96 and 128 KiB** from deterministic bounded
@@ -33,11 +33,14 @@ head/tail samples of existing direct/root records. For each dictionary it:
 3. keeps only records whose physical payload actually shrinks;
 4. charges the dictionary itself as a new raw authenticated physical record plus **512 B** reserved
    metadata/descriptor cost;
-5. preserves the existing <=8x materialization envelope; and
-6. charges a cold target the dictionary once, rejecting any target where dictionary-only overhead exceeds
-   **2.0x** its logical size.
+5. preserves the existing weighted direct-pack <=8x materialization envelope;
+6. requires every dependent target actually touched by the new dictionary to remain <=8x; and
+7. charges a cold touched target the dictionary once, rejecting dictionary-only overhead above **2.0x**
+   its logical size.
 
-The produced `.cmpct` file remains the exact attempt-5 archive. This is a size/locality ceiling only.
+Untouched attempt-5 nodes cannot fail the new mechanism's locality gate merely because their inherited
+read economics use a different policy. The produced `.cmpct` file remains the exact attempt-5 archive.
+This is a size/locality ceiling only.
 
 ## Frozen gate
 
@@ -47,8 +50,8 @@ A reader-visible shared-dictionary design is worth considering only if one candi
 - >= **8** independently profitable, locality-admissible direct/root records;
 - exact dictionary compression/decompression round-trip for every measured record;
 - weighted direct-pack materialization <= **8x**;
-- maximum dependent-node materialization <= **8x**; and
-- additional cold dictionary materialization <= **2x** per target.
+- maximum materialization among targets touched by the dictionary <= **8x**; and
+- additional cold dictionary materialization <= **2x** per touched target.
 
 The 128 KiB requirement deliberately exceeds the current structural crossing gap. A new decoder
 dependency must have enough headroom to pay for native-reader work, recovery metadata, CPU, and any
