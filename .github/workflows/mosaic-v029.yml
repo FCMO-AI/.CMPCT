@@ -86,7 +86,7 @@ jobs:
           assert t['max_read_amplification'] <= 8.0, t
           PY
 
-      - name: Measure complete v0.28 versus strict mosaic artifacts
+      - name: Measure complete v0.28 versus strict research artifacts
         run: |
           set -o pipefail
           python benchmarks/mosaic_v029_archive_bench.py \
@@ -110,9 +110,10 @@ jobs:
           assert v2['workloads_improved'] >= 4, v2
           assert combined['mosaic_selected'] >= 5, combined
           assert combined['max_mosaic_read_amplification'] <= 8.0, combined
-          # Footnote: these complete-artifact thresholds were frozen in MOSAIC_V029_CAMPAIGN.md before
-          # this workflow first measured the strict CMPNX9 engine. A red result changes the mechanism,
-          # not these numbers.
+          assert combined['max_additional_recipe_read_amplification'] <= 2.0, combined
+          # Footnote: the complete-artifact size/coverage thresholds were frozen before attempt #1 and
+          # are unchanged. Attempt #5 only adds the separately preregistered <=2x residual-recipe
+          # over-read ceiling; a red result changes the mechanism, not any of these numbers.
           PY
 
       - name: Existing regression suite
@@ -144,12 +145,14 @@ jobs:
           path=Path('benchmark-artifacts/mosaic-v029-full-artifact.json')
           if path.exists():
               r=json.loads(path.read_text()); v2=r['suites']['v2']['totals']; c=r['combined']
-              print('## Multi-root mosaic — complete artifacts')
+              print('## Multi-root + residual placement — complete artifacts')
               print(f"- v2: **{v2['candidate_bytes']:,} B** vs **{v2['v028_bytes']:,} B** ({v2['smaller_than_v028_pct']:.3f}% smaller)")
               print(f"- combined: **{c['candidate_bytes']:,} B** vs **{c['v028_bytes']:,} B** ({c['smaller_than_v028_pct']:.3f}% smaller)")
-              print(f"- combined mosaic-selected workloads: **{c['mosaic_selected']}/{c['workloads']}**")
+              print(f"- combined research-selected workloads: **{c['mosaic_selected']}/{c['workloads']}**")
               print(f"- combined regressions: **{c['workloads_regressed']}**")
-              print(f"- max descriptor-actual amplification: **{c['max_mosaic_read_amplification']:.3f}x**")
+              print(f"- residual packs / packed delta nodes: **{c['residual_pack_records']} / {c['residual_packed_delta_nodes']}**")
+              print(f"- max mosaic amplification: **{c['max_mosaic_read_amplification']:.3f}x**")
+              print(f"- max additional recipe-pack amplification: **{c['max_additional_recipe_read_amplification']:.4f}x**")
           PY
 
       - name: Upload research evidence
