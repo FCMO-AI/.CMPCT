@@ -21,14 +21,18 @@ def test_safe_search_thresholds_every_finalist_against_original_incumbent(monkey
     def fake_forward(_raw, _width, _alignment, predictor, _basis):
         # Both candidates clear the 64-byte threshold versus Geometry. The second is only five bytes better
         # than the first; an order-dependent implementation would wrongly reject it after choosing `first`.
-        return b"A" if predictor == "first" else b"B"
+        # Footnote: transformed mocks intentionally remain larger than the mocked compressed payloads.
+        # Production BPA legitimately falls back to an uncompressed transform when compression expands it;
+        # a one-byte mock would test that independent fallback law instead of the search-order invariant.
+        marker = b"A" if predictor == "first" else b"B"
+        return marker * 1200
 
     monkeypatch.setattr(BPA, "forward", fake_forward)
     monkeypatch.setattr(BPA, "inverse", lambda _encoded, _logical_size: raw[:_logical_size])
-    monkeypatch.setattr(BPA, "_screen_size", lambda transformed: 1 if transformed == b"A" else 2)
+    monkeypatch.setattr(BPA, "_screen_size", lambda transformed: 1 if transformed[:1] == b"A" else 2)
 
     def fake_zc(transformed, _level):
-        return b"1" * 900 if transformed == b"A" else b"2" * 895
+        return b"1" * 900 if transformed[:1] == b"A" else b"2" * 895
 
     monkeypatch.setattr(SAFE.G, "zc", fake_zc)
     result = SAFE.audition(raw)
