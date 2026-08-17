@@ -48,7 +48,7 @@ jobs:
           rustup toolchain install 1.89.0 --profile minimal
           cargo +1.89.0 build --release --manifest-path native/preflate-bridge/Cargo.toml
 
-      - name: Prove same-path two-pass repair and measure v0.28
+      - name: Prove cross-path two-pass repair and measure v0.28
         run: |
           mkdir -p benchmark-artifacts
           python benchmarks/neutral_hostile_determinism_repair_check.py \
@@ -61,8 +61,9 @@ jobs:
           import json
           from pathlib import Path
           r=json.loads(Path('benchmark-artifacts/neutral-hostile-v1-determinism-repair.json').read_text())
-          assert r['schema'] == 'cmpct-neutral-hostile-v1-determinism-repair-manifest-v2'
-          assert r['requirements']['same_absolute_regeneration_path'] is True
+          assert r['schema'] == 'cmpct-neutral-hostile-v1-determinism-repair-manifest-v3'
+          assert r['requirements']['two_cross_path_regenerations_match'] is True
+          assert r['requirements']['content_derived_reportlab_xobject_identity'] is True
           assert r['requirements']['broad_pdf_fixture_replacement_rejected'] is True
           assert len(r['rows']) == 3
           assert r['accepted'] is True, r
@@ -82,13 +83,13 @@ jobs:
           import json
           from pathlib import Path
           r=json.loads(Path('benchmark-artifacts/neutral-hostile-v1-determinism-repair.json').read_text())
-          print('## Neutral/hostile v1 same-path determinism repair')
+          print('## Neutral/hostile v1 cross-path determinism repair')
           print(f"- accepted: **{r['accepted']}**")
           for row in r['rows']:
               print(f"- **{row['name']}**: deterministic={row['deterministic']}, first=`{row['tree_sha256'][:16]}…`, second=`{row['second_build_tree_sha256'][:16]}…`, file diffs={len(row['file_differences'])}")
               if row['raw_pdf_rounds']:
                   a,b=row['raw_pdf_rounds']
-                  print(f"  - same-path raw PDF: {a['bytes']:,} / {b['bytes']:,} B; hashes equal={a['sha256']==b['sha256']}")
+                  print(f"  - cross-path raw PDF: {a['bytes']:,} / {b['bytes']:,} B; hashes equal={a['sha256']==b['sha256']}")
               if row['v028_candidate_bytes'] is not None:
                   print(f"  - repaired v0.28: **{row['v028_candidate_bytes']:,} B**, historical delta={row['repair_candidate_byte_delta']:+,} B")
           print('- Historical v0.28 evidence remains immutable; broad PDF substitution was explicitly rejected.')
@@ -105,6 +106,5 @@ jobs:
             benchmark-artifacts/CMPCT_Neutral_Hostile_Determinism_Repair/forensics/*.pdf
           if-no-files-found: warn
 
-# Footnote: the same absolute scratch path is part of the evidence contract because ReportLab XObject
-# names legitimately depend on source-image paths. Different-path builds are different producer inputs,
-# not a valid determinism test. The workflow still fails closed on any same-path byte drift.
+# Footnote: cross-path byte identity is part of the acceptance contract. ReportLab resource names are
+# deliberately made content-derived so temporary CI directories cannot perturb the benchmark tree.
