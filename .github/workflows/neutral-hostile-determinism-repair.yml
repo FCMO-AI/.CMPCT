@@ -1,0 +1,93 @@
+name: CMPCT neutral-hostile determinism repair
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-neutral-hostile-determinism-repair-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  prove:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    env:
+      CMPCT_PREFLATE_BRIDGE: ${{ github.workspace }}/native/preflate-bridge/target/release/cmpct-preflate-bridge
+    steps:
+      - name: Check out candidate
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install pinned corpus dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y zstd gcc libsndfile1
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[audio,test]'
+          python -m pip install \
+            pillow==12.3.0 \
+            reportlab==5.0.0 \
+            python-docx==1.2.0 \
+            openpyxl==3.1.5 \
+            python-pptx==1.0.2 \
+            numpy==2.4.6
+
+      - name: Build pinned memory-safe Preflate bridge
+        run: |
+          rustup toolchain install 1.89.0 --profile minimal
+          cargo +1.89.0 build --release --manifest-path native/preflate-bridge/Cargo.toml
+
+      - name: Prove two-pass deterministic repair and measure v0.28
+        run: |
+          mkdir -p benchmark-artifacts
+          python benchmarks/neutral_hostile_determinism_repair_check.py \
+            --work-root benchmark-artifacts/CMPCT_Neutral_Hostile_Determinism_Repair \
+            --output benchmark-artifacts/neutral-hostile-v1-determinism-repair.json
+
+      - name: Enforce repair contract
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          r=json.loads(Path('benchmark-artifacts/neutral-hostile-v1-determinism-repair.json').read_text())
+          assert r['schema'] == 'cmpct-neutral-hostile-v1-determinism-repair-manifest-v1'
+          assert len(r['rows']) == 3
+          for row in r['rows']:
+              assert row['tree_sha256'] == row['second_build_tree_sha256'], row
+              assert row['v028_candidate_bytes'] > 0, row
+          print(json.dumps(r, indent=2))
+          PY
+
+      - name: Summarize repair identity
+        run: |
+          python - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          import json
+          from pathlib import Path
+          r=json.loads(Path('benchmark-artifacts/neutral-hostile-v1-determinism-repair.json').read_text())
+          print('## Neutral/hostile v1 determinism repair')
+          for row in r['rows']:
+              print(f"- **{row['name']}**: tree `{row['tree_sha256'][:16]}…`, v0.28={row['v028_candidate_bytes']:,} B, historical delta={row['repair_candidate_byte_delta']:+,} B")
+          print('- Historical v0.28 evidence remains unchanged; this is a separate substrate-repair identity.')
+          PY
+
+      - name: Upload repair evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: cmpct-neutral-hostile-determinism-repair-${{ github.sha }}
+          path: benchmark-artifacts/neutral-hostile-v1-determinism-repair.json
+
+# Footnote: this workflow is intentionally independent from the v0.29 compression gate. Its only job is
+# to prove that repaired benchmark inputs reproduce byte-for-byte twice before a new baseline manifest
+# can be adopted. A red here means the substrate remains untrustworthy; compression thresholds do not
+# get relaxed to accommodate it.
