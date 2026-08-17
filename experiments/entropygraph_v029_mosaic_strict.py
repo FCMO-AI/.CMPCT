@@ -1,17 +1,16 @@
-"""Strict-locality wrapper for the CMPCT multi-root mosaic full-artifact experiment.
+"""Strict evidence wrapper for the second CMPCT multi-root mosaic full-artifact experiment.
 
-The first full-artifact engine records a bounded candidate-root list in each mosaic descriptor.  Its
-reader materializes that entire list before decoding the opcode stream.  Therefore locality accounting
-must charge **every descriptor-listed root**, not only slots that ultimately emit COPY bytes.
+Attempt #1 used this wrapper to compensate for descriptors that listed more roots than COPY opcodes
+actually needed.  Attempt #2 fixes that mismatch in the representation itself: mosaic payloads are
+re-encoded until the descriptor contains only roots that are genuinely referenced, and locality then
+charges every descriptor root exactly as the reader materializes it.
 
-Rather than hiding that correction inside benchmark code, this wrapper makes the stricter semantics an
-executable research engine.  It mirrors the v0.28 ``entropygraph_v028_strict`` pattern: the underlying
-experiment remains inspectable, while evidence and any future promotion use the conservative contract.
+This wrapper now points the benchmark/conformance surface at ``entropygraph_v029_mosaic_leaf.py`` while
+leaving attempt #1 intact for reproducibility.  The wrapper remains useful as the stable evidence entry
+point so benchmark scripts and tests do not quietly switch experimental engines by importing a new file.
 
-Footnote: patching ``used_base_slots`` here is deliberately harsher than the primitive metric.  The
-mosaic payload itself is unchanged; the wrapper simply makes admission behave as though every supplied
-slot is used, which exactly matches what the current reader materializes.  A future grammar may encode a
-compacted root dictionary, but it must earn that lower read cost with real bytes and reader behavior.
+Footnote: no threshold or canonical-format behavior changes here. The preregistered full-artifact gate
+continues to compare the strict evidence entry point against complete v0.28 artifacts.
 """
 from __future__ import annotations
 
@@ -22,31 +21,23 @@ from pathlib import Path
 import sys
 
 HERE = Path(__file__).resolve().parent
-BASE_PATH = HERE / "entropygraph_v029_mosaic.py"
+IMPL_PATH = HERE / "entropygraph_v029_mosaic_leaf.py"
 
 
-def _load_base():
-    spec = importlib.util.spec_from_file_location("cmpct_entropygraph_v029_mosaic_base", BASE_PATH)
+def _load_impl():
+    spec = importlib.util.spec_from_file_location("cmpct_entropygraph_v029_mosaic_leaf_strict", IMPL_PATH)
     if spec is None or spec.loader is None:
-        raise RuntimeError("cannot load mosaic full-artifact engine")
+        raise RuntimeError("cannot load leaf-mosaic full-artifact engine")
     module = importlib.util.module_from_spec(spec)
-    # Footnote: dynamic modules are registered before execution so dataclass/type machinery in future
-    # research dependencies sees a normal import environment instead of an anonymous loader object.
     sys.modules[spec.name] = module
     spec.loader.exec_module(module)
     return module
 
 
-BASE = _load_base()
-
-
-def _all_descriptor_slots(stats) -> tuple[int, ...]:
-    return tuple(range(len(stats.copied_by_base)))
-
-
-# The base engine asks this helper which candidate slots should be charged to the read-amplification
-# calculation and metadata admission path.  Current reader semantics materialize all descriptor roots.
-BASE.used_base_slots = _all_descriptor_slots
+IMPL = _load_impl()
+# Compatibility handle used by the research tests/benchmarks for the inherited tree-hash and raw reader
+# oracle. It points at attempt #1's complete reader, which attempt #2 deliberately reuses unchanged.
+BASE = IMPL.PARENT
 
 MAG = BASE.MAG
 HDR = BASE.HDR
@@ -56,24 +47,24 @@ MAX_READ_AMP = BASE.MAX_READ_AMP
 
 
 def build(root: Path, out: Path) -> dict:
-    return BASE.build(root, out)
+    return IMPL.build(root, out)
 
 
 def build_graph(root: Path, out: Path) -> dict:
-    """Build the strict mosaic graph directly, bypassing outer v0.28 fallback for conformance tests."""
-    return BASE._build_mosaic_graph(root, out)
+    """Build attempt #2 CMPNX9 directly, bypassing outer v0.28 fallback for conformance tests."""
+    return IMPL.build_graph(root, out)
 
 
 def extract(archive: Path, dst: Path) -> None:
-    BASE.extract(archive, dst)
+    IMPL.extract(archive, dst)
 
 
 def strong_verify(archive: Path) -> dict:
-    return BASE.strong_verify(archive)
+    return IMPL.strong_verify(archive)
 
 
 def bench(root: Path, out: Path) -> dict:
-    return BASE.bench(root, out)
+    return IMPL.bench(root, out)
 
 
 def _main() -> None:
