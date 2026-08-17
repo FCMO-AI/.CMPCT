@@ -91,15 +91,16 @@ jobs:
           PY
           fi
 
-      - name: Upload repair evidence
+      - name: Upload repair and PDF forensic evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: cmpct-neutral-hostile-determinism-repair-${{ github.sha }}
-          path: benchmark-artifacts/neutral-hostile-v1-determinism-repair.json
+          path: |
+            benchmark-artifacts/neutral-hostile-v1-determinism-repair.json
+            benchmark-artifacts/CMPCT_Neutral_Hostile_Determinism_Repair/forensics/*.pdf
           if-no-files-found: warn
 
-# Footnote: this workflow is intentionally independent from the v0.29 compression gate. Its only job is
-# to prove that repaired benchmark inputs reproduce byte-for-byte twice before a new baseline manifest
-# can be adopted. A red here preserves per-file drift evidence; compression thresholds do not get
-# relaxed to accommodate an untrustworthy substrate.
+# Footnote: this workflow is intentionally independent from the v0.29 compression gate. The raw PDF
+# pair is diagnostic-only evidence used to minimize the benchmark repair; it does not become public
+# benchmark content or change an acceptance threshold. Historical v0.28 evidence remains immutable.
