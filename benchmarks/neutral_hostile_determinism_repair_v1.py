@@ -1,18 +1,18 @@
 from __future__ import annotations
 
-"""Minimal determinism repair for three historical neutral/hostile v1 workloads.
+"""Minimal deterministic substrate repair for three neutral/hostile v1 workloads.
 
-The v0.29 generalization tranche exposed producer metadata that can drift even when the synthetic payload
-PRNG is seeded.  This layer keeps the historical workload generators intact and normalizes only container
-metadata whose value is unrelated to compression policy: Office ZIP timestamps/core dates, ReportLab PDF
-dates/document IDs, gzip mtime, and nested-backup ZIP metadata.
+The repair keeps historical logical content intact while removing producer identity that is unrelated to
+compression policy: Office ZIP timestamps/core dates, ReportLab PDF dates/document IDs, ReportLab image
+resource names derived from absolute filenames, gzip mtime, and nested-backup ZIP metadata.
 
-Footnote: an earlier research attempt replaced ``client_report.pdf`` with a hand-built deterministic PDF.
-That made the proof green but changed the Office v0.28 baseline by roughly thirteen percent, which is far
-too invasive for a benchmark-substrate repair.  The replacement was therefore rejected.  The accepted
-repair must preserve the historical ReportLab content and only canonicalize producer metadata in place.
+Footnote: two earlier repair attempts are intentionally superseded rather than hidden.  Replacing the PDF
+with a custom fixture moved the Office v0.28 baseline by ~13% and was rejected.  Testing two builds at one
+absolute path proved local repeatability but not portable benchmark identity.  This version makes only the
+ReportLab XObject *name source* content-derived, then requires equality across different work directories.
 """
 
+import functools
 import gzip
 import io
 from pathlib import Path
@@ -33,19 +33,44 @@ _PDF_DATE_RE = re.compile(rb"D:\d{14}(?:[+\-Z']\d{0,4}'?)?")
 _PDF_ID_RE = re.compile(rb"/ID\s*\[\s*<([0-9A-Fa-f]+)>\s*<([0-9A-Fa-f]+)>\s*\]")
 
 
+def install_generation_hooks(neutral_module) -> None:
+    """Make ReportLab embedded-image resource identity independent of the temporary corpus path.
+
+    ``Canvas.drawImage`` hashes a filename when given a filename.  The corpus uses identical deterministic
+    JPEG bytes in every regeneration, but different CI/work roots therefore produce different
+    ``FormXob.<digest>`` names and consequently different compressed page streams.  Passing an
+    ``ImageReader`` instead makes ReportLab derive the resource identity from image content.
+
+    Footnote: the image bytes, dimensions, placement, page text, PDF grammar and compression settings are
+    unchanged.  Only the internal resource-name input changes from an absolute path to the same bytes the
+    PDF already embeds.  Date and trailer-ID metadata are still canonicalized post-generation below.
+    """
+    canvas_module = getattr(neutral_module, "canvas", None)
+    if canvas_module is None or not hasattr(canvas_module, "Canvas"):
+        raise RuntimeError("neutral hostile generator no longer exposes reportlab canvas module")
+
+    current = canvas_module.Canvas.drawImage
+    if getattr(current, "_cmpct_content_identity_wrapper", False):
+        return
+
+    from reportlab.lib.utils import ImageReader
+
+    @functools.wraps(current)
+    def stable_draw_image(self, image, *args, **kwargs):
+        if isinstance(image, (str, Path)):
+            image = ImageReader(str(image))
+        return current(self, image, *args, **kwargs)
+
+    stable_draw_image._cmpct_content_identity_wrapper = True
+    canvas_module.Canvas.drawImage = stable_draw_image
+
+
 def _stable_xml(data: bytes) -> bytes:
-    """Replace volatile Office core timestamps without changing XML structure."""
     return _W3CDTF_RE.sub(FIXED_W3CDTF, data)
 
 
 def _stable_pdf(path: Path) -> None:
-    """Canonicalize only fixed-width ReportLab date/ID metadata in place.
-
-    Footnote: ReportLab also derives XObject resource names from image source paths.  That is not producer
-    nondeterminism and must not be rewritten here.  The two-pass proof therefore regenerates at the same
-    absolute workspace path; this function handles only metadata that can genuinely vary at that path.
-    Length preservation keeps the already-written xref offsets valid.
-    """
+    """Canonicalize only fixed-width ReportLab date/ID metadata in place."""
     data = path.read_bytes()
 
     def date_repl(match: re.Match[bytes]) -> bytes:
@@ -58,6 +83,7 @@ def _stable_pdf(path: Path) -> None:
         left = b"0" * len(match.group(1))
         right = b"0" * len(match.group(2))
         rebuilt = b"/ID [<" + left + b"><" + right + b">]"
+        # Footnote: length preservation leaves the existing xref offsets valid.
         return (rebuilt + b" " * len(raw))[: len(raw)]
 
     data = _PDF_DATE_RE.sub(date_repl, data)
@@ -66,7 +92,6 @@ def _stable_pdf(path: Path) -> None:
 
 
 def _stable_zip(path: Path) -> None:
-    """Rewrite a ZIP-family container with fixed member metadata and deterministic ordering."""
     with zipfile.ZipFile(path, "r") as source:
         rows = [(info, source.read(info.filename)) for info in source.infolist()]
 
@@ -104,8 +129,6 @@ def _repair_logs(workload: Path) -> None:
         raw_path = workload / gz_path.name[:-3]
         if not raw_path.exists():
             raise RuntimeError(f"missing deterministic gzip source for {gz_path.name}")
-        # Footnote: gzip.compress defaults to wall-clock mtime.  mtime=0 changes only the member header;
-        # the compressed payload and benchmark semantics are otherwise identical.
         gz_path.write_bytes(gzip.compress(raw_path.read_bytes(), compresslevel=6, mtime=0))
 
 
