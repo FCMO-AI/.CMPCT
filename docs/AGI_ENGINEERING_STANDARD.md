@@ -18,9 +18,10 @@ constraint, proves the mechanism and removes a meaningful bottleneck without mov
 
 ## The quality ratchet
 
-Every material milestone MUST leave CMPCT at least as strong as the verified state it inherited.
+Every **promoted material milestone** MUST leave CMPCT at least as strong as the verified released state
+it inherited.
 
-A change must therefore do one or more of the following while preserving established strengths:
+A promoted change must therefore do one or more of the following while preserving established strengths:
 
 - improve compression ratio on fair workloads;
 - improve creation, extraction, list, read or selective-read latency;
@@ -33,12 +34,31 @@ A change must therefore do one or more of the following while preserving establi
 - remove a known architectural limitation;
 - discover and document a reproducible negative result that prevents future wasted effort.
 
-“No regression” is the floor, not the aspiration. When a task is nominally maintenance-only, the agent
-should still look for a safe, evidence-backed way to improve the surrounding invariant, test surface,
-measurement quality or architecture.
+“No regression” is the **promotion floor**, not the aspiration and not a ban on risky exploration. When a
+task is nominally maintenance-only, the agent should still look for a safe, evidence-backed way to
+improve the surrounding invariant, test surface, measurement quality or architecture.
 
 Do not manufacture novelty. If the best engineering result is a narrow surgical fix, make it an
 exceptionally well-proven surgical fix.
+
+## Breakthrough seeds and regression rehabilitation
+
+A project that rejects every exploratory candidate the instant one benchmark turns red will eventually
+optimize for caution rather than progress. CMPCT explicitly avoids that failure mode.
+
+A reproducible mechanism-level breakthrough may be retained as a **research seed** even when it regresses
+another measured performance dimension. This does not make the seed release-ready. It creates
+**regression debt** that must be repaired while the breakthrough gain is preserved.
+
+The normative protocol is `docs/BREAKTHROUGH_REHABILITATION.md`:
+
+> **Discover boldly; promote conservatively. Preserve the miracle, then engineer away its debt.**
+
+First ask whether inherited and new mechanisms can coexist through bounded adaptive/portfolio selection.
+If not, isolate the exported cost, change the representation boundary, or invent a counter-mechanism for
+the damaged dimension. Do not tune a dramatic gain back out merely to make an intermediate matrix green.
+Correctness, byte-exact losslessness, authentication, hostile-input safety and truthful benchmark
+semantics are never borrowable optimization metrics.
 
 ## Prime directive: solve the real problem
 
@@ -55,7 +75,7 @@ Record or establish:
 5. **Hypothesis.** What mechanism is expected to improve the target and why?
 6. **Disproof test.** What result would show the hypothesis is wrong?
 7. **Acceptance evidence.** What measurements, vectors, adversarial cases or platform tests are needed
-   before merge?
+   before merge/promotion?
 
 Do not begin with “what code can I add?” Begin with “what fact about the system would have to change for
 this problem to disappear?”
@@ -150,11 +170,14 @@ advantages. In particular:
 - raw measurements and losing workloads are retained;
 - stochastic data generation is seeded or otherwise made reproducible;
 - timing conclusions are not drawn from one noisy observation;
-- a failed gate is investigated, not negotiated away.
+- a failed promotion gate is investigated, not negotiated away.
 
 When a mature competitor wins, treat the result as useful information. Determine whether the cause is a
 fundamental tradeoff, implementation weakness, benchmark asymmetry or missing representation. If it is
 an engineering weakness, turn it into a prioritized defect.
+
+A breakthrough seed gets no benchmark leniency: every loss remains visible. The difference is procedural,
+not statistical—the seed may be preserved and rehabilitated while the release gate itself stays strict.
 
 ## Adversarial self-review
 
@@ -164,8 +187,7 @@ Ask at least:
 
 - What assumption is most likely false?
 - What input distribution makes this look bad?
-- What happens on incompressible, tiny-file, huge-file, sparse, nested, duplicated and metadata-heavy
-  cases?
+- What happens on incompressible, tiny-file, huge-file, sparse, nested, duplicated and metadata-heavy cases?
 - Can malformed input trigger excessive allocation, CPU, I/O, recursion or disk materialization?
 - Does a partial read accidentally require a full decode?
 - Does a failure path return unauthenticated or partially trusted bytes?
@@ -177,6 +199,7 @@ Ask at least:
 - Did any comment, test, fallback, note or historical context disappear during refactoring?
 - Is the benchmark easier than the real workload?
 - Would the result still be persuasive if the losing rows were shown first?
+- If this is a rehabilitated breakthrough, did the original large gain survive the repair?
 
 Then add the strongest cheap test that attacks the most dangerous surviving assumption.
 
@@ -208,8 +231,9 @@ For substantial representation changes, reason about at least:
 - implementation complexity in the shared reader;
 - portability burden.
 
-A representation that saves 1% size by making a 4 KiB read inflate 2 GiB has not achieved an
-unqualified win.
+A representation that saves 1% size by making a 4 KiB read inflate 2 GiB has not achieved an unqualified
+win. If its storage mechanism is genuinely transformative, the 2 GiB amplification becomes explicit
+regression debt to rehabilitate before promotion rather than a reason to hide either result.
 
 ## The engineering-miracle test
 
@@ -222,6 +246,7 @@ A miracle-grade result typically has several of these traits:
 - removes work instead of merely accelerating it;
 - reuses information already present in the system;
 - converts a global tradeoff into an adaptive local choice;
+- creates a dramatic advantage that can be rehabilitated into a larger Pareto frontier;
 - achieves a Pareto improvement across previously conflicting metrics;
 - turns an implicit heuristic into an explicit cost model;
 - finds a representation that makes a difficult operation trivial for the reader;
@@ -232,6 +257,11 @@ A miracle-grade result typically has several of these traits:
 
 Do not chase spectacle. The highest form of cleverness is a design that looks obvious after it is
 explained and remains robust under hostile evidence.
+
+If a miracle-grade mechanism produces one serious performance regression, do not erase the miracle as a
+first response. Preserve it, quantify the debt, and attempt a second invention that restores the lost
+dimension while retaining the first gain. Retire the seed only when evidence shows the tradeoff is
+fundamental, the repair destroys the advantage, or complexity/resource cost is indefensible.
 
 ## Quality dimensions that must not be traded silently
 
@@ -254,8 +284,10 @@ Every material change must explicitly consider the dimensions it touches:
 - public reproducibility;
 - end-user friction.
 
-If a dimension is intentionally worsened, the tradeoff must be explicit, measured and justified. An
-unacknowledged tradeoff is a defect.
+If a performance dimension is intentionally worsened during exploration, the tradeoff must be explicit,
+measured and entered as regression debt. An unacknowledged tradeoff is a defect. Promotion requires
+closing applicable debt unless the product contract itself is deliberately redesigned with stronger
+Pareto evidence. Correctness/security/integrity are hard invariants, not debt instruments.
 
 ## Code standard
 
@@ -266,8 +298,7 @@ Mandatory rules:
 
 - preserve existing design comments, footnotes and invariants unless they are demonstrably obsolete;
 - when removing a note, preserve the still-valid rationale elsewhere in the same change;
-- add concise nearby “why” comments for non-obvious invariants, safety boundaries and benchmark
-  semantics;
+- add concise nearby “why” comments for non-obvious invariants, safety boundaries and benchmark semantics;
 - avoid copy-pasted parsers, codec logic and policy forks across platforms;
 - prefer typed errors and explicit bounds over implicit assumptions;
 - make optional accelerators optional;
@@ -285,15 +316,17 @@ Promote a research mechanism only when it has:
 1. a precise byte/semantic contract;
 2. measurable benefit on non-private reproducible workloads;
 3. known losing cases;
-4. independent conformance evidence;
-5. explicit integrity semantics;
-6. bounded create/read/recovery resource accounting;
-7. hostile malformed-input tests;
-8. recovery/crash behavior where applicable;
-9. native/shared-reader support or a deliberate staged compatibility plan;
-10. portability and export implications documented.
+4. closed applicable regression debt relative to the inherited release baseline, or a deliberately versioned broader Pareto contract with explicit approval;
+5. independent conformance evidence;
+6. explicit integrity semantics;
+7. bounded create/read/recovery resource accounting;
+8. hostile malformed-input tests;
+9. recovery/crash behavior where applicable;
+10. native/shared-reader support or a deliberate staged compatibility plan;
+11. portability and export implications documented.
 
-A promising prototype is not a format revision.
+A promising prototype is not a format revision. A breakthrough seed with open performance debt is
+valuable research, not release-ready state.
 
 ## Completion dossier for every material PR
 
@@ -312,13 +345,20 @@ A material PR should make the following easy to answer from repository/PR eviden
 - What are the raw or durable result locations?
 - What lost, remained unchanged or stayed ambiguous?
 
+### Breakthrough debt, when applicable
+- What dramatic gain is being preserved?
+- Which metrics/workloads regressed and by how much?
+- What rehabilitation attempts were made?
+- Does the gain-retention test prove the miracle survived the repair?
+- Is all promotion-blocking debt closed?
+
 ### Safety and compatibility
 - What hostile/resource/path/recovery cases were considered?
 - What reader/format/ABI/platform compatibility changed?
 
 ### Performance
 - What happened to archive size, create/extract latency, selective access and memory where relevant?
-- Did the direct-base release gate pass without weakening its contract?
+- Did the direct-base release gate pass without weakening its contract before promotion?
 
 ### Future leverage
 - What new capability, abstraction or research direction does this unlock?
@@ -328,20 +368,24 @@ A PR that cannot answer these questions is not ready simply because tests are gr
 
 ## Stop conditions
 
-Do not merge when any of the following is true:
+Do not **promote** when any of the following is true:
 
 - a claimed win is not reproducible;
 - the comparison is semantically unfair;
-- a deterministic size regression is unexplained;
-- a confirmed performance regression exceeds the release contract;
+- a deterministic size regression remains open under the release contract;
+- a confirmed performance regression exceeds the release contract and remains open;
 - a parser/resource boundary is knowingly unbounded;
 - the change weakens integrity or recovery without explicit redesign approval;
 - canonical bytes changed without a format-revision/conformance update;
 - a platform integration forks archive semantics;
 - private provenance leaked into the public tree;
 - required comments/notes/tests were accidentally deleted;
-- the work is material but unversioned or lacks a durable benchmark record;
+- the work is material but unversioned or lacks a durable benchmark record when promotion requires one;
 - a major assumption remains untested when a practical disproof test exists.
+
+A miracle-grade exploratory seed may remain as research with open performance debt if it is clearly
+labeled, reproducible, safe, and governed by `docs/BREAKTHROUGH_REHABILITATION.md`. It may not masquerade
+as completed release state.
 
 ## Agent behavior under uncertainty
 
@@ -352,12 +396,17 @@ validated in the current milestone rather than polishing symptoms. If the deeper
 one milestone, leave a precise executable next mission, not a vague recommendation.
 
 If conventional approaches fail, change the model of the problem before changing the standard of proof.
+If a breakthrough creates a new bottleneck, treat that bottleneck as useful information: preserve the
+breakthrough, then attack the newly dominant cost until the combined system is stronger than the
+inherited baseline on every promotion-critical dimension.
 
 ## Final self-check
 
-Before calling a material task complete, ask:
+Before calling a promoted material task complete, ask:
 
 > If a skeptical expert received only this repository state, the benchmark artifacts and the tests,
-> would they independently conclude that CMPCT became better for the claimed reason?
+> would they independently conclude that CMPCT became better for the claimed reason — and, if a
+> breakthrough initially regressed something, that the final system retained the breakthrough while
+> paying the debt?
 
 If the answer is not clearly yes, the work is not finished.
