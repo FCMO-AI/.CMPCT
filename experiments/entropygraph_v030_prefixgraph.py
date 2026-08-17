@@ -80,10 +80,16 @@ def _anchor_indices(count: int) -> list[int]:
     return sorted({round(i * (count - 1) / (MAX_ANCHOR_AUDITIONS - 1)) for i in range(MAX_ANCHOR_AUDITIONS)})
 
 
-def _serialize_candidate(rels: list[str], raws: list[bytes], anchor: int | None) -> tuple[bytes, dict]:
+def _serialize_candidate(
+    rels: list[str],
+    raws: list[bytes],
+    direct_payloads: list[bytes],
+    anchor: int | None,
+) -> tuple[bytes, dict]:
     if len(raws) > MAX_FILES:
         raise ValueError("PrefixGraph file-count ceiling exceeded")
-    direct_payloads = [_compress(raw) for raw in raws]
+    if len(direct_payloads) != len(raws):
+        raise ValueError("PrefixGraph direct-payload cache length mismatch")
     prefix_compressor = None
     if anchor is not None:
         prefix_compressor, _ = _prefix_codec(raws[anchor])
@@ -140,11 +146,15 @@ def build(root: Path, out: Path) -> dict:
     if any(len(raw) > MAX_FILE_BYTES for raw in raws):
         raise ValueError("PrefixGraph research seed file ceiling exceeded")
 
+    # Footnote: the direct Zstd-19 floor is anchor-independent.  Compute it exactly once and share those
+    # immutable payload bytes across the anchor tournament; recomputing it for every anchor changes no
+    # candidate bytes but multiplies encoder CPU by roughly the audition count.
+    direct_payloads = [_compress(raw) for raw in raws]
     candidates: list[tuple[bytes, dict]] = []
-    all_direct, direct_stats = _serialize_candidate(rels, raws, None)
+    all_direct, direct_stats = _serialize_candidate(rels, raws, direct_payloads, None)
     candidates.append((all_direct, direct_stats))
     for anchor in _anchor_indices(len(raws)):
-        candidates.append(_serialize_candidate(rels, raws, anchor))
+        candidates.append(_serialize_candidate(rels, raws, direct_payloads, anchor))
 
     # Footnote: anchor nomination is allowed to be approximate for large families, but admission is not.
     # The complete duplicated-metadata archive length is the objective; payload-only estimates never win.
