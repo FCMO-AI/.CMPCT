@@ -1,40 +1,41 @@
 """CMPCT v0.30 authoritative integration facade.
 
 This module binds the system tournament to the release-rehabilitated G0-G4 builder without rewriting the
-research selector.  The distinction is intentional:
+research selector. The distinction is intentional:
 
 - ``entropygraph_v030_release_candidate`` remains the exact system-tournament implementation and causal test
   surface;
-- ``entropygraph_v030_geometry_overlay_g04_publish`` removes archive-sized publication RAM copies while
-  preserving G0-G4 bytes;
-- this facade makes that rehabilitated builder the implementation used by authoritative generalization,
-  performance and eventual release surfaces.
+- ``entropygraph_v030_shared_portfolio`` constructs v0.28 + attempt-5 exactly once, retains the graph for
+  Geometry, preserves accepted-v0.29 floor semantics, and uses bounded streamed publication identity checks;
+- this facade makes that shared, byte-compatible builder the implementation used by authoritative
+  generalization, performance and eventual release surfaces.
 
 Footnote: the selector resolves its ``G04`` global at call time, so assigning the byte-compatible wrapper here
-changes build resource behavior but not the grammar/read path.  If exact-byte identity tests ever show a
-difference between research and rehabilitated G0-G4 builders, this facade must fail promotion rather than hide
-that mismatch.
+changes scheduling/resource behavior but not the grammar/read path. Complete-byte identity tests against the
+older duplicated builder are mandatory; if they ever differ, the shared scheduler is invalid and promotion
+must fail rather than hiding the mismatch.
 """
 from __future__ import annotations
 
 from pathlib import Path
 
-from experiments import entropygraph_v030_geometry_overlay_g04_publish as G04
+from experiments import entropygraph_v030_shared_portfolio as G04
 from experiments import entropygraph_v030_release_candidate as RC
 from experiments import entropygraph_v030_release_reader_policy as READER
 
-# Bind the selector to the release-path builder. All other selector behavior remains single-sourced in RC.
+# Bind the selector to the shared release-path builder. All tournament/read behavior remains single-sourced.
 RC.G04 = G04
 
 MAX_MEMBER_READ_AMP = RC.MAX_MEMBER_READ_AMP
 
 
 def build(root: Path, out: Path) -> dict:
-    stats = RC.build(root, out)
-    stats = dict(stats)
+    stats = dict(RC.build(root, out))
     stats["release_facade"] = "cmpct-v030-authoritative-integration-v1"
     g04 = stats.get("g04") or {}
     stats["g04_publication_identity_check"] = g04.get("publication_identity_check")
+    stats["g04_shared_analysis_mode"] = g04.get("shared_analysis_mode")
+    stats["g04_attempt5_graph_build_count"] = g04.get("attempt5_graph_build_count")
     return stats
 
 
