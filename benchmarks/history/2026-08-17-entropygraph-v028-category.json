@@ -1,0 +1,231 @@
+{
+  "schema": "cmpct-public-entropygraph-v028-category-v1",
+  "date": "2026-08-17",
+  "project_version": "0.28.0",
+  "canonical_format_revision": 24,
+  "source": {
+    "head_commit": "ce309d2185e41f749bc2e52c6ce1398bb874def5",
+    "workflow_run_id": 32050943008,
+    "workflow_merge_commit": "10b7d9acc8395574b1bf8acf3bb0fe41bb6c66ae",
+    "artifact_id": 9295363727,
+    "artifact_digest": "sha256:711f19a14b796439430822f50fb91cc0b28219c443226b129023d6f5f61b018f",
+    "raw_record": "entropygraph-v028.json",
+    "harness": "benchmarks/entropygraph_v028_strict_bench.py --suite both --category-baselines"
+  },
+  "benchmark_contract": {
+    "purpose": "Per-workload current CMPCT storage frontier against a serious Zstandard size baseline; distinct from whole-suite structural aggregation and canonical ZIP execution parity.",
+    "aggregation": "Each fixed public workload is archived independently.",
+    "same_lifetime_measurement": true,
+    "same_tree_rule": "CMPCT, ZIP/Deflate-9 and solid tar+Zstd-19 are measured before the generated workload tree is destroyed or regenerated.",
+    "primary_baseline": "solid tar + Zstandard-19",
+    "secondary_baseline": "ZIP + Deflate-9",
+    "all_workloads_required": true,
+    "semantic_qualification": "solid tar+Zstd-19 is a size baseline with different selective-access and recovery semantics; ZIP/Deflate-9 is a familiar secondary archive baseline."
+  },
+  "environment": {
+    "python": "3.11.15",
+    "platform": "Linux-6.17.0-1022-azure-x86_64-with-glibc2.39",
+    "cpu_count": 4,
+    "preflate_bridge": "/home/runner/work/.CMPCT/.CMPCT/native/preflate-bridge/target/release/cmpct-preflate-bridge",
+    "tools": {
+      "zstd": "/usr/local/bin/zstd",
+      "7z": "/usr/bin/7z",
+      "zpaq": "/usr/bin/zpaq",
+      "mkdwarfs": null,
+      "borg": "/usr/bin/borg"
+    }
+  },
+  "rows": [
+    {
+      "suite": "neutral_hostile_v1",
+      "name": "01_developer_repository",
+      "files": 1266,
+      "logical_bytes": 2624373,
+      "tree_sha256": "ddcdf1ae1b61042634aae40b1b12da629feb98cb45db23c56d1da15334b74645",
+      "cmpct_bytes": 746627,
+      "tar_zstd19_solid_bytes": 740094,
+      "zip_deflate9_bytes": 1193043,
+      "cmpct_vs_tar_zstd19_pct": -0.8827257078154938,
+      "cmpct_vs_zip_deflate9_pct": 37.41826572889661
+    },
+    {
+      "suite": "neutral_hostile_v1",
+      "name": "02_office_workspace",
+      "files": 20,
+      "logical_bytes": 16063822,
+      "tree_sha256": "e247592d089fac8c75da293a6ce65fc063e1e4856df37206bbace6a25097088b",
+      "cmpct_bytes": 5954946,
+      "tar_zstd19_solid_bytes": 8313135,
+      "zip_deflate9_bytes": 15496287,
+      "cmpct_vs_tar_zstd19_pct": 28.367023992753637,
+      "cmpct_vs_zip_deflate9_pct": 61.571788132215154
+    },
+    {
+      "suite": "neutral_hostile_v1",
+      "name": "03_media_library",
+      "files": 28,
+      "logical_bytes": 28845629,
+      "tree_sha256": "fd2b09eb2f90a9c738ad73d20dd0a109dbfe7d4cb55257f9b44285579dbb1572",
+      "cmpct_bytes": 28723199,
+      "tar_zstd19_solid_bytes": 28719814,
+      "zip_deflate9_bytes": 28702445,
+      "cmpct_vs_tar_zstd19_pct": -0.011786288030974017,
+      "cmpct_vs_zip_deflate9_pct": -0.0723074288618966
+    },
+    {
+      "suite": "neutral_hostile_v1",
+      "name": "04_analytics_and_database",
+      "files": 5,
+      "logical_bytes": 31265767,
+      "tree_sha256": "6d0854fe058a95258588b89dca653ac8f00c61f815c6127b179e86cc58b1789d",
+      "cmpct_bytes": 6135172,
+      "tar_zstd19_solid_bytes": 9349748,
+      "zip_deflate9_bytes": 10707777,
+      "cmpct_vs_tar_zstd19_pct": 34.381418622191745,
+      "cmpct_vs_zip_deflate9_pct": 42.70358824245219
+    },
+    {
+      "suite": "neutral_hostile_v1",
+      "name": "05_logs_and_telemetry",
+      "files": 11,
+      "logical_bytes": 16994250,
+      "tree_sha256": "4f92a518db5396543d9fb9496f1fec54339f3671914873407d208ef1e8d68994",
+      "cmpct_bytes": 3550609,
+      "tar_zstd19_solid_bytes": 4352195,
+      "zip_deflate9_bytes": 5442141,
+      "cmpct_vs_tar_zstd19_pct": 18.417970702139954,
+      "cmpct_vs_zip_deflate9_pct": 34.75712959293043
+    },
+    {
+      "suite": "neutral_hostile_v1",
+      "name": "06_incremental_backups",
+      "files": 769,
+      "logical_bytes": 14006619,
+      "tree_sha256": "4d3ea523fef479c3e8702ee6df0e3916fc00cd267fa5d4cba6ba235778d05569",
+      "cmpct_bytes": 8223845,
+      "tar_zstd19_solid_bytes": 8384768,
+      "zip_deflate9_bytes": 11157381,
+      "cmpct_vs_tar_zstd19_pct": 1.919230204103441,
+      "cmpct_vs_zip_deflate9_pct": 26.29233509190015
+    },
+    {
+      "suite": "neutral_hostile_v1",
+      "name": "07_incompressible_and_encrypted_like",
+      "files": 1425,
+      "logical_bytes": 10182899,
+      "tree_sha256": "da4f37ac1d7a6751c4adcaabb50cc2cd6f2ffbed7bd2100d34b9ef597f7d1d80",
+      "cmpct_bytes": 10193958,
+      "tar_zstd19_solid_bytes": 10198830,
+      "zip_deflate9_bytes": 10344005,
+      "cmpct_vs_tar_zstd19_pct": 0.04777018540361983,
+      "cmpct_vs_zip_deflate9_pct": 1.4505696777988797
+    },
+    {
+      "suite": "neutral_hostile_v1",
+      "name": "08_many_tiny_files",
+      "files": 5000,
+      "logical_bytes": 736546,
+      "tree_sha256": "a62a03735deaaaebadacb961326c760aff09c1a4e031a44df02a9e95f8f5093f",
+      "cmpct_bytes": 420318,
+      "tar_zstd19_solid_bytes": 446879,
+      "zip_deflate9_bytes": 1264827,
+      "cmpct_vs_tar_zstd19_pct": 5.943667077665319,
+      "cmpct_vs_zip_deflate9_pct": 66.76873596151884
+    },
+    {
+      "suite": "neutral_hostile_v1",
+      "name": "09_ml_artifacts",
+      "files": 4,
+      "logical_bytes": 18172774,
+      "tree_sha256": "efc09910fea8ef67d24cd8957d3d576df3a7cc7f10f14585e3a3ae269017901d",
+      "cmpct_bytes": 13836439,
+      "tar_zstd19_solid_bytes": 13702829,
+      "zip_deflate9_bytes": 14445855,
+      "cmpct_vs_tar_zstd19_pct": -0.9750541293334392,
+      "cmpct_vs_zip_deflate9_pct": 4.218621881501649
+    },
+    {
+      "suite": "neutral_hostile_v1",
+      "name": "10_large_mixed_binary",
+      "files": 1,
+      "logical_bytes": 33554432,
+      "tree_sha256": "9373f96626c7f463b4112bf138ac5db766e7e71def9b209c7ba28fe44f0878d3",
+      "cmpct_bytes": 12593372,
+      "tar_zstd19_solid_bytes": 12591878,
+      "zip_deflate9_bytes": 12666863,
+      "cmpct_vs_tar_zstd19_pct": -0.011864790939048171,
+      "cmpct_vs_zip_deflate9_pct": 0.5801831124249153
+    },
+    {
+      "suite": "resemblance_hostile_v1",
+      "name": "01_shifted_versions",
+      "files": 18,
+      "logical_bytes": 33525242,
+      "tree_sha256": "d9106dcdc8f965d45236c241d6c45f773e10b84ac204acc3c3521d889cd3a8fd",
+      "cmpct_bytes": 1761588,
+      "tar_zstd19_solid_bytes": 1694672,
+      "zip_deflate9_bytes": 30283112,
+      "cmpct_vs_tar_zstd19_pct": -3.9486107046083254,
+      "cmpct_vs_zip_deflate9_pct": 94.18293602057807
+    },
+    {
+      "suite": "resemblance_hostile_v1",
+      "name": "02_false_neighbors",
+      "files": 600,
+      "logical_bytes": 39524435,
+      "tree_sha256": "3427fd306a10a7c293d4303323d64948ee74d4065353bf99310cfed34dc73d0e",
+      "cmpct_bytes": 34698771,
+      "tar_zstd19_solid_bytes": 34660165,
+      "zip_deflate9_bytes": 34781120,
+      "cmpct_vs_tar_zstd19_pct": -0.11138435145937706,
+      "cmpct_vs_zip_deflate9_pct": 0.23676350847816285
+    },
+    {
+      "suite": "resemblance_hostile_v1",
+      "name": "03_boundary_churn",
+      "files": 12,
+      "logical_bytes": 9744144,
+      "tree_sha256": "3238446efaef2a70a5c08d722bdc9dac3ac7c1c99ae3cde8093fae1481ad4b3d",
+      "cmpct_bytes": 89945,
+      "tar_zstd19_solid_bytes": 73084,
+      "zip_deflate9_bytes": 947203,
+      "cmpct_vs_tar_zstd19_pct": -23.07071315198949,
+      "cmpct_vs_zip_deflate9_pct": 90.50414747419508
+    },
+    {
+      "suite": "resemblance_hostile_v1",
+      "name": "04_deflate_family",
+      "files": 14,
+      "logical_bytes": 126270,
+      "tree_sha256": "527a9e356e923e5bcc26566a8f677a7f7277af1577493e09c2bdca1b6d17154a",
+      "cmpct_bytes": 14597,
+      "tar_zstd19_solid_bytes": 14247,
+      "zip_deflate9_bytes": 33916,
+      "cmpct_vs_tar_zstd19_pct": -2.456657541938654,
+      "cmpct_vs_zip_deflate9_pct": 56.96131619294729
+    },
+    {
+      "suite": "resemblance_hostile_v1",
+      "name": "05_incompressible",
+      "files": 80,
+      "logical_bytes": 10606293,
+      "tree_sha256": "1efe49fb1adb16ef911f64f44d41629db599dbeef264d72fd8f26e40515130e4",
+      "cmpct_bytes": 10611653,
+      "tar_zstd19_solid_bytes": 10618884,
+      "zip_deflate9_bytes": 10618200,
+      "cmpct_vs_tar_zstd19_pct": 0.06809566805701993,
+      "cmpct_vs_zip_deflate9_pct": 0.06165828483170406
+    }
+  ],
+  "totals": {
+    "workloads": 15,
+    "candidate_bytes": 137555039,
+    "tar_zstd19_solid_bytes": 143861222,
+    "zip_deflate9_bytes": 188084175,
+    "cmpct_smaller_than_tar_zstd19_pct": 4.3835183048841335,
+    "cmpct_smaller_than_zip_deflate9_pct": 26.865171405302974,
+    "wins_vs_tar_zstd19": 7,
+    "losses_vs_tar_zstd19": 8,
+    "ties_vs_tar_zstd19": 0
+  }
+}
