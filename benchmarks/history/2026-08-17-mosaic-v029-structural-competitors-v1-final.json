@@ -1,0 +1,91 @@
+{
+  "schema": "cmpct-v029-structural-competitors-v1-final-summary",
+  "date": "2026-08-17",
+  "source_commit": "1db5ad1c106b3c6634efd3f188cd90d737283673",
+  "workflow_run": 32001987077,
+  "artifact": {
+    "id": 9279473965,
+    "digest": "sha256:ec178f797c48546f60e7398cb9d29783d2c462b02ece1647bb7985bdf990f933"
+  },
+  "claim_boundary": "final corrected structural-competitor evidence on the repair-v3 substrate; diagnostic after repair-v4 superseded the media identity",
+  "candidate": "attempt #5 Mosaic Placement + Residual Program Packing portfolio",
+  "canonical_format_revision": 24,
+  "rows": [
+    {
+      "suite": "neutral_hostile_v1_aggregate",
+      "files": 8530,
+      "logical_bytes": 172452114,
+      "tree_sha256": "7ce3c674bc5a42d3cea1b571f008e23b86ad9fbe4bb90a72096288d159f919c8",
+      "v028_bytes": 90418702,
+      "candidate_bytes": 90418702,
+      "candidate_saving_bytes": 0,
+      "selected": "v028-fallback",
+      "candidate_portfolio_create_s": 1080.9733096159998,
+      "embedded_v028_portfolio_create_s": 268.80030260399997,
+      "candidate_create_ratio_vs_v028": 4.0214705818,
+      "competitors": {
+        "zip_deflate9": {"bytes": 111815135, "create_s": 5.261012059999985},
+        "tar_zstd19_solid": {"bytes": 96854728, "create_s": 43.29640664899989},
+        "seven_zip_lzma2": {"bytes": 92520541, "create_s": 48.96452909599998},
+        "zpaq_m5": {"bytes": 96219051, "create_s": 262.3316159420001},
+        "borg": {"bytes": 107988211, "create_s": 28.348403183999835},
+        "dwarfs": {"available": false, "reason": "mkdwarfs executable unavailable"}
+      }
+    },
+    {
+      "suite": "resemblance_hostile_v1_aggregate",
+      "files": 724,
+      "logical_bytes": 93526384,
+      "tree_sha256": "ad01e5ea8f8b083b2a37dae963c61238e0189db4ab91455628578973dbdbb53c",
+      "v028_bytes": 47197165,
+      "candidate_bytes": 47147764,
+      "candidate_saving_bytes": 49401,
+      "candidate_smaller_than_v028_pct": 0.10466942241128255,
+      "selected": "mosaic",
+      "candidate_portfolio_create_s": 181.566843307,
+      "embedded_v028_portfolio_create_s": 93.41599965,
+      "candidate_create_ratio_vs_v028": 1.9436188607,
+      "residual_pack_records": 12,
+      "residual_packed_delta_nodes": 186,
+      "max_additional_recipe_read_amplification": 0.06773645177560665,
+      "competitors": {
+        "zip_deflate9": {"bytes": 76690799, "create_s": 1.9137891010000203},
+        "tar_zstd19_solid": {"bytes": 47065652, "create_s": 8.787490354000056},
+        "seven_zip_lzma2": {"bytes": 47430346, "create_s": 17.70777377399986},
+        "zpaq_m5": {"bytes": 47062640, "create_s": 199.62293617},
+        "borg": {"bytes": 76460853, "create_s": 5.770927307000193},
+        "dwarfs": {"available": false, "reason": "mkdwarfs executable unavailable"}
+      },
+      "same_run_gaps": {
+        "candidate_smaller_than_seven_zip_bytes": 282582,
+        "candidate_larger_than_tar_zstd_bytes": 82112,
+        "candidate_larger_than_zpaq_bytes": 85124
+      }
+    }
+  ],
+  "totals": {
+    "v028_bytes": 137615867,
+    "candidate_bytes": 137566466,
+    "candidate_saving_bytes": 49401,
+    "regressed_suites": 0,
+    "improved_suites": 1,
+    "available_competitor_measurements": 10,
+    "competitor_measurement_failures": 0
+  },
+  "interpretation": {
+    "measurement_harness_repaired": true,
+    "candidate_beats_seven_zip_on_hostile_same_run": true,
+    "candidate_beats_all_available_measured_competitors_on_neutral": true,
+    "candidate_beats_tar_zstd_on_hostile": false,
+    "candidate_beats_zpaq_on_hostile": false,
+    "minimum_hostile_additional_saving_to_beat_both_tar_zstd_and_zpaq_bytes": 85125,
+    "creation_cost_release_blocker": "neutral candidate spends ~4.02x embedded v0.28 time only to fall back byte-for-byte; a production implementation must avoid research double-build waste",
+    "repair_v4_supersedes_neutral_identity": true,
+    "promotion_use": "diagnostic target only; structural-v2 must remeasure on accepted repair-v4/generalization-v3 substrate before any release claim"
+  },
+  "evidence_policy": {
+    "negative_and_positive_competitor_results_retained": true,
+    "no_scalar_winner_claim_across_different_semantics": true,
+    "no_v029_release_claim": true
+  }
+}
