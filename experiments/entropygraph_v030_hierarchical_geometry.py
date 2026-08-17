@@ -73,11 +73,14 @@ def _common_prefix(left: bytes, right: bytes) -> int:
 
 
 def primary_candidates(raw: bytes) -> list[int]:
-    """Nominate a few recurring bytes whose gaps are relatively structured.
+    """Nominate a few recurring bytes whose *complete* recurrence intervals are relatively structured.
 
-    Footnote: the nomination pass is O(n): positions for all 256 byte values are collected together.  The
-    score is intentionally only a *work predictor*.  A strange byte such as `.` or `}` is allowed to win if
-    its geometry is useful; exact level-19 stored bytes, not human ideas about delimiters, decide admission.
+    Footnote: the leading bytes before the first occurrence and trailing bytes after the last occurrence are
+    censored observations, not full recurrence intervals.  Treating them as ordinary gaps systematically
+    penalizes legitimate record-boundary bytes: an end-of-record separator naturally has a zero trailing
+    fragment, while an interior lexical byte often has two symmetric edge fragments.  Only inter-occurrence
+    gaps therefore enter the regularity score.  The pass remains O(n), byte-semantic-free and bounded to four
+    nominees; exact level-19 stored bytes still decide whether any proposed geometry is admitted.
     """
     positions: list[list[int]] = [[] for _ in range(256)]
     for index, byte in enumerate(raw):
@@ -88,12 +91,12 @@ def primary_candidates(raw: bytes) -> list[int]:
         count = len(pos)
         if count < 64 or count + 1 > MAX_ROWS:
             continue
-        previous = -1
-        gaps: list[int] = []
-        for current in pos:
-            gaps.append(current - previous - 1)
-            previous = current
-        gaps.append(len(raw) - previous - 1)
+
+        # Only complete recurrence intervals are statistically comparable.  Prefix/suffix fragments are
+        # left-censored/right-censored by the bounded node and must not steer structural nomination.
+        gaps = [right - left - 1 for left, right in zip(pos, pos[1:])]
+        if not gaps:
+            continue
         mean = sum(gaps) / len(gaps)
         if mean < 1.0:
             continue
