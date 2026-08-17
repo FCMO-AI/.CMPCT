@@ -1,6 +1,7 @@
 name: Agent extraction hardening
 
 on:
+  workflow_dispatch:
   push:
     branches:
       - frontier/full-completion-20260815
@@ -11,9 +12,14 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: cmpct-extraction-hardening-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   harden:
     runs-on: ubuntu-24.04
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v6
         with:
