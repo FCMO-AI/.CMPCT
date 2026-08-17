@@ -1,6 +1,9 @@
 name: CMPCT v0.30 Lattice ML oracle
 
 on:
+  push:
+    branches:
+      - agent/v030-lattice-oracle
   pull_request:
   workflow_dispatch:
 
@@ -77,7 +80,7 @@ jobs:
           python -m py_compile experiments/lattice_v030_oracle.py experiments/lattice_v030_oracle_safe.py
           # Footnote: the safe entrypoint preserves inherited over-8x physical groups unchanged instead
           # of aborting the entire experiment. No transform/cost/gate threshold is changed.
-          python experiments/lattice_v030_oracle_safe.py \
+          PYTHONPATH=. python experiments/lattice_v030_oracle_safe.py \
             benchmark-artifacts/neutral/09_ml_artifacts \
             --work-root benchmark-artifacts/CMPCT_V030_Lattice_ML \
             --output benchmark-artifacts/v030-lattice-ml.json \
@@ -108,8 +111,6 @@ jobs:
           }
           Path('benchmark-artifacts/v030-lattice-ml-verdict.json').write_text(json.dumps(verdict, indent=2)+'\n')
           print(json.dumps(verdict, indent=2))
-          # Footnote: unlike a promotion gate, this workflow intentionally fails a disproven seed. The
-          # campaign preregistered >=64 KiB on at least one workload before exact emitter work is justified.
           assert verdict['passes_64k_single_workload_seed_gate'], verdict
           PY
 
@@ -146,6 +147,5 @@ jobs:
             benchmark-artifacts/v030-lattice-ml.stdout.txt
           if-no-files-found: warn
 
-# Footnote: this is deliberately a one-workload causal gate. The expensive 15-workload generalization
-# matrix becomes justified only after the mechanism earns its preregistered >=64 KiB single-workload seed
-# threshold against the real accepted v0.29 artifact; otherwise the hypothesis is rejected cheaply.
+# Footnote: the branch-scoped push trigger isolates this focused causal measurement while the draft PR is
+# closed. Reopening it restores the ordinary full PR fan-out before any integration or promotion.
