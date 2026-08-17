@@ -1,0 +1,52 @@
+name: CMPCT v0.30 native r25 Geometry conformance
+
+on:
+  push:
+    branches:
+      - agent/v030-native-r25-production
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-v030-native-r25-geometry-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  rust-conformance:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Check out native production branch
+        uses: actions/checkout@v6
+
+      - name: Install pinned Rust toolchain
+        run: |
+          rustup toolchain install 1.89.0 --profile minimal
+
+      - name: Compile and test independent r25 Geometry decoder
+        run: |
+          cargo +1.89.0 test --locked --manifest-path native/cmpct-r25-geometry/Cargo.toml
+
+      - name: Clippy independent decoder as errors
+        run: |
+          rustup component add clippy --toolchain 1.89.0
+          cargo +1.89.0 clippy --manifest-path native/cmpct-r25-geometry/Cargo.toml --all-targets -- -D warnings
+
+      - name: Assert production resource constants remain bounded
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          text=Path('native/cmpct-r25-geometry/src/lib.rs').read_text()
+          required={
+              'MAX_NODE_BYTES: usize = 512 * 1024': '512 KiB logical representation unit',
+              'MAX_DECODE_UNIT: usize = 8 * 1024 * 1024': '8 MiB physical decode unit',
+              'MAX_GEOMETRY_CHUNKS: usize = 256': 'bounded per-blob representation table',
+              'MAX_CELL_SCANS: usize = 4_194_304': 'bounded rectangular inverse work',
+              'TAIL_CERT_DOMAIN': 'domain-separated recovery certificate',
+          }
+          for needle,label in required.items():
+              assert needle in text, f'missing native r25 invariant: {label}'
+          print('native r25 resource contract pinned')
+          PY
