@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 import random
 
 import pytest
@@ -104,6 +105,34 @@ def test_every_target_requires_facility_free_fallback() -> None:
         )
 
 
+def test_policy_filter_cannot_silently_delete_declared_target() -> None:
+    # Footnote: this is the production-critical regression caught during audit.  The first draft built its
+    # target table only from legal plans, so a target whose every candidate violated policy vanished entirely.
+    with pytest.raises(ValueError, match="no legal plan"):
+        RSO.Problem(
+            [],
+            [
+                _baseline("safe", 10),
+                RSO.Plan("dropped", "too-deep", 1, dependency_depth=2),
+            ],
+            policy=RSO.Policy(max_dependency_depth=1),
+        )
+
+
+def test_duplicate_plan_identity_is_rejected() -> None:
+    with pytest.raises(ValueError, match="duplicate representation plan"):
+        RSO.Problem([], [_baseline("x", 10, "same"), _baseline("x", 11, "same")])
+
+
+def test_nan_and_non_integer_cost_declarations_are_rejected() -> None:
+    with pytest.raises(ValueError, match="read-amplification"):
+        RSO.Plan("x", "nan", 1, read_amplification=math.nan)
+    with pytest.raises(ValueError, match="integer"):
+        RSO.Facility("f", 1.5)  # type: ignore[arg-type]
+    with pytest.raises(ValueError, match="integer"):
+        RSO.Plan("x", "float-cost", 1.0)  # type: ignore[arg-type]
+
+
 def test_beam_matches_exact_on_random_small_shared_cost_problems() -> None:
     rng = random.Random(20260817)
     for case in range(20):
@@ -152,3 +181,37 @@ def test_baseline_audit_surface_works_for_slotted_extraction() -> None:
     assert row.total_bytes == 17
     assert row.method == "baseline"
     assert RSO.explain(row)["selected"][0]["plan"] == "direct"
+
+
+def test_component_decomposition_proves_global_optimum_across_many_total_facilities() -> None:
+    facilities = []
+    plans = []
+    expected = 0
+    # 24 total facilities would exceed the monolithic exact ceiling, but each independent component has one.
+    for index in range(24):
+        fid = f"f{index}"
+        tid = f"t{index}"
+        facilities.append(RSO.Facility(fid, 20))
+        plans.append(_baseline(tid, 100))
+        plans.append(RSO.Plan(tid, f"ref-{index}", 10, frozenset({fid}), dependency_depth=1))
+        expected += 30
+    problem = RSO.Problem(facilities, plans)
+    row, certificate = RSO.extract_with_certificate(problem)
+    assert row.total_bytes == expected
+    assert certificate["optimality_proven"] is True
+    assert len(certificate["components"]) == 24
+    assert all(component["optimality_proven"] for component in certificate["components"])
+
+
+def test_oversized_connected_component_is_explicitly_unproven() -> None:
+    facilities = [RSO.Facility(f"f{index}", 1) for index in range(19)]
+    requirements = frozenset(f"f{index}" for index in range(4))
+    plans = [_baseline("root", 100), RSO.Plan("root", "shared", 10, requirements, dependency_depth=1)]
+    # Connect the remaining facilities into the same target/facility component without violating the four-root
+    # per-plan ceiling. These dominated plans are intentionally expensive but still establish graph connectivity.
+    for index in range(4, 19):
+        plans.append(RSO.Plan("root", f"dominated-{index}", 1000, frozenset({f"f{index}"}), dependency_depth=1))
+    problem = RSO.Problem(facilities, plans)
+    _, certificate = RSO.extract_with_certificate(problem, max_exact_facilities=18, beam_width=32)
+    assert certificate["optimality_proven"] is False
+    assert certificate["components"][0]["active_facilities"] == 19
