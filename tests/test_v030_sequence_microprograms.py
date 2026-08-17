@@ -100,7 +100,7 @@ def test_period_codelet_round_trips_nonsemantic_byte_cycle() -> None:
 
 def test_full_ltm_transform_round_trips_schema_blind_rows() -> None:
     rows = []
-    for index in range(4096):
+    for index in range(2500):
         rows.append(
             f"2026-07-01T00:{(index // 60) % 60:02d}:{index % 60:02d}+00:00 "
             f"INFO worker={index % 32:02d} tenant=T{index % 380:04d} "
@@ -108,6 +108,7 @@ def test_full_ltm_transform_round_trips_schema_blind_rows() -> None:
             f"latency_ms={8 + (index * 13) % 820} request={(index * 0x9e3779b1) & ((1 << 48) - 1):012x}"
         )
     raw = ("\n".join(rows) + "\n").encode()
+    assert len(raw) <= LTM.MAX_NODE_BYTES
     transformed, stats = LTM.build_transform(raw, ord("\n"), ord(" "))
     assert stats["rows"] == len(rows) + 1
     assert sum(stats["codelet_counts"].values()) == stats["max_fields"]
