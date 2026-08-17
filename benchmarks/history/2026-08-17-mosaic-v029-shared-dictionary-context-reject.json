@@ -1,0 +1,53 @@
+{
+  "schema": "cmpct-v029-shared-dictionary-context-oracle-history-v1",
+  "date": "2026-08-17",
+  "status": "REJECT",
+  "claim_boundary": "detached size/locality ceiling only; output archive remained exact attempt-5 bytes",
+  "source": {
+    "workflow_run_id": 32010705186,
+    "workflow_artifact_id": 9281767803,
+    "workflow_artifact_digest": "sha256:b1df2292bcbd8f7cb0ab366b8bab001bfd92555f0c53981618219e479ed7de7f",
+    "head_sha": "c989c12d9d1794d8abb84fe720355a55676e399a",
+    "attempt5_archive_bytes": 47147764,
+    "records": 134,
+    "direct_candidate_records": 118,
+    "direct_candidate_payload_bytes": 47006600
+  },
+  "frozen_gate": {
+    "min_net_saving_bytes": 131072,
+    "min_improved_records": 8,
+    "max_weighted_direct_pack_read_amp": 8.0,
+    "max_dependent_node_read_amp": 8.0,
+    "max_additional_dictionary_read_amp": 2.0,
+    "dictionary_storage_counted": true,
+    "roundtrip_verified_per_record": true
+  },
+  "best": {
+    "requested_dictionary_kib": 16,
+    "dictionary_bytes": 16384,
+    "dictionary_storage_charge_bytes": 16949,
+    "profitable_records_before_locality": 96,
+    "locality_admissible_profitable_records": 95,
+    "payload_saving_bytes": 23289,
+    "net_saving_bytes": 6340,
+    "gate_fraction": 0.048370361328125,
+    "shortfall_bytes": 124732,
+    "weighted_direct_pack_read_amp": 6.254099503032336,
+    "max_dependent_node_read_amp": 7.9132964706240765,
+    "max_additional_dictionary_read_amp": 0.25,
+    "training_samples": 236,
+    "training_sample_bytes": 15466496,
+    "train_s": 0.35406709799997316,
+    "recompress_verify_s": 1.9085176639999872
+  },
+  "candidates": [
+    {"dictionary_kib": 8, "admissible_records": 95, "payload_saving_bytes": 13822, "storage_charge_bytes": 8757, "net_saving_bytes": 5065},
+    {"dictionary_kib": 16, "admissible_records": 95, "payload_saving_bytes": 23289, "storage_charge_bytes": 16949, "net_saving_bytes": 6340},
+    {"dictionary_kib": 32, "admissible_records": 55, "payload_saving_bytes": 21960, "storage_charge_bytes": 33333, "net_saving_bytes": -11373},
+    {"dictionary_kib": 64, "admissible_records": 2, "payload_saving_bytes": 1732, "storage_charge_bytes": 66101, "net_saving_bytes": -64369},
+    {"dictionary_kib": 96, "admissible_records": 2, "payload_saving_bytes": 1743, "storage_charge_bytes": 98869, "net_saving_bytes": -97126},
+    {"dictionary_kib": 128, "admissible_records": 3, "payload_saving_bytes": 2071, "storage_charge_bytes": 131637, "net_saving_bytes": -129566}
+  ],
+  "conclusion": "Stored archive-global zstd dictionary context is not the missing hostile-side byte pool under the frozen locality and storage accounting. The best candidate reached only 6,340 B net, 4.84% of the 128 KiB implementation threshold, despite broad locality admissibility. Do not lower the gate or implement reader-visible dictionary context from this evidence.",
+  "next_authorized_experiment": "Run the preregistered one-hop reference-context oracle using existing independently stored direct/root records as bounded raw zstd context. If that also rejects, terminate zstd-context tuning and move to large-payload representation/backend choices."
+}
