@@ -1,0 +1,81 @@
+name: CMPCT v0.30 Bitplane Algebra child oracle
+
+on:
+  push:
+    branches:
+      - agent/v030-latent-type-supercompiler
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-v030-bitplane-algebra-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  bitplane-algebra:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      PYTHONPATH: ${{ github.workspace }}
+    steps:
+      - name: Check out child research head
+        uses: actions/checkout@v6
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install deterministic benchmark dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[test]'
+          python -m pip install pillow reportlab python-docx openpyxl python-pptx numpy
+
+      - name: Run Geometry safety and Bitplane Algebra invariants
+        run: |
+          pytest -q \
+            tests/test_v030_geometry_safe.py \
+            tests/test_v030_bitplane_algebra.py \
+            tests/test_v030_bitplane_algebra_search.py
+
+      - name: Run exact-generator binary payload oracle
+        run: |
+          mkdir -p benchmark-artifacts
+          # Footnote: this is intentionally a detached physical-node oracle. It compares every BPA node to
+          # the safe existing G0/G1/G2 Geometry incumbent and preserves exact fallback; complete archive
+          # integration is a later gate only if this mechanism first clears the frozen causal threshold.
+          set -o pipefail
+          python benchmarks/bitplane_algebra_v030_probe.py \
+            --work-root benchmark-artifacts/bpa-work \
+            --output benchmark-artifacts/bitplane-algebra-v030.json \
+            2>&1 | tee benchmark-artifacts/bitplane-algebra-v030.stdout.txt
+
+      - name: Enforce frozen child-research contract
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          data = json.loads(Path('benchmark-artifacts/bitplane-algebra-v030.json').read_text())
+          totals = data['totals']
+          contract = data['contract']
+          assert data['schema'] == 'cmpct-v030-bitplane-algebra-probe-v1'
+          assert totals['files_regressed'] == 0
+          assert totals['saving_vs_geometry_bytes'] >= contract['minimum_aggregate_saving_bytes']
+          assert totals['max_single_file_saving_bytes'] >= contract['minimum_single_numeric_file_saving_bytes']
+          assert totals['bpa_selected_chunks'] > 0
+          assert totals['max_exact_finalists'] <= contract['max_exact_finalists']
+          assert totals['mechanism_gate'] is True
+          print(json.dumps(totals, indent=2, sort_keys=True))
+          PY
+
+      - name: Upload research evidence even on failure
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: cmpct-v030-bitplane-algebra-child
+          path: benchmark-artifacts/
+          if-no-files-found: warn
