@@ -11,15 +11,16 @@ Before changing format behavior, encoder policy, performance, portability or the
 3. `docs/CURRENT_STATE.md`;
 4. the newest applicable note under `docs/releases/`;
 5. `docs/PERFORMANCE_RELEASE_GATE.md`;
-6. `docs/HARDENING.md`;
-7. `docs/PORTABILITY.md`;
-8. `docs/NATIVE_CORE.md` when native/portability work is in scope;
-9. `docs/FORMAT.md`;
-10. `docs/HISTORY.md`;
-11. `docs/RESEARCH_LOG.md` and `docs/ENTROPYGRAPH.md`;
-12. `docs/BENCHMARKS.md`;
-13. `docs/PUBLIC_SURFACE.md`;
-14. `docs/ROADMAP.md`.
+6. `docs/BREAKTHROUGH_REHABILITATION.md` — how to preserve a miracle-grade research gain while paying any regression debt before promotion;
+7. `docs/HARDENING.md`;
+8. `docs/PORTABILITY.md`;
+9. `docs/NATIVE_CORE.md` when native/portability work is in scope;
+10. `docs/FORMAT.md`;
+11. `docs/HISTORY.md`;
+12. `docs/RESEARCH_LOG.md` and `docs/ENTROPYGRAPH.md`;
+13. `docs/BENCHMARKS.md`;
+14. `docs/PUBLIC_SURFACE.md`;
+15. `docs/ROADMAP.md`.
 
 Do not depend on inaccessible chat history, private corpora, unrelated internal projects, or private
 artifact provenance for project-critical context. If a conclusion matters to future CMPCT work, put
@@ -34,9 +35,16 @@ context.
 strong systems reasoning, explicit hypotheses, adversarial self-review, independent evidence and
 measurable improvement with the same seriousness as the best work already merged into CMPCT.
 
-Every material task must apply the **quality ratchet**: preserve all verified strengths of the inherited
-state while improving at least one meaningful dimension or producing a durable negative result that
-prevents wasted future work. Green tests alone are not sufficient evidence of excellent engineering.
+Every **promoted material milestone** must apply the quality ratchet: preserve all verified strengths of
+the inherited released state while improving at least one meaningful dimension or producing a durable
+negative result that prevents wasted future work. Green tests alone are not sufficient evidence of
+excellent engineering.
+
+Exploration is intentionally less timid than promotion. A reproducible mechanism-level breakthrough may
+temporarily regress another benchmark without being thrown away. In that case the agent must preserve
+the seed, expose the regression debt, and continue engineering until the breakthrough survives while
+the inherited release floor is restored. `docs/BREAKTHROUGH_REHABILITATION.md` is the normative protocol.
+No-regression remains the promotion boundary, not a ban on high-upside experiments.
 
 For non-trivial work, agents are expected to:
 
@@ -55,7 +63,8 @@ For non-trivial work, agents are expected to:
 When a problem appears impossible under the current framing, change the model of the problem before
 lowering the standard of proof. “Engineering miracle” means discovering a better representation,
 invariant or cost model that makes a previously difficult tradeoff tractable—not adding complexity for
-spectacle.
+spectacle. If such a miracle initially exports cost into another benchmark, do not reflexively tune the
+miracle away; preserve it and attack the exported cost as the next engineering mission.
 
 ## Development rules
 
@@ -82,8 +91,8 @@ spectacle.
 - Every numeric core release must add `docs/releases/vX.Y.0.md`, run the release performance gate, and commit a fresh public benchmark record for that release under `benchmarks/history/` before merge.
 - A coherent surface milestone advances `SURFACE_REVISION` once, not once per commit. Multiple commits that collectively form the same presentation milestone may share the same surface revision.
 - A base-vs-candidate core-release comparison must use the exact same corpus tree and benchmark semantics. Never regenerate separate random corpora and call their archive-size difference a regression or improvement.
-- Deterministic CMPCT archive-size regression on the release parity corpus has **zero-byte tolerance**. If the candidate emits larger archives for the same input, fix it or deliberately redesign the benchmark contract before release; do not loosen the gate to make the PR green.
-- Confirmed create/extract slowdown outside the same-runner timing noise envelope blocks a core release. If the signal is ambiguous, improve measurement quality rather than declaring a win or regression from noise.
+- Deterministic CMPCT archive-size regression on the release parity corpus has **zero-byte tolerance at promotion**. If a release candidate emits larger archives for the same input, it is not promotable yet; do not loosen the gate. A dramatic research breakthrough with such debt may be preserved and rehabilitated under `docs/BREAKTHROUGH_REHABILITATION.md` instead of being reflexively discarded.
+- Confirmed create/extract slowdown outside the same-runner timing noise envelope blocks core-release promotion. If the signal is ambiguous, improve measurement quality rather than declaring a win or regression from noise. If a miracle-grade research seed creates a confirmed timing debt, preserve the measurement and repair it before promotion.
 - Durable public benchmark results belong under `benchmarks/history/`; do not leave public evidence only in terminal output, CI artifacts, chat, or prose.
 - Preserve public historical benchmark files; append new records instead of rewriting old results to match a new narrative.
 - The website's large performance claims must be derived from committed benchmark records. Do not hand-copy headline percentages into HTML/JavaScript.
@@ -95,6 +104,7 @@ spectacle.
 - Do not merely patch the reported example when the failure mechanism can be generalized into an invariant or property test.
 - When a mature competitor wins fairly, preserve the loss, explain the mechanism if known, and turn an actionable weakness into a prioritized engineering target.
 - For substantial representation work, account for archive bytes, creation/extraction cost, peak memory, selective-read bytes/decoded work, dependency depth, integrity/recovery work and portability burden. Do not optimize one scalar by silently exporting cost elsewhere.
+- A breakthrough seed that improves one strategic metric dramatically while regressing another must open explicit regression debt. First attempt adaptive portfolio/fallback selection, then isolate exported cost, then change representation boundaries or invent a counter-mechanism. Do not optimize the breakthrough back out merely to make an intermediate matrix green.
 - Before completion, perform the adversarial self-review and completion dossier defined in `docs/AGI_ENGINEERING_STANDARD.md`.
 
 ## Benchmark rule
@@ -112,19 +122,23 @@ repository presentation changed. They may still run ordinary tests and the site 
 
 ## Performance-release rule
 
-`.github/workflows/zip-parity.yml` is a core-release gate, not optional telemetry. Its direct comparison is
+`.github/workflows/zip-parity.yml` is a core-release promotion gate, not optional telemetry. Its direct comparison is
 owned by the candidate harness: it generates one corpus, freezes its metadata, fingerprints it, and
 runs both the base and candidate CMPCT engines against that identical tree on one runner.
 
 The gate currently applies two different statistical rules because the measurements have different
 physics:
 
-- **Archive size:** deterministic for identical input/encoder semantics, therefore **0 B regression**.
-- **Timing:** repeated median on the same runner; fail only when slowdown clears both the documented
+- **Archive size:** deterministic for identical input/encoder semantics, therefore **0 B regression at promotion**.
+- **Timing:** repeated median on the same runner; fail promotion only when slowdown clears both the documented
   relative and absolute noise thresholds. A future controlled benchmark environment may tighten that
   envelope, but may not silently remove the performance requirement.
 
-See `docs/PERFORMANCE_RELEASE_GATE.md` for the full contract.
+A failed gate does not erase a verified high-upside research result. For a breakthrough seed it creates
+regression debt: preserve the seed and full evidence, rehabilitate the damaged metric, and rerun the
+full gate. Promotion happens only after the debt is closed while the breakthrough gain remains.
+
+See `docs/PERFORMANCE_RELEASE_GATE.md` and `docs/BREAKTHROUGH_REHABILITATION.md` for the full contract.
 
 ## Material-PR evidence dossier
 
@@ -135,6 +149,7 @@ Every material PR should make the following explicit in its body or linked durab
 - **Alternatives:** meaningful solution classes considered and why rejected paths lost;
 - **Evidence:** tests, independent oracles, benchmark records and raw/durable result locations;
 - **Losses/ambiguity:** workloads, platforms or metrics that remain worse, unchanged or inconclusive;
+- **Breakthrough debt when applicable:** the preserved gain, every regressed metric, rehabilitation hypotheses, gain-retention test and promotion exit condition;
 - **Safety/compatibility:** hostile inputs, resource limits, recovery, path semantics, format/ABI impact;
 - **Performance:** size, latency, memory/selective-work consequences where relevant;
 - **Future leverage:** the highest-value new capability or unresolved defect exposed by the work.
