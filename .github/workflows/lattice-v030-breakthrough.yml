@@ -1,0 +1,98 @@
+name: CMPCT v0.30 Lattice breakthrough
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-v030-lattice-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lattice-generalization:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      CMPCT_PREFLATE_BRIDGE: ${{ github.workspace }}/native/preflate-bridge/target/release/cmpct-preflate-bridge
+    steps:
+      - name: Check out candidate
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install deterministic benchmark dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y zstd ffmpeg gcc libsndfile1
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[audio,test]'
+          python -m pip install pillow reportlab python-docx openpyxl python-pptx numpy
+
+      - name: Build pinned memory-safe Preflate bridge
+        run: |
+          rustup toolchain install 1.89.0 --profile minimal
+          cargo +1.89.0 build --release --manifest-path native/preflate-bridge/Cargo.toml
+
+      - name: Run focused Lattice correctness and hostile-boundary tests
+        run: |
+          pytest -q tests/test_v030_lattice.py
+
+      - name: Run exact-tree 15-workload breakthrough gate
+        run: |
+          mkdir -p benchmark-artifacts
+          # Footnote: the candidate benchmark owns both sides of the direct comparison. Each accepted
+          # v0.29 artifact and its Lattice challenger consume the same still-live workload tree, so a
+          # generator/toolchain drift cannot impersonate a breakthrough.
+          set -o pipefail
+          python benchmarks/lattice_v030_generalization_bench.py \
+            --work-root benchmark-artifacts/lattice-v030-work \
+            --output benchmark-artifacts/lattice-v030-generalization.json \
+            2>&1 | tee benchmark-artifacts/lattice-v030.stdout.txt
+
+      - name: Enforce preregistered mechanism and safety claims
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          data=json.loads(Path('benchmark-artifacts/lattice-v030-generalization.json').read_text())
+          rows=data['rows']; totals=data['totals']; contract=data['benchmark_contract']
+          assert data['schema']=='cmpct-v030-lattice-generalization-v1'
+          assert len(rows)==contract['expected_workloads']==15
+          assert contract['archive_size_regression_tolerance_bytes']==0
+          assert totals['workloads_regressed']==0
+          assert all(r['candidate_bytes'] <= r['v029_bytes'] for r in rows)
+          assert all(len(r['tree_sha256'])==64 for r in rows)
+          assert totals['saving_vs_v029_bytes'] >= contract['minimum_aggregate_breakthrough_saving_bytes']
+          assert totals['max_single_workload_saving_bytes'] >= contract['minimum_single_workload_breakthrough_saving_bytes']
+          assert totals['mechanism_gate'] is True
+          assert totals['lattice_selected'] > 0 and totals['lane_nodes'] > 0
+          assert totals['max_read_amplification'] <= 1.0
+          print(json.dumps(totals, indent=2))
+          PY
+
+      - name: Public-surface guard
+        run: python tools/check_public_surface.py
+
+      - name: Upload breakthrough evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cmpct-v030-lattice-${{ github.sha }}
+          path: |
+            benchmark-artifacts/lattice-v030-generalization.json
+            benchmark-artifacts/lattice-v030.stdout.txt
+          if-no-files-found: warn
+
+# Footnote: green here means the size mechanism survived its preregistered seed gate. It does not mean
+# v0.30 is release-ready: timing, memory, extraction/selective-read, adversarial parser and full direct-base
+# promotion gates remain separate regression-debt obligations.
