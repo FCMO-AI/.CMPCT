@@ -33,6 +33,26 @@ def _load_impl():
 
 
 IMPL = _load_impl()
+
+# Attempt #4's initial implementation called ``similarity_order(all_sketches, node_ids)`` as though the
+# helper accepted a subset argument. The canonical helper accepts one sketch sequence and returns indices
+# *within that sequence*. Adapt the call at the stable evidence boundary so the mechanism is unchanged:
+# only the already-selected direct roots are ordered, then local positions are mapped back to node ids.
+#
+# Footnote: this is an API-contract repair, not a benchmark mechanism change. The nominated roots,
+# co-pack ceiling, locality accounting and frozen full-artifact thresholds are exactly the preregistered
+# attempt-4 values; the first CI run failed before any placement economics or benchmark could execute.
+_ORIGINAL_SIMILARITY_ORDER = IMPL.similarity_order
+
+
+def _subset_similarity_order(sketches, node_ids):
+    selected = list(node_ids)
+    local_order = _ORIGINAL_SIMILARITY_ORDER([sketches[node_id] for node_id in selected])
+    return [selected[local_index] for local_index in local_order]
+
+
+IMPL.similarity_order = _subset_similarity_order
+
 BASE = IMPL.PARENT
 MAG = IMPL.MAG
 HDR = IMPL.HDR
