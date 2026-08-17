@@ -6,9 +6,10 @@ Only the three workloads that drifted during the first v0.29 inherited-frontier 
 Each is built twice from scratch, normalized by `neutral_hostile_determinism_repair_v1`, and compared at
 both tree and individual-file level before a repaired v0.28 baseline artifact is measured.
 
-Footnote: a nondeterministic round no longer raises before evidence is written. The JSON records exact
-per-file hash/size differences and marks the workload rejected; the workflow's separate enforce step
-still fails. That preserves forensic evidence without weakening the acceptance contract.
+Footnote: the Office builder's raw `client_report.pdf` is copied *before* normalization into a forensic
+subdirectory. That pair is diagnostic evidence only; it lets us identify ReportLab's exact volatile byte
+surface and replace the broad deterministic fixture with the smallest safe canonicalization possible.
+The workflow's acceptance result still comes only from the normalized tree.
 """
 
 import argparse
@@ -38,9 +39,6 @@ def _load(path: Path, name: str):
 
 N = _load(NEUTRAL_PATH, "cmpct_neutral_v1_for_repair")
 R = _load(REPAIR_PATH, "cmpct_neutral_v1_repair")
-# Footnote: producer hooks must be installed after the historical generator has imported its libraries
-# but before any workload builder runs. This forces ReportLab's exact Canvas call site into invariant
-# mode without editing the historical generator or mutating its stored v0.28 evidence.
 R.install_generation_hooks(N)
 V028 = _load(V028_PATH, "cmpct_v028_for_repaired_baseline")
 
@@ -98,6 +96,20 @@ def run(work_root: Path) -> dict:
             suite_root.mkdir(parents=True, exist_ok=True)
             builder(suite_root)
             workload = suite_root / name
+
+            raw_pdf = None
+            if name == "02_office_workspace":
+                source_pdf = workload / "client_report.pdf"
+                raw = source_pdf.read_bytes()
+                forensic = work_root / "forensics" / f"client_report-round-{index}-raw.pdf"
+                forensic.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copyfile(source_pdf, forensic)
+                raw_pdf = {
+                    "path": forensic.relative_to(work_root).as_posix(),
+                    "bytes": len(raw),
+                    "sha256": hashlib.sha256(raw).hexdigest(),
+                }
+
             R.normalize_workload(workload)
             manifest = _file_manifest(workload)
             files, logical = _shape(manifest)
@@ -107,6 +119,7 @@ def run(work_root: Path) -> dict:
                 "logical_bytes": logical,
                 "path": workload,
                 "file_manifest": manifest,
+                "raw_pdf": raw_pdf,
             })
 
         file_differences = _diff(rounds[0]["file_manifest"], rounds[1]["file_manifest"])
@@ -126,6 +139,7 @@ def run(work_root: Path) -> dict:
             "second_build_tree_sha256": rounds[1]["tree_sha256"],
             "second_build_logical_bytes": rounds[1]["logical_bytes"],
             "file_differences": file_differences,
+            "raw_pdf_rounds": [rounds[0]["raw_pdf"], rounds[1]["raw_pdf"]] if name == "02_office_workspace" else [],
             "historical_tree_sha256": previous["tree_sha256"],
             "historical_candidate_bytes": int(previous["candidate_bytes"]),
             "historical_logical_bytes": int(previous["logical_bytes"]),
