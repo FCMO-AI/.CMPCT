@@ -1,18 +1,23 @@
-"""Byte-identical parallel scheduler oracle for the v0.29 Mosaic portfolio.
+"""Byte-identical parallel scheduler oracle for the accepted v0.29 Mosaic portfolio.
 
-The accepted research portfolio currently pays a large wall-clock penalty because it builds the complete
-v0.28 fallback and the complete Mosaic candidate serially, even though neither build depends on the
-other. This oracle changes *scheduling only*: both inherited builders run in separate spawned Python
-processes, then the exact same smaller-artifact selection rule is applied.
+The accepted attempt-5 portfolio currently pays a large wall-clock penalty because it builds the complete
+v0.28 fallback and the complete Residual Program Packing candidate serially, even though neither build
+depends on the other for multi-file trees. This oracle changes *scheduling only*: both inherited builders
+run in separate spawned Python processes, then the exact same smaller-artifact selection rule is applied.
 
 The experiment is intentionally conservative. A result is admissible only when the selected archive
-SHA-256 exactly matches the existing sequential portfolio output. No encoder threshold, record order,
-codec setting, metadata byte, format field, or fallback rule may change.
+SHA-256 exactly matches ``entropygraph_v029_residual_fast.build``. No encoder threshold, record order,
+codec setting, metadata byte, format field, residual-pack rule, Mosaic rule, or fallback rule may change.
 
 Timing uses balanced ABBA ordering across four paired repetitions. This matters because always running
 sequential first can warm filesystem/page-cache state for the parallel run and manufacture an apparent
 speedup. ABBA gives each implementation two first-position and two second-position measurements while
 retaining the same frozen >=20% and >=5 s per-pair and median gates.
+
+Footnote: an earlier scheduler prototype accidentally targeted the obsolete attempt-1 ``CMPNX9`` engine.
+Its timing result was real for that old portfolio but was not evidence for the accepted attempt-5
+``CMPNX11`` mechanism. This module therefore imports the accepted Residual Program Packing wrapper
+explicitly and records that engine identity in every evidence row so stale-engine drift fails loudly.
 """
 from __future__ import annotations
 
@@ -21,6 +26,7 @@ import hashlib
 import json
 import multiprocessing as mp
 from pathlib import Path
+import queue as queue_module
 import shutil
 import statistics
 import sys
@@ -31,11 +37,13 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from experiments import entropygraph_v029_mosaic as mosaic
+from experiments import entropygraph_v029_residual_fast as accepted
 
 MIN_WALLCLOCK_IMPROVEMENT_PCT = 20.0
 MIN_ABSOLUTE_IMPROVEMENT_S = 5.0
 BALANCED_ORDER = ("sequential-first", "parallel-first", "parallel-first", "sequential-first")
+ACCEPTED_ENGINE = "attempt5-residual-program-packing"
+CHILD_RESULT_TIMEOUT_S = 30 * 60
 
 
 def _sha256(path: Path) -> str:
@@ -52,9 +60,12 @@ def _worker(kind: str, root_s: str, out_s: str, queue) -> None:
     started = time.perf_counter()
     try:
         if kind == "v028":
-            stats = mosaic.V028.build(root, out)
-        elif kind == "mosaic":
-            stats = mosaic._build_mosaic_graph(root, out)
+            stats = accepted.V028.build(root, out)
+        elif kind == "attempt5":
+            # Footnote: ``build_graph`` is the accepted attempt-5 CMPNX11 candidate without the outer
+            # v0.28 tournament. It is independent of the v0.28 build, which is precisely what makes
+            # parallel scheduling legal without changing a single candidate byte.
+            stats = accepted.build_graph(root, out)
         else:
             raise ValueError(kind)
         queue.put({"kind": kind, "ok": True, "elapsed_s": time.perf_counter() - started, "stats": stats})
@@ -62,23 +73,66 @@ def _worker(kind: str, root_s: str, out_s: str, queue) -> None:
         queue.put({"kind": kind, "ok": False, "elapsed_s": time.perf_counter() - started, "error": repr(exc)})
 
 
+def _single_file_compatible_build(root: Path, out: Path) -> dict:
+    """Preserve the accepted scheduler's single-file fast-reject policy exactly.
+
+    The fast reject needs the completed v0.28 selection before it knows whether the research graph may be
+    skipped. Starting the graph speculatively would re-introduce the exact 22.8x dead-end cost that the
+    accepted optimization removed. Single-file trees therefore keep the accepted sequential policy;
+    parallelism is a multi-file portfolio optimization only.
+    """
+    started = time.perf_counter()
+    stats = accepted.build(root, out)
+    elapsed = time.perf_counter() - started
+    return {
+        "selected": stats["selected"],
+        "archive_bytes": out.stat().st_size,
+        "archive_sha256": _sha256(out),
+        "parallel_create_s": elapsed,
+        "v028_child_s": float(stats.get("v028", {}).get("create_s", elapsed)),
+        "attempt5_child_s": float(stats.get("mosaic", {}).get("create_s", 0.0)),
+        "v028_bytes": int(stats["v028_bytes"]),
+        "attempt5_graph_bytes": int(stats["mosaic_graph_bytes"]),
+        "scheduler_mode": "single-file-accepted-policy",
+        "accepted_engine": ACCEPTED_ENGINE,
+        "fast_reject_reason": stats.get("fast_reject_reason"),
+    }
+
+
 def build_parallel(root: Path, out: Path) -> dict:
+    if accepted._logical_file_count(root) <= 1:
+        return _single_file_compatible_build(root, out)
+
     started = time.perf_counter()
     ctx = mp.get_context("spawn")
     with tempfile.TemporaryDirectory(prefix="cmpct-mosaic-parallel-") as td:
         td_path = Path(td)
         v028_path = td_path / "v028.cmpct"
-        mosaic_path = td_path / "mosaic.cmpct"
+        attempt5_path = td_path / "attempt5.cmpct"
         queue = ctx.Queue()
         processes = [
             ctx.Process(target=_worker, args=("v028", str(root), str(v028_path), queue)),
-            ctx.Process(target=_worker, args=("mosaic", str(root), str(mosaic_path), queue)),
+            ctx.Process(target=_worker, args=("attempt5", str(root), str(attempt5_path), queue)),
         ]
         for process in processes:
             process.start()
-        results = [queue.get() for _ in processes]
-        for process in processes:
-            process.join()
+
+        results = []
+        try:
+            for _ in processes:
+                results.append(queue.get(timeout=CHILD_RESULT_TIMEOUT_S))
+        except queue_module.Empty as exc:
+            for process in processes:
+                if process.is_alive():
+                    process.terminate()
+            raise RuntimeError("parallel portfolio child failed to report before timeout") from exc
+        finally:
+            for process in processes:
+                process.join(timeout=30)
+                if process.is_alive():
+                    process.terminate()
+                    process.join(timeout=5)
+
         failures = [result for result in results if not result.get("ok")]
         if failures or any(process.exitcode != 0 for process in processes):
             raise RuntimeError(
@@ -86,8 +140,8 @@ def build_parallel(root: Path, out: Path) -> dict:
                 f"exitcodes={[p.exitcode for p in processes]!r}"
             )
 
-        if mosaic_path.stat().st_size < v028_path.stat().st_size:
-            chosen = mosaic_path
+        if attempt5_path.stat().st_size < v028_path.stat().st_size:
+            chosen = attempt5_path
             selected = "mosaic"
         else:
             chosen = v028_path
@@ -100,15 +154,18 @@ def build_parallel(root: Path, out: Path) -> dict:
             "archive_sha256": _sha256(out),
             "parallel_create_s": time.perf_counter() - started,
             "v028_child_s": by_kind["v028"]["elapsed_s"],
-            "mosaic_child_s": by_kind["mosaic"]["elapsed_s"],
+            "attempt5_child_s": by_kind["attempt5"]["elapsed_s"],
             "v028_bytes": v028_path.stat().st_size,
-            "mosaic_graph_bytes": mosaic_path.stat().st_size,
+            "attempt5_graph_bytes": attempt5_path.stat().st_size,
+            "scheduler_mode": "parallel-independent-portfolio",
+            "accepted_engine": ACCEPTED_ENGINE,
+            "fast_reject_reason": None,
         }
 
 
 def _build_sequential(root: Path, out: Path) -> tuple[dict, float]:
     started = time.perf_counter()
-    stats = mosaic.build(root, out)
+    stats = accepted.build(root, out)
     return stats, time.perf_counter() - started
 
 
@@ -145,7 +202,9 @@ def measure(root: Path, work_root: Path, repetitions: int = 4) -> dict:
         seq_sha = _sha256(seq)
         exact = seq.read_bytes() == par.read_bytes()
         if not exact or seq_sha != par_stats["archive_sha256"]:
-            raise RuntimeError("parallel scheduler changed selected archive bytes")
+            raise RuntimeError("parallel scheduler changed accepted attempt-5 selected archive bytes")
+        if par_stats["accepted_engine"] != ACCEPTED_ENGINE:
+            raise RuntimeError("parallel scheduler drifted away from the accepted attempt-5 engine")
 
         sequential_times.append(seq_elapsed)
         parallel_times.append(par_stats["parallel_create_s"])
@@ -155,15 +214,19 @@ def measure(root: Path, work_root: Path, repetitions: int = 4) -> dict:
             {
                 "rep": rep,
                 "execution_order": execution_order,
+                "accepted_engine": ACCEPTED_ENGINE,
+                "scheduler_mode": par_stats["scheduler_mode"],
                 "selected": seq_stats["selected"],
                 "archive_bytes": seq.stat().st_size,
                 "archive_sha256": seq_sha,
+                "v028_bytes": int(seq_stats["v028_bytes"]),
+                "attempt5_graph_bytes": int(seq_stats["mosaic_graph_bytes"]),
                 "sequential_s": seq_elapsed,
                 "parallel_s": par_stats["parallel_create_s"],
                 "wallclock_saved_s": saved,
                 "wallclock_improvement_pct": improvement_pct,
                 "v028_child_s": par_stats["v028_child_s"],
-                "mosaic_child_s": par_stats["mosaic_child_s"],
+                "attempt5_child_s": par_stats["attempt5_child_s"],
                 "byte_identical": exact,
                 "pair_gate_pass": _pair_passes(seq_elapsed, par_stats["parallel_create_s"]),
             }
@@ -179,10 +242,13 @@ def measure(root: Path, work_root: Path, repetitions: int = 4) -> dict:
     )
 
     return {
-        "schema": "cmpct-v029-parallel-portfolio-oracle-v2",
+        "schema": "cmpct-v029-parallel-portfolio-oracle-v3",
+        "accepted_engine": ACCEPTED_ENGINE,
         "policy": {
             "scheduling_only": True,
             "spawned_workers": 2,
+            "parallel_scope": "multi-file-only",
+            "single_file_policy": "preserve-accepted-fast-reject-sequentially",
             "exact_archive_identity_required": True,
             "minimum_wallclock_improvement_pct": MIN_WALLCLOCK_IMPROVEMENT_PCT,
             "minimum_absolute_improvement_s": MIN_ABSOLUTE_IMPROVEMENT_S,
@@ -199,6 +265,7 @@ def measure(root: Path, work_root: Path, repetitions: int = 4) -> dict:
         "median_gate_pass": median_gate,
         "research_gate_pass": (
             median_gate
+            and all(row["accepted_engine"] == ACCEPTED_ENGINE for row in exact_rows)
             and all(row["byte_identical"] for row in exact_rows)
             and all(row["pair_gate_pass"] for row in exact_rows)
         ),
