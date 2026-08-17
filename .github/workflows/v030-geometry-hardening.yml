@@ -34,22 +34,28 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -e '.[test]'
 
+      - name: Record exact evidence runtime
+        run: python benchmarks/evidence_runtime_fingerprint.py
+
       - name: Run Geometry transform and hardening tests
         run: |
           python -m pytest -q \
             tests/test_v030_geometry.py \
             tests/test_v030_geometry_safe.py \
-            tests/test_v030_geometry_guarded.py
+            tests/test_v030_geometry_guarded.py \
+            tests/test_v030_evidence_runtime_fingerprint.py
 
       - name: Compile research modules
         run: |
           python -m py_compile \
             experiments/entropygraph_v030_geometry.py \
             experiments/entropygraph_v030_geometry_safe.py \
-            experiments/entropygraph_v030_geometry_guarded.py
+            experiments/entropygraph_v030_geometry_guarded.py \
+            benchmarks/evidence_runtime_fingerprint.py
 
       - name: Public-surface guard
         run: python tools/check_public_surface.py
 
 # Footnote: this workflow is intentionally small and independent from the expensive 15-workload size gate.
-# It can harden reader admission without cancelling or contaminating the exact-byte Geometry measurement.
+# It can harden reader admission and make serialization/compressor drift observable without cancelling or
+# contaminating the exact-byte Geometry measurement branch.
