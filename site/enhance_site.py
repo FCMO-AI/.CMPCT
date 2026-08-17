@@ -102,6 +102,20 @@ def patch_index(output: Path, version: str, surface: str) -> None:
         1,
     )
 
+    # Footnote: no-regression remains strict at release promotion, but the public wording must not imply
+    # that a high-upside research seed is destroyed on first contact with a red benchmark. Research may
+    # carry explicit debt; the release earns promotion only after that debt is rehabilitated.
+    html = html.replace(
+        '<strong>No silent performance regression.</strong>',
+        '<strong>Discover boldly. Promote without regression.</strong>',
+        1,
+    )
+    html = html.replace(
+        'Every material update is benchmarked against its direct base. Deterministic archive-size regression: <b>0 bytes allowed</b>. Confirmed speed regression outside the same-runner noise envelope: <b>release blocked</b>.',
+        'Breakthrough research may expose a temporary measured tradeoff; it is preserved as explicit regression debt, not promoted as the new baseline. For release: deterministic archive-size regression is <b>0 bytes allowed</b>, and confirmed speed debt outside the same-runner noise envelope must be <b>rehabilitated before promotion</b>.',
+        1,
+    )
+
     html = html.replace(
         'Every material step<br><em>gets a version and a benchmark.</em>',
         'Core releases must<br><em>earn the number.</em>',
