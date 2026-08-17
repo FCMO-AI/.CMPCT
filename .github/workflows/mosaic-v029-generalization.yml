@@ -36,14 +36,20 @@ jobs:
           sudo apt-get install -y zstd ffmpeg gcc libsndfile1
           python -m pip install --upgrade pip
           python -m pip install -e '.[audio,test]'
-          python -m pip install pillow reportlab python-docx openpyxl python-pptx numpy
+          python -m pip install \
+            pillow==12.3.0 \
+            reportlab==5.0.0 \
+            python-docx==1.2.0 \
+            openpyxl==3.1.5 \
+            python-pptx==1.0.2 \
+            numpy==2.4.6
 
       - name: Build pinned memory-safe Preflate bridge
         run: |
           rustup toolchain install 1.89.0 --profile minimal
           cargo +1.89.0 build --release --manifest-path native/preflate-bridge/Cargo.toml
 
-      - name: Measure exact 15-workload v0.28 frontier
+      - name: Measure deterministic 15-workload v0.28 frontier
         run: |
           mkdir -p benchmark-artifacts
           set -o pipefail
@@ -60,19 +66,23 @@ jobs:
           r=json.loads(Path('benchmark-artifacts/mosaic-v029-generalization.json').read_text())
           t=r['totals']
           print(json.dumps(t, indent=2))
+          assert r['schema'] == 'cmpct-v029-generalization-v2'
           assert r['claim_boundary'].startswith('attempt-5 generalization versus exact embedded v0.28')
           assert t['workloads'] == 15, t
+          assert t['historical_baseline_rows'] == 12, t
+          assert t['repaired_baseline_rows'] == 3, t
           assert t['baseline_tree_drift_rows'] == 0, t
           assert t['baseline_byte_drift_rows'] == 0, t
-          assert t['v028_bytes'] == 137_557_457, t
+          assert t['v028_bytes'] == 137_556_533, t
           assert t['workloads_regressed'] == 0, t
           assert t['candidate_bytes'] < t['v028_bytes'], t
           assert t['workloads_improved'] >= 1, t
           assert t['max_mosaic_read_amplification'] <= 8.0, t
           assert t['max_additional_recipe_read_amplification'] <= 2.0, t
           assert t['creation_ratio_vs_v028'] <= 3.0, t
-          # Footnote: these values were fixed in MOSAIC_V029_GENERALIZATION.md before this workflow's
-          # first measurement. A red result changes/optimizes the mechanism; it does not relax the gate.
+          # Footnote: size/locality/timing thresholds are the original preregistered generalization
+          # thresholds. Only the benchmark *identity* changed after a separately proven substrate repair;
+          # the mechanism does not receive a weaker performance bar.
           PY
 
       - name: Full regression suite
@@ -89,12 +99,14 @@ jobs:
           import json
           from pathlib import Path
           r=json.loads(Path('benchmark-artifacts/mosaic-v029-generalization.json').read_text()); t=r['totals']
-          print('## CMPCT attempt #5 — inherited v0.28 frontier')
+          print('## CMPCT attempt #5 — deterministic inherited v0.28 frontier')
+          print(f"- baseline identities: **{t['historical_baseline_rows']} historical + {t['repaired_baseline_rows']} repair-v3**")
           print(f"- exact v0.28 bytes: **{t['v028_bytes']:,}**")
           print(f"- attempt-5 portfolio bytes: **{t['candidate_bytes']:,}**")
           print(f"- improvement: **{t['smaller_than_v028_pct']:.5f}%**")
           print(f"- improved / regressed workloads: **{t['workloads_improved']} / {t['workloads_regressed']}**")
           print(f"- research representation selected: **{t['research_selected']}/15**")
+          print(f"- fast-rejected rows: **{t['fast_reject_rows']}/15**")
           print(f"- baseline tree/byte drift rows: **{t['baseline_tree_drift_rows']} / {t['baseline_byte_drift_rows']}**")
           print(f"- residual packs / packed delta nodes: **{t['residual_pack_records']} / {t['residual_packed_delta_nodes']}**")
           print(f"- max mosaic amplification: **{t['max_mosaic_read_amplification']:.3f}x**")
@@ -113,5 +125,5 @@ jobs:
             benchmark-artifacts/mosaic-v029-generalization.stdout.txt
           if-no-files-found: warn
 
-# Footnote: this gate still does not assign project version 0.29.0. A green run earns the separately
-# preregistered structural-competitor sweep and then a canonical/native/recovery release proposal.
+# Footnote: this gate still does not assign project version 0.29.0. A green deterministic generalization
+# run earns the structural-competitor sweep and then a canonical/native/recovery release proposal.
