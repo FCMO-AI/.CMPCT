@@ -1,0 +1,46 @@
+{
+  "schema": "cmpct-mosaic-v029-stress-summary-v2",
+  "date": "2026-08-17",
+  "source_commit": "f3ae407baa39574399fa68e86835e416abf46ebe",
+  "raw_artifact": {"id":9272874229,"sha256":"b9e1e4b14b55fd06fa3c63a7311dc3d4379de61171f473b1a2ef0be6e2add0a0"},
+  "claim_boundary": "noisy multi-root target representation only; full archive costs remain unmeasured",
+  "corpus": {
+    "schema": "cmpct-mosaic-stress-v2",
+    "seed": 699063789,
+    "workloads": [
+      {"name":"01_noisy_two_parent_merge","roots":2,"targets":1,"logical_bytes":983040,"tree_sha256":"9086ea3dce0c9a6d03ba6ef8a82f51a103e4db40732a560b5154238f0b3d9ba4"},
+      {"name":"02_shifted_reordered_merge","roots":2,"targets":1,"logical_bytes":748952,"tree_sha256":"55ac63689ba4478f25eb419ff843c1a9c4df0f204e9393c29ce80fecf44c6634"},
+      {"name":"03_record_store_conflict_merge","roots":2,"targets":1,"logical_bytes":1418400,"tree_sha256":"cba597b13f44e6d18eef596936ecbdd7376db44768cc49d5a9334ee08c15b805"},
+      {"name":"04_source_like_merge","roots":2,"targets":1,"logical_bytes":680868,"tree_sha256":"e209a1195f01f05e45daf2a32482a4cedcbfd8d3a3cddcedb1eef7557195fc3f"},
+      {"name":"05_compressed_stream_avalan","roots":4,"targets":1,"logical_bytes":2622270,"tree_sha256":"dc154377ed917d41c579e643eb27a1d3fe4d502956671eed1d22affd323b3882"},
+      {"name":"06_single_parent_noisy_control","roots":4,"targets":1,"logical_bytes":1638400,"tree_sha256":"c73f77ace1e6643f2887a2500f527f617fc0e9406cbfddeef26c0dfb9d956a9e"},
+      {"name":"07_false_neighbors_control","roots":4,"targets":1,"logical_bytes":1617920,"tree_sha256":"c4ad99304465da6051d54ae6cb7ae5bbb00cc6774edbf2541588a67dad96233a"},
+      {"name":"08_incompressible_control","roots":4,"targets":1,"logical_bytes":1638400,"tree_sha256":"9fed7908a3790a84aaf38c7a7b78f2f7cffb7ff110ea790e82b840e7642aefe2"},
+      {"name":"09_root_diversity_pressure","roots":8,"targets":1,"logical_bytes":1732864,"tree_sha256":"55613157eeaf164b5d5ef77c141b82fc04bb279c49169d3b7f84da86ab02c72e"},
+      {"name":"10_small_metadata_control","roots":2,"targets":1,"logical_bytes":6144,"tree_sha256":"1f700bda9b884b70ff9398d79afe8956fe8485c04f22311cc51b9cf025f2e2cc"}
+    ]
+  },
+  "totals": {
+    "targets":10,
+    "v028_optimistic_floor_bytes":1156075,
+    "candidate_bytes":777886,
+    "smaller_than_floor_pct":32.71318902320351,
+    "mosaic_selected":6,
+    "workloads_improved":6,
+    "workloads_regressed":0,
+    "max_read_amplification":5.12398125,
+    "elapsed_s":5.595927204999995
+  },
+  "rows": [
+    {"name":"01_noisy_two_parent_merge","floor_bytes":167136,"candidate_bytes":6437,"saving_pct":96.149,"selected":"mosaic","roots":[0,1],"read_amp":2.020,"copied_bytes":322248,"literal_bytes":5432},
+    {"name":"02_shifted_reordered_merge","floor_bytes":104201,"candidate_bytes":5592,"saving_pct":94.633,"selected":"mosaic","roots":[0,1],"read_amp":1.993,"copied_bytes":246955,"literal_bytes":5118},
+    {"name":"03_record_store_conflict_merge","floor_bytes":109618,"candidate_bytes":91103,"saving_pct":16.890,"selected":"mosaic","roots":[0,1],"read_amp":2.208,"copied_bytes":396023,"literal_bytes":76777},
+    {"name":"04_source_like_merge","floor_bytes":5818,"candidate_bytes":805,"saving_pct":86.164,"selected":"mosaic","roots":[0,1],"read_amp":2.011,"copied_bytes":224957,"literal_bytes":1971},
+    {"name":"05_compressed_stream_avalan","floor_bytes":845,"candidate_bytes":845,"saving_pct":0.0,"selected":"v028-single-fallback"},
+    {"name":"06_single_parent_noisy_control","floor_bytes":4356,"candidate_bytes":4356,"saving_pct":0.0,"selected":"v028-single-fallback"},
+    {"name":"07_false_neighbors_control","floor_bytes":307291,"candidate_bytes":307291,"saving_pct":0.0,"selected":"v028-single-fallback"},
+    {"name":"08_incompressible_control","floor_bytes":327733,"candidate_bytes":327733,"saving_pct":0.0,"selected":"v028-direct-fallback"},
+    {"name":"09_root_diversity_pressure","floor_bytes":128352,"candidate_bytes":33514,"saving_pct":73.889,"selected":"mosaic","roots":[0,1,2,3],"read_amp":5.124,"copied_bytes":126858,"literal_bytes":33142},
+    {"name":"10_small_metadata_control","floor_bytes":725,"candidate_bytes":210,"saving_pct":71.034,"selected":"mosaic","roots":[0,1],"read_amp":2.057,"copied_bytes":1952,"literal_bytes":96}
+  ]
+}
