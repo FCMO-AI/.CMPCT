@@ -81,6 +81,20 @@ def _solid_tar_zstd(root: Path, output: Path) -> dict:
             "semantics": "monolithic solid tar+Zstd-19 diagnostic; no random member access/recovery parity"}
 
 
+def _category_baselines(root: Path, temp: Path) -> dict:
+    """Measure the two per-workload public baselines used by the category frontier.
+
+    Footnote: these measurements intentionally run inside the same workload lifetime as the CMPCT
+    candidate. Some valid synthetic office/media generators can contain producer metadata that is not
+    byte-identical across a second regeneration. Measuring here guarantees that category percentages
+    compare archives of the exact tree whose hash and CMPCT bytes are recorded in the same row.
+    """
+    return {
+        "zip_deflate9": _zip_deflate(root, temp / "category.zip"),
+        "tar_zstd19_solid": _solid_tar_zstd(root, temp / "category.tar.zst"),
+    }
+
+
 def _optional_tool(name: str, root: Path, output: Path, command: list[str], semantics: str,
                    timeout: int = 300) -> dict:
     exe = shutil.which(name)
@@ -152,7 +166,8 @@ def _competitors(root: Path, temp: Path) -> dict:
     return result
 
 
-def _run_suite(engine, root: Path, suite_name: str, with_competitors: bool) -> list[dict]:
+def _run_suite(engine, root: Path, suite_name: str, with_competitors: bool,
+               with_category_baselines: bool) -> list[dict]:
     rows = []
     for workload in sorted(p for p in root.iterdir() if p.is_dir()):
         files, logical, tree = _tree_stats(workload)
@@ -169,9 +184,17 @@ def _run_suite(engine, root: Path, suite_name: str, with_competitors: bool) -> l
             }
             if with_competitors:
                 row["competitors"] = _competitors(workload, temp)
+            elif with_category_baselines:
+                # Footnote: avoid the expensive full competitor portfolio merely to populate the
+                # website's Zstd category matrix. The separate structural sweep remains authoritative.
+                row["category_baselines"] = _category_baselines(workload, temp)
             rows.append(row)
-            print(json.dumps({"suite": suite_name, "name": workload.name, "candidate": row["candidate_bytes"],
-                              "base": row["inherited_v025_bytes"], "selected": row["selected"]}), flush=True)
+            event = {"suite": suite_name, "name": workload.name, "candidate": row["candidate_bytes"],
+                     "base": row["inherited_v025_bytes"], "selected": row["selected"]}
+            if row.get("category_baselines"):
+                event["category_zip"] = row["category_baselines"]["zip_deflate9"].get("bytes")
+                event["category_zstd"] = row["category_baselines"]["tar_zstd19_solid"].get("bytes")
+            print(json.dumps(event), flush=True)
     return rows
 
 
@@ -179,6 +202,7 @@ def main() -> None:
     ap = argparse.ArgumentParser(); ap.add_argument("--output", type=Path, required=True)
     ap.add_argument("--suite", choices=("neutral", "hostile", "both"), default="both")
     ap.add_argument("--competitors", action="store_true")
+    ap.add_argument("--category-baselines", action="store_true")
     args = ap.parse_args()
     engine = _load(ROOT / "experiments" / "entropygraph_v028.py", "entropygraph_v028_bench_engine")
     rows = []
@@ -187,11 +211,13 @@ def main() -> None:
         if args.suite in ("neutral", "both"):
             neutral = _load(ROOT / "benchmarks" / "neutral_hostile_corpus_v1.py", "neutral_v1")
             neutral_root = temp / "neutral"; neutral.build(neutral_root)
-            rows += _run_suite(engine, neutral_root, "neutral_hostile_v1", args.competitors)
+            rows += _run_suite(engine, neutral_root, "neutral_hostile_v1", args.competitors,
+                               args.category_baselines)
         if args.suite in ("hostile", "both"):
             hostile = _load(ROOT / "benchmarks" / "resemblance_hostile_corpus_v1.py", "resemblance_hostile_v1")
             hostile_root = temp / "hostile"; hostile.build(hostile_root)
-            rows += _run_suite(engine, hostile_root, "resemblance_hostile_v1", args.competitors)
+            rows += _run_suite(engine, hostile_root, "resemblance_hostile_v1", args.competitors,
+                               args.category_baselines)
     base_total = sum(row["inherited_v025_bytes"] for row in rows)
     candidate_total = sum(row["candidate_bytes"] for row in rows)
     graph_total = sum(row["graph_bytes"] for row in rows)
@@ -224,6 +250,10 @@ def main() -> None:
             "no_research_size_regression": "candidate must be <= inherited v0.25 per workload by exact artifact portfolio selection",
             "losses_retained": True,
             "competitor_semantic_mismatches_recorded": True,
+            "category_baselines": (
+                "optional per-workload ZIP/Deflate-9 and solid tar+Zstd-19 measurements are taken on the exact "
+                "same generated tree as the candidate; they are not whole-suite structural totals"
+            ) if args.category_baselines else None,
             "note": "Portfolio selection intentionally exports extra create CPU; rows retain portfolio_create_s rather than hiding that cost.",
         },
     }
