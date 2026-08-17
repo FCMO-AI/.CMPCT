@@ -110,10 +110,12 @@ For a new material CMPCT version:
 4. confirm the hero, serious comparator, Red Team Board and evidence receipt are populated from the new
    record;
 5. run `site/tests/proof_surface_contract.py`;
-6. run Browser Lab compatibility and canonical reader checks;
-7. verify mobile and reduced-motion behavior;
-8. advance the numeric core version only if CMPCT itself earned it; presentation-only changes advance
-   `SURFACE_REVISION`.
+6. run `site/tests/release_evidence_contract.py`;
+7. run Browser Lab compatibility and canonical reader checks;
+8. verify mobile and reduced-motion behavior;
+9. advance the numeric core version only if CMPCT itself earned it; presentation-only changes advance
+   `SURFACE_REVISION`;
+10. promote the validated generated tree to `gh-pages` and verify its `deployment.json` receipt.
 
 If a new benchmark cannot satisfy the stable public contract, fix the normalization boundary rather than
 hard-coding the new release into the browser.
@@ -131,3 +133,26 @@ A website milestone is incomplete unless it passes all five:
 
 The target feeling is a scientific instrument with editorial clarity: visually memorable, technically
 calm, and unusually easy to audit.
+
+## 9. Static publication architecture
+
+The proof surface has two deliberately different Git authorities:
+
+- **`main` is canonical source authority.** Site source, benchmark history, normalizers, tests and policy live there.
+- **`gh-pages` is serving authority only.** It contains a generated static tree and must never become an editable
+  parallel implementation of the site.
+
+GitHub Actions keeps the jobs it is good at: disclosure scanning, deterministic site generation, evidence
+arithmetic, JavaScript syntax checks, Browser Lab smoke tests and canonical-reader compatibility. Those jobs
+validate what may be promoted. They do not own the public serving path.
+
+Every static promotion must include `.nojekyll` so GitHub Pages can treat the branch as already-built output,
+and `deployment.json` so a human or agent can prove which `main` source commit, surface revision, canonical
+format revision and evidence schema the live tree represents.
+
+The repository Pages setting is **Deploy from a branch → `gh-pages` → `/ (root)`**. See
+`docs/GH_PAGES_DEPLOYMENT.md` for promotion and rollback procedure.
+
+Footnote: branch-backed Pages still uses GitHub's internal Pages deployment infrastructure. The architectural
+gain is not pretending GitHub disappears; it is removing CMPCT's custom build/test workflow from the critical
+path between an already-validated static tree and public serving.
