@@ -1,0 +1,1 @@
+Code import sequence is hardening -> build rehabilitation -> PrefixGraph reference -> full G0-G4 overlay -> full release harness. Generic v0.29 zero-copy substrate is tracked separately to avoid duplicate ownership.
