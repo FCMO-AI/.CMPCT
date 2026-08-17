@@ -55,13 +55,14 @@ jobs:
           from pathlib import Path
 
           data = json.loads(Path('_site/project-data.json').read_text())
+          index = Path('_site/index.html').read_text()
           with Path('pyproject.toml').open('rb') as fh:
               version = tomllib.load(fh)['project']['version']
           surface = Path('SURFACE_REVISION').read_text().strip()
           assert re.fullmatch(r'\d+\.\d+\.[a-z]+', surface), surface
           assert data['project']['project_version'] == version
           assert data['project']['surface_revision'] == surface
-          assert f'surface {surface}' in Path('_site/index.html').read_text()
+          assert f'surface {surface}' in index
           assert Path('_site/surface-revision.txt').read_text().strip() == surface
           assert data['frontier'], 'performance site requires a committed research-frontier record'
           assert data['frontier']['project_version'] == version, 'public frontier must follow the current core release'
@@ -74,6 +75,7 @@ jobs:
               assert frontier['primary_comparator']['short'] == 'EntropyGraph v0.25'
 
               overall = frontier['overall_comparison']
+              category = frontier['category_comparison']
               release = frontier['release_delta']
               rows = overall['competitors']
               by_short = {row['short']: row for row in rows}
@@ -82,15 +84,17 @@ jobs:
               assert overall['candidate_bytes'] == candidate_rows[0]['bytes']
               assert overall['headline_comparator_short'] in by_short
               assert overall['headline_comparator_short'] != release['baseline_short']
+              assert overall['serious_comparator_short'] == 'tar / Zstd solid'
               assert 'ZIP / Deflate' in by_short
               assert '7z / LZMA2' in by_short
               assert 'tar / Zstd solid' in by_short
               assert all(row['short'] != release['baseline_short'] for row in rows)
 
-              # Footnote: these two candidate totals intentionally represent different aggregation
-              # contracts. Equality is not required; accidentally using one for both is the bug this
-              # gate exists to catch.
+              # Footnote: whole-suite arena, independent-workload category frontier, and release-base
+              # tournament are three different aggregation/causality contracts. Their candidate totals
+              # are not interchangeable even when they happen to be numerically close.
               assert overall['candidate_bytes'] != release['candidate_bytes']
+              assert category['candidate_bytes'] != overall['candidate_bytes']
               assert release['baseline_bytes'] == frontier['primary_comparator']['bytes']
               expected_release = (release['baseline_bytes'] - release['candidate_bytes']) / release['baseline_bytes'] * 100.0
               assert math.isclose(release['lead_pct'], expected_release, rel_tol=0, abs_tol=1e-12)
@@ -100,10 +104,64 @@ jobs:
                   expected = (row['bytes'] - overall['candidate_bytes']) / row['bytes'] * 100.0
                   assert math.isclose(row['lead_pct'], expected, rel_tol=0, abs_tol=1e-12), row['short']
 
+              # The category surface must be complete, self-consistent and hard enough to show losses.
+              # Footnote: compare workload identities, not old-vs-new run tree hashes. Each category row
+              # carries its own exact tree hash and same-lifetime contract because producer metadata may
+              # legitimately differ across separate benchmark runs.
+              assert category['baseline_short'] == 'tar / Zstd solid'
+              assert category['secondary_short'] == 'ZIP / Deflate'
+              assert category['contract'].get('same_lifetime_measurement') is True
+              category_rows = category['rows']
+              assert len(category_rows) == category['workloads'] == frontier['workload_count']
+              frontier_keys = {(row['suite'], row['name']) for row in frontier['workloads']}
+              category_keys = {(row['suite'], row['name']) for row in category_rows}
+              assert len(category_keys) == len(category_rows)
+              assert category_keys == frontier_keys
+
+              candidate_total = zstd_total = zip_total = 0
+              wins = losses = ties = 0
+              for row in category_rows:
+                  candidate = int(row['cmpct_bytes'])
+                  zstd = int(row['zstd_bytes'])
+                  zip_bytes = int(row['zip_deflate_bytes'])
+                  assert candidate > 0 and zstd > 0 and zip_bytes > 0
+                  assert re.fullmatch(r'[0-9a-f]{64}', str(row['tree_sha256']))
+                  expected_zstd = (zstd - candidate) / zstd * 100.0
+                  expected_zip = (zip_bytes - candidate) / zip_bytes * 100.0
+                  assert math.isclose(row['cmpct_vs_zstd_pct'], expected_zstd, rel_tol=0, abs_tol=1e-12), row['name']
+                  assert math.isclose(row['cmpct_vs_zip_deflate_pct'], expected_zip, rel_tol=0, abs_tol=1e-12), row['name']
+                  candidate_total += candidate
+                  zstd_total += zstd
+                  zip_total += zip_bytes
+                  wins += candidate < zstd
+                  losses += candidate > zstd
+                  ties += candidate == zstd
+
+              assert category['candidate_bytes'] == candidate_total
+              assert category['zstd_bytes'] == zstd_total
+              assert category['zip_deflate_bytes'] == zip_total
+              assert category['wins_vs_zstd'] == wins
+              assert category['losses_vs_zstd'] == losses
+              assert category['ties_vs_zstd'] == ties
+              assert wins + losses + ties == category['workloads']
+              # A serious category frontier is allowed to show red cells; suppressing all losses would
+              # make the public evidence suspiciously easy rather than stronger.
+              assert wins > 0 and losses > 0
+              expected_category_zstd = (zstd_total - candidate_total) / zstd_total * 100.0
+              expected_category_zip = (zip_total - candidate_total) / zip_total * 100.0
+              assert math.isclose(category['lead_vs_zstd_pct'], expected_category_zstd, rel_tol=0, abs_tol=1e-12)
+              assert math.isclose(category['lead_vs_zip_deflate_pct'], expected_category_zip, rel_tol=0, abs_tol=1e-12)
+
               renderer = Path('site/src/assets/frontier-v028.js').read_text()
               assert 'overall_comparison' in renderer
+              assert 'category_comparison' in renderer
               assert 'release_delta' in renderer
-              assert 'v0.28 RELEASE DELTA' in renderer
+              assert 'CATEGORY FRONTIER' in renderer
+              assert 'v0.28 RELEASE DELTA' not in renderer
+              assert 'CANONICAL ZIP EXECUTION PARITY' in index
+              assert 'CATEGORY FRONTIER · SOLID ZSTD-19' in index
+              assert 'Discover boldly. Promote without regression.' in index
+              assert any('promotion boundary' in str(rule) for rule in data['project']['non_negotiables'])
 
           assert len(data['frontier']['competitors']) >= 4
           assert data['frontier']['workloads'], 'frontier workload matrix must not be empty'
@@ -161,5 +219,5 @@ jobs:
 
 # Footnote: main publishes automatically only after disclosure, generated benchmark-data coherence,
 # presentation-revision coherence, JavaScript syntax, and canonical-reader Browser Lab compatibility
-# gates pass. EntropyGraph II gets separate overall-vs-external and release-vs-base invariants so a
-# future site refactor cannot silently substitute one benchmark question for the other.
+# gates pass. EntropyGraph II keeps whole-suite external position, exact-tree Zstd category evidence,
+# direct-base release causality and canonical ZIP execution parity as separately proven public surfaces.
