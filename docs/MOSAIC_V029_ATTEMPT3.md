@@ -28,7 +28,15 @@ solid root pack, so standalone direct cost is not its real marginal archive cost
 A second failure survives attempt #2: roots are kept as mosaic candidates only when their individual
 one-root delta saves bytes. That filters out the intended pattern where root A explains one region and
 root B another; either root alone can lose because the rest of the target stays literal, while A+B wins.
-The primitive v2 root-diversity workload demonstrates exactly this phenomenon.
+The preserved primitive-v2 **source-like merge** is the concrete counterexample: root 0 produces a
+5,818 B one-root target, while root 1 produces **5,888 B versus 5,878 B direct**—10 B worse despite
+copying about 195 KiB. Together the two-root mosaic stores the target in **805 B**.
+
+Footnote: an earlier pre-measurement regression assertion incorrectly used the root-diversity workload as
+an individually-losing example. The preserved raw v2 evidence shows its useful roots are individually
+profitable (~128.4 KiB single-root versus ~160.1 KiB direct). That test/document statement was corrected
+before any attempt-3 archive measurement was accepted or inspected; the benchmark gate itself never
+changed.
 
 ## Attempt #3 hypothesis
 
@@ -97,8 +105,8 @@ state before the next target is considered, so savings are not double-counted ag
 
 1. the shifted/reordered target to enter a real pack-marginal tournament and be rejected when its solid
    pack already makes direct storage cheaper overall;
-2. the root-diversity workload to retain multiple **individually unprofitable but jointly informative**
-   roots and send the target into a pack-marginal tournament;
+2. the source-like workload to retain the known **individually unprofitable but jointly informative**
+   second root and send the target into a pack-marginal tournament;
 3. all emitted mosaic bases to remain direct;
 4. exact reconstruction, authenticated-tail recovery, physical corruption refusal and outer v0.28
    fallback to remain green.
