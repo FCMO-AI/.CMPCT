@@ -17,6 +17,10 @@ jobs:
     timeout-minutes: 90
     env:
       CMPCT_PREFLATE_BRIDGE: ${{ github.workspace }}/native/preflate-bridge/target/release/cmpct-preflate-bridge
+      # Footnote: `experiments/` and `benchmarks/` are deliberate repository-root research namespaces,
+      # not installed cmpct package modules. Pinning the checkout root in PYTHONPATH makes focused pytest
+      # and direct benchmark entrypoints obey the same import contract as the established research CI.
+      PYTHONPATH: ${{ github.workspace }}
     steps:
       - name: Check out candidate
         uses: actions/checkout@v6
