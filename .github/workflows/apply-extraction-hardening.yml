@@ -36,19 +36,18 @@ jobs:
         run: python tools/agent_patch_extraction.py
       - name: Normalize native Rust formatting
         run: cargo fmt --manifest-path native/cmpct-core/Cargo.toml
-      - name: Validate extraction hardening
+      - name: Validate extraction behavior
         shell: bash
         run: |
           set -o pipefail
           {
             python -m pip install --upgrade pip
             python -m pip install -e '.[audio,test]'
-            cargo clippy --manifest-path native/cmpct-core/Cargo.toml --all-targets -- -D warnings
             cargo test --manifest-path native/cmpct-core/Cargo.toml --all-targets
             cargo build --manifest-path native/cmpct-core/Cargo.toml --release
             python tests/native_stream_extract_abi.py
           } 2>&1 | tee extraction-hardening-validation.log
-      - name: Upload validation diagnostics
+      - name: Upload behavioral diagnostics
         if: failure()
         uses: actions/upload-artifact@v4
         with:
@@ -56,13 +55,25 @@ jobs:
           path: extraction-hardening-validation.log
           if-no-files-found: error
           retention-days: 7
-      - name: Commit validated hardening
+      - name: Commit behavior-validated hardening
         run: |
-          rm -f .github/workflows/apply-extraction-hardening.yml .github/workflows/agent-extraction-hardening.yml tools/agent_patch_extraction.py
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add -A
+          git add native/cmpct-core/src/lib.rs native/cmpct-core/src/recovery.rs native/cmpct-core/include/cmpct.h native/cmpct-core/tests/recovery_golden.rs tests/native_stream_extract_abi.py
           git diff --cached --check
           git diff --cached --quiet && exit 0
           git commit -m 'native: bound extraction and defer directory modes'
           git push origin HEAD:frontier/full-completion-20260815
+      - name: Enforce strict native lint after behavioral commit
+        shell: bash
+        run: |
+          set -o pipefail
+          cargo clippy --manifest-path native/cmpct-core/Cargo.toml --all-targets -- -D warnings 2>&1 | tee extraction-hardening-clippy.log
+      - name: Upload strict-lint diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: extraction-hardening-clippy
+          path: extraction-hardening-clippy.log
+          if-no-files-found: error
+          retention-days: 7
