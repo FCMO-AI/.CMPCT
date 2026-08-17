@@ -4,11 +4,15 @@ from experiments.entropygraph_v029_parallel_portfolio import ACCEPTED_ENGINE, bu
 from experiments import entropygraph_v029_residual_strict as accepted
 
 
-def test_parallel_scheduler_preserves_exact_selected_archive(tmp_path: Path) -> None:
-    root = tmp_path / "corpus"
+def _make_two_file_corpus(root: Path) -> None:
     root.mkdir()
     (root / "a.bin").write_bytes((b"alpha-beta-gamma\n" * 7000) + b"tail-a")
     (root / "b.bin").write_bytes((b"alpha-beta-delta\n" * 7000) + b"tail-b")
+
+
+def test_parallel_scheduler_preserves_exact_selected_archive(tmp_path: Path) -> None:
+    root = tmp_path / "corpus"
+    _make_two_file_corpus(root)
 
     sequential = tmp_path / "sequential.cmpct"
     parallel = tmp_path / "parallel.cmpct"
@@ -27,6 +31,28 @@ def test_parallel_scheduler_preserves_exact_selected_archive(tmp_path: Path) -> 
     assert par["v028_bytes"] == seq["v028_bytes"]
     assert par["attempt5_graph_bytes"] == seq["mosaic_graph_bytes"]
     assert parallel.read_bytes() == sequential.read_bytes()
+
+
+def test_parallel_scheduler_atomically_replaces_existing_output(tmp_path: Path) -> None:
+    root = tmp_path / "replace-corpus"
+    _make_two_file_corpus(root)
+
+    expected_path = tmp_path / "expected.cmpct"
+    expected = accepted.build(root, expected_path)
+
+    output = tmp_path / "existing.cmpct"
+    sentinel = b"old-output-must-not-survive"
+    output.write_bytes(sentinel)
+    result = build_parallel(root, output)
+
+    # ``os.replace`` is valuable only if the normal overwrite case preserves the exact accepted winner.
+    # Pin this explicitly so a future portability workaround cannot silently fall back to append/copy logic
+    # or leave the pre-existing output in place while still reporting zero publication payload bytes.
+    assert output.read_bytes() != sentinel
+    assert output.read_bytes() == expected_path.read_bytes()
+    assert result["archive_bytes"] == expected["archive_bytes"]
+    assert result["selection_materialization"] == "same-filesystem-atomic-move"
+    assert result["selection_extra_payload_write_bytes"] == 0
 
 
 def test_parallel_scheduler_preserves_single_file_fast_reject_policy(tmp_path: Path) -> None:
