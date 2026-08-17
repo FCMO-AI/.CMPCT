@@ -51,23 +51,23 @@ def test_primary_recovers_when_tail_footer_is_corrupt(tmp_path: Path) -> None:
         assert reader.read("small.txt") == (root / "small.txt").read_bytes()
 
 
-def test_both_valid_index_paths_must_agree_on_record_base(tmp_path: Path) -> None:
+def test_tail_record_base_tamper_invalidates_certificate_even_when_primary_survives(tmp_path: Path) -> None:
     _root, r25 = _build(tmp_path)
     data = bytearray(r25.read_bytes())
     footer_pos = len(data) - V25.V25_FTR.size
     fields = list(V25.V25_FTR.unpack_from(data, footer_pos))
-    fields[8] += 1  # record_base; tail index bytes/hash remain untouched but physical-layout proof must fail.
+    fields[8] += 1  # record_base; certificate intentionally left unchanged.
     data[footer_pos:] = V25.V25_FTR.pack(*fields)
     damaged = tmp_path / "tail-base-corrupt.cmpct"; damaged.write_bytes(data)
-    # Tail path is invalid; the independently authenticated primary path is still a legal recovery source.
+    # Tail validation fails cryptographically (and would also fail the physical-span proof); the independent
+    # primary path remains valid and therefore recovers the archive.
     with V25.CMPCTV25(damaged) as reader:
         assert reader.index["v"] == 25
 
 
-def test_tail_rejects_record_base_that_cannot_cover_blob_table(tmp_path: Path) -> None:
+def test_tail_rejects_record_base_tamper_when_primary_is_also_unusable(tmp_path: Path) -> None:
     _root, r25 = _build(tmp_path)
     data = bytearray(r25.read_bytes())
-    # Disable the primary path too, ensuring the malformed tail cannot be accepted by itself.
     fields = list(BASE25.HDR.unpack_from(data, 0)); fields[3] = (1 << 63) - 1
     data[:BASE25.HDR.size] = BASE25.HDR.pack(*fields)
     footer_pos = len(data) - V25.V25_FTR.size
@@ -78,7 +78,17 @@ def test_tail_rejects_record_base_that_cannot_cover_blob_table(tmp_path: Path) -
         V25.CMPCTV25(damaged)
 
 
+def test_tail_certificate_commits_to_record_base_and_index_bytes() -> None:
+    kwargs = dict(kind=0, codec=1, flags=0, reserved=0, csize=100, usize=200, prev=0)
+    index = b"canonical-index"
+    first = V25._tail_certificate(**kwargs, record_base=1234, index_raw=index)
+    assert first != V25._tail_certificate(**kwargs, record_base=1235, index_raw=index)
+    assert first != V25._tail_certificate(**kwargs, record_base=1234, index_raw=index + b"!")
+    assert len(first) == 32
+
+
 def test_recovery_footer_resource_contract_is_bounded() -> None:
     assert V25.MAX_INDEX_COMPRESSED <= 256 * 1024 * 1024
     assert V25.MAX_INDEX_RAW <= 256 * 1024 * 1024
     assert V25.V25_FTR.size > BASE25.FTR.size
+    assert V25.TAIL_CERT_DOMAIN.startswith(b"CMPCT25-")
