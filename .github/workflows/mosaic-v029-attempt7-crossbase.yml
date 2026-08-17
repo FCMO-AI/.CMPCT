@@ -1,126 +1,33 @@
-name: CMPCT v0.29 attempt7 cross-base structural
+name: CMPCT v0.29 attempt7 cross-base structural (retired)
 
 on:
-  pull_request:
   workflow_dispatch:
 
 permissions:
   contents: read
 
-concurrency:
-  group: cmpct-v029-attempt7-crossbase-${{ github.ref }}
-  cancel-in-progress: true
-
 jobs:
-  crossbase-structural:
+  evidence-pointer:
     runs-on: ubuntu-latest
-    timeout-minutes: 90
-    env:
-      CMPCT_PREFLATE_BRIDGE: ${{ github.workspace }}/native/preflate-bridge/target/release/cmpct-preflate-bridge
     steps:
-      - name: Check out candidate
+      - name: Check out repository
         uses: actions/checkout@v6
-        with:
-          fetch-depth: 0
-          ref: ${{ github.event.pull_request.head.sha || github.sha }}
 
-      - name: Set up Python
-        uses: actions/setup-python@v6
-        with:
-          python-version: "3.11"
-          cache: pip
-
-      - name: Install hostile corpus and same-run competitors
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y zstd ffmpeg gcc libsndfile1
-          for pkg in p7zip-full zpaq borgbackup; do sudo apt-get install -y "$pkg" || true; done
-          python -m pip install --upgrade pip
-          python -m pip install -e '.[audio,test]'
-          python -m pip install numpy==2.4.6
-
-      - name: Build pinned memory-safe Preflate bridge
-        run: |
-          rustup toolchain install 1.89.0 --profile minimal
-          cargo +1.89.0 build --release --manifest-path native/preflate-bridge/Cargo.toml
-
-      - name: Run preregistered cross-base structural oracle
-        run: |
-          mkdir -p benchmark-artifacts
-          set -o pipefail
-          python benchmarks/mosaic_v029_crossbase_structural_oracle.py \
-            --source-commit '${{ github.event.pull_request.head.sha || github.sha }}' \
-            --work-root benchmark-artifacts/CMPCT_V029_CrossBase_Structural \
-            --output benchmark-artifacts/mosaic-v029-crossbase-structural.json \
-            2>&1 | tee benchmark-artifacts/mosaic-v029-crossbase-structural.stdout.txt
-
-      - name: Enforce invariants without forcing a positive research outcome
+      - name: Verify preserved attempt-7 structural rejection
         run: |
           python - <<'PY'
           import json
           from pathlib import Path
-          r=json.loads(Path('benchmark-artifacts/mosaic-v029-crossbase-structural.json').read_text())
-          c=r['candidate']
-          assert r['schema'] == 'cmpct-v029-crossbase-residual-structural-v1'
-          assert c['attempt7_bytes'] <= c['attempt5_bytes'], c
-          assert c['max_additional_recipe_read_amplification'] <= 2.0, c
-          plan=c.get('crossbase_plan', {})
-          if c['selected'] == 'crossbase-residual':
-              assert c['attempt7_bytes'] < c['attempt5_bytes'], c
-              assert c['causal_crossbase_selection'] is True, c
-              assert plan.get('selected_crossbase_plan') is True, plan
-              assert plan.get('mixed_base_groups', 0) >= 1, plan
-              assert plan.get('mixed_base_members', 0) >= 2, plan
-          for name,row in r['competitors'].items():
-              if row.get('available'):
-                  assert row['bytes'] > 0, (name,row)
-                  assert row.get('semantics'), (name,row)
-          # Footnote: a preregistered REJECT is valid research evidence.  The gate result is summarized
-          # and uploaded, not asserted as CI success, so we never weaken thresholds just to get green.
-          print(json.dumps({'candidate': c, 'comparison': r['comparison']}, indent=2))
+          p=Path('benchmarks/history/2026-08-17-mosaic-v029-attempt7-crossbase-structural-reject.json')
+          r=json.loads(p.read_text())
+          assert r['schema'] == 'cmpct-v029-attempt7-crossbase-structural-reject-v1'
+          assert r['decision']['research_gate'] == 'REJECT'
+          assert r['candidate']['causal_crossbase_selection'] is True
+          assert r['candidate']['saving_vs_attempt5_bytes'] == 1303
+          assert r['comparison']['structural_gate_pass'] is False
+          print(json.dumps(r, indent=2))
           PY
 
-      - name: Focused cross-base planner tests
-        run: python -m pytest -q tests/test_v029_crossbase_residual.py
-
-      - name: Public-surface guard
-        run: python tools/check_public_surface.py
-
-      - name: Summarize attempt-7 result
-        if: always()
-        run: |
-          if [ -f benchmark-artifacts/mosaic-v029-crossbase-structural.json ]; then
-            python - <<'PY' >> "$GITHUB_STEP_SUMMARY"
-          import json
-          from pathlib import Path
-          r=json.loads(Path('benchmark-artifacts/mosaic-v029-crossbase-structural.json').read_text())
-          c=r['candidate']; x=r['comparison']; p=c.get('crossbase_plan', {})
-          print('## CMPCT v0.29 attempt #7 — cross-base residual structural oracle')
-          print(f"- attempt #5: **{c['attempt5_bytes']:,} B**")
-          print(f"- attempt #7: **{c['attempt7_bytes']:,} B** ({c['saving_vs_attempt5_bytes']:+,} B vs #5)")
-          print(f"- causal cross-base selection: **{c['causal_crossbase_selection']}**")
-          print(f"- plan: **{p.get('strategy','n/a')}**, mixed groups/members **{p.get('mixed_base_groups',0)}/{p.get('mixed_base_members',0)}**")
-          for name in ('tar_zstd19_solid','seven_zip_lzma2','zpaq_m5','borg'):
-              row=r['competitors'].get(name,{})
-              if row.get('available'):
-                  print(f"- {name}: **{row['bytes']:,} B**")
-              else:
-                  print(f"- {name}: unavailable ({row.get('reason','not reported')})")
-          margin=x.get('margin_below_strongest_bytes')
-          print(f"- margin below strongest required competitor: **{margin:+,} B**" if margin is not None else '- required competitor margin unavailable')
-          print(f"- preregistered structural gate: **{'PASS' if x['structural_gate_pass'] else 'REJECT'}**")
-          PY
-          fi
-
-      - name: Upload attempt-7 evidence
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: cmpct-v029-attempt7-crossbase-${{ github.sha }}
-          path: |
-            benchmark-artifacts/mosaic-v029-crossbase-structural.json
-            benchmark-artifacts/mosaic-v029-crossbase-structural.stdout.txt
-          if-no-files-found: warn
-
-# Footnote: this workflow is a falsification oracle.  It cannot assign v0.29.0 or alter canonical
-# revision-24 bytes; its authority is limited to same-run measurement of the preregistered mechanism.
+# Footnote: cross-base physical co-location was fully exercised (all 186 packed recipes participated) but
+# bought only 1,303 exact artifact bytes.  Automatic execution is retired; durable evidence points future
+# work toward recipe representation rather than further same-base/cross-base grouping tweaks.

@@ -1,19 +1,19 @@
 from __future__ import annotations
 
-"""Generalization benchmark for the attempt-5 CMPCT research candidate.
+"""Portable inherited-frontier benchmark for the accepted attempt-5 CMPCT research candidate.
 
-The campaign-specific 18-workload gate has already passed.  This harness returns to the 15 public
-workloads that supported v0.28 and asks whether the new compiler preserves that frontier while improving
-at least one workload and staying inside the preregistered creation-cost/locality envelopes.
+The campaign-specific 18-workload gate has already passed. This harness returns to the 15 public
+workloads that supported v0.28 and asks whether the research compiler preserves that frontier while
+improving at least one workload and staying inside the preregistered creation-cost/locality envelopes.
 
-Three neutral/hostile workload generators contained producer metadata/path identity that was not stable
-across fresh work directories.  Their historical v0.28 record remains immutable; this harness explicitly
-uses the separately proven cross-path repair-v3 identities for those three rows and the historical v0.28
-identities for the other twelve.
+Four neutral/hostile workloads now use the separately proven repair-v5 benchmark identity. Repair-v5 is
+not a candidate-only normalization: two independent GitHub runners matched every file manifest and exact
+v0.28 measurement before this harness was allowed to adopt the identity. The other eleven rows retain
+their historical v0.28 identities.
 
-Footnote: the repair is applied to the source tree *before* ``ENGINE.build``.  The embedded v0.28 engine
-and attempt #5 therefore consume exactly the same repaired bytes.  No candidate-only normalization or
-baseline regeneration can become a compression win.
+Footnote: both embedded v0.28 and attempt #5 consume the exact same repaired source tree. Historical
+records remain immutable, and the performance/locality gate is unchanged; only the benchmark identity
+needed to remove a proven media-producer nondeterminism has advanced.
 """
 
 import argparse
@@ -28,8 +28,8 @@ import time
 ROOT = Path(__file__).resolve().parents[1]
 ENGINE_PATH = ROOT / "experiments" / "entropygraph_v029_residual_strict.py"
 V028_HISTORY = ROOT / "benchmarks" / "history" / "2026-08-16-entropygraph-v028.json"
-REPAIR_HISTORY = ROOT / "benchmarks" / "history" / "2026-08-17-neutral-hostile-determinism-repair-v3.json"
-REPAIR_PATH = ROOT / "benchmarks" / "neutral_hostile_determinism_repair_v1.py"
+REPAIR_HISTORY = ROOT / "benchmarks" / "history" / "2026-08-17-neutral-hostile-determinism-repair-v5.json"
+REPAIR_PATH = ROOT / "benchmarks" / "neutral_hostile_determinism_repair_v5.py"
 
 
 def _load(path: Path, name: str):
@@ -42,7 +42,7 @@ def _load(path: Path, name: str):
     return module
 
 
-ENGINE = _load(ENGINE_PATH, "cmpct_v029_generalization_engine")
+ENGINE = _load(ENGINE_PATH, "cmpct_v029_generalization_engine_v3")
 
 
 def _tree_stats(root: Path) -> tuple[int, int]:
@@ -59,8 +59,8 @@ def _preserved_rows() -> dict[tuple[str, str], dict]:
         rows[(row["suite"], row["name"])] = copy
 
     repair = json.loads(REPAIR_HISTORY.read_text(encoding="utf-8"))
-    if repair.get("schema") != "cmpct-neutral-hostile-v1-determinism-repair-manifest-v3" or not repair.get("accepted"):
-        raise RuntimeError("portable neutral/hostile repair-v3 evidence is missing or unaccepted")
+    if repair.get("schema") != "cmpct-neutral-hostile-v1-determinism-repair-v5-accepted-v1" or repair.get("accepted") is not True:
+        raise RuntimeError("portable neutral/hostile repair-v5 evidence is missing or unaccepted")
     for fixed in repair["rows"]:
         key = ("neutral_hostile_v1", fixed["name"])
         inherited = dict(rows[key])
@@ -68,7 +68,7 @@ def _preserved_rows() -> dict[tuple[str, str], dict]:
             "tree_sha256": fixed["tree_sha256"],
             "candidate_bytes": int(fixed["v028_candidate_bytes"]),
             "logical_bytes": int(fixed["logical_bytes"]),
-            "baseline_identity": "neutral-hostile-repair-v3",
+            "baseline_identity": "neutral-hostile-repair-v5",
         })
         rows[key] = inherited
     return rows
@@ -132,9 +132,9 @@ def run(work_root: Path) -> dict:
     shutil.rmtree(work_root, ignore_errors=True)
     work_root.mkdir(parents=True)
     preserved = _preserved_rows()
-    neutral = _load(ROOT / "benchmarks" / "neutral_hostile_corpus_v1.py", "cmpct_v029_general_neutral")
-    hostile = _load(ROOT / "benchmarks" / "resemblance_hostile_corpus_v1.py", "cmpct_v029_general_hostile")
-    repair = _load(REPAIR_PATH, "cmpct_v029_general_repair")
+    neutral = _load(ROOT / "benchmarks" / "neutral_hostile_corpus_v1.py", "cmpct_v029_general_neutral_v3")
+    hostile = _load(ROOT / "benchmarks" / "resemblance_hostile_corpus_v1.py", "cmpct_v029_general_hostile_v3")
+    repair = _load(REPAIR_PATH, "cmpct_v029_general_repair_v5")
     repair.install_generation_hooks(neutral)
 
     rows = []
@@ -169,7 +169,7 @@ def run(work_root: Path) -> dict:
     totals = {
         "workloads": len(rows),
         "historical_baseline_rows": sum(row["baseline_identity"] == "historical-v0.28" for row in rows),
-        "repaired_baseline_rows": sum(row["baseline_identity"] == "neutral-hostile-repair-v3" for row in rows),
+        "repaired_baseline_rows": sum(row["baseline_identity"] == "neutral-hostile-repair-v5" for row in rows),
         "v028_bytes": v028_total,
         "candidate_bytes": candidate_total,
         "smaller_than_v028_pct": (
@@ -198,14 +198,14 @@ def run(work_root: Path) -> dict:
         ),
     }
     return {
-        "schema": "cmpct-v029-generalization-v2",
+        "schema": "cmpct-v029-generalization-v3",
         "claim_boundary": (
-            "attempt-5 generalization versus exact embedded v0.28 on 12 historical identities plus 3 portable repair-v3 identities"
+            "attempt-5 generalization versus exact embedded v0.28 on 11 historical identities plus 4 portable repair-v5 identities"
         ),
         "engine": "experiments/entropygraph_v029_residual_strict.py",
         "preserved_baselines": [
             "benchmarks/history/2026-08-16-entropygraph-v028.json",
-            "benchmarks/history/2026-08-17-neutral-hostile-determinism-repair-v3.json",
+            "benchmarks/history/2026-08-17-neutral-hostile-determinism-repair-v5.json",
         ],
         "rows": rows,
         "totals": totals,
@@ -214,7 +214,7 @@ def run(work_root: Path) -> dict:
 
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--work-root", type=Path, default=Path("CMPCT_V029_Generalization"))
+    parser.add_argument("--work-root", type=Path, default=Path("CMPCT_V029_Generalization_v3"))
     parser.add_argument("--output", type=Path)
     args = parser.parse_args()
     result = run(args.work_root)
