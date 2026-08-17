@@ -69,7 +69,7 @@
       "target_bytes": 2048,
       "inherited_best_single_delta_bytes": 725,
       "best_two_root_mosaic_bytes": 210,
-      "conclusion": "multi-root representation is materially smaller but the target is below v0.28 MIN_DELTA; a separately bounded small-mosaic path can test this without changing inherited delta policy"
+      "conclusion": "multi-root representation is materially smaller, but mosaic candidate retention used an absolute 4096-byte copied-information floor that a 2048-byte target can never satisfy; attempt 4 should use a separately bounded target-relative mosaic contribution floor without changing inherited v0.28 delta policy"
     }
   ],
   "negative_controls": [
@@ -77,5 +77,5 @@
     {"workload":"08_incompressible_control","best_mosaic":null,"pack_marginal_target_bytes":327733},
     {"workload":"06_single_parent_noisy_control","best_mosaic":null}
   ],
-  "next_hypothesis": "a placement-aware compiler should choose external mosaic only when marginally profitable, semantic in-pack recipe when it reduces an already-required solid record, or a dedicated <=4-root co-pack when cross-pack root placement is the sole locality blocker; small targets require a separate bounded mosaic discovery floor. Cases with negative oracle headroom remain untouched."
+  "next_hypothesis": "a placement-aware compiler should choose external mosaic only when marginally profitable, semantic in-pack recipe when it reduces an already-required solid record, or a dedicated <=4-root co-pack when cross-pack root placement is the sole locality blocker; small targets require a target-relative bounded contribution floor rather than the 4096-byte absolute mosaic floor. Cases with negative oracle headroom remain untouched."
 }
