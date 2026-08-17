@@ -1,17 +1,18 @@
 from __future__ import annotations
 
-"""Full-artifact benchmark for the bounded multi-root mosaic experiment.
+"""Full-artifact benchmark for the bounded multi-root + residual-placement research campaign.
 
-This is the first benchmark where mosaic must pay complete EntropyGraph archive costs rather than only
-one target record.  For every deterministic workload the strict engine builds:
+For every deterministic workload the strict attempt-5 engine builds:
 
-1. the complete v0.28 portfolio artifact (itself v0.25 fallback + EntropyGraph II);
-2. the complete mosaic graph with the same v0.28 root assignment/packing policy;
-3. an outer portfolio that copies v0.28 byte-for-byte whenever the mosaic graph is not smaller.
+1. the complete v0.28 portfolio artifact;
+2. the complete research graph, where attempt #4 placement is preserved and attempt #5 may additionally
+   co-pack bounded one-base reconstruction programs;
+3. an outer portfolio that copies v0.28 byte-for-byte whenever the research graph is not smaller.
 
-Footnote: because the inherited artifact is produced in the same build call on the same source tree,
-there is no separately regenerated baseline corpus and no opportunity to hide a workload-level size
-regression behind aggregate averaging.
+Footnote: the benchmark schema and frozen acceptance thresholds intentionally remain the same as attempts
+#1–#4. Switching the strict engine does not create a new baseline or remove previously losing workloads;
+it asks whether the new physical representation clears the exact gate that attempt #4 missed by one v2
+workload.
 """
 
 import argparse
@@ -27,13 +28,13 @@ from mosaic_hostile_corpus_v1 import build as build_v1
 from mosaic_stress_corpus_v2 import build as build_v2
 
 ROOT = Path(__file__).resolve().parents[1]
-ENGINE_PATH = ROOT / "experiments" / "entropygraph_v029_mosaic_strict.py"
+ENGINE_PATH = ROOT / "experiments" / "entropygraph_v029_residual_strict.py"
 
 
 def _load_engine():
     spec = importlib.util.spec_from_file_location("cmpct_mosaic_full_archive_bench_engine", ENGINE_PATH)
     if spec is None or spec.loader is None:
-        raise RuntimeError("cannot load strict mosaic engine")
+        raise RuntimeError("cannot load strict attempt-5 research engine")
     module = importlib.util.module_from_spec(spec)
     sys.modules[spec.name] = module
     spec.loader.exec_module(module)
@@ -45,8 +46,8 @@ ENGINE = _load_engine()
 
 def _measure_workload(path: Path, scratch: Path) -> dict:
     # Footnote: the first full-artifact CI attempt failed here before measuring any archive because the
-    # per-suite scratch directory did not yet exist.  Create it explicitly rather than letting a test
-    # harness accident masquerade as evidence for or against the compression mechanism.
+    # per-suite scratch directory did not yet exist. Create it explicitly rather than letting a harness
+    # accident masquerade as compression evidence.
     scratch.mkdir(parents=True, exist_ok=True)
     archive = scratch / f"{path.name}.cmpct"
     t0 = time.perf_counter()
@@ -79,6 +80,11 @@ def _measure_workload(path: Path, scratch: Path) -> dict:
         "mosaic_estimated_record_savings": int(mosaic_stats["mosaic_estimated_record_savings"]),
         "pack_read_amplification": float(mosaic_stats["pack_read_amplification"]),
         "max_mosaic_read_amplification": float(mosaic_stats["max_mosaic_read_amplification"]),
+        "residual_pack_records": int(mosaic_stats.get("residual_pack_records", 0)),
+        "residual_packed_delta_nodes": int(mosaic_stats.get("residual_packed_delta_nodes", 0)),
+        "max_additional_recipe_read_amplification": float(
+            mosaic_stats.get("max_additional_recipe_read_amplification", 0.0)
+        ),
         "mosaic_graph_create_s": float(mosaic_stats["create_s"]),
         "portfolio_create_s": float(result["portfolio_create_s"]),
         "build_wall_s": build_wall,
@@ -107,7 +113,14 @@ def _measure_suite(label: str, builder, root: Path, scratch: Path) -> dict:
             "workloads_regressed": sum(row["candidate_bytes"] > row["v028_bytes"] for row in rows),
             "mosaic_selected": sum(row["selected"] == "mosaic" for row in rows),
             "mosaic_nodes": sum(row["mosaic_nodes"] for row in rows),
-            "max_mosaic_read_amplification": max((row["max_mosaic_read_amplification"] for row in rows), default=0.0),
+            "residual_pack_records": sum(row["residual_pack_records"] for row in rows),
+            "residual_packed_delta_nodes": sum(row["residual_packed_delta_nodes"] for row in rows),
+            "max_mosaic_read_amplification": max(
+                (row["max_mosaic_read_amplification"] for row in rows), default=0.0
+            ),
+            "max_additional_recipe_read_amplification": max(
+                (row["max_additional_recipe_read_amplification"] for row in rows), default=0.0
+            ),
             "portfolio_create_s": sum(row["portfolio_create_s"] for row in rows),
         },
     }
@@ -128,8 +141,10 @@ def run(work_root: Path) -> dict:
     candidate = sum(row["candidate_bytes"] for row in all_rows)
     return {
         "schema": "cmpct-mosaic-v029-full-artifact-v1",
-        "claim_boundary": "complete research artifacts versus complete v0.28 portfolio artifacts; canonical revision 24 unchanged",
-        "engine": "experiments/entropygraph_v029_mosaic_strict.py",
+        "claim_boundary": (
+            "complete research artifacts versus complete v0.28 portfolio artifacts; canonical revision 24 unchanged"
+        ),
+        "engine": "experiments/entropygraph_v029_residual_strict.py",
         "suites": {"v1": v1, "v2": v2},
         "combined": {
             "v028_bytes": base,
@@ -140,7 +155,14 @@ def run(work_root: Path) -> dict:
             "workloads_regressed": sum(row["candidate_bytes"] > row["v028_bytes"] for row in all_rows),
             "mosaic_selected": sum(row["selected"] == "mosaic" for row in all_rows),
             "mosaic_nodes": sum(row["mosaic_nodes"] for row in all_rows),
-            "max_mosaic_read_amplification": max((row["max_mosaic_read_amplification"] for row in all_rows), default=0.0),
+            "residual_pack_records": sum(row["residual_pack_records"] for row in all_rows),
+            "residual_packed_delta_nodes": sum(row["residual_packed_delta_nodes"] for row in all_rows),
+            "max_mosaic_read_amplification": max(
+                (row["max_mosaic_read_amplification"] for row in all_rows), default=0.0
+            ),
+            "max_additional_recipe_read_amplification": max(
+                (row["max_additional_recipe_read_amplification"] for row in all_rows), default=0.0
+            ),
         },
     }
 
