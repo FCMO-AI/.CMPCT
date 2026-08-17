@@ -5,19 +5,25 @@ on:
   push:
     branches:
       - frontier/full-completion-20260815
+  pull_request:
+    branches:
+      - main
     paths:
-      - .github/workflows/agent-extraction-hardening.yml
+      - native/**
+      - tests/native_stream_extract_abi.py
       - tools/agent_patch_extraction.py
+      - .github/workflows/agent-extraction-hardening.yml
 
 permissions:
   contents: write
 
 concurrency:
-  group: cmpct-extraction-hardening-${{ github.ref }}
+  group: cmpct-extraction-hardening-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:
   harden:
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     steps:
@@ -34,8 +40,6 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          # The frontier accumulated rustfmt debt across its native files. Normalize the crate once so
-          # canonical native CI can reach semantic gates again instead of failing before compilation.
           cargo fmt --manifest-path native/cmpct-core/Cargo.toml
       - name: Prove mutation scope is native-only
         shell: bash
@@ -59,7 +63,13 @@ jobs:
             cargo build --manifest-path native/cmpct-core/Cargo.toml --release
             python tests/native_stream_extract_abi.py
           } 2>&1 | tee extraction-hardening-validation.log
-      - name: Commit behavior-validated hardening
+      - name: Enforce strict native lint before commit
+        shell: bash
+        run: |
+          set -o pipefail
+          cargo clippy --manifest-path native/cmpct-core/Cargo.toml --all-targets -- -D warnings 2>&1 | tee -a extraction-hardening-validation.log
+      - name: Commit validated hardening
+        if: github.event_name != 'pull_request'
         shell: bash
         run: |
           set -euo pipefail
@@ -71,11 +81,6 @@ jobs:
           git diff --cached --quiet && exit 0
           git commit -m 'Harden native extraction resource and mode handling'
           git push origin HEAD:frontier/full-completion-20260815
-      - name: Enforce strict native lint on committed tree
-        shell: bash
-        run: |
-          set -o pipefail
-          cargo clippy --manifest-path native/cmpct-core/Cargo.toml --all-targets -- -D warnings 2>&1 | tee -a extraction-hardening-validation.log
       - name: Upload validation diagnostics
         if: failure()
         uses: actions/upload-artifact@v4
