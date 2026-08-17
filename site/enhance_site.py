@@ -82,6 +82,26 @@ def patch_index(output: Path, version: str, surface: str) -> None:
         f'<span>Project v{version}</span><span>Surface {surface}</span><span>Canonical format',
         1,
     )
+
+    # Footnote: the three performance blocks deliberately answer different questions. The arena is the
+    # whole-suite cross-format position; the tile matrix is the exact-tree Zstd category frontier; and
+    # the later table is shipping/canonical CMPCT-vs-ZIP execution parity including create/extract time.
+    html = html.replace(
+        'The frontier view uses the broad neutral/hostile suite: developer trees, office containers, media, analytics, logs, backups, incompressible data, tiny files, ML artifacts and a mixed binary image. Losses stay visible.',
+        'The arena compares current CMPCT with external formats on matched whole-suite trees. The category frontier below asks a harder, different question per workload: how many bytes does CMPCT store versus solid Zstd-19? ZIP stays visible as the familiar adoption baseline; losses stay visible.',
+        1,
+    )
+    html = html.replace(
+        '<div class="card-head"><span>WORKLOAD MATRIX</span><strong id="workload-score">—</strong></div>',
+        '<div class="card-head"><span>CATEGORY FRONTIER · SOLID ZSTD-19</span><strong id="workload-score">—</strong></div>',
+        1,
+    )
+    html = html.replace(
+        '<div><p class="eyebrow">04 / CANONICAL PARITY</p><h2>Where the executable engine<br><em>beats ZIP—and where it does not.</em></h2></div>',
+        '<div><p class="eyebrow">04 / CANONICAL ZIP EXECUTION PARITY</p><h2>Shipping CMPCT vs ZIP.<br><em>Size, create, extract.</em></h2><p class="parity-purpose">This table is operational parity for the canonical reader/writer at library and fresh-process CLI boundaries. It is intentionally separate from the Zstd category-size frontier above.</p></div>',
+        1,
+    )
+
     html = html.replace(
         'Every material step<br><em>gets a version and a benchmark.</em>',
         'Core releases must<br><em>earn the number.</em>',
@@ -116,6 +136,13 @@ def patch_machine_state(output: Path, surface: str) -> None:
             "presentation-only work advances the alphabetic surface revision instead."
         )
         rules = [new_rule if rule == old_rule else rule for rule in rules]
+        breakthrough_rule = (
+            "No-regression is a core-release promotion boundary, not an exploration ban: preserve a "
+            "verified breakthrough seed with explicit regression debt, then rehabilitate the debt while "
+            "retaining the gain before promotion."
+        )
+        if breakthrough_rule not in rules:
+            rules.append(breakthrough_rule)
         agent["non_negotiables"] = rules
         agent_path.write_text(json.dumps(agent, indent=2) + "\n", encoding="utf-8")
 
@@ -135,7 +162,7 @@ def patch_machine_state(output: Path, surface: str) -> None:
         )
         text = text.replace(
             "Performance is a release contract: material updates are benchmarked against their direct base and deterministic size regressions are rejected.",
-            "Performance is a core-release contract: numeric versions are reserved for material CMPCT improvements, while presentation-only work uses the alphabetic surface track. Deterministic size regressions remain rejected for core release candidates.",
+            "Performance is a core-release contract: numeric versions are reserved for material CMPCT improvements, while presentation-only work uses the alphabetic surface track. Breakthrough research may carry explicit regression debt, but promotion requires rehabilitation rather than hiding or averaging the loss away.",
             1,
         )
         llms_path.write_text(text, encoding="utf-8")
@@ -145,8 +172,8 @@ def enhance(output: Path) -> None:
     version = project_version()
     surface = surface_revision(version)
     # Footnote: normalize the newest evidence before presentation code reads project-data.json. Older
-    # v0.25 records remain in history; the adapter only promotes a newer committed v0.28 record when
-    # its explicit schema is present, so a missing/corrupt record fails soft to the old frontier.
+    # records remain in history; schema-specific current evidence is promoted only when its explicit
+    # contract is present, so malformed data cannot silently acquire public authority.
     patch_project_data(output)
     patch_index(output, version, surface)
     patch_machine_state(output, surface)
