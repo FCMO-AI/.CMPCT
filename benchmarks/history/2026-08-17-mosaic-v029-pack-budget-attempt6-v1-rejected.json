@@ -1,0 +1,95 @@
+{
+  "schema": "cmpct-v029-pack-budget-negative-evidence-v1",
+  "date": "2026-08-17",
+  "source_commit": "1db5ad1c106b3c6634efd3f188cd90d737283673",
+  "workflow_run": 32001987135,
+  "artifact": {
+    "id": 9279539626,
+    "digest": "sha256:7e7ce355fe94e5ba434eb565bbba041d71094a0f91c89e6c7d8fc33828746b05"
+  },
+  "claim_boundary": "attempt-6 bounded agglomerative Locality Budget Compiler on the old repair-v3/historical frontier; repair-v4 supersedes media identity",
+  "preregistered_gate": {
+    "additional_saving_vs_attempt5_gte_pct_of_v028": 0.05,
+    "old_absolute_floor_bytes": 68779,
+    "workloads_improved_vs_attempt5_gte": 2,
+    "workload_regressions_vs_attempt5_eq": 0,
+    "weighted_pack_read_amplification_lte": 8.0,
+    "per_member_pack_read_amplification_lte": 8.0,
+    "final_selected_pack_read_amplification_lte": 8.0
+  },
+  "totals": {
+    "v028_bytes": 137556533,
+    "attempt5_bytes": 137507932,
+    "candidate_bytes": 137439837,
+    "attempt5_saving_vs_v028_bytes": 48601,
+    "additional_saving_vs_attempt5_bytes": 68095,
+    "additional_saving_vs_attempt5_pct_of_v028": 0.04950328313377889,
+    "candidate_saving_vs_v028_bytes": 116696,
+    "candidate_smaller_than_v028_pct": 0.08483493837402836,
+    "workloads_improved_vs_attempt5": 3,
+    "workloads_regressed_vs_attempt5": 0,
+    "pack_budget_selected_rows": 3,
+    "max_pack_budget_weighted_read_amp": 4.924616546044881,
+    "max_pack_budget_worst_member_amp": 7.920141464448448,
+    "max_selected_pack_read_amplification": 7.790890767000247,
+    "max_selected_additional_recipe_read_amplification": 0.06773645177560665,
+    "oracle_portfolio_create_s": 2145.634200998,
+    "embedded_v028_portfolio_create_s": 367.68846348299974,
+    "median_oracle_create_ratio_vs_v028": 4.1521263366461545,
+    "research_gate_pass": false
+  },
+  "winning_rows": [
+    {
+      "suite": "neutral_hostile_v1",
+      "name": "09_ml_artifacts",
+      "v028_bytes": 13836439,
+      "attempt5_bytes": 13836439,
+      "candidate_bytes": 13769390,
+      "additional_saving_bytes": 67049,
+      "allocator_root_pack_saving_bytes": 68945,
+      "allocator_weighted_read_amp": 3.173624566067899,
+      "allocator_worst_member_amp": 7.790890767000247,
+      "final_pack_read_amp": 7.790890767000247
+    },
+    {
+      "suite": "resemblance_hostile_v1",
+      "name": "01_shifted_versions",
+      "v028_bytes": 1761588,
+      "attempt5_bytes": 1723056,
+      "candidate_bytes": 1722633,
+      "additional_saving_bytes": 423,
+      "allocator_root_pack_saving_bytes": 221,
+      "allocator_weighted_read_amp": 3.702898496252713,
+      "allocator_worst_member_amp": 6.161471002134183,
+      "final_pack_read_amp": 6.161471002134183
+    },
+    {
+      "suite": "resemblance_hostile_v1",
+      "name": "03_boundary_churn",
+      "v028_bytes": 89945,
+      "attempt5_bytes": 79876,
+      "candidate_bytes": 79253,
+      "additional_saving_bytes": 623,
+      "allocator_root_pack_saving_bytes": 623,
+      "allocator_weighted_read_amp": 1.9199679315084013,
+      "allocator_worst_member_amp": 3.3538433219447152,
+      "final_pack_read_amp": 3.3538433219447152
+    }
+  ],
+  "near_miss": {
+    "required_additional_saving_bytes": 68779,
+    "actual_additional_saving_bytes": 68095,
+    "shortfall_bytes": 684,
+    "interpretation": "The mechanism missed its preregistered gate narrowly rather than being falsified by orders of magnitude. The independent older PR #37 solver saved only 183 B; the bounded agglomerative planner exposed a new 67,049 B ML-artifact win under <=8x per-member locality. Repair-v4 must rerun the same mechanism before disposition."
+  },
+  "creation_cost": {
+    "release_ready": false,
+    "note": "The oracle deliberately double-builds attempt5 plus the budgeted graph and is not production scheduling. Even a byte-pass requires integrated planning/shared-analysis work before release consideration."
+  },
+  "evidence_policy": {
+    "result_preserved_as_rejected_under_original_gate": true,
+    "threshold_not_lowered_after_near_miss": true,
+    "repair_v4_must_keep_old_68779_byte_floor": true,
+    "no_v029_release_claim": true
+  }
+}

@@ -1,0 +1,90 @@
+name: CMPCT neutral-hostile determinism repair v4
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-neutral-hostile-determinism-repair-v4-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  prove-v4:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      CMPCT_PREFLATE_BRIDGE: ${{ github.workspace }}/native/preflate-bridge/target/release/cmpct-preflate-bridge
+    steps:
+      - name: Check out candidate
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Install pinned corpus dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y zstd gcc libsndfile1
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[audio,test]'
+          python -m pip install pillow==12.3.0 reportlab==5.0.0 python-docx==1.2.0 openpyxl==3.1.5 python-pptx==1.0.2 numpy==2.4.6
+      - name: Build pinned memory-safe Preflate bridge
+        run: |
+          rustup toolchain install 1.89.0 --profile minimal
+          cargo +1.89.0 build --release --manifest-path native/preflate-bridge/Cargo.toml
+      - name: Prove repair-v4 media identity and measure exact v0.28
+        run: |
+          mkdir -p benchmark-artifacts
+          python benchmarks/neutral_hostile_determinism_repair_v4_check.py \
+            --work-root benchmark-artifacts/CMPCT_Neutral_Hostile_Determinism_Repair_v4 \
+            --output benchmark-artifacts/neutral-hostile-v1-determinism-repair-v4.json
+      - name: Enforce repair-v4 contract
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          r=json.loads(Path('benchmark-artifacts/neutral-hostile-v1-determinism-repair-v4.json').read_text())
+          assert r['schema'] == 'cmpct-neutral-hostile-v1-determinism-repair-manifest-v4'
+          assert r['accepted'] is True, r
+          assert len(r['rows']) == 4, r
+          assert r['requirements']['media_identity_independent_of_external_ffmpeg_outputs'] is True
+          assert r['requirements']['excluded_media_mutation_explicitly_proven'] is True
+          assert r['evidence_dependencies']['repair_v4_rows_freshly_proven'] == ['03_media_library'], r
+          assert set(r['evidence_dependencies']['repair_v3_rows_imported']) == {
+              '02_office_workspace', '05_logs_and_telemetry', '06_incremental_backups'
+          }, r
+          for row in r['rows']:
+              assert row['deterministic'] is True, row
+              assert row['tree_sha256'] == row['second_build_tree_sha256'], row
+              assert not row['file_differences'], row
+              assert row['v028_candidate_bytes'] and row['v028_candidate_bytes'] > 0, row
+          media=next(row for row in r['rows'] if row['name']=='03_media_library')
+          assert media['repair_v4_source'] == 'fresh-cross-path-media-proof', media
+          assert media['files'] == 25, media
+          assert media['excluded_mutation_proven'] is True, media
+          assert len(media['excluded_before_normalization']) == 2, media
+          names={'clip_h264.mp4', 'field_recording.flac', 'field_recording.mp3'}
+          assert set(media['excluded_before_normalization'][0]) == names, media
+          assert set(media['excluded_after_mutation_round2']) == names, media
+          for name in names:
+              assert media['excluded_before_normalization'][1][name] != media['excluded_after_mutation_round2'][name], media
+          print(json.dumps(r, indent=2))
+          PY
+      - name: Public-surface guard
+        run: python tools/check_public_surface.py
+      - name: Upload repair-v4 evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cmpct-neutral-hostile-determinism-repair-v4-${{ github.sha }}
+          path: benchmark-artifacts/neutral-hostile-v1-determinism-repair-v4.json
+          if-no-files-found: warn
+
+# Footnote: the portable media identity deliberately no longer requires FFmpeg installation. Repair-v3
+# rows are imported from accepted durable evidence; only the new media identity is freshly regenerated.

@@ -33,7 +33,7 @@ jobs:
       - name: Install deterministic benchmark dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y zstd ffmpeg gcc libsndfile1
+          sudo apt-get install -y zstd gcc libsndfile1
           python -m pip install --upgrade pip
           python -m pip install -e '.[audio,test]'
           python -m pip install \
@@ -66,23 +66,23 @@ jobs:
           r=json.loads(Path('benchmark-artifacts/mosaic-v029-generalization.json').read_text())
           t=r['totals']
           print(json.dumps(t, indent=2))
-          assert r['schema'] == 'cmpct-v029-generalization-v2'
+          assert r['schema'] == 'cmpct-v029-generalization-v3'
           assert r['claim_boundary'].startswith('attempt-5 generalization versus exact embedded v0.28')
           assert t['workloads'] == 15, t
-          assert t['historical_baseline_rows'] == 12, t
-          assert t['repaired_baseline_rows'] == 3, t
+          assert t['historical_baseline_rows'] == 11, t
+          assert t['repaired_v3_baseline_rows'] == 3, t
+          assert t['repaired_v4_baseline_rows'] == 1, t
           assert t['baseline_tree_drift_rows'] == 0, t
           assert t['baseline_byte_drift_rows'] == 0, t
-          assert t['v028_bytes'] == 137_556_533, t
+          assert t['v028_bytes'] == 129_471_502, t
           assert t['workloads_regressed'] == 0, t
           assert t['candidate_bytes'] < t['v028_bytes'], t
           assert t['workloads_improved'] >= 1, t
           assert t['max_mosaic_read_amplification'] <= 8.0, t
           assert t['max_additional_recipe_read_amplification'] <= 2.0, t
           assert t['creation_ratio_vs_v028'] <= 3.0, t
-          # Footnote: size/locality/timing thresholds are the original preregistered generalization
-          # thresholds. Only the benchmark *identity* changed after a separately proven substrate repair;
-          # the mechanism does not receive a weaker performance bar.
+          # Footnote: size/locality/timing thresholds remain the original attempt-5 generalization bars.
+          # Repair-v4 changes only the portable baseline identity; it cannot weaken candidate admission.
           PY
 
       - name: Full regression suite
@@ -99,8 +99,8 @@ jobs:
           import json
           from pathlib import Path
           r=json.loads(Path('benchmark-artifacts/mosaic-v029-generalization.json').read_text()); t=r['totals']
-          print('## CMPCT attempt #5 — deterministic inherited v0.28 frontier')
-          print(f"- baseline identities: **{t['historical_baseline_rows']} historical + {t['repaired_baseline_rows']} repair-v3**")
+          print('## CMPCT attempt #5 — deterministic inherited v0.28 frontier v3')
+          print(f"- baseline identities: **{t['historical_baseline_rows']} historical + {t['repaired_v3_baseline_rows']} repair-v3 + {t['repaired_v4_baseline_rows']} repair-v4**")
           print(f"- exact v0.28 bytes: **{t['v028_bytes']:,}**")
           print(f"- attempt-5 portfolio bytes: **{t['candidate_bytes']:,}**")
           print(f"- improvement: **{t['smaller_than_v028_pct']:.5f}%**")
@@ -119,11 +119,11 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: cmpct-v029-generalization-${{ github.sha }}
+          name: cmpct-v029-generalization-v3-${{ github.sha }}
           path: |
             benchmark-artifacts/mosaic-v029-generalization.json
             benchmark-artifacts/mosaic-v029-generalization.stdout.txt
           if-no-files-found: warn
 
-# Footnote: this gate still does not assign project version 0.29.0. A green deterministic generalization
-# run earns the structural-competitor sweep and then a canonical/native/recovery release proposal.
+# Footnote: generalization-v3 proves attempt #5 against the new portable identity. It still cannot assign
+# project version 0.29.0; release-worthiness remains a separate, stricter ratchet.

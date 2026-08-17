@@ -24,16 +24,30 @@ jobs:
           fetch-depth: 0
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
 
+      - name: Check accepted generalization-v3 prerequisite
+        id: prerequisite
+        shell: bash
+        run: |
+          if [ -f benchmarks/history/2026-08-17-mosaic-v029-generalization-v3.json ]; then
+            echo 'ready=true' >> "$GITHUB_OUTPUT"
+            echo 'Accepted generalization-v3 evidence present; structural-v2 will run.' >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo 'ready=false' >> "$GITHUB_OUTPUT"
+            echo 'Structural-v2 intentionally deferred until accepted generalization-v3 evidence is committed.' >> "$GITHUB_STEP_SUMMARY"
+          fi
+
       - name: Set up Python
+        if: steps.prerequisite.outputs.ready == 'true'
         uses: actions/setup-python@v6
         with:
           python-version: "3.11"
           cache: pip
 
       - name: Install deterministic corpus and structural competitors
+        if: steps.prerequisite.outputs.ready == 'true'
         run: |
           sudo apt-get update
-          sudo apt-get install -y zstd ffmpeg gcc libsndfile1
+          sudo apt-get install -y zstd gcc libsndfile1
           # Competitor packages are evidence supplements. Missing distro packages are recorded by the
           # benchmark rather than converting environmental availability into a fake compression failure.
           for pkg in p7zip-full zpaq dwarfs borgbackup; do sudo apt-get install -y "$pkg" || true; done
@@ -48,30 +62,35 @@ jobs:
             numpy==2.4.6
 
       - name: Build pinned memory-safe Preflate bridge
+        if: steps.prerequisite.outputs.ready == 'true'
         run: |
           rustup toolchain install 1.89.0 --profile minimal
           cargo +1.89.0 build --release --manifest-path native/preflate-bridge/Cargo.toml
 
-      - name: Run repaired aggregate structural sweep
+      - name: Run repair-v4 aggregate structural sweep
+        if: steps.prerequisite.outputs.ready == 'true'
         run: |
           mkdir -p benchmark-artifacts
           set -o pipefail
-          python benchmarks/mosaic_v029_structural_competitors.py \
+          python benchmarks/mosaic_v029_structural_competitors_v4.py \
             --source-commit '${{ github.event.pull_request.head.sha || github.sha }}' \
-            --work-root benchmark-artifacts/CMPCT_V029_Structural_Competitors \
-            --output benchmark-artifacts/mosaic-v029-structural-competitors.json \
-            2>&1 | tee benchmark-artifacts/mosaic-v029-structural-competitors.stdout.txt
+            --work-root benchmark-artifacts/CMPCT_V029_Structural_Competitors_v4 \
+            --output benchmark-artifacts/mosaic-v029-structural-competitors-v2.json \
+            2>&1 | tee benchmark-artifacts/mosaic-v029-structural-competitors-v2.stdout.txt
 
       - name: Enforce preregistered CMPCT-side policy
+        if: steps.prerequisite.outputs.ready == 'true'
         run: |
           python - <<'PY'
           import json
           from pathlib import Path
-          r=json.loads(Path('benchmark-artifacts/mosaic-v029-structural-competitors.json').read_text())
+          r=json.loads(Path('benchmark-artifacts/mosaic-v029-structural-competitors-v2.json').read_text())
           t=r['totals']
-          assert r['schema'] == 'cmpct-v029-structural-competitors-v1'
+          assert r['schema'] == 'cmpct-v029-structural-competitors-v2'
           assert r['candidate']['canonical_format_revision'] == 24
           assert r['method']['competitor_availability_is_hard_gate'] is False
+          assert 'repair_v4' in r['evidence_dependencies'], r
+          assert 'generalization_v3' in r['evidence_dependencies'], r
           assert t['suites'] == 2, t
           assert t['candidate_regressed_suites'] == 0, t
           for row in r['rows']:
@@ -84,26 +103,27 @@ jobs:
                       assert competitor['bytes'] > 0, (name, competitor)
                       assert competitor.get('semantics'), (name, competitor)
           # Footnote: there is intentionally no assertion that CMPCT must beat every structurally
-          # different archive tool. Availability and semantic mismatches remain visible evidence;
-          # claims are made only after the measured rows exist.
+          # different archive tool. Exact losses and semantic mismatches remain visible evidence.
           print(json.dumps(t, indent=2))
           PY
 
       - name: Full regression suite
+        if: steps.prerequisite.outputs.ready == 'true'
         run: python -m pytest -q
 
       - name: Public-surface guard
+        if: steps.prerequisite.outputs.ready == 'true'
         run: python tools/check_public_surface.py
 
       - name: Summarize structural competitors
-        if: always()
+        if: always() && steps.prerequisite.outputs.ready == 'true'
         run: |
-          if [ -f benchmark-artifacts/mosaic-v029-structural-competitors.json ]; then
+          if [ -f benchmark-artifacts/mosaic-v029-structural-competitors-v2.json ]; then
             python - <<'PY' >> "$GITHUB_STEP_SUMMARY"
           import json
           from pathlib import Path
-          r=json.loads(Path('benchmark-artifacts/mosaic-v029-structural-competitors.json').read_text())
-          print('## CMPCT attempt #5 — structural competitor aggregates')
+          r=json.loads(Path('benchmark-artifacts/mosaic-v029-structural-competitors-v2.json').read_text())
+          print('## CMPCT attempt #5 — structural competitors on repair-v4')
           for row in r['rows']:
               print(f"- **{row['suite']}**: v0.28={row['v028_bytes']:,} B, attempt5={row['candidate_bytes']:,} B, delta={row['candidate_saving_bytes']:+,} B")
               for name, c in row['competitors'].items():
@@ -116,15 +136,14 @@ jobs:
           fi
 
       - name: Upload structural evidence
-        if: always()
+        if: always() && steps.prerequisite.outputs.ready == 'true'
         uses: actions/upload-artifact@v4
         with:
-          name: cmpct-v029-structural-competitors-${{ github.sha }}
+          name: cmpct-v029-structural-competitors-v2-${{ github.sha }}
           path: |
-            benchmark-artifacts/mosaic-v029-structural-competitors.json
-            benchmark-artifacts/mosaic-v029-structural-competitors.stdout.txt
+            benchmark-artifacts/mosaic-v029-structural-competitors-v2.json
+            benchmark-artifacts/mosaic-v029-structural-competitors-v2.stdout.txt
           if-no-files-found: warn
 
-# Footnote: a green run earns a v0.29 canonical-release proposal only. CMPNX10/CMPNX11 remain research
-# grammar until a new reader-visible format revision, independent vectors, hostile bounds, recovery and
-# native parity all land together.
+# Footnote: structural-v2 is intentionally gated behind accepted generalization-v3 evidence so competitor
+# CPU is never spent on an unapproved benchmark identity.
