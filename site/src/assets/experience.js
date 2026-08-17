@@ -259,13 +259,27 @@ function render(e) {
   renderReceipt(e);
 }
 
+function renderAfterBaseUI(evidence, attempt = 0) {
+  // Footnote: app.js still owns Browser Lab plus the shared canonical/parity scaffolding. Both modules
+  // read the same static JSON asynchronously, so rendering immediately could allow a slower base fetch
+  // to overwrite proof-surface values afterward. Waiting for app.js to stamp the current frontier marker
+  // makes ordering deterministic without coupling the stable renderer to a release-specific script.
+  const marker = $("#frontier-version");
+  const expected = String(evidence.project_version || "");
+  const baseReady = expected && marker?.textContent?.includes(expected);
+  if (baseReady || attempt >= 180) {
+    render(evidence);
+    return;
+  }
+  requestAnimationFrame(() => renderAfterBaseUI(evidence, attempt + 1));
+}
+
 async function boot() {
   try {
     const response = await fetch("project-data.json", { cache: "no-store" });
     if (!response.ok) throw new Error(`Unable to load project data (${response.status})`);
     const data = await response.json();
-    const evidence = evidenceFrom(data);
-    render(evidence);
+    renderAfterBaseUI(evidenceFrom(data));
   } catch (error) {
     // Footnote: app.js owns Browser Lab compatibility and the generic site-data error state. This layer
     // fails soft so a presentation enhancement can never disable the archive tool or canonical reader UI.
