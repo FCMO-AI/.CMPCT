@@ -21,7 +21,6 @@ from pathlib import Path
 import shutil
 import statistics
 import sys
-import tempfile
 import time
 
 from mosaic_hostile_corpus_v1 import build as build_v1
@@ -45,6 +44,10 @@ ENGINE = _load_engine()
 
 
 def _measure_workload(path: Path, scratch: Path) -> dict:
+    # Footnote: the first full-artifact CI attempt failed here before measuring any archive because the
+    # per-suite scratch directory did not yet exist.  Create it explicitly rather than letting a test
+    # harness accident masquerade as evidence for or against the compression mechanism.
+    scratch.mkdir(parents=True, exist_ok=True)
     archive = scratch / f"{path.name}.cmpct"
     t0 = time.perf_counter()
     result = ENGINE.build(path, archive)
