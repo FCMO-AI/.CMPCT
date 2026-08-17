@@ -1,0 +1,96 @@
+{
+  "project": {
+    "project": ".CMPCT",
+    "project_version": "0.29.0",
+    "format_revision": 24,
+    "surface_revision": "0.29.c",
+    "status": "pre-1.0 / active development",
+    "canonical_repository": "FCMO-AI/.CMPCT",
+    "canonical_branch": "main",
+    "site_build_commit": "f6bbdee3380ea6e04d8e31de1b393e612bb425fc",
+    "publication": {"mode":"static-gh-pages","status":"generated public website","branch":"gh-pages","source_of_truth":"main"}
+  },
+  "frontier": {
+    "file": "2026-08-17-mosaic-v029-public.json",
+    "date": "2026-08-17",
+    "kind": "research-frontier",
+    "schema": "cmpct-public-mosaic-v029-benchmark-v1",
+    "render_contract": "mosaic-v029",
+    "project_version": "0.29.0",
+    "canonical_format_revision": 24,
+    "candidate": {"engine":"experiments.entropygraph_v029_release","engine_identity":"attempt5-residual-program-packing","name":"CMPCT Mosaic / Residual Program Packing attempt #5","research_magic":"CMPNX11","status":"accepted v0.29 research frontier; canonical r24 unchanged"},
+    "contract": {"direct_base":"CMPCT v0.28.0 / accepted EntropyGraph II portfolio","no_retroactive_thresholds":true,"portable_frontier":"15 deterministic inherited-frontier workloads; exact historical/repaired v0.28 baseline identity required; 0-byte size-regression tolerance","scheduler":"accepted attempt-5 engine only; byte-identical output required; four paired ABBA repetitions; every pair and median must save >=20% and >=5s on the fixed hostile aggregate","structural_aggregate":"one deterministic 724-file resemblance-hostile tree; same-run full-tree archive sizes; semantic differences with solid archives remain explicit"},
+    "logical_bytes": 93526384,
+    "files": 724,
+    "workload_count": 15,
+    "archive_bytes": 47147764,
+    "ratio": 0.5041119092126988,
+    "saved_pct": 49.58880907873013,
+    "competitors": [
+      {"name":"CMPCT Mosaic attempt #5","short":"CMPCT v0.29","bytes":47147764,"lead_pct":0.0,"role":"candidate"},
+      {"name":"7z LZMA2","short":"7z / LZMA2","bytes":47430343,"lead_pct":0.5957768426848611,"role":"competitor"},
+      {"name":"tar + Zstd level 19 solid","short":"tar / Zstd solid","bytes":47065652,"lead_pct":-0.17446268459215225,"role":"competitor"},
+      {"name":"ZPAQ method 5","short":"ZPAQ m5","bytes":47062639,"lead_pct":-0.1808759598032741,"role":"competitor"},
+      {"name":"ZIP Deflate level 9","short":"ZIP / Deflate","bytes":76690799,"lead_pct":38.522267840761444,"role":"competitor"},
+      {"name":"Borg","short":"Borg","bytes":76461311,"lead_pct":38.33775097055294,"role":"competitor"}
+    ],
+    "overall_comparison": {
+      "candidate_bytes":47147764,"logical_bytes":93526384,"files":724,"suite_count":1,"headline_comparator_short":"ZIP / Deflate","serious_comparator_short":"tar / Zstd solid",
+      "competitors":[
+        {"name":"CMPCT Mosaic attempt #5","short":"CMPCT v0.29","bytes":47147764,"lead_pct":0.0,"role":"candidate"},
+        {"name":"7z LZMA2","short":"7z / LZMA2","bytes":47430343,"lead_pct":0.5957768426848611,"role":"competitor"},
+        {"name":"tar + Zstd level 19 solid","short":"tar / Zstd solid","bytes":47065652,"lead_pct":-0.17446268459215225,"role":"competitor"},
+        {"name":"ZPAQ method 5","short":"ZPAQ m5","bytes":47062639,"lead_pct":-0.1808759598032741,"role":"competitor"},
+        {"name":"ZIP Deflate level 9","short":"ZIP / Deflate","bytes":76690799,"lead_pct":38.522267840761444,"role":"competitor"},
+        {"name":"Borg","short":"Borg","bytes":76461311,"lead_pct":38.33775097055294,"role":"competitor"}
+      ],
+      "method":{"source_artifact_digest":"sha256:b97329f46231164fddb46d64b1ee69316b6d09165f6a5b63742ae1789a802765","source_artifact_id":9280765170,"source_record":"benchmarks/history/2026-08-17-mosaic-v029-attempt7-crossbase-structural-reject.json","source_workflow_run":32007466854}
+    },
+    "category_comparison": {},
+    "release_delta":{"candidate_bytes":137501815,"baseline_bytes":137550416,"baseline_short":"CMPCT v0.28","lead_pct":0.035333226473120954,"workloads":15,"workloads_improved":2,"workloads_regressed":0,"research_selected":2,"saving_bytes":48601},
+    "primary_comparator":{"short":"CMPCT v0.28","name":"exact embedded v0.28 portfolio","bytes":137550416,"lead_pct":0.035333226473120954},
+    "wins_primary":2,"regressions_primary":0,"research_selected":2,"residual_pack_records":12,"residual_packed_delta_nodes":186,
+    "workloads":[
+      {"suite":"resemblance_hostile_v1","name":"01_shifted_versions","candidate_bytes":1723056,"v028_bytes":1761588,"saving_vs_v028_pct":2.1873446004400576,"selected":"mosaic","improved":true},
+      {"suite":"resemblance_hostile_v1","name":"03_boundary_churn","candidate_bytes":79876,"v028_bytes":89945,"saving_vs_v028_pct":11.194618933792873,"selected":"mosaic","improved":true}
+    ],
+    "scheduler":{"accepted_engine":"attempt5-residual-program-packing","archive_bytes":47147764,"v028_bytes":47197165,"byte_identical":true,"every_pair_gate_pass":true,"median_gate_pass":true,"research_gate_pass":true,"wallclock_improvement_pct":46.31844326587608,"wallclock_saved_s":84.50978696999994,"scope":"fixed multi-file resemblance-hostile aggregate only; no global speed claim"},
+    "known_losses":["CMPNX11 is research-only and is not readable by the canonical r24 reader.","Portable size gain over v0.28 is small (48,601 B / 0.035333%) and concentrated in 2 of 15 workloads; 13 workloads intentionally fall back exactly.","Before corrected scheduling, the accepted attempt-5 portable portfolio used 2.175x the v0.28 creation time; any scheduler speed claim is scoped only to its measured fixed hostile aggregate.","On the matched hostile structural aggregate, attempt #5 is smaller than 7z/LZMA2 but remains 82,112 B larger than solid tar/Zstd-19 and 85,125 B larger than ZPAQ m5.","Solid archive competitors have different selective-read/recovery semantics; these rows compare stored bytes, not feature parity."]
+  },
+  "frontier_history": [],
+  "parity_records": [{
+    "schema":"cmpct-zip-parity-v1","repetitions":3,"timing_statistic":"median","date":"2026-08-17","project_version":"0.28.0","format_revision":24,"source_commit":"95eade37a9f573590862242b25cf94a32194c564",
+    "filesystem_semantic_mismatch":"CMPCT preserves links/sparse/uid-gid/xattrs in the archive; this Python ZIP baseline dereferences symlinks and does not preserve the richer filesystem semantics.",
+    "environment":{"python":"3.11.15","cpu_model":"AMD EPYC 7763 64-Core Processor"},
+    "corpora":{
+      "tiny":{"logical_bytes":1291090,"library":{"cmpct":{"bytes":151677,"create_s_median":0.159067985,"extract_s_median":0.2171031845},"zip":{"bytes":674152,"create_s_median":0.268855239,"extract_s_median":0.364362975}},"cli":{"cmpct":{"bytes":151677,"create_s_median":0.267120907,"extract_s_median":0.2850880825},"zip":{"bytes":674152,"create_s_median":0.482644862,"extract_s_median":0.401682895}}},
+      "source":{"logical_bytes":97380,"library":{"cmpct":{"bytes":9094,"create_s_median":0.0322963615,"extract_s_median":0.0334453475},"zip":{"bytes":140409,"create_s_median":0.0492819985,"extract_s_median":0.060985}},"cli":{"cmpct":{"bytes":9094,"create_s_median":0.108831612,"extract_s_median":0.101513813},"zip":{"bytes":140409,"create_s_median":0.117652449,"extract_s_median":0.096054844}}},
+      "media":{"logical_bytes":4931984,"library":{"cmpct":{"bytes":4224917,"create_s_median":0.0384063385,"extract_s_median":0.0044531865},"zip":{"bytes":4230623,"create_s_median":0.102554151,"extract_s_median":0.007535769}},"cli":{"cmpct":{"bytes":4224917,"create_s_median":0.191243659,"extract_s_median":0.073685151},"zip":{"bytes":4230623,"create_s_median":0.140392015,"extract_s_median":0.04192492}}},
+      "binary":{"logical_bytes":50331648,"library":{"cmpct":{"bytes":16793303,"create_s_median":0.161950461,"extract_s_median":0.05264111},"zip":{"bytes":16880276,"create_s_median":0.5647560605,"extract_s_median":0.055316586}},"cli":{"cmpct":{"bytes":16793303,"create_s_median":0.2698288305,"extract_s_median":0.13237616},"zip":{"bytes":16880276,"create_s_median":0.601696018,"extract_s_median":0.094557886}}},
+      "dedup_links":{"logical_bytes":27262976,"library":{"cmpct":{"bytes":1373,"create_s_median":0.0389423265,"extract_s_median":0.008924362},"zip":{"bytes":86991,"create_s_median":0.1531966845,"extract_s_median":0.027879227}},"cli":{"cmpct":{"bytes":1373,"create_s_median":0.110826098,"extract_s_median":0.0777536385},"zip":{"bytes":86991,"create_s_median":0.1828215285,"extract_s_median":0.0669976095}}},
+      "sparse":{"logical_bytes":134217728,"library":{"cmpct":{"bytes":4196500,"create_s_median":0.100976661,"extract_s_median":0.0028889855},"zip":{"bytes":4327446,"create_s_median":0.8201520965,"extract_s_median":0.3550813065}},"cli":{"cmpct":{"bytes":4196500,"create_s_median":0.1826076765,"extract_s_median":0.071616827},"zip":{"bytes":4327446,"create_s_median":0.8111789035,"extract_s_median":0.403739655}}},
+      "nested":{"logical_bytes":845291,"library":{"cmpct":{"bytes":797604,"create_s_median":0.011060608,"extract_s_median":0.001741212},"zip":{"bytes":808362,"create_s_median":0.019830733,"extract_s_median":0.0029789085}},"cli":{"cmpct":{"bytes":797604,"create_s_median":0.085804375,"extract_s_median":0.069580647},"zip":{"bytes":808362,"create_s_median":0.052277469,"extract_s_median":0.0358097145}}},
+      "combined":{"logical_bytes":84760369,"library":{"cmpct":{"bytes":21974962,"create_s_median":0.4084521565,"extract_s_median":0.325017581},"zip":{"bytes":22862111,"create_s_median":1.159686828,"extract_s_median":0.5246950305}},"cli":{"cmpct":{"bytes":21974962,"create_s_median":0.677633162,"extract_s_median":0.4074524725},"zip":{"bytes":22862111,"create_s_median":1.2220644815,"extract_s_median":0.568843136}}}
+    }
+  }],
+  "release_history":[
+    {"version":"0.29.0","title":"CMPCT v0.29.0 — Mosaic / Residual Program Packing","date":"2026-08-17"},
+    {"version":"0.28.0","title":"CMPCT v0.28.0 — EntropyGraph II resemblance frontier","date":"2026-08-17"},
+    {"version":"0.27.1","title":"CMPCT v0.27.1 — Canonical handoff consistency","date":""},
+    {"version":"0.27.0","title":"CMPCT v0.27.0 — AGI-grade engineering standard","date":""},
+    {"version":"0.26.0","title":"CMPCT v0.26.0 — Performance-command-center release","date":""},
+    {"version":"0.25.0","title":"CMPCT v0.25.0 — EntropyGraph research milestone","date":""}
+  ],
+  "public_evidence": {
+    "schema":"cmpct-public-evidence-v1","project_version":"0.29.0","canonical_format_revision":24,"frontier_name":"CMPCT Mosaic / Residual Program Packing attempt #5","frontier_status":"accepted v0.29 research frontier; canonical r24 unchanged",
+    "authority":{"canonical":"r24 reader/writer + committed parity evidence","research":"current benchmark frontier; not canonical grammar"},
+    "structural":{"candidate_bytes":47147764,"logical_bytes":93526384,"files":724,"headline_comparator_short":"ZIP / Deflate","serious_comparator_short":"tar / Zstd solid","competitors":[{"name":"CMPCT Mosaic attempt #5","short":"CMPCT v0.29","bytes":47147764,"lead_pct":0.0,"role":"candidate"},{"name":"7z LZMA2","short":"7z / LZMA2","bytes":47430343,"lead_pct":0.5957768426848611,"role":"competitor"},{"name":"tar + Zstd level 19 solid","short":"tar / Zstd solid","bytes":47065652,"lead_pct":-0.17446268459215225,"role":"competitor"},{"name":"ZPAQ method 5","short":"ZPAQ m5","bytes":47062639,"lead_pct":-0.1808759598032741,"role":"competitor"},{"name":"ZIP Deflate level 9","short":"ZIP / Deflate","bytes":76690799,"lead_pct":38.522267840761444,"role":"competitor"},{"name":"Borg","short":"Borg","bytes":76461311,"lead_pct":38.33775097055294,"role":"competitor"}],"method":{"source_artifact_digest":"sha256:b97329f46231164fddb46d64b1ee69316b6d09165f6a5b63742ae1789a802765","source_record":"benchmarks/history/2026-08-17-mosaic-v029-attempt7-crossbase-structural-reject.json"}},
+    "category":{"baseline_short":"tar / Zstd solid","secondary_short":"ZIP / Deflate","workloads":null,"wins":null,"losses":null,"ties":null,"lead_pct":null,"rows":[],"contract":{}},
+    "scheduler":{"accepted_engine":"attempt5-residual-program-packing","archive_bytes":47147764,"v028_bytes":47197165,"byte_identical":true,"every_pair_gate_pass":true,"median_gate_pass":true,"research_gate_pass":true,"wallclock_improvement_pct":46.31844326587608,"wallclock_saved_s":84.50978696999994,"scope":"fixed multi-file resemblance-hostile aggregate only; no global speed claim"},
+    "release_delta":{"candidate_bytes":137501815,"baseline_bytes":137550416,"baseline_short":"CMPCT v0.28","lead_pct":0.035333226473120954,"workloads":15,"workloads_improved":2,"workloads_regressed":0,"research_selected":2,"saving_bytes":48601},
+    "known_losses":["CMPNX11 is research-only and is not readable by the canonical r24 reader.","Portable size gain over v0.28 is small (48,601 B / 0.035333%) and concentrated in 2 of 15 workloads; 13 workloads intentionally fall back exactly.","Before corrected scheduling, the accepted attempt-5 portable portfolio used 2.175x the v0.28 creation time; any scheduler speed claim is scoped only to its measured fixed hostile aggregate.","On the matched hostile structural aggregate, attempt #5 is smaller than 7z/LZMA2 but remains 82,112 B larger than solid tar/Zstd-19 and 85,125 B larger than ZPAQ m5.","Solid archive competitors have different selective-read/recovery semantics; these rows compare stored bytes, not feature parity."],
+    "capabilities":[{"key":"lossless","label":"Lossless reconstruction","authority":"canonical"},{"key":"identity","label":"Exact-content identity and deduplication","authority":"canonical"},{"key":"selective_access","label":"Indexed selective access","authority":"canonical-design"},{"key":"integrity","label":"Authenticated/checksummed physical data and metadata","authority":"canonical"},{"key":"recovery","label":"Physical metadata recovery path","authority":"canonical"},{"key":"bounded_decode","label":"Bounded context / decode-work discipline","authority":"design-and-research"},{"key":"performance_gate","label":"Zero-byte deterministic size-regression gate at promotion","authority":"release-policy"}],
+    "provenance":{"record":"2026-08-17-mosaic-v029-public.json","date":"2026-08-17","tree_sha256":"ad01e5ea8f8b083b2a37dae963c61238e0189db4ab91455628578973dbdbb53c","suite":"resemblance_hostile_v1_aggregate","source_artifact":"sha256:b97329f46231164fddb46d64b1ee69316b6d09165f6a5b63742ae1789a802765","contract":{"direct_base":"CMPCT v0.28.0 / accepted EntropyGraph II portfolio","no_retroactive_thresholds":true,"portable_frontier":"15 deterministic inherited-frontier workloads; exact historical/repaired v0.28 baseline identity required; 0-byte size-regression tolerance","scheduler":"accepted attempt-5 engine only; byte-identical output required; four paired ABBA repetitions; every pair and median must save >=20% and >=5s on the fixed hostile aggregate","structural_aggregate":"one deterministic 724-file resemblance-hostile tree; same-run full-tree archive sizes; semantic differences with solid archives remain explicit"}},
+    "claim_policy":{"wins_and_losses_visible":true,"research_canonical_boundary_required":true,"headline_values_derived_from_committed_evidence":true,"missing_evidence_behavior":"suppress-or-mark-unavailable; never reuse stale headline data","semantic_difference_behavior":"label differences; raw-size comparison does not imply feature parity"}
+  }
+}
