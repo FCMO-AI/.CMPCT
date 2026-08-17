@@ -7,6 +7,16 @@ not live only in chat, issue comments, terminal scrollback, or prose summaries.
 
 - `2026-08-14-zip-parity-v024.json` — reproducible CMPCT-vs-Python-ZIP parity evidence with explicit library/CLI timing layers and semantic mismatch notes.
 - `2026-08-14-raw-chunk-streaming-parity.json` — follow-up shared-runner evidence for the large-binary extraction frontier and related parity checks.
+- `2026-08-16-entropygraph-v025.json` — public neutral/hostile EntropyGraph research frontier with ZIP/Zstd/Deflate and solid-Zstd comparison evidence for that exact historical workload set.
+- `2026-08-16-entropygraph-v028.json` — EntropyGraph II release-causality record plus matched whole-suite structural competitor sweep.
+- `2026-08-17-entropygraph-v028-category.json` — fresh same-lifetime per-workload CMPCT vs solid tar+Zstd-19 and ZIP/Deflate-9 category evidence. All 15 workloads are retained, including Zstd losses; this record is intentionally distinct from whole-suite aggregation and canonical ZIP execution parity.
+- `2026-08-17-zip-parity-v0280.json` — current v0.28 canonical executable CMPCT-vs-ZIP ABBA/parity evidence.
+
+Footnote: the v0.28 category record measures CMPCT and both category baselines while each generated
+workload tree is still alive. This avoids pretending that a separately regenerated office/media tree is
+byte-identical when producer metadata can differ across runs. Its tree hashes are row-local provenance;
+whole-suite structural totals and direct-base release totals retain their own separate aggregation
+contracts.
 
 The earlier private development campaign materially influenced CMPCT's architecture, but its private
 corpus identity and private artifact provenance are intentionally **not** part of this public benchmark
