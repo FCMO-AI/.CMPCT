@@ -30,6 +30,14 @@ jobs:
           python-version: '3.11'
       - name: Apply extraction hardening
         run: python tools/agent_patch_extraction.py
+      - name: Format only extraction-touched Rust files
+        shell: bash
+        run: |
+          set -euo pipefail
+          rustfmt --edition 2021 \
+            native/cmpct-core/src/lib.rs \
+            native/cmpct-core/src/recovery.rs \
+            native/cmpct-core/tests/recovery_golden.rs
       - name: Prove mutation scope is limited
         shell: bash
         run: |
@@ -41,16 +49,15 @@ jobs:
             echo "$unexpected" >&2
             exit 1
           fi
-      - name: Format and validate focused frontier
+      - name: Validate focused frontier
         shell: bash
         run: |
           set -o pipefail
           {
-            cargo fmt --manifest-path native/cmpct-core/Cargo.toml
             python -m pip install --upgrade pip
             python -m pip install -e '.[audio,test]'
             cargo clippy --manifest-path native/cmpct-core/Cargo.toml --all-targets -- -D warnings
-            cargo test --manifest-path native/cmpct-core/Cargo.toml
+            cargo test --manifest-path native/cmpct-core/Cargo.toml --all-targets
             cargo build --manifest-path native/cmpct-core/Cargo.toml --release
             python tests/native_stream_extract_abi.py
           } 2>&1 | tee extraction-hardening-validation.log
