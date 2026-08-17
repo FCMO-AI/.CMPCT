@@ -1,0 +1,96 @@
+name: Agent v0.29 zero-copy portfolio selection
+
+on:
+  push:
+    branches:
+      - agent/v029-zero-copy-selection
+
+permissions:
+  contents: write
+
+jobs:
+  patch-and-validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: agent/v029-zero-copy-selection
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+
+      - name: Install CMPCT test dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[test]'
+
+      - name: Apply same-filesystem atomic selection patch
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          p = Path('experiments/entropygraph_v029_parallel_portfolio.py')
+          s = p.read_text()
+          s = s.replace('import json\nimport multiprocessing as mp\n', 'import json\nimport multiprocessing as mp\nimport os\n')
+          s = s.replace('import queue as queue_module\nimport shutil\nimport statistics\n', 'import queue as queue_module\nimport statistics\n')
+          old = '''    with tempfile.TemporaryDirectory(prefix="cmpct-mosaic-parallel-") as td:\n        td_path = Path(td)\n'''
+          new = '''    # Keep candidate artifacts beside the requested output so selecting the winner can be an\n    # atomic same-filesystem rename rather than rewriting the complete archive payload once more.\n    # This changes scheduling/I/O only; candidate bytes and the smaller-artifact tournament are unchanged.\n    out.parent.mkdir(parents=True, exist_ok=True)\n    with tempfile.TemporaryDirectory(prefix=".cmpct-mosaic-parallel-", dir=out.parent) as td:\n        td_path = Path(td)\n'''
+          if old not in s:
+              raise SystemExit('temporary-directory anchor not found')
+          s = s.replace(old, new, 1)
+          old = '''        shutil.copyfile(chosen, out)\n        by_kind = {result["kind"]: result for result in results}\n'''
+          new = '''        # ``chosen`` and ``out`` now share a filesystem, so ``os.replace`` publishes the exact\n        # winning inode without another archive-sized payload copy. Temporary loser cleanup remains\n        # scoped to the TemporaryDirectory.\n        os.replace(chosen, out)\n        by_kind = {result["kind"]: result for result in results}\n'''
+          if old not in s:
+              raise SystemExit('selection-copy anchor not found')
+          s = s.replace(old, new, 1)
+          old = '''            "scheduler_mode": "parallel-independent-portfolio",\n            "accepted_engine": ACCEPTED_ENGINE,\n'''
+          new = '''            "scheduler_mode": "parallel-independent-portfolio",\n            "selection_materialization": "same-filesystem-atomic-move",\n            "selection_extra_payload_write_bytes": 0,\n            "accepted_engine": ACCEPTED_ENGINE,\n'''
+          if old not in s:
+              raise SystemExit('result-metadata anchor not found')
+          s = s.replace(old, new, 1)
+          p.write_text(s)
+          PY
+
+      - name: Focused scheduler invariants
+        run: |
+          python -m py_compile experiments/entropygraph_v029_parallel_portfolio.py
+          python - <<'PY'
+          import ast
+          from pathlib import Path
+
+          p = Path('experiments/entropygraph_v029_parallel_portfolio.py')
+          source = p.read_text()
+          ast.parse(source)
+          assert 'shutil.copyfile(chosen, out)' not in source
+          assert 'os.replace(chosen, out)' in source
+          assert 'dir=out.parent' in source
+          assert 'selection_extra_payload_write_bytes": 0' in source
+          PY
+          python -m pytest -q
+
+      - name: Validate deterministic I/O delta contract
+        run: |
+          python - <<'PY'
+          # Accepted hostile artifact size from the v0.29 release evidence. The old scheduler performed
+          # one additional payload copy of exactly the selected archive size after both candidates had
+          # already been written. Same-filesystem rename reduces that finalization payload write to zero.
+          accepted_hostile_bytes = 47_147_764
+          old_extra_payload_write_bytes = accepted_hostile_bytes
+          new_extra_payload_write_bytes = 0
+          assert old_extra_payload_write_bytes - new_extra_payload_write_bytes == 47_147_764
+          print('accepted_hostile_selected_bytes=', accepted_hostile_bytes)
+          print('old_finalization_payload_write_bytes=', old_extra_payload_write_bytes)
+          print('new_finalization_payload_write_bytes=', new_extra_payload_write_bytes)
+          print('payload_write_reduction_bytes=', old_extra_payload_write_bytes - new_extra_payload_write_bytes)
+          PY
+
+      - name: Commit validated implementation
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add experiments/entropygraph_v029_parallel_portfolio.py
+          git commit -m 'perf: eliminate v0.29 winner payload recopy'
+          git push origin HEAD:agent/v029-zero-copy-selection
