@@ -37,22 +37,25 @@ jobs:
           python -m pip install -e '.[audio,test]'
           python -m pip install pillow reportlab python-docx openpyxl python-pptx numpy
 
-      - name: Run local representation and canonical semantic tests
+      - name: Run local representation, canonical semantic, and recovery tests
         run: |
           pytest -q \
             tests/test_v030_geometry_safe.py \
             tests/test_v030_hierarchical_geometry.py \
             tests/test_v030_g5_entropy_lanes.py \
-            tests/test_v030_canonical_v25_geometry.py
+            tests/test_v030_canonical_v25_geometry.py \
+            tests/test_v030_canonical_v25_recovery.py
 
-      - name: Run canonical same-live-tree focused gate
+      - name: Run canonical same-live-tree focused gate through hardened recovery contract
         run: |
           mkdir -p benchmark-artifacts
           # Footnote: this is the first v0.30 gate whose baseline is the real canonical r24 Builder/Reader
           # semantics rather than a research-only tree grammar. r25 must preserve the logical index and beat
           # complete r24 archive bytes on all three exact focused trees without hiding behind portfolio fallback.
+          # The safe entrypoint replaces only r25 footer/reader plumbing; corpus identities and frozen thresholds
+          # remain those of the original focused gate.
           set -o pipefail
-          python benchmarks/canonical_v25_geometry_probe.py \
+          python benchmarks/canonical_v25_geometry_safe_entrypoint.py \
             --work-root benchmark-artifacts/r25-work \
             --output benchmark-artifacts/canonical-r25-geometry.json \
             2>&1 | tee benchmark-artifacts/canonical-r25-geometry.stdout.txt
