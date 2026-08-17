@@ -1,0 +1,78 @@
+name: CMPCT v0.30 production G5 incremental gate
+
+on:
+  push:
+    branches:
+      - agent/v030-production-candidate
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-v030-production-g5-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  g5-incremental:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      PYTHONPATH: ${{ github.workspace }}
+    steps:
+      - name: Check out production candidate
+        uses: actions/checkout@v6
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install deterministic dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y zstd gcc
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[test]'
+          python -m pip install pillow reportlab python-docx openpyxl python-pptx numpy
+
+      - name: Run inherited Geometry safety plus G5 unit/adversarial tests
+        run: |
+          pytest -q \
+            tests/test_v030_geometry_safe.py \
+            tests/test_v030_hierarchical_geometry.py \
+            tests/test_v030_g5_entropy_lanes.py
+
+      - name: Run exact public-tree incremental G5 oracle
+        run: |
+          mkdir -p benchmark-artifacts
+          set -o pipefail
+          python benchmarks/g5_v030_incremental_probe.py \
+            --work-root benchmark-artifacts/g5-work \
+            --output benchmark-artifacts/g5-v030-incremental.json \
+            2>&1 | tee benchmark-artifacts/g5-v030.stdout.txt
+
+      - name: Re-enforce frozen contract independently
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          data=json.loads(Path('benchmark-artifacts/g5-v030-incremental.json').read_text())
+          c=data['contract']; t=data['totals']; rows={row['path']:row for row in data['rows']}
+          assert data['schema']=='cmpct-v030-g5-incremental-v1'
+          assert rows['scales.npy']['saving_vs_g0_g4_bytes'] >= c['minimum_scales_saving_bytes']
+          assert rows['features.npy']['saving_vs_g0_g4_bytes'] >= c['minimum_features_saving_bytes']
+          assert t['target_saving_vs_g0_g4_bytes'] >= c['minimum_aggregate_saving_bytes']
+          assert all(node['saving_vs_g0_g4_bytes'] >= 0 for row in data['rows'] for node in row['nodes'])
+          assert t['mechanism_gate'] is True
+          print(json.dumps(t, indent=2, sort_keys=True))
+          PY
+
+      - name: Upload evidence even on failure
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: cmpct-v030-production-g5
+          path: benchmark-artifacts/
+          if-no-files-found: warn
