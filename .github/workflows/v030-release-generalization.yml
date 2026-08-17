@@ -37,7 +37,7 @@ jobs:
           python -m pip install -e '.[test]'
           python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
 
-      - name: Run integration, locality and frozen-contract tests
+      - name: Run integration, locality, reader and frozen-contract tests
         run: |
           python -m pytest -q \
             tests/test_v030_geometry.py \
@@ -46,6 +46,7 @@ jobs:
             tests/test_v030_geometry_overlay_prefallback.py \
             tests/test_v030_geometry_overlay_g04.py \
             tests/test_v030_prefixgraph.py \
+            tests/test_v030_release_reader.py \
             tests/test_v030_release_candidate.py \
             tests/test_v030_release_generalization_contract.py
 
@@ -54,6 +55,7 @@ jobs:
           python -m py_compile \
             experiments/entropygraph_v030_geometry_overlay_g04.py \
             experiments/entropygraph_v030_prefixgraph.py \
+            experiments/entropygraph_v030_release_reader.py \
             experiments/entropygraph_v030_release_candidate.py \
             benchmarks/v030_release_generalization.py
 
@@ -75,7 +77,8 @@ jobs:
           contract=data['contract']; totals=data['totals']; gate=data['gate']
           assert data['schema']=='cmpct-v030-release-generalization-v1'
           assert contract['expected_v029_aggregate_bytes']==137501815
-          assert contract['minimum_release_saving_bytes']==687753
+          assert contract['minimum_release_saving_bytes']==687783
+          assert contract['inherited_absolute_revision_floor_bytes']==687783
           assert contract['minimum_release_saving_pct']==0.5
           assert contract['minimum_improved_rows']==3
           assert contract['maximum_member_read_amplification']==8.0
@@ -84,7 +87,7 @@ jobs:
           assert totals['accepted_v029_bytes']==137501815
           assert totals['workloads_regressed']==0
           assert totals['workloads_improved']>=3
-          assert totals['saving_vs_v029_bytes']>=687753
+          assert totals['saving_vs_v029_bytes']>=687783
           assert totals['max_selected_member_read_amplification']<=8.0
           assert gate['passed'] is True
           print(json.dumps({'totals': totals, 'gate': gate}, indent=2))
@@ -107,4 +110,4 @@ jobs:
 
 # Footnote: this workflow may prove release-sized compression/generalization, but it cannot by itself release
 # v0.30. Timing/memory, direct promoted readers, recovery/fuzz, native/portability and external-competitor gates
-# remain independent mandatory evidence. The 0.5% floor is not lowered after seeing candidate results.
+# remain independent mandatory evidence. The inherited 687,783-byte floor is not lowered after seeing results.
