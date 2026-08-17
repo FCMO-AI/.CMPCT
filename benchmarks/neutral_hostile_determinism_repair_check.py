@@ -38,6 +38,10 @@ def _load(path: Path, name: str):
 
 N = _load(NEUTRAL_PATH, "cmpct_neutral_v1_for_repair")
 R = _load(REPAIR_PATH, "cmpct_neutral_v1_repair")
+# Footnote: producer hooks must be installed after the historical generator has imported its libraries
+# but before any workload builder runs. This forces ReportLab's exact Canvas call site into invariant
+# mode without editing the historical generator or mutating its stored v0.28 evidence.
+R.install_generation_hooks(N)
 V028 = _load(V028_PATH, "cmpct_v028_for_repaired_baseline")
 
 BUILDERS = {
