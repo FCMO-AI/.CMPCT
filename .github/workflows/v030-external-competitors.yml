@@ -33,14 +33,15 @@ jobs:
           python-version: '3.11'
           cache: pip
 
-      - name: Install CMPCT and external compressors
+      - name: Install CMPCT, frozen-corpus media tools and external compressors
         run: |
           sudo apt-get update
-          sudo apt-get install -y zstd p7zip-full zpaq gcc
+          sudo apt-get install -y zstd p7zip-full zpaq gcc ffmpeg
           python -m pip install --upgrade pip
           python -m pip install -e '.[test]'
           python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
           zstd --version
+          ffmpeg -version | head -n 1
           (7z i | head -n 4) || true
           zpaq 2>&1 | head -n 4 || true
 
@@ -93,5 +94,7 @@ jobs:
           if-no-files-found: warn
           retention-days: 90
 
-# Footnote: solid tar+Zstd and ZPAQ are size competitors here, not random-access peers. The workflow requires
-# those tools to be installed so the historical hostile frontier cannot disappear behind an 'optional' result.
+# Footnote: `ffmpeg` is required to construct the frozen neutral-hostile media workload before the external matrix
+# starts. It is not a CMPCT or competitor compressor and changes no benchmark threshold. Solid tar+Zstd and ZPAQ
+# remain size competitors rather than random-access peers; requiring all declared tools prevents the historical
+# hostile frontier from disappearing behind an optional/missing dependency result.
