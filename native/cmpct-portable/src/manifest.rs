@@ -1,10 +1,14 @@
-use crate::format::{as_array, as_map, field, parse_msgpack, safe_relpath, text, uint, MAX_META_BYTES, MAX_PATH_BYTES};
+use crate::format::{
+    as_array, as_map, field, parse_msgpack, safe_relpath, text, uint, MAX_META_BYTES,
+    MAX_PATH_BYTES,
+};
 use crate::{PortableEntry, PortableError};
 use rmpv::Value;
 use std::collections::{HashMap, HashSet};
 
 pub(crate) const INTERNAL_ROOT: &str = ".__cmpct_r25_internal__";
-pub(crate) const FILESYSTEM_MANIFEST: &str = ".__cmpct_r25_internal__/filesystem-v1.msgpack";
+pub(crate) const FILESYSTEM_MANIFEST: &str =
+    ".__cmpct_r25_internal__/filesystem-v1.msgpack";
 const PROFILE: &str = "cmpct-r25-filesystem-manifest-v1";
 const VERSION: u64 = 1;
 const MAX_ENTRIES: usize = 65_536;
@@ -41,21 +45,43 @@ pub(crate) struct FsManifest {
 }
 
 impl FsManifest {
-    pub(crate) fn parse(raw: &[u8], content_entries: &[PortableEntry]) -> Result<Self, PortableError> {
+    pub(crate) fn parse(
+        raw: &[u8],
+        content_entries: &[PortableEntry],
+    ) -> Result<Self, PortableError> {
         if raw.len() as u64 > MAX_META_BYTES {
-            return Err(PortableError::Limit("r25 filesystem manifest exceeds 8 MiB policy".into()));
+            return Err(PortableError::Limit(
+                "r25 filesystem manifest exceeds 8 MiB policy".into(),
+            ));
         }
         let root = parse_msgpack(raw)?;
         let map = as_map(&root, "r25 filesystem manifest")?;
-        if uint(field(map, "v")?, "r25 filesystem manifest version", VERSION)? != VERSION
-            || text(field(map, "profile")?, "r25 filesystem manifest profile")? != PROFILE
-            || text(field(map, "internal_path")?, "r25 filesystem manifest internal path")? != FILESYSTEM_MANIFEST
+        if uint(
+            field(map, "v")?,
+            "r25 filesystem manifest version",
+            VERSION,
+        )? != VERSION
+            || text(
+                field(map, "profile")?,
+                "r25 filesystem manifest profile",
+            )? != PROFILE
+            || text(
+                field(map, "internal_path")?,
+                "r25 filesystem manifest internal path",
+            )? != FILESYSTEM_MANIFEST
         {
-            return Err(PortableError::Format("unsupported r25 filesystem manifest identity".into()));
+            return Err(PortableError::Format(
+                "unsupported r25 filesystem manifest identity".into(),
+            ));
         }
-        let rows = as_array(field(map, "entries")?, "r25 filesystem manifest entries")?;
+        let rows = as_array(
+            field(map, "entries")?,
+            "r25 filesystem manifest entries",
+        )?;
         if rows.len() > MAX_ENTRIES {
-            return Err(PortableError::Limit("r25 filesystem manifest entry count exceeds policy".into()));
+            return Err(PortableError::Limit(
+                "r25 filesystem manifest entry count exceeds policy".into(),
+            ));
         }
 
         let mut entries = Vec::with_capacity(rows.len());
@@ -67,7 +93,9 @@ impl FsManifest {
         for row in rows {
             let row = as_array(row, "r25 filesystem manifest entry")?;
             if row.len() != 8 {
-                return Err(PortableError::Format("malformed r25 filesystem manifest entry".into()));
+                return Err(PortableError::Format(
+                    "malformed r25 filesystem manifest entry".into(),
+                ));
             }
             let path = text(&row[0], "r25 filesystem path")?.to_owned();
             safe_relpath(&path)?;
@@ -75,7 +103,9 @@ impl FsManifest {
                 return Err(PortableError::Path(path));
             }
             if !seen.insert(path.clone()) {
-                return Err(PortableError::Format("duplicate r25 filesystem path".into()));
+                return Err(PortableError::Format(
+                    "duplicate r25 filesystem path".into(),
+                ));
             }
             let kind = text(&row[1], "r25 filesystem entry kind")?;
             let mode = uint(&row[2], "r25 filesystem mode", 0o7777)? as u32;
@@ -87,27 +117,35 @@ impl FsManifest {
                 "f" => {
                     let identity = as_array(&row[7], "r25 regular-file identity")?;
                     if identity.len() != 2 {
-                        return Err(PortableError::Format("r25 regular-file identity shape".into()));
+                        return Err(PortableError::Format(
+                            "r25 regular-file identity shape".into(),
+                        ));
                     }
                     let size = uint(&identity[0], "r25 regular-file size", u64::MAX)?;
-                    let digest = identity[1]
-                        .as_slice()
-                        .ok_or_else(|| PortableError::Format("r25 regular-file digest must be binary".into()))?;
-                    let sha256: [u8; 32] = digest
-                        .try_into()
-                        .map_err(|_| PortableError::Format("r25 regular-file digest must be SHA-256".into()))?;
+                    let Value::Binary(digest) = &identity[1] else {
+                        return Err(PortableError::Format(
+                            "r25 regular-file digest must be binary".into(),
+                        ));
+                    };
+                    let sha256: [u8; 32] = digest.as_slice().try_into().map_err(|_| {
+                        PortableError::Format(
+                            "r25 regular-file digest must be SHA-256".into(),
+                        )
+                    })?;
                     expected_content.insert(path.clone());
                     FsKind::File { size, sha256 }
                 }
                 "d" => {
                     if !row[7].is_nil() {
-                        return Err(PortableError::Format("r25 directory carries unexpected payload".into()));
+                        return Err(PortableError::Format(
+                            "r25 directory carries unexpected payload".into(),
+                        ));
                     }
                     FsKind::Directory
                 }
                 "l" => {
                     let target = text(&row[7], "r25 symlink target")?.to_owned();
-                    if target.contains('\0') || target.as_bytes().len() > MAX_PATH_BYTES {
+                    if target.contains('\0') || target.len() > MAX_PATH_BYTES {
                         return Err(PortableError::Path(format!("{path} -> {target}")));
                     }
                     FsKind::Symlink { target }
@@ -123,7 +161,11 @@ impl FsManifest {
                     }
                     FsKind::Hardlink { target }
                 }
-                _ => return Err(PortableError::Format("unknown r25 filesystem entry kind".into())),
+                _ => {
+                    return Err(PortableError::Format(
+                        "unknown r25 filesystem entry kind".into(),
+                    ));
+                }
             };
             let index = entries.len();
             by_path.insert(path.clone(), index);
@@ -140,7 +182,10 @@ impl FsManifest {
             });
         }
 
-        let actual_content: HashSet<String> = content_entries.iter().map(|entry| entry.path.clone()).collect();
+        let actual_content: HashSet<String> = content_entries
+            .iter()
+            .map(|entry| entry.path.clone())
+            .collect();
         if actual_content != expected_content {
             return Err(PortableError::Integrity(
                 "r25 content profile and filesystem manifest disagree on logical members".into(),
@@ -159,8 +204,10 @@ impl FsManifest {
         for entry in &manifest.entries {
             if let FsKind::Hardlink { target } = &entry.kind {
                 let owner = manifest.resolve_regular(target)?;
-                if !matches!(owner.kind, FsKind::File { .. }) {
-                    return Err(PortableError::Format("r25 hardlink owner is not a regular file".into()));
+                if !matches!(&owner.kind, FsKind::File { .. }) {
+                    return Err(PortableError::Format(
+                        "r25 hardlink owner is not a regular file".into(),
+                    ));
                 }
             }
         }
@@ -184,13 +231,15 @@ impl FsManifest {
                 let (kind, size) = match &entry.kind {
                     FsKind::File { size, .. } => (0, *size),
                     FsKind::Directory => (1, 0),
-                    FsKind::Symlink { target } => (2, target.as_bytes().len() as u64),
+                    FsKind::Symlink { target } => (2, target.len() as u64),
                     FsKind::Hardlink { target } => {
                         let owner = self.resolve_regular(target)?;
-                        let FsKind::File { size, .. } = owner.kind else {
-                            return Err(PortableError::Format("r25 hardlink owner is not a regular file".into()));
+                        let FsKind::File { size, .. } = &owner.kind else {
+                            return Err(PortableError::Format(
+                                "r25 hardlink owner is not a regular file".into(),
+                            ));
                         };
-                        (3, size)
+                        (3, *size)
                     }
                 };
                 Ok(PortableEntry {
@@ -204,21 +253,29 @@ impl FsManifest {
             .collect()
     }
 
-    pub(crate) fn resolve_regular<'a>(&'a self, path: &str) -> Result<&'a FsEntry, PortableError> {
+    pub(crate) fn resolve_regular<'a>(
+        &'a self,
+        path: &str,
+    ) -> Result<&'a FsEntry, PortableError> {
         let mut current = path;
         for _ in 0..=self.entries.len() {
-            let index = *self
-                .by_path
-                .get(current)
-                .ok_or_else(|| PortableError::Format(format!("r25 hardlink target not found: {current}")))?;
+            let index = *self.by_path.get(current).ok_or_else(|| {
+                PortableError::Format(format!("r25 hardlink target not found: {current}"))
+            })?;
             let entry = &self.entries[index];
             match &entry.kind {
                 FsKind::File { .. } => return Ok(entry),
                 FsKind::Hardlink { target } => current = target,
-                _ => return Err(PortableError::Format("r25 hardlink target is not a regular file".into())),
+                _ => {
+                    return Err(PortableError::Format(
+                        "r25 hardlink target is not a regular file".into(),
+                    ));
+                }
             }
         }
-        Err(PortableError::Format("r25 hardlink chain exceeded manifest bound".into()))
+        Err(PortableError::Format(
+            "r25 hardlink chain exceeded manifest bound".into(),
+        ))
     }
 }
 
@@ -234,7 +291,9 @@ fn nonnegative_i64(value: &Value, label: &str) -> Result<i64, PortableError> {
 fn parse_xattrs(value: &Value) -> Result<Vec<(String, Vec<u8>)>, PortableError> {
     let rows = as_array(value, "r25 filesystem xattrs")?;
     if rows.len() > MAX_XATTRS_PER_ENTRY {
-        return Err(PortableError::Limit("r25 xattr count exceeds policy".into()));
+        return Err(PortableError::Limit(
+            "r25 xattr count exceeds policy".into(),
+        ));
     }
     let mut out = Vec::with_capacity(rows.len());
     let mut total = 0usize;
@@ -244,18 +303,21 @@ fn parse_xattrs(value: &Value) -> Result<Vec<(String, Vec<u8>)>, PortableError> 
             return Err(PortableError::Format("malformed r25 xattr item".into()));
         }
         let name = text(&row[0], "r25 xattr name")?.to_owned();
-        let data = row[1]
-            .as_slice()
-            .ok_or_else(|| PortableError::Format("r25 xattr value must be binary".into()))?
-            .to_vec();
+        let Value::Binary(data) = &row[1] else {
+            return Err(PortableError::Format(
+                "r25 xattr value must be binary".into(),
+            ));
+        };
         total = total
             .checked_add(name.len())
             .and_then(|value| value.checked_add(data.len()))
             .ok_or_else(|| PortableError::Limit("r25 xattr byte counter overflow".into()))?;
         if total > MAX_META_BYTES as usize {
-            return Err(PortableError::Limit("r25 xattr bytes exceed manifest policy".into()));
+            return Err(PortableError::Limit(
+                "r25 xattr bytes exceed manifest policy".into(),
+            ));
         }
-        out.push((name, data));
+        out.push((name, data.clone()));
     }
     Ok(out)
 }
