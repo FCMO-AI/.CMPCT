@@ -1,5 +1,6 @@
 name: CMPCT v0.30 Agent-00 native decoder repair
 # ci-lane: diagnostic
+# Retriggered by the hourly agent after confirming the authoritative branch still contains the pre-repair decoder branch types.
 
 on:
   pull_request:
