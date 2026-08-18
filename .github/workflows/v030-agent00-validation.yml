@@ -2,6 +2,7 @@ name: CMPCT v0.30 Agent-00 candidate validator
 # ci-lane: deep
 
 on:
+  workflow_dispatch:
   push:
     branches: [main]
     paths: ['.github/workflows/v030-agent00-validation.yml']
@@ -21,13 +22,17 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 90
     outputs:
-      candidate_sha: ${{ steps.meta.outputs.sha }}
+      candidate_sha: ${{ steps.meta.outputs.candidate_sha }}
+      authority_main_sha: ${{ steps.meta.outputs.authority_main_sha }}
     steps:
       - uses: actions/checkout@v6
         with:
           ref: agent/v030-authoritative-integration
       - id: meta
-        run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+        shell: bash
+        run: |
+          echo "candidate_sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          echo "authority_main_sha=${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
       - uses: actions/setup-python@v6
         with:
           python-version: '3.11'
@@ -68,14 +73,25 @@ jobs:
         env:
           RESULT: ${{ needs.validate.result }}
           CANDIDATE_SHA: ${{ needs.validate.outputs.candidate_sha }}
+          AUTHORITY_MAIN_SHA: ${{ needs.validate.outputs.authority_main_sha }}
+          RUN_ID: ${{ github.run_id }}
+          RUN_ATTEMPT: ${{ github.run_attempt }}
         run: |
           mkdir -p docs/v030-validation
           python - <<'PY'
           import json, os
           from pathlib import Path
-          result=os.environ.get('RESULT','unknown')
-          data={'schema':'cmpct-v030-agent00-validation-v1','candidate_sha':os.environ.get('CANDIDATE_SHA',''),'result':result,'passed':result=='success'}
-          Path('docs/v030-validation/agent00-main-receipt.json').write_text(json.dumps(data,indent=2)+'\n')
+          result = os.environ.get('RESULT', 'unknown')
+          data = {
+              'schema': 'cmpct-v030-agent00-validation-v2',
+              'candidate_sha': os.environ.get('CANDIDATE_SHA', ''),
+              'authority_main_sha': os.environ.get('AUTHORITY_MAIN_SHA', ''),
+              'run_id': os.environ.get('RUN_ID', ''),
+              'run_attempt': os.environ.get('RUN_ATTEMPT', ''),
+              'result': result,
+              'passed': result == 'success',
+          }
+          Path('docs/v030-validation/agent00-main-receipt.json').write_text(json.dumps(data, indent=2) + '\n')
           PY
           git config user.name github-actions[bot]
           git config user.email 41898282+github-actions[bot]@users.noreply.github.com
@@ -84,5 +100,5 @@ jobs:
           git push origin HEAD:main
 
 # Footnote: temporary pre-freeze diagnostic infrastructure. It validates the private integration ref from the
-# default-branch Actions trust context and persists only a pass/fail receipt. It is removed before the v0.30
-# release fingerprint; final release evidence still runs on the exact main-bound candidate.
+# default-branch Actions trust context and persists only a pass/fail receipt with exact tested SHAs/run identity.
+# It is removed before the v0.30 release fingerprint; final release evidence still runs on the exact main-bound candidate.
