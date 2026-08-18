@@ -33,7 +33,7 @@ jobs:
       - name: Install exact corpus and test dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y zstd gcc
+          sudo apt-get install -y zstd gcc ffmpeg
           python -m pip install --upgrade pip
           python -m pip install -e '.[test]'
           python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
@@ -117,6 +117,8 @@ jobs:
           if-no-files-found: warn
           retention-days: 90
 
-# Footnote: this workflow may prove release-sized compression/generalization, but it cannot by itself release
-# v0.30. Timing/memory, direct promoted readers, recovery/fuzz, native/portability and external-competitor gates
-# remain independent mandatory evidence. The inherited 687,783-byte floor is not lowered after seeing results.
+# Footnote: `ffmpeg` is part of the frozen neutral-hostile corpus generator. Installing it changes no CMPCT
+# algorithm or threshold; it makes CI capable of constructing the media workload the benchmark already requires.
+# This workflow may prove release-sized compression/generalization, but it cannot by itself release v0.30.
+# Timing/memory, direct promoted readers, recovery/fuzz, native/portability and external-competitor gates remain
+# independent mandatory evidence. The inherited 687,783-byte floor is not lowered after seeing results.
