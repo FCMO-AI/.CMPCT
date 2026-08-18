@@ -44,26 +44,8 @@ jobs:
       - name: Rust release build
         working-directory: native/cmpct-portable
         run: cargo build --release
-      - name: Builder-independent Python/Rust/ABI conformance
+      - name: Research-grammar Python/Rust/ABI conformance
         run: python tests/native_v030_portable.py
-      - name: Revision-24 delegation smoke
-        run: |
-          python - <<'PY'
-          from pathlib import Path
-          import tempfile
-          from cmpct.builder import Builder
-
-          with tempfile.TemporaryDirectory(prefix='cmpct-v030-r24-') as td:
-              td=Path(td); source=td/'source'; source.mkdir()
-              (source/'hello.txt').write_bytes((b'r24 delegation remains native\n') * 64)
-              out=td/'r24.cmpct'
-              Builder(source).build(out)
-              print(out)
-              Path('/tmp/cmpct-v030-r24-path').write_text(str(out))
-          PY
-        # Footnote: a separate shell block would lose TemporaryDirectory contents. The durable smoke below
-        # therefore creates its own ordinary fixture and checks only the dispatcher boundary; the existing
-        # native-core workflow remains the exhaustive revision-24 conformance suite.
       - name: Revision-24 dispatcher gate
         run: |
           rm -rf /tmp/cmpct-v030-r24-src /tmp/cmpct-v030-r24.cmpct
@@ -75,5 +57,6 @@ jobs:
           cmp /tmp/cmpct-v030-r24-src/hello.txt /tmp/cmpct-v030-r24-read
 
 # Footnote: this workflow intentionally does not weaken or replace native-core.yml. The mature r24 suite
-# keeps owning revision-24 regression coverage; this job proves the new dispatcher plus both candidate r25
-# grammars, recovery, locality, ABI, transactional extraction and ZIP compatibility as an additional gate.
+# keeps owning revision-24 regression coverage. Until T03 reaches REVIEW the CMPNX* vectors here are only
+# research-grammar implementation oracles; canonical r25 profile identities and final receipts must be
+# regenerated against T03's fixed CMP25* framing before T01 handoff can claim release conformance.
