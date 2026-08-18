@@ -1,0 +1,68 @@
+name: CMPCT v0.30 Agent-00 native decoder repair
+# ci-lane: diagnostic
+
+on:
+  pull_request:
+    branches: [main]
+    paths: ['.github/workflows/v030-agent00-native-fix.yml']
+
+permissions:
+  contents: write
+
+jobs:
+  repair:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: agent/v030-authoritative-integration
+      - name: Repair zstd decoder reader type boundary
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path('native/cmpct-portable/src/format.rs')
+          text = path.read_text(encoding='utf-8')
+          old_import = 'use std::io::{Cursor, Read};'
+          new_import = 'use std::io::{BufReader, Cursor, Read};'
+          old = '''    let cursor = Cursor::new(compressed);
+    let decoder = match dictionary {
+        Some(dict) => zstd::stream::read::Decoder::with_dictionary(cursor, dict),
+        None => zstd::stream::read::Decoder::new(cursor),
+    }
+'''
+          new = '''    // Footnote: `Decoder::new(Read)` inserts its own `BufReader`, while `with_dictionary` accepts an
+    // already-buffered reader. Feeding both branches the same explicit `BufReader<Cursor<_>>` and using
+    // `with_buffer` for the dictionary-free branch keeps one concrete decoder type without dynamic dispatch.
+    let reader = BufReader::new(Cursor::new(compressed));
+    let decoder = match dictionary {
+        Some(dict) => zstd::stream::read::Decoder::with_dictionary(reader, dict),
+        None => zstd::stream::read::Decoder::with_buffer(reader),
+    }
+'''
+          if old_import not in text:
+              raise SystemExit('expected std::io import not found; refusing broad rewrite')
+          if old not in text:
+              raise SystemExit('expected bounded_zstd_decode block not found; refusing broad rewrite')
+          text = text.replace(old_import, new_import, 1).replace(old, new, 1)
+          path.write_text(text, encoding='utf-8')
+          PY
+          cargo fmt --manifest-path native/cmpct-portable/Cargo.toml --all
+      - name: Prove repaired native crate compiles and tests
+        working-directory: native/cmpct-portable
+        run: |
+          cargo clippy --all-targets --message-format=short -- -D warnings
+          cargo test --all-targets
+      - name: Persist exact native repair
+        shell: bash
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add native/cmpct-portable/src/format.rs
+          git commit -m 'fix(v0.30): unify bounded zstd decoder reader type'
+          git push origin HEAD:agent/v030-authoritative-integration
+
+# Footnote: this one-shot workflow is execution infrastructure for the sole active agent because the chat runtime
+# cannot clone/push Git directly. It performs an exact two-snippet replacement, runs Rust lint/tests before commit,
+# and carries no release authority. The trigger PR is closed and this workflow is never merged to main.
