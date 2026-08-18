@@ -145,7 +145,7 @@ impl FsManifest {
                 }
                 "l" => {
                     let target = text(&row[7], "r25 symlink target")?.to_owned();
-                    if target.contains('\0') || target.len() > MAX_PATH_BYTES {
+                    if !safe_symlink_target(&target) {
                         return Err(PortableError::Path(format!("{path} -> {target}")));
                     }
                     FsKind::Symlink { target }
@@ -288,6 +288,26 @@ fn signed_i64(value: &Value, label: &str) -> Result<i64, PortableError> {
         .ok_or_else(|| PortableError::Format(format!("{label} declaration")))
 }
 
+fn safe_symlink_target(target: &str) -> bool {
+    if target.is_empty() || target.contains('\0') || target.len() > MAX_PATH_BYTES {
+        return false;
+    }
+    // Footnote: validate one portable lexical grammar rather than whichever host happens to open the archive.
+    // Windows treats backslash as a separator and recognizes drive/UNC/rooted paths; POSIX does not. Normalizing
+    // separators and rejecting those Windows roots prevents an archive accepted on Linux from escaping on Windows.
+    let normalized = target.replace('\\', "/");
+    let bytes = normalized.as_bytes();
+    if normalized.starts_with('/')
+        || normalized.starts_with("//")
+        || (bytes.len() >= 2 && bytes[1] == b':' && bytes[0].is_ascii_alphabetic())
+    {
+        return false;
+    }
+    normalized
+        .split('/')
+        .all(|part| !part.is_empty() && part != "..")
+}
+
 fn parse_xattrs(value: &Value) -> Result<Vec<(String, Vec<u8>)>, PortableError> {
     let rows = as_array(value, "r25 filesystem xattrs")?;
     if rows.len() > MAX_XATTRS_PER_ENTRY {
@@ -331,5 +351,13 @@ mod tests {
         assert_eq!(signed_i64(&Value::from(-1_i64), "mtime").unwrap(), -1);
         assert_eq!(signed_i64(&Value::from(i64::MIN), "mtime").unwrap(), i64::MIN);
         assert_eq!(signed_i64(&Value::from(i64::MAX), "mtime").unwrap(), i64::MAX);
+    }
+
+    #[test]
+    fn symlink_policy_is_portable_across_posix_and_windows_grammars() {
+        for target in ["../x", "..\\x", "/x", "C:\\x", "C:/x", "\\\\server\\share", "\\rooted"] {
+            assert!(!safe_symlink_target(target), "accepted hostile target {target:?}");
+        }
+        assert!(safe_symlink_target("folder/file.txt"));
     }
 }
