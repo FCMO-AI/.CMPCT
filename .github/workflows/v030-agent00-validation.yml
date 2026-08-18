@@ -28,6 +28,22 @@ jobs:
       - uses: actions/checkout@v6
         with:
           ref: agent/v030-authoritative-integration
+      - name: Normalize candidate native formatting
+        working-directory: native/cmpct-portable
+        run: cargo fmt --all
+      - name: Persist formatter-only drift before validation
+        shell: bash
+        run: |
+          if git diff --quiet -- native/cmpct-portable; then
+            exit 0
+          fi
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add native/cmpct-portable
+          git commit -m 'style(v0.30): canonicalize portable Rust formatting'
+          git push origin HEAD:agent/v030-authoritative-integration
+          echo '::error::Candidate changed under rustfmt; rerun validation on the new exact head.'
+          exit 1
       - id: meta
         shell: bash
         run: |
@@ -99,6 +115,7 @@ jobs:
           git commit -m 'ci(v0.30): record Agent-00 candidate validation' || true
           git push origin HEAD:main
 
-# Footnote: temporary pre-freeze diagnostic infrastructure. It validates the private integration ref from the
-# default-branch Actions trust context and persists only a pass/fail receipt with exact tested SHAs/run identity.
-# It is removed before the v0.30 release fingerprint; final release evidence still runs on the exact main-bound candidate.
+# Footnote: temporary pre-freeze diagnostic infrastructure. The normalization step never hides formatting drift:
+# when rustfmt changes the candidate, it commits that exact mechanical change and deliberately fails so validation
+# must restart against the new SHA. This workflow is removed before the v0.30 release fingerprint; final release
+# evidence still runs on the exact main-bound candidate.
