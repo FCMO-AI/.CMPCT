@@ -1,21 +1,21 @@
 from __future__ import annotations
 
-"""Canonical-byte binding for the exact-tree v0.30 external competitor frontier."""
+"""Release-product binding for the exact-tree v0.30 external competitor frontier."""
 
 import argparse
 import json
 from pathlib import Path
 
 from benchmarks import v030_external_competitors as B
-from experiments import entropygraph_v030_canonical as CANON
+from experiments import entropygraph_v030_release_product as CANON
 
 B.CMPCT = CANON
 
 
 def run(work_root: Path) -> dict:
     result = dict(B.run(work_root))
-    result["engine"] = "experiments/entropygraph_v030_canonical.py"
-    result["release_facade"] = "cmpct-v030-r25-v1"
+    result["engine"] = "experiments/entropygraph_v030_release_product.py"
+    result["release_facade"] = "cmpct-v030-release-product-v1"
     return result
 
 
