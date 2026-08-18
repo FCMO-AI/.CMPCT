@@ -1,8 +1,10 @@
 # .CMPCT
 
-> Project v0.29.0 · surface 0.29.i · canonical format r24.
+> Project v0.29.0 · surface 0.29.k · canonical format r24.
 
 CMPCT is an experimental general-purpose lossless archive/container. Performance is a core-release contract: benchmark wins and losses remain attached to committed evidence, while presentation-only changes use the alphabetic surface track.
+
+Public stewardship: **CMPCT by FCMO AI** · **From the FCMO group**. This is provenance, not benchmark authority or a licensing statement.
 
 ## Agent orientation
 - README.md: https://github.com/FCMO-AI/.CMPCT/blob/main/README.md
@@ -10,18 +12,20 @@ CMPCT is an experimental general-purpose lossless archive/container. Performance
 - docs/CURRENT_STATE.md: https://github.com/FCMO-AI/.CMPCT/blob/main/docs/CURRENT_STATE.md
 - docs/FORMAT.md: https://github.com/FCMO-AI/.CMPCT/blob/main/docs/FORMAT.md
 - docs/BENCHMARKS.md: https://github.com/FCMO-AI/.CMPCT/blob/main/docs/BENCHMARKS.md
+- docs/OPEN_SOURCE_STEWARDSHIP.md: https://github.com/FCMO-AI/.CMPCT/blob/main/docs/OPEN_SOURCE_STEWARDSHIP.md
 - benchmarks/history: https://github.com/FCMO-AI/.CMPCT/tree/main/benchmarks/history
 
 ## Machine-readable site state
 - agent.json
 - project-data.json
 - deployment.json
+- project-attribution.json
 
 ## Publication authority
 Canonical source and evidence live on `main`. `gh-pages` is generated static deployment output only and must not become a second source of truth.
 
 ## Visual quality authority
-The restored pre-redesign hero/score/graph/light-band composition is the minimum presentation floor. Surface 0.29.h established the ratio-aware Chromium matrix across 16 representative width/height/aspect-ratio classes. Surface 0.29.i preserves that structural floor and adds the Ember Eclipse hero treatment: charcoal is the environmental default and brand orange is localized around the evidence/compression object as a sourced signal rather than wallpaper.
+The restored pre-redesign hero/score/graph/light-band composition is the minimum presentation floor. Surface 0.29.h established the ratio-aware Chromium matrix across 16 representative width/height/aspect-ratio classes. Surface 0.29.i preserves that structural floor and adds the Ember Eclipse hero treatment: charcoal is the environmental default and brand orange is localized around the evidence/compression object as a sourced signal rather than wallpaper. Surface 0.29.k adds only the quiet maker-signature/provenance layer and preserves responsive.css as final layout authority.
 
 ## Qualification
 The site distinguishes canonical revision-24 behavior from the research-frontier Mosaic/CMPNX11 results. Do not promote research-only grammar as canonical interoperability support. Raw archive-size comparisons do not imply feature parity.
