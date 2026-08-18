@@ -1,29 +1,35 @@
 # v0.30 current architecture decision
 
-## Preferred release architecture
+## Release architecture
 
-A v0.30 candidate should evolve Mosaic rather than discard it:
+v0.30 preserves Mosaic/Geometry research leverage without pretending every successful mechanism must share one on-disk profile.
 
-1. build accepted v0.29 as immutable non-regression floor;
-2. build the attempt-5 Placement/Residual graph before its outer fallback;
-3. audition the complete G0-G4 Geometry ladder on eligible authenticated physical records under the inherited locality/decode budgets;
-4. add PrefixGraph only as a depth-1 cross-file reference edge where complete-artifact pricing proves it beneficial;
-5. serialize one authenticated v0.30 graph grammar;
-6. strong-verify the exact logical tree;
-7. choose v0.30 only when the complete artifact is strictly smaller than accepted v0.29;
-8. publish the already-written winner with same-filesystem atomic replacement.
+1. Capture the bounded authenticated r25 filesystem manifest.
+2. Build genuine canonical r24 as the immutable complete-product compatibility floor.
+3. Build the r25 complete-artifact tournament, reusing the shared attempt-5/G0-G4 substrate and bounded PrefixGraph admission.
+4. Permit only canonical `CMP25G4\0` or `CMP25PG\0` r25 profiles; research `CMPNX*` bytes cannot publish.
+5. Strongly verify the exact user-visible tree and independent content-graph/filesystem-manifest identities.
+6. Publish r25 only when its exact complete bytes are strictly smaller than genuine r24 for the same original filesystem tree; exact ties retain r24.
+7. Publish the already-written winner with same-filesystem atomic replacement.
 
-## Why Overlay V2 is not sufficient by itself
+Historical 15-workload causality remains a separate immutable evidence substrate. It proves mechanism gains against accepted v0.29; it does not replace the genuine r24 product floor.
 
-The current pre-fallback Overlay V2 fixes the original integration-order bug but its physical audition is still limited to lanes and flat delimiter geometry. CMPNX14's newer G3 Hierarchical Geometry and G4 Prefix Planes are not present in that overlay path. A green V2 therefore establishes that *flat Geometry can rehabilitate the pre-fallback graph*; it does not establish full G0-G4 composition.
+## Geometry
+
+The promoted Geometry path reuses the full G0-G4 transform ladder and inherited locality/decode budgets. Flat-only Overlay V2 remains useful historical evidence but is not a substitute for the selected full G0-G4 contract.
+
+## PrefixGraph
+
+PrefixGraph is a bounded depth-1 alternative r25 profile for v0.30. It is admitted only under complete-artifact pricing and <=8x selected decoded-context amplification. Independent PrefixGraph savings are never added arithmetically to Geometry savings.
+
+A later format revision may internalize PrefixGraph as a Mosaic edge if a one-artifact ablation proves the extra grammar interaction beats the current complete-profile tournament under the same reader/native/locality constraints.
+
+## Canonical state isolation
+
+Canonical r25 operations reuse the existing semantic-owner source files through isolated module namespaces. Research modules keep their historical identities; canonical calls do not rewrite process-global research profile state. This removes import-order/concurrency from released profile semantics without introducing a second handwritten parser.
 
 ## Promotion rule
 
-The authoritative branch will not substitute a flat-only green result for the stronger G0-G4 release requirement. Full composition must either:
+No green research mechanism can substitute for the full product matrix. Promotion requires exact product parity, historical causality, runtime/RSS/selective-read, recovery/fuzz, native/shared-reader, ZIP/export, Android/platform, external competitor, version/public-surface, site-source and strict fingerprint-bound release-lock evidence.
 
-- reuse the reactor's hierarchical transform/inverse/resource contract at Mosaic's physical boundary; or
-- demonstrate through complete broad-corpus evidence that a standalone GIR tournament is materially superior enough to justify the separate reader/native grammar.
-
-The first option is preferred because it retains Mosaic's graph relationships and lets later PrefixGraph composition operate in the same ownership model.
-
-Footnote: this decision intentionally prevents a common multi-agent failure mode: promoting the first branch that gets a green badge even though a stronger sibling mechanism exists but has not been composed yet.
+Footnote: the architecture optimizes for one coherent product contract, not one physical representation. Multiple bounded r25 profiles are acceptable because dispatch is explicit and shared; duplicate semantic owners are not.
