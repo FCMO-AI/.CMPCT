@@ -388,16 +388,24 @@ impl<W: Write> Write for IdentityWriter<'_, W> {
 }
 
 fn ensure_safe_symlink(target: &str, rel: &str) -> Result<(), PortableError> {
-    let path = Path::new(target);
-    if path.is_absolute()
-        || path
-            .components()
-            .any(|component| matches!(component, std::path::Component::ParentDir))
+    let normalized = target.replace('\\', "/");
+    let bytes = normalized.as_bytes();
+    let has_windows_drive =
+        bytes.len() >= 2 && bytes[1] == b':' && bytes[0].is_ascii_alphabetic();
+    let has_parent = normalized.split('/').any(|part| part == "..");
+    if target.is_empty()
+        || target.contains('\0')
+        || normalized.starts_with('/')
+        || has_windows_drive
+        || has_parent
     {
         return Err(PortableError::Path(format!(
             "unsafe r25 symlink target in {rel}: {target}"
         )));
     }
+    // Footnote: the manifest already enforces this portable lexical rule at authenticated preflight. Repeat the
+    // same rule immediately before materialization so a future parser/extractor refactor cannot make a target
+    // safe on Linux but traversal-capable when the same archive is later extracted on Windows.
     Ok(())
 }
 
@@ -422,6 +430,15 @@ fn create_symlink(_target: &str, _destination: &Path) -> Result<(), PortableErro
     ))
 }
 
+fn system_time_from_unix_nanos(nanos: i64) -> Option<std::time::SystemTime> {
+    let duration = std::time::Duration::from_nanos(nanos.unsigned_abs());
+    if nanos >= 0 {
+        std::time::UNIX_EPOCH.checked_add(duration)
+    } else {
+        std::time::UNIX_EPOCH.checked_sub(duration)
+    }
+}
+
 fn apply_metadata_best_effort(path: &Path, metadata: &FsMetadata, is_symlink: bool) {
     if !is_symlink {
         #[cfg(unix)]
@@ -430,14 +447,67 @@ fn apply_metadata_best_effort(path: &Path, metadata: &FsMetadata, is_symlink: bo
             let _ = fs::set_permissions(path, fs::Permissions::from_mode(metadata.mode));
         }
         if let Ok(file) = File::open(path)
-            && let Some(time) = std::time::UNIX_EPOCH
-                .checked_add(std::time::Duration::from_nanos(metadata.mtime_ns as u64))
+            && let Some(time) = system_time_from_unix_nanos(metadata.mtime_ns)
         {
             let _ = file.set_times(std::fs::FileTimes::new().set_modified(time));
         }
+        // Footnote: ``mtime_ns`` is a signed archive field. Converting a negative value to ``u64`` first wraps
+        // it into the distant future and silently defeats pre-1970 restoration; checked add/sub preserves the
+        // exact signed domain admitted by the manifest while remaining best-effort on limited host filesystems.
     }
     let _ = (metadata.uid, metadata.gid, &metadata.xattrs);
     // Footnote: uid/gid/xattr restoration is intentionally retained in the parsed contract even on hosts where
     // this small portable crate cannot set it without privilege/platform-specific APIs. The staged extractor
     // never fabricates values; platform adapters may add best-effort setters without changing archive grammar.
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn materializer_symlink_guard_matches_portable_manifest_policy() {
+        for target in [
+            "../x",
+            "..\\x",
+            "/x",
+            "C:\\x",
+            "C:/x",
+            "\\\\server\\share",
+            "\\rooted",
+        ] {
+            assert!(
+                ensure_safe_symlink(target, "link").is_err(),
+                "materializer accepted hostile target {target:?}"
+            );
+        }
+        for target in ["folder/file.txt", "folder\\file.txt", "same-file", "a..b"] {
+            assert!(
+                ensure_safe_symlink(target, "link").is_ok(),
+                "materializer rejected benign target {target:?}"
+            );
+        }
+        // Footnote: this duplicates the parser's hostile vector intentionally. The test protects the second
+        // trust boundary immediately before ``symlink()`` so parser hardening cannot later be weakened by a
+        // host-only materializer check.
+    }
+
+    #[test]
+    fn signed_mtime_conversion_preserves_both_sides_of_unix_epoch() {
+        let before = system_time_from_unix_nanos(-1_000_000_000).expect("pre-epoch time");
+        let after = system_time_from_unix_nanos(1_000_000_000).expect("post-epoch time");
+        assert_eq!(
+            std::time::UNIX_EPOCH.duration_since(before).unwrap(),
+            std::time::Duration::from_secs(1)
+        );
+        assert_eq!(
+            after.duration_since(std::time::UNIX_EPOCH).unwrap(),
+            std::time::Duration::from_secs(1)
+        );
+        assert!(system_time_from_unix_nanos(i64::MIN).is_some());
+        assert!(system_time_from_unix_nanos(i64::MAX).is_some());
+
+        // Footnote: parser parity is incomplete if extraction silently maps every negative timestamp to an
+        // unusable wrapped future duration. This test pins the same signed i64 domain at materialization time.
+    }
 }
