@@ -7,6 +7,11 @@ from experiments import entropygraph_v029_residual_strict as accepted
 
 ACCEPTED_ENGINE = portfolio.ACCEPTED_ENGINE
 build_parallel = portfolio.build_parallel
+DURABLE_PUBLICATION_LEVELS = {
+    "atomic-file-fsynced",
+    "atomic-file-fsynced-directory-sync-unavailable",
+    "atomic-file-and-directory-fsynced",
+}
 
 
 def _make_two_file_corpus(root: Path) -> None:
@@ -31,7 +36,7 @@ def test_parallel_scheduler_preserves_exact_selected_archive(tmp_path: Path) -> 
     assert par["scheduler_mode"] == "parallel-independent-portfolio"
     assert par["selection_materialization"] == "same-filesystem-atomic-move"
     assert par["selection_extra_payload_write_bytes"] == 0
-    assert par["selection_durability"].startswith("atomic-file-fsynced")
+    assert par["selection_durability"] in DURABLE_PUBLICATION_LEVELS
     assert par["selected"] == seq["selected"]
     assert par["archive_bytes"] == seq["archive_bytes"]
     assert par["v028_bytes"] == seq["v028_bytes"]
@@ -59,7 +64,7 @@ def test_parallel_scheduler_atomically_replaces_existing_output(tmp_path: Path) 
     assert result["archive_bytes"] == expected["archive_bytes"]
     assert result["selection_materialization"] == "same-filesystem-atomic-move"
     assert result["selection_extra_payload_write_bytes"] == 0
-    assert result["selection_durability"].startswith("atomic-file-fsynced")
+    assert result["selection_durability"] in DURABLE_PUBLICATION_LEVELS
 
 
 def test_durable_replace_flushes_winner_before_publication(tmp_path: Path, monkeypatch) -> None:
@@ -80,6 +85,7 @@ def test_durable_replace_flushes_winner_before_publication(tmp_path: Path, monke
 
     assert not source.exists()
     assert destination.read_bytes() == payload
+    assert durability in DURABLE_PUBLICATION_LEVELS
     assert fsync_calls, "winner data must be flushed before atomic publication"
     if os.name == "posix" and durability == "atomic-file-and-directory-fsynced":
         assert len(fsync_calls) >= 2, "POSIX durable publication must also flush the parent directory"
