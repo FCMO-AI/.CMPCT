@@ -35,6 +35,16 @@ def test_regular_gap_discovery_is_content_driven() -> None:
     assert 0x1E in geometry._delimiter_rank(raw)
 
 
+def test_regular_gap_discovery_is_invariant_to_censored_edge_phase() -> None:
+    cycle = b"abcdef"
+    for phase in range(len(cycle) + 1):
+        raw = cycle[phase:] + b"\x1e" + (cycle + b"\x1e") * 3998 + cycle[:phase]
+        assert 0x1E in geometry._delimiter_rank(raw), f"separator lost at edge phase {phase}"
+
+    # Footnote: the first/last fragments are incomplete observations of the recurrence period. Varying their
+    # phase must not change the score of the complete delimiter-to-delimiter intervals in the bounded sample.
+
+
 def test_geometry_archive_round_trips_generic_delimited_bytes(tmp_path: Path) -> None:
     source = tmp_path / "source"; source.mkdir()
     rows = [f"key={i:06d},tenant={i % 37:02d},status=active,value={(i * 13) % 997:03d}" for i in range(14000)]

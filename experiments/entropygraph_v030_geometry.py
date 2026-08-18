@@ -87,11 +87,14 @@ def _get_varint(buf: bytes, pos: int) -> tuple[int, int]:
 
 
 def _delimiter_rank(raw: bytes) -> list[int]:
-    """Return at most four separator bytes whose gap pattern is unusually regular.
+    """Return at most four separator bytes whose complete recurrence gaps are unusually regular.
 
     Footnote: one pass records positions for all byte values, so candidate discovery is O(n), not
-    256 independent scans.  The score penalizes gap variance and tiny sample counts; compression itself
-    still makes the final admission decision, so this heuristic can only nominate work, never force it.
+    256 independent scans. Only complete inter-occurrence intervals are scored: the prefix before the first
+    occurrence and suffix after the last are censored observations whose lengths depend on where the bounded
+    sample starts/ends, not on delimiter recurrence. Including those edge fragments can make a truly periodic
+    separator look irregular solely because the chunk begins or ends mid-cycle. Compression itself still makes
+    the final admission decision, so this heuristic can only nominate work, never force it.
     """
     positions: list[list[int]] = [[] for _ in range(256)]
     for index, byte in enumerate(raw):
@@ -101,12 +104,9 @@ def _delimiter_rank(raw: bytes) -> list[int]:
         count = len(pos)
         if count < MIN_DELIMITER_OCCURRENCES or count + 1 > MAX_DELIMITER_SEGMENTS:
             continue
-        gaps: list[int] = []
-        previous = -1
-        for current in pos:
-            gaps.append(current - previous - 1)
-            previous = current
-        gaps.append(len(raw) - previous - 1)
+        gaps = [pos[index] - pos[index - 1] - 1 for index in range(1, count)]
+        if not gaps:
+            continue
         mean = sum(gaps) / len(gaps)
         variance = sum((gap - mean) ** 2 for gap in gaps) / len(gaps)
         score = math.sqrt(variance) / (mean + 1.0) + 8.0 / math.sqrt(count)
