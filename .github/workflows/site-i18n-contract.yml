@@ -4,13 +4,19 @@ on:
   pull_request:
     paths:
       - "site/**"
+      - "README.md"
+      - "docs/readme/**"
+      - "docs/SITE_I18N.md"
       - "benchmarks/history/**"
       - "SURFACE_REVISION"
       - ".github/workflows/site-i18n-contract.yml"
   push:
-    branches: [main]
+    branches: [main, agent/site-curated-i18n]
     paths:
       - "site/**"
+      - "README.md"
+      - "docs/readme/**"
+      - "docs/SITE_I18N.md"
       - "benchmarks/history/**"
       - "SURFACE_REVISION"
       - ".github/workflows/site-i18n-contract.yml"
@@ -25,7 +31,7 @@ concurrency:
 jobs:
   curated-locales:
     runs-on: ubuntu-latest
-    timeout-minutes: 18
+    timeout-minutes: 30
     steps:
       - name: Check out repository
         uses: actions/checkout@v6
@@ -41,12 +47,17 @@ jobs:
           python site/build_site.py --out _site
           python site/enhance_site.py _site
 
-      - name: Validate curated language catalogue
+      - name: Validate curated language catalogue and READMEs
         run: |
           # Footnote: catalogue validation runs before Chromium so cheap semantic/API failures do not spend
-          # browser minutes. It proves completeness/placeholder/protected-token invariants, not literary taste.
+          # browser minutes. It proves completeness, source alignment, placeholders, protected terms and
+          # translated README authority markers; literary taste remains a human-review concern.
           node --check site/src/assets/i18n/catalog.js
+          node --check site/src/assets/i18n/extended-meta.js
+          node --check site/src/assets/i18n/extended-packs.js
+          node --check site/src/assets/i18n/locale-pack.js
           node --check site/src/assets/i18n.js
+          for f in site/src/assets/i18n/locales/*.js; do node --check "$f"; done
           node --check site/tests/i18n-contract.mjs
           node --check site/tests/i18n-viewport.mjs
           node site/tests/i18n-contract.mjs
@@ -58,7 +69,7 @@ jobs:
           npm install --no-save --no-package-lock playwright@1.55.0
           npx playwright install chromium
 
-      - name: Render localized stress matrix
+      - name: Render all localized stress cases
         run: |
           python -m http.server 4173 --directory _site >/tmp/cmpct-i18n-site.log 2>&1 &
           SERVER_PID=$!
@@ -74,5 +85,6 @@ jobs:
           if-no-files-found: warn
           retention-days: 7
 
-# Footnote: this workflow validates source only. It deliberately does not deploy GitHub Pages; CMPCT keeps
-# main as canonical source authority and gh-pages as explicitly promoted generated serving output.
+# Footnote: direct feature-branch pushes are validated because a PR can temporarily lose its synthetic merge
+# ref while main advances. This workflow validates source only and deliberately does not deploy GitHub Pages;
+# CMPCT keeps main as canonical source authority and gh-pages as explicitly promoted generated serving output.
