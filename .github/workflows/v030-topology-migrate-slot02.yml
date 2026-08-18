@@ -1,0 +1,122 @@
+# ci-lane: fast
+name: CMPCT v0.30 slot-02 one-shot CI topology migration
+
+on:
+  push:
+    branches:
+      - agent/v030-coop-evidence-performance
+    paths:
+      - '.github/workflows/v030-topology-migrate-slot02.yml'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: cmpct-v030-slot02-topology-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - name: Classify v0.30 workflows without changing evidence gates
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          lanes = {
+              '.github/workflows/geometry-v030-breakthrough.yml': 'deep',
+              '.github/workflows/v030-authoritative-pr-gates.yml': 'release',
+              '.github/workflows/v030-authoritative-v2-pr.yml': 'release',
+              '.github/workflows/v030-canonical-authority.yml': 'release',
+              '.github/workflows/v030-external-competitors.yml': 'release',
+              '.github/workflows/v030-g04-overlay-oracle.yml': 'deep',
+              '.github/workflows/v030-geometry-overlay-oracle.yml': 'deep',
+              '.github/workflows/v030-gir-build-rehab.yml': 'deep',
+              '.github/workflows/v030-gir-focused-complete.yml': 'deep',
+              '.github/workflows/v030-gir-hardening.yml': 'deep',
+              '.github/workflows/v030-hierarchical-geometry.yml': 'deep',
+              '.github/workflows/v030-prefixgraph-oracle.yml': 'deep',
+              '.github/workflows/v030-release-fuzz.yml': 'release',
+              '.github/workflows/v030-release-generalization.yml': 'release',
+              '.github/workflows/v030-release-performance.yml': 'release',
+              '.github/workflows/v030-release-reader.yml': 'release',
+              '.github/workflows/v030-shared-portfolio-rehab.yml': 'release',
+              '.github/workflows/v030-coop-evidence-performance.yml': 'release',
+          }
+          for raw_path, lane in lanes.items():
+              path = Path(raw_path)
+              text = path.read_text(encoding='utf-8')
+              lines = text.splitlines()
+              if not any(line.startswith('# ci-lane: ') for line in lines[:8]):
+                  text = f'# ci-lane: {lane}\n' + text
+              path.write_text(text, encoding='utf-8')
+
+          coop = Path('.github/workflows/v030-coop-evidence-performance.yml')
+          text = coop.read_text(encoding='utf-8')
+          duplicate = (
+              'on:\n'
+              '  push:\n'
+              '    branches:\n'
+              '      - agent/v030-coop-evidence-performance\n'
+              '  pull_request:\n'
+          )
+          if duplicate not in text:
+              raise SystemExit('slot-02 reactor trigger shape drifted; refusing broad text rewrite')
+          coop.write_text(text.replace(duplicate, 'on:\n  pull_request:\n', 1), encoding='utf-8')
+
+          # Footnote: this migration deliberately changes routing metadata only.  It does not edit any job,
+          # threshold, benchmark command, comparator, corpus, or evidence assertion; the topology checker gets
+          # the next move if older workflows need additional concurrency/path repair after lane classification.
+          PY
+      - name: Run topology ratchet on every affected workflow
+        run: |
+          python tools/check_ci_topology.py \
+            .github/workflows/geometry-v030-breakthrough.yml \
+            .github/workflows/v030-authoritative-pr-gates.yml \
+            .github/workflows/v030-authoritative-v2-pr.yml \
+            .github/workflows/v030-canonical-authority.yml \
+            .github/workflows/v030-external-competitors.yml \
+            .github/workflows/v030-g04-overlay-oracle.yml \
+            .github/workflows/v030-geometry-overlay-oracle.yml \
+            .github/workflows/v030-gir-build-rehab.yml \
+            .github/workflows/v030-gir-focused-complete.yml \
+            .github/workflows/v030-gir-hardening.yml \
+            .github/workflows/v030-hierarchical-geometry.yml \
+            .github/workflows/v030-prefixgraph-oracle.yml \
+            .github/workflows/v030-release-fuzz.yml \
+            .github/workflows/v030-release-generalization.yml \
+            .github/workflows/v030-release-performance.yml \
+            .github/workflows/v030-release-reader.yml \
+            .github/workflows/v030-shared-portfolio-rehab.yml \
+            .github/workflows/v030-coop-evidence-performance.yml \
+            .github/workflows/v030-topology-migrate-slot02.yml
+      - name: Commit the migration if the checker is green
+        run: |
+          git rm .github/workflows/v030-topology-migrate-slot02.yml
+          git add .github/workflows/geometry-v030-breakthrough.yml \
+            .github/workflows/v030-authoritative-pr-gates.yml \
+            .github/workflows/v030-authoritative-v2-pr.yml \
+            .github/workflows/v030-canonical-authority.yml \
+            .github/workflows/v030-external-competitors.yml \
+            .github/workflows/v030-g04-overlay-oracle.yml \
+            .github/workflows/v030-geometry-overlay-oracle.yml \
+            .github/workflows/v030-gir-build-rehab.yml \
+            .github/workflows/v030-gir-focused-complete.yml \
+            .github/workflows/v030-gir-hardening.yml \
+            .github/workflows/v030-hierarchical-geometry.yml \
+            .github/workflows/v030-prefixgraph-oracle.yml \
+            .github/workflows/v030-release-fuzz.yml \
+            .github/workflows/v030-release-generalization.yml \
+            .github/workflows/v030-release-performance.yml \
+            .github/workflows/v030-release-reader.yml \
+            .github/workflows/v030-shared-portfolio-rehab.yml \
+            .github/workflows/v030-coop-evidence-performance.yml
+          git config user.name 'cmpct-slot02-bot'
+          git config user.email 'actions@users.noreply.github.com'
+          git commit -m 'ci(v0.30): classify evidence lanes for topology ratchet'
+          git push origin HEAD:agent/v030-coop-evidence-performance
