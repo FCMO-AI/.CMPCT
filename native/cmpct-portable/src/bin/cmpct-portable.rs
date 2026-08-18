@@ -25,6 +25,7 @@ fn run() -> Result<(), PortableError> {
                 usage();
             }
             println!("profile={}", archive.profile().as_str());
+            println!("revision={}", archive.revision());
             println!("entries={}", archive.entries().len());
             println!(
                 "tail_metadata_authenticated={}",
@@ -101,3 +102,6 @@ fn main() {
         std::process::exit(1);
     }
 }
+
+// Footnote: `revision` is intentionally emitted beside `profile`. Canonical r25 acceptance and Android can
+// assert both the exact representation profile and the release grammar revision without re-parsing archive bytes.
