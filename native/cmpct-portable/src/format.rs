@@ -103,11 +103,7 @@ fn key_token(value: &Value) -> Result<Vec<u8>, PortableError> {
     Ok(out)
 }
 
-fn validate_value(
-    value: &Value,
-    depth: usize,
-    nodes: &mut usize,
-) -> Result<(), PortableError> {
+fn validate_value(value: &Value, depth: usize, nodes: &mut usize) -> Result<(), PortableError> {
     if depth > MAX_VALUE_DEPTH {
         return Err(PortableError::Limit(
             "MessagePack nesting exceeds policy".into(),
@@ -180,8 +176,9 @@ fn read_be_u16(raw: &[u8], pos: usize) -> Result<(usize, usize), PortableError> 
 fn read_be_u32(raw: &[u8], pos: usize) -> Result<(usize, usize), PortableError> {
     let end = require_bytes(raw, pos, 4)?;
     let value = u32::from_be_bytes([raw[pos], raw[pos + 1], raw[pos + 2], raw[pos + 3]]);
-    let value = usize::try_from(value)
-        .map_err(|_| PortableError::Limit("MessagePack length does not fit host address space".into()))?;
+    let value = usize::try_from(value).map_err(|_| {
+        PortableError::Limit("MessagePack length does not fit host address space".into())
+    })?;
     Ok((value, end))
 }
 
@@ -241,9 +238,9 @@ fn preflight_value(
         0x00..=0x7f | 0xc0 | 0xc2 | 0xc3 | 0xe0..=0xff => Ok(marker_end),
         0x80..=0x8f => {
             let pairs = (marker & 0x0f) as usize;
-            let children = pairs
-                .checked_mul(2)
-                .ok_or_else(|| PortableError::Limit("MessagePack map child count overflow".into()))?;
+            let children = pairs.checked_mul(2).ok_or_else(|| {
+                PortableError::Limit("MessagePack map child count overflow".into())
+            })?;
             preflight_children(raw, marker_end, children, depth, nodes)
         }
         0x90..=0x9f => preflight_children(raw, marker_end, (marker & 0x0f) as usize, depth, nodes),
@@ -284,16 +281,16 @@ fn preflight_value(
         }
         0xde => {
             let (pairs, len_end) = read_be_u16(raw, marker_end)?;
-            let children = pairs
-                .checked_mul(2)
-                .ok_or_else(|| PortableError::Limit("MessagePack map child count overflow".into()))?;
+            let children = pairs.checked_mul(2).ok_or_else(|| {
+                PortableError::Limit("MessagePack map child count overflow".into())
+            })?;
             preflight_children(raw, len_end, children, depth, nodes)
         }
         0xdf => {
             let (pairs, len_end) = read_be_u32(raw, marker_end)?;
-            let children = pairs
-                .checked_mul(2)
-                .ok_or_else(|| PortableError::Limit("MessagePack map child count overflow".into()))?;
+            let children = pairs.checked_mul(2).ok_or_else(|| {
+                PortableError::Limit("MessagePack map child count overflow".into())
+            })?;
             preflight_children(raw, len_end, children, depth, nodes)
         }
     }
@@ -343,20 +340,14 @@ pub(crate) fn as_map<'a>(
         .ok_or_else(|| PortableError::Format(format!("{label} must be a map")))
 }
 
-pub(crate) fn as_array<'a>(
-    value: &'a Value,
-    label: &str,
-) -> Result<&'a [Value], PortableError> {
+pub(crate) fn as_array<'a>(value: &'a Value, label: &str) -> Result<&'a [Value], PortableError> {
     value
         .as_array()
         .map(Vec::as_slice)
         .ok_or_else(|| PortableError::Format(format!("{label} must be an array")))
 }
 
-pub(crate) fn field<'a>(
-    map: &'a [(Value, Value)],
-    name: &str,
-) -> Result<&'a Value, PortableError> {
+pub(crate) fn field<'a>(map: &'a [(Value, Value)], name: &str) -> Result<&'a Value, PortableError> {
     optional_field(map, name)
         .ok_or_else(|| PortableError::Format(format!("missing metadata field {name}")))
 }
@@ -413,9 +404,7 @@ pub(crate) fn number(value: &Value, label: &str) -> Result<f64, PortableError> {
 
 pub(crate) fn tree_digest(text: &str) -> Result<[u8; 32], PortableError> {
     if text.len() != 64 || !text.as_bytes().iter().all(u8::is_ascii_hexdigit) {
-        return Err(PortableError::Format(
-            "tree SHA-256 declaration".into(),
-        ));
+        return Err(PortableError::Format("tree SHA-256 declaration".into()));
     }
     let mut out = [0u8; 32];
     for (index, slot) in out.iter_mut().enumerate() {
@@ -431,9 +420,7 @@ pub(crate) fn safe_relpath(rel: &str) -> Result<PathBuf, PortableError> {
         return Err(PortableError::Path(rel.into()));
     }
     if rel.len() > MAX_PATH_BYTES {
-        return Err(PortableError::Limit(
-            "logical path exceeds policy".into(),
-        ));
+        return Err(PortableError::Limit("logical path exceeds policy".into()));
     }
     let mut out = PathBuf::new();
     for part in rel.split('/') {
@@ -509,7 +496,11 @@ mod tests {
 
     #[test]
     fn finite_number_policy_rejects_nan_and_infinity() {
-        for value in [Value::F64(f64::NAN), Value::F64(f64::INFINITY), Value::F64(f64::NEG_INFINITY)] {
+        for value in [
+            Value::F64(f64::NAN),
+            Value::F64(f64::INFINITY),
+            Value::F64(f64::NEG_INFINITY),
+        ] {
             assert!(number(&value, "policy").is_err());
         }
         assert_eq!(number(&Value::F64(8.0), "policy").unwrap(), 8.0);

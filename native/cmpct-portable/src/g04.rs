@@ -1,7 +1,7 @@
 use crate::format::{
-    as_array, as_map, bounded_zstd_decode, digest32, field, merkle_root, number, optional_field,
-    parse_msgpack, safe_relpath, sha256, text, tree_digest, tree_hasher_prefix, u32_le, u64_le, uint,
-    MAX_META_BYTES,
+    MAX_META_BYTES, as_array, as_map, bounded_zstd_decode, digest32, field, merkle_root, number,
+    optional_field, parse_msgpack, safe_relpath, sha256, text, tree_digest, tree_hasher_prefix,
+    u32_le, u64_le, uint,
 };
 use crate::identity::R25Identity;
 use crate::{MemberReadStats, PortableEntry, PortableError};
@@ -53,8 +53,14 @@ const HG_MAGIC_PREFIX: &[u8; 4] = b"HGP2";
 #[derive(Debug, Clone)]
 enum Transform {
     None,
-    Lane { width: usize, logical_size: usize },
-    Delimiter { delimiter: u8, logical_size: usize },
+    Lane {
+        width: usize,
+        logical_size: usize,
+    },
+    Delimiter {
+        delimiter: u8,
+        logical_size: usize,
+    },
     Hierarchical {
         primary: u8,
         secondary: u8,
@@ -169,7 +175,10 @@ struct AuthMeta {
 
 impl G04Archive {
     pub(crate) fn open(path: &Path, identity: R25Identity) -> Result<Self, PortableError> {
-        if !matches!(identity, R25Identity::ResearchG04 | R25Identity::CanonicalG04) {
+        if !matches!(
+            identity,
+            R25Identity::ResearchG04 | R25Identity::CanonicalG04
+        ) {
             return Err(PortableError::Format(
                 "G0-G4 reader received a PrefixGraph profile identity".into(),
             ));
@@ -212,9 +221,9 @@ impl G04Archive {
                     "G0-G4 physical record table contains gap/overlap".into(),
                 ));
             }
-            let absolute = record_start
-                .checked_add(rel)
-                .ok_or_else(|| PortableError::Limit("G0-G4 record absolute offset overflow".into()))?;
+            let absolute = record_start.checked_add(rel).ok_or_else(|| {
+                PortableError::Limit("G0-G4 record absolute offset overflow".into())
+            })?;
             file.seek(SeekFrom::Start(absolute))?;
             let mut header = [0u8; PHYSICAL_HEADER_SIZE as usize];
             file.read_exact(&mut header)?;
@@ -317,9 +326,10 @@ impl G04Archive {
             .entries
             .get(index)
             .ok_or_else(|| PortableError::Format("G0-G4 member id out of range".into()))?;
-        let file = self.files.get(&entry.path).ok_or_else(|| {
-            PortableError::Format("G0-G4 entry/file table disagreement".into())
-        })?;
+        let file = self
+            .files
+            .get(&entry.path)
+            .ok_or_else(|| PortableError::Format("G0-G4 entry/file table disagreement".into()))?;
         Ok((&entry.path, file))
     }
 
@@ -345,9 +355,9 @@ impl G04Archive {
             GFile::Nodes { nodes, .. } => {
                 for node_id in nodes {
                     let raw = context.node(*node_id)?;
-                    logical = logical
-                        .checked_add(raw.len() as u64)
-                        .ok_or_else(|| PortableError::Limit("G0-G4 member length overflow".into()))?;
+                    logical = logical.checked_add(raw.len() as u64).ok_or_else(|| {
+                        PortableError::Limit("G0-G4 member length overflow".into())
+                    })?;
                     if logical > expected_size {
                         return Err(PortableError::Integrity(
                             "G0-G4 streamed member exceeds declaration".into(),
@@ -450,20 +460,23 @@ impl<'a> DecodeContext<'a> {
     }
 
     fn decoded_context_bytes(&self) -> Result<u64, PortableError> {
-        self.touched_records.values().try_fold(0u64, |total, value| {
-            total
-                .checked_add(*value)
-                .ok_or_else(|| PortableError::Limit("G0-G4 context byte counter overflow".into()))
-        })
+        self.touched_records
+            .values()
+            .try_fold(0u64, |total, value| {
+                total.checked_add(*value).ok_or_else(|| {
+                    PortableError::Limit("G0-G4 context byte counter overflow".into())
+                })
+            })
     }
 
     fn record(&mut self, record_id: usize) -> Result<Arc<Vec<u8>>, PortableError> {
         if let Some(value) = self.record_cache.get(&record_id) {
             return Ok(Arc::clone(value));
         }
-        let record = self.archive.records.get(record_id).ok_or_else(|| {
-            PortableError::Format("G0-G4 record reference out of range".into())
-        })?;
+        let record =
+            self.archive.records.get(record_id).ok_or_else(|| {
+                PortableError::Format("G0-G4 record reference out of range".into())
+            })?;
         let mut file = self
             .archive
             .file
@@ -548,9 +561,12 @@ impl<'a> DecodeContext<'a> {
         if let Some(value) = self.node_cache.get(&node_id) {
             return Ok(Arc::clone(value));
         }
-        let node = self.archive.nodes.get(node_id).cloned().ok_or_else(|| {
-            PortableError::Format("G0-G4 node reference out of range".into())
-        })?;
+        let node = self
+            .archive
+            .nodes
+            .get(node_id)
+            .cloned()
+            .ok_or_else(|| PortableError::Format("G0-G4 node reference out of range".into()))?;
         let (raw, expected) = match node {
             Node::Direct {
                 record,
@@ -821,7 +837,9 @@ fn parse_meta(value: &Value, expected_count: Option<usize>) -> Result<ParsedMeta
 
     let node_values = as_array(field(map, "nodes")?, "G0-G4 nodes")?;
     if node_values.len() > MAX_NODES {
-        return Err(PortableError::Limit("G0-G4 node count exceeds policy".into()));
+        return Err(PortableError::Limit(
+            "G0-G4 node count exceeds policy".into(),
+        ));
     }
     let mut nodes = Vec::with_capacity(node_values.len());
     for value in node_values {
@@ -929,7 +947,11 @@ fn parse_transform(value: &Value) -> Result<Transform, PortableError> {
     }
 }
 
-fn parse_node(value: &Value, node_count: usize, record_count: usize) -> Result<Node, PortableError> {
+fn parse_node(
+    value: &Value,
+    node_count: usize,
+    record_count: usize,
+) -> Result<Node, PortableError> {
     let row = as_array(value, "G0-G4 node")?;
     let kind = row
         .first()
@@ -980,7 +1002,8 @@ fn parse_node(value: &Value, node_count: usize, record_count: usize) -> Result<N
             Ok(Node::PackMosaic {
                 record: record_id(&row[1], "G0-G4 pack-mosaic record id")?,
                 offset: uint(&row[2], "G0-G4 pack-mosaic offset", MAX_DECODE_UNIT)? as usize,
-                recipe_len: uint(&row[3], "G0-G4 pack-mosaic recipe length", MAX_DECODE_UNIT)? as usize,
+                recipe_len: uint(&row[3], "G0-G4 pack-mosaic recipe length", MAX_DECODE_UNIT)?
+                    as usize,
                 bases,
                 length: chunk(&row[5], "G0-G4 pack-mosaic logical length")?,
                 sha: digest32(&row[6], "G0-G4 pack-mosaic digest")?,
@@ -1006,14 +1029,20 @@ fn parse_bases(value: &Value, node_count: usize) -> Result<Vec<usize>, PortableE
             node_count.saturating_sub(1) as u64,
         )? as usize;
         if !seen.insert(id) {
-            return Err(PortableError::Format("duplicate G0-G4 mosaic base id".into()));
+            return Err(PortableError::Format(
+                "duplicate G0-G4 mosaic base id".into(),
+            ));
         }
         out.push(id);
     }
     Ok(out)
 }
 
-fn parse_file(value: &Value, node_count: usize, record_count: usize) -> Result<GFile, PortableError> {
+fn parse_file(
+    value: &Value,
+    node_count: usize,
+    record_count: usize,
+) -> Result<GFile, PortableError> {
     let row = as_array(value, "G0-G4 file descriptor")?;
     let kind = row
         .first()
@@ -1034,13 +1063,11 @@ fn parse_file(value: &Value, node_count: usize, record_count: usize) -> Result<G
             let ids = as_array(&row[1], "G0-G4 file node list")?;
             let mut nodes = Vec::with_capacity(ids.len());
             for id in ids {
-                nodes.push(
-                    uint(
-                        id,
-                        "G0-G4 file node id",
-                        node_count.saturating_sub(1) as u64,
-                    )? as usize,
-                );
+                nodes.push(uint(
+                    id,
+                    "G0-G4 file node id",
+                    node_count.saturating_sub(1) as u64,
+                )? as usize);
             }
             let size = uint(
                 &row[2],
@@ -1102,9 +1129,15 @@ fn get_varint(buf: &[u8], pos: &mut usize) -> Result<u64, PortableError> {
     Err(PortableError::Format("overlong r25 varint".into()))
 }
 
-fn lane_inverse(stored: &[u8], width: usize, logical_size: usize) -> Result<Vec<u8>, PortableError> {
+fn lane_inverse(
+    stored: &[u8],
+    width: usize,
+    logical_size: usize,
+) -> Result<Vec<u8>, PortableError> {
     if !LANE_WIDTHS.contains(&(width as u64)) || stored.len() != logical_size {
-        return Err(PortableError::Format("invalid G0-G4 lane descriptor".into()));
+        return Err(PortableError::Format(
+            "invalid G0-G4 lane descriptor".into(),
+        ));
     }
     let full = logical_size - logical_size % width;
     let rows = full / width;
@@ -1130,7 +1163,9 @@ fn delimiter_inverse(
         || encoded[4] != descriptor_delimiter
         || logical_size as u64 > MAX_OVERLAY_RECORD
     {
-        return Err(PortableError::Format("invalid G0-G4 delimiter descriptor".into()));
+        return Err(PortableError::Format(
+            "invalid G0-G4 delimiter descriptor".into(),
+        ));
     }
     let mut pos = 5;
     let count = get_varint(encoded, &mut pos)?;
@@ -1231,7 +1266,9 @@ fn hierarchy_inverse(
                 .checked_add(len)
                 .ok_or_else(|| PortableError::Limit("hierarchical field byte overflow".into()))?;
             if len > MAX_CHUNK || total_field_bytes > MAX_CHUNK {
-                return Err(PortableError::Limit("hierarchical field length budget".into()));
+                return Err(PortableError::Limit(
+                    "hierarchical field length budget".into(),
+                ));
             }
             row.push(len as usize);
         }
@@ -1280,9 +1317,9 @@ fn hierarchy_inverse(
             let len = row[column];
             let prefix_len = prefixes[row_index][column];
             let suffix_len = len - prefix_len;
-            let end = cursor
-                .checked_add(suffix_len)
-                .ok_or_else(|| PortableError::Limit("hierarchical payload offset overflow".into()))?;
+            let end = cursor.checked_add(suffix_len).ok_or_else(|| {
+                PortableError::Limit("hierarchical payload offset overflow".into())
+            })?;
             if end > encoded.len() {
                 return Err(PortableError::Format("short hierarchical payload".into()));
             }
@@ -1324,7 +1361,11 @@ fn hierarchy_inverse(
     Ok(out)
 }
 
-fn delta_decode(base: &[u8], payload: &[u8], expected_size: usize) -> Result<Vec<u8>, PortableError> {
+fn delta_decode(
+    base: &[u8],
+    payload: &[u8],
+    expected_size: usize,
+) -> Result<Vec<u8>, PortableError> {
     let mut out = Vec::with_capacity(expected_size);
     let mut pos = 0usize;
     while pos < payload.len() {
@@ -1386,7 +1427,9 @@ fn mosaic_decode(
                     .checked_add(len)
                     .ok_or_else(|| PortableError::Limit("mosaic literal offset overflow".into()))?;
                 if end > payload.len() || len > expected_size.saturating_sub(out.len()) {
-                    return Err(PortableError::Format("mosaic literal exceeds bounds".into()));
+                    return Err(PortableError::Format(
+                        "mosaic literal exceeds bounds".into(),
+                    ));
                 }
                 out.extend_from_slice(&payload[pos..end]);
                 pos = end;
@@ -1441,7 +1484,9 @@ impl Write for LimitedVec {
 
 fn preflate_unpack(payload: &[u8], expected_size: u64) -> Result<Vec<u8>, PortableError> {
     if expected_size > MAX_DECODE_UNIT || payload.len() as u64 > MAX_DECODE_UNIT {
-        return Err(PortableError::Limit("preflate record exceeds decode unit".into()));
+        return Err(PortableError::Limit(
+            "preflate record exceeds decode unit".into(),
+        ));
     }
     let config = PreflateContainerConfig {
         max_chunk_size: MAX_DECODE_UNIT as usize,

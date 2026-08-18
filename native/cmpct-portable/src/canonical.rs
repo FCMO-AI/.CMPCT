@@ -1,7 +1,7 @@
 use crate::format::{safe_relpath, sha256};
 use crate::g04::G04Archive;
 use crate::identity::R25Identity;
-use crate::manifest::{FsEntry, FsKind, FsManifest, FsMetadata, FILESYSTEM_MANIFEST};
+use crate::manifest::{FILESYSTEM_MANIFEST, FsEntry, FsKind, FsManifest, FsMetadata};
 use crate::prefix::PrefixArchive;
 use crate::{MemberReadStats, PortableEntry, PortableError, Profile};
 use sha2::{Digest, Sha256};
@@ -123,10 +123,7 @@ impl Canonical25Archive {
                 .iter()
                 .position(|candidate| candidate.path == entry.path)
                 .ok_or_else(|| {
-                    PortableError::Integrity(format!(
-                        "missing r25 graph member: {}",
-                        entry.path
-                    ))
+                    PortableError::Integrity(format!("missing r25 graph member: {}", entry.path))
                 })?;
             let (graph_size, graph_sha) = content.entry_identity(index)?;
             if graph_size != *size || graph_sha != *sha256 {
@@ -344,19 +341,14 @@ impl Canonical25Archive {
         for (index, entry) in self.manifest.entries().iter().enumerate() {
             match &entry.kind {
                 FsKind::File { .. } | FsKind::Hardlink { .. } => {
-                    writer
-                        .start_file(&entry.path, options)
-                        .map_err(|error| {
-                            PortableError::Format(format!("ZIP start_file: {error}"))
-                        })?;
+                    writer.start_file(&entry.path, options).map_err(|error| {
+                        PortableError::Format(format!("ZIP start_file: {error}"))
+                    })?;
                     self.stream_member(index, &mut writer)?;
                 }
                 FsKind::Directory => {
                     writer
-                        .add_directory(
-                            format!("{}/", entry.path.trim_end_matches('/')),
-                            options,
-                        )
+                        .add_directory(format!("{}/", entry.path.trim_end_matches('/')), options)
                         .map_err(|error| {
                             PortableError::Format(format!("ZIP add_directory: {error}"))
                         })?;
