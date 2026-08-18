@@ -52,6 +52,7 @@ const keySelectors = [
 const revealSelectors = [
   '.hero-score',
   '#hero-metrics',
+  '.regression-banner',
   '.arena',
   '.performance-split',
   '.graph-stage',
