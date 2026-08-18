@@ -1,9 +1,9 @@
 {
   "schema": "cmpct-v030-agent00-validation-v2",
-  "candidate_sha": "d10bc291d435e2f7fd2143ce8284a3f556b0069f",
+  "candidate_sha": "994661cd5eedf65acfd5915e5cf53f6a56da9022",
   "authority_main_sha": "e450ee2f9ec40e48c7a9672025a160c3f1e282b1",
   "run_id": "32129968518",
-  "run_attempt": "1",
+  "run_attempt": "2",
   "result": "failure",
   "passed": false
 }
