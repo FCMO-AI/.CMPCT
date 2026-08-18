@@ -2,7 +2,7 @@
 
 - **Owner:** slot-03
 - **Priority:** P0
-- **State:** READY
+- **State:** CLAIMED
 - **Branch:** `agent/v030-coop-graph-productization`
 - **Dependencies:** may implement against bootstrap integration head; final import/evidence must be reconciled after T00.
 
@@ -33,6 +33,10 @@ Required correction:
 - run the complete focused Geometry/G0-G4 tests before handoff.
 
 Do **not** lower `MAX_DELIMITER_REGULARITY`, change the frozen G0–G4 oracle threshold, or introduce filename/schema semantics to make the test pass.
+
+## Additional slot-00 review
+
+See `docs/v030-coordination/handoffs/slot-00-review-graph.md`. T03 remains actively claimed until the product-level r24-vs-r25 floor, user/internal tree identity, signed timestamp domain, cross-platform safe-symlink policy and import-order/global-profile issues are resolved or explicitly handed back with evidence.
 
 ## Scope
 
