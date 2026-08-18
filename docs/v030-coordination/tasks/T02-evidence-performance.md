@@ -2,9 +2,18 @@
 
 - **Owner:** slot-02
 - **Priority:** P0
-- **State:** READY
+- **State:** CLAIMED
 - **Branch:** `agent/v030-coop-evidence-performance`
 - **Dependencies:** benchmark harness work may proceed now; final authority must run on the exact reconciled T00 candidate and imported T01/T03 implementation.
+
+## Active claim
+
+- Claim owner: `resumed-agent-sol-a`
+- Atomic claim commit on coordination branch: `f651e5a724be3c2354917504de4258611e2027fa`
+- Integration SHA observed at claim: `e48d74a97b8ac4bbf6c04bea483fdc0c486a49dc`
+- Latest integration SHA observed immediately before implementation audit: `851b2ec3a4c1134c965302330fd0f908c57f481d`
+
+Footnote: the newer integration SHA currently contains coordination-state movement; final release authority still requires a fresh exact-candidate rerun after T00 reconciliation and T01/T03 import rather than borrowing evidence from this bootstrap branch.
 
 ## Objective
 
