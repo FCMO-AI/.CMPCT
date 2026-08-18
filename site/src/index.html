@@ -4,13 +4,11 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="dark">
-  <meta name="theme-color" content="#090909">
-  <meta name="description" content="CMPCT — a lossless archive project pushing size, access, integrity and recovery together, with every public performance claim derived from committed evidence.">
-  <title>.CMPCT — a better archive, proven in public</title>
+  <meta name="theme-color" content="#080808">
+  <meta name="description" content="CMPCT — a performance-driven lossless archive project built to beat legacy archive tradeoffs across size, speed, access, integrity and recovery.">
+  <title>.CMPCT — performance is the release contract</title>
   <link rel="stylesheet" href="assets/styles.css">
-  <link rel="stylesheet" href="assets/experience.css">
   <script type="module" src="assets/app.js"></script>
-  <script type="module" src="assets/experience.js"></script>
 </head>
 <body>
   <a class="skip-link" href="#main">Skip to content</a>
@@ -19,187 +17,127 @@
   <header class="site-header" data-header>
     <a class="brand" href="#top" aria-label="CMPCT home"><span class="brand-mark">^</span><span>.CMPCT</span></a>
     <nav class="top-nav" aria-label="Primary navigation">
-      <a href="#numbers">Numbers</a>
-      <a href="#why">Why CMPCT</a>
-      <a href="#arena">Proof</a>
-      <a href="#lab">Try it</a>
-      <a href="#evidence">Engineering</a>
+      <a href="#performance">Performance</a>
+      <a href="#engine">Engine</a>
+      <a href="#lab">Lab</a>
+      <a href="#evidence">Evidence</a>
     </nav>
     <div class="header-right">
       <span class="release-chip">v__CMPCT_VERSION__ · r__FORMAT_REVISION__</span>
-      <a class="header-action" href="agent.json" title="Machine-readable orientation">Agent view</a>
       <a class="header-action" href="https://github.com/FCMO-AI/.CMPCT">GitHub ↗</a>
     </div>
   </header>
 
   <main id="main">
-    <section class="hero proof-hero" id="top">
-      <div class="hero-kicker"><span class="pulse-dot"></span> CURRENT CLAIMS COME FROM COMMITTED BENCHMARKS</div>
-      <div class="hero-layout">
+    <section class="hero" id="top">
+      <div class="hero-kicker"><span class="pulse-dot"></span> PERFORMANCE FRONTIER · LIVE FROM COMMITTED BENCHMARKS</div>
+      <div class="hero-grid">
         <div class="hero-copy">
-          <p class="hero-pretitle">A BETTER WAY TO PACK FILES.</p>
-          <h1><span>Store less.</span><br><span>Keep more.</span></h1>
-          <p class="hero-lede"><strong>CMPCT is a lossless archive project</strong> built to reduce stored bytes without giving up the things archives become painful to recover later: selective access, exact identity, integrity, bounded decode work and physical recovery.</p>
-          <p class="hero-plain">Think “a better ZIP” as the starting point—not the finish line.</p>
+          <h1>Archive formats made peace with compromise.<br><em>CMPCT did not.</em></h1>
+          <p class="hero-lede">A lossless archive project engineered to push size, speed, random access, fidelity, integrity and recovery forward at the same time—and reject releases that move the frontier backward.</p>
           <div class="hero-actions">
-            <a class="button button-hot" href="#numbers">See the numbers</a>
+            <a class="button button-hot" href="#performance">See the numbers</a>
             <a class="button button-ghost" href="#lab">Build a .cmpct</a>
-            <a class="button button-text" href="#red-team">Show me where it loses ↓</a>
           </div>
           <div class="truth-line"><span>Project v__CMPCT_VERSION__</span><span>Canonical format r__FORMAT_REVISION__</span><span>Build __BUILD_COMMIT__</span></div>
         </div>
-
-        <aside class="hero-score proof-score" aria-live="polite">
-          <span class="score-label">CURRENT MATCHED-TEST HEADLINE</span>
+        <div class="hero-score" aria-live="polite">
+          <span class="score-label">CURRENT VERIFIED LEAD</span>
           <strong id="hero-gain">—</strong>
-          <span class="score-unit">smaller than ZIP / Deflate</span>
-          <p class="score-translation" id="hero-translation">If ZIP stores 100 MB on this test, CMPCT needs about 62 MB.</p>
-          <div class="proof-rule"></div>
-          <p id="hero-qualification">Loading the latest committed benchmark evidence…</p>
-          <a class="receipt-link" href="#evidence-receipt">Evidence receipt ↓</a>
-        </aside>
+          <span class="score-unit">smaller than ZIP / Zstd</span>
+          <div class="score-ruler"><i></i><i></i><i></i><i></i><i></i></div>
+          <p id="hero-qualification">Loading the latest committed benchmark frontier…</p>
+        </div>
       </div>
-
-      <div class="hero-proofline" aria-label="CMPCT design priorities">
-        <span>LOSSLESS</span><span>SELECTIVE ACCESS</span><span>INTEGRITY</span><span>RECOVERY</span><span>DEDUPLICATION</span><span>BOUNDED DECODE</span>
+      <div class="hero-metrics" id="hero-metrics">
+        <article><span>ZIP / ZSTD</span><strong>—</strong><small>verified aggregate lead</small></article>
+        <article><span>ZIP / DEFLATE</span><strong>—</strong><small>verified aggregate lead</small></article>
+        <article><span>SOLID TAR / ZSTD</span><strong>—</strong><small>diagnostic aggregate lead</small></article>
+        <article><span>WORKLOAD WINS</span><strong>—</strong><small>against ZIP / Zstd</small></article>
       </div>
     </section>
 
-    <section class="release-law" aria-label="Release performance law">
-      <div class="law-number">0 B</div>
-      <div class="law-copy">
-        <span>RELEASE LAW</span>
-        <strong>Discover boldly. Promote without regression.</strong>
-        <p>Research may expose a tradeoff. A release does not get to hide one. CMPCT preserves promising experiments as explicit debt, then repairs the debt before promotion.</p>
-      </div>
+    <section class="regression-banner">
+      <div><span class="banner-index">RELEASE LAW / 01</span><strong>No silent performance regression.</strong></div>
+      <p>Every material update is benchmarked against its direct base. Deterministic archive-size regression: <b>0 bytes allowed</b>. Confirmed speed regression outside the same-runner noise envelope: <b>release blocked</b>.</p>
       <span class="gate-state"><i></i> PERFORMANCE GATE</span>
     </section>
 
-    <section class="section numbers-section" id="numbers">
+    <section class="section performance-section" id="performance">
       <div class="section-head split-head">
         <div>
-          <p class="eyebrow">01 / THE NUMBERS THAT MATTER</p>
-          <h2>Big claims.<br><em>With the uncomfortable numbers beside them.</em></h2>
+          <p class="eyebrow">01 / THE ARENA</p>
+          <h2>Not a compression ratio.<br><em>A performance position.</em></h2>
         </div>
-        <p class="section-intro">CMPCT does not need to win every bar to be interesting. It needs to live on the serious compression frontier while preserving system properties that raw solid archives can trade away.</p>
-      </div>
-
-      <div class="hero-metrics metric-wall" id="hero-metrics" aria-live="polite">
-        <article><span>ZIP / DEFLATE</span><strong>—</strong><small>matched stored bytes</small></article>
-        <article><span>7Z / LZMA2</span><strong>—</strong><small>matched stored bytes</small></article>
-        <article><span>SOLID ZSTD-19</span><strong>—</strong><small>matched stored bytes</small></article>
-        <article><span>CREATE WALL TIME</span><strong>—</strong><small>scoped scheduler result</small></article>
-      </div>
-
-      <div class="numbers-explainer">
-        <article><span>FOR A NORMAL PERSON</span><h3>Smaller archives.</h3><p>Less storage, less transfer, less duplication. That is the obvious part.</p></article>
-        <article><span>FOR A POWER USER</span><h3>Not just a solid blob.</h3><p>CMPCT is designed around file identity, selective reads and recovery rather than optimizing one number in isolation.</p></article>
-        <article><span>FOR AN ENGINEER</span><h3>Semantics stay attached.</h3><p>Every competitive number has a scope, comparator, tree or workload contract and a raw source. Different semantics are labeled instead of laundered into parity.</p></article>
-      </div>
-    </section>
-
-    <section class="section why-section" id="why">
-      <div class="section-head split-head">
-        <div><p class="eyebrow">02 / WHY CMPCT EXISTS</p><h2>Most archives compress files.<br><em>CMPCT compiles relationships.</em></h2></div>
-        <p>Traditional archives tend to treat paths as payloads to compress. CMPCT searches for exact relationships between required objects, chooses physical roots and records deterministic reconstruction paths while bounding locality and recovery cost.</p>
-      </div>
-
-      <div class="before-after">
-        <article class="mental-model">
-          <span class="model-label">TRADITIONAL MENTAL MODEL</span>
-          <div class="stack-model">
-            <div><b>file A</b><i>compress</i><strong>blob A</strong></div>
-            <div><b>file B</b><i>compress</i><strong>blob B</strong></div>
-            <div><b>file C</b><i>compress</i><strong>blob C</strong></div>
-          </div>
-          <p>Useful and simple—but repetition and cross-object structure can remain invisible.</p>
-        </article>
-        <article class="mental-model mental-model-cmpct">
-          <span class="model-label">CMPCT MENTAL MODEL</span>
-          <div class="relation-model" aria-label="Logical files converging on shared physical information">
-            <div class="logical-set"><b>file A</b><b>file B</b><b>file C</b></div>
-            <div class="relation-arrow">relationships →</div>
-            <div class="physical-set"><strong>shared data</strong><strong>exact deltas</strong><strong>bounded roots</strong></div>
-          </div>
-          <p>Logical independence stays visible while exact physical information can converge.</p>
-        </article>
-      </div>
-
-      <div class="capability-grid" id="capability-grid">
-        <article><span>01</span><h3>Exact identity</h3><p>Identical content can converge on one authenticated physical root without collapsing logical paths.</p><small>ARCHITECTURAL</small></article>
-        <article><span>02</span><h3>Selective access</h3><p>Decode the object you asked for instead of requiring one giant archive-wide decompression event.</p><small>DESIGN GOAL + CANONICAL MECHANISMS</small></article>
-        <article><span>03</span><h3>Bounded context</h3><p>Cross-file context is auditioned and constrained so better compression does not silently create unbounded read work.</p><small>RESEARCH / POLICY</small></article>
-        <article><span>04</span><h3>Integrity</h3><p>Indexes and physical data carry explicit checks instead of relying on “the decompressor did not complain.”</p><small>CANONICAL</small></article>
-        <article><span>05</span><h3>Physical recovery</h3><p>Redundant authenticated metadata exists so recovery is a real reader path, not a documentation promise.</p><small>CANONICAL</small></article>
-        <article><span>06</span><h3>Performance ratchet</h3><p>A new release must preserve the inherited floor while earning a material improvement somewhere that matters.</p><small>RELEASE CONTRACT</small></article>
-      </div>
-    </section>
-
-    <section class="section arena-section" id="arena">
-      <div class="section-head split-head">
-        <div><p class="eyebrow">03 / THE ARENA</p><h2>Serious compression,<br><em>same tree, losses included.</em></h2></div>
-        <p>The structural arena asks one narrow question: how many bytes did each tool store for the same matched hostile tree? It does not pretend every format has identical access, recovery or durability semantics.</p>
+        <p>The frontier view uses the broad neutral/hostile suite: developer trees, office containers, media, analytics, logs, backups, incompressible data, tiny files, ML artifacts and a mixed binary image. Losses stay visible.</p>
       </div>
 
       <div class="arena">
         <div class="arena-head">
-          <div><span>STORED BYTES · LOWER IS BETTER</span><strong id="arena-logical">— logical input</strong></div>
+          <div><span>AGGREGATE STORED BYTES</span><strong id="arena-logical">— logical input</strong></div>
           <div class="arena-legend"><i class="cmpct-swatch"></i>CMPCT <i></i>competitor</div>
         </div>
         <div id="competitor-ladder" class="competitor-ladder" aria-label="Archive size comparison"></div>
-        <div class="arena-foot">
-          <p><strong>Read this correctly:</strong> a 0.2% raw-size loss to a solid compressor may coexist with stronger access/recovery semantics. A 38% win over ZIP may still be less technically interesting than landing inside the Zstd/7z/ZPAQ cluster.</p>
-        </div>
       </div>
 
       <div class="performance-split">
         <article class="matrix-card">
-          <div class="card-head"><span>CATEGORY FRONTIER · SOLID ZSTD-19</span><strong id="workload-score">—</strong></div>
-          <p class="card-deck">Independent workload archives answer a different question than the whole-suite structural run. Each cell keeps its own exact-tree provenance.</p>
+          <div class="card-head"><span>WORKLOAD MATRIX</span><strong id="workload-score">—</strong></div>
           <div id="workload-matrix" class="workload-matrix"></div>
         </article>
-        <article class="proof-card" id="evidence-receipt">
-          <div class="card-head"><span>EVIDENCE RECEIPT</span><strong>OPEN BOOK</strong></div>
-          <dl class="receipt-grid" id="evidence-receipt-grid">
-            <div><dt>Project</dt><dd>—</dd></div><div><dt>Format</dt><dd>—</dd></div><div><dt>Tree</dt><dd>—</dd></div><div><dt>Files</dt><dd>—</dd></div><div><dt>Record</dt><dd>—</dd></div><div><dt>Contract</dt><dd>—</dd></div>
-          </dl>
-          <div class="receipt-actions">
-            <a href="project-data.json">Raw site data ↗</a>
-            <a href="agent.json">Agent JSON ↗</a>
-            <a href="llms.txt">LLM orientation ↗</a>
-            <a href="https://github.com/FCMO-AI/.CMPCT/tree/main/benchmarks/history">Benchmark history ↗</a>
-          </div>
+        <article class="loss-card">
+          <div class="card-head"><span>FRONTIER DEFECTS</span><strong>VISIBLE BY POLICY</strong></div>
+          <div id="known-losses" class="loss-list"><p>Loading benchmark losses…</p></div>
         </article>
       </div>
     </section>
 
-    <section class="section red-team-section" id="red-team">
-      <div class="section-head split-head">
-        <div><p class="eyebrow">04 / RED TEAM BOARD</p><h2>If CMPCT loses fairly,<br><em>the loss stays on the page.</em></h2></div>
-        <p>Benchmark credibility comes from preserved failure. These are current limitations and qualifications from the same committed research record powering the wins above.</p>
+    <section class="section engine-section" id="engine">
+      <div class="section-head">
+        <p class="eyebrow">02 / WHY IT CAN WIN</p>
+        <h2>The archive is compiled as an <em>information graph.</em></h2>
+        <p>CMPCT does not assume that every filename deserves an independent compressed payload. It searches for exact relationships between required objects, chooses physical roots, and records deterministic reconstruction paths while bounding locality and recovery cost.</p>
       </div>
-      <div class="red-team-board">
-        <div class="red-team-principle"><span>PUBLIC POLICY</span><strong>No benchmark laundering.</strong><p>Do not change the workload, timing boundary or semantic definition merely because a mature competitor wins.</p></div>
-        <div id="known-losses" class="loss-list"><p>Loading benchmark qualifications…</p></div>
+
+      <div class="graph-stage" aria-label="Conceptual information graph">
+        <div class="graph-node node-input">LOGICAL TREE<small>required bytes</small></div>
+        <div class="graph-node node-stream">EXACT STREAMS<small>compressed roots</small></div>
+        <div class="graph-node node-object">OBJECTS<small>interned identity</small></div>
+        <div class="graph-node node-pack">BOUNDED PACKS<small>≤ 512 KiB context</small></div>
+        <div class="graph-node node-index">INDEX<small>proof + recovery</small></div>
+        <svg class="graph-lines" viewBox="0 0 1000 420" preserveAspectRatio="none" aria-hidden="true">
+          <path d="M125 105 C270 105 250 210 405 210"/><path d="M125 105 C280 105 300 330 475 330"/>
+          <path d="M420 210 C570 210 560 100 700 100"/><path d="M490 330 C620 330 610 240 760 240"/>
+          <path d="M710 100 C860 100 820 210 925 210"/><path d="M770 240 C860 240 865 210 925 210"/>
+        </svg>
+      </div>
+
+      <div class="mechanism-grid">
+        <article><span>01</span><h3>Federate exact streams</h3><p>Related ZIP-like containers can share identical compressed members globally instead of paying duplicate storage inside each package.</p></article>
+        <article><span>02</span><h3>Invert representation</h3><p>If a compressed stream is already required, a matching loose file can be a cheap exact inverse view rather than a second physical payload.</p></article>
+        <article><span>03</span><h3>Intern identical objects</h3><p>Snapshots and aliases keep independent logical paths while identical content converges on one authenticated physical root.</p></article>
+        <article><span>04</span><h3>Bound context</h3><p>Cross-file context is auditioned rather than assumed, and physical decode units stay bounded to protect selective reads.</p></article>
+        <article><span>05</span><h3>Separate hot and cold roots</h3><p>Latency-sensitive inverse views avoid a hidden second decompression layer while colder container streams can share context.</p></article>
+        <article><span>06</span><h3>Make recovery physical</h3><p>Redundant authenticated metadata is not decorative: the reader can actually recover through the tail copy after primary corruption.</p></article>
       </div>
     </section>
 
-    <section class="canonical-band" id="engine">
+    <section class="canonical-band">
       <div class="canonical-copy">
-        <p class="eyebrow">05 / SHIPPING VS FRONTIER</p>
-        <h2>One project.<br><em>Two authority levels.</em></h2>
-        <p>The public research frontier is allowed to be aggressive. The canonical reader/writer is the interoperability contract. The website never lets a research representation borrow canonical authority.</p>
+        <p class="eyebrow">03 / CANONICAL VS FRONTIER</p>
+        <h2>Aggressive claims.<br><em>Precise boundaries.</em></h2>
+        <p>The strongest project-level benchmark currently comes from the EntropyGraph research engine. The shipping reference reader/writer remains canonical format revision __FORMAT_REVISION__. The site shows both and labels them separately instead of laundering an experiment into an interoperability claim.</p>
       </div>
-      <div class="authority-map">
-        <article class="authority-card canonical-authority"><span>SHIPPING / CANONICAL</span><strong>r__FORMAT_REVISION__</strong><p>Reader/writer grammar, conformance, Browser Lab compatibility and interoperability.</p><small>CANONICAL AUTHORITY</small></article>
-        <div class="authority-bridge">≠</div>
-        <article class="authority-card frontier-authority"><span>RESEARCH FRONTIER</span><strong id="frontier-version">—</strong><p id="frontier-label">benchmark candidate</p><small>MEASURED RESEARCH</small></article>
+      <div class="canonical-status">
+        <article><span>PROJECT</span><strong>v__CMPCT_VERSION__</strong><small>current release</small></article>
+        <article><span>CANONICAL FORMAT</span><strong>r__FORMAT_REVISION__</strong><small>reader/writer contract</small></article>
+        <article><span>RESEARCH FRONTIER</span><strong id="frontier-version">—</strong><small id="frontier-label">benchmark candidate</small></article>
       </div>
     </section>
 
     <section class="section parity-section" id="evidence">
       <div class="section-head split-head">
-        <div><p class="eyebrow">06 / CANONICAL ZIP EXECUTION PARITY</p><h2>Shipping CMPCT vs ZIP.<br><em>Size, create, extract.</em></h2><p class="parity-purpose">This table is operational parity for the canonical reader/writer at library and fresh-process CLI boundaries. It is intentionally separate from the research storage frontier above.</p></div>
+        <div><p class="eyebrow">04 / CANONICAL PARITY</p><h2>Where the executable engine<br><em>beats ZIP—and where it does not.</em></h2></div>
         <div class="record-picker"><label for="benchmark-record">Committed record</label><select id="benchmark-record"></select></div>
       </div>
       <div class="parity-kpis" id="benchmark-headline"></div>
@@ -214,15 +152,15 @@
 
     <section class="section lab-section" id="lab">
       <div class="section-head split-head">
-        <div><p class="eyebrow">07 / BROWSER LAB</p><h2>Stop reading.<br><em>Make one.</em></h2></div>
-        <p>The portable writer runs on this device. Files are not uploaded. It emits a conservative canonical subset and disables itself rather than guessing after a format revision.</p>
+        <div><p class="eyebrow">05 / BROWSER LAB</p><h2>Make one.<br><em>On your machine.</em></h2></div>
+        <p>The portable writer runs locally in the browser. Nothing is uploaded. It intentionally emits a conservative canonical subset and disables itself rather than guessing after a format revision.</p>
       </div>
 
       <div class="lab-status" id="writer-status" role="status"><span class="status-dot"></span><div><strong>Checking canonical compatibility…</strong><small>The writer gates itself against the repository format revision.</small></div></div>
       <div class="lab-grid">
-        <article class="tool-card create-card">
-          <div class="tool-head"><div><span>CREATE</span><h3>Portable CMPCT writer</h3></div><b>LOCAL ONLY</b></div>
-          <div class="drop-zone" id="drop-zone" tabindex="0" role="button" aria-label="Drop files here or choose files"><span class="drop-mark">^</span><strong>Drop files or a folder</strong><small>Your data stays in this browser.</small></div>
+        <article class="tool-card">
+          <div class="tool-head"><div><span>CREATE</span><h3>Portable CMPCT writer</h3></div><b>LOCAL</b></div>
+          <div class="drop-zone" id="drop-zone" tabindex="0" role="button" aria-label="Drop files here or choose files"><span class="drop-mark">^</span><strong>Drop files or a folder</strong><small>Build a byte-exact archive without uploading data.</small></div>
           <input id="file-input" class="visually-hidden" type="file" multiple>
           <input id="folder-input" class="visually-hidden" type="file" multiple webkitdirectory>
           <div class="pick-actions"><button class="button button-ghost" id="choose-files" type="button">Choose files</button><button class="button button-ghost" id="choose-folder" type="button">Choose folder</button></div>
@@ -233,33 +171,23 @@
         </article>
         <article class="tool-card inspector-card">
           <div class="tool-head"><div><span>INSPECT</span><h3>Header lens</h3></div><b>NO UPLOAD</b></div>
-          <p>Read only the fixed header of a local CMPCT archive. Full structural validation stays with the canonical reader and shared core.</p>
+          <p>Read only the fixed header of a local CMPCT archive. Full structural validation stays with the canonical reader and native core.</p>
           <label class="inspect-picker"><input id="inspect-input" type="file" accept=".cmpct,application/x-cmpct"><span>Choose a .cmpct file</span></label>
           <dl class="inspect-output" id="inspect-output"><div><dt>Magic</dt><dd>—</dd></div><div><dt>Version field</dt><dd>—</dd></div><div><dt>Primary index</dt><dd>—</dd></div><div><dt>Data span</dt><dd>—</dd></div><div><dt>Archive size</dt><dd>—</dd></div></dl>
         </article>
       </div>
     </section>
 
-    <section class="release-section" id="trajectory">
-      <div class="section-head split-head"><div><p class="eyebrow">08 / FRONTIER HISTORY</p><h2>Core releases must<br><em>earn the number.</em></h2></div><p>Compression, speed, reliability, recovery and interoperability all count. Presentation does not. Surface work advances the alphabetic surface revision without pretending the archive engine improved.</p></div>
+    <section class="release-section">
+      <div class="section-head split-head"><div><p class="eyebrow">06 / RELEASE TRAJECTORY</p><h2>Every material step<br><em>gets a version and a benchmark.</em></h2></div><p>Project versions move whenever substantive work lands. Format revision moves only when readers need new on-disk semantics. The performance gate runs either way.</p></div>
       <div class="release-rail" id="release-rail"></div>
-    </section>
-
-    <section class="section engineer-cta">
-      <div><p class="eyebrow">FOR ENGINEERS & AGENTS</p><h2>Don't trust the landing page.<br><em>Interrogate it.</em></h2></div>
-      <div class="engineer-links">
-        <a href="https://github.com/FCMO-AI/.CMPCT/blob/main/docs/FORMAT.md"><span>FORMAT</span><strong>Read the grammar ↗</strong></a>
-        <a href="https://github.com/FCMO-AI/.CMPCT/blob/main/docs/BENCHMARKS.md"><span>METHOD</span><strong>Audit benchmarks ↗</strong></a>
-        <a href="https://github.com/FCMO-AI/.CMPCT/tree/main/benchmarks/history"><span>RAW EVIDENCE</span><strong>Open records ↗</strong></a>
-        <a href="agent.json"><span>MACHINE VIEW</span><strong>Read agent.json ↗</strong></a>
-      </div>
     </section>
   </main>
 
   <footer class="site-footer">
-    <div><span class="brand-mark">^</span><strong>.CMPCT</strong><p>A better archive is not one number. The numbers still have to be real.</p></div>
+    <div><span class="brand-mark">^</span><strong>.CMPCT</strong><p>Performance is not a screenshot. It is a release contract.</p></div>
     <nav><a href="https://github.com/FCMO-AI/.CMPCT">Repository ↗</a><a href="https://github.com/FCMO-AI/.CMPCT/blob/main/docs/FORMAT.md">Format ↗</a><a href="https://github.com/FCMO-AI/.CMPCT/blob/main/docs/BENCHMARKS.md">Benchmarks ↗</a></nav>
-    <p class="footer-note">Pre-1.0 · research and canonical claims are intentionally separated · committed benchmark evidence remains qualified by its recorded environment and semantics.</p>
+    <p class="footer-note">Pre-1.0 · Apache-2.0 proposal not yet adopted · committed benchmark evidence remains qualified by its recorded environment and semantics.</p>
   </footer>
 </body>
 </html>
