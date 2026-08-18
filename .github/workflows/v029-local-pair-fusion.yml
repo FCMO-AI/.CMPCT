@@ -1,11 +1,24 @@
+# ci-lane: deep
 name: CMPCT v0.29 locality-bounded pair fusion
 
 on:
   pull_request:
+    branches: [main]
+    paths:
+      - 'experiments/entropygraph_v029_local_pair_fusion_oracle.py'
+      - 'experiments/entropygraph_v029_residual_program_packing.py'
+      - 'benchmarks/resemblance_hostile_corpus_v1.py'
+      - 'tests/test_v029_local_pair_fusion_oracle.py'
+      - 'native/preflate-bridge/**'
+      - '.github/workflows/v029-local-pair-fusion.yml'
   workflow_dispatch:
 
 permissions:
   contents: read
+
+concurrency:
+  group: cmpct-v029-local-pair-fusion-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 jobs:
   pair-fusion-oracle:
@@ -87,6 +100,9 @@ jobs:
       - name: Public-surface guard
         run: python tools/check_public_surface.py
 
+      - name: CI topology self-check
+        run: python tools/check_ci_topology.py .github/workflows/v029-local-pair-fusion.yml
+
       - name: Summarize pair-fusion ceiling
         run: |
           python - <<'PY' >> "$GITHUB_STEP_SUMMARY"
@@ -106,9 +122,15 @@ jobs:
           PY
 
       - name: Upload pair-fusion evidence
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: cmpct-v029-local-pair-fusion-${{ github.sha }}
           path: |
             benchmark-artifacts/mosaic-v029-local-pair-fusion.json
             benchmark-artifacts/mosaic-v029-local-pair-fusion.stdout.txt
+          if-no-files-found: warn
+          retention-days: 30
+
+# Footnote: this is a historical/deep mechanism oracle, not ordinary v0.30 PR feedback. Path-scoping preserves
+# the exact research gate when its implementation/corpus changes without spending a runner on unrelated release,
+# documentation, native-r25 or public-surface commits.
