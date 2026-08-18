@@ -160,12 +160,166 @@ fn validate_value(
     Ok(())
 }
 
+fn require_bytes(raw: &[u8], pos: usize, count: usize) -> Result<usize, PortableError> {
+    let end = pos
+        .checked_add(count)
+        .ok_or_else(|| PortableError::Limit("MessagePack offset overflow".into()))?;
+    if end > raw.len() {
+        return Err(PortableError::Format(
+            "truncated MessagePack declaration/body".into(),
+        ));
+    }
+    Ok(end)
+}
+
+fn read_be_u16(raw: &[u8], pos: usize) -> Result<(usize, usize), PortableError> {
+    let end = require_bytes(raw, pos, 2)?;
+    Ok((u16::from_be_bytes([raw[pos], raw[pos + 1]]) as usize, end))
+}
+
+fn read_be_u32(raw: &[u8], pos: usize) -> Result<(usize, usize), PortableError> {
+    let end = require_bytes(raw, pos, 4)?;
+    let value = u32::from_be_bytes([raw[pos], raw[pos + 1], raw[pos + 2], raw[pos + 3]]);
+    let value = usize::try_from(value)
+        .map_err(|_| PortableError::Limit("MessagePack length does not fit host address space".into()))?;
+    Ok((value, end))
+}
+
+fn preflight_leaf(raw: &[u8], pos: usize, body: usize) -> Result<usize, PortableError> {
+    require_bytes(raw, pos, body)
+}
+
+fn preflight_blob(raw: &[u8], pos: usize, declared: usize) -> Result<usize, PortableError> {
+    if declared > MAX_META_BYTES as usize {
+        return Err(PortableError::Limit(
+            "MessagePack string/binary declaration exceeds policy".into(),
+        ));
+    }
+    require_bytes(raw, pos, declared)
+}
+
+fn preflight_children(
+    raw: &[u8],
+    mut pos: usize,
+    count: usize,
+    depth: usize,
+    nodes: &mut usize,
+) -> Result<usize, PortableError> {
+    if count > MAX_VALUE_NODES.saturating_sub(*nodes) {
+        return Err(PortableError::Limit(
+            "MessagePack container declaration exceeds node policy".into(),
+        ));
+    }
+    for _ in 0..count {
+        pos = preflight_value(raw, pos, depth + 1, nodes)?;
+    }
+    Ok(pos)
+}
+
+fn preflight_value(
+    raw: &[u8],
+    pos: usize,
+    depth: usize,
+    nodes: &mut usize,
+) -> Result<usize, PortableError> {
+    if depth > MAX_VALUE_DEPTH {
+        return Err(PortableError::Limit(
+            "MessagePack nesting exceeds policy".into(),
+        ));
+    }
+    let marker_end = require_bytes(raw, pos, 1)?;
+    *nodes = nodes
+        .checked_add(1)
+        .ok_or_else(|| PortableError::Limit("MessagePack node counter overflow".into()))?;
+    if *nodes > MAX_VALUE_NODES {
+        return Err(PortableError::Limit(
+            "MessagePack node count exceeds policy".into(),
+        ));
+    }
+    let marker = raw[pos];
+    match marker {
+        0x00..=0x7f | 0xc0 | 0xc2 | 0xc3 | 0xe0..=0xff => Ok(marker_end),
+        0x80..=0x8f => {
+            let pairs = (marker & 0x0f) as usize;
+            let children = pairs
+                .checked_mul(2)
+                .ok_or_else(|| PortableError::Limit("MessagePack map child count overflow".into()))?;
+            preflight_children(raw, marker_end, children, depth, nodes)
+        }
+        0x90..=0x9f => preflight_children(raw, marker_end, (marker & 0x0f) as usize, depth, nodes),
+        0xa0..=0xbf => preflight_blob(raw, marker_end, (marker & 0x1f) as usize),
+        0xc1 => Err(PortableError::Format(
+            "reserved MessagePack marker 0xc1 is not admitted".into(),
+        )),
+        0xc4 | 0xd9 => {
+            let len_end = require_bytes(raw, marker_end, 1)?;
+            preflight_blob(raw, len_end, raw[marker_end] as usize)
+        }
+        0xc5 | 0xda => {
+            let (len, len_end) = read_be_u16(raw, marker_end)?;
+            preflight_blob(raw, len_end, len)
+        }
+        0xc6 | 0xdb => {
+            let (len, len_end) = read_be_u32(raw, marker_end)?;
+            preflight_blob(raw, len_end, len)
+        }
+        // r25 metadata has no extension-type grammar. Rejecting ext declarations before rmpv runs prevents a
+        // future caller from accidentally allocating an unbounded/unsupported extension payload.
+        0xc7..=0xc9 | 0xd4..=0xd8 => Err(PortableError::Format(
+            "MessagePack extension markers are not admitted by r25 metadata".into(),
+        )),
+        0xca => preflight_leaf(raw, marker_end, 4),
+        0xcb => preflight_leaf(raw, marker_end, 8),
+        0xcc | 0xd0 => preflight_leaf(raw, marker_end, 1),
+        0xcd | 0xd1 => preflight_leaf(raw, marker_end, 2),
+        0xce | 0xd2 => preflight_leaf(raw, marker_end, 4),
+        0xcf | 0xd3 => preflight_leaf(raw, marker_end, 8),
+        0xdc => {
+            let (count, len_end) = read_be_u16(raw, marker_end)?;
+            preflight_children(raw, len_end, count, depth, nodes)
+        }
+        0xdd => {
+            let (count, len_end) = read_be_u32(raw, marker_end)?;
+            preflight_children(raw, len_end, count, depth, nodes)
+        }
+        0xde => {
+            let (pairs, len_end) = read_be_u16(raw, marker_end)?;
+            let children = pairs
+                .checked_mul(2)
+                .ok_or_else(|| PortableError::Limit("MessagePack map child count overflow".into()))?;
+            preflight_children(raw, len_end, children, depth, nodes)
+        }
+        0xdf => {
+            let (pairs, len_end) = read_be_u32(raw, marker_end)?;
+            let children = pairs
+                .checked_mul(2)
+                .ok_or_else(|| PortableError::Limit("MessagePack map child count overflow".into()))?;
+            preflight_children(raw, len_end, children, depth, nodes)
+        }
+    }
+}
+
+fn preflight_msgpack(raw: &[u8]) -> Result<(), PortableError> {
+    let mut nodes = 0usize;
+    let end = preflight_value(raw, 0, 0, &mut nodes)?;
+    if end != raw.len() {
+        return Err(PortableError::Format(
+            "trailing bytes after MessagePack root".into(),
+        ));
+    }
+    Ok(())
+}
+
 pub(crate) fn parse_msgpack(raw: &[u8]) -> Result<Value, PortableError> {
     if raw.len() as u64 > MAX_META_BYTES {
         return Err(PortableError::Limit(
             "metadata exceeds decode-unit bound".into(),
         ));
     }
+    // Footnote: this scan happens before rmpv sees hostile bytes. A ten-byte stream may declare a 4 GiB
+    // array/string even though the compressed metadata itself is tiny; post-decode validation is too late if the
+    // general decoder already reserved from that declaration. Keep the second validator as defense in depth.
+    preflight_msgpack(raw)?;
     let mut cursor = Cursor::new(raw);
     let value = rmpv::decode::read_value(&mut cursor)
         .map_err(|error| PortableError::Format(format!("MessagePack decode: {error}")))?;
@@ -238,18 +392,23 @@ pub(crate) fn sint(
 }
 
 pub(crate) fn number(value: &Value, label: &str) -> Result<f64, PortableError> {
-    if let Some(value) = value.as_f64() {
-        return Ok(value);
+    let number = if let Some(value) = value.as_f64() {
+        value
+    } else if let Some(value) = value.as_i64() {
+        value as f64
+    } else if let Some(value) = value.as_u64() {
+        value as f64
+    } else {
+        return Err(PortableError::Format(format!(
+            "{label} numeric declaration"
+        )));
+    };
+    if !number.is_finite() {
+        return Err(PortableError::Format(format!(
+            "{label} must be a finite numeric declaration"
+        )));
     }
-    if let Some(value) = value.as_i64() {
-        return Ok(value as f64);
-    }
-    if let Some(value) = value.as_u64() {
-        return Ok(value as f64);
-    }
-    Err(PortableError::Format(format!(
-        "{label} numeric declaration"
-    )))
+    Ok(number)
 }
 
 pub(crate) fn tree_digest(text: &str) -> Result<[u8; 32], PortableError> {
@@ -323,4 +482,36 @@ pub(crate) fn tree_hasher_prefix(hasher: &mut Sha256, rel: &str, size: u64) {
     hasher.update((rel.len() as u32).to_le_bytes());
     hasher.update(rel);
     hasher.update(size.to_le_bytes());
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn preflight_rejects_huge_container_declarations_before_decode() {
+        for raw in [
+            vec![0xdd, 0xff, 0xff, 0xff, 0xff],
+            vec![0xdf, 0x7f, 0xff, 0xff, 0xff],
+            vec![0xc6, 0xff, 0xff, 0xff, 0xff],
+            vec![0xdb, 0xff, 0xff, 0xff, 0xff],
+        ] {
+            assert!(parse_msgpack(&raw).is_err());
+        }
+    }
+
+    #[test]
+    fn preflight_rejects_truncated_and_reserved_markers() {
+        assert!(parse_msgpack(&[0xcd, 0x01]).is_err());
+        assert!(parse_msgpack(&[0xc1]).is_err());
+        assert!(parse_msgpack(&[0xd9, 0x04, b'a']).is_err());
+    }
+
+    #[test]
+    fn finite_number_policy_rejects_nan_and_infinity() {
+        for value in [Value::F64(f64::NAN), Value::F64(f64::INFINITY), Value::F64(f64::NEG_INFINITY)] {
+            assert!(number(&value, "policy").is_err());
+        }
+        assert_eq!(number(&Value::F64(8.0), "policy").unwrap(), 8.0);
+    }
 }
