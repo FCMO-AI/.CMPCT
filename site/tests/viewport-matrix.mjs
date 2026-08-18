@@ -45,6 +45,23 @@ const keySelectors = [
   '.site-footer',
 ];
 
+/* Footnote: the historical motion layer reveals later chapters with IntersectionObserver. A full-page
+   screenshot does not itself guarantee those observers are exercised. Scroll representative chapter
+   surfaces through the real viewport first, then return to the hero; visibility assertions can remain
+   strict instead of incorrectly treating intentional pre-reveal opacity as a responsive failure. */
+const revealSelectors = [
+  '.hero-score',
+  '#hero-metrics',
+  '.arena',
+  '.performance-split',
+  '.graph-stage',
+  '.canonical-band',
+  '.benchmark-table-wrap',
+  '.lab-grid',
+  '.release-rail',
+  '.site-footer',
+];
+
 function overlap(a, b) {
   const x = Math.max(0, Math.min(a.right, b.right) - Math.max(a.left, b.left));
   const y = Math.max(0, Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top));
@@ -187,6 +204,16 @@ try {
       return gain && gain !== '—';
     }, { timeout: 15_000 });
     await page.evaluate(() => document.fonts?.ready);
+    await page.waitForTimeout(160);
+
+    for (const selector of revealSelectors) {
+      const target = page.locator(selector).first();
+      if (await target.count()) {
+        await target.scrollIntoViewIfNeeded();
+        await page.waitForTimeout(100);
+      }
+    }
+    await page.evaluate(() => window.scrollTo(0, 0));
     await page.waitForTimeout(160);
 
     const result = await inspect(page, viewport);
