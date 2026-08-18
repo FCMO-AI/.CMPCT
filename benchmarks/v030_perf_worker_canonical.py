@@ -25,12 +25,11 @@ def _rss_kib() -> int:
     return int(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss)
 
 
-def _require_product_member_surface(engine) -> None:
-    missing = [
-        name
-        for name in ("read_member", "read_member_with_stats", "list_members")
-        if not callable(getattr(engine, name, None))
-    ]
+def _require_product_member_surface(engine, *, require_stats: bool = True) -> None:
+    required = ["read_member", "list_members"]
+    if require_stats:
+        required.append("read_member_with_stats")
+    missing = [name for name in required if not callable(getattr(engine, name, None))]
     if missing:
         raise RuntimeError("canonical product member surface unavailable: " + ", ".join(missing))
 
@@ -45,8 +44,8 @@ def _observed_product_member(engine, archive: Path, member: str) -> tuple[bytes,
     Footnote: the instrumentation never substitutes a build declaration or a missing-value default. If the public
     operation cannot expose what it decoded, final release evidence fails instead of quietly reporting 0.0x/1.0x.
     """
-    _require_product_member_surface(engine)
     magic = Path(archive).read_bytes()[:8]
+    _require_product_member_surface(engine, require_stats=magic != engine.R24_MAGIC)
 
     if magic != engine.R24_MAGIC:
         raw, direct = engine.read_member_with_stats(archive, member)
@@ -147,7 +146,7 @@ def main() -> None:
     elif args.op == "members":
         if args.engine != "v030":
             raise SystemExit("canonical product member listing is a v0.30 operation")
-        _require_product_member_surface(engine)
+        _require_product_member_surface(engine, require_stats=False)
         result = {"engine": args.engine, "op": args.op, "members": engine.list_members(args.archive)}
     else:
         if args.engine != "v030":
