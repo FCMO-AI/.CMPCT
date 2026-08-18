@@ -11,6 +11,9 @@ on:
       - 'experiments/entropygraph_v030_canonical_final.py'
       - 'experiments/entropygraph_v030_release_product.py'
       - 'tests/test_v030_canonical_final.py'
+      - 'tests/generate_v030_canonical_goldens.py'
+      - 'tests/conformance/v030-r25-canonical.json'
+      - 'tests/native_v030_canonical.py'
       - 'tests/native_v030_r24_verify_authority.py'
       - '.github/workflows/v030-native-authority.yml'
   workflow_dispatch:
@@ -25,7 +28,7 @@ concurrency:
 jobs:
   native-authority:
     runs-on: ubuntu-24.04
-    timeout-minutes: 40
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-python@v6
@@ -40,6 +43,8 @@ jobs:
           python -m pip install -e '.[test]'
       - name: Python canonical boundary tests
         run: python -m pytest -q tests/test_v030_canonical_final.py
+      - name: Reproduce independent canonical r25 golden bytes
+        run: python tests/generate_v030_canonical_goldens.py --check
       - name: Rust format
         working-directory: native/cmpct-portable
         run: cargo fmt --check
@@ -52,6 +57,8 @@ jobs:
       - name: Rust release build
         working-directory: native/cmpct-portable
         run: cargo build --release
+      - name: Canonical CMP25 CLI ABI recovery and filesystem acceptance
+        run: python tests/native_v030_canonical.py
       - name: Prove complete r24 RAW verification and truthful locality surface
         run: |
           python tests/native_v030_r24_verify_authority.py \
@@ -60,5 +67,5 @@ jobs:
         run: python tools/check_ci_topology.py .github/workflows/v030-native-authority.yml
 
 # Footnote: this lane is release-scoped because it validates the shared native reader that can open every
-# representation the v0.30 selector may publish. It is intentionally path-scoped and superseding so native
-# authority is not confused with unrelated research or presentation work.
+# representation the v0.30 selector may publish. Builder-independent CMP25 bytes are regenerated from primitive
+# framing, then consumed by both the CLI and C ABI; self-generated writer/reader agreement is not sufficient.
