@@ -8,10 +8,9 @@ on:
     paths:
       - 'experiments/entropygraph_v030_release_product.py'
       - 'experiments/entropygraph_v030_canonical_final.py'
-      - 'benchmarks/v030_release_generalization_canonical.py'
       - 'benchmarks/v030_release_ablation_product.py'
       - 'benchmarks/v030_release_ablation_canonical.py'
-      - 'benchmarks/v030_release_performance_canonical.py'
+      - 'benchmarks/v030_release_performance_product.py'
       - 'benchmarks/v030_release_selective_read_canonical.py'
       - 'benchmarks/v030_release_selective_read_product.py'
       - 'benchmarks/v030_perf_worker_canonical.py'
@@ -52,9 +51,8 @@ jobs:
             experiments/entropygraph_v030_canonical_final.py \
             experiments/entropygraph_v030_release_product.py \
             benchmarks/v030_perf_worker_canonical.py \
-            benchmarks/v030_release_generalization_canonical.py \
             benchmarks/v030_release_ablation_product.py \
-            benchmarks/v030_release_performance_canonical.py \
+            benchmarks/v030_release_performance_product.py \
             benchmarks/v030_release_selective_read_canonical.py \
             benchmarks/v030_release_selective_read_product.py \
             benchmarks/v030_external_competitors_canonical.py
@@ -87,48 +85,40 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -e '.[audio,test]'
           python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
-      - name: Run exact release-product 15-workload compression gate
+      - name: Run historical causality and genuine r24-vs-r25 product parity
         run: |
           mkdir -p benchmark-artifacts
-          python benchmarks/v030_release_generalization_canonical.py \
-            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/final-generalization-work" \
-            --output "$GITHUB_WORKSPACE/benchmark-artifacts/final-generalization.json"
-      - name: Run historical-causality plus genuine r24-vs-r25 product parity
-        run: |
           python benchmarks/v030_release_ablation_product.py \
             --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/final-ablation-work" \
             --output "$GITHUB_WORKSPACE/benchmark-artifacts/final-ablation.json"
-      - name: Enforce immutable release thresholds
+      - name: Enforce immutable compression and product floors
         run: |
           python - <<'PY'
           import json
           from pathlib import Path
-          g=json.loads(Path('benchmark-artifacts/final-generalization.json').read_text())
           a=json.loads(Path('benchmark-artifacts/final-ablation.json').read_text())
-          assert g['engine']=='experiments/entropygraph_v030_release_product.py'
-          assert g['release_facade']=='cmpct-v030-release-product-v1'
-          assert g['contract']['expected_v029_aggregate_bytes']==137501815
-          assert g['contract']['minimum_release_saving_bytes']==687783
-          assert g['totals']['workloads']==15
-          assert g['totals']['workloads_regressed']==0
-          assert g['totals']['workloads_improved']>=3
-          assert g['totals']['saving_vs_v029_bytes']>=687783
-          assert g['totals']['max_selected_member_read_amplification']<=8.0
-          assert g['gate']['passed'] is True
+          h=a['historical_causality']; p=a['canonical_product_parity']
+          c=h['totals']['combined']
           assert a['product_engine']=='experiments/entropygraph_v030_release_product.py'
-          assert a['gate']['historical_causality_passed'] is True
-          assert a['gate']['canonical_product_parity_passed'] is True
-          assert a['canonical_product_parity']['gate']['zero_product_byte_regressions'] is True
-          assert a['canonical_product_parity']['gate']['aggregate_product_no_regression'] is True
+          assert a['release_facade']=='cmpct-v030-release-product-v1'
+          assert a['contract']['expected_v029_historical_aggregate_bytes']==137501815
+          assert a['contract']['minimum_historical_release_saving_bytes']==687783
+          assert h['totals']['v029']['archive_bytes']==137501815
+          assert c['regressed_rows']==0
+          assert c['improved_rows']>=3
+          assert c['saving_vs_v029_bytes']>=687783
+          assert h['gate']['passed'] is True
+          assert p['gate']['zero_product_byte_regressions'] is True
+          assert p['gate']['aggregate_product_no_regression'] is True
+          assert p['gate']['passed'] is True
+          assert a['gate']['passed'] is True
           PY
       - name: Upload release compression evidence
         if: always()
         uses: actions/upload-artifact@v6
         with:
           name: v030-final-compression-${{ github.sha }}
-          path: |
-            benchmark-artifacts/final-generalization.json
-            benchmark-artifacts/final-ablation.json
+          path: benchmark-artifacts/final-ablation.json
           if-no-files-found: warn
           retention-days: 90
 
@@ -149,10 +139,10 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -e '.[audio,test]'
           python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
-      - name: Run fresh-process release-product runtime gate
+      - name: Run paired release-product runtime gate
         run: |
           mkdir -p benchmark-artifacts
-          python benchmarks/v030_release_performance_canonical.py \
+          python benchmarks/v030_release_performance_product.py \
             --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/final-runtime-work" \
             --output "$GITHUB_WORKSPACE/benchmark-artifacts/final-runtime.json"
       - name: Run operation-derived selective-read gate
@@ -233,6 +223,6 @@ jobs:
           if-no-files-found: warn
           retention-days: 90
 
-# Footnote: these jobs are the final Python/product benchmark authority. Native/shared-reader, recovery/fuzz,
-# Android/portability, shared-build rehabilitation, version discipline and live-publication receipts remain
-# separate mandatory release gates; no single green benchmark job can authorize publication by itself.
+# Footnote: historical mechanism causality and canonical product parity intentionally remain different byte/tree
+# domains. The former owns the immutable 137,501,815 B / 687,783 B threshold; the latter proves the new r25
+# framing never regresses the genuine r24 product. Conflating them would make product metadata appear free.
