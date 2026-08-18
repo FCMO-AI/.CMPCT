@@ -1,9 +1,7 @@
+# ci-lane: release
 name: CMPCT v0.30 cooperative evidence-performance authority
 
 on:
-  push:
-    branches:
-      - agent/v030-coop-evidence-performance
   pull_request:
     branches:
       - agent/v030-authoritative-integration
