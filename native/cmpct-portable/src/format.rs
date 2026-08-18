@@ -2,7 +2,7 @@ use crate::PortableError;
 use rmpv::Value;
 use sha2::{Digest, Sha256};
 use std::collections::HashSet;
-use std::io::{Cursor, Read};
+use std::io::{BufReader, Cursor, Read};
 use std::path::PathBuf;
 
 pub(crate) const MAX_META_BYTES: u64 = 8 * 1024 * 1024;
@@ -51,10 +51,13 @@ pub(crate) fn bounded_zstd_decode(
     }
     let capacity = usize::try_from(expected_size)
         .map_err(|_| PortableError::Limit("zstd output does not fit host address space".into()))?;
-    let cursor = Cursor::new(compressed);
+    // Footnote: `Decoder::new(Read)` inserts its own `BufReader`, while `with_dictionary` accepts an
+    // already-buffered reader. Feeding both branches the same explicit `BufReader<Cursor<_>>` and using
+    // `with_buffer` for the dictionary-free branch keeps one concrete decoder type without dynamic dispatch.
+    let reader = BufReader::new(Cursor::new(compressed));
     let decoder = match dictionary {
-        Some(dict) => zstd::stream::read::Decoder::with_dictionary(cursor, dict),
-        None => zstd::stream::read::Decoder::new(cursor),
+        Some(dict) => zstd::stream::read::Decoder::with_dictionary(reader, dict),
+        None => zstd::stream::read::Decoder::with_buffer(reader),
     }
     .map_err(|error| PortableError::Format(format!("zstd decoder init: {error}")))?;
     let mut limited = decoder.take(expected_size.saturating_add(1));
