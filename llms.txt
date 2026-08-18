@@ -1,6 +1,6 @@
 # .CMPCT
 
-> Project v0.29.0 · surface 0.29.g · canonical format r24.
+> Project v0.29.0 · surface 0.29.h · canonical format r24.
 
 CMPCT is an experimental general-purpose lossless archive/container. Performance is a core-release contract: benchmark wins and losses remain attached to committed evidence, while presentation-only changes use the alphabetic surface track.
 
@@ -21,7 +21,7 @@ CMPCT is an experimental general-purpose lossless archive/container. Performance
 Canonical source and evidence live on `main`. `gh-pages` is generated static deployment output only and must not become a second source of truth.
 
 ## Visual quality authority
-The restored pre-redesign hero/score/graph/light-band composition is the minimum presentation floor. Major visual changes are expected to be rendered and inspected at desktop and mobile viewports before promotion.
+The restored pre-redesign hero/score/graph/light-band composition is the minimum presentation floor. Surface 0.29.h adds ratio-aware adaptation validated in Chromium across 16 representative width/height/aspect-ratio classes, with screenshot evidence retained by CI.
 
 ## Qualification
 The site distinguishes canonical revision-24 behavior from the research-frontier Mosaic/CMPNX11 results. Do not promote research-only grammar as canonical interoperability support. Raw archive-size comparisons do not imply feature parity.
