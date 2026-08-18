@@ -25,6 +25,44 @@ This subtree is CMPCT's public proof surface. Before modifying it, read:
 - Run `python site/tests/proof_surface_contract.py _site` after building the site.
 - Run `python site/tests/release_evidence_contract.py` before promoting a static site tree.
 
+## Visual quality contract
+
+The pre-public-proof visual grammar restored in Surface 0.29.f is a **minimum quality floor**, not an archive curiosity. Future content or engineering work must adapt itself to that visual system unless a deliberately reviewed replacement is demonstrably stronger.
+
+The following features may evolve, but they may not silently disappear or collapse into generic cards:
+
+- the intricate mixed sans/serif hero composition and strong typographic pacing;
+- a dominant authored hero graphic tied to CMPCT or its evidence, not generic decorative particles;
+- the proof score as a major visual object rather than a small dashboard tile;
+- the information-graph chapter and its relationship choreography;
+- the full-width light canonical/research authority break;
+- the performance arena as a measured visual instrument;
+- deliberate chapter pacing, responsive composition and a visually finished Browser Lab.
+
+Every visual edit must be **rendered and inspected**, not approved from source code alone. At minimum inspect:
+
+- desktop: 1440×1000;
+- mobile: 390×844;
+- the hero/proof score;
+- arena + Red Team Board;
+- information graph;
+- canonical/research authority band;
+- Browser Lab;
+- any region directly changed by the patch.
+
+For large redesigns, add 1920×1080 and tablet (~820px wide) inspection. Record defects found during rendering and correct them before merge. A CSS/JS feature that exists in source but is visually hidden, clipped, illegible, or compositionally weaker counts as a failed feature.
+
+Visual changes must obey a quality ratchet:
+
+1. first reproduce the current/baseline surface;
+2. make one coherent change;
+3. render it at the required viewports;
+4. compare against the baseline for hierarchy, legibility, distinctiveness and product meaning;
+5. keep the change only if it survives that comparison;
+6. preserve a regression assertion for any concrete defect discovered.
+
+Do not confuse technical spectacle with quality. WebGL, canvas, shaders, scroll choreography or large motion are welcome when they explain CMPCT or create a stronger authored experience; they are not intrinsically better than a simpler effect. Secondary UI must not compete with the main idea. Reduced-motion must retain the composition and information even when choreography is removed.
+
 ## Publication architecture
 
 - `main` owns canonical site source, benchmark evidence, generators, tests and documentation.
