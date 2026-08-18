@@ -2,6 +2,7 @@ use crate::format::{
     as_array, as_map, bounded_zstd_decode, digest32, field, number, optional_field, parse_msgpack,
     safe_relpath, sha256, text, tree_digest, tree_hasher_prefix, u64_le, uint, MAX_META_BYTES,
 };
+use crate::identity::R25Identity;
 use crate::{MemberReadStats, PortableEntry, PortableError};
 use rmpv::Value;
 use sha2::{Digest, Sha256};
@@ -11,8 +12,6 @@ use std::io::{Read, Seek, SeekFrom, Write};
 use std::path::Path;
 use std::sync::Mutex;
 
-const MAGIC: &[u8; 8] = b"CMPNXP1\0";
-const TAIL: &[u8; 8] = b"CMPNXP1T";
 const HEADER_SIZE: u64 = 56;
 const FOOTER_SIZE: u64 = 56;
 const MAX_FILES: usize = 1024;
@@ -37,6 +36,7 @@ struct PrefixRecord {
 
 #[derive(Debug)]
 pub(crate) struct PrefixArchive {
+    identity: R25Identity,
     entries: Vec<PortableEntry>,
     records: Vec<PrefixRecord>,
     tree_sha: [u8; 32],
@@ -53,15 +53,23 @@ struct AuthMeta {
 }
 
 impl PrefixArchive {
-    pub(crate) fn open(path: &Path) -> Result<Self, PortableError> {
+    pub(crate) fn open(path: &Path, identity: R25Identity) -> Result<Self, PortableError> {
+        if !matches!(
+            identity,
+            R25Identity::ResearchPrefix | R25Identity::CanonicalPrefix
+        ) {
+            return Err(PortableError::Format(
+                "PrefixGraph reader received a G0-G4 profile identity".into(),
+            ));
+        }
         let mut file = File::open(path)?;
         let file_len = file.metadata()?.len();
         if file_len < HEADER_SIZE + FOOTER_SIZE {
             return Err(PortableError::Format("short PrefixGraph archive".into()));
         }
 
-        let primary = read_primary(&mut file).ok();
-        let tail = read_tail(&mut file, file_len).ok();
+        let primary = read_primary(&mut file, identity).ok();
+        let tail = read_tail(&mut file, file_len, identity).ok();
         if primary.is_none() && tail.is_none() {
             return Err(PortableError::Integrity(
                 "no authenticated PrefixGraph metadata copy".into(),
@@ -105,6 +113,7 @@ impl PrefixArchive {
         // fixes every csize/hash and the tail binds the aggregate payload endpoint, so opening a large archive
         // remains metadata-bounded while selective reads still authenticate every context byte they consume.
         Ok(Self {
+            identity,
             entries,
             records,
             tree_sha,
@@ -115,6 +124,14 @@ impl PrefixArchive {
 
     pub(crate) fn entries(&self) -> &[PortableEntry] {
         &self.entries
+    }
+
+    pub(crate) fn entry_identity(&self, index: usize) -> Result<(u64, [u8; 32]), PortableError> {
+        let record = self
+            .records
+            .get(index)
+            .ok_or_else(|| PortableError::Format("PrefixGraph member id out of range".into()))?;
+        Ok((record.usize, record.logical_sha))
     }
 
     pub(crate) fn tail_authenticated(&self) -> bool {
@@ -201,7 +218,7 @@ impl PrefixArchive {
                 logical_bytes: record.usize,
                 decoded_context_bytes: decoded_context,
                 amplification,
-                profile: "prefixgraph-r25",
+                profile: self.identity.profile_name(),
             },
         ))
     }
@@ -243,12 +260,12 @@ impl PrefixArchive {
     }
 }
 
-fn read_primary(file: &mut File) -> Result<AuthMeta, PortableError> {
+fn read_primary(file: &mut File, identity: R25Identity) -> Result<AuthMeta, PortableError> {
     file.seek(SeekFrom::Start(0))?;
     let mut header = [0u8; HEADER_SIZE as usize];
     file.read_exact(&mut header)?;
-    if &header[0..8] != MAGIC {
-        return Err(PortableError::Format("not PrefixGraph".into()));
+    if &header[0..8] != identity.magic() {
+        return Err(PortableError::Format("PrefixGraph profile magic mismatch".into()));
     }
     let compressed_size = u64_le(&header[8..16])?;
     let raw_size = u64_le(&header[16..24])?;
@@ -276,14 +293,18 @@ fn read_primary(file: &mut File) -> Result<AuthMeta, PortableError> {
     })
 }
 
-fn read_tail(file: &mut File, file_len: u64) -> Result<AuthMeta, PortableError> {
+fn read_tail(
+    file: &mut File,
+    file_len: u64,
+    identity: R25Identity,
+) -> Result<AuthMeta, PortableError> {
     if file_len < FOOTER_SIZE {
         return Err(PortableError::Format("short PrefixGraph tail".into()));
     }
     file.seek(SeekFrom::Start(file_len - FOOTER_SIZE))?;
     let mut footer = [0u8; FOOTER_SIZE as usize];
     file.read_exact(&mut footer)?;
-    if &footer[0..8] != TAIL {
+    if &footer[0..8] != identity.tail() {
         return Err(PortableError::Format("PrefixGraph tail magic".into()));
     }
     let compressed_size = u64_le(&footer[8..16])?;
