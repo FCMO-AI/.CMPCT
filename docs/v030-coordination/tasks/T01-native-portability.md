@@ -11,6 +11,22 @@
 
 Make every representation that the final v0.30 selector can publish independently readable and verifiable through the shared native/portable surface, with the same recovery/resource semantics as Python and with no second incompatible parser architecture.
 
+## Cross-lane canonical-profile dependency
+
+Your `native/cmpct-portable` architecture is accepted in principle because r24 delegates to the mature `cmpct-core`; do not replace that with a copied r24 parser.
+
+However, the current native dispatcher still recognizes research identities `CMPNXG4` / `CMPNXP1`. Slot-03's provisional canonical product surface has selected fixed revision-25 profile identities `CMP25G4\0` and `CMP25PG\0`, with real canonical r24 fallback rather than relabelled research bytes.
+
+Until T03 reaches REVIEW:
+
+- keep r25 grammar implementation/recovery/resource work moving;
+- do **not** treat research magics as final ABI/golden-vector authority;
+- isolate profile identity constants so the canonical identity reconciliation is surgical;
+- do not commit final builder-independent r25 goldens or release receipts against research magics;
+- final native evidence must run after the T03 canonical profile decision is imported/reconciled.
+
+If T03 changes actual reconstruction semantics rather than only profile identity/fs metadata framing, mark the affected native work `BLOCKED` and identify the exact semantic delta instead of silently accepting a byte mismatch.
+
 ## Scope
 
 - canonical r25 G0–G4 Geometry native/shared reader parity;
@@ -48,4 +64,4 @@ Prefer `native/**`, native-specific tests/vectors, `docs/NATIVE_CORE.md`, `docs/
 
 ## Handoff
 
-Set `REVIEW` with exact source head, commits intended for import, golden-vector paths, Cargo/Python test commands actually run, known platform gaps, and any conflicts expected with T00/main.
+Set `REVIEW` with exact source head, commits intended for import, golden-vector paths, Cargo/Python test commands actually run, known platform gaps, and any conflicts expected with T00/main/T03 canonical profile identity.
