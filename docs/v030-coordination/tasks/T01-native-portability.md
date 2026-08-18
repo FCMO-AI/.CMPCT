@@ -1,10 +1,10 @@
 # T01 — Native r25 / portability completion
 
-- **Owner:** slot-01
+- **Owner:** v0.30 sole executor
 - **Priority:** P0
-- **State:** READY
-- **Branch:** `agent/v030-coop-native-portability`
-- **Dependencies:** may implement against bootstrap integration head; final evidence must be rerun/rebased after T00 reconciliation.
+- **State:** CLAIMED
+- **Branch:** `agent/v030-authoritative-integration`
+- **Dependencies:** final authority must run on the same exact reconciled candidate used by T00–T04.
 
 ## Objective
 
@@ -22,9 +22,9 @@ Make every representation that the final v0.30 selector can publish independentl
 - native ABI/CLI integration using the repository's shared memory-safe core design;
 - platform/Android acceptance infrastructure required by existing policy.
 
-## Owned paths
+## Preferred implementation area
 
-Prefer `native/**`, native-specific tests/vectors, `docs/NATIVE_CORE.md`, `docs/PORTABILITY.md`, and narrowly necessary canonical profile adapters. Do not change compression-selection thresholds or benchmark floors.
+Prefer `native/**`, native-specific tests/vectors, `docs/NATIVE_CORE.md`, `docs/PORTABILITY.md`, and narrowly necessary canonical profile adapters. Because one executor owns the full release, adjacent product code may be changed when required to close a proven interface defect, but compression-selection thresholds and benchmark floors remain frozen unless the release policy itself explicitly requires a stricter gate.
 
 ## Must not regress
 
@@ -44,7 +44,10 @@ Prefer `native/**`, native-specific tests/vectors, `docs/NATIVE_CORE.md`, `docs/
 6. ZIP export from each selected representation round-trips through stock tooling.
 7. Existing native/core regression suite remains green.
 8. Relevant portability/format/native docs are accurate, not aspirational.
+9. Android/platform acceptance required by repository policy is tied to the exact release candidate, including the shared portable dispatcher rather than an independent parser.
 
-## Handoff
+## Current continuation rule
 
-Set `REVIEW` with exact source head, commits intended for import, golden-vector paths, Cargo/Python test commands actually run, known platform gaps, and any conflicts expected with T00/main.
+Work directly on the authoritative branch. Preserve useful earlier implementation/evidence provenance where it still applies, but rerun every normative native/platform receipt on the final reconciled fingerprint. Historical or pre-fingerprint greens prove mechanisms only.
+
+Move T01 to `DONE` only when the implementation and all release-lock evidence obligations are durably closed on the authoritative branch.
