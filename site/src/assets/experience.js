@@ -1,5 +1,7 @@
 /* CMPCT restored experience assembly.
-   Footnote: proof-renderer.js owns evidence truth; cinematic.js owns presentation. Keeping those roles in
-   separate modules lets the visual campaign evolve without teaching decorative code how to make claims. */
+   Footnote: i18n.js owns only deterministic locale application; proof-renderer.js owns evidence truth;
+   cinematic.js owns presentation. Loading localization before the proof renderer lets later evidence DOM
+   updates inherit the selected locale without giving translation code authority over benchmark claims. */
+import "./i18n.js";
 import "./proof-renderer.js";
 import "./cinematic.js";
