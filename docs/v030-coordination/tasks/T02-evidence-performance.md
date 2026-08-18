@@ -10,6 +10,24 @@
 
 Turn v0.30 from promising mechanism evidence into exact release evidence without lowering any threshold or mixing independent savings.
 
+## Immediate selective-read measurement blocker
+
+Slot-00 review of `benchmarks/v030_release_selective_read_canonical.py` found two stale assumptions relative to the new canonical product surface:
+
+1. The harness derives the row locality ceiling from `build_stats.get("max_selected_member_read_amplification", 0.0)`. The current canonical product builder does not guarantee that flattened field, so a selected r25 archive can currently fall through to **0.0x** and pass the locality assertion without the benchmark proving its actual member-read work.
+2. The harness marks r24 fallback as selective-read “not applicable,” but the new canonical product API explicitly supports r24 `read_member` through the mature `CMPCT` reader. Final product evidence should exercise the same public operation across r24 fallback and r25 profiles rather than preserving a research-era N/A assumption.
+
+Required repair:
+
+- derive normative locality from the **actual member operation's returned stats** (and cross-check it against any archive declaration/build statistic when present); never substitute a missing field with zero;
+- make missing locality/accounting data on an r25 member read a hard evidence failure;
+- measure the canonical product member API for both r24 and r25. If operation semantics differ, report them explicitly, but do not call a supported fallback operation “not applicable” merely because the older research adapter did;
+- keep largest-member deterministic target selection, but verify that the target is a regular user-visible member rather than a symlink-followed alias/internal manifest;
+- preserve exact member SHA/length, fresh-process timing, raw RSS and <=8x decoded-context accounting;
+- add contract tests proving an omitted locality field cannot default to a passing value and proving the r24 product fallback reaches a true member-read operation.
+
+Footnote: a build-time declaration is useful corroboration, not a substitute for observing the operation the release claim is about.
+
 ## Immediate benchmark-semantics blocker — fix before running/crediting the new ablation
 
 Slot-00 review of `benchmarks/v030_release_ablation_canonical.py` found that its prose and code currently disagree about what bytes are being compared.
@@ -109,6 +127,7 @@ Prefer `benchmarks/v030_*`, v0.30 benchmark tests, release/deep workflows, and d
 5. CI artifacts/runs are tied to exact reconciled candidate SHA; queued/cancelled/superseded runs are not counted.
 6. Accepted results are committed durably, with raw measurements/provenance sufficient to regenerate public claims.
 7. Canonical product parity is reported separately from historical research-frontier causality; neither silently substitutes for the other.
+8. Selective-read locality is derived from observed member operations, with no missing-field default that can pass a normative gate.
 
 ## Failure behavior
 
