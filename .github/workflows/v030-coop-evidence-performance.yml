@@ -2,9 +2,9 @@
 name: CMPCT v0.30 cooperative evidence-performance authority
 
 on:
-  pull_request:
+  push:
     branches:
-      - agent/v030-authoritative-integration
+      - agent/v030-coop-evidence-performance
     paths:
       - 'benchmarks/v030_*.py'
       - 'tests/test_v030_*.py'
@@ -16,7 +16,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: cmpct-v030-coop-evidence-${{ github.event.pull_request.number || github.ref }}
+  group: cmpct-v030-coop-evidence-${{ github.ref }}
   cancel-in-progress: true
 
 env:
@@ -432,8 +432,8 @@ jobs:
           if-no-files-found: warn
           retention-days: 90
 
-# Footnote: this workflow is the slot-02 evidence reactor, not release authority by itself. A green specialist
-# branch proves the harness and current candidate evidence on its exact SHA; slot-00 must still import T01/T03,
-# freeze one reconciled integration SHA, and rerun the same gates there before any durable v0.30 release record or
-# public claim can be accepted. A red result remains evidence and must never be converted to green by changing a
-# workload, comparator, timing boundary, semantic substrate, or threshold.
+# Footnote: this branch-scoped workflow is the slot-02 evidence reactor, not release authority by itself. A green
+# specialist branch proves the harness and current candidate evidence on its exact SHA; slot-00 must still import
+# T01/T03, freeze one reconciled integration SHA, and rerun the same gates there before any durable v0.30 release
+# record or public claim can be accepted. A red result remains evidence and must never be converted to green by
+# changing a workload, comparator, timing boundary, semantic substrate, or threshold.
