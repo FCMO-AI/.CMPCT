@@ -1,9 +1,10 @@
 from __future__ import annotations
 
-"""Canonical-byte binding for the frozen v0.30 paired runtime gate.
+"""Release-product binding for the frozen v0.30 paired runtime gate.
 
-Thresholds remain owned by ``v030_release_performance``. This adapter changes only the v0.30 worker to the
-canonical revision-25 facade so timing/RSS evidence refers to the exact on-disk profiles that can ship.
+Thresholds remain owned by ``v030_release_performance``. The fresh-process worker imports the one promoted
+v0.30 product front door, so create/extract/RSS/selective evidence cannot accidentally benchmark an integration
+checkpoint that the final CLI will not ship.
 """
 
 import argparse
@@ -17,8 +18,8 @@ B.WORKER = B.ROOT / "benchmarks" / "v030_perf_worker_canonical.py"
 
 def run(work_root: Path) -> dict:
     result = dict(B.run(work_root))
-    result["engine"] = "experiments/entropygraph_v030_canonical.py"
-    result["release_facade"] = "cmpct-v030-r25-v1"
+    result["engine"] = "experiments/entropygraph_v030_release_product.py"
+    result["release_facade"] = "cmpct-v030-release-product-v1"
     result["worker"] = "benchmarks/v030_perf_worker_canonical.py"
     return result
 
