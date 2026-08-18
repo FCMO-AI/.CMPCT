@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
-"""Validate CMPCT's public-proof truth and its restored cinematic presentation contract.
+"""Validate CMPCT's public-proof truth and restored cinematic visual contract.
 
-Footnote: the historical visual shell is now an explicit regression surface. A future content rebuild may
-change evidence or copy, but it must not silently flatten the intricate hero, graph stage, light authority
-band, Browser Lab, or evidence-driven cinematic layer that make the site recognizably CMPCT.
+Footnote: the historical shell and the later rendered ratchets are explicit regression surfaces. Future
+content work may change evidence or copy, but it must not silently flatten the intricate hero, graph stage,
+light authority band, Browser Lab, or evidence-driven graphics that make the public site recognizably CMPCT.
 """
 
 import argparse
@@ -89,16 +89,19 @@ def main() -> None:
         assert marker not in html, f"unexpanded generated-site marker: {marker}"
 
     for asset in (
-        "styles.css", "motion.css", "polish.css", "experience.css", "cinematic.css",
+        "styles.css", "motion.css", "polish.css", "experience.css", "cinematic.css", "masterclass.css",
         "motion.js", "experience.js", "proof-renderer.js", "cinematic.js",
     ):
         assert (out / "assets" / asset).is_file(), f"missing generated visual asset: {asset}"
 
-    # Footnote: the pre-redesign stylesheet remains the owner of composition; experience.css may only add
-    # the campaign layer. Re-importing the rejected atelier/base stack would recreate the flattening bug.
+    # Footnote: the pre-redesign stylesheet remains the owner of composition. Later layers may amplify it
+    # but must remain additive and auditable; re-importing the rejected atelier stack recreates the bug.
     experience = (out / "assets" / "experience.css").read_text(encoding="utf-8")
     assert 'cinematic.css' in experience
+    assert 'masterclass.css' in experience
+    assert experience.index('cinematic.css') < experience.index('masterclass.css')
     assert 'atelier.css' not in experience
+
     styles = (out / "assets" / "styles.css").read_text(encoding="utf-8")
     for historical_signature in ('.hero-copy h1', '.hero-copy h1 em', '.hero-score:before', '.graph-stage', '.canonical-band'):
         assert historical_signature in styles, f"historical visual grammar missing: {historical_signature}"
@@ -106,6 +109,19 @@ def main() -> None:
     cinematic = (out / "assets" / "cinematic.css").read_text(encoding="utf-8")
     for signature in ('.entropy-sun', '.canonical-crossing', '.chapter-rail', '.engineer-cta'):
         assert signature in cinematic, f"cinematic campaign feature missing: {signature}"
+
+    # Footnote: these signatures correspond to defects/features that were visually verified, not arbitrary
+    # CSS trivia. In particular, the sun once existed in code but sat behind the hero stacking context.
+    masterclass = (out / "assets" / "masterclass.css").read_text(encoding="utf-8")
+    for signature in ('mix-blend-mode: screen', '@keyframes cmpct-route-flow', '.canonical-band .canonical-status'):
+        assert signature in masterclass, f"rendered visual-ratchet feature missing: {signature}"
+    assert '.entropy-sun' in masterclass and 'z-index: 1' in masterclass
+    assert 'prefers-reduced-motion' in masterclass and 'animation:none !important' in masterclass
+
+    behavior = (out / "assets" / "cinematic.js").read_text(encoding="utf-8")
+    assert 'length: 1120' in behavior, "masterclass dot-field density regressed"
+    assert 'scrollCompression' in behavior, "evidence field must retain scroll-driven physical compression"
+    assert 'compressionRatio' in behavior and 'candidate_bytes' in behavior
 
     # Headline values stay runtime-derived. A later release must never inherit today's marketing number.
     assert "38.5%" not in html

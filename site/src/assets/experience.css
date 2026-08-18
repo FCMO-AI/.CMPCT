@@ -1,4 +1,6 @@
-/* CMPCT restored visual assembly — surface 0.29.f.
-   Footnote: styles.css, motion.css and polish.css are the historical visual foundation. This file loads
-   only the additive cinematic campaign, so the pre-redesign design remains the owner of composition. */
+/* CMPCT restored visual assembly — surface 0.29.g.
+   Footnote: styles.css, motion.css and polish.css remain the historical visual foundation. cinematic.css
+   adapts current proof into that composition; masterclass.css contains only later changes that survived
+   rendered desktop/mobile review, keeping the restoration lineage auditable and non-destructive. */
 @import url("./cinematic.css");
+@import url("./masterclass.css");
