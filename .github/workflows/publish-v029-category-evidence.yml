@@ -1,7 +1,7 @@
+# ci-lane: publisher
 name: Publish v0.29 category evidence
 
 on:
-  pull_request:
   workflow_dispatch:
 
 permissions:
@@ -14,14 +14,12 @@ concurrency:
 
 jobs:
   publish:
-    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     steps:
-      - name: Check out PR head
+      - name: Check out selected ref
         uses: actions/checkout@v6
         with:
           fetch-depth: 0
-          ref: ${{ github.event.pull_request.head.sha || github.sha }}
 
       - name: Reuse successful exact-tree category artifact
         id: publish
@@ -129,11 +127,7 @@ jobs:
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add "$target"
           git commit -m 'bench: publish exact-tree v0.29 Zstd category evidence'
-          if [ -n "${GITHUB_HEAD_REF:-}" ]; then
-            git push origin "HEAD:${GITHUB_HEAD_REF}"
-          else
-            git push origin HEAD
-          fi
+          git push origin HEAD
           echo 'created=true' >> "$GITHUB_OUTPUT"
 
       - name: Explain durable evidence boundary
@@ -143,6 +137,6 @@ jobs:
           echo '- exact-tree rule: CMPCT, ZIP/Deflate-9 and solid tar+Zstd-19 measured during one workload lifetime' >> "$GITHUB_STEP_SUMMARY"
           echo '- publication target: `benchmarks/history/2026-08-17-mosaic-v029-category.json`' >> "$GITHUB_STEP_SUMMARY"
 
-# Footnote: this workflow exists only to make already-successful public benchmark evidence durable in
-# repository history. It never edits engine code, benchmark bytes, or comparator results. A later engine
-# change must rerun the category benchmark rather than republishing this record under a new claim.
+# Footnote: the durable category record is already committed. This workflow is now an explicit repair
+# tool only, so ordinary PRs no longer spend a runner just to rediscover that there is nothing to publish.
+# It never edits engine code, benchmark bytes, or comparator results.

@@ -1,12 +1,32 @@
+# ci-lane: fast
 name: CMPCT native core
 
 on:
-  push:
   pull_request:
+    paths:
+      - "native/**"
+      - "src/**"
+      - "tests/**"
+      - "benchmarks/native*.py"
+      - "pyproject.toml"
+      - ".github/workflows/native-core.yml"
+  push:
+    branches: [main]
+    paths:
+      - "native/**"
+      - "src/**"
+      - "tests/**"
+      - "benchmarks/native*.py"
+      - "pyproject.toml"
+      - ".github/workflows/native-core.yml"
   workflow_dispatch:
 
 permissions:
   contents: read
+
+concurrency:
+  group: cmpct-native-core-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 jobs:
   native-core:
