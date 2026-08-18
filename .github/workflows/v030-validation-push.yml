@@ -10,7 +10,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: cmpct-v030-validation-push-${{ github.ref }}
@@ -85,6 +85,37 @@ jobs:
           python tests/native_v030_r24_verify_authority.py \
             --binary native/cmpct-portable/target/release/cmpct-portable
 
-# Footnote: this branch is a throwaway clone of Agent-00 authority. Push-only routing avoids pull_request fanout
-# from historical workflows and exists solely for defect discovery before the release fingerprint. It is not a
-# durable release receipt; final authority reruns on the exact candidate merged through the main release PR.
+  receipt:
+    if: always()
+    needs: [product-contracts, native]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+      - name: Persist diagnostic result on validation branch
+        env:
+          PRODUCT_RESULT: ${{ needs.product-contracts.result }}
+          NATIVE_RESULT: ${{ needs.native.result }}
+        run: |
+          mkdir -p docs/v030-validation
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          data={
+            'schema':'cmpct-v030-isolated-validation-v1',
+            'source_sha':os.environ['GITHUB_SHA'],
+            'product_contracts':os.environ['PRODUCT_RESULT'],
+            'native':os.environ['NATIVE_RESULT'],
+          }
+          data['passed']=all(data[k]=='success' for k in ('product_contracts','native'))
+          Path('docs/v030-validation/receipt.json').write_text(json.dumps(data,indent=2)+'\n')
+          PY
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add docs/v030-validation/receipt.json
+          git commit -m "ci(v0.30): record isolated validation result" || true
+          git push origin HEAD:agent/v030-validation-push
+
+# Footnote: the receipt lives only on the throwaway validation branch and is diagnostic. Persisting the job results
+# in Git makes them observable without depending on the PR-only workflow API. The final release still reruns all
+# authorities on the exact candidate and commits its own signed/provenance-bound receipts.
