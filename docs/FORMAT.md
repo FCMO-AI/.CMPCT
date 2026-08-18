@@ -126,8 +126,8 @@ Before format 1.0, this document must become a byte-level normative specificatio
 Status: **integration-branch contract, not a released/shipped support claim**.
 
 Revision 25 productizes the proven v0.30 reconstruction-graph work without pretending historical
-`CMPNX*` research grammars are canonical CMPCT revisions. The architecture decision and ownership map
-live in `docs/V030_CANONICAL_PRODUCT_ARCHITECTURE.md`.
+`CMPNX*` research grammars are canonical CMPCT revisions. The architecture decision and semantic-ownership map
+live in `docs/V030_CANONICAL_PRODUCT_ARCHITECTURE.md` and `docs/V030_CONVERGENCE_RULES.md`.
 
 ## 13. Revision-25 profiles and magic
 
@@ -144,28 +144,30 @@ Both header/tail identities are exactly eight bytes.
 must reject or explicitly classify them as research input; it must not infer revision 24 merely because
 the magic is not one of the revision-25 identities.
 
-## 14. Complete-artifact profile selection
+## 14. Complete-artifact profile and product selection
 
-The encoder may audition both revision-25 profiles, but only one complete artifact is published.
-Selection rules are:
+Revision 25 has two nested exact-selection boundaries.
 
-1. every candidate reconstructs the exact same staged logical content tree;
+**Inside the r25 tournament:**
+
+1. every r25 candidate reconstructs the exact same staged logical content tree;
 2. Geometry and PrefixGraph are priced as complete archives, including metadata and recovery copies;
 3. independent mechanism savings are never added arithmetically;
 4. selected PrefixGraph references have dependency depth <= 1;
 5. selected decoded-context amplification remains <= 8x;
-6. a real r25 candidate must be **strictly smaller** than the accepted-v0.29 complete research floor
-   before the product boundary publishes it;
-7. unsupported filesystem shapes and internal `CMPNX*` portfolio fallbacks publish a freshly built,
-   genuine r24 artifact instead;
-8. successful r25 winners are published without first performing a redundant full r24 encode.
+6. a real r25 candidate must be **strictly smaller** than the accepted-v0.29 complete historical research floor before it is eligible for product publication.
 
-The final scheduling rule is intentional: canonical r24 is the exact compatibility fallback, not an
-unconditional shadow encode. Charging every successful r25 creation for an r24 archive that will be discarded
-would create a systematic creation-time regression while adding no on-disk guarantee.
+**At the product boundary:**
 
-Footnote: accepted v0.29 is the causal compression floor inside the encoder tournament. It is not the
-product compatibility fallback because its own output can be `CMPNX*` research grammar.
+7. the encoder builds a genuine canonical r24 artifact for the same original filesystem tree and the r25 tournament as independent complete candidates;
+8. those two candidates may execute concurrently so the exact comparison does not impose an avoidable serial double-encode latency;
+9. r25 publishes only when it is a canonical `CMP25*` profile **and strictly smaller than genuine r24**;
+10. an exact r24/r25 byte-size tie conservatively publishes r24;
+11. unsupported r25 filesystem shapes or an r25 tournament result that is research-only/non-winning publish the already-built genuine r24 artifact.
+
+No estimate, staged-tree surrogate, or independent-savings sum may replace the genuine r24-vs-r25 complete-product comparison.
+
+Footnote: accepted v0.29 remains the immutable causal compression floor for the historical 15-workload mechanism gate. Genuine r24 is the compatibility/product no-regression floor. They intentionally answer different questions and neither may be silently substituted for the other.
 
 ## 15. Authenticated filesystem manifest
 
@@ -202,7 +204,8 @@ where:
 
 - `path` is one safe canonical relative path;
 - `kind` is one of `"f"` (regular), `"d"` (directory), `"l"` (symlink), or `"h"` (hardlink);
-- `mode`, `mtime_ns`, `uid`, and `gid` are non-negative exact integers subject to reader policy;
+- `mode`, `uid`, and `gid` are bounded non-negative exact integers subject to reader policy;
+- `mtime_ns` is a bounded **signed i64** nanosecond timestamp; negative/pre-1970 values are valid and must not be self-rejected by a conforming reader;
 - `xattrs` is a list of `[name: str, value: bytes]` pairs;
 - regular-file `extra` is `[logical_size: int, sha256: 32-byte bytes]`;
 - directory `extra` is `nil`;
@@ -216,7 +219,11 @@ The current product implementation caps the encoded manifest at **8 MiB** and ap
 entry/path policies as the streamed r25 reader. The entry-count limit is enforced during source traversal,
 not merely after building an unbounded in-memory manifest.
 
-## 16. Content/manifest consistency
+Symlink target admission is host-independent: the same target must be safe under both POSIX and Windows lexical interpretation. Backslash and slash are treated as separators for escape analysis; POSIX absolute paths, Windows drive/root/UNC forms, and any `..` component under either spelling are rejected by safe extraction.
+
+Footnote: an archive admitted on one operating system must not become traversal-capable merely because the same authenticated link bytes are materialized by another platform later.
+
+## 16. Content/manifest consistency and tree identities
 
 For a valid revision-25 archive, the selected content profile's authenticated logical-member set must be
 exactly:
@@ -235,38 +242,48 @@ format/verification failure.
 
 The reserved internal manifest is not exposed as a user member by canonical list/extract APIs.
 
+Canonical verification distinguishes three identities:
+
+- `tree_sha256` / `user_tree_sha256`: the user-visible semantic tree used for cross-version product identity;
+- `content_graph_tree_sha256`: the selected r25 graph identity, including the reserved manifest member;
+- `filesystem_manifest_sha256`: the exact authenticated manifest-byte identity.
+
+A reader must reconstruct and verify user-visible regular members before accepting the user-tree identity; it may not trust a manifest-declared digest without checking graph reconstruction.
+
 ## 17. Revision-25 resource/locality requirements
 
 The promoted reader inherits the v0.30 streamed-reader limits. At minimum:
 
 - PrefixGraph dependency depth <= 1;
 - selected per-member decoded-context amplification <= 8x;
+- maximum physical decode unit <= 8 MiB;
 - bounded metadata and logical declaration sizes;
 - bounded physical decode units and decoder working memory;
 - bounded node/record/file counts;
 - strict path validation and duplicate refusal;
 - authenticated primary/tail recovery;
 - physical/logical hash refusal on corruption;
-- transactional extraction publication.
+- transactional extraction publication and rollback.
 
 The reader does **not** need Geometry nomination, separator search, PrefixGraph anchor search, similarity
 search, or portfolio/fallback heuristics. Those remain encoder policy.
 
+Canonical profile dispatch must not depend on process-global mutation of research-module identities. The current release product reuses the exact semantic-owner source files inside isolated canonical module namespaces, so research imports retain their historical identities while canonical operations resolve fixed `CMP25*` profiles.
+
 ## 18. Explicit revision-24 fallback semantics
 
 Revision 25 intentionally declines source shapes that it cannot yet preserve without weakening r24.
-The canonical builder falls back to a real `CMPCT24\0` archive for at least:
+The canonical builder publishes a real `CMPCT24\0` archive when r25 is unsupported or does not win the complete-product tournament, including:
 
-- sparse regular files (until r25 has native sparse graph semantics rather than materialized zeroes);
+- sparse regular files until r25 has native sparse graph semantics rather than materialized zeroes;
 - unsupported special/device/socket/FIFO entries;
 - user paths colliding with the reserved r25 internal namespace;
 - manifest/path/file/logical-size declarations above policy;
 - source path/metadata text that cannot be represented portably by the bounded r25 MessagePack grammar;
-- an internal tournament winner whose actual bytes are research-only `CMPNX*`.
+- an internal tournament result whose actual bytes are research-only `CMPNX*`;
+- any canonical r25 artifact whose exact byte size is greater than or equal to genuine r24 for the same original filesystem tree.
 
-Fallback means the source is encoded with the existing r24 builder and consumed by the existing r24 reader.
-It does not mean rewriting an r25/research magic to look like r24. Conversely, when a real r25 profile wins the
-accepted-v0.29 complete-artifact gate, the builder does not create an unused r24 artifact merely for comparison.
+Fallback means using the exact independently built r24 artifact. It never means rewriting an r25/research magic to look like r24.
 
 ## 19. Revision-25 portability/conformance boundary
 
@@ -274,11 +291,11 @@ These bytes are reader-visible and therefore require the normal promotion gates 
 
 - independent fixed-byte r25 golden vectors;
 - hostile parser/resource mutations for both profile grammars and the filesystem manifest;
-- native-core parity through the shared memory-safe reader;
-- recovery/locality tests;
-- platform handler integration through that shared core rather than independent parsers;
+- shared native-reader parity for every canonical profile and genuine r24 fallback;
+- signed timestamp and host-independent symlink safety parity through extraction/materialization;
+- primary/tail recovery and operation-derived locality tests;
+- ZIP/export interoperability with truthful unsupported-semantics behavior;
+- platform/Android integration through the shared portable reader rather than independent parsers;
 - direct-base performance evidence under `docs/V030_RELEASE_GATES.md`.
 
-T03 defines the canonical product grammar/API boundary. T01 owns native/portability realization; T02 owns
-performance/evidence thresholds; T04 is the release referee. Until those imports are reconciled and green,
-revision 24 remains the released interoperability floor.
+One executor owns the remaining v0.30 implementation and evidence dependency graph on `agent/v030-authoritative-integration`; CI/platform/native tooling provide independent execution evidence, not separate design authority. Until the exact frozen candidate satisfies all release-lock receipts, revision 24 remains the released interoperability floor.
