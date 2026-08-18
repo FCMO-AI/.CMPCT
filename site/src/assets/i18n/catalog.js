@@ -53,10 +53,46 @@ const coreMessages = Object.fromEntries(Object.entries(SOURCE_MESSAGES).map(([ke
   ...Object.fromEntries(SUPPORTED_LOCALES.filter((locale) => locale !== 'en').map((locale) => [locale, messagePacks[locale]?.[key]])),
 })]));
 
+function phraseGroup(source, prefix = '') {
+  // Footnote: DOM markup can split one authored sentence into punctuation + text around emphasized children.
+  // Reuse the already-curated canonical phrase rather than duplicating twenty independent translations.
+  const entry = PHRASES.find((candidate) => candidate.en === source);
+  if (!entry) throw new Error(`CMPCT i18n: missing source phrase for derived message: ${source}`);
+  return Object.freeze(Object.fromEntries(SUPPORTED_LOCALES.map((locale) => [locale, `${prefix}${entry[locale]}`])));
+}
+
+const UI_MESSAGES = Object.freeze({
+  confirmedSpeedRegressionFragment: phraseGroup('Confirmed speed regression outside the same-runner noise envelope:', '. '),
+  // Footnote: the cinematic chapter rail is created after initial DOM translation. Its accessibility name must
+  // therefore live in the dynamic message catalogue instead of remaining an English-only JS literal.
+  pageChapters: Object.freeze({
+    en: 'Page chapters',
+    'es-419': 'Capítulos de la página',
+    'pt-BR': 'Capítulos da página',
+    fr: 'Chapitres de la page',
+    de: 'Seitenkapitel',
+    it: 'Capitoli della pagina',
+    nl: 'Paginaonderdelen',
+    pl: 'Sekcje strony',
+    cs: 'Sekce stránky',
+    hu: 'Oldalszakaszok',
+    ro: 'Secțiunile paginii',
+    tr: 'Sayfa bölümleri',
+    sv: 'Sidavsnitt',
+    da: 'Sideafsnit',
+    fi: 'Sivun osiot',
+    id: 'Bagian halaman',
+    ja: 'ページの章',
+    ko: '페이지 섹션',
+    'zh-Hans': '页面章节',
+    'zh-Hant': '頁面章節',
+  }),
+});
+
 // Footnote: attribution strings are a newer main-line stewardship concern. They join the same static-message
 // catalogue rather than bypassing i18n, so dynamically inserted maker provenance is translated and validated
 // without changing the older canonical English phrase identities or the extended packs' source-order mapping.
-export const MESSAGES = Object.freeze({ ...coreMessages, ...ATTRIBUTION_MESSAGES });
+export const MESSAGES = Object.freeze({ ...coreMessages, ...ATTRIBUTION_MESSAGES, ...UI_MESSAGES });
 
 // Footnote: the English source file describes the original localization campaign. The assembled catalogue
 // advances with the public-surface milestone so CI can reject stale translation evidence without rewriting the
