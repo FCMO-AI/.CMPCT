@@ -25,12 +25,24 @@ const placeholders = (value) => [...String(value).matchAll(/\{([A-Za-z0-9_]+)\}/
 const words = (value) => String(value).replace(/\s+/g, " ").trim();
 
 // Footnote: these are deliberately narrow technical loanwords/identifiers that may naturally remain unchanged
-// in one or more languages. Ordinary prose cannot use this escape hatch; unchanged English prose is a defect.
+// across many languages. Ordinary prose cannot use this escape hatch; unchanged English prose is a defect.
 const SAFE_SAME_TECHNICAL = new Set([
-  "Runner", "Build", "ZIP / DEFLATE", "7Z / LZMA2", "Corpus", "LOCAL", "Magic",
+  "Runner", "Build", "ZIP / DEFLATE", "7Z / LZMA2", "SOLID ZSTD-19", "Corpus", "LOCAL", "Magic",
   "Benchmarks ↗", "commit:", "Repository", "Repository ↗", "Record", "media", "sparse",
   "Engine", "Lab", "Contract", "Format",
 ]);
+
+// Footnote: a few target languages genuinely spell an ordinary UI term exactly like English. These exemptions
+// are locale-specific on purpose; making them global would let a future pack hide an untranslated phrase.
+const SAFE_SAME_BY_LOCALE = Object.freeze({
+  nl: new Set(["Project", "OPEN"]),
+  pl: new Set(["Format ↗"]),
+  ro: new Set(["Format ↗"]),
+  sv: new Set(["Format ↗"]),
+  da: new Set(["Format ↗"]),
+  id: new Set(["Format ↗"]),
+});
+const sameIsIntentional = (locale, source) => SAFE_SAME_TECHNICAL.has(source) || Boolean(SAFE_SAME_BY_LOCALE[locale]?.has(source));
 
 if (DEFAULT_LOCALE !== "en") fail("English must remain the canonical semantic source locale");
 // Footnote: English is not merely the fallback. It is intentionally the first explicit source-language choice
@@ -59,8 +71,8 @@ for (const entry of PHRASES) {
     const value = words(entry[locale]);
     if (!value) { fail(`missing ${locale} phrase: ${source}`); continue; }
     if (locale === DEFAULT_LOCALE) continue;
-    if (value === source && !entry.allowSame && !SAFE_SAME_TECHNICAL.has(source)) {
-      fail(`${locale} left English source unchanged without technical exemption: ${source}`);
+    if (value === source && !entry.allowSame && !sameIsIntentional(locale, source)) {
+      fail(`${locale} left English source unchanged without technical/native exemption: ${source}`);
     }
     const ratio = value.length / Math.max(source.length, 1);
     const limit = entry.compact ? QUALITY_CONTRACT.compactExpansionLimit : QUALITY_CONTRACT.generalExpansionLimit;
@@ -90,6 +102,7 @@ if (!runtime.includes("navigator.languages")) fail("automatic browser-locale sel
 if (!runtime.includes("MutationObserver")) fail("dynamic evidence translation observer is missing");
 if (!runtime.includes('"zh-Hant"') || !runtime.includes('"zh-Hans"')) fail("Chinese script/region resolution is missing");
 if (!runtime.includes("for (const key of SUPPORTED_LOCALES)")) fail("website selector no longer derives ordering from the canonical locale list");
+if (!runtime.includes('sourceGroup.label = "Canonical source"')) fail("website selector no longer exposes English as the canonical language source");
 
 // Human-facing README parity is part of the same public localization contract. The English README remains
 // canonical, but every supported non-English locale must be directly discoverable and retain the current
