@@ -2,7 +2,7 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-CRATE="$ROOT/native/cmpct-core"
+CRATE="$ROOT/native/cmpct-portable"
 JNI="$ROOT/integrations/android/app/src/main/jniLibs"
 
 command -v cargo >/dev/null || { echo "cargo is required" >&2; exit 1; }
@@ -18,6 +18,8 @@ mkdir -p "$JNI"
 # Footnote: cargo-ndk's Android ABI names intentionally produce Gradle's expected jniLibs directory
 # structure. The Rust target triples remain an internal mapping handled by cargo-ndk, so this script
 # does not duplicate target/ABI translation logic that could drift between Android toolchains.
+# Building cmpct-portable also compiles its cmpct-core dependency; there is one r24 parser and one
+# r25 dispatcher, not separate Android-specific archive implementations.
 (
   cd "$CRATE"
   cargo ndk \
@@ -31,10 +33,10 @@ mkdir -p "$JNI"
 )
 
 for abi in arm64-v8a armeabi-v7a x86_64 x86; do
-  test -f "$JNI/$abi/libcmpct_core.so" || {
-    echo "missing native CMPCT library for $abi" >&2
+  test -f "$JNI/$abi/libcmpct_portable.so" || {
+    echo "missing portable CMPCT library for $abi" >&2
     exit 1
   }
 done
 
-echo "CMPCT native Android libraries ready under $JNI"
+echo "CMPCT portable native Android libraries ready under $JNI"
