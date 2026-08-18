@@ -51,6 +51,25 @@ The website build may consume only deliberately public project inputs. In partic
 - visual rules may be implemented directly without publishing private design-source documents or
   unrelated organizational lore.
 
+## Public stewardship rule
+
+Public organizational provenance is intentional and is not treated as unrelated private context.
+CMPCT uses the quiet maker lines **“CMPCT by FCMO AI”** and **“From the FCMO group”** according to
+`docs/OPEN_SOURCE_STEWARDSHIP.md`.
+
+The attribution boundary is strict:
+
+- CMPCT remains the dominant project identity;
+- FCMO credit appears where provenance naturally belongs: repository facade, ecosystem metadata,
+  citation metadata, machine-readable project state and a quiet website footer/About surface;
+- attribution must not be inserted repeatedly into algorithms, benchmark results or normal CLI output;
+- FCMO provenance must not imply benchmark authority, license terms, archive capability or ownership of
+  third-party/contributor work;
+- unrelated private project names, internal architecture and organizational lore remain prohibited.
+
+# Footnote: public stewardship is a deliberately published identity fact. It does not create an exception
+# for leaking private FCMO systems; the organization name is public, the unrelated internal context is not.
+
 ## Git-history rule
 
 Removing a file or name from the current tree does not remove it from older Git objects. Before the
