@@ -1,8 +1,13 @@
+mod canonical;
 mod format;
 mod g04;
+mod identity;
+mod manifest;
 mod prefix;
 
+use crate::canonical::Canonical25Archive;
 use crate::format::safe_relpath;
+use crate::identity::{classify, R25Identity};
 use cmpct_core::Archive as R24Archive;
 use std::ffi::CStr;
 use std::fs::{self, File};
@@ -14,8 +19,6 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use thiserror::Error;
 
 const R24_MAGIC: &[u8; 8] = b"CMPCT24\0";
-const G04_MAGIC: &[u8; 8] = b"CMPNXG4\0";
-const PREFIX_MAGIC: &[u8; 8] = b"CMPNXP1\0";
 const R24_VERIFY_MATERIALIZE_LIMIT: u64 = 256 * 1024 * 1024;
 
 #[derive(Debug, Error)]
@@ -45,6 +48,8 @@ pub enum Profile {
     Revision24,
     G04,
     PrefixGraph,
+    ResearchG04,
+    ResearchPrefixGraph,
 }
 
 impl Profile {
@@ -53,6 +58,16 @@ impl Profile {
             Self::Revision24 => "r24",
             Self::G04 => "g04-r25",
             Self::PrefixGraph => "prefixgraph-r25",
+            Self::ResearchG04 => "research-g04",
+            Self::ResearchPrefixGraph => "research-prefixgraph",
+        }
+    }
+
+    pub fn revision(self) -> u32 {
+        match self {
+            Self::Revision24 => 24,
+            Self::G04 | Self::PrefixGraph => 25,
+            Self::ResearchG04 | Self::ResearchPrefixGraph => 0,
         }
     }
 }
@@ -77,8 +92,9 @@ pub struct MemberReadStats {
 #[derive(Debug)]
 pub enum PortableArchive {
     Revision24(R24Archive),
-    G04(g04::G04Archive),
-    PrefixGraph(prefix::PrefixArchive),
+    Canonical25(Canonical25Archive),
+    ResearchG04(g04::G04Archive),
+    ResearchPrefixGraph(prefix::PrefixArchive),
 }
 
 impl PortableArchive {
@@ -86,12 +102,21 @@ impl PortableArchive {
         let mut probe = File::open(path)?;
         let mut magic = [0u8; 8];
         probe.read_exact(&mut magic)?;
-        match &magic {
-            value if value == R24_MAGIC => Ok(Self::Revision24(R24Archive::open(path)?)),
-            value if value == G04_MAGIC => Ok(Self::G04(g04::G04Archive::open(path)?)),
-            value if value == PREFIX_MAGIC => Ok(Self::PrefixGraph(prefix::PrefixArchive::open(path)?)),
-            _ => Err(PortableError::Format(
-                "archive magic is not a supported r24/r25 representation".into(),
+        if &magic == R24_MAGIC {
+            return Ok(Self::Revision24(R24Archive::open(path)?));
+        }
+        let identity = classify(&magic).ok_or_else(|| {
+            PortableError::Format("archive magic is not a supported r24/r25 representation".into())
+        })?;
+        match identity {
+            R25Identity::CanonicalG04 | R25Identity::CanonicalPrefix => {
+                Ok(Self::Canonical25(Canonical25Archive::open(path, identity)?))
+            }
+            R25Identity::ResearchG04 => {
+                Ok(Self::ResearchG04(g04::G04Archive::open(path, identity)?))
+            }
+            R25Identity::ResearchPrefix => Ok(Self::ResearchPrefixGraph(
+                prefix::PrefixArchive::open(path, identity)?,
             )),
         }
     }
@@ -99,24 +124,31 @@ impl PortableArchive {
     pub fn profile(&self) -> Profile {
         match self {
             Self::Revision24(_) => Profile::Revision24,
-            Self::G04(_) => Profile::G04,
-            Self::PrefixGraph(_) => Profile::PrefixGraph,
+            Self::Canonical25(archive) => archive.profile(),
+            Self::ResearchG04(_) => Profile::ResearchG04,
+            Self::ResearchPrefixGraph(_) => Profile::ResearchPrefixGraph,
         }
+    }
+
+    pub fn revision(&self) -> u32 {
+        self.profile().revision()
     }
 
     pub fn tail_metadata_authenticated(&self) -> bool {
         match self {
             Self::Revision24(_) => false,
-            Self::G04(archive) => archive.tail_authenticated(),
-            Self::PrefixGraph(archive) => archive.tail_authenticated(),
+            Self::Canonical25(archive) => archive.tail_authenticated(),
+            Self::ResearchG04(archive) => archive.tail_authenticated(),
+            Self::ResearchPrefixGraph(archive) => archive.tail_authenticated(),
         }
     }
 
     pub fn declared_member_read_amplification(&self) -> Option<f64> {
         match self {
-            Self::G04(archive) => Some(archive.declared_amplification()),
-            Self::PrefixGraph(_) => Some(8.0),
             Self::Revision24(_) => None,
+            Self::Canonical25(archive) => Some(archive.declared_amplification()),
+            Self::ResearchG04(archive) => Some(archive.declared_amplification()),
+            Self::ResearchPrefixGraph(_) => Some(8.0),
         }
     }
 
@@ -133,8 +165,9 @@ impl PortableArchive {
                     mtime_ns: entry.mtime_ns,
                 })
                 .collect(),
-            Self::G04(archive) => archive.entries().to_vec(),
-            Self::PrefixGraph(archive) => archive.entries().to_vec(),
+            Self::Canonical25(archive) => archive.entries().to_vec(),
+            Self::ResearchG04(archive) => archive.entries().to_vec(),
+            Self::ResearchPrefixGraph(archive) => archive.entries().to_vec(),
         }
     }
 
@@ -181,8 +214,9 @@ impl PortableArchive {
                     profile: "r24",
                 })
             }
-            Self::G04(archive) => archive.stream_member(index, output),
-            Self::PrefixGraph(archive) => archive.stream_member(index, output),
+            Self::Canonical25(archive) => archive.stream_member(index, output),
+            Self::ResearchG04(archive) => archive.stream_member(index, output),
+            Self::ResearchPrefixGraph(archive) => archive.stream_member(index, output),
         }
     }
 
@@ -215,8 +249,9 @@ impl PortableArchive {
                     },
                 ))
             }
-            Self::G04(archive) => archive.read_member(index),
-            Self::PrefixGraph(archive) => archive.read_member(index),
+            Self::Canonical25(archive) => archive.read_member(index),
+            Self::ResearchG04(archive) => archive.read_member(index),
+            Self::ResearchPrefixGraph(archive) => archive.read_member(index),
         }
     }
 
@@ -225,6 +260,42 @@ impl PortableArchive {
             .entry_index(path)
             .ok_or_else(|| PortableError::Format(format!("member not found: {path}")))?;
         self.read_member(index)
+    }
+
+    pub fn read_range(
+        &self,
+        index: usize,
+        offset: u64,
+        output: &mut [u8],
+    ) -> Result<usize, PortableError> {
+        let entry = self
+            .entries()
+            .get(index)
+            .cloned()
+            .ok_or_else(|| PortableError::Range)?;
+        if entry.kind == 1 || offset > entry.size {
+            return Err(PortableError::Range);
+        }
+        let wanted = usize::try_from((entry.size - offset).min(output.len() as u64))
+            .map_err(|_| PortableError::Range)?;
+        if wanted == 0 {
+            return Ok(0);
+        }
+        if let Self::Revision24(archive) = self {
+            return Ok(archive.read_range(index, offset, &mut output[..wanted])?);
+        }
+
+        // Footnote: r25's release locality contract is member-selective, not arbitrary sub-member random access.
+        // The bridge therefore avoids materializing a giant file but still authenticates the complete selected
+        // member before returning its requested window. r24 retains its mature exact range path above.
+        let mut writer = RangeWriter::new(offset, &mut output[..wanted]);
+        self.stream_member(index, &mut writer)?;
+        if writer.written != wanted {
+            return Err(PortableError::Integrity(
+                "r25 range read ended before the requested logical window".into(),
+            ));
+        }
+        Ok(writer.written)
     }
 
     pub fn member_stats(&self, index: usize) -> Result<MemberReadStats, PortableError> {
@@ -262,8 +333,9 @@ impl PortableArchive {
                 }
                 Ok(())
             }
-            Self::G04(archive) => archive.verify(),
-            Self::PrefixGraph(archive) => archive.verify(),
+            Self::Canonical25(archive) => archive.verify(),
+            Self::ResearchG04(archive) => archive.verify(),
+            Self::ResearchPrefixGraph(archive) => archive.verify(),
         }
     }
 
@@ -295,6 +367,9 @@ impl PortableArchive {
     }
 
     fn extract_into(&self, root: &Path) -> Result<(), PortableError> {
+        if let Self::Canonical25(archive) = self {
+            return archive.extract_into(root);
+        }
         let entries = self.entries();
         for (index, entry) in entries.iter().enumerate() {
             let rel = safe_relpath(&entry.path)?;
@@ -311,7 +386,7 @@ impl PortableArchive {
                 1 => fs::create_dir_all(&target)?,
                 2 | 3 => {
                     return Err(PortableError::Unsupported(
-                        "portable native extraction refuses r24 link entries rather than weakening link-safety semantics".into(),
+                        "portable native extraction refuses r24 links rather than weakening link-safety semantics".into(),
                     ));
                 }
                 _ => {
@@ -325,6 +400,9 @@ impl PortableArchive {
     }
 
     pub fn export_zip(&self, destination: &Path) -> Result<(), PortableError> {
+        if let Self::Canonical25(archive) = self {
+            return archive.export_zip(destination);
+        }
         let file = File::create(destination)?;
         let mut writer = zip::ZipWriter::new(file);
         let options = zip::write::SimpleFileOptions::default()
@@ -349,7 +427,7 @@ impl PortableArchive {
                 }
                 2 | 3 => {
                     return Err(PortableError::Unsupported(
-                        "ZIP export refuses r24 link entries until their fidelity policy is explicitly mapped".into(),
+                        "ZIP export refuses r24 links until their fidelity policy is explicitly mapped".into(),
                     ));
                 }
                 _ => return Err(PortableError::Format("unknown logical entry kind".into())),
@@ -358,6 +436,48 @@ impl PortableArchive {
         writer
             .finish()
             .map_err(|error| PortableError::Format(format!("ZIP finish: {error}")))?;
+        Ok(())
+    }
+}
+
+struct RangeWriter<'a> {
+    offset: u64,
+    cursor: u64,
+    output: &'a mut [u8],
+    written: usize,
+}
+
+impl<'a> RangeWriter<'a> {
+    fn new(offset: u64, output: &'a mut [u8]) -> Self {
+        Self {
+            offset,
+            cursor: 0,
+            output,
+            written: 0,
+        }
+    }
+}
+
+impl Write for RangeWriter<'_> {
+    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+        let start = self.cursor;
+        let end = self.cursor.saturating_add(buf.len() as u64);
+        let wanted_end = self.offset.saturating_add(self.output.len() as u64);
+        if end > self.offset && start < wanted_end && self.written < self.output.len() {
+            let source_start = self.offset.saturating_sub(start) as usize;
+            let source_end = ((wanted_end.min(end) - start) as usize).min(buf.len());
+            if source_start < source_end {
+                let take = (source_end - source_start).min(self.output.len() - self.written);
+                self.output[self.written..self.written + take]
+                    .copy_from_slice(&buf[source_start..source_start + take]);
+                self.written += take;
+            }
+        }
+        self.cursor = end;
+        Ok(buf.len())
+    }
+
+    fn flush(&mut self) -> std::io::Result<()> {
         Ok(())
     }
 }
@@ -458,6 +578,18 @@ pub unsafe extern "C" fn cmpct_portable_close(handle: *mut PortableArchive) {
 }
 
 #[unsafe(no_mangle)]
+pub unsafe extern "C" fn cmpct_portable_revision(
+    handle: *const PortableArchive,
+    out: *mut u32,
+) -> c_int {
+    if handle.is_null() || out.is_null() {
+        return PortableStatus::Null as c_int;
+    }
+    unsafe { *out = (&*handle).revision() };
+    PortableStatus::Ok as c_int
+}
+
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn cmpct_portable_entry_count(
     handle: *const PortableArchive,
     out: *mut usize,
@@ -522,6 +654,36 @@ pub unsafe extern "C" fn cmpct_portable_entry_path(
     }
     unsafe { ptr::copy_nonoverlapping(bytes.as_ptr(), buffer, bytes.len()) };
     PortableStatus::Ok as c_int
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn cmpct_portable_entry_read_range(
+    handle: *const PortableArchive,
+    index: usize,
+    offset: u64,
+    buffer: *mut u8,
+    capacity: usize,
+    written: *mut usize,
+) -> c_int {
+    if handle.is_null() || written.is_null() || (buffer.is_null() && capacity != 0) {
+        return PortableStatus::Null as c_int;
+    }
+    let archive = unsafe { &*handle };
+    if capacity == 0 {
+        unsafe { *written = 0 };
+        return PortableStatus::Ok as c_int;
+    }
+    let output = unsafe { std::slice::from_raw_parts_mut(buffer, capacity) };
+    match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        archive.read_range(index, offset, output)
+    })) {
+        Ok(Ok(count)) => {
+            unsafe { *written = count };
+            PortableStatus::Ok as c_int
+        }
+        Ok(Err(error)) => status(&error) as c_int,
+        Err(_) => PortableStatus::Panic as c_int,
+    }
 }
 
 #[unsafe(no_mangle)]
