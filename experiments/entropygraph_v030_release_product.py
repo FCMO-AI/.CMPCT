@@ -1,6 +1,6 @@
 """CMPCT v0.30 release product front door.
 
-This is the one promoted Python product surface for v0.30.  It delegates revision-25 implementation to
+This is the one promoted Python product surface for v0.30. It delegates revision-25 implementation to
 ``entropygraph_v030_canonical_final`` and the mature revision-24 compatibility path to ``cmpct.reader.CMPCT``.
 The distinction matters because release evidence must describe one user tree consistently even when the exact
 product selector conservatively falls back to r24.
@@ -32,6 +32,11 @@ UnsupportedArchiveProfile = C.UnsupportedArchiveProfile
 MAX_MANIFEST_ENTRIES = C.MAX_MANIFEST_ENTRIES
 MAX_PROFILE_FILES = C.MAX_PROFILE_FILES
 MAX_PROFILE_LOGICAL_BYTES = C.MAX_PROFILE_LOGICAL_BYTES
+
+
+def _revision_for_archive(archive: Path) -> tuple[int | None, str]:
+    """Classify only released r24/r25 profiles; research CMPNX remains non-canonical."""
+    return C._profile_for_archive(Path(archive))
 
 
 def _r24_user_tree_sha(reader: CMPCT) -> str:
@@ -72,7 +77,7 @@ def build(root: Path, out: Path) -> dict:
 
 def strong_verify(archive: Path) -> dict:
     archive = Path(archive)
-    revision, profile = C._profile_for_archive(archive)
+    revision, profile = _revision_for_archive(archive)
     if revision == REVISION:
         return C.strong_verify(archive)
     if revision == 24:
@@ -109,7 +114,7 @@ def strong_verify(archive: Path) -> dict:
 
 def read_member_with_stats(archive: Path, rel: str) -> tuple[bytes, dict]:
     archive = Path(archive)
-    revision, profile = C._profile_for_archive(archive)
+    revision, profile = _revision_for_archive(archive)
     if revision == 24:
         with CMPCT(archive) as reader:
             raw = bytes(reader.read(rel))
@@ -131,7 +136,7 @@ def read_member(archive: Path, rel: str) -> bytes:
 
 def list_members(archive: Path) -> list[dict]:
     archive = Path(archive)
-    revision, profile = C._profile_for_archive(archive)
+    revision, profile = _revision_for_archive(archive)
     if revision == 24:
         with CMPCT(archive) as reader:
             names = {
