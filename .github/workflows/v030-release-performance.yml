@@ -31,7 +31,7 @@ jobs:
       - name: Install exact corpus and benchmark dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y zstd gcc
+          sudo apt-get install -y zstd gcc ffmpeg
           python -m pip install --upgrade pip
           python -m pip install -e '.[test]'
           python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
@@ -103,5 +103,7 @@ jobs:
           if-no-files-found: warn
           retention-days: 90
 
-# Footnote: hosted timing is used only as same-run paired promotion evidence. Absolute public throughput claims
-# require controlled benchmark hardware. A miss is implementation debt; thresholds are not relaxed post hoc.
+# Footnote: `ffmpeg` is required to construct the frozen neutral-hostile media workload before runtime is measured.
+# Installing it repairs the benchmark environment only; it does not participate in CMPCT compression or relax any
+# create/extract/RSS threshold. Hosted timing remains same-run paired promotion evidence, while absolute public
+# throughput claims still require controlled benchmark hardware. A miss is implementation debt, not a policy edit.
