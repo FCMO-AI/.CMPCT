@@ -6,9 +6,10 @@ rust-version = "1.89"
 publish = false
 description = "Shared memory-safe CMPCT r24/r25 portable reader surface"
 
-# Footnote: this crate is a portability/conformance component, not a version claim. It deliberately
-# depends on the mature revision-24 core instead of copying that parser, while the two v0.30 research
-# grammars remain isolated behind one bounded dispatcher until slot-00 decides the final r25 profile.
+# Footnote: this crate is a portability/conformance component, not a release-number claim. It deliberately
+# delegates revision 24 to the mature cmpct-core instead of copying that parser. Canonical CMP25 identities
+# use the same bounded reconstruction grammar as their CMPNX research predecessors, with filesystem/product
+# semantics layered above the graph reader rather than forked into Android, CLI, or ABI-specific parsers.
 [lib]
 crate-type = ["rlib", "cdylib"]
 
@@ -19,6 +20,7 @@ path = "src/bin/cmpct-portable.rs"
 [dependencies]
 cmpct-core = { path = "../cmpct-core" }
 crc32fast = "1"
+libc = "0.2"
 preflate-container = { git = "https://github.com/microsoft/preflate-rs", rev = "3bcd33441849a8a25d2b26077128f4e3a88d071b", package = "preflate-container", default-features = false }
 rmpv = "1.3"
 sha2 = "0.10"
