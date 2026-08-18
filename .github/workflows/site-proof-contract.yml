@@ -92,10 +92,11 @@ jobs:
 
       - name: Install Chromium render harness
         run: |
-          # Footnote: Playwright is intentionally CI-only. The public website keeps zero runtime dependency
-          # on it; Chromium exists here solely to turn responsive layout claims into executable evidence.
+          # Footnote: Playwright is CI-only and never ships with the public site. GitHub's Ubuntu runner
+          # already carries Chromium's ordinary system libraries; downloading only the pinned browser keeps
+          # this fast-lane gate deterministic and avoids mutating the runner with an apt transaction on every PR.
           npm install --no-save --no-package-lock playwright@1.55.0
-          npx playwright install --with-deps chromium
+          npx playwright install chromium
 
       - name: Render responsive viewport matrix
         run: |
