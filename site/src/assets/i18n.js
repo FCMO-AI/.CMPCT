@@ -1,4 +1,4 @@
-/* CMPCT curated internationalization runtime — Surface 0.29.i.
+/* CMPCT curated internationalization runtime — Surface 0.29.k.
    Footnote: this module performs locale selection and deterministic application only. It never translates
    text itself and never contacts a translation provider. All wording is reviewable in i18n/catalog.js. */
 import {
@@ -32,24 +32,42 @@ function message(key, values = {}, targetLocale = locale) {
   return group ? interpolate(group[targetLocale] || group[DEFAULT_LOCALE], values) : "";
 }
 
+function canonicalRequestedLocale(raw) {
+  const requested = String(raw || "").trim().replace(/_/g, "-");
+  if (!requested) return null;
+  const lower = requested.toLowerCase();
+  const exact = SUPPORTED_LOCALES.find((candidate) => candidate.toLowerCase() === lower);
+  if (exact) return exact;
+
+  // Footnote: Chinese cannot safely use the generic language-family fallback. Script/region tags decide
+  // which curated writing system is appropriate; unknown generic zh intentionally defaults to Simplified.
+  if (lower === "zh" || lower.startsWith("zh-")) {
+    if (/(?:^|-)hant(?:-|$)|(?:^|-)(tw|hk|mo)(?:-|$)/.test(lower)) return "zh-Hant";
+    if (/(?:^|-)hans(?:-|$)|(?:^|-)(cn|sg|my)(?:-|$)/.test(lower)) return "zh-Hans";
+    return "zh-Hans";
+  }
+
+  const base = lower.split("-")[0];
+  return SUPPORTED_LOCALES.find((candidate) => candidate.toLowerCase().split("-")[0] === base) || null;
+}
+
 function localeFromBrowser() {
   const requested = [...(navigator.languages || []), navigator.language].filter(Boolean);
   for (const raw of requested) {
-    const exact = SUPPORTED_LOCALES.find((candidate) => candidate.toLowerCase() === String(raw).toLowerCase());
-    if (exact) return exact;
-    const base = String(raw).toLowerCase().split("-")[0];
-    const family = SUPPORTED_LOCALES.find((candidate) => candidate.toLowerCase().split("-")[0] === base);
-    if (family) return family;
+    const candidate = canonicalRequestedLocale(raw);
+    if (candidate) return candidate;
   }
   return DEFAULT_LOCALE;
 }
 
 function resolveLocale() {
   const query = new URLSearchParams(location.search).get("lang");
-  if (query && SUPPORTED_LOCALES.includes(query)) return query;
+  const queryLocale = canonicalRequestedLocale(query);
+  if (queryLocale) return queryLocale;
   try {
     const stored = localStorage.getItem(STORAGE_KEY);
-    if (stored && SUPPORTED_LOCALES.includes(stored)) return stored;
+    const storedLocale = canonicalRequestedLocale(stored);
+    if (storedLocale) return storedLocale;
   } catch {
     // Footnote: storage may be unavailable in hardened/private contexts. Locale selection remains fully
     // functional through the URL and browser preferences; persistence is an enhancement, not a dependency.
@@ -230,6 +248,7 @@ function exposeState() {
     ready: true,
     locale,
     supported: [...SUPPORTED_LOCALES],
+    humanReviewed: Boolean(LOCALE_META[locale]?.humanReviewed),
     missing: [...new Set([...missing.entries()].filter(([node]) => node?.isConnected).map(([, text]) => text))].sort(),
     setLocale,
   });
@@ -242,7 +261,7 @@ function syncSelector() {
 }
 
 function setLocale(next, { persist = true, url = true } = {}) {
-  if (!SUPPORTED_LOCALES.includes(next)) next = DEFAULT_LOCALE;
+  next = canonicalRequestedLocale(next) || DEFAULT_LOCALE;
   locale = next;
   missing.clear();
   applying = true;
