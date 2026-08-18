@@ -69,10 +69,35 @@ def main() -> None:
         'SHIPPING / CANONICAL',
         'RESEARCH FRONTIER',
         'RED TEAM BOARD',
+        'assets/motion.css',
+        'assets/polish.css',
         'assets/experience.css',
+        'assets/motion.js',
         'assets/experience.js',
     ):
         assert needle in html, f"missing public-proof surface: {needle}"
+
+    # Footnote: the August 17 publication regression served the raw source template instead of the
+    # enhanced build. Checking generated markers here makes that exact failure mode release-blocking.
+    for marker in ("__CMPCT_VERSION__", "__FORMAT_REVISION__", "__BUILD_COMMIT__"):
+        assert marker not in html, f"unexpanded generated-site marker: {marker}"
+
+    # Footnote: the visual campaign is layered rather than destructive. Both the preserved baseline and
+    # the current atelier override must survive the build so future redesigns do not erase accumulated UI.
+    for asset in (
+        "motion.css",
+        "polish.css",
+        "experience.css",
+        "experience-base.css",
+        "atelier.css",
+        "motion.js",
+        "experience.js",
+    ):
+        assert (out / "assets" / asset).is_file(), f"missing generated visual asset: {asset}"
+
+    experience = (out / "assets" / "experience.css").read_text(encoding="utf-8")
+    assert 'experience-base.css' in experience, "visual assembly must preserve the established proof CSS"
+    assert 'atelier.css' in experience, "visual assembly must load the current FCMO campaign last"
 
     # Footnote: the headline must remain a runtime evidence value. If someone types the current 38.5%
     # into HTML, a later release can look current while silently showing stale marketing copy.

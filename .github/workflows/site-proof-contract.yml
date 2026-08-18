@@ -1,3 +1,4 @@
+# ci-lane: fast
 name: CMPCT public proof contract
 
 on:
@@ -24,6 +25,10 @@ on:
 
 permissions:
   contents: read
+
+concurrency:
+  group: cmpct-public-proof-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 jobs:
   proof-surface:
@@ -83,6 +88,47 @@ jobs:
               assert archive.read('unique.txt') == b'small independent file\n'
           PY
 
-# Footnote: Actions validates the canonical source and generated proof artifact, but it does not own
-# publication. The public server consumes the already-generated gh-pages tree so runner congestion can
-# delay validation feedback without preventing an explicitly promoted static site from being served.
+      - name: Stamp validated main publication receipt
+        if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+        env:
+          SOURCE_COMMIT: ${{ github.sha }}
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          out = Path('_site')
+          payload = json.loads((out / 'project-data.json').read_text(encoding='utf-8'))
+          project = payload['project']
+          evidence = payload.get('public_evidence') or {}
+          receipt = {
+              'schema': 'cmpct-static-pages-deployment-v1',
+              'publishing_branch': 'gh-pages',
+              'publishing_path': '/',
+              'source_branch': 'main',
+              'source_commit': os.environ['SOURCE_COMMIT'],
+              'project_version': project['project_version'],
+              'surface_revision': project['surface_revision'],
+              'canonical_format_revision': project['format_revision'],
+              'evidence_schema': evidence.get('schema'),
+              'jekyll': False,
+              'static_only': True,
+              'generated_from_committed_evidence': True,
+              'policy': 'main owns source and validation; gh-pages owns generated serving artifacts only',
+          }
+          (out / 'deployment.json').write_text(json.dumps(receipt, indent=2) + '\n', encoding='utf-8')
+          PY
+
+      - name: Preserve validated main static artifact
+        if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: cmpct-public-site-${{ github.sha }}
+          path: _site/
+          if-no-files-found: error
+          retention-days: 7
+
+# Footnote: Actions validates canonical source and, on main only, preserves the exact checked static tree
+# as a short-lived promotion handoff. It still does not deploy Pages: gh-pages remains the sole serving
+# branch, so publication is an explicit promotion of validated bytes rather than a workflow-owned build.
