@@ -6,8 +6,17 @@ build-backend = "setuptools.build_meta"
 name = "cmpct"
 version = "0.29.0"
 description = "Compact archive format prototype with adaptive codecs, deduplication, streaming access, and recovery metadata"
+authors = [{ name = "FCMO AI" }]
 requires-python = ">=3.10"
 dependencies = ["zstandard>=0.22", "msgpack>=1.0"]
+
+# Footnote: stewardship is expressed through standard package metadata and durable project URLs rather
+# than promotional text inside runtime code. This keeps provenance discoverable without turning imports,
+# CLI output, or algorithm modules into advertising surfaces.
+[project.urls]
+Homepage = "https://fcmo-ai.github.io/.CMPCT/"
+Repository = "https://github.com/FCMO-AI/.CMPCT"
+"FCMO AI" = "https://github.com/FCMO-AI"
 
 [project.optional-dependencies]
 audio = ["numpy>=1.26", "soundfile>=0.12"]

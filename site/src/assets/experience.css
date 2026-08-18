@@ -1,10 +1,11 @@
-/* CMPCT restored visual assembly — surface 0.29.i.
+/* CMPCT restored visual assembly — surface 0.29.k.
    Footnote: styles.css, motion.css and polish.css remain the historical visual foundation. cinematic.css
    adapts current proof into that composition; masterclass.css contains rendered visual ratchets;
-   ember-eclipse.css concentrates brand orange into a localized hero light source; and responsive.css loads
-   last so physical viewport constraints can adapt those same authored objects without replacing their design
-   language or benchmark semantics. */
+   ember-eclipse.css concentrates brand orange into a localized hero light source; fcmo-attribution.css owns
+   only the quiet maker signature; and responsive.css loads last so physical viewport constraints can adapt
+   those same authored objects without replacing their design language or benchmark semantics. */
 @import url("./cinematic.css");
 @import url("./masterclass.css");
 @import url("./ember-eclipse.css");
+@import url("./fcmo-attribution.css");
 @import url("./responsive.css");

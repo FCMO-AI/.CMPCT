@@ -4,6 +4,15 @@ version = "0.1.0"
 edition = "2021"
 license = "Apache-2.0"
 description = "Memory-safe read-only core for CMPCT revision 24"
+repository = "https://github.com/FCMO-AI/.CMPCT"
+homepage = "https://fcmo-ai.github.io/.CMPCT/"
+
+# Footnote: Cargo's package.authors field is deprecated. Keep stewardship in durable URLs and explicit
+# package metadata instead of reviving deprecated registry fields or inserting credit into runtime output.
+[package.metadata.fcmo]
+project-credit = "CMPCT by FCMO AI"
+group-credit = "From the FCMO group"
+steward-url = "https://github.com/FCMO-AI"
 
 [lib]
 crate-type = ["rlib", "cdylib"]
