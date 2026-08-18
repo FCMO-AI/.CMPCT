@@ -33,6 +33,9 @@ const SAFE_SAME_TECHNICAL = new Set([
 ]);
 
 if (DEFAULT_LOCALE !== "en") fail("English must remain the canonical semantic source locale");
+// Footnote: English is not merely the fallback. It is intentionally the first explicit source-language choice
+// in every generated selector so automatic detection never hides where translated wording originates.
+if (SUPPORTED_LOCALES[0] !== DEFAULT_LOCALE) fail("English must be the first selectable locale");
 if (SUPPORTED_LOCALES.length < 20) fail(`expected at least 20 supported locales, got ${SUPPORTED_LOCALES.length}`);
 if (QUALITY_CONTRACT.machineTranslationAtRuntime !== false) fail("runtime machine translation must stay disabled");
 if (QUALITY_CONTRACT.mode !== "curated-semantic-adaptation") fail("unexpected i18n quality mode");
@@ -86,11 +89,17 @@ for (const forbidden of ["translate.googleapis.com", "google-translate", "api.de
 if (!runtime.includes("navigator.languages")) fail("automatic browser-locale selection is missing");
 if (!runtime.includes("MutationObserver")) fail("dynamic evidence translation observer is missing");
 if (!runtime.includes('"zh-Hant"') || !runtime.includes('"zh-Hans"')) fail("Chinese script/region resolution is missing");
+if (!runtime.includes("for (const key of SUPPORTED_LOCALES)")) fail("website selector no longer derives ordering from the canonical locale list");
 
 // Human-facing README parity is part of the same public localization contract. The English README remains
 // canonical, but every supported non-English locale must be directly discoverable and retain the current
 // release/format/surface/evidence markers so translated documentation cannot silently fossilize.
 const rootReadme = fs.readFileSync(path.join(root, "README.md"), "utf8");
+const englishIndex = rootReadme.indexOf("English ·");
+const firstTranslationIndex = rootReadme.indexOf("docs/readme/README.");
+if (englishIndex < 0 || firstTranslationIndex < 0 || englishIndex > firstTranslationIndex) {
+  fail("GitHub README language chooser must present English first");
+}
 for (const locale of SUPPORTED_LOCALES.filter((key) => key !== DEFAULT_LOCALE)) {
   const relative = `docs/readme/README.${locale}.md`;
   const absolute = path.join(root, relative);
@@ -103,6 +112,7 @@ for (const locale of SUPPORTED_LOCALES.filter((key) => key !== DEFAULT_LOCALE)) 
   }
   if (readme.includes("0.29.j") || readme.includes("0.28.a")) fail(`${relative} contains stale surface marker`);
   if (!readme.includes(`?lang=${locale}`)) fail(`${relative} does not preserve locale when handing off to the website`);
+  if (!readme.includes("../../README.md")) fail(`${relative} does not expose English canonical source selection`);
 }
 
 if (errors.length) {
