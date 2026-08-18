@@ -2,8 +2,8 @@ name: CMPCT v0.30 Agent-00 one-shot native formatter
 # ci-lane: diagnostic
 
 on:
-  push:
-    branches: [agent/v030-authoritative-integration]
+  pull_request:
+    branches: [main]
     paths: ['.github/workflows/v030-agent00-maintenance-format.yml']
 
 permissions:
@@ -11,6 +11,7 @@ permissions:
 
 jobs:
   format-native:
+    if: github.event.pull_request.head.ref == 'agent/v030-authoritative-integration'
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v6
