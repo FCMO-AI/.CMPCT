@@ -1,62 +1,74 @@
-# .CMPCT
+<div align="center">
+  <a href="https://fcmo-ai.github.io/.CMPCT/">
+    <img src=".github/assets/repository-hero.svg" width="100%" alt="CMPCT — Archive formats made peace with compromise. CMPCT did not.">
+  </a>
 
-**Canonical repository for the CMPCT general-purpose archive/container project.**
+  <br>
 
-CMPCT is an experimental lossless archive system built around a demanding goal: make the default
-archive choice better than legacy ZIP across **size, speed, random access, fidelity, integrity,
-recovery, updates and modern storage semantics**—without winning one metric by quietly sacrificing the
-others.
+  **A general-purpose lossless archive/container project engineered to push stored bytes, selective access, integrity, recovery and portability forward together.**
 
-> Status: **core project v0.28.0 / surface 0.28.a / pre-1.0 / format under active development.** `main`
-> is the canonical source of truth. The executable reference implementation still writes format
-> revision **24**. Surface revisions describe site/docs/repository presentation and do not consume a
-> numeric core release number.
+  <br>
 
-> v0.28.0 is the **EntropyGraph II / Resemblance Compiler research milestone**. Its CMPNX8 research
-> grammar is not being smuggled under revision-24 magic; canonical reader/writer semantics remain r24
-> until graph representations independently earn a future format revision.
+  [![CI topology](https://github.com/FCMO-AI/.CMPCT/actions/workflows/ci-topology.yml/badge.svg)](https://github.com/FCMO-AI/.CMPCT/actions/workflows/ci-topology.yml)
+  [![Fuzz](https://github.com/FCMO-AI/.CMPCT/actions/workflows/fuzz.yml/badge.svg)](https://github.com/FCMO-AI/.CMPCT/actions/workflows/fuzz.yml)
+  [![Engineering evidence](https://github.com/FCMO-AI/.CMPCT/actions/workflows/engineering-evidence.yml/badge.svg)](https://github.com/FCMO-AI/.CMPCT/actions/workflows/engineering-evidence.yml)
 
-> Licensing status: **Apache-2.0 is proposed, not yet adopted.** See `LICENSING.md` and
-> `LICENSE-APACHE-2.0-PROPOSED.txt`. The proposal must not be interpreted as a finalized public grant.
+  **[Website](https://fcmo-ai.github.io/.CMPCT/)** · **[Browser Lab](https://fcmo-ai.github.io/.CMPCT/#lab)** · **[Benchmarks](docs/BENCHMARKS.md)** · **[Format](docs/FORMAT.md)** · **[Roadmap](docs/ROADMAP.md)** · **[Agent entrypoint](docs/CURRENT_STATE.md)**
 
-## The performance position
+  <sub>core v0.29.0 · canonical format r24 · surface 0.29.k · pre-1.0</sub>
 
-CMPCT is not "Zstd with a new extension" and it is not satisfied by being smaller on one hand-picked
-directory. Numeric core release candidates are benchmarked against their direct base before release.
+  <br><br>
 
-The release rule is deliberately asymmetric because size and timing have different measurement physics:
+  <sub>
+  English · <a href="docs/readme/README.es-419.md">Español</a> · <a href="docs/readme/README.pt-BR.md">Português</a> · <a href="docs/readme/README.fr.md">Français</a> · <a href="docs/readme/README.de.md">Deutsch</a> · <a href="docs/readme/README.it.md">Italiano</a> · <a href="docs/readme/README.nl.md">Nederlands</a> · <a href="docs/readme/README.pl.md">Polski</a> · <a href="docs/readme/README.cs.md">Čeština</a> · <a href="docs/readme/README.hu.md">Magyar</a><br>
+  <a href="docs/readme/README.ro.md">Română</a> · <a href="docs/readme/README.tr.md">Türkçe</a> · <a href="docs/readme/README.sv.md">Svenska</a> · <a href="docs/readme/README.da.md">Dansk</a> · <a href="docs/readme/README.fi.md">Suomi</a> · <a href="docs/readme/README.id.md">Bahasa Indonesia</a> · <a href="docs/readme/README.ja.md">日本語</a> · <a href="docs/readme/README.ko.md">한국어</a> · <a href="docs/readme/README.zh-Hans.md">简体中文</a> · <a href="docs/readme/README.zh-Hant.md">繁體中文</a>
+  </sub>
+</div>
 
-- **archive size:** identical input + encoder semantics must never get larger; release gate tolerance is **0 bytes**;
-- **create/extract speed:** base and candidate run on the same runner with repeated medians; a confirmed
-  slowdown outside the documented relative+absolute noise envelope blocks release;
-- **benchmark evidence:** every numeric core release must commit a fresh public benchmark record rather
-  than leave the new result only in CI output;
-- **corpora:** losing/adversarial workloads stay visible. A benchmark is not improved by deleting the
-  case that disproves the headline.
+---
 
-See `docs/PERFORMANCE_RELEASE_GATE.md` for the normative release policy.
+> **Performance is the release contract.** Research may discover an uncomfortable tradeoff. A promoted release does not get to hide one: deterministic archive-size regression has **0-byte tolerance**, confirmed speed regression outside the documented same-runner noise envelope blocks promotion, and losing workloads remain public evidence.
 
-### v0.28 research frontier
+## Why CMPCT exists
 
-The fixed v0.28 neutral + resemblance-hostile portfolio contains **15 deterministic workloads**. The
-inherited v0.25 EntropyGraph engine stores **166,816,028 bytes**; EntropyGraph II stores
-**137,557,457 bytes**, **17.5394% smaller**, with **3 workloads improved and 0 regressed**. The other
-**12/15 workloads are exact inherited fallbacks** rather than losses hidden inside an average.
+| | CMPCT is trying to make this better |
+|---|---|
+| **Stored bytes** | Use exact identity, content-aware representations and bounded relationship reuse instead of treating every file as an unrelated byte stream. |
+| **Selective access** | Read the requested object or range without turning the entire archive into one mandatory decompression event. |
+| **Integrity + recovery** | Keep checks, redundant metadata and salvage paths as executable reader behavior rather than disaster-recovery prose. |
+| **Filesystem fidelity** | Preserve links, sparse files, metadata and update semantics expected from a modern general-purpose container. |
+| **Interoperability** | Keep a canonical reader/writer contract, ZIP export, native-core work and portability gates separate from experimental research grammar. |
+| **Evidence quality** | Derive public claims from committed reproducible records, preserve losses and reject benchmark theater. |
 
-The mechanism-level wins are concentrated where resemblance reuse predicts them:
+CMPCT is not “Zstd with a new extension” and it is not satisfied by winning one hand-picked directory. The target is a stronger default archive across **size, speed, random access, fidelity, integrity, recovery, updates and modern storage semantics** without quietly exporting the cost somewhere else.
 
-- shifted near-duplicate versions: **30,200,827 → 1,761,588 bytes (-94.17%)**;
-- repeated boundary churn: **866,651 → 89,945 bytes (-89.62%)**;
-- ML artifacts: **13,879,065 → 13,836,439 bytes (-0.31%)**.
+## Latest verified frontier
 
-On the resemblance-hostile structural aggregate the selected CMPCT candidate stores **47,197,165 B**,
-in the same size class as solid tar+Zstd-19 (**47,065,652 B**), ZPAQ method 5 (**47,062,641 B**) and
-7z/LZMA2 (**47,430,344 B**), while ZIP/Deflate-9 stores **76,690,799 B**. These are structural size
-comparisons, **not semantic-parity claims**: solid archives export different selective-read and recovery
-costs. DwarFS was unavailable on the evidence runner and remains recorded as unavailable.
+**Project v0.29.0 — Mosaic / Residual Program Packing** advances the verified research engine while the shipping canonical format remains **revision 24**.
 
-The durable record is `benchmarks/history/2026-08-16-entropygraph-v028.json`. Historical v0.25 evidence
-remains preserved rather than rewritten.
+| v0.29 research evidence | Result |
+|---|---:|
+| Portable inherited-frontier portfolio | **137,501,815 B** |
+| Direct v0.28 base | 137,550,416 B |
+| Exact saving | **48,601 B (0.035333%)** |
+| Portable workloads | **15** |
+| Improved / regressed | **2 / 0** |
+| Exact v0.28 fallbacks | **13 / 15** |
+| Hostile mechanism suites | **4.407362% smaller**, 9 improved / 0 regressed across 18 workloads |
+| Fixed hostile scheduler | **182.454 s → 97.944 s median (-46.318%)**, byte-identical selected archive |
+
+On the deterministic 724-file / 93,526,384-byte resemblance-hostile aggregate, accepted attempt #5 stores **47,147,764 B**. On that same tree, ZPAQ method 5 stores 47,062,639 B, solid tar+Zstd-19 stores 47,065,652 B, 7z/LZMA2 stores 47,430,343 B, Borg stores 76,461,311 B and ZIP/Deflate-9 stores 76,690,799 B.
+
+These rows are **matched stored-byte comparisons, not semantic-parity claims**. Solid archives, backup repositories and CMPCT expose different selective-read, update, integrity and recovery tradeoffs. The durable release record is [`docs/releases/v0.29.0.md`](docs/releases/v0.29.0.md); machine-readable evidence lives under [`benchmarks/history/`](benchmarks/history/).
+
+### Shipping vs frontier
+
+| Authority | Current state | Meaning |
+|---|---|---|
+| **Canonical reader/writer** | **format r24** | What `python -m cmpct create` writes and canonical readers must understand. |
+| **Research frontier** | **CMPNX11 / v0.29.0** | Experimental Mosaic + Residual Program Packing engine; not canonical r24 syntax. |
+| **Public surface** | **0.29.k** | Repository/site/docs presentation only; it does not alter archive semantics or consume a core version. |
+| **License** | **Apache-2.0 proposed** | Proposal only. It is not yet the finalized public grant. |
 
 ## What CMPCT can do today
 
@@ -78,23 +90,22 @@ Current canonical revision-24 prototype capabilities include:
 - on-demand export to ordinary Deflate ZIP for legacy compatibility;
 - opt-in reproducible creation and deterministic parallel candidate encoding.
 
-The EntropyGraph II research engine additionally explores:
+The v0.29 research line additionally explores and measures:
 
-- bounded FastCDC-style resemblance units;
-- bounded multi-band similarity candidate search;
+- bounded FastCDC-style resemblance units and multi-band similarity search;
 - measured depth-1 COPY/LITERAL deltas;
-- adaptive similarity-ordered physical context from 64 KiB through 2 MiB under <=8x weighted read
-  amplification;
+- bounded multi-root Mosaic placement;
+- Residual Program Packing for groups of related delta recipes;
+- exact v0.28 portfolio fallback whenever the new representation does not win;
+- locality/resource ceilings for selected physical plans;
 - exact optional DEFLATE precompression through a pinned memory-safe bridge;
 - Merkle-authenticated physical records and authenticated tail recovery;
 - strict remote range sources that cannot silently fetch entire archives;
-- inherited-v0.25 portfolio fallback whenever the graph candidate is larger.
+- byte-identical parallel portfolio scheduling for the accepted v0.29 research engine.
 
-Those mechanisms remain gated from the canonical reader until they pass format integration,
-conformance, hardening, native parity and portability requirements.
+Those research mechanisms remain gated from the canonical reader until they independently pass format integration, conformance, hardening, native parity, recovery and portability requirements.
 
-The important rule is **content-driven selection, not extension-driven folklore**. If a specialized
-representation is slower or larger for the actual bytes, CMPCT should not use it.
+The important rule is **content-driven selection, not extension-driven folklore**. If a specialized representation is slower or larger for the actual bytes, CMPCT should not use it.
 
 ## Quick start
 
@@ -111,10 +122,7 @@ python -m cmpct range archive.cmpct path/to/huge.bin 1048576 4096 -o slice.bin
 python -m cmpct export-zip archive.cmpct legacy.zip
 ```
 
-Fresh-process CLI creation is intentionally serial unless `--workers N` is supplied. The v0.28 release
-gate found that thread-pool startup could cost a small media tree ~10 ms while its library work barely
-changed. The in-process `Builder` API keeps deterministic parallel creation by default, where callers can
-amortize setup and large workloads showed material gains.
+Fresh-process canonical CLI creation is intentionally serial unless `--workers N` is supplied. The v0.28 release gate found that thread-pool startup could cost a small media tree about 10 ms while its library work barely changed. The in-process `Builder` API keeps deterministic parallel creation by default, where callers can amortize setup and large workloads showed material gains.
 
 For the optional native content-defined chunker on Linux:
 
@@ -122,8 +130,18 @@ For the optional native content-defined chunker on Linux:
 cc -O3 -shared -fPIC native/cmpct_cdc.c -o src/cmpct/libcmpct_cdc.so
 ```
 
-The reader does **not** depend on that helper. It accelerates boundary selection while creating an
-archive; chunk boundaries are explicitly recorded on disk.
+The reader does **not** depend on that helper. It accelerates boundary selection while creating an archive; chunk boundaries are explicitly recorded on disk.
+
+## The performance position
+
+Numeric core release candidates are benchmarked against their direct base before release. The release rule is deliberately asymmetric because size and timing have different measurement physics:
+
+- **archive size:** identical input + encoder semantics must never get larger; release gate tolerance is **0 bytes**;
+- **create/extract speed:** base and candidate run on the same runner with repeated medians; a confirmed slowdown outside the documented relative+absolute noise envelope blocks release;
+- **benchmark evidence:** every numeric core release must commit a fresh public benchmark record rather than leave the new result only in CI output;
+- **corpora:** losing/adversarial workloads stay visible. A benchmark is not improved by deleting the case that disproves the headline.
+
+See [`docs/PERFORMANCE_RELEASE_GATE.md`](docs/PERFORMANCE_RELEASE_GATE.md) for the normative release policy and [`docs/BREAKTHROUGH_REHABILITATION.md`](docs/BREAKTHROUGH_REHABILITATION.md) for how high-upside research is preserved while regression debt is paid before promotion.
 
 ## New-agent reading order
 
@@ -135,31 +153,32 @@ A coding/research agent with no previous CMPCT context should read, in order:
 4. `docs/CURRENT_STATE.md` — zero-chat-history handoff and immediate frontier;
 5. newest applicable note under `docs/releases/` — latest numeric core milestone;
 6. `docs/PERFORMANCE_RELEASE_GATE.md` — no-regression core-release contract;
-7. `docs/FORMAT.md` — current revision-24 on-disk contract;
-8. `docs/HISTORY.md` — surviving format/prototype history with private provenance generalized;
-9. `docs/ENTROPYGRAPH.md` and `docs/ENTROPYGRAPH_II_CAMPAIGN.md` — current research frontier and gates;
-10. `docs/HARDENING.md` — hostile parser/resource state;
-11. `docs/PORTABILITY.md` and `docs/NATIVE_CORE.md` — product integration and shared reader-core state;
-12. `docs/RESEARCH_LOG.md` — failed ideas and experimental conclusions;
-13. `docs/BENCHMARKS.md` and `benchmarks/history/` — benchmark semantics and durable public records;
-14. `docs/PUBLIC_SURFACE.md` — public-repository/site disclosure boundary;
-15. `docs/ROADMAP.md` — work remaining before 1.0.
+7. `docs/BREAKTHROUGH_REHABILITATION.md` — breakthrough preservation and regression-debt protocol;
+8. `docs/FORMAT.md` — current revision-24 on-disk contract;
+9. `docs/HISTORY.md` — surviving format/prototype history with private provenance generalized;
+10. `docs/ENTROPYGRAPH.md`, `docs/ENTROPYGRAPH_II_CAMPAIGN.md` and `docs/MOSAIC_V029_CAMPAIGN.md` — research lineage and current frontier;
+11. `docs/HARDENING.md` — hostile parser/resource state;
+12. `docs/PORTABILITY.md` and `docs/NATIVE_CORE.md` — product integration and shared reader-core state;
+13. `docs/RESEARCH_LOG.md` — failed ideas and experimental conclusions;
+14. `docs/BENCHMARKS.md` and `benchmarks/history/` — benchmark semantics and durable public records;
+15. `docs/PUBLIC_SURFACE.md` — public-repository/site disclosure boundary;
+16. `docs/ROADMAP.md` — work remaining before 1.0.
 
-A new agent should not need private chat, private corpora, or unrelated project context to continue
-development safely.
+A new agent should not need private chat, private corpora or unrelated project context to continue development safely.
 
 ## Repository map
 
 - `src/cmpct/` — canonical revision-24 reference implementation.
-- `src/cmpct/resemblance.py` — reusable bounded similarity/delta primitives used by EntropyGraph II.
-- `experiments/entropygraph_v025.py` — historical CMPNX5 engine and v0.28 exact fallback.
+- `src/cmpct/resemblance.py` — reusable bounded similarity/delta primitives.
+- `experiments/entropygraph_v025.py` — historical CMPNX5 engine and inherited fallback lineage.
 - `experiments/entropygraph_v028.py` — EntropyGraph II CMPNX8 research engine.
-- `experiments/entropygraph_v028_strict.py` — strict-locality EntropyGraph II portfolio.
-- `experiments/entropygraph_v028_remote.py` — strict range-source research reader.
+- `experiments/entropygraph_v029_release.py` — stable accepted v0.29 research entrypoint and byte-identical scheduler surface.
 - `benchmarks/universal_bench.py` — deterministic heterogeneous canonical benchmark corpus generator.
 - `benchmarks/zip_parity_bench.py` — fair CMPCT/ZIP parity and shared-corpus release-gate harness.
 - `benchmarks/neutral_hostile_corpus_v1.py` — deterministic neutral/hostile research suite.
 - `benchmarks/resemblance_hostile_corpus_v1.py` — shifted-version/false-neighbor/boundary-churn attack suite.
+- `benchmarks/mosaic_v029_generalization_bench.py` — portable v0.29 generalization gate.
+- `benchmarks/mosaic_v029_structural_competitors.py` — matched hostile cross-format structural comparison.
 - `benchmarks/history/` — durable public machine-readable benchmark records.
 - `fuzz/` — malformed canonical/graph/delta resource and parser attacks.
 - `tools/check_performance_regression.py` — direct-base release regression checker.
@@ -175,8 +194,9 @@ development safely.
 - `docs/CURRENT_STATE.md` — current handoff/frontier for a zero-context developer or agent.
 - `docs/FORMAT.md` — current on-disk contract and invariants.
 - `docs/HISTORY.md` — format and design lineage through the canonical revision-24 baseline.
-- `docs/ENTROPYGRAPH.md` — current generalized research results and integration boundary.
+- `docs/ENTROPYGRAPH.md` — generalized graph-representation research and integration boundary.
 - `docs/ENTROPYGRAPH_II_CAMPAIGN.md` — v0.28 falsifiable design/evidence map.
+- `docs/MOSAIC_V029_CAMPAIGN.md` — v0.29 Mosaic campaign and falsifiable mechanism gates.
 - `docs/RESEARCH_LOG.md` — design decisions, failed ideas and experimental conclusions.
 - `docs/PRINCIPLES.md` — rules that prevent corpus-specific overfitting.
 - `docs/BENCHMARKS.md` — benchmark discipline and interpreted checkpoints.
@@ -186,88 +206,50 @@ development safely.
 
 ## Website
 
-The site is designed to **create impact first, prove the claim second, and earn trust after that**.
-Its headline performance numbers, competitor ladder, workload matrix, losses and core-release state are
-generated from committed benchmark history rather than hand-maintained marketing percentages.
+The live site is designed to **create impact first, prove the claim second, and earn trust after that**. Its headline performance numbers, competitor ladder, workload matrix, losses and core-release state are generated from committed benchmark history rather than hand-maintained marketing percentages.
 
-For v0.28 the public adapter explicitly declares **EntropyGraph v0.25** as the primary research baseline
-and keeps ZIP/Deflate, 7z/LZMA2, solid tar/Zstd, ZPAQ and Borg under their actual names. A stale UI schema
-is not allowed to rename one competitor into another merely to keep an old hero label filled in.
+For v0.29 the public adapter exposes the accepted Mosaic / Residual Program Packing frontier while keeping ZIP/Deflate, 7z/LZMA2, solid tar/Zstd, ZPAQ and Borg under their actual names. A stale UI schema is not allowed to rename one competitor into another merely to keep an old hero label filled in.
 
 The site deliberately separates:
 
 - **research frontier** — the strongest currently verified experimental representation results;
-- **canonical parity** — the executable revision-24 reader/writer compared against ZIP at equivalent
-  library and fresh-process CLI boundaries;
-- **surface revision** — the current site/docs/repository presentation milestone, which has no authority
-  over archive semantics or benchmark truth.
+- **canonical parity** — the executable revision-24 reader/writer compared against ZIP at equivalent library and fresh-process CLI boundaries;
+- **surface revision** — the current site/docs/repository presentation milestone, which has no authority over archive semantics or benchmark truth.
 
-The site may be visually and rhetorically aggressive. It may not blur those boundaries or invent a win.
-Canonical `main` publishes through the Pages workflow only after public-surface, data-coherence,
-surface-revision, JavaScript and Browser Lab compatibility checks pass.
+The site may be visually and rhetorically aggressive. It may not blur those boundaries or invent a win. Canonical `main` publishes through the Pages workflow only after public-surface, data-coherence, surface-revision, JavaScript and Browser Lab compatibility checks pass.
+
+**Open it:** https://fcmo-ai.github.io/.CMPCT/
 
 ## Version discipline
 
-CMPCT does not treat the numeric project version as a commit counter.
+CMPCT does not treat the numeric project version as a commit counter. There are three different version axes:
 
-There are three different version axes:
+1. **Numeric core project version (`MAJOR.MINOR.PATCH`)** — reserved for a material improvement to CMPCT itself: archive/engine capability, compression or speed, reliability, recovery, portability/interoperability, or another product-level gain. After the historical v0.27.1 checkpoint, normal core advancement moves the `MAJOR.MINOR` line and uses `PATCH=0` for packaging compatibility.
+2. **Surface revision (`MAJOR.MINOR.LETTER`)** — site animation/design, documentation cleanup, repository presentation, workflow ergonomics and similar non-format work. The current surface milestone is **`0.29.k`**. It does not independently change `pyproject.toml` and does not require a synthetic benchmark record.
+3. **On-disk format revision** — changes only when readers need new archive grammar/storage semantics. The canonical executable format remains **r24**.
 
-1. **Numeric core project version (`MAJOR.MINOR.PATCH`)** — reserved for a material improvement to CMPCT
-   itself: archive/engine capability, compression or speed, reliability, recovery,
-   portability/interoperability, or another product-level gain. After the historical v0.27.1 checkpoint,
-   normal core advancement moves the `MAJOR.MINOR` line and uses `PATCH=0` for packaging compatibility.
-2. **Surface revision (`MAJOR.MINOR.LETTER`)** — site animation/design, documentation cleanup, repository
-   presentation, workflow ergonomics and similar non-format work. The current surface milestone is
-   `0.28.a`. It does not independently change `pyproject.toml` and does not require a synthetic benchmark
-   record.
-3. **On-disk format revision** — changes only when readers need new archive grammar/storage semantics.
+A core release can improve encoder policy, speed, reliability or interoperability without changing the on-disk revision, but it must still earn its numeric number with durable evidence. A research milestone can likewise advance the project line while keeping experimental bytes explicitly non-canonical. A site or repository beautification pass can be useful and substantial without pretending CMPCT itself became a new format release.
 
-A core release can improve encoder policy, speed, reliability or interoperability without changing the
-on-disk revision, but it must still earn its numeric number with durable evidence. A research milestone
-can likewise advance the project line while keeping experimental bytes explicitly non-canonical. A site
-or repo beautification pass can be useful and substantial without pretending CMPCT itself became a new
-format release.
-
-CI rejects numeric bumps that do not touch archive/engine paths, requires matching release and benchmark
-evidence for numeric core releases, validates the alphabetic surface line, and keeps those concerns
-separate from the performance regression gate.
+CI rejects numeric bumps that do not touch archive/engine paths, requires matching release and benchmark evidence for numeric core releases, validates the alphabetic surface line, and keeps those concerns separate from the performance regression gate.
 
 ## Development history and benchmark provenance
 
-The project began as a sequence of Seekable-Zstd, indexed-Zstd, adaptive-framing and ZIP-family
-experiments before becoming the native content-aware CMPCT format. The technical history is preserved,
-but private corpus identities, private artifact names and unrelated project provenance are intentionally
-not part of the public project record.
+The project began as a sequence of Seekable-Zstd, indexed-Zstd, adaptive-framing and ZIP-family experiments before becoming the native content-aware CMPCT format. The technical history is preserved, but private corpus identities, private artifact names and unrelated project provenance are intentionally not part of the public project record.
 
-Public benchmark history must be independently reproducible or generated from deliberately public,
-synthetic inputs. Private development corpora may still be useful local regression signals, but their
-names, hashes, paths, contents and artifact provenance are not public evidence.
+Public benchmark history must be independently reproducible or generated from deliberately public, synthetic inputs. Private development corpora may still be useful local regression signals, but their names, hashes, paths, contents and artifact provenance are not public evidence.
 
-Historical benchmark data is **not** automatically a universal performance guarantee. The project
-records environment, process boundaries and semantic mismatches, and preserves losing workloads rather
-than rewriting the record around whichever result looks best.
+Historical benchmark data is **not** automatically a universal performance guarantee. The project records environment, process boundaries and semantic mismatches, and preserves losing workloads rather than rewriting the record around whichever result looks best.
 
 ## Public-surface rule
 
-CMPCT must stand on its own. The repository and website must not require or expose unrelated internal
-projects, private customer data, private corpora, personal information, chat transcripts, credentials,
-private artifact names or private-system links. See `docs/PUBLIC_SURFACE.md` for the enforceable rule.
+CMPCT must stand on its own. The repository and website must not require or expose unrelated internal projects, private customer data, private corpora, personal information, chat transcripts, credentials, private artifact names or private-system links. See `docs/PUBLIC_SURFACE.md` for the enforceable rule.
 
 ## Canonicality
 
-This repository supersedes chat-local CMPCT prototypes and benchmark scripts. New format changes,
-benchmarks, experiments, site changes and design decisions must land here, but they do not all receive
-the same kind of version marker. Material archive/engine progress earns a numeric core release; site,
-documentation and repository presentation use `SURFACE_REVISION`; research may remain explicitly
-experimental until it is promoted. Experimental code cannot claim canonical format support until it is
-wired into the reference reader/writer and conformance surface.
+This repository supersedes chat-local CMPCT prototypes and benchmark scripts. New format changes, benchmarks, experiments, site changes and design decisions must land here, but they do not all receive the same kind of version marker. Material archive/engine progress earns a numeric core release; site, documentation and repository presentation use `SURFACE_REVISION`; research may remain explicitly experimental until it is promoted. Experimental code cannot claim canonical format support until it is wired into the reference reader/writer and conformance surface.
 
 ## License
 
-Apache License 2.0 is the **current proposed license**, not the final adopted license. The repository
-contains the unmodified proposed license text in `LICENSE-APACHE-2.0-PROPOSED.txt` plus an explicit
-adoption checklist in `LICENSING.md`. Until that process is completed, do not represent CMPCT as
-finally released under Apache-2.0.
+Apache License 2.0 is the **current proposed license**, not the final adopted license. The repository contains the unmodified proposed license text in `LICENSE-APACHE-2.0-PROPOSED.txt` plus an explicit adoption checklist in `LICENSING.md`. Until that process is completed, do not represent CMPCT as finally released under Apache-2.0.
 
-Footnote: historical release notes and benchmark records are not rewritten to fit the new policy. The
-scarce-version rule applies prospectively so the repository preserves an honest audit trail.
+Footnote: the repository hero is deliberately evergreen and contains no benchmark percentages or release numbers; evidence-bearing values remain text sourced from the current release record, where they can be reviewed and updated without turning artwork into stale benchmark authority. Historical release notes and benchmark records are not rewritten to fit the new policy. The scarce-version rule applies prospectively so the repository preserves an honest audit trail.
