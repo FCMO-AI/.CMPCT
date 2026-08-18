@@ -5,13 +5,15 @@ on:
     paths:
       - 'integrations/android/**'
       - 'native/cmpct-core/**'
+      - 'native/cmpct-portable/**'
       - 'tests/conformance/**'
       - '.github/workflows/android.yml'
   push:
-    branches: [main]
+    branches: [main, agent/v030-coop-native-portability]
     paths:
       - 'integrations/android/**'
       - 'native/cmpct-core/**'
+      - 'native/cmpct-portable/**'
       - 'tests/conformance/**'
       - '.github/workflows/android.yml'
 
@@ -79,15 +81,20 @@ jobs:
           export ANDROID_NDK_ROOT="$ANDROID_NDK_HOME"
           gradle --no-daemon :app:assembleDebug
 
-      - name: Verify packaged JNI dependency is relocatable
+      - name: Verify packaged JNI dependency is relocatable and portable
         working-directory: integrations/android
         run: |
           # Footnote: the first real emulator run caught an absolute /home/runner DT_NEEDED entry.
-          # Inspect the packaged ELF directly so that class of host-path leak fails before device boot.
+          # Inspect the packaged ELF directly so that class of host-path leak fails before device boot;
+          # also require the shared portable dispatcher rather than the obsolete r24-only dependency.
           unzip -p app/build/outputs/apk/debug/app-debug.apk \
             lib/x86_64/libcmpct_android.so > "$RUNNER_TEMP/libcmpct_android.so"
           readelf -d "$RUNNER_TEMP/libcmpct_android.so" | tee "$RUNNER_TEMP/cmpct-elf-dynamic.txt"
-          grep -Fq 'Shared library: [libcmpct_core.so]' "$RUNNER_TEMP/cmpct-elf-dynamic.txt"
+          grep -Fq 'Shared library: [libcmpct_portable.so]' "$RUNNER_TEMP/cmpct-elf-dynamic.txt"
+          if grep -Fq 'Shared library: [libcmpct_core.so]' "$RUNNER_TEMP/cmpct-elf-dynamic.txt"; then
+            echo 'Android JNI still links the r24-only core directly' >&2
+            exit 1
+          fi
           if grep -Fq '/home/' "$RUNNER_TEMP/cmpct-elf-dynamic.txt"; then
             echo 'host filesystem path leaked into Android DT_NEEDED' >&2
             exit 1
@@ -138,7 +145,7 @@ jobs:
           cat "$RUNNER_TEMP/cmpct-emulator.log" >&2
           exit 1
 
-      - name: Run revision-24 Android archive UX and JNI conformance tests
+      - name: Run Android archive UX and shared JNI conformance tests
         working-directory: integrations/android
         run: |
           export ANDROID_NDK_HOME="$ANDROID_SDK_ROOT/ndk/29.0.14206865"
