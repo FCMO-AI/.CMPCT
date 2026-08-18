@@ -1,14 +1,13 @@
 use crate::format::{
-    as_array, as_map, field, parse_msgpack, safe_relpath, text, uint, MAX_META_BYTES,
-    MAX_PATH_BYTES,
+    MAX_META_BYTES, MAX_PATH_BYTES, as_array, as_map, field, parse_msgpack, safe_relpath, text,
+    uint,
 };
 use crate::{PortableEntry, PortableError};
 use rmpv::Value;
 use std::collections::{HashMap, HashSet};
 
 pub(crate) const INTERNAL_ROOT: &str = ".__cmpct_r25_internal__";
-pub(crate) const FILESYSTEM_MANIFEST: &str =
-    ".__cmpct_r25_internal__/filesystem-v1.msgpack";
+pub(crate) const FILESYSTEM_MANIFEST: &str = ".__cmpct_r25_internal__/filesystem-v1.msgpack";
 const PROFILE: &str = "cmpct-r25-filesystem-manifest-v1";
 const VERSION: u64 = 1;
 const MAX_ENTRIES: usize = 65_536;
@@ -56,15 +55,8 @@ impl FsManifest {
         }
         let root = parse_msgpack(raw)?;
         let map = as_map(&root, "r25 filesystem manifest")?;
-        if uint(
-            field(map, "v")?,
-            "r25 filesystem manifest version",
-            VERSION,
-        )? != VERSION
-            || text(
-                field(map, "profile")?,
-                "r25 filesystem manifest profile",
-            )? != PROFILE
+        if uint(field(map, "v")?, "r25 filesystem manifest version", VERSION)? != VERSION
+            || text(field(map, "profile")?, "r25 filesystem manifest profile")? != PROFILE
             || text(
                 field(map, "internal_path")?,
                 "r25 filesystem manifest internal path",
@@ -74,10 +66,7 @@ impl FsManifest {
                 "unsupported r25 filesystem manifest identity".into(),
             ));
         }
-        let rows = as_array(
-            field(map, "entries")?,
-            "r25 filesystem manifest entries",
-        )?;
+        let rows = as_array(field(map, "entries")?, "r25 filesystem manifest entries")?;
         if rows.len() > MAX_ENTRIES {
             return Err(PortableError::Limit(
                 "r25 filesystem manifest entry count exceeds policy".into(),
@@ -128,9 +117,7 @@ impl FsManifest {
                         ));
                     };
                     let sha256: [u8; 32] = digest.as_slice().try_into().map_err(|_| {
-                        PortableError::Format(
-                            "r25 regular-file digest must be SHA-256".into(),
-                        )
+                        PortableError::Format("r25 regular-file digest must be SHA-256".into())
                     })?;
                     expected_content.insert(path.clone());
                     FsKind::File { size, sha256 }
@@ -253,10 +240,7 @@ impl FsManifest {
             .collect()
     }
 
-    pub(crate) fn resolve_regular<'a>(
-        &'a self,
-        path: &str,
-    ) -> Result<&'a FsEntry, PortableError> {
+    pub(crate) fn resolve_regular<'a>(&'a self, path: &str) -> Result<&'a FsEntry, PortableError> {
         let mut current = path;
         for _ in 0..=self.entries.len() {
             let index = *self.by_path.get(current).ok_or_else(|| {
@@ -303,6 +287,9 @@ fn parse_xattrs(value: &Value) -> Result<Vec<(String, Vec<u8>)>, PortableError> 
             return Err(PortableError::Format("malformed r25 xattr item".into()));
         }
         let name = text(&row[0], "r25 xattr name")?.to_owned();
+        if name.contains('\0') {
+            return Err(PortableError::Format("r25 xattr name contains NUL".into()));
+        }
         let Value::Binary(data) = &row[1] else {
             return Err(PortableError::Format(
                 "r25 xattr value must be binary".into(),

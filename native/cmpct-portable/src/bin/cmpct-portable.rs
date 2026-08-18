@@ -17,7 +17,9 @@ fn open(path: &str) -> Result<PortableArchive, PortableError> {
 fn run() -> Result<(), PortableError> {
     let mut args = env::args().skip(1);
     let Some(command) = args.next() else { usage() };
-    let Some(archive_path) = args.next() else { usage() };
+    let Some(archive_path) = args.next() else {
+        usage()
+    };
     let archive = open(&archive_path)?;
     match command.as_str() {
         "info" => {
@@ -25,6 +27,7 @@ fn run() -> Result<(), PortableError> {
                 usage();
             }
             println!("profile={}", archive.profile().as_str());
+            println!("revision={}", archive.revision());
             println!("entries={}", archive.entries().len());
             println!(
                 "tail_metadata_authenticated={}",
@@ -76,14 +79,18 @@ fn run() -> Result<(), PortableError> {
             println!("amplification={:.6}", stats.amplification);
         }
         "extract" => {
-            let Some(destination) = args.next() else { usage() };
+            let Some(destination) = args.next() else {
+                usage()
+            };
             if args.next().is_some() {
                 usage();
             }
             archive.extract_transactional(&PathBuf::from(destination))?;
         }
         "export-zip" => {
-            let Some(destination) = args.next() else { usage() };
+            let Some(destination) = args.next() else {
+                usage()
+            };
             if args.next().is_some() {
                 usage();
             }

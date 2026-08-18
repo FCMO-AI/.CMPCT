@@ -1,6 +1,6 @@
 use crate::format::{
-    as_array, as_map, bounded_zstd_decode, digest32, field, number, optional_field, parse_msgpack,
-    safe_relpath, sha256, text, tree_digest, tree_hasher_prefix, u64_le, uint, MAX_META_BYTES,
+    MAX_META_BYTES, as_array, as_map, bounded_zstd_decode, digest32, field, number, optional_field,
+    parse_msgpack, safe_relpath, sha256, text, tree_digest, tree_hasher_prefix, u64_le, uint,
 };
 use crate::identity::R25Identity;
 use crate::{MemberReadStats, PortableEntry, PortableError};
@@ -168,7 +168,9 @@ impl PrefixArchive {
         let payload = self.payload(index)?;
         let mut decoded_context = record.usize;
         let raw = match record.kind {
-            PrefixKind::Direct => bounded_zstd_decode(&payload, record.usize, MAX_FILE_BYTES, None)?,
+            PrefixKind::Direct => {
+                bounded_zstd_decode(&payload, record.usize, MAX_FILE_BYTES, None)?
+            }
             PrefixKind::Prefix(base) => {
                 let base_record = self.records.get(base).ok_or_else(|| {
                     PortableError::Format("PrefixGraph base id out of range".into())
@@ -179,26 +181,20 @@ impl PrefixArchive {
                     ));
                 }
                 let base_payload = self.payload(base)?;
-                let anchor = bounded_zstd_decode(
-                    &base_payload,
-                    base_record.usize,
-                    MAX_FILE_BYTES,
-                    None,
-                )?;
+                let anchor =
+                    bounded_zstd_decode(&base_payload, base_record.usize, MAX_FILE_BYTES, None)?;
                 if sha256(&anchor) != base_record.logical_sha {
                     return Err(PortableError::Integrity(
                         "PrefixGraph anchor logical SHA-256 mismatch".into(),
                     ));
                 }
-                decoded_context = decoded_context
-                    .checked_add(base_record.usize)
-                    .ok_or_else(|| PortableError::Limit("PrefixGraph context counter overflow".into()))?;
-                bounded_zstd_decode(
-                    &payload,
-                    record.usize,
-                    MAX_FILE_BYTES,
-                    Some(&anchor),
-                )?
+                decoded_context =
+                    decoded_context
+                        .checked_add(base_record.usize)
+                        .ok_or_else(|| {
+                            PortableError::Limit("PrefixGraph context counter overflow".into())
+                        })?;
+                bounded_zstd_decode(&payload, record.usize, MAX_FILE_BYTES, Some(&anchor))?
             }
         };
         if sha256(&raw) != record.logical_sha {
@@ -265,7 +261,9 @@ fn read_primary(file: &mut File, identity: R25Identity) -> Result<AuthMeta, Port
     let mut header = [0u8; HEADER_SIZE as usize];
     file.read_exact(&mut header)?;
     if &header[0..8] != identity.magic() {
-        return Err(PortableError::Format("PrefixGraph profile magic mismatch".into()));
+        return Err(PortableError::Format(
+            "PrefixGraph profile magic mismatch".into(),
+        ));
     }
     let compressed_size = u64_le(&header[8..16])?;
     let raw_size = u64_le(&header[16..24])?;
@@ -322,7 +320,9 @@ fn read_tail(
         .and_then(|value| value.checked_sub(compressed_size))
         .ok_or_else(|| PortableError::Format("PrefixGraph tail metadata offset".into()))?;
     if tail_offset < HEADER_SIZE {
-        return Err(PortableError::Format("PrefixGraph tail overlaps header".into()));
+        return Err(PortableError::Format(
+            "PrefixGraph tail overlaps header".into(),
+        ));
     }
     file.seek(SeekFrom::Start(tail_offset))?;
     let mut compressed = vec![0u8; compressed_size as usize];
@@ -341,7 +341,9 @@ fn read_tail(
     })
 }
 
-fn parse_meta(value: &Value) -> Result<(Vec<PortableEntry>, Vec<PrefixRecord>, [u8; 32]), PortableError> {
+fn parse_meta(
+    value: &Value,
+) -> Result<(Vec<PortableEntry>, Vec<PrefixRecord>, [u8; 32]), PortableError> {
     let map = as_map(value, "PrefixGraph metadata")?;
     if uint(field(map, "v")?, "PrefixGraph metadata revision", 1)? != 1
         || text(field(map, "engine")?, "PrefixGraph engine")? != "PrefixGraph-depth1-v1"

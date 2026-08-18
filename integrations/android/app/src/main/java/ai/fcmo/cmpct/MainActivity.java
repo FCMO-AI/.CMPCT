@@ -104,7 +104,7 @@ public final class MainActivity extends Activity {
                 // Opening through Rust after magic validation catches corrupt index/schema bytes before
                 // the archive is presented as a directory to the user.
                 try (CmpctNative.Archive archive = new CmpctNative.Archive(record.file.getAbsolutePath())) {
-                    if (archive.revision() != 24) throw new IOException("Unsupported CMPCT revision");
+                    if (archive.revision() != 24 && archive.revision() != 25) throw new IOException("Unsupported CMPCT revision");
                 }
                 runOnUiThread(() -> browse(record, ""));
             } catch (Exception e) {

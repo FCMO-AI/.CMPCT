@@ -103,11 +103,7 @@ fn key_token(value: &Value) -> Result<Vec<u8>, PortableError> {
     Ok(out)
 }
 
-fn validate_value(
-    value: &Value,
-    depth: usize,
-    nodes: &mut usize,
-) -> Result<(), PortableError> {
+fn validate_value(value: &Value, depth: usize, nodes: &mut usize) -> Result<(), PortableError> {
     if depth > MAX_VALUE_DEPTH {
         return Err(PortableError::Limit(
             "MessagePack nesting exceeds policy".into(),
@@ -189,20 +185,14 @@ pub(crate) fn as_map<'a>(
         .ok_or_else(|| PortableError::Format(format!("{label} must be a map")))
 }
 
-pub(crate) fn as_array<'a>(
-    value: &'a Value,
-    label: &str,
-) -> Result<&'a [Value], PortableError> {
+pub(crate) fn as_array<'a>(value: &'a Value, label: &str) -> Result<&'a [Value], PortableError> {
     value
         .as_array()
         .map(Vec::as_slice)
         .ok_or_else(|| PortableError::Format(format!("{label} must be an array")))
 }
 
-pub(crate) fn field<'a>(
-    map: &'a [(Value, Value)],
-    name: &str,
-) -> Result<&'a Value, PortableError> {
+pub(crate) fn field<'a>(map: &'a [(Value, Value)], name: &str) -> Result<&'a Value, PortableError> {
     optional_field(map, name)
         .ok_or_else(|| PortableError::Format(format!("missing metadata field {name}")))
 }
@@ -254,9 +244,7 @@ pub(crate) fn number(value: &Value, label: &str) -> Result<f64, PortableError> {
 
 pub(crate) fn tree_digest(text: &str) -> Result<[u8; 32], PortableError> {
     if text.len() != 64 || !text.as_bytes().iter().all(u8::is_ascii_hexdigit) {
-        return Err(PortableError::Format(
-            "tree SHA-256 declaration".into(),
-        ));
+        return Err(PortableError::Format("tree SHA-256 declaration".into()));
     }
     let mut out = [0u8; 32];
     for (index, slot) in out.iter_mut().enumerate() {
@@ -272,9 +260,7 @@ pub(crate) fn safe_relpath(rel: &str) -> Result<PathBuf, PortableError> {
         return Err(PortableError::Path(rel.into()));
     }
     if rel.len() > MAX_PATH_BYTES {
-        return Err(PortableError::Limit(
-            "logical path exceeds policy".into(),
-        ));
+        return Err(PortableError::Limit("logical path exceeds policy".into()));
     }
     let mut out = PathBuf::new();
     for part in rel.split('/') {

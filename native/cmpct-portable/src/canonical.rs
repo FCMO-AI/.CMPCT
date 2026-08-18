@@ -1,7 +1,7 @@
 use crate::format::{safe_relpath, sha256};
 use crate::g04::G04Archive;
 use crate::identity::R25Identity;
-use crate::manifest::{FsEntry, FsKind, FsManifest, FsMetadata, FILESYSTEM_MANIFEST};
+use crate::manifest::{FILESYSTEM_MANIFEST, FsEntry, FsKind, FsManifest, FsMetadata};
 use crate::prefix::PrefixArchive;
 use crate::{MemberReadStats, PortableEntry, PortableError, Profile};
 use sha2::{Digest, Sha256};
@@ -123,10 +123,7 @@ impl Canonical25Archive {
                 .iter()
                 .position(|candidate| candidate.path == entry.path)
                 .ok_or_else(|| {
-                    PortableError::Integrity(format!(
-                        "missing r25 graph member: {}",
-                        entry.path
-                    ))
+                    PortableError::Integrity(format!("missing r25 graph member: {}", entry.path))
                 })?;
             let (graph_size, graph_sha) = content.entry_identity(index)?;
             if graph_size != *size || graph_sha != *sha256 {
@@ -344,19 +341,14 @@ impl Canonical25Archive {
         for (index, entry) in self.manifest.entries().iter().enumerate() {
             match &entry.kind {
                 FsKind::File { .. } | FsKind::Hardlink { .. } => {
-                    writer
-                        .start_file(&entry.path, options)
-                        .map_err(|error| {
-                            PortableError::Format(format!("ZIP start_file: {error}"))
-                        })?;
+                    writer.start_file(&entry.path, options).map_err(|error| {
+                        PortableError::Format(format!("ZIP start_file: {error}"))
+                    })?;
                     self.stream_member(index, &mut writer)?;
                 }
                 FsKind::Directory => {
                     writer
-                        .add_directory(
-                            format!("{}/", entry.path.trim_end_matches('/')),
-                            options,
-                        )
+                        .add_directory(format!("{}/", entry.path.trim_end_matches('/')), options)
                         .map_err(|error| {
                             PortableError::Format(format!("ZIP add_directory: {error}"))
                         })?;
@@ -445,8 +437,59 @@ fn apply_metadata_best_effort(path: &Path, metadata: &FsMetadata, is_symlink: bo
             }
         }
     }
-    let _ = (metadata.uid, metadata.gid, &metadata.xattrs);
-    // Footnote: uid/gid/xattr restoration is intentionally retained in the parsed contract even on hosts where
-    // this small portable crate cannot set it without privilege/platform-specific APIs. The staged extractor
-    // never fabricates values; platform adapters may add best-effort setters without changing archive grammar.
+
+    #[cfg(unix)]
+    restore_unix_owner(path, metadata, is_symlink);
+    #[cfg(any(target_os = "linux", target_os = "android"))]
+    restore_linux_xattrs(path, metadata, is_symlink);
+
+    // Footnote: ownership/xattrs are best-effort because unprivileged extraction cannot promise chown or
+    // namespace-specific xattr setters. Failures never fabricate metadata and never bypass content integrity;
+    // the staged tree is still published only after structural/content restoration succeeds.
+}
+
+#[cfg(unix)]
+fn restore_unix_owner(path: &Path, metadata: &FsMetadata, is_symlink: bool) {
+    use std::ffi::CString;
+    use std::os::unix::ffi::OsStrExt;
+
+    let Ok(path) = CString::new(path.as_os_str().as_bytes()) else {
+        return;
+    };
+    unsafe {
+        // Footnote: lchown is mandatory for links so metadata restoration never follows an archive-controlled
+        // symlink. Regular entries use chown. Both are intentionally best-effort under ordinary app/user IDs.
+        if is_symlink {
+            let _ = libc::lchown(path.as_ptr(), metadata.uid, metadata.gid);
+        } else {
+            let _ = libc::chown(path.as_ptr(), metadata.uid, metadata.gid);
+        }
+    }
+}
+
+#[cfg(any(target_os = "linux", target_os = "android"))]
+fn restore_linux_xattrs(path: &Path, metadata: &FsMetadata, is_symlink: bool) {
+    use std::ffi::CString;
+    use std::os::unix::ffi::OsStrExt;
+
+    let Ok(path) = CString::new(path.as_os_str().as_bytes()) else {
+        return;
+    };
+    for (name, value) in &metadata.xattrs {
+        let Ok(name) = CString::new(name.as_bytes()) else {
+            continue;
+        };
+        unsafe {
+            let ptr = if value.is_empty() {
+                std::ptr::null()
+            } else {
+                value.as_ptr().cast()
+            };
+            if is_symlink {
+                let _ = libc::lsetxattr(path.as_ptr(), name.as_ptr(), ptr, value.len(), 0);
+            } else {
+                let _ = libc::setxattr(path.as_ptr(), name.as_ptr(), ptr, value.len(), 0);
+            }
+        }
+    }
 }

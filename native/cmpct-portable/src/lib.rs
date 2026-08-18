@@ -7,7 +7,7 @@ mod prefix;
 
 use crate::canonical::Canonical25Archive;
 use crate::format::safe_relpath;
-use crate::identity::{classify, R25Identity};
+use crate::identity::{R25Identity, classify};
 use cmpct_core::Archive as R24Archive;
 use std::ffi::CStr;
 use std::fs::{self, File};
@@ -89,6 +89,9 @@ pub struct MemberReadStats {
     pub profile: &'static str,
 }
 
+// Footnote: profile structs stay private so external Rust callers cannot bypass the dispatcher. The
+// crate is publish=false; PortableArchive is a handle, not a promise that low-level variants are stable.
+#[allow(private_interfaces)]
 #[derive(Debug)]
 pub enum PortableArchive {
     Revision24(R24Archive),
@@ -229,7 +232,8 @@ impl PortableArchive {
                     .ok_or_else(|| PortableError::Format("r24 entry id out of range".into()))?;
                 if entry.kind != 0 || entry.size > R24_VERIFY_MATERIALIZE_LIMIT {
                     return Err(PortableError::Limit(
-                        "r24 whole-member materialization is limited to regular files <=256 MiB".into(),
+                        "r24 whole-member materialization is limited to regular files <=256 MiB"
+                            .into(),
                     ));
                 }
                 let mut out = vec![0u8; entry.size as usize];
@@ -255,7 +259,10 @@ impl PortableArchive {
         }
     }
 
-    pub fn read_member_path(&self, path: &str) -> Result<(Vec<u8>, MemberReadStats), PortableError> {
+    pub fn read_member_path(
+        &self,
+        path: &str,
+    ) -> Result<(Vec<u8>, MemberReadStats), PortableError> {
         let index = self
             .entry_index(path)
             .ok_or_else(|| PortableError::Format(format!("member not found: {path}")))?;
@@ -410,9 +417,9 @@ impl PortableArchive {
         for (index, entry) in self.entries().iter().enumerate() {
             match entry.kind {
                 0 => {
-                    writer
-                        .start_file(&entry.path, options)
-                        .map_err(|error| PortableError::Format(format!("ZIP start_file: {error}")))?;
+                    writer.start_file(&entry.path, options).map_err(|error| {
+                        PortableError::Format(format!("ZIP start_file: {error}"))
+                    })?;
                     self.stream_member(index, &mut writer)?;
                 }
                 1 => {
@@ -421,9 +428,9 @@ impl PortableArchive {
                     } else {
                         format!("{}/", entry.path)
                     };
-                    writer
-                        .add_directory(name, options)
-                        .map_err(|error| PortableError::Format(format!("ZIP add_directory: {error}")))?;
+                    writer.add_directory(name, options).map_err(|error| {
+                        PortableError::Format(format!("ZIP add_directory: {error}"))
+                    })?;
                 }
                 2 | 3 => {
                     return Err(PortableError::Unsupported(
@@ -492,11 +499,7 @@ fn unique_sibling(destination: &Path, role: &str) -> Result<PathBuf, PortableErr
         .duration_since(UNIX_EPOCH)
         .unwrap_or_default()
         .as_nanos();
-    Ok(parent.join(format!(
-        ".{name}.{role}.{}.{}",
-        std::process::id(),
-        nanos
-    )))
+    Ok(parent.join(format!(".{name}.{role}.{}.{}", std::process::id(), nanos)))
 }
 
 #[repr(C)]
@@ -699,7 +702,8 @@ pub unsafe extern "C" fn cmpct_portable_entry_read(
         return PortableStatus::Null as c_int;
     }
     let archive = unsafe { &*handle };
-    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| archive.read_member(index)));
+    let result =
+        std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| archive.read_member(index)));
     let (bytes, member_stats) = match result {
         Ok(Ok(value)) => value,
         Ok(Err(error)) => return status(&error) as c_int,
