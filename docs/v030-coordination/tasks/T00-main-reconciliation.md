@@ -13,7 +13,7 @@ Reconcile every canonical-main commit that postdates the current integration mer
 
 Canonical main reconciliation completed at integration commit `851b2ec3a4c1134c965302330fd0f908c57f481d` against main `72e7e6313ffa896b7ef7a14a2f48495754b494f2`.
 
-`compare main...agent/v030-authoritative-integration` now reports **0 commits behind**. The merge adopted exact current-main blobs for all 35 post-merge-base paths while preserving all non-overlapping v0.30 and cooperation-slot paths.
+`compare main...agent/v030-authoritative-integration` reports **0 commits behind**. The merge adopted exact current-main blobs for all 35 post-merge-base paths while preserving all non-overlapping v0.30 and cooperation-slot paths.
 
 Semantic overlap decisions:
 
