@@ -7,6 +7,7 @@ on:
       - agent/v030-validation-base
     paths:
       - '.github/workflows/v030-validation-surgical.yml'
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -15,11 +16,76 @@ concurrency:
   group: cmpct-v030-surgical-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
-jobs:
-  dispatch-seed:
-    runs-on: ubuntu-24.04
-    steps:
-      - run: echo 'validation workflow is replaced by the PR head implementation'
+env:
+  PYTHONPATH: ${{ github.workspace }}
 
-# Footnote: this base copy exists only because GitHub evaluates pull_request workflow definitions from the base
-# branch. The PR head replaces this seed with the full surgical candidate checks.
+jobs:
+  product-contracts:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y zstd gcc
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[test]'
+      - name: Compile promoted product
+        run: |
+          python -m py_compile \
+            experiments/entropygraph_v030_canonical_final.py \
+            experiments/entropygraph_v030_release_product.py \
+            benchmarks/v030_perf_worker_canonical.py \
+            benchmarks/v030_release_ablation_product.py \
+            benchmarks/v030_release_performance_product.py \
+            benchmarks/v030_release_selective_read_product.py \
+            benchmarks/v030_external_competitors_canonical.py
+      - name: Product and evidence contracts
+        run: |
+          python -m pytest -q \
+            tests/test_v030_canonical_final.py \
+            tests/test_v030_release_ablation_contract.py \
+            tests/test_v030_release_selective_read_contract.py \
+            tests/test_v030_release_generalization_contract.py
+
+  native:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 55
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y zstd
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[test]'
+      - name: Rust format and lint
+        working-directory: native/cmpct-portable
+        run: |
+          cargo fmt --check
+          cargo clippy --all-targets --message-format=short -- -D warnings
+      - name: Rust tests and release build
+        working-directory: native/cmpct-portable
+        run: |
+          cargo test --all-targets
+          cargo build --release
+      - name: Canonical r25 golden acceptance
+        run: python tests/native_v030_canonical.py
+      - name: r24 complete verification adversary
+        run: |
+          python tests/native_v030_r24_verify_authority.py \
+            --binary native/cmpct-portable/target/release/cmpct-portable
+
+# Footnote: this temporary validation lane runs against a narrow validation-base PR so current implementation
+# defects can be found without waking the entire historical v0.30 convergence workflow graph. It is not release
+# evidence and is deleted/ignored before the release fingerprint; final authority still reruns on the exact
+# candidate PR to main.
