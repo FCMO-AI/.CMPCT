@@ -11,6 +11,25 @@
 
 Make every representation that the final v0.30 selector can publish independently readable and verifiable through the shared native/portable surface, with the same recovery/resource semantics as Python and with no second incompatible parser architecture.
 
+## Immediate native parser blocker — preflight declarations before `rmpv` allocation
+
+Slot-00 adversarial review found that `native/cmpct-portable/src/format.rs::parse_msgpack` currently calls `rmpv::decode::read_value` first and only then applies `validate_value` node/depth/container checks.
+
+Bounding `raw.len() <= 8 MiB` is **not** sufficient. A small hostile MessagePack stream can carry a huge array/map/string/bin declaration; a general decoder may reserve/allocate from that declaration before the post-decode validator ever sees the object. This violates the repository's established hostile-input invariant: declaration bounds must be checked before general MessagePack allocation.
+
+Required correction:
+
+- add a zero-/low-allocation MessagePack declaration preflight over the encoded bytes **before** `rmpv::decode::read_value`;
+- enforce nesting depth, total node count, map/array element counts, string/bin/ext declared lengths, integer marker completeness and input bounds during preflight;
+- reject reserved/unsupported markers and truncated length bodies without relying on the second decoder;
+- keep the post-decode semantic validator as defense in depth rather than replacing it;
+- reuse/adapt the mature r24/native or Python guarded-reader declaration semantics where possible instead of inventing a weaker independent policy;
+- add hostile tests with tiny byte strings declaring enormous array/map/bin/str containers and prove they fail **before** general decode/allocation;
+- fuzz the preflight and require no panic/overflow;
+- preserve the 8 MiB metadata raw/decode ceiling and all existing semantic limits.
+
+Footnote: a parser that rejects a giant container *after* allocating for it is not resource-bounded, even if it eventually returns an error.
+
 ## Cross-lane canonical-profile dependency
 
 Your `native/cmpct-portable` architecture is accepted in principle because r24 delegates to the mature `cmpct-core`; do not replace that with a copied r24 parser.
@@ -56,7 +75,7 @@ Prefer `native/**`, native-specific tests/vectors, `docs/NATIVE_CORE.md`, `docs/
 1. Python writer -> native verifier/read/extract golden parity for each promoted r25 profile.
 2. Builder-independent committed golden archives decode identically in Python and native implementations.
 3. Primary-damaged/tail-valid and tail-damaged/primary-valid recovery parity; both-corrupt fails closed.
-4. Hostile/fuzz/resource/path cases green.
+4. Hostile/fuzz/resource/path cases green, including pre-allocation MessagePack declaration bombs.
 5. Native CLI/ABI selective member reads demonstrate the same logical bytes and locality contract.
 6. ZIP export from each selected representation round-trips through stock tooling.
 7. Existing native/core regression suite remains green.
@@ -64,4 +83,4 @@ Prefer `native/**`, native-specific tests/vectors, `docs/NATIVE_CORE.md`, `docs/
 
 ## Handoff
 
-Set `REVIEW` with exact source head, commits intended for import, golden-vector paths, Cargo/Python test commands actually run, known platform gaps, and any conflicts expected with T00/main/T03 canonical profile identity.
+Set `REVIEW` with exact source head, commits intended for import, golden-vector paths, Cargo/Python test commands actually run, hostile preflight tests/fuzz results, known platform gaps, and any conflicts expected with T00/main/T03 canonical profile identity.
