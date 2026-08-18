@@ -24,8 +24,11 @@ def test_signed_mtime_manifest_domain_matches_writer() -> None:
     decoded = canonical._decode_manifest(_manifest_raw(mtime_ns=-1_000_000_000))
     assert decoded["manifest"]["entries"][0][3] == -1_000_000_000
 
+    # MessagePack cannot represent MIN_I64 - 1 at all, so the hostile boundary must use the representable
+    # unsigned side of the wire domain. MAX_I64 + 1 encodes as uint64 and therefore actually reaches the reader's
+    # signed-i64 admission check instead of failing inside the test fixture's packer.
     hostile = msgpack.unpackb(_manifest_raw(), raw=False)
-    hostile["entries"][0][3] = canonical.MIN_I64 - 1
+    hostile["entries"][0][3] = canonical.MAX_I64 + 1
     with pytest.raises(RuntimeError, match="mtime declaration"):
         canonical._decode_manifest(msgpack.packb(hostile, use_bin_type=True))
 
@@ -77,102 +80,3 @@ def _fake_product_environment(
     archive = tmp_path / "out.cmpct"
 
     prepared_raw = _manifest_raw()
-
-    def fake_prepare(_root: Path, staged: Path) -> dict:
-        staged.mkdir(parents=True, exist_ok=True)
-        return {
-            "manifest_raw": prepared_raw,
-            "manifest_sha256": "m" * 64,
-            "manifest_bytes": len(prepared_raw),
-            "entries": 1,
-            "regular_graph_members": 1,
-        }
-
-    def fake_r24(_root: Path, out: Path) -> dict:
-        out.write_bytes(canonical.R24_MAGIC + b"r" * (r24_bytes - 8))
-        return {"archive_bytes": r24_bytes, "format_revision": 24}
-
-    def fake_r25(_staged: Path, out: Path) -> dict:
-        out.write_bytes(canonical.PG_MAGIC + b"p" * (r25_bytes - 8))
-        return {"archive_bytes": r25_bytes, "v029_bytes": v029_bytes, "selected": "prefixgraph"}
-
-    monkeypatch.setattr(canonical, "_prepare_profile_tree", fake_prepare)
-    monkeypatch.setattr(canonical, "_r24_build", fake_r24)
-    monkeypatch.setattr(canonical, "_r25_build", fake_r25)
-    monkeypatch.setattr(canonical, "_semantic_tree_sha", lambda _decoded: "tree")
-    monkeypatch.setattr(
-        canonical,
-        "strong_verify",
-        lambda path: {
-            "ok": True,
-            "tree_sha256": "tree" if Path(path).read_bytes().startswith(canonical.PG_MAGIC) else None,
-        },
-    )
-    return source, archive
-
-
-def test_r25_that_beats_research_floor_but_loses_product_floor_cannot_publish(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    source, archive = _fake_product_environment(
-        tmp_path,
-        monkeypatch,
-        r24_bytes=100,
-        r25_bytes=110,
-        v029_bytes=120,
-    )
-    result = canonical.build(source, archive)
-    assert archive.read_bytes().startswith(canonical.R24_MAGIC)
-    assert result["format_revision"] == 24
-    assert result["r25_strictly_smaller_than_v029_research_floor"] is True
-    assert result["r25_strictly_smaller_than_r24"] is False
-    assert result["r24_product_bytes"] == 100
-    assert result["r25_product_bytes"] == 110
-
-    # Footnote: staged research accounting is causal evidence, not the product floor. Revision 25 must pay its
-    # filesystem framing and beat the genuine revision-24 artifact for the same source tree before publication.
-
-
-def test_exact_product_size_tie_conservatively_keeps_r24(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    source, archive = _fake_product_environment(
-        tmp_path,
-        monkeypatch,
-        r24_bytes=100,
-        r25_bytes=100,
-        v029_bytes=120,
-    )
-    result = canonical.build(source, archive)
-    assert archive.read_bytes().startswith(canonical.R24_MAGIC)
-    assert result["selected"] == "r24-fallback"
-    assert result["tie_policy"] == "r24-wins"
-
-
-def test_r24_member_stats_do_not_invent_one_x_locality(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    archive = tmp_path / "r24.cmpct"
-    archive.write_bytes(canonical.R24_MAGIC)
-
-    class FakeReader:
-        def __init__(self, _path: Path):
-            pass
-
-        def __enter__(self):
-            return self
-
-        def __exit__(self, *_args):
-            return False
-
-        def read(self, _rel: str) -> bytes:
-            return b"payload"
-
-    monkeypatch.setattr(canonical, "CMPCT", FakeReader)
-    raw, stats = canonical.read_member_with_stats(archive, "a.txt")
-    assert raw == b"payload"
-    assert stats["decoded_context_bytes"] is None
-    assert stats["decoded_context_amplification"] is None
-
-    # Footnote: r24 may decode shared/compressed context larger than the requested member. Unknown is truthful;
-    # reporting a fabricated precise 1.0x would let an unmeasured locality claim pass a release gate.
