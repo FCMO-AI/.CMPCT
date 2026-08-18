@@ -103,11 +103,11 @@ final class ArchiveRegistry {
                         "CMPCT release identity mismatch: magic expects revision "
                                 + expectedRevision + ", native reader reported " + revision);
             }
+            archive.verify();
         } catch (IOException e) {
-            // Footnote: never publish a root after magic-only validation. The shared native parser must
-            // authenticate/decode the index first; otherwise a corrupt file could survive as a broken
-            // DocumentsProvider root merely because its first eight bytes looked plausible. Binding the
-            // magic to revision also keeps CMPNX research grammars out of the user-facing Android registry.
+            // Footnote: never publish a DocumentsProvider root after magic/index-only validation. The shared
+            // native verifier must authenticate every complete regular member first; otherwise corrupted RAW
+            // payload bytes could survive import and fail later only when a user opens a document.
             if (created) destination.delete();
             throw e;
         }
@@ -115,9 +115,6 @@ final class ArchiveRegistry {
         String name = displayName(context, uri);
         if (name == null || name.trim().isEmpty()) name = id.substring(0, 12) + ".cmpct";
         prefs(context).edit().putString(id, name).apply();
-
-        // Footnote: DocumentsUI caches roots. Tell it immediately when a new archive becomes a root,
-        // otherwise a successful import can remain invisible until the picker is restarted or refreshed.
         context.getContentResolver().notifyChange(
                 DocumentsContract.buildRootsUri(context.getPackageName() + ".documents"), null);
         return new Record(id, name, destination);
