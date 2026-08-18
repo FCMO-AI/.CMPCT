@@ -1,14 +1,20 @@
+# ci-lane: deep
 name: CMPCT v0.30 Agent-00 native decoder repair
-# ci-lane: diagnostic
-# Retriggered by the hourly agent after confirming the authoritative branch still contains the pre-repair decoder branch types.
 
 on:
+  push:
+    branches: [agent/v030-native-fix-trigger]
+    paths: ['.github/workflows/v030-agent00-native-fix.yml']
   pull_request:
     branches: [main]
     paths: ['.github/workflows/v030-agent00-native-fix.yml']
 
 permissions:
   contents: write
+
+concurrency:
+  group: cmpct-v030-agent00-native-fix-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   repair:
