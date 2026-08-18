@@ -29,10 +29,11 @@ pub(crate) fn sha256(data: &[u8]) -> [u8; 32] {
 }
 
 pub(crate) fn digest32(value: &Value, label: &str) -> Result<[u8; 32], PortableError> {
-    let bytes = value
-        .as_slice()
-        .ok_or_else(|| PortableError::Format(format!("{label} must be binary")))?;
+    let Value::Binary(bytes) = value else {
+        return Err(PortableError::Format(format!("{label} must be binary")));
+    };
     bytes
+        .as_slice()
         .try_into()
         .map_err(|_| PortableError::Format(format!("{label} must be a 32-byte digest")))
 }
@@ -44,7 +45,9 @@ pub(crate) fn bounded_zstd_decode(
     dictionary: Option<&[u8]>,
 ) -> Result<Vec<u8>, PortableError> {
     if expected_size > limit || compressed.len() as u64 > limit.saturating_add(1024 * 1024) {
-        return Err(PortableError::Limit("zstd decode declaration exceeds policy".into()));
+        return Err(PortableError::Limit(
+            "zstd decode declaration exceeds policy".into(),
+        ));
     }
     let capacity = usize::try_from(expected_size)
         .map_err(|_| PortableError::Limit("zstd output does not fit host address space".into()))?;
@@ -106,13 +109,17 @@ fn validate_value(
     nodes: &mut usize,
 ) -> Result<(), PortableError> {
     if depth > MAX_VALUE_DEPTH {
-        return Err(PortableError::Limit("MessagePack nesting exceeds policy".into()));
+        return Err(PortableError::Limit(
+            "MessagePack nesting exceeds policy".into(),
+        ));
     }
     *nodes = nodes
         .checked_add(1)
         .ok_or_else(|| PortableError::Limit("MessagePack node counter overflow".into()))?;
     if *nodes > MAX_VALUE_NODES {
-        return Err(PortableError::Limit("MessagePack node count exceeds policy".into()));
+        return Err(PortableError::Limit(
+            "MessagePack node count exceeds policy".into(),
+        ));
     }
     match value {
         Value::Array(values) => {
@@ -138,11 +145,15 @@ fn validate_value(
                 .as_str()
                 .ok_or_else(|| PortableError::Format("invalid UTF-8 MessagePack string".into()))?;
             if text.len() > MAX_META_BYTES as usize {
-                return Err(PortableError::Limit("MessagePack string exceeds policy".into()));
+                return Err(PortableError::Limit(
+                    "MessagePack string exceeds policy".into(),
+                ));
             }
         }
         Value::Binary(value) if value.len() > MAX_META_BYTES as usize => {
-            return Err(PortableError::Limit("MessagePack binary exceeds policy".into()));
+            return Err(PortableError::Limit(
+                "MessagePack binary exceeds policy".into(),
+            ));
         }
         _ => {}
     }
@@ -151,7 +162,9 @@ fn validate_value(
 
 pub(crate) fn parse_msgpack(raw: &[u8]) -> Result<Value, PortableError> {
     if raw.len() as u64 > MAX_META_BYTES {
-        return Err(PortableError::Limit("metadata exceeds decode-unit bound".into()));
+        return Err(PortableError::Limit(
+            "metadata exceeds decode-unit bound".into(),
+        ));
     }
     let mut cursor = Cursor::new(raw);
     let value = rmpv::decode::read_value(&mut cursor)
@@ -166,29 +179,37 @@ pub(crate) fn parse_msgpack(raw: &[u8]) -> Result<Value, PortableError> {
     Ok(value)
 }
 
-pub(crate) fn as_map<'a>(value: &'a Value, label: &str) -> Result<&'a [(Value, Value)], PortableError> {
+pub(crate) fn as_map<'a>(
+    value: &'a Value,
+    label: &str,
+) -> Result<&'a [(Value, Value)], PortableError> {
     value
         .as_map()
         .map(Vec::as_slice)
         .ok_or_else(|| PortableError::Format(format!("{label} must be a map")))
 }
 
-pub(crate) fn as_array<'a>(value: &'a Value, label: &str) -> Result<&'a [Value], PortableError> {
+pub(crate) fn as_array<'a>(
+    value: &'a Value,
+    label: &str,
+) -> Result<&'a [Value], PortableError> {
     value
         .as_array()
         .map(Vec::as_slice)
         .ok_or_else(|| PortableError::Format(format!("{label} must be an array")))
 }
 
-pub(crate) fn field<'a>(map: &'a [(Value, Value)], name: &str) -> Result<&'a Value, PortableError> {
+pub(crate) fn field<'a>(
+    map: &'a [(Value, Value)],
+    name: &str,
+) -> Result<&'a Value, PortableError> {
     optional_field(map, name)
         .ok_or_else(|| PortableError::Format(format!("missing metadata field {name}")))
 }
 
 pub(crate) fn optional_field<'a>(map: &'a [(Value, Value)], name: &str) -> Option<&'a Value> {
-    map.iter().find_map(|(key, value)| {
-        (key.as_str() == Some(name)).then_some(value)
-    })
+    map.iter()
+        .find_map(|(key, value)| (key.as_str() == Some(name)).then_some(value))
 }
 
 pub(crate) fn text<'a>(value: &'a Value, label: &str) -> Result<&'a str, PortableError> {
@@ -204,7 +225,12 @@ pub(crate) fn uint(value: &Value, label: &str, maximum: u64) -> Result<u64, Port
         .ok_or_else(|| PortableError::Format(format!("{label} integer declaration")))
 }
 
-pub(crate) fn sint(value: &Value, label: &str, minimum: i64, maximum: i64) -> Result<i64, PortableError> {
+pub(crate) fn sint(
+    value: &Value,
+    label: &str,
+    minimum: i64,
+    maximum: i64,
+) -> Result<i64, PortableError> {
     value
         .as_i64()
         .filter(|value| *value >= minimum && *value <= maximum)
@@ -221,12 +247,16 @@ pub(crate) fn number(value: &Value, label: &str) -> Result<f64, PortableError> {
     if let Some(value) = value.as_u64() {
         return Ok(value as f64);
     }
-    Err(PortableError::Format(format!("{label} numeric declaration")))
+    Err(PortableError::Format(format!(
+        "{label} numeric declaration"
+    )))
 }
 
 pub(crate) fn tree_digest(text: &str) -> Result<[u8; 32], PortableError> {
     if text.len() != 64 || !text.as_bytes().iter().all(u8::is_ascii_hexdigit) {
-        return Err(PortableError::Format("tree SHA-256 declaration".into()));
+        return Err(PortableError::Format(
+            "tree SHA-256 declaration".into(),
+        ));
     }
     let mut out = [0u8; 32];
     for (index, slot) in out.iter_mut().enumerate() {
@@ -242,7 +272,9 @@ pub(crate) fn safe_relpath(rel: &str) -> Result<PathBuf, PortableError> {
         return Err(PortableError::Path(rel.into()));
     }
     if rel.len() > MAX_PATH_BYTES {
-        return Err(PortableError::Limit("logical path exceeds policy".into()));
+        return Err(PortableError::Limit(
+            "logical path exceeds policy".into(),
+        ));
     }
     let mut out = PathBuf::new();
     for part in rel.split('/') {
