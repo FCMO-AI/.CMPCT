@@ -1,6 +1,6 @@
-/* CMPCT experience assembly.
-   Footnote: the established public-proof stylesheet is preserved byte-for-byte as experience-base.css.
-   The current visual campaign lives in atelier.css and loads after it, so redesign work stays auditable,
-   rollbackable, and separate from benchmark/proof rules accumulated before it. */
-@import url("./experience-base.css");
-@import url("./atelier.css");
+/* CMPCT restored visual assembly — surface 0.29.g.
+   Footnote: styles.css, motion.css and polish.css remain the historical visual foundation. cinematic.css
+   adapts current proof into that composition; masterclass.css contains only later changes that survived
+   rendered desktop/mobile review, keeping the restoration lineage auditable and non-destructive. */
+@import url("./cinematic.css");
+@import url("./masterclass.css");
