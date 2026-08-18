@@ -1,10 +1,13 @@
 name: CMPCT Android
+# ci-lane: release
 
 on:
   pull_request:
+    branches: [main]
     paths:
       - 'integrations/android/**'
       - 'native/cmpct-core/**'
+      - 'native/cmpct-portable/**'
       - 'tests/conformance/**'
       - '.github/workflows/android.yml'
   push:
@@ -12,15 +15,21 @@ on:
     paths:
       - 'integrations/android/**'
       - 'native/cmpct-core/**'
+      - 'native/cmpct-portable/**'
       - 'tests/conformance/**'
       - '.github/workflows/android.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: cmpct-android-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 jobs:
   build-and-device-smoke:
-    runs-on: ubuntu-latest
-    timeout-minutes: 45
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - uses: actions/setup-java@v4
         with:
@@ -79,15 +88,20 @@ jobs:
           export ANDROID_NDK_ROOT="$ANDROID_NDK_HOME"
           gradle --no-daemon :app:assembleDebug
 
-      - name: Verify packaged JNI dependency is relocatable
+      - name: Verify packaged JNI dependency is relocatable and portable
         working-directory: integrations/android
         run: |
           # Footnote: the first real emulator run caught an absolute /home/runner DT_NEEDED entry.
-          # Inspect the packaged ELF directly so that class of host-path leak fails before device boot.
+          # Inspect the packaged ELF directly so that class of host-path leak fails before device boot;
+          # also require the shared portable dispatcher rather than the obsolete r24-only dependency.
           unzip -p app/build/outputs/apk/debug/app-debug.apk \
             lib/x86_64/libcmpct_android.so > "$RUNNER_TEMP/libcmpct_android.so"
           readelf -d "$RUNNER_TEMP/libcmpct_android.so" | tee "$RUNNER_TEMP/cmpct-elf-dynamic.txt"
-          grep -Fq 'Shared library: [libcmpct_core.so]' "$RUNNER_TEMP/cmpct-elf-dynamic.txt"
+          grep -Fq 'Shared library: [libcmpct_portable.so]' "$RUNNER_TEMP/cmpct-elf-dynamic.txt"
+          if grep -Fq 'Shared library: [libcmpct_core.so]' "$RUNNER_TEMP/cmpct-elf-dynamic.txt"; then
+            echo 'Android JNI still links the r24-only core directly' >&2
+            exit 1
+          fi
           if grep -Fq '/home/' "$RUNNER_TEMP/cmpct-elf-dynamic.txt"; then
             echo 'host filesystem path leaked into Android DT_NEEDED' >&2
             exit 1
@@ -95,10 +109,6 @@ jobs:
 
       - name: Create Android 10 emulator
         run: |
-          # Footnote: Android documents ANDROID_AVD_HOME as the first directory searched by
-          # `emulator -avd`. Pin both creation and launch to the same explicit CI directory instead
-          # of relying on whichever HOME/SDK-home convention a particular command-line-tools build
-          # happens to choose.
           AVD_HOME="$RUNNER_TEMP/cmpct-avd"
           mkdir -p "$AVD_HOME"
           echo "ANDROID_AVD_HOME=$AVD_HOME" >> "$GITHUB_ENV"
@@ -113,9 +123,6 @@ jobs:
 
       - name: Start emulator
         run: |
-          # Footnote: sdkmanager installs the emulator under the SDK root, but setup-android does not
-          # promise that directory will be added to PATH after a later package install. Use the exact
-          # executable path so device acceptance cannot fail merely because command discovery drifted.
           nohup "$ANDROID_SDK_ROOT/emulator/emulator" \
             -avd cmpct-api29 \
             -no-window \
@@ -138,18 +145,26 @@ jobs:
           cat "$RUNNER_TEMP/cmpct-emulator.log" >&2
           exit 1
 
-      - name: Run revision-24 Android archive UX and JNI conformance tests
+      - name: Run Android archive UX and shared JNI conformance tests
         working-directory: integrations/android
         run: |
           export ANDROID_NDK_HOME="$ANDROID_SDK_ROOT/ndk/29.0.14206865"
           export ANDROID_NDK_ROOT="$ANDROID_NDK_HOME"
           gradle --no-daemon :app:connectedDebugAndroidTest
 
-      - uses: actions/upload-artifact@v4
+      - name: CI topology self-check
+        run: python tools/check_ci_topology.py .github/workflows/android.yml
+
+      - uses: actions/upload-artifact@v6
         if: always()
         with:
-          name: cmpct-android-debug
+          name: cmpct-android-debug-${{ github.sha }}
           path: |
             integrations/android/app/build/outputs/apk/debug/app-debug.apk
             integrations/android/app/build/reports/androidTests/connected/**
           if-no-files-found: warn
+          retention-days: 30
+
+# Footnote: Android consumes libcmpct_portable through a parser-free JNI shim. Canonical r25 and inherited r24
+# therefore share one Rust admission/recovery/resource implementation; Android-specific parser drift is a release
+# blocker, not a supported portability strategy.
