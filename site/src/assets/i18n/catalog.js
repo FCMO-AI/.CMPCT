@@ -14,6 +14,7 @@ import { META as FR_META, PHRASES as FR_PHRASES, MESSAGES as FR_MESSAGES } from 
 import { META as DE_META, PHRASES as DE_PHRASES, MESSAGES as DE_MESSAGES } from './locales/de.js';
 import { EXTENDED_LOCALES, EXTENDED_META } from './extended-meta.js';
 import { EXTENDED_MESSAGES, EXTENDED_PHRASE_VALUES } from './extended-packs.js';
+import { ATTRIBUTION_MESSAGES } from './attribution-messages.js';
 import { makePhraseMap } from './locale-pack.js';
 
 export const DEFAULT_LOCALE = 'en';
@@ -47,10 +48,15 @@ export const PHRASES = Object.freeze(SOURCE_PHRASES.map((source) => Object.freez
   ...Object.fromEntries(SUPPORTED_LOCALES.filter((locale) => locale !== 'en').map((locale) => [locale, packs[locale]?.[source.en]])),
 })));
 
-export const MESSAGES = Object.freeze(Object.fromEntries(Object.entries(SOURCE_MESSAGES).map(([key, en]) => [key, Object.freeze({
+const coreMessages = Object.fromEntries(Object.entries(SOURCE_MESSAGES).map(([key, en]) => [key, Object.freeze({
   en,
   ...Object.fromEntries(SUPPORTED_LOCALES.filter((locale) => locale !== 'en').map((locale) => [locale, messagePacks[locale]?.[key]])),
-})])));
+})]));
+
+// Footnote: attribution strings are a newer main-line stewardship concern. They join the same static-message
+// catalogue rather than bypassing i18n, so dynamically inserted maker provenance is translated and validated
+// without changing the older canonical English phrase identities or the extended packs' source-order mapping.
+export const MESSAGES = Object.freeze({ ...coreMessages, ...ATTRIBUTION_MESSAGES });
 
 // Footnote: the English source file describes the original localization campaign. The assembled catalogue
 // advances with the public-surface milestone so CI can reject stale translation evidence without rewriting the
