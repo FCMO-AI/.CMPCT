@@ -39,6 +39,19 @@ Required resolution:
 
 Match r24's timestamp domain: admit a bounded signed i64 nanosecond value (or fail r25 admission before writing, but do not emit self-unreadable bytes). Add a negative-mtime round-trip test where the host filesystem supports setting it.
 
+## P0 — cross-platform safe-symlink validation
+
+`restore_manifest_tree(..., safe_symlinks=True)` currently checks the stored link target with `PurePosixPath` only. A target such as `..\\outside` is not a `..` POSIX path component, but Windows can interpret the backslash as a separator when `os.symlink()` materializes it. The r24 reader uses the host `Path` semantics and therefore does not have this exact mismatch.
+
+Required resolution:
+
+- safe-symlink policy must reject escape targets under **both POSIX and Windows lexical semantics**, independent of the host running the verifier;
+- reject POSIX absolute paths, Windows drive/UNC/rooted paths, and any `..` component after either slash spelling is interpreted as a separator;
+- retain `--unsafe-symlinks` as an explicit caller choice, not an implicit platform exception;
+- add hostile tests for `../x`, `..\\x`, `/x`, `C:\\x`, `C:/x`, UNC/rooted forms and benign relative targets.
+
+Footnote: an archive validated safely on Linux must not become traversal-capable merely because the same bytes are extracted on Windows later.
+
 ## P0 — delimiter nomination regression
 
 The exact-head Geometry failure is correctly fixed in the current branch: `_delimiter_rank` now scores complete inter-occurrence intervals only and retains exact pricing as the admission authority. Preserve that implementation and its regression tests during final integration.
