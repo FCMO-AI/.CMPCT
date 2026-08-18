@@ -3,16 +3,21 @@
   "publishing_branch": "gh-pages",
   "publishing_path": "/",
   "source_branch": "main",
-  "source_commit": "e046c22a6970f072645954b30493732c916c729a",
+  "source_commit": "59375b1b371615540d9b24724ff7e3799243ed5a",
   "project_version": "0.29.0",
-  "surface_revision": "0.29.i",
+  "surface_revision": "0.29.k",
   "canonical_format_revision": 24,
   "evidence_schema": "cmpct-public-evidence-v1",
   "jekyll": false,
   "static_only": true,
   "generated_from_committed_evidence": true,
-  "visual_baseline": "restored pre-public-proof composition + rendered masterclass ratchet + 16-viewport responsive matrix + Ember Eclipse light-source ratchet",
-  "responsive_validation": "Surface 0.29.h Chromium matrix remains the structural floor: 16 width/height/aspect-ratio classes with zero geometry failures; 0.29.i changes presentation only and preserves responsive.css as final layout owner",
-  "promotion_note": "User-authorized live promotion while the hosted 0.29.i Chromium rerun remains queued; any live defect is a blocking corrective-ratchet item, not an accepted regression",
+  "visual_baseline": "restored pre-public-proof composition + rendered masterclass ratchet + 16-viewport responsive matrix + Ember Eclipse light-source ratchet + quiet FCMO provenance signature",
+  "responsive_validation": "Surface 0.29.h Chromium matrix remains the structural floor: 16 width/height/aspect-ratio classes with zero geometry failures; 0.29.k attribution is additive and preserves responsive.css as final layout owner",
+  "promotion_note": "User-authorized live promotion while GitHub-hosted Actions remain queued; attribution is presentation/metadata-only and any rendered regression remains a blocking corrective-ratchet item",
+  "stewardship": {
+    "credit": "CMPCT by FCMO AI",
+    "group_credit": "From the FCMO group",
+    "steward_url": "https://github.com/FCMO-AI"
+  },
   "policy": "main owns source and validation; gh-pages owns generated serving artifacts only"
 }
