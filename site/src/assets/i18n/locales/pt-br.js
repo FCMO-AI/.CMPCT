@@ -1,0 +1,67 @@
+/* CMPCT curated pt-br adaptation pack — Surface 0.29.i.
+   Footnote: the locale pack assembles two review-sized phrase shards and parameterized UI messages.
+   No runtime translator or fallback synthesis exists here. */
+import { PHRASES as A } from './pt-br.a.js';
+import { PHRASES as B } from './pt-br.b.js';
+export const META={
+  "label": "Português (Brasil)",
+  "short": "PT",
+  "htmlLang": "pt-BR",
+  "title": ".CMPCT — desempenho faz parte do contrato de cada versão",
+  "description": "CMPCT é um projeto de arquivamento sem perdas que avança tamanho, acesso, integridade e recuperação em conjunto, com alegações públicas de desempenho derivadas de evidências registradas."
+};
+export const PHRASES=Object.freeze({...A,...B});
+export const MESSAGES={
+  "files": "{n} arquivos",
+  "file": "{n} arquivo",
+  "logical": "{bytes} lógicos",
+  "logicalInputFiles": "{bytes} de entrada lógica · {n} arquivos",
+  "smallerThan": "{pct} menor que {name}",
+  "largerThan": "{pct} maior que {name}",
+  "sameStored": "os mesmos bytes armazenados que {name}",
+  "versus": "vs {name}",
+  "cmpctSmaller": "CMPCT menor · bytes armazenados pareados",
+  "cmpctLarger": "CMPCT maior · bytes armazenados pareados",
+  "sameBytes": "mesmos bytes armazenados",
+  "unavailableMatched": "bytes armazenados pareados indisponíveis",
+  "currentFrontier": "fronteira de pesquisa atual do CMPCT",
+  "categoryScore": "{wins}/{total} menores · {losses} maiores",
+  "noCategory": "evidências por categoria indisponíveis",
+  "noFreshCategory": "Não há evidências recentes por categoria em árvores exatas para esta fronteira.",
+  "comparisonUnavailable": "comparação indisponível",
+  "noQualification": "Nenhuma qualificação de benchmark está registrada para esta fronteira pública.",
+  "heroIf": "Se {name} armazena 100 MB neste teste pareado, CMPCT precisa de cerca de {value} MB.",
+  "heroNeeds": "O CMPCT precisa atualmente de cerca de {value} MB para cada 100 MB armazenados por {name} neste teste pareado.",
+  "seriousBaseline": "Referência séria de tamanho: {relation}.",
+  "scopedScheduler": "Resultado delimitado do escalonador: {pct}% menos tempo de parede em seu gate fixo.",
+  "canonicalRemains": "O formato canônico continua em r{revision}.",
+  "frontierQualification": "{frontier} · {files} arquivos na árvore estrutural pareada.{serious}{speed} O formato canônico continua em r{revision}.",
+  "fixedSchedulerGate": "gate hostil fixo do escalonador · não é uma alegação global de velocidade",
+  "winsAgainst": "{wins}/{total} vitórias vs {name}",
+  "noCommittedParity": "Nenhum registro de paridade versionado",
+  "repetitionsMedian": "mediana de {n}×",
+  "semanticQualification": "Qualificação semântica:",
+  "interpretation": "Interpretação:",
+  "currentProjectRelease": "Versão atual do projeto",
+  "versionedMilestone": "Marco versionado",
+  "writerVerified": "Gravador portátil verificado para o formato canônico r{revision}.",
+  "regularSubset": "Apenas subconjunto de arquivos regulares; a semântica completa do sistema de arquivos continua sendo território da CLI.",
+  "writerPaused": "Gravador do navegador pausado após a revisão de formato {revision}.",
+  "writerRefuses": "Este build foi verificado para r{supported}; ele se recusa a adivinhar uma gramática mais nova.",
+  "readyLocally": "Pronto localmente",
+  "cliOverLimit": "Use a CLI: acima do limite do navegador",
+  "input": "Entrada",
+  "archive": "Arquivo",
+  "delta": "Diferença",
+  "smaller": "{bytes} menor",
+  "overhead": "{bytes} de sobrecarga",
+  "buildingLocally": "Criando localmente…",
+  "builtOnDevice": "Arquivo criado neste dispositivo.",
+  "logicalFilesUnique": "{logical} arquivos lógicos → {unique} blobs únicos · {deflate} Deflate / {raw} RAW.",
+  "saveCmpct": "Salvar .cmpct",
+  "couldNotBuild": "Não foi possível criar o arquivo.",
+  "fixedMagicError": "A assinatura fixa não parece ser CMPCT.",
+  "inspection": "Inspeção",
+  "benchmarkUnavailable": "Dados de benchmark indisponíveis: {error}",
+  "canonicalDataMissing": "Os dados canônicos do site não foram carregados."
+};
