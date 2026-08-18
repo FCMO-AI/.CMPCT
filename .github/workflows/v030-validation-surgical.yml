@@ -2,9 +2,9 @@ name: CMPCT v0.30 surgical validation
 # ci-lane: deep
 
 on:
-  pull_request:
+  push:
     branches:
-      - agent/v030-validation-base
+      - agent/v030-validation-head
     paths:
       - '.github/workflows/v030-validation-surgical.yml'
   workflow_dispatch:
@@ -13,7 +13,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: cmpct-v030-surgical-${{ github.event.pull_request.number || github.ref }}
+  group: cmpct-v030-surgical-${{ github.ref }}
   cancel-in-progress: true
 
 env:
@@ -85,7 +85,7 @@ jobs:
           python tests/native_v030_r24_verify_authority.py \
             --binary native/cmpct-portable/target/release/cmpct-portable
 
-# Footnote: this temporary validation lane runs against a narrow validation-base PR so current implementation
-# defects can be found without waking the entire historical v0.30 convergence workflow graph. It is not release
-# evidence and is deleted/ignored before the release fingerprint; final authority still reruns on the exact
-# candidate PR to main.
+# Footnote: this temporary diagnostic lane runs on the dedicated validation-head branch instead of a pull-request
+# event. Broad historical pull-request workflows therefore cannot fan out merely because this one surgical gate
+# needs to execute. This is not release evidence; final authority still reruns every frozen gate on the exact
+# candidate PR to main before merge, tag, version bump, or publication.
