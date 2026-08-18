@@ -22,7 +22,10 @@ import java.util.Map;
 /** Durable registry of CMPCT archives imported into app-private storage. */
 final class ArchiveRegistry {
     private static final String PREFS = "cmpct_archives";
-    private static final byte[] MAGIC = new byte[] {'C','M','P','C','T','2','4',0};
+    private static final byte[] MAGIC_R24 = new byte[] {'C','M','P','C','T','2','4',0};
+    private static final byte[] MAGIC_R25_G04 = new byte[] {'C','M','P','2','5','G','4',0};
+    private static final byte[] MAGIC_R25_PREFIX = new byte[] {'C','M','P','2','5','P','G',0};
+    private static final int MAGIC_LENGTH = 8;
 
     static final class Record {
         final String id;
@@ -48,7 +51,7 @@ final class ArchiveRegistry {
             throw new IOException("SHA-256 is unavailable", impossible);
         }
 
-        byte[] first = new byte[MAGIC.length];
+        byte[] first = new byte[MAGIC_LENGTH];
         int firstUsed = 0;
         long total = 0;
         try (InputStream raw = context.getContentResolver().openInputStream(uri)) {
@@ -74,9 +77,10 @@ final class ArchiveRegistry {
             throw e;
         }
 
-        if (total < MAGIC.length || !matchesMagic(first)) {
+        int expectedRevision = total < MAGIC_LENGTH ? 0 : releaseRevision(first);
+        if (expectedRevision == 0) {
             staging.delete();
-            throw new IOException("Not a CMPCT revision-24 archive (CMPCT24\\0 magic missing)");
+            throw new IOException("Not a canonical CMPCT release archive");
         }
 
         String id = hex(digest.digest());
@@ -93,11 +97,17 @@ final class ArchiveRegistry {
         }
 
         try (CmpctNative.Archive archive = new CmpctNative.Archive(destination.getAbsolutePath())) {
-            if (archive.revision() != 24) throw new IOException("Unsupported CMPCT revision");
+            int revision = archive.revision();
+            if (revision != expectedRevision) {
+                throw new IOException(
+                        "CMPCT release identity mismatch: magic expects revision "
+                                + expectedRevision + ", native reader reported " + revision);
+            }
         } catch (IOException e) {
             // Footnote: never publish a root after magic-only validation. The shared native parser must
             // authenticate/decode the index first; otherwise a corrupt file could survive as a broken
-            // DocumentsProvider root merely because its first eight bytes looked plausible.
+            // DocumentsProvider root merely because its first eight bytes looked plausible. Binding the
+            // magic to revision also keeps CMPNX research grammars out of the user-facing Android registry.
             if (created) destination.delete();
             throw e;
         }
@@ -144,10 +154,17 @@ final class ArchiveRegistry {
         return context.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
     }
 
-    private static boolean matchesMagic(byte[] actual) {
-        if (actual.length != MAGIC.length) return false;
-        for (int i = 0; i < MAGIC.length; i++) if (actual[i] != MAGIC[i]) return false;
-        return true;
+    private static int releaseRevision(byte[] actual) {
+        if (matchesMagic(actual, MAGIC_R24)) return 24;
+        if (matchesMagic(actual, MAGIC_R25_G04) || matchesMagic(actual, MAGIC_R25_PREFIX)) return 25;
+        return 0;
+    }
+
+    private static boolean matchesMagic(byte[] actual, byte[] expected) {
+        if (actual.length != expected.length) return false;
+        int diff = 0;
+        for (int i = 0; i < expected.length; i++) diff |= actual[i] ^ expected[i];
+        return diff == 0;
     }
 
     private static String displayName(Context context, Uri uri) {
