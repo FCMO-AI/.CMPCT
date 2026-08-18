@@ -1,11 +1,11 @@
 {
   "schema": "cmpct-v030-agent-claim-v1",
   "slot": "slot-00",
-  "role": "integrator-release-referee",
+  "role": "integrator-release-referee-and-sole-executor",
   "status": "ACTIVE",
   "branch": "agent/v030-authoritative-integration",
-  "claim_owner": "current-convergence-agent",
-  "base_integration_sha_observed": "c95865ea6f5781d6794bea11bcd9b84bb5f9aff7",
-  "task_ids": ["T00", "T04"],
-  "notes": "Owns main reconciliation, semantic conflict adjudication, authoritative imports, release-lock truth, and final promotion. Other slots must not rewrite this branch outside coordination-file claims/handoffs."
+  "claim_owner": "gpt-5.6-sol-sole-v030-20260818",
+  "base_integration_sha_observed": "5f747a1123e5aff407deac8a694fa4f0cc23d5c7",
+  "task_ids": ["T00", "T01", "T02", "T03", "T04"],
+  "notes": "Sole active v0.30 engineering agent by direct user instruction. Owns all remaining implementation, evidence, reconciliation, release-lock, publication, and post-release verification work. GitHub Actions are CI execution infrastructure, not independent engineering agents."
 }
