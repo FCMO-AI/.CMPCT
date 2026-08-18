@@ -1,0 +1,439 @@
+# ci-lane: release
+name: CMPCT v0.30 cooperative evidence-performance authority
+
+on:
+  push:
+    branches:
+      - agent/v030-coop-evidence-performance
+    paths:
+      - 'benchmarks/v030_*.py'
+      - 'tests/test_v030_*.py'
+      - '.github/workflows/v030-coop-evidence-performance.yml'
+      - 'docs/v030-coordination/tasks/T02-evidence-performance.md'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-v030-coop-evidence-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+
+jobs:
+  evidence-fast:
+    name: evidence-fast
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y zstd gcc
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[test]'
+      - name: Compile evidence authority
+        run: |
+          python -m py_compile \
+            benchmarks/v030_release_ablation_canonical.py \
+            benchmarks/v030_perf_worker_canonical.py \
+            benchmarks/v030_release_selective_read_canonical.py
+      - name: Run frozen evidence contracts and promoted member-reader tests
+        run: |
+          python -m pytest -q \
+            tests/test_v030_release_ablation_contract.py \
+            tests/test_v030_release_selective_read_contract.py \
+            tests/test_v030_release_generalization_contract.py \
+            tests/test_v030_member_reader.py \
+            tests/test_v030_canonical.py
+      - name: Run coordinator v0.30 topology ratchet
+        run: |
+          python tools/check_ci_topology.py \
+            .github/workflows/geometry-v030-breakthrough.yml \
+            .github/workflows/v030-authoritative-pr-gates.yml \
+            .github/workflows/v030-authoritative-v2-pr.yml \
+            .github/workflows/v030-canonical-authority.yml \
+            .github/workflows/v030-external-competitors.yml \
+            .github/workflows/v030-g04-overlay-oracle.yml \
+            .github/workflows/v030-geometry-overlay-oracle.yml \
+            .github/workflows/v030-gir-build-rehab.yml \
+            .github/workflows/v030-gir-focused-complete.yml \
+            .github/workflows/v030-gir-hardening.yml \
+            .github/workflows/v030-hierarchical-geometry.yml \
+            .github/workflows/v030-prefixgraph-oracle.yml \
+            .github/workflows/v030-release-fuzz.yml \
+            .github/workflows/v030-release-generalization.yml \
+            .github/workflows/v030-release-performance.yml \
+            .github/workflows/v030-release-reader.yml \
+            .github/workflows/v030-shared-portfolio-rehab.yml
+          python tools/check_ci_topology.py .github/workflows/v030-coop-evidence-performance.yml
+          # Footnote: the first invocation is the exact 17-path command required by T02's coordinator review;
+          # the second keeps this specialist reactor subject to the same ratchet without changing that receipt.
+      - name: Public-surface guard
+        if: always()
+        run: python tools/check_public_surface.py
+
+  shared-rehabilitation:
+    name: shared-rehabilitation
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install workload dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y zstd gcc
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[test]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
+      - name: Prove byte identity before timing
+        run: |
+          python -m pytest -q \
+            tests/test_v029_parallel_portfolio.py \
+            tests/test_v030_g04_publish.py \
+            tests/test_v030_shared_portfolio.py
+      - name: Run frozen shared-build rehabilitation gate
+        run: |
+          mkdir -p benchmark-artifacts
+          python benchmarks/v030_shared_portfolio_rehab.py \
+            --work-root benchmark-artifacts/shared-work \
+            --output benchmark-artifacts/shared-rehab.json
+      - name: Enforce unchanged shared-build contract
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          d=json.loads(Path('benchmark-artifacts/shared-rehab.json').read_text())
+          c=d['contract']; g=d['gate']
+          assert c['minimum_wallclock_improvement_pct']==20.0
+          assert c['minimum_absolute_improvement_s']==5.0
+          assert c['attempt5_graph_build_count']==1
+          assert g['all_byte_identical'] is True
+          assert g['all_single_attempt5_build'] is True
+          assert g['every_pair_pass'] is True
+          assert g['median_pass'] is True
+          assert g['passed'] is True
+          PY
+      - name: Upload shared-build raw evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: v030-coop-shared-rehab-${{ github.sha }}
+          path: benchmark-artifacts/shared-rehab.json
+          if-no-files-found: warn
+          retention-days: 90
+
+  canonical-generalization:
+    name: canonical-generalization
+    runs-on: ubuntu-latest
+    timeout-minutes: 420
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install corpus dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y zstd gcc
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[test]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
+      - name: Pin canonical compression contract
+        run: |
+          python -m pytest -q \
+            tests/test_v030_release_generalization_contract.py \
+            tests/test_v030_release_admission.py \
+            tests/test_v030_canonical.py
+      - name: Run exact canonical 15-workload gate
+        run: |
+          mkdir -p benchmark-artifacts
+          python benchmarks/v030_release_generalization_canonical.py \
+            --work-root benchmark-artifacts/generalization-work \
+            --output benchmark-artifacts/generalization.json
+      - name: Enforce immutable compression contract
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          d=json.loads(Path('benchmark-artifacts/generalization.json').read_text())
+          c=d['contract']; t=d['totals']; g=d['gate']
+          assert d['engine']=='experiments/entropygraph_v030_canonical.py'
+          assert d['release_facade']=='cmpct-v030-r25-v1'
+          assert c['expected_v029_aggregate_bytes']==137501815
+          assert c['minimum_release_saving_bytes']==687783
+          assert c['minimum_improved_rows']==3
+          assert c['maximum_member_read_amplification']==8.0
+          assert t['workloads']==15
+          assert t['workloads_regressed']==0
+          assert t['workloads_improved']>=3
+          assert t['saving_vs_v029_bytes']>=687783
+          assert t['max_selected_member_read_amplification']<=8.0
+          assert g['passed'] is True
+          PY
+      - name: Upload canonical compression raw evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: v030-coop-generalization-${{ github.sha }}
+          path: benchmark-artifacts/generalization.json
+          if-no-files-found: warn
+          retention-days: 90
+
+  canonical-ablation:
+    name: canonical-ablation
+    runs-on: ubuntu-latest
+    timeout-minutes: 600
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install corpus dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y zstd gcc
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[test]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
+      - name: Pin two-substrate ablation semantics
+        run: python -m pytest -q tests/test_v030_release_ablation_contract.py tests/test_v030_canonical.py
+      - name: Run historical causality plus canonical product parity
+        run: |
+          mkdir -p benchmark-artifacts
+          python benchmarks/v030_release_ablation_canonical.py \
+            --work-root benchmark-artifacts/ablation-work \
+            --output benchmark-artifacts/ablation.json
+      - name: Enforce non-additive substrate-safe ablation contract
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          d=json.loads(Path('benchmark-artifacts/ablation.json').read_text())
+          c=d['contract']; h=d['historical_causality']; p=d['canonical_product_parity']; g=d['gate']
+          ht=h['totals']; hg=h['gate']; pt=p['totals']; pg=p['gate']
+          assert d['schema']=='cmpct-v030-canonical-ablation-v2'
+          assert c['historical_variants']==['v029','geometry_only','prefixgraph_only','combined']
+          assert c['expected_v029_historical_aggregate_bytes']==137501815
+          assert c['minimum_historical_release_saving_bytes']==687783
+          assert c['minimum_historical_improved_rows']==3
+          assert c['historical_regression_tolerance_bytes']==0
+          assert c['product_regression_tolerance_bytes']==0
+          assert ht['v029']['archive_bytes']==137501815
+          assert ht['combined']['regressed_rows']==0
+          assert ht['combined']['improved_rows']>=3
+          assert ht['combined']['saving_vs_v029_bytes']>=687783
+          assert hg['all_variant_trees_verified'] is True
+          assert hg['all_selected_artifacts_sha256_addressed'] is True
+          assert hg['combined_is_exact_equivalent_artifact_tournament'] is True
+          assert hg['no_additive_savings_credit'] is True
+          assert hg['passed'] is True
+          assert pt['regressed_rows']==0
+          assert pg['zero_product_byte_regressions'] is True
+          assert pg['aggregate_product_no_regression'] is True
+          assert pg['passed'] is True
+          assert g['historical_causality_passed'] is True
+          assert g['canonical_product_parity_passed'] is True
+          assert g['passed'] is True
+          PY
+      - name: Upload exact two-substrate ablation ledger
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: v030-coop-ablation-${{ github.sha }}
+          path: benchmark-artifacts/ablation.json
+          if-no-files-found: warn
+          retention-days: 90
+
+  canonical-runtime:
+    name: canonical-runtime
+    runs-on: ubuntu-latest
+    timeout-minutes: 480
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install runtime dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y zstd gcc
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[test]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
+      - name: Run runtime prerequisites
+        run: |
+          python -m pytest -q \
+            tests/test_v030_shared_portfolio.py \
+            tests/test_v030_release_admission.py \
+            tests/test_v030_member_reader.py \
+            tests/test_v030_canonical.py
+      - name: Run fresh-process canonical create/extract/RSS gate
+        run: |
+          mkdir -p benchmark-artifacts
+          python benchmarks/v030_release_performance_canonical.py \
+            --work-root benchmark-artifacts/runtime-work \
+            --output benchmark-artifacts/runtime.json
+      - name: Enforce frozen runtime ratios
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          d=json.loads(Path('benchmark-artifacts/runtime.json').read_text())
+          c=d['contract']; t=d['totals']; g=d['gate']
+          assert c['maximum_median_create_ratio']==1.10
+          assert c['maximum_workload_create_ratio']==1.25
+          assert c['maximum_median_extract_ratio']==1.10
+          assert c['maximum_workload_extract_ratio']==1.25
+          assert c['maximum_peak_rss_ratio']==1.25
+          assert t['median_create_ratio']<=1.10
+          assert t['max_workload_create_ratio']<=1.25
+          assert t['median_extract_ratio']<=1.10
+          assert t['max_workload_extract_ratio']<=1.25
+          assert t['max_peak_rss_ratio']<=1.25
+          assert g['passed'] is True
+          PY
+      - name: Upload canonical runtime raw evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: v030-coop-runtime-${{ github.sha }}
+          path: benchmark-artifacts/runtime.json
+          if-no-files-found: warn
+          retention-days: 90
+
+  canonical-selective-read:
+    name: canonical-selective-read
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install selective-read dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y zstd gcc
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[test]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
+      - name: Pin selective-read policy and reader integrity
+        run: |
+          python -m pytest -q \
+            tests/test_v030_release_selective_read_contract.py \
+            tests/test_v030_member_reader.py \
+            tests/test_v030_release_reader_policy.py \
+            tests/test_v030_canonical.py
+      - name: Run balanced fresh-process canonical product selective-member evidence
+        run: |
+          mkdir -p benchmark-artifacts
+          python benchmarks/v030_release_selective_read_canonical.py \
+            --work-root benchmark-artifacts/selective-work \
+            --output benchmark-artifacts/selective.json
+      - name: Enforce exact observed member and locality contract
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          d=json.loads(Path('benchmark-artifacts/selective.json').read_text())
+          c=d['contract']; t=d['totals']; g=d['gate']
+          assert d['schema']=='cmpct-v030-canonical-selective-read-v2'
+          assert c['maximum_member_read_amplification']==8.0
+          assert c['missing_locality_behavior']=='hard failure; no numeric default'
+          assert t['targets']==3
+          assert t['measured_product_rows']==3
+          assert t['max_observed_member_read_amplification']<=8.0
+          assert g['all_canonical_product_profiles_measured'] is True
+          assert g['all_targets_are_regular_user_visible_members'] is True
+          assert g['all_members_exact'] is True
+          assert g['all_locality_is_operation_observed'] is True
+          assert g['all_rows_within_locality_ceiling'] is True
+          assert g['all_reads_are_strict_member_scope'] is True
+          assert g['balanced_fresh_process_repetitions'] is True
+          assert g['passed'] is True
+          PY
+      - name: Upload selective-read raw evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: v030-coop-selective-${{ github.sha }}
+          path: benchmark-artifacts/selective.json
+          if-no-files-found: warn
+          retention-days: 90
+
+  canonical-external-frontier:
+    name: canonical-external-frontier
+    runs-on: ubuntu-latest
+    timeout-minutes: 600
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install CMPCT and external compressors
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y zstd p7zip-full zpaq gcc
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[test]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
+      - name: Run exact-tree external competitor frontier
+        run: |
+          mkdir -p benchmark-artifacts
+          python benchmarks/v030_external_competitors_canonical.py \
+            --work-root benchmark-artifacts/external-work \
+            --output benchmark-artifacts/external.json
+      - name: Enforce symmetric extracted-tree competitor contract
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          d=json.loads(Path('benchmark-artifacts/external.json').read_text())
+          a=d['aggregates']; g=d['gate']
+          assert a['all']['7z_lzma2_max_solid']['complete_for_suite'] is True
+          assert a['all']['tar_zstd19_solid']['complete_for_suite'] is True
+          assert a['all']['zpaq_method5']['complete_for_suite'] is True
+          assert all(
+              item.get('tree_verified') is True
+              for row in d['rows']
+              for item in row['formats'].values()
+              if item.get('available')
+          )
+          assert g['aggregate_beats_zip'] is True
+          assert g['aggregate_beats_7z_when_available'] is True
+          assert g['neutral_beats_solid_zstd19'] is True
+          assert g['hostile_closes_solid_zstd19_frontier'] is True
+          assert g['hostile_closes_zpaq5_frontier_when_available'] is True
+          assert g['passed'] is True
+          PY
+      - name: Upload exact external frontier evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: v030-coop-external-${{ github.sha }}
+          path: benchmark-artifacts/external.json
+          if-no-files-found: warn
+          retention-days: 90
+
+# Footnote: this branch-scoped workflow is the slot-02 evidence reactor, not release authority by itself. A green
+# specialist branch proves the harness and current candidate evidence on its exact SHA; slot-00 must still import
+# T01/T03, freeze one reconciled integration SHA, and rerun the same gates there before any durable v0.30 release
+# record or public claim can be accepted. A red result remains evidence and must never be converted to green by
+# changing a workload, comparator, timing boundary, semantic substrate, or threshold.

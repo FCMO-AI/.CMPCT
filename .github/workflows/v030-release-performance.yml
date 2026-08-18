@@ -1,3 +1,4 @@
+# ci-lane: release
 name: CMPCT v0.30 runtime promotion gate
 
 on:

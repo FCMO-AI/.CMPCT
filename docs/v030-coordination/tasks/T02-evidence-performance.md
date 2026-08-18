@@ -2,13 +2,57 @@
 
 - **Owner:** slot-02
 - **Priority:** P0
-- **State:** READY
+- **State:** CLAIMED
 - **Branch:** `agent/v030-coop-evidence-performance`
 - **Dependencies:** benchmark harness work may proceed now; final authority must run on the exact reconciled T00 candidate and imported T01/T03 implementation.
 
 ## Objective
 
 Turn v0.30 from promising mechanism evidence into exact release evidence without lowering any threshold or mixing independent savings.
+
+## Immediate selective-read measurement blocker
+
+Slot-00 review of `benchmarks/v030_release_selective_read_canonical.py` found two stale assumptions relative to the new canonical product surface:
+
+1. The harness derives the row locality ceiling from `build_stats.get("max_selected_member_read_amplification", 0.0)`. The current canonical product builder does not guarantee that flattened field, so a selected r25 archive can currently fall through to **0.0x** and pass the locality assertion without the benchmark proving its actual member-read work.
+2. The harness marks r24 fallback as selective-read “not applicable,” but the new canonical product API explicitly supports r24 `read_member` through the mature `CMPCT` reader. Final product evidence should exercise the same public operation across r24 fallback and r25 profiles rather than preserving a research-era N/A assumption.
+
+Required repair:
+
+- derive normative locality from the **actual member operation's returned stats** (and cross-check it against any archive declaration/build statistic when present); never substitute a missing field with zero;
+- make missing locality/accounting data on an r25 member read a hard evidence failure;
+- measure the canonical product member API for both r24 and r25. If operation semantics differ, report them explicitly, but do not call a supported fallback operation “not applicable” merely because the older research adapter did;
+- keep largest-member deterministic target selection, but verify that the target is a regular user-visible member rather than a symlink-followed alias/internal manifest;
+- preserve exact member SHA/length, fresh-process timing, raw RSS and <=8x decoded-context accounting;
+- add contract tests proving an omitted locality field cannot default to a passing value and proving the r24 product fallback reaches a true member-read operation.
+
+Footnote: a build-time declaration is useful corroboration, not a substitute for observing the operation the release claim is about.
+
+## Immediate benchmark-semantics blocker — fix before running/crediting the new ablation
+
+Slot-00 review of `benchmarks/v030_release_ablation_canonical.py` found that its prose and code currently disagree about what bytes are being compared.
+
+The module says all four graph ablations consume the same staged filesystem manifest, but `_measure_row` currently does:
+
+- accepted v0.29: `V029.build(source, ...)` on the original tree;
+- Geometry-only: `G04.build(source, ...)` on the original tree;
+- PrefixGraph-only: `PG.build(source, ...)` on the original tree;
+- combined: `CANON.build(source, ...)`, which uses the new canonical product boundary, filesystem-manifest semantics and genuine r24 fallback.
+
+It then asserts that canonical combined bytes equal `min(geometry_only, prefixgraph_only)`. That is not a valid complete-artifact identity because the operands do not pay the same metadata/filesystem semantics or use the same fallback boundary.
+
+Required repair:
+
+1. **Do not credit or preserve a green result from the current harness.** It is a measurement defect, not a candidate failure.
+2. Separate two evidence questions explicitly:
+   - **Frozen research-frontier causality:** preserve the historical repaired 15-workload source trees and the exact accepted v0.29 byte identity `137,501,815 B`; run v0.29 / Geometry / PrefixGraph / combined under exactly those historical content-tree semantics so the immutable threshold remains comparable.
+   - **Canonical product parity:** compare released canonical v0.29/r24 product bytes against canonical v0.30 product bytes on the same original filesystem trees, including the new r25 filesystem-manifest semantics and genuine r24 fallback. This is an additional no-regression/product-worthiness gate; it must not silently redefine the 137,501,815 B historical baseline.
+3. If you want a manifest-charged causal ablation, all four variants must use the **same prepared tree** and the same exact metadata charge. Label it as a new causal substrate; do not claim it reproduces historical accepted-v0.29 bytes unless it actually does.
+4. Combined exact-minimum assertions may compare only complete artifacts with equivalent semantics. Do not compare `CANON.build(...)` to raw `G04.build(source)` / `PG.build(source)` artifacts.
+5. Preserve the frozen >=687,783 B, >=3 improved, 0-regression and <=8x gates on their original accepted substrate. Add stricter canonical-product parity rather than moving those goalposts.
+6. Add contract tests that deliberately make one variant omit the manifest/fallback charge and prove the harness rejects the semantic mismatch.
+
+Footnote: productization is allowed to introduce a genuine new canonical r25 framing cost; benchmark honesty requires paying it. It is not allowed to retroactively rewrite the frozen historical v0.29 baseline so the new framing appears free.
 
 ## Immediate CI-topology debt — fix before final benchmark handoff
 
@@ -82,6 +126,8 @@ Prefer `benchmarks/v030_*`, v0.30 benchmark tests, release/deep workflows, and d
 4. External competitor matrix verifies extraction semantics before crediting archive size and preserves every fair loss.
 5. CI artifacts/runs are tied to exact reconciled candidate SHA; queued/cancelled/superseded runs are not counted.
 6. Accepted results are committed durably, with raw measurements/provenance sufficient to regenerate public claims.
+7. Canonical product parity is reported separately from historical research-frontier causality; neither silently substitutes for the other.
+8. Selective-read locality is derived from observed member operations, with no missing-field default that can pass a normative gate.
 
 ## Failure behavior
 
@@ -90,3 +136,17 @@ If a gate fails, preserve the machine result and mark the task `BLOCKED` or crea
 ## Handoff
 
 Set `REVIEW` with exact evidence files, run IDs/artifacts, environment/tool versions, raw/summary results, source SHA, topology checker output, and a concise statement of every remaining loss or unavailable comparator.
+
+## Slot-02 implementation checkpoint — awaiting exact-head fast/topology receipt
+
+The three coordinator review blockers above have been repaired on the specialist branch without deleting their original review record:
+
+- **Selective-read measurement:** `benchmarks/v030_perf_worker_canonical.py` instruments the actual canonical public `read_member` call in the same fresh process and reports observed decode context for Geometry, PrefixGraph, and genuine r24 fallback. Missing locality is a hard error; no `0.0x` default remains. `benchmarks/v030_release_selective_read_canonical.py` measures all selected canonical product profiles, chooses the largest regular user-visible member from `list_members`, excludes the internal r25 manifest and alias kinds, verifies exact SHA/length, preserves wall/RSS measurements, and enforces the unchanged <=8x law. Contract tests cover omitted locality, genuine r24 public-operation reachability, and target selection.
+- **Ablation semantics:** `benchmarks/v030_release_ablation_canonical.py` now emits two explicitly non-interchangeable ledgers. `historical_causality` preserves the exact repaired historical substrate and the 137,501,815 B / >=687,783 B / >=3 improved / zero-regression gates; `canonical_product_parity` independently rebuilds genuine r24 product bytes and compares them with the final canonical product on the same original filesystem workload. Every artifact carries a substrate identity, and cross-substrate exact-min arithmetic is a hard error. Contract tests deliberately omit/change the substrate charge and require rejection.
+- **CI topology:** all 17 coordinator-listed workflows are classified (eight `deep`, nine `release`), concurrency cancellation is preserved, and only two redundant research bare-PR triggers were removed. The slot-02 reactor itself is `release`-classified and now runs the exact 17-path topology checker command inside `evidence-fast` before handoff.
+
+Current handoff candidate lineage before this checkpoint commit: specialist `2ff883ea41f2c70fb3cd7151de5be7639f4069b5`, containing authoritative integration `f6a273bbb1e49e21096a1cc875eff35a8e3c1110` as a merge parent. PR #61 remains draft and targets `agent/v030-authoritative-integration` rather than `main`.
+
+Final canonical product parity/selective-read authority is intentionally **not** claimed on this specialist branch because T03's final product surface is still a cross-slot dependency. Product-dependent evidence must be rerun on slot-00's exact reconciled candidate after the corrected T03 implementation is imported. Queued, cancelled, superseded, pre-product, or pre-reconciliation runs are not release evidence.
+
+Footnote: this checkpoint is also the meaningful PR synchronization event used to obtain a fresh exact-head fast/topology receipt. The task remains `CLAIMED` until that receipt is green; it is not a ceremonial no-op commit.
