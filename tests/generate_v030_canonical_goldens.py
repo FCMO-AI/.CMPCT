@@ -2,8 +2,8 @@
 """Generate builder-independent canonical CMP25 acceptance archives.
 
 This generator deliberately does not import the CMPCT builder or any v0.30 writer. It emits fixed G0-G4 and
-PrefixGraph framing from struct/msgpack/zstd primitives so a bug shared by the product encoder and reader cannot
-manufacture its own passing golden fixture.
+PrefixGraph framing from struct/msgpack plus a tiny deterministic raw-block Zstandard encoder, so a bug shared by
+the product encoder/reader or a different system-zstd build cannot manufacture or drift its own passing fixture.
 """
 from __future__ import annotations
 
@@ -13,7 +13,6 @@ import hashlib
 import json
 from pathlib import Path
 import struct
-import subprocess
 import zlib
 
 import msgpack
@@ -33,6 +32,8 @@ G04_FOOTER = struct.Struct("<8sQQ32s32s")
 PHYSICAL_HEADER = struct.Struct("<BQQI32s")
 PREFIX_HEADER = struct.Struct("<8sQQ32s")
 PREFIX_FOOTER = struct.Struct("<8sQQ32s")
+ZSTD_MAGIC = bytes.fromhex("28b52ffd")
+ZSTD_MAX_RAW_BLOCK = (1 << 17) - 1
 
 
 def sha(data: bytes) -> bytes:
@@ -44,15 +45,39 @@ def pack(value) -> bytes:
 
 
 def zpack(data: bytes) -> bytes:
-    # Footnote: the stock zstd CLI is the documented physical/meta codec only. No CMPCT search,
-    # graph selection, geometry heuristic or product writer participates in these fixture bytes.
-    completed = subprocess.run(
-        ["zstd", "-q", "-6", "--check", "--stdout"],
-        input=data,
-        stdout=subprocess.PIPE,
-        check=True,
-    )
-    return completed.stdout
+    """Emit one deterministic single-segment Zstandard frame containing only RAW blocks.
+
+    Footnote: compression ratio is irrelevant to a conformance golden; stable independently decodable bytes are
+    the goal. RAW blocks exercise the exact Zstandard framing/decoder contract without depending on libzstd's
+    optimizer decisions, version, CPU dispatch, external executable, or CMPCT implementation code.
+    """
+    size = len(data)
+    out = bytearray(ZSTD_MAGIC)
+    if size < 256:
+        out.append(0x20)  # single-segment, 1-byte frame content size
+        out.append(size)
+    elif size < 65_792:
+        out.append(0x60)  # single-segment, 2-byte FCS encoded as size-256
+        out += (size - 256).to_bytes(2, "little")
+    elif size < 1 << 32:
+        out.append(0xA0)  # single-segment, 4-byte frame content size
+        out += size.to_bytes(4, "little")
+    else:
+        out.append(0xE0)  # single-segment, 8-byte frame content size
+        out += size.to_bytes(8, "little")
+
+    if not data:
+        out += (1).to_bytes(3, "little")  # last RAW block, zero-byte payload
+        return bytes(out)
+    cursor = 0
+    while cursor < size:
+        block = data[cursor : cursor + ZSTD_MAX_RAW_BLOCK]
+        cursor += len(block)
+        # Zstd block header: bit0=last, bits1..2=RAW type(0), bits3..=block size.
+        header = (len(block) << 3) | int(cursor == size)
+        out += header.to_bytes(3, "little")
+        out += block
+    return bytes(out)
 
 
 def tree_sha(files: dict[str, bytes]) -> bytes:
@@ -233,10 +258,11 @@ def document() -> dict:
     manifest, fs = filesystem_payload()
     user_raw = fs["raw"]
     result = {
-        "schema": "cmpct-v030-native-canonical-golden-v1",
+        "schema": "cmpct-v030-native-canonical-golden-v2",
         "provenance": (
-            "Generated directly from frozen byte grammars by tests/generate_v030_canonical_goldens.py; "
-            "no CMPCT Builder or v0.30 experiment writer imported."
+            "Generated directly from frozen byte grammars and deterministic raw-block Zstandard frames by "
+            "tests/generate_v030_canonical_goldens.py; no CMPCT Builder, v0.30 writer, or external compressor "
+            "implementation participates in canonical golden bytes."
         ),
         "filesystem": {
             "manifest_sha256": sha(manifest).hex(),
@@ -283,6 +309,6 @@ def main() -> None:
 if __name__ == "__main__":
     main()
 
-# Footnote: using the system zstd CLI keeps the golden generator independent from CMPCT's Python/native writer
-# dependencies while still exercising the exact public physical-codec contract. The committed JSON, not a
-# particular zstd library build, is the reader authority; --check catches accidental byte drift explicitly.
+# Footnote: raw-block Zstandard is intentionally worse compression but better conformance engineering: the
+# independently committed golden bytes are a pure function of this short framing grammar and fixture content,
+# not of a compressor version or optimization heuristic. Production archives still use ordinary zstd encoding.
