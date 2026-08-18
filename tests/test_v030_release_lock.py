@@ -119,6 +119,12 @@ def _write_passing_pair(tmp_path: Path, manifest: dict, fingerprint: str, eviden
     )
 
 
+def _write_task(root: Path, rel: str, state: str) -> None:
+    path = root / rel
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(f"# Task\n\n- **State:** {state}\n", encoding="utf-8")
+
+
 def test_release_lock_fails_closed_when_receipts_are_missing(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(lock, "ROOT", tmp_path)
     manifest, _fingerprint, _evidence = _fixture_root(tmp_path)
@@ -142,6 +148,7 @@ def test_release_lock_accepts_only_complete_current_evidence_bound_receipts(
     assert ok is True
     assert report["release_unlocked"] is True
     assert report["failures"] == {}
+    assert report["task_state_failures"] == []
 
 
 def test_release_lock_invalidates_receipts_after_critical_code_change(
@@ -278,6 +285,52 @@ def test_release_lock_forbids_receipts_from_attesting_to_receipt_files(
 
     assert ok is False
     assert any("may not point into the release receipt directory" in error for error in report["failures"]["native-r25"])
+
+
+def test_task_state_blocks_unlock_even_when_all_receipts_pass(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(lock, "ROOT", tmp_path)
+    manifest, fingerprint, evidence = _fixture_root(tmp_path)
+    _write_passing_pair(tmp_path, manifest, fingerprint, evidence)
+    task0 = "docs/v030-coordination/tasks/T00.md"
+    task4 = "docs/v030-coordination/tasks/T04.md"
+    manifest["required_task_states"] = [
+        {"path": task0, "allowed": ["DONE"]},
+        {"path": task4, "allowed": ["REVIEW"]},
+    ]
+    _write_task(tmp_path, task0, "CLAIMED")
+    _write_task(tmp_path, task4, "REVIEW")
+
+    ok, report = lock.check(manifest)
+
+    assert ok is False
+    assert report["failures"] == {}
+    assert report["task_states"] == {task0: "CLAIMED", task4: "REVIEW"}
+    assert any("expected one of ['DONE']" in error for error in report["task_state_failures"])
+
+    _write_task(tmp_path, task0, "DONE")
+    ok, report = lock.check(manifest)
+    assert ok is True
+    assert report["task_state_failures"] == []
+
+
+def test_task_state_fails_closed_when_state_declaration_is_missing(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(lock, "ROOT", tmp_path)
+    manifest, fingerprint, evidence = _fixture_root(tmp_path)
+    _write_passing_pair(tmp_path, manifest, fingerprint, evidence)
+    task = "docs/v030-coordination/tasks/T03.md"
+    manifest["required_task_states"] = [{"path": task, "allowed": ["DONE"]}]
+    path = tmp_path / task
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("# Task without state\n", encoding="utf-8")
+
+    ok, report = lock.check(manifest)
+
+    assert ok is False
+    assert any("no parseable" in error for error in report["task_state_failures"])
 
 
 def test_template_uses_current_fingerprint_owner_and_fact_sources(
