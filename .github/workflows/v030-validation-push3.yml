@@ -1,0 +1,72 @@
+name: CMPCT v0.30 isolated candidate validation 3
+# ci-lane: deep
+
+on:
+  push:
+    branches: [agent/v030-validation-push3]
+    paths: ['.github/workflows/v030-validation-push3.yml']
+
+permissions:
+  contents: write
+
+concurrency:
+  group: cmpct-v030-validation-push3
+  cancel-in-progress: true
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y zstd gcc
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[test]'
+      - name: Compile and contract-test release product
+        run: |
+          python -m py_compile experiments/entropygraph_v030_canonical_final.py experiments/entropygraph_v030_release_product.py benchmarks/v030_perf_worker_canonical.py benchmarks/v030_release_ablation_product.py benchmarks/v030_release_performance_product.py benchmarks/v030_release_selective_read_product.py benchmarks/v030_external_competitors_canonical.py
+          python -m pytest -q tests/test_v030_canonical_final.py tests/test_v030_release_ablation_contract.py tests/test_v030_release_selective_read_contract.py tests/test_v030_release_generalization_contract.py
+      - name: Reproduce independent r25 goldens
+        run: python tests/generate_v030_canonical_goldens.py --check
+      - name: Rust native authority smoke
+        working-directory: native/cmpct-portable
+        run: |
+          cargo fmt --check
+          cargo clippy --all-targets --message-format=short -- -D warnings
+          cargo test --all-targets
+          cargo build --release
+      - name: Native canonical acceptance and r24 corruption adversary
+        run: |
+          python tests/native_v030_canonical.py
+          python tests/native_v030_r24_verify_authority.py --binary native/cmpct-portable/target/release/cmpct-portable
+
+  receipt:
+    if: always()
+    needs: [validate]
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+      - name: Persist result on validation branch
+        env:
+          RESULT: ${{ needs.validate.result }}
+        run: |
+          mkdir -p docs/v030-validation
+          printf '{"schema":"cmpct-v030-isolated-validation-v3","source_sha":"%s","result":"%s","passed":%s}\n' "$GITHUB_SHA" "$RESULT" "$([ "$RESULT" = success ] && echo true || echo false)" > docs/v030-validation/receipt-v3.json
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add docs/v030-validation/receipt-v3.json
+          git commit -m 'ci(v0.30): record isolated validation v3' || true
+          git push origin HEAD:agent/v030-validation-push3
+
+# Footnote: diagnostic only. The branch is a snapshot of Agent-00 authority plus this one workflow. Final release
+# receipts still rerun on the exact main-bound candidate after version/docs/evidence are frozen.
