@@ -3,6 +3,13 @@
   "release": "0.30.0",
   "target_format_revision": 25,
   "receipt_directory": "docs/v030-release-receipts",
+  "required_task_states": [
+    {"path": "docs/v030-coordination/tasks/T00-main-reconciliation.md", "allowed": ["DONE"]},
+    {"path": "docs/v030-coordination/tasks/T01-native-portability.md", "allowed": ["DONE"]},
+    {"path": "docs/v030-coordination/tasks/T02-evidence-performance.md", "allowed": ["DONE"]},
+    {"path": "docs/v030-coordination/tasks/T03-graph-productization.md", "allowed": ["DONE"]},
+    {"path": "docs/v030-coordination/tasks/T04-final-release.md", "allowed": ["REVIEW"]}
+  ],
   "fingerprint_globs": [
     "AGENTS.md",
     ".github/AGENTS.md",
@@ -158,8 +165,7 @@
       "assertions": [
         {"path": "facts.tests_green", "eq": true},
         {"path": "facts.version_discipline_green", "eq": true},
-        {"path": "facts.public_surface_green", "eq": true},
-        {"path": "facts.no_release_critical_task_open", "eq": true}
+        {"path": "facts.public_surface_green", "eq": true}
       ]
     },
     {
