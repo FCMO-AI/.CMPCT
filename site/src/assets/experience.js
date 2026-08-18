@@ -1,2 +1,5 @@
-/* Historical restoration baseline.
-   Footnote: the current public-evidence renderer is temporarily dormant in this commit so the exact pre-redesign composition can be recovered without a second layout system fighting it. The following campaign commit reintroduces current evidence through the restored DOM grammar. */
+/* CMPCT restored experience assembly.
+   Footnote: proof-renderer.js owns evidence truth; cinematic.js owns presentation. Keeping those roles in
+   separate modules lets the visual campaign evolve without teaching decorative code how to make claims. */
+import "./proof-renderer.js";
+import "./cinematic.js";

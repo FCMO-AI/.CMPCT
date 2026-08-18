@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
-"""Validate the generated CMPCT public-proof experience.
+"""Validate CMPCT's public-proof truth and its restored cinematic presentation contract.
 
-Footnote: this gate intentionally checks both evidence truth and presentation presence. A structurally
-valid JSON file is not enough if the homepage drops the loss board or canonical/research boundary; a
-beautiful page is not enough if its headline can drift away from the committed benchmark record.
+Footnote: the historical visual shell is now an explicit regression surface. A future content rebuild may
+change evidence or copy, but it must not silently flatten the intricate hero, graph stage, light authority
+band, Browser Lab, or evidence-driven cinematic layer that make the site recognizably CMPCT.
 """
 
 import argparse
@@ -21,9 +21,9 @@ def main() -> None:
     parser.add_argument("site", type=Path)
     parser.add_argument("--source", type=Path, default=Path("site/src"))
     args = parser.parse_args()
-
     out = args.site.resolve()
     source = args.source.resolve()
+
     data = json.loads((out / "project-data.json").read_text(encoding="utf-8"))
     evidence = data.get("public_evidence") or {}
     assert evidence.get("schema") == SCHEMA, evidence.get("schema")
@@ -39,8 +39,8 @@ def main() -> None:
     by_short = {str(row.get("short")): row for row in rows}
     headline = str(structural.get("headline_comparator_short") or "")
     serious = str(structural.get("serious_comparator_short") or "")
-    assert headline in by_short, "headline comparator must be present in the same matched arena"
-    assert serious in by_short, "serious compressor must remain present beside the familiar headline"
+    assert headline in by_short, "headline comparator must remain in the matched arena"
+    assert serious in by_short, "serious compressor must remain beside the familiar headline"
     for row in rows:
         if row.get("role") == "candidate":
             continue
@@ -49,18 +49,25 @@ def main() -> None:
         assert math.isclose(float(row["lead_pct"]), expected, rel_tol=0, abs_tol=1e-10), row.get("short")
 
     losses = list(evidence.get("known_losses") or [])
-    assert losses, "Red Team Board requires at least one current qualification when the frontier records one"
+    assert losses, "Red Team Board requires current qualifications when the frontier records them"
     policy = evidence.get("claim_policy") or {}
     assert policy.get("wins_and_losses_visible") is True
     assert policy.get("research_canonical_boundary_required") is True
     assert policy.get("headline_values_derived_from_committed_evidence") is True
-
     provenance = evidence.get("provenance") or {}
     assert provenance.get("record"), "public claims must name their durable record"
     assert provenance.get("contract"), "public claims must preserve benchmark scope/contract"
 
     html = (out / "index.html").read_text(encoding="utf-8")
     for needle in (
+        'Archive formats made peace with compromise.',
+        '<em>CMPCT did not.</em>',
+        'id="entropy-sun"',
+        'class="hero-score"',
+        'class="score-ruler"',
+        'class="graph-stage cinematic-surface"',
+        'class="graph-lines"',
+        'class="canonical-band"',
         'id="hero-gain"',
         'id="hero-metrics"',
         'id="competitor-ladder"',
@@ -75,41 +82,41 @@ def main() -> None:
         'assets/motion.js',
         'assets/experience.js',
     ):
-        assert needle in html, f"missing public-proof surface: {needle}"
+        assert needle in html, f"missing public visual/proof surface: {needle}"
 
-    # Footnote: the August 17 publication regression served the raw source template instead of the
-    # enhanced build. Checking generated markers here makes that exact failure mode release-blocking.
+    # Footnote: this catches the exact publication downgrade that once served raw source markers.
     for marker in ("__CMPCT_VERSION__", "__FORMAT_REVISION__", "__BUILD_COMMIT__"):
         assert marker not in html, f"unexpanded generated-site marker: {marker}"
 
-    # Footnote: the visual campaign is layered rather than destructive. Both the preserved baseline and
-    # the current atelier override must survive the build so future redesigns do not erase accumulated UI.
     for asset in (
-        "motion.css",
-        "polish.css",
-        "experience.css",
-        "experience-base.css",
-        "atelier.css",
-        "motion.js",
-        "experience.js",
+        "styles.css", "motion.css", "polish.css", "experience.css", "cinematic.css",
+        "motion.js", "experience.js", "proof-renderer.js", "cinematic.js",
     ):
         assert (out / "assets" / asset).is_file(), f"missing generated visual asset: {asset}"
 
+    # Footnote: the pre-redesign stylesheet remains the owner of composition; experience.css may only add
+    # the campaign layer. Re-importing the rejected atelier/base stack would recreate the flattening bug.
     experience = (out / "assets" / "experience.css").read_text(encoding="utf-8")
-    assert 'experience-base.css' in experience, "visual assembly must preserve the established proof CSS"
-    assert 'atelier.css' in experience, "visual assembly must load the current FCMO campaign last"
+    assert 'cinematic.css' in experience
+    assert 'atelier.css' not in experience
+    styles = (out / "assets" / "styles.css").read_text(encoding="utf-8")
+    for historical_signature in ('.hero-copy h1', '.hero-copy h1 em', '.hero-score:before', '.graph-stage', '.canonical-band'):
+        assert historical_signature in styles, f"historical visual grammar missing: {historical_signature}"
 
-    # Footnote: the headline must remain a runtime evidence value. If someone types the current 38.5%
-    # into HTML, a later release can look current while silently showing stale marketing copy.
+    cinematic = (out / "assets" / "cinematic.css").read_text(encoding="utf-8")
+    for signature in ('.entropy-sun', '.canonical-crossing', '.chapter-rail', '.engineer-cta'):
+        assert signature in cinematic, f"cinematic campaign feature missing: {signature}"
+
+    # Headline values stay runtime-derived. A later release must never inherit today's marketing number.
     assert "38.5%" not in html
+    proof_renderer = (source / "assets" / "proof-renderer.js").read_text(encoding="utf-8")
+    assert SCHEMA in proof_renderer
+    assert "mosaic-v029" not in proof_renderer
+    assert "entropygraph-v028" not in proof_renderer
+    assembly = (source / "assets" / "experience.js").read_text(encoding="utf-8")
+    assert 'proof-renderer.js' in assembly and 'cinematic.js' in assembly
 
-    renderer = (source / "assets" / "experience.js").read_text(encoding="utf-8")
-    assert SCHEMA in renderer
-    assert "mosaic-v029" not in renderer
-    assert "entropygraph-v028" not in renderer
-    assert "render_contract" not in renderer
-
-    print(f"CMPCT public proof surface: coherent ({SCHEMA})")
+    print(f"CMPCT public proof + restored cinematic surface: coherent ({SCHEMA})")
 
 
 if __name__ == "__main__":
