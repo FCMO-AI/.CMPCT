@@ -209,9 +209,9 @@ impl PortableArchive {
                 }
                 Ok(MemberReadStats {
                     logical_bytes: entry.size,
-                    decoded_context_bytes: entry.size,
-                    amplification: 1.0,
-                    profile: "r24",
+                    decoded_context_bytes: 0,
+                    amplification: f64::NAN,
+                    profile: "r24-locality-unavailable",
                 })
             }
             Self::Canonical25(archive) => archive.stream_member(index, output),
@@ -243,9 +243,9 @@ impl PortableArchive {
                     out,
                     MemberReadStats {
                         logical_bytes: entry.size,
-                        decoded_context_bytes: entry.size,
-                        amplification: 1.0,
-                        profile: "r24",
+                        decoded_context_bytes: 0,
+                        amplification: f64::NAN,
+                        profile: "r24-locality-unavailable",
                     },
                 ))
             }
@@ -301,16 +301,13 @@ impl PortableArchive {
     pub fn member_stats(&self, index: usize) -> Result<MemberReadStats, PortableError> {
         match self {
             Self::Revision24(archive) => {
-                let entry = archive
+                archive
                     .entries()
                     .get(index)
                     .ok_or_else(|| PortableError::Format("r24 entry id out of range".into()))?;
-                Ok(MemberReadStats {
-                    logical_bytes: entry.size,
-                    decoded_context_bytes: entry.size,
-                    amplification: 1.0,
-                    profile: "r24",
-                })
+                Err(PortableError::Unsupported(
+                    "r24 decoded-context locality is not exposed by cmpct-core; use inherited r24 locality evidence rather than a synthetic 1.0x value".into(),
+                ))
             }
             _ => self.stream_member(index, std::io::sink()),
         }
@@ -319,18 +316,11 @@ impl PortableArchive {
     pub fn verify(&self) -> Result<(), PortableError> {
         match self {
             Self::Revision24(archive) => {
-                for (index, entry) in archive.entries().iter().enumerate() {
-                    if entry.kind != 0 {
-                        continue;
-                    }
-                    if entry.size > R24_VERIFY_MATERIALIZE_LIMIT {
-                        return Err(PortableError::Limit(
-                            "native r24 verify requires a <=256 MiB whole-member read; use the mature r24 verifier for larger objects".into(),
-                        ));
-                    }
-                    let mut bytes = vec![0u8; entry.size as usize];
-                    archive.read_range(index, 0, &mut bytes)?;
-                }
+                // Footnote: a full range read is not a complete verifier for direct RAW storage because the
+                // locality-preserving range path intentionally does not hash unseen bytes. The mature r24 core
+                // now exposes a streamed logical verifier that hashes every regular member against its
+                // authenticated index/recipe identity without the old 256 MiB materialization cap.
+                archive.verify_complete()?;
                 Ok(())
             }
             Self::Canonical25(archive) => archive.verify(),
