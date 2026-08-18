@@ -1,43 +1,47 @@
 {
-  "schema": "cmpct-v030-convergence-status-v5",
+  "schema": "cmpct-v030-convergence-status-v6",
   "release_authority": false,
+  "execution_model": "single-executor",
   "integration_branch": "agent/v030-authoritative-integration",
-  "integration_head_observed": "2d293b0dae1ee905d07ac341d63b19174806cb40",
-  "canonical_main_head_observed": "b71dd9e4f025e2580f0e2a8d4bdeab8212c12a17",
+  "integration_head_observed_before_status_write": "fe6877165a37083606884115ea15f27d9a46911e",
+  "canonical_main_head_observed": "11e6497781becab8dc0c92c9af981920b56aa5b1",
   "canonical_project_version": "0.29.0",
   "canonical_format_revision": 24,
-  "branch_relation_to_main": {
+  "branch_relation_to_main_before_status_write": {
     "status": "ahead",
-    "ahead_by": 309,
+    "ahead_by": 382,
     "behind_by": 0,
-    "merge_base": "b71dd9e4f025e2580f0e2a8d4bdeab8212c12a17"
+    "merge_base": "11e6497781becab8dc0c92c9af981920b56aa5b1"
   },
   "latest_main_reconciliation": {
-    "pull_request": 75,
-    "merge_commit": "2d293b0dae1ee905d07ac341d63b19174806cb40",
-    "canonical_commits_imported": 3,
-    "files_changed": 2,
-    "purpose": "bind subsequent r25 validation to the current canonical main trust context"
+    "pull_request": 78,
+    "merge_commit": "cd51dfd462e584f84f22925a55a14a1c4808f8ac",
+    "purpose": "bring the authoritative v0.30 line to current main ancestry before exact-head validation"
   },
-  "agent00_validator": {
-    "workflow": ".github/workflows/v030-agent00-validation.yml",
-    "receipt": "docs/v030-validation/agent00-main-receipt.json",
-    "receipt_schema_expected": "cmpct-v030-agent00-validation-v2",
-    "required_binding": [
-      "candidate_sha",
-      "authority_main_sha",
-      "run_id",
-      "run_attempt",
-      "result",
-      "passed"
-    ]
+  "current_productization_change": {
+    "profile_isolation_module": "experiments/entropygraph_v030_profile_isolation.py",
+    "canonical_wrapper": "experiments/entropygraph_v030_canonical_final.py",
+    "preserved_implementation": "experiments/entropygraph_v030_canonical_final_impl.py",
+    "regression_test": "tests/test_v030_profile_isolation.py",
+    "purpose": "remove process-global canonical profile mutation while preserving the exact reviewed semantic-owner source implementations"
   },
-  "generic_zero_copy_head": "02039b7a760d39416253418978a457601f2fb748",
+  "exact_head_diagnostic_pr": 56,
   "merge_blockers": [
-    "obtain a fresh Agent-00 validator receipt bound to integration head 2d293b0dae1ee905d07ac341d63b19174806cb40 and canonical main b71dd9e4f025e2580f0e2a8d4bdeab8212c12a17",
-    "complete the fresh authoritative reader/fuzz, G0-G4, shared-rehab, generalization and runtime gates on one frozen current-main-derived candidate",
-    "complete native/portability and external-competitor validation on that same frozen candidate",
-    "commit durable benchmark evidence for every release-level performance claim",
-    "preserve the frozen >=687783-byte aggregate saving floor, >=3 improved rows, 0 regressions and <=8x locality law"
-  ]
+    "complete exact-head focused and full regression validation after canonical profile isolation",
+    "complete historical 15-workload causality and genuine r24-vs-r25 canonical product parity on the final reconciled candidate",
+    "complete create/extract/selective-read/RSS and shared-build performance gates on that same candidate",
+    "complete reader recovery/fuzz, native/shared-reader, ZIP/export and Android/platform validation on that same candidate",
+    "complete symmetric external competitor validation with exact extraction semantics and fair losses preserved",
+    "prepare final v0.30.0/r25 docs, release note and site source from accepted durable evidence",
+    "freeze the release-critical fingerprint and mint every required strict evidence-bound receipt",
+    "obtain strict release lock UNLOCKED before merge, tag or public v0.30 claims"
+  ],
+  "frozen_thresholds": {
+    "accepted_v029_bytes": 137501815,
+    "minimum_saving_vs_v029_bytes": 687783,
+    "minimum_improved_workloads": 3,
+    "maximum_regressed_workloads": 0,
+    "maximum_selected_r25_member_read_amplification": 8.0,
+    "canonical_product_rule": "r25 strictly smaller than genuine r24 on same original filesystem tree; exact ties retain r24"
+  }
 }
