@@ -1,7 +1,13 @@
-/* CMPCT curated locale catalogue assembly — Surface 0.29.i.
+/* CMPCT curated locale catalogue assembly — Surface 0.29.k.
    Footnote: locale content lives in reviewable source-keyed or source-order packs. This assembly deliberately
    contains no translation logic and cannot synthesize missing copy. Missing entries remain quality-gate failures. */
-import { META as EN_META, SOURCE_PHRASES, SOURCE_MESSAGES, PROTECTED_TOKENS, QUALITY_CONTRACT } from './locales/en.js';
+import {
+  META as EN_META,
+  SOURCE_PHRASES,
+  SOURCE_MESSAGES,
+  PROTECTED_TOKENS,
+  QUALITY_CONTRACT as SOURCE_QUALITY_CONTRACT,
+} from './locales/en.js';
 import { META as ES_META, PHRASES as ES_PHRASES, MESSAGES as ES_MESSAGES } from './locales/es-419.js';
 import { META as PT_META, PHRASES as PT_PHRASES, MESSAGES as PT_MESSAGES } from './locales/pt-br.js';
 import { META as FR_META, PHRASES as FR_PHRASES, MESSAGES as FR_MESSAGES } from './locales/fr.js';
@@ -46,4 +52,8 @@ export const MESSAGES = Object.freeze(Object.fromEntries(Object.entries(SOURCE_M
   ...Object.fromEntries(SUPPORTED_LOCALES.filter((locale) => locale !== 'en').map((locale) => [locale, messagePacks[locale]?.[key]])),
 })])));
 
-export { PROTECTED_TOKENS, QUALITY_CONTRACT };
+// Footnote: the English source file describes the original localization campaign. The assembled catalogue
+// advances with the public-surface milestone so CI can reject stale translation evidence without rewriting the
+// canonical English phrase identities that all locale packs key against.
+export const QUALITY_CONTRACT = Object.freeze({ ...SOURCE_QUALITY_CONTRACT, catalogueRevision: '0.29.k' });
+export { PROTECTED_TOKENS };
