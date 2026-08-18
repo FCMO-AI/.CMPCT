@@ -65,7 +65,7 @@ export const PHRASES={
   "Repository ↗": "Dépôt ↗",
   "format, benchmarks, implementation": "format, benchmarks, implémentation",
   "Performance is not a screenshot. It is a release contract.": "La performance n’est pas une capture d’écran. C’est un contrat de version.",
-  "Format ↗": "Format ↗",
+  "Format ↗": "Format d’archive ↗",
   "Benchmarks ↗": "Benchmarks ↗",
   "Pre-1.0 · licensing proposal not yet adopted · committed benchmark evidence remains qualified by its recorded environment and semantics.": "Pré-1.0 · la proposition de licence n’est pas encore adoptée · les preuves de benchmark enregistrées restent qualifiées par leur environnement et leur sémantique documentés.",
   "CMPNX11 is research-only and is not readable by the canonical r24 reader.": "CMPNX11 est réservé à la recherche et n’est pas lisible par le lecteur canonique r24.",
@@ -105,5 +105,5 @@ export const PHRASES={
   "false neighbors": "faux voisins",
   "boundary churn": "instabilité de frontière",
   "deflate family": "famille Deflate",
-  "incompressible": "incompressible"
+  "incompressible": "non compressible"
 };
