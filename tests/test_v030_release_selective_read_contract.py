@@ -66,6 +66,10 @@ def test_r24_fallback_is_observed_through_public_product_read_member(tmp_path: P
             return None
 
     class FakeEngine:
+        # Footnote: the worker dispatches by real archive magic before instrumenting the mature r24 reader.
+        # The contract fixture therefore supplies an actual r24-marked path instead of relying on a nonexistent
+        # placeholder file; weakening that dispatch would let research/non-canonical bytes masquerade as r24.
+        R24_MAGIC = b"FAKER24!"
         POLICY = SimpleNamespace(R=SimpleNamespace(_G04Session=DummySession, _PGSession=DummySession))
         CMPCT = FakeCMPCT
 
@@ -77,7 +81,9 @@ def test_r24_fallback_is_observed_through_public_product_read_member(tmp_path: P
             return [{"path": "payload.bin", "kind": "file", "size": len(payload)}]
 
     engine = FakeEngine()
-    raw, stats = W._observed_product_member(engine, tmp_path / "fake.cmpct", "payload.bin")
+    archive = tmp_path / "fake.cmpct"
+    archive.write_bytes(engine.R24_MAGIC + b"contract-fixture")
+    raw, stats = W._observed_product_member(engine, archive, "payload.bin")
     assert raw == payload
     assert calls == ["payload.bin"]
     assert stats["representation"] == "canonical-r24"
