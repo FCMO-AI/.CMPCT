@@ -1,4 +1,5 @@
 name: CMPCT curated localization contract
+# ci-lane: deep
 
 on:
   pull_request:
