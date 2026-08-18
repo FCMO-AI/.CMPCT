@@ -5,8 +5,8 @@ from __future__ import annotations
 
 Footnote: the historical shell and the later rendered ratchets are explicit regression surfaces. Future
 content work may change evidence or copy, but it must not silently flatten the intricate hero, graph stage,
-light authority band, Browser Lab, evidence-driven graphics, or the ratio-aware responsive behavior that
-make the public site recognizably CMPCT across physical screen classes.
+light authority band, Browser Lab, evidence-driven graphics, the Ember Eclipse signal hierarchy, or the
+ratio-aware responsive behavior that make the public site recognizably CMPCT across physical screen classes.
 """
 
 import argparse
@@ -91,7 +91,7 @@ def main() -> None:
 
     for asset in (
         "styles.css", "motion.css", "polish.css", "experience.css", "cinematic.css", "masterclass.css",
-        "responsive.css", "motion.js", "experience.js", "proof-renderer.js", "cinematic.js",
+        "ember-eclipse.css", "responsive.css", "motion.js", "experience.js", "proof-renderer.js", "cinematic.js",
     ):
         assert (out / "assets" / asset).is_file(), f"missing generated visual asset: {asset}"
 
@@ -100,8 +100,14 @@ def main() -> None:
     experience = (out / "assets" / "experience.css").read_text(encoding="utf-8")
     assert 'cinematic.css' in experience
     assert 'masterclass.css' in experience
+    assert 'ember-eclipse.css' in experience
     assert 'responsive.css' in experience
-    assert experience.index('cinematic.css') < experience.index('masterclass.css') < experience.index('responsive.css')
+    assert (
+        experience.index('cinematic.css')
+        < experience.index('masterclass.css')
+        < experience.index('ember-eclipse.css')
+        < experience.index('responsive.css')
+    )
     assert 'atelier.css' not in experience
 
     styles = (out / "assets" / "styles.css").read_text(encoding="utf-8")
@@ -119,6 +125,22 @@ def main() -> None:
         assert signature in masterclass, f"rendered visual-ratchet feature missing: {signature}"
     assert '.entropy-sun' in masterclass and 'z-index: 1' in masterclass
     assert 'prefers-reduced-motion' in masterclass and 'animation:none !important' in masterclass
+
+    # Footnote: Surface 0.29.i deliberately makes orange a localized light source rather than a uniform
+    # hero condition. These signatures protect the dark environmental default, eclipse corona and
+    # scroll-collapse mechanism while leaving actual visual approval to the Chromium screenshot matrix.
+    eclipse = (out / "assets" / "ember-eclipse.css").read_text(encoding="utf-8")
+    for signature in (
+        'CMPCT Surface 0.29.i',
+        '--hero-progress: 0',
+        'main::before',
+        '.hero::before',
+        'rgba(8,8,8,.92)',
+        'scale(calc(1 - var(--hero-progress) * .14))',
+        '@media (orientation: landscape) and (max-height: 520px)',
+        '@media (prefers-reduced-motion: reduce)',
+    ):
+        assert signature in eclipse, f"Ember Eclipse visual-ratchet feature missing: {signature}"
 
     # Footnote: width-only responsive CSS is insufficient for notched landscape phones, short laptops and
     # ultrawide displays. These signatures keep the actual ratio-aware design contract present in output;
@@ -141,6 +163,9 @@ def main() -> None:
     assert 'length: 1120' in behavior, "masterclass dot-field density regressed"
     assert 'scrollCompression' in behavior, "evidence field must retain scroll-driven physical compression"
     assert 'compressionRatio' in behavior and 'candidate_bytes' in behavior
+
+    motion = (out / "assets" / "motion.js").read_text(encoding="utf-8")
+    assert '--hero-progress' in motion and 'hero.offsetHeight * .72' in motion
 
     viewport_gate = Path("site/tests/viewport-matrix.mjs")
     assert viewport_gate.is_file(), "real-browser viewport matrix gate is required"
@@ -170,7 +195,7 @@ def main() -> None:
     assembly = (source / "assets" / "experience.js").read_text(encoding="utf-8")
     assert 'proof-renderer.js' in assembly and 'cinematic.js' in assembly
 
-    print(f"CMPCT public proof + restored cinematic + responsive surface: coherent ({SCHEMA})")
+    print(f"CMPCT public proof + restored cinematic + Ember Eclipse + responsive surface: coherent ({SCHEMA})")
 
 
 if __name__ == "__main__":
