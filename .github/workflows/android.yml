@@ -17,6 +17,10 @@ on:
       - 'tests/conformance/**'
       - '.github/workflows/android.yml'
 
+concurrency:
+  group: android-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build-and-device-smoke:
     runs-on: ubuntu-latest
