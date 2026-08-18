@@ -10,6 +10,30 @@
 
 Turn the successful v0.30 research representations into one understandable canonical product architecture instead of shipping a pile of parallel experiment facades.
 
+## Immediate exact-head defect — fix first
+
+Fresh authoritative PR-gate run `32105135629`, job `95612937412`, found one focused Geometry failure before the G0–G4 oracle was allowed to run:
+
+`tests/test_v030_geometry.py::test_regular_gap_discovery_is_content_driven`
+
+Fixture: `(b"abcdef" + b"\x1e") * 4000`.
+Expected: control separator `0x1e` must be nominated by `_delimiter_rank`.
+Observed: `[100, 99, 101, 102]`.
+
+Root cause: flat Geometry's recurrence score includes the incomplete prefix/suffix fragments as if they were complete delimiter intervals. The fixture ends on the delimiter, so the censored trailing fragment biases variance and lets ordinary periodic payload bytes outrank the true separator.
+
+Required correction:
+
+- compute regularity from **complete inter-occurrence intervals only** (`pos[i] - pos[i-1] - 1`);
+- do not include stream-edge fragments in recurrence variance;
+- retain the occurrence/segment/search bounds and deterministic tie-breaking;
+- keep this heuristic nomination-only: exact transformed payload/archive pricing still decides admission;
+- preserve/add a nearby footnote explaining why censored edge fragments are excluded;
+- keep the existing control-byte regression test and add an edge-phase property case if useful;
+- run the complete focused Geometry/G0-G4 tests before handoff.
+
+Do **not** lower `MAX_DELIMITER_REGULARITY`, change the frozen G0–G4 oracle threshold, or introduce filename/schema semantics to make the test pass.
+
 ## Scope
 
 - internalize PrefixGraph as a bounded depth-1 relation inside the owning v0.30 graph/compiler **or** produce a rigorously justified alternative canonical profile with equivalent accounting, locality, reader and portability guarantees;
