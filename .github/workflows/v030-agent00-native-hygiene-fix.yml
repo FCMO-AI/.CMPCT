@@ -2,9 +2,9 @@ name: CMPCT v0.30 Agent-00 native hygiene repair
 # ci-lane: deep
 
 on:
-  push:
+  pull_request:
     branches: [main]
-    paths: ['.github/workflows/v030-agent00-native-hygiene-fix.yml']
+    types: [edited]
 
 permissions:
   contents: write
@@ -15,6 +15,7 @@ concurrency:
 
 jobs:
   repair:
+    if: github.event.pull_request.number == 56
     runs-on: ubuntu-24.04
     timeout-minutes: 90
     steps:
@@ -130,6 +131,6 @@ jobs:
           git commit -m 'fix(v0.30): harden portable Rust API and lint contracts'
           git push origin HEAD:agent/v030-authoritative-integration
 
-# Footnote: this temporary workflow performs only count-checked exact substitutions and refuses to commit unless
-# rustfmt, Clippy with warnings denied, all Rust targets and the release build succeed. It is execution plumbing for
-# the sole active v0.30 agent, not a parallel engineering agent or a release-authority receipt, and is removed after use.
+# Footnote: this temporary workflow runs only when the closed convergence PR's description is deliberately edited,
+# avoiding the repository's normal PR-open/synchronize fan-out. Every source substitution is count-checked, and no
+# integration commit is emitted unless rustfmt, Clippy -D warnings, all Rust targets and release build succeed.
