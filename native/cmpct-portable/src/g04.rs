@@ -3,6 +3,7 @@ use crate::format::{
     parse_msgpack, safe_relpath, sha256, text, tree_digest, tree_hasher_prefix, u32_le, u64_le, uint,
     MAX_META_BYTES,
 };
+use crate::identity::R25Identity;
 use crate::{MemberReadStats, PortableEntry, PortableError};
 use crc32fast::Hasher as Crc32;
 use preflate_container::{PreflateContainerConfig, ProcessBuffer, RecreateContainerProcessor};
@@ -14,8 +15,6 @@ use std::io::{Cursor, Read, Seek, SeekFrom, Write};
 use std::path::Path;
 use std::sync::{Arc, Mutex};
 
-const MAGIC: &[u8; 8] = b"CMPNXG4\0";
-const TAIL: &[u8; 8] = b"CNG4T\0\0\0";
 const ENGINE: &str = "EntropyGraph-II-v030-G04Overlay-v1";
 const HEADER_SIZE: u64 = 108;
 const FOOTER_SIZE: u64 = 88;
@@ -118,16 +117,6 @@ impl Node {
     fn is_direct(&self) -> bool {
         matches!(self, Self::Direct { .. })
     }
-
-    fn logical_len(&self) -> usize {
-        match self {
-            Self::Direct { length, .. }
-            | Self::Delta { length, .. }
-            | Self::DeltaPack { length, .. }
-            | Self::Mosaic { length, .. }
-            | Self::PackMosaic { length, .. } => *length,
-        }
-    }
 }
 
 #[derive(Debug, Clone)]
@@ -146,6 +135,7 @@ enum GFile {
 
 #[derive(Debug)]
 pub(crate) struct G04Archive {
+    identity: R25Identity,
     entries: Vec<PortableEntry>,
     files: BTreeMap<String, GFile>,
     nodes: Vec<Node>,
@@ -178,14 +168,19 @@ struct AuthMeta {
 }
 
 impl G04Archive {
-    pub(crate) fn open(path: &Path) -> Result<Self, PortableError> {
+    pub(crate) fn open(path: &Path, identity: R25Identity) -> Result<Self, PortableError> {
+        if !matches!(identity, R25Identity::ResearchG04 | R25Identity::CanonicalG04) {
+            return Err(PortableError::Format(
+                "G0-G4 reader received a PrefixGraph profile identity".into(),
+            ));
+        }
         let mut file = File::open(path)?;
         let file_len = file.metadata()?.len();
         if file_len < HEADER_SIZE + FOOTER_SIZE {
             return Err(PortableError::Format("short G0-G4 archive".into()));
         }
-        let primary = read_primary(&mut file).ok();
-        let tail = read_tail(&mut file, file_len).ok();
+        let primary = read_primary(&mut file, identity).ok();
+        let tail = read_tail(&mut file, file_len, identity).ok();
         if primary.is_none() && tail.is_none() {
             return Err(PortableError::Integrity(
                 "no authenticated G0-G4 metadata copy".into(),
@@ -286,6 +281,7 @@ impl G04Archive {
             .collect();
 
         Ok(Self {
+            identity,
             entries,
             files: parsed.files,
             nodes: parsed.nodes,
@@ -299,6 +295,13 @@ impl G04Archive {
 
     pub(crate) fn entries(&self) -> &[PortableEntry] {
         &self.entries
+    }
+
+    pub(crate) fn entry_identity(&self, index: usize) -> Result<(u64, [u8; 32]), PortableError> {
+        let (_, file) = self.file_at(index)?;
+        Ok(match file {
+            GFile::Preflate { size, sha, .. } | GFile::Nodes { size, sha, .. } => (*size, *sha),
+        })
     }
 
     pub(crate) fn tail_authenticated(&self) -> bool {
@@ -372,7 +375,7 @@ impl G04Archive {
             logical_bytes: expected_size,
             decoded_context_bytes,
             amplification,
-            profile: "g04-r25",
+            profile: self.identity.profile_name(),
         })
     }
 
@@ -656,12 +659,12 @@ impl<'a> DecodeContext<'a> {
     }
 }
 
-fn read_primary(file: &mut File) -> Result<AuthMeta, PortableError> {
+fn read_primary(file: &mut File, identity: R25Identity) -> Result<AuthMeta, PortableError> {
     file.seek(SeekFrom::Start(0))?;
     let mut header = [0u8; HEADER_SIZE as usize];
     file.read_exact(&mut header)?;
-    if &header[0..8] != MAGIC {
-        return Err(PortableError::Format("not G0-G4 archive".into()));
+    if &header[0..8] != identity.magic() {
+        return Err(PortableError::Format("G0-G4 profile magic mismatch".into()));
     }
     let compressed_size = u64_le(&header[8..16])?;
     let raw_size = u64_le(&header[16..24])?;
@@ -702,14 +705,18 @@ fn read_primary(file: &mut File) -> Result<AuthMeta, PortableError> {
     })
 }
 
-fn read_tail(file: &mut File, file_len: u64) -> Result<AuthMeta, PortableError> {
+fn read_tail(
+    file: &mut File,
+    file_len: u64,
+    identity: R25Identity,
+) -> Result<AuthMeta, PortableError> {
     if file_len < FOOTER_SIZE {
         return Err(PortableError::Format("short G0-G4 tail".into()));
     }
     file.seek(SeekFrom::Start(file_len - FOOTER_SIZE))?;
     let mut footer = [0u8; FOOTER_SIZE as usize];
     file.read_exact(&mut footer)?;
-    if &footer[0..8] != TAIL {
+    if &footer[0..8] != identity.tail() {
         return Err(PortableError::Format("G0-G4 tail magic".into()));
     }
     let compressed_size = u64_le(&footer[8..16])?;
@@ -830,7 +837,10 @@ fn parse_meta(value: &Value, expected_count: Option<usize>) -> Result<ParsedMeta
                 }
             }
             Node::Mosaic { bases, .. } | Node::PackMosaic { bases, .. } => {
-                if bases.iter().any(|base| !nodes.get(*base).is_some_and(Node::is_direct)) {
+                if bases
+                    .iter()
+                    .any(|base| !nodes.get(*base).is_some_and(Node::is_direct))
+                {
                     return Err(PortableError::Format(
                         "G0-G4 mosaic dependency depth exceeds one".into(),
                     ));
@@ -990,7 +1000,11 @@ fn parse_bases(value: &Value, node_count: usize) -> Result<Vec<usize>, PortableE
     let mut seen = HashSet::with_capacity(values.len());
     let mut out = Vec::with_capacity(values.len());
     for value in values {
-        let id = uint(value, "G0-G4 mosaic base id", node_count.saturating_sub(1) as u64)? as usize;
+        let id = uint(
+            value,
+            "G0-G4 mosaic base id",
+            node_count.saturating_sub(1) as u64,
+        )? as usize;
         if !seen.insert(id) {
             return Err(PortableError::Format("duplicate G0-G4 mosaic base id".into()));
         }
@@ -1008,22 +1022,31 @@ fn parse_file(value: &Value, node_count: usize, record_count: usize) -> Result<G
         .ok_or_else(|| PortableError::Format("empty G0-G4 file descriptor".into()))?;
     match kind {
         "preflate" if row.len() == 4 => Ok(GFile::Preflate {
-            record: uint(&row[1], "G0-G4 preflate record id", record_count.saturating_sub(1) as u64)? as usize,
+            record: uint(
+                &row[1],
+                "G0-G4 preflate record id",
+                record_count.saturating_sub(1) as u64,
+            )? as usize,
             size: uint(&row[2], "G0-G4 preflate logical size", MAX_DECODE_UNIT)?,
             sha: digest32(&row[3], "G0-G4 preflate file digest")?,
         }),
         "nodes" if row.len() == 4 => {
             let ids = as_array(&row[1], "G0-G4 file node list")?;
             let mut nodes = Vec::with_capacity(ids.len());
-            let mut expected = 0u64;
             for id in ids {
-                let id = uint(id, "G0-G4 file node id", node_count.saturating_sub(1) as u64)? as usize;
-                nodes.push(id);
-                // Exact node-length sum is checked after all nodes are parsed by the caller's file stream.
-                expected = expected.saturating_add(1);
+                nodes.push(
+                    uint(
+                        id,
+                        "G0-G4 file node id",
+                        node_count.saturating_sub(1) as u64,
+                    )? as usize,
+                );
             }
-            let size = uint(&row[2], "G0-G4 file logical size", MAX_DECLARED_LOGICAL_BYTES)?;
-            let _ = expected;
+            let size = uint(
+                &row[2],
+                "G0-G4 file logical size",
+                MAX_DECLARED_LOGICAL_BYTES,
+            )?;
             Ok(GFile::Nodes {
                 nodes,
                 size,
@@ -1097,7 +1120,11 @@ fn lane_inverse(stored: &[u8], width: usize, logical_size: usize) -> Result<Vec<
     Ok(out)
 }
 
-fn delimiter_inverse(encoded: &[u8], descriptor_delimiter: u8, logical_size: usize) -> Result<Vec<u8>, PortableError> {
+fn delimiter_inverse(
+    encoded: &[u8],
+    descriptor_delimiter: u8,
+    logical_size: usize,
+) -> Result<Vec<u8>, PortableError> {
     if encoded.len() < 6
         || &encoded[0..4] != b"DGO1"
         || encoded[4] != descriptor_delimiter
