@@ -73,6 +73,10 @@ def test_website_attribution_is_additive_and_outside_proof_renderer() -> None:
     assert GROUP_CREDIT in attribution_js
     assert "fcmo-attribution" in attribution_css
 
+    # Footnote: the serving receipt prevents a stale visible surface label after a safe partial promotion.
+    assert "fetch('surface-revision.txt'" in attribution_js
+    assert "surface\\s+\\d+\\.\\d+\\.[a-z]+" in attribution_js
+
     # Footnote: evidence truth must remain independent from organizational provenance.
     assert "FCMO AI" not in proof_renderer
     assert GROUP_CREDIT not in proof_renderer
