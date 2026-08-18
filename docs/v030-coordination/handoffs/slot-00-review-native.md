@@ -59,6 +59,19 @@ Either:
 
 Do not emit a precise 1.0x measurement that was not measured. Final T02 selective-read evidence should use operation-derived stats for r25 and a truthful comparable r24 surface.
 
+## P1 — new native workflow must obey current CI topology
+
+`.github/workflows/native-v030-portable.yml` is a legitimate native compile/lint/conformance smoke lane, but it currently predates the reconciled mainline workflow policy.
+
+Before handoff:
+
+- declare `# ci-lane: fast` near the top if the measured job remains ordinary native PR feedback; if it routinely exceeds the fast-lane envelope, classify it honestly and route it accordingly;
+- add a PR/ref-scoped concurrency group with `cancel-in-progress: true`;
+- avoid duplicate feature-branch push + pull_request executions for the same authority. A narrowly documented branch-only push during isolated research is acceptable only if it cannot also double-run an open PR; otherwise prefer the path-scoped PR trigger plus `workflow_dispatch`;
+- run `python tools/check_ci_topology.py .github/workflows/native-v030-portable.yml` and include the exact output in T01 handoff.
+
+Do not weaken Rust tests, Python/Rust conformance or r24 delegation coverage merely to shorten the lane.
+
 ## Cross-lane identity dependency
 
 Do not freeze `CMPNXG4` / `CMPNXP1` into final native ABI/goldens. T03's current product architecture uses `CMP25G4\0` / `CMP25PG\0`; reconcile final identities and filesystem-manifest semantics after T03 reaches REVIEW.
