@@ -33,7 +33,7 @@ concurrency:
 jobs:
   proof-surface:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 18
     steps:
       - name: Check out repository
         uses: actions/checkout@v6
@@ -71,7 +71,9 @@ jobs:
           node --check site/src/assets/app.js
           node --check site/src/assets/experience.js
           node --check site/src/assets/motion.js
+          node --check site/src/assets/cinematic.js
           node --check site/src/assets/cmpct-browser-writer.js
+          node --check site/tests/viewport-matrix.mjs
 
       - name: Preserve Browser Lab canonical compatibility
         run: |
@@ -87,6 +89,30 @@ jobs:
               assert archive.read('copy/repeated.txt') == archive.read('docs/repeated.txt')
               assert archive.read('unique.txt') == b'small independent file\n'
           PY
+
+      - name: Install Chromium render harness
+        run: |
+          # Footnote: Playwright is CI-only and never ships with the public site. GitHub's Ubuntu runner
+          # already carries Chromium's ordinary system libraries; downloading only the pinned browser keeps
+          # this fast-lane gate deterministic and avoids mutating the runner with an apt transaction on every PR.
+          npm install --no-save --no-package-lock playwright@1.55.0
+          npx playwright install chromium
+
+      - name: Render responsive viewport matrix
+        run: |
+          python -m http.server 4173 --directory _site >/tmp/cmpct-site.log 2>&1 &
+          SERVER_PID=$!
+          trap 'kill "$SERVER_PID" 2>/dev/null || true' EXIT
+          node site/tests/viewport-matrix.mjs http://127.0.0.1:4173/ viewport-artifacts
+
+      - name: Preserve responsive render evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: cmpct-responsive-matrix-${{ github.sha }}
+          path: viewport-artifacts/
+          if-no-files-found: warn
+          retention-days: 7
 
       - name: Stamp validated main publication receipt
         if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
@@ -130,5 +156,5 @@ jobs:
           retention-days: 7
 
 # Footnote: Actions validates canonical source and, on main only, preserves the exact checked static tree
-# as a short-lived promotion handoff. It still does not deploy Pages: gh-pages remains the sole serving
-# branch, so publication is an explicit promotion of validated bytes rather than a workflow-owned build.
+# as a short-lived promotion handoff. The viewport artifact is visual evidence, not a deployment source.
+# Pages still serves only the explicitly promoted gh-pages tree.

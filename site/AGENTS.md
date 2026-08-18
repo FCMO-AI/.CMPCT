@@ -39,7 +39,7 @@ The following features may evolve, but they may not silently disappear or collap
 - the performance arena as a measured visual instrument;
 - deliberate chapter pacing, responsive composition and a visually finished Browser Lab.
 
-Every visual edit must be **rendered and inspected**, not approved from source code alone. At minimum inspect:
+Every visual edit must be **rendered and inspected**, not approved from source code alone. The minimum manual anchor remains:
 
 - desktop: 1440×1000;
 - mobile: 390×844;
@@ -50,7 +50,35 @@ Every visual edit must be **rendered and inspected**, not approved from source c
 - Browser Lab;
 - any region directly changed by the patch.
 
-For large redesigns, add 1920×1080 and tablet (~820px wide) inspection. Record defects found during rendering and correct them before merge. A CSS/JS feature that exists in source but is visually hidden, clipped, illegible, or compositionally weaker counts as a failed feature.
+Surface 0.29.h adds a machine-enforced physical viewport matrix. Any site-affecting PR must also pass
+`site/tests/viewport-matrix.mjs` through the public-proof workflow. The matrix deliberately covers width,
+height **and aspect ratio**, not just familiar device labels:
+
+- 320×568 compact phone;
+- 360×800 standard phone;
+- 390×844 tall phone;
+- 430×932 large phone;
+- 844×390 landscape phone;
+- 540×720 foldable/narrow inner display;
+- 768×1024 and 820×1180 tablet portrait;
+- 1024×768 tablet landscape;
+- 1024×600 short panel;
+- 1366×768 short laptop;
+- 1440×900 16:10 laptop;
+- 1280×1024 5:4 desktop;
+- 1920×1080 desktop;
+- 2560×1080 ultrawide;
+- 2560×1440 large desktop.
+
+The browser gate must retain screenshot artifacts and fail on document-level horizontal overflow, clipped
+proof values, wide-layout hero collisions, header collisions, information-graph node collisions, collapsed
+required surfaces, or impractically small controls. Those assertions are a floor, not a substitute for visual
+judgment: inspect the screenshots when a visual change is material, and add an assertion whenever rendering
+exposes a new concrete failure mode.
+
+For large redesigns, compare the viewport artifact against the last accepted surface rather than checking only
+whether the new screenshots are internally valid. A CSS/JS feature that exists in source but is visually hidden,
+clipped, illegible, compositionally weaker, or broken at an untested ratio counts as a failed feature.
 
 Visual changes must obey a quality ratchet:
 
