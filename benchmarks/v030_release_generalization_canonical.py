@@ -2,10 +2,12 @@ from __future__ import annotations
 
 """Canonical-byte authority for the frozen v0.30 15-workload release gate.
 
-All numeric thresholds and source identities remain owned by ``v030_release_generalization``. This adapter binds
-that immutable harness to the revision-25 canonical facade and enriches every row with the exact published
-archive SHA-256 plus its actual on-disk revision/profile. Size-equivalent research-envelope evidence is useful
-for development, but only these canonical bytes may close the release ledger.
+All numeric thresholds and historical source identities remain owned by ``v030_release_generalization``. This
+adapter binds that immutable harness to the single release product front door and enriches every selected archive
+with its exact SHA-256 and actual canonical revision/profile.
+
+Footnote: this file does not redefine the frozen 137,501,815-byte historical v0.29 substrate. Product r24-vs-r25
+framing parity is an additional gate in ``v030_release_ablation_canonical``; historical causality remains historical.
 """
 
 import argparse
@@ -14,7 +16,7 @@ import json
 from pathlib import Path
 
 from benchmarks import v030_release_generalization as B
-from experiments import entropygraph_v030_canonical as CANON
+from experiments import entropygraph_v030_release_product as CANON
 
 B.RC = CANON
 
@@ -38,7 +40,7 @@ def run(work_root: Path) -> dict:
         revision, profile = CANON._revision_for_archive(archive)
         verified = CANON.strong_verify(archive)
         if not verified.get("ok") or verified.get("tree_sha256") != row["tree_sha256"]:
-            raise RuntimeError(f"canonical archive verification drift: {row['suite']}/{row['name']}")
+            raise RuntimeError(f"canonical archive verification drift: {row['suite']}/{row['name']}: {verified!r}")
         row["archive_sha256"] = _sha256_file(archive)
         row["format_revision"] = revision
         row["format_profile"] = profile
@@ -46,8 +48,8 @@ def run(work_root: Path) -> dict:
         revisions[str(revision)] = revisions.get(str(revision), 0) + 1
         profiles[profile] = profiles.get(profile, 0) + 1
 
-    result["engine"] = "experiments/entropygraph_v030_canonical.py"
-    result["release_facade"] = "cmpct-v030-r25-v1"
+    result["engine"] = "experiments/entropygraph_v030_release_product.py"
+    result["release_facade"] = "cmpct-v030-release-product-v1"
     result["canonical_format"] = {
         "new_revision": 25,
         "fallback_revision": 24,
@@ -56,6 +58,7 @@ def run(work_root: Path) -> dict:
         "revisions_selected": revisions,
         "profiles_selected": profiles,
         "fallback_is_unwrapped": True,
+        "exact_product_floor": "r25 must strictly beat genuine r24 bytes; ties keep r24",
     }
     return result
 
