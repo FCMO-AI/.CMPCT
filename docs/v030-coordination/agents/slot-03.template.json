@@ -1,0 +1,11 @@
+{
+  "schema": "cmpct-v030-agent-claim-v1",
+  "slot": "slot-03",
+  "role": "graph-productization",
+  "status": "UNCLAIMED_TEMPLATE",
+  "branch": "agent/v030-coop-graph-productization",
+  "claim_owner": null,
+  "base_integration_sha_observed": null,
+  "task_ids": ["T03"],
+  "notes": "Create slot-03.json atomically; do not edit this template to claim the slot."
+}
