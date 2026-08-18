@@ -159,7 +159,7 @@ def assert_c_abi(path: Path, fixture: dict) -> None:
 
 def main() -> None:
     fixture = json.loads(FIXTURE.read_text(encoding="utf-8"))
-    assert fixture["schema"] == "cmpct-v030-native-canonical-golden-v1"
+    assert fixture["schema"] == "cmpct-v030-native-canonical-golden-v2"
     assert CLI.is_file() and LIB.is_file()
     with tempfile.TemporaryDirectory(prefix="cmpct-v030-canonical-") as td:
         tmp = Path(td)
@@ -174,6 +174,6 @@ def main() -> None:
 if __name__ == "__main__":
     main()
 
-# Footnote: the golden archive bytes come from an independent primitive grammar generator, not the product
-# encoder. Recovery, user/internal view separation, <=8x member locality, extraction and the C ABI therefore
-# receive an independent byte-level oracle rather than a self-consistency test.
+# Footnote: golden v2 replaces an external compressor with deterministic raw-block Zstandard framing. Recovery,
+# user/internal view separation, <=8x locality, extraction and C ABI checks now rest on byte fixtures that are
+# independent of both CMPCT implementation code and compressor-version optimizer decisions.
