@@ -5,7 +5,8 @@ from __future__ import annotations
 
 Footnote: the historical shell and the later rendered ratchets are explicit regression surfaces. Future
 content work may change evidence or copy, but it must not silently flatten the intricate hero, graph stage,
-light authority band, Browser Lab, or evidence-driven graphics that make the public site recognizably CMPCT.
+light authority band, Browser Lab, evidence-driven graphics, or the ratio-aware responsive behavior that
+make the public site recognizably CMPCT across physical screen classes.
 """
 
 import argparse
@@ -90,7 +91,7 @@ def main() -> None:
 
     for asset in (
         "styles.css", "motion.css", "polish.css", "experience.css", "cinematic.css", "masterclass.css",
-        "motion.js", "experience.js", "proof-renderer.js", "cinematic.js",
+        "responsive.css", "motion.js", "experience.js", "proof-renderer.js", "cinematic.js",
     ):
         assert (out / "assets" / asset).is_file(), f"missing generated visual asset: {asset}"
 
@@ -99,7 +100,8 @@ def main() -> None:
     experience = (out / "assets" / "experience.css").read_text(encoding="utf-8")
     assert 'cinematic.css' in experience
     assert 'masterclass.css' in experience
-    assert experience.index('cinematic.css') < experience.index('masterclass.css')
+    assert 'responsive.css' in experience
+    assert experience.index('cinematic.css') < experience.index('masterclass.css') < experience.index('responsive.css')
     assert 'atelier.css' not in experience
 
     styles = (out / "assets" / "styles.css").read_text(encoding="utf-8")
@@ -118,10 +120,46 @@ def main() -> None:
     assert '.entropy-sun' in masterclass and 'z-index: 1' in masterclass
     assert 'prefers-reduced-motion' in masterclass and 'animation:none !important' in masterclass
 
+    # Footnote: width-only responsive CSS is insufficient for notched landscape phones, short laptops and
+    # ultrawide displays. These signatures keep the actual ratio-aware design contract present in output;
+    # Chromium viewport-matrix CI then proves that the contract renders without measurable collisions.
+    responsive = (out / "assets" / "responsive.css").read_text(encoding="utf-8")
+    for signature in (
+        'env(safe-area-inset-left)',
+        'min-aspect-ratio: 21/9',
+        'max-aspect-ratio: 4/5',
+        'orientation: landscape',
+        'max-height: 520px',
+        '@media (max-width: 520px)',
+        '.graph-stage::after',
+        '.result-mini-grid { grid-template-columns: 1fr; }',
+        'pointer: coarse',
+    ):
+        assert signature in responsive, f"responsive visual-ratchet feature missing: {signature}"
+
     behavior = (out / "assets" / "cinematic.js").read_text(encoding="utf-8")
     assert 'length: 1120' in behavior, "masterclass dot-field density regressed"
     assert 'scrollCompression' in behavior, "evidence field must retain scroll-driven physical compression"
     assert 'compressionRatio' in behavior and 'candidate_bytes' in behavior
+
+    viewport_gate = Path("site/tests/viewport-matrix.mjs")
+    assert viewport_gate.is_file(), "real-browser viewport matrix gate is required"
+    viewport_text = viewport_gate.read_text(encoding="utf-8")
+    for viewport in (
+        'phone-compact-320x568',
+        'phone-landscape-844x390',
+        'tablet-portrait-768x1024',
+        'tablet-landscape-1024x768',
+        'short-panel-1024x600',
+        'laptop-short-1366x768',
+        'desktop-16x9-1920x1080',
+        'ultrawide-2560x1080',
+        'large-qhd-2560x1440',
+    ):
+        assert viewport in viewport_text, f"viewport class missing from render matrix: {viewport}"
+    assert 'documentScrollWidth' in viewport_text
+    assert 'information-graph node collision' in viewport_text
+    assert 'hero proof value clips outside score card' in viewport_text
 
     # Headline values stay runtime-derived. A later release must never inherit today's marketing number.
     assert "38.5%" not in html
@@ -132,7 +170,7 @@ def main() -> None:
     assembly = (source / "assets" / "experience.js").read_text(encoding="utf-8")
     assert 'proof-renderer.js' in assembly and 'cinematic.js' in assembly
 
-    print(f"CMPCT public proof + restored cinematic surface: coherent ({SCHEMA})")
+    print(f"CMPCT public proof + restored cinematic + responsive surface: coherent ({SCHEMA})")
 
 
 if __name__ == "__main__":
