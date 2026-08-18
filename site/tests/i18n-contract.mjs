@@ -45,6 +45,9 @@ for (const entry of PHRASES) {
     const value = words(entry[locale]);
     if (!value) { fail(`missing ${locale} phrase: ${source}`); continue; }
     if (locale === DEFAULT_LOCALE) continue;
+    // Footnote: a non-English catalogue entry that silently copies the English source is not curated
+    // localization. Universal technical terms may opt in explicitly with allowSame on the canonical entry.
+    if (value === source && !entry.allowSame) fail(`${locale} left English source unchanged without allowSame: ${source}`);
     const ratio = value.length / Math.max(source.length, 1);
     const limit = entry.compact ? QUALITY_CONTRACT.compactExpansionLimit : QUALITY_CONTRACT.generalExpansionLimit;
     if (source.length >= 6 && ratio > limit) fail(`${locale} expansion ${ratio.toFixed(2)}× > ${limit}×: ${source}`);
