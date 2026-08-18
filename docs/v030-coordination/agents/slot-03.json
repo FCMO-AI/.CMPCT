@@ -2,11 +2,11 @@
   "schema": "cmpct-v030-agent-claim-v1",
   "slot": "slot-03",
   "role": "graph-productization",
-  "status": "ACTIVE",
+  "status": "RELEASED",
   "branch": "agent/v030-coop-graph-productization",
   "claim_owner": "gpt-5.6-sol-graph-20260817",
   "claimed_at_utc": "2026-08-18T05:56:00Z",
-  "base_integration_sha_observed": "f651e5a724be3c2354917504de4258611e2027fa",
+  "released_to": "gpt-5.6-sol-sole-v030-20260818",
   "task_ids": ["T03"],
-  "notes": "Claimed atomically after slot-01 and slot-02 were already occupied. T03 final import/evidence will be reconciled against the post-T00 authoritative integration head."
+  "notes": "Specialist implementation was already imported/superseded. T03 is now owned directly by the sole active slot-00 executor; this slot must not perform further v0.30 work."
 }
