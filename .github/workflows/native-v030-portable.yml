@@ -1,0 +1,79 @@
+name: CMPCT v0.30 portable native reader
+
+on:
+  push:
+    branches:
+      - agent/v030-coop-native-portability
+  pull_request:
+    paths:
+      - 'native/cmpct-portable/**'
+      - 'native/cmpct-core/**'
+      - 'tests/native_v030_portable.py'
+      - 'tests/conformance/v030-r25-portable.json'
+      - '.github/workflows/native-v030-portable.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  portable-native:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install Python reference reader
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y zstd
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[test]'
+      - name: Rust format
+        working-directory: native/cmpct-portable
+        run: cargo fmt --check
+      - name: Rust lint
+        working-directory: native/cmpct-portable
+        run: cargo clippy --all-targets --message-format=short -- -D warnings
+      - name: Rust tests
+        working-directory: native/cmpct-portable
+        run: cargo test
+      - name: Rust release build
+        working-directory: native/cmpct-portable
+        run: cargo build --release
+      - name: Builder-independent Python/Rust/ABI conformance
+        run: python tests/native_v030_portable.py
+      - name: Revision-24 delegation smoke
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import tempfile
+          from cmpct.builder import Builder
+
+          with tempfile.TemporaryDirectory(prefix='cmpct-v030-r24-') as td:
+              td=Path(td); source=td/'source'; source.mkdir()
+              (source/'hello.txt').write_bytes((b'r24 delegation remains native\n') * 64)
+              out=td/'r24.cmpct'
+              Builder(source).build(out)
+              print(out)
+              Path('/tmp/cmpct-v030-r24-path').write_text(str(out))
+          PY
+        # Footnote: a separate shell block would lose TemporaryDirectory contents. The durable smoke below
+        # therefore creates its own ordinary fixture and checks only the dispatcher boundary; the existing
+        # native-core workflow remains the exhaustive revision-24 conformance suite.
+      - name: Revision-24 dispatcher gate
+        run: |
+          rm -rf /tmp/cmpct-v030-r24-src /tmp/cmpct-v030-r24.cmpct
+          mkdir -p /tmp/cmpct-v030-r24-src
+          printf 'r24 delegation remains native\n%.0s' {1..64} >/tmp/cmpct-v030-r24-src/hello.txt
+          python -m cmpct create /tmp/cmpct-v030-r24-src /tmp/cmpct-v030-r24.cmpct >/tmp/cmpct-v030-r24-build.json
+          native/cmpct-portable/target/release/cmpct-portable info /tmp/cmpct-v030-r24.cmpct | grep -Fx 'profile=r24'
+          native/cmpct-portable/target/release/cmpct-portable read /tmp/cmpct-v030-r24.cmpct hello.txt >/tmp/cmpct-v030-r24-read
+          cmp /tmp/cmpct-v030-r24-src/hello.txt /tmp/cmpct-v030-r24-read
+
+# Footnote: this workflow intentionally does not weaken or replace native-core.yml. The mature r24 suite
+# keeps owning revision-24 regression coverage; this job proves the new dispatcher plus both candidate r25
+# grammars, recovery, locality, ABI, transactional extraction and ZIP compatibility as an additional gate.
