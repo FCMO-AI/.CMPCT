@@ -157,3 +157,37 @@ def test_template_uses_current_fingerprint_and_manifest_owner(tmp_path: Path, mo
     assert template["owner_task"] == "T02"
     assert template["facts"]["regressions"] == 0
     assert template["facts"]["saving"].startswith("REPLACE_WITH_VALUE_>=_")
+
+
+def test_native_build_outputs_do_not_change_release_fingerprint(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(lock, "ROOT", tmp_path)
+    source = tmp_path / "native" / "cmpct-portable" / "src"
+    source.mkdir(parents=True)
+    (source / "lib.rs").write_text("pub const REVISION: u8 = 25;\n", encoding="utf-8")
+    target = tmp_path / "native" / "cmpct-portable" / "target" / "release"
+    target.mkdir(parents=True)
+    build_product = target / "cmpct-portable"
+    build_product.write_bytes(b"first-build")
+    manifest = {
+        "fingerprint_globs": [
+            "native/**/Cargo.toml",
+            "native/**/Cargo.lock",
+            "native/**/build.rs",
+            "native/**/src/**/*",
+            "native/**/tests/**/*",
+            "native/**/benches/**/*",
+            "native/**/vectors/**/*",
+            "native/**/golden/**/*",
+        ]
+    }
+
+    before, paths = lock.fingerprint(manifest)
+    build_product.write_bytes(b"different-machine-build")
+    after, paths_after = lock.fingerprint(manifest)
+
+    # Footnote: Cargo target output is execution residue, not release source. If it participated in the
+    # fingerprint, identical source could invalidate receipts merely because a different runner built it.
+    assert before == after
+    assert paths == paths_after == ["native/cmpct-portable/src/lib.rs"]
