@@ -45,6 +45,15 @@ def load_manifest(path: Path = DEFAULT_MANIFEST) -> dict[str, Any]:
         raise ValueError("release lock has no fingerprint surface")
     if not isinstance(data.get("required_receipts"), list) or not data["required_receipts"]:
         raise ValueError("release lock has no required receipts")
+    task_states = data.get("required_task_states", [])
+    if not isinstance(task_states, list):
+        raise ValueError("release lock required_task_states must be a list")
+    for spec in task_states:
+        if not isinstance(spec, dict) or not isinstance(spec.get("path"), str):
+            raise ValueError("release lock has malformed task-state requirement")
+        allowed = spec.get("allowed")
+        if not isinstance(allowed, list) or not allowed or any(not isinstance(item, str) or not item for item in allowed):
+            raise ValueError("release lock task-state requirement has no allowed states")
     return data
 
 
@@ -301,6 +310,40 @@ def template_for(receipt_id: str, manifest: dict[str, Any], fp: str) -> dict[str
     }
 
 
+def _task_state(path: Path) -> str | None:
+    prefix = "- **State:**"
+    try:
+        text = path.read_text(encoding="utf-8")
+    except (OSError, UnicodeError):
+        return None
+    for line in text.splitlines():
+        if line.startswith(prefix):
+            state = line[len(prefix) :].strip()
+            return state or None
+    return None
+
+
+def check_task_states(manifest: dict[str, Any]) -> tuple[dict[str, str | None], list[str]]:
+    observed: dict[str, str | None] = {}
+    errors: list[str] = []
+    for spec in manifest.get("required_task_states", []):
+        rel = spec.get("path")
+        allowed = spec.get("allowed")
+        try:
+            path = _safe_repo_file(rel)
+        except Exception as exc:
+            errors.append(f"task-state requirement: {exc}")
+            continue
+        state = _task_state(path)
+        observed[rel] = state
+        if state is None:
+            errors.append(f"task {rel} has no parseable '- **State:**' declaration")
+            continue
+        if state not in allowed:
+            errors.append(f"task {rel} state is {state!r}, expected one of {allowed!r}")
+    return observed, errors
+
+
 def check(manifest: dict[str, Any]) -> tuple[bool, dict[str, Any]]:
     fp, fingerprint_paths = fingerprint(manifest)
     receipt_dir = ROOT / manifest["receipt_directory"]
@@ -317,6 +360,9 @@ def check(manifest: dict[str, Any]) -> tuple[bool, dict[str, Any]]:
             failures[receipt_id] = errors
         else:
             passed.append(receipt_id)
+
+    task_states, task_failures = check_task_states(manifest)
+    unlocked = not failures and not task_failures
     report = {
         "schema": "cmpct-v030-release-lock-report-v1",
         "release": manifest["release"],
@@ -326,9 +372,11 @@ def check(manifest: dict[str, Any]) -> tuple[bool, dict[str, Any]]:
         "required_receipts": len(manifest["required_receipts"]),
         "passed_receipts": passed,
         "failures": failures,
-        "release_unlocked": not failures,
+        "task_states": task_states,
+        "task_state_failures": task_failures,
+        "release_unlocked": unlocked,
     }
-    return not failures, report
+    return unlocked, report
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -359,6 +407,10 @@ def main(argv: list[str] | None = None) -> int:
         for receipt_id, errors in report["failures"].items():
             print(f"- {receipt_id}")
             for error in errors:
+                print(f"    {error}")
+        if report["task_state_failures"]:
+            print("- coordination task states")
+            for error in report["task_state_failures"]:
                 print(f"    {error}")
     return 0 if ok else 1
 
