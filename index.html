@@ -8,6 +8,12 @@
   <meta name="description" content="CMPCT — a lossless archive project pushing size, access, integrity and recovery together, with public performance claims derived from committed evidence.">
   <title>.CMPCT — performance is the release contract</title>
   <link rel="stylesheet" href="assets/styles.css">
+  <!-- Footnote: motion.css is optional presentation; styles.css remains the structural baseline. -->
+  <link rel="stylesheet" href="assets/motion.css">
+  <!-- Footnote: polish.css contains visually verified responsive/accessibility corrections only. -->
+  <link rel="stylesheet" href="assets/polish.css">
+  <!-- Footnote: experience.css is the stable public-proof layer and loads last by design. -->
+  <link rel="stylesheet" href="assets/experience.css">
 </head>
 <body>
   <a class="skip-link" href="#main">Skip to content</a>
@@ -22,7 +28,7 @@
       <a href="#lab">Lab</a>
     </nav>
     <div class="header-right">
-      <span class="release-chip">v__CMPCT_VERSION__ · r__FORMAT_REVISION__</span>
+      <span class="release-chip">v0.29.0 · surface 0.29.i · r24</span>
       <a class="header-action" href="agent.json">Agent view</a>
       <a class="header-action" href="https://github.com/FCMO-AI/.CMPCT">GitHub ↗</a>
     </div>
@@ -43,7 +49,7 @@
             <a class="button button-ghost" href="#lab">Build a .cmpct</a>
             <a class="button button-text" href="#red-team">Show me where it loses ↓</a>
           </div>
-          <div class="truth-line"><span>Project v__CMPCT_VERSION__</span><span>Canonical format r__FORMAT_REVISION__</span><span>Build __BUILD_COMMIT__</span></div>
+          <div class="truth-line"><span>Project v0.29.0</span><span>Surface 0.29.i</span><span>Canonical format r24</span><span>Build e046c22a6970</span></div>
         </div>
         <aside class="hero-score" aria-live="polite">
           <span class="score-label">CURRENT MATCHED-TEST HEADLINE</span>
@@ -126,7 +132,7 @@
       <div class="canonical-crossing" aria-hidden="true"><span>^</span><i></i></div>
       <div class="canonical-copy"><p class="eyebrow">03 / SHIPPING VS FRONTIER</p><h2>One project.<br><em>Two authority levels.</em></h2><p>The research frontier is allowed to be aggressive. The canonical reader/writer is the interoperability contract. A beautiful site never lets a research representation borrow canonical authority.</p></div>
       <div class="canonical-status authority-map">
-        <article class="canonical-authority"><span>SHIPPING / CANONICAL</span><strong>r__FORMAT_REVISION__</strong><small>reader / writer contract</small></article>
+        <article class="canonical-authority"><span>SHIPPING / CANONICAL</span><strong>r24</strong><small>reader / writer contract</small></article>
         <article class="frontier-authority"><span>RESEARCH FRONTIER</span><strong id="frontier-version">—</strong><small id="frontier-label">benchmark candidate</small></article>
         <article><span>PUBLIC EVIDENCE</span><strong>OPEN</strong><small>claims derive from committed records</small></article>
       </div>
@@ -170,5 +176,8 @@
 
   <footer class="site-footer"><div><span class="brand-mark">^</span><strong>.CMPCT</strong><p>Performance is not a screenshot. It is a release contract.</p></div><nav><a href="https://github.com/FCMO-AI/.CMPCT">Repository ↗</a><a href="https://github.com/FCMO-AI/.CMPCT/blob/main/docs/FORMAT.md">Format ↗</a><a href="https://github.com/FCMO-AI/.CMPCT/blob/main/docs/BENCHMARKS.md">Benchmarks ↗</a></nav><p class="footer-note">Pre-1.0 · licensing proposal not yet adopted · committed benchmark evidence remains qualified by its recorded environment and semantics.</p></footer>
   <script type="module" src="assets/app.js"></script>
+  <script type="module" src="assets/motion.js"></script>
+  <!-- Footnote: one stable renderer owns the current/future proof experience. -->
+  <script type="module" src="assets/experience.js"></script>
 </body>
 </html>
