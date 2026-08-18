@@ -136,3 +136,17 @@ If a gate fails, preserve the machine result and mark the task `BLOCKED` or crea
 ## Handoff
 
 Set `REVIEW` with exact evidence files, run IDs/artifacts, environment/tool versions, raw/summary results, source SHA, topology checker output, and a concise statement of every remaining loss or unavailable comparator.
+
+## Slot-02 implementation checkpoint — awaiting exact-head fast/topology receipt
+
+The three coordinator review blockers above have been repaired on the specialist branch without deleting their original review record:
+
+- **Selective-read measurement:** `benchmarks/v030_perf_worker_canonical.py` instruments the actual canonical public `read_member` call in the same fresh process and reports observed decode context for Geometry, PrefixGraph, and genuine r24 fallback. Missing locality is a hard error; no `0.0x` default remains. `benchmarks/v030_release_selective_read_canonical.py` measures all selected canonical product profiles, chooses the largest regular user-visible member from `list_members`, excludes the internal r25 manifest and alias kinds, verifies exact SHA/length, preserves wall/RSS measurements, and enforces the unchanged <=8x law. Contract tests cover omitted locality, genuine r24 public-operation reachability, and target selection.
+- **Ablation semantics:** `benchmarks/v030_release_ablation_canonical.py` now emits two explicitly non-interchangeable ledgers. `historical_causality` preserves the exact repaired historical substrate and the 137,501,815 B / >=687,783 B / >=3 improved / zero-regression gates; `canonical_product_parity` independently rebuilds genuine r24 product bytes and compares them with the final canonical product on the same original filesystem workload. Every artifact carries a substrate identity, and cross-substrate exact-min arithmetic is a hard error. Contract tests deliberately omit/change the substrate charge and require rejection.
+- **CI topology:** all 17 coordinator-listed workflows are classified (eight `deep`, nine `release`), concurrency cancellation is preserved, and only two redundant research bare-PR triggers were removed. The slot-02 reactor itself is `release`-classified and now runs the exact 17-path topology checker command inside `evidence-fast` before handoff.
+
+Current handoff candidate lineage before this checkpoint commit: specialist `2ff883ea41f2c70fb3cd7151de5be7639f4069b5`, containing authoritative integration `f6a273bbb1e49e21096a1cc875eff35a8e3c1110` as a merge parent. PR #61 remains draft and targets `agent/v030-authoritative-integration` rather than `main`.
+
+Final canonical product parity/selective-read authority is intentionally **not** claimed on this specialist branch because T03's final product surface is still a cross-slot dependency. Product-dependent evidence must be rerun on slot-00's exact reconciled candidate after the corrected T03 implementation is imported. Queued, cancelled, superseded, pre-product, or pre-reconciliation runs are not release evidence.
+
+Footnote: this checkpoint is also the meaningful PR synchronization event used to obtain a fresh exact-head fast/topology receipt. The task remains `CLAIMED` until that receipt is green; it is not a ceremonial no-op commit.
