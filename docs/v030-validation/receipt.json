@@ -1,0 +1,7 @@
+{
+  "schema": "cmpct-v030-isolated-validation-v1",
+  "source_sha": "f985e91a7f21288f381cf2cd65191d2ff1e3b2f2",
+  "product_contracts": "failure",
+  "native": "failure",
+  "passed": false
+}
