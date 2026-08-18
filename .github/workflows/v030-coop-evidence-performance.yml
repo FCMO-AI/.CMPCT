@@ -53,6 +53,29 @@ jobs:
             tests/test_v030_release_generalization_contract.py \
             tests/test_v030_member_reader.py \
             tests/test_v030_canonical.py
+      - name: Run coordinator v0.30 topology ratchet
+        run: |
+          python tools/check_ci_topology.py \
+            .github/workflows/geometry-v030-breakthrough.yml \
+            .github/workflows/v030-authoritative-pr-gates.yml \
+            .github/workflows/v030-authoritative-v2-pr.yml \
+            .github/workflows/v030-canonical-authority.yml \
+            .github/workflows/v030-external-competitors.yml \
+            .github/workflows/v030-g04-overlay-oracle.yml \
+            .github/workflows/v030-geometry-overlay-oracle.yml \
+            .github/workflows/v030-gir-build-rehab.yml \
+            .github/workflows/v030-gir-focused-complete.yml \
+            .github/workflows/v030-gir-hardening.yml \
+            .github/workflows/v030-hierarchical-geometry.yml \
+            .github/workflows/v030-prefixgraph-oracle.yml \
+            .github/workflows/v030-release-fuzz.yml \
+            .github/workflows/v030-release-generalization.yml \
+            .github/workflows/v030-release-performance.yml \
+            .github/workflows/v030-release-reader.yml \
+            .github/workflows/v030-shared-portfolio-rehab.yml
+          python tools/check_ci_topology.py .github/workflows/v030-coop-evidence-performance.yml
+          # Footnote: the first invocation is the exact 17-path command required by T02's coordinator review;
+          # the second keeps this specialist reactor subject to the same ratchet without changing that receipt.
       - name: Public-surface guard
         if: always()
         run: python tools/check_public_surface.py
@@ -186,35 +209,47 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -e '.[test]'
           python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
-      - name: Pin four-way ablation semantics
+      - name: Pin two-substrate ablation semantics
         run: python -m pytest -q tests/test_v030_release_ablation_contract.py tests/test_v030_canonical.py
-      - name: Run exact four-configuration complete-artifact ablation
+      - name: Run historical causality plus canonical product parity
         run: |
           mkdir -p benchmark-artifacts
           python benchmarks/v030_release_ablation_canonical.py \
             --work-root benchmark-artifacts/ablation-work \
             --output benchmark-artifacts/ablation.json
-      - name: Enforce non-additive digest-addressed ablation contract
+      - name: Enforce non-additive substrate-safe ablation contract
         run: |
           python - <<'PY'
           import json
           from pathlib import Path
           d=json.loads(Path('benchmark-artifacts/ablation.json').read_text())
-          c=d['contract']; t=d['totals']; g=d['gate']
-          assert c['variants']==['v029','geometry_only','prefixgraph_only','combined']
-          assert c['expected_v029_aggregate_bytes']==137501815
-          assert c['minimum_release_saving_bytes']==687783
-          assert t['v029']['archive_bytes']==137501815
-          assert t['combined']['regressed_rows']==0
-          assert t['combined']['improved_rows']>=3
-          assert t['combined']['saving_vs_v029_bytes']>=687783
-          assert g['all_variant_trees_verified'] is True
-          assert g['all_selected_artifacts_sha256_addressed'] is True
-          assert g['combined_is_exact_complete_artifact_tournament'] is True
-          assert g['no_additive_savings_credit'] is True
+          c=d['contract']; h=d['historical_causality']; p=d['canonical_product_parity']; g=d['gate']
+          ht=h['totals']; hg=h['gate']; pt=p['totals']; pg=p['gate']
+          assert d['schema']=='cmpct-v030-canonical-ablation-v2'
+          assert c['historical_variants']==['v029','geometry_only','prefixgraph_only','combined']
+          assert c['expected_v029_historical_aggregate_bytes']==137501815
+          assert c['minimum_historical_release_saving_bytes']==687783
+          assert c['minimum_historical_improved_rows']==3
+          assert c['historical_regression_tolerance_bytes']==0
+          assert c['product_regression_tolerance_bytes']==0
+          assert ht['v029']['archive_bytes']==137501815
+          assert ht['combined']['regressed_rows']==0
+          assert ht['combined']['improved_rows']>=3
+          assert ht['combined']['saving_vs_v029_bytes']>=687783
+          assert hg['all_variant_trees_verified'] is True
+          assert hg['all_selected_artifacts_sha256_addressed'] is True
+          assert hg['combined_is_exact_equivalent_artifact_tournament'] is True
+          assert hg['no_additive_savings_credit'] is True
+          assert hg['passed'] is True
+          assert pt['regressed_rows']==0
+          assert pg['zero_product_byte_regressions'] is True
+          assert pg['aggregate_product_no_regression'] is True
+          assert pg['passed'] is True
+          assert g['historical_causality_passed'] is True
+          assert g['canonical_product_parity_passed'] is True
           assert g['passed'] is True
           PY
-      - name: Upload exact ablation ledger
+      - name: Upload exact two-substrate ablation ledger
         if: always()
         uses: actions/upload-artifact@v6
         with:
@@ -305,25 +340,31 @@ jobs:
             tests/test_v030_member_reader.py \
             tests/test_v030_release_reader_policy.py \
             tests/test_v030_canonical.py
-      - name: Run balanced fresh-process selective-member evidence
+      - name: Run balanced fresh-process canonical product selective-member evidence
         run: |
           mkdir -p benchmark-artifacts
           python benchmarks/v030_release_selective_read_canonical.py \
             --work-root benchmark-artifacts/selective-work \
             --output benchmark-artifacts/selective.json
-      - name: Enforce exact member and locality contract
+      - name: Enforce exact observed member and locality contract
         run: |
           python - <<'PY'
           import json
           from pathlib import Path
           d=json.loads(Path('benchmark-artifacts/selective.json').read_text())
           c=d['contract']; t=d['totals']; g=d['gate']
+          assert d['schema']=='cmpct-v030-canonical-selective-read-v2'
           assert c['maximum_member_read_amplification']==8.0
+          assert c['missing_locality_behavior']=='hard failure; no numeric default'
           assert t['targets']==3
-          assert t['measured_new_representation_rows']>=1
-          assert g['all_measured_members_exact'] is True
-          assert g['all_measured_rows_within_locality_ceiling'] is True
-          assert g['all_measured_reads_are_strict_member_scope'] is True
+          assert t['measured_product_rows']==3
+          assert t['max_observed_member_read_amplification']<=8.0
+          assert g['all_canonical_product_profiles_measured'] is True
+          assert g['all_targets_are_regular_user_visible_members'] is True
+          assert g['all_members_exact'] is True
+          assert g['all_locality_is_operation_observed'] is True
+          assert g['all_rows_within_locality_ceiling'] is True
+          assert g['all_reads_are_strict_member_scope'] is True
           assert g['balanced_fresh_process_repetitions'] is True
           assert g['passed'] is True
           PY
@@ -391,8 +432,8 @@ jobs:
           if-no-files-found: warn
           retention-days: 90
 
-# Footnote: this workflow is the slot-02 evidence reactor, not release authority by itself.  A green specialist
+# Footnote: this workflow is the slot-02 evidence reactor, not release authority by itself. A green specialist
 # branch proves the harness and current candidate evidence on its exact SHA; slot-00 must still import T01/T03,
 # freeze one reconciled integration SHA, and rerun the same gates there before any durable v0.30 release record or
-# public claim can be accepted.  A red result remains evidence and must never be converted to green by changing a
-# workload, comparator, timing boundary, or threshold.
+# public claim can be accepted. A red result remains evidence and must never be converted to green by changing a
+# workload, comparator, timing boundary, semantic substrate, or threshold.
