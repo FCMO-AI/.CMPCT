@@ -83,7 +83,11 @@ function installScrollDepth() {
     ticking = false;
     const rect = hero.getBoundingClientRect();
     const progress = Math.max(-220, Math.min(220, -rect.top));
+    const normalized = Math.max(0, Math.min(1, -rect.top / Math.max(hero.offsetHeight * .72, 1)));
     hero.style.setProperty('--hero-scroll', progress.toFixed(1));
+    root.style.setProperty('--hero-progress', normalized.toFixed(4));
+    // Footnote: normalized progress is presentation-only state. It lets authored light fields contract
+    // with the same hero scroll journey without coupling decoration to benchmark or archive semantics.
   };
 
   const requestPaint = () => {
