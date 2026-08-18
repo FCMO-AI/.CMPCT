@@ -1,49 +1,43 @@
 """Canonical CMPCT v0.30 product implementation with isolated revision-25 profile state.
 
-The implementation body is preserved verbatim in ``entropygraph_v030_canonical_final_impl``.  This front module
-loads that exact source against an isolated module graph whose Geometry, PrefixGraph, reader, admission and shared
-portfolio globals are private to the release product.  Ordinary research modules therefore keep their historical
-CMPNX profile identities and cannot observe canonical r25 profile rebinding through import order or concurrency.
+The reviewed implementation body is preserved in ``entropygraph_v030_canonical_final_impl.py`` and executed
+*inside this public module's global namespace* while its Geometry, PrefixGraph, reader, admission and shared-
+portfolio imports are temporarily routed to private canonical module namespaces. Ordinary research modules
+therefore keep their historical CMPNX identities, while public canonical helpers retain normal Python dependency
+injection/monkeypatch behavior because their ``__globals__`` is this module rather than a hidden re-export target.
 
-Footnote: the split is intentionally mechanical rather than a rewrite.  Keeping the reviewed implementation blob
-intact avoids deleting design notes or subtly changing product behavior while removing the process-global profile
-mutation defect found during T03 adversarial review.
+Footnote: executing the preserved source here is deliberately different from importing it and copying function
+objects afterward. Re-exported functions keep the hidden module's globals, so callers replacing a public reader
+or candidate provider would appear to patch the canonical API while the operation silently used another object.
+One execution namespace plus isolated dependencies removes both hazards without rewriting the reviewed product
+implementation or introducing a second handwritten archive grammar.
 """
 from __future__ import annotations
 
-import importlib
+from pathlib import Path
 
 from experiments import entropygraph_v030_profile_isolation as _ISOLATION
 
+_WRAPPER_DOC = __doc__
+_IMPLEMENTATION_PATH = Path(__file__).with_name("entropygraph_v030_canonical_final_impl.py")
+
 _ISOLATION.assert_research_modules_unchanged()
 with _ISOLATION.canonical_import_context():
-    _IMPLEMENTATION = importlib.import_module("experiments.entropygraph_v030_canonical_final_impl")
+    _SOURCE = _IMPLEMENTATION_PATH.read_bytes()
+    # Footnote: compile the preserved implementation as a module but execute it in *this* module dictionary.
+    # Functions/classes therefore resolve later global substitutions through the public canonical namespace,
+    # while the import statements executed right now bind only the isolated release-profile dependencies.
+    exec(compile(_SOURCE, str(_IMPLEMENTATION_PATH), "exec"), globals(), globals())
 
-# Re-export the complete implementation surface, including intentionally testable private helpers. Functions
-# retain the implementation module's globals, which are already bound to the isolated canonical dependency graph.
-for _name, _value in vars(_IMPLEMENTATION).items():
-    if _name in {
-        "__name__",
-        "__package__",
-        "__loader__",
-        "__spec__",
-        "__file__",
-        "__cached__",
-        "__builtins__",
-        "__doc__",
-    }:
-        continue
-    globals()[_name] = _value
-
-# The release wrapper itself owns these diagnostic handles so tests can prove isolation directly.
+# Keep the public wrapper's architectural explanation instead of exposing the preserved implementation's older
+# module docstring. The executable implementation itself remains unchanged below the source boundary.
+__doc__ = _WRAPPER_DOC
 PROFILE_ISOLATION = _ISOLATION
-IMPLEMENTATION_MODULE = _IMPLEMENTATION
+IMPLEMENTATION_SOURCE = _IMPLEMENTATION_PATH
 
-# Footnote: no ordinary research module is mutated after this import. The implementation's historical
-# ``_revision25_profile_context`` now snapshots and restores private clone state only; its assignments are
-# idempotent inside that isolated graph and invisible to concurrent research calls.
+# No ordinary research module is mutated after initialization. The preserved implementation's historical
+# ``_revision25_profile_context`` now snapshots/restores private clone state only; those assignments are
+# idempotent inside the isolated graph and invisible to concurrent research calls.
 
 if __name__ == "__main__":
-    # Preserve the pre-split CLI contract. Importing the implementation under its private module name means its
-    # own ``if __name__ == '__main__'`` block cannot fire, so the wrapper delegates explicitly.
-    _IMPLEMENTATION._main()
+    _main()
