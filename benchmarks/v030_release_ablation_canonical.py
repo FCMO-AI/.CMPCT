@@ -1,24 +1,23 @@
 from __future__ import annotations
 
-"""Exact four-configuration ablation for the canonical CMPCT v0.30 candidate.
+"""Exact v0.30 evidence split into historical causality and canonical product parity.
 
-The release checklist requires a causal comparison of four *complete artifacts* on the same repaired
-15-workload frontier:
+Two questions must remain separate because they have different byte semantics:
 
-1. accepted v0.29;
-2. Geometry enabled, PrefixGraph disabled;
-3. PrefixGraph enabled, Geometry disabled;
-4. both v0.30 feature toggles enabled through the canonical release tournament.
+* ``historical_causality`` reproduces the repaired 15-workload v0.29 research frontier exactly. v0.29,
+  Geometry-only, PrefixGraph-only and the complete-artifact combined tournament all consume the same original
+  historical content tree. This is the only section allowed to enforce the frozen 137,501,815-byte v0.29
+  aggregate and the inherited >=687,783-byte revision floor.
+* ``canonical_product_parity`` compares a genuine released r24 product archive with the final canonical v0.30
+  product archive on the same original filesystem tree. Revision-25 filesystem-manifest bytes are paid here,
+  and genuine r24 fallback is allowed. This section is an additional no-regression/product-worthiness gate; it
+  never rewrites the historical v0.29 baseline.
 
-No row is credited from detached payload estimates and no independent savings are added.  Every selected
-artifact is strong-verified to the exact frozen source tree and SHA-256-addressed before its bytes enter the
-ledger.  The current "combined" architecture is deliberately a complete-artifact tournament: it may select
-either Geometry or PrefixGraph, but it does not claim that one archive simultaneously contains both mechanisms.
-That distinction is recorded explicitly so a future compositional grammar cannot inherit this evidence by name.
+A byte comparison is valid only between complete artifacts carrying the same ``substrate_id``. Cross-substrate
+``min``/saving arithmetic is rejected before it can enter a ledger.
 
-Footnote: the PrefixGraph-only ablation retains the same accepted-v0.29 fallback semantics as a release feature.
-Measuring raw PrefixGraph without its fallback would answer a different question (the research grammar's cost),
-and could make a safe feature look regressive merely by disabling the immutable release floor.
+Footnote: productization is allowed to cost bytes. Evidence is not allowed to hide that cost by charging a
+filesystem manifest to only one side or by retroactively pretending the accepted research archive was r24.
 """
 
 import argparse
@@ -27,14 +26,21 @@ import json
 from pathlib import Path
 import shutil
 
+from cmpct.builder import Builder
+from cmpct.reader import CMPCT
 from benchmarks import v030_release_generalization as GENERAL
 from experiments import entropygraph_v029_release as V029
-from experiments import entropygraph_v030_canonical as CANON
 from experiments import entropygraph_v030_geometry_overlay_g04 as G04
 from experiments import entropygraph_v030_prefixgraph as PG
 from experiments import entropygraph_v030_release_candidate as RC
 
+HISTORICAL_SUBSTRATE = "historical-repaired-content-tree-v1"
+PRODUCT_SUBSTRATE = "canonical-filesystem-product-v1"
 VARIANTS = ("v029", "geometry_only", "prefixgraph_only", "combined")
+
+
+class ProductSurfaceUnavailable(RuntimeError):
+    """Final T03 canonical product API has not yet been imported into the reconciled candidate."""
 
 
 def _sha256_file(path: Path) -> str:
@@ -45,26 +51,29 @@ def _sha256_file(path: Path) -> str:
     return digest.hexdigest()
 
 
+def _require_same_substrate(*artifacts: dict) -> str:
+    ids = {artifact.get("substrate_id") for artifact in artifacts}
+    if None in ids or len(ids) != 1:
+        raise RuntimeError(f"incomparable complete-artifact substrates: {sorted(str(x) for x in ids)}")
+    return str(next(iter(ids)))
+
+
 def _select_prefixgraph_candidate(v029_bytes: int, prefixgraph_bytes: int | None, admitted: bool) -> str:
-    """Return the exact PrefixGraph-only tournament winner without approximate or additive scoring."""
     if admitted and prefixgraph_bytes is not None and prefixgraph_bytes < v029_bytes:
         return "prefixgraph"
     return "v029-fallback"
 
 
-def _artifact(path: Path, expected_tree: str, *, selected: str, details: dict | None = None) -> dict:
-    CANON.install_revision25_profiles()
-    verified = CANON.strong_verify(path)
+def _historical_artifact(path: Path, expected_tree: str, *, selected: str, details: dict | None = None) -> dict:
+    verified = RC.strong_verify(path)
     if not verified.get("ok") or verified.get("tree_sha256") != expected_tree:
-        raise RuntimeError(f"ablation artifact failed canonical strong verification: {selected}: {verified!r}")
-    revision, profile = CANON._revision_for_archive(path)
+        raise RuntimeError(f"historical ablation artifact failed strict verification: {selected}: {verified!r}")
     return {
+        "substrate_id": HISTORICAL_SUBSTRATE,
         "selected": selected,
         "archive_bytes": path.stat().st_size,
         "archive_sha256": _sha256_file(path),
-        "format_revision": revision,
-        "format_profile": profile,
-        "tree_sha256": verified["tree_sha256"],
+        "tree_sha256": expected_tree,
         "tree_verified": True,
         "details": details or {},
     }
@@ -94,13 +103,13 @@ def _build_corpora(work_root: Path):
             yield suite, workload, accepted[(suite, workload.name)]
 
 
-def _measure_row(suite: str, source: Path, expected: dict, archive_root: Path) -> dict:
+def _historical_row(suite: str, source: Path, expected: dict, archive_root: Path) -> dict:
     expected_tree = expected["tree_sha256"]
-    live_tree = CANON.treehash(source)
+    live_tree = RC.treehash(source)
     if live_tree != expected_tree:
-        raise RuntimeError(f"ablation source-tree drift: {suite}/{source.name}: {live_tree} != {expected_tree}")
+        raise RuntimeError(f"historical ablation source-tree drift: {suite}/{source.name}: {live_tree} != {expected_tree}")
 
-    row_root = archive_root / suite / source.name
+    row_root = archive_root / "historical" / suite / source.name
     row_root.mkdir(parents=True, exist_ok=True)
     v029_path = row_root / "v029.cmpct"
     geometry_path = row_root / "geometry-only.cmpct"
@@ -111,27 +120,24 @@ def _measure_row(suite: str, source: Path, expected: dict, archive_root: Path) -
     expected_v029_bytes = int(expected["accepted_v029_bytes"])
     if v029_path.stat().st_size != expected_v029_bytes:
         raise RuntimeError(
-            f"ablation accepted-v0.29 byte drift: {suite}/{source.name}: "
-            f"{v029_path.stat().st_size} != {expected_v029_bytes}"
+            f"accepted-v0.29 byte drift: {suite}/{source.name}: {v029_path.stat().st_size} != {expected_v029_bytes}"
         )
-    v029 = _artifact(v029_path, expected_tree, selected="v029", details={"build": v029_stats})
+    v029 = _historical_artifact(v029_path, expected_tree, selected="v029", details={"build": v029_stats})
 
-    CANON.install_revision25_profiles()
     geometry_stats = G04.build(source, geometry_path)
-    geometry = _artifact(
+    geometry = _historical_artifact(
         geometry_path,
         expected_tree,
         selected="geometry" if geometry_stats.get("selected") == "geometry-overlay-g04" else "v029-fallback",
         details={
             "builder_selected": geometry_stats.get("selected"),
             "saving_vs_v029_bytes": int(geometry_stats.get("saving_vs_v029_bytes", 0)),
-            "max_selected_member_read_amplification": float(
-                geometry_stats.get("max_selected_member_read_amplification", 0.0)
-            ),
+            "max_selected_member_read_amplification": geometry_stats.get("max_selected_member_read_amplification"),
         },
     )
+    _require_same_substrate(v029, geometry)
     if geometry["archive_bytes"] > v029["archive_bytes"]:
-        raise RuntimeError("Geometry-only ablation violated immutable v0.29 size floor")
+        raise RuntimeError("Geometry-only historical ablation violated immutable v0.29 size floor")
 
     pg_contract_eligible, pg_reject_reason = RC._prefixgraph_eligibility(source, expected_tree)
     pg_stats = None
@@ -139,9 +145,8 @@ def _measure_row(suite: str, source: Path, expected: dict, archive_root: Path) -
     pg_admitted = False
     prefixgraph_raw = None
     if pg_contract_eligible:
-        CANON.install_revision25_profiles()
         pg_stats = PG.build(source, prefixgraph_path)
-        prefixgraph_raw = _artifact(
+        prefixgraph_raw = _historical_artifact(
             prefixgraph_path,
             expected_tree,
             selected="prefixgraph-raw",
@@ -165,8 +170,8 @@ def _measure_row(suite: str, source: Path, expected: dict, archive_root: Path) -
         prefixgraph_only = dict(prefixgraph_raw)
         prefixgraph_only["selected"] = "prefixgraph"
     else:
-        # Footnote: this is an evidence alias to the already-hashed exact v0.29 artifact, not an invented byte
-        # count.  Keeping the same digest makes the fallback identity auditable without writing a duplicate file.
+        # Footnote: this fallback aliases the exact already-hashed v0.29 complete artifact. It does not invent a
+        # smaller byte count or silently replace the historical substrate with canonical r24.
         prefixgraph_only = dict(v029)
         prefixgraph_only["selected"] = "v029-fallback"
     prefixgraph_only["details"] = {
@@ -178,29 +183,25 @@ def _measure_row(suite: str, source: Path, expected: dict, archive_root: Path) -
         "locality": pg_locality,
     }
 
-    CANON.install_revision25_profiles()
-    combined_stats = CANON.build(source, combined_path)
-    combined = _artifact(
+    combined_stats = RC.build(source, combined_path)
+    combined = _historical_artifact(
         combined_path,
         expected_tree,
         selected=str(combined_stats.get("selected")),
         details={
             "builder_selected": combined_stats.get("selected"),
-            "max_selected_member_read_amplification": float(
-                combined_stats.get("max_selected_member_read_amplification", 0.0)
-            ),
+            "max_selected_member_read_amplification": combined_stats.get("max_selected_member_read_amplification"),
             "prefixgraph_admitted": bool(combined_stats.get("prefixgraph_admitted", False)),
         },
     )
 
+    _require_same_substrate(v029, geometry, prefixgraph_only, combined)
     expected_combined = min(geometry["archive_bytes"], prefixgraph_only["archive_bytes"])
     if combined["archive_bytes"] != expected_combined:
         raise RuntimeError(
-            f"combined tournament is not the exact minimum enabled complete artifact: "
+            f"historical combined tournament is not the exact minimum equivalent complete artifact: "
             f"{suite}/{source.name}: combined={combined['archive_bytes']} expected={expected_combined}"
         )
-    if combined["archive_bytes"] > v029["archive_bytes"]:
-        raise RuntimeError("combined ablation violated immutable v0.29 size floor")
 
     variants = {
         "v029": v029,
@@ -211,6 +212,7 @@ def _measure_row(suite: str, source: Path, expected: dict, archive_root: Path) -
     return {
         "suite": suite,
         "name": source.name,
+        "substrate_id": HISTORICAL_SUBSTRATE,
         "baseline_identity": expected["baseline_identity"],
         "tree_sha256": expected_tree,
         "variants": variants,
@@ -223,16 +225,78 @@ def _measure_row(suite: str, source: Path, expected: dict, archive_root: Path) -
     }
 
 
-def run(work_root: Path) -> dict:
-    shutil.rmtree(work_root, ignore_errors=True)
-    work_root.mkdir(parents=True)
-    rows = [
-        _measure_row(suite, source, expected, work_root / "archives")
-        for suite, source, expected in _build_corpora(work_root)
-    ]
-    if len(rows) != 15:
-        raise RuntimeError(f"v0.30 canonical ablation expected 15 workloads, got {len(rows)}")
+def _load_product_module():
+    from experiments import entropygraph_v030_canonical as canonical
 
+    required = ("build", "strong_verify", "list_members", "read_member", "build_ablation", "treehash")
+    missing = [name for name in required if not callable(getattr(canonical, name, None))]
+    if missing:
+        raise ProductSurfaceUnavailable(
+            "final canonical product surface has not been imported; missing: " + ", ".join(missing)
+        )
+    return canonical
+
+
+def _r24_product_build(source: Path, out: Path) -> dict:
+    stats = dict(Builder(source).build(out))
+    with CMPCT(out) as reader:
+        verified_files = reader.verify()
+    return {
+        "substrate_id": PRODUCT_SUBSTRATE,
+        "selected": "canonical-r24",
+        "archive_bytes": out.stat().st_size,
+        "archive_sha256": _sha256_file(out),
+        "verified_files": int(verified_files),
+        "format_revision": 24,
+        "format_profile": "canonical-r24",
+        "build": stats,
+    }
+
+
+def _product_row(suite: str, source: Path, archive_root: Path, canonical) -> dict:
+    row_root = archive_root / "product" / suite / source.name
+    row_root.mkdir(parents=True, exist_ok=True)
+    r24_path = row_root / "r24.cmpct"
+    candidate_path = row_root / "v030-product.cmpct"
+
+    r24 = _r24_product_build(source, r24_path)
+    candidate_stats = dict(canonical.build(source, candidate_path))
+    candidate_verify = dict(canonical.strong_verify(candidate_path))
+    expected_user_tree = canonical.treehash(source)
+    if not candidate_verify.get("ok"):
+        raise RuntimeError(f"canonical product verification failed: {suite}/{source.name}: {candidate_verify!r}")
+    if candidate_verify.get("tree_sha256") != expected_user_tree:
+        raise RuntimeError(
+            f"canonical product user-tree identity mismatch: {suite}/{source.name}: "
+            f"{candidate_verify.get('tree_sha256')} != {expected_user_tree}"
+        )
+
+    candidate = {
+        "substrate_id": PRODUCT_SUBSTRATE,
+        "selected": str(candidate_stats.get("selected")),
+        "archive_bytes": candidate_path.stat().st_size,
+        "archive_sha256": _sha256_file(candidate_path),
+        "tree_sha256": expected_user_tree,
+        "tree_verified": True,
+        "format_revision": candidate_stats.get("format_revision"),
+        "format_profile": candidate_stats.get("format_profile"),
+        "filesystem_manifest_sha256": candidate_stats.get("filesystem_manifest_sha256"),
+        "build": candidate_stats,
+        "verify": candidate_verify,
+    }
+    _require_same_substrate(r24, candidate)
+    return {
+        "suite": suite,
+        "name": source.name,
+        "substrate_id": PRODUCT_SUBSTRATE,
+        "r24": r24,
+        "v030": candidate,
+        "saving_vs_r24_bytes": r24["archive_bytes"] - candidate["archive_bytes"],
+        "regressed_vs_r24": candidate["archive_bytes"] > r24["archive_bytes"],
+    }
+
+
+def _historical_totals(rows: list[dict]) -> tuple[dict, dict]:
     totals = {}
     for variant in VARIANTS:
         archive_bytes = sum(int(row["variants"][variant]["archive_bytes"]) for row in rows)
@@ -248,11 +312,11 @@ def run(work_root: Path) -> dict:
                 for row in rows
             ),
         }
-
     combined = totals["combined"]
     gate = {
         "exact_workload_count": len(rows) == 15,
         "exact_v029_aggregate": totals["v029"]["archive_bytes"] == GENERAL.EXPECTED_V029_TOTAL,
+        "one_historical_substrate": all(row["substrate_id"] == HISTORICAL_SUBSTRATE for row in rows),
         "all_variant_trees_verified": all(
             row["variants"][variant]["tree_verified"] for row in rows for variant in VARIANTS
         ),
@@ -264,7 +328,7 @@ def run(work_root: Path) -> dict:
         "combined_no_size_regressions": combined["regressed_rows"] == 0,
         "combined_minimum_improved_rows": combined["improved_rows"] >= GENERAL.MIN_IMPROVED_ROWS,
         "combined_revision_sized_saving": combined["saving_vs_v029_bytes"] >= GENERAL.MIN_RELEASE_SAVING_BYTES,
-        "combined_is_exact_complete_artifact_tournament": all(
+        "combined_is_exact_equivalent_artifact_tournament": all(
             row["variants"]["combined"]["archive_bytes"]
             == min(
                 row["variants"]["geometry_only"]["archive_bytes"],
@@ -277,28 +341,87 @@ def run(work_root: Path) -> dict:
         ),
     }
     gate["passed"] = all(gate.values())
+    return totals, gate
+
+
+def _product_totals(rows: list[dict]) -> tuple[dict, dict]:
+    r24_bytes = sum(int(row["r24"]["archive_bytes"]) for row in rows)
+    v030_bytes = sum(int(row["v030"]["archive_bytes"]) for row in rows)
+    totals = {
+        "workloads": len(rows),
+        "r24_product_bytes": r24_bytes,
+        "v030_product_bytes": v030_bytes,
+        "saving_vs_r24_bytes": r24_bytes - v030_bytes,
+        "improved_rows": sum(row["v030"]["archive_bytes"] < row["r24"]["archive_bytes"] for row in rows),
+        "regressed_rows": sum(bool(row["regressed_vs_r24"]) for row in rows),
+    }
+    gate = {
+        "exact_workload_count": len(rows) == 15,
+        "one_product_substrate": all(row["substrate_id"] == PRODUCT_SUBSTRATE for row in rows),
+        "all_candidate_trees_verified": all(row["v030"]["tree_verified"] for row in rows),
+        "all_product_artifacts_sha256_addressed": all(
+            len(row[side]["archive_sha256"]) == 64 for row in rows for side in ("r24", "v030")
+        ),
+        "zero_product_byte_regressions": totals["regressed_rows"] == 0,
+        "aggregate_product_no_regression": v030_bytes <= r24_bytes,
+    }
+    gate["passed"] = all(gate.values())
+    return totals, gate
+
+
+def run(work_root: Path) -> dict:
+    shutil.rmtree(work_root, ignore_errors=True)
+    work_root.mkdir(parents=True)
+    corpora = list(_build_corpora(work_root))
+    if len(corpora) != 15:
+        raise RuntimeError(f"v0.30 evidence expected 15 workloads, got {len(corpora)}")
+
+    historical_rows = [
+        _historical_row(suite, source, expected, work_root / "archives")
+        for suite, source, expected in corpora
+    ]
+    historical_totals, historical_gate = _historical_totals(historical_rows)
+
+    canonical = _load_product_module()
+    product_rows = [
+        _product_row(suite, source, work_root / "archives", canonical)
+        for suite, source, _expected in corpora
+    ]
+    product_totals, product_gate = _product_totals(product_rows)
+
+    gate = {
+        "historical_causality_passed": historical_gate["passed"],
+        "canonical_product_parity_passed": product_gate["passed"],
+    }
+    gate["passed"] = all(gate.values())
     return {
-        "schema": "cmpct-v030-canonical-ablation-v1",
-        "engine": "experiments/entropygraph_v030_canonical.py",
-        "release_facade": "cmpct-v030-r25-v1",
+        "schema": "cmpct-v030-canonical-ablation-v2",
         "contract": {
-            "variants": list(VARIANTS),
-            "expected_v029_aggregate_bytes": GENERAL.EXPECTED_V029_TOTAL,
-            "minimum_release_saving_bytes": GENERAL.MIN_RELEASE_SAVING_BYTES,
-            "minimum_improved_rows": GENERAL.MIN_IMPROVED_ROWS,
-            "regression_tolerance_bytes": 0,
+            "historical_substrate": HISTORICAL_SUBSTRATE,
+            "product_substrate": PRODUCT_SUBSTRATE,
+            "historical_variants": list(VARIANTS),
+            "expected_v029_historical_aggregate_bytes": GENERAL.EXPECTED_V029_TOTAL,
+            "minimum_historical_release_saving_bytes": GENERAL.MIN_RELEASE_SAVING_BYTES,
+            "minimum_historical_improved_rows": GENERAL.MIN_IMPROVED_ROWS,
+            "historical_regression_tolerance_bytes": 0,
             "maximum_member_read_amplification": GENERAL.MAX_MEMBER_READ_AMP,
-            "combined_semantics": (
-                "both feature toggles enabled in one complete-artifact tournament; current architecture selects "
-                "the exact smaller admitted Geometry-only or PrefixGraph-only artifact and never sums savings"
-            ),
-            "prefixgraph_only_semantics": (
-                "PrefixGraph candidate plus exact accepted-v0.29 fallback; raw PrefixGraph bytes are retained as "
-                "diagnostic evidence even when the release-safe feature toggle falls back"
+            "product_regression_tolerance_bytes": 0,
+            "comparison_rule": "complete artifacts may be compared only when substrate_id is identical",
+            "baseline_rule": (
+                "137,501,815 B belongs only to the historical repaired content-tree substrate; canonical r24 "
+                "product bytes are independently rebuilt and never substituted for that identity"
             ),
         },
-        "rows": rows,
-        "totals": totals,
+        "historical_causality": {
+            "rows": historical_rows,
+            "totals": historical_totals,
+            "gate": historical_gate,
+        },
+        "canonical_product_parity": {
+            "rows": product_rows,
+            "totals": product_totals,
+            "gate": product_gate,
+        },
         "gate": gate,
     }
 
@@ -311,9 +434,19 @@ def main() -> None:
     result = run(args.work_root)
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(result, indent=2, default=str) + "\n", encoding="utf-8")
-    print(json.dumps({"totals": result["totals"], "gate": result["gate"]}, indent=2), flush=True)
+    print(
+        json.dumps(
+            {
+                "historical_totals": result["historical_causality"]["totals"],
+                "product_totals": result["canonical_product_parity"]["totals"],
+                "gate": result["gate"],
+            },
+            indent=2,
+        ),
+        flush=True,
+    )
     if not result["gate"]["passed"]:
-        raise SystemExit("canonical v0.30 four-configuration ablation gate failed")
+        raise SystemExit("canonical v0.30 historical-causality/product-parity gate failed")
 
 
 if __name__ == "__main__":
