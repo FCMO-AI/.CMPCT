@@ -1,10 +1,10 @@
 # T04 — Canonical release closure
 
-- **Owner:** slot-00
+- **Owner:** v0.30 sole executor
 - **Priority:** P0 after dependencies
 - **State:** BLOCKED
 - **Branch:** `agent/v030-authoritative-integration`
-- **Dependencies:** T00, T01, T02 and T03 must reach their required completed implementation/evidence state before T04 can become REVIEW. The executable lock itself requires T00–T03 = `DONE`; residual research may remain only when it is explicitly outside the promoted v0.30 product path.
+- **Dependencies:** T00, T01, T02 and T03 must reach their required completed implementation/evidence state before T04 can become `REVIEW`. The executable lock itself requires T00–T03 = `DONE`; residual research may remain only when it is explicitly outside the promoted v0.30 product path.
 
 ## Objective
 
@@ -16,8 +16,8 @@ The final release fingerprint includes canonical format/native/portability docum
 
 Required order:
 
-1. Integrate and review the final T01/T02/T03 implementation deltas; no mid-flight specialist branch is release authority.
-2. Reconcile current `main` again if it moved, then run T00 final regression/adversarial review and move T00 to `DONE` only when the integrated technical candidate is coherent.
+1. Finish the T01/T02/T03 implementation deltas directly on the authoritative branch; no other branch is release authority.
+2. Reconcile current `main` again if it moved, then complete T00 final regression/adversarial review and move T00 to `DONE` only when the integrated technical candidate is coherent.
 3. Complete canonical version/format/release-note/docs/site source from already accepted durable facts. Do not publish or merge yet.
 4. Set T01/T02/T03 to `DONE` only after their implementation and durable evidence obligations are genuinely closed. Move T04 from `BLOCKED` to **`REVIEW`** once the final release/public source is present and internally consistent.
 5. Freeze the release-critical content fingerprint with:
@@ -35,7 +35,7 @@ Footnote: T04 intentionally sits at `REVIEW` when the pre-release lock opens. Re
 
 ## Scope
 
-- final adversarial completion audit against `docs/V030_RELEASE_GATES.md` and root `AGENTS.md`;
+- final adversarial completion audit against `docs/V030_RELEASE_GATES.md`, `docs/V030_EXECUTION_MODEL.md`, and root `AGENTS.md`;
 - canonical version/format decision and version-discipline check;
 - `docs/FORMAT.md`, `docs/CURRENT_STATE.md`, `docs/HISTORY.md`, `docs/NATIVE_CORE.md`, `docs/PORTABILITY.md`, release note and benchmark-history consistency;
 - public API/CLI/package smoke and upgrade/fallback behavior;
@@ -49,7 +49,7 @@ Footnote: T04 intentionally sits at `REVIEW` when the pre-release lock opens. Re
 
 Before T04 may enter `REVIEW`:
 
-1. T00–T03 are `DONE` on the integrated branch according to the release manifest.
+1. T00–T03 are `DONE` on the authoritative branch according to the release manifest.
 2. Canonical v0.30.0/r25 source, release note, documentation and site source exist and contain no unsupported claim.
 3. Website headline numbers are derived from durable accepted benchmark records, not copied from research prose.
 4. Version discipline/public-surface/site source checks are green or represented by exact required final evidence to be rerun on the frozen fingerprint.
