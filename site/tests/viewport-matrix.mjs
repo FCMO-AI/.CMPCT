@@ -45,19 +45,24 @@ const keySelectors = [
   '.site-footer',
 ];
 
-/* Footnote: the historical motion layer reveals later chapters with IntersectionObserver. A full-page
-   screenshot does not itself guarantee those observers are exercised. Scroll representative chapter
-   surfaces through the real viewport first, then return to the hero; visibility assertions can remain
-   strict instead of incorrectly treating intentional pre-reveal opacity as a responsive failure. */
+/* Footnote: this mirrors motion.js's complete IntersectionObserver target vocabulary. The two hero
+   entries are included as well because value-pulse animation can temporarily affect their opacity during
+   data hydration. Traversing the same objects a human scrolls past means retained screenshots represent
+   the activated experience, not an artificial pre-reveal state. */
 const revealSelectors = [
   '.hero-score',
   '#hero-metrics',
   '.regression-banner',
+  '.section-head',
   '.arena',
   '.performance-split',
   '.graph-stage',
+  '.mechanism-grid',
   '.canonical-band',
+  '.parity-kpis',
   '.benchmark-table-wrap',
+  '.benchmark-notes',
+  '.lab-status',
   '.lab-grid',
   '.release-rail',
   '.site-footer',
@@ -210,10 +215,11 @@ try {
     await page.waitForTimeout(160);
 
     for (const selector of revealSelectors) {
-      const target = page.locator(selector).first();
-      if (await target.count()) {
-        await target.scrollIntoViewIfNeeded();
-        await page.waitForTimeout(100);
+      const targets = page.locator(selector);
+      const count = await targets.count();
+      for (let index = 0; index < count; index += 1) {
+        await targets.nth(index).scrollIntoViewIfNeeded();
+        await page.waitForTimeout(90);
       }
     }
 
