@@ -1,0 +1,88 @@
+name: CMPCT v0.30 Agent-00 candidate validator
+# ci-lane: deep
+
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/v030-agent00-validation.yml']
+
+permissions:
+  contents: write
+
+concurrency:
+  group: cmpct-v030-agent00-validation
+  cancel-in-progress: true
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    outputs:
+      candidate_sha: ${{ steps.meta.outputs.sha }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: agent/v030-authoritative-integration
+      - id: meta
+        run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y zstd gcc
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[test]'
+      - name: Product contracts
+        run: |
+          python -m py_compile experiments/entropygraph_v030_canonical_final.py experiments/entropygraph_v030_release_product.py benchmarks/v030_perf_worker_canonical.py benchmarks/v030_release_ablation_product.py benchmarks/v030_release_performance_product.py benchmarks/v030_release_selective_read_product.py benchmarks/v030_external_competitors_canonical.py
+          python -m pytest -q tests/test_v030_canonical_final.py tests/test_v030_release_ablation_contract.py tests/test_v030_release_selective_read_contract.py tests/test_v030_release_generalization_contract.py
+      - name: Independent r25 golden reproducibility
+        run: python tests/generate_v030_canonical_goldens.py --check
+      - name: Native authority
+        working-directory: native/cmpct-portable
+        run: |
+          cargo fmt --check
+          cargo clippy --all-targets --message-format=short -- -D warnings
+          cargo test --all-targets
+          cargo build --release
+      - name: Native acceptance
+        run: |
+          python tests/native_v030_canonical.py
+          python tests/native_v030_r24_verify_authority.py --binary native/cmpct-portable/target/release/cmpct-portable
+
+  receipt:
+    if: always()
+    needs: [validate]
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: main
+      - name: Persist diagnostic receipt
+        env:
+          RESULT: ${{ needs.validate.result }}
+          CANDIDATE_SHA: ${{ needs.validate.outputs.candidate_sha }}
+        run: |
+          mkdir -p docs/v030-validation
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          result=os.environ.get('RESULT','unknown')
+          data={'schema':'cmpct-v030-agent00-validation-v1','candidate_sha':os.environ.get('CANDIDATE_SHA',''),'result':result,'passed':result=='success'}
+          Path('docs/v030-validation/agent00-main-receipt.json').write_text(json.dumps(data,indent=2)+'\n')
+          PY
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add docs/v030-validation/agent00-main-receipt.json
+          git commit -m 'ci(v0.30): record Agent-00 candidate validation' || true
+          git push origin HEAD:main
+
+# Footnote: temporary pre-freeze diagnostic infrastructure. It validates the private integration ref from the
+# default-branch Actions trust context and persists only a pass/fail receipt. It is removed before the v0.30
+# release fingerprint; final release evidence still runs on the exact main-bound candidate.
