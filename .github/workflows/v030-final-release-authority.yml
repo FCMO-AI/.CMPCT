@@ -8,6 +8,8 @@ on:
     paths:
       - 'experiments/entropygraph_v030_release_product.py'
       - 'experiments/entropygraph_v030_canonical_final.py'
+      - 'experiments/entropygraph_v030_canonical_final_impl.py'
+      - 'experiments/entropygraph_v030_profile_isolation.py'
       - 'benchmarks/v030_release_ablation_product.py'
       - 'benchmarks/v030_release_ablation_canonical.py'
       - 'benchmarks/v030_release_performance_product.py'
@@ -16,6 +18,7 @@ on:
       - 'benchmarks/v030_perf_worker_canonical.py'
       - 'benchmarks/v030_external_competitors_canonical.py'
       - 'tests/test_v030_canonical_final.py'
+      - 'tests/test_v030_profile_isolation.py'
       - '.github/workflows/v030-final-release-authority.yml'
   workflow_dispatch:
 
@@ -48,7 +51,9 @@ jobs:
       - name: Compile the promoted product/evidence surface
         run: |
           python -m py_compile \
+            experiments/entropygraph_v030_profile_isolation.py \
             experiments/entropygraph_v030_canonical_final.py \
+            experiments/entropygraph_v030_canonical_final_impl.py \
             experiments/entropygraph_v030_release_product.py \
             benchmarks/v030_perf_worker_canonical.py \
             benchmarks/v030_release_ablation_product.py \
@@ -59,6 +64,7 @@ jobs:
       - name: Run product boundary and benchmark-contract tests
         run: |
           python -m pytest -q \
+            tests/test_v030_profile_isolation.py \
             tests/test_v030_canonical_final.py \
             tests/test_v030_release_ablation_contract.py \
             tests/test_v030_release_selective_read_contract.py \
@@ -226,3 +232,5 @@ jobs:
 # Footnote: historical mechanism causality and canonical product parity intentionally remain different byte/tree
 # domains. The former owns the immutable 137,501,815 B / 687,783 B threshold; the latter proves the new r25
 # framing never regresses the genuine r24 product. Conflating them would make product metadata appear free.
+# The isolated wrapper, preserved implementation body and isolation loader are all release-critical triggers;
+# changing any one can alter canonical profile dispatch even when the public wrapper filename itself is unchanged.
