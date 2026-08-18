@@ -373,18 +373,6 @@ pub(crate) fn uint(value: &Value, label: &str, maximum: u64) -> Result<u64, Port
         .ok_or_else(|| PortableError::Format(format!("{label} integer declaration")))
 }
 
-pub(crate) fn sint(
-    value: &Value,
-    label: &str,
-    minimum: i64,
-    maximum: i64,
-) -> Result<i64, PortableError> {
-    value
-        .as_i64()
-        .filter(|value| *value >= minimum && *value <= maximum)
-        .ok_or_else(|| PortableError::Format(format!("{label} integer declaration")))
-}
-
 pub(crate) fn number(value: &Value, label: &str) -> Result<f64, PortableError> {
     let number = if let Some(value) = value.as_f64() {
         value

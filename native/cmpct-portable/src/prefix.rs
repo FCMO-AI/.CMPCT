@@ -35,7 +35,7 @@ struct PrefixRecord {
 }
 
 #[derive(Debug)]
-pub(crate) struct PrefixArchive {
+pub struct PrefixArchive {
     identity: R25Identity,
     entries: Vec<PortableEntry>,
     records: Vec<PrefixRecord>,
@@ -75,12 +75,12 @@ impl PrefixArchive {
                 "no authenticated PrefixGraph metadata copy".into(),
             ));
         }
-        if let (Some(left), Some(right)) = (&primary, &tail) {
-            if left.meta_sha != right.meta_sha {
-                return Err(PortableError::Integrity(
-                    "conflicting authenticated PrefixGraph metadata copies".into(),
-                ));
-            }
+        if let (Some(left), Some(right)) = (&primary, &tail)
+            && left.meta_sha != right.meta_sha
+        {
+            return Err(PortableError::Integrity(
+                "conflicting authenticated PrefixGraph metadata copies".into(),
+            ));
         }
         let chosen = primary.as_ref().or(tail.as_ref()).expect("metadata copy");
         let (entries, mut records, tree_sha) = parse_meta(&chosen.value)?;
@@ -341,9 +341,9 @@ fn read_tail(
     })
 }
 
-fn parse_meta(
-    value: &Value,
-) -> Result<(Vec<PortableEntry>, Vec<PrefixRecord>, [u8; 32]), PortableError> {
+type ParsedPrefixMeta = (Vec<PortableEntry>, Vec<PrefixRecord>, [u8; 32]);
+
+fn parse_meta(value: &Value) -> Result<ParsedPrefixMeta, PortableError> {
     let map = as_map(value, "PrefixGraph metadata")?;
     if uint(field(map, "v")?, "PrefixGraph metadata revision", 1)? != 1
         || text(field(map, "engine")?, "PrefixGraph engine")? != "PrefixGraph-depth1-v1"
@@ -369,19 +369,19 @@ fn parse_meta(
             "PrefixGraph dependency depth exceeds one".into(),
         ));
     }
-    if let Some(value) = optional_field(map, "max_file_bytes") {
-        if uint(value, "PrefixGraph max_file_bytes", MAX_FILE_BYTES)? > MAX_FILE_BYTES {
-            return Err(PortableError::Limit(
-                "PrefixGraph file-size declaration exceeds policy".into(),
-            ));
-        }
+    if let Some(value) = optional_field(map, "max_file_bytes")
+        && uint(value, "PrefixGraph max_file_bytes", MAX_FILE_BYTES)? > MAX_FILE_BYTES
+    {
+        return Err(PortableError::Limit(
+            "PrefixGraph file-size declaration exceeds policy".into(),
+        ));
     }
-    if let Some(value) = optional_field(map, "max_member_read_amplification") {
-        if number(value, "PrefixGraph read amplification")? > MAX_MEMBER_READ_AMP {
-            return Err(PortableError::Limit(
-                "PrefixGraph read-amplification declaration exceeds policy".into(),
-            ));
-        }
+    if let Some(value) = optional_field(map, "max_member_read_amplification")
+        && number(value, "PrefixGraph read amplification")? > MAX_MEMBER_READ_AMP
+    {
+        return Err(PortableError::Limit(
+            "PrefixGraph read-amplification declaration exceeds policy".into(),
+        ));
     }
 
     let mut seen = HashSet::with_capacity(files.len());

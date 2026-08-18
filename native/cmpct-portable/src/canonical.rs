@@ -81,7 +81,7 @@ impl ContentArchive {
 }
 
 #[derive(Debug)]
-pub(crate) struct Canonical25Archive {
+pub struct Canonical25Archive {
     identity: R25Identity,
     content: ContentArchive,
     manifest: FsManifest,
@@ -429,12 +429,11 @@ fn apply_metadata_best_effort(path: &Path, metadata: &FsMetadata, is_symlink: bo
             use std::os::unix::fs::PermissionsExt;
             let _ = fs::set_permissions(path, fs::Permissions::from_mode(metadata.mode));
         }
-        if let Ok(file) = File::open(path) {
-            if let Some(time) = std::time::UNIX_EPOCH
+        if let Ok(file) = File::open(path)
+            && let Some(time) = std::time::UNIX_EPOCH
                 .checked_add(std::time::Duration::from_nanos(metadata.mtime_ns as u64))
-            {
-                let _ = file.set_times(std::fs::FileTimes::new().set_modified(time));
-            }
+        {
+            let _ = file.set_times(std::fs::FileTimes::new().set_modified(time));
         }
     }
     let _ = (metadata.uid, metadata.gid, &metadata.xattrs);

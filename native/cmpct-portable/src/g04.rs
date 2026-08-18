@@ -140,7 +140,7 @@ enum GFile {
 }
 
 #[derive(Debug)]
-pub(crate) struct G04Archive {
+pub struct G04Archive {
     identity: R25Identity,
     entries: Vec<PortableEntry>,
     files: BTreeMap<String, GFile>,
@@ -195,12 +195,12 @@ impl G04Archive {
                 "no authenticated G0-G4 metadata copy".into(),
             ));
         }
-        if let (Some(left), Some(right)) = (&primary, &tail) {
-            if left.meta_sha != right.meta_sha || left.merkle != right.merkle {
-                return Err(PortableError::Integrity(
-                    "conflicting authenticated G0-G4 metadata copies".into(),
-                ));
-            }
+        if let (Some(left), Some(right)) = (&primary, &tail)
+            && (left.meta_sha != right.meta_sha || left.merkle != right.merkle)
+        {
+            return Err(PortableError::Integrity(
+                "conflicting authenticated G0-G4 metadata copies".into(),
+            ));
         }
         let chosen = primary.as_ref().or(tail.as_ref()).expect("metadata copy");
         let parsed = parse_meta(&chosen.value, chosen.expected_count)?;

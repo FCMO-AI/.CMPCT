@@ -5,9 +5,14 @@ mod identity;
 mod manifest;
 mod prefix;
 
-use crate::canonical::Canonical25Archive;
+#[doc(hidden)]
+pub use crate::canonical::Canonical25Archive;
 use crate::format::safe_relpath;
+#[doc(hidden)]
+pub use crate::g04::G04Archive;
 use crate::identity::{R25Identity, classify};
+#[doc(hidden)]
+pub use crate::prefix::PrefixArchive;
 use cmpct_core::Archive as R24Archive;
 use std::ffi::CStr;
 use std::fs::{self, File};
@@ -93,8 +98,8 @@ pub struct MemberReadStats {
 pub enum PortableArchive {
     Revision24(R24Archive),
     Canonical25(Canonical25Archive),
-    ResearchG04(g04::G04Archive),
-    ResearchPrefixGraph(prefix::PrefixArchive),
+    ResearchG04(G04Archive),
+    ResearchPrefixGraph(PrefixArchive),
 }
 
 impl PortableArchive {
@@ -112,12 +117,10 @@ impl PortableArchive {
             R25Identity::CanonicalG04 | R25Identity::CanonicalPrefix => {
                 Ok(Self::Canonical25(Canonical25Archive::open(path, identity)?))
             }
-            R25Identity::ResearchG04 => {
-                Ok(Self::ResearchG04(g04::G04Archive::open(path, identity)?))
-            }
-            R25Identity::ResearchPrefix => Ok(Self::ResearchPrefixGraph(
-                prefix::PrefixArchive::open(path, identity)?,
-            )),
+            R25Identity::ResearchG04 => Ok(Self::ResearchG04(G04Archive::open(path, identity)?)),
+            R25Identity::ResearchPrefix => Ok(Self::ResearchPrefixGraph(PrefixArchive::open(
+                path, identity,
+            )?)),
         }
     }
 
@@ -276,7 +279,7 @@ impl PortableArchive {
             .entries()
             .get(index)
             .cloned()
-            .ok_or_else(|| PortableError::Range)?;
+            .ok_or(PortableError::Range)?;
         if entry.kind == 1 || offset > entry.size {
             return Err(PortableError::Range);
         }
@@ -477,7 +480,7 @@ impl Write for RangeWriter<'_> {
 }
 
 fn unique_sibling(destination: &Path, role: &str) -> Result<PathBuf, PortableError> {
-    let parent = destination.parent().unwrap_or_else(|| Path::new("."));
+    let parent = destination.parent().unwrap_or(Path::new("."));
     let name = destination
         .file_name()
         .and_then(|value| value.to_str())
@@ -535,6 +538,12 @@ fn status(error: &PortableError) -> PortableStatus {
     }
 }
 
+/// Opens an archive through the stable C ABI.
+///
+/// # Safety
+/// `path` must point to a readable NUL-terminated C string and `out` must point to writable storage for one
+/// `PortableArchive*`. The returned handle must later be passed to `cmpct_portable_close` exactly once.
+// Footnote: the ABI validates nulls, UTF-8, archive grammar and panics; pointer provenance remains the caller's contract.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn cmpct_portable_open(
     path: *const c_char,
@@ -560,6 +569,10 @@ pub unsafe extern "C" fn cmpct_portable_open(
     }
 }
 
+/// Releases a handle returned by `cmpct_portable_open`.
+///
+/// # Safety
+/// `handle` must be null or a live pointer returned by `cmpct_portable_open` that has not already been closed.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn cmpct_portable_close(handle: *mut PortableArchive) {
     if !handle.is_null() {
@@ -567,6 +580,10 @@ pub unsafe extern "C" fn cmpct_portable_close(handle: *mut PortableArchive) {
     }
 }
 
+/// Returns the detected archive revision through the C ABI.
+///
+/// # Safety
+/// `handle` must reference a live `PortableArchive` and `out` must point to writable `u32` storage.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn cmpct_portable_revision(
     handle: *const PortableArchive,
@@ -579,6 +596,10 @@ pub unsafe extern "C" fn cmpct_portable_revision(
     PortableStatus::Ok as c_int
 }
 
+/// Returns the number of logical entries through the C ABI.
+///
+/// # Safety
+/// `handle` must reference a live `PortableArchive` and `out` must point to writable `usize` storage.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn cmpct_portable_entry_count(
     handle: *const PortableArchive,
@@ -592,6 +613,10 @@ pub unsafe extern "C" fn cmpct_portable_entry_count(
     PortableStatus::Ok as c_int
 }
 
+/// Copies fixed metadata for one logical entry through the C ABI.
+///
+/// # Safety
+/// `handle` must reference a live `PortableArchive` and `out` must point to writable `PortableEntryInfo` storage.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn cmpct_portable_entry_info(
     handle: *const PortableArchive,
@@ -618,6 +643,11 @@ pub unsafe extern "C" fn cmpct_portable_entry_info(
     PortableStatus::Ok as c_int
 }
 
+/// Copies one logical entry path into caller-owned storage.
+///
+/// # Safety
+/// `handle` must reference a live `PortableArchive`; `required` must be writable. If `buffer` is non-null, it must
+/// reference at least `capacity` writable bytes and must not alias memory invalidated by this call.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn cmpct_portable_entry_path(
     handle: *const PortableArchive,
@@ -646,6 +676,11 @@ pub unsafe extern "C" fn cmpct_portable_entry_path(
     PortableStatus::Ok as c_int
 }
 
+/// Reads a bounded logical member range into caller-owned storage.
+///
+/// # Safety
+/// `handle` must reference a live `PortableArchive`; `written` must be writable. `buffer` may be null only when
+/// `capacity == 0`; otherwise it must reference at least `capacity` writable bytes for the duration of the call.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn cmpct_portable_entry_read_range(
     handle: *const PortableArchive,
@@ -676,6 +711,11 @@ pub unsafe extern "C" fn cmpct_portable_entry_read_range(
     }
 }
 
+/// Materializes one admitted member into caller-owned storage and optionally returns locality statistics.
+///
+/// # Safety
+/// `handle` must reference a live `PortableArchive` and `written` must be writable. A non-null `buffer` must cover
+/// `capacity` writable bytes; a non-null `stats` must point to writable `PortableMemberStats` storage.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn cmpct_portable_entry_read(
     handle: *const PortableArchive,
@@ -713,6 +753,10 @@ pub unsafe extern "C" fn cmpct_portable_entry_read(
     PortableStatus::Ok as c_int
 }
 
+/// Performs complete archive verification through the C ABI.
+///
+/// # Safety
+/// `handle` must reference a live `PortableArchive` for the complete duration of the call.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn cmpct_portable_verify(handle: *const PortableArchive) -> c_int {
     if handle.is_null() {
