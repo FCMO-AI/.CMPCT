@@ -10,6 +10,27 @@ function ensureMeta(name, content) {
   node.setAttribute('content', content);
 }
 
+async function synchronizeSurfaceLabel() {
+  // Footnote: gh-pages is generated serving output and can occasionally be promoted in small, safe pieces
+  // while hosted CI is unavailable. The tiny machine-readable receipt is therefore the final authority for
+  // the visible surface label; this prevents a stale static chip without teaching branding code project truth.
+  try {
+    const response = await fetch('surface-revision.txt', { cache: 'no-store' });
+    if (!response.ok) return;
+    const surface = (await response.text()).trim();
+    if (!/^\d+\.\d+\.[a-z]+$/.test(surface)) return;
+
+    const chip = document.querySelector('.release-chip');
+    if (chip) chip.textContent = chip.textContent.replace(/surface\s+\d+\.\d+\.[a-z]+/i, `surface ${surface}`);
+
+    const truthSurface = [...document.querySelectorAll('.truth-line span')]
+      .find((node) => /^Surface\s+/i.test(node.textContent || ''));
+    if (truthSurface) truthSurface.textContent = `Surface ${surface}`;
+  } catch {
+    // Progressive enhancement only: a failed provenance fetch must never disturb the static site.
+  }
+}
+
 function installQuietProvenance() {
   // Footnote: attribution belongs to the provenance layer, not the evidence renderer. It is inserted once
   // at the persistent footer so FCMO remains discoverable without competing with CMPCT's product hierarchy.
@@ -40,8 +61,13 @@ function installQuietProvenance() {
   }
 }
 
-if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', installQuietProvenance, { once: true });
-} else {
+function startProvenance() {
   installQuietProvenance();
+  void synchronizeSurfaceLabel();
+}
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', startProvenance, { once: true });
+} else {
+  startProvenance();
 }
