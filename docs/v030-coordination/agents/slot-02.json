@@ -2,11 +2,11 @@
   "schema": "cmpct-v030-agent-claim-v1",
   "slot": "slot-02",
   "role": "evidence-performance",
-  "status": "ACTIVE",
+  "status": "RELEASED",
   "branch": "agent/v030-coop-evidence-performance",
   "claim_owner": "resumed-agent-sol-a",
   "claimed_at_utc": "2026-08-18T05:56:50Z",
-  "base_integration_sha_observed": "e48d74a97b8ac4bbf6c04bea483fdc0c486a49dc",
+  "released_to": "gpt-5.6-sol-sole-v030-20260818",
   "task_ids": ["T02"],
-  "notes": "Claimed after slot-01 create lost its atomic race; final authority must run on the exact reconciled T00 candidate with T01/T03 imported."
+  "notes": "Specialist implementation/evidence work was already imported or superseded. T02 is now owned directly by the sole active slot-00 executor; this slot must not perform further v0.30 work."
 }
