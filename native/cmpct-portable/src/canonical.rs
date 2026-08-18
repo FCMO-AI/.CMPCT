@@ -390,8 +390,7 @@ impl<W: Write> Write for IdentityWriter<'_, W> {
 fn ensure_safe_symlink(target: &str, rel: &str) -> Result<(), PortableError> {
     let normalized = target.replace('\\', "/");
     let bytes = normalized.as_bytes();
-    let has_windows_drive =
-        bytes.len() >= 2 && bytes[1] == b':' && bytes[0].is_ascii_alphabetic();
+    let has_windows_drive = bytes.len() >= 2 && bytes[1] == b':' && bytes[0].is_ascii_alphabetic();
     let has_parent = normalized.split('/').any(|part| part == "..");
     if target.is_empty()
         || target.contains('\0')
