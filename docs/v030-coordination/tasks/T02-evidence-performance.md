@@ -10,6 +10,42 @@
 
 Turn v0.30 from promising mechanism evidence into exact release evidence without lowering any threshold or mixing independent savings.
 
+## Immediate CI-topology debt — fix before final benchmark handoff
+
+Fresh reconciled-head topology run `32105402278`, job `95613682897`, inspected every v0.30 workflow added by PR #56 and failed all 17 because they predate current-main's mandatory `# ci-lane:` declaration.
+
+Affected files:
+
+- `.github/workflows/geometry-v030-breakthrough.yml`
+- `.github/workflows/v030-authoritative-pr-gates.yml`
+- `.github/workflows/v030-authoritative-v2-pr.yml`
+- `.github/workflows/v030-canonical-authority.yml`
+- `.github/workflows/v030-external-competitors.yml`
+- `.github/workflows/v030-g04-overlay-oracle.yml`
+- `.github/workflows/v030-geometry-overlay-oracle.yml`
+- `.github/workflows/v030-gir-build-rehab.yml`
+- `.github/workflows/v030-gir-focused-complete.yml`
+- `.github/workflows/v030-gir-hardening.yml`
+- `.github/workflows/v030-hierarchical-geometry.yml`
+- `.github/workflows/v030-prefixgraph-oracle.yml`
+- `.github/workflows/v030-release-fuzz.yml`
+- `.github/workflows/v030-release-generalization.yml`
+- `.github/workflows/v030-release-performance.yml`
+- `.github/workflows/v030-release-reader.yml`
+- `.github/workflows/v030-shared-portfolio-rehab.yml`
+
+Required repair:
+
+1. Read `.github/AGENTS.md` and `docs/CI_ARCHITECTURE.md` from reconciled main.
+2. Classify mechanism/oracle experiments as `deep`; final compression/runtime/native/external evidence as `release`; use `fast` only where the job is genuinely ordinary PR feedback.
+3. Do **not** call a 90-minute benchmark `fast` to evade path-scoping rules.
+4. Deep/release PR-triggered workflows must have meaningful `paths`/`paths-ignore`; remove redundant automatic triggers if a branch-scoped research push or explicit dispatch is the cleaner authority.
+5. Preserve concurrency cancellation and all numeric evidence thresholds.
+6. Run `python tools/check_ci_topology.py <all 17 paths>` before handoff.
+7. Include the exact topology checker output in the T02 handoff.
+
+The first checker failure exposed only missing lane declarations because lane-specific PR rules cannot execute until a lane exists. After adding declarations, fix any second-order path-scope errors rather than weakening the checker.
+
 ## Scope
 
 - repaired exact 15-workload generalization suite;
@@ -53,4 +89,4 @@ If a gate fails, preserve the machine result and mark the task `BLOCKED` or crea
 
 ## Handoff
 
-Set `REVIEW` with exact evidence files, run IDs/artifacts, environment/tool versions, raw/summary results, source SHA, and a concise statement of every remaining loss or unavailable comparator.
+Set `REVIEW` with exact evidence files, run IDs/artifacts, environment/tool versions, raw/summary results, source SHA, topology checker output, and a concise statement of every remaining loss or unavailable comparator.
