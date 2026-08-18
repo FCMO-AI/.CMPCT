@@ -2,9 +2,10 @@
 
 - **Owner:** slot-01
 - **Priority:** P0
-- **State:** READY
+- **State:** CLAIMED
 - **Branch:** `agent/v030-coop-native-portability`
 - **Dependencies:** may implement against bootstrap integration head; final evidence must be rerun/rebased after T00 reconciliation.
+- **Working integration base observed:** `ae8d3b91e74ca8e60653208f5b3bd1055d1b5b55`
 
 ## Objective
 
