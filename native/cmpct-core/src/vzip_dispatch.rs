@@ -1,4 +1,4 @@
-//! Execution layer for revision-24 virtual-ZIP range projections.
+//! Execution layer for revision-24 virtual-ZIP range projections and complete archive verification.
 //!
 //! The recipe planner decides which logical blob slices intersect a request. This layer performs
 //! exactly those reads through a caller-supplied authenticated blob-range callback and verifies the
@@ -6,6 +6,7 @@
 //! blob I/O behind the callback lets archive dispatch reuse the existing framing/codec integrity path.
 
 use crate::vzip::{VirtualZipError, VirtualZipRecipe};
+use crate::{Archive, CmpctError, Storage};
 use sha2::{Digest, Sha256};
 
 #[derive(Debug, PartialEq, Eq)]
@@ -86,4 +87,59 @@ where
         return Err(VirtualZipDispatchError::LogicalHash);
     }
     Ok(())
+}
+
+const VERIFY_CHUNK_BYTES: usize = 8 * 1024 * 1024;
+
+impl Archive {
+    /// Stream every regular revision-24 member and authenticate its complete logical identity.
+    ///
+    /// This is deliberately stronger than treating a successful range read as verification. Direct RAW range
+    /// reads are intentionally local and therefore do not hash unseen payload bytes; complete verification must
+    /// hash the entire logical stream against the authenticated index/recipe identity. Chunking the verifier also
+    /// removes the old portable wrapper's 256 MiB materialization ceiling for large RAW/chunked/sparse members.
+    pub fn verify_complete(&self) -> Result<usize, CmpctError> {
+        let mut verified = 0usize;
+        for (entry_index, entry) in self.entries.iter().enumerate() {
+            if entry.kind != 0 {
+                continue;
+            }
+            let expected = match (&entry.storage, entry.logical_hash) {
+                (_, Some(hash)) => hash,
+                (Storage::VirtualZip(recipe), None) => recipe.logical_sha256,
+                // A regular member without any authenticated logical identity cannot satisfy a strong verify
+                // contract. Failing closed is preferable to returning success from touched-byte checks only.
+                _ => {
+                    return Err(CmpctError::Schema(format!(
+                        "regular member {} is missing complete logical SHA-256",
+                        entry.path
+                    )))
+                }
+            };
+
+            let mut digest = Sha256::new();
+            let mut offset = 0u64;
+            let mut buffer = vec![0u8; VERIFY_CHUNK_BYTES.min(
+                usize::try_from(entry.size.max(1)).unwrap_or(VERIFY_CHUNK_BYTES),
+            )];
+            while offset < entry.size {
+                let remaining = entry.size - offset;
+                let take = usize::try_from(remaining.min(buffer.len() as u64))
+                    .map_err(|_| CmpctError::MemberLimit)?;
+                self.read_range(entry_index, offset, &mut buffer[..take])?;
+                digest.update(&buffer[..take]);
+                offset = offset
+                    .checked_add(take as u64)
+                    .ok_or(CmpctError::MemberLimit)?;
+            }
+            let got: [u8; 32] = digest.finalize().into();
+            if got != expected {
+                return Err(CmpctError::MemberHash);
+            }
+            verified = verified
+                .checked_add(1)
+                .ok_or(CmpctError::MemberLimit)?;
+        }
+        Ok(verified)
+    }
 }
