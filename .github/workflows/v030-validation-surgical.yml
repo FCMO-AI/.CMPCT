@@ -1,0 +1,25 @@
+name: CMPCT v0.30 surgical validation
+# ci-lane: deep
+
+on:
+  pull_request:
+    branches:
+      - agent/v030-validation-base
+    paths:
+      - '.github/workflows/v030-validation-surgical.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-v030-surgical-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  dispatch-seed:
+    runs-on: ubuntu-24.04
+    steps:
+      - run: echo 'validation workflow is replaced by the PR head implementation'
+
+# Footnote: this base copy exists only because GitHub evaluates pull_request workflow definitions from the base
+# branch. The PR head replaces this seed with the full surgical candidate checks.
