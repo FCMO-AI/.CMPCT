@@ -2,11 +2,18 @@
   "project": ".CMPCT",
   "project_version": "0.29.0",
   "format_revision": 24,
-  "surface_revision": "0.29.i",
+  "surface_revision": "0.29.k",
   "status": "pre-1.0 / active development",
   "canonical_repository": "FCMO-AI/.CMPCT",
   "canonical_branch": "main",
-  "site_build_commit": "e046c22a6970f072645954b30493732c916c729a",
+  "site_build_commit": "59375b1b371615540d9b24724ff7e3799243ed5a",
+  "stewardship": {
+    "credit": "CMPCT by FCMO AI",
+    "group_credit": "From the FCMO group",
+    "steward": "FCMO AI",
+    "steward_url": "https://github.com/FCMO-AI",
+    "policy": "docs/OPEN_SOURCE_STEWARDSHIP.md"
+  },
   "publication": {
     "mode": "static-gh-pages",
     "status": "generated public website",
@@ -19,7 +26,7 @@
     "guide": "LICENSING.md",
     "proposed_text": "LICENSE-APACHE-2.0-PROPOSED.txt"
   },
-  "reading_order": ["README.md","AGENTS.md","docs/CURRENT_STATE.md","docs/ENTROPYGRAPH.md","docs/HARDENING.md","docs/PORTABILITY.md","docs/NATIVE_CORE.md","docs/FORMAT.md","docs/HISTORY.md","docs/RESEARCH_LOG.md","docs/BENCHMARKS.md","docs/PUBLIC_SURFACE.md","docs/ROADMAP.md"],
+  "reading_order": ["README.md","AGENTS.md","docs/CURRENT_STATE.md","docs/ENTROPYGRAPH.md","docs/HARDENING.md","docs/PORTABILITY.md","docs/NATIVE_CORE.md","docs/FORMAT.md","docs/HISTORY.md","docs/RESEARCH_LOG.md","docs/BENCHMARKS.md","docs/PUBLIC_SURFACE.md","docs/OPEN_SOURCE_STEWARDSHIP.md","docs/ROADMAP.md"],
   "non_negotiables": [
     "Byte-exact losslessness unless a caller explicitly requests a different semantic transform.",
     "Numeric core versions are reserved for material CMPCT format/engine improvements; presentation-only work advances the alphabetic surface revision instead.",
@@ -32,6 +39,7 @@
     "The restored pre-redesign visual grammar is a minimum quality floor; site changes require rendered inspection rather than code-only approval.",
     "Responsive presentation is validated across a representative width, height and aspect-ratio matrix; newly discovered geometry failures become regression cases.",
     "Brand orange behaves as a sourced signal rather than wallpaper; Surface 0.29.i localizes the hero atmosphere around the evidence/compression object.",
+    "Public FCMO stewardship uses quiet provenance: CMPCT remains the dominant identity while maker credit appears only on natural repository, metadata, citation, machine-state and footer/About surfaces.",
     "gh-pages is generated deployment output only; canonical site source and evidence remain on main."
   ]
 }
