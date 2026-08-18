@@ -1,0 +1,11 @@
+{
+  "schema": "cmpct-v030-agent-claim-v1",
+  "slot": "slot-00",
+  "role": "integrator-release-referee",
+  "status": "ACTIVE",
+  "branch": "agent/v030-authoritative-integration",
+  "claim_owner": "current-convergence-agent",
+  "base_integration_sha_observed": "c95865ea6f5781d6794bea11bcd9b84bb5f9aff7",
+  "task_ids": ["T00", "T04"],
+  "notes": "Owns main reconciliation, semantic conflict adjudication, authoritative imports, release-lock truth, and final promotion. Other slots must not rewrite this branch outside coordination-file claims/handoffs."
+}
