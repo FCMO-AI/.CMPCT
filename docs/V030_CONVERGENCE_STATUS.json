@@ -1,38 +1,43 @@
 {
-  "schema": "cmpct-v030-convergence-status-v4",
+  "schema": "cmpct-v030-convergence-status-v5",
   "release_authority": false,
   "integration_branch": "agent/v030-authoritative-integration",
-  "integration_head_observed": "e9c4fa59d7c7dbb2f832ff84721630b1b6614558",
-  "canonical_main_head_observed": "72e7e6313ffa896b7ef7a14a2f48495754b494f2",
+  "integration_head_observed": "2d293b0dae1ee905d07ac341d63b19174806cb40",
+  "canonical_main_head_observed": "b71dd9e4f025e2580f0e2a8d4bdeab8212c12a17",
   "canonical_project_version": "0.29.0",
   "canonical_format_revision": 24,
   "branch_relation_to_main": {
     "status": "ahead",
-    "ahead_by": 145,
+    "ahead_by": 309,
     "behind_by": 0,
-    "merge_base": "72e7e6313ffa896b7ef7a14a2f48495754b494f2"
+    "merge_base": "b71dd9e4f025e2580f0e2a8d4bdeab8212c12a17"
   },
-  "pr_triggered_workflow_runs_on_observed_head_first_page": 26,
-  "authoritative_pr_gate_run": 32105135629,
-  "authoritative_pr_gate_state": {
-    "reader_fuzz": "in_progress",
-    "g04_oracle": "in_progress",
-    "runtime": "queued",
-    "generalization": "queued",
-    "shared_rehab": "queued"
+  "latest_main_reconciliation": {
+    "pull_request": 75,
+    "merge_commit": "2d293b0dae1ee905d07ac341d63b19174806cb40",
+    "canonical_commits_imported": 3,
+    "files_changed": 2,
+    "purpose": "bind subsequent r25 validation to the current canonical main trust context"
   },
-  "geometry_reactor_head": "583c0c351ea50a80f4ed8ce7216515f2faf25aec",
-  "flat_overlay_v2_head": "d15e6971c440db75bd8590770a1e86e86b5a7d17",
-  "flat_overlay_is_full_g0_g4": false,
-  "prefixgraph_green_head": "8f48b715812afd4a27ef320a3b1d0520d7a9de0a",
-  "hardening_head": "24c40510fb39edbb78e083a9d65acaeef7dc4d8e",
-  "build_rehab_head": "67a240601408047e71960145a6c2865785cc0fdc",
+  "agent00_validator": {
+    "workflow": ".github/workflows/v030-agent00-validation.yml",
+    "receipt": "docs/v030-validation/agent00-main-receipt.json",
+    "receipt_schema_expected": "cmpct-v030-agent00-validation-v2",
+    "required_binding": [
+      "candidate_sha",
+      "authority_main_sha",
+      "run_id",
+      "run_attempt",
+      "result",
+      "passed"
+    ]
+  },
   "generic_zero_copy_head": "02039b7a760d39416253418978a457601f2fb748",
-  "full_15_workload_release_gate": "running",
   "merge_blockers": [
-    "complete the fresh authoritative reader/fuzz, G0-G4, shared-rehab, generalization and runtime gates on the current integration head",
-    "complete native/portability and external-competitor validation on the current integration head",
-    "commit durable current-head benchmark evidence for every release-level performance claim",
+    "obtain a fresh Agent-00 validator receipt bound to integration head 2d293b0dae1ee905d07ac341d63b19174806cb40 and canonical main b71dd9e4f025e2580f0e2a8d4bdeab8212c12a17",
+    "complete the fresh authoritative reader/fuzz, G0-G4, shared-rehab, generalization and runtime gates on one frozen current-main-derived candidate",
+    "complete native/portability and external-competitor validation on that same frozen candidate",
+    "commit durable benchmark evidence for every release-level performance claim",
     "preserve the frozen >=687783-byte aggregate saving floor, >=3 improved rows, 0 regressions and <=8x locality law"
   ]
 }
