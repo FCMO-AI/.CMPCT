@@ -108,6 +108,7 @@ async function inspect(page, viewport) {
       viewport,
       innerWidth: window.innerWidth,
       innerHeight: window.innerHeight,
+      scrollY: window.scrollY,
       documentScrollWidth: Math.max(root.scrollWidth, body.scrollWidth),
       boxes,
       gain: visible(gain) ? rect(gain) : null,
@@ -127,6 +128,7 @@ async function inspect(page, viewport) {
 function validate(result) {
   const errors = [];
   const { innerWidth: w, boxes } = result;
+  if (result.scrollY > 1) errors.push(`geometry snapshot did not return to top: scrollY=${result.scrollY.toFixed(1)}`);
   if (result.documentScrollWidth > w + 1) {
     errors.push(`document horizontal overflow: ${result.documentScrollWidth}px > ${w}px`);
   }
@@ -214,8 +216,17 @@ try {
         await page.waitForTimeout(100);
       }
     }
-    await page.evaluate(() => window.scrollTo(0, 0));
-    await page.waitForTimeout(160);
+
+    // Footnote: the production site intentionally uses smooth scrolling. Geometry comparison needs a
+    // deterministic origin after reveal traversal, so the harness disables only the test document's
+    // scroll interpolation, returns to y=0, and explicitly waits for that invariant before measurement.
+    await page.evaluate(() => {
+      document.documentElement.style.scrollBehavior = 'auto';
+      document.body.style.scrollBehavior = 'auto';
+      window.scrollTo(0, 0);
+    });
+    await page.waitForFunction(() => window.scrollY < 1, { timeout: 3_000 });
+    await page.waitForTimeout(100);
 
     const result = await inspect(page, viewport);
     const errors = [...pageErrors, ...validate(result)];
