@@ -1,0 +1,37 @@
+name: CMPCT v0.30 Agent-00 isolated native formatter
+# ci-lane: diagnostic
+
+on:
+  pull_request:
+    branches: [main]
+    paths: ['.github/workflows/v030-agent00-maintenance-format.yml']
+
+permissions:
+  contents: write
+
+jobs:
+  format-native:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: agent/v030-authoritative-integration
+      - name: Apply canonical Rust formatting
+        working-directory: native/cmpct-portable
+        run: cargo fmt --all
+      - name: Persist formatter-only changes
+        shell: bash
+        run: |
+          if git diff --quiet -- native/cmpct-portable; then
+            echo 'native Rust sources already rustfmt-clean'
+            exit 0
+          fi
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add native/cmpct-portable
+          git commit -m 'style(v0.30): canonicalize portable Rust formatting'
+          git push origin HEAD:agent/v030-authoritative-integration
+
+# Footnote: this tiny trigger PR exists only to let repository-native rustfmt repair the authoritative branch while
+# the large convergence PR has many historical workflows queued. The formatter changes Rust layout only; it cannot
+# authorize release and this temporary workflow/branch are removed after the mechanical repair is persisted.
