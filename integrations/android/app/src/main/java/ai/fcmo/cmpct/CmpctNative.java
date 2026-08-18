@@ -55,6 +55,11 @@ final class CmpctNative {
             return nativeRevision(handle);
         }
 
+        void verify() throws IOException {
+            ensureOpen();
+            nativeVerify(handle);
+        }
+
         int entryCount() throws IOException {
             ensureOpen();
             return nativeEntryCount(handle);
@@ -101,8 +106,13 @@ final class CmpctNative {
     private static native long nativeOpen(String path) throws IOException;
     private static native void nativeClose(long handle);
     private static native int nativeRevision(long handle) throws IOException;
+    private static native void nativeVerify(long handle) throws IOException;
     private static native int nativeEntryCount(long handle) throws IOException;
     private static native String nativeEntryPath(long handle, int index) throws IOException;
     private static native long[] nativeEntryInfo(long handle, int index) throws IOException;
     private static native byte[] nativeReadRange(long handle, int index, long offset, int length) throws IOException;
 }
+
+// Footnote: archive import calls the same complete portable verifier as desktop before registering a DocumentsUI
+// root. A valid magic/index with corrupted payload is therefore rejected rather than becoming a broken Android
+// filesystem root that fails only when the user later opens a member.
