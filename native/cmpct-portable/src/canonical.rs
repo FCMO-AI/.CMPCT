@@ -100,7 +100,11 @@ impl Canonical25Archive {
             .entries()
             .iter()
             .position(|entry| entry.path == FILESYSTEM_MANIFEST)
-            .ok_or_else(|| PortableError::Format("canonical r25 archive is missing its filesystem manifest".into()))?;
+            .ok_or_else(|| {
+                PortableError::Format(
+                    "canonical r25 archive is missing its filesystem manifest".into(),
+                )
+            })?;
         let (manifest_raw, _) = content.read_member(manifest_index)?;
         let manifest = FsManifest::parse(&manifest_raw, content.entries())?;
 
@@ -118,7 +122,12 @@ impl Canonical25Archive {
                 .entries()
                 .iter()
                 .position(|candidate| candidate.path == entry.path)
-                .ok_or_else(|| PortableError::Integrity(format!("missing r25 graph member: {}", entry.path)))?;
+                .ok_or_else(|| {
+                    PortableError::Integrity(format!(
+                        "missing r25 graph member: {}",
+                        entry.path
+                    ))
+                })?;
             let (graph_size, graph_sha) = content.entry_identity(index)?;
             if graph_size != *size || graph_sha != *sha256 {
                 return Err(PortableError::Integrity(format!(
@@ -161,7 +170,11 @@ impl Canonical25Archive {
             .entries()
             .iter()
             .position(|entry| entry.path == path)
-            .ok_or_else(|| PortableError::Integrity(format!("canonical r25 content member disappeared: {path}")))
+            .ok_or_else(|| {
+                PortableError::Integrity(format!(
+                    "canonical r25 content member disappeared: {path}"
+                ))
+            })
     }
 
     fn regular_owner<'a>(&'a self, entry: &'a FsEntry) -> Result<&'a FsEntry, PortableError> {
@@ -198,7 +211,7 @@ impl Canonical25Archive {
                 let FsKind::File {
                     size: expected_size,
                     sha256: expected_sha,
-                } = owner.kind
+                } = &owner.kind
                 else {
                     unreachable!("regular_owner returns file")
                 };
@@ -210,14 +223,14 @@ impl Canonical25Archive {
                 };
                 let stats = self.content.stream_member(content_index, &mut verified)?;
                 let got_sha: [u8; 32] = verified.digest.finalize().into();
-                if verified.bytes != expected_size || got_sha != expected_sha {
+                if verified.bytes != *expected_size || got_sha != *expected_sha {
                     return Err(PortableError::Integrity(format!(
                         "r25 streamed filesystem identity mismatch: {}",
                         owner.path
                     )));
                 }
                 Ok(MemberReadStats {
-                    logical_bytes: expected_size,
+                    logical_bytes: *expected_size,
                     ..stats
                 })
             }
@@ -257,7 +270,7 @@ impl Canonical25Archive {
 
     pub(crate) fn extract_into(&self, root: &Path) -> Result<(), PortableError> {
         for (index, entry) in self.manifest.entries().iter().enumerate() {
-            if !matches!(entry.kind, FsKind::File { .. }) {
+            if !matches!(&entry.kind, FsKind::File { .. }) {
                 continue;
             }
             let target = root.join(safe_relpath(&entry.path)?);
@@ -273,7 +286,9 @@ impl Canonical25Archive {
             let target = root.join(safe_relpath(&entry.path)?);
             match &entry.kind {
                 FsKind::Directory => fs::create_dir_all(&target)?,
-                FsKind::Symlink { target: link_target } => {
+                FsKind::Symlink {
+                    target: link_target,
+                } => {
                     ensure_safe_symlink(link_target, &entry.path)?;
                     if let Some(parent) = target.parent() {
                         fs::create_dir_all(parent)?;
@@ -294,15 +309,24 @@ impl Canonical25Archive {
         // Apply children before directory metadata so creating a child cannot perturb the restored directory
         // mode/mtime. Ownership/xattrs are best-effort just like the Python product bridge: insufficient host
         // privilege must not turn a valid archive into partial publication because extraction is staged.
-        for entry in self.manifest.entries().iter().filter(|entry| !matches!(entry.kind, FsKind::Directory)) {
+        for entry in self
+            .manifest
+            .entries()
+            .iter()
+            .filter(|entry| !matches!(&entry.kind, FsKind::Directory))
+        {
             let target = root.join(safe_relpath(&entry.path)?);
-            apply_metadata_best_effort(&target, &entry.metadata, matches!(entry.kind, FsKind::Symlink { .. }));
+            apply_metadata_best_effort(
+                &target,
+                &entry.metadata,
+                matches!(&entry.kind, FsKind::Symlink { .. }),
+            );
         }
         let mut directories: Vec<&FsEntry> = self
             .manifest
             .entries()
             .iter()
-            .filter(|entry| matches!(entry.kind, FsKind::Directory))
+            .filter(|entry| matches!(&entry.kind, FsKind::Directory))
             .collect();
         directories.sort_by_key(|entry| std::cmp::Reverse(entry.path.matches('/').count()));
         for entry in directories {
@@ -322,17 +346,25 @@ impl Canonical25Archive {
                 FsKind::File { .. } | FsKind::Hardlink { .. } => {
                     writer
                         .start_file(&entry.path, options)
-                        .map_err(|error| PortableError::Format(format!("ZIP start_file: {error}")))?;
+                        .map_err(|error| {
+                            PortableError::Format(format!("ZIP start_file: {error}"))
+                        })?;
                     self.stream_member(index, &mut writer)?;
                 }
                 FsKind::Directory => {
                     writer
-                        .add_directory(format!("{}/", entry.path.trim_end_matches('/')), options)
-                        .map_err(|error| PortableError::Format(format!("ZIP add_directory: {error}")))?;
+                        .add_directory(
+                            format!("{}/", entry.path.trim_end_matches('/')),
+                            options,
+                        )
+                        .map_err(|error| {
+                            PortableError::Format(format!("ZIP add_directory: {error}"))
+                        })?;
                 }
                 FsKind::Symlink { .. } => {
                     return Err(PortableError::Unsupported(
-                        "portable ZIP export refuses symlinks instead of silently changing link semantics".into(),
+                        "portable ZIP export refuses symlinks instead of silently changing link semantics"
+                            .into(),
                     ));
                 }
             }
@@ -365,8 +397,14 @@ impl<W: Write> Write for IdentityWriter<'_, W> {
 
 fn ensure_safe_symlink(target: &str, rel: &str) -> Result<(), PortableError> {
     let path = Path::new(target);
-    if path.is_absolute() || path.components().any(|component| matches!(component, std::path::Component::ParentDir)) {
-        return Err(PortableError::Path(format!("unsafe r25 symlink target in {rel}: {target}")));
+    if path.is_absolute()
+        || path
+            .components()
+            .any(|component| matches!(component, std::path::Component::ParentDir))
+    {
+        return Err(PortableError::Path(format!(
+            "unsafe r25 symlink target in {rel}: {target}"
+        )));
     }
     Ok(())
 }
@@ -380,13 +418,16 @@ fn create_symlink(target: &str, destination: &Path) -> Result<(), PortableError>
 #[cfg(windows)]
 fn create_symlink(_target: &str, _destination: &Path) -> Result<(), PortableError> {
     Err(PortableError::Unsupported(
-        "safe r25 symlink extraction on Windows requires an explicit file-vs-directory target contract".into(),
+        "safe r25 symlink extraction on Windows requires an explicit file-vs-directory target contract"
+            .into(),
     ))
 }
 
 #[cfg(not(any(unix, windows)))]
 fn create_symlink(_target: &str, _destination: &Path) -> Result<(), PortableError> {
-    Err(PortableError::Unsupported("symlink extraction is unavailable on this platform".into()))
+    Err(PortableError::Unsupported(
+        "symlink extraction is unavailable on this platform".into(),
+    ))
 }
 
 fn apply_metadata_best_effort(path: &Path, metadata: &FsMetadata, is_symlink: bool) {
@@ -396,8 +437,10 @@ fn apply_metadata_best_effort(path: &Path, metadata: &FsMetadata, is_symlink: bo
             use std::os::unix::fs::PermissionsExt;
             let _ = fs::set_permissions(path, fs::Permissions::from_mode(metadata.mode));
         }
-        if let Ok(file) = File::options().write(true).open(path) {
-            if let Some(time) = std::time::UNIX_EPOCH.checked_add(std::time::Duration::from_nanos(metadata.mtime_ns as u64)) {
+        if let Ok(file) = File::open(path) {
+            if let Some(time) = std::time::UNIX_EPOCH
+                .checked_add(std::time::Duration::from_nanos(metadata.mtime_ns as u64))
+            {
                 let _ = file.set_times(std::fs::FileTimes::new().set_modified(time));
             }
         }
