@@ -1,46 +1,42 @@
 # T03 — Graph integration / canonical productization
 
-- **Owner:** slot-03
+- **Owner:** v0.30 sole executor
 - **Priority:** P0
 - **State:** CLAIMED
-- **Branch:** `agent/v030-coop-graph-productization`
-- **Dependencies:** may implement against bootstrap integration head; final import/evidence must be reconciled after T00.
+- **Branch:** `agent/v030-authoritative-integration`
+- **Dependencies:** final evidence must be run on the same exact reconciled candidate used by T00–T04.
 
 ## Objective
 
-Turn the successful v0.30 research representations into one understandable canonical product architecture instead of shipping a pile of parallel experiment facades.
+Turn the successful v0.30 research representations into one understandable canonical product architecture instead of shipping parallel experiment facades.
 
-## Immediate exact-head defect — fix first
+## Geometry exact-head invariant
 
-Fresh authoritative PR-gate run `32105135629`, job `95612937412`, found one focused Geometry failure before the G0–G4 oracle was allowed to run:
-
-`tests/test_v030_geometry.py::test_regular_gap_discovery_is_content_driven`
-
-Fixture: `(b"abcdef" + b"\x1e") * 4000`.
-Expected: control separator `0x1e` must be nominated by `_delimiter_rank`.
-Observed: `[100, 99, 101, 102]`.
-
-Root cause: flat Geometry's recurrence score includes the incomplete prefix/suffix fragments as if they were complete delimiter intervals. The fixture ends on the delimiter, so the censored trailing fragment biases variance and lets ordinary periodic payload bytes outrank the true separator.
-
-Required correction:
+A focused Geometry regression previously showed that delimiter recurrence scoring included incomplete stream-edge fragments as if they were complete intervals. Preserve the correction:
 
 - compute regularity from **complete inter-occurrence intervals only** (`pos[i] - pos[i-1] - 1`);
-- do not include stream-edge fragments in recurrence variance;
-- retain the occurrence/segment/search bounds and deterministic tie-breaking;
-- keep this heuristic nomination-only: exact transformed payload/archive pricing still decides admission;
-- preserve/add a nearby footnote explaining why censored edge fragments are excluded;
-- keep the existing control-byte regression test and add an edge-phase property case if useful;
-- run the complete focused Geometry/G0-G4 tests before handoff.
+- do not include censored stream-edge fragments in recurrence variance;
+- retain occurrence/segment/search bounds and deterministic tie-breaking;
+- keep delimiter ranking nomination-only: exact transformed payload/archive pricing decides admission;
+- preserve the nearby explanatory footnote and edge/control-byte regression coverage;
+- do not lower `MAX_DELIMITER_REGULARITY`, change frozen G0–G4 thresholds, or introduce filename/schema authority.
 
-Do **not** lower `MAX_DELIMITER_REGULARITY`, change the frozen G0–G4 oracle threshold, or introduce filename/schema semantics to make the test pass.
+## Product-boundary review
 
-## Additional slot-00 review
+`docs/v030-coordination/reviews/graph-productization.md` is normative until every item is either resolved in code/tests/docs or deliberately rejected with evidence.
 
-See `docs/v030-coordination/handoffs/slot-00-review-graph.md`. T03 remains actively claimed until the product-level r24-vs-r25 floor, user/internal tree identity, signed timestamp domain, cross-platform safe-symlink policy and import-order/global-profile issues are resolved or explicitly handed back with evidence.
+The highest-priority invariants are:
+
+1. genuine canonical r25 bytes compete against genuine canonical r24 bytes for the same original filesystem tree; exact ties keep r24;
+2. public user-tree identity is distinct from any internal content-graph identity, and canonical strong verification proves the user-visible tree;
+3. filesystem timestamps use a bounded signed domain compatible with what the writer can emit;
+4. safe-symlink policy rejects escapes under both POSIX and Windows lexical semantics;
+5. canonical import/dispatch is thread/import-order safe and does not mutate research-module globals process-wide;
+6. metadata restoration policy distinguishes authenticated metadata from best-effort host application.
 
 ## Scope
 
-- internalize PrefixGraph as a bounded depth-1 relation inside the owning v0.30 graph/compiler **or** produce a rigorously justified alternative canonical profile with equivalent accounting, locality, reader and portability guarantees;
+- internalize PrefixGraph as a bounded depth-1 relation inside the owning v0.30 graph/compiler **or** use a rigorously justified canonical profile with equivalent accounting, locality, reader, and portability guarantees;
 - preserve full G0–G4 Geometry inside Mosaic/pre-fallback structure without duplicating reactor logic;
 - reduce research adapters/facades from the promoted path while preserving historical evidence and rejected experiments;
 - canonical API/CLI selection/read/extract behavior across r25 and exact r24 fallback;
@@ -48,30 +44,37 @@ See `docs/v030-coordination/handoffs/slot-00-review-graph.md`. T03 remains activ
 - one semantic owner per promoted mechanism;
 - product-facing error/fallback behavior that is bounded and explainable.
 
-## Owned paths
+## Preferred implementation area
 
-Prefer `experiments/entropygraph_v030_*` only where those modules are moving toward the promoted implementation, canonical reader/selector/API adapters, format/product tests, and `docs/FORMAT.md` / architecture docs as required. Do not alter native implementation owned by T01 or benchmark thresholds owned by T02.
+Prefer `experiments/entropygraph_v030_*` only where those modules are moving toward the promoted implementation, canonical reader/selector/API adapters, format/product tests, and `docs/FORMAT.md` / architecture docs as required. Because one executor owns the release, native or benchmark code may also be adjusted when a product-interface defect crosses boundaries, but release thresholds and evidence semantics remain frozen.
 
 ## Required design properties
 
 - complete-artifact exact pricing; no independent-savings addition;
-- exact v0.29/r24 fallback on loss or unsupported cases;
+- exact genuine r24 fallback on product loss or unsupported cases;
 - dependency depth <=1 for PrefixGraph-like references;
 - <=8x selected per-member decoded-context amplification;
 - bounded transform/reference search and decode units;
 - no filename/MIME/schema-specific authority for Geometry nomination;
 - reader simpler than encoder heuristics;
-- no duplicate promoted implementation of separator nomination, generic publication, recovery, or reference semantics.
+- no duplicate promoted implementation of separator nomination, generic publication, recovery, or reference semantics;
+- import-order/thread-safe canonical profile dispatch.
 
 ## Completion evidence
 
-1. Clear canonical architecture document that maps every selected archive profile to one writer/reader/native responsibility.
+1. Clear canonical architecture document maps every selected archive profile to one writer/reader/native responsibility.
 2. Exact ablation hooks exist for v0.29, Geometry-only, PrefixGraph-only, and combined behavior without arithmetic borrowing.
-3. PrefixGraph promotion debt is resolved explicitly, not left as `CMPNXP1` research scaffolding by accident.
-4. Focused round-trip/recovery/locality/property tests remain green.
-5. Redundant promoted facades are removed or demoted to clearly labeled historical/research helpers without deleting useful notes/evidence.
-6. Format/API documentation matches actual bytes and fallback semantics.
+3. PrefixGraph promotion debt is resolved explicitly, not left as research scaffolding by accident.
+4. Genuine r24-vs-r25 complete-product selection floor and conservative ties are tested.
+5. User/internal tree identities and strong verification semantics are explicit and tested.
+6. Signed timestamp, cross-platform safe-symlink, recovery/locality/property tests remain green.
+7. Canonical import/dispatch has no process-global research-module mutation hazard.
+8. Redundant promoted facades are removed or demoted to clearly labeled historical/research helpers without deleting useful notes/evidence.
+9. Format/API documentation matches actual bytes and fallback semantics.
+10. Final `canonical-architecture` evidence is bound to the exact release fingerprint.
 
-## Handoff
+## Continuation rule
 
-Set `REVIEW` with exact source head, architecture decision record, files/commits to import, compatibility effect, tests run, and explicit list of any research modules intentionally retained only for history/ablation.
+Work directly on the authoritative branch and fix product defects where they actually live. Earlier branch-level implementations and tests are mechanism provenance only until present on the exact candidate.
+
+Move T03 to `DONE` only when every normative review item and the release-lock `canonical-architecture` obligation are durably closed.
