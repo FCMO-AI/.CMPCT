@@ -1,0 +1,62 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="420" viewBox="0 0 1280 420" role="img" aria-labelledby="title desc">
+  <title id="title">CMPCT repository hero — CMPCT by FCMO AI</title>
+  <desc id="desc">Dark editorial banner for CMPCT by FCMO AI, from the FCMO group, with an orange caret mark, information-grid lines, and the project statement Archive formats made peace with compromise. CMPCT did not.</desc>
+  <!-- Footnote: this asset intentionally contains no benchmark percentages or release numbers so the repository hero cannot become stale evidence. -->
+  <!-- Footnote: the maker credit is deliberately quiet and peripheral. CMPCT remains the hero; FCMO AI is discoverable as stewardship, not promoted as a competing product mark. -->
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#080808"/>
+      <stop offset="0.58" stop-color="#0b0b0b"/>
+      <stop offset="1" stop-color="#11100f"/>
+    </linearGradient>
+    <radialGradient id="hotGlow" cx="79%" cy="20%" r="62%">
+      <stop offset="0" stop-color="#FD5204" stop-opacity="0.19"/>
+      <stop offset="0.34" stop-color="#FD5204" stop-opacity="0.055"/>
+      <stop offset="1" stop-color="#FD5204" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="axis" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#FD5204" stop-opacity="0"/>
+      <stop offset="0.5" stop-color="#FD5204" stop-opacity="0.82"/>
+      <stop offset="1" stop-color="#FD5204" stop-opacity="0"/>
+    </linearGradient>
+    <pattern id="grid" width="48" height="48" patternUnits="userSpaceOnUse">
+      <path d="M 48 0 L 0 0 0 48" fill="none" stroke="#ffffff" stroke-opacity="0.026" stroke-width="1"/>
+    </pattern>
+    <filter id="soft" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur stdDeviation="24"/>
+    </filter>
+  </defs>
+
+  <rect width="1280" height="420" rx="28" fill="url(#bg)"/>
+  <rect width="1280" height="420" rx="28" fill="url(#grid)"/>
+  <rect width="1280" height="420" rx="28" fill="url(#hotGlow)"/>
+  <rect x="1" y="1" width="1278" height="418" rx="27" fill="none" stroke="#ffffff" stroke-opacity="0.11"/>
+
+  <circle cx="1045" cy="85" r="126" fill="#FD5204" opacity="0.038" filter="url(#soft)"/>
+  <path d="M1072 40 L1131 129 L1101 129 L1071 84 L1042 129 L1012 129 Z" fill="#FD5204" opacity="0.97"/>
+  <path d="M1072 40 L1131 129 L1101 129 L1071 84 L1042 129 L1012 129 Z" fill="none" stroke="#ff8c55" stroke-opacity="0.45" stroke-width="1.5"/>
+
+  <g opacity="0.74">
+    <line x1="778" y1="205" x2="1190" y2="205" stroke="url(#axis)" stroke-width="1"/>
+    <circle cx="826" cy="205" r="4" fill="#FD5204"/>
+    <circle cx="944" cy="205" r="3" fill="#d7ff3f"/>
+    <circle cx="1072" cy="205" r="4" fill="#FD5204"/>
+    <circle cx="1160" cy="205" r="3" fill="#ffffff" fill-opacity="0.55"/>
+    <path d="M826 205 C870 205 888 168 944 168 S1014 205 1072 205 S1127 238 1160 238" fill="none" stroke="#ffffff" stroke-opacity="0.15" stroke-width="1.2"/>
+    <path d="M826 205 C878 205 894 248 944 248 S1018 205 1072 205" fill="none" stroke="#FD5204" stroke-opacity="0.28" stroke-width="1.2"/>
+  </g>
+
+  <text x="72" y="78" fill="#FD5204" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="15" font-weight="800" letter-spacing="3">GENERAL-PURPOSE LOSSLESS ARCHIVE / CONTAINER</text>
+  <text x="68" y="184" fill="#f4f0e8" font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif" font-size="76" font-weight="900" letter-spacing="-5">.CMPCT</text>
+  <text x="72" y="238" fill="#b7b1a8" font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif" font-size="27" font-weight="620">Archive formats made peace with compromise.</text>
+  <text x="72" y="278" fill="#f4f0e8" font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif" font-size="27" font-style="italic" font-weight="760">CMPCT did not.</text>
+
+  <g transform="translate(72 336)">
+    <line x1="0" y1="0" x2="602" y2="0" stroke="#ffffff" stroke-opacity="0.11"/>
+    <line x1="0" y1="0" x2="132" y2="0" stroke="#FD5204" stroke-width="2"/>
+    <text x="0" y="30" fill="#6f6a63" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="12" font-weight="700" letter-spacing="1.8">SIZE · SPEED · SELECTIVE ACCESS · INTEGRITY · RECOVERY</text>
+  </g>
+
+  <text x="1195" y="365" text-anchor="end" fill="#5b5751" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="11" font-weight="700" letter-spacing="1.6">PERFORMANCE IS THE RELEASE CONTRACT</text>
+  <text x="1195" y="395" text-anchor="end" fill="#65605a" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="10.5" font-weight="650" letter-spacing="1.15">CMPCT by <tspan fill="#8A857C" font-weight="800">FCMO AI</tspan> · From the FCMO group</text>
+</svg>
