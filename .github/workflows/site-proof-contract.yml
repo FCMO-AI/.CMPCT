@@ -1,0 +1,160 @@
+# ci-lane: fast
+name: CMPCT public proof contract
+
+on:
+  pull_request:
+    paths:
+      - "site/**"
+      - "docs/SITE_PUBLIC_PROOF_STANDARD.md"
+      - "docs/GH_PAGES_DEPLOYMENT.md"
+      - "benchmarks/history/**"
+      - "SURFACE_REVISION"
+      - "pyproject.toml"
+      - ".github/workflows/site-proof-contract.yml"
+  push:
+    branches: [main]
+    paths:
+      - "site/**"
+      - "docs/SITE_PUBLIC_PROOF_STANDARD.md"
+      - "docs/GH_PAGES_DEPLOYMENT.md"
+      - "benchmarks/history/**"
+      - "SURFACE_REVISION"
+      - "pyproject.toml"
+      - ".github/workflows/site-proof-contract.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-public-proof-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  proof-surface:
+    runs-on: ubuntu-latest
+    timeout-minutes: 18
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Set up Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: "22"
+
+      - name: Install canonical CMPCT package
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e .
+
+      - name: Build public site
+        run: |
+          python tools/check_public_surface.py
+          python site/build_site.py --out _site
+          python site/enhance_site.py _site
+
+      - name: Validate stable public evidence and required proof surfaces
+        run: python site/tests/proof_surface_contract.py _site
+
+      - name: Preserve release-level evidence invariants
+        run: python site/tests/release_evidence_contract.py
+
+      - name: Check browser code
+        run: |
+          node --check site/src/assets/app.js
+          node --check site/src/assets/experience.js
+          node --check site/src/assets/motion.js
+          node --check site/src/assets/cinematic.js
+          node --check site/src/assets/cmpct-browser-writer.js
+          node --check site/tests/viewport-matrix.mjs
+
+      - name: Preserve Browser Lab canonical compatibility
+        run: |
+          node site/tests/browser-writer-smoke.mjs /tmp/browser-writer-smoke.cmpct
+          python - <<'PY'
+          from pathlib import Path
+          from cmpct.reader import CMPCT
+
+          path = Path('/tmp/browser-writer-smoke.cmpct')
+          with CMPCT(path) as archive:
+              assert archive.index['v'] == 24
+              assert [row[0] for row in archive.files] == ['copy/repeated.txt', 'docs/repeated.txt', 'unique.txt']
+              assert archive.read('copy/repeated.txt') == archive.read('docs/repeated.txt')
+              assert archive.read('unique.txt') == b'small independent file\n'
+          PY
+
+      - name: Install Chromium render harness
+        run: |
+          # Footnote: Playwright is CI-only and never ships with the public site. GitHub's Ubuntu runner
+          # already carries Chromium's ordinary system libraries; downloading only the pinned browser keeps
+          # this fast-lane gate deterministic and avoids mutating the runner with an apt transaction on every PR.
+          npm install --no-save --no-package-lock playwright@1.55.0
+          npx playwright install chromium
+
+      - name: Render responsive viewport matrix
+        run: |
+          python -m http.server 4173 --directory _site >/tmp/cmpct-site.log 2>&1 &
+          SERVER_PID=$!
+          trap 'kill "$SERVER_PID" 2>/dev/null || true' EXIT
+          node site/tests/viewport-matrix.mjs http://127.0.0.1:4173/ viewport-artifacts
+
+      - name: Preserve responsive render evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: cmpct-responsive-matrix-${{ github.sha }}
+          path: viewport-artifacts/
+          if-no-files-found: warn
+          retention-days: 7
+
+      - name: Stamp validated main publication receipt
+        if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+        env:
+          SOURCE_COMMIT: ${{ github.sha }}
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          out = Path('_site')
+          payload = json.loads((out / 'project-data.json').read_text(encoding='utf-8'))
+          project = payload['project']
+          evidence = payload.get('public_evidence') or {}
+          receipt = {
+              'schema': 'cmpct-static-pages-deployment-v1',
+              'publishing_branch': 'gh-pages',
+              'publishing_path': '/',
+              'source_branch': 'main',
+              'source_commit': os.environ['SOURCE_COMMIT'],
+              'project_version': project['project_version'],
+              'surface_revision': project['surface_revision'],
+              'canonical_format_revision': project['format_revision'],
+              'evidence_schema': evidence.get('schema'),
+              'jekyll': False,
+              'static_only': True,
+              'generated_from_committed_evidence': True,
+              'policy': 'main owns source and validation; gh-pages owns generated serving artifacts only',
+          }
+          (out / 'deployment.json').write_text(json.dumps(receipt, indent=2) + '\n', encoding='utf-8')
+          PY
+
+      - name: Preserve validated main static artifact
+        if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: cmpct-public-site-${{ github.sha }}
+          path: _site/
+          if-no-files-found: error
+          retention-days: 7
+
+# Footnote: Actions validates canonical source and, on main only, preserves the exact checked static tree
+# as a short-lived promotion handoff. The viewport artifact is visual evidence, not a deployment source.
+# Pages still serves only the explicitly promoted gh-pages tree.

@@ -1,0 +1,61 @@
+# ci-lane: fast
+name: CMPCT CI topology ratchet
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/**"
+      - ".github/AGENTS.md"
+      - "docs/CI_ARCHITECTURE.md"
+      - "tools/check_ci_topology.py"
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/**"
+      - ".github/AGENTS.md"
+      - "docs/CI_ARCHITECTURE.md"
+      - "tools/check_ci_topology.py"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-ci-topology-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  topology:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check out repository history
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Select workflow files that this change actually touched
+        id: changed
+        env:
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+          BEFORE: ${{ github.event.before }}
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = "pull_request" ] && [ -n "${PR_BASE:-}" ]; then
+            base="$PR_BASE"
+          elif [ -n "${BEFORE:-}" ] && [ "$BEFORE" != "0000000000000000000000000000000000000000" ]; then
+            base="$BEFORE"
+          else
+            base="HEAD^"
+          fi
+
+          git diff --name-only "$base" HEAD -- '.github/workflows/*.yml' '.github/workflows/*.yaml' > /tmp/changed-workflows.txt
+          cat /tmp/changed-workflows.txt
+
+      - name: Enforce CI topology on changed workflows
+        run: |
+          mapfile -t files < /tmp/changed-workflows.txt
+          python tools/check_ci_topology.py "${files[@]}"
+
+# Footnote: this ratchet deliberately checks only new/materially edited workflow files. Existing legacy
+# workflows are migration debt, not precedent; touching one makes the new topology contract apply.

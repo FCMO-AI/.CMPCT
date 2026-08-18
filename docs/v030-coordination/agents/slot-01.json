@@ -1,0 +1,12 @@
+{
+  "schema": "cmpct-v030-agent-claim-v1",
+  "slot": "slot-01",
+  "role": "native-portability",
+  "status": "ACTIVE",
+  "branch": "agent/v030-coop-native-portability",
+  "claim_owner": "gpt-5.6-sol-resumed-20260818-01",
+  "claimed_at_utc": "2026-08-18T05:56:21Z",
+  "base_integration_sha_observed": "ae8d3b91e74ca8e60653208f5b3bd1055d1b5b55",
+  "task_ids": ["T01"],
+  "notes": "Claimed atomically from the authoritative coordination branch. T01 final evidence must be rerun against the reconciled T00 candidate before release acceptance."
+}

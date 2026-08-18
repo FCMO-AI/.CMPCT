@@ -1,0 +1,12 @@
+{
+  "schema": "cmpct-v030-agent-claim-v1",
+  "slot": "slot-03",
+  "role": "graph-productization",
+  "status": "ACTIVE",
+  "branch": "agent/v030-coop-graph-productization",
+  "claim_owner": "gpt-5.6-sol-graph-20260817",
+  "claimed_at_utc": "2026-08-18T05:56:00Z",
+  "base_integration_sha_observed": "f651e5a724be3c2354917504de4258611e2027fa",
+  "task_ids": ["T03"],
+  "notes": "Claimed atomically after slot-01 and slot-02 were already occupied. T03 final import/evidence will be reconciled against the post-T00 authoritative integration head."
+}

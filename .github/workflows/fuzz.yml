@@ -1,13 +1,25 @@
+# ci-lane: fast
 name: CMPCT continuous fuzzing
 
 on:
   pull_request:
+    paths:
+      - "src/**"
+      - "native/**"
+      - "fuzz/**"
+      - "tests/**"
+      - "pyproject.toml"
+      - ".github/workflows/fuzz.yml"
   workflow_dispatch:
   schedule:
     - cron: "17 4 * * *"
 
 permissions:
   contents: read
+
+concurrency:
+  group: cmpct-fuzz-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 jobs:
   fuzz-smoke:
