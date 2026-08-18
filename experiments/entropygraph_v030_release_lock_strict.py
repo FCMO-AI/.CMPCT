@@ -6,7 +6,9 @@ This module adds the hostile-input grammar that must run *before* any receipt ca
 - JSON must be standards-compliant; Python's permissive NaN/Infinity extensions are rejected;
 - every parsed float must be finite;
 - evidence/task paths must remain ordinary repository files with no symlink component or root escape;
-- JSON evidence used by receipts is pre-parsed under the same strict grammar before the core lock reads it.
+- JSON evidence used by receipts is pre-parsed under the same strict grammar before the core lock reads it;
+- every receipt must prove that at least one hashed JSON evidence file records the exact current release
+  fingerprint, preventing an old green artifact from being paired with a newly typed current fingerprint.
 
 Footnote: this file intentionally lives under ``experiments/entropygraph_v030_*`` because that surface is already
 part of the release-critical fingerprint. Changing the strict gate therefore invalidates every prior receipt.
@@ -66,6 +68,26 @@ def _require_finite(value: Any, *, label: str, path: str = "$", nodes: int = 0) 
     return nodes
 
 
+def _lookup_json(document: Any, dotted: str) -> Any:
+    if not isinstance(dotted, str) or not dotted:
+        raise StrictReleaseInputError("evidence fingerprint json_path is missing")
+    current = document
+    for part in dotted.split("."):
+        if isinstance(current, dict):
+            if part not in current:
+                raise StrictReleaseInputError(f"evidence fingerprint JSON path does not exist: {dotted}")
+            current = current[part]
+            continue
+        if isinstance(current, list) and part.isdigit():
+            index = int(part)
+            if index >= len(current):
+                raise StrictReleaseInputError(f"evidence fingerprint JSON path does not exist: {dotted}")
+            current = current[index]
+            continue
+        raise StrictReleaseInputError(f"evidence fingerprint JSON path does not exist: {dotted}")
+    return current
+
+
 def strict_repo_file(rel: str) -> Path:
     """Resolve one ordinary repository file without following symlinked path components."""
     if not isinstance(rel, str) or not rel or "\\" in rel or "\x00" in rel:
@@ -97,7 +119,6 @@ def load_manifest_strict(path: Path = DEFAULT_MANIFEST) -> dict[str, Any]:
     manifest = strict_json_loads(path.read_text(encoding="utf-8"), label=path.relative_to(ROOT).as_posix())
     if not isinstance(manifest, dict):
         raise StrictReleaseInputError("release-lock manifest root must be an object")
-    # Reuse the core semantic validator without letting it re-read permissive text.
     if manifest.get("schema") != "cmpct-v030-release-lock-manifest-v1":
         raise StrictReleaseInputError("unsupported v0.30 release-lock manifest schema")
     if manifest.get("release") != "0.30.0" or manifest.get("target_format_revision") != 25:
@@ -109,9 +130,42 @@ def load_manifest_strict(path: Path = DEFAULT_MANIFEST) -> dict[str, Any]:
     return manifest
 
 
+def _validate_evidence_fingerprint_source(
+    receipt_id: str,
+    receipt: dict[str, Any],
+    evidence_documents: list[Any | None],
+    expected_fingerprint: str,
+) -> str | None:
+    source = receipt.get("candidate_fingerprint_source")
+    if not isinstance(source, dict):
+        return f"receipt {receipt_id}: missing candidate_fingerprint_source"
+    evidence_index = source.get("evidence_index")
+    json_path = source.get("json_path")
+    if isinstance(evidence_index, bool) or not isinstance(evidence_index, int) or evidence_index < 0:
+        return f"receipt {receipt_id}: invalid candidate_fingerprint_source evidence_index"
+    if evidence_index >= len(evidence_documents):
+        return f"receipt {receipt_id}: candidate_fingerprint_source evidence_index out of range"
+    document = evidence_documents[evidence_index]
+    if document is None:
+        return f"receipt {receipt_id}: candidate fingerprint source evidence is not strict JSON"
+    try:
+        source_value = _lookup_json(document, json_path)
+    except StrictReleaseInputError as exc:
+        return f"receipt {receipt_id}: {exc}"
+    if source_value != expected_fingerprint:
+        return (
+            f"receipt {receipt_id}: evidence candidate fingerprint {source_value!r} does not match "
+            f"current fingerprint {expected_fingerprint!r}"
+        )
+    if receipt.get("candidate_fingerprint") != expected_fingerprint:
+        return f"receipt {receipt_id}: receipt candidate fingerprint does not match current fingerprint"
+    return None
+
+
 def preflight(manifest: dict[str, Any]) -> list[str]:
     """Return strict-input failures without mutating core release state."""
     failures: list[str] = []
+    expected_fingerprint, _ = CORE.fingerprint(manifest)
 
     for task in manifest.get("required_task_states", []):
         rel = task.get("path") if isinstance(task, dict) else None
@@ -146,22 +200,37 @@ def preflight(manifest: dict[str, Any]) -> list[str]:
             continue
 
         evidence = receipt.get("evidence")
+        evidence_documents: list[Any | None] = []
         if not isinstance(evidence, list):
-            continue
-        for index, item in enumerate(evidence):
-            if not isinstance(item, dict) or not isinstance(item.get("path"), str):
-                continue
-            rel = item["path"]
-            try:
-                evidence_path = strict_repo_file(rel)
-            except Exception as exc:
-                failures.append(f"receipt {receipt_id} evidence[{index}]: {exc}")
-                continue
-            if evidence_path.suffix.lower() == ".json":
+            evidence_documents = []
+        else:
+            for index, item in enumerate(evidence):
+                document: Any | None = None
+                if not isinstance(item, dict) or not isinstance(item.get("path"), str):
+                    evidence_documents.append(None)
+                    continue
+                rel = item["path"]
                 try:
-                    strict_json_loads(evidence_path.read_text(encoding="utf-8"), label=rel)
+                    evidence_path = strict_repo_file(rel)
                 except Exception as exc:
                     failures.append(f"receipt {receipt_id} evidence[{index}]: {exc}")
+                    evidence_documents.append(None)
+                    continue
+                if evidence_path.suffix.lower() == ".json":
+                    try:
+                        document = strict_json_loads(evidence_path.read_text(encoding="utf-8"), label=rel)
+                    except Exception as exc:
+                        failures.append(f"receipt {receipt_id} evidence[{index}]: {exc}")
+                evidence_documents.append(document)
+
+        fingerprint_error = _validate_evidence_fingerprint_source(
+            receipt_id,
+            receipt,
+            evidence_documents,
+            expected_fingerprint,
+        )
+        if fingerprint_error:
+            failures.append(fingerprint_error)
     return failures
 
 
@@ -174,6 +243,15 @@ def check(manifest: dict[str, Any]) -> tuple[bool, dict[str, Any]]:
     report["release_unlocked"] = bool(core_ok and not strict_failures)
     report["strict_front_door"] = "experiments/entropygraph_v030_release_lock_strict.py"
     return report["release_unlocked"], report
+
+
+def _strict_template(receipt_id: str, manifest: dict[str, Any], fingerprint: str) -> dict[str, Any]:
+    template = CORE.template_for(receipt_id, manifest, fingerprint)
+    template["candidate_fingerprint_source"] = {
+        "evidence_index": 0,
+        "json_path": "candidate_fingerprint",
+    }
+    return template
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -197,7 +275,7 @@ def main(argv: list[str] | None = None) -> int:
         print(json.dumps({"candidate_fingerprint": fingerprint, "files": paths}, indent=2, allow_nan=False))
         return 0
     if args.template:
-        print(json.dumps(CORE.template_for(args.template, manifest, fingerprint), indent=2, allow_nan=False))
+        print(json.dumps(_strict_template(args.template, manifest, fingerprint), indent=2, allow_nan=False))
         return 0
 
     ok, report = check(manifest)
