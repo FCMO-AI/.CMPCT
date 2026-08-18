@@ -55,7 +55,7 @@ Java_ai_fcmo_cmpct_CmpctNative_nativeOpen(JNIEnv *env, jclass, jstring path) {
         return 0;
     }
     const char *utf = env->GetStringUTFChars(path, nullptr);
-    if (utf == nullptr) return 0;  // JVM already raised OOM.
+    if (utf == nullptr) return 0;
     PortableArchive *archive = nullptr;
     const int32_t status = cmpct_portable_open(utf, &archive);
     env->ReleaseStringUTFChars(path, utf);
@@ -85,6 +85,14 @@ Java_ai_fcmo_cmpct_CmpctNative_nativeRevision(JNIEnv *env, jclass, jlong handle)
     return static_cast<jint>(revision);
 }
 
+extern "C" JNIEXPORT void JNICALL
+Java_ai_fcmo_cmpct_CmpctNative_nativeVerify(JNIEnv *env, jclass, jlong handle) {
+    PortableArchive *archive = nullptr;
+    if (!require_archive(env, handle, &archive)) return;
+    const int32_t status = cmpct_portable_verify(archive);
+    if (status != CMPCT_PORTABLE_OK) throw_io(env, status);
+}
+
 extern "C" JNIEXPORT jint JNICALL
 Java_ai_fcmo_cmpct_CmpctNative_nativeEntryCount(JNIEnv *env, jclass, jlong handle) {
     PortableArchive *archive = nullptr;
@@ -110,17 +118,14 @@ Java_ai_fcmo_cmpct_CmpctNative_nativeEntryPath(JNIEnv *env, jclass, jlong handle
         throw_io(env, CMPCT_PORTABLE_RANGE);
         return nullptr;
     }
-
     size_t len = 0;
-    int32_t status = cmpct_portable_entry_path(
-        archive, static_cast<size_t>(index), nullptr, 0, &len);
+    int32_t status = cmpct_portable_entry_path(archive, static_cast<size_t>(index), nullptr, 0, &len);
     if (status != CMPCT_PORTABLE_OK) {
         throw_io(env, status);
         return nullptr;
     }
     std::vector<uint8_t> path(len + 1, 0);
-    status = cmpct_portable_entry_path(
-        archive, static_cast<size_t>(index), path.data(), path.size(), &len);
+    status = cmpct_portable_entry_path(archive, static_cast<size_t>(index), path.data(), path.size(), &len);
     if (status != CMPCT_PORTABLE_OK) {
         throw_io(env, status);
         return nullptr;
@@ -136,10 +141,8 @@ Java_ai_fcmo_cmpct_CmpctNative_nativeEntryInfo(JNIEnv *env, jclass, jlong handle
         throw_io(env, CMPCT_PORTABLE_RANGE);
         return nullptr;
     }
-
     CmpctPortableEntryInfo info{};
-    const int32_t status =
-        cmpct_portable_entry_info(archive, static_cast<size_t>(index), &info);
+    const int32_t status = cmpct_portable_entry_info(archive, static_cast<size_t>(index), &info);
     if (status != CMPCT_PORTABLE_OK) {
         throw_io(env, status);
         return nullptr;
@@ -164,7 +167,6 @@ Java_ai_fcmo_cmpct_CmpctNative_nativeReadRange(
         throw_io(env, CMPCT_PORTABLE_RANGE);
         return nullptr;
     }
-
     std::vector<uint8_t> buffer(static_cast<size_t>(length));
     size_t read = 0;
     const int32_t status = cmpct_portable_entry_read_range(
@@ -178,7 +180,6 @@ Java_ai_fcmo_cmpct_CmpctNative_nativeReadRange(
         throw_io(env, status);
         return nullptr;
     }
-
     if (read > static_cast<size_t>(INT32_MAX)) {
         throw_io(env, CMPCT_PORTABLE_LIMIT);
         return nullptr;
@@ -193,3 +194,6 @@ Java_ai_fcmo_cmpct_CmpctNative_nativeReadRange(
     }
     return out;
 }
+
+// Footnote: JNI owns no archive grammar. Every operation, including complete verification, crosses the same
+// libcmpct_portable ABI used by desktop/native tests so Android cannot accidentally become a weaker parser.
