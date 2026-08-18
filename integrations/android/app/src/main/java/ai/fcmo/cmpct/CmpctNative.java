@@ -3,7 +3,7 @@ package ai.fcmo.cmpct;
 import java.io.Closeable;
 import java.io.IOException;
 
-/** Thin Java ownership layer over the shared revision-24 native core. */
+/** Thin Java ownership layer over the shared CMPCT r24/r25 portable native reader. */
 final class CmpctNative {
     static final int KIND_FILE = 0;
     static final int KIND_DIR = 1;
@@ -12,8 +12,8 @@ final class CmpctNative {
     static final int MAX_BRIDGE_READ = 1024 * 1024;
 
     static {
-        // Footnote: cmpct_android is only a JNI shim. It links libcmpct_core.so so Android uses the
-        // same parser/range-read implementation and conformance boundary as every other platform.
+        // Footnote: cmpct_android is only a JNI shim. It links libcmpct_portable.so so Android uses the
+        // same r24 delegation, canonical-r25 admission/recovery checks and range semantics as desktop.
         System.loadLibrary("cmpct_android");
     }
 
