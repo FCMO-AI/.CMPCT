@@ -9,8 +9,11 @@ on:
       - 'native/cmpct-portable/**'
       - 'native/cmpct-core/**'
       - 'experiments/entropygraph_v030_canonical_final.py'
+      - 'experiments/entropygraph_v030_canonical_final_impl.py'
+      - 'experiments/entropygraph_v030_profile_isolation.py'
       - 'experiments/entropygraph_v030_release_product.py'
       - 'tests/test_v030_canonical_final.py'
+      - 'tests/test_v030_profile_isolation.py'
       - 'tests/generate_v030_canonical_goldens.py'
       - 'tests/conformance/v030-r25-canonical.json'
       - 'tests/native_v030_canonical.py'
@@ -41,8 +44,11 @@ jobs:
           sudo apt-get install -y zstd
           python -m pip install --upgrade pip
           python -m pip install -e '.[test]'
-      - name: Python canonical boundary tests
-        run: python -m pytest -q tests/test_v030_canonical_final.py
+      - name: Python canonical boundary and profile-isolation tests
+        run: |
+          python -m pytest -q \
+            tests/test_v030_canonical_final.py \
+            tests/test_v030_profile_isolation.py
       - name: Reproduce independent canonical r25 golden bytes
         run: python tests/generate_v030_canonical_goldens.py --check
       - name: Rust format
@@ -69,3 +75,5 @@ jobs:
 # Footnote: this lane is release-scoped because it validates the shared native reader that can open every
 # representation the v0.30 selector may publish. Builder-independent CMP25 bytes are regenerated from primitive
 # framing, then consumed by both the CLI and C ABI; self-generated writer/reader agreement is not sufficient.
+# The wrapper, preserved implementation body and namespace-isolation loader are all trigger paths because any of
+# them can change the exact canonical bytes/dispatch contract native code is required to match.
