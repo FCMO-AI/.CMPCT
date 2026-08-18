@@ -186,7 +186,7 @@ jobs:
       - name: Install corpus dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y zstd gcc
+          sudo apt-get install -y zstd gcc ffmpeg
           python -m pip install --upgrade pip
           python -m pip install -e '.[test]'
           python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
@@ -242,7 +242,7 @@ jobs:
       - name: Install runtime benchmark dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y zstd gcc
+          sudo apt-get install -y zstd gcc ffmpeg
           python -m pip install --upgrade pip
           python -m pip install -e '.[test]'
           python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
@@ -288,6 +288,8 @@ jobs:
           if-no-files-found: warn
           retention-days: 90
 
-# Footnote: this workflow is only orchestration. All numeric thresholds live in the benchmark modules and are
-# asserted again here. A red job is a release blocker; a green job does not bypass native/portability/competitor
-# gates. The PR remains merge-locked until the full evidence ledger closes.
+# Footnote: the generalization/runtime jobs construct the frozen neutral-hostile media workload and therefore need
+# `ffmpeg` available before measurement. The reader/G0-G4/shared-rehab lanes do not construct that media row and
+# retain their narrower dependency cones. This is environment repair only: all numeric thresholds remain in the
+# benchmark modules and are asserted again here. A red job is still a release blocker; a green job does not bypass
+# native/portability/competitor gates, and the PR remains merge-locked until the full evidence ledger closes.
