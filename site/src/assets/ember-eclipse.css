@@ -1,0 +1,161 @@
+/* CMPCT Surface 0.29.i — Ember Eclipse hero atmosphere.
+   Footnote: this layer reduces orange as a uniform environmental wash and turns it into a localized
+   physical signal around the existing compression object. The inherited typography, proof score,
+   evidence renderer, motion system and responsive geometry remain owners of their respective contracts. */
+
+:root {
+  --hero-progress: 0;
+  --eclipse-warm: rgba(253,82,4,.12);
+  --eclipse-warm-soft: rgba(253,82,4,.045);
+  --eclipse-dark: rgba(8,8,8,.88);
+}
+
+/* The page body returns to charcoal as the environmental default. Orange survives as illumination rather
+   than as a page-sized fill, which increases its perceived intensity while lowering visual fatigue. */
+body {
+  background:
+    radial-gradient(circle at 84% 7%, rgba(253,82,4,.018), transparent 21%),
+    radial-gradient(circle at 12% 72%, rgba(215,255,63,.014), transparent 28%),
+    #080808;
+}
+
+/* Full-bleed light field. main owns viewport width, so the hero can remain a bounded editorial composition
+   while the atmosphere reaches the physical display edges. The field contracts as the hero leaves view,
+   making the brand signal behave like energy collapsing into the archive rather than a generic gradient. */
+main {
+  position: relative;
+  isolation: isolate;
+}
+main::before {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  left: 0;
+  right: 0;
+  top: -72px;
+  height: min(1180px, 116svh);
+  pointer-events: none;
+  background:
+    radial-gradient(ellipse 56% 66% at 78% 18%, rgba(253,82,4,.13) 0%, rgba(253,82,4,.075) 18%, rgba(253,82,4,.026) 38%, transparent 66%),
+    radial-gradient(ellipse 42% 34% at 63% 63%, rgba(253,82,4,.028) 0%, transparent 72%),
+    radial-gradient(ellipse 88% 78% at 50% 24%, transparent 28%, rgba(8,8,8,.12) 62%, rgba(8,8,8,.48) 100%),
+    linear-gradient(180deg, rgba(8,8,8,.80) 0%, rgba(8,8,8,.34) 18%, rgba(8,8,8,.08) 48%, rgba(8,8,8,.62) 86%, #080808 100%);
+  opacity: calc(1 - var(--hero-progress) * .30);
+  transform: translate3d(0, calc(var(--hero-progress) * 48px), 0) scale(calc(1 - var(--hero-progress) * .035));
+  transform-origin: 76% 18%;
+  transition: opacity .12s linear;
+}
+
+/* Convert the inherited broad orange halo into an eclipse corona. The dark inner disk gives the eye a quiet
+   anchor; the warm ring and sparse conic glints visually explain where the orange is coming from. */
+.hero::before {
+  width: min(64vw, 980px);
+  right: -10%;
+  top: -12%;
+  background:
+    radial-gradient(circle at 50% 50%, rgba(8,8,8,.92) 0 14%, rgba(8,8,8,.48) 20%, transparent 24%),
+    radial-gradient(circle at 50% 50%, transparent 0 18%, rgba(253,82,4,.14) 23%, rgba(253,82,4,.058) 34%, rgba(253,82,4,.016) 48%, transparent 66%),
+    conic-gradient(from 76deg,
+      transparent 0 8%, rgba(253,82,4,.038) 10%, transparent 13% 29%,
+      rgba(255,255,255,.016) 32%, transparent 35% 57%,
+      rgba(253,82,4,.028) 61%, transparent 65% 100%);
+  filter: blur(13px) saturate(.92);
+  opacity: calc(.82 - var(--hero-progress) * .18);
+  transform:
+    translate3d(
+      calc(var(--hero-pointer-x) * 18px),
+      calc(var(--hero-pointer-y) * 12px + var(--hero-scroll) * .10px),
+      0
+    )
+    scale(calc(1 - var(--hero-progress) * .14));
+  transform-origin: 50% 50%;
+  animation: none;
+}
+
+/* Keep the evidence sun crisp above the softer corona. A slightly calmer opacity gives the surrounding
+   charcoal enough authority that the dots read as an object instead of turning the viewport orange. */
+.entropy-sun {
+  opacity: .90;
+  filter:
+    drop-shadow(0 0 24px rgba(253,82,4,.095))
+    drop-shadow(0 0 82px rgba(253,82,4,.028));
+}
+
+/* Quiet shadow around the hero copy and proof object prevents the atmospheric light from flattening the
+   editorial hierarchy. This is deliberately not a card or backdrop blur: the content still occupies space. */
+.hero-copy h1 {
+  text-shadow: 0 22px 72px rgba(0,0,0,.42), 0 2px 18px rgba(0,0,0,.22);
+}
+.hero-score {
+  background:
+    radial-gradient(circle at var(--score-glow-x,72%) var(--score-glow-y,18%), rgba(253,82,4,.115), transparent 28%),
+    linear-gradient(145deg, rgba(253,82,4,.055), rgba(255,255,255,.014) 36%, #090909 74%);
+}
+.hero-metrics {
+  background: rgba(8,8,8,.66);
+}
+
+/* Ultrawide layouts get a wider, shallower light source so the object occupies peripheral vision without
+   spraying orange across the entire 21:9 canvas. */
+@media (min-width: 1400px) and (min-aspect-ratio: 21/9) {
+  main::before {
+    background:
+      radial-gradient(ellipse 42% 78% at 72% 15%, rgba(253,82,4,.11) 0%, rgba(253,82,4,.060) 20%, rgba(253,82,4,.018) 40%, transparent 67%),
+      radial-gradient(ellipse 34% 28% at 60% 66%, rgba(253,82,4,.022), transparent 72%),
+      radial-gradient(ellipse 92% 82% at 50% 23%, transparent 32%, rgba(8,8,8,.16) 66%, rgba(8,8,8,.55) 100%),
+      linear-gradient(180deg, rgba(8,8,8,.82), rgba(8,8,8,.16) 43%, rgba(8,8,8,.68) 88%, #080808);
+    transform-origin: 72% 15%;
+  }
+}
+
+/* Phones have less physical area for visual recovery, so orange is concentrated even harder around the
+   compression object. The title remains the first dominant signal; the atmosphere never becomes a poster fill. */
+@media (max-width: 760px) {
+  main::before {
+    top: -62px;
+    height: min(980px, 128svh);
+    background:
+      radial-gradient(ellipse 74% 46% at 83% 17%, rgba(253,82,4,.095) 0%, rgba(253,82,4,.046) 22%, rgba(253,82,4,.014) 42%, transparent 67%),
+      radial-gradient(ellipse 92% 78% at 50% 20%, transparent 28%, rgba(8,8,8,.16) 58%, rgba(8,8,8,.62) 100%),
+      linear-gradient(180deg, rgba(8,8,8,.88) 0%, rgba(8,8,8,.42) 20%, rgba(8,8,8,.10) 48%, rgba(8,8,8,.72) 84%, #080808 100%);
+  }
+  .hero::before {
+    opacity: calc(.67 - var(--hero-progress) * .14);
+    background:
+      radial-gradient(circle at 50% 50%, rgba(8,8,8,.94) 0 14%, rgba(8,8,8,.48) 20%, transparent 24%),
+      radial-gradient(circle at 50% 50%, transparent 0 18%, rgba(253,82,4,.11) 24%, rgba(253,82,4,.040) 36%, transparent 62%),
+      conic-gradient(from 70deg, transparent 0 38%, rgba(253,82,4,.024) 42%, transparent 47% 100%);
+  }
+  .entropy-sun { opacity: .62; }
+}
+
+@media (max-width: 520px) {
+  main::before {
+    background:
+      radial-gradient(ellipse 70% 40% at 87% 15%, rgba(253,82,4,.078), rgba(253,82,4,.026) 28%, transparent 64%),
+      radial-gradient(ellipse 96% 82% at 50% 18%, transparent 24%, rgba(8,8,8,.22) 58%, rgba(8,8,8,.70) 100%),
+      linear-gradient(180deg, rgba(8,8,8,.91), rgba(8,8,8,.48) 22%, rgba(8,8,8,.14) 48%, rgba(8,8,8,.78) 86%, #080808);
+  }
+}
+
+/* Short landscape viewports need a shallow light ellipse; a tall radial bloom would consume most of the
+   visible screen and recreate the original orange-heavy problem. */
+@media (orientation: landscape) and (max-height: 520px) {
+  main::before {
+    height: 720px;
+    background:
+      radial-gradient(ellipse 42% 34% at 78% 13%, rgba(253,82,4,.085), rgba(253,82,4,.025) 32%, transparent 66%),
+      radial-gradient(ellipse 94% 72% at 50% 18%, transparent 24%, rgba(8,8,8,.24) 62%, rgba(8,8,8,.68) 100%),
+      linear-gradient(180deg, rgba(8,8,8,.88), rgba(8,8,8,.30) 34%, rgba(8,8,8,.74) 82%, #080808);
+  }
+  .hero::before { top: -38%; opacity: .60; }
+  .entropy-sun { opacity: .58; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  main::before,
+  .hero::before {
+    transform: none !important;
+    transition: none !important;
+  }
+}
