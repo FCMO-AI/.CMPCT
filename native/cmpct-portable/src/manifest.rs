@@ -109,7 +109,7 @@ impl FsManifest {
             }
             let kind = text(&row[1], "r25 filesystem entry kind")?;
             let mode = uint(&row[2], "r25 filesystem mode", 0o7777)? as u32;
-            let mtime_ns = nonnegative_i64(&row[3], "r25 filesystem mtime_ns")?;
+            let mtime_ns = signed_i64(&row[3], "r25 filesystem mtime_ns")?;
             let uid = uint(&row[4], "r25 filesystem uid", u32::MAX as u64)? as u32;
             let gid = uint(&row[5], "r25 filesystem gid", u32::MAX as u64)? as u32;
             let xattrs = parse_xattrs(&row[6])?;
@@ -279,13 +279,13 @@ impl FsManifest {
     }
 }
 
-fn nonnegative_i64(value: &Value, label: &str) -> Result<i64, PortableError> {
-    let value = value
+fn signed_i64(value: &Value, label: &str) -> Result<i64, PortableError> {
+    // Footnote: filesystem nanosecond timestamps use a signed domain. A negative value is not malformed merely
+    // because it predates the Unix epoch; native and Python must accept the same writer-emittable i64 range.
+    value
         .as_i64()
         .or_else(|| value.as_u64().and_then(|value| i64::try_from(value).ok()))
-        .filter(|value| *value >= 0)
-        .ok_or_else(|| PortableError::Format(format!("{label} declaration")))?;
-    Ok(value)
+        .ok_or_else(|| PortableError::Format(format!("{label} declaration")))
 }
 
 fn parse_xattrs(value: &Value) -> Result<Vec<(String, Vec<u8>)>, PortableError> {
@@ -320,4 +320,16 @@ fn parse_xattrs(value: &Value) -> Result<Vec<(String, Vec<u8>)>, PortableError> 
         out.push((name, data.clone()));
     }
     Ok(out)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn signed_mtime_domain_accepts_pre_epoch_values() {
+        assert_eq!(signed_i64(&Value::from(-1_i64), "mtime").unwrap(), -1);
+        assert_eq!(signed_i64(&Value::from(i64::MIN), "mtime").unwrap(), i64::MIN);
+        assert_eq!(signed_i64(&Value::from(i64::MAX), "mtime").unwrap(), i64::MAX);
+    }
 }
