@@ -36,7 +36,7 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y zstd gcc
+          sudo apt-get install -y zstd gcc ffmpeg
           python -m pip install --upgrade pip
           python -m pip install -e '.[test]'
       - name: Compile final authority surface
@@ -83,7 +83,7 @@ jobs:
       - name: Install corpus dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y zstd gcc
+          sudo apt-get install -y zstd gcc ffmpeg
           python -m pip install --upgrade pip
           python -m pip install -e '.[test]'
           python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
@@ -138,7 +138,7 @@ jobs:
       - name: Install runtime dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y zstd gcc
+          sudo apt-get install -y zstd gcc ffmpeg
           python -m pip install --upgrade pip
           python -m pip install -e '.[test]'
           python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
@@ -186,6 +186,8 @@ jobs:
           if-no-files-found: warn
           retention-days: 90
 
-# Footnote: these jobs do not redefine policy; they bind the frozen contracts to the memory-bounded final
-# authority facade. v1 jobs remain historical diagnostics only. Native/portability and external competitor
-# evidence remain separate mandatory gates before merge/version/site/release.
+# Footnote: `ffmpeg` is a frozen-corpus dependency, not a codec shortcut for CMPCT. The neutral-hostile media row
+# cannot exist without it, so every authority lane that constructs that corpus must install it before measuring.
+# These jobs do not redefine policy; they bind the frozen contracts to the memory-bounded final authority facade.
+# v1 jobs remain historical diagnostics only. Native/portability and external competitor evidence remain separate
+# mandatory gates before merge/version/site/release.
