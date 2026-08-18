@@ -25,9 +25,9 @@ import argparse
 import hashlib
 import json
 import multiprocessing as mp
+import os
 from pathlib import Path
 import queue as queue_module
-import shutil
 import statistics
 import sys
 import tempfile
@@ -49,9 +49,37 @@ CHILD_RESULT_TIMEOUT_S = 30 * 60
 def _sha256(path: Path) -> str:
     h = hashlib.sha256()
     with path.open("rb") as f:
-        for block in iter(lambda: f.read(1024 * 1024), b""):
+        for block in iter(lambda: f.read(1024 * 1024, ), b""):
             h.update(block)
     return h.hexdigest()
+
+
+def _durable_replace(source: Path, destination: Path) -> str:
+    """Publish ``source`` without recopying payload bytes and harden the rename against crashes.
+
+    ``os.replace`` makes publication atomic but atomicity alone is not a durability guarantee: after a
+    power loss, dirty file data or the renamed directory entry may not have reached stable storage. Flush
+    the completed candidate first, perform the same-filesystem rename, then fsync the destination directory
+    where the platform supports directory descriptors. The directory sync is intentionally capability-
+    detected because Windows does not expose POSIX directory fsync through this interface.
+    """
+    with source.open("rb") as candidate:
+        os.fsync(candidate.fileno())
+    os.replace(source, destination)
+
+    if os.name != "posix":
+        return "atomic-file-fsynced"
+
+    flags = os.O_RDONLY | getattr(os, "O_DIRECTORY", 0)
+    try:
+        directory_fd = os.open(destination.parent, flags)
+    except OSError:
+        return "atomic-file-fsynced-directory-sync-unavailable"
+    try:
+        os.fsync(directory_fd)
+    finally:
+        os.close(directory_fd)
+    return "atomic-file-and-directory-fsynced"
 
 
 def _worker(kind: str, root_s: str, out_s: str, queue) -> None:
@@ -105,7 +133,10 @@ def build_parallel(root: Path, out: Path) -> dict:
 
     started = time.perf_counter()
     ctx = mp.get_context("spawn")
-    with tempfile.TemporaryDirectory(prefix="cmpct-mosaic-parallel-") as td:
+    # Keep candidates beside the requested output so winner publication can be a same-filesystem atomic
+    # rename instead of an archive-sized payload copy. Candidate bytes and selection semantics are unchanged.
+    out.parent.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(prefix=".cmpct-mosaic-parallel-", dir=out.parent) as td:
         td_path = Path(td)
         v028_path = td_path / "v028.cmpct"
         attempt5_path = td_path / "attempt5.cmpct"
@@ -140,13 +171,17 @@ def build_parallel(root: Path, out: Path) -> dict:
                 f"exitcodes={[p.exitcode for p in processes]!r}"
             )
 
-        if attempt5_path.stat().st_size < v028_path.stat().st_size:
+        # Snapshot both sizes before publication. ``os.replace`` intentionally removes the winner's old
+        # temporary path, so post-publication metadata must never stat that path.
+        v028_bytes = v028_path.stat().st_size
+        attempt5_bytes = attempt5_path.stat().st_size
+        if attempt5_bytes < v028_bytes:
             chosen = attempt5_path
             selected = "mosaic"
         else:
             chosen = v028_path
             selected = "v028-fallback"
-        shutil.copyfile(chosen, out)
+        durability = _durable_replace(chosen, out)
         by_kind = {result["kind"]: result for result in results}
         return {
             "selected": selected,
@@ -155,9 +190,12 @@ def build_parallel(root: Path, out: Path) -> dict:
             "parallel_create_s": time.perf_counter() - started,
             "v028_child_s": by_kind["v028"]["elapsed_s"],
             "attempt5_child_s": by_kind["attempt5"]["elapsed_s"],
-            "v028_bytes": v028_path.stat().st_size,
-            "attempt5_graph_bytes": attempt5_path.stat().st_size,
+            "v028_bytes": v028_bytes,
+            "attempt5_graph_bytes": attempt5_bytes,
             "scheduler_mode": "parallel-independent-portfolio",
+            "selection_materialization": "same-filesystem-atomic-move",
+            "selection_extra_payload_write_bytes": 0,
+            "selection_durability": durability,
             "accepted_engine": ACCEPTED_ENGINE,
             "fast_reject_reason": None,
         }
