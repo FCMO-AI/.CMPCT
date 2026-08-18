@@ -1,14 +1,28 @@
+import os
 from pathlib import Path
 
-from experiments.entropygraph_v029_parallel_portfolio import ACCEPTED_ENGINE, build_parallel
+from experiments import entropygraph_v029_parallel_portfolio as portfolio
 from experiments import entropygraph_v029_residual_strict as accepted
+
+
+ACCEPTED_ENGINE = portfolio.ACCEPTED_ENGINE
+build_parallel = portfolio.build_parallel
+DURABLE_PUBLICATION_LEVELS = {
+    "atomic-file-fsynced",
+    "atomic-file-fsynced-directory-sync-unavailable",
+    "atomic-file-and-directory-fsynced",
+}
+
+
+def _make_two_file_corpus(root: Path) -> None:
+    root.mkdir()
+    (root / "a.bin").write_bytes((b"alpha-beta-gamma\n" * 7000) + b"tail-a")
+    (root / "b.bin").write_bytes((b"alpha-beta-delta\n" * 7000) + b"tail-b")
 
 
 def test_parallel_scheduler_preserves_exact_selected_archive(tmp_path: Path) -> None:
     root = tmp_path / "corpus"
-    root.mkdir()
-    (root / "a.bin").write_bytes((b"alpha-beta-gamma\n" * 7000) + b"tail-a")
-    (root / "b.bin").write_bytes((b"alpha-beta-delta\n" * 7000) + b"tail-b")
+    _make_two_file_corpus(root)
 
     sequential = tmp_path / "sequential.cmpct"
     parallel = tmp_path / "parallel.cmpct"
@@ -22,11 +36,59 @@ def test_parallel_scheduler_preserves_exact_selected_archive(tmp_path: Path) -> 
     assert par["scheduler_mode"] == "parallel-independent-portfolio"
     assert par["selection_materialization"] == "same-filesystem-atomic-move"
     assert par["selection_extra_payload_write_bytes"] == 0
+    assert par["selection_durability"] in DURABLE_PUBLICATION_LEVELS
     assert par["selected"] == seq["selected"]
     assert par["archive_bytes"] == seq["archive_bytes"]
     assert par["v028_bytes"] == seq["v028_bytes"]
     assert par["attempt5_graph_bytes"] == seq["mosaic_graph_bytes"]
     assert parallel.read_bytes() == sequential.read_bytes()
+
+
+def test_parallel_scheduler_atomically_replaces_existing_output(tmp_path: Path) -> None:
+    root = tmp_path / "replace-corpus"
+    _make_two_file_corpus(root)
+
+    expected_path = tmp_path / "expected.cmpct"
+    expected = accepted.build(root, expected_path)
+
+    output = tmp_path / "existing.cmpct"
+    sentinel = b"old-output-must-not-survive"
+    output.write_bytes(sentinel)
+    result = build_parallel(root, output)
+
+    # ``os.replace`` is valuable only if the normal overwrite case preserves the exact accepted winner.
+    # Pin this explicitly so a future portability workaround cannot silently fall back to append/copy logic
+    # or leave the pre-existing output in place while still reporting zero publication payload bytes.
+    assert output.read_bytes() != sentinel
+    assert output.read_bytes() == expected_path.read_bytes()
+    assert result["archive_bytes"] == expected["archive_bytes"]
+    assert result["selection_materialization"] == "same-filesystem-atomic-move"
+    assert result["selection_extra_payload_write_bytes"] == 0
+    assert result["selection_durability"] in DURABLE_PUBLICATION_LEVELS
+
+
+def test_durable_replace_flushes_winner_before_publication(tmp_path: Path, monkeypatch) -> None:
+    source = tmp_path / "candidate.cmpct"
+    destination = tmp_path / "published.cmpct"
+    payload = (b"durability-check\n" * 4096) + b"tail"
+    source.write_bytes(payload)
+
+    fsync_calls: list[int] = []
+    real_fsync = portfolio.os.fsync
+
+    def recording_fsync(fd: int) -> None:
+        fsync_calls.append(fd)
+        real_fsync(fd)
+
+    monkeypatch.setattr(portfolio.os, "fsync", recording_fsync)
+    durability = portfolio._durable_replace(source, destination)
+
+    assert not source.exists()
+    assert destination.read_bytes() == payload
+    assert durability in DURABLE_PUBLICATION_LEVELS
+    assert fsync_calls, "winner data must be flushed before atomic publication"
+    if os.name == "posix" and durability == "atomic-file-and-directory-fsynced":
+        assert len(fsync_calls) >= 2, "POSIX durable publication must also flush the parent directory"
 
 
 def test_parallel_scheduler_preserves_single_file_fast_reject_policy(tmp_path: Path) -> None:

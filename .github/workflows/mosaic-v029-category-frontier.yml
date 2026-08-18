@@ -1,14 +1,21 @@
+# ci-lane: deep
 name: CMPCT v0.29 Zstd category frontier
 
 on:
   pull_request:
+    paths:
+      - "src/**"
+      - "native/preflate-bridge/**"
+      - "benchmarks/**"
+      - "pyproject.toml"
+      - ".github/workflows/mosaic-v029-category-frontier.yml"
   workflow_dispatch:
 
 permissions:
   contents: read
 
 concurrency:
-  group: cmpct-v029-category-${{ github.ref }}
+  group: cmpct-v029-category-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:
