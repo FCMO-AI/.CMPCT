@@ -4,11 +4,34 @@
 - **Priority:** P0 after dependencies
 - **State:** BLOCKED
 - **Branch:** `agent/v030-authoritative-integration`
-- **Dependencies:** T00, T01, T02, T03 must be DONE or have explicitly accepted residual non-release work.
+- **Dependencies:** T00, T01, T02 and T03 must reach their required completed implementation/evidence state before T04 can become REVIEW. The executable lock itself requires T00–T03 = `DONE`; residual research may remain only when it is explicitly outside the promoted v0.30 product path.
 
 ## Objective
 
 Turn the reconciled, benchmark-proven implementation into the actual v0.30 release without leaving research scaffolding, stale public claims, or unverified packaging behind.
+
+## Release-order invariant
+
+The final release fingerprint includes canonical format/native/portability documentation, `docs/releases/v0.30.0.md`, and generated site source. Therefore **public/release source must be prepared before the final fingerprint and receipts are minted**. Otherwise a legitimate final site/release-note edit would invalidate every earlier receipt.
+
+Required order:
+
+1. Integrate and review the final T01/T02/T03 implementation deltas; no mid-flight specialist branch is release authority.
+2. Reconcile current `main` again if it moved, then run T00 final regression/adversarial review and move T00 to `DONE` only when the integrated technical candidate is coherent.
+3. Complete canonical version/format/release-note/docs/site source from already accepted durable facts. Do not publish or merge yet.
+4. Set T01/T02/T03 to `DONE` only after their implementation and durable evidence obligations are genuinely closed. Move T04 from `BLOCKED` to **`REVIEW`** once the final release/public source is present and internally consistent.
+5. Freeze the release-critical content fingerprint with:
+
+   ```bash
+   python -m experiments.entropygraph_v030_release_lock_strict --print-fingerprint
+   ```
+
+6. Run/re-run every final authority gate whose receipt is required on that exact fingerprinted source. Commit strict-JSON evidence and evidence-bound receipts. A pre-freeze research artifact may support diagnosis, but cannot substitute for a required final receipt.
+7. Run the strict release lock. **Only `UNLOCKED` authorizes irreversible release actions.**
+8. Merge the exact candidate to `main`, create the v0.30.0 tag/release, deploy/verify the public site, and run post-merge/post-tag smoke against the released bytes/code.
+9. Only after those irreversible actions and post-release checks succeed may T04 move from `REVIEW` to `DONE`.
+
+Footnote: T04 intentionally sits at `REVIEW` when the pre-release lock opens. Requiring T04 `DONE` before unlock would be circular because `DONE` includes merge/tag/live verification, which the lock exists to authorize.
 
 ## Scope
 
@@ -19,16 +42,29 @@ Turn the reconciled, benchmark-proven implementation into the actual v0.30 relea
 - website generated only from accepted durable benchmark records;
 - public-surface guard and no unrelated internal/sensitive material;
 - GitHub Pages freshness/live verification;
-- merge authoritative candidate to `main` only when every release lock is green;
+- merge authoritative candidate to `main` only when the strict release lock is green;
 - tag/release and post-merge/post-tag verification of the exact released bytes/code.
 
-## Completion evidence
+## Pre-release REVIEW evidence
 
-1. No release-critical task remains READY/CLAIMED/BLOCKED/REVIEW.
-2. Normative release-gate ledger is completely green on one exact reconciled SHA.
-3. Required durable benchmark/conformance records exist in-repo.
-4. Numeric v0.30 version and r25 (if retained) are documented consistently across package, format, native, site, and release notes.
-5. Public site claims are generated from accepted evidence, not copied from research prose.
-6. `main` contains the release commit, tag/release points to it, and post-release smoke/reader/website checks pass.
+Before T04 may enter `REVIEW`:
 
-Footnote: T04 is deliberately blocked until the hard engineering is complete. Presentation work must not create pressure to waive a native, benchmark, performance, locality, recovery, or competitor gate.
+1. T00–T03 are `DONE` on the integrated branch according to the release manifest.
+2. Canonical v0.30.0/r25 source, release note, documentation and site source exist and contain no unsupported claim.
+3. Website headline numbers are derived from durable accepted benchmark records, not copied from research prose.
+4. Version discipline/public-surface/site source checks are green or represented by exact required final evidence to be rerun on the frozen fingerprint.
+5. No release-critical source edit is planned after the fingerprint freeze. Any such edit invalidates affected receipts and requires the lock to be satisfied again.
+
+## Post-unlock DONE evidence
+
+T04 becomes `DONE` only when:
+
+1. the strict lock was `UNLOCKED` on the exact pre-merge candidate;
+2. `main` contains that release candidate without unreviewed semantic changes;
+3. the v0.30.0 tag/release points to the intended release commit;
+4. package/archive reader smoke passes against released artifacts;
+5. GitHub Pages is fresh and live-site claims match committed accepted evidence;
+6. post-release version/public-surface checks are green;
+7. any release-time failure is either corrected with a new fingerprint + revalidated lock or the release is explicitly not declared complete.
+
+Footnote: presentation is part of the release artifact but never a reason to waive native, benchmark, performance, locality, recovery, Android, or competitor evidence. The order above prevents presentation changes from silently invalidating technical receipts after they have already been accepted.
