@@ -1,0 +1,31 @@
+name: v0.30 native surgical patch
+
+on:
+  push:
+    branches: [agent/v030-coop-native-portability]
+    paths: ['tools/v030_native_surgical_patch.py']
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: agent/v030-coop-native-portability
+          fetch-depth: 0
+      - name: Apply anchored patch
+        run: python tools/v030_native_surgical_patch.py
+      - name: Format touched Rust
+        run: cargo fmt --manifest-path native/cmpct-portable/Cargo.toml
+      - name: Commit exact patch and remove one-shot machinery
+        run: |
+          rm -f tools/v030_native_surgical_patch.py .github/workflows/v030-native-surgical-patch.yml
+          git config user.name 'cmpct-v030-coordination'
+          git config user.email 'actions@users.noreply.github.com'
+          git add native/cmpct-portable/src/g04.rs tools/v030_native_surgical_patch.py .github/workflows/v030-native-surgical-patch.yml
+          git diff --cached --check
+          git commit -m 'native: share G0-G4 grammar across research and canonical r25 identities' -m 'Footnote: the one-shot patch changes only profile framing/identity anchors and adds metadata identity access; reconstruction code is preserved verbatim.'
+          git push origin HEAD:agent/v030-coop-native-portability
