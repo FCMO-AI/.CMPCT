@@ -1,3 +1,4 @@
+# ci-lane: deep
 name: CMPCT v0.30 parallel candidate oracle
 
 on:
@@ -96,3 +97,6 @@ jobs:
 
 # This workflow is research-only. A PASS does not modify the release scheduler or authorize a v0.30
 # claim; promotion requires balanced repeated timing on the authoritative workload matrix.
+# Footnote: the topology classifier requires every automatic v0.30 workflow to state its execution class.
+# `deep` is appropriate here because this is an expensive, non-release-authorizing diagnostic oracle rather than
+# a merge gate or publisher. The classification changes scheduling/CI hygiene only, not any benchmark threshold.
