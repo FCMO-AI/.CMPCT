@@ -1,4 +1,4 @@
-name: CMPCT v0.30 Agent-00 candidate validator
+name: CMPCT v0.30 Agent-00 isolated native hygiene trigger
 # ci-lane: deep
 
 on:
@@ -10,11 +10,11 @@ permissions:
   contents: write
 
 concurrency:
-  group: cmpct-v030-agent00-validation
+  group: cmpct-v030-agent00-native-hygiene-trigger
   cancel-in-progress: true
 
 jobs:
-  validate-and-repair:
+  repair:
     if: github.event.pull_request.number == 56
     runs-on: ubuntu-24.04
     timeout-minutes: 90
@@ -22,16 +22,16 @@ jobs:
       - uses: actions/checkout@v6
         with:
           ref: agent/v030-authoritative-integration
-      - name: Apply bounded native hygiene patch
+      - name: Apply exact one-shot source repair
         run: python tools/v030_agent00_native_hygiene_patch.py
-      - name: Prove repaired portable crate
+      - name: Normalize and prove the repaired native crate
         working-directory: native/cmpct-portable
         run: |
           cargo fmt --all
           cargo clippy --all-targets --message-format=short -- -D warnings
           cargo test --all-targets
           cargo build --release
-      - name: Persist verified source and remove executor
+      - name: Persist only verified Rust changes
         shell: bash
         run: |
           rm tools/v030_agent00_native_hygiene_patch.py
@@ -41,7 +41,7 @@ jobs:
           git commit -m 'fix(v0.30): harden portable Rust API and lint contracts'
           git push origin HEAD:agent/v030-authoritative-integration
 
-# Footnote: this is the already-established Agent-00 diagnostic lane, temporarily narrowed to one exact repair.
-# It operates only on the sole authoritative integration branch and cannot persist a source change unless rustfmt,
-# Clippy with warnings denied, all Rust target tests, and the release build all succeed. The patch executor deletes
-# itself before commit so neither maintenance code nor this temporary main-side lane enters the release fingerprint.
+# Footnote: the convergence PR is reopened only to emit one repository-native event because GitHub App file writes
+# do not recursively fire push workflows here. The job checks out the sole v0.30 integration branch, refuses to
+# persist anything unless rustfmt, Clippy -D warnings, all Rust tests and release build pass, then removes its patch
+# script. The PR remains merge-locked and is closed again immediately after this maintenance event begins.
