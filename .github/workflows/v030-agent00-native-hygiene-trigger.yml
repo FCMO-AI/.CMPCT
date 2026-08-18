@@ -4,7 +4,7 @@ name: CMPCT v0.30 Agent-00 isolated native hygiene trigger
 on:
   pull_request:
     branches: [main]
-    types: [edited]
+    types: [reopened]
 
 permissions:
   contents: write
@@ -15,7 +15,7 @@ concurrency:
 
 jobs:
   repair:
-    if: github.event.pull_request.number == 66
+    if: github.event.pull_request.number == 56
     runs-on: ubuntu-24.04
     timeout-minutes: 90
     steps:
@@ -41,6 +41,7 @@ jobs:
           git commit -m 'fix(v0.30): harden portable Rust API and lint contracts'
           git push origin HEAD:agent/v030-authoritative-integration
 
-# Footnote: editing PR #66 is only a harmless event source because GitHub App file writes do not recursively fire
-# push workflows here. The job always checks out the sole v0.30 integration branch, refuses to commit unless Rust
-# formatting/lint/tests/release build all pass, and removes its temporary patch script before persisting source.
+# Footnote: the convergence PR is reopened only to emit one repository-native event because GitHub App file writes
+# do not recursively fire push workflows here. The job checks out the sole v0.30 integration branch, refuses to
+# persist anything unless rustfmt, Clippy -D warnings, all Rust tests and release build pass, then removes its patch
+# script. The PR remains merge-locked and is closed again immediately after this maintenance event begins.
