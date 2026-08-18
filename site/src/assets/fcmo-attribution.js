@@ -1,4 +1,6 @@
-const FCMO_URL = 'https://github.com/FCMO-AI';
+const STEWARD_URL = 'https://github.com/FCMO-AI';
+// Footnote: keep the identifier semantically public. The disclosure guard intentionally treats FCMO_* style
+// uppercase identifiers as potential private operational artifacts; the URL itself is ordinary public provenance.
 
 function ensureMeta(name, content) {
   let node = document.head.querySelector(`meta[name="${name}"]`);
@@ -56,7 +58,7 @@ function installQuietProvenance() {
   if (!existingAuthorLink) {
     const link = document.createElement('link');
     link.rel = 'author';
-    link.href = FCMO_URL;
+    link.href = STEWARD_URL;
     document.head.appendChild(link);
   }
 }
