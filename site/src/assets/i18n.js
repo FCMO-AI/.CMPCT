@@ -289,12 +289,22 @@ function installSelector() {
   host.setAttribute("aria-label", "Language");
   host.innerHTML = `<span aria-hidden="true">文/A</span><select id="cmpct-locale-select" aria-label="Language"></select>`;
   const select = host.querySelector("select");
+
+  // Footnote: English is not just a fallback. It is the canonical semantic source and therefore remains the
+  // first explicit selectable language even as the catalogue grows. Grouping the source separately makes
+  // translation provenance visible without making the compact control wider in its closed state.
+  const sourceGroup = document.createElement("optgroup");
+  sourceGroup.label = "Canonical source";
+  const translatedGroup = document.createElement("optgroup");
+  translatedGroup.label = "Curated translations";
+  select.append(sourceGroup, translatedGroup);
+
   for (const key of SUPPORTED_LOCALES) {
     const option = document.createElement("option");
     option.value = key;
     option.textContent = LOCALE_META[key].short;
-    option.title = LOCALE_META[key].label;
-    select.append(option);
+    option.title = key === DEFAULT_LOCALE ? `${LOCALE_META[key].label} — canonical source` : LOCALE_META[key].label;
+    (key === DEFAULT_LOCALE ? sourceGroup : translatedGroup).append(option);
   }
   select.value = locale;
   select.addEventListener("change", () => setLocale(select.value));
