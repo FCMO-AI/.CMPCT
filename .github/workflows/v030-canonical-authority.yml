@@ -88,7 +88,7 @@ jobs:
       - name: Install corpus dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y zstd gcc
+          sudo apt-get install -y zstd gcc ffmpeg
           python -m pip install --upgrade pip
           python -m pip install -e '.[test]'
           python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
@@ -147,7 +147,7 @@ jobs:
       - name: Install runtime dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y zstd gcc
+          sudo apt-get install -y zstd gcc ffmpeg
           python -m pip install --upgrade pip
           python -m pip install -e '.[test]'
           python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
@@ -199,10 +199,10 @@ jobs:
         with:
           python-version: '3.11'
           cache: pip
-      - name: Install CMPCT and external compressors
+      - name: Install CMPCT, frozen-corpus media tools and external compressors
         run: |
           sudo apt-get update
-          sudo apt-get install -y zstd p7zip-full zpaq gcc
+          sudo apt-get install -y zstd p7zip-full zpaq gcc ffmpeg
           python -m pip install --upgrade pip
           python -m pip install -e '.[test]'
           python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
@@ -241,4 +241,6 @@ jobs:
           retention-days: 90
 
 # Footnote: only this workflow's canonical-r25 jobs are eligible to close compression/runtime/external release
-# gates. Native/shared-reader and portability remain mandatory separate authority before #56 can merge.
+# gates. The corpus-building jobs install `ffmpeg` because the frozen neutral-hostile media row invokes it before
+# measurement; this is environment completion, not a compressor shortcut or policy change. Native/shared-reader
+# and portability remain mandatory separate authority before #56 can merge.
