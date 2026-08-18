@@ -1,8 +1,9 @@
-/* CMPCT restored visual assembly — surface 0.29.h.
+/* CMPCT restored visual assembly — surface 0.29.i.
    Footnote: styles.css, motion.css and polish.css remain the historical visual foundation. cinematic.css
-   adapts current proof into that composition; masterclass.css contains rendered visual ratchets; and
-   responsive.css loads last so physical viewport constraints can adapt those same authored objects without
-   replacing their design language or benchmark semantics. */
+   adapts current proof into that composition; masterclass.css contains rendered visual ratchets;
+   responsive.css adapts those objects to physical viewport constraints; and i18n.css loads last so longer
+   curated copy can fit without replacing the authored design language or benchmark semantics. */
 @import url("./cinematic.css");
 @import url("./masterclass.css");
 @import url("./responsive.css");
+@import url("./i18n.css");
