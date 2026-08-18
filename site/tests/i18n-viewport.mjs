@@ -1,15 +1,17 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { chromium } from "playwright";
+import { SUPPORTED_LOCALES } from "../src/assets/i18n/catalog.js";
 
-/* CMPCT locale render contract — Surface 0.29.i.
+/* CMPCT locale render contract — Surface 0.29.k.
    Footnote: the base viewport matrix already proves the authored English composition across 16 physical
-   ratios. This complementary matrix targets translation-specific risks: longer words, longer CTA copy,
-   header utility pressure and accidental untranslated prose after dynamic evidence renders. */
+   ratios. This complementary matrix renders every non-English locale at three translation-stress geometries:
+   compact phone, landscape phone and short laptop. It targets word expansion, CJK compression, CTA pressure,
+   dynamic evidence leakage and accidental untranslated prose. */
 
 const baseUrl = process.argv[2] || "http://127.0.0.1:4173/";
 const artifactDir = process.argv[3] || "locale-artifacts";
-const locales = ["es-419", "pt-BR", "fr", "de"];
+const locales = SUPPORTED_LOCALES.filter((locale) => locale !== "en");
 const viewports = [
   { name: "compact-phone", width: 320, height: 568 },
   { name: "landscape-phone", width: 844, height: 390 },
@@ -48,6 +50,7 @@ try {
         return {
           htmlLang: doc.lang,
           locale: state.locale,
+          supportedCount: state.supported?.length || 0,
           missing: state.missing || [],
           overflow,
           switcherVisible,
@@ -60,6 +63,7 @@ try {
       const issues = [];
       if (result.locale !== locale) issues.push(`runtime locale ${result.locale} != ${locale}`);
       if (result.htmlLang !== locale) issues.push(`html lang ${result.htmlLang} != ${locale}`);
+      if (result.supportedCount !== SUPPORTED_LOCALES.length) issues.push(`runtime exposes ${result.supportedCount}/${SUPPORTED_LOCALES.length} locales`);
       if (result.overflow > 1) issues.push(`horizontal overflow ${result.overflow}px`);
       if (!result.switcherVisible) issues.push("language switcher is not physically usable");
       if (!result.heroVisible) issues.push("hero headline is not physically visible");
@@ -77,7 +81,7 @@ try {
   await browser.close();
 }
 
-await fs.writeFile(path.join(artifactDir, "report.json"), JSON.stringify({ failures, cases: report }, null, 2));
+await fs.writeFile(path.join(artifactDir, "report.json"), JSON.stringify({ failures, localeCount: locales.length, cases: report }, null, 2));
 if (failures) {
   console.error(`Localized viewport contract failed ${failures}/${report.length} cases.`);
   for (const item of report.filter((row) => row.issues.length)) {
@@ -85,4 +89,4 @@ if (failures) {
   }
   process.exit(1);
 }
-console.log(`Localized viewport contract passed ${report.length} rendered cases with zero untranslated authored strings.`);
+console.log(`Localized viewport contract passed ${report.length} rendered cases across ${locales.length} non-English locales with zero untranslated authored strings.`);
