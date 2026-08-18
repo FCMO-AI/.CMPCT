@@ -33,6 +33,7 @@ main::before {
   left: 0;
   right: 0;
   top: -72px;
+  height: min(1180px, 116vh);
   height: min(1180px, 116svh);
   pointer-events: none;
   background:
@@ -113,6 +114,7 @@ main::before {
 @media (max-width: 760px) {
   main::before {
     top: -62px;
+    height: min(980px, 128vh);
     height: min(980px, 128svh);
     background:
       radial-gradient(ellipse 74% 46% at 83% 17%, rgba(253,82,4,.095) 0%, rgba(253,82,4,.046) 22%, rgba(253,82,4,.014) 42%, transparent 67%),
