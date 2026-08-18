@@ -127,7 +127,9 @@ jobs:
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add "$target"
           git commit -m 'bench: publish exact-tree v0.29 Zstd category evidence'
-          git push origin HEAD
+          # Footnote: workflow_dispatch can check out an arbitrary selected branch in a detached HEAD.
+          # Push explicitly back to that selected branch rather than relying on Git to infer a destination.
+          git push origin "HEAD:${GITHUB_REF_NAME}"
           echo 'created=true' >> "$GITHUB_OUTPUT"
 
       - name: Explain durable evidence boundary
