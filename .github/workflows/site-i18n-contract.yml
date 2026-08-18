@@ -1,0 +1,78 @@
+name: CMPCT curated localization contract
+
+on:
+  pull_request:
+    paths:
+      - "site/**"
+      - "benchmarks/history/**"
+      - "SURFACE_REVISION"
+      - ".github/workflows/site-i18n-contract.yml"
+  push:
+    branches: [main]
+    paths:
+      - "site/**"
+      - "benchmarks/history/**"
+      - "SURFACE_REVISION"
+      - ".github/workflows/site-i18n-contract.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: site-i18n-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  curated-locales:
+    runs-on: ubuntu-latest
+    timeout-minutes: 18
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+
+      - name: Build canonical public surface
+        run: |
+          python tools/check_public_surface.py
+          python site/build_site.py --out _site
+          python site/enhance_site.py _site
+
+      - name: Validate curated language catalogue
+        run: |
+          # Footnote: catalogue validation runs before Chromium so cheap semantic/API failures do not spend
+          # browser minutes. It proves completeness/placeholder/protected-token invariants, not literary taste.
+          node --check site/src/assets/i18n/catalog.js
+          node --check site/src/assets/i18n.js
+          node --check site/tests/i18n-contract.mjs
+          node --check site/tests/i18n-viewport.mjs
+          node site/tests/i18n-contract.mjs
+
+      - name: Install pinned Chromium render harness
+        run: |
+          # Footnote: Playwright is CI-only and never ships with the static site. Keep the same pinned browser
+          # family as the base public-proof workflow so locale failures are comparable to ordinary viewport proof.
+          npm install --no-save --no-package-lock playwright@1.55.0
+          npx playwright install chromium
+
+      - name: Render localized stress matrix
+        run: |
+          python -m http.server 4173 --directory _site >/tmp/cmpct-i18n-site.log 2>&1 &
+          SERVER_PID=$!
+          trap 'kill "$SERVER_PID" 2>/dev/null || true' EXIT
+          node site/tests/i18n-viewport.mjs http://127.0.0.1:4173/ locale-artifacts
+
+      - name: Preserve locale render evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: cmpct-locale-matrix-${{ github.sha }}
+          path: locale-artifacts/
+          if-no-files-found: warn
+          retention-days: 7
+
+# Footnote: this workflow validates source only. It deliberately does not deploy GitHub Pages; CMPCT keeps
+# main as canonical source authority and gh-pages as explicitly promoted generated serving output.
