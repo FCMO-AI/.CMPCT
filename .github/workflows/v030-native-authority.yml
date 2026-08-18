@@ -11,6 +11,7 @@ on:
       - 'experiments/entropygraph_v030_canonical_final.py'
       - 'experiments/entropygraph_v030_release_product.py'
       - 'tests/test_v030_canonical_final.py'
+      - 'tests/native_v030_r24_verify_authority.py'
       - '.github/workflows/v030-native-authority.yml'
   workflow_dispatch:
 
@@ -24,7 +25,7 @@ concurrency:
 jobs:
   native-authority:
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-python@v6
@@ -51,6 +52,10 @@ jobs:
       - name: Rust release build
         working-directory: native/cmpct-portable
         run: cargo build --release
+      - name: Prove complete r24 RAW verification and truthful locality surface
+        run: |
+          python tests/native_v030_r24_verify_authority.py \
+            --binary native/cmpct-portable/target/release/cmpct-portable
       - name: CI topology self-check
         run: python tools/check_ci_topology.py .github/workflows/v030-native-authority.yml
 
