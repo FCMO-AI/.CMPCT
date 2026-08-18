@@ -3,22 +3,13 @@
   "publishing_branch": "gh-pages",
   "publishing_path": "/",
   "source_branch": "main",
-  "source_commit": "0cf01f2330f4d3cf3ef9105c74f79e8a797ab00c",
+  "source_commit": "d4cf3cf8fbcb98bfa6eeb0c6448e1cc5ee82f019",
   "project_version": "0.29.0",
-  "surface_revision": "0.29.c",
+  "surface_revision": "0.29.e",
   "canonical_format_revision": 24,
   "evidence_schema": "cmpct-public-evidence-v1",
   "jekyll": false,
   "static_only": true,
   "generated_from_committed_evidence": true,
-  "policy": "main owns source and validation; gh-pages owns generated serving artifacts only",
-  "verification_markers": [
-    "A BETTER WAY TO PACK FILES.",
-    "Store less.",
-    "No benchmark laundering."
-  ],
-  "evidence_receipts": {
-    "structural": "benchmarks/history/2026-08-17-mosaic-v029-public.json",
-    "category": "benchmarks/history/2026-08-17-mosaic-v029-category.json"
-  }
+  "policy": "main owns source and validation; gh-pages owns generated serving artifacts only"
 }

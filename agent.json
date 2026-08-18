@@ -2,11 +2,11 @@
   "project": ".CMPCT",
   "project_version": "0.29.0",
   "format_revision": 24,
-  "surface_revision": "0.29.c",
+  "surface_revision": "0.29.e",
   "status": "pre-1.0 / active development",
   "canonical_repository": "FCMO-AI/.CMPCT",
   "canonical_branch": "main",
-  "site_build_commit": "0cf01f2330f4d3cf3ef9105c74f79e8a797ab00c",
+  "site_build_commit": "d4cf3cf8fbcb98bfa6eeb0c6448e1cc5ee82f019",
   "publication": {
     "mode": "static-gh-pages",
     "status": "generated public website",
