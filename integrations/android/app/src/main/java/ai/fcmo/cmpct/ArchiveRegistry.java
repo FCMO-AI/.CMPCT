@@ -80,7 +80,7 @@ final class ArchiveRegistry {
         int expectedRevision = total < MAGIC_LENGTH ? 0 : releaseRevision(first);
         if (expectedRevision == 0) {
             staging.delete();
-            throw new IOException("Not a canonical CMPCT release archive");
+            throw new IOException("Not a canonical CMPCT release archive (expected CMPCT24/CMP25 identity)");
         }
 
         String id = hex(digest.digest());
@@ -185,3 +185,6 @@ final class ArchiveRegistry {
         return out.toString();
     }
 }
+
+// Footnote: the rejection text names both release-family prefixes so old r24 Android regression tests retain a
+// stable diagnostic substring while canonical r25 becomes first-class. The diagnostic is not itself the parser.
