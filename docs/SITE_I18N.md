@@ -14,6 +14,11 @@ The browser chooses a supported locale in this order:
 3. `navigator.languages` / browser preference;
 4. English fallback.
 
+Automatic selection never hides source authority. The website language selector always presents English
+first in a dedicated **Canonical source** group, followed by **Curated translations**. This ordering is a
+contract-tested invariant, not an incidental object order. A visitor automatically opened into another
+locale can therefore return to canonical English directly without clearing browser or storage preferences.
+
 Chinese receives explicit script/region handling rather than a naive `zh` family fallback:
 `zh-Hant`, `zh-TW`, `zh-HK` and `zh-MO` resolve to Traditional Chinese; `zh-Hans`, `zh-CN`, `zh-SG`
 and `zh-MY` resolve to Simplified Chinese; generic `zh` defaults to Simplified Chinese.
@@ -73,7 +78,7 @@ human can later add that assurance only after actually reviewing the relevant lo
 - resolve locale;
 - update document language, title and description;
 - apply committed exact phrases and parameterized templates;
-- observe later DOM updates from the proof renderer and Browser Lab;
+- observe later DOM updates from the proof renderer, cinematic rail, stewardship layer and Browser Lab;
 - expose `window.__CMPCT_I18N__` for validation;
 - record visible authored English copy that lacks a curated transformation.
 
@@ -85,10 +90,18 @@ canonical English phrase. `makePhraseMap()` refuses a locale if its phrase count
 English source, so a source-copy edit cannot silently shift every following translation onto the wrong
 sentence.
 
+Late-created UI fragments belong in the same message catalogue. In particular, markup-split sentence
+fragments and the cinematic chapter rail's accessibility name are source-controlled dynamic messages;
+they are not allowed to remain hidden English merely because the DOM that owns them is created after boot.
+
 ## Human-facing README localization
 
 `README.md` in English remains the canonical repository introduction. Every non-English supported locale
 has a directly linked static Markdown adaptation under `docs/readme/README.<locale>.md`.
+
+The root GitHub README presents English first, followed by the translated README links. Every localized
+README links back to `README.md`, so GitHub's non-JavaScript surface exposes the same source-selection
+principle as the website rather than becoming a one-way translated document tree.
 
 Those variants must preserve the current project authority markers and evidence-bearing facts, including:
 
@@ -111,6 +124,7 @@ the translated README to the website preserve the chosen locale through `?lang=`
 `site/tests/i18n-contract.mjs` checks:
 
 - at least 20 supported locales;
+- English remains both canonical and the first explicit selectable locale;
 - catalogue completeness and source-order integrity;
 - parameter placeholder parity;
 - protected technical terms;
@@ -118,14 +132,23 @@ the translated README to the website preserve the chosen locale through `?lang=`
 - accidental unchanged English prose except narrow technical loanwords;
 - absence of known runtime translation-provider endpoints;
 - Chinese script-aware locale routing;
-- localized README existence, discoverability and current v0.29/r24/0.29.k/evidence markers.
+- root/localized README source selection, existence, discoverability and current v0.29/r24/0.29.k/evidence markers.
 
 `site/tests/i18n-viewport.mjs` automatically renders **every non-English supported locale** in Chromium at
 three translation-stress geometries: compact phone, landscape phone and short laptop. With the current 19
 non-English locales this is **57 localized render cases**. Each case fails on horizontal overflow, an
 unusable language control, an untranslated hero, an incorrect document language, an incomplete runtime
-locale list or any currently visible authored English string reported as missing. Full-page screenshots
-and a machine-readable report are retained as CI artifacts.
+locale list or any currently visible **actionable authored** string that remains untranslated.
+
+The render report retains both actionable missing strings and ignored verbatim/derived labels. Benchmark
+measurements, hashes, codec/tool identifiers and public provenance intentionally remain stable evidence;
+already-localized chapter-rail labels are derived from translated section copy. The gate distinguishes
+those from authored English instead of weakening the runtime catalogue or silently discarding diagnostic
+state. Full-page screenshots and a machine-readable report are retained as CI artifacts.
+
+The locale workflow is explicitly a **deep CI lane**: browser installation and 57 full-page renders are
+materially more expensive than source checks. Catalogue/README validation therefore runs first so cheap
+semantic failures do not spend Chromium minutes.
 
 The existing English physical viewport matrix remains authoritative for general composition. The locale
 matrix is additive and specifically attacks localization regressions such as long Finnish/German strings,
