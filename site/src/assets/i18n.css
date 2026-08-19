@@ -1,6 +1,31 @@
-/* CMPCT curated locale controls — Surface 0.29.i.
+/* CMPCT curated locale controls — Surface 0.29.k.
    Footnote: localization must adapt to the restored visual system, not force the visual system to imitate
    English line lengths. This layer is deliberately small and loads after responsive.css. */
+
+/* Footnote: mainstream desktop/mobile platforms ship regional CJK fonts, but generic Linux/browser images
+   can otherwise fall all the way through to tofu squares. These language-scoped stacks keep the normal system
+   typography first while naming interoperable Japanese/Korean/Simplified/Traditional fallbacks explicitly.
+   CI installs Noto CJK and asserts representative glyph coverage, so a green screenshot matrix must be readable. */
+:lang(ja) {
+  --sans: "Noto Sans CJK JP", "Noto Sans JP", "Hiragino Sans", "Yu Gothic", Meiryo, ui-sans-serif, system-ui, sans-serif;
+  --mono: "Noto Sans Mono CJK JP", "Noto Sans CJK JP", ui-monospace, monospace;
+}
+
+:lang(ko) {
+  --sans: "Noto Sans CJK KR", "Noto Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", ui-sans-serif, system-ui, sans-serif;
+  --mono: "Noto Sans Mono CJK KR", "Noto Sans CJK KR", ui-monospace, monospace;
+}
+
+:lang(zh-Hans) {
+  --sans: "Noto Sans CJK SC", "Noto Sans SC", "PingFang SC", "Microsoft YaHei", ui-sans-serif, system-ui, sans-serif;
+  --mono: "Noto Sans Mono CJK SC", "Noto Sans CJK SC", ui-monospace, monospace;
+}
+
+:lang(zh-Hant) {
+  --sans: "Noto Sans CJK TC", "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", ui-sans-serif, system-ui, sans-serif;
+  --mono: "Noto Sans Mono CJK TC", "Noto Sans CJK TC", ui-monospace, monospace;
+}
+
 .language-switcher {
   position: relative;
   display: inline-grid;
