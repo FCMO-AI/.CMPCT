@@ -19,9 +19,10 @@ keeping the stronger single-grammar composition goal as an optimization path. No
 saving is claimed unless a future one-artifact ablation proves it.
 
 Footnote: candidates are created in a sibling temporary directory and the winner is published with
-``os.replace``. The selected logical artifact is strong-verified before publication; a physical SHA-256 is then
-checked across the same-filesystem atomic rename. Re-decoding the identical logical tree after that byte-identity
-proof would add creation cost without adding an independent integrity fact.
+``os.replace``. Admission verifies any candidate that can still win, a physical SHA-256 proves the selected
+bytes survived publication unchanged, and the published path is then re-opened through the strict release
+reader for an independent post-publication logical-tree proof. Dominated candidates are the only verification
+work pruned by size, so runtime optimization cannot weaken the final release integrity boundary.
 """
 from __future__ import annotations
 
@@ -201,12 +202,13 @@ def build(root: Path, out: Path) -> dict:
         if out.stat().st_size != selected_bytes or published_physical_sha256 != selected_physical_sha256:
             raise RuntimeError("published v0.30 release candidate bytes changed during atomic publication")
 
-        # Footnote: selected_verify was obtained from the exact bytes whose SHA-256 crossed os.replace. Reusing
-        # that logical verification result is stronger than silently trusting rename semantics alone while
-        # avoiding a second full logical decode of bytes we have just proven physically identical.
-        final_verify = dict(selected_verify)
+        # Footnote: physical identity proves the atomic move preserved the admitted bytes, but the final release
+        # contract intentionally demands a fresh logical read from the *published path* as well. This catches
+        # publication/path/reader integration defects that a pre-publication verification cannot exercise.
+        final_verify = _verify_component(out, expected_tree, "Published v0.30 release candidate")
+        final_verify = dict(final_verify)
         final_verify["publication_physical_sha256"] = published_physical_sha256
-        final_verify["publication_reused_preverified_logical_result"] = True
+        final_verify["publication_reused_preverified_logical_result"] = False
 
         return {
             "selected": selected,
