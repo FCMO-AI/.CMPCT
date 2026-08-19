@@ -144,9 +144,12 @@ impl Archive {
 
             let mut digest = Sha256::new();
             let mut offset = 0u64;
-            let mut buffer = vec![0u8; VERIFY_CHUNK_BYTES.min(
-                usize::try_from(entry.size.max(1)).unwrap_or(VERIFY_CHUNK_BYTES),
-            )];
+            let mut buffer = vec![
+                0u8;
+                VERIFY_CHUNK_BYTES.min(
+                    usize::try_from(entry.size.max(1)).unwrap_or(VERIFY_CHUNK_BYTES),
+                )
+            ];
             while offset < entry.size {
                 let remaining = entry.size - offset;
                 let take = usize::try_from(remaining.min(buffer.len() as u64))
@@ -161,9 +164,7 @@ impl Archive {
             if got != expected {
                 return Err(CmpctError::MemberHash);
             }
-            verified = verified
-                .checked_add(1)
-                .ok_or(CmpctError::MemberLimit)?;
+            verified = verified.checked_add(1).ok_or(CmpctError::MemberLimit)?;
         }
         Ok(verified)
     }
