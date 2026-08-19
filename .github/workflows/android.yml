@@ -10,6 +10,7 @@ on:
       - 'native/cmpct-portable/**'
       - 'tests/conformance/**'
       - '.github/workflows/android.yml'
+      - '.github/workflows/android-physical-arm64.yml'
   push:
     branches: [main]
     paths:
@@ -18,6 +19,7 @@ on:
       - 'native/cmpct-portable/**'
       - 'tests/conformance/**'
       - '.github/workflows/android.yml'
+      - '.github/workflows/android-physical-arm64.yml'
   workflow_dispatch:
 
 concurrency:
@@ -30,6 +32,11 @@ jobs:
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@v6
+        with:
+          # Footnote: PR workflow metadata points at GitHub's synthetic merge ref. Release evidence must instead
+          # identify the exact candidate source tree whose fingerprint is frozen, so tests explicitly check out
+          # the PR head while still benefiting from GitHub's ordinary PR trigger/branch-protection semantics.
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
 
       - uses: actions/setup-java@v4
         with:
@@ -165,6 +172,38 @@ jobs:
           export ANDROID_NDK_ROOT="$ANDROID_NDK_HOME"
           gradle --no-daemon :app:connectedDebugAndroidTest
 
+      - name: Record exact-candidate hosted Android evidence
+        run: |
+          # Footnote: the physical ARM64 workflow consumes this machine-readable artifact and independently
+          # verifies its source SHA/fingerprint before it can claim the required Android platform matrix green.
+          # Generating it only after connectedDebugAndroidTest succeeds prevents a failed emulator run from
+          # leaving behind a superficially plausible positive receipt.
+          python -m experiments.entropygraph_v030_release_lock_strict --print-fingerprint \
+            > "$RUNNER_TEMP/cmpct-v030-fingerprint.json"
+          python - <<'PY'
+          import json, os, pathlib, subprocess
+          temp = pathlib.Path(os.environ['RUNNER_TEMP'])
+          fingerprint = json.loads((temp / 'cmpct-v030-fingerprint.json').read_text())['candidate_fingerprint']
+          candidate_sha = subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip()
+          evidence = {
+              'schema': 'cmpct-v030-hosted-android-evidence-v1',
+              'candidate_sha': candidate_sha,
+              'candidate_fingerprint': fingerprint,
+              'workflow': 'android.yml',
+              'run_id': int(os.environ['GITHUB_RUN_ID']),
+              'run_attempt': int(os.environ['GITHUB_RUN_ATTEMPT']),
+              'facts': {
+                  'hosted_android_emulator_green': True,
+                  'emulator_arch': 'x86_64',
+                  'emulator_api': 29,
+                  'all_declared_abis_built': True,
+                  'portable_jni_dependency_verified': True,
+              },
+          }
+          (temp / 'cmpct-hosted-android-evidence.json').write_text(json.dumps(evidence, indent=2) + '\n')
+          print(json.dumps(evidence, indent=2))
+          PY
+
       - name: CI topology self-check
         run: python tools/check_ci_topology.py .github/workflows/android.yml
 
@@ -177,6 +216,7 @@ jobs:
             integrations/android/app/build/reports/androidTests/connected/**
             ${{ runner.temp }}/cmpct-emulator.log
             ${{ runner.temp }}/cmpct-elf-dynamic.txt
+            ${{ runner.temp }}/cmpct-hosted-android-evidence.json
           if-no-files-found: warn
           retention-days: 30
 
