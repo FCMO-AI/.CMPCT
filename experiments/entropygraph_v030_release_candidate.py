@@ -20,9 +20,9 @@ saving is claimed unless a future one-artifact ablation proves it.
 
 Footnote: candidates are created in a sibling temporary directory and the winner is published with
 ``os.replace``. Admission verifies any candidate that can still win, a physical SHA-256 proves the selected
-bytes survived publication unchanged, and the published path is then re-opened through the strict release
-reader for an independent post-publication logical-tree proof. Dominated candidates are the only verification
-work pruned by size, so runtime optimization cannot weaken the final release integrity boundary.
+bytes survived publication unchanged, and standalone builds re-open the published path through the strict
+release reader. The canonical r24-vs-r25 parent may explicitly defer only that final re-open because it performs
+the same published-path verification after complete-product selection; candidate admission is never deferred.
 """
 from __future__ import annotations
 
@@ -140,7 +140,13 @@ def extract(archive: Path, dst: Path, *, max_output_bytes: int = READER.DEFAULT_
     READER.extract(archive, dst, max_output_bytes=max_output_bytes)
 
 
-def build(root: Path, out: Path) -> dict:
+def build(root: Path, out: Path, *, post_publish_verify: bool = True) -> dict:
+    """Build the exact release tournament and optionally defer only its final published-path re-open.
+
+    ``post_publish_verify=False`` is an internal composition hook for the canonical r24-vs-r25 product builder,
+    which immediately verifies the finally selected complete product. Callers that use this tournament directly
+    retain the safer default and therefore receive the same self-contained verification boundary as before.
+    """
     started = time.perf_counter()
     out.parent.mkdir(parents=True, exist_ok=True)
     expected_tree = treehash(root)
@@ -202,13 +208,19 @@ def build(root: Path, out: Path) -> dict:
         if out.stat().st_size != selected_bytes or published_physical_sha256 != selected_physical_sha256:
             raise RuntimeError("published v0.30 release candidate bytes changed during atomic publication")
 
-        # Footnote: physical identity proves the atomic move preserved the admitted bytes, but the final release
-        # contract intentionally demands a fresh logical read from the *published path* as well. This catches
-        # publication/path/reader integration defects that a pre-publication verification cannot exercise.
-        final_verify = _verify_component(out, expected_tree, "Published v0.30 release candidate")
-        final_verify = dict(final_verify)
+        if post_publish_verify:
+            # Footnote: standalone tournament publication owns its own final logical re-open; this is deliberately
+            # the default because a physical rename checksum cannot exercise the reader/path integration boundary.
+            final_verify = _verify_component(out, expected_tree, "Published v0.30 release candidate")
+            final_verify = dict(final_verify)
+            final_verify["publication_logical_verification_deferred"] = False
+        else:
+            # Footnote: the canonical parent is allowed to defer only this duplicated final pass. Admission has
+            # already verified the winning candidate, physical identity proves publication preserved its bytes,
+            # and the parent must strong-verify whichever complete r24/r25 product it finally publishes.
+            final_verify = dict(selected_verify)
+            final_verify["publication_logical_verification_deferred"] = True
         final_verify["publication_physical_sha256"] = published_physical_sha256
-        final_verify["publication_reused_preverified_logical_result"] = False
 
         return {
             "selected": selected,
@@ -228,6 +240,7 @@ def build(root: Path, out: Path) -> dict:
             "selection_materialization": "same-filesystem-atomic-move",
             "selection_extra_payload_write_bytes": 0,
             "selection_publication_physical_sha256": published_physical_sha256,
+            "post_publish_logical_verification": "performed" if post_publish_verify else "deferred-to-canonical-parent",
             "max_dependency_depth": int(pg_stats.get("max_dependency_depth", 0)) if selected == "prefixgraph" else 0,
             "max_selected_member_read_amplification": (
                 float(pg_locality["max_member_read_amplification"])
