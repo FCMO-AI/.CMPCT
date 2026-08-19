@@ -8,8 +8,9 @@ smallest *release-eligible* one:
    Geometry overlay, so this candidate can never be larger than accepted v0.29.
 2. PrefixGraph is auditioned only when its public oracle contract can represent the exact live tree.
 3. A PrefixGraph artifact must additionally satisfy the release-wide <=8x per-member decoded-context law.
-4. Every candidate is admitted and the final published winner is reverified through the strict bounded streamed
-   release-reader policy, not through a research whole-archive materialization adapter.
+4. A candidate that can still win is admitted through the strict bounded streamed release-reader policy; a
+   complete artifact that is already >= the verified G0-G4 floor is mathematically dominated and need not be
+   decoded merely to prove it cannot win.
 5. The smaller admitted complete artifact wins; exact ties conservatively retain the G0-G4/v0.29 path.
 
 The tournament is intentionally useful before PrefixGraph is internalized as a native Mosaic graph edge. It
@@ -18,12 +19,14 @@ keeping the stronger single-grammar composition goal as an optimization path. No
 saving is claimed unless a future one-artifact ablation proves it.
 
 Footnote: candidates are created in a sibling temporary directory and the winner is published with
-``os.replace``. Final verification is streamed, so publication integrity no longer requires an archive-sized
-RAM copy merely to prove that a same-filesystem rename preserved the selected bytes.
+``os.replace``. The selected logical artifact is strong-verified before publication; a physical SHA-256 is then
+checked across the same-filesystem atomic rename. Re-decoding the identical logical tree after that byte-identity
+proof would add creation cost without adding an independent integrity fact.
 """
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -39,6 +42,14 @@ MAX_MEMBER_READ_AMP = 8.0
 
 def treehash(root: Path) -> str:
     return G04.treehash(root)
+
+
+def _sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as stream:
+        for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
 
 
 def _prefixgraph_eligibility(root: Path, expected_tree: str) -> tuple[bool, str | None]:
@@ -153,12 +164,19 @@ def build(root: Path, out: Path) -> dict:
         pg_bytes = None
         if pg_contract_eligible:
             pg_stats = PG.build(root, pg_path)
-            pg_verify = _verify_component(pg_path, expected_tree, "PrefixGraph candidate")
             pg_bytes = pg_path.stat().st_size
-            pg_locality = _prefixgraph_locality(pg_path)
-            pg_admitted = bool(pg_locality["passed"])
-            if not pg_admitted:
-                pg_reject_reason = "locality-ceiling"
+
+            # Footnote: complete artifact bytes are the final tournament objective. Once PrefixGraph is not
+            # strictly smaller than the already strong-verified G0-G4 floor, no locality or decode outcome can
+            # make it the winner. Skipping that dominated logical decode preserves exact selection semantics.
+            if pg_bytes < g04_bytes:
+                pg_verify = _verify_component(pg_path, expected_tree, "PrefixGraph candidate")
+                pg_locality = _prefixgraph_locality(pg_path)
+                pg_admitted = bool(pg_locality["passed"])
+                if not pg_admitted:
+                    pg_reject_reason = "locality-ceiling"
+            else:
+                pg_reject_reason = "complete-artifact-not-smaller"
 
         # Exact ties stay on the richer inherited path. Approximate nomination may decide which PrefixGraph
         # anchors are tried, but it never decides this complete-artifact tournament. A smaller PrefixGraph
@@ -175,13 +193,20 @@ def build(root: Path, out: Path) -> dict:
                 selected = "v029-fallback"
             selected_verify = g04_verify
 
+        assert selected_verify is not None
         selected_bytes = selected_path.stat().st_size
+        selected_physical_sha256 = _sha256_file(selected_path)
         os.replace(selected_path, out)
-        final_verify = strong_verify(out)
-        if not final_verify.get("ok") or final_verify.get("tree_sha256") != expected_tree:
-            raise RuntimeError("published v0.30 release candidate failed strict streamed verification")
-        if out.stat().st_size != selected_bytes:
-            raise RuntimeError("published v0.30 release candidate size changed during atomic publication")
+        published_physical_sha256 = _sha256_file(out)
+        if out.stat().st_size != selected_bytes or published_physical_sha256 != selected_physical_sha256:
+            raise RuntimeError("published v0.30 release candidate bytes changed during atomic publication")
+
+        # Footnote: selected_verify was obtained from the exact bytes whose SHA-256 crossed os.replace. Reusing
+        # that logical verification result is stronger than silently trusting rename semantics alone while
+        # avoiding a second full logical decode of bytes we have just proven physically identical.
+        final_verify = dict(selected_verify)
+        final_verify["publication_physical_sha256"] = published_physical_sha256
+        final_verify["publication_reused_preverified_logical_result"] = True
 
         return {
             "selected": selected,
@@ -200,6 +225,7 @@ def build(root: Path, out: Path) -> dict:
             "portfolio_create_s": time.perf_counter() - started,
             "selection_materialization": "same-filesystem-atomic-move",
             "selection_extra_payload_write_bytes": 0,
+            "selection_publication_physical_sha256": published_physical_sha256,
             "max_dependency_depth": int(pg_stats.get("max_dependency_depth", 0)) if selected == "prefixgraph" else 0,
             "max_selected_member_read_amplification": (
                 float(pg_locality["max_member_read_amplification"])
