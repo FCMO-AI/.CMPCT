@@ -1,7 +1,17 @@
+# ci-lane: deep
 name: CMPCT neutral-hostile determinism repair v6
 
 on:
   pull_request:
+    paths:
+      - ".github/workflows/neutral-hostile-determinism-repair-v6.yml"
+      - "benchmarks/neutral_hostile_*"
+      - "benchmarks/history/2026-08-16-entropygraph-v028.json"
+      - "benchmarks/history/2026-08-17-neutral-hostile-determinism-repair-v5.json"
+      - "experiments/entropygraph_v028*.py"
+      - "native/preflate-bridge/**"
+      - "tests/test_neutral_hostile_repair_v6.py"
+      - "pyproject.toml"
   workflow_dispatch:
 
 permissions:
@@ -128,4 +138,5 @@ jobs:
 # Footnote: this gate proves a candidate benchmark identity; it does not overwrite the accepted v0.28/v0.29
 # ledger. A second independent GitHub runner attempt must reproduce the full per-file manifests and exact embedded
 # v0.28 bytes before repair-v6 can be promoted into durable history. The absolute v0.30 saving hurdle is inherited
-# separately and may never be lowered as a side effect of benchmark-substrate repair.
+# separately and may never be lowered as a side effect of benchmark-substrate repair. Path scoping keeps this deep
+# proof off unrelated PR edits while still rerunning when its corpus, repair, v0.28 or native-bridge inputs change.
