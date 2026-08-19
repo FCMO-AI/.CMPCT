@@ -43,6 +43,31 @@ jobs:
             python-pptx==1.0.2 \
             numpy==2.4.6
 
+      - name: Probe developer-repository generator at file granularity
+        run: |
+          mkdir -p benchmark-artifacts
+          python benchmarks/neutral_hostile_source_repo_determinism_check.py \
+            --work-root benchmark-artifacts/CMPCT_Source_Repo_Determinism_Probe \
+            --output benchmark-artifacts/neutral-hostile-source-repo-determinism.json \
+            > benchmark-artifacts/neutral-hostile-source-repo-determinism.stdout.txt
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          r=json.loads(Path('benchmark-artifacts/neutral-hostile-source-repo-determinism.json').read_text())
+          assert r['schema'] == 'cmpct-neutral-hostile-source-repo-determinism-probe-v1'
+          assert r['current']['deterministic_across_paths'] is True, r['current']['file_differences_between_rounds']
+          print(json.dumps({
+              'tree_sha256': r['current']['tree_sha256'],
+              'historical_tree_sha256': r['historical']['tree_sha256'],
+              'matches_historical_tree': r['current']['matches_historical_tree'],
+              'logical_bytes': r['current']['logical_bytes'],
+              'files': r['current']['files'],
+              'elf_rounds': r['current']['elf_rounds'],
+              'gcc': r['environment']['gcc'],
+              'ld': r['environment']['ld'],
+          }, indent=2))
+          PY
+
       - name: Build pinned memory-safe Preflate bridge
         run: |
           rustup toolchain install 1.89.0 --profile minimal
@@ -95,16 +120,35 @@ jobs:
           print('- Historical v0.28 evidence remains immutable; broad PDF substitution was explicitly rejected.')
           PY
           fi
+          if [ -f benchmark-artifacts/neutral-hostile-source-repo-determinism.json ]; then
+            python - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          import json
+          from pathlib import Path
+          r=json.loads(Path('benchmark-artifacts/neutral-hostile-source-repo-determinism.json').read_text())
+          c=r['current']
+          print('## Developer-repository substrate probe')
+          print(f"- cross-path deterministic: **{c['deterministic_across_paths']}**")
+          print(f"- current tree: `{c['tree_sha256']}`")
+          print(f"- accepted v0.28 tree: `{r['historical']['tree_sha256']}`")
+          print(f"- matches accepted tree: **{c['matches_historical_tree']}**")
+          print(f"- round-to-round file diffs: **{len(c['file_differences_between_rounds'])}**")
+          print('- This probe is diagnostic only; it never rewrites or normalizes the frozen workload.')
+          PY
+          fi
 
-      - name: Upload repair and PDF forensic evidence
+      - name: Upload repair and forensic evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: cmpct-neutral-hostile-determinism-repair-${{ github.sha }}
           path: |
             benchmark-artifacts/neutral-hostile-v1-determinism-repair.json
+            benchmark-artifacts/neutral-hostile-source-repo-determinism.json
+            benchmark-artifacts/neutral-hostile-source-repo-determinism.stdout.txt
             benchmark-artifacts/CMPCT_Neutral_Hostile_Determinism_Repair/forensics/*.pdf
           if-no-files-found: warn
 
 # Footnote: cross-path byte identity is part of the acceptance contract. ReportLab resource names are
-# deliberately made content-derived so temporary CI directories cannot perturb the benchmark tree.
+# deliberately made content-derived so temporary CI directories cannot perturb the benchmark tree. The
+# developer-repository probe is additive evidence only: it must explain source drift before any frozen
+# benchmark identity can be changed, and therefore performs no normalization itself.
