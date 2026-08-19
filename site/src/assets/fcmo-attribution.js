@@ -1,6 +1,6 @@
 const STEWARD_URL = 'https://github.com/FCMO-AI';
-// Footnote: keep the identifier semantically public. The disclosure guard intentionally treats FCMO_* style
-// uppercase identifiers as potential private operational artifacts; the URL itself is ordinary public provenance.
+// Footnote: keep this identifier semantically public. Uppercase operational-looking identifiers are intentionally
+// avoided here so public stewardship provenance cannot be mistaken for a private artifact name by the disclosure guard.
 
 function ensureMeta(name, content) {
   let node = document.head.querySelector(`meta[name="${name}"]`);
