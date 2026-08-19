@@ -79,6 +79,11 @@ try {
         const switcherVisible = Boolean(switchRect && switchRect.width >= 40 && switchRect.height >= 34 && switchRect.right > 0 && switchRect.left < viewportWidth);
         const heroVisible = Boolean(heroRect && heroRect.width > 0 && heroRect.height > 0 && heroRect.bottom > 0);
         const fontCoverage = !coverage || document.fonts.check(`16px "${coverage.family}"`, coverage.sample);
+        const renderedText = body.innerText || "";
+        // Footnote: localization may use private sentinels internally while composing parameterized fragments,
+        // but none may survive into rendered user copy. Catch every `__TOKEN__` shape so future helpers cannot
+        // repeat the Chinese `__PCT__` leak under a different internal placeholder name.
+        const templateSentinels = [...new Set(renderedText.match(/__[A-Z0-9_]+__/g) || [])].sort();
         return {
           htmlLang: doc.lang,
           locale: state.locale,
@@ -92,6 +97,7 @@ try {
           fontCoverage,
           fontCoverageFamily: coverage?.family || null,
           fontCoverageSample: coverage?.sample || null,
+          templateSentinels,
         };
       }, coverage);
 
@@ -106,6 +112,7 @@ try {
       if (!result.heroVisible) issues.push("hero headline is not physically visible");
       if (!result.heroText || /Archive formats made peace with compromise/i.test(result.heroText)) issues.push("hero remained English");
       if (!result.fontCoverage) issues.push(`missing verified glyph coverage for ${result.fontCoverageFamily}: ${result.fontCoverageSample}`);
+      if (result.templateSentinels.length) issues.push(`internal template sentinel leaked into rendered copy: ${result.templateSentinels.join(", ")}`);
       if (actionableMissing.length) issues.push(`untranslated authored copy: ${actionableMissing.join(" | ")}`);
 
       const name = `${locale.replace(/[^A-Za-z0-9-]/g, "-")}-${viewport.name}`;
@@ -127,4 +134,4 @@ if (failures) {
   }
   process.exit(1);
 }
-console.log(`Localized viewport contract passed ${report.length} rendered cases across ${locales.length} non-English locales with zero actionable untranslated authored strings and verified CJK glyph coverage.`);
+console.log(`Localized viewport contract passed ${report.length} rendered cases across ${locales.length} non-English locales with zero actionable untranslated authored strings, zero leaked template sentinels and verified CJK glyph coverage.`);
