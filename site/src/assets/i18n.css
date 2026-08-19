@@ -1,0 +1,114 @@
+/* CMPCT curated locale controls — Surface 0.29.k.
+   Footnote: localization must adapt to the restored visual system, not force the visual system to imitate
+   English line lengths. This layer is deliberately small and loads after responsive.css. */
+
+/* Footnote: mainstream desktop/mobile platforms ship regional CJK fonts, but generic Linux/browser images
+   can otherwise fall all the way through to tofu squares. These language-scoped stacks keep the normal system
+   typography first while naming interoperable Japanese/Korean/Simplified/Traditional fallbacks explicitly.
+   CI installs Noto CJK and asserts representative glyph coverage, so a green screenshot matrix must be readable. */
+:lang(ja) {
+  --sans: "Noto Sans CJK JP", "Noto Sans JP", "Hiragino Sans", "Yu Gothic", Meiryo, ui-sans-serif, system-ui, sans-serif;
+  --mono: "Noto Sans Mono CJK JP", "Noto Sans CJK JP", ui-monospace, monospace;
+}
+
+:lang(ko) {
+  --sans: "Noto Sans CJK KR", "Noto Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", ui-sans-serif, system-ui, sans-serif;
+  --mono: "Noto Sans Mono CJK KR", "Noto Sans CJK KR", ui-monospace, monospace;
+}
+
+:lang(zh-Hans) {
+  --sans: "Noto Sans CJK SC", "Noto Sans SC", "PingFang SC", "Microsoft YaHei", ui-sans-serif, system-ui, sans-serif;
+  --mono: "Noto Sans Mono CJK SC", "Noto Sans CJK SC", ui-monospace, monospace;
+}
+
+:lang(zh-Hant) {
+  --sans: "Noto Sans CJK TC", "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", ui-sans-serif, system-ui, sans-serif;
+  --mono: "Noto Sans Mono CJK TC", "Noto Sans CJK TC", ui-monospace, monospace;
+}
+
+.language-switcher {
+  position: relative;
+  display: inline-grid;
+  grid-template-columns: auto auto;
+  align-items: center;
+  gap: 6px;
+  min-height: 36px;
+  padding: 0 8px;
+  border: 1px solid color-mix(in srgb, var(--line, #343434) 78%, transparent);
+  background: color-mix(in srgb, var(--bg, #080808) 88%, transparent);
+  color: var(--muted, #9c9a92);
+  font: 650 .64rem/1 var(--mono, ui-monospace, monospace);
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+}
+
+.language-switcher:focus-within {
+  border-color: var(--hot, #ff6a00);
+  color: var(--paper, #f1ede3);
+}
+
+.language-switcher select {
+  width: 2.35rem;
+  min-height: 34px;
+  border: 0;
+  outline: 0;
+  appearance: none;
+  -webkit-appearance: none;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  letter-spacing: .06em;
+  text-align: right;
+  cursor: pointer;
+}
+
+.language-switcher option {
+  background: #101010;
+  color: #f1ede3;
+}
+
+/* German and Romance-language copy is often longer than English. Give compact proof labels a little more
+   breathing room without changing hierarchy or shrinking body copy into illegibility. */
+:lang(de) .hero-kicker,
+:lang(de) .hero-proofline span,
+:lang(de) .card-head span,
+:lang(de) .eyebrow,
+:lang(es-419) .hero-kicker,
+:lang(pt-BR) .hero-kicker,
+:lang(fr) .hero-kicker {
+  letter-spacing: .07em;
+}
+
+:lang(de) .hero-actions .button,
+:lang(fr) .hero-actions .button,
+:lang(pt-BR) .hero-actions .button,
+:lang(es-419) .hero-actions .button {
+  padding-inline: clamp(12px, 1.35vw, 19px);
+}
+
+@media (min-width: 761px) and (max-width: 1180px) {
+  .language-switcher { min-height: 34px; padding-inline: 7px; }
+}
+
+@media (max-width: 760px) {
+  /* Footnote: phones already spend almost all header width on identity and primary outbound actions. The
+     language control becomes a fixed utility pill near the safe bottom edge instead of causing header
+     collisions or hiding repository access. It stays reachable with one thumb and never covers the Lab CTA. */
+  .language-switcher {
+    position: fixed;
+    z-index: 80;
+    right: max(12px, env(safe-area-inset-right));
+    bottom: max(12px, env(safe-area-inset-bottom));
+    min-height: 44px;
+    padding-inline: 11px;
+    border-color: color-mix(in srgb, var(--hot, #ff6a00) 42%, var(--line, #343434));
+    box-shadow: 0 12px 34px rgba(0, 0, 0, .42);
+  }
+  .language-switcher select { min-height: 42px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .language-switcher { transition: none !important; }
+}
