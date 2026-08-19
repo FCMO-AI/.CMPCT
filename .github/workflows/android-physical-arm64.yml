@@ -5,9 +5,19 @@ on:
   # Footnote: label-triggering makes the physical gate usable before merge, when the exact v0.30 candidate still
   # lives on PR #56. Merely synchronizing the PR never queues a scarce self-hosted device runner; the executor
   # deliberately adds/re-adds `v030-physical-arm64` only after the candidate is otherwise frozen and hosted
-  # Android evidence for that exact source fingerprint is green.
+  # Android evidence for that exact source fingerprint is green. Path scope keeps this release lane compliant
+  # with the repository topology ratchet and prevents unrelated labeled PRs from touching scarce hardware.
   pull_request:
     types: [labeled]
+    paths:
+      - 'integrations/android/**'
+      - 'native/cmpct-core/**'
+      - 'native/cmpct-portable/**'
+      - 'tests/conformance/**'
+      - 'experiments/entropygraph_v030_*'
+      - 'docs/V030_RELEASE_LOCK.json'
+      - '.github/workflows/android.yml'
+      - '.github/workflows/android-physical-arm64.yml'
   workflow_dispatch:
     inputs:
       device_serial:
@@ -18,6 +28,12 @@ on:
 permissions:
   contents: read
   actions: read
+
+concurrency:
+  # Footnote: only the newest physical-device request for one PR/ref may own the scarce acceptance device.
+  # Superseded candidates are cancelled before they can produce evidence that a later source tree might misuse.
+  group: cmpct-physical-android-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 jobs:
   physical-arm64:
