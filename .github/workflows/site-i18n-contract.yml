@@ -1,0 +1,95 @@
+name: CMPCT curated localization contract
+# ci-lane: deep
+
+on:
+  pull_request:
+    paths:
+      - "site/**"
+      - "README.md"
+      - "docs/readme/**"
+      - "docs/SITE_I18N.md"
+      - "benchmarks/history/**"
+      - "SURFACE_REVISION"
+      - ".github/workflows/site-i18n-contract.yml"
+  push:
+    branches: [main, agent/site-curated-i18n]
+    paths:
+      - "site/**"
+      - "README.md"
+      - "docs/readme/**"
+      - "docs/SITE_I18N.md"
+      - "benchmarks/history/**"
+      - "SURFACE_REVISION"
+      - ".github/workflows/site-i18n-contract.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: site-i18n-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  curated-locales:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+
+      - name: Build canonical public surface
+        run: |
+          python tools/check_public_surface.py
+          python site/build_site.py --out _site
+          python site/enhance_site.py _site
+
+      - name: Validate curated language catalogue and READMEs
+        run: |
+          # Footnote: catalogue validation runs before Chromium so cheap semantic/API failures do not spend
+          # browser minutes. It proves completeness, source alignment, placeholders, protected terms and
+          # translated README authority markers; literary taste remains a human-review concern.
+          node --check site/src/assets/i18n/catalog.js
+          node --check site/src/assets/i18n/extended-meta.js
+          node --check site/src/assets/i18n/extended-packs.js
+          node --check site/src/assets/i18n/locale-pack.js
+          node --check site/src/assets/i18n.js
+          for f in site/src/assets/i18n/locales/*.js; do node --check "$f"; done
+          node --check site/tests/i18n-contract.mjs
+          node --check site/tests/i18n-viewport.mjs
+          node site/tests/i18n-contract.mjs
+
+      - name: Install pinned Chromium render harness
+        run: |
+          # Footnote: Playwright is CI-only and never ships with the static site. Keep the same pinned browser
+          # family as the base public-proof workflow so locale failures are comparable to ordinary viewport proof.
+          # Ubuntu runner images do not guarantee CJK glyph coverage; install Noto CJK so Japanese, Korean and
+          # both Chinese scripts are rendered as actual language rather than tofu boxes during visual proof.
+          sudo apt-get update
+          sudo apt-get install -y fonts-noto-cjk
+          npm install --no-save --no-package-lock playwright@1.55.0
+          npx playwright install chromium
+
+      - name: Render all localized stress cases
+        run: |
+          python -m http.server 4173 --directory _site >/tmp/cmpct-i18n-site.log 2>&1 &
+          SERVER_PID=$!
+          trap 'kill "$SERVER_PID" 2>/dev/null || true' EXIT
+          node site/tests/i18n-viewport.mjs http://127.0.0.1:4173/ locale-artifacts
+
+      - name: Preserve locale render evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: cmpct-locale-matrix-${{ github.sha }}
+          path: locale-artifacts/
+          if-no-files-found: warn
+          retention-days: 7
+
+# Footnote: direct feature-branch pushes are validated because a PR can temporarily lose its synthetic merge
+# ref while main advances. This workflow validates source only and deliberately does not deploy GitHub Pages;
+# CMPCT keeps main as canonical source authority and gh-pages as explicitly promoted generated serving output.

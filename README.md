@@ -15,7 +15,14 @@
 
   **[Website](https://fcmo-ai.github.io/.CMPCT/)** · **[Browser Lab](https://fcmo-ai.github.io/.CMPCT/#lab)** · **[Benchmarks](docs/BENCHMARKS.md)** · **[Format](docs/FORMAT.md)** · **[Roadmap](docs/ROADMAP.md)** · **[Agent entrypoint](docs/CURRENT_STATE.md)**
 
-  <sub>core v0.29.0 · canonical format r24 · surface 0.29.j · pre-1.0</sub>
+  <sub>core v0.29.0 · canonical format r24 · surface 0.29.k · pre-1.0</sub>
+
+  <br><br>
+
+  <sub>
+  English · <a href="docs/readme/README.es-419.md">Español</a> · <a href="docs/readme/README.pt-BR.md">Português</a> · <a href="docs/readme/README.fr.md">Français</a> · <a href="docs/readme/README.de.md">Deutsch</a> · <a href="docs/readme/README.it.md">Italiano</a> · <a href="docs/readme/README.nl.md">Nederlands</a> · <a href="docs/readme/README.pl.md">Polski</a> · <a href="docs/readme/README.cs.md">Čeština</a> · <a href="docs/readme/README.hu.md">Magyar</a><br>
+  <a href="docs/readme/README.ro.md">Română</a> · <a href="docs/readme/README.tr.md">Türkçe</a> · <a href="docs/readme/README.sv.md">Svenska</a> · <a href="docs/readme/README.da.md">Dansk</a> · <a href="docs/readme/README.fi.md">Suomi</a> · <a href="docs/readme/README.id.md">Bahasa Indonesia</a> · <a href="docs/readme/README.ja.md">日本語</a> · <a href="docs/readme/README.ko.md">한국어</a> · <a href="docs/readme/README.zh-Hans.md">简体中文</a> · <a href="docs/readme/README.zh-Hant.md">繁體中文</a>
+  </sub>
 </div>
 
 ---
@@ -60,7 +67,7 @@ These rows are **matched stored-byte comparisons, not semantic-parity claims**. 
 |---|---|---|
 | **Canonical reader/writer** | **format r24** | What `python -m cmpct create` writes and canonical readers must understand. |
 | **Research frontier** | **CMPNX11 / v0.29.0** | Experimental Mosaic + Residual Program Packing engine; not canonical r24 syntax. |
-| **Public surface** | **0.29.j** | Repository/site/docs presentation only; it does not alter archive semantics or consume a core version. |
+| **Public surface** | **0.29.k** | Repository/site/docs presentation only; it does not alter archive semantics or consume a core version. |
 | **License** | **Apache-2.0 proposed** | Proposal only. It is not yet the finalized public grant. |
 
 ## What CMPCT can do today
@@ -218,7 +225,7 @@ The site may be visually and rhetorically aggressive. It may not blur those boun
 CMPCT does not treat the numeric project version as a commit counter. There are three different version axes:
 
 1. **Numeric core project version (`MAJOR.MINOR.PATCH`)** — reserved for a material improvement to CMPCT itself: archive/engine capability, compression or speed, reliability, recovery, portability/interoperability, or another product-level gain. After the historical v0.27.1 checkpoint, normal core advancement moves the `MAJOR.MINOR` line and uses `PATCH=0` for packaging compatibility.
-2. **Surface revision (`MAJOR.MINOR.LETTER`)** — site animation/design, documentation cleanup, repository presentation, workflow ergonomics and similar non-format work. The current surface milestone is **`0.29.j`**. It does not independently change `pyproject.toml` and does not require a synthetic benchmark record.
+2. **Surface revision (`MAJOR.MINOR.LETTER`)** — site animation/design, documentation cleanup, repository presentation, workflow ergonomics and similar non-format work. The current surface milestone is **`0.29.k`**. It does not independently change `pyproject.toml` and does not require a synthetic benchmark record.
 3. **On-disk format revision** — changes only when readers need new archive grammar/storage semantics. The canonical executable format remains **r24**.
 
 A core release can improve encoder policy, speed, reliability or interoperability without changing the on-disk revision, but it must still earn its numeric number with durable evidence. A research milestone can likewise advance the project line while keeping experimental bytes explicitly non-canonical. A site or repository beautification pass can be useful and substantial without pretending CMPCT itself became a new format release.
