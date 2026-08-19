@@ -1,7 +1,15 @@
+# ci-lane: deep
 name: CMPCT neutral-hostile determinism repair
 
 on:
   pull_request:
+    paths:
+      - ".github/workflows/neutral-hostile-determinism-repair.yml"
+      - "benchmarks/neutral_hostile_*"
+      - "benchmarks/history/2026-08-16-entropygraph-v028.json"
+      - "experiments/entropygraph_v028*.py"
+      - "native/preflate-bridge/**"
+      - "pyproject.toml"
   workflow_dispatch:
 
 permissions:
@@ -151,4 +159,5 @@ jobs:
 # Footnote: cross-path byte identity is part of the acceptance contract. ReportLab resource names are
 # deliberately made content-derived so temporary CI directories cannot perturb the benchmark tree. The
 # developer-repository probe is additive evidence only: it must explain source drift before any frozen
-# benchmark identity can be changed, and therefore performs no normalization itself.
+# benchmark identity can be changed, and therefore performs no normalization itself. Path scoping keeps this
+# deep forensic lane from competing with release CI when unrelated files change.
