@@ -18,6 +18,16 @@ const viewports = [
   { name: "short-laptop", width: 1366, height: 768 },
 ];
 
+// Footnote: a screenshot can be geometrically valid while still showing unreadable tofu squares. CJK locales
+// therefore carry an explicit font/glyph contract in addition to the ordinary layout checks. The workflow installs
+// these open Noto families on Linux; product CSS still includes the normal platform-native fallbacks for users.
+const GLYPH_COVERAGE = Object.freeze({
+  ja: { family: "Noto Sans CJK JP", sample: "日本語" },
+  ko: { family: "Noto Sans CJK KR", sample: "한국어" },
+  "zh-Hans": { family: "Noto Sans CJK SC", sample: "简体中文" },
+  "zh-Hant": { family: "Noto Sans CJK TC", sample: "繁體中文" },
+});
+
 function isVerbatimEvidenceOrDerivedLabel(value) {
   const text = String(value || "").replace(/\s+/g, " ").trim();
   if (!text) return true;
@@ -51,9 +61,11 @@ try {
       await page.goto(url.toString(), { waitUntil: "networkidle" });
       await page.waitForFunction(() => window.__CMPCT_I18N__?.ready === true, null, { timeout: 15_000 });
       await page.waitForFunction(() => document.querySelector("#hero-gain")?.textContent?.trim() !== "—", null, { timeout: 15_000 }).catch(() => {});
+      await page.evaluate(() => document.fonts.ready);
       await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
 
-      const result = await page.evaluate(() => {
+      const coverage = GLYPH_COVERAGE[locale] || null;
+      const result = await page.evaluate((coverage) => {
         const state = window.__CMPCT_I18N__ || {};
         const doc = document.documentElement;
         const body = document.body;
@@ -66,6 +78,7 @@ try {
         const overflow = Math.max(doc.scrollWidth, body.scrollWidth) - viewportWidth;
         const switcherVisible = Boolean(switchRect && switchRect.width >= 40 && switchRect.height >= 34 && switchRect.right > 0 && switchRect.left < viewportWidth);
         const heroVisible = Boolean(heroRect && heroRect.width > 0 && heroRect.height > 0 && heroRect.bottom > 0);
+        const fontCoverage = !coverage || document.fonts.check(`16px "${coverage.family}"`, coverage.sample);
         return {
           htmlLang: doc.lang,
           locale: state.locale,
@@ -76,8 +89,11 @@ try {
           heroVisible,
           heroText: hero?.textContent?.replace(/\s+/g, " ").trim() || "",
           title: document.title,
+          fontCoverage,
+          fontCoverageFamily: coverage?.family || null,
+          fontCoverageSample: coverage?.sample || null,
         };
-      });
+      }, coverage);
 
       const actionableMissing = result.missing.filter((text) => !isVerbatimEvidenceOrDerivedLabel(text));
       const ignoredMissing = result.missing.filter((text) => isVerbatimEvidenceOrDerivedLabel(text));
@@ -89,6 +105,7 @@ try {
       if (!result.switcherVisible) issues.push("language switcher is not physically usable");
       if (!result.heroVisible) issues.push("hero headline is not physically visible");
       if (!result.heroText || /Archive formats made peace with compromise/i.test(result.heroText)) issues.push("hero remained English");
+      if (!result.fontCoverage) issues.push(`missing verified glyph coverage for ${result.fontCoverageFamily}: ${result.fontCoverageSample}`);
       if (actionableMissing.length) issues.push(`untranslated authored copy: ${actionableMissing.join(" | ")}`);
 
       const name = `${locale.replace(/[^A-Za-z0-9-]/g, "-")}-${viewport.name}`;
@@ -110,4 +127,4 @@ if (failures) {
   }
   process.exit(1);
 }
-console.log(`Localized viewport contract passed ${report.length} rendered cases across ${locales.length} non-English locales with zero actionable untranslated authored strings.`);
+console.log(`Localized viewport contract passed ${report.length} rendered cases across ${locales.length} non-English locales with zero actionable untranslated authored strings and verified CJK glyph coverage.`);
