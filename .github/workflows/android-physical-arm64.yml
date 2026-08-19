@@ -1,0 +1,235 @@
+# ci-lane: release
+name: CMPCT physical Android ARM64 acceptance
+
+on:
+  # Footnote: label-triggering makes the physical gate usable before merge, when the exact v0.30 candidate still
+  # lives on PR #56. Merely synchronizing the PR never queues a scarce self-hosted device runner; the executor
+  # deliberately adds/re-adds `v030-physical-arm64` only after the candidate is otherwise frozen and hosted
+  # Android evidence for that exact source fingerprint is green.
+  pull_request:
+    types: [labeled]
+  workflow_dispatch:
+    inputs:
+      device_serial:
+        description: 'adb serial of the dedicated physical ARM64 device (blank = exactly one connected device)'
+        required: false
+        default: ''
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  physical-arm64:
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.action == 'labeled' && github.event.label.name == 'v030-physical-arm64')
+    # A runner gets this label only when it is physically attached to the dedicated acceptance device.
+    # This prevents an emulator or unrelated cloud ARM VM from satisfying the production-device gate.
+    runs-on: [self-hosted, linux, arm64, cmpct-android-physical]
+    timeout-minutes: 90
+    env:
+      ANDROID_SERIAL: ${{ inputs.device_serial || '' }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          clean: true
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '9.5.0'
+
+      - name: Set up Android command-line SDK
+        uses: android-actions/setup-android@v4
+        with:
+          packages: ''
+
+      - name: Resolve exact v0.30 candidate identity
+        run: |
+          python -m experiments.entropygraph_v030_release_lock_strict --print-fingerprint \
+            > "$RUNNER_TEMP/cmpct-v030-fingerprint.json"
+          echo "CMPCT_CANDIDATE_SHA=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
+          python - <<'PY' >> "$GITHUB_ENV"
+          import json, os, pathlib
+          data=json.loads((pathlib.Path(os.environ['RUNNER_TEMP'])/'cmpct-v030-fingerprint.json').read_text())
+          print('CMPCT_CANDIDATE_FINGERPRINT='+data['candidate_fingerprint'])
+          PY
+
+      - name: Find matching successful hosted Android evidence
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # Footnote: physical-device success is only one half of the release matrix. Rather than trusting a
+          # typed run id, inspect successful hosted Android artifacts and accept only one whose *embedded* source
+          # SHA and release fingerprint match this checkout exactly. Synthetic PR merge SHAs cannot satisfy it.
+          python - <<'PY'
+          import io, json, os, pathlib, urllib.request, zipfile
+          token=os.environ['GH_TOKEN']
+          repo=os.environ['GITHUB_REPOSITORY']
+          branch=os.environ.get('GITHUB_HEAD_REF') or os.environ.get('GITHUB_REF_NAME')
+          candidate=os.environ['CMPCT_CANDIDATE_SHA']
+          fingerprint=os.environ['CMPCT_CANDIDATE_FINGERPRINT']
+          headers={'Authorization':f'Bearer {token}','Accept':'application/vnd.github+json','X-GitHub-Api-Version':'2022-11-28'}
+          def get_json(url):
+              req=urllib.request.Request(url, headers=headers)
+              with urllib.request.urlopen(req, timeout=30) as r: return json.load(r)
+          def get_bytes(url):
+              req=urllib.request.Request(url, headers=headers)
+              with urllib.request.urlopen(req, timeout=60) as r: return r.read()
+          runs=get_json(f'https://api.github.com/repos/{repo}/actions/workflows/android.yml/runs?status=success&branch={branch}&per_page=50')['workflow_runs']
+          found=None
+          for run in runs:
+              artifacts=get_json(f"https://api.github.com/repos/{repo}/actions/runs/{run['id']}/artifacts?per_page=100")['artifacts']
+              for artifact in artifacts:
+                  if artifact.get('expired') or not artifact['name'].startswith('cmpct-android-debug-'): continue
+                  raw=get_bytes(artifact['archive_download_url'])
+                  with zipfile.ZipFile(io.BytesIO(raw)) as z:
+                      names=[n for n in z.namelist() if n.endswith('cmpct-hosted-android-evidence.json')]
+                      if not names: continue
+                      evidence=json.loads(z.read(names[0]))
+                  if evidence.get('candidate_sha') == candidate and evidence.get('candidate_fingerprint') == fingerprint and evidence.get('facts',{}).get('hosted_android_emulator_green') is True:
+                      found={'run_id':run['id'],'run_attempt':run['run_attempt'],'artifact_id':artifact['id'],'evidence':evidence}
+                      break
+              if found: break
+          if not found:
+              raise SystemExit('no successful hosted Android artifact matches this exact candidate SHA/fingerprint')
+          out=pathlib.Path(os.environ['RUNNER_TEMP'])/'cmpct-hosted-android-evidence.json'
+          out.write_text(json.dumps(found, indent=2)+'\n')
+          print(json.dumps(found, indent=2))
+          PY
+
+      - name: Prove a real ARM64 Android device is connected
+        run: |
+          adb start-server
+          if [ -z "${ANDROID_SERIAL}" ]; then
+            mapfile -t DEVICES < <(adb devices | awk 'NR>1 && $2=="device" {print $1}')
+            test "${#DEVICES[@]}" -eq 1
+            export ANDROID_SERIAL="${DEVICES[0]}"
+            echo "ANDROID_SERIAL=${ANDROID_SERIAL}" >> "$GITHUB_ENV"
+          fi
+          test "$(adb -s "$ANDROID_SERIAL" get-state)" = device
+          ABI="$(adb -s "$ANDROID_SERIAL" shell getprop ro.product.cpu.abi | tr -d '\r')"
+          test "$ABI" = arm64-v8a
+          # Footnote: ro.kernel.qemu=1 is an explicit disqualifier. An ARM64 emulator, ARM cloud VM or hosted
+          # x86 emulator can test portability but can never manufacture the physical-device release fact.
+          test "$(adb -s "$ANDROID_SERIAL" shell getprop ro.kernel.qemu | tr -d '\r')" != 1
+          echo "CMPCT_ANDROID_ABI=$ABI" >> "$GITHUB_ENV"
+
+      - name: Install pinned Android/Rust build dependencies
+        run: |
+          sdkmanager \
+            'platforms;android-36' \
+            'build-tools;36.0.0' \
+            'ndk;29.0.14206865' \
+            'cmake;3.22.1' \
+            'platform-tools'
+          rustup target add \
+            aarch64-linux-android \
+            armv7-linux-androideabi \
+            x86_64-linux-android \
+            i686-linux-android
+          cargo install cargo-ndk --locked
+
+      - name: Build exact candidate APK for all declared ABIs
+        working-directory: integrations/android
+        run: |
+          export ANDROID_NDK_HOME="$ANDROID_SDK_ROOT/ndk/29.0.14206865"
+          export ANDROID_NDK_ROOT="$ANDROID_NDK_HOME"
+          gradle --no-daemon :app:assembleDebug :app:assembleDebugAndroidTest
+
+      - name: Verify packaged physical ABI uses portable dispatcher
+        working-directory: integrations/android
+        run: |
+          unzip -p app/build/outputs/apk/debug/app-debug.apk \
+            lib/arm64-v8a/libcmpct_android.so > "$RUNNER_TEMP/libcmpct_android_arm64.so"
+          readelf -d "$RUNNER_TEMP/libcmpct_android_arm64.so" | tee "$RUNNER_TEMP/cmpct-arm64-elf-dynamic.txt"
+          grep -Fq 'Shared library: [libcmpct_portable.so]' "$RUNNER_TEMP/cmpct-arm64-elf-dynamic.txt"
+          ! grep -Fq 'Shared library: [libcmpct_core.so]' "$RUNNER_TEMP/cmpct-arm64-elf-dynamic.txt"
+          ! grep -Fq '/home/' "$RUNNER_TEMP/cmpct-arm64-elf-dynamic.txt"
+
+      - name: Install and run complete Android instrumentation suite on physical device
+        working-directory: integrations/android
+        run: |
+          export ANDROID_NDK_HOME="$ANDROID_SDK_ROOT/ndk/29.0.14206865"
+          export ANDROID_NDK_ROOT="$ANDROID_NDK_HOME"
+          gradle --no-daemon :app:connectedDebugAndroidTest
+
+      - name: Exercise process restart and provider persistence
+        run: |
+          PACKAGE=ai.fcmo.cmpct
+          adb -s "$ANDROID_SERIAL" shell am force-stop "$PACKAGE"
+          adb -s "$ANDROID_SERIAL" shell monkey -p "$PACKAGE" -c android.intent.category.LAUNCHER 1 >/dev/null
+          adb -s "$ANDROID_SERIAL" shell am force-stop "$PACKAGE"
+          adb -s "$ANDROID_SERIAL" shell pm path "$PACKAGE" | grep -q '^package:'
+
+      - name: Emit fingerprint-bound physical Android platform evidence
+        run: |
+          python - <<'PY'
+          import hashlib, json, os, pathlib, subprocess
+          def adb(*args):
+              return subprocess.check_output(['adb','-s',os.environ['ANDROID_SERIAL'],*args], text=True).replace('\r','').strip()
+          hosted=json.loads((pathlib.Path(os.environ['RUNNER_TEMP'])/'cmpct-hosted-android-evidence.json').read_text())
+          serial_digest=hashlib.sha256(os.environ['ANDROID_SERIAL'].encode()).hexdigest()
+          evidence={
+              'schema':'cmpct-v030-platform-android-evidence-v1',
+              'candidate_sha':os.environ['CMPCT_CANDIDATE_SHA'],
+              'candidate_fingerprint':os.environ['CMPCT_CANDIDATE_FINGERPRINT'],
+              'physical_workflow_run_id':int(os.environ['GITHUB_RUN_ID']),
+              'physical_workflow_run_attempt':int(os.environ['GITHUB_RUN_ATTEMPT']),
+              'hosted_workflow_run_id':hosted['run_id'],
+              'device':{
+                  'serial_sha256':serial_digest,
+                  'abi':adb('shell','getprop','ro.product.cpu.abi'),
+                  'qemu':adb('shell','getprop','ro.kernel.qemu'),
+                  'manufacturer':adb('shell','getprop','ro.product.manufacturer'),
+                  'model':adb('shell','getprop','ro.product.model'),
+                  'android':adb('shell','getprop','ro.build.version.release'),
+                  'sdk':adb('shell','getprop','ro.build.version.sdk'),
+                  'build_fingerprint':adb('shell','getprop','ro.build.fingerprint'),
+              },
+              'facts':{
+                  'hosted_android_emulator_green':True,
+                  'physical_arm64_android_green':True,
+                  'required_platform_matrix_green':True,
+                  'all_declared_abis_built':True,
+                  'portable_arm64_jni_dependency_verified':True,
+                  'physical_instrumentation_green':True,
+                  'physical_process_restart_green':True,
+              },
+          }
+          if evidence['device']['abi'] != 'arm64-v8a' or evidence['device']['qemu'] == '1':
+              raise SystemExit('physical evidence device identity changed before receipt emission')
+          out=pathlib.Path(os.environ['RUNNER_TEMP'])/'cmpct-platform-android-evidence.json'
+          out.write_text(json.dumps(evidence, indent=2)+'\n')
+          print(json.dumps(evidence, indent=2))
+          PY
+
+      - name: Collect physical-device diagnostics
+        if: always()
+        run: |
+          mkdir -p "$RUNNER_TEMP/cmpct-physical-evidence"
+          adb -s "$ANDROID_SERIAL" logcat -d -t 2000 > "$RUNNER_TEMP/cmpct-physical-evidence/logcat.txt" || true
+          cp "$RUNNER_TEMP/cmpct-platform-android-evidence.json" "$RUNNER_TEMP/cmpct-physical-evidence/" 2>/dev/null || true
+          cp "$RUNNER_TEMP/cmpct-hosted-android-evidence.json" "$RUNNER_TEMP/cmpct-physical-evidence/" 2>/dev/null || true
+          cp "$RUNNER_TEMP/cmpct-arm64-elf-dynamic.txt" "$RUNNER_TEMP/cmpct-physical-evidence/" 2>/dev/null || true
+          find integrations/android/app/build/reports/androidTests -type f -maxdepth 8 \
+            -exec cp --parents {} "$RUNNER_TEMP/cmpct-physical-evidence/" \; 2>/dev/null || true
+
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: cmpct-physical-arm64-${{ github.sha }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/cmpct-physical-evidence/
+          if-no-files-found: error
+          retention-days: 90
+
+# Footnote: owning an ARM64 build is not physical-device acceptance. This workflow requires a self-hosted
+# Linux/ARM64 runner with the dedicated physical-device label, rejects QEMU explicitly, reuses the exact same APK
+# build path as hosted CI, and refuses to combine its device result with hosted evidence from another candidate.
+# The repository can define and enforce this truth boundary; it cannot conjure the required hardware.
