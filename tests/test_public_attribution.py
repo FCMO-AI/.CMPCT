@@ -10,8 +10,8 @@ ROOT = Path(__file__).resolve().parents[1]
 CANONICAL_CREDIT = "CMPCT by FCMO AI"
 GROUP_CREDIT = "From the FCMO group"
 STEWARD_URL = "https://github.com/FCMO-AI"
-# Footnote: this identifier intentionally describes public stewardship rather than using an FCMO_* operational-style
-# prefix. The disclosure guard is supposed to catch internal artifact names, not suppress the public GitHub identity.
+# Footnote: this identifier intentionally describes public stewardship and avoids operational-looking private
+# artifact naming. The disclosure guard should catch internal provenance without suppressing the public GitHub identity.
 
 
 def read(path: str) -> str:
