@@ -242,7 +242,7 @@ def run(work_root: Path) -> dict:
         "repair_v5_composed_not_rewritten": True,
         "file_manifests_retained_for_cross_run_comparison": True,
         "candidate_and_baseline_consume_same_tree": True,
-        "historical_records_rewritten": False,
+        "historical_records_preserved": True,
         "developer_shape_preserved": developer.get("shape_preserved") is True,
         "developer_elf_fixture_execution": smoke_ok,
     }
