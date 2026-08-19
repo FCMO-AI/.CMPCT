@@ -94,12 +94,15 @@ function translatePattern(source, targetLocale) {
   if ((match = source.match(/^([\d.]+)% smaller than (.+)$/))) return message("smallerThan", { pct: `${match[1]}%`, name: match[2] }, targetLocale);
   if ((match = source.match(/^smaller than (.+)$/))) {
     const full = message("smallerThan", { pct: "__PCT__", name: match[1] }, targetLocale);
-    return full.replace("__PCT__ ", "");
+    // Footnote: `__PCT__` is an internal sentinel used only to reuse each locale's natural word order when
+    // the source fragment omits a percentage. Remove the token itself rather than assuming a trailing ASCII
+    // space; CJK templates can place it directly beside punctuation or translated words.
+    return normalize(full.replace("__PCT__", ""));
   }
   if ((match = source.match(/^([\d.]+)% larger than (.+)$/))) return message("largerThan", { pct: `${match[1]}%`, name: match[2] }, targetLocale);
   if ((match = source.match(/^larger than (.+)$/))) {
     const full = message("largerThan", { pct: "__PCT__", name: match[1] }, targetLocale);
-    return full.replace("__PCT__ ", "");
+    return normalize(full.replace("__PCT__", ""));
   }
   if ((match = source.match(/^same stored bytes as (.+)$/))) return message("sameStored", { name: match[1] }, targetLocale);
   if ((match = source.match(/^vs (.+)$/))) return message("versus", { name: match[1] }, targetLocale);
