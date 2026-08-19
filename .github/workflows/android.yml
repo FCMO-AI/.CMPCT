@@ -45,18 +45,27 @@ jobs:
         with:
           packages: ''
 
-      - name: Enable KVM for Android emulator
+      - name: Select Android emulator acceleration
         run: |
-          # Footnote: GitHub Linux runners expose Android hardware acceleration, but /dev/kvm access
-          # must be granted to the runner process. Without this, a headless emulator can stall before
-          # adb ever sees a device and hide application-level failures behind CI infrastructure noise.
-          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' \
-            | sudo tee /etc/udev/rules.d/99-kvm4all.rules
-          sudo udevadm control --reload-rules
-          sudo udevadm trigger --name-match=kvm
-          test -e /dev/kvm
-          test -r /dev/kvm
-          test -w /dev/kvm
+          # Footnote: /dev/kvm is an optional hosted-runner capability, not an Android product requirement.
+          # When GitHub exposes it we grant the runner access and use hardware acceleration; when a runner
+          # instance has no KVM device at all, the same x86_64 instrumentation gate continues under the emulator's
+          # software engine instead of failing before Rust/Gradle compilation. Physical ARM64 acceptance remains
+          # a separate v0.30 release-lock fact and is never inferred from this emulator job.
+          if [ -e /dev/kvm ]; then
+            echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' \
+              | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+            sudo udevadm control --reload-rules
+            sudo udevadm trigger --name-match=kvm || true
+            sudo chmod 0666 /dev/kvm || true
+            test -r /dev/kvm
+            test -w /dev/kvm
+            echo 'CMPCT_ANDROID_EMULATOR_ACCEL=on' >> "$GITHUB_ENV"
+            echo 'Android emulator acceleration: KVM'
+          else
+            echo 'CMPCT_ANDROID_EMULATOR_ACCEL=off' >> "$GITHUB_ENV"
+            echo 'Android emulator acceleration: software (hosted runner has no /dev/kvm)'
+          fi
 
       - name: Install Rust Android targets
         run: |
@@ -123,19 +132,23 @@ jobs:
 
       - name: Start emulator
         run: |
+          # Footnote: explicitly pass the acceleration mode chosen from the actual runner device state. The
+          # software fallback is slower but exercises the identical APK/system image and prevents transient KVM
+          # allocation from deciding whether Android code is tested at all.
           nohup "$ANDROID_SDK_ROOT/emulator/emulator" \
             -avd cmpct-api29 \
             -no-window \
             -no-audio \
             -no-snapshot \
             -no-boot-anim \
+            -accel "$CMPCT_ANDROID_EMULATOR_ACCEL" \
             -gpu swiftshader_indirect \
             > "$RUNNER_TEMP/cmpct-emulator.log" 2>&1 &
-          if ! timeout 180 adb wait-for-device; then
+          if ! timeout 300 adb wait-for-device; then
             cat "$RUNNER_TEMP/cmpct-emulator.log" >&2
             exit 1
           fi
-          for _ in $(seq 1 120); do
+          for _ in $(seq 1 180); do
             if [ "$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')" = "1" ]; then
               adb shell input keyevent 82 || true
               exit 0
@@ -162,9 +175,13 @@ jobs:
           path: |
             integrations/android/app/build/outputs/apk/debug/app-debug.apk
             integrations/android/app/build/reports/androidTests/connected/**
+            ${{ runner.temp }}/cmpct-emulator.log
+            ${{ runner.temp }}/cmpct-elf-dynamic.txt
           if-no-files-found: warn
           retention-days: 30
 
 # Footnote: Android consumes libcmpct_portable through a parser-free JNI shim. Canonical r25 and inherited r24
 # therefore share one Rust admission/recovery/resource implementation; Android-specific parser drift is a release
-# blocker, not a supported portability strategy.
+# blocker, not a supported portability strategy. This hosted emulator gate is intentionally not the physical ARM64
+# release receipt required by v0.30; it proves build/package/routing/JNI behavior while the physical device gate
+# independently proves real arm64-v8a provider and lifecycle behavior.
