@@ -1,0 +1,131 @@
+name: CMPCT neutral-hostile determinism repair v6
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-neutral-hostile-determinism-repair-v6-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+  CMPCT_PREFLATE_BRIDGE: ${{ github.workspace }}/native/preflate-bridge/target/release/cmpct-preflate-bridge
+
+jobs:
+  prove:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    steps:
+      - name: Check out candidate
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install pinned corpus dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y zstd gcc ffmpeg libsndfile1
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[audio,test]'
+          python -m pip install \
+            pillow==12.3.0 \
+            reportlab==5.0.0 \
+            python-docx==1.2.0 \
+            openpyxl==3.1.5 \
+            python-pptx==1.0.2 \
+            numpy==2.4.6
+
+      - name: Build pinned memory-safe Preflate bridge
+        run: |
+          rustup toolchain install 1.89.0 --profile minimal
+          cargo +1.89.0 build --release --manifest-path native/preflate-bridge/Cargo.toml
+
+      - name: Run repair-v6 structural tests
+        run: python -m pytest -q tests/test_neutral_hostile_repair_v6.py
+
+      - name: Prove five-workload cross-path identity and embedded v0.28
+        run: |
+          mkdir -p benchmark-artifacts
+          python benchmarks/neutral_hostile_determinism_repair_v6_check.py \
+            --work-root benchmark-artifacts/CMPCT_Neutral_Hostile_Determinism_Repair_v6 \
+            --output benchmark-artifacts/neutral-hostile-v1-determinism-repair-v6.json \
+            > benchmark-artifacts/neutral-hostile-v1-determinism-repair-v6.stdout.txt
+
+      - name: Enforce candidate repair-v6 contract
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          r=json.loads(Path('benchmark-artifacts/neutral-hostile-v1-determinism-repair-v6.json').read_text())
+          assert r['schema'] == 'cmpct-neutral-hostile-v1-determinism-repair-manifest-v6'
+          assert r['within_run_pass'] is True, r
+          assert len(r['rows']) == 5
+          assert all(r['requirements'].values()), r['requirements']
+          developer=next(row for row in r['rows'] if row['name']=='01_developer_repository')
+          assert developer['files'] == 1266
+          assert developer['logical_bytes'] == 2624373
+          assert developer['shape_preserved'] is True
+          assert developer['predecessor_identity'] == 'historical-v0.28'
+          assert developer['v028_candidate_bytes'] and developer['v028_candidate_bytes'] > 0
+          for item in developer['developer_fixture']['fixtures']:
+              assert item['bytes'] == 112776
+              assert item['elf64_x86_64'] is True
+          for row in r['rows']:
+              assert row['deterministic'] is True, row['name']
+              assert row['tree_sha256'] == row['second_build_tree_sha256'], row['name']
+              assert not row['file_differences'], row['name']
+              assert row['v028_candidate_bytes'] and row['v028_candidate_bytes'] > 0, row['name']
+          print(json.dumps({
+              'within_run_pass': r['within_run_pass'],
+              'developer_tree_sha256': developer['tree_sha256'],
+              'developer_v028_candidate_bytes': developer['v028_candidate_bytes'],
+              'developer_candidate_delta_vs_historical': developer['repair_candidate_byte_delta_vs_predecessor'],
+              'developer_elf': developer['developer_fixture'],
+          }, indent=2))
+          PY
+
+      - name: Summarize repair-v6 evidence
+        if: always()
+        run: |
+          if [ -f benchmark-artifacts/neutral-hostile-v1-determinism-repair-v6.json ]; then
+            python - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          import json
+          from pathlib import Path
+          r=json.loads(Path('benchmark-artifacts/neutral-hostile-v1-determinism-repair-v6.json').read_text())
+          print('## Neutral/hostile repair-v6 candidate')
+          print(f"- within-run pass: **{r['within_run_pass']}**")
+          print('- historical evidence rewritten: **false**')
+          for row in r['rows']:
+              print(f"- **{row['name']}**: deterministic={row['deterministic']}, tree=`{row['tree_sha256'][:16]}…`, v0.28={row['v028_candidate_bytes']:,} B, predecessor={row['predecessor_identity']}")
+          d=next(row for row in r['rows'] if row['name']=='01_developer_repository')
+          print(f"- developer shape: **{d['files']} files / {d['logical_bytes']:,} B**, preserved={d['shape_preserved']}")
+          print(f"- developer execution smoke: `{d['developer_fixture']['execution_smoke']}`")
+          print('- Acceptance still requires an independent fresh-run manifest + exact-v0.28 match; this workflow does not self-approve the new identity.')
+          PY
+          fi
+
+      - name: Upload repair-v6 candidate evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: cmpct-neutral-hostile-determinism-repair-v6-${{ github.sha }}-${{ github.run_attempt }}
+          path: |
+            benchmark-artifacts/neutral-hostile-v1-determinism-repair-v6.json
+            benchmark-artifacts/neutral-hostile-v1-determinism-repair-v6.stdout.txt
+          if-no-files-found: warn
+          retention-days: 90
+
+# Footnote: this gate proves a candidate benchmark identity; it does not overwrite the accepted v0.28/v0.29
+# ledger. A second independent GitHub runner attempt must reproduce the full per-file manifests and exact embedded
+# v0.28 bytes before repair-v6 can be promoted into durable history. The absolute v0.30 saving hurdle is inherited
+# separately and may never be lowered as a side effect of benchmark-substrate repair.
