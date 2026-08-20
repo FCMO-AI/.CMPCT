@@ -40,6 +40,115 @@ IMPLEMENTATION_SOURCE = _IMPLEMENTATION_PATH
 # idempotent inside the isolated graph and invisible to concurrent research calls.
 
 
+# Preserve the historical byte-at-a-time delimiter implementation as an independent oracle.  The canonical
+# private profile can use a bulk transpose because the transform grammar is identical: only how the same bytes
+# are moved in memory changes.  The shared-rehab/byte-identity gates therefore remain capable of falsifying this
+# optimization rather than comparing two copies of the same new implementation.
+_PRESERVED_DELIMITER_FORWARD = SHARED.G.O.delimiter_forward
+_PRESERVED_DELIMITER_INVERSE = SHARED.G.O.delimiter_inverse
+
+
+def _bulk_delimiter_forward(raw: bytes, delimiter: int) -> bytes:
+    """Emit the exact DGO1 transform with its dense rectangular prefix transposed in C-level slices."""
+    O = SHARED.G.O
+    if not 0 <= delimiter <= 255 or len(raw) > O.MAX_OVERLAY_RECORD:
+        raise ValueError("invalid Geometry overlay delimiter input")
+    parts = raw.split(bytes((delimiter,)))
+    lengths = [len(part) for part in parts]
+    max_len = max(lengths, default=0)
+    if len(parts) > O.MAX_DELIMITER_SEGMENTS or len(parts) * max_len > O.MAX_DELIMITER_CELL_SCANS:
+        raise ValueError("Geometry overlay delimiter work budget exceeded")
+
+    out = bytearray(b"DGO1")
+    out.append(delimiter)
+    O._put_varint(out, len(parts))
+    for length in lengths:
+        O._put_varint(out, length)
+
+    # Every row participates in columns below min_len.  Materialize that rectangular prefix row-major once,
+    # then append each strided column using bytearray slicing implemented in C.  Ragged tails retain the exact
+    # historical loop, so arbitrary empty/unequal fields preserve byte identity without a second grammar.
+    min_len = min(lengths, default=0)
+    count = len(parts)
+    if min_len:
+        rectangle = b"".join(part[:min_len] for part in parts)
+        for column in range(min_len):
+            out.extend(rectangle[column::min_len])
+    for column in range(min_len, max_len):
+        for part in parts:
+            if column < len(part):
+                out.append(part[column])
+    return bytes(out)
+
+
+def _bulk_delimiter_inverse(encoded: bytes, logical_size: int) -> bytes:
+    """Invert DGO1 with the same bounded grammar while bulk-transposing the common rectangular prefix."""
+    O = SHARED.G.O
+    if (
+        not encoded.startswith(b"DGO1")
+        or len(encoded) < 6
+        or logical_size < 0
+        or logical_size > O.MAX_OVERLAY_RECORD
+    ):
+        raise RuntimeError("invalid Geometry overlay delimiter descriptor")
+    delimiter = encoded[4]
+    count, pos = O._get_varint(encoded, 5)
+    if count < 1 or count > O.MAX_DELIMITER_SEGMENTS:
+        raise RuntimeError("Geometry overlay delimiter segment count")
+
+    lengths: list[int] = []
+    logical_members = 0
+    for _ in range(count):
+        length, pos = O._get_varint(encoded, pos)
+        if length > O.MAX_OVERLAY_RECORD or logical_members + length > O.MAX_OVERLAY_RECORD:
+            raise RuntimeError("Geometry overlay delimiter length budget")
+        lengths.append(length)
+        logical_members += length
+    if logical_members + count - 1 != logical_size:
+        raise RuntimeError("Geometry overlay delimiter logical-size mismatch")
+    max_len = max(lengths, default=0)
+    if count * max_len > O.MAX_DELIMITER_CELL_SCANS:
+        raise RuntimeError("Geometry overlay delimiter cell-work budget")
+    body = encoded[pos:]
+    if len(body) != logical_members:
+        raise RuntimeError("Geometry overlay delimiter body-size mismatch")
+
+    rows = [bytearray(length) for length in lengths]
+    min_len = min(lengths, default=0)
+    cursor = 0
+    if min_len:
+        dense_bytes = count * min_len
+        dense = body[:dense_bytes]
+        rectangle = bytearray(dense_bytes)
+        # ``dense`` is column-major; one strided assignment per column recreates the row-major rectangle.
+        for column in range(min_len):
+            start = column * count
+            rectangle[column::min_len] = dense[start : start + count]
+        for index, row in enumerate(rows):
+            start = index * min_len
+            row[:min_len] = rectangle[start : start + min_len]
+        cursor = dense_bytes
+
+    for column in range(min_len, max_len):
+        for index, length in enumerate(lengths):
+            if column < length:
+                if cursor >= len(body):
+                    raise RuntimeError("short Geometry overlay delimiter body")
+                rows[index][column] = body[cursor]
+                cursor += 1
+    if cursor != len(body):
+        raise RuntimeError("Geometry overlay delimiter trailing body")
+    return bytes((delimiter,)).join(bytes(row) for row in rows)
+
+
+# Patch only the isolated canonical graph/reader references.  Research modules remain untouched and therefore
+# continue to provide the original byte oracle.  Both writer and reader must use the same exact transform bytes.
+SHARED.G.O.delimiter_forward = _bulk_delimiter_forward
+SHARED.G.O.delimiter_inverse = _bulk_delimiter_inverse
+if getattr(POLICY.R.G04, "O", None) is not None:
+    POLICY.R.G04.O.delimiter_inverse = _bulk_delimiter_inverse
+
+
 def _parallel_overlay_retained_graph(graph_path: Path, overlay_path: Path) -> dict:
     """Apply the owning G0-G4 auditions concurrently while preserving exact record order and bytes.
 
@@ -86,6 +195,7 @@ def _parallel_overlay_retained_graph(graph_path: Path, overlay_path: Path) -> di
         "verified": verified,
         "audition_workers": worker_count,
         "audition_scheduler": "bounded-ordered-thread-pool-v1",
+        "delimiter_transpose": "bulk-rectangular-prefix-v1",
     }
 
 
