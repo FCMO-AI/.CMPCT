@@ -17,6 +17,7 @@ from pathlib import Path
 import shutil
 import stat
 import tempfile
+import threading
 import time
 
 import msgpack
@@ -105,7 +106,6 @@ def _largest_regular_user_member_bytes(root: Path) -> int:
     """
     largest = 0
     for dirpath, dirnames, filenames in os.walk(Path(root), followlinks=False):
-        # Do not let symlinked directories enter the walk on platforms where os.walk reports them in dirnames.
         dirnames[:] = [name for name in dirnames if not os.path.islink(Path(dirpath) / name)]
         for name in filenames:
             path = Path(dirpath) / name
@@ -154,10 +154,71 @@ def _locality_bounded_r24_build(root: Path, out: Path) -> dict:
     }
 
 
-# Only the promoted release product gets the stricter r24 encoder policy. Historical v0.29 and research builders
-# remain byte-stable evidence oracles. Canonical-final resolves this global at call time, so both the profile-
-# ineligible fallback and the concurrent r24-vs-r25 product floor use the same bounded r24 representation.
-C._r24_build = _locality_bounded_r24_build
+# Manifest capture is a full content-hash pass that r24 does not depend on. Start r24 before that pass so its
+# compression work overlaps manifest hashing instead of waiting behind it. The canonical-final build later asks
+# for r24 through the same temp-directory key; that call consumes the exact prebuilt artifact and stats. No bytes,
+# format grammar, pricing, or selection rule changes—only when independent work begins.
+_ORIGINAL_PREPARE_PROFILE_TREE = C._prepare_profile_tree
+_R24_PREBUILD_LOCK = threading.Lock()
+_R24_PREBUILDS: dict[str, tuple[ThreadPoolExecutor, object, Path]] = {}
+
+
+def _prebuild_key(path: Path) -> str:
+    return os.fspath(Path(path).parent.absolute())
+
+
+def _prepare_profile_tree_with_r24_overlap(root: Path, staging_root: Path) -> dict:
+    staging_root = Path(staging_root)
+    key = _prebuild_key(staging_root)
+    prebuilt = staging_root.parent / "prebuilt-canonical-r24.cmpct"
+    executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="cmpct-v030-r24-prebuild")
+    future = executor.submit(_locality_bounded_r24_build, Path(root), prebuilt)
+    with _R24_PREBUILD_LOCK:
+        if key in _R24_PREBUILDS:
+            executor.shutdown(wait=False, cancel_futures=True)
+            raise RuntimeError("duplicate canonical r24 prebuild key")
+        _R24_PREBUILDS[key] = (executor, future, prebuilt)
+    try:
+        return _ORIGINAL_PREPARE_PROFILE_TREE(root, staging_root)
+    except ProfileNotEligible:
+        # Canonical-final immediately falls back to r24 and will consume the in-flight prebuild.
+        raise
+    except Exception:
+        with _R24_PREBUILD_LOCK:
+            _R24_PREBUILDS.pop(key, None)
+        future.cancel()
+        executor.shutdown(wait=False, cancel_futures=True)
+        prebuilt.unlink(missing_ok=True)
+        raise
+
+
+def _consume_or_build_locality_bounded_r24(root: Path, out: Path) -> dict:
+    out = Path(out)
+    key = _prebuild_key(out)
+    with _R24_PREBUILD_LOCK:
+        pending = _R24_PREBUILDS.pop(key, None)
+    if pending is None:
+        return _locality_bounded_r24_build(root, out)
+    executor, future, prebuilt = pending
+    try:
+        stats = dict(future.result())
+        os.replace(prebuilt, out)
+        return {
+            **stats,
+            "archive_bytes": out.stat().st_size,
+            "r24_prebuild_overlap": "filesystem-manifest-capture",
+            "r24_prebuild_reused": True,
+        }
+    finally:
+        executor.shutdown(wait=True, cancel_futures=False)
+        prebuilt.unlink(missing_ok=True)
+
+
+# Only the promoted release product gets these r24 policies. Historical v0.29 and research builders remain
+# byte-stable evidence oracles. Canonical-final resolves both globals at call time, including profile-ineligible
+# fallback and the normal concurrent r24-vs-r25 product tournament.
+C._prepare_profile_tree = _prepare_profile_tree_with_r24_overlap
+C._r24_build = _consume_or_build_locality_bounded_r24
 
 
 def _revision_for_archive(archive: Path) -> tuple[int | None, str]:
@@ -324,9 +385,6 @@ def extract(
         internal_budget = min(POLICY.R.MAX_DECLARED_LOGICAL_BYTES, max_output_bytes + FS.MAX_MANIFEST_BYTES)
         with C._revision25_profile_context():
             POLICY.extract_verified_into_staging(archive, content_root, max_output_bytes=internal_budget)
-        # The graph streamer has authenticated every reconstructed byte and the decoded manifest was cross-bound
-        # to those graph identities before any publication. Preserve cheap shape checks, then restore metadata and
-        # links without re-reading the full content payload a second time.
         VERIFIED_RESTORE.restore_verified_manifest_tree(content_root, decoded, safe_symlinks=False)
         C._publish_tree(content_root, dst)
     except Exception:
