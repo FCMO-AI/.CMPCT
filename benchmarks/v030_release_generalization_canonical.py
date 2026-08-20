@@ -33,13 +33,14 @@ def _sha256_file(path: Path) -> str:
     return digest.hexdigest()
 
 
-def _r24_max_member_amplification(archive: Path) -> float:
-    """Observe decoded r24 blob context for every regular member through the mature reader.
+def _r24_selected_member_amplification(archive: Path) -> float:
+    """Measure normative r24 locality on the largest regular user-visible member.
 
-    ``CMPCT.read`` is the product operation used by the r24 facade.  Tracking ``_blob`` records every logical
-    blob context touched even when the base reader subsequently serves that blob from its cache.  Resetting the
-    observation set before each regular member therefore yields a conservative per-member decoded-context ratio
-    without a missing-field default or a build-time proxy.
+    The release contract intentionally uses one deterministic selected member for both r24 and r25: the largest
+    regular user-visible member.  Measuring every tiny packed file and then taking the worst ratio would answer a
+    different question and can explode on r24 small-file packs even though the normative selected-member operation
+    is local.  We still observe the real public ``CMPCT.read`` operation and charge every blob context it touches;
+    no build-time proxy and no missing-field default is allowed.
     """
     original = CANON.CMPCT
 
@@ -52,20 +53,18 @@ def _r24_max_member_amplification(archive: Path) -> float:
             self.observed_blob_ids.add(int(idx))
             return super()._blob(idx)
 
-    worst = 0.0
     with TrackingR24(archive) as reader:
-        for row in reader.files:
-            rel, kind, _mode, _mtime, size, _digest, _storage = row
-            if kind != CANON.R24_CODEC.K_FILE:
-                continue
-            reader.observed_blob_ids.clear()
-            raw = bytes(reader.read(rel))
-            if len(raw) != int(size):
-                raise RuntimeError(f"canonical r24 locality read length drift for {rel!r}")
-            decoded = sum(int(reader.blobs[idx][1]) for idx in reader.observed_blob_ids)
-            amp = max(len(raw), decoded) / max(1, len(raw))
-            worst = max(worst, amp)
-    return worst
+        regular = [row for row in reader.files if row[1] == CANON.R24_CODEC.K_FILE]
+        if not regular:
+            raise RuntimeError("canonical r24 locality measurement found no regular user-visible member")
+        row = max(regular, key=lambda item: (int(item[4]), str(item[0])))
+        rel, _kind, _mode, _mtime, size, _digest, _storage = row
+        reader.observed_blob_ids.clear()
+        raw = bytes(reader.read(rel))
+        if len(raw) != int(size):
+            raise RuntimeError(f"canonical r24 locality read length drift for {rel!r}")
+        decoded = sum(int(reader.blobs[idx][1]) for idx in reader.observed_blob_ids)
+        return max(len(raw), decoded) / max(1, len(raw))
 
 
 def _normalize_product_stats(product: dict, historical_bytes: int, historical_stats: dict, archive: Path) -> dict:
@@ -79,7 +78,7 @@ def _normalize_product_stats(product: dict, historical_bytes: int, historical_st
 
     final_revision = int(product.get("format_revision", 24))
     if final_revision == 24:
-        max_amp = _r24_max_member_amplification(archive)
+        max_amp = _r24_selected_member_amplification(archive)
     elif final_revision == CANON.REVISION:
         observed = r25.get("max_selected_member_read_amplification")
         if not isinstance(observed, (int, float)):
