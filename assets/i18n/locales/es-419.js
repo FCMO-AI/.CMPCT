@@ -1,0 +1,67 @@
+/* CMPCT curated es-419 adaptation pack — Surface 0.29.i.
+   Footnote: the locale pack assembles two review-sized phrase shards and parameterized UI messages.
+   No runtime translator or fallback synthesis exists here. */
+import { PHRASES as A } from './es-419.a.js';
+import { PHRASES as B } from './es-419.b.js';
+export const META={
+  "label": "Español (Latinoamérica)",
+  "short": "ES",
+  "htmlLang": "es-419",
+  "title": ".CMPCT — el rendimiento es parte del contrato de cada versión",
+  "description": "CMPCT es un proyecto de archivado sin pérdida que empuja juntos tamaño, acceso, integridad y recuperación, con afirmaciones públicas de rendimiento derivadas de evidencia registrada."
+};
+export const PHRASES=Object.freeze({...A,...B});
+export const MESSAGES={
+  "files": "{n} archivos",
+  "file": "{n} archivo",
+  "logical": "{bytes} lógicos",
+  "logicalInputFiles": "{bytes} de entrada lógica · {n} archivos",
+  "smallerThan": "{pct} más pequeño que {name}",
+  "largerThan": "{pct} más grande que {name}",
+  "sameStored": "los mismos bytes almacenados que {name}",
+  "versus": "vs {name}",
+  "cmpctSmaller": "CMPCT más pequeño · bytes almacenados emparejados",
+  "cmpctLarger": "CMPCT más grande · bytes almacenados emparejados",
+  "sameBytes": "mismos bytes almacenados",
+  "unavailableMatched": "bytes almacenados emparejados no disponibles",
+  "currentFrontier": "frontera de investigación actual de CMPCT",
+  "categoryScore": "{wins}/{total} más pequeños · {losses} más grandes",
+  "noCategory": "evidencia por categoría no disponible",
+  "noFreshCategory": "No hay evidencia reciente por categoría sobre árboles exactos para esta frontera.",
+  "comparisonUnavailable": "comparación no disponible",
+  "noQualification": "No hay ninguna salvedad de benchmark registrada para esta frontera pública.",
+  "heroIf": "Si {name} almacena 100 MB en esta prueba emparejada, CMPCT necesita aproximadamente {value} MB.",
+  "heroNeeds": "CMPCT necesita actualmente unos {value} MB por cada 100 MB que almacena {name} en esta prueba emparejada.",
+  "seriousBaseline": "Referencia seria de tamaño: {relation}.",
+  "scopedScheduler": "Resultado acotado del planificador: {pct}% menos tiempo real en su prueba fija.",
+  "canonicalRemains": "El formato canónico sigue en r{revision}.",
+  "frontierQualification": "{frontier} · {files} archivos en el árbol estructural emparejado.{serious}{speed} El formato canónico sigue en r{revision}.",
+  "fixedSchedulerGate": "prueba hostil fija del planificador · no es una afirmación global de velocidad",
+  "winsAgainst": "{wins}/{total} victorias vs {name}",
+  "noCommittedParity": "No hay registro de paridad versionado",
+  "repetitionsMedian": "mediana de {n}×",
+  "semanticQualification": "Salvedad semántica:",
+  "interpretation": "Interpretación:",
+  "currentProjectRelease": "Versión actual del proyecto",
+  "versionedMilestone": "Hito versionado",
+  "writerVerified": "Escritor portátil verificado para el formato canónico r{revision}.",
+  "regularSubset": "Solo subconjunto de archivos regulares; la semántica completa del sistema de archivos sigue siendo territorio de la CLI.",
+  "writerPaused": "Escritor del navegador pausado tras la revisión de formato {revision}.",
+  "writerRefuses": "Este build está verificado para r{supported}; se niega a adivinar una gramática más nueva.",
+  "readyLocally": "Listo localmente",
+  "cliOverLimit": "Usa la CLI: supera el límite del navegador",
+  "input": "Entrada",
+  "archive": "Archivo",
+  "delta": "Diferencia",
+  "smaller": "{bytes} más pequeño",
+  "overhead": "{bytes} de sobrecosto",
+  "buildingLocally": "Creando localmente…",
+  "builtOnDevice": "Archivo creado en este dispositivo.",
+  "logicalFilesUnique": "{logical} archivos lógicos → {unique} blobs únicos · {deflate} Deflate / {raw} RAW.",
+  "saveCmpct": "Guardar .cmpct",
+  "couldNotBuild": "No se pudo crear el archivo.",
+  "fixedMagicError": "La firma fija no parece ser CMPCT.",
+  "inspection": "Inspección",
+  "benchmarkUnavailable": "Datos de benchmark no disponibles: {error}",
+  "canonicalDataMissing": "No se cargaron los datos canónicos del sitio."
+};

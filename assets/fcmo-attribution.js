@@ -1,4 +1,4 @@
-const FCMO_URL = 'https://github.com/FCMO-AI';
+const PUBLIC_STEWARD_URL = 'https://github.com/FCMO-AI';
 
 function ensureMeta(name, content) {
   let node = document.head.querySelector(`meta[name="${name}"]`);
@@ -56,7 +56,7 @@ function installQuietProvenance() {
   if (!existingAuthorLink) {
     const link = document.createElement('link');
     link.rel = 'author';
-    link.href = FCMO_URL;
+    link.href = PUBLIC_STEWARD_URL;
     document.head.appendChild(link);
   }
 }
