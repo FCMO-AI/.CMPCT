@@ -2,19 +2,20 @@ name: CMPCT exact-main static promotion handoff
 # ci-lane: publisher
 
 on:
-  pull_request:
+  push:
+    branches: [agent/site-promotion-handoff-13742e49]
     paths:
       - ".github/workflows/site-promotion-handoff.yml"
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
-  group: cmpct-site-promotion-handoff-${{ github.event.pull_request.number || github.ref }}
+  group: cmpct-site-promotion-handoff
   cancel-in-progress: true
 
 jobs:
-  exact-main-artifact:
+  prepare-static-commit:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -23,12 +24,13 @@ jobs:
         with:
           ref: 13742e49d8a0f5da32a9bdae6b57dd2de82d6c5b
           fetch-depth: 0
+          persist-credentials: true
 
       - name: Assert source authority
         run: |
           test "$(git rev-parse HEAD)" = "13742e49d8a0f5da32a9bdae6b57dd2de82d6c5b"
-          # Footnote: this disposable workflow exists only to expose the canonical main build as an artifact;
-          # it never substitutes its own PR merge SHA for the source commit recorded by the static site.
+          # Footnote: this disposable workflow prepares a Git object only. The connected agent performs the
+          # actual gh-pages ref update so Pages observes an authorized branch-backed Git promotion.
 
       - name: Set up Python
         uses: actions/setup-python@v6
@@ -49,12 +51,12 @@ jobs:
       - name: Build exact canonical public surface
         run: |
           python tools/check_public_surface.py
-          # Footnote: GITHUB_SHA belongs to the disposable pull-request event. Removing it makes build_site.py
-          # derive provenance from the checked-out immutable main commit instead of stamping the handoff PR.
+          # Footnote: GITHUB_SHA names this disposable branch commit. Removing it makes build_site.py derive
+          # provenance from the immutable main commit actually checked out above.
           env -u GITHUB_SHA python site/build_site.py --out _site
           python site/enhance_site.py _site
 
-      - name: Validate release-independent proof contracts
+      - name: Validate canonical static artifact
         run: |
           python site/tests/proof_surface_contract.py _site
           python site/tests/release_evidence_contract.py
@@ -64,14 +66,10 @@ jobs:
           node --check site/src/assets/cinematic.js
           node --check site/src/assets/cmpct-browser-writer.js
           node site/tests/i18n-contract.mjs
-
-      - name: Preserve Browser Lab canonical compatibility
-        run: |
           node site/tests/browser-writer-smoke.mjs /tmp/browser-writer-smoke.cmpct
           python - <<'PY'
           from pathlib import Path
           from cmpct.reader import CMPCT
-
           path = Path('/tmp/browser-writer-smoke.cmpct')
           with CMPCT(path) as archive:
               assert archive.index['v'] == 24
@@ -85,7 +83,6 @@ jobs:
           python - <<'PY'
           import json
           from pathlib import Path
-
           out = Path('_site')
           payload = json.loads((out / 'project-data.json').read_text(encoding='utf-8'))
           project = payload['project']
@@ -119,14 +116,30 @@ jobs:
           (out / 'deployment.json').write_text(json.dumps(receipt, indent=2) + '\n', encoding='utf-8')
           PY
 
-      - name: Upload exact static promotion handoff
-        uses: actions/upload-artifact@v4
-        with:
-          name: cmpct-public-site-13742e49d8a0f5da32a9bdae6b57dd2de82d6c5b
-          path: _site/
-          if-no-files-found: error
-          retention-days: 1
+      - name: Prepare non-serving promotion commit
+        run: |
+          git fetch origin gh-pages
+          test "$(git rev-parse origin/gh-pages)" = "319728fb7a2226e3daf7e106b9c7bb428a4efa23"
+          rm -rf /tmp/cmpct-gh-pages
+          git worktree add --detach /tmp/cmpct-gh-pages origin/gh-pages
+          find /tmp/cmpct-gh-pages -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} +
+          cp -a _site/. /tmp/cmpct-gh-pages/
+          cd /tmp/cmpct-gh-pages
+          test -f .nojekyll
+          test -f index.html
+          test -f deployment.json
+          test -f project-data.json
+          test -f agent.json
+          test -f llms.txt
+          test "$(cat surface-revision.txt)" = "0.29.k"
+          git config user.name "cmpct-static-handoff[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "site: publish curated 20-locale surface from main 13742e49" -m "Footnote: validated generated serving output only; parent is the previously verified gh-pages deployment. Canonical source remains main, and the connected agent performs the serving-ref fast-forward."
+          # Footnote: this non-serving ref may be force-replaced on a rerun because it is only a transport for
+          # the prepared commit. gh-pages itself is never force-pushed by this workflow.
+          git push --force origin HEAD:refs/heads/agent/static-promotion-handoff-13742e49
+          echo "Prepared commit: $(git rev-parse HEAD)"
 
-# Footnote: this workflow is intentionally disposable and must never be merged. It only bridges an authenticated
-# connector limitation by materializing the same deterministic build already prescribed by site-proof-contract.yml.
-# Publication still occurs by one explicit fast-forward commit on gh-pages, followed by live receipt verification.
+# Footnote: this workflow is disposable and never lands on main. GITHUB_TOKEN writes only the non-serving
+# handoff branch; the actual gh-pages update is an explicit fast-forward performed by the connected Git agent.
