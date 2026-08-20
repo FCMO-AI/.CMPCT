@@ -55,6 +55,13 @@ def test_release_product_r25_extract_owns_single_publication_boundary(tmp_path, 
             AssertionError("shipping r25 extraction must not invoke nested transactional POLICY.extract")
         ),
     )
+    monkeypatch.setattr(
+        product.FS,
+        "restore_manifest_tree",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            AssertionError("shipping r25 extraction must not re-enter the generic digest-restoration path")
+        ),
+    )
 
     def stream(_archive: Path, staging: Path, *, max_output_bytes: int) -> dict:
         events.append("stream")
@@ -74,7 +81,7 @@ def test_release_product_r25_extract_owns_single_publication_boundary(tmp_path, 
         staging.rename(dst)
 
     monkeypatch.setattr(product.POLICY, "extract_verified_into_staging", stream)
-    monkeypatch.setattr(product.FS, "restore_manifest_tree", restore)
+    monkeypatch.setattr(product.VERIFIED_RESTORE, "restore_verified_manifest_tree", restore)
     monkeypatch.setattr(product.C, "_publish_tree", publish)
 
     product.extract(archive, destination, max_output_bytes=1024)
