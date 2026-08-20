@@ -189,14 +189,26 @@ def _parallel_overlay_retained_graph(graph_path: Path, overlay_path: Path) -> di
 SHARED._overlay_retained_graph = _parallel_overlay_retained_graph
 
 
-def _overlapped_release_candidate_build(root: Path, out: Path, *, post_publish_verify: bool = True) -> dict:
-    """Build PrefixGraph beside G0-G4 without changing complete-artifact admission or publication semantics.
+def _overlapped_release_candidate_build(
+    root: Path,
+    out: Path,
+    *,
+    post_publish_verify: bool = True,
+    defer_preselection_verify: bool = False,
+) -> dict:
+    """Build PrefixGraph beside G0-G4 without changing exact candidate bytes or winner selection.
 
     PrefixGraph reads the immutable staged tree and writes a separate temporary artifact. It has no dependency on
     G0-G4's retained graph, so paying the two complete candidate builds serially is pure wall-time duplication.
     G0-G4 deliberately stays on the calling thread because its shared portfolio owns spawned v0.29 workers;
-    PrefixGraph alone uses one bounded background worker. Exact bytes, strict verification, locality admission,
-    conservative ties and the physical publication checksum remain byte-for-byte the historical tournament law.
+    PrefixGraph alone uses one bounded background worker.
+
+    The canonical parent may additionally set ``defer_preselection_verify=True``. In that composition only,
+    temporary r25 candidates are priced by exact complete bytes and PrefixGraph locality, while their full logical
+    decode is deferred until the outer r24-vs-r25 selector has published the one actual product winner. The parent
+    always strong-verifies that winner before ``build`` returns. Standalone candidate callers keep the historical
+    verify-before-publication behavior by default. Thus losing temporary candidates stop paying whole-tree decode
+    cost without weakening the released-artifact integrity boundary or changing one archive byte.
     """
     started = time.perf_counter()
     out.parent.mkdir(parents=True, exist_ok=True)
@@ -219,7 +231,9 @@ def _overlapped_release_candidate_build(root: Path, out: Path, *, post_publish_v
         else:
             g04_stats = RC.G04.build(root, g04_path)
 
-        g04_verify = RC._verify_component(g04_path, expected_tree, "G0-G4 candidate")
+        g04_verify = None if defer_preselection_verify else RC._verify_component(
+            g04_path, expected_tree, "G0-G4 candidate"
+        )
         g04_bytes = g04_path.stat().st_size
         v029_bytes = int(g04_stats["v029_bytes"])
         if g04_bytes > v029_bytes:
@@ -233,7 +247,8 @@ def _overlapped_release_candidate_build(root: Path, out: Path, *, post_publish_v
             assert pg_stats is not None
             pg_bytes = pg_path.stat().st_size
             if pg_bytes < g04_bytes:
-                pg_verify = RC._verify_component(pg_path, expected_tree, "PrefixGraph candidate")
+                if not defer_preselection_verify:
+                    pg_verify = RC._verify_component(pg_path, expected_tree, "PrefixGraph candidate")
                 pg_locality = RC._prefixgraph_locality(pg_path)
                 pg_admitted = bool(pg_locality["passed"])
                 if not pg_admitted:
@@ -250,7 +265,8 @@ def _overlapped_release_candidate_build(root: Path, out: Path, *, post_publish_v
             selected = "g04-overlay" if g04_stats["selected"] == "geometry-overlay-g04" else "v029-fallback"
             selected_verify = g04_verify
 
-        assert selected_verify is not None
+        if not defer_preselection_verify and selected_verify is None:
+            raise RuntimeError("standalone canonical candidate lost its mandatory preselection verification")
         selected_bytes = selected_path.stat().st_size
         selected_physical_sha256 = RC._sha256_file(selected_path)
         os.replace(selected_path, out)
@@ -262,9 +278,16 @@ def _overlapped_release_candidate_build(root: Path, out: Path, *, post_publish_v
             final_verify = RC._verify_component(out, expected_tree, "Published v0.30 release candidate")
             final_verify = dict(final_verify)
             final_verify["publication_logical_verification_deferred"] = False
-        else:
+        elif selected_verify is not None:
             final_verify = dict(selected_verify)
             final_verify["publication_logical_verification_deferred"] = True
+        else:
+            final_verify = {
+                "ok": None,
+                "verification_state": "deferred-to-canonical-parent",
+                "tree_sha256": expected_tree,
+                "publication_logical_verification_deferred": True,
+            }
         final_verify["publication_physical_sha256"] = published_physical_sha256
 
         return {
@@ -282,7 +305,10 @@ def _overlapped_release_candidate_build(root: Path, out: Path, *, post_publish_v
             "saving_vs_g04_bytes": g04_bytes - selected_bytes,
             "tree_sha256": expected_tree,
             "portfolio_create_s": time.perf_counter() - started,
-            "candidate_scheduler": "g04-main-plus-one-prefixgraph-worker-v1",
+            "candidate_scheduler": "g04-main-plus-one-prefixgraph-worker-v2",
+            "preselection_logical_verification": (
+                "deferred-to-canonical-parent" if defer_preselection_verify else "performed"
+            ),
             "selection_materialization": "same-filesystem-atomic-move",
             "selection_extra_payload_write_bytes": 0,
             "selection_publication_physical_sha256": published_physical_sha256,
@@ -315,10 +341,17 @@ _PRESERVED_STRONG_VERIFY = strong_verify
 
 
 def _r25_build(staged_root: Path, out: Path) -> dict:
-    """Build the r25 tournament while leaving final complete-product verification to this canonical parent."""
+    """Build exact r25 bytes; the outer canonical parent verifies only the final r24/r25 product winner."""
     started = time.perf_counter()
     with _revision25_profile_context():
-        stats = dict(RC.build(staged_root, out, post_publish_verify=False))
+        stats = dict(
+            RC.build(
+                staged_root,
+                out,
+                post_publish_verify=False,
+                defer_preselection_verify=True,
+            )
+        )
     return {**stats, "create_s": time.perf_counter() - started}
 
 
