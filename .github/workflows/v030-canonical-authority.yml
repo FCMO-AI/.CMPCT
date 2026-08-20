@@ -39,7 +39,7 @@ jobs:
           sudo apt-get install -y zstd gcc
           python -m pip install --upgrade pip
           python -m pip install -e '.[test,audio]'
-      - name: Compile canonical authority
+      - name: Compile canonical product authority
         run: |
           python -m py_compile \
             experiments/entropygraph_v030_release_admission.py \
@@ -50,9 +50,10 @@ jobs:
             experiments/entropygraph_v030_release_candidate.py \
             experiments/entropygraph_v030_authoritative.py \
             experiments/entropygraph_v030_canonical.py \
+            experiments/entropygraph_v030_release_product.py \
             benchmarks/v030_release_generalization_canonical.py \
             benchmarks/v030_perf_worker_canonical.py \
-            benchmarks/v030_release_performance_canonical.py \
+            benchmarks/v030_release_performance_product.py \
             benchmarks/v030_external_competitors_canonical.py
       - name: Run canonical correctness, recovery and hostile-input gates
         run: |
@@ -107,8 +108,8 @@ jobs:
           from pathlib import Path
           d=json.loads(Path('benchmark-artifacts/canonical-generalization.json').read_text())
           c=d['contract']; t=d['totals']; g=d['gate']; f=d['canonical_format']
-          assert d['engine']=='experiments/entropygraph_v030_canonical.py'
-          assert d['release_facade']=='cmpct-v030-r25-v1'
+          assert d['engine']=='experiments/entropygraph_v030_release_product.py'
+          assert d['release_facade']=='cmpct-v030-release-product-v1'
           assert c['expected_v029_aggregate_bytes']==137499525
           assert c['minimum_release_saving_bytes']==687783
           assert c['inherited_absolute_revision_floor_bytes']==687783
@@ -153,10 +154,10 @@ jobs:
           python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
       - name: Run canonical runtime prerequisites
         run: python -m pytest -q tests/test_v030_shared_portfolio.py tests/test_v030_release_admission.py tests/test_v030_member_reader.py tests/test_v030_canonical.py
-      - name: Run fresh-process canonical runtime gate
+      - name: Run fresh-process promoted-product runtime gate
         run: |
           mkdir -p benchmark-artifacts
-          python benchmarks/v030_release_performance_canonical.py \
+          python benchmarks/v030_release_performance_product.py \
             --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/canonical-runtime-work" \
             --output "$GITHUB_WORKSPACE/benchmark-artifacts/canonical-runtime.json"
       - name: Enforce frozen runtime policy
@@ -166,8 +167,8 @@ jobs:
           from pathlib import Path
           d=json.loads(Path('benchmark-artifacts/canonical-runtime.json').read_text())
           c=d['contract']; t=d['totals']; g=d['gate']
-          assert d['engine']=='experiments/entropygraph_v030_canonical.py'
-          assert d['release_facade']=='cmpct-v030-r25-v1'
+          assert d['engine']=='experiments/entropygraph_v030_release_product.py'
+          assert d['release_facade']=='cmpct-v030-release-product-v1'
           assert c['maximum_median_create_ratio']==1.10
           assert c['maximum_workload_create_ratio']==1.25
           assert c['maximum_median_extract_ratio']==1.10
@@ -212,15 +213,15 @@ jobs:
           python benchmarks/v030_external_competitors_canonical.py \
             --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/canonical-external-work" \
             --output "$GITHUB_WORKSPACE/benchmark-artifacts/canonical-external.json"
-      - name: Enforce external frontier contract
+      - name: Enforce strict per-workload external frontier contract
         run: |
           python - <<'PY'
           import json
           from pathlib import Path
           d=json.loads(Path('benchmark-artifacts/canonical-external.json').read_text())
           a=d['aggregates']; g=d['gate']
-          assert d['engine']=='experiments/entropygraph_v030_canonical.py'
-          assert d['release_facade']=='cmpct-v030-r25-v1'
+          assert d['engine']=='experiments/entropygraph_v030_release_product.py'
+          assert d['release_facade']=='cmpct-v030-release-product-v1'
           assert a['all']['7z_lzma2_max_solid']['complete_for_suite'] is True
           assert a['all']['tar_zstd19_solid']['complete_for_suite'] is True
           assert a['all']['zpaq_method5']['complete_for_suite'] is True
@@ -229,6 +230,20 @@ jobs:
           assert g['neutral_beats_solid_zstd19'] is True
           assert g['hostile_closes_solid_zstd19_frontier'] is True
           assert g['hostile_closes_zpaq5_frontier_when_available'] is True
+          for key in (
+              'all_workloads_strictly_beat_zip_size',
+              'all_workloads_strictly_beat_zstd19_size',
+              'all_workloads_strictly_beat_zip_create',
+              'all_workloads_strictly_beat_zstd19_create',
+              'strict_no_ties_size_or_create',
+          ):
+              assert g[key] is True
+          rows=d['strict_per_workload_dominance']['rows']
+          assert len(rows)==15
+          assert all(r['strictly_beats_zip_size'] for r in rows)
+          assert all(r['strictly_beats_zstd19_size'] for r in rows)
+          assert all(r['strictly_beats_zip_create'] for r in rows)
+          assert all(r['strictly_beats_zstd19_create'] for r in rows)
           assert g['passed'] is True
           PY
       - name: Upload canonical external evidence
@@ -240,8 +255,10 @@ jobs:
           if-no-files-found: warn
           retention-days: 90
 
-# Footnote: only this workflow's canonical-r25 jobs are eligible to close compression/runtime/external release
-# gates. The corpus-building jobs install `ffmpeg` and the package `audio` extra because the frozen neutral-hostile
-# media row and inherited r24 WAV-FLAC candidate require them before measurement; this is environment completion,
-# not a compressor shortcut or policy change. Native/shared-reader and portability remain mandatory separate
-# authority before #56 can merge.
+# Footnote: this workflow now binds every canonical release measurement to the promoted
+# `entropygraph_v030_release_product` front door. Historical mechanism-causality remains separate evidence; it is
+# not allowed to impersonate product runtime or external performance. The corpus jobs install ffmpeg/audio only to
+# construct the frozen workload. No compression, locality, runtime, RSS or competitor threshold is weakened.
+# External authority independently enforces the user's strict 15/15 ZIP/Zstd size+creation-speed law, including
+# the rule that equality is failure. Native/shared-reader and portability remain mandatory separate authority
+# before #56 can merge.
