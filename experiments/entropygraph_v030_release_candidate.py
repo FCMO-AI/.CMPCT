@@ -8,9 +8,9 @@ smallest *release-eligible* one:
    Geometry overlay, so this candidate can never be larger than accepted v0.29.
 2. PrefixGraph is auditioned only when its public oracle contract can represent the exact live tree.
 3. A PrefixGraph artifact must additionally satisfy the release-wide <=8x per-member decoded-context law.
-4. A candidate that can still win is admitted through the strict bounded streamed release-reader policy; a
-   complete artifact that is already >= the verified G0-G4 floor is mathematically dominated and need not be
-   decoded merely to prove it cannot win.
+4. Standalone tournament callers verify any candidate that can still win through the strict streamed reader.
+   The canonical r24/r25 parent may instead defer those logical passes because it strongly verifies the one final
+   product winner before returning; exact byte pricing and locality admission are never deferred.
 5. The smaller admitted complete artifact wins; exact ties conservatively retain the G0-G4/v0.29 path.
 
 The tournament is intentionally useful before PrefixGraph is internalized as a native Mosaic graph edge. It
@@ -19,10 +19,10 @@ keeping the stronger single-grammar composition goal as an optimization path. No
 saving is claimed unless a future one-artifact ablation proves it.
 
 Footnote: candidates are created in a sibling temporary directory and the winner is published with
-``os.replace``. Admission verifies any candidate that can still win, a physical SHA-256 proves the selected
-bytes survived publication unchanged, and standalone builds re-open the published path through the strict
-release reader. The canonical r24-vs-r25 parent may explicitly defer only that final re-open because it performs
-the same published-path verification after complete-product selection; candidate admission is never deferred.
+``os.replace``. A physical SHA-256 proves the selected bytes survived publication unchanged. Standalone builds
+retain candidate admission verification and re-open the published path through the strict release reader. The
+canonical r24-vs-r25 parent can explicitly defer the candidate logical passes because the r25 artifact is itself
+only an inner contender; the parent performs the authoritative strong verification after exact r24/r25 selection.
 """
 from __future__ import annotations
 
@@ -65,9 +65,6 @@ def _prefixgraph_eligibility(root: Path, expected_tree: str) -> tuple[bool, str 
     if any(path.stat().st_size > PG.MAX_FILE_BYTES for path in files):
         return False, "file-size-ceiling"
 
-    # Footnote: PrefixGraph's oracle was deliberately self-contained. Until its tree-identity routine is
-    # unified with the owning graph grammar, exact equality here prevents a semantically narrower tree hash
-    # from entering the release tournament by accident.
     pg_tree = PG.treehash(root)
     if pg_tree != expected_tree:
         return False, "tree-identity-contract-mismatch"
@@ -75,13 +72,7 @@ def _prefixgraph_eligibility(root: Path, expected_tree: str) -> tuple[bool, str 
 
 
 def _prefixgraph_locality(archive: Path) -> dict:
-    """Measure conservative decoded-context amplification needed for one PrefixGraph member.
-
-    A prefix-coded target requires its own logical output plus the complete raw direct anchor as Zstd history.
-    Counting both is deliberately stricter than physical compressed-byte traffic: it captures the memory/work
-    context the selective read must materialize and matches CMPCT's policy that context cannot be made free by
-    compressing it well. Direct members are 1.0x. Depth remains exactly 0/1.
-    """
+    """Measure conservative decoded-context amplification needed for one PrefixGraph member."""
     meta, _payloads = PG._read(archive)
     records = meta["records"]
     worst = 0.0
@@ -136,16 +127,26 @@ def strong_verify(archive: Path) -> dict:
 
 
 def extract(archive: Path, dst: Path, *, max_output_bytes: int = READER.DEFAULT_MAX_EXTRACT_BYTES) -> None:
-    """Extract through the bounded streamed/transactional release reader."""
     READER.extract(archive, dst, max_output_bytes=max_output_bytes)
 
 
-def build(root: Path, out: Path, *, post_publish_verify: bool = True) -> dict:
-    """Build the exact release tournament and optionally defer only its final published-path re-open.
+def build(
+    root: Path,
+    out: Path,
+    *,
+    post_publish_verify: bool = True,
+    defer_preselection_verify: bool = False,
+) -> dict:
+    """Build the exact release tournament with an explicit canonical-parent verification deferral seam.
 
-    ``post_publish_verify=False`` is an internal composition hook for the canonical r24-vs-r25 product builder,
-    which immediately verifies the finally selected complete product. Callers that use this tournament directly
-    retain the safer default and therefore receive the same self-contained verification boundary as before.
+    Defaults preserve the standalone safety boundary: viable candidates are strongly verified before selection
+    and the published winner is verified again through the public reader path. The canonical r24/r25 parent sets
+    both ``post_publish_verify=False`` and ``defer_preselection_verify=True`` because this r25 artifact is only an
+    inner candidate; the parent strongly verifies the exact final r24/r25 winner before ``build`` returns.
+
+    Deferral never changes candidate bytes, exact size comparison, PrefixGraph locality admission, tie behavior,
+    or physical publication identity. It removes only logical decode passes for artifacts that cannot themselves
+    escape the enclosing canonical tournament.
     """
     started = time.perf_counter()
     out.parent.mkdir(parents=True, exist_ok=True)
@@ -157,7 +158,7 @@ def build(root: Path, out: Path, *, post_publish_verify: bool = True) -> dict:
         pg_path = temp / "prefixgraph.cmpct"
 
         g04_stats = G04.build(root, g04_path)
-        g04_verify = _verify_component(g04_path, expected_tree, "G0-G4 candidate")
+        g04_verify = None if defer_preselection_verify else _verify_component(g04_path, expected_tree, "G0-G4 candidate")
         g04_bytes = g04_path.stat().st_size
         v029_bytes = int(g04_stats["v029_bytes"])
         if g04_bytes > v029_bytes:
@@ -173,21 +174,16 @@ def build(root: Path, out: Path, *, post_publish_verify: bool = True) -> dict:
             pg_stats = PG.build(root, pg_path)
             pg_bytes = pg_path.stat().st_size
 
-            # Footnote: complete artifact bytes are the final tournament objective. Once PrefixGraph is not
-            # strictly smaller than the already strong-verified G0-G4 floor, no locality or decode outcome can
-            # make it the winner. Skipping that dominated logical decode preserves exact selection semantics.
             if pg_bytes < g04_bytes:
-                pg_verify = _verify_component(pg_path, expected_tree, "PrefixGraph candidate")
                 pg_locality = _prefixgraph_locality(pg_path)
                 pg_admitted = bool(pg_locality["passed"])
+                if pg_admitted and not defer_preselection_verify:
+                    pg_verify = _verify_component(pg_path, expected_tree, "PrefixGraph candidate")
                 if not pg_admitted:
                     pg_reject_reason = "locality-ceiling"
             else:
                 pg_reject_reason = "complete-artifact-not-smaller"
 
-        # Exact ties stay on the richer inherited path. Approximate nomination may decide which PrefixGraph
-        # anchors are tried, but it never decides this complete-artifact tournament. A smaller PrefixGraph
-        # that violates locality is retained as diagnostic evidence but cannot become the released artifact.
         if pg_admitted and pg_bytes is not None and pg_bytes < g04_bytes:
             selected_path = pg_path
             selected = "prefixgraph"
@@ -200,7 +196,9 @@ def build(root: Path, out: Path, *, post_publish_verify: bool = True) -> dict:
                 selected = "v029-fallback"
             selected_verify = g04_verify
 
-        assert selected_verify is not None
+        if not defer_preselection_verify and selected_verify is None:
+            raise RuntimeError("standalone release tournament selected an unverified candidate")
+
         selected_bytes = selected_path.stat().st_size
         selected_physical_sha256 = _sha256_file(selected_path)
         os.replace(selected_path, out)
@@ -209,17 +207,18 @@ def build(root: Path, out: Path, *, post_publish_verify: bool = True) -> dict:
             raise RuntimeError("published v0.30 release candidate bytes changed during atomic publication")
 
         if post_publish_verify:
-            # Footnote: standalone tournament publication owns its own final logical re-open; this is deliberately
-            # the default because a physical rename checksum cannot exercise the reader/path integration boundary.
-            final_verify = _verify_component(out, expected_tree, "Published v0.30 release candidate")
-            final_verify = dict(final_verify)
+            final_verify = dict(_verify_component(out, expected_tree, "Published v0.30 release candidate"))
             final_verify["publication_logical_verification_deferred"] = False
-        else:
-            # Footnote: the canonical parent is allowed to defer only this duplicated final pass. Admission has
-            # already verified the winning candidate, physical identity proves publication preserved its bytes,
-            # and the parent must strong-verify whichever complete r24/r25 product it finally publishes.
+        elif selected_verify is not None:
             final_verify = dict(selected_verify)
             final_verify["publication_logical_verification_deferred"] = True
+        else:
+            final_verify = {
+                "ok": None,
+                "tree_sha256": expected_tree,
+                "publication_logical_verification_deferred": True,
+                "verification_owner": "canonical-r24-r25-parent-final-winner",
+            }
         final_verify["publication_physical_sha256"] = published_physical_sha256
 
         return {
@@ -240,6 +239,7 @@ def build(root: Path, out: Path, *, post_publish_verify: bool = True) -> dict:
             "selection_materialization": "same-filesystem-atomic-move",
             "selection_extra_payload_write_bytes": 0,
             "selection_publication_physical_sha256": published_physical_sha256,
+            "preselection_logical_verification": "deferred-to-canonical-parent" if defer_preselection_verify else "performed",
             "post_publish_logical_verification": "performed" if post_publish_verify else "deferred-to-canonical-parent",
             "max_dependency_depth": int(pg_stats.get("max_dependency_depth", 0)) if selected == "prefixgraph" else 0,
             "max_selected_member_read_amplification": (
