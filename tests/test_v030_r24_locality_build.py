@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+import threading
 
 from experiments import entropygraph_v030_release_product as product
 
@@ -87,5 +88,43 @@ def test_shipping_r24_keeps_default_pack_cap_for_large_members(tmp_path, monkeyp
     assert stats["locality_selected_member_bytes"] == 1024 * 1024
 
 
-def test_release_product_rebinds_canonical_r24_builder_to_locality_bounded_policy() -> None:
-    assert product.C._r24_build is product._locality_bounded_r24_build
+def test_r24_prebuild_overlaps_filesystem_manifest_capture(tmp_path, monkeypatch) -> None:
+    root = tmp_path / "source"
+    root.mkdir()
+    (root / "payload.bin").write_bytes(b"payload")
+    job_root = tmp_path / "job"
+    job_root.mkdir()
+    staging = job_root / "profile-tree"
+    output = job_root / "canonical-r24.cmpct"
+    started = threading.Event()
+    release = threading.Event()
+    capture_observed_prebuild = []
+
+    def fake_r24(_root: Path, target: Path) -> dict:
+        started.set()
+        assert release.wait(2.0)
+        target.write_bytes(b"prebuilt-r24")
+        return {"archive_bytes": len(b"prebuilt-r24"), "format_revision": 24}
+
+    def fake_prepare(_root: Path, _staging: Path) -> dict:
+        capture_observed_prebuild.append(started.wait(1.0))
+        return {"manifest_raw": b"manifest"}
+
+    monkeypatch.setattr(product, "_locality_bounded_r24_build", fake_r24)
+    monkeypatch.setattr(product, "_ORIGINAL_PREPARE_PROFILE_TREE", fake_prepare)
+
+    prepared = product._prepare_profile_tree_with_r24_overlap(root, staging)
+    assert prepared == {"manifest_raw": b"manifest"}
+    assert capture_observed_prebuild == [True]
+
+    release.set()
+    stats = product._consume_or_build_locality_bounded_r24(root, output)
+
+    assert output.read_bytes() == b"prebuilt-r24"
+    assert stats["r24_prebuild_overlap"] == "filesystem-manifest-capture"
+    assert stats["r24_prebuild_reused"] is True
+
+
+def test_release_product_rebinds_canonical_build_hooks() -> None:
+    assert product.C._r24_build is product._consume_or_build_locality_bounded_r24
+    assert product.C._prepare_profile_tree is product._prepare_profile_tree_with_r24_overlap
