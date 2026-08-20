@@ -65,11 +65,10 @@ def _bulk_delimiter_forward(raw: bytes, delimiter: int) -> bytes:
     for length in lengths:
         O._put_varint(out, length)
 
-    # Every row participates in columns below min_len.  Materialize that rectangular prefix row-major once,
-    # then append each strided column using bytearray slicing implemented in C.  Ragged tails retain the exact
+    # Every row participates in columns below min_len. Materialize that rectangular prefix row-major once,
+    # then append each strided column using bytearray slicing implemented in C. Ragged tails retain the exact
     # historical loop, so arbitrary empty/unequal fields preserve byte identity without a second grammar.
     min_len = min(lengths, default=0)
-    count = len(parts)
     if min_len:
         rectangle = b"".join(part[:min_len] for part in parts)
         for column in range(min_len):
@@ -120,7 +119,6 @@ def _bulk_delimiter_inverse(encoded: bytes, logical_size: int) -> bytes:
         dense_bytes = count * min_len
         dense = body[:dense_bytes]
         rectangle = bytearray(dense_bytes)
-        # ``dense`` is column-major; one strided assignment per column recreates the row-major rectangle.
         for column in range(min_len):
             start = column * count
             rectangle[column::min_len] = dense[start : start + count]
@@ -141,8 +139,8 @@ def _bulk_delimiter_inverse(encoded: bytes, logical_size: int) -> bytes:
     return bytes((delimiter,)).join(bytes(row) for row in rows)
 
 
-# Patch only the isolated canonical graph/reader references.  Research modules remain untouched and therefore
-# continue to provide the original byte oracle.  Both writer and reader must use the same exact transform bytes.
+# Patch only the isolated canonical graph/reader references. Research modules remain untouched and therefore
+# continue to provide the original byte oracle. Both writer and reader must use the same exact transform bytes.
 SHARED.G.O.delimiter_forward = _bulk_delimiter_forward
 SHARED.G.O.delimiter_inverse = _bulk_delimiter_inverse
 if getattr(POLICY.R.G04, "O", None) is not None:
@@ -150,19 +148,7 @@ if getattr(POLICY.R.G04, "O", None) is not None:
 
 
 def _parallel_overlay_retained_graph(graph_path: Path, overlay_path: Path) -> dict:
-    """Apply the owning G0-G4 auditions concurrently while preserving exact record order and bytes.
-
-    Each physical-record audition is pure with respect to every other record: the semantic owner remains
-    ``SHARED.G._audition_record`` and complete archive pricing remains unchanged.  The previous release path paid
-    these independent Zstd/Geometry tournaments serially *after* the attempt-5 graph was already available; on
-    the frozen ML workload that represented roughly thirty seconds of avoidable wall time.  A bounded ordered
-    thread pool changes scheduling only.  ``pool.map`` preserves input order, and the existing shared-rehab gate
-    still requires the resulting complete archive to be byte-identical to the serial reference implementation.
-
-    Four workers are deliberately a fixed ceiling rather than ``os.cpu_count()``: hosted and local machines may
-    expose very different logical-CPU counts, while release resource behaviour should remain bounded and boring.
-    Small graphs use no more workers than records.
-    """
+    """Apply the owning G0-G4 auditions concurrently while preserving exact record order and bytes."""
     source_format, _source, graph_meta, graph_records = SHARED.strict._read_source_records(graph_path)
     users = SHARED.O._record_member_lengths(graph_meta, len(graph_records))
 
@@ -181,7 +167,6 @@ def _parallel_overlay_retained_graph(graph_path: Path, overlay_path: Path) -> di
     records = [row[0] for row in outcomes]
     transforms = [row[1] for row in outcomes]
     auditions = [row[2] for row in outcomes]
-
     annotated_meta = dict(graph_meta)
     annotated_meta["overlay_source_format"] = source_format
     write_stats = SHARED.G._write_overlay(annotated_meta, records, transforms, overlay_path)
@@ -203,6 +188,129 @@ def _parallel_overlay_retained_graph(graph_path: Path, overlay_path: Path) -> di
 # which gives the shared-rehab workflow an independent byte-for-byte oracle instead of moving both sides at once.
 SHARED._overlay_retained_graph = _parallel_overlay_retained_graph
 
+
+def _overlapped_release_candidate_build(root: Path, out: Path, *, post_publish_verify: bool = True) -> dict:
+    """Build PrefixGraph beside G0-G4 without changing complete-artifact admission or publication semantics.
+
+    PrefixGraph reads the immutable staged tree and writes a separate temporary artifact. It has no dependency on
+    G0-G4's retained graph, so paying the two complete candidate builds serially is pure wall-time duplication.
+    G0-G4 deliberately stays on the calling thread because its shared portfolio owns spawned v0.29 workers;
+    PrefixGraph alone uses one bounded background worker. Exact bytes, strict verification, locality admission,
+    conservative ties and the physical publication checksum remain byte-for-byte the historical tournament law.
+    """
+    started = time.perf_counter()
+    out.parent.mkdir(parents=True, exist_ok=True)
+    expected_tree = RC.treehash(root)
+
+    with tempfile.TemporaryDirectory(prefix=".cmpct-v030-release-candidate-", dir=out.parent) as td:
+        temp = Path(td)
+        g04_path = temp / "g04-or-v029.cmpct"
+        pg_path = temp / "prefixgraph.cmpct"
+        pg_contract_eligible, pg_reject_reason = RC._prefixgraph_eligibility(root, expected_tree)
+        pg_stats = None
+
+        if pg_contract_eligible:
+            with ThreadPoolExecutor(max_workers=1, thread_name_prefix="cmpct-v030-prefixgraph") as pool:
+                pg_future = pool.submit(RC.PG.build, root, pg_path)
+                # Keep G0-G4 on this thread: its internal multiprocessing/spawn boundary remains exactly where
+                # it was before this scheduling optimization, while independent PrefixGraph CPU overlaps it.
+                g04_stats = RC.G04.build(root, g04_path)
+                pg_stats = pg_future.result()
+        else:
+            g04_stats = RC.G04.build(root, g04_path)
+
+        g04_verify = RC._verify_component(g04_path, expected_tree, "G0-G4 candidate")
+        g04_bytes = g04_path.stat().st_size
+        v029_bytes = int(g04_stats["v029_bytes"])
+        if g04_bytes > v029_bytes:
+            raise RuntimeError("monotone G0-G4 candidate exceeded accepted v0.29 floor")
+
+        pg_admitted = False
+        pg_verify = None
+        pg_locality = None
+        pg_bytes = None
+        if pg_contract_eligible:
+            assert pg_stats is not None
+            pg_bytes = pg_path.stat().st_size
+            if pg_bytes < g04_bytes:
+                pg_verify = RC._verify_component(pg_path, expected_tree, "PrefixGraph candidate")
+                pg_locality = RC._prefixgraph_locality(pg_path)
+                pg_admitted = bool(pg_locality["passed"])
+                if not pg_admitted:
+                    pg_reject_reason = "locality-ceiling"
+            else:
+                pg_reject_reason = "complete-artifact-not-smaller"
+
+        if pg_admitted and pg_bytes is not None and pg_bytes < g04_bytes:
+            selected_path = pg_path
+            selected = "prefixgraph"
+            selected_verify = pg_verify
+        else:
+            selected_path = g04_path
+            selected = "g04-overlay" if g04_stats["selected"] == "geometry-overlay-g04" else "v029-fallback"
+            selected_verify = g04_verify
+
+        assert selected_verify is not None
+        selected_bytes = selected_path.stat().st_size
+        selected_physical_sha256 = RC._sha256_file(selected_path)
+        os.replace(selected_path, out)
+        published_physical_sha256 = RC._sha256_file(out)
+        if out.stat().st_size != selected_bytes or published_physical_sha256 != selected_physical_sha256:
+            raise RuntimeError("published v0.30 release candidate bytes changed during atomic publication")
+
+        if post_publish_verify:
+            final_verify = RC._verify_component(out, expected_tree, "Published v0.30 release candidate")
+            final_verify = dict(final_verify)
+            final_verify["publication_logical_verification_deferred"] = False
+        else:
+            final_verify = dict(selected_verify)
+            final_verify["publication_logical_verification_deferred"] = True
+        final_verify["publication_physical_sha256"] = published_physical_sha256
+
+        return {
+            "selected": selected,
+            "archive_bytes": selected_bytes,
+            "v029_bytes": v029_bytes,
+            "g04_bytes": g04_bytes,
+            "g04_selected": g04_stats["selected"],
+            "prefixgraph_contract_eligible": pg_contract_eligible,
+            "prefixgraph_admitted": pg_admitted,
+            "prefixgraph_reject_reason": pg_reject_reason,
+            "prefixgraph_bytes": pg_bytes,
+            "prefixgraph_locality": pg_locality,
+            "saving_vs_v029_bytes": v029_bytes - selected_bytes,
+            "saving_vs_g04_bytes": g04_bytes - selected_bytes,
+            "tree_sha256": expected_tree,
+            "portfolio_create_s": time.perf_counter() - started,
+            "candidate_scheduler": "g04-main-plus-one-prefixgraph-worker-v1",
+            "selection_materialization": "same-filesystem-atomic-move",
+            "selection_extra_payload_write_bytes": 0,
+            "selection_publication_physical_sha256": published_physical_sha256,
+            "post_publish_logical_verification": "performed" if post_publish_verify else "deferred-to-canonical-parent",
+            "max_dependency_depth": int(pg_stats.get("max_dependency_depth", 0)) if selected == "prefixgraph" else 0,
+            "max_selected_member_read_amplification": (
+                float(pg_locality["max_member_read_amplification"])
+                if selected == "prefixgraph" and pg_locality is not None
+                else float(g04_stats.get("max_selected_member_read_amplification", 0.0))
+            ),
+            "g04": g04_stats,
+            "prefixgraph": pg_stats,
+            "g04_strong_verify": g04_verify,
+            "prefixgraph_strong_verify": pg_verify,
+            "selected_strong_verify": selected_verify,
+            "final_strong_verify": final_verify,
+            "reader_authority": "v030-release-streaming-policy-v1",
+            "claim_boundary": (
+                "complete-artifact system tournament; independent candidate construction may overlap, while "
+                "PrefixGraph and G0-G4 savings are never added or claimed simultaneously"
+            ),
+        }
+
+
+# Canonical scheduling only. The research selector remains serial and therefore continues to provide independent
+# result/byte provenance; all exact admission helpers are still owned by the private RC module.
+RC.build = _overlapped_release_candidate_build
+
 _PRESERVED_STRONG_VERIFY = strong_verify
 
 
@@ -211,21 +319,11 @@ def _r25_build(staged_root: Path, out: Path) -> dict:
     started = time.perf_counter()
     with _revision25_profile_context():
         stats = dict(RC.build(staged_root, out, post_publish_verify=False))
-    # Footnote: RC still strong-verifies every candidate that can win and proves the selected bytes survive its
-    # atomic publication. Only RC's *second* published-path logical pass is deferred. ``build`` below resolves
-    # this replacement through the shared module globals and always calls canonical ``strong_verify`` after the
-    # exact r24-vs-r25 winner is published, so every user-visible product still receives that final proof once.
     return {**stats, "create_s": time.perf_counter() - started}
 
 
 def strong_verify(archive: Path) -> dict:
-    """Strong-verify canonical r25 in one content pass plus one authenticated manifest binding pass.
-
-    The shared release reader already reconstructs every profile member, authenticates payload and logical
-    identities, authenticates the complete content-graph tree, and enforces locality. The filesystem manifest is
-    then read and bound to those authenticated metadata identities. Re-reading every regular member afterward
-    proves the same bytes a second time and is deliberately avoided here.
-    """
+    """Strong-verify canonical r25 in one content pass plus one authenticated manifest binding pass."""
     archive = Path(archive)
     revision, profile = _profile_for_archive(archive)
     if revision != REVISION:
@@ -247,9 +345,6 @@ def strong_verify(archive: Path) -> dict:
             "reader": "cmpct-v030-canonical-final-v1",
         }
 
-    # Footnote: ``POLICY.strong_verify`` is the byte proof; ``_validated_manifest`` is the semantic binding.
-    # The latter compares every manifest regular-file (size, SHA-256) identity with the authenticated profile
-    # metadata, so the already verified content graph and the user-visible filesystem description cannot diverge.
     return {
         **base,
         "content_graph_tree_sha256": base.get("tree_sha256"),
