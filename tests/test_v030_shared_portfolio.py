@@ -43,6 +43,12 @@ def _assert_identity(source: Path, tmp_path: Path, stem: str) -> None:
     assert new_stats["shared_analysis_mode"] == "attempt5-graph-built-once"
     assert new_stats["selection_extra_payload_write_bytes"] == 0
     assert new_stats["publication_identity_check"] == "streamed-sha256"
+    if new_stats["selected"] == "geometry-overlay-g04":
+        assert new_stats["overlay_verification_state"] == "verified-before-publication"
+        assert new_stats["losing_overlay_logical_verification_skipped"] is False
+    else:
+        assert new_stats["overlay_verification_state"] == "deferred-until-byte-win"
+        assert new_stats["losing_overlay_logical_verification_skipped"] is True
 
 
 def test_shared_portfolio_is_byte_identical_on_multi_file_tree(tmp_path: Path) -> None:
@@ -72,5 +78,62 @@ def test_shared_floor_preserves_strict_tie_and_fast_reject_law(tmp_path: Path, m
     assert result["v029_stats"]["fast_reject_reason"] == "forced-fast-reject"
     assert result["graph_path"].is_file()
 
+
+def test_losing_overlay_is_not_strong_verified(tmp_path: Path, monkeypatch) -> None:
+    """Exact byte loss must skip a full logical decode while keeping the winning floor byte-identical."""
+    source = tmp_path / "source"
+    source.mkdir()
+    (source / "payload.bin").write_bytes(b"payload")
+    expected_tree = "ab" * 32
+
+    def fake_shared_candidates(_root: Path, temp: Path) -> dict:
+        floor = temp / "floor.cmpct"
+        graph = temp / "graph.cmpct"
+        floor.write_bytes(b"F" * 10)
+        graph.write_bytes(b"G" * 12)
+        v029_stats = {"v028_child_s": 0.0, "attempt5_child_s": 0.0}
+        return {
+            "v028_path": floor,
+            "graph_path": graph,
+            "floor_path": floor,
+            "floor_selected": "v028-fallback",
+            "v028_bytes": 10,
+            "graph_bytes": 12,
+            "floor_bytes": 10,
+            "v029_stats": v029_stats,
+            "graph_stats": {},
+            "shared_build_s": 0.0,
+        }
+
+    def fake_overlay(_graph: Path, overlay: Path) -> dict:
+        overlay.write_bytes(b"O" * 20)
+        return {
+            "source_format": "fixture",
+            "records": [],
+            "transforms": [],
+            "auditions": [],
+            "write_stats": {"meta_raw_bytes": 0, "meta_comp_bytes": 0},
+            "verified": None,
+            "verification_state": "deferred-until-byte-win",
+        }
+
+    monkeypatch.setattr(shared, "_build_shared_candidates", fake_shared_candidates)
+    monkeypatch.setattr(shared, "_overlay_retained_graph", fake_overlay)
+    monkeypatch.setattr(shared, "treehash", lambda _root: expected_tree)
+    monkeypatch.setattr(
+        shared.G,
+        "strong_verify",
+        lambda _archive: (_ for _ in ()).throw(AssertionError("losing overlay must not be decoded")),
+    )
+
+    out = tmp_path / "selected.cmpct"
+    result = shared.build(source, out)
+    assert result["selected"] == "v029-fallback"
+    assert result["losing_overlay_logical_verification_skipped"] is True
+    assert result["overlay_verification_state"] == "deferred-until-byte-win"
+    assert out.read_bytes() == b"F" * 10
+
 # Footnote: the identity tests deliberately compare complete archive bytes, not only selected sizes. Scheduling
 # is allowed to change wall time and temporary-artifact lifetime; it is not allowed to change one stored byte.
+# The losing-overlay test narrows the optimization boundary further: only a candidate that loses exact complete
+# byte pricing may skip logical verification; any byte-winning overlay is still verified before publication.
