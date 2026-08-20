@@ -15,7 +15,8 @@ def test_shipping_r24_micro_pack_target_is_bounded_by_largest_member(tmp_path, m
     seen: dict[str, int] = {}
 
     class FakeBuilder:
-        def __init__(self, _root: Path):
+        def __init__(self, _root: Path, *, deflate_reuse_min: int):
+            seen["deflate_reuse_min"] = int(deflate_reuse_min)
             self.micro_pack_target = 256 * 1024
 
         def build(self, target: Path):
@@ -42,6 +43,7 @@ def test_shipping_r24_micro_pack_target_is_bounded_by_largest_member(tmp_path, m
     stats = product._locality_bounded_r24_build(root, out)
 
     assert seen["target"] == 24_000
+    assert seen["deflate_reuse_min"] == product.R24_RELEASE_DEFLATE_REUSE_MIN_BYTES
     assert stats["micro_pack_target_default_bytes"] == 256 * 1024
     assert stats["micro_pack_target_release_bytes"] == 24_000
     assert stats["locality_selected_member_bytes"] == 3000
@@ -57,7 +59,8 @@ def test_shipping_r24_keeps_default_pack_cap_for_large_members(tmp_path, monkeyp
     seen: dict[str, int] = {}
 
     class FakeBuilder:
-        def __init__(self, _root: Path):
+        def __init__(self, _root: Path, *, deflate_reuse_min: int):
+            seen["deflate_reuse_min"] = int(deflate_reuse_min)
             self.micro_pack_target = 256 * 1024
 
         def build(self, target: Path):
@@ -84,6 +87,7 @@ def test_shipping_r24_keeps_default_pack_cap_for_large_members(tmp_path, monkeyp
     stats = product._locality_bounded_r24_build(root, out)
 
     assert seen["target"] == 256 * 1024
+    assert seen["deflate_reuse_min"] == product.R24_RELEASE_DEFLATE_REUSE_MIN_BYTES
     assert stats["micro_pack_target_release_bytes"] == 256 * 1024
     assert stats["locality_selected_member_bytes"] == 1024 * 1024
 
