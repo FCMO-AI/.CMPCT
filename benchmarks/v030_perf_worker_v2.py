@@ -2,9 +2,11 @@ from __future__ import annotations
 
 """Final-authority fresh-process worker for the v0.30 paired runtime gate.
 
-This is intentionally a near-copy of ``v030_perf_worker.py`` with one semantic difference: the v0.30 engine is
-``entropygraph_v030_authoritative``.  Keeping the old worker intact preserves v1 timing evidence while v2 closes
-the release ledger against the memory-bounded admission policy.
+The v0.29 side remains the accepted historical release baseline.  The v0.30 side must exercise the one promoted
+product front door, ``entropygraph_v030_release_product``: that surface owns canonical r24/r25 selection, the
+current bounded/ordered Geometry scheduler, revision-25 filesystem semantics, and exact r24 fallback.  Benchmarking
+the demoted ``entropygraph_v030_authoritative`` research facade would measure a historical convergence adapter
+that the release itself does not ship and would therefore make runtime evidence non-authoritative.
 """
 
 import argparse
@@ -19,7 +21,7 @@ def _engine(name: str):
     if name == "v029":
         from experiments import entropygraph_v029_release as engine
     elif name == "v030":
-        from experiments import entropygraph_v030_authoritative as engine
+        from experiments import entropygraph_v030_release_product as engine
     else:  # pragma: no cover
         raise ValueError(name)
     return engine
