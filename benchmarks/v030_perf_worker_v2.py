@@ -7,6 +7,11 @@ product front door, ``entropygraph_v030_release_product``: that surface owns can
 current bounded/ordered Geometry scheduler, revision-25 filesystem semantics, and exact r24 fallback.  Benchmarking
 the demoted ``entropygraph_v030_authoritative`` research facade would measure a historical convergence adapter
 that the release itself does not ship and would therefore make runtime evidence non-authoritative.
+
+Only the requested codec operation is timed. Source/destination tree hashing is correctness evidence and runs
+after the operation clock stops, matching the canonical worker and keeping both engines inside the same timing
+boundary. Including an extra full-tree scan in pack/extract time would measure evidence bookkeeping rather than
+creation/extraction performance and can disproportionately penalize the richer canonical product identity.
 """
 
 import argparse
@@ -47,15 +52,22 @@ def main() -> None:
             raise SystemExit("--source required for pack")
         args.archive.parent.mkdir(parents=True, exist_ok=True)
         stats = engine.build(args.source, args.archive)
+        operation_wall_s = time.perf_counter() - started
+        operation_peak_rss_kib = _rss_kib()
+        # Identity validation is intentionally outside the timer. The build result is retained verbatim and the
+        # independently recomputed tree is still emitted, so moving this scan cannot hide a correctness failure.
+        source_tree = engine.treehash(args.source)
         result = {
             "engine": args.engine,
             "op": args.op,
             "archive_bytes": args.archive.stat().st_size,
-            "tree_sha256": engine.treehash(args.source),
+            "tree_sha256": source_tree,
             "build_stats": stats,
         }
     elif args.op == "verify":
         verified = engine.strong_verify(args.archive)
+        operation_wall_s = time.perf_counter() - started
+        operation_peak_rss_kib = _rss_kib()
         if not verified.get("ok"):
             raise RuntimeError(f"{args.engine} strong verification failed: {verified!r}")
         result = {"engine": args.engine, "op": args.op, "tree_sha256": verified.get("tree_sha256"), "verify": verified}
@@ -65,10 +77,13 @@ def main() -> None:
         if args.destination.exists():
             shutil.rmtree(args.destination)
         engine.extract(args.archive, args.destination)
-        result = {"engine": args.engine, "op": args.op, "tree_sha256": engine.treehash(args.destination)}
+        operation_wall_s = time.perf_counter() - started
+        operation_peak_rss_kib = _rss_kib()
+        destination_tree = engine.treehash(args.destination)
+        result = {"engine": args.engine, "op": args.op, "tree_sha256": destination_tree}
 
-    result["wall_s"] = time.perf_counter() - started
-    result["peak_rss_kib"] = _rss_kib()
+    result["wall_s"] = operation_wall_s
+    result["peak_rss_kib"] = operation_peak_rss_kib
     print(json.dumps(result, separators=(",", ":"), default=str), flush=True)
 
 
