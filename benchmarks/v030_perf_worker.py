@@ -48,11 +48,19 @@ def main() -> None:
             raise SystemExit("--source required for pack")
         args.archive.parent.mkdir(parents=True, exist_ok=True)
         stats = engine.build(args.source, args.archive)
+        # Preserve the frozen timing envelope: this post-build treehash remains inside the measured operation
+        # exactly as before. It is diagnostic, however, not allowed to retroactively redefine the source identity
+        # that the writer captured before construction and then authenticated through its selected archive.
+        post_build_tree = engine.treehash(args.source)
+        writer_tree = stats.get("tree_sha256") if isinstance(stats, dict) else None
+        if not isinstance(writer_tree, str) or len(writer_tree) != 64:
+            writer_tree = post_build_tree
         result = {
             "engine": args.engine,
             "op": args.op,
             "archive_bytes": args.archive.stat().st_size,
-            "tree_sha256": engine.treehash(args.source),
+            "tree_sha256": writer_tree,
+            "post_build_source_tree_sha256": post_build_tree,
             "build_stats": stats,
         }
     elif args.op == "verify":
