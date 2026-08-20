@@ -2,23 +2,27 @@ from __future__ import annotations
 
 """Canonical-byte authority for the frozen v0.30 15-workload release gate.
 
-All numeric thresholds and historical source identities remain owned by ``v030_release_generalization``. This
-adapter binds that immutable harness to the single release product front door and enriches every selected archive
-with its exact SHA-256 and actual canonical revision/profile.
+The historical generalization harness owns the frozen 15 source trees, accepted-v0.29 row bytes and numeric
+release thresholds.  The shipping v0.30 product, however, has a deliberately different stats schema because it
+builds genuine canonical r24 and r25 complete products.  This adapter therefore keeps the two evidence domains
+separate instead of pretending canonical product stats are the old research-candidate dictionary.
 
-Footnote: this file does not redefine the frozen 137,501,815-byte historical v0.29 substrate. Product r24-vs-r25
-framing parity is an additional gate in ``v030_release_ablation_canonical``; historical causality remains historical.
+For every workload we independently rebuild the accepted v0.29 floor on the *original* benchmark tree, then build
+the actual ``entropygraph_v030_release_product`` and project only measured facts into the historical harness.  In
+particular, ``v029_research_floor_bytes`` from the staged r25 tree is never substituted for the accepted historical
+v0.29 bytes.  That distinction is release-critical because the staged r25 tree includes filesystem-manifest
+semantics that the frozen historical substrate did not.
 """
 
 import argparse
 import hashlib
 import json
 from pathlib import Path
+import tempfile
 
 from benchmarks import v030_release_generalization as B
 from experiments import entropygraph_v030_release_product as CANON
-
-B.RC = CANON
+from experiments import entropygraph_v030_geometry_overlay_g04 as HIST_G04
 
 
 def _sha256_file(path: Path) -> str:
@@ -29,8 +33,114 @@ def _sha256_file(path: Path) -> str:
     return digest.hexdigest()
 
 
+def _r24_max_member_amplification(archive: Path) -> float:
+    """Observe decoded r24 blob context for every regular member through the mature reader.
+
+    ``CMPCT.read`` is the product operation used by the r24 facade.  Tracking ``_blob`` records every logical
+    blob context touched even when the base reader subsequently serves that blob from its cache.  Resetting the
+    observation set before each regular member therefore yields a conservative per-member decoded-context ratio
+    without a missing-field default or a build-time proxy.
+    """
+    original = CANON.CMPCT
+
+    class TrackingR24(original):
+        def __init__(self, path):
+            super().__init__(path)
+            self.observed_blob_ids: set[int] = set()
+
+        def _blob(self, idx):
+            self.observed_blob_ids.add(int(idx))
+            return super()._blob(idx)
+
+    worst = 0.0
+    with TrackingR24(archive) as reader:
+        for row in reader.files:
+            rel, kind, _mode, _mtime, size, _digest, _storage = row
+            if kind != CANON.R24_CODEC.K_FILE:
+                continue
+            reader.observed_blob_ids.clear()
+            raw = bytes(reader.read(rel))
+            if len(raw) != int(size):
+                raise RuntimeError(f"canonical r24 locality read length drift for {rel!r}")
+            decoded = sum(int(reader.blobs[idx][1]) for idx in reader.observed_blob_ids)
+            amp = max(len(raw), decoded) / max(1, len(raw))
+            worst = max(worst, amp)
+    return worst
+
+
+def _normalize_product_stats(product: dict, historical_bytes: int, historical_stats: dict, archive: Path) -> dict:
+    """Project measured canonical product facts into the immutable historical gate schema."""
+    r25 = product.get("r25") if isinstance(product.get("r25"), dict) else {}
+    g04 = r25.get("g04") if isinstance(r25.get("g04"), dict) else {}
+    g04 = dict(g04)
+    # The historical create-time comparator must be the exact original-tree accepted-v0.29 build, never the
+    # staged-r25 research floor.  Keep it inside the legacy location only because B's diagnostic helper reads it.
+    g04["v029"] = dict(historical_stats)
+
+    final_revision = int(product.get("format_revision", 24))
+    if final_revision == 24:
+        max_amp = _r24_max_member_amplification(archive)
+    elif final_revision == CANON.REVISION:
+        observed = r25.get("max_selected_member_read_amplification")
+        if not isinstance(observed, (int, float)):
+            raise RuntimeError("canonical r25 product omitted selected-member locality accounting")
+        max_amp = float(observed)
+    else:
+        raise RuntimeError(f"canonical product emitted unexpected revision {final_revision!r}")
+
+    g04_bytes = int(r25.get("g04_bytes", product["archive_bytes"]))
+    prefixgraph_bytes = r25.get("prefixgraph_bytes")
+    return {
+        **product,
+        "v029_bytes": int(historical_bytes),
+        "g04_bytes": g04_bytes,
+        "g04_selected": r25.get("g04_selected", "not-attempted"),
+        "prefixgraph_contract_eligible": bool(r25.get("prefixgraph_contract_eligible", False)),
+        "prefixgraph_admitted": bool(r25.get("prefixgraph_admitted", False)),
+        "prefixgraph_reject_reason": r25.get("prefixgraph_reject_reason", "not-attempted"),
+        "prefixgraph_bytes": int(prefixgraph_bytes) if isinstance(prefixgraph_bytes, int) else None,
+        "saving_vs_g04_bytes": g04_bytes - int(product["archive_bytes"]),
+        "max_dependency_depth": int(r25.get("max_dependency_depth", 0)),
+        "max_selected_member_read_amplification": max_amp,
+        "selection_materialization": "same-filesystem-atomic-move",
+        "selection_extra_payload_write_bytes": 0,
+        "g04": g04,
+        "prefixgraph_locality": r25.get("prefixgraph_locality"),
+        "historical_v029_measurement": "independent-original-tree-build",
+        "canonical_product_stats": product,
+    }
+
+
+class _CanonicalGeneralizationAdapter:
+    """Minimal surface consumed by the frozen generalization harness."""
+
+    treehash = staticmethod(CANON.treehash)
+    strong_verify = staticmethod(CANON.strong_verify)
+
+    @staticmethod
+    def build(root: Path, out: Path) -> dict:
+        out.parent.mkdir(parents=True, exist_ok=True)
+        with tempfile.TemporaryDirectory(prefix=".cmpct-v030-generalization-floor-", dir=out.parent) as td:
+            historical_path = Path(td) / "accepted-v029.cmpct"
+            historical_stats = dict(HIST_G04.BASE.build(root, historical_path))
+            historical_bytes = historical_path.stat().st_size
+            product = dict(CANON.build(root, out))
+        return _normalize_product_stats(product, historical_bytes, historical_stats, out)
+
+
+ADAPTER = _CanonicalGeneralizationAdapter()
+
+
 def run(work_root: Path) -> dict:
-    result = dict(B.run(work_root))
+    # Avoid the old import-time global swap.  Other tests/evidence modules may import B in the same interpreter,
+    # so canonical adaptation is scoped to this run and always restored even when a workload fails.
+    previous = B.RC
+    B.RC = ADAPTER
+    try:
+        result = dict(B.run(work_root))
+    finally:
+        B.RC = previous
+
     revisions: dict[str, int] = {}
     profiles: dict[str, int] = {}
     for row in result["rows"]:
@@ -50,6 +160,7 @@ def run(work_root: Path) -> dict:
 
     result["engine"] = "experiments/entropygraph_v030_release_product.py"
     result["release_facade"] = "cmpct-v030-release-product-v1"
+    result["historical_floor_engine"] = "accepted-v029 original-tree builder via entropygraph_v030_geometry_overlay_g04.BASE"
     result["canonical_format"] = {
         "new_revision": 25,
         "fallback_revision": 24,
