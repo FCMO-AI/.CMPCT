@@ -11,7 +11,9 @@ from benchmarks import v030_release_generalization as G
 def test_ablation_variants_and_historical_release_floors_are_frozen() -> None:
     assert A.VARIANTS == ("v029", "geometry_only", "prefixgraph_only", "combined")
     assert A.HISTORICAL_SUBSTRATE != A.PRODUCT_SUBSTRATE
-    assert G.EXPECTED_V029_TOTAL == 137_501_815
+    assert G.EXPECTED_V029_TOTAL == 137_499_525
+    # Repair-v6 changed the accepted deterministic identity, not the revision-quality bar.
+    assert G.INHERITED_ABSOLUTE_REVISION_FLOOR == 687_783
     assert G.MIN_RELEASE_SAVING_BYTES == 687_783
     assert G.MIN_IMPROVED_ROWS == 3
     assert G.MAX_MEMBER_READ_AMP == 8.0
