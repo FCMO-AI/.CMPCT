@@ -39,14 +39,18 @@ jobs:
           python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
           rustup toolchain install 1.89.0 --profile minimal
           cargo +1.89.0 build --release --manifest-path native/preflate-bridge/Cargo.toml
-      - name: Build deterministic resemblance corpus
+      - name: Build bounded deterministic resemblance corpus
         run: |
           python - <<'PY'
           from pathlib import Path
           root = Path('benchmark-artifacts/parallel-candidate-source')
           root.mkdir(parents=True, exist_ok=True)
-          base = bytearray((i * 29 + (i >> 7) * 11) & 0xff for i in range(512 * 1024))
-          for n in range(48):
+          # The earlier 48 x 512 KiB diagnostic recursively drove the inherited G0-G4/v0.29 substrate into its
+          # 30-minute child-result timeout before the oracle could emit *any* evidence. This oracle is about
+          # scheduler byte identity, not scale. Keep a multi-file, PrefixGraph-eligible resemblance tree large
+          # enough to exercise both candidates but bounded enough to always reach a PASS/REJECT decision.
+          base = bytearray((i * 29 + (i >> 7) * 11) & 0xff for i in range(128 * 1024))
+          for n in range(12):
               data = bytearray(base)
               shift = (n * 977) % 8192
               if shift:
@@ -56,6 +60,10 @@ jobs:
               header = f'cmpct-v030-parallel-oracle:{n:03d}\n'.encode()
               data[:len(header)] = header
               (root / f'record-{n:03d}.bin').write_bytes(data)
+          logical_bytes = sum(path.stat().st_size for path in root.iterdir())
+          assert len(list(root.iterdir())) == 12
+          assert logical_bytes == 12 * 128 * 1024
+          print({'files': 12, 'logical_bytes': logical_bytes})
           PY
       - name: Run byte-identical parallel candidate oracle
         run: |
@@ -79,6 +87,8 @@ jobs:
               assert data['prefixgraph_bytes'] > 0
               assert len(data['g04_sha256']) == 64
               assert len(data['prefixgraph_sha256']) == 64
+              # Frozen materiality threshold is unchanged. A smaller diagnostic may honestly return REJECT; the
+              # workflow's job is to produce valid evidence rather than hang until a child timeout manufactures red.
               assert data['minimum_saved_ratio'] == 0.20
               assert data['minimum_saved_s'] == 5.0
           print(json.dumps(data, indent=2, sort_keys=True))
@@ -87,16 +97,15 @@ jobs:
         run: python tools/check_public_surface.py
       - name: Upload oracle evidence
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: cmpct-v030-parallel-candidate-${{ github.sha }}
           path: |
             benchmark-artifacts/parallel-candidate-result.json
             benchmark-artifacts/parallel-candidate.stdout.txt
           if-no-files-found: warn
+          retention-days: 90
 
-# This workflow is research-only. A PASS does not modify the release scheduler or authorize a v0.30
-# claim; promotion requires balanced repeated timing on the authoritative workload matrix.
-# Footnote: the topology classifier requires every automatic v0.30 workflow to state its execution class.
-# `deep` is appropriate here because this is an expensive, non-release-authorizing diagnostic oracle rather than
-# a merge gate or publisher. The classification changes scheduling/CI hygiene only, not any benchmark threshold.
+# This workflow is research-only. A PASS does not modify the release scheduler or authorize a v0.30 claim;
+# promotion requires balanced repeated timing on the authoritative workload matrix. The bounded corpus changes
+# only whether this diagnostic can terminate; the frozen >=20% and >=5 s research materiality rule is untouched.
