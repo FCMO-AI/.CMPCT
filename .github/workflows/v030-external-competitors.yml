@@ -8,6 +8,7 @@ on:
     paths:
       - 'experiments/entropygraph_v030_*.py'
       - 'benchmarks/v030_external_competitors.py'
+      - 'benchmarks/v030_external_competitors_canonical.py'
       - '.github/workflows/v030-external-competitors.yml'
   workflow_dispatch:
 
@@ -45,17 +46,18 @@ jobs:
           (7z i | head -n 4) || true
           zpaq 2>&1 | head -n 4 || true
 
-      - name: Compile authority and matrix
+      - name: Compile release product and matrix
         run: |
           python -m py_compile \
-            experiments/entropygraph_v030_authoritative.py \
+            experiments/entropygraph_v030_release_product.py \
             experiments/entropygraph_v030_release_admission.py \
-            benchmarks/v030_external_competitors.py
+            benchmarks/v030_external_competitors.py \
+            benchmarks/v030_external_competitors_canonical.py
 
       - name: Run exact repaired 15-workload competitor matrix
         run: |
           mkdir -p benchmark-artifacts
-          python benchmarks/v030_external_competitors.py \
+          python benchmarks/v030_external_competitors_canonical.py \
             --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-external-work" \
             --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-external-competitors.json"
 
@@ -66,7 +68,6 @@ jobs:
           from pathlib import Path
           data=json.loads(Path('benchmark-artifacts/v030-external-competitors.json').read_text())
           gate=data['gate']; agg=data['aggregates']
-          assert data['schema']=='cmpct-v030-external-competitors-v1'
           assert gate['exact_workload_count'] is True
           assert gate['all_cmpct_trees_verified'] is True
           assert gate['all_zip_trees_verified'] is True
@@ -78,6 +79,13 @@ jobs:
           assert gate['neutral_beats_solid_zstd19'] is True
           assert gate['hostile_closes_solid_zstd19_frontier'] is True
           assert gate['hostile_closes_zpaq5_frontier_when_available'] is True
+          assert gate['all_workloads_strictly_beat_zip'] is True
+          assert gate['all_workloads_strictly_beat_zstd19'] is True
+          assert gate['strict_no_ties_vs_zip_or_zstd19'] is True
+          strict=data['strict_per_workload_dominance']['rows']
+          assert len(strict)==15
+          assert all(row['strictly_beats_zip'] for row in strict)
+          assert all(row['strictly_beats_zstd19'] for row in strict)
           assert gate['passed'] is True
           PY
 
@@ -96,5 +104,5 @@ jobs:
 
 # Footnote: `ffmpeg` and the package audio extra are required to construct and encode the frozen neutral-hostile
 # media workload. They change no benchmark threshold and are not competitor shortcuts. Solid tar+Zstd and ZPAQ
-# remain size competitors rather than random-access peers; requiring all declared tools prevents the historical
-# hostile frontier from disappearing behind an optional/missing dependency result.
+# remain size competitors rather than random-access peers. ZIP and Zstd are now strict per-workload release floors:
+# any tie or loss on any of the 15 frozen workloads fails v0.30 regardless of aggregate performance.
