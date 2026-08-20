@@ -39,6 +39,60 @@ IMPLEMENTATION_SOURCE = _IMPLEMENTATION_PATH
 # ``_revision25_profile_context`` now snapshots/restores private clone state only; those assignments are
 # idempotent inside the isolated graph and invisible to concurrent research calls.
 
+
+def _parallel_overlay_retained_graph(graph_path: Path, overlay_path: Path) -> dict:
+    """Apply the owning G0-G4 auditions concurrently while preserving exact record order and bytes.
+
+    Each physical-record audition is pure with respect to every other record: the semantic owner remains
+    ``SHARED.G._audition_record`` and complete archive pricing remains unchanged.  The previous release path paid
+    these independent Zstd/Geometry tournaments serially *after* the attempt-5 graph was already available; on
+    the frozen ML workload that represented roughly thirty seconds of avoidable wall time.  A bounded ordered
+    thread pool changes scheduling only.  ``pool.map`` preserves input order, and the existing shared-rehab gate
+    still requires the resulting complete archive to be byte-identical to the serial reference implementation.
+
+    Four workers are deliberately a fixed ceiling rather than ``os.cpu_count()``: hosted and local machines may
+    expose very different logical-CPU counts, while release resource behaviour should remain bounded and boring.
+    Small graphs use no more workers than records.
+    """
+    source_format, _source, graph_meta, graph_records = SHARED.strict._read_source_records(graph_path)
+    users = SHARED.O._record_member_lengths(graph_meta, len(graph_records))
+
+    def audition(item):
+        record_id, record = item
+        return SHARED.G._audition_record(record_id, record, users[record_id])
+
+    if graph_records:
+        worker_count = min(4, len(graph_records))
+        with ThreadPoolExecutor(max_workers=worker_count, thread_name_prefix="cmpct-v030-g04") as pool:
+            outcomes = list(pool.map(audition, enumerate(graph_records)))
+    else:
+        worker_count = 0
+        outcomes = []
+
+    records = [row[0] for row in outcomes]
+    transforms = [row[1] for row in outcomes]
+    auditions = [row[2] for row in outcomes]
+
+    annotated_meta = dict(graph_meta)
+    annotated_meta["overlay_source_format"] = source_format
+    write_stats = SHARED.G._write_overlay(annotated_meta, records, transforms, overlay_path)
+    verified = SHARED.G.strong_verify(overlay_path)
+    return {
+        "source_format": source_format,
+        "records": records,
+        "transforms": transforms,
+        "auditions": auditions,
+        "write_stats": write_stats,
+        "verified": verified,
+        "audition_workers": worker_count,
+        "audition_scheduler": "bounded-ordered-thread-pool-v1",
+    }
+
+
+# Only the private canonical clone is patched. Historical/research imports keep their serial implementation,
+# which gives the shared-rehab workflow an independent byte-for-byte oracle instead of moving both sides at once.
+SHARED._overlay_retained_graph = _parallel_overlay_retained_graph
+
 _PRESERVED_STRONG_VERIFY = strong_verify
 
 
