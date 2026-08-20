@@ -35,7 +35,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y zstd gcc ffmpeg
           python -m pip install --upgrade pip
-          python -m pip install -e '.[test]'
+          python -m pip install -e '.[test,audio]'
           python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
 
       - name: Run integration, locality, reader and frozen-contract tests
@@ -85,7 +85,7 @@ jobs:
           assert data['schema']=='cmpct-v030-release-generalization-v1'
           assert data['engine']=='experiments/entropygraph_v030_release.py'
           assert data['release_facade']=='cmpct-v030-authoritative-integration-v1'
-          assert contract['expected_v029_aggregate_bytes']==137501815
+          assert contract['expected_v029_aggregate_bytes']==137499525
           assert contract['minimum_release_saving_bytes']==687783
           assert contract['inherited_absolute_revision_floor_bytes']==687783
           assert contract['minimum_release_saving_pct']==0.5
@@ -93,7 +93,7 @@ jobs:
           assert contract['maximum_member_read_amplification']==8.0
           assert contract['regression_tolerance_bytes']==0
           assert totals['workloads']==15
-          assert totals['accepted_v029_bytes']==137501815
+          assert totals['accepted_v029_bytes']==137499525
           assert totals['workloads_regressed']==0
           assert totals['workloads_improved']>=3
           assert totals['saving_vs_v029_bytes']>=687783
@@ -117,8 +117,7 @@ jobs:
           if-no-files-found: warn
           retention-days: 90
 
-# Footnote: `ffmpeg` is part of the frozen neutral-hostile corpus generator. Installing it changes no CMPCT
-# algorithm or threshold; it makes CI capable of constructing the media workload the benchmark already requires.
-# This workflow may prove release-sized compression/generalization, but it cannot by itself release v0.30.
-# Timing/memory, direct promoted readers, recovery/fuzz, native/portability and external-competitor gates remain
-# independent mandatory evidence. The inherited 687,783-byte floor is not lowered after seeing results.
+# Footnote: `ffmpeg` and the package audio extra are frozen-corpus/runtime dependencies, not codec shortcuts.
+# Repair-v6 changes the accepted deterministic v0.29 identity to 137,499,525 B; it does not lower the inherited
+# 687,783-byte release hurdle. Timing/memory, direct promoted readers, recovery/fuzz, native/portability and
+# external-competitor gates remain independent mandatory evidence before v0.30 can release.
