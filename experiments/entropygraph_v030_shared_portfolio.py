@@ -13,7 +13,8 @@ and discards its losing candidate.  This module makes those independent candidat
    policy, without consuming either candidate artifact;
 3. apply the owning G0-G4 transform tournament directly to that retained attempt-5 graph;
 4. compare the complete G0-G4 archive against the reconstructed accepted-v0.29 floor;
-5. publish the exact winner with same-filesystem ``os.replace`` and bounded streamed SHA-256 identity checks.
+5. strong-verify an overlay only when complete-artifact pricing says it actually wins;
+6. publish the exact winner with same-filesystem ``os.replace`` and bounded streamed SHA-256 identity checks.
 
 No transform rule, graph byte, codec setting, fallback threshold, fast-reject predicate or archive grammar changes.
 This is shared *scheduling/materialization*, not a compression mechanism.
@@ -21,6 +22,8 @@ This is shared *scheduling/materialization*, not a compression mechanism.
 Footnote: single-file trees still build the attempt-5 graph because G0-G4 explicitly needs that pre-fallback
 substrate even when accepted v0.29 would fast-reject it.  Running that already-required work in parallel with
 v0.28 does not resurrect the old dead-end audition; it removes serial latency from work v0.30 must perform.
+A losing overlay is never publishable, so decoding its entire logical tree before exact byte pricing is not a
+safety check on released bytes.  Winning overlays remain strong-verified before publication.
 """
 from __future__ import annotations
 
@@ -161,7 +164,12 @@ def _build_shared_candidates(root: Path, temp: Path) -> dict:
 
 
 def _overlay_retained_graph(graph_path: Path, overlay_path: Path) -> dict:
-    """Apply the exact owning G0-G4 writer to a retained attempt-5 graph artifact."""
+    """Apply the exact owning G0-G4 writer to a retained attempt-5 graph artifact.
+
+    Full logical verification is deliberately deferred until complete-artifact pricing proves the overlay beats
+    the accepted-v0.29 floor. A losing artifact cannot be published; decoding it here would only add creation
+    latency. The build tournament below strong-verifies every byte-winning overlay before publication.
+    """
     source_format, _source, graph_meta, graph_records = strict._read_source_records(graph_path)
     users = O._record_member_lengths(graph_meta, len(graph_records))
     records = []
@@ -176,14 +184,14 @@ def _overlay_retained_graph(graph_path: Path, overlay_path: Path) -> dict:
     annotated_meta = dict(graph_meta)
     annotated_meta["overlay_source_format"] = source_format
     write_stats = G._write_overlay(annotated_meta, records, transforms, overlay_path)
-    verified = G.strong_verify(overlay_path)
     return {
         "source_format": source_format,
         "records": records,
         "transforms": transforms,
         "auditions": auditions,
         "write_stats": write_stats,
-        "verified": verified,
+        "verified": None,
+        "verification_state": "deferred-until-byte-win",
     }
 
 
@@ -202,12 +210,15 @@ def build(root: Path, out: Path) -> dict:
 
         overlay = _overlay_retained_graph(graph_path, overlay_path)
         expected_tree = treehash(root)
-        verified = overlay["verified"]
-        if not verified.get("ok") or verified.get("tree_sha256") != expected_tree:
-            raise RuntimeError("shared G0-G4 overlay failed exact logical-tree verification")
         overlay_bytes = overlay_path.stat().st_size
 
         if overlay_bytes < floor_bytes:
+            # Exact bytes earned consideration. Verify logical identity before this candidate can be published.
+            verified = G.strong_verify(overlay_path)
+            if not verified.get("ok") or verified.get("tree_sha256") != expected_tree:
+                raise RuntimeError("shared G0-G4 overlay failed exact logical-tree verification")
+            overlay["verified"] = verified
+            overlay["verification_state"] = "verified-before-publication"
             chosen_path = overlay_path
             selected = "geometry-overlay-g04"
         else:
@@ -268,4 +279,6 @@ def build(root: Path, out: Path) -> dict:
             "selection_extra_payload_write_bytes": 0,
             "publication_identity_check": "streamed-sha256",
             "publication_hash_block_bytes": 1024 * 1024,
+            "overlay_verification_state": overlay["verification_state"],
+            "losing_overlay_logical_verification_skipped": selected == "v029-fallback",
         }
