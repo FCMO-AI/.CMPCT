@@ -21,6 +21,7 @@ import msgpack
 from cmpct.reader import CMPCT
 from cmpct import codec as R24_CODEC
 from experiments import entropygraph_v030_canonical_final as C
+from experiments import entropygraph_v030_verified_restore as VERIFIED_RESTORE
 
 REVISION = C.REVISION
 G04_MAGIC = C.G04_MAGIC
@@ -218,13 +219,18 @@ def extract(
     max_output_bytes: int = POLICY.DEFAULT_MAX_EXTRACT_BYTES,
     safe_symlinks: bool = True,
 ) -> None:
-    """Extract the shipping product with one transactional publication boundary.
+    """Extract the shipping product with one authenticated content pass and one transaction.
 
     Canonical r25 restoration needs an outer transaction because filesystem metadata/hardlinks/symlinks are
     restored after the authenticated content graph is streamed. Calling ``POLICY.extract`` inside that outer
     transaction used to create a second complete temp directory and rename cycle. The release reader now exposes
     the same verified streamer for caller-owned staging, so r25 pays one transaction while retaining identical
     graph authentication, locality/resource checks, metadata restoration, rollback and final publication.
+
+    The verified streamer has also already authenticated every reconstructed regular-file byte. The generic FS
+    restorer intentionally re-hashes arbitrary staging trees, but doing so here was a second full content pass.
+    The promoted path therefore uses the verified-staging restorer: type/size are checked again, while digest
+    identity remains owned by the immediately preceding authenticated stream.
     """
     archive = Path(archive)
     dst = Path(dst)
@@ -250,9 +256,10 @@ def extract(
         internal_budget = min(POLICY.R.MAX_DECLARED_LOGICAL_BYTES, max_output_bytes + FS.MAX_MANIFEST_BYTES)
         with C._revision25_profile_context():
             POLICY.extract_verified_into_staging(archive, content_root, max_output_bytes=internal_budget)
-        # The graph streamer has already authenticated every reconstructed byte and the decoded manifest was
-        # cross-bound to those graph identities above. FS remains the sole owner of metadata/link restoration.
-        FS.restore_manifest_tree(content_root, decoded, safe_symlinks=False)
+        # The graph streamer has authenticated every reconstructed byte and the decoded manifest was cross-bound
+        # to those graph identities before any publication. Preserve cheap shape checks, then restore metadata and
+        # links without re-reading the full content payload a second time.
+        VERIFIED_RESTORE.restore_verified_manifest_tree(content_root, decoded, safe_symlinks=False)
         C._publish_tree(content_root, dst)
     except Exception:
         if wrapper.exists():
