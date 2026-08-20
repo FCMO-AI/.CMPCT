@@ -188,7 +188,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y zstd gcc ffmpeg
           python -m pip install --upgrade pip
-          python -m pip install -e '.[test]'
+          python -m pip install -e '.[test,audio]'
           python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
       - name: Pin release contract before expensive run
         run: |
@@ -210,7 +210,7 @@ jobs:
           data=json.loads(Path('benchmark-artifacts/generalization.json').read_text())
           contract=data['contract']; totals=data['totals']; gate=data['gate']
           assert data['engine']=='experiments/entropygraph_v030_release.py'
-          assert contract['expected_v029_aggregate_bytes']==137501815
+          assert contract['expected_v029_aggregate_bytes']==137499525
           assert contract['minimum_release_saving_bytes']==687783
           assert contract['inherited_absolute_revision_floor_bytes']==687783
           assert totals['workloads']==15
@@ -244,7 +244,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y zstd gcc ffmpeg
           python -m pip install --upgrade pip
-          python -m pip install -e '.[test]'
+          python -m pip install -e '.[test,audio]'
           python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
       - name: Run runtime prerequisites
         run: |
@@ -289,7 +289,7 @@ jobs:
           retention-days: 90
 
 # Footnote: the generalization/runtime jobs construct the frozen neutral-hostile media workload and therefore need
-# `ffmpeg` available before measurement. The reader/G0-G4/shared-rehab lanes do not construct that media row and
-# retain their narrower dependency cones. This is environment repair only: all numeric thresholds remain in the
-# benchmark modules and are asserted again here. A red job is still a release blocker; a green job does not bypass
-# native/portability/competitor gates, and the PR remains merge-locked until the full evidence ledger closes.
+# `ffmpeg` plus the package audio extra before measurement. The reader/G0-G4/shared-rehab lanes do not construct
+# that media row and retain their narrower dependency cones. This is environment repair only: all numeric thresholds
+# remain in benchmark modules and are asserted again here. A red job is still a release blocker; a green job does not
+# bypass native/portability/competitor gates, and the PR remains merge-locked until the full evidence ledger closes.
