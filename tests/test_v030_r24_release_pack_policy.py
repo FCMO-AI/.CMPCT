@@ -16,7 +16,7 @@ class _FakeReader:
         return None
 
     def verify(self):
-        return 1
+        raise AssertionError("r24 floor candidate must not be eagerly verified")
 
 
 class _FakeBuilder:
@@ -61,7 +61,9 @@ def test_release_r24_spends_locality_budget_up_to_reader_cache_cap(monkeypatch, 
     assert stats["micro_pack_target_release_bytes"] == 2 * 1024 * 1024
     assert stats["locality_selected_member_bytes"] == 300 * 1024
     assert stats["locality_ceiling"] == 8.0
-    assert stats["locality_pack_policy"] == "min-2mib-cache-cap-or-8x-largest-regular-member"
+    assert stats["locality_pack_policy"] == "min-2mib-cache-cap-or-8x-largest-regular-member-plus-exact-deflate-retention"
+    assert stats["verification_state"] == "deferred-to-selected-artifact"
+    assert stats["verified_files"] is None
 
 
 def test_release_r24_still_shrinks_for_tiny_selected_member(monkeypatch, tmp_path: Path):
@@ -74,8 +76,8 @@ def test_release_r24_still_shrinks_for_tiny_selected_member(monkeypatch, tmp_pat
 def test_release_r24_byte_knobs_ignore_ambient_environment(monkeypatch, tmp_path: Path):
     builder, stats = _exercise(monkeypatch, tmp_path, largest_bytes=300 * 1024)
 
-    assert builder.deflate_reuse_min == 64 * 1024
+    assert builder.deflate_reuse_min == 0
     assert builder.micro_pack_max_file == 32 * 1024
-    assert stats["deflate_reuse_min_release_bytes"] == 64 * 1024
+    assert stats["deflate_reuse_min_release_bytes"] == 0
     assert stats["micro_pack_max_file_release_bytes"] == 32 * 1024
-    assert stats["release_byte_knobs"] == "environment-independent-r24-v1"
+    assert stats["release_byte_knobs"] == "environment-independent-r24-v2"
