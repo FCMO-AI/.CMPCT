@@ -102,6 +102,41 @@ def extract(archive: Path, dst: Path, *, max_output_bytes: int = R.DEFAULT_MAX_E
     return R.extract(archive, dst, max_output_bytes=max_output_bytes)
 
 
+def extract_verified_into_staging(
+    archive: Path,
+    staging: Path,
+    *,
+    max_output_bytes: int = R.DEFAULT_MAX_EXTRACT_BYTES,
+) -> dict:
+    """Stream one r25 profile directly into an unpublished caller-owned staging tree.
+
+    The ordinary public ``extract`` remains transactional and unchanged.  Canonical r25 already owns a wider
+    transaction because it must restore authenticated filesystem metadata after graph extraction.  Calling the
+    ordinary extractor from inside that transaction created a redundant nested temp-directory + rename cycle.
+
+    This hook reuses the exact same bounded/authenticated G0-G4 or PrefixGraph streamer and promotion validators;
+    it merely lets the canonical parent own publication once.  Research/accepted-v0.29 grammars are deliberately
+    rejected here so no caller can accidentally bypass their own extraction boundary.
+    """
+    max_output_bytes = R._int(
+        max_output_bytes,
+        "extraction output budget",
+        minimum=1,
+        maximum=R.MAX_DECLARED_LOGICAL_BYTES,
+    )
+    archive = Path(archive)
+    staging = Path(staging)
+    if staging.exists() and any(staging.iterdir()):
+        raise RuntimeError("verified staging extraction requires an empty target directory")
+    staging.mkdir(parents=True, exist_ok=True)
+    magic = R._magic(archive)
+    if magic == R.G04.MAG:
+        return R._stream_g04(archive, staging, max_output_bytes)
+    if magic == R.PG.MAGIC:
+        return R._stream_pg(archive, staging, max_output_bytes)
+    raise RuntimeError("verified staging extraction accepts canonical r25 graph profiles only")
+
+
 def treehash(root: Path) -> str:
     return R.treehash(root)
 
