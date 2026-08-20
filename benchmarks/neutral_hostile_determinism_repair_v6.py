@@ -149,12 +149,13 @@ def install_generation_hooks(neutral_module) -> None:
     Repair-v6 was originally safe only when every caller remembered to invoke ``normalize_root`` after the
     historical corpus builder returned. That is too fragile for a benchmark identity that now underpins several
     independent release gates: a forgotten post-pass can silently reintroduce host GCC/linker bytes before the
-    first tree check. Keep ``normalize_root`` as an idempotent compatibility guard, but also wrap the developer
-    producer itself so ``neutral.build(...)`` emits the accepted deterministic ELF fixtures by construction.
+    first tree check. Keep ``normalize_root`` as an idempotent compatibility guard, but enforce the same accepted
+    normalization at both the individual developer producer and aggregate ``build`` boundary.
 
-    Footnote: the wrapper calls the historical generator unchanged and then applies the exact same
-    ``_canonicalize_developer_elf`` operation accepted by the two independent repair-v6 reproductions. It does
-    not alter source files, workload shape, benchmark thresholds, candidate preprocessing, or accepted bytes.
+    Footnote: some historical corpus modules assemble an internal builder table when the module is imported.
+    Replacing ``corpus_source_repo`` afterward does not change a function object already captured by that table.
+    Wrapping aggregate ``build`` closes that stale-reference path without changing any generated source byte: the
+    post-pass is exactly the repair-v6 normalization accepted by two independent runner reproductions.
     """
     # Repair-v5 still owns CPU-canonical media generation and the earlier deterministic producer hooks.
     BASE.install_generation_hooks(neutral_module)
@@ -162,19 +163,31 @@ def install_generation_hooks(neutral_module) -> None:
     current = getattr(neutral_module, "corpus_source_repo", None)
     if current is None:
         raise RuntimeError("neutral hostile generator no longer exposes corpus_source_repo")
-    if getattr(current, "_cmpct_developer_repair_v6_wrapper", False):
-        return
+    if not getattr(current, "_cmpct_developer_repair_v6_wrapper", False):
+        historical_developer = current
 
-    @functools.wraps(current)
-    def deterministic_developer(root: Path) -> None:
-        current(root)
-        workload = Path(root) / DEVELOPER_NAME
-        if not workload.is_dir():
-            raise RuntimeError("developer-repository producer did not create its canonical workload directory")
-        _canonicalize_developer_elf(workload)
+        @functools.wraps(historical_developer)
+        def deterministic_developer(root: Path) -> None:
+            historical_developer(root)
+            workload = Path(root) / DEVELOPER_NAME
+            if not workload.is_dir():
+                raise RuntimeError("developer-repository producer did not create its canonical workload directory")
+            _canonicalize_developer_elf(workload)
 
-    deterministic_developer._cmpct_developer_repair_v6_wrapper = True
-    neutral_module.corpus_source_repo = deterministic_developer
+        deterministic_developer._cmpct_developer_repair_v6_wrapper = True
+        neutral_module.corpus_source_repo = deterministic_developer
+
+    aggregate = getattr(neutral_module, "build", None)
+    if callable(aggregate) and not getattr(aggregate, "_cmpct_repair_v6_aggregate_wrapper", False):
+        historical_build = aggregate
+
+        @functools.wraps(historical_build)
+        def deterministic_aggregate(root: Path) -> None:
+            historical_build(root)
+            normalize_root(Path(root))
+
+        deterministic_aggregate._cmpct_repair_v6_aggregate_wrapper = True
+        neutral_module.build = deterministic_aggregate
 
 
 def normalize_workload(workload: Path) -> None:
