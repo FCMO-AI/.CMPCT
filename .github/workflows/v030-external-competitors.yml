@@ -38,7 +38,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y zstd p7zip-full zpaq gcc ffmpeg
           python -m pip install --upgrade pip
-          python -m pip install -e '.[test]'
+          python -m pip install -e '.[test,audio]'
           python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
           zstd --version
           ffmpeg -version | head -n 1
@@ -94,7 +94,7 @@ jobs:
           if-no-files-found: warn
           retention-days: 90
 
-# Footnote: `ffmpeg` is required to construct the frozen neutral-hostile media workload before the external matrix
-# starts. It is not a CMPCT or competitor compressor and changes no benchmark threshold. Solid tar+Zstd and ZPAQ
+# Footnote: `ffmpeg` and the package audio extra are required to construct and encode the frozen neutral-hostile
+# media workload. They change no benchmark threshold and are not competitor shortcuts. Solid tar+Zstd and ZPAQ
 # remain size competitors rather than random-access peers; requiring all declared tools prevents the historical
 # hostile frontier from disappearing behind an optional/missing dependency result.
