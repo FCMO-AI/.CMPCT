@@ -10,6 +10,7 @@ public product operations should import this module.
 """
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
 import hashlib
 from pathlib import Path
 
@@ -32,6 +33,60 @@ UnsupportedArchiveProfile = C.UnsupportedArchiveProfile
 MAX_MANIFEST_ENTRIES = C.MAX_MANIFEST_ENTRIES
 MAX_PROFILE_FILES = C.MAX_PROFILE_FILES
 MAX_PROFILE_LOGICAL_BYTES = C.MAX_PROFILE_LOGICAL_BYTES
+
+
+def _parallel_deferred_overlay(graph_path: Path, overlay_path: Path) -> dict:
+    """Run canonical G0-G4 auditions in parallel but verify only if exact bytes can win.
+
+    The shared portfolio's publication law owns strong verification after complete-artifact pricing. An overlay
+    that is already >= the accepted v0.29 floor has no route to publication, so decoding its entire logical tree
+    beforehand is pure creation latency. A byte-winning overlay is still strong-verified by ``SHARED.build``
+    before it can be selected. This preserves the bounded ordered audition schedule and exact transform bytes.
+
+    Footnote: canonical-final originally patched the shared overlay helper before the later deferred-verification
+    optimization existed. Keeping this release-product binding explicit prevents that older private override from
+    silently reintroducing both eager verification and a stale metadata shape.
+    """
+    shared = C.SHARED
+    source_format, _source, graph_meta, graph_records = shared.strict._read_source_records(graph_path)
+    users = shared.O._record_member_lengths(graph_meta, len(graph_records))
+
+    def audition(item):
+        record_id, record = item
+        return shared.G._audition_record(record_id, record, users[record_id])
+
+    if graph_records:
+        worker_count = min(4, len(graph_records))
+        with ThreadPoolExecutor(max_workers=worker_count, thread_name_prefix="cmpct-v030-g04") as pool:
+            outcomes = list(pool.map(audition, enumerate(graph_records)))
+    else:
+        worker_count = 0
+        outcomes = []
+
+    records = [row[0] for row in outcomes]
+    transforms = [row[1] for row in outcomes]
+    auditions = [row[2] for row in outcomes]
+    annotated_meta = dict(graph_meta)
+    annotated_meta["overlay_source_format"] = source_format
+    write_stats = shared.G._write_overlay(annotated_meta, records, transforms, overlay_path)
+    return {
+        "source_format": source_format,
+        "records": records,
+        "transforms": transforms,
+        "auditions": auditions,
+        "write_stats": write_stats,
+        "verified": None,
+        "verification_state": "deferred-until-byte-win",
+        "audition_workers": worker_count,
+        "audition_scheduler": "bounded-ordered-thread-pool-v1",
+        "delimiter_transpose": "bulk-rectangular-prefix-v1",
+    }
+
+
+# The canonical module's earlier ordered-parallel helper eagerly verified every overlay. Rebind only its private
+# shared clone to the current release law: losers skip logical decode; winners are verified inside SHARED.build.
+# Historical/research modules remain untouched and therefore continue to serve as independent byte oracles.
+C.SHARED._overlay_retained_graph = _parallel_deferred_overlay
 
 
 def _revision_for_archive(archive: Path) -> tuple[int | None, str]:
