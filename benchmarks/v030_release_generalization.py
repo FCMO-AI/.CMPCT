@@ -21,7 +21,8 @@ and external-competitor gates remain mandatory.
 
 Footnote: accepted v0.29 changed only two rows versus v0.28 on this corpus. We reconstruct the exact row floor
 from durable evidence: those two winners use their accepted v0.29 bytes and every other row retains its exact
-v0.28 artifact byte count. The absolute revision hurdle is an inherited policy input, not recomputed downward.
+v0.28 artifact byte count on the independently accepted repair-v6 source identity. The absolute revision hurdle
+is an inherited policy input and is never recomputed downward after benchmark-substrate repair.
 """
 
 import argparse
@@ -35,7 +36,7 @@ import time
 from benchmarks import mosaic_v029_generalization_bench as V029
 from experiments import entropygraph_v030_release_candidate as RC
 
-EXPECTED_V029_TOTAL = 137_501_815
+EXPECTED_V029_TOTAL = 137_499_525
 LEGACY_V028_REVISION_FLOOR_BASE = 137_550_416
 INHERITED_ABSOLUTE_REVISION_FLOOR = 687_783
 MIN_RELEASE_SAVING_BYTES = max(
@@ -155,7 +156,7 @@ def run(work_root: Path) -> dict:
 
     neutral = V029._load(V029.ROOT / "benchmarks" / "neutral_hostile_corpus_v1.py", "cmpct_v030_release_neutral")
     hostile = V029._load(V029.ROOT / "benchmarks" / "resemblance_hostile_corpus_v1.py", "cmpct_v030_release_hostile")
-    repair = V029._load(V029.REPAIR_PATH, "cmpct_v030_release_repair_v5")
+    repair = V029._load(V029.REPAIR_PATH, "cmpct_v030_release_repair_v6")
     repair.install_generation_hooks(neutral)
 
     rows: list[dict] = []
@@ -265,7 +266,7 @@ def run(work_root: Path) -> dict:
             "minimum_improved_rows": MIN_IMPROVED_ROWS,
             "maximum_member_read_amplification": MAX_MEMBER_READ_AMP,
             "regression_tolerance_bytes": 0,
-            "baseline": "accepted v0.29 exact row artifacts on 11 historical + 4 repair-v5 identities",
+            "baseline": "accepted v0.29 exact row artifacts on 10 historical + 5 independently accepted repair-v6 identities",
             "non_additivity": "complete artifacts compete; independent Geometry/PrefixGraph savings are never summed",
         },
         "rows": rows,

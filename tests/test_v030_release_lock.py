@@ -165,7 +165,7 @@ def test_release_lock_invalidates_receipts_after_critical_code_change(
 
     assert ok is False
     assert all(
-        "candidate fingerprint does not match" in errors
+        any("candidate fingerprint does not match" in error for error in errors)
         for errors in report["failures"].values()
     )
 

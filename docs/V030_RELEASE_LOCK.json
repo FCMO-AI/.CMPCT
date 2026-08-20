@@ -84,7 +84,7 @@
       "id": "compression-generalization",
       "owner_task": "T02",
       "assertions": [
-        {"path": "facts.accepted_v029_bytes", "eq": 137501815},
+        {"path": "facts.accepted_v029_bytes", "eq": 137499525},
         {"path": "facts.saving_vs_v029_bytes", "min": 687783},
         {"path": "facts.workloads_improved", "min": 3},
         {"path": "facts.workloads_regressed", "eq": 0},
