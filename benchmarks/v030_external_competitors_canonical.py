@@ -30,35 +30,66 @@ B.CMPCT = CANON
 B._tree = lambda root: HISTORICAL_TREE.treehash(root)
 
 
-def _timing_profile(stats: dict) -> dict:
-    """Retain internal wall-time ownership without changing the competitor timer boundary."""
+def _candidate_profile(stats: dict) -> dict:
+    """Retain internal time/byte ownership without changing the competitor measurement boundary.
+
+    The release problem is now often a *canonicalization gap*: G0-G4 may possess a much smaller accepted-v0.29
+    research floor but be unable to publish it as revision 25.  Preserve the exact competing byte counts so a red
+    row tells us whether engineering should target r24, G0-G4 framing, PrefixGraph, or candidate scheduling.
+    """
     r24 = stats.get("r24") if isinstance(stats.get("r24"), dict) else {}
     r25 = stats.get("r25") if isinstance(stats.get("r25"), dict) else {}
     g04 = r25.get("g04") if isinstance(r25.get("g04"), dict) else {}
     pg = r25.get("prefixgraph") if isinstance(r25.get("prefixgraph"), dict) else {}
+    r24_bytes = stats.get("r24_product_bytes")
+    r25_bytes = stats.get("r25_product_bytes")
+    v029_bytes = g04.get("v029_bytes")
+    overlay_bytes = g04.get("overlay_bytes")
     return {
         "product_portfolio_create_s": stats.get("portfolio_create_s"),
+        "r24_product_bytes": r24_bytes,
+        "r25_product_bytes": r25_bytes,
         "r24_create_s": r24.get("create_s"),
         "r24_verification_state": r24.get("verification_state"),
         "r24_prebuild_overlap": r24.get("r24_prebuild_overlap"),
+        "r25_selected": r25.get("selected"),
         "r25_create_s": r25.get("create_s"),
         "r25_portfolio_create_s": r25.get("portfolio_create_s"),
         "r25_preselection_logical_verification": r25.get("preselection_logical_verification"),
+        "g04_selected": g04.get("selected"),
+        "g04_product_bytes": r25.get("g04_bytes"),
+        "g04_v029_floor_bytes": v029_bytes,
+        "g04_prefallback_graph_bytes": g04.get("pre_overlay_graph_bytes"),
+        "g04_overlay_bytes": overlay_bytes,
+        "g04_overlay_delta_vs_v029_bytes": (
+            int(overlay_bytes) - int(v029_bytes)
+            if isinstance(overlay_bytes, int) and isinstance(v029_bytes, int)
+            else None
+        ),
+        "g04_overlay_delta_vs_r24_bytes": (
+            int(overlay_bytes) - int(r24_bytes)
+            if isinstance(overlay_bytes, int) and isinstance(r24_bytes, int)
+            else None
+        ),
         "g04_portfolio_create_s": g04.get("portfolio_create_s"),
         "g04_shared_candidate_build_s": g04.get("shared_candidate_build_s"),
         "g04_v028_child_s": g04.get("v028_child_s"),
         "g04_attempt5_child_s": g04.get("attempt5_child_s"),
         "g04_overlay_verification_state": g04.get("overlay_verification_state"),
+        "prefixgraph_contract_eligible": r25.get("prefixgraph_contract_eligible"),
+        "prefixgraph_admitted": r25.get("prefixgraph_admitted"),
+        "prefixgraph_reject_reason": r25.get("prefixgraph_reject_reason"),
+        "prefixgraph_bytes": r25.get("prefixgraph_bytes"),
         "prefixgraph_portfolio_create_s": pg.get("portfolio_create_s"),
     }
 
 
 def _cmpct_with_stage_timings(stage: Path, archive: Path, extracted: Path) -> dict:
-    """Mirror the frozen CMPCT competitor measurement and expose only nested diagnostic timings.
+    """Mirror the frozen CMPCT competitor measurement and expose only nested diagnostics.
 
     The create timer starts immediately before and stops immediately after ``CANON.build`` exactly as the base
     harness does. Strong verification and extraction remain outside that timer. The extra fields merely preserve
-    already-produced product stats so a red row identifies which internal stage owns the latency.
+    already-produced product stats so a red row identifies which internal stage owns latency and bytes.
     """
     started = time.perf_counter()
     stats = CANON.build(stage, archive)
@@ -76,7 +107,7 @@ def _cmpct_with_stage_timings(stage: Path, archive: Path, extracted: Path) -> di
         "extract_s": extract_s,
         "selected": stats.get("selected"),
         "max_member_read_amplification": stats.get("max_selected_member_read_amplification"),
-        "timing_profile": _timing_profile(stats),
+        "candidate_profile": _candidate_profile(stats),
     }
 
 
@@ -166,8 +197,8 @@ def run(work_root: Path) -> dict:
     result["source_tree_identity"] = "historical-regular-file-content-v0.29-frozen"
     result["product_fidelity_evidence"] = "canonical product parity / native portability lanes"
     result["timing_diagnostics"] = (
-        "CMPCT rows retain product-internal stage timings; comparator create_s remains the unchanged full public "
-        "CANON.build wall-clock and strict ZIP/Zstd gates use only that outer measurement."
+        "CMPCT rows retain product-internal candidate time/byte ownership; comparator create_s remains the unchanged "
+        "full public CANON.build wall-clock and strict ZIP/Zstd gates use only that outer measurement."
     )
     result["strict_competitor_contract"] = (
         "For every frozen workload: CMPCT archive_bytes < ZIP/Deflate-9 archive_bytes AND CMPCT archive_bytes < "
