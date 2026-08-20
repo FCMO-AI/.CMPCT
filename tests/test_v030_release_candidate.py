@@ -19,8 +19,6 @@ def _locality(amp: float = 2.0):
 
 
 def _patch_reader(monkeypatch, tree: str) -> None:
-    # Footnote: both pre-selection admission and post-publication verification now go through this one reader
-    # authority. Tests patch that authority directly rather than accidentally proving legacy G04/PG readers.
     monkeypatch.setattr(rc.READER, "strong_verify", lambda path: _fake_verify(tree))
 
 
@@ -59,6 +57,7 @@ def test_complete_artifact_tournament_selects_smaller_prefixgraph(tmp_path: Path
     assert stats["selection_materialization"] == "same-filesystem-atomic-move"
     assert stats["selection_extra_payload_write_bytes"] == 0
     assert stats["reader_authority"] == "v030-release-streaming-policy-v1"
+    assert stats["preselection_logical_verification"] == "performed"
     assert out.read_bytes().startswith(rc.PG.MAGIC)
     assert not any(path.name.startswith(".cmpct-v030-release-candidate-") for path in tmp_path.iterdir())
 
@@ -143,6 +142,45 @@ def test_ineligible_prefixgraph_is_not_built(tmp_path: Path, monkeypatch) -> Non
     assert stats["prefixgraph_admitted"] is False
     assert stats["prefixgraph_reject_reason"] == "test-ineligible"
     assert stats["prefixgraph_bytes"] is None
+
+
+def test_canonical_parent_deferral_skips_inner_logical_verify_but_keeps_locality(tmp_path: Path, monkeypatch) -> None:
+    root = tmp_path / "src"
+    root.mkdir()
+    (root / "a.bin").write_bytes(b"a" * 128)
+    out = tmp_path / "result.cmpct"
+    tree = rc.PG.treehash(root)
+    monkeypatch.setattr(rc, "treehash", lambda candidate: tree)
+
+    def fake_g04_build(candidate, path):
+        path.write_bytes(rc.G04.MAG + b"g" * 992)
+        return {"v029_bytes": 1100, "selected": "geometry-overlay-g04", "max_selected_member_read_amplification": 1.0}
+
+    def fake_pg_build(candidate, path):
+        path.write_bytes(rc.PG.MAGIC + b"p" * 892)
+        return {"max_dependency_depth": 1}
+
+    monkeypatch.setattr(rc.G04, "build", fake_g04_build)
+    monkeypatch.setattr(rc.PG, "build", fake_pg_build)
+    monkeypatch.setattr(rc, "_prefixgraph_locality", lambda path: _locality(2.0))
+    monkeypatch.setattr(
+        rc,
+        "_verify_component",
+        lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("inner logical verification executed")),
+    )
+
+    stats = rc.build(root, out, post_publish_verify=False, defer_preselection_verify=True)
+    assert stats["selected"] == "prefixgraph"
+    assert stats["prefixgraph_admitted"] is True
+    assert stats["prefixgraph_locality"]["passed"] is True
+    assert stats["g04_strong_verify"] is None
+    assert stats["prefixgraph_strong_verify"] is None
+    assert stats["selected_strong_verify"] is None
+    assert stats["preselection_logical_verification"] == "deferred-to-canonical-parent"
+    assert stats["post_publish_logical_verification"] == "deferred-to-canonical-parent"
+    assert stats["final_strong_verify"]["verification_owner"] == "canonical-r24-r25-parent-final-winner"
+    assert stats["final_strong_verify"]["ok"] is None
+    assert out.read_bytes().startswith(rc.PG.MAGIC)
 
 
 def test_prefixgraph_eligibility_requires_shared_tree_identity(tmp_path: Path, monkeypatch) -> None:
