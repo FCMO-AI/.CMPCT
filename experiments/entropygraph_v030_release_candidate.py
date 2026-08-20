@@ -7,11 +7,12 @@ smallest *release-eligible* one:
 1. ``G04.build`` produces the monotone Mosaic path: accepted v0.29 fallback plus the full G0-G4 pre-fallback
    Geometry overlay, so this candidate can never be larger than accepted v0.29.
 2. PrefixGraph is auditioned only when its public oracle contract can represent the exact live tree.
-3. A PrefixGraph artifact must additionally satisfy the release-wide <=8x per-member decoded-context law.
-4. Standalone tournament callers verify any candidate that can still win through the strict streamed reader.
+3. Independent G0-G4 and PrefixGraph contenders are built concurrently once PrefixGraph eligibility is known.
+4. A PrefixGraph artifact must additionally satisfy the release-wide <=8x per-member decoded-context law.
+5. Standalone tournament callers verify any candidate that can still win through the strict streamed reader.
    The canonical r24/r25 parent may instead defer those logical passes because it strongly verifies the one final
    product winner before returning; exact byte pricing and locality admission are never deferred.
-5. The smaller admitted complete artifact wins; exact ties conservatively retain the G0-G4/v0.29 path.
+6. The smaller admitted complete artifact wins; exact ties conservatively retain the G0-G4/v0.29 path.
 
 The tournament is intentionally useful before PrefixGraph is internalized as a native Mosaic graph edge. It
 answers the release-system question honestly—what complete archive would v0.30 choose for this workload?—while
@@ -23,10 +24,13 @@ Footnote: candidates are created in a sibling temporary directory and the winner
 retain candidate admission verification and re-open the published path through the strict release reader. The
 canonical r24-vs-r25 parent can explicitly defer the candidate logical passes because the r25 artifact is itself
 only an inner contender; the parent performs the authoritative strong verification after exact r24/r25 selection.
+Concurrent construction changes no candidate bytes or admission rule: both builders receive the same immutable
+source tree and write disjoint sibling paths, and all exact comparisons happen only after both futures finish.
 """
 from __future__ import annotations
 
 import argparse
+from concurrent.futures import ThreadPoolExecutor
 import hashlib
 import json
 import os
@@ -145,8 +149,9 @@ def build(
     inner candidate; the parent strongly verifies the exact final r24/r25 winner before ``build`` returns.
 
     Deferral never changes candidate bytes, exact size comparison, PrefixGraph locality admission, tie behavior,
-    or physical publication identity. It removes only logical decode passes for artifacts that cannot themselves
-    escape the enclosing canonical tournament.
+    or physical publication identity. Eligible G0-G4 and PrefixGraph candidates are independent complete artifacts,
+    so they are constructed concurrently and joined before any selection decision. Ineligible PrefixGraph inputs
+    still pay no PrefixGraph build at all.
     """
     started = time.perf_counter()
     out.parent.mkdir(parents=True, exist_ok=True)
@@ -157,21 +162,32 @@ def build(
         g04_path = temp / "g04-or-v029.cmpct"
         pg_path = temp / "prefixgraph.cmpct"
 
-        g04_stats = G04.build(root, g04_path)
+        pg_contract_eligible, pg_reject_reason = _prefixgraph_eligibility(root, expected_tree)
+        pg_stats = None
+        pg_build_workers = 1
+        if pg_contract_eligible:
+            pg_build_workers = 2
+            with ThreadPoolExecutor(max_workers=2, thread_name_prefix="cmpct-v030-r25-candidate") as pool:
+                g04_future = pool.submit(G04.build, root, g04_path)
+                pg_future = pool.submit(PG.build, root, pg_path)
+                g04_stats = g04_future.result()
+                pg_stats = pg_future.result()
+        else:
+            g04_stats = G04.build(root, g04_path)
+
         g04_verify = None if defer_preselection_verify else _verify_component(g04_path, expected_tree, "G0-G4 candidate")
         g04_bytes = g04_path.stat().st_size
         v029_bytes = int(g04_stats["v029_bytes"])
         if g04_bytes > v029_bytes:
             raise RuntimeError("monotone G0-G4 candidate exceeded accepted v0.29 floor")
 
-        pg_contract_eligible, pg_reject_reason = _prefixgraph_eligibility(root, expected_tree)
         pg_admitted = False
-        pg_stats = None
         pg_verify = None
         pg_locality = None
         pg_bytes = None
         if pg_contract_eligible:
-            pg_stats = PG.build(root, pg_path)
+            if pg_stats is None or not pg_path.is_file():
+                raise RuntimeError("eligible PrefixGraph contender did not materialize")
             pg_bytes = pg_path.stat().st_size
 
             if pg_bytes < g04_bytes:
@@ -236,12 +252,14 @@ def build(
             "saving_vs_g04_bytes": g04_bytes - selected_bytes,
             "tree_sha256": expected_tree,
             "portfolio_create_s": time.perf_counter() - started,
+            "candidate_build_workers": pg_build_workers,
+            "candidate_build_scheduler": "parallel-independent-complete-artifacts-v1" if pg_contract_eligible else "g04-only-v1",
             "selection_materialization": "same-filesystem-atomic-move",
             "selection_extra_payload_write_bytes": 0,
             "selection_publication_physical_sha256": published_physical_sha256,
             "preselection_logical_verification": "deferred-to-canonical-parent" if defer_preselection_verify else "performed",
             "post_publish_logical_verification": "performed" if post_publish_verify else "deferred-to-canonical-parent",
-            "max_dependency_depth": int(pg_stats.get("max_dependency_depth", 0)) if selected == "prefixgraph" else 0,
+            "max_dependency_depth": int(pg_stats.get("max_dependency_depth", 0)) if selected == "prefixgraph" and pg_stats is not None else 0,
             "max_selected_member_read_amplification": (
                 float(pg_locality["max_member_read_amplification"])
                 if selected == "prefixgraph" and pg_locality is not None
