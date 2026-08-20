@@ -18,6 +18,7 @@ def test_shipping_r24_micro_pack_target_is_bounded_by_largest_member(tmp_path, m
         def __init__(self, _root: Path, *, deflate_reuse_min: int):
             seen["deflate_reuse_min"] = int(deflate_reuse_min)
             self.micro_pack_target = 256 * 1024
+            self.micro_pack_max_file = 32 * 1024
 
         def build(self, target: Path):
             seen["target"] = int(self.micro_pack_target)
@@ -52,7 +53,7 @@ def test_shipping_r24_micro_pack_target_is_bounded_by_largest_member(tmp_path, m
     assert stats["verification_state"] == "deferred-to-selected-artifact"
 
 
-def test_shipping_r24_keeps_default_pack_cap_for_large_members(tmp_path, monkeypatch) -> None:
+def test_shipping_r24_uses_reader_cache_cap_for_large_members(tmp_path, monkeypatch) -> None:
     root = tmp_path / "source"
     root.mkdir()
     (root / "large.bin").write_bytes(b"x" * (1024 * 1024))
@@ -63,6 +64,7 @@ def test_shipping_r24_keeps_default_pack_cap_for_large_members(tmp_path, monkeyp
         def __init__(self, _root: Path, *, deflate_reuse_min: int):
             seen["deflate_reuse_min"] = int(deflate_reuse_min)
             self.micro_pack_target = 256 * 1024
+            self.micro_pack_max_file = 32 * 1024
 
         def build(self, target: Path):
             seen["target"] = int(self.micro_pack_target)
@@ -87,9 +89,12 @@ def test_shipping_r24_keeps_default_pack_cap_for_large_members(tmp_path, monkeyp
 
     stats = product._locality_bounded_r24_build(root, out)
 
-    assert seen["target"] == 256 * 1024
+    # For a 1 MiB selected member the 8x locality allowance is 8 MiB, but the mature reader's decoded-blob
+    # cache ceiling is 2 MiB. The shipping encoder intentionally uses that tighter cache cap; 256 KiB was only
+    # the historical encoder heuristic and is no longer the release policy for this source shape.
+    assert seen["target"] == product.R24_RELEASE_PACK_CAP_BYTES == 2 * 1024 * 1024
     assert seen["deflate_reuse_min"] == product.R24_RELEASE_DEFLATE_REUSE_MIN_BYTES
-    assert stats["micro_pack_target_release_bytes"] == 256 * 1024
+    assert stats["micro_pack_target_release_bytes"] == product.R24_RELEASE_PACK_CAP_BYTES
     assert stats["locality_selected_member_bytes"] == 1024 * 1024
     assert stats["verification_state"] == "deferred-to-selected-artifact"
 
