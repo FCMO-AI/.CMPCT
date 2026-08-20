@@ -43,6 +43,9 @@ This checklist is normative for the authoritative integration branch. Research s
 
 ## Competitive evidence
 - [ ] exact external competitor matrix rerun on controlled substrate
+- [ ] **every frozen workload produces a canonical CMPCT archive strictly smaller than ZIP/Deflate-9**
+- [ ] **every frozen workload produces a canonical CMPCT archive strictly smaller than solid tar+Zstd-19**
+- [ ] equality with ZIP or Zstd on any workload is a failure; aggregate or suite-level wins cannot offset a losing/tied row
 - [ ] archive size comparisons disclose semantics/locality differences
 - [ ] timing comparisons use symmetric fresh-process methodology where applicable
 
@@ -55,4 +58,4 @@ This checklist is normative for the authoritative integration branch. Research s
 - [ ] gh-pages freshness/live verification green
 - [ ] final release commit merged to `main`
 
-Footnote: fallback can preserve correctness and no-regression size, but it cannot by itself satisfy release worthiness. v0.30 must demonstrate a material broad-system improvement, not merely contain dormant research mechanisms.
+Footnote: fallback can preserve correctness and no-regression size, but it cannot by itself satisfy release worthiness. v0.30 must demonstrate a material broad-system improvement, not merely contain dormant research mechanisms. The per-workload ZIP/Zstd dominance rule is an additional v0.30 release law and may not be weakened to aggregate parity.
