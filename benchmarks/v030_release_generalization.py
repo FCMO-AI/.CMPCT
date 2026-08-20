@@ -7,13 +7,20 @@ workload it builds the system release candidate (monotone G0-G4/v0.29 path plus 
 strong-verifies the selected complete artifact, and compares it to the exact accepted v0.29 bytes for that row.
 
 Release-worthiness is intentionally stricter than a research oracle:
-- 0 exact-tree or accepted-v0.29 baseline drift rows;
+- 0 historical source-tree or accepted-v0.29 baseline drift rows;
+- the selected product artifact independently strong-verifies to the candidate product's user-tree identity;
 - 0 candidate byte regressions;
 - at least 3 workloads strictly improved;
 - at least 0.5% aggregate saving versus accepted v0.29, while retaining the inherited 687,783-byte absolute
   revision floor so a slightly smaller/repaired substrate cannot make a numeric revision easier to earn;
-- every selected representation <=8x per-member decoded-context amplification;
-- every selected artifact strong-verifies to the frozen source tree.
+- every selected representation <=8x per-member decoded-context amplification.
+
+The benchmark intentionally carries two tree identities. ``historical_tree_sha256`` is the frozen v0.28/v0.29
+content-tree contract used by repair-v6 evidence (regular-file path + length + bytes). ``tree_sha256`` is the
+current candidate product identity. Research candidates historically used the same content-only domain, while the
+canonical r24/r25 product uses the richer user-tree semantic domain that also represents entry kind/link relations.
+Those identities must never be compared as though they were interchangeable: the historical hash proves benchmark
+substrate continuity; the product hash proves the selected archive represents the product's exact user-visible tree.
 
 This is the compression/generalization tranche only. Passing it does not by itself authorize release:
 controlled create/extract/selective-read/memory, recovery/fuzz, native/shared-reader parity, portability/export,
@@ -26,6 +33,7 @@ is an inherited policy input and is never recomputed downward after benchmark-su
 """
 
 import argparse
+import hashlib
 import json
 import math
 from pathlib import Path
@@ -51,6 +59,25 @@ _V029_WINNERS = {
     ("resemblance_hostile_v1", "01_shifted_versions"): 1_723_056,
     ("resemblance_hostile_v1", "03_boundary_churn"): 79_876,
 }
+
+
+def _historical_treehash(root: Path) -> str:
+    """Return the frozen benchmark content-tree identity used by v0.28/v0.29 and repair-v6.
+
+    Do not delegate this to ``RC.treehash``. The canonical v0.30 adapter deliberately replaces ``RC`` with the
+    release product, whose r24/r25 semantic tree includes entry-kind/link relations. Historical benchmark evidence
+    instead authenticates regular-file relative path, length and bytes. Keeping the implementation here makes the
+    evidence boundary explicit and prevents a future product-hash evolution from being misdiagnosed as corpus drift.
+    """
+    digest = hashlib.sha256()
+    for path in sorted(item for item in root.rglob("*") if item.is_file()):
+        rel = path.relative_to(root).as_posix().encode("utf-8")
+        data = path.read_bytes()
+        digest.update(len(rel).to_bytes(4, "little"))
+        digest.update(rel)
+        digest.update(len(data).to_bytes(8, "little"))
+        digest.update(data)
+    return digest.hexdigest()
 
 
 def _accepted_v029_rows() -> dict[tuple[str, str], dict]:
@@ -81,19 +108,29 @@ def _measure_workload(suite: str, path: Path, archive_dir: Path, accepted: dict[
     archive_dir.mkdir(parents=True, exist_ok=True)
     archive = archive_dir / f"{path.name}.cmpct"
     expected = accepted[(suite, path.name)]
-    live_tree = RC.treehash(path)
-    tree_match = live_tree == expected["tree_sha256"]
-    if not tree_match:
+
+    historical_tree = _historical_treehash(path)
+    baseline_tree_match = historical_tree == expected["tree_sha256"]
+    if not baseline_tree_match:
         raise RuntimeError(
-            f"v0.30 source-tree drift: {suite}/{path.name}: {live_tree} != {expected['tree_sha256']}"
+            f"v0.30 historical source-tree drift: {suite}/{path.name}: "
+            f"{historical_tree} != {expected['tree_sha256']}"
         )
+
+    # Candidate/product identity is a separate domain from frozen benchmark provenance. In research mode this may
+    # happen to equal ``historical_tree``; canonical r24/r25 intentionally uses the richer user-tree semantic hash.
+    product_tree = RC.treehash(path)
 
     started = time.perf_counter()
     stats = RC.build(path, archive)
     wall = time.perf_counter() - started
     verified = RC.strong_verify(archive)
-    if not verified.get("ok") or verified.get("tree_sha256") != live_tree:
-        raise RuntimeError(f"v0.30 selected artifact failed strong verification: {suite}/{path.name}")
+    product_tree_match = bool(verified.get("ok")) and verified.get("tree_sha256") == product_tree
+    if not product_tree_match:
+        raise RuntimeError(
+            f"v0.30 selected artifact failed product-tree strong verification: {suite}/{path.name}: "
+            f"verified={verified.get('tree_sha256')!r} expected={product_tree!r}"
+        )
 
     expected_v029 = int(expected["accepted_v029_bytes"])
     measured_v029 = int(stats["v029_bytes"])
@@ -113,9 +150,11 @@ def _measure_workload(suite: str, path: Path, archive_dir: Path, accepted: dict[
         "suite": suite,
         "name": path.name,
         "baseline_identity": expected["baseline_identity"],
-        "tree_sha256": live_tree,
+        "tree_sha256": product_tree,
+        "historical_tree_sha256": historical_tree,
         "preserved_tree_sha256": expected["tree_sha256"],
-        "baseline_tree_match": tree_match,
+        "baseline_tree_match": baseline_tree_match,
+        "product_tree_match": product_tree_match,
         "accepted_v029_bytes": expected_v029,
         "measured_v029_bytes": measured_v029,
         "baseline_v029_bytes_match": baseline_match,
@@ -210,6 +249,7 @@ def run(work_root: Path) -> dict:
         "workloads_improved": sum(row["candidate_bytes"] < row["accepted_v029_bytes"] for row in rows),
         "workloads_regressed": sum(row["candidate_bytes"] > row["accepted_v029_bytes"] for row in rows),
         "baseline_tree_drift_rows": sum(not row["baseline_tree_match"] for row in rows),
+        "product_tree_drift_rows": sum(not row["product_tree_match"] for row in rows),
         "baseline_v029_byte_drift_rows": sum(not row["baseline_v029_bytes_match"] for row in rows),
         "v029_fallback_rows": sum(row["selected"] == "v029-fallback" for row in rows),
         "g04_overlay_rows": sum(row["selected"] == "g04-overlay" for row in rows),
@@ -238,6 +278,7 @@ def run(work_root: Path) -> dict:
         "exact_workload_count": len(rows) == 15,
         "exact_v029_aggregate": v029_total == EXPECTED_V029_TOTAL,
         "no_tree_drift": totals["baseline_tree_drift_rows"] == 0,
+        "product_tree_verified": totals["product_tree_drift_rows"] == 0,
         "no_v029_byte_drift": totals["baseline_v029_byte_drift_rows"] == 0,
         "no_size_regressions": totals["workloads_regressed"] == 0,
         "minimum_improved_rows": totals["workloads_improved"] >= MIN_IMPROVED_ROWS,
@@ -255,6 +296,7 @@ def run(work_root: Path) -> dict:
         "schema": "cmpct-v030-release-generalization-v1",
         "claim_boundary": (
             "integrated v0.30 compression/generalization gate on the exact repaired 15-workload v0.29 frontier; "
+            "historical benchmark identity and canonical product identity are independently authenticated; "
             "not final release authority until timing/memory/native/recovery/portability/competitor gates pass"
         ),
         "engine": "experiments/entropygraph_v030_release_candidate.py",
@@ -266,6 +308,8 @@ def run(work_root: Path) -> dict:
             "minimum_improved_rows": MIN_IMPROVED_ROWS,
             "maximum_member_read_amplification": MAX_MEMBER_READ_AMP,
             "regression_tolerance_bytes": 0,
+            "historical_tree_identity": "regular-file relative path + length + bytes; exact v0.28/v0.29 and repair-v6 evidence domain",
+            "product_tree_identity": "candidate-owned user-tree semantic identity; canonical r24/r25 includes entry kind/link relations",
             "baseline": "accepted v0.29 exact row artifacts on 10 historical + 5 independently accepted repair-v6 identities",
             "non_additivity": "complete artifacts compete; independent Geometry/PrefixGraph savings are never summed",
         },
