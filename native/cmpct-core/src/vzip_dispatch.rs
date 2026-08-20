@@ -1,93 +1,16 @@
-//! Execution layer for revision-24 virtual-ZIP range projections and complete archive verification.
+//! Execution layer for revision-24 virtual-ZIP archive dispatch and complete verification.
 //!
-//! The recipe planner decides which logical blob slices intersect a request. This layer performs
-//! exactly those reads through a caller-supplied authenticated blob-range callback and verifies the
-//! recipe's logical SHA-256 when the caller asks for the complete virtual member. Keeping physical
-//! blob I/O behind the callback lets archive dispatch reuse the existing framing/codec integrity path.
+//! Pure logical-range projection lives in `vzip_projection.rs`; this module binds that executor to the
+//! archive core's authenticated storage path and owns complete-member verification. The split keeps one
+//! production implementation of range planning while allowing integration tests to compile that pure layer
+//! without importing private `Archive`/`Storage` internals into the test crate root.
 
-use crate::vzip::{VirtualZipError, VirtualZipRecipe};
+#[path = "vzip_projection.rs"]
+mod projection;
+pub use projection::{execute_range, VirtualZipDispatchError};
+
 use crate::{Archive, CmpctError, Storage};
 use sha2::{Digest, Sha256};
-
-#[derive(Debug, PartialEq, Eq)]
-pub enum VirtualZipDispatchError<E> {
-    Plan(VirtualZipError),
-    Blob(E),
-    InvalidProjection,
-    LogicalHash,
-}
-
-impl<E> From<VirtualZipError> for VirtualZipDispatchError<E> {
-    fn from(value: VirtualZipError) -> Self {
-        Self::Plan(value)
-    }
-}
-
-/// Execute one bounded virtual-ZIP range through an authenticated blob-range reader.
-///
-/// `read_blob_range` must preserve the archive core's normal physical framing and codec-integrity
-/// checks. The executor never reads unrelated recipe segments: each callback corresponds to exactly
-/// one slice emitted by `VirtualZipRecipe::plan_range`.
-pub fn execute_range<E, F>(
-    recipe: &VirtualZipRecipe,
-    start: u64,
-    out: &mut [u8],
-    mut read_blob_range: F,
-) -> Result<(), VirtualZipDispatchError<E>>
-where
-    F: FnMut(usize, u64, &mut [u8]) -> Result<(), E>,
-{
-    let length =
-        u64::try_from(out.len()).map_err(|_| VirtualZipDispatchError::InvalidProjection)?;
-    let segments = recipe.plan_range(start, length)?;
-    if out.is_empty() {
-        return Ok(());
-    }
-
-    let mut covered = 0usize;
-    let mut expected_output_offset = 0usize;
-    for segment in segments {
-        let output_offset = usize::try_from(segment.output_offset)
-            .map_err(|_| VirtualZipDispatchError::InvalidProjection)?;
-        let segment_len = usize::try_from(segment.length)
-            .map_err(|_| VirtualZipDispatchError::InvalidProjection)?;
-        let output_end = output_offset
-            .checked_add(segment_len)
-            .ok_or(VirtualZipDispatchError::InvalidProjection)?;
-        if output_offset != expected_output_offset || output_end > out.len() || segment_len == 0 {
-            return Err(VirtualZipDispatchError::InvalidProjection);
-        }
-
-        // Footnote: requiring contiguous output coverage turns a malformed/buggy projection into a
-        // hard failure instead of leaving caller-visible bytes uninitialized or silently duplicated.
-        read_blob_range(
-            segment.blob_index,
-            segment.blob_offset,
-            &mut out[output_offset..output_end],
-        )
-        .map_err(VirtualZipDispatchError::Blob)?;
-        covered = covered
-            .checked_add(segment_len)
-            .ok_or(VirtualZipDispatchError::InvalidProjection)?;
-        expected_output_offset = output_end;
-    }
-    if covered != out.len() || expected_output_offset != out.len() {
-        return Err(VirtualZipDispatchError::InvalidProjection);
-    }
-
-    // Partial reads retain touched-blob integrity semantics. A complete logical read additionally
-    // authenticates the reconstructed nested ZIP against the recipe identity frozen in the index.
-    let end = start
-        .checked_add(length)
-        .ok_or(VirtualZipDispatchError::InvalidProjection)?;
-    if start == 0
-        && end == recipe.logical_size
-        && Sha256::digest(&*out).as_slice() != recipe.logical_sha256
-    {
-        return Err(VirtualZipDispatchError::LogicalHash);
-    }
-    Ok(())
-}
 
 const VERIFY_CHUNK_BYTES: usize = 8 * 1024 * 1024;
 
@@ -117,7 +40,7 @@ impl Archive {
                 let (_payload_pos, hash) = self.checked_blob_layout(blob, &mut file)?;
                 Ok(hash)
             }
-            // Footnote: chunked, sparse and packed members can compose or slice several blobs. Their physical
+            // Chunked, sparse and packed members can compose or slice several blobs. Their physical
             // blob hashes therefore cannot stand in for one logical member hash; accepting them here would turn
             // a compatibility fix into a false strong-verification claim.
             _ => Err(CmpctError::Schema(format!(
