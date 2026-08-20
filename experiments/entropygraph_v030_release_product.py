@@ -13,6 +13,8 @@ from __future__ import annotations
 from concurrent.futures import ThreadPoolExecutor
 import hashlib
 from pathlib import Path
+import shutil
+import tempfile
 
 import msgpack
 
@@ -216,7 +218,49 @@ def extract(
     max_output_bytes: int = POLICY.DEFAULT_MAX_EXTRACT_BYTES,
     safe_symlinks: bool = True,
 ) -> None:
-    C.extract(archive, dst, max_output_bytes=max_output_bytes, safe_symlinks=safe_symlinks)
+    """Extract the shipping product with one transactional publication boundary.
+
+    Canonical r25 restoration needs an outer transaction because filesystem metadata/hardlinks/symlinks are
+    restored after the authenticated content graph is streamed. Calling ``POLICY.extract`` inside that outer
+    transaction used to create a second complete temp directory and rename cycle. The release reader now exposes
+    the same verified streamer for caller-owned staging, so r25 pays one transaction while retaining identical
+    graph authentication, locality/resource checks, metadata restoration, rollback and final publication.
+    """
+    archive = Path(archive)
+    dst = Path(dst)
+    revision, profile = _revision_for_archive(archive)
+    if revision == 24:
+        return C.extract(archive, dst, max_output_bytes=max_output_bytes, safe_symlinks=safe_symlinks)
+    if revision != REVISION:
+        raise UnsupportedArchiveProfile(profile)
+    if not isinstance(max_output_bytes, int) or isinstance(max_output_bytes, bool) or max_output_bytes < 1:
+        raise ValueError("max_output_bytes must be a positive integer")
+
+    decoded = C._validated_manifest(archive)
+    if safe_symlinks:
+        C._validate_safe_symlinks(decoded)
+    user_bytes = sum(int(identity[0]) for identity in decoded["regular"].values())
+    if user_bytes > max_output_bytes:
+        raise RuntimeError("r25 extraction exceeds caller output budget")
+
+    dst.parent.mkdir(parents=True, exist_ok=True)
+    wrapper = Path(tempfile.mkdtemp(prefix=f".{dst.name}.cmpct-v030-product-stage-", dir=dst.parent))
+    content_root = wrapper / "tree"
+    try:
+        internal_budget = min(POLICY.R.MAX_DECLARED_LOGICAL_BYTES, max_output_bytes + FS.MAX_MANIFEST_BYTES)
+        with C._revision25_profile_context():
+            POLICY.extract_verified_into_staging(archive, content_root, max_output_bytes=internal_budget)
+        # The graph streamer has already authenticated every reconstructed byte and the decoded manifest was
+        # cross-bound to those graph identities above. FS remains the sole owner of metadata/link restoration.
+        FS.restore_manifest_tree(content_root, decoded, safe_symlinks=False)
+        C._publish_tree(content_root, dst)
+    except Exception:
+        if wrapper.exists():
+            shutil.rmtree(wrapper, ignore_errors=True)
+        raise
+    else:
+        if wrapper.exists():
+            shutil.rmtree(wrapper, ignore_errors=True)
 
 
 def build_ablation(root: Path, out: Path, mode: str) -> dict:
