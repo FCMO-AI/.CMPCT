@@ -133,7 +133,44 @@ def test_losing_overlay_is_not_strong_verified(tmp_path: Path, monkeypatch) -> N
     assert result["overlay_verification_state"] == "deferred-until-byte-win"
     assert out.read_bytes() == b"F" * 10
 
+
+def test_canonical_parallel_overlay_preserves_deferred_verification_contract(tmp_path: Path, monkeypatch) -> None:
+    """The release-product parallel override must not resurrect eager verification or omit state metadata."""
+    from experiments import entropygraph_v030_release_product as product
+
+    private = product.C.SHARED
+    graph = tmp_path / "graph.cmpct"
+    graph.write_bytes(b"graph")
+    overlay = tmp_path / "overlay.cmpct"
+
+    monkeypatch.setattr(private.strict, "_read_source_records", lambda _path: ("fixture", None, {}, [b"record"]))
+    monkeypatch.setattr(private.O, "_record_member_lengths", lambda _meta, _count: [6])
+    monkeypatch.setattr(
+        private.G,
+        "_audition_record",
+        lambda record_id, record, users: (record, None, {"record_id": record_id, "selected": "none"}),
+    )
+
+    def fake_write(_meta, _records, _transforms, path: Path) -> dict:
+        path.write_bytes(b"overlay")
+        return {"meta_raw_bytes": 0, "meta_comp_bytes": 0}
+
+    monkeypatch.setattr(private.G, "_write_overlay", fake_write)
+    monkeypatch.setattr(
+        private.G,
+        "strong_verify",
+        lambda _archive: (_ for _ in ()).throw(AssertionError("overlay helper must defer logical verification")),
+    )
+
+    result = product._parallel_deferred_overlay(graph, overlay)
+    assert overlay.read_bytes() == b"overlay"
+    assert result["verified"] is None
+    assert result["verification_state"] == "deferred-until-byte-win"
+    assert result["audition_scheduler"] == "bounded-ordered-thread-pool-v1"
+    assert result["audition_workers"] == 1
+
+
 # Footnote: the identity tests deliberately compare complete archive bytes, not only selected sizes. Scheduling
 # is allowed to change wall time and temporary-artifact lifetime; it is not allowed to change one stored byte.
-# The losing-overlay test narrows the optimization boundary further: only a candidate that loses exact complete
+# The losing-overlay tests narrow the optimization boundary further: only a candidate that loses exact complete
 # byte pricing may skip logical verification; any byte-winning overlay is still verified before publication.
