@@ -68,7 +68,10 @@ public final class CmpctAndroidR25Test {
                 byte[] head = archive.readRange(regular, 0, 32);
                 byte[] hardHead = archive.readRange(hardlink, 0, 32);
                 assertEquals(hex(head), hex(hardHead));
-                assertEquals("canonical-r25-portability\ncanon", new String(head, StandardCharsets.UTF_8));
+                // The builder-independent golden payload is 26-byte "canonical-r25-portability\n" repetitions;
+                // a 32-byte range therefore ends in "canoni". Keep the assertion at the requested byte count so
+                // Android proves exact selected-read boundaries rather than masking an off-by-one with a shorter read.
+                assertEquals("canonical-r25-portability\ncanoni", new String(head, StandardCharsets.UTF_8));
                 byte[] targetBytes = archive.readRange(symlink, 0, 13);
                 assertEquals("dir/hello.bin", new String(targetBytes, StandardCharsets.UTF_8));
             }
