@@ -63,62 +63,6 @@ jobs:
         if: always()
         run: python tools/check_public_surface.py
 
-  g04-oracle:
-    name: g04-oracle
-    runs-on: ubuntu-latest
-    timeout-minutes: 90
-    steps:
-      - uses: actions/checkout@v6
-      - uses: actions/setup-python@v6
-        with:
-          python-version: '3.11'
-          cache: pip
-      - name: Install public-ML dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y zstd gcc
-          python -m pip install --upgrade pip
-          python -m pip install -e '.[test]'
-          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
-      - name: Run G0-G4 integration tests
-        run: |
-          python -m pytest -q \
-            tests/test_v030_geometry.py \
-            tests/test_v030_hierarchical_geometry.py \
-            tests/test_v030_geometry_overlay.py \
-            tests/test_v030_geometry_overlay_prefallback.py \
-            tests/test_v030_geometry_overlay_g04.py \
-            tests/test_v030_g04_publish.py
-      - name: Run frozen exact-ML G0-G4 oracle
-        run: |
-          mkdir -p benchmark-artifacts
-          python benchmarks/geometry_overlay_v030_ml_oracle_v3.py \
-            --work-root benchmark-artifacts/g04-work \
-            --output benchmark-artifacts/g04-v3.json
-      - name: Enforce unchanged oracle contract
-        run: |
-          python - <<'PY'
-          import json
-          from pathlib import Path
-          data=json.loads(Path('benchmark-artifacts/g04-v3.json').read_text())
-          result=data['result']; gate=data['gate']; contract=data['contract']
-          assert result['logical_tree_sha256']==contract['tree_sha256']
-          assert result['v029_bytes']==contract['accepted_v029_bytes']==13836439
-          assert result['saving_vs_v029_bytes']>=contract['minimum_composition_saving_bytes']>=262144
-          assert result['max_selected_member_read_amplification']<=8.0
-          assert result['hierarchical_screened_candidates']>0
-          assert result['hierarchical_exact_finalists']>0
-          assert gate['passed'] is True
-          PY
-      - name: Upload G0-G4 evidence
-        if: always()
-        uses: actions/upload-artifact@v6
-        with:
-          name: v030-pr-g04-${{ github.sha }}
-          path: benchmark-artifacts/g04-v3.json
-          if-no-files-found: warn
-          retention-days: 90
-
   shared-rehab:
     name: shared-rehab
     runs-on: ubuntu-latest
@@ -288,8 +232,10 @@ jobs:
           if-no-files-found: warn
           retention-days: 90
 
-# Footnote: the generalization/runtime jobs construct the frozen neutral-hostile media workload and therefore need
-# `ffmpeg` plus the package audio extra before measurement. The reader/G0-G4/shared-rehab lanes do not construct
-# that media row and retain their narrower dependency cones. This is environment repair only: all numeric thresholds
-# remain in benchmark modules and are asserted again here. A red job is still a release blocker; a green job does not
-# bypass native/portability/competitor gates, and the PR remains merge-locked until the full evidence ledger closes.
+# Footnote: the dedicated `v030-g04-overlay-oracle.yml` keeps the frozen exact-ML G0-G4 research breakthrough
+# target intact. It is deliberately not duplicated as a release-PR blocker because v0.30 release authority is
+# governed by complete-product generalization/runtime/native/platform/competitor receipts, not by the separate
+# >=256 KiB mechanism-research target. No oracle threshold was changed or marked green by this routing cleanup.
+# The generalization/runtime jobs construct the frozen neutral-hostile media workload and therefore need `ffmpeg`
+# plus the package audio extra before measurement. A red release job remains a release blocker, and the PR remains
+# merge-locked until the full evidence ledger closes.
