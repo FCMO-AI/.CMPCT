@@ -17,8 +17,6 @@ def _multi_file_fixture(root: Path) -> None:
 
 def _single_file_fixture(root: Path) -> None:
     root.mkdir(parents=True)
-    # One deterministic mixed stream exercises the accepted single-file portfolio law while G0-G4 still
-    # receives the exact pre-fallback graph it needs. The test does not assume whether fast reject fires.
     body = bytearray()
     for index in range(9000):
         body.extend(f"{index:08d}|{index % 31:02d}|value-{index % 127:03d}\n".encode())
@@ -32,6 +30,8 @@ def _assert_identity(source: Path, tmp_path: Path, stem: str) -> None:
     old_stats = duplicated.build(source, old_archive)
     new_stats = shared.build(source, new_archive)
 
+    # Existing eligible fixtures remain byte-identical: adding the global locality admission law may only
+    # reject an overlay that was never release-eligible under the frozen <=8x contract.
     assert new_archive.read_bytes() == old_archive.read_bytes()
     assert new_stats["archive_bytes"] == old_stats["archive_bytes"]
     assert new_stats["v029_bytes"] == old_stats["v029_bytes"]
@@ -43,11 +43,13 @@ def _assert_identity(source: Path, tmp_path: Path, stem: str) -> None:
     assert new_stats["shared_analysis_mode"] == "attempt5-graph-built-once"
     assert new_stats["selection_extra_payload_write_bytes"] == 0
     assert new_stats["publication_identity_check"] == "streamed-sha256"
+    assert new_stats["max_selected_member_read_amplification"] <= shared.MAX_MEMBER_READ_AMP
     if new_stats["selected"] == "geometry-overlay-g04":
+        assert new_stats["overlay_locality_passed"] is True
+        assert new_stats["overlay_selection_reject_reason"] is None
         assert new_stats["overlay_verification_state"] == "verified-before-publication"
         assert new_stats["losing_overlay_logical_verification_skipped"] is False
     else:
-        assert new_stats["overlay_verification_state"] == "deferred-until-byte-win"
         assert new_stats["losing_overlay_logical_verification_skipped"] is True
 
 
@@ -69,14 +71,32 @@ def test_shared_floor_preserves_strict_tie_and_fast_reject_law(tmp_path: Path, m
     temp = tmp_path / "shared"
     temp.mkdir()
 
-    # Force only the *selection law* after both independently required v0.30 candidates exist. This proves a
-    # retained graph cannot sneak into the accepted-v0.29 floor merely because Geometry needed it built.
     monkeypatch.setattr(shared.V029_ACCEPTED, "_fast_reject", lambda v028, files: "forced-fast-reject")
     result = shared._build_shared_candidates(source, temp)
     assert result["floor_selected"] == "v028-fallback"
     assert result["floor_path"] == result["v028_path"]
     assert result["v029_stats"]["fast_reject_reason"] == "forced-fast-reject"
     assert result["graph_path"].is_file()
+
+
+def _fake_shared_candidates(temp: Path, *, floor: bytes = b"F" * 10) -> dict:
+    floor_path = temp / "floor.cmpct"
+    graph = temp / "graph.cmpct"
+    floor_path.write_bytes(floor)
+    graph.write_bytes(b"G" * 12)
+    v029_stats = {"v028_child_s": 0.0, "attempt5_child_s": 0.0}
+    return {
+        "v028_path": floor_path,
+        "graph_path": graph,
+        "floor_path": floor_path,
+        "floor_selected": "v028-fallback",
+        "v028_bytes": len(floor),
+        "graph_bytes": 12,
+        "floor_bytes": len(floor),
+        "v029_stats": v029_stats,
+        "graph_stats": {},
+        "shared_build_s": 0.0,
+    }
 
 
 def test_losing_overlay_is_not_strong_verified(tmp_path: Path, monkeypatch) -> None:
@@ -87,23 +107,7 @@ def test_losing_overlay_is_not_strong_verified(tmp_path: Path, monkeypatch) -> N
     expected_tree = "ab" * 32
 
     def fake_shared_candidates(_root: Path, temp: Path) -> dict:
-        floor = temp / "floor.cmpct"
-        graph = temp / "graph.cmpct"
-        floor.write_bytes(b"F" * 10)
-        graph.write_bytes(b"G" * 12)
-        v029_stats = {"v028_child_s": 0.0, "attempt5_child_s": 0.0}
-        return {
-            "v028_path": floor,
-            "graph_path": graph,
-            "floor_path": floor,
-            "floor_selected": "v028-fallback",
-            "v028_bytes": 10,
-            "graph_bytes": 12,
-            "floor_bytes": 10,
-            "v029_stats": v029_stats,
-            "graph_stats": {},
-            "shared_build_s": 0.0,
-        }
+        return _fake_shared_candidates(temp)
 
     def fake_overlay(_graph: Path, overlay: Path) -> dict:
         overlay.write_bytes(b"O" * 20)
@@ -114,7 +118,7 @@ def test_losing_overlay_is_not_strong_verified(tmp_path: Path, monkeypatch) -> N
             "auditions": [],
             "write_stats": {"meta_raw_bytes": 0, "meta_comp_bytes": 0},
             "verified": None,
-            "verification_state": "deferred-until-byte-win",
+            "verification_state": "deferred-until-byte-and-locality-win",
         }
 
     monkeypatch.setattr(shared, "_build_shared_candidates", fake_shared_candidates)
@@ -130,8 +134,51 @@ def test_losing_overlay_is_not_strong_verified(tmp_path: Path, monkeypatch) -> N
     result = shared.build(source, out)
     assert result["selected"] == "v029-fallback"
     assert result["losing_overlay_logical_verification_skipped"] is True
-    assert result["overlay_verification_state"] == "deferred-until-byte-win"
+    assert result["overlay_verification_state"] == "deferred-until-byte-and-locality-win"
+    assert result["overlay_selection_reject_reason"] == "complete-artifact-not-smaller"
+    assert result["max_selected_member_read_amplification"] == 1.0
     assert out.read_bytes() == b"F" * 10
+
+
+def test_byte_winning_overlay_over_locality_ceiling_falls_back_without_verification(tmp_path: Path, monkeypatch) -> None:
+    """A smaller G0-G4 artifact is still ineligible when its selected-member locality exceeds 8x."""
+    source = tmp_path / "source-locality"
+    source.mkdir()
+    (source / "payload.bin").write_bytes(b"payload")
+    expected_tree = "cd" * 32
+
+    monkeypatch.setattr(shared, "_build_shared_candidates", lambda _root, temp: _fake_shared_candidates(temp, floor=b"F" * 20))
+
+    def fake_overlay(_graph: Path, overlay: Path) -> dict:
+        overlay.write_bytes(b"O" * 10)
+        return {
+            "source_format": "fixture",
+            "records": [],
+            "transforms": [],
+            "auditions": [{"selected": "lane", "max_member_read_amplification": shared.MAX_MEMBER_READ_AMP + 5.0}],
+            "write_stats": {"meta_raw_bytes": 0, "meta_comp_bytes": 0},
+            "verified": None,
+            "verification_state": "deferred-until-byte-and-locality-win",
+        }
+
+    monkeypatch.setattr(shared, "_overlay_retained_graph", fake_overlay)
+    monkeypatch.setattr(shared, "treehash", lambda _root: expected_tree)
+    monkeypatch.setattr(
+        shared.G,
+        "strong_verify",
+        lambda _archive: (_ for _ in ()).throw(AssertionError("locality-ineligible overlay must not be decoded")),
+    )
+
+    out = tmp_path / "selected-locality.cmpct"
+    result = shared.build(source, out)
+    assert out.read_bytes() == b"F" * 20
+    assert result["selected"] == "v029-fallback"
+    assert result["overlay_bytes"] == 10
+    assert result["overlay_locality_passed"] is False
+    assert result["overlay_selection_reject_reason"] == "locality-ceiling"
+    assert result["overlay_max_member_read_amplification"] == shared.MAX_MEMBER_READ_AMP + 5.0
+    assert result["max_selected_member_read_amplification"] == 1.0
+    assert result["losing_overlay_logical_verification_skipped"] is True
 
 
 def test_canonical_parallel_overlay_preserves_deferred_verification_contract(tmp_path: Path, monkeypatch) -> None:
@@ -170,7 +217,7 @@ def test_canonical_parallel_overlay_preserves_deferred_verification_contract(tmp
     assert result["audition_workers"] == 1
 
 
-# Footnote: the identity tests deliberately compare complete archive bytes, not only selected sizes. Scheduling
-# is allowed to change wall time and temporary-artifact lifetime; it is not allowed to change one stored byte.
-# The losing-overlay tests narrow the optimization boundary further: only a candidate that loses exact complete
-# byte pricing may skip logical verification; any byte-winning overlay is still verified before publication.
+# Footnote: identity tests compare complete bytes. Scheduling may change wall time, not storage. The locality test
+# locks the stronger release truth: an overlay can win byte pricing and still be rejected before verification when
+# its operation-derived selected-member amplification exceeds the frozen <=8x law; rejected audition locality is
+# never allowed to masquerade as locality of the fallback bytes that were actually published.
