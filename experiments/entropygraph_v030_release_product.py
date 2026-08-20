@@ -42,7 +42,13 @@ MAX_PROFILE_FILES = C.MAX_PROFILE_FILES
 MAX_PROFILE_LOGICAL_BYTES = C.MAX_PROFILE_LOGICAL_BYTES
 R24_RELEASE_PACK_CAP_BYTES = 2 * 1024 * 1024
 R24_RELEASE_MICRO_MAX_FILE_BYTES = 32 * 1024
-R24_RELEASE_DEFLATE_REUSE_MIN_BYTES = 64 * 1024
+# Canonical r24 fallback must obey the same <=8x selected-member locality law as r25. Virtual ZIP/WHL reads can
+# otherwise regenerate a small Deflate stream from a much larger raw member when the historical 64 KiB reuse
+# cutoff drops that exact stream. Retain every exact Deflate stream in the release fallback so a selected virtual
+# archive read consumes compressed representation bytes rather than needlessly decoding its raw constituents.
+# This changes only the r24 encoder policy, not revision-24 grammar or reader semantics; exact product-size and
+# runtime gates remain authoritative and can reject the policy if its extra stream metadata costs too much.
+R24_RELEASE_DEFLATE_REUSE_MIN_BYTES = 0
 
 
 def _parallel_deferred_overlay(graph_path: Path, overlay_path: Path) -> dict:
@@ -122,18 +128,17 @@ def _largest_regular_user_member_bytes(root: Path) -> int:
 
 
 def _locality_bounded_r24_build(root: Path, out: Path) -> dict:
-    """Build canonical r24 with fixed release knobs and a locality-derived cache-safe micro-pack budget.
+    """Build canonical r24 with fixed release knobs and locality-bounded shared context.
 
-    Revision 24 accepts arbitrary micro-pack sizes; 256 KiB was an encoder heuristic, not grammar. The prior
-    v0.30 policy only ever *shrunk* that heuristic, leaving compression on the table for logs and hostile trees
-    even when the frozen selected-member <=8x law permitted substantially more shared context. The release path
-    now spends that budget up to 2 MiB, which is also the mature reader's existing decoded-blob cache ceiling:
-    ``min(2 MiB, 8 * largest_regular_member)``.
+    Revision 24 accepts arbitrary micro-pack sizes; 256 KiB was an encoder heuristic, not grammar. The release
+    path spends the selected-member locality budget up to the mature reader's 2 MiB decoded-blob cache ceiling:
+    ``min(2 MiB, 8 * largest_regular_member)``. It also retains exact Deflate streams at every size so virtual ZIP
+    reconstruction does not turn a tiny selected archive into a large raw-content decode.
 
-    Historical v0.29 builders remain untouched. Canonical v0.30 also pins the two environment-sensitive byte
-    knobs that matter here so `CMPCT_MICRO_PACK_*` or `CMPCT_DEFLATE_REUSE_MIN` cannot silently change release
-    bytes between evidence runners. Exact r24/r25 complete-artifact pricing and conservative tie policy remain
-    unchanged, and the full regression/generalization/runtime matrix decides whether this encoder policy survives.
+    Historical v0.29 builders remain untouched. Canonical v0.30 pins every environment-sensitive byte knob here
+    so `CMPCT_MICRO_PACK_*` or `CMPCT_DEFLATE_REUSE_MIN` cannot silently change release bytes between evidence
+    runners. Exact r24/r25 complete-artifact pricing and conservative tie policy remain unchanged, and the full
+    regression/generalization/runtime matrix decides whether this encoder policy survives.
     """
     started = time.perf_counter()
     root = Path(root)
@@ -160,8 +165,8 @@ def _locality_bounded_r24_build(root: Path, out: Path) -> dict:
         "deflate_reuse_min_release_bytes": R24_RELEASE_DEFLATE_REUSE_MIN_BYTES,
         "locality_selected_member_bytes": largest_member,
         "locality_ceiling": 8.0,
-        "locality_pack_policy": "min-2mib-cache-cap-or-8x-largest-regular-member",
-        "release_byte_knobs": "environment-independent-r24-v1",
+        "locality_pack_policy": "min-2mib-cache-cap-or-8x-largest-regular-member-plus-exact-deflate-retention",
+        "release_byte_knobs": "environment-independent-r24-v2",
     }
 
 
