@@ -2,9 +2,10 @@ from __future__ import annotations
 
 """Fresh-process runtime worker for the canonical v0.30 release product surface.
 
-Timed pack/verify/extract operations remain engine-native. Tree equality is reported in the canonical
-user-visible semantic-tree domain for both r24 and r25, so runtime correctness does not compare the historical
-benchmark tree hash to the r25 product tree hash by accident.
+Timed pack/verify/extract operations remain engine-native. The v0.30 side reports the canonical product
+user-tree identity; the accepted v0.29 comparison side remains the frozen CMPNX research baseline used by this
+historical runtime gate and therefore must be verified by its own reader rather than being misclassified as r24.
+Canonical r24-vs-r25 product parity is a separate release gate.
 """
 
 import argparse
@@ -113,6 +114,17 @@ def _observed_product_member(engine, archive: Path, member: str) -> tuple[bytes,
     return raw, stats
 
 
+def _tree_for_source(engine_name: str, engine, product, source: Path) -> str:
+    """Return the identity domain owned by the measured side of the paired gate.
+
+    v0.29 emits experimental CMPNX bytes, not canonical r24. Feeding those bytes to the v0.30 product facade is
+    both semantically wrong and guaranteed to fail closed as ``research-only``. Keep the historical baseline in
+    its frozen identity domain; v0.30 stays in the canonical product domain. The parent gate already requires
+    each side to match the accepted source identity and separately enforces genuine r24-vs-r25 product parity.
+    """
+    return product.treehash(source) if engine_name == "v030" else engine.treehash(source)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--engine", choices=("v029", "v030"), required=True)
@@ -134,12 +146,11 @@ def main() -> None:
         stats = engine.build(args.source, args.archive)
         operation_wall_s = time.perf_counter() - started
         operation_peak_rss_kib = _rss_kib()
-        canonical_tree = product.treehash(args.source)
         result = {
             "engine": args.engine,
             "op": args.op,
             "archive_bytes": args.archive.stat().st_size,
-            "tree_sha256": canonical_tree,
+            "tree_sha256": _tree_for_source(args.engine, engine, product, args.source),
             "build_stats": stats,
         }
     elif args.op == "verify":
@@ -148,15 +159,21 @@ def main() -> None:
             raise RuntimeError(f"{args.engine} strong verification failed: {verified!r}")
         operation_wall_s = time.perf_counter() - started
         operation_peak_rss_kib = _rss_kib()
-        canonical_verified = verified if args.engine == "v030" else product.strong_verify(args.archive)
-        if not canonical_verified.get("ok"):
-            raise RuntimeError(f"canonical identity verification failed for {args.engine}: {canonical_verified!r}")
+        if args.engine == "v030":
+            canonical_verified = verified
+            tree_sha = canonical_verified.get("tree_sha256")
+        else:
+            # v0.29's accepted release-performance comparator is intentionally CMPNX research evidence. It is
+            # not legal input to the canonical r24/r25 dispatcher, whose correct behavior is to reject it.
+            canonical_verified = None
+            tree_sha = verified.get("tree_sha256")
         result = {
             "engine": args.engine,
             "op": args.op,
-            "tree_sha256": canonical_verified.get("tree_sha256"),
+            "tree_sha256": tree_sha,
             "engine_tree_sha256": verified.get("tree_sha256"),
             "verify": verified,
+            "canonical_product_verify": canonical_verified,
         }
     elif args.op == "extract":
         if args.destination is None:
@@ -169,7 +186,7 @@ def main() -> None:
         result = {
             "engine": args.engine,
             "op": args.op,
-            "tree_sha256": product.treehash(args.destination),
+            "tree_sha256": _tree_for_source(args.engine, engine, product, args.destination),
         }
     elif args.op == "members":
         if args.engine != "v030":
