@@ -49,6 +49,7 @@ jobs:
             experiments/entropygraph_v030_shared_portfolio.py \
             experiments/entropygraph_v030_release_candidate.py \
             experiments/entropygraph_v030_authoritative.py \
+            experiments/entropygraph_v030_release_product.py \
             benchmarks/v030_release_generalization_v2.py \
             benchmarks/v030_perf_worker_v2.py \
             benchmarks/v030_release_performance_v2.py
@@ -150,21 +151,21 @@ jobs:
             tests/test_v030_release_reader.py \
             tests/test_v030_member_reader.py \
             tests/test_v030_release_candidate.py
-      - name: Run fresh-process authoritative-v2 runtime gate
+      - name: Run fresh-process promoted-product runtime gate
         run: |
           mkdir -p benchmark-artifacts
           python benchmarks/v030_release_performance_v2.py \
             --work-root benchmark-artifacts/runtime-v2-work \
             --output benchmark-artifacts/runtime-v2.json
-      - name: Enforce frozen runtime policy
+      - name: Enforce frozen runtime policy on promoted product
         run: |
           python - <<'PY'
           import json
           from pathlib import Path
           data=json.loads(Path('benchmark-artifacts/runtime-v2.json').read_text())
           c=data['contract']; t=data['totals']; g=data['gate']
-          assert data['engine']=='experiments/entropygraph_v030_authoritative.py'
-          assert data['release_facade']=='cmpct-v030-authoritative-v2'
+          assert data['engine']=='experiments/entropygraph_v030_release_product.py'
+          assert data['release_facade']=='cmpct-v030-release-product-v1'
           assert c['maximum_median_create_ratio']==1.10
           assert c['maximum_workload_create_ratio']==1.25
           assert c['maximum_median_extract_ratio']==1.10
@@ -188,6 +189,8 @@ jobs:
 
 # Footnote: `ffmpeg` and the package audio extra are frozen-corpus/runtime dependencies, not codec shortcuts for
 # CMPCT. The neutral-hostile media row and inherited r24 WAV-FLAC candidate cannot be exercised without them.
-# These jobs do not redefine policy; they bind the same frozen contracts to the historical convergence facade.
+# Historical v2 generalization remains mechanism-causality evidence. Runtime is bound to the promoted canonical
+# product front door and uses the same frozen 1.10/1.25/RSS thresholds; source/output identity scans are verified
+# outside the operation timer so evidence bookkeeping cannot masquerade as codec creation/extraction cost.
 # Canonical r25 remains the promotion authority; native/portability and external competitor evidence remain
 # separate mandatory gates before merge/version/site/release.
