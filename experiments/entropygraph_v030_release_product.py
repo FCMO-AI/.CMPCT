@@ -40,6 +40,9 @@ UnsupportedArchiveProfile = C.UnsupportedArchiveProfile
 MAX_MANIFEST_ENTRIES = C.MAX_MANIFEST_ENTRIES
 MAX_PROFILE_FILES = C.MAX_PROFILE_FILES
 MAX_PROFILE_LOGICAL_BYTES = C.MAX_PROFILE_LOGICAL_BYTES
+R24_RELEASE_PACK_CAP_BYTES = 2 * 1024 * 1024
+R24_RELEASE_MICRO_MAX_FILE_BYTES = 32 * 1024
+R24_RELEASE_DEFLATE_REUSE_MIN_BYTES = 64 * 1024
 
 
 def _parallel_deferred_overlay(graph_path: Path, overlay_path: Path) -> dict:
@@ -101,8 +104,8 @@ def _largest_regular_user_member_bytes(root: Path) -> int:
 
     r24 micro-packs are whole compressed frames. A selected read of any packed file therefore decodes the whole
     owning pack. The frozen v0.30 locality contract selects the largest regular user-visible member and allows at
-    most 8x decoded context, so the shipping r24 fallback must not create a pack larger than eight times that
-    member. This helper computes the bound from source shape only; it never predicts compression or selection.
+    most 8x decoded context, so the shipping r24 fallback derives its pack budget from that member. This helper
+    computes the bound from source shape only; it never predicts compression or selection.
     """
     largest = 0
     for dirpath, dirnames, filenames in os.walk(Path(root), followlinks=False):
@@ -119,23 +122,28 @@ def _largest_regular_user_member_bytes(root: Path) -> int:
 
 
 def _locality_bounded_r24_build(root: Path, out: Path) -> dict:
-    """Build canonical r24 with its existing grammar and a release-law-bounded micro-pack target.
+    """Build canonical r24 with fixed release knobs and a locality-derived cache-safe micro-pack budget.
 
-    The mature r24 format already supports arbitrary micro-pack sizes; the old 256 KiB target was an encoder
-    heuristic, not an on-disk requirement. On an all-tiny-file tree that heuristic can make a real selected read
-    decode tens of times the selected member. Keep the historical/default Builder untouched for v0.29 evidence,
-    but constrain the shipping v0.30 r24 fallback to ``min(default_target, 8 * largest_regular_member)``. This
-    changes physical grouping only: reader grammar, hashes, metadata semantics, exact bytes pricing and r24/r25
-    conservative selection remain unchanged.
+    Revision 24 accepts arbitrary micro-pack sizes; 256 KiB was an encoder heuristic, not grammar. The prior
+    v0.30 policy only ever *shrunk* that heuristic, leaving compression on the table for logs and hostile trees
+    even when the frozen selected-member <=8x law permitted substantially more shared context. The release path
+    now spends that budget up to 2 MiB, which is also the mature reader's existing decoded-blob cache ceiling:
+    ``min(2 MiB, 8 * largest_regular_member)``.
+
+    Historical v0.29 builders remain untouched. Canonical v0.30 also pins the two environment-sensitive byte
+    knobs that matter here so `CMPCT_MICRO_PACK_*` or `CMPCT_DEFLATE_REUSE_MIN` cannot silently change release
+    bytes between evidence runners. Exact r24/r25 complete-artifact pricing and conservative tie policy remain
+    unchanged, and the full regression/generalization/runtime matrix decides whether this encoder policy survives.
     """
     started = time.perf_counter()
     root = Path(root)
     out = Path(out)
-    builder = C.Builder(root)
+    builder = C.Builder(root, deflate_reuse_min=R24_RELEASE_DEFLATE_REUSE_MIN_BYTES)
+    builder.micro_pack_max_file = R24_RELEASE_MICRO_MAX_FILE_BYTES
     default_target = int(builder.micro_pack_target)
     largest_member = _largest_regular_user_member_bytes(root)
     if largest_member > 0:
-        builder.micro_pack_target = min(default_target, 8 * largest_member)
+        builder.micro_pack_target = min(R24_RELEASE_PACK_CAP_BYTES, 8 * largest_member)
     stats = dict(builder.build(out))
     with CMPCT(out) as reader:
         verified_files = reader.verify()
@@ -148,9 +156,12 @@ def _locality_bounded_r24_build(root: Path, out: Path) -> dict:
         "create_s": time.perf_counter() - started,
         "micro_pack_target_default_bytes": default_target,
         "micro_pack_target_release_bytes": int(builder.micro_pack_target),
+        "micro_pack_max_file_release_bytes": int(builder.micro_pack_max_file),
+        "deflate_reuse_min_release_bytes": R24_RELEASE_DEFLATE_REUSE_MIN_BYTES,
         "locality_selected_member_bytes": largest_member,
         "locality_ceiling": 8.0,
-        "locality_pack_policy": "min-default-or-8x-largest-regular-member",
+        "locality_pack_policy": "min-2mib-cache-cap-or-8x-largest-regular-member",
+        "release_byte_knobs": "environment-independent-r24-v1",
     }
 
 
