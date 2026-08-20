@@ -1,4 +1,4 @@
-# ci-lane: diagnostic
+# ci-lane: deep
 name: CMPCT v0.30 G0-G4 process-pool oracle
 
 on:
@@ -88,5 +88,5 @@ jobs:
           if-no-files-found: warn
           retention-days: 90
 
-# Diagnostic only. A green result proves an exact-byte scheduling optimization worth integrating; it does not
-# itself satisfy release performance, ZIP/Zstd dominance, or strict release authority.
+# Deep diagnostic only. A green result proves an exact-byte scheduling optimization worth integrating; it does
+# not itself satisfy release performance, ZIP/Zstd dominance, or strict release authority.
