@@ -22,6 +22,7 @@ compress differently.
 
 import functools
 import importlib.util
+import json
 from pathlib import Path
 import struct
 import sys
@@ -73,20 +74,17 @@ def canonical_elf64(variant: int) -> bytes:
     values = _table_values(variant)
     message = f"{sum(values)}\n".encode("ascii")
     code = bytearray()
-    code += b"\xb8\x01\x00\x00\x00"  # mov eax, SYS_write
-    code += b"\xbf\x01\x00\x00\x00"  # mov edi, stdout
-
-    # Footnote: RIP-relative addressing keeps the fixture position-independent inside its one fixed PT_LOAD
-    # image. ``lea``'s displacement is derived from layout rather than copied as an unexplained magic constant.
+    code += b"\xb8\x01\x00\x00\x00"
+    code += b"\xbf\x01\x00\x00\x00"
     lea_next_offset = ELF_CODE_OFFSET + len(code) + 7
     code_bytes = 33
     message_offset = ELF_CODE_OFFSET + code_bytes
     code += b"\x48\x8d\x35" + struct.pack("<i", message_offset - lea_next_offset)
-    code += b"\xba" + struct.pack("<I", len(message))  # mov edx, message length
-    code += b"\x0f\x05"  # syscall
-    code += b"\xb8\x3c\x00\x00\x00"  # mov eax, SYS_exit
-    code += b"\x31\xff"  # xor edi, edi
-    code += b"\x0f\x05"  # syscall
+    code += b"\xba" + struct.pack("<I", len(message))
+    code += b"\x0f\x05"
+    code += b"\xb8\x3c\x00\x00\x00"
+    code += b"\x31\xff"
+    code += b"\x0f\x05"
     if len(code) != code_bytes:
         raise RuntimeError("canonical ELF code layout drift")
 
@@ -102,8 +100,8 @@ def canonical_elf64(variant: int) -> bytes:
     elf_header = struct.pack(
         "<16sHHIQQQIHHHHHH",
         ident,
-        2,  # ET_EXEC
-        62,  # EM_X86_64
+        2,
+        62,
         1,
         ELF_BASE_VADDR + ELF_CODE_OFFSET,
         ELF_HEADER_BYTES,
@@ -118,8 +116,8 @@ def canonical_elf64(variant: int) -> bytes:
     )
     program_header = struct.pack(
         "<IIQQQQQQ",
-        1,  # PT_LOAD
-        5,  # PF_R | PF_X
+        1,
+        5,
         0,
         ELF_BASE_VADDR,
         ELF_BASE_VADDR,
@@ -143,6 +141,37 @@ def _canonicalize_developer_elf(workload: Path) -> None:
         path.chmod(0o755)
 
 
+def _refresh_aggregate_manifest(neutral_module, root: Path, manifest: object) -> object:
+    """Keep the aggregate corpus manifest truthful after repairing its developer producer.
+
+    The v1 aggregate builder writes MANIFEST.json before repair-v6 gets control back. Rebuilding the developer
+    workload through the accepted producer therefore must also refresh that row; otherwise the payload bytes are
+    correct while the corpus' own provenance record still names the discarded host-GCC tree.
+    """
+    if not isinstance(manifest, dict):
+        return manifest
+    workload = root / DEVELOPER_NAME
+    files = sorted(path for path in workload.rglob("*") if path.is_file())
+    tree_hash = getattr(neutral_module, "tree_hash", None)
+    if not callable(tree_hash):
+        raise RuntimeError("neutral hostile generator no longer exposes tree_hash")
+    rows = manifest.get("corpora")
+    if not isinstance(rows, list):
+        raise RuntimeError("neutral hostile aggregate manifest has no corpora list")
+    row = next((item for item in rows if isinstance(item, dict) and item.get("name") == DEVELOPER_NAME), None)
+    if row is None:
+        raise RuntimeError("neutral hostile aggregate manifest omitted developer workload")
+    row.update(
+        {
+            "files": len(files),
+            "logical_bytes": sum(path.stat().st_size for path in files),
+            "tree_sha256": tree_hash(workload),
+        }
+    )
+    (root / "MANIFEST.json").write_text(json.dumps(manifest, indent=2), encoding="utf-8")
+    return manifest
+
+
 def install_generation_hooks(neutral_module) -> None:
     """Install every producer-side repair needed to generate the accepted v6 bytes directly.
 
@@ -152,12 +181,12 @@ def install_generation_hooks(neutral_module) -> None:
     first tree check. Keep ``normalize_root`` as an idempotent compatibility guard, but enforce the same accepted
     normalization at both the individual developer producer and aggregate ``build`` boundary.
 
-    Footnote: some historical corpus modules assemble an internal builder table when the module is imported.
-    Replacing ``corpus_source_repo`` afterward does not change a function object already captured by that table.
-    Wrapping aggregate ``build`` closes that stale-reference path without changing any generated source byte: the
-    post-pass is exactly the repair-v6 normalization accepted by two independent runner reproductions.
+    Footnote: the accepted repair-v6 proof invokes the wrapped developer producer directly. Aggregate corpus
+    generation is required to be byte-identical to that path as well. Rather than relying on a historical
+    builder's global-function lookup behavior, the aggregate wrapper explicitly regenerates only the developer
+    workload through the already wrapped producer, whose independent PRNG reseed makes this replacement isolated
+    from every other workload. The corpus manifest is then refreshed to describe the bytes actually measured.
     """
-    # Repair-v5 still owns CPU-canonical media generation and the earlier deterministic producer hooks.
     BASE.install_generation_hooks(neutral_module)
 
     current = getattr(neutral_module, "corpus_source_repo", None)
@@ -182,9 +211,17 @@ def install_generation_hooks(neutral_module) -> None:
         historical_build = aggregate
 
         @functools.wraps(historical_build)
-        def deterministic_aggregate(root: Path) -> None:
-            historical_build(root)
-            normalize_root(Path(root))
+        def deterministic_aggregate(root: Path):
+            root = Path(root)
+            manifest = historical_build(root)
+            developer_producer = getattr(neutral_module, "corpus_source_repo", None)
+            if not callable(developer_producer):
+                raise RuntimeError("neutral hostile generator lost repaired developer producer")
+            # Re-run exactly the producer path accepted by repair-v6. corpus_source_repo owns its own reseed and
+            # reset_dir, so this cannot perturb any sibling workload produced by historical_build.
+            developer_producer(root)
+            normalize_root(root)
+            return _refresh_aggregate_manifest(neutral_module, root, manifest)
 
         deterministic_aggregate._cmpct_repair_v6_aggregate_wrapper = True
         neutral_module.build = deterministic_aggregate
