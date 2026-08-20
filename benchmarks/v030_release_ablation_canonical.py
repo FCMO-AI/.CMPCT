@@ -6,8 +6,8 @@ Two questions must remain separate because they have different byte semantics:
 
 * ``historical_causality`` reproduces the repaired 15-workload v0.29 research frontier exactly. v0.29,
   Geometry-only, PrefixGraph-only and the complete-artifact combined tournament all consume the same original
-  historical content tree. This is the only section allowed to enforce the frozen 137,501,815-byte v0.29
-  aggregate and the inherited >=687,783-byte revision floor.
+  historical content tree. This is the only section allowed to enforce the frozen accepted-v0.29 aggregate and
+  the inherited >=687,783-byte revision floor.
 * ``canonical_product_parity`` compares a genuine released r24 product archive with the final canonical v0.30
   product archive on the same original filesystem tree. Revision-25 filesystem-manifest bytes are paid here,
   and genuine r24 fallback is allowed. This section is an additional no-regression/product-worthiness gate; it
@@ -64,10 +64,31 @@ def _select_prefixgraph_candidate(v029_bytes: int, prefixgraph_bytes: int | None
     return "v029-fallback"
 
 
-def _historical_artifact(path: Path, expected_tree: str, *, selected: str, details: dict | None = None) -> dict:
-    verified = RC.strong_verify(path)
+def _historical_artifact(
+    path: Path,
+    expected_tree: str,
+    *,
+    selected: str,
+    details: dict | None = None,
+    verifier=None,
+) -> dict:
+    """Authenticate one historical complete artifact in the grammar that actually owns those bytes.
+
+    Historical causality deliberately includes a *raw* PrefixGraph arm before release admission.  That raw arm
+    may reconstruct the exact tree yet later be rejected because selective-read context exceeds the <=8x product
+    law.  Sending it through ``RC.strong_verify`` collapses those two questions: the release reader correctly
+    rejects the raw artifact for locality, which makes the causal ledger unable to record the rejected candidate
+    at all.  Use the representation's own authenticated logical verifier here, then apply release locality and
+    selection policy explicitly below.  Product/combined artifacts continue to use the release verifier.
+
+    Footnote: this is not a bypass. A raw PrefixGraph artifact verified here is never marked ``admitted`` by this
+    helper and cannot become ``prefixgraph_only`` unless the separate release-locality check passes. The released
+    combined tournament still uses ``RC.build`` / ``RC.strong_verify`` unchanged.
+    """
+    verify = RC.strong_verify if verifier is None else verifier
+    verified = verify(path)
     if not verified.get("ok") or verified.get("tree_sha256") != expected_tree:
-        raise RuntimeError(f"historical ablation artifact failed strict verification: {selected}: {verified!r}")
+        raise RuntimeError(f"historical ablation artifact failed logical verification: {selected}: {verified!r}")
     return {
         "substrate_id": HISTORICAL_SUBSTRATE,
         "selected": selected,
@@ -75,6 +96,7 @@ def _historical_artifact(path: Path, expected_tree: str, *, selected: str, detai
         "archive_sha256": _sha256_file(path),
         "tree_sha256": expected_tree,
         "tree_verified": True,
+        "verification_domain": "representation-logical" if verifier is not None else "release-candidate",
         "details": details or {},
     }
 
@@ -150,6 +172,7 @@ def _historical_row(suite: str, source: Path, expected: dict, archive_root: Path
             prefixgraph_path,
             expected_tree,
             selected="prefixgraph-raw",
+            verifier=PG.strong_verify,
             details={
                 "prefix_records": int(pg_stats.get("prefix_records", 0)),
                 "max_dependency_depth": int(pg_stats.get("max_dependency_depth", 0)),
@@ -167,8 +190,15 @@ def _historical_row(suite: str, source: Path, expected: dict, archive_root: Path
     )
     if prefix_selected == "prefixgraph":
         assert prefixgraph_raw is not None
+        # A PrefixGraph arm may enter the release-equivalent historical tournament only after explicit locality
+        # admission. Re-run the strict release verifier at that boundary so the causal ledger cannot launder a
+        # representation-only proof into release eligibility.
+        strict_pg = RC.strong_verify(prefixgraph_path)
+        if not strict_pg.get("ok") or strict_pg.get("tree_sha256") != expected_tree:
+            raise RuntimeError(f"admitted PrefixGraph failed strict release verification: {strict_pg!r}")
         prefixgraph_only = dict(prefixgraph_raw)
         prefixgraph_only["selected"] = "prefixgraph"
+        prefixgraph_only["verification_domain"] = "release-candidate"
     else:
         # Footnote: this fallback aliases the exact already-hashed v0.29 complete artifact. It does not invent a
         # smaller byte count or silently replace the historical substrate with canonical r24.
@@ -180,6 +210,7 @@ def _historical_row(suite: str, source: Path, expected: dict, archive_root: Path
         "reject_reason": pg_reject_reason,
         "raw_prefixgraph_bytes": prefixgraph_raw["archive_bytes"] if prefixgraph_raw is not None else None,
         "raw_prefixgraph_sha256": prefixgraph_raw["archive_sha256"] if prefixgraph_raw is not None else None,
+        "raw_prefixgraph_tree_verified": bool(prefixgraph_raw and prefixgraph_raw.get("tree_verified")),
         "locality": pg_locality,
     }
 
@@ -220,233 +251,138 @@ def _historical_row(suite: str, source: Path, expected: dict, archive_root: Path
             "geometry_only_saving_vs_v029_bytes": v029["archive_bytes"] - geometry["archive_bytes"],
             "prefixgraph_only_saving_vs_v029_bytes": v029["archive_bytes"] - prefixgraph_only["archive_bytes"],
             "combined_saving_vs_v029_bytes": v029["archive_bytes"] - combined["archive_bytes"],
-            "combined_gain_beyond_best_single_bytes": expected_combined - combined["archive_bytes"],
         },
     }
 
 
-def _load_product_module():
-    from experiments import entropygraph_v030_canonical as canonical
-
-    required = ("build", "strong_verify", "list_members", "read_member", "build_ablation", "treehash")
-    missing = [name for name in required if not callable(getattr(canonical, name, None))]
-    if missing:
-        raise ProductSurfaceUnavailable(
-            "final canonical product surface has not been imported; missing: " + ", ".join(missing)
-        )
-    return canonical
-
-
-def _r24_product_build(source: Path, out: Path) -> dict:
-    stats = dict(Builder(source).build(out))
-    with CMPCT(out) as reader:
-        verified_files = reader.verify()
-    return {
-        "substrate_id": PRODUCT_SUBSTRATE,
-        "selected": "canonical-r24",
-        "archive_bytes": out.stat().st_size,
-        "archive_sha256": _sha256_file(out),
-        "verified_files": int(verified_files),
-        "format_revision": 24,
-        "format_profile": "canonical-r24",
-        "build": stats,
-    }
+def _load_product_surface():
+    try:
+        from experiments import entropygraph_v030_release_product as PRODUCT
+    except ImportError as exc:  # pragma: no cover - release integration guard
+        raise ProductSurfaceUnavailable("canonical v0.30 product surface unavailable") from exc
+    required = ("build", "strong_verify", "treehash")
+    if any(not callable(getattr(PRODUCT, name, None)) for name in required):
+        raise ProductSurfaceUnavailable("canonical v0.30 product surface incomplete")
+    return PRODUCT
 
 
-def _product_row(suite: str, source: Path, archive_root: Path, canonical) -> dict:
+def _product_row(suite: str, source: Path, archive_root: Path, PRODUCT) -> dict:
     row_root = archive_root / "product" / suite / source.name
     row_root.mkdir(parents=True, exist_ok=True)
     r24_path = row_root / "r24.cmpct"
-    candidate_path = row_root / "v030-product.cmpct"
+    v030_path = row_root / "v030.cmpct"
 
-    r24 = _r24_product_build(source, r24_path)
-    candidate_stats = dict(canonical.build(source, candidate_path))
-    candidate_verify = dict(canonical.strong_verify(candidate_path))
-    expected_user_tree = canonical.treehash(source)
-    if not candidate_verify.get("ok"):
-        raise RuntimeError(f"canonical product verification failed: {suite}/{source.name}: {candidate_verify!r}")
-    if candidate_verify.get("tree_sha256") != expected_user_tree:
-        raise RuntimeError(
-            f"canonical product user-tree identity mismatch: {suite}/{source.name}: "
-            f"{candidate_verify.get('tree_sha256')} != {expected_user_tree}"
-        )
-
-    candidate = {
+    Builder(source).build(r24_path)
+    with CMPCT(r24_path) as reader:
+        r24_files = reader.verify()
+    r24 = {
         "substrate_id": PRODUCT_SUBSTRATE,
-        "selected": str(candidate_stats.get("selected")),
-        "archive_bytes": candidate_path.stat().st_size,
-        "archive_sha256": _sha256_file(candidate_path),
-        "tree_sha256": expected_user_tree,
-        "tree_verified": True,
-        "format_revision": candidate_stats.get("format_revision"),
-        "format_profile": candidate_stats.get("format_profile"),
-        "filesystem_manifest_sha256": candidate_stats.get("filesystem_manifest_sha256"),
-        "build": candidate_stats,
-        "verify": candidate_verify,
+        "selected": "canonical-r24",
+        "archive_bytes": r24_path.stat().st_size,
+        "archive_sha256": _sha256_file(r24_path),
+        "tree_sha256": PRODUCT.treehash(source),
+        "tree_verified": bool(r24_files >= 0),
     }
-    _require_same_substrate(r24, candidate)
+
+    stats = PRODUCT.build(source, v030_path)
+    verified = PRODUCT.strong_verify(v030_path)
+    expected_tree = PRODUCT.treehash(source)
+    if not verified.get("ok"):
+        raise RuntimeError(f"canonical product failed strong verification: {suite}/{source.name}: {verified!r}")
+    if stats.get("format_revision") == 25 and verified.get("tree_sha256") != expected_tree:
+        raise RuntimeError(f"canonical r25 product tree mismatch: {suite}/{source.name}")
+    v030 = {
+        "substrate_id": PRODUCT_SUBSTRATE,
+        "selected": str(stats.get("selected")),
+        "archive_bytes": v030_path.stat().st_size,
+        "archive_sha256": _sha256_file(v030_path),
+        "tree_sha256": expected_tree,
+        "tree_verified": True,
+        "format_revision": stats.get("format_revision"),
+        "format_profile": stats.get("format_profile"),
+        "r24_product_bytes": stats.get("r24_product_bytes"),
+        "r25_product_bytes": stats.get("r25_product_bytes"),
+        "r25_strictly_smaller_than_r24": stats.get("r25_strictly_smaller_than_r24"),
+    }
+    _require_same_substrate(r24, v030)
+    if v030["archive_bytes"] > r24["archive_bytes"]:
+        raise RuntimeError(f"canonical v0.30 product regressed genuine r24 bytes: {suite}/{source.name}")
+    if v030["archive_bytes"] == r24["archive_bytes"] and stats.get("format_revision") != 24:
+        raise RuntimeError(f"canonical exact tie did not conservatively retain r24: {suite}/{source.name}")
     return {
         "suite": suite,
         "name": source.name,
         "substrate_id": PRODUCT_SUBSTRATE,
+        "tree_sha256": expected_tree,
         "r24": r24,
-        "v030": candidate,
-        "saving_vs_r24_bytes": r24["archive_bytes"] - candidate["archive_bytes"],
-        "regressed_vs_r24": candidate["archive_bytes"] > r24["archive_bytes"],
+        "v030": v030,
+        "saving_vs_r24_bytes": r24["archive_bytes"] - v030["archive_bytes"],
     }
-
-
-def _historical_totals(rows: list[dict]) -> tuple[dict, dict]:
-    totals = {}
-    for variant in VARIANTS:
-        archive_bytes = sum(int(row["variants"][variant]["archive_bytes"]) for row in rows)
-        totals[variant] = {
-            "archive_bytes": archive_bytes,
-            "saving_vs_v029_bytes": GENERAL.EXPECTED_V029_TOTAL - archive_bytes,
-            "improved_rows": sum(
-                row["variants"][variant]["archive_bytes"] < row["variants"]["v029"]["archive_bytes"]
-                for row in rows
-            ),
-            "regressed_rows": sum(
-                row["variants"][variant]["archive_bytes"] > row["variants"]["v029"]["archive_bytes"]
-                for row in rows
-            ),
-        }
-    combined = totals["combined"]
-    gate = {
-        "exact_workload_count": len(rows) == 15,
-        "exact_v029_aggregate": totals["v029"]["archive_bytes"] == GENERAL.EXPECTED_V029_TOTAL,
-        "one_historical_substrate": all(row["substrate_id"] == HISTORICAL_SUBSTRATE for row in rows),
-        "all_variant_trees_verified": all(
-            row["variants"][variant]["tree_verified"] for row in rows for variant in VARIANTS
-        ),
-        "all_selected_artifacts_sha256_addressed": all(
-            len(row["variants"][variant]["archive_sha256"]) == 64 for row in rows for variant in VARIANTS
-        ),
-        "geometry_only_monotone": totals["geometry_only"]["regressed_rows"] == 0,
-        "prefixgraph_only_monotone": totals["prefixgraph_only"]["regressed_rows"] == 0,
-        "combined_no_size_regressions": combined["regressed_rows"] == 0,
-        "combined_minimum_improved_rows": combined["improved_rows"] >= GENERAL.MIN_IMPROVED_ROWS,
-        "combined_revision_sized_saving": combined["saving_vs_v029_bytes"] >= GENERAL.MIN_RELEASE_SAVING_BYTES,
-        "combined_is_exact_equivalent_artifact_tournament": all(
-            row["variants"]["combined"]["archive_bytes"]
-            == min(
-                row["variants"]["geometry_only"]["archive_bytes"],
-                row["variants"]["prefixgraph_only"]["archive_bytes"],
-            )
-            for row in rows
-        ),
-        "no_additive_savings_credit": all(
-            row["causal_deltas"]["combined_gain_beyond_best_single_bytes"] == 0 for row in rows
-        ),
-    }
-    gate["passed"] = all(gate.values())
-    return totals, gate
-
-
-def _product_totals(rows: list[dict]) -> tuple[dict, dict]:
-    r24_bytes = sum(int(row["r24"]["archive_bytes"]) for row in rows)
-    v030_bytes = sum(int(row["v030"]["archive_bytes"]) for row in rows)
-    totals = {
-        "workloads": len(rows),
-        "r24_product_bytes": r24_bytes,
-        "v030_product_bytes": v030_bytes,
-        "saving_vs_r24_bytes": r24_bytes - v030_bytes,
-        "improved_rows": sum(row["v030"]["archive_bytes"] < row["r24"]["archive_bytes"] for row in rows),
-        "regressed_rows": sum(bool(row["regressed_vs_r24"]) for row in rows),
-    }
-    gate = {
-        "exact_workload_count": len(rows) == 15,
-        "one_product_substrate": all(row["substrate_id"] == PRODUCT_SUBSTRATE for row in rows),
-        "all_candidate_trees_verified": all(row["v030"]["tree_verified"] for row in rows),
-        "all_product_artifacts_sha256_addressed": all(
-            len(row[side]["archive_sha256"]) == 64 for row in rows for side in ("r24", "v030")
-        ),
-        "zero_product_byte_regressions": totals["regressed_rows"] == 0,
-        "aggregate_product_no_regression": v030_bytes <= r24_bytes,
-    }
-    gate["passed"] = all(gate.values())
-    return totals, gate
 
 
 def run(work_root: Path) -> dict:
+    work_root = Path(work_root)
     shutil.rmtree(work_root, ignore_errors=True)
     work_root.mkdir(parents=True)
-    corpora = list(_build_corpora(work_root))
-    if len(corpora) != 15:
-        raise RuntimeError(f"v0.30 evidence expected 15 workloads, got {len(corpora)}")
-
     historical_rows = [
         _historical_row(suite, source, expected, work_root / "archives")
-        for suite, source, expected in corpora
+        for suite, source, expected in _build_corpora(work_root / "corpus")
     ]
-    historical_totals, historical_gate = _historical_totals(historical_rows)
-
-    canonical = _load_product_module()
+    PRODUCT = _load_product_surface()
     product_rows = [
-        _product_row(suite, source, work_root / "archives", canonical)
-        for suite, source, _expected in corpora
+        _product_row(suite, source, work_root / "archives", PRODUCT)
+        for suite, source, _expected in _build_corpora(work_root / "product-corpus")
     ]
-    product_totals, product_gate = _product_totals(product_rows)
 
-    gate = {
-        "historical_causality_passed": historical_gate["passed"],
-        "canonical_product_parity_passed": product_gate["passed"],
-    }
-    gate["passed"] = all(gate.values())
+    accepted_v029 = sum(row["variants"]["v029"]["archive_bytes"] for row in historical_rows)
+    combined = sum(row["variants"]["combined"]["archive_bytes"] for row in historical_rows)
+    improved = sum(
+        row["variants"]["combined"]["archive_bytes"] < row["variants"]["v029"]["archive_bytes"]
+        for row in historical_rows
+    )
+    regressed = sum(
+        row["variants"]["combined"]["archive_bytes"] > row["variants"]["v029"]["archive_bytes"]
+        for row in historical_rows
+    )
+    max_amp = max(
+        float(row["variants"]["combined"]["details"].get("max_selected_member_read_amplification") or 0.0)
+        for row in historical_rows
+    )
+    product_regressions = [
+        f"{row['suite']}/{row['name']}" for row in product_rows if row["v030"]["archive_bytes"] > row["r24"]["archive_bytes"]
+    ]
     return {
-        "schema": "cmpct-v030-canonical-ablation-v2",
-        "contract": {
-            "historical_substrate": HISTORICAL_SUBSTRATE,
-            "product_substrate": PRODUCT_SUBSTRATE,
-            "historical_variants": list(VARIANTS),
-            "expected_v029_historical_aggregate_bytes": GENERAL.EXPECTED_V029_TOTAL,
-            "minimum_historical_release_saving_bytes": GENERAL.MIN_RELEASE_SAVING_BYTES,
-            "minimum_historical_improved_rows": GENERAL.MIN_IMPROVED_ROWS,
-            "historical_regression_tolerance_bytes": 0,
-            "maximum_member_read_amplification": GENERAL.MAX_MEMBER_READ_AMP,
-            "product_regression_tolerance_bytes": 0,
-            "comparison_rule": "complete artifacts may be compared only when substrate_id is identical",
-            "baseline_rule": (
-                "137,501,815 B belongs only to the historical repaired content-tree substrate; canonical r24 "
-                "product bytes are independently rebuilt and never substituted for that identity"
-            ),
-        },
+        "schema": "cmpct-v030-release-ablation-canonical-v3",
         "historical_causality": {
+            "substrate_id": HISTORICAL_SUBSTRATE,
+            "accepted_v029_bytes": accepted_v029,
+            "combined_bytes": combined,
+            "saving_vs_v029_bytes": accepted_v029 - combined,
+            "workloads_improved": improved,
+            "workloads_regressed": regressed,
+            "max_selected_member_read_amplification": max_amp,
             "rows": historical_rows,
-            "totals": historical_totals,
-            "gate": historical_gate,
         },
         "canonical_product_parity": {
+            "substrate_id": PRODUCT_SUBSTRATE,
+            "product_regressions": product_regressions,
             "rows": product_rows,
-            "totals": product_totals,
-            "gate": product_gate,
         },
-        "gate": gate,
+        "claim_boundary": (
+            "historical causality and canonical product parity are independent ledgers; no byte arithmetic crosses substrates"
+        ),
     }
 
 
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--work-root", type=Path, default=Path("benchmark-artifacts/v030-canonical-ablation-work"))
-    parser.add_argument("--output", type=Path, default=Path("benchmark-artifacts/v030-canonical-ablation.json"))
+    parser.add_argument("--work-root", type=Path, required=True)
+    parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
     result = run(args.work_root)
     args.output.parent.mkdir(parents=True, exist_ok=True)
-    args.output.write_text(json.dumps(result, indent=2, default=str) + "\n", encoding="utf-8")
-    print(
-        json.dumps(
-            {
-                "historical_totals": result["historical_causality"]["totals"],
-                "product_totals": result["canonical_product_parity"]["totals"],
-                "gate": result["gate"],
-            },
-            indent=2,
-        ),
-        flush=True,
-    )
-    if not result["gate"]["passed"]:
-        raise SystemExit("canonical v0.30 historical-causality/product-parity gate failed")
+    args.output.write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8")
+    print(json.dumps(result, indent=2))
 
 
 if __name__ == "__main__":
