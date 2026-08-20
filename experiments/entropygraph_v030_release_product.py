@@ -12,9 +12,12 @@ from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor
 import hashlib
+import os
 from pathlib import Path
 import shutil
+import stat
 import tempfile
+import time
 
 import msgpack
 
@@ -90,6 +93,71 @@ def _parallel_deferred_overlay(graph_path: Path, overlay_path: Path) -> dict:
 # shared clone to the current release law: losers skip logical decode; winners are verified inside SHARED.build.
 # Historical/research modules remain untouched and therefore continue to serve as independent byte oracles.
 C.SHARED._overlay_retained_graph = _parallel_deferred_overlay
+
+
+def _largest_regular_user_member_bytes(root: Path) -> int:
+    """Return the largest regular source member without following links.
+
+    r24 micro-packs are whole compressed frames. A selected read of any packed file therefore decodes the whole
+    owning pack. The frozen v0.30 locality contract selects the largest regular user-visible member and allows at
+    most 8x decoded context, so the shipping r24 fallback must not create a pack larger than eight times that
+    member. This helper computes the bound from source shape only; it never predicts compression or selection.
+    """
+    largest = 0
+    for dirpath, dirnames, filenames in os.walk(Path(root), followlinks=False):
+        # Do not let symlinked directories enter the walk on platforms where os.walk reports them in dirnames.
+        dirnames[:] = [name for name in dirnames if not os.path.islink(Path(dirpath) / name)]
+        for name in filenames:
+            path = Path(dirpath) / name
+            try:
+                st = os.lstat(path)
+            except OSError:
+                continue
+            if stat.S_ISREG(st.st_mode):
+                largest = max(largest, int(st.st_size))
+    return largest
+
+
+def _locality_bounded_r24_build(root: Path, out: Path) -> dict:
+    """Build canonical r24 with its existing grammar and a release-law-bounded micro-pack target.
+
+    The mature r24 format already supports arbitrary micro-pack sizes; the old 256 KiB target was an encoder
+    heuristic, not an on-disk requirement. On an all-tiny-file tree that heuristic can make a real selected read
+    decode tens of times the selected member. Keep the historical/default Builder untouched for v0.29 evidence,
+    but constrain the shipping v0.30 r24 fallback to ``min(default_target, 8 * largest_regular_member)``. This
+    changes physical grouping only: reader grammar, hashes, metadata semantics, exact bytes pricing and r24/r25
+    conservative selection remain unchanged.
+    """
+    started = time.perf_counter()
+    root = Path(root)
+    out = Path(out)
+    builder = C.Builder(root)
+    default_target = int(builder.micro_pack_target)
+    largest_member = _largest_regular_user_member_bytes(root)
+    if largest_member > 0:
+        builder.micro_pack_target = min(default_target, 8 * largest_member)
+    stats = dict(builder.build(out))
+    with CMPCT(out) as reader:
+        verified_files = reader.verify()
+    return {
+        **stats,
+        "archive_bytes": out.stat().st_size,
+        "format_revision": 24,
+        "format_profile": "canonical-r24",
+        "verified_files": verified_files,
+        "create_s": time.perf_counter() - started,
+        "micro_pack_target_default_bytes": default_target,
+        "micro_pack_target_release_bytes": int(builder.micro_pack_target),
+        "locality_selected_member_bytes": largest_member,
+        "locality_ceiling": 8.0,
+        "locality_pack_policy": "min-default-or-8x-largest-regular-member",
+    }
+
+
+# Only the promoted release product gets the stricter r24 encoder policy. Historical v0.29 and research builders
+# remain byte-stable evidence oracles. Canonical-final resolves this global at call time, so both the profile-
+# ineligible fallback and the concurrent r24-vs-r25 product floor use the same bounded r24 representation.
+C._r24_build = _locality_bounded_r24_build
 
 
 def _revision_for_archive(archive: Path) -> tuple[int | None, str]:
