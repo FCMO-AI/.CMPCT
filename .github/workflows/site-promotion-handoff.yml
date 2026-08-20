@@ -1,145 +1,102 @@
-name: CMPCT exact-main static promotion handoff
+name: CMPCT live Pages promotion audit
 # ci-lane: publisher
 
 on:
-  push:
-    branches: [agent/site-promotion-handoff-13742e49]
+  pull_request:
     paths:
       - ".github/workflows/site-promotion-handoff.yml"
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
-  group: cmpct-site-promotion-handoff
+  group: cmpct-live-pages-audit-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:
-  prepare-static-commit:
+  live-pages-audit:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 10
     steps:
-      - name: Check out immutable merged main source
-        uses: actions/checkout@v6
-        with:
-          ref: 13742e49d8a0f5da32a9bdae6b57dd2de82d6c5b
-          fetch-depth: 0
-          persist-credentials: true
-
-      - name: Assert source authority
+      - name: Verify public deployment receipt and promoted assets
+        env:
+          SITE_ROOT: https://fcmo-ai.github.io/.CMPCT
+          EXPECTED_SOURCE: 13742e49d8a0f5da32a9bdae6b57dd2de82d6c5b
+          EXPECTED_SURFACE: 0.29.k
+          EXPECTED_FORMAT: "24"
         run: |
-          test "$(git rev-parse HEAD)" = "13742e49d8a0f5da32a9bdae6b57dd2de82d6c5b"
-          # Footnote: this disposable workflow prepares a Git object only. The connected agent performs the
-          # actual gh-pages ref update so Pages observes an authorized branch-backed Git promotion.
+          set -euo pipefail
+          work="$(mktemp -d)"
+          success=0
 
-      - name: Set up Python
-        uses: actions/setup-python@v6
-        with:
-          python-version: "3.11"
-          cache: pip
-
-      - name: Set up Node
-        uses: actions/setup-node@v6
-        with:
-          node-version: "22"
-
-      - name: Install canonical CMPCT package
-        run: |
-          python -m pip install --upgrade pip
-          python -m pip install -e .
-
-      - name: Build exact canonical public surface
-        run: |
-          python tools/check_public_surface.py
-          # Footnote: GITHUB_SHA names this disposable branch commit. Removing it makes build_site.py derive
-          # provenance from the immutable main commit actually checked out above.
-          env -u GITHUB_SHA python site/build_site.py --out _site
-          python site/enhance_site.py _site
-
-      - name: Validate canonical static artifact
-        run: |
-          python site/tests/proof_surface_contract.py _site
-          python site/tests/release_evidence_contract.py
-          node --check site/src/assets/app.js
-          node --check site/src/assets/experience.js
-          node --check site/src/assets/motion.js
-          node --check site/src/assets/cinematic.js
-          node --check site/src/assets/cmpct-browser-writer.js
-          node site/tests/i18n-contract.mjs
-          node site/tests/browser-writer-smoke.mjs /tmp/browser-writer-smoke.cmpct
-          python - <<'PY'
-          from pathlib import Path
-          from cmpct.reader import CMPCT
-          path = Path('/tmp/browser-writer-smoke.cmpct')
-          with CMPCT(path) as archive:
-              assert archive.index['v'] == 24
-              assert [row[0] for row in archive.files] == ['copy/repeated.txt', 'docs/repeated.txt', 'unique.txt']
-              assert archive.read('copy/repeated.txt') == archive.read('docs/repeated.txt')
-              assert archive.read('unique.txt') == b'small independent file\n'
-          PY
-
-      - name: Stamp exact publication receipt
-        run: |
-          python - <<'PY'
+          for attempt in $(seq 1 36); do
+            # Footnote: Pages propagation is infrastructure state, not source state. The audit retries only the
+            # public HTTPS reads; it never mutates the site and it accepts nothing until the live receipt names
+            # the exact merged main source commit and the key multilingual assets are physically retrievable.
+            if curl --fail --silent --show-error --location --max-time 15 \
+                -H 'Cache-Control: no-cache' \
+                "$SITE_ROOT/deployment.json?audit=$GITHUB_RUN_ID-$attempt" \
+                -o "$work/deployment.json" \
+              && curl --fail --silent --show-error --location --max-time 15 \
+                -H 'Cache-Control: no-cache' \
+                "$SITE_ROOT/?audit=$GITHUB_RUN_ID-$attempt" \
+                -o "$work/index.html" \
+              && curl --fail --silent --show-error --location --max-time 15 \
+                -H 'Cache-Control: no-cache' \
+                "$SITE_ROOT/assets/i18n.js?audit=$GITHUB_RUN_ID-$attempt" \
+                -o "$work/i18n.js" \
+              && curl --fail --silent --show-error --location --max-time 15 \
+                -H 'Cache-Control: no-cache' \
+                "$SITE_ROOT/assets/i18n/locales/ja.js?audit=$GITHUB_RUN_ID-$attempt" \
+                -o "$work/ja.js"; then
+              if python - "$work" <<'PY'
           import json
+          import os
+          import sys
           from pathlib import Path
-          out = Path('_site')
-          payload = json.loads((out / 'project-data.json').read_text(encoding='utf-8'))
-          project = payload['project']
-          evidence = payload.get('public_evidence') or {}
-          source_commit = '13742e49d8a0f5da32a9bdae6b57dd2de82d6c5b'
-          assert project['site_build_commit'] == source_commit
-          receipt = {
-              'schema': 'cmpct-static-pages-deployment-v1',
-              'publishing_branch': 'gh-pages',
-              'publishing_path': '/',
-              'source_branch': 'main',
-              'source_commit': source_commit,
-              'project_version': project['project_version'],
-              'surface_revision': project['surface_revision'],
-              'canonical_format_revision': project['format_revision'],
-              'evidence_schema': evidence.get('schema'),
-              'jekyll': False,
-              'static_only': True,
-              'generated_from_committed_evidence': True,
-              'validation': {
-                  'localization_cases': 57,
-                  'localization_failures': 0,
-                  'cjk_glyph_coverage': True,
-                  'final_pr_head': '71370bd5340cdce824481ec6de7a73beccf09337'
-              },
-              'policy': 'main owns source and validation; gh-pages owns generated serving artifacts only'
-          }
-          assert receipt['surface_revision'] == '0.29.k'
-          assert receipt['canonical_format_revision'] == 24
-          assert receipt['evidence_schema'] == 'cmpct-public-evidence-v1'
-          (out / 'deployment.json').write_text(json.dumps(receipt, indent=2) + '\n', encoding='utf-8')
+
+          root = Path(sys.argv[1])
+          receipt = json.loads((root / 'deployment.json').read_text(encoding='utf-8'))
+          index = (root / 'index.html').read_text(encoding='utf-8')
+          i18n = (root / 'i18n.js').read_text(encoding='utf-8')
+          ja = (root / 'ja.js').read_text(encoding='utf-8')
+
+          assert receipt['source_commit'] == os.environ['EXPECTED_SOURCE'], receipt
+          assert receipt['surface_revision'] == os.environ['EXPECTED_SURFACE'], receipt
+          assert str(receipt['canonical_format_revision']) == os.environ['EXPECTED_FORMAT'], receipt
+          assert receipt['evidence_schema'] == 'cmpct-public-evidence-v1', receipt
+          assert receipt.get('validation', {}).get('localization_cases') == 57, receipt
+          assert receipt.get('validation', {}).get('localization_failures') == 0, receipt
+          assert receipt.get('validation', {}).get('cjk_glyph_coverage') is True, receipt
+          assert '13742e49d8a0' in index, 'live index is not stamped from intended source'
+          assert '0.29.k' in index, 'live index does not expose intended surface revision'
+          assert 'SUPPORTED_LOCALES' in i18n and 'Canonical source' in i18n, 'live i18n runtime missing source selector'
+          assert 'ja' in ja and any(ord(ch) > 0x3000 for ch in ja), 'live Japanese locale asset lacks Japanese-script content'
+          print(json.dumps(receipt, indent=2))
           PY
+              then
+                success=1
+                echo "Live Pages audit passed on attempt $attempt."
+                break
+              fi
+            fi
+            sleep 10
+          done
 
-      - name: Prepare non-serving promotion commit
+          test "$success" = 1
+
+      - name: Record live verification summary
+        if: ${{ success() }}
         run: |
-          git fetch origin gh-pages
-          test "$(git rev-parse origin/gh-pages)" = "319728fb7a2226e3daf7e106b9c7bb428a4efa23"
-          rm -rf /tmp/cmpct-gh-pages
-          git worktree add --detach /tmp/cmpct-gh-pages origin/gh-pages
-          find /tmp/cmpct-gh-pages -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} +
-          cp -a _site/. /tmp/cmpct-gh-pages/
-          cd /tmp/cmpct-gh-pages
-          test -f .nojekyll
-          test -f index.html
-          test -f deployment.json
-          test -f project-data.json
-          test -f agent.json
-          test -f llms.txt
-          test "$(cat surface-revision.txt)" = "0.29.k"
-          git config user.name "cmpct-static-handoff[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -A
-          git commit -m "site: publish curated 20-locale surface from main 13742e49" -m "Footnote: validated generated serving output only; parent is the previously verified gh-pages deployment. Canonical source remains main, and the connected agent performs the serving-ref fast-forward."
-          # Footnote: this non-serving ref may be force-replaced on a rerun because it is only a transport for
-          # the prepared commit. gh-pages itself is never force-pushed by this workflow.
-          git push --force origin HEAD:refs/heads/agent/static-promotion-handoff-13742e49
-          echo "Prepared commit: $(git rev-parse HEAD)"
+          {
+            echo '## CMPCT live Pages promotion verified'
+            echo
+            echo '- Public URL: `https://fcmo-ai.github.io/.CMPCT/`'
+            echo '- Source commit: `13742e49d8a0f5da32a9bdae6b57dd2de82d6c5b`'
+            echo '- Surface: `0.29.k`'
+            echo '- Canonical format: `r24`'
+            echo '- Locale render evidence: `57/57`, CJK glyph coverage asserted'
+          } >> "$GITHUB_STEP_SUMMARY"
 
-# Footnote: this workflow is disposable and never lands on main. GITHUB_TOKEN writes only the non-serving
-# handoff branch; the actual gh-pages update is an explicit fast-forward performed by the connected Git agent.
+# Footnote: this disposable workflow is an external read-only audit of the branch-backed Pages result. It is
+# never merged into main and never publishes or edits gh-pages; its only authority is to prove what HTTPS serves.
