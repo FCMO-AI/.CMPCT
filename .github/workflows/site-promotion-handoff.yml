@@ -1,4 +1,4 @@
-name: CMPCT live Pages promotion audit
+name: CMPCT Pages configuration diagnostic
 # ci-lane: publisher
 
 on:
@@ -8,95 +8,77 @@ on:
 
 permissions:
   contents: read
+  pages: read
 
 concurrency:
-  group: cmpct-live-pages-audit-${{ github.event.pull_request.number || github.ref }}
+  group: cmpct-pages-diagnostic-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:
-  live-pages-audit:
+  pages-diagnostic:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 5
     steps:
-      - name: Verify public deployment receipt and promoted assets
+      - name: Read canonical GitHub Pages configuration
         env:
-          SITE_ROOT: https://fcmo-ai.github.io/.CMPCT
-          EXPECTED_SOURCE: 13742e49d8a0f5da32a9bdae6b57dd2de82d6c5b
-          EXPECTED_SURFACE: 0.29.k
-          EXPECTED_FORMAT: "24"
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          work="$(mktemp -d)"
-          success=0
+          curl --fail --silent --show-error --location \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "https://api.github.com/repos/$GITHUB_REPOSITORY/pages" \
+            -o /tmp/pages.json
+          echo '--- GitHub Pages API ---'
+          python -m json.tool /tmp/pages.json
 
-          for attempt in $(seq 1 36); do
-            # Footnote: Pages propagation is infrastructure state, not source state. The audit retries only the
-            # public HTTPS reads; it never mutates the site and it accepts nothing until the live receipt names
-            # the exact merged main source commit and the key multilingual assets are physically retrievable.
-            if curl --fail --silent --show-error --location --max-time 15 \
-                -H 'Cache-Control: no-cache' \
-                "$SITE_ROOT/deployment.json?audit=$GITHUB_RUN_ID-$attempt" \
-                -o "$work/deployment.json" \
-              && curl --fail --silent --show-error --location --max-time 15 \
-                -H 'Cache-Control: no-cache' \
-                "$SITE_ROOT/?audit=$GITHUB_RUN_ID-$attempt" \
-                -o "$work/index.html" \
-              && curl --fail --silent --show-error --location --max-time 15 \
-                -H 'Cache-Control: no-cache' \
-                "$SITE_ROOT/assets/i18n.js?audit=$GITHUB_RUN_ID-$attempt" \
-                -o "$work/i18n.js" \
-              && curl --fail --silent --show-error --location --max-time 15 \
-                -H 'Cache-Control: no-cache' \
-                "$SITE_ROOT/assets/i18n/locales/ja.js?audit=$GITHUB_RUN_ID-$attempt" \
-                -o "$work/ja.js"; then
-              if python - "$work" <<'PY'
+      - name: Probe GitHub-owned public URL candidates
+        run: |
+          set -euo pipefail
+          python - <<'PY'
           import json
-          import os
-          import sys
           from pathlib import Path
-
-          root = Path(sys.argv[1])
-          receipt = json.loads((root / 'deployment.json').read_text(encoding='utf-8'))
-          index = (root / 'index.html').read_text(encoding='utf-8')
-          i18n = (root / 'i18n.js').read_text(encoding='utf-8')
-          ja = (root / 'ja.js').read_text(encoding='utf-8')
-
-          assert receipt['source_commit'] == os.environ['EXPECTED_SOURCE'], receipt
-          assert receipt['surface_revision'] == os.environ['EXPECTED_SURFACE'], receipt
-          assert str(receipt['canonical_format_revision']) == os.environ['EXPECTED_FORMAT'], receipt
-          assert receipt['evidence_schema'] == 'cmpct-public-evidence-v1', receipt
-          assert receipt.get('validation', {}).get('localization_cases') == 57, receipt
-          assert receipt.get('validation', {}).get('localization_failures') == 0, receipt
-          assert receipt.get('validation', {}).get('cjk_glyph_coverage') is True, receipt
-          assert '13742e49d8a0' in index, 'live index is not stamped from intended source'
-          assert '0.29.k' in index, 'live index does not expose intended surface revision'
-          assert 'SUPPORTED_LOCALES' in i18n and 'Canonical source' in i18n, 'live i18n runtime missing source selector'
-          assert 'ja' in ja and any(ord(ch) > 0x3000 for ch in ja), 'live Japanese locale asset lacks Japanese-script content'
-          print(json.dumps(receipt, indent=2))
+          data = json.loads(Path('/tmp/pages.json').read_text())
+          print('configured_html_url=' + str(data.get('html_url')))
+          print('configured_status=' + str(data.get('status')))
+          print('configured_build_type=' + str(data.get('build_type')))
+          print('configured_source=' + json.dumps(data.get('source'), sort_keys=True))
           PY
-              then
-                success=1
-                echo "Live Pages audit passed on attempt $attempt."
-                break
-              fi
-            fi
-            sleep 10
+
+          for url in \
+            'https://fcmo-ai.github.io/.CMPCT/' \
+            'https://fcmo-ai.github.io/.cmpct/' \
+            'https://fcmo-ai.github.io/CMPCT/' \
+            'https://fcmo-ai.github.io/'; do
+            code="$(curl --silent --show-error --location --max-time 15 -o /tmp/probe.html -w '%{http_code}' "$url" || true)"
+            printf '%s -> %s\n' "$url" "$code"
           done
 
-          test "$success" = 1
-
-      - name: Record live verification summary
-        if: ${{ success() }}
+      - name: Probe configured Pages URL and receipt
         run: |
-          {
-            echo '## CMPCT live Pages promotion verified'
-            echo
-            echo '- Public URL: `https://fcmo-ai.github.io/.CMPCT/`'
-            echo '- Source commit: `13742e49d8a0f5da32a9bdae6b57dd2de82d6c5b`'
-            echo '- Surface: `0.29.k`'
-            echo '- Canonical format: `r24`'
-            echo '- Locale render evidence: `57/57`, CJK glyph coverage asserted'
-          } >> "$GITHUB_STEP_SUMMARY"
+          set -euo pipefail
+          configured="$(python - <<'PY'
+          import json
+          from pathlib import Path
+          value = json.loads(Path('/tmp/pages.json').read_text()).get('html_url') or ''
+          print(value.rstrip('/'))
+          PY
+          )"
+          test -n "$configured"
+          echo "Configured Pages URL: $configured/"
+          curl --silent --show-error --location --max-time 15 -D /tmp/root.headers \
+            -o /tmp/root.body "$configured/" || true
+          echo '--- configured root response ---'
+          sed -n '1,25p' /tmp/root.headers
+          curl --silent --show-error --location --max-time 15 -D /tmp/receipt.headers \
+            -o /tmp/receipt.body "$configured/deployment.json" || true
+          echo '--- configured receipt response ---'
+          sed -n '1,25p' /tmp/receipt.headers
+          echo '--- configured receipt/body prefix ---'
+          head -c 1200 /tmp/receipt.body || true
+          echo
 
-# Footnote: this disposable workflow is an external read-only audit of the branch-backed Pages result. It is
-# never merged into main and never publishes or edits gh-pages; its only authority is to prove what HTTPS serves.
+# Footnote: this disposable workflow is a read-only control-plane diagnostic. It asks GitHub which Pages URL
+# and source are actually configured, then probes those public endpoints. It never changes Pages settings,
+# source files, main, or gh-pages and is never merged into the repository.
