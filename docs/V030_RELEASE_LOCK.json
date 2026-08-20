@@ -125,7 +125,12 @@
         {"path": "facts.exact_tree_verified_before_credit", "eq": true},
         {"path": "facts.symmetric_semantics_disclosed", "eq": true},
         {"path": "facts.hostile_structural_frontier_pass", "eq": true},
-        {"path": "facts.fair_losses_preserved", "eq": true}
+        {"path": "facts.fair_losses_preserved", "eq": true},
+        {"path": "facts.all_workloads_strictly_beat_zip_size", "eq": true},
+        {"path": "facts.all_workloads_strictly_beat_zstd19_size", "eq": true},
+        {"path": "facts.all_workloads_strictly_beat_zip_create", "eq": true},
+        {"path": "facts.all_workloads_strictly_beat_zstd19_create", "eq": true},
+        {"path": "facts.strict_no_ties_size_or_create", "eq": true}
       ]
     },
     {
