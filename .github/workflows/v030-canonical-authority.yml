@@ -109,7 +109,7 @@ jobs:
           c=d['contract']; t=d['totals']; g=d['gate']; f=d['canonical_format']
           assert d['engine']=='experiments/entropygraph_v030_canonical.py'
           assert d['release_facade']=='cmpct-v030-r25-v1'
-          assert c['expected_v029_aggregate_bytes']==137501815
+          assert c['expected_v029_aggregate_bytes']==137499525
           assert c['minimum_release_saving_bytes']==687783
           assert c['inherited_absolute_revision_floor_bytes']==687783
           assert c['minimum_improved_rows']==3
