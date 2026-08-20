@@ -128,17 +128,17 @@ def _largest_regular_user_member_bytes(root: Path) -> int:
 
 
 def _locality_bounded_r24_build(root: Path, out: Path) -> dict:
-    """Build canonical r24 with fixed release knobs and locality-bounded shared context.
+    """Build exact canonical r24 bytes while deferring logical verification until selection.
 
     Revision 24 accepts arbitrary micro-pack sizes; 256 KiB was an encoder heuristic, not grammar. The release
     path spends the selected-member locality budget up to the mature reader's 2 MiB decoded-blob cache ceiling:
     ``min(2 MiB, 8 * largest_regular_member)``. It also retains exact Deflate streams at every size so virtual ZIP
     reconstruction does not turn a tiny selected archive into a large raw-content decode.
 
-    Historical v0.29 builders remain untouched. Canonical v0.30 pins every environment-sensitive byte knob here
-    so `CMPCT_MICRO_PACK_*` or `CMPCT_DEFLATE_REUSE_MIN` cannot silently change release bytes between evidence
-    runners. Exact r24/r25 complete-artifact pricing and conservative tie policy remain unchanged, and the full
-    regression/generalization/runtime matrix decides whether this encoder policy survives.
+    The r24 candidate exists first as a byte floor. Verifying it before the r24/r25 tournament is wasted work when
+    r25 wins, and duplicated work when r24 wins because canonical-final strongly verifies the selected publication
+    before returning. Therefore this function builds exact r24 bytes only; selected-artifact verification remains
+    mandatory and unchanged at the parent publication boundary. Historical v0.29 builders remain untouched.
     """
     started = time.perf_counter()
     root = Path(root)
@@ -150,14 +150,13 @@ def _locality_bounded_r24_build(root: Path, out: Path) -> dict:
     if largest_member > 0:
         builder.micro_pack_target = min(R24_RELEASE_PACK_CAP_BYTES, 8 * largest_member)
     stats = dict(builder.build(out))
-    with CMPCT(out) as reader:
-        verified_files = reader.verify()
     return {
         **stats,
         "archive_bytes": out.stat().st_size,
         "format_revision": 24,
         "format_profile": "canonical-r24",
-        "verified_files": verified_files,
+        "verified_files": None,
+        "verification_state": "deferred-to-selected-artifact",
         "create_s": time.perf_counter() - started,
         "micro_pack_target_default_bytes": default_target,
         "micro_pack_target_release_bytes": int(builder.micro_pack_target),
