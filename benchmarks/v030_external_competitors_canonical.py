@@ -20,6 +20,7 @@ round-trip, while CMPCT's richer filesystem fidelity is separately covered by ca
 import argparse
 import json
 from pathlib import Path
+import time
 
 from benchmarks import v030_external_competitors as B
 from experiments import entropygraph_v030_release_product as CANON
@@ -27,6 +28,61 @@ from experiments import entropygraph_v030_release as HISTORICAL_TREE
 
 B.CMPCT = CANON
 B._tree = lambda root: HISTORICAL_TREE.treehash(root)
+
+
+def _timing_profile(stats: dict) -> dict:
+    """Retain internal wall-time ownership without changing the competitor timer boundary."""
+    r24 = stats.get("r24") if isinstance(stats.get("r24"), dict) else {}
+    r25 = stats.get("r25") if isinstance(stats.get("r25"), dict) else {}
+    g04 = r25.get("g04") if isinstance(r25.get("g04"), dict) else {}
+    pg = r25.get("prefixgraph") if isinstance(r25.get("prefixgraph"), dict) else {}
+    return {
+        "product_portfolio_create_s": stats.get("portfolio_create_s"),
+        "r24_create_s": r24.get("create_s"),
+        "r24_verification_state": r24.get("verification_state"),
+        "r24_prebuild_overlap": r24.get("r24_prebuild_overlap"),
+        "r25_create_s": r25.get("create_s"),
+        "r25_portfolio_create_s": r25.get("portfolio_create_s"),
+        "r25_preselection_logical_verification": r25.get("preselection_logical_verification"),
+        "g04_portfolio_create_s": g04.get("portfolio_create_s"),
+        "g04_shared_candidate_build_s": g04.get("shared_candidate_build_s"),
+        "g04_v028_child_s": g04.get("v028_child_s"),
+        "g04_attempt5_child_s": g04.get("attempt5_child_s"),
+        "g04_overlay_verification_state": g04.get("overlay_verification_state"),
+        "prefixgraph_portfolio_create_s": pg.get("portfolio_create_s"),
+    }
+
+
+def _cmpct_with_stage_timings(stage: Path, archive: Path, extracted: Path) -> dict:
+    """Mirror the frozen CMPCT competitor measurement and expose only nested diagnostic timings.
+
+    The create timer starts immediately before and stops immediately after ``CANON.build`` exactly as the base
+    harness does. Strong verification and extraction remain outside that timer. The extra fields merely preserve
+    already-produced product stats so a red row identifies which internal stage owns the latency.
+    """
+    started = time.perf_counter()
+    stats = CANON.build(stage, archive)
+    create_s = time.perf_counter() - started
+    verified = CANON.strong_verify(archive)
+    if not verified.get("ok"):
+        raise RuntimeError(f"CMPCT v0.30 competitor artifact failed strong verification: {verified!r}")
+    started = time.perf_counter()
+    CANON.extract(archive, extracted)
+    extract_s = time.perf_counter() - started
+    return {
+        "available": True,
+        "archive_bytes": archive.stat().st_size,
+        "create_s": create_s,
+        "extract_s": extract_s,
+        "selected": stats.get("selected"),
+        "max_member_read_amplification": stats.get("max_selected_member_read_amplification"),
+        "timing_profile": _timing_profile(stats),
+    }
+
+
+# Diagnostic enrichment only: the exact same public product build/verify/extract calls and timer boundary remain
+# authoritative. No comparator implementation, threshold, workload, ordering or archive bytes are changed.
+B._cmpct = _cmpct_with_stage_timings
 
 
 def _strict_row_dominance(result: dict) -> dict:
@@ -109,6 +165,10 @@ def run(work_root: Path) -> dict:
     result["release_facade"] = "cmpct-v030-release-product-v1"
     result["source_tree_identity"] = "historical-regular-file-content-v0.29-frozen"
     result["product_fidelity_evidence"] = "canonical product parity / native portability lanes"
+    result["timing_diagnostics"] = (
+        "CMPCT rows retain product-internal stage timings; comparator create_s remains the unchanged full public "
+        "CANON.build wall-clock and strict ZIP/Zstd gates use only that outer measurement."
+    )
     result["strict_competitor_contract"] = (
         "For every frozen workload: CMPCT archive_bytes < ZIP/Deflate-9 archive_bytes AND CMPCT archive_bytes < "
         "solid tar+Zstd-19 archive_bytes AND CMPCT create_s < ZIP/Deflate-9 create_s AND CMPCT create_s < solid "
