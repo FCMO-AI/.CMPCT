@@ -7,9 +7,11 @@ Three preregistered public workloads cover the mechanisms expected to matter:
 - neutral logs/telemetry (hierarchical Geometry);
 - neutral ML artifacts (large structured/tokenizer Geometry).
 
-Two balanced repetitions run v0.29-first then v0.30-first.  Pack, strong verify and full extract are each
-fresh processes.  Every produced tree must match the exact repaired source identity and every v0.29 archive
-must reproduce its durable accepted byte floor.
+Two balanced repetitions run v0.29-first then v0.30-first. Pack, strong verify and full extract are each
+fresh processes. Every produced tree must match the identity domain owned by that measured engine and every v0.29
+archive must reproduce its durable accepted byte floor. The historical/research gate uses the same frozen content-
+tree identity on both sides; the canonical binding may supply the richer r24/r25 product user-tree identity for
+v0.30 without pretending it equals the historical v0.29 benchmark hash.
 
 Promotion thresholds are frozen before independent timing evidence:
 - median workload create ratio v0.30/v0.29 <= 1.10;
@@ -19,11 +21,11 @@ Promotion thresholds are frozen before independent timing evidence:
 - no measured v0.30 pack/extract peak-RSS ratio > 1.25;
 - zero v0.30 archive-size regressions.
 
-A miss is optimization debt, not permission to relax the gate.  The separate shared-portfolio benchmark must
+A miss is optimization debt, not permission to relax the gate. The separate shared-portfolio benchmark must
 also prove >=20% / >=5 s rehabilitation versus the older duplicated v0.30 implementation.
 
 Footnote: hosted-runner timings are suitable for a same-run paired release gate, not for publishing absolute
-throughput claims.  Public MB/s claims still belong on controlled benchmark hardware with raw repetitions.
+throughput claims. Public MB/s claims still belong on controlled benchmark hardware with raw repetitions.
 """
 
 import argparse
@@ -51,17 +53,34 @@ TARGETS = (
 )
 
 
+def _expected_tree_for_engine(engine: str, source: Path, historical_expected: str) -> str:
+    """Return the identity that the selected worker must report for this engine.
+
+    The base/research runtime gate historically uses the frozen content-tree domain for both engines. The canonical
+    adapter replaces this function for v0.30 so r24/r25 evidence is checked in its native user-tree semantic domain.
+    This hook changes no timed operation and never changes the v0.29 benchmark-substrate proof.
+    """
+    del engine, source
+    return historical_expected
+
+
 def _run_worker(*args: str) -> dict:
     env = os.environ.copy()
     env["PYTHONPATH"] = str(ROOT) + (os.pathsep + env["PYTHONPATH"] if env.get("PYTHONPATH") else "")
-    completed = subprocess.run(
-        [sys.executable, str(WORKER), *args],
-        cwd=ROOT,
-        env=env,
-        check=True,
-        capture_output=True,
-        text=True,
-    )
+    try:
+        completed = subprocess.run(
+            [sys.executable, str(WORKER), *args],
+            cwd=ROOT,
+            env=env,
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+    except subprocess.CalledProcessError as exc:
+        raise RuntimeError(
+            "performance worker failed: "
+            f"args={args!r} returncode={exc.returncode} stdout={exc.stdout!r} stderr={exc.stderr!r}"
+        ) from exc
     lines = [line for line in completed.stdout.splitlines() if line.strip()]
     if not lines:
         raise RuntimeError(f"performance worker produced no JSON: stderr={completed.stderr!r}")
@@ -106,12 +125,9 @@ def _build_corpora(work_root: Path) -> dict[tuple[str, str], Path]:
     )
     for key, source in roots.items():
         expected = accepted[key]["tree_sha256"]
-        # Use the same tree implementation the frozen generalization gate uses.
-        from experiments import entropygraph_v030_release as release
-
-        got = release.treehash(source)
+        got = GENERAL._historical_treehash(source)
         if got != expected:
-            raise RuntimeError(f"runtime-gate source drift for {key}: {got} != {expected}")
+            raise RuntimeError(f"runtime-gate historical source drift for {key}: {got} != {expected}")
     return roots
 
 
@@ -128,8 +144,12 @@ def run(work_root: Path) -> dict:
 
     for suite, name in TARGETS:
         source = roots[(suite, name)]
-        expected_tree = accepted[(suite, name)]["tree_sha256"]
+        historical_tree = accepted[(suite, name)]["tree_sha256"]
         expected_v029_bytes = int(accepted[(suite, name)]["accepted_v029_bytes"])
+        expected_trees = {
+            engine: _expected_tree_for_engine(engine, source, historical_tree)
+            for engine in ("v029", "v030")
+        }
         repetitions = []
 
         for rep, order in enumerate(REPETITION_ORDER):
@@ -155,16 +175,24 @@ def run(work_root: Path) -> dict:
                     "--archive", str(archive),
                     "--destination", str(destination),
                 )
+                expected_tree = expected_trees[engine]
                 if packed["tree_sha256"] != expected_tree or verified["tree_sha256"] != expected_tree:
-                    raise RuntimeError(f"{engine} pack/verify tree mismatch for {suite}/{name}")
+                    raise RuntimeError(
+                        f"{engine} pack/verify tree mismatch for {suite}/{name}: "
+                        f"pack={packed['tree_sha256']!r} verify={verified['tree_sha256']!r} expected={expected_tree!r}"
+                    )
                 if extracted["tree_sha256"] != expected_tree:
-                    raise RuntimeError(f"{engine} extracted tree mismatch for {suite}/{name}")
+                    raise RuntimeError(
+                        f"{engine} extracted tree mismatch for {suite}/{name}: "
+                        f"got={extracted['tree_sha256']!r} expected={expected_tree!r}"
+                    )
                 if engine == "v029" and int(packed["archive_bytes"]) != expected_v029_bytes:
                     raise RuntimeError(
                         f"v0.29 runtime baseline drift for {suite}/{name}: "
                         f"{packed['archive_bytes']} != {expected_v029_bytes}"
                     )
                 per_engine[engine] = {
+                    "tree_sha256": expected_tree,
                     "archive_bytes": int(packed["archive_bytes"]),
                     "pack_wall_s": float(packed["wall_s"]),
                     "pack_peak_rss_kib": int(packed["peak_rss_kib"]),
@@ -194,7 +222,9 @@ def run(work_root: Path) -> dict:
         workload = {
             "suite": suite,
             "name": name,
-            "tree_sha256": expected_tree,
+            "historical_tree_sha256": historical_tree,
+            "v029_tree_sha256": expected_trees["v029"],
+            "v030_tree_sha256": expected_trees["v030"],
             "accepted_v029_bytes": expected_v029_bytes,
             "repetitions": repetitions,
             "median_create_ratio": statistics.median(row["create_ratio"] for row in repetitions),
@@ -237,6 +267,7 @@ def run(work_root: Path) -> dict:
             "maximum_peak_rss_ratio": MAX_PEAK_RSS_RATIO,
             "size_regression_tolerance_bytes": 0,
             "timing_semantics": "fresh-process same-run paired hosted-runner release gate",
+            "tree_identity_semantics": "historical substrate and measured product identities are engine-owned and independently verified",
         },
         "rows": rows,
         "totals": {
