@@ -1,6 +1,11 @@
 from __future__ import annotations
 
-"""Fresh-process runtime worker for the canonical v0.30 release product surface."""
+"""Fresh-process runtime worker for the canonical v0.30 release product surface.
+
+Timed pack/verify/extract operations remain engine-native. Tree equality is reported in the canonical
+user-visible semantic-tree domain for both r24 and r25, so runtime correctness does not compare the historical
+benchmark tree hash to the r25 product tree hash by accident.
+"""
 
 import argparse
 import hashlib
@@ -19,6 +24,12 @@ def _engine(name: str):
     else:  # pragma: no cover
         raise ValueError(name)
     return engine
+
+
+def _product_identity_engine():
+    from experiments import entropygraph_v030_release_product as product
+
+    return product
 
 
 def _rss_kib() -> int:
@@ -113,27 +124,38 @@ def main() -> None:
     args = parser.parse_args()
 
     engine = _engine(args.engine)
+    product = _product_identity_engine()
     started = time.perf_counter()
+
     if args.op == "pack":
         if args.source is None:
             raise SystemExit("--source required for pack")
         args.archive.parent.mkdir(parents=True, exist_ok=True)
         stats = engine.build(args.source, args.archive)
+        operation_wall_s = time.perf_counter() - started
+        operation_peak_rss_kib = _rss_kib()
+        canonical_tree = product.treehash(args.source)
         result = {
             "engine": args.engine,
             "op": args.op,
             "archive_bytes": args.archive.stat().st_size,
-            "tree_sha256": engine.treehash(args.source),
+            "tree_sha256": canonical_tree,
             "build_stats": stats,
         }
     elif args.op == "verify":
         verified = engine.strong_verify(args.archive)
         if not verified.get("ok"):
             raise RuntimeError(f"{args.engine} strong verification failed: {verified!r}")
+        operation_wall_s = time.perf_counter() - started
+        operation_peak_rss_kib = _rss_kib()
+        canonical_verified = verified if args.engine == "v030" else product.strong_verify(args.archive)
+        if not canonical_verified.get("ok"):
+            raise RuntimeError(f"canonical identity verification failed for {args.engine}: {canonical_verified!r}")
         result = {
             "engine": args.engine,
             "op": args.op,
-            "tree_sha256": verified.get("tree_sha256"),
+            "tree_sha256": canonical_verified.get("tree_sha256"),
+            "engine_tree_sha256": verified.get("tree_sha256"),
             "verify": verified,
         }
     elif args.op == "extract":
@@ -142,18 +164,29 @@ def main() -> None:
         if args.destination.exists():
             shutil.rmtree(args.destination)
         engine.extract(args.archive, args.destination)
-        result = {"engine": args.engine, "op": args.op, "tree_sha256": engine.treehash(args.destination)}
+        operation_wall_s = time.perf_counter() - started
+        operation_peak_rss_kib = _rss_kib()
+        result = {
+            "engine": args.engine,
+            "op": args.op,
+            "tree_sha256": product.treehash(args.destination),
+        }
     elif args.op == "members":
         if args.engine != "v030":
             raise SystemExit("canonical product member listing is a v0.30 operation")
         _require_product_member_surface(engine, require_stats=False)
-        result = {"engine": args.engine, "op": args.op, "members": engine.list_members(args.archive)}
+        members = engine.list_members(args.archive)
+        operation_wall_s = time.perf_counter() - started
+        operation_peak_rss_kib = _rss_kib()
+        result = {"engine": args.engine, "op": args.op, "members": members}
     else:
         if args.engine != "v030":
             raise SystemExit("canonical product selective-member operation is a v0.30 operation")
         if not args.member:
             raise SystemExit("--member required for member operation")
         raw, stats = _observed_product_member(engine, args.archive, args.member)
+        operation_wall_s = time.perf_counter() - started
+        operation_peak_rss_kib = _rss_kib()
         result = {
             "engine": args.engine,
             "op": args.op,
@@ -163,8 +196,8 @@ def main() -> None:
             "member_stats": stats,
         }
 
-    result["wall_s"] = time.perf_counter() - started
-    result["peak_rss_kib"] = _rss_kib()
+    result["wall_s"] = operation_wall_s
+    result["peak_rss_kib"] = operation_peak_rss_kib
     print(json.dumps(result, separators=(",", ":"), default=str), flush=True)
 
 
