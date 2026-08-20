@@ -48,8 +48,16 @@ def test_missing_substrate_is_not_silently_assumed_equivalent() -> None:
 
 
 def test_product_surface_dependency_fails_closed_when_contract_is_incomplete(monkeypatch) -> None:
-    import experiments.entropygraph_v030_canonical as canonical
+    """The ablation harness must reject an incomplete *promoted release* surface.
 
-    monkeypatch.delattr(canonical, "build_ablation", raising=False)
-    with pytest.raises(A.ProductSurfaceUnavailable, match="build_ablation"):
-        A._load_product_module()
+    The historical version of this test targeted ``entropygraph_v030_canonical.build_ablation`` through a
+    now-removed ``_load_product_module`` helper. Product parity no longer enters through that research/canonical
+    implementation module: it intentionally goes through ``entropygraph_v030_release_product`` and
+    ``_load_product_surface``. Keep the fail-closed invariant attached to the actual promoted boundary so a
+    future facade regression cannot silently downgrade evidence to a research surface.
+    """
+    from experiments import entropygraph_v030_release_product as product
+
+    monkeypatch.delattr(product, "build", raising=False)
+    with pytest.raises(A.ProductSurfaceUnavailable, match="product surface incomplete"):
+        A._load_product_surface()
