@@ -35,7 +35,7 @@ def test_shipping_r24_micro_pack_target_is_bounded_by_largest_member(tmp_path, m
             return None
 
         def verify(self):
-            return 2
+            raise AssertionError("r24 floor candidate must not be eagerly verified")
 
     monkeypatch.setattr(product.C, "Builder", FakeBuilder)
     monkeypatch.setattr(product, "CMPCT", FakeReader)
@@ -48,7 +48,8 @@ def test_shipping_r24_micro_pack_target_is_bounded_by_largest_member(tmp_path, m
     assert stats["micro_pack_target_release_bytes"] == 24_000
     assert stats["locality_selected_member_bytes"] == 3000
     assert stats["locality_ceiling"] == 8.0
-    assert stats["verified_files"] == 2
+    assert stats["verified_files"] is None
+    assert stats["verification_state"] == "deferred-to-selected-artifact"
 
 
 def test_shipping_r24_keeps_default_pack_cap_for_large_members(tmp_path, monkeypatch) -> None:
@@ -79,7 +80,7 @@ def test_shipping_r24_keeps_default_pack_cap_for_large_members(tmp_path, monkeyp
             return None
 
         def verify(self):
-            return 1
+            raise AssertionError("r24 floor candidate must not be eagerly verified")
 
     monkeypatch.setattr(product.C, "Builder", FakeBuilder)
     monkeypatch.setattr(product, "CMPCT", FakeReader)
@@ -90,6 +91,7 @@ def test_shipping_r24_keeps_default_pack_cap_for_large_members(tmp_path, monkeyp
     assert seen["deflate_reuse_min"] == product.R24_RELEASE_DEFLATE_REUSE_MIN_BYTES
     assert stats["micro_pack_target_release_bytes"] == 256 * 1024
     assert stats["locality_selected_member_bytes"] == 1024 * 1024
+    assert stats["verification_state"] == "deferred-to-selected-artifact"
 
 
 def test_r24_prebuild_overlaps_filesystem_manifest_capture(tmp_path, monkeypatch) -> None:
