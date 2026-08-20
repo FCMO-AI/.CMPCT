@@ -55,10 +55,17 @@ def test_canonical_r25_builder_defers_only_inner_final_reopen(monkeypatch, tmp_p
 
     monkeypatch.setattr(canonical, "_revision25_profile_context", lambda: nullcontext())
 
-    def fake_build(root: Path, archive: Path, *, post_publish_verify: bool = True) -> dict:
+    def fake_build(
+        root: Path,
+        archive: Path,
+        *,
+        post_publish_verify: bool = True,
+        defer_preselection_verify: bool = False,
+    ) -> dict:
         observed["root"] = Path(root)
         observed["archive"] = Path(archive)
         observed["post_publish_verify"] = post_publish_verify
+        observed["defer_preselection_verify"] = defer_preselection_verify
         archive.write_bytes(canonical.G04_MAGIC + b"candidate")
         return {"archive_bytes": archive.stat().st_size, "selected": "geometry-g04"}
 
@@ -69,9 +76,11 @@ def test_canonical_r25_builder_defers_only_inner_final_reopen(monkeypatch, tmp_p
         "root": staged,
         "archive": out,
         "post_publish_verify": False,
+        "defer_preselection_verify": True,
     }
     assert result["selected"] == "geometry-g04"
     assert result["create_s"] >= 0
 
-    # Footnote: the deferral belongs only to this canonical composition seam. ``RC.build`` itself keeps
-    # ``post_publish_verify=True`` as the public default, so standalone tournament callers remain self-verifying.
+    # Footnote: both deferrals belong only to this canonical composition seam. ``RC.build`` itself keeps
+    # verification enabled by default for standalone tournament callers, while the canonical parent verifies the
+    # one artifact that can actually publish after the exact r24/r25 byte decision.
