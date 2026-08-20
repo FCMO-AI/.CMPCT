@@ -8,8 +8,9 @@ cross-format extracted-tree comparator intentionally remains the historical regu
 used to freeze all 15 inputs.
 
 v0.30 has a strict per-workload dominance contract for the two ubiquitous compression baselines: canonical
-CMPCT must be strictly smaller than both deterministic ZIP/Deflate-9 and solid tar+Zstd-19 on every one of the
-15 frozen workloads. Aggregate wins, suite-level wins and exact ties cannot compensate for a losing row.
+CMPCT must be strictly smaller and strictly faster to create than both deterministic ZIP/Deflate-9 and solid
+tar+Zstd-19 on every one of the 15 frozen workloads. Aggregate wins, suite-level wins and exact ties cannot
+compensate for a losing row on either dimension.
 
 Footnote: comparing ZIP/7z/tar/ZPAQ with the r25 metadata hash would be false equivalence because those formats do
 not all preserve the same metadata semantics. The size frontier is credited only after exact regular-file content
@@ -29,39 +30,56 @@ B._tree = lambda root: HISTORICAL_TREE.treehash(root)
 
 
 def _strict_row_dominance(result: dict) -> dict:
-    """Require CMPCT to beat ZIP and Zstd by at least one byte on every frozen workload."""
+    """Require strict per-workload size and create-time wins over ZIP and solid Zstd-19."""
     rows = result["rows"]
     details = []
-    all_zip = True
-    all_zstd = True
+    all_zip_size = True
+    all_zstd_size = True
+    all_zip_create = True
+    all_zstd_create = True
     for row in rows:
         formats = row["formats"]
         cmpct = formats["cmpct_v030"]
         zip_row = formats["zip_deflate9"]
         zstd_row = formats["tar_zstd19_solid"]
-        if not cmpct.get("available") or not zip_row.get("available") or not zstd_row.get("available"):
-            zip_win = False
-            zstd_win = False
+        available = cmpct.get("available") and zip_row.get("available") and zstd_row.get("available")
+        if not available:
+            zip_size_win = zstd_size_win = zip_create_win = zstd_create_win = False
         else:
             cmpct_bytes = int(cmpct["archive_bytes"])
             zip_bytes = int(zip_row["archive_bytes"])
             zstd_bytes = int(zstd_row["archive_bytes"])
-            zip_win = cmpct_bytes < zip_bytes
-            zstd_win = cmpct_bytes < zstd_bytes
-        all_zip = all_zip and zip_win
-        all_zstd = all_zstd and zstd_win
+            cmpct_create = float(cmpct["create_s"])
+            zip_create = float(zip_row["create_s"])
+            zstd_create = float(zstd_row["create_s"])
+            zip_size_win = cmpct_bytes < zip_bytes
+            zstd_size_win = cmpct_bytes < zstd_bytes
+            zip_create_win = cmpct_create < zip_create
+            zstd_create_win = cmpct_create < zstd_create
+        all_zip_size = all_zip_size and zip_size_win
+        all_zstd_size = all_zstd_size and zstd_size_win
+        all_zip_create = all_zip_create and zip_create_win
+        all_zstd_create = all_zstd_create and zstd_create_win
         details.append({
             "label": row["label"],
             "cmpct_bytes": cmpct.get("archive_bytes"),
             "zip_deflate9_bytes": zip_row.get("archive_bytes"),
             "tar_zstd19_solid_bytes": zstd_row.get("archive_bytes"),
-            "strictly_beats_zip": zip_win,
-            "strictly_beats_zstd19": zstd_win,
+            "cmpct_create_s": cmpct.get("create_s"),
+            "zip_deflate9_create_s": zip_row.get("create_s"),
+            "tar_zstd19_solid_create_s": zstd_row.get("create_s"),
+            "strictly_beats_zip_size": zip_size_win,
+            "strictly_beats_zstd19_size": zstd_size_win,
+            "strictly_beats_zip_create": zip_create_win,
+            "strictly_beats_zstd19_create": zstd_create_win,
         })
+    strict_all = all_zip_size and all_zstd_size and all_zip_create and all_zstd_create
     return {
-        "all_workloads_strictly_beat_zip": all_zip,
-        "all_workloads_strictly_beat_zstd19": all_zstd,
-        "strict_no_ties": all_zip and all_zstd,
+        "all_workloads_strictly_beat_zip_size": all_zip_size,
+        "all_workloads_strictly_beat_zstd19_size": all_zstd_size,
+        "all_workloads_strictly_beat_zip_create": all_zip_create,
+        "all_workloads_strictly_beat_zstd19_create": all_zstd_create,
+        "strict_no_ties_size_or_create": strict_all,
         "rows": details,
     }
 
@@ -70,17 +88,21 @@ def run(work_root: Path) -> dict:
     result = dict(B.run(work_root))
     strict = _strict_row_dominance(result)
     gate = dict(result["gate"])
-    gate["all_workloads_strictly_beat_zip"] = strict["all_workloads_strictly_beat_zip"]
-    gate["all_workloads_strictly_beat_zstd19"] = strict["all_workloads_strictly_beat_zstd19"]
-    gate["strict_no_ties_vs_zip_or_zstd19"] = strict["strict_no_ties"]
-    gate["passed"] = bool(gate.get("passed")) and all(
-        gate[key]
-        for key in (
-            "all_workloads_strictly_beat_zip",
-            "all_workloads_strictly_beat_zstd19",
-            "strict_no_ties_vs_zip_or_zstd19",
-        )
-    )
+    for key in (
+        "all_workloads_strictly_beat_zip_size",
+        "all_workloads_strictly_beat_zstd19_size",
+        "all_workloads_strictly_beat_zip_create",
+        "all_workloads_strictly_beat_zstd19_create",
+        "strict_no_ties_size_or_create",
+    ):
+        gate[key] = strict[key]
+    gate["passed"] = bool(gate.get("passed")) and all(gate[key] for key in (
+        "all_workloads_strictly_beat_zip_size",
+        "all_workloads_strictly_beat_zstd19_size",
+        "all_workloads_strictly_beat_zip_create",
+        "all_workloads_strictly_beat_zstd19_create",
+        "strict_no_ties_size_or_create",
+    ))
     result["gate"] = gate
     result["strict_per_workload_dominance"] = strict
     result["engine"] = "experiments/entropygraph_v030_release_product.py"
@@ -88,8 +110,9 @@ def run(work_root: Path) -> dict:
     result["source_tree_identity"] = "historical-regular-file-content-v0.29-frozen"
     result["product_fidelity_evidence"] = "canonical product parity / native portability lanes"
     result["strict_competitor_contract"] = (
-        "For every frozen workload: CMPCT archive_bytes < ZIP/Deflate-9 archive_bytes AND "
-        "CMPCT archive_bytes < solid tar+Zstd-19 archive_bytes. Equality is failure."
+        "For every frozen workload: CMPCT archive_bytes < ZIP/Deflate-9 archive_bytes AND CMPCT archive_bytes < "
+        "solid tar+Zstd-19 archive_bytes AND CMPCT create_s < ZIP/Deflate-9 create_s AND CMPCT create_s < solid "
+        "tar+Zstd-19 create_s. Equality on any comparison is failure."
     )
     return result
 
