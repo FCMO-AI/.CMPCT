@@ -50,7 +50,8 @@ jobs:
             experiments/entropygraph_v030_release_reader_policy.py \
             experiments/entropygraph_v030_member_reader.py \
             experiments/entropygraph_v030_release_candidate.py \
-            experiments/entropygraph_v030_release.py
+            experiments/entropygraph_v030_release.py \
+            experiments/entropygraph_v030_release_product.py
       - name: Run reader, locality, recovery and deterministic mutation gates
         run: |
           python -m pytest -q \
@@ -198,10 +199,10 @@ jobs:
             tests/test_v030_release_reader_policy.py \
             tests/test_v030_member_reader.py \
             tests/test_v030_release_candidate.py
-      - name: Run fresh-process paired v0.29/v0.30 runtime gate
+      - name: Run fresh-process paired v0.29/promoted-v0.30 runtime gate
         run: |
           mkdir -p benchmark-artifacts
-          python benchmarks/v030_release_performance.py \
+          python benchmarks/v030_release_performance_v2.py \
             --work-root benchmark-artifacts/runtime-work \
             --output benchmark-artifacts/runtime.json
       - name: Enforce frozen runtime policy
@@ -211,6 +212,8 @@ jobs:
           from pathlib import Path
           data=json.loads(Path('benchmark-artifacts/runtime.json').read_text())
           contract=data['contract']; totals=data['totals']; gate=data['gate']
+          assert data['engine']=='experiments/entropygraph_v030_release_product.py'
+          assert data['release_facade']=='cmpct-v030-release-product-v1'
           assert contract['maximum_median_create_ratio']==1.10
           assert contract['maximum_workload_create_ratio']==1.25
           assert contract['maximum_median_extract_ratio']==1.10
@@ -236,6 +239,7 @@ jobs:
 # target intact. It is deliberately not duplicated as a release-PR blocker because v0.30 release authority is
 # governed by complete-product generalization/runtime/native/platform/competitor receipts, not by the separate
 # >=256 KiB mechanism-research target. No oracle threshold was changed or marked green by this routing cleanup.
-# The generalization/runtime jobs construct the frozen neutral-hostile media workload and therefore need `ffmpeg`
-# plus the package audio extra before measurement. A red release job remains a release blocker, and the PR remains
-# merge-locked until the full evidence ledger closes.
+# The generalization job remains historical mechanism-causality evidence. Runtime is bound to the promoted
+# canonical product and the exact same frozen ratio/RSS thresholds, with correctness tree scans outside the codec
+# operation timer. A red product runtime remains a release blocker, and the PR remains merge-locked until the full
+# evidence ledger closes.
