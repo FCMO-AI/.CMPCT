@@ -76,6 +76,42 @@ def test_canonical_projection_cannot_substitute_staged_r25_floor_for_historical_
     assert normalized["historical_v029_measurement"] == "independent-original-tree-build"
 
 
+def test_r24_locality_measures_largest_regular_user_member(monkeypatch, tmp_path) -> None:
+    # Tiny files can legitimately share a large r24 pack. Taking the worst ratio over every tiny member answers a
+    # different question than the frozen release contract, which selects the largest regular user-visible member.
+    # Keep the actual public read operation observable so this cannot degrade into a build-time proxy.
+    class FakeR24:
+        def __init__(self, _path):
+            self.files = [
+                ["tiny.txt", canonical.CANON.R24_CODEC.K_FILE, 0, 0, 1, None, ["blob", 0]],
+                ["large.bin", canonical.CANON.R24_CODEC.K_FILE, 0, 0, 100, None, ["blob", 1]],
+            ]
+            self.blobs = [
+                [0, 500, 0, 0, 0],
+                [0, 200, 0, 0, 0],
+            ]
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return None
+
+        def _blob(self, idx):
+            return b"x" * int(self.blobs[idx][1])
+
+        def read(self, name):
+            if name == "tiny.txt":
+                return self._blob(0)[:1]
+            if name == "large.bin":
+                return self._blob(1)[:100]
+            raise KeyError(name)
+
+    monkeypatch.setattr(canonical.CANON, "CMPCT", FakeR24)
+
+    assert canonical._r24_selected_member_amplification(tmp_path / "fake-r24.cmpct") == 2.0
+
+
 def test_canonical_adapter_is_scoped_and_restores_historical_harness(monkeypatch, tmp_path) -> None:
     original = gate.RC
     seen = []
