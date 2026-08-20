@@ -13,17 +13,19 @@ and discards its losing candidate.  This module makes those independent candidat
    policy, without consuming either candidate artifact;
 3. apply the owning G0-G4 transform tournament directly to that retained attempt-5 graph;
 4. compare the complete G0-G4 archive against the reconstructed accepted-v0.29 floor;
-5. strong-verify an overlay only when complete-artifact pricing says it actually wins;
-6. publish the exact winner with same-filesystem ``os.replace`` and bounded streamed SHA-256 identity checks.
+5. require any byte-winning overlay to satisfy the release-wide <=8x selected-member locality law;
+6. strong-verify an admitted overlay only when complete-artifact pricing says it actually wins;
+7. publish the exact winner with same-filesystem ``os.replace`` and bounded streamed SHA-256 identity checks.
 
 No transform rule, graph byte, codec setting, fallback threshold, fast-reject predicate or archive grammar changes.
-This is shared *scheduling/materialization*, not a compression mechanism.
+This is shared *scheduling/materialization* plus release-law admission, not a compression mechanism.
 
 Footnote: single-file trees still build the attempt-5 graph because G0-G4 explicitly needs that pre-fallback
 substrate even when accepted v0.29 would fast-reject it.  Running that already-required work in parallel with
 v0.28 does not resurrect the old dead-end audition; it removes serial latency from work v0.30 must perform.
-A losing overlay is never publishable, so decoding its entire logical tree before exact byte pricing is not a
-safety check on released bytes.  Winning overlays remain strong-verified before publication.
+A losing or locality-ineligible overlay is never publishable, so decoding its entire logical tree before exact
+byte/locality pricing is not a safety check on released bytes. Winning admitted overlays remain strong-verified
+before publication.
 """
 from __future__ import annotations
 
@@ -166,9 +168,10 @@ def _build_shared_candidates(root: Path, temp: Path) -> dict:
 def _overlay_retained_graph(graph_path: Path, overlay_path: Path) -> dict:
     """Apply the exact owning G0-G4 writer to a retained attempt-5 graph artifact.
 
-    Full logical verification is deliberately deferred until complete-artifact pricing proves the overlay beats
-    the accepted-v0.29 floor. A losing artifact cannot be published; decoding it here would only add creation
-    latency. The build tournament below strong-verifies every byte-winning overlay before publication.
+    Full logical verification is deliberately deferred until complete-artifact pricing and locality admission
+    prove the overlay can beat the accepted-v0.29 floor. A losing or >8x-locality artifact cannot be published;
+    decoding it here would only add creation latency. The build tournament below strong-verifies every admitted
+    byte-winning overlay before publication.
     """
     source_format, _source, graph_meta, graph_records = strict._read_source_records(graph_path)
     users = O._record_member_lengths(graph_meta, len(graph_records))
@@ -191,12 +194,18 @@ def _overlay_retained_graph(graph_path: Path, overlay_path: Path) -> dict:
         "auditions": auditions,
         "write_stats": write_stats,
         "verified": None,
-        "verification_state": "deferred-until-byte-win",
+        "verification_state": "deferred-until-byte-and-locality-win",
     }
 
 
+def _overlay_locality(auditions: list[dict]) -> float:
+    """Return the worst decoded-context amplification of transforms present in the overlay candidate."""
+    transformed = [row for row in auditions if row.get("selected") != "none"]
+    return max((float(row.get("max_member_read_amplification", 0.0)) for row in transformed), default=0.0)
+
+
 def build(root: Path, out: Path) -> dict:
-    """Build byte-identical G0-G4 output while constructing the expensive attempt-5 graph only once."""
+    """Build byte-identical candidates and publish only a byte- and locality-eligible G0-G4 winner."""
     started = time.perf_counter()
     out.parent.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix=".cmpct-v030-shared-portfolio-", dir=out.parent) as td:
@@ -211,9 +220,11 @@ def build(root: Path, out: Path) -> dict:
         overlay = _overlay_retained_graph(graph_path, overlay_path)
         expected_tree = treehash(root)
         overlay_bytes = overlay_path.stat().st_size
+        overlay_max_amp = _overlay_locality(overlay["auditions"])
+        overlay_locality_passed = overlay_max_amp <= MAX_MEMBER_READ_AMP
 
-        if overlay_bytes < floor_bytes:
-            # Exact bytes earned consideration. Verify logical identity before this candidate can be published.
+        if overlay_bytes < floor_bytes and overlay_locality_passed:
+            # Exact bytes and locality earned consideration. Verify logical identity before publication.
             verified = G.strong_verify(overlay_path)
             if not verified.get("ok") or verified.get("tree_sha256") != expected_tree:
                 raise RuntimeError("shared G0-G4 overlay failed exact logical-tree verification")
@@ -221,9 +232,14 @@ def build(root: Path, out: Path) -> dict:
             overlay["verification_state"] = "verified-before-publication"
             chosen_path = overlay_path
             selected = "geometry-overlay-g04"
+            selection_reject_reason = None
         else:
             chosen_path = floor_path
             selected = "v029-fallback"
+            selection_reject_reason = (
+                "locality-ceiling" if overlay_bytes < floor_bytes and not overlay_locality_passed
+                else "complete-artifact-not-smaller"
+            )
 
         chosen_sha = _sha256_file(chosen_path)
         chosen_size = chosen_path.stat().st_size
@@ -236,6 +252,9 @@ def build(root: Path, out: Path) -> dict:
         hierarchy_rows = [row for row in transformed if str(row.get("selected", "")).startswith("hierarchical")]
         write_stats = overlay["write_stats"]
         final_bytes = out.stat().st_size
+        # The accepted v0.29 fallback is the release-locality incumbent. When it wins, rejected G0-G4
+        # auditions are diagnostic only and must never be mislabeled as locality of the published bytes.
+        selected_max_amp = overlay_max_amp if selected == "geometry-overlay-g04" else 1.0
         return {
             "selected": selected,
             "archive_bytes": final_bytes,
@@ -259,9 +278,10 @@ def build(root: Path, out: Path) -> dict:
             "hierarchical_incremental_saving_bytes": sum(
                 int(row.get("hierarchical_incremental_saving_bytes", 0)) for row in hierarchy_rows
             ),
-            "max_selected_member_read_amplification": max(
-                (float(row.get("max_member_read_amplification", 0.0)) for row in transformed), default=0.0
-            ),
+            "max_selected_member_read_amplification": selected_max_amp,
+            "overlay_max_member_read_amplification": overlay_max_amp,
+            "overlay_locality_passed": overlay_locality_passed,
+            "overlay_selection_reject_reason": selection_reject_reason,
             "overlay_meta_raw_bytes": write_stats["meta_raw_bytes"],
             "overlay_meta_comp_bytes": write_stats["meta_comp_bytes"],
             "portfolio_create_s": time.perf_counter() - started,
@@ -272,7 +292,7 @@ def build(root: Path, out: Path) -> dict:
             "shared_candidate_build_s": float(shared["shared_build_s"]),
             "v028_child_s": float(shared["v029_stats"]["v028_child_s"]),
             "attempt5_child_s": float(shared["v029_stats"]["attempt5_child_s"]),
-            "integration_order": "shared(v028,attempt5-graph) -> G0-G4-overlay -> accepted-v029-tournament",
+            "integration_order": "shared(v028,attempt5-graph) -> G0-G4-overlay -> byte+locality tournament",
             "shared_analysis_mode": "attempt5-graph-built-once",
             "attempt5_graph_build_count": 1,
             "selection_materialization": "same-filesystem-atomic-move",
