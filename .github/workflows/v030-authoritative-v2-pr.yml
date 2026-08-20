@@ -38,7 +38,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y zstd gcc ffmpeg
           python -m pip install --upgrade pip
-          python -m pip install -e '.[test]'
+          python -m pip install -e '.[test,audio]'
       - name: Compile final authority surface
         run: |
           python -m py_compile \
@@ -85,7 +85,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y zstd gcc ffmpeg
           python -m pip install --upgrade pip
-          python -m pip install -e '.[test]'
+          python -m pip install -e '.[test,audio]'
           python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
       - name: Pin immutable compression contract
         run: python -m pytest -q tests/test_v030_release_generalization_contract.py tests/test_v030_release_admission.py
@@ -104,7 +104,7 @@ jobs:
           c=data['contract']; t=data['totals']; g=data['gate']
           assert data['engine']=='experiments/entropygraph_v030_authoritative.py'
           assert data['release_facade']=='cmpct-v030-authoritative-v2'
-          assert c['expected_v029_aggregate_bytes']==137501815
+          assert c['expected_v029_aggregate_bytes']==137499525
           assert c['minimum_release_saving_bytes']==687783
           assert c['inherited_absolute_revision_floor_bytes']==687783
           assert c['minimum_improved_rows']==3
@@ -140,7 +140,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y zstd gcc ffmpeg
           python -m pip install --upgrade pip
-          python -m pip install -e '.[test]'
+          python -m pip install -e '.[test,audio]'
           python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
       - name: Run authority-v2 prerequisites
         run: |
@@ -186,8 +186,8 @@ jobs:
           if-no-files-found: warn
           retention-days: 90
 
-# Footnote: `ffmpeg` is a frozen-corpus dependency, not a codec shortcut for CMPCT. The neutral-hostile media row
-# cannot exist without it, so every authority lane that constructs that corpus must install it before measuring.
-# These jobs do not redefine policy; they bind the frozen contracts to the memory-bounded final authority facade.
-# v1 jobs remain historical diagnostics only. Native/portability and external competitor evidence remain separate
-# mandatory gates before merge/version/site/release.
+# Footnote: `ffmpeg` and the package audio extra are frozen-corpus/runtime dependencies, not codec shortcuts for
+# CMPCT. The neutral-hostile media row and inherited r24 WAV-FLAC candidate cannot be exercised without them.
+# These jobs do not redefine policy; they bind the same frozen contracts to the historical convergence facade.
+# Canonical r25 remains the promotion authority; native/portability and external competitor evidence remain
+# separate mandatory gates before merge/version/site/release.
