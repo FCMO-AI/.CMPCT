@@ -1,20 +1,24 @@
 """Release-only locality repair for revision-24 nested archive packs.
 
 The mature r24 builder has a valuable optimization for 8+ nested ZIP/WHL files: it stores the exact container
-bytes as slices of one ``S_PACK`` blob instead of parsing/recompressing every archive.  That representation is
-fully compatible with r24, but the historical encoder packed the entire cohort into one blob.  A selected read of
+bytes as slices of one ``S_PACK`` blob instead of parsing/recompressing every archive. That representation is
+fully compatible with r24, but the historical encoder packed the entire cohort into one blob. A selected read of
 one member therefore decodes the whole cohort and can exceed v0.30's frozen <=8x member-read amplification law.
 
-This module preserves the r24 grammar and the historical/default builder byte policy.  It installs a narrow
-post-scan repartitioner that activates only for the promoted v0.30 shipping-r24 configuration (exact Deflate
-retention + the measured 256 KiB medium-file policy + the release TEXT_EXT dispatcher).  Existing container packs
-are split deterministically into smaller ``S_PACK`` blobs.  Every resulting group satisfies both:
+This module preserves the r24 grammar and the historical/default builder byte policy. It installs a narrow
+post-scan repartitioner that activates only when the promoted v0.30 product explicitly marks a Builder instance as
+release-locality-owned. The marker is deliberately independent of compression knobs such as micro-pack size or
+medium-binary admission: evidence A/Bs must be able to vary those policies without accidentally toggling an
+unrelated safety mechanism.
+
+Existing container packs are split deterministically into smaller ``S_PACK`` blobs. Every resulting group satisfies
+both:
 
     group decoded bytes <= 8 * smallest logical member in the group
     group decoded bytes <= 8 MiB
 
 Thus *every* member in a release container pack, not merely the benchmark-selected largest member, stays within
-the same locality ceiling.  No source bytes are transformed and no reader behavior changes.
+the same locality ceiling. No source bytes are transformed and no reader behavior changes.
 """
 from __future__ import annotations
 
@@ -22,18 +26,21 @@ from . import builder as B
 
 MAX_MEMBER_READ_AMPLIFICATION = 8
 MAX_DECODE_UNIT_BYTES = 8 * 1024 * 1024
-RELEASE_MICRO_MAX_FILE_BYTES = 256 * 1024
+RELEASE_LOCALITY_MARKER = "v030_release_locality_enabled"
 
 _ORIGINAL_SCAN = B.Builder.scan
 
 
 def _shipping_release_builder(builder: B.Builder) -> bool:
-    """Recognize the promoted r24-v4 construction without changing ordinary/historical builders."""
-    return (
-        int(getattr(builder, "deflate_reuse_min", -1)) == 0
-        and int(getattr(builder, "micro_pack_max_file", 0)) >= RELEASE_MICRO_MAX_FILE_BYTES
-        and type(B.TEXT_EXT).__name__ == "_ReleaseTextHints"
-    )
+    """Recognize only an explicitly release-owned r24 construction.
+
+    Earlier revisions inferred release ownership from ``deflate_reuse_min == 0`` plus a 256 KiB micro-pack knob.
+    That coupled the locality repair to the medium-binary compression experiment: an A/B changing pack size could
+    accidentally compare illegal historical locality on one side against legal release locality on the other.
+    An explicit per-instance marker keeps safety orthogonal to encoder tuning while historical/default Builders
+    remain byte-identical.
+    """
+    return bool(getattr(builder, RELEASE_LOCALITY_MARKER, False))
 
 
 def _container_pack_hashes(builder: B.Builder) -> list[bytes]:
@@ -140,7 +147,7 @@ def _repartition_container_pack(builder: B.Builder, pack_hash: bytes) -> dict | 
         max_group_bytes = max(max_group_bytes, len(group_raw))
         max_group_amp = max(max_group_amp, amp)
 
-    # The old whole-cohort candidate is now unreachable.  Do not delete it if content-addressed dedup happened to
+    # The old whole-cohort candidate is now unreachable. Do not delete it if content-addressed dedup happened to
     # reuse the same hash for one of the new groups (normally impossible once a real split occurred).
     if pack_hash not in new_hashes:
         builder.cands.pop(pack_hash, None)
@@ -165,7 +172,7 @@ def _release_locality_scan(self: B.Builder):
         if row is not None:
             evidence.append(row)
     self.v030_container_pack_locality = {
-        "policy": "deterministic-s-pack-groups-all-members-le-8x-v1",
+        "policy": "explicit-release-owned-deterministic-s-pack-groups-all-members-le-8x-v2",
         "max_member_read_amplification": MAX_MEMBER_READ_AMPLIFICATION,
         "max_decode_unit_bytes": MAX_DECODE_UNIT_BYTES,
         "packs": evidence,
