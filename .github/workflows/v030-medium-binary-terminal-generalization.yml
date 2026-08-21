@@ -1,0 +1,76 @@
+name: CMPCT v0.30 medium-binary terminal generalization
+# ci-lane: deep
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'experiments/entropygraph_v030_release_product.py'
+      - 'benchmarks/v030_medium_binary_terminal_generalization.py'
+      - '.github/workflows/v030-medium-binary-terminal-generalization.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+
+jobs:
+  prove-generalization:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install CMPCT test dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[test]'
+      - name: Compile oracle
+        run: python -m py_compile benchmarks/v030_medium_binary_terminal_generalization.py
+      - name: Run adversarial structural generalization proof
+        run: |
+          mkdir -p benchmark-artifacts
+          python benchmarks/v030_medium_binary_terminal_generalization.py \
+            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-medium-terminal-generalization-work" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-medium-terminal-generalization.json"
+      - name: Independently enforce proof boundary
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          d=json.loads(Path('benchmark-artifacts/v030-medium-terminal-generalization.json').read_text())
+          assert d['schema']=='cmpct-v030-medium-binary-terminal-generalization-v1'
+          g=d['gate']
+          assert g['case_count'] is True
+          assert g['has_admitted_generalization_cases'] is True
+          assert g['has_rejected_negative_control'] is True
+          assert g['all_trees_equal'] is True
+          assert g['all_admitted_archive_identical'] is True
+          assert g['all_admitted_full_product_selected_r24'] is True
+          assert g['shipping_r24_v4'] is True
+          assert g['predicate_generalization_proven'] is True
+          admitted=[r for r in d['rows'] if r['predicate_admitted']]
+          assert len(admitted) >= 3
+          assert all(r['exact_archive_identity'] for r in admitted)
+          assert all(r['exact_tree_identity'] for r in admitted)
+          PY
+      - name: Public-surface guard
+        if: always()
+        run: python tools/check_public_surface.py
+      - name: Upload generalization evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: v030-medium-terminal-generalization-${{ github.sha }}
+          path: benchmark-artifacts/v030-medium-terminal-generalization.json
+          if-no-files-found: warn
+          retention-days: 90
+
+# This lane cannot authorize release or widen the terminal envelope by itself. A red is useful evidence that the
+# proposed source-derived predicate is insufficient and must be tightened; it must never be converted to green by
+# relaxing identity, locality, corpus, or product-selection rules.
