@@ -43,13 +43,13 @@ jobs:
           python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
       - name: Compile oracle
         run: python -m py_compile benchmarks/v030_r24_medium_binary_pack_oracle.py
-      - name: Run exact r24 medium-binary pack A/B
+      - name: Run exact r24 medium-binary pack regression proof
         run: |
           mkdir -p benchmark-artifacts
           python benchmarks/v030_r24_medium_binary_pack_oracle.py \
             --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-r24-medium-pack-work" \
             --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-r24-medium-pack.json"
-      - name: Independently enforce promotion evidence
+      - name: Independently enforce shipping regression evidence
         run: |
           python - <<'PY'
           import json
@@ -65,9 +65,13 @@ jobs:
           assert g['promotion_recommended'] is True
           positives=[r for r in d['rows'] if r['positive_target']]
           assert len(positives)==2
+          # The medium-pack policy is already shipping as r24-v4, so baseline and candidate are now expected to
+          # converge. This lane is a regression proof: preserve the strict competitor wins and exact verified
+          # bytes, while the separate 15-workload generalization ratchet owns the original v3->v4 byte delta.
           for r in positives:
-              assert r['medium_binary_pack_r24']['archive_bytes'] < r['baseline_r24']['archive_bytes']
+              assert r['medium_binary_pack_r24']['archive_bytes'] <= r['baseline_r24']['archive_bytes']
               assert r['strict_four_way_win'] is True
+              assert r['medium_binary_pack_r24']['release_byte_knobs']=='environment-independent-r24-v4'
           PY
       - name: Public-surface guard
         if: always()
@@ -80,5 +84,6 @@ jobs:
           if-no-files-found: warn
           retention-days: 90
 
-# This workflow is deliberately a research/promotion oracle. It may prove an existing-r24 grammar optimization,
-# but it cannot relax the v0.30 all-15 external frontier, zero-byte regression, locality, integrity, or release lock.
+# This workflow began as a promotion oracle and now serves as the focused shipping regression proof for r24-v4.
+# The separate all-15 medium-pack generalization lane owns the historical v3->v4 zero-byte-regression delta.
+# Neither lane can relax the external ZIP/Zstd frontier, locality, integrity, portability, or release lock.
