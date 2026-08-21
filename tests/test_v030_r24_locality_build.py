@@ -22,6 +22,7 @@ def test_shipping_r24_micro_pack_target_is_bounded_by_largest_member(tmp_path, m
 
         def build(self, target: Path):
             seen["target"] = int(self.micro_pack_target)
+            seen["max_file"] = int(self.micro_pack_max_file)
             target.write_bytes(b"fake-r24")
             return {"bytes": target.stat().st_size}
 
@@ -44,9 +45,12 @@ def test_shipping_r24_micro_pack_target_is_bounded_by_largest_member(tmp_path, m
     stats = product._locality_bounded_r24_build(root, out)
 
     assert seen["target"] == 24_000
+    assert seen["max_file"] == product.R24_RELEASE_MICRO_MAX_FILE_BYTES == 256 * 1024
     assert seen["deflate_reuse_min"] == product.R24_RELEASE_DEFLATE_REUSE_MIN_BYTES
     assert stats["micro_pack_target_default_bytes"] == 256 * 1024
     assert stats["micro_pack_target_release_bytes"] == 24_000
+    assert stats["micro_pack_max_file_release_bytes"] == 256 * 1024
+    assert stats["micro_pack_medium_binary_extension"] == ".bin"
     assert stats["locality_selected_member_bytes"] == 3000
     assert stats["locality_ceiling"] == 8.0
     assert stats["verified_files"] is None
@@ -99,6 +103,34 @@ def test_shipping_r24_uses_reader_cache_cap_for_large_members(tmp_path, monkeypa
     assert stats["locality_selected_member_bytes"] == 1024 * 1024
     assert stats["verification_state"] == "deferred-to-selected-artifact"
     assert stats["large_file_chunk_policy"] == "mature-cdc"
+
+
+def test_shipping_r24_enables_medium_binary_pack_only_during_build(tmp_path, monkeypatch) -> None:
+    root = tmp_path / "source"
+    root.mkdir()
+    (root / "medium.bin").write_bytes(b"x" * (96 * 1024))
+    out = tmp_path / "out.cmpct"
+    seen: dict[str, object] = {}
+
+    class FakeBuilder:
+        def __init__(self, _root: Path, *, deflate_reuse_min: int):
+            self.micro_pack_target = 256 * 1024
+            self.micro_pack_max_file = 32 * 1024
+
+        def build(self, target: Path):
+            seen["medium_enabled"] = product.R24_RELEASE_MEDIUM_BINARY_EXT in product.R24_BUILDER_MODULE.TEXT_EXT
+            seen["max_file"] = self.micro_pack_max_file
+            target.write_bytes(b"fake-r24")
+            return {}
+
+    monkeypatch.setattr(product.C, "Builder", FakeBuilder)
+    stats = product._locality_bounded_r24_build(root, out)
+
+    assert seen["medium_enabled"] is True
+    assert seen["max_file"] == 256 * 1024
+    assert stats["micro_pack_medium_binary_policy"] == "shipping-r24-thread-local-existing-s-pack"
+    assert product.R24_RELEASE_MEDIUM_BINARY_EXT not in product.R24_BUILDER_MODULE.TEXT_EXT
+    assert getattr(product._R24_CDC_POLICY, "medium_binary_pack", False) is False
 
 
 def test_shipping_r24_admits_wide_chunks_only_for_one_large_regular_file(tmp_path, monkeypatch) -> None:
@@ -181,6 +213,29 @@ def test_wide_chunk_dispatch_is_thread_local(monkeypatch) -> None:
 
     assert seen["wide"] == [product.R24_RELEASE_WIDE_CHUNK_BYTES, 3]
     assert seen["normal"] == [b"original", b"3"]
+
+
+def test_medium_binary_pack_dispatch_is_thread_local() -> None:
+    barrier = threading.Barrier(2)
+    seen: dict[str, bool] = {}
+
+    def r24_worker() -> None:
+        product._R24_CDC_POLICY.medium_binary_pack = True
+        barrier.wait()
+        seen["r24"] = product.R24_RELEASE_MEDIUM_BINARY_EXT in product.R24_BUILDER_MODULE.TEXT_EXT
+        product._R24_CDC_POLICY.medium_binary_pack = False
+
+    def research_worker() -> None:
+        product._R24_CDC_POLICY.medium_binary_pack = False
+        barrier.wait()
+        seen["research"] = product.R24_RELEASE_MEDIUM_BINARY_EXT in product.R24_BUILDER_MODULE.TEXT_EXT
+
+    first = threading.Thread(target=r24_worker)
+    second = threading.Thread(target=research_worker)
+    first.start(); second.start(); first.join(); second.join()
+
+    assert seen == {"r24": True, "research": False}
+    assert product.R24_RELEASE_MEDIUM_BINARY_EXT not in product.R24_BUILDER_MODULE.TEXT_EXT
 
 
 def test_r24_prebuild_overlaps_filesystem_manifest_capture(tmp_path, monkeypatch) -> None:
