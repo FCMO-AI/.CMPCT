@@ -1,16 +1,17 @@
 from __future__ import annotations
 
-"""Prove the verified terminal-r24 envelope before skipping speculative r25 construction.
+"""Regression-proof the shipping terminal-r24 envelope after skipping speculative r25 construction.
 
 The exact-r24 wide-chunk oracle found a strict size/create Pareto win for the frozen single-large-file workload,
-but its ``create_s`` intentionally stopped before strong verification.  A release-product terminal path would have
-to return only after mandatory selected-artifact verification.  This oracle measures that complete boundary:
+but its ``create_s`` intentionally stopped before strong verification.  The shipping terminal path must return only
+after mandatory selected-artifact verification.  This oracle measures that complete boundary:
 
     source-shape scan + release-r24 build + strong verification
 
 against deterministic ZIP/Deflate-9 and solid tar+Zstd-19, while also requiring the completed r24 artifact to be
 strictly smaller than the accepted v0.29 row.  Only the structurally admitted envelope (exactly one regular file,
-largest >=8 MiB) is evaluated.  No result changes shipping selection by itself.
+largest >=8 MiB) is evaluated.  The lane is a regression proof for that promoted envelope; it cannot satisfy the
+full v0.30 release authority or authorize broader terminal admission.
 
 Historical benchmark identity and canonical product identity are intentionally separate.  The former authenticates
 the frozen regular-file corpus; the latter proves that the verified r24 publication represents the promoted
@@ -148,8 +149,8 @@ def run(work_root: Path) -> dict:
                 }, separators=(",", ":")), flush=True)
     eligible = [row for row in rows if row["eligible"]]
     return {
-        "schema": "cmpct-v030-r24-terminal-oracle-v1",
-        "claim_boundary": "research admission proof; shipping terminal selection remains unchanged",
+        "schema": "cmpct-v030-r24-terminal-oracle-v2",
+        "claim_boundary": "shipping regression proof for the structurally admitted terminal-r24 path; full v0.30 authority remains separate",
         "admission": "exactly-one-regular-file-and-largest-ge-8mib",
         "identity_domains": {
             "historical": "frozen regular-file content tree",
@@ -175,7 +176,7 @@ def main() -> None:
     args.output.write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8")
     print(json.dumps(result["summary"], indent=2), flush=True)
     if not result["summary"]["all_eligible_pass"]:
-        raise SystemExit("verified terminal-r24 envelope did not earn admission")
+        raise SystemExit("verified terminal-r24 envelope regressed")
 
 
 if __name__ == "__main__":
