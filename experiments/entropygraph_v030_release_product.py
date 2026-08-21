@@ -43,7 +43,8 @@ MAX_MANIFEST_ENTRIES = C.MAX_MANIFEST_ENTRIES
 MAX_PROFILE_FILES = C.MAX_PROFILE_FILES
 MAX_PROFILE_LOGICAL_BYTES = C.MAX_PROFILE_LOGICAL_BYTES
 R24_RELEASE_PACK_CAP_BYTES = 2 * 1024 * 1024
-R24_RELEASE_MICRO_MAX_FILE_BYTES = 32 * 1024
+R24_RELEASE_MICRO_MAX_FILE_BYTES = 256 * 1024
+R24_RELEASE_MEDIUM_BINARY_EXT = ".bin"
 R24_RELEASE_WIDE_CHUNK_BYTES = 8 * 1024 * 1024
 G04_PROCESS_MIN_GRAPH_BYTES = 4 * 1024 * 1024
 G04_PROCESS_MIN_RECORDS = 18
@@ -56,16 +57,38 @@ G04_AUDITION_MAX_WORKERS = 4
 # runtime gates remain authoritative and can reject the policy if its extra stream metadata costs too much.
 R24_RELEASE_DEFLATE_REUSE_MIN_BYTES = 0
 
-# The wide-chunk promotion is intentionally thread-local. ``Builder.scan`` resolves ``cdc_chunks`` through the
-# cmpct.builder module, while canonical r24 and r25 work overlap in separate threads. A process-global temporary
-# monkeypatch could therefore silently alter a concurrent research candidate. Install one permanent dispatcher
-# that is byte-identical to the mature chunker by default and spends the full 8 MiB decode-unit budget only inside
-# an explicitly admitted r24 build thread. The original function is pinned once so module reloads cannot form a
-# wrapper chain.
+# Wide chunks and medium-binary S_PACK admission are intentionally thread-local. ``Builder.scan`` and
+# ``Builder._build_micro_packs`` resolve their policy through the cmpct.builder module, while canonical r24 and
+# r25 work overlap in separate threads. Process-global temporary monkeypatches would silently alter a concurrent
+# r25/research candidate. Pin the mature defaults once, then install permanent dispatchers that are byte-identical
+# outside the explicitly admitted r24 build thread.
 if not hasattr(R24_BUILDER_MODULE, "_cmpct_v030_original_cdc_chunks"):
     R24_BUILDER_MODULE._cmpct_v030_original_cdc_chunks = R24_BUILDER_MODULE.cdc_chunks
+if not hasattr(R24_BUILDER_MODULE, "_cmpct_v030_original_text_ext"):
+    R24_BUILDER_MODULE._cmpct_v030_original_text_ext = frozenset(R24_BUILDER_MODULE.TEXT_EXT)
 _R24_ORIGINAL_CDC_CHUNKS = R24_BUILDER_MODULE._cmpct_v030_original_cdc_chunks
+_R24_ORIGINAL_TEXT_EXT = R24_BUILDER_MODULE._cmpct_v030_original_text_ext
 _R24_CDC_POLICY = threading.local()
+
+
+class _ReleaseTextHints:
+    """Set-like TEXT_EXT view that admits medium .bin only inside shipping r24 construction."""
+
+    def __contains__(self, item) -> bool:
+        return item in _R24_ORIGINAL_TEXT_EXT or (
+            item == R24_RELEASE_MEDIUM_BINARY_EXT and getattr(_R24_CDC_POLICY, "medium_binary_pack", False)
+        )
+
+    def __iter__(self):
+        if getattr(_R24_CDC_POLICY, "medium_binary_pack", False):
+            return iter(sorted(set(_R24_ORIGINAL_TEXT_EXT) | {R24_RELEASE_MEDIUM_BINARY_EXT}))
+        return iter(sorted(_R24_ORIGINAL_TEXT_EXT))
+
+    def __len__(self) -> int:
+        return len(_R24_ORIGINAL_TEXT_EXT) + int(
+            getattr(_R24_CDC_POLICY, "medium_binary_pack", False)
+            and R24_RELEASE_MEDIUM_BINARY_EXT not in _R24_ORIGINAL_TEXT_EXT
+        )
 
 
 def _release_cdc_chunks(data: bytes):
@@ -75,6 +98,7 @@ def _release_cdc_chunks(data: bytes):
 
 
 R24_BUILDER_MODULE.cdc_chunks = _release_cdc_chunks
+R24_BUILDER_MODULE.TEXT_EXT = _ReleaseTextHints()
 
 
 def _g04_audition_worker(payload):
@@ -202,6 +226,12 @@ def _locality_bounded_r24_build(root: Path, out: Path) -> dict:
     ``min(2 MiB, 8 * largest_regular_member)``. It also retains exact Deflate streams at every size so virtual ZIP
     reconstruction does not turn a tiny selected archive into a large raw-content decode.
 
+    A measured medium-binary envelope additionally admits <=256 KiB ``.bin`` blobs to the existing r24 S_PACK
+    mechanism. The exact A/B oracle produced strict size+complete-create wins versus both ZIP and Zstd-19 on the
+    false-neighbor and incompressible hostile families while the encrypted-like negative control became smaller.
+    This changes only encoder admission; S_PACK grammar, reader semantics and locality accounting are unchanged.
+    The extension view is thread-local so concurrent r25/historical work keeps the mature TEXT_EXT policy.
+
     A measured single-large-file envelope additionally uses fixed <=8 MiB chunks. The exact-r24 A/B oracle showed
     that this source shape is a strict Pareto win while multi-file analytics/ML trees became larger. Admission is
     therefore structural rather than benchmark-named: exactly one regular file of at least 8 MiB. The policy does
@@ -223,11 +253,14 @@ def _locality_bounded_r24_build(root: Path, out: Path) -> dict:
         builder.micro_pack_target = min(R24_RELEASE_PACK_CAP_BYTES, 8 * largest_member)
     wide_single_file = regular_files == 1 and largest_member >= R24_RELEASE_WIDE_CHUNK_BYTES
     previous_wide = getattr(_R24_CDC_POLICY, "wide_single_file", False)
+    previous_medium_binary = getattr(_R24_CDC_POLICY, "medium_binary_pack", False)
     _R24_CDC_POLICY.wide_single_file = wide_single_file
+    _R24_CDC_POLICY.medium_binary_pack = True
     try:
         stats = dict(builder.build(out))
     finally:
         _R24_CDC_POLICY.wide_single_file = previous_wide
+        _R24_CDC_POLICY.medium_binary_pack = previous_medium_binary
     return {
         **stats,
         "archive_bytes": out.stat().st_size,
@@ -239,6 +272,8 @@ def _locality_bounded_r24_build(root: Path, out: Path) -> dict:
         "micro_pack_target_default_bytes": default_target,
         "micro_pack_target_release_bytes": int(builder.micro_pack_target),
         "micro_pack_max_file_release_bytes": int(builder.micro_pack_max_file),
+        "micro_pack_medium_binary_extension": R24_RELEASE_MEDIUM_BINARY_EXT,
+        "micro_pack_medium_binary_policy": "shipping-r24-thread-local-existing-s-pack",
         "deflate_reuse_min_release_bytes": R24_RELEASE_DEFLATE_REUSE_MIN_BYTES,
         "locality_selected_member_bytes": largest_member,
         "locality_ceiling": 8.0,
@@ -247,7 +282,7 @@ def _locality_bounded_r24_build(root: Path, out: Path) -> dict:
         "large_file_chunk_policy": "fixed-8mib" if wide_single_file else "mature-cdc",
         "large_file_chunk_admission": "one-regular-file-ge-8mib",
         "large_file_chunk_bytes": R24_RELEASE_WIDE_CHUNK_BYTES if wide_single_file else None,
-        "release_byte_knobs": "environment-independent-r24-v3",
+        "release_byte_knobs": "environment-independent-r24-v4",
     }
 
 
