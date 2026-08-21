@@ -1,0 +1,85 @@
+# ci-lane: deep
+name: CMPCT v0.30 r24 nested-container locality
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'src/cmpct/__init__.py'
+      - 'src/cmpct/v030_release_locality.py'
+      - 'tests/test_v030_r24_container_locality.py'
+      - 'benchmarks/v030_r24_nested_container_locality_oracle.py'
+      - 'benchmarks/resemblance_hostile_corpus_v1.py'
+      - 'experiments/entropygraph_v030_release_product.py'
+      - '.github/workflows/v030-r24-nested-container-locality.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-v030-r24-container-locality-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+
+jobs:
+  locality:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install deterministic dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y zstd
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[test]'
+      - name: Compile repair and evidence
+        run: |
+          python -m py_compile \
+            src/cmpct/v030_release_locality.py \
+            benchmarks/v030_r24_nested_container_locality_oracle.py \
+            tests/test_v030_r24_container_locality.py
+      - name: Run focused regression tests
+        run: python -m pytest -q tests/test_v030_r24_container_locality.py
+      - name: Run frozen deflate-family causality proof
+        run: |
+          mkdir -p benchmark-artifacts
+          python benchmarks/v030_r24_nested_container_locality_oracle.py \
+            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-r24-container-locality-work" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-r24-container-locality.json"
+      - name: Independently enforce immutable locality law
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          d=json.loads(Path('benchmark-artifacts/v030-r24-container-locality.json').read_text())
+          assert d['schema']=='cmpct-v030-r24-nested-container-locality-v1'
+          assert d['claim_boundary'].startswith('shipping r24 encoder grouping only')
+          g=d['gate']
+          assert g['historical_reproduces_single_pack'] is True
+          assert g['historical_reproduces_over_8x'] is True
+          assert g['shipping_splits_pack'] is True
+          assert g['shipping_all_members_le_8x'] is True
+          assert g['shipping_strong_verify'] is True
+          assert g['same_verified_file_count'] is True
+          assert d['historical']['max_amplification'] > 8.0
+          assert d['shipping']['max_amplification'] <= 8.0
+          assert d['shipping']['strong_verify']['ok'] is True
+          assert g['passed'] is True
+          PY
+      - name: CI topology self-check
+        run: python tools/check_ci_topology.py .github/workflows/v030-r24-nested-container-locality.yml
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: v030-r24-nested-container-locality-${{ github.sha }}
+          path: benchmark-artifacts/v030-r24-container-locality.json
+          if-no-files-found: error
+          retention-days: 90
