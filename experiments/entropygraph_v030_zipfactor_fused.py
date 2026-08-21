@@ -4,6 +4,12 @@ Canonical staging normally hashes every regular file for the filesystem manifest
 it again. This builder preserves the exact filesystem-manifest grammar while parsing/hashing each graph-owned ZIP
 from the same in-memory read. It emits the same compact-v2 archive grammar and fails closed on unsupported source
 semantics. The optimization is creation-time machinery only; reader semantics remain owned by zipfactor_compact.
+
+The default compression level is 3. A repeated same-runner level sweep selected it as the measured Pareto point:
+it preserved strict size wins over ZIP and solid Zstd-19 while materially reducing complete candidate creation
+latency versus the previous level-6 default. The level remains recorded in archive metadata and callers may override
+it for controlled evidence work; canonical productization should use this measured default unless new evidence
+supersedes it.
 """
 from __future__ import annotations
 
@@ -21,6 +27,7 @@ from experiments import entropygraph_v030_zipfactor_compact as ZFC
 from experiments import entropygraph_v030_zipfactor_profile as BASE
 
 MAX_LOGICAL_BYTES = 512 * 1024 * 1024
+DEFAULT_LEVEL = 3
 
 
 class ProfileNotEligible(RuntimeError):
@@ -113,7 +120,7 @@ def _scan(root: Path) -> tuple[bytes, list[tuple[str, dict]], dict]:
     }
 
 
-def build(root: Path, out: Path, *, level: int = 6, group_size: int = 7) -> dict:
+def build(root: Path, out: Path, *, level: int = DEFAULT_LEVEL, group_size: int = 7) -> dict:
     manifest_raw, items, fs_stats = _scan(Path(root))
     template_raw = BASE._serialize_template(items[0][1])
     groups = [items[index:index + group_size] for index in range(0, len(items), group_size)]
