@@ -1,29 +1,26 @@
 from __future__ import annotations
 
-"""Exact-byte oracle for replacing the promoted G0-G4 audition thread pool with processes.
+"""Exact-byte oracle for the promoted G0-G4 process audition scheduler.
 
-The promoted release product already executes independent G0-G4 record auditions through an ordered thread
-pool. Those auditions are Python-heavy transform searches, so CPython's GIL can serialize the CPU work even
-though four threads exist. This oracle isolates exactly that stage instead of repeatedly timing the entire
-r24/r25 product tournament:
+The release product now uses spawned processes for sufficiently large G0-G4 record tournaments because the
+pre-promotion oracle showed that the Python-heavy transform search was materially GIL-bound. This harness remains
+an independent regression oracle rather than becoming self-referential:
 
 1. build the accepted v0.29/pre-overlay graph substrate once for each frozen workload;
-2. run the current promoted overlay scheduler and a bounded spawned-process scheduler on that same graph;
-3. invoke both from a worker thread, matching the canonical r25 nesting where the overlay normally executes;
+2. run the previous ordered-thread scheduler and the promoted product scheduler on that same retained graph;
+3. invoke both from a worker thread, matching canonical r25 nesting;
 4. require exact overlay bytes, exact SHA-256 and exact logical-tree verification on every repetition;
-5. use balanced baseline-first/process-first timing and require material speedup before promotion.
+5. use balanced execution order and preserve the original materiality hurdle.
 
 No transform, compression level, record order, locality rule, verification rule, candidate selection rule or
-release threshold changes. A red result is useful negative evidence: it means process startup/serialization costs
-outweigh the GIL benefit and this scheduler must not be promoted.
+release threshold changes. If the promoted path stops being byte-identical or materially faster, this gate goes
+red and the scheduling optimization loses promotion evidence.
 """
 
 import argparse
-from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor
 import hashlib
 import json
-import multiprocessing as mp
-import os
 from pathlib import Path
 import shutil
 import statistics
@@ -47,27 +44,20 @@ def _sha256(path: Path) -> str:
     return h.hexdigest()
 
 
-def _audition_worker(payload):
-    """Spawn-safe exact delegation to the owning canonical audition implementation."""
-    record_id, record, users = payload
-    from experiments import entropygraph_v030_release_product as child_product
-
-    shared = child_product.C.SHARED
-    return shared.G._audition_record(record_id, record, users)
-
-
-def _process_overlay_retained_graph(graph_path: Path, overlay_path: Path) -> dict:
-    """Exact promoted overlay construction with ordered spawned-process auditions."""
+def _thread_overlay_retained_graph(graph_path: Path, overlay_path: Path) -> dict:
+    """Reconstruct the exact pre-promotion ordered-thread scheduler as the independent baseline."""
     shared = PRODUCT.C.SHARED
     source_format, _source, graph_meta, graph_records = shared.strict._read_source_records(graph_path)
     users = shared.O._record_member_lengths(graph_meta, len(graph_records))
 
+    def audition(item):
+        record_id, record = item
+        return shared.G._audition_record(record_id, record, users[record_id])
+
     if graph_records:
-        worker_count = min(4, len(graph_records), max(1, os.cpu_count() or 1))
-        ctx = mp.get_context("spawn")
-        payloads = [(record_id, record, users[record_id]) for record_id, record in enumerate(graph_records)]
-        with ProcessPoolExecutor(max_workers=worker_count, mp_context=ctx) as pool:
-            outcomes = list(pool.map(_audition_worker, payloads, chunksize=1))
+        worker_count = min(PRODUCT.G04_AUDITION_MAX_WORKERS, len(graph_records))
+        with ThreadPoolExecutor(max_workers=worker_count, thread_name_prefix="cmpct-v030-g04-oracle-thread") as pool:
+            outcomes = list(pool.map(audition, enumerate(graph_records)))
     else:
         worker_count = 0
         outcomes = []
@@ -87,9 +77,17 @@ def _process_overlay_retained_graph(graph_path: Path, overlay_path: Path) -> dic
         "verified": None,
         "verification_state": "deferred-until-byte-win",
         "audition_workers": worker_count,
-        "audition_scheduler": "bounded-ordered-spawn-process-pool-oracle-v2",
+        "audition_scheduler": "bounded-ordered-thread-pool-v1",
         "delimiter_transpose": "bulk-rectangular-prefix-v1",
     }
+
+
+def _promoted_overlay_retained_graph(graph_path: Path, overlay_path: Path) -> dict:
+    stats = dict(PRODUCT._parallel_deferred_overlay(graph_path, overlay_path))
+    if graph_path.stat().st_size >= PRODUCT.G04_PROCESS_MIN_GRAPH_BYTES:
+        if stats.get("audition_scheduler") != "bounded-ordered-spawn-process-pool-v1":
+            raise RuntimeError(f"frozen oracle target did not exercise promoted process scheduler: {stats!r}")
+    return stats
 
 
 def _run_nested(function, graph_path: Path, overlay_path: Path) -> tuple[dict, float]:
@@ -100,8 +98,8 @@ def _run_nested(function, graph_path: Path, overlay_path: Path) -> tuple[dict, f
     return stats, time.perf_counter() - started
 
 
-def _measure_overlay(graph_path: Path, out: Path, scheduler: str, baseline_overlay, expected_tree: str) -> dict:
-    function = baseline_overlay if scheduler == "baseline" else _process_overlay_retained_graph
+def _measure_overlay(graph_path: Path, out: Path, scheduler: str, expected_tree: str) -> dict:
+    function = _thread_overlay_retained_graph if scheduler == "baseline" else _promoted_overlay_retained_graph
     stats, elapsed = _run_nested(function, graph_path, out)
     verified = PRODUCT.C.SHARED.G.strong_verify(out)
     if not verified.get("ok") or verified.get("tree_sha256") != expected_tree:
@@ -137,7 +135,6 @@ def run(work_root: Path) -> dict:
     _build_neutral_corpus(corpus)
 
     shared = PRODUCT.C.SHARED
-    baseline_overlay = shared._overlay_retained_graph
     rows: list[dict] = []
     for target in TARGETS:
         source = corpus / target
@@ -145,8 +142,6 @@ def run(work_root: Path) -> dict:
             raise RuntimeError(f"missing frozen workload {target}")
         expected_tree = shared.treehash(source)
 
-        # Build the expensive v0.28 + attempt-5 substrate only once. The scheduler being evaluated starts after
-        # this boundary, so repeating substrate construction would add noise without testing the hypothesis.
         with tempfile.TemporaryDirectory(prefix=f"cmpct-v030-g04-oracle-{target}-", dir=work_root) as td:
             stage = Path(td)
             substrate_started = time.perf_counter()
@@ -161,9 +156,7 @@ def run(work_root: Path) -> dict:
                 results = {}
                 for scheduler in order:
                     out = stage / f"overlay-{rep}-{scheduler}.cmpct"
-                    results[scheduler] = _measure_overlay(
-                        graph_path, out, scheduler, baseline_overlay, expected_tree
-                    )
+                    results[scheduler] = _measure_overlay(graph_path, out, scheduler, expected_tree)
                 baseline = results["baseline"]
                 process = results["process"]
                 byte_identical = (
@@ -173,7 +166,7 @@ def run(work_root: Path) -> dict:
                 )
                 if not byte_identical:
                     raise RuntimeError(
-                        f"process scheduler changed G0-G4 overlay bytes/tree for {target}: "
+                        f"promoted process scheduler changed G0-G4 overlay bytes/tree for {target}: "
                         f"baseline={baseline!r} process={process!r}"
                     )
                 saved = float(baseline["overlay_s"]) - float(process["overlay_s"])
@@ -216,7 +209,7 @@ def run(work_root: Path) -> dict:
     return {
         "schema": "cmpct-v030-g04-process-pool-oracle-v2",
         "engine": "experiments/entropygraph_v030_release_product.py",
-        "hypothesis": "replace GIL-bound ordered G0-G4 audition threads with bounded spawned processes",
+        "hypothesis": "promoted bounded process auditions beat the previous GIL-bound ordered thread scheduler",
         "measurement_boundary": "same retained pre-overlay graph; G0-G4 overlay stage only; nested worker-thread invocation",
         "contract": {
             "scheduling_only": True,
@@ -243,7 +236,7 @@ def main() -> None:
     args.output.write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8")
     print(json.dumps({"rows": result["rows"], "gate": result["gate"]}, indent=2), flush=True)
     if not result["gate"]["passed"]:
-        raise SystemExit("G0-G4 process-pool scheduler oracle did not earn promotion")
+        raise SystemExit("G0-G4 process-pool scheduler oracle did not retain promotion evidence")
 
 
 if __name__ == "__main__":
