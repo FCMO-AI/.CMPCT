@@ -80,4 +80,4 @@ def test_release_r24_byte_knobs_ignore_ambient_environment(monkeypatch, tmp_path
     assert builder.micro_pack_max_file == 32 * 1024
     assert stats["deflate_reuse_min_release_bytes"] == 0
     assert stats["micro_pack_max_file_release_bytes"] == 32 * 1024
-    assert stats["release_byte_knobs"] == "environment-independent-r24-v2"
+    assert stats["release_byte_knobs"] == "environment-independent-r24-v3"
