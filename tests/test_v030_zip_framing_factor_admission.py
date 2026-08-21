@@ -24,9 +24,13 @@ def _write_bundle(path: Path, *, salt: int, drift_name: bool = False) -> None:
             zf.writestr(info, "".join(rows).encode(), compress_type=zipfile.ZIP_DEFLATED, compresslevel=6)
 
 
+def _unseen_family(root: Path, *, count: int = 5) -> None:
+    for bundle in range(count):
+        _write_bundle(root / f"bundle-{bundle:02d}.zip", salt=100 + bundle)
+
+
 def test_zip_framing_factor_admits_unseen_structurally_identical_family(tmp_path: Path) -> None:
-    for bundle in range(5):
-        _write_bundle(tmp_path / f"bundle-{bundle:02d}.zip", salt=100 + bundle)
+    _unseen_family(tmp_path)
 
     items, _parse_s, reject = ZFF._parse_sources(tmp_path)
 
@@ -34,6 +38,24 @@ def test_zip_framing_factor_admits_unseen_structurally_identical_family(tmp_path
     assert items is not None
     assert len(items) == 5
     assert all(len(item["locals"]) == 4 for _rel, item in items)
+
+
+def test_zip_framing_factor_round_trips_unseen_family_with_bounded_locality(tmp_path: Path) -> None:
+    source = tmp_path / "source"
+    source.mkdir()
+    _unseen_family(source, count=6)
+    items, parse_s, reject = ZFF._parse_sources(source)
+    assert reject is None
+    assert items is not None
+
+    candidate = tmp_path / "candidate.zff"
+    result = ZFF._build_candidate(items, group_size=3, level=3, archive=candidate, parse_s=parse_s)
+
+    assert result["all_zip_bytes_exact"] is True
+    assert result["tree_verified"] is True
+    assert result["locality_green"] is True
+    assert float(result["max_member_read_amplification"]) <= ZFF.MAX_AMP
+    assert int(result["max_decode_unit_bytes"]) <= ZFF.MAX_DECODE
 
 
 def test_zip_framing_factor_rejects_framing_name_drift(tmp_path: Path) -> None:
