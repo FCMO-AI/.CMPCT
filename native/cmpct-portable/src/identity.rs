@@ -4,7 +4,6 @@ pub(crate) enum R25Identity {
     ResearchPrefix,
     CanonicalG04,
     CanonicalPrefix,
-    CanonicalZipFactor,
 }
 
 impl R25Identity {
@@ -14,7 +13,6 @@ impl R25Identity {
             Self::ResearchPrefix => b"CMPNXP1\0",
             Self::CanonicalG04 => b"CMP25G4\0",
             Self::CanonicalPrefix => b"CMP25PG\0",
-            Self::CanonicalZipFactor => b"CMP25Z2\0",
         }
     }
 
@@ -24,13 +22,11 @@ impl R25Identity {
             Self::ResearchPrefix => b"CMPNXP1T",
             Self::CanonicalG04 => b"C25G4TL\0",
             Self::CanonicalPrefix => b"C25PGTL\0",
-            // Reserved now so the recovery envelope has one stable native identity before selector promotion.
-            Self::CanonicalZipFactor => b"C25Z2TL\0",
         }
     }
 
     pub(crate) const fn is_canonical(self) -> bool {
-        matches!(self, Self::CanonicalG04 | Self::CanonicalPrefix | Self::CanonicalZipFactor)
+        matches!(self, Self::CanonicalG04 | Self::CanonicalPrefix)
     }
 
     pub(crate) const fn profile_name(self) -> &'static str {
@@ -39,7 +35,6 @@ impl R25Identity {
             Self::ResearchPrefix => "research-prefixgraph",
             Self::CanonicalG04 => "g04-r25",
             Self::CanonicalPrefix => "prefixgraph-r25",
-            Self::CanonicalZipFactor => "zip-framing-factor-compact-v2",
         }
     }
 }
@@ -48,7 +43,6 @@ pub(crate) fn classify(magic: &[u8; 8]) -> Option<R25Identity> {
     [
         R25Identity::CanonicalG04,
         R25Identity::CanonicalPrefix,
-        R25Identity::CanonicalZipFactor,
         R25Identity::ResearchG04,
         R25Identity::ResearchPrefix,
     ]
@@ -58,5 +52,5 @@ pub(crate) fn classify(magic: &[u8; 8]) -> Option<R25Identity> {
 
 // Footnote: profile identity is isolated from reconstruction semantics on purpose. T03's productization
 // decision changed the canonical eight-byte framing while retaining the measured G0-G4/PrefixGraph grammars;
-// ZIP-factor follows the same rule: a canonical identity is reserved only alongside a bounded native decoder,
-// while selector admission still remains blocked on recovery and exact evidence.
+// keeping this table singular prevents research or pre-parity profile bytes from being silently described as
+// supported canonical revision 25 before native/Android dispatch is complete.
