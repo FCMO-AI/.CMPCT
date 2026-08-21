@@ -1,17 +1,22 @@
 from __future__ import annotations
 
-"""Canonical-productization proof for the fused compact revision-25 ZIP-factor profile.
+"""Canonical-productization proof for the fused binary-control revision-25 ZIP-factor profile.
 
 The timed candidate path performs one source pass that simultaneously captures the canonical filesystem manifest,
-hashes each graph-owned ZIP and parses its framing, then writes the compact profile and performs mandatory one-pass
-strong verification. A second independent manifest capture is deliberately *outside* the creation timer and serves
-only as source-truth evidence, analogous to post-create extraction/tree verification for external competitors.
-Native/Android parity, two-way recovery and selector promotion remain separate hard prerequisites.
+hashes each graph-owned ZIP and parses its framing, writes the bounded binary-control profile, and then performs
+mandatory cold strong verification from the published archive. A second independent manifest capture is deliberately
+*outside* the creation timer and serves only as source-truth evidence, analogous to post-create extraction/tree
+verification for external competitors.
 
-The canonical proof follows the fused builder's measured level-3 default. The repeated level sweep established that
-level 3 preserves strict size wins over both ZIP and solid Zstd-19 while reducing complete candidate latency versus
-the former level-6 setting; this proof still fails unless the full build + mandatory verification boundary beats
-both competitors on the exact frozen workload.
+This proof now targets binary-control-v3 rather than compact-v2. The exact v2-v3 A/B established that eliminating
+compressed MessagePack control metadata is a Pareto improvement while preserving the same logical ZIP reconstruction,
+filesystem semantics and locality boundary. The repeated level sweep further established level 3 as the measured
+speed/size operating point: it retains a strict size win over solid Zstd-19 while materially reducing latency versus
+level 6. The proof still fails unless the complete build + mandatory verification boundary is strictly smaller and
+strictly faster than both ZIP and solid Zstd-19 on the frozen workload.
+
+Native/Android dispatch parity and the two-way recovery envelope remain separate hard prerequisites; this benchmark
+cannot authorize selector promotion by itself.
 """
 
 import argparse
@@ -26,23 +31,26 @@ from benchmarks import resemblance_hostile_corpus_v1 as CORPUS
 from benchmarks import v030_external_competitors as EXT
 from experiments import entropygraph_v030_canonical_final_impl as CANON
 from experiments import entropygraph_v030_product_fs as FS
-from experiments import entropygraph_v030_zipfactor_compact as ZFC
-from experiments import entropygraph_v030_zipfactor_fused as ZFF
+from experiments import entropygraph_v030_zipfactor_compact_v3 as V3
+
+MEASURED_LEVEL = 3
+GROUP_SIZE = 7
 
 
 def _verify_product_identity(archive: Path) -> dict:
-    scan = ZFC.verify_and_identities(archive)
+    scan = V3.verify_and_identities(archive)
     manifest_raw = scan["manifest_raw"]
     identities = scan["identities"]
     decoded = scan["manifest"]
     expected_paths = set(decoded["regular"]) | {FS.FILESYSTEM_MANIFEST}
     if set(identities) != expected_paths:
-        raise RuntimeError("compact ZIP-factor profile/member manifest path mismatch")
-    if identities[FS.FILESYSTEM_MANIFEST] != (len(manifest_raw), hashlib.sha256(manifest_raw).digest()):
-        raise RuntimeError("compact ZIP-factor filesystem manifest graph identity mismatch")
+        raise RuntimeError("binary-control ZIP-factor profile/member manifest path mismatch")
+    manifest_identity = identities[FS.FILESYSTEM_MANIFEST]
+    if manifest_identity != (len(manifest_raw), hashlib.sha256(manifest_raw).digest()):
+        raise RuntimeError("binary-control ZIP-factor filesystem manifest graph identity mismatch")
     for rel, identity in decoded["regular"].items():
         if identities.get(rel) != identity:
-            raise RuntimeError(f"compact ZIP-factor manifest/content identity mismatch: {rel}")
+            raise RuntimeError(f"binary-control ZIP-factor manifest/content identity mismatch: {rel}")
     semantic = CANON._semantic_tree_sha(decoded)
     verified = {key: value for key, value in scan.items() if key not in {"manifest_raw", "manifest", "identities"}}
     return {
@@ -64,15 +72,15 @@ def run(work_root: Path) -> dict:
     source = corpus / "04_deflate_family"
     historical_tree = CORPUS.tree_hash(source)
 
-    with tempfile.TemporaryDirectory(prefix="cmpct-zf-product-", dir=work_root) as td_raw:
+    with tempfile.TemporaryDirectory(prefix="cmpct-zf-product-v3-", dir=work_root) as td_raw:
         td = Path(td_raw)
         stage = EXT._normalized_stage(source, td)
         zip_result = EXT._zip(stage, td / "base.zip", td / "zip-out")
         zstd_result = EXT._tar_zstd(stage, td / "base.tar.zst", td / "zstd-out", td)
 
-        candidate = td / "candidate-r25-zf.cmpct"
+        candidate = td / "candidate-r25-zf-v3.cmpct"
         started = time.perf_counter()
-        build_stats = ZFF.build(stage, candidate, level=ZFF.DEFAULT_LEVEL, group_size=7)
+        build_stats = V3.build(stage, candidate, level=MEASURED_LEVEL, group_size=GROUP_SIZE)
         build_s = time.perf_counter() - started
 
         started = time.perf_counter()
@@ -89,12 +97,13 @@ def run(work_root: Path) -> dict:
         source_tree = CANON._semantic_tree_sha(CANON._decode_manifest(truth["manifest_raw"]))
         source_truth_s = time.perf_counter() - started
         if identity["semantic_tree_sha256"] != source_tree:
-            raise RuntimeError("fused ZIP-factor semantic tree differs from independent source truth")
+            raise RuntimeError("fused binary-control ZIP-factor semantic tree differs from independent source truth")
 
         result = {
-            "schema": "cmpct-v030-zipfactor-canonical-productization-v4",
+            "schema": "cmpct-v030-zipfactor-canonical-productization-v5",
             "claim_boundary": (
-                "fused compact canonical Python product-boundary proof only; native/Android parity, two-way recovery, and selector promotion remain mandatory"
+                "fused binary-control canonical Python product-boundary proof only; native/Android parity, "
+                "two-way recovery, and selector promotion remain mandatory"
             ),
             "workload": "resemblance_hostile_v1/04_deflate_family",
             "historical_tree_sha256": historical_tree,
@@ -111,7 +120,8 @@ def run(work_root: Path) -> dict:
                 "mandatory_verify_s": verify_s,
                 "create_s": create_s,
                 "fused_manifest_and_zip_parse": True,
-                "measured_default_level": ZFF.DEFAULT_LEVEL,
+                "binary_control": True,
+                "measured_default_level": MEASURED_LEVEL,
                 "beats_zip_size": archive_bytes < int(zip_result["archive_bytes"]),
                 "beats_zstd19_size": archive_bytes < int(zstd_result["archive_bytes"]),
                 "beats_zip_create": create_s < float(zip_result["create_s"]),
@@ -124,6 +134,7 @@ def run(work_root: Path) -> dict:
             "canonical_semantic_tree_exact": c["semantic_tree_sha256"] == source_tree,
             "independent_source_truth": True,
             "strong_verify_green": c["strong_verify"]["ok"] is True,
+            "binary_control_v3_selected": c["format_profile"] == V3.PROFILE and c["binary_control"] is True,
             "measured_level_3_selected": c["measured_default_level"] == 3 and c["level"] == 3,
             "locality_green": (
                 float(c["verified_max_member_read_amplification"]) <= 8.0
@@ -146,9 +157,14 @@ def main() -> None:
     result = run(args.work_root)
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8")
-    print(json.dumps({"candidate": result["candidate"], "zip": result["zip"], "zstd": result["tar_zstd19"], "gate": result["gate"]}, indent=2), flush=True)
+    print(json.dumps({
+        "candidate": result["candidate"],
+        "zip": result["zip"],
+        "zstd": result["tar_zstd19"],
+        "gate": result["gate"],
+    }, indent=2), flush=True)
     if not result["gate"]["passed"]:
-        raise SystemExit("fused compact canonical ZIP-factor productization gate failed")
+        raise SystemExit("fused binary-control canonical ZIP-factor productization gate failed")
 
 
 if __name__ == "__main__":
