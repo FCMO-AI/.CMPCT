@@ -45,14 +45,14 @@ jobs:
           python benchmarks/v030_r24_terminal_oracle.py \
             --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-terminal-r24-work" \
             --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-terminal-r24.json"
-      - name: Independently enforce admission proof
+      - name: Independently enforce shipping regression proof
         run: |
           python - <<'PY'
           import json
           from pathlib import Path
           d=json.loads(Path('benchmark-artifacts/v030-terminal-r24.json').read_text())
-          assert d['schema']=='cmpct-v030-r24-terminal-oracle-v1'
-          assert d['claim_boundary'].startswith('research admission proof')
+          assert d['schema']=='cmpct-v030-r24-terminal-oracle-v2'
+          assert d['claim_boundary'].startswith('shipping regression proof')
           assert d['summary']['workloads']==15
           eligible=[r for r in d['rows'] if r['eligible']]
           assert len(eligible)==d['summary']['eligible_workloads']
@@ -85,4 +85,5 @@ jobs:
           if-no-files-found: error
           retention-days: 90
 
-# Admission proof only. This lane cannot change shipping selection or satisfy release authority by itself.
+# Shipping regression proof for one measured structural envelope. This lane prevents that promoted shortcut from
+# regressing but cannot widen its admission or satisfy the full v0.30 release authority by itself.
