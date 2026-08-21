@@ -25,6 +25,7 @@ import msgpack
 
 from cmpct.reader import CMPCT
 from cmpct import codec as R24_CODEC
+import cmpct.builder as R24_BUILDER_MODULE
 from experiments import entropygraph_v030_canonical_final as C
 from experiments import entropygraph_v030_verified_restore as VERIFIED_RESTORE
 
@@ -43,6 +44,7 @@ MAX_PROFILE_FILES = C.MAX_PROFILE_FILES
 MAX_PROFILE_LOGICAL_BYTES = C.MAX_PROFILE_LOGICAL_BYTES
 R24_RELEASE_PACK_CAP_BYTES = 2 * 1024 * 1024
 R24_RELEASE_MICRO_MAX_FILE_BYTES = 32 * 1024
+R24_RELEASE_WIDE_CHUNK_BYTES = 8 * 1024 * 1024
 G04_PROCESS_MIN_GRAPH_BYTES = 4 * 1024 * 1024
 G04_PROCESS_MIN_RECORDS = 18
 G04_AUDITION_MAX_WORKERS = 4
@@ -53,6 +55,26 @@ G04_AUDITION_MAX_WORKERS = 4
 # This changes only the r24 encoder policy, not revision-24 grammar or reader semantics; exact product-size and
 # runtime gates remain authoritative and can reject the policy if its extra stream metadata costs too much.
 R24_RELEASE_DEFLATE_REUSE_MIN_BYTES = 0
+
+# The wide-chunk promotion is intentionally thread-local. ``Builder.scan`` resolves ``cdc_chunks`` through the
+# cmpct.builder module, while canonical r24 and r25 work overlap in separate threads. A process-global temporary
+# monkeypatch could therefore silently alter a concurrent research candidate. Install one permanent dispatcher
+# that is byte-identical to the mature chunker by default and spends the full 8 MiB decode-unit budget only inside
+# an explicitly admitted r24 build thread. The original function is pinned once so module reloads cannot form a
+# wrapper chain.
+if not hasattr(R24_BUILDER_MODULE, "_cmpct_v030_original_cdc_chunks"):
+    R24_BUILDER_MODULE._cmpct_v030_original_cdc_chunks = R24_BUILDER_MODULE.cdc_chunks
+_R24_ORIGINAL_CDC_CHUNKS = R24_BUILDER_MODULE._cmpct_v030_original_cdc_chunks
+_R24_CDC_POLICY = threading.local()
+
+
+def _release_cdc_chunks(data: bytes):
+    if getattr(_R24_CDC_POLICY, "wide_single_file", False):
+        return [data[i : i + R24_RELEASE_WIDE_CHUNK_BYTES] for i in range(0, len(data), R24_RELEASE_WIDE_CHUNK_BYTES)]
+    return _R24_ORIGINAL_CDC_CHUNKS(data)
+
+
+R24_BUILDER_MODULE.cdc_chunks = _release_cdc_chunks
 
 
 def _g04_audition_worker(payload):
@@ -143,14 +165,9 @@ def _parallel_deferred_overlay(graph_path: Path, overlay_path: Path) -> dict:
 C.SHARED._overlay_retained_graph = _parallel_deferred_overlay
 
 
-def _largest_regular_user_member_bytes(root: Path) -> int:
-    """Return the largest regular source member without following links.
-
-    r24 micro-packs are whole compressed frames. A selected read of any packed file therefore decodes the whole
-    owning pack. The frozen v0.30 locality contract selects the largest regular user-visible member and allows at
-    most 8x decoded context, so the shipping r24 fallback derives its pack budget from that member. This helper
-    computes the bound from source shape only; it never predicts compression or selection.
-    """
+def _regular_user_shape(root: Path) -> tuple[int, int]:
+    """Return ``(regular_file_count, largest_regular_bytes)`` without following links."""
+    count = 0
     largest = 0
     for dirpath, dirnames, filenames in os.walk(Path(root), followlinks=False):
         dirnames[:] = [name for name in dirnames if not os.path.islink(Path(dirpath) / name)]
@@ -161,8 +178,20 @@ def _largest_regular_user_member_bytes(root: Path) -> int:
             except OSError:
                 continue
             if stat.S_ISREG(st.st_mode):
+                count += 1
                 largest = max(largest, int(st.st_size))
-    return largest
+    return count, largest
+
+
+def _largest_regular_user_member_bytes(root: Path) -> int:
+    """Return the largest regular source member without following links.
+
+    r24 micro-packs are whole compressed frames. A selected read of any packed file therefore decodes the whole
+    owning pack. The frozen v0.30 locality contract selects the largest regular user-visible member and allows at
+    most 8x decoded context, so the shipping r24 fallback derives its pack budget from that member. This helper
+    computes the bound from source shape only; it never predicts compression or selection.
+    """
+    return _regular_user_shape(root)[1]
 
 
 def _locality_bounded_r24_build(root: Path, out: Path) -> dict:
@@ -172,6 +201,11 @@ def _locality_bounded_r24_build(root: Path, out: Path) -> dict:
     path spends the selected-member locality budget up to the mature reader's 2 MiB decoded-blob cache ceiling:
     ``min(2 MiB, 8 * largest_regular_member)``. It also retains exact Deflate streams at every size so virtual ZIP
     reconstruction does not turn a tiny selected archive into a large raw-content decode.
+
+    A measured single-large-file envelope additionally uses fixed <=8 MiB chunks. The exact-r24 A/B oracle showed
+    that this source shape is a strict Pareto win while multi-file analytics/ML trees became larger. Admission is
+    therefore structural rather than benchmark-named: exactly one regular file of at least 8 MiB. The policy does
+    not alter revision-24 grammar, and the thread-local dispatcher prevents it leaking into concurrent r25 work.
 
     The r24 candidate exists first as a byte floor. Verifying it before the r24/r25 tournament is wasted work when
     r25 wins, and duplicated work when r24 wins because canonical-final strongly verifies the selected publication
@@ -184,10 +218,16 @@ def _locality_bounded_r24_build(root: Path, out: Path) -> dict:
     builder = C.Builder(root, deflate_reuse_min=R24_RELEASE_DEFLATE_REUSE_MIN_BYTES)
     builder.micro_pack_max_file = R24_RELEASE_MICRO_MAX_FILE_BYTES
     default_target = int(builder.micro_pack_target)
-    largest_member = _largest_regular_user_member_bytes(root)
+    regular_files, largest_member = _regular_user_shape(root)
     if largest_member > 0:
         builder.micro_pack_target = min(R24_RELEASE_PACK_CAP_BYTES, 8 * largest_member)
-    stats = dict(builder.build(out))
+    wide_single_file = regular_files == 1 and largest_member >= R24_RELEASE_WIDE_CHUNK_BYTES
+    previous_wide = getattr(_R24_CDC_POLICY, "wide_single_file", False)
+    _R24_CDC_POLICY.wide_single_file = wide_single_file
+    try:
+        stats = dict(builder.build(out))
+    finally:
+        _R24_CDC_POLICY.wide_single_file = previous_wide
     return {
         **stats,
         "archive_bytes": out.stat().st_size,
@@ -203,7 +243,11 @@ def _locality_bounded_r24_build(root: Path, out: Path) -> dict:
         "locality_selected_member_bytes": largest_member,
         "locality_ceiling": 8.0,
         "locality_pack_policy": "min-2mib-cache-cap-or-8x-largest-regular-member-plus-exact-deflate-retention",
-        "release_byte_knobs": "environment-independent-r24-v2",
+        "regular_user_files": regular_files,
+        "large_file_chunk_policy": "fixed-8mib" if wide_single_file else "mature-cdc",
+        "large_file_chunk_admission": "one-regular-file-ge-8mib",
+        "large_file_chunk_bytes": R24_RELEASE_WIDE_CHUNK_BYTES if wide_single_file else None,
+        "release_byte_knobs": "environment-independent-r24-v3",
     }
 
 
