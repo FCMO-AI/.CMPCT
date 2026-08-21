@@ -5,11 +5,11 @@ it again. This builder preserves the exact filesystem-manifest grammar while par
 from the same in-memory read. It emits the same compact-v2 archive grammar and fails closed on unsupported source
 semantics. The optimization is creation-time machinery only; reader semantics remain owned by zipfactor_compact.
 
-The default compression level is 3. A repeated same-runner level sweep selected it as the measured Pareto point:
-it preserved strict size wins over ZIP and solid Zstd-19 while materially reducing complete candidate creation
-latency versus the previous level-6 default. The level remains recorded in archive metadata and callers may override
-it for controlled evidence work; canonical productization should use this measured default unless new evidence
-supersedes it.
+The default compression level is 3. A repeated same-runner level sweep found no level that by itself beat ZIP on
+complete creation time. Level 2 was marginally faster but left only a 36-byte size margin versus solid Zstd-19;
+level 3 retained a 219-byte margin at essentially the same latency and was materially faster than the old level-6
+default. The level remains recorded in archive metadata and callers may override it for controlled evidence work;
+canonical productization still has to earn the full four-way gate after mandatory verification.
 """
 from __future__ import annotations
 
