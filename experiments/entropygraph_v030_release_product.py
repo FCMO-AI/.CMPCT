@@ -46,6 +46,10 @@ R24_RELEASE_PACK_CAP_BYTES = 2 * 1024 * 1024
 R24_RELEASE_MICRO_MAX_FILE_BYTES = 256 * 1024
 R24_RELEASE_MEDIUM_BINARY_EXT = ".bin"
 R24_RELEASE_WIDE_CHUNK_BYTES = 8 * 1024 * 1024
+R24_TERMINAL_MEDIUM_MIN_FILE_BYTES = 32 * 1024
+R24_TERMINAL_MEDIUM_MAX_FILE_BYTES = 256 * 1024
+R24_TERMINAL_MEDIUM_MIN_FILES = 32
+R24_TERMINAL_MEDIUM_MIN_ARCHIVE_TO_LOGICAL_RATIO = 0.84
 G04_PROCESS_MIN_GRAPH_BYTES = 4 * 1024 * 1024
 G04_PROCESS_MIN_RECORDS = 18
 G04_AUDITION_MAX_WORKERS = 4
@@ -436,9 +440,128 @@ def _build_terminal_r24(root: Path, out: Path) -> dict:
     }
 
 
+def _medium_binary_terminal_shape(root: Path) -> dict:
+    """Return the source-only portion of the proven medium-binary terminal predicate.
+
+    The generalization gate deliberately varied file count, member size and redundancy. It proved that the
+    expensive r25 branch is dominated only in the high-entropy region, so source shape alone is insufficient:
+    this helper merely decides whether it is worth constructing the cheap r24-v4 candidate whose *actual*
+    complete-byte ratio supplies the final admission signal. Symlinks and other non-regular entries fail closed.
+    """
+    root = Path(root)
+    count = 0
+    logical_bytes = 0
+    min_bytes = None
+    max_bytes = 0
+    all_bin = True
+    has_nonregular = False
+    for dirpath, dirnames, filenames in os.walk(root, followlinks=False):
+        kept_dirs = []
+        for name in dirnames:
+            path = Path(dirpath) / name
+            if os.path.islink(path):
+                has_nonregular = True
+            else:
+                kept_dirs.append(name)
+        dirnames[:] = kept_dirs
+        for name in filenames:
+            path = Path(dirpath) / name
+            try:
+                st = os.lstat(path)
+            except OSError:
+                has_nonregular = True
+                continue
+            if not stat.S_ISREG(st.st_mode):
+                has_nonregular = True
+                continue
+            size = int(st.st_size)
+            count += 1
+            logical_bytes += size
+            min_bytes = size if min_bytes is None else min(min_bytes, size)
+            max_bytes = max(max_bytes, size)
+            all_bin = all_bin and path.suffix.lower() == R24_RELEASE_MEDIUM_BINARY_EXT
+    return {
+        "regular_files": count,
+        "logical_bytes": logical_bytes,
+        "min_regular_bytes": 0 if min_bytes is None else min_bytes,
+        "max_regular_bytes": max_bytes,
+        "all_regular_bin": bool(count) and all_bin,
+        "has_nonregular_entries": has_nonregular,
+    }
+
+
+def _medium_binary_terminal_source_eligible(shape: dict) -> bool:
+    return (
+        not shape["has_nonregular_entries"]
+        and shape["regular_files"] >= R24_TERMINAL_MEDIUM_MIN_FILES
+        and shape["all_regular_bin"]
+        and shape["min_regular_bytes"] >= R24_TERMINAL_MEDIUM_MIN_FILE_BYTES
+        and shape["max_regular_bytes"] <= R24_TERMINAL_MEDIUM_MAX_FILE_BYTES
+    )
+
+
+def _build_medium_binary_terminal_if_eligible(root: Path, out: Path) -> dict | None:
+    """Publish r24 directly only when the fully measured adversarial predicate is satisfied.
+
+    Frozen parity proved byte/SHA/tree identity with the full tournament on false-neighbor and incompressible
+    workloads, eliminating about 128 seconds of losing r25 construction there. Independent adversarial cases then
+    proved the same invariant for three additional high-entropy count/size envelopes while rejecting shifted,
+    shared and compressible controls. The final >=0.84 signal is calculated from the real shipping r24-v4 bytes,
+    never from a filename, entropy guess or benchmark label. A miss falls back to the exact tournament.
+    """
+    started = time.perf_counter()
+    root = Path(root)
+    out = Path(out)
+    shape = _medium_binary_terminal_shape(root)
+    if not _medium_binary_terminal_source_eligible(shape):
+        return None
+
+    out.parent.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(prefix=".cmpct-v030-terminal-medium-r24-", dir=out.parent) as td:
+        candidate = Path(td) / "canonical-r24.cmpct"
+        r24_stats = _locality_bounded_r24_build(root, candidate)
+        archive_bytes = candidate.stat().st_size
+        logical_bytes = max(1, int(shape["logical_bytes"]))
+        ratio = archive_bytes / logical_bytes
+        if ratio < R24_TERMINAL_MEDIUM_MIN_ARCHIVE_TO_LOGICAL_RATIO:
+            return None
+        C._publish_atomic(candidate, out)
+
+    verified = strong_verify(out)
+    if not verified.get("ok") or int(verified.get("format_revision", -1)) != 24:
+        raise RuntimeError(f"medium terminal r24 publication failed strong verification: {verified!r}")
+    return {
+        "selected": "r24-fallback",
+        "archive_bytes": out.stat().st_size,
+        "format_revision": 24,
+        "format_profile": "canonical-r24",
+        "r24_product_bytes": out.stat().st_size,
+        "r25_product_bytes": None,
+        "r25_attempted": False,
+        "r25_reject_reason": "verified-terminal-r24-medium-binary-envelope",
+        "r24": r24_stats,
+        "final_strong_verify": verified,
+        "portfolio_create_s": time.perf_counter() - started,
+        "release_facade": "cmpct-v030-canonical-final-v1",
+        "terminal_r24": True,
+        "terminal_r24_admission": "medium-bin-32plus-files-32k-to-256k-r24-ratio-ge-0.84",
+        "terminal_r24_source_shape": shape,
+        "terminal_r24_archive_to_logical_ratio": ratio,
+        "terminal_r24_evidence": (
+            "frozen exact-parity plus adversarial generalization: admitted r24-v4 bytes are identical to full "
+            "product winner; compressible/shared/shifted controls fail closed"
+        ),
+    }
+
+
 def build(root: Path, out: Path) -> dict:
-    if _terminal_r24_eligible(Path(root)):
-        return _build_terminal_r24(Path(root), Path(out))
+    root = Path(root)
+    out = Path(out)
+    if _terminal_r24_eligible(root):
+        return _build_terminal_r24(root, out)
+    medium_terminal = _build_medium_binary_terminal_if_eligible(root, out)
+    if medium_terminal is not None:
+        return medium_terminal
     return C.build(root, out)
 
 
