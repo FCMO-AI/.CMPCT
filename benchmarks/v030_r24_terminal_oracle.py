@@ -57,8 +57,9 @@ def _one(label: str, source: Path, accepted_v029_bytes: int, work: Path) -> dict
         stage = B._normalized_stage(source, root)
         zip_result = B._zip(stage, root / "baseline.zip", root / "zip-out")
         zstd_result = B._tar_zstd(stage, root / "baseline.tar.zst", root / "zstd-out", root)
-        B._verify_extracted(root / "zip-out", B._tree(source), "zip")
-        B._verify_extracted(root / "zstd-out", B._tree(source), "zstd")
+        expected_tree = B._tree(source)
+        B._verify_extracted(root / "zip-out", expected_tree, "zip")
+        B._verify_extracted(root / "zstd-out", expected_tree, "zstd")
 
         archive = root / "terminal-r24.cmpct"
         started = time.perf_counter()
@@ -67,7 +68,7 @@ def _one(label: str, source: Path, accepted_v029_bytes: int, work: Path) -> dict
         complete_create_s = time.perf_counter() - started
         if not verified.get("ok") or int(verified.get("format_revision", -1)) != 24:
             raise RuntimeError(f"terminal r24 failed strong verification: {verified!r}")
-        if verified.get("tree_sha256") != B._tree(source):
+        if verified.get("tree_sha256") != expected_tree:
             raise RuntimeError("terminal r24 source tree mismatch")
 
         archive_bytes = archive.stat().st_size
@@ -112,9 +113,15 @@ def run(work_root: Path) -> dict:
             repair.normalize_root(root)
         for workload in sorted(path for path in root.iterdir() if path.is_dir()):
             key = (suite, workload.name)
-            if B._tree(workload) != accepted[key]["tree_sha256"]:
+            expected = accepted[key]
+            if B._tree(workload) != expected["tree_sha256"]:
                 raise RuntimeError(f"terminal-r24 source drift: {suite}/{workload.name}")
-            row = _one(f"{suite}/{workload.name}", workload, int(accepted[key]["archive_bytes"]), work_root)
+            row = _one(
+                f"{suite}/{workload.name}",
+                workload,
+                int(expected["accepted_v029_bytes"]),
+                work_root,
+            )
             row["suite"] = suite
             row["name"] = workload.name
             rows.append(row)
