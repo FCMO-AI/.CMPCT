@@ -1,0 +1,85 @@
+# ci-lane: deep
+name: CMPCT v0.30 ZIP framing-factor oracle
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'benchmarks/resemblance_hostile_corpus_v1.py'
+      - 'benchmarks/v030_external_competitors.py'
+      - 'benchmarks/v030_zip_framing_factor_oracle.py'
+      - '.github/workflows/v030-zip-framing-factor-oracle.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-v030-zip-framing-factor-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+
+jobs:
+  oracle:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install deterministic dependencies and competitors
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y zstd
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[test]'
+      - name: Compile oracle
+        run: python -m py_compile benchmarks/v030_zip_framing_factor_oracle.py
+      - name: Run exact ZIP framing-factor experiment
+        run: |
+          mkdir -p benchmark-artifacts
+          python benchmarks/v030_zip_framing_factor_oracle.py \
+            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-zip-framing-factor-work" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-zip-framing-factor.json"
+      - name: Independently enforce evidence boundary
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          d=json.loads(Path('benchmark-artifacts/v030-zip-framing-factor.json').read_text())
+          assert d['schema']=='cmpct-v030-zip-framing-factor-oracle-v1'
+          assert d['claim_boundary'].startswith('research-only')
+          assert d['workload']=='resemblance_hostile_v1/04_deflate_family'
+          g=d['gate']
+          assert g['source_admitted'] is True
+          assert g['all_candidates_exact_tree'] is True
+          assert g['all_candidates_exact_zip_bytes'] is True
+          assert g['all_candidates_locality_green'] is True
+          assert g['passed'] is True
+          rows=d['candidates']
+          assert rows and all(r['max_member_read_amplification'] <= 8.0 for r in rows)
+          assert all(r['max_decode_unit_bytes'] <= 8*1024*1024 for r in rows)
+          if d['viable_candidate'] is not None:
+              c=d['viable_candidate']
+              assert c['tree_verified'] and c['all_zip_bytes_exact'] and c['locality_green']
+              assert c['archive_bytes'] < d['zip']['archive_bytes']
+              assert c['archive_bytes'] < d['tar_zstd19']['archive_bytes']
+              assert c['create_s'] < d['zip']['create_s']
+              assert c['create_s'] < d['tar_zstd19']['create_s']
+          PY
+      - name: CI topology self-check
+        run: python tools/check_ci_topology.py .github/workflows/v030-zip-framing-factor-oracle.yml
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: v030-zip-framing-factor-${{ github.sha }}
+          path: benchmark-artifacts/v030-zip-framing-factor.json
+          if-no-files-found: error
+          retention-days: 90
+
+# A four-way win is promising research evidence, not release authority. Promotion would require a bounded canonical
+# grammar plus Python/native/Android parity, integrity/recovery tests and the unchanged exact-head release lock.
