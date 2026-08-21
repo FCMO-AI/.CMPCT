@@ -3,9 +3,9 @@ from __future__ import annotations
 """Canonical-productization proof for the bounded revision-25 ZIP-factor profile.
 
 Unlike the original research oracle, this gate pays the actual product boundary: filesystem-manifest capture and
-staging, profile construction, exact manifest/content identity validation, and mandatory profile strong verification.
-The external ZIP/solid-Zstd comparators use the same normalized source tree. A four-way win here is still not release
-authority because native/Android reader parity is intentionally a separate promotion prerequisite.
+staging, profile construction, exact manifest/content identity validation, and mandatory one-pass profile strong
+verification. The external ZIP/solid-Zstd comparators use the same normalized source tree. A four-way win here is
+still not release authority because native/Android reader parity is intentionally a separate promotion prerequisite.
 """
 
 import argparse
@@ -21,15 +21,14 @@ from benchmarks import v030_external_competitors as EXT
 from experiments import entropygraph_v030_canonical_final_impl as CANON
 from experiments import entropygraph_v030_product_fs as FS
 from experiments import entropygraph_v030_zipfactor_profile as ZF
+from experiments import entropygraph_v030_zipfactor_session as ZFS
 
 
 def _verify_product_identity(archive: Path, source_tree: str) -> dict:
-    verified = ZF.strong_verify(archive)
-    if not verified.get("ok"):
-        raise RuntimeError(f"ZIP-factor profile strong verification failed: {verified!r}")
-    manifest_raw, _stats = ZF.read_member_with_stats(archive, FS.FILESYSTEM_MANIFEST)
+    scan = ZFS.verify_and_identities(archive)
+    manifest_raw = scan["manifest_raw"]
+    identities = scan["identities"]
     decoded = CANON._decode_manifest(manifest_raw)
-    identities = ZF.content_identities(archive)
     expected_paths = set(decoded["regular"]) | {FS.FILESYSTEM_MANIFEST}
     if set(identities) != expected_paths:
         raise RuntimeError("ZIP-factor profile/member manifest path mismatch")
@@ -41,12 +40,15 @@ def _verify_product_identity(archive: Path, source_tree: str) -> dict:
     semantic = CANON._semantic_tree_sha(decoded)
     if semantic != source_tree:
         raise RuntimeError("ZIP-factor canonical semantic tree differs from source")
+    verified = {key: value for key, value in scan.items() if key not in {"manifest_raw", "identities"}}
     return {
         "strong_verify": verified,
         "manifest_entries": len(decoded["manifest"]["entries"]),
         "content_members": len(identities),
         "semantic_tree_sha256": semantic,
         "manifest_content_identity_exact": True,
+        "verified_max_member_read_amplification": scan["max_member_read_amplification"],
+        "verified_max_decode_unit_bytes": scan["max_decode_unit_bytes"],
     }
 
 
@@ -111,8 +113,8 @@ def run(work_root: Path) -> dict:
             "canonical_semantic_tree_exact": c["semantic_tree_sha256"] == source_tree,
             "strong_verify_green": c["strong_verify"]["ok"] is True,
             "locality_green": (
-                float(c["max_member_read_amplification"]) <= 8.0
-                and int(c["max_decode_unit_bytes"]) <= 8 * 1024 * 1024
+                float(c["verified_max_member_read_amplification"]) <= 8.0
+                and int(c["verified_max_decode_unit_bytes"]) <= 8 * 1024 * 1024
             ),
             "strictly_beats_zip_size": c["beats_zip_size"],
             "strictly_beats_zstd19_size": c["beats_zstd19_size"],
