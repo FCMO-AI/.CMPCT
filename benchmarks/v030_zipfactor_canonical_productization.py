@@ -1,11 +1,12 @@
 from __future__ import annotations
 
-"""Canonical-productization proof for the compact bounded revision-25 ZIP-factor profile.
+"""Canonical-productization proof for the fused compact revision-25 ZIP-factor profile.
 
-This gate pays the actual product boundary: filesystem-manifest capture/staging, compact profile construction,
-exact manifest/content identity validation, and mandatory one-pass strong verification. The compact candidate uses
-the canonical filesystem manifest as the single owner of per-file size/SHA and stores each logical path only once.
-A four-way win remains pre-promotion evidence until native/Android parity and recovery semantics are complete.
+The timed candidate path performs one source pass that simultaneously captures the canonical filesystem manifest,
+hashes each graph-owned ZIP and parses its framing, then writes the compact profile and performs mandatory one-pass
+strong verification. A second independent manifest capture is deliberately *outside* the creation timer and serves
+only as source-truth evidence, analogous to post-create extraction/tree verification for external competitors.
+Native/Android parity, two-way recovery and selector promotion remain separate hard prerequisites.
 """
 
 import argparse
@@ -21,9 +22,10 @@ from benchmarks import v030_external_competitors as EXT
 from experiments import entropygraph_v030_canonical_final_impl as CANON
 from experiments import entropygraph_v030_product_fs as FS
 from experiments import entropygraph_v030_zipfactor_compact as ZFC
+from experiments import entropygraph_v030_zipfactor_fused as ZFF
 
 
-def _verify_product_identity(archive: Path, source_tree: str) -> dict:
+def _verify_product_identity(archive: Path) -> dict:
     scan = ZFC.verify_and_identities(archive)
     manifest_raw = scan["manifest_raw"]
     identities = scan["identities"]
@@ -37,8 +39,6 @@ def _verify_product_identity(archive: Path, source_tree: str) -> dict:
         if identities.get(rel) != identity:
             raise RuntimeError(f"compact ZIP-factor manifest/content identity mismatch: {rel}")
     semantic = CANON._semantic_tree_sha(decoded)
-    if semantic != source_tree:
-        raise RuntimeError("compact ZIP-factor canonical semantic tree differs from source")
     verified = {key: value for key, value in scan.items() if key not in {"manifest_raw", "manifest", "identities"}}
     return {
         "strong_verify": verified,
@@ -65,41 +65,47 @@ def run(work_root: Path) -> dict:
         zip_result = EXT._zip(stage, td / "base.zip", td / "zip-out")
         zstd_result = EXT._tar_zstd(stage, td / "base.tar.zst", td / "zstd-out", td)
 
-        started = time.perf_counter()
-        profile_tree = td / "profile-tree"
-        prepared = CANON._prepare_profile_tree(stage, profile_tree)
-        source_tree = CANON._semantic_tree_sha(CANON._decode_manifest(prepared["manifest_raw"]))
-        prepare_s = time.perf_counter() - started
-
         candidate = td / "candidate-r25-zf.cmpct"
         started = time.perf_counter()
-        build_stats = ZFC.build(profile_tree, candidate, level=6, group_size=7)
+        build_stats = ZFF.build(stage, candidate, level=6, group_size=7)
         build_s = time.perf_counter() - started
 
         started = time.perf_counter()
-        identity = _verify_product_identity(candidate, source_tree)
+        identity = _verify_product_identity(candidate)
         verify_s = time.perf_counter() - started
-        create_s = prepare_s + build_s + verify_s
+        create_s = build_s + verify_s
         archive_bytes = candidate.stat().st_size
 
+        # Independent source truth is a postcondition, not codec creation work. It intentionally uses the generic
+        # canonical bridge rather than the fused scanner, so a shared scanner bug cannot manufacture identity.
+        started = time.perf_counter()
+        truth_tree = td / "source-truth-profile"
+        truth = CANON._prepare_profile_tree(stage, truth_tree)
+        source_tree = CANON._semantic_tree_sha(CANON._decode_manifest(truth["manifest_raw"]))
+        source_truth_s = time.perf_counter() - started
+        if identity["semantic_tree_sha256"] != source_tree:
+            raise RuntimeError("fused ZIP-factor semantic tree differs from independent source truth")
+
         result = {
-            "schema": "cmpct-v030-zipfactor-canonical-productization-v2",
+            "schema": "cmpct-v030-zipfactor-canonical-productization-v3",
             "claim_boundary": (
-                "compact canonical Python product-boundary proof only; native/Android parity, two-way recovery, and selector promotion remain mandatory"
+                "fused compact canonical Python product-boundary proof only; native/Android parity, two-way recovery, and selector promotion remain mandatory"
             ),
             "workload": "resemblance_hostile_v1/04_deflate_family",
             "historical_tree_sha256": historical_tree,
             "canonical_semantic_tree_sha256": source_tree,
+            "independent_source_truth_s": source_truth_s,
             "zip": zip_result,
             "tar_zstd19": zstd_result,
             "candidate": {
                 **build_stats,
                 **identity,
                 "archive_bytes": archive_bytes,
-                "profile_prepare_s": prepare_s,
+                "profile_prepare_s": 0.0,
                 "profile_build_s": build_s,
                 "mandatory_verify_s": verify_s,
                 "create_s": create_s,
+                "fused_manifest_and_zip_parse": True,
                 "beats_zip_size": archive_bytes < int(zip_result["archive_bytes"]),
                 "beats_zstd19_size": archive_bytes < int(zstd_result["archive_bytes"]),
                 "beats_zip_create": create_s < float(zip_result["create_s"]),
@@ -110,6 +116,7 @@ def run(work_root: Path) -> dict:
         result["gate"] = {
             "exact_manifest_content_identity": c["manifest_content_identity_exact"] is True,
             "canonical_semantic_tree_exact": c["semantic_tree_sha256"] == source_tree,
+            "independent_source_truth": True,
             "strong_verify_green": c["strong_verify"]["ok"] is True,
             "locality_green": (
                 float(c["verified_max_member_read_amplification"]) <= 8.0
@@ -134,7 +141,7 @@ def main() -> None:
     args.output.write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8")
     print(json.dumps({"candidate": result["candidate"], "zip": result["zip"], "zstd": result["tar_zstd19"], "gate": result["gate"]}, indent=2), flush=True)
     if not result["gate"]["passed"]:
-        raise SystemExit("compact canonical ZIP-factor productization gate failed")
+        raise SystemExit("fused compact canonical ZIP-factor productization gate failed")
 
 
 if __name__ == "__main__":
