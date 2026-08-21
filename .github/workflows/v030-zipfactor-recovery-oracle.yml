@@ -1,0 +1,84 @@
+# ci-lane: deep
+name: CMPCT v0.30 ZIP-factor recovery oracle
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'experiments/entropygraph_v030_zipfactor_compact_v3.py'
+      - 'benchmarks/v030_zipfactor_recovery_oracle.py'
+      - '.github/workflows/v030-zipfactor-recovery-oracle.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-v030-zf-recovery-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+
+jobs:
+  recovery:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install deterministic dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y zstd
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[test]'
+      - name: Compile recovery proof surface
+        run: |
+          python -m py_compile \
+            experiments/entropygraph_v030_zipfactor_compact_v3.py \
+            benchmarks/v030_zipfactor_recovery_oracle.py
+      - name: Run exact two-way control recovery proof
+        run: |
+          mkdir -p benchmark-artifacts
+          python benchmarks/v030_zipfactor_recovery_oracle.py \
+            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-zf-recovery-work" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-zf-recovery.json"
+      - name: Independently enforce recovery and size boundary
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          d=json.loads(Path('benchmark-artifacts/v030-zf-recovery.json').read_text())
+          g=d['gate']
+          assert d['schema']=='cmpct-v030-zipfactor-recovery-oracle-v1'
+          assert g['clean_verified'] is True
+          assert g['primary_corruption_recovers_from_tail'] is True
+          assert g['tail_corruption_recovers_from_primary'] is True
+          assert g['double_control_corruption_fails_closed'] is True
+          assert g['recovered_identity_exact'] is True
+          assert g['locality_within_8x'] is True
+          assert g['decode_unit_within_8mib'] is True
+          assert g['recovery_candidate_smaller_than_zstd19'] is True
+          assert d['candidate']['payload_body_copies']==1
+          assert d['candidate']['control_copies']==2
+          assert d['candidate']['archive_bytes'] < d['zstd19_bytes']
+          assert g['passed'] is True
+          PY
+      - name: CI topology self-check
+        run: python tools/check_ci_topology.py .github/workflows/v030-zipfactor-recovery-oracle.yml
+      - name: Upload recovery evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: v030-zf-recovery-${{ github.sha }}
+          path: benchmark-artifacts/v030-zf-recovery.json
+          if-no-files-found: warn
+          retention-days: 90
+
+# This lane is intentionally non-authoritative. It proves that ZIP-factor can carry two independently usable
+# authenticated control copies without duplicating payloads or spending the <=8x locality budget. Native/Android
+# implementation, canonical dispatch, fuzzing and the full per-workload size+creation release law remain separate.
