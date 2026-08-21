@@ -64,6 +64,14 @@ def test_medium_terminal_source_predicate_rejects_mixed_suffix_and_small_members
     assert P._medium_binary_terminal_source_eligible(shape) is False
 
 
+def test_medium_terminal_source_predicate_rejects_too_few_files(tmp_path):
+    root = tmp_path / "too-few"
+    _random_bins(root, count=P.R24_TERMINAL_MEDIUM_MIN_FILES - 1, size=64 * 1024)
+    shape = P._medium_binary_terminal_shape(root)
+    assert shape["regular_files"] == P.R24_TERMINAL_MEDIUM_MIN_FILES - 1
+    assert P._medium_binary_terminal_source_eligible(shape) is False
+
+
 def test_medium_terminal_source_predicate_rejects_symlink(tmp_path):
     root = tmp_path / "symlink"
     _random_bins(root)
