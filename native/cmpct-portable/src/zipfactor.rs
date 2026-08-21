@@ -4,7 +4,6 @@ use crate::format::{
 };
 use crate::manifest::{FILESYSTEM_MANIFEST, FsKind, FsManifest};
 use crate::{MemberReadStats, PortableEntry, PortableError};
-use rmpv::Value;
 use std::collections::{HashMap, HashSet};
 use std::fs::File;
 use std::io::{Cursor, Read, Seek, SeekFrom, Write};
@@ -63,8 +62,13 @@ struct GroupDesc {
     blob_size: u64,
 }
 
+/// Hidden pre-dispatch reader for the bounded CMP25Z2 ZIP-factor candidate.
+///
+/// This type is public only so the cross-language integration test can exercise the exact production
+/// implementation. `cmpct-portable` identity/dispatch deliberately does not advertise CMP25Z2 until recovery,
+/// ABI and platform promotion gates are complete.
 #[derive(Debug)]
-pub(crate) struct ZipFactorArchive {
+pub struct ZipFactorArchive {
     entries: Vec<PortableEntry>,
     identities: Vec<(u64, [u8; 32])>,
     manifest_raw: Vec<u8>,
@@ -78,7 +82,8 @@ pub(crate) struct ZipFactorArchive {
 }
 
 impl ZipFactorArchive {
-    pub(crate) fn open(path: &Path) -> Result<Self, PortableError> {
+    /// Open a bounded compact-v2 ZIP-factor archive without enabling production format dispatch.
+    pub fn open(path: &Path) -> Result<Self, PortableError> {
         let mut file = File::open(path)?;
         let file_len = file.metadata()?.len();
         let mut magic = [0u8; 8];
@@ -232,8 +237,6 @@ impl ZipFactorArchive {
             ));
         }
 
-        // Parse the canonical filesystem manifest with a path-only provisional content index. The parser owns
-        // filesystem grammar validation and verifies that the content-path set is exactly manifest + regular files.
         let mut provisional = Vec::with_capacity(seen_paths.len() + 1);
         provisional.push(PortableEntry {
             path: FILESYSTEM_MANIFEST.to_owned(),
@@ -311,22 +314,22 @@ impl ZipFactorArchive {
         })
     }
 
-    pub(crate) fn entries(&self) -> &[PortableEntry] {
+    pub fn entries(&self) -> &[PortableEntry] {
         &self.entries
     }
 
-    pub(crate) fn entry_identity(&self, index: usize) -> Result<(u64, [u8; 32]), PortableError> {
+    pub fn entry_identity(&self, index: usize) -> Result<(u64, [u8; 32]), PortableError> {
         self.identities
             .get(index)
             .copied()
             .ok_or_else(|| PortableError::Format("ZIP-factor member id out of range".into()))
     }
 
-    pub(crate) fn tail_authenticated(&self) -> bool {
+    pub fn tail_authenticated(&self) -> bool {
         false
     }
 
-    pub(crate) fn declared_amplification(&self) -> f64 {
+    pub fn declared_amplification(&self) -> f64 {
         self.declared_amplification
     }
 
@@ -431,7 +434,7 @@ impl ZipFactorArchive {
         ))
     }
 
-    pub(crate) fn read_member(
+    pub fn read_member(
         &self,
         index: usize,
     ) -> Result<(Vec<u8>, MemberReadStats), PortableError> {
@@ -456,7 +459,7 @@ impl ZipFactorArchive {
         self.decode_path(&path)
     }
 
-    pub(crate) fn stream_member<W: Write>(
+    pub fn stream_member<W: Write>(
         &self,
         index: usize,
         mut output: W,
@@ -466,7 +469,7 @@ impl ZipFactorArchive {
         Ok(stats)
     }
 
-    pub(crate) fn verify(&self) -> Result<(), PortableError> {
+    pub fn verify(&self) -> Result<(), PortableError> {
         for index in 0..self.entries.len() {
             let (raw, _stats) = self.read_member(index)?;
             let (size, digest) = self.identities[index];
