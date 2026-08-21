@@ -47,7 +47,8 @@ def _control_len_from_primary(raw: bytes) -> int:
     return size
 
 
-def _tail_control(raw: bytes) -> tuple[bytes, int]:
+def _tail_layout(raw: bytes) -> tuple[int, int, bytes]:
+    """Return (control_len, control_start, expected_sha) without trusting the tail control payload itself."""
     if len(raw) < _FOOTER.size:
         raise RuntimeError("truncated ZIP-factor recovery footer")
     magic, control_len, expected_sha = _FOOTER.unpack_from(raw, len(raw) - _FOOTER.size)
@@ -56,6 +57,11 @@ def _tail_control(raw: bytes) -> tuple[bytes, int]:
     control_start = len(raw) - _FOOTER.size - control_len
     if control_start <= 8:
         raise RuntimeError("ZIP-factor recovery tail control overlaps primary")
+    return int(control_len), control_start, expected_sha
+
+
+def _tail_control(raw: bytes) -> tuple[bytes, int]:
+    control_len, control_start, expected_sha = _tail_layout(raw)
     control = raw[control_start : control_start + control_len]
     if _sha(control) != expected_sha:
         raise RuntimeError("ZIP-factor recovery tail control authentication")
@@ -110,16 +116,15 @@ def recover_verify(path: Path) -> dict:
     raw = Path(path).read_bytes()
     errors: dict[str, str] = {}
 
-    # Primary path derives its own descriptor length, but uses a valid tail footer only to locate the shared
-    # payload end. If the tail is damaged, body_end is derived from the primary length and footer-declared layout
-    # only when the footer itself remains parseable; otherwise the fixed clean-archive size relation is recovered
-    # by scanning the authenticated tail magic from EOF. The oracle's corruption cases exercise both paths.
+    # The fixed footer owns only layout discovery for the primary path. Its control digest is intentionally not
+    # required there: damage to the redundant tail control must not prevent the independently valid primary copy
+    # from locating and verifying the shared payload body.
     try:
         primary_len = _control_len_from_primary(raw)
-        tail_control, tail_start = _tail_control(raw)
-        primary = raw[8 : 8 + primary_len]
-        if len(tail_control) != primary_len:
+        tail_len, tail_start, _tail_sha = _tail_layout(raw)
+        if tail_len != primary_len:
             raise RuntimeError("ZIP-factor recovery control copy length mismatch")
+        primary = raw[8 : 8 + primary_len]
         candidate = _v3_candidate(raw, primary, 8 + primary_len, tail_start)
         result = _verify_v3_bytes(candidate)
         return {"ok": True, "recovered_from": "primary", "result": result}
@@ -131,7 +136,12 @@ def recover_verify(path: Path) -> dict:
         body_start = 8 + len(control)
         candidate = _v3_candidate(raw, control, body_start, tail_start)
         result = _verify_v3_bytes(candidate)
-        return {"ok": True, "recovered_from": "tail", "result": result, "primary_error": errors.get("primary")}
+        return {
+            "ok": True,
+            "recovered_from": "tail",
+            "result": result,
+            "primary_error": errors.get("primary"),
+        }
     except Exception as exc:
         errors["tail"] = repr(exc)
         return {"ok": False, "errors": errors}
@@ -214,8 +224,10 @@ def run(work_root: Path) -> dict:
     tail_snapshot = _snapshot(tail_recovered) if tail_recovered.get("ok") else None
     gate = {
         "clean_verified": clean.get("ok") is True,
-        "primary_corruption_recovers_from_tail": primary_recovered.get("ok") is True and primary_recovered.get("recovered_from") == "tail",
-        "tail_corruption_recovers_from_primary": tail_recovered.get("ok") is True and tail_recovered.get("recovered_from") == "primary",
+        "primary_corruption_recovers_from_tail": primary_recovered.get("ok") is True
+        and primary_recovered.get("recovered_from") == "tail",
+        "tail_corruption_recovers_from_primary": tail_recovered.get("ok") is True
+        and tail_recovered.get("recovered_from") == "primary",
         "double_control_corruption_fails_closed": both_failed.get("ok") is False,
         "recovered_identity_exact": clean_snapshot == primary_snapshot == tail_snapshot,
         "locality_within_8x": clean_snapshot["max_member_read_amplification"] <= 8.0,
@@ -228,8 +240,14 @@ def run(work_root: Path) -> dict:
         "candidate": stats,
         "zstd19_bytes": int(zstd_result["archive_bytes"]),
         "clean": {"recovered_from": clean.get("recovered_from"), "snapshot": clean_snapshot},
-        "primary_corruption": {"recovered_from": primary_recovered.get("recovered_from"), "ok": primary_recovered.get("ok")},
-        "tail_corruption": {"recovered_from": tail_recovered.get("recovered_from"), "ok": tail_recovered.get("ok")},
+        "primary_corruption": {
+            "recovered_from": primary_recovered.get("recovered_from"),
+            "ok": primary_recovered.get("ok"),
+        },
+        "tail_corruption": {
+            "recovered_from": tail_recovered.get("recovered_from"),
+            "ok": tail_recovered.get("ok"),
+        },
         "double_corruption": {"ok": both_failed.get("ok"), "errors": both_failed.get("errors")},
         "gate": gate,
         "claim_boundary": (
