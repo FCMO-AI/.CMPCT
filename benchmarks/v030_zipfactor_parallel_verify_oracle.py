@@ -3,44 +3,33 @@ from __future__ import annotations
 """Exact A/B for parallel strong verification of the bounded ZIP-factor v3 candidate.
 
 The canonical ZIP-factor candidate already splits the deflate-family workload into independently decodable
-locality-bounded groups.  This oracle changes no bytes and no integrity rule: it compares the shipping serial
+locality-bounded groups. This oracle changes no bytes and no integrity rule: it compares the shipping serial
 verification algorithm with a bounded thread-parallel implementation that verifies each authenticated group
 independently, then deterministically merges the resulting logical identities.
 
-Promotion is intentionally strict.  The parallel path only earns a recommendation when it returns the exact same
-manifest, logical identities, semantic tree, locality accounting and verified-member count as the serial verifier,
-and its repeated median full-verification wall-clock is materially lower.  This oracle is research evidence only;
-it does not alter canonical dispatch or release authority.
+Promotion is intentionally strict. The parallel path only earns a recommendation when it returns the exact same
+authenticated filesystem manifest, complete logical identities, locality accounting and verified-member count as
+the serial verifier, and its repeated median full-verification wall-clock is lower. The manifest bytes plus every
+regular-file size/SHA-256 identity are the canonical semantic inputs, so the oracle does not invent a second tree
+hash implementation. This is research evidence only; it does not alter canonical dispatch or release authority.
 """
 
 import argparse
 from concurrent.futures import ThreadPoolExecutor
+import hashlib
 import json
 from pathlib import Path
 import statistics
 import struct
-import tempfile
 import time
 
 from benchmarks import v030_external_competitors as EXT
-from experiments import entropygraph_v030_release as HIST
 from experiments import entropygraph_v030_zipfactor_compact_v3 as V3
 from experiments import entropygraph_v030_zipfactor_profile as BASE
 from experiments import entropygraph_v030_product_fs as FS
 
 ROUNDS = 31
 MAX_WORKERS = 4
-
-
-def _tree_from_identities(manifest_raw: bytes, identities: dict[str, tuple[int, bytes]]) -> str:
-    # Reuse the canonical semantic-tree owner rather than inventing an oracle-only identity domain.
-    manifest = FS.decode_manifest(
-        manifest_raw,
-        max_path_bytes=V3.MAX_PATH,
-        max_entries=V3.MAX_FILES + 1024,
-    )
-    FS.verify_content_identities(manifest, identities)
-    return FS.semantic_treehash(manifest_raw, manifest)
 
 
 def _verify_group(
@@ -149,8 +138,8 @@ def _snapshot(result: dict) -> dict:
         for path, (size, digest) in sorted(result["identities"].items())
     }
     return {
+        "manifest_sha256": hashlib.sha256(result["manifest_raw"]).hexdigest(),
         "identities": identities,
-        "semantic_tree": _tree_from_identities(result["manifest_raw"], result["identities"]),
         "verified_user_files": result["verified_user_files"],
         "max_member_read_amplification": result["max_member_read_amplification"],
         "max_decode_unit_bytes": result["max_decode_unit_bytes"],
@@ -212,7 +201,7 @@ def run(work_root: Path, rounds: int = ROUNDS) -> dict:
     faster = parallel_median < serial_median
 
     gate = {
-        "exact_identity_and_semantics": exact,
+        "exact_manifest_and_logical_identities": exact,
         "parallel_strictly_faster": faster,
         "serial_median_s": serial_median,
         "parallel_median_s": parallel_median,
