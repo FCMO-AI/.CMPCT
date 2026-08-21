@@ -182,7 +182,7 @@ def test_byte_winning_overlay_over_locality_ceiling_falls_back_without_verificat
 
 
 def test_canonical_parallel_overlay_preserves_deferred_verification_contract(tmp_path: Path, monkeypatch) -> None:
-    """The release-product parallel override must not resurrect eager verification or omit state metadata."""
+    """Small graphs keep the low-overhead thread scheduler and continue to defer logical verification."""
     from experiments import entropygraph_v030_release_product as product
 
     private = product.C.SHARED
@@ -217,7 +217,61 @@ def test_canonical_parallel_overlay_preserves_deferred_verification_contract(tmp
     assert result["audition_workers"] == 1
 
 
+def test_canonical_overlay_uses_promoted_process_scheduler_inside_measured_envelope(tmp_path: Path, monkeypatch) -> None:
+    """Large measured substrates route through ordered spawn workers without changing audition order or bytes."""
+    from experiments import entropygraph_v030_release_product as product
+
+    private = product.C.SHARED
+    graph = tmp_path / "large-graph.cmpct"
+    graph.touch()
+    with graph.open("r+b") as stream:
+        stream.truncate(product.G04_PROCESS_MIN_GRAPH_BYTES)
+    overlay = tmp_path / "process-overlay.cmpct"
+    graph_records = [f"record-{index:02d}".encode() for index in range(product.G04_PROCESS_MIN_RECORDS)]
+
+    monkeypatch.setattr(private.strict, "_read_source_records", lambda _path: ("fixture", None, {}, graph_records))
+    monkeypatch.setattr(private.O, "_record_member_lengths", lambda _meta, count: [1] * count)
+    monkeypatch.setattr(
+        private.G,
+        "_audition_record",
+        lambda record_id, record, users: (record, None, {"record_id": record_id, "selected": "none"}),
+    )
+
+    class FakeProcessPool:
+        def __init__(self, *, max_workers, mp_context):
+            self.max_workers = max_workers
+            self.mp_context = mp_context
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+        def map(self, function, payloads, chunksize=1):
+            assert chunksize == 1
+            return [function(payload) for payload in payloads]
+
+    monkeypatch.setattr(product, "ProcessPoolExecutor", FakeProcessPool)
+
+    def fake_write(_meta, records, transforms, path: Path) -> dict:
+        assert records == graph_records
+        assert transforms == [None] * len(graph_records)
+        path.write_bytes(b"process-overlay")
+        return {"meta_raw_bytes": 0, "meta_comp_bytes": 0}
+
+    monkeypatch.setattr(private.G, "_write_overlay", fake_write)
+    result = product._parallel_deferred_overlay(graph, overlay)
+    assert overlay.read_bytes() == b"process-overlay"
+    assert result["audition_scheduler"] == "bounded-ordered-spawn-process-pool-v1"
+    assert result["audition_workers"] == product.G04_AUDITION_MAX_WORKERS
+    assert [row["record_id"] for row in result["auditions"]] == list(range(len(graph_records)))
+    assert result["audition_process_min_graph_bytes"] == product.G04_PROCESS_MIN_GRAPH_BYTES
+    assert result["audition_process_min_records"] == product.G04_PROCESS_MIN_RECORDS
+
+
 # Footnote: identity tests compare complete bytes. Scheduling may change wall time, not storage. The locality test
 # locks the stronger release truth: an overlay can win byte pricing and still be rejected before verification when
 # its operation-derived selected-member amplification exceeds the frozen <=8x law; rejected audition locality is
-# never allowed to masquerade as locality of the fallback bytes that were actually published.
+# never allowed to masquerade as locality of the fallback bytes that were actually published. The process-scheduler
+# test locks only execution topology and order; the independent frozen-workload oracle owns material-speed evidence.
