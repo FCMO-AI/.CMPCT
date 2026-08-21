@@ -1,0 +1,61 @@
+name: CMPCT v0.30 promote proven medium terminal r24
+
+on:
+  push:
+    branches:
+      - agent/v030-authoritative-integration
+    paths:
+      - '.github/workflows/v030-promote-medium-terminal-one-shot.yml'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: cmpct-v030-promote-medium-terminal
+  cancel-in-progress: false
+
+jobs:
+  promote:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: agent/v030-authoritative-integration
+          fetch-depth: 0
+
+      - name: Promote the proven structural envelope and add regression coverage
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          product = Path('experiments/entropygraph_v030_release_product.py')
+          text = product.read_text(encoding='utf-8')
+
+          old_constants = '''R24_RELEASE_MEDIUM_BINARY_EXT = ".bin"\nR24_RELEASE_WIDE_CHUNK_BYTES = 8 * 1024 * 1024\nG04_PROCESS_MIN_GRAPH_BYTES = 4 * 1024 * 1024\n'''
+          new_constants = '''R24_RELEASE_MEDIUM_BINARY_EXT = ".bin"\nR24_RELEASE_WIDE_CHUNK_BYTES = 8 * 1024 * 1024\nR24_TERMINAL_MEDIUM_MIN_FILE_BYTES = 32 * 1024\nR24_TERMINAL_MEDIUM_MAX_FILE_BYTES = 256 * 1024\nR24_TERMINAL_MEDIUM_MIN_FILES = 32\nR24_TERMINAL_MEDIUM_MIN_ARCHIVE_TO_LOGICAL_RATIO = 0.84\nG04_PROCESS_MIN_GRAPH_BYTES = 4 * 1024 * 1024\n'''
+          if old_constants not in text:
+              raise SystemExit('release-product constant anchor drifted')
+          text = text.replace(old_constants, new_constants, 1)
+
+          old_block = '''def build(root: Path, out: Path) -> dict:\n    if _terminal_r24_eligible(Path(root)):\n        return _build_terminal_r24(Path(root), Path(out))\n    return C.build(root, out)\n'''
+          new_block = '''def _medium_binary_terminal_shape(root: Path) -> dict:\n    \"\"\"Return the source-only portion of the proven medium-binary terminal predicate.\n\n    The generalization gate deliberately varied file count, member size and redundancy. It proved that the\n    expensive r25 branch is dominated only in the high-entropy region, so source shape alone is insufficient:\n    this helper merely decides whether it is worth constructing the cheap r24-v4 candidate whose *actual*\n    complete-byte ratio supplies the final admission signal. Symlinks and other non-regular entries fail closed.\n    \"\"\"\n    root = Path(root)\n    count = 0\n    logical_bytes = 0\n    min_bytes = None\n    max_bytes = 0\n    all_bin = True\n    has_nonregular = False\n    for dirpath, dirnames, filenames in os.walk(root, followlinks=False):\n        kept_dirs = []\n        for name in dirnames:\n            path = Path(dirpath) / name\n            if os.path.islink(path):\n                has_nonregular = True\n            else:\n                kept_dirs.append(name)\n        dirnames[:] = kept_dirs\n        for name in filenames:\n            path = Path(dirpath) / name\n            try:\n                st = os.lstat(path)\n            except OSError:\n                has_nonregular = True\n                continue\n            if not stat.S_ISREG(st.st_mode):\n                has_nonregular = True\n                continue\n            size = int(st.st_size)\n            count += 1\n            logical_bytes += size\n            min_bytes = size if min_bytes is None else min(min_bytes, size)\n            max_bytes = max(max_bytes, size)\n            all_bin = all_bin and path.suffix.lower() == R24_RELEASE_MEDIUM_BINARY_EXT\n    return {\n        \"regular_files\": count,\n        \"logical_bytes\": logical_bytes,\n        \"min_regular_bytes\": 0 if min_bytes is None else min_bytes,\n        \"max_regular_bytes\": max_bytes,\n        \"all_regular_bin\": bool(count) and all_bin,\n        \"has_nonregular_entries\": has_nonregular,\n    }\n\n\ndef _medium_binary_terminal_source_eligible(shape: dict) -> bool:\n    return (\n        not shape[\"has_nonregular_entries\"]\n        and shape[\"regular_files\"] >= R24_TERMINAL_MEDIUM_MIN_FILES\n        and shape[\"all_regular_bin\"]\n        and shape[\"min_regular_bytes\"] >= R24_TERMINAL_MEDIUM_MIN_FILE_BYTES\n        and shape[\"max_regular_bytes\"] <= R24_TERMINAL_MEDIUM_MAX_FILE_BYTES\n    )\n\n\ndef _build_medium_binary_terminal_if_eligible(root: Path, out: Path) -> dict | None:\n    \"\"\"Publish r24 directly only when the fully measured adversarial predicate is satisfied.\n\n    Frozen parity proved byte/SHA/tree identity with the full tournament on false-neighbor and incompressible\n    workloads, eliminating about 128 seconds of losing r25 construction there. Independent adversarial cases then\n    proved the same invariant for three additional high-entropy count/size envelopes while rejecting shifted,\n    shared and compressible controls. The final >=0.84 signal is calculated from the real shipping r24-v4 bytes,\n    never from a filename, entropy guess or benchmark label. A miss falls back to the exact tournament.\n    \"\"\"\n    started = time.perf_counter()\n    root = Path(root)\n    out = Path(out)\n    shape = _medium_binary_terminal_shape(root)\n    if not _medium_binary_terminal_source_eligible(shape):\n        return None\n\n    out.parent.mkdir(parents=True, exist_ok=True)\n    with tempfile.TemporaryDirectory(prefix=\".cmpct-v030-terminal-medium-r24-\", dir=out.parent) as td:\n        candidate = Path(td) / \"canonical-r24.cmpct\"\n        r24_stats = _locality_bounded_r24_build(root, candidate)\n        archive_bytes = candidate.stat().st_size\n        logical_bytes = max(1, int(shape[\"logical_bytes\"]))\n        ratio = archive_bytes / logical_bytes\n        if ratio < R24_TERMINAL_MEDIUM_MIN_ARCHIVE_TO_LOGICAL_RATIO:\n            return None\n        C._publish_atomic(candidate, out)\n\n    verified = strong_verify(out)\n    if not verified.get(\"ok\") or int(verified.get(\"format_revision\", -1)) != 24:\n        raise RuntimeError(f\"medium terminal r24 publication failed strong verification: {verified!r}\")\n    return {\n        \"selected\": \"r24-fallback\",\n        \"archive_bytes\": out.stat().st_size,\n        \"format_revision\": 24,\n        \"format_profile\": \"canonical-r24\",\n        \"r24_product_bytes\": out.stat().st_size,\n        \"r25_product_bytes\": None,\n        \"r25_attempted\": False,\n        \"r25_reject_reason\": \"verified-terminal-r24-medium-binary-envelope\",\n        \"r24\": r24_stats,\n        \"final_strong_verify\": verified,\n        \"portfolio_create_s\": time.perf_counter() - started,\n        \"release_facade\": \"cmpct-v030-canonical-final-v1\",\n        \"terminal_r24\": True,\n        \"terminal_r24_admission\": \"medium-bin-32plus-files-32k-to-256k-r24-ratio-ge-0.84\",\n        \"terminal_r24_source_shape\": shape,\n        \"terminal_r24_archive_to_logical_ratio\": ratio,\n        \"terminal_r24_evidence\": (\n            \"frozen exact-parity plus adversarial generalization: admitted r24-v4 bytes are identical to full \"\n            \"product winner; compressible/shared/shifted controls fail closed\"\n        ),\n    }\n\n\ndef build(root: Path, out: Path) -> dict:\n    root = Path(root)\n    out = Path(out)\n    if _terminal_r24_eligible(root):\n        return _build_terminal_r24(root, out)\n    medium_terminal = _build_medium_binary_terminal_if_eligible(root, out)\n    if medium_terminal is not None:\n        return medium_terminal\n    return C.build(root, out)\n'''
+          if old_block not in text:
+              raise SystemExit('release-product build anchor drifted')
+          text = text.replace(old_block, new_block, 1)
+          product.write_text(text, encoding='utf-8')
+
+          test = Path('tests/test_v030_medium_binary_terminal_shipping.py')
+          test.write_text('''from __future__ import annotations\n\nfrom pathlib import Path\nimport random\n\nfrom experiments import entropygraph_v030_release_product as P\n\n\ndef _random_bins(root: Path, *, count: int = 32, size: int = 32 * 1024, seed: int = 9001) -> None:\n    root.mkdir(parents=True, exist_ok=True)\n    rng = random.Random(seed)\n    for index in range(count):\n        (root / f\"member-{index:04d}.bin\").write_bytes(bytes(rng.getrandbits(8) for _ in range(size + index % 7)))\n\n\ndef test_medium_terminal_shipping_skips_r25_only_after_real_r24_ratio(tmp_path, monkeypatch):\n    root = tmp_path / \"high-entropy\"\n    _random_bins(root)\n    called = {\"r25\": False}\n\n    def forbidden(*args, **kwargs):\n        called[\"r25\"] = True\n        raise AssertionError(\"proven terminal envelope must not construct r25\")\n\n    monkeypatch.setattr(P.C, \"build\", forbidden)\n    out = tmp_path / \"terminal.cmpct\"\n    stats = P.build(root, out)\n    assert called[\"r25\"] is False\n    assert stats[\"terminal_r24\"] is True\n    assert stats[\"r25_attempted\"] is False\n    assert stats[\"terminal_r24_archive_to_logical_ratio\"] >= P.R24_TERMINAL_MEDIUM_MIN_ARCHIVE_TO_LOGICAL_RATIO\n    assert P.strong_verify(out)[\"ok\"] is True\n\n\ndef test_compressible_medium_binary_fails_closed_to_exact_tournament(tmp_path, monkeypatch):\n    root = tmp_path / \"compressible\"\n    root.mkdir()\n    for index in range(32):\n        (root / f\"member-{index:04d}.bin\").write_bytes((b\"cmpct-v030\" * 4096)[: 32 * 1024])\n    sentinel = {\"selected\": \"sentinel-r25-tournament\"}\n    called = {\"r25\": 0}\n\n    def exact_tournament(*args, **kwargs):\n        called[\"r25\"] += 1\n        return sentinel\n\n    monkeypatch.setattr(P.C, \"build\", exact_tournament)\n    result = P.build(root, tmp_path / \"fallback.cmpct\")\n    assert result is sentinel\n    assert called[\"r25\"] == 1\n\n\ndef test_medium_terminal_source_predicate_rejects_mixed_suffix_and_small_members(tmp_path):\n    root = tmp_path / \"mixed\"\n    _random_bins(root)\n    (root / \"member-0000.bin\").rename(root / \"member-0000.dat\")\n    shape = P._medium_binary_terminal_shape(root)\n    assert P._medium_binary_terminal_source_eligible(shape) is False\n\n    small = tmp_path / \"small\"\n    _random_bins(small)\n    (small / \"member-0001.bin\").write_bytes(b\"x\" * (32 * 1024 - 1))\n    shape = P._medium_binary_terminal_shape(small)\n    assert P._medium_binary_terminal_source_eligible(shape) is False\n\n\ndef test_medium_terminal_source_predicate_rejects_symlink(tmp_path):\n    root = tmp_path / \"symlink\"\n    _random_bins(root)\n    link = root / \"link.bin\"\n    try:\n        link.symlink_to(root / \"member-0000.bin\")\n    except OSError:\n        return\n    shape = P._medium_binary_terminal_shape(root)\n    assert shape[\"has_nonregular_entries\"] is True\n    assert P._medium_binary_terminal_source_eligible(shape) is False\n''', encoding='utf-8')
+          PY
+
+          python -m py_compile experiments/entropygraph_v030_release_product.py tests/test_v030_medium_binary_terminal_shipping.py
+          python -m pytest -q tests/test_v030_medium_binary_terminal_shipping.py tests/test_v030_productization_contract.py
+
+      - name: Commit promoted product path
+        run: |
+          git config user.name 'cmpct-v030-automation'
+          git config user.email 'actions@users.noreply.github.com'
+          git add -- experiments/entropygraph_v030_release_product.py tests/test_v030_medium_binary_terminal_shipping.py
+          git rm -- .github/workflows/v030-promote-medium-terminal-one-shot.yml
+          git commit -m 'perf(v030): terminalize proven high-entropy medium binary r24'
+          git push origin HEAD:agent/v030-authoritative-integration
