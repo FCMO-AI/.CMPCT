@@ -23,6 +23,14 @@ jobs:
         with:
           ref: agent/v030-authoritative-integration
           fetch-depth: 0
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install test dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[test]'
 
       - name: Promote the proven structural envelope and add regression coverage
         run: |
