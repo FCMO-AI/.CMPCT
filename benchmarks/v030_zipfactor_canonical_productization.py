@@ -1,11 +1,11 @@
 from __future__ import annotations
 
-"""Canonical-productization proof for the bounded revision-25 ZIP-factor profile.
+"""Canonical-productization proof for the compact bounded revision-25 ZIP-factor profile.
 
-Unlike the original research oracle, this gate pays the actual product boundary: filesystem-manifest capture and
-staging, profile construction, exact manifest/content identity validation, and mandatory one-pass profile strong
-verification. The external ZIP/solid-Zstd comparators use the same normalized source tree. A four-way win here is
-still not release authority because native/Android reader parity is intentionally a separate promotion prerequisite.
+This gate pays the actual product boundary: filesystem-manifest capture/staging, compact profile construction,
+exact manifest/content identity validation, and mandatory one-pass strong verification. The compact candidate uses
+the canonical filesystem manifest as the single owner of per-file size/SHA and stores each logical path only once.
+A four-way win remains pre-promotion evidence until native/Android parity and recovery semantics are complete.
 """
 
 import argparse
@@ -20,27 +20,26 @@ from benchmarks import resemblance_hostile_corpus_v1 as CORPUS
 from benchmarks import v030_external_competitors as EXT
 from experiments import entropygraph_v030_canonical_final_impl as CANON
 from experiments import entropygraph_v030_product_fs as FS
-from experiments import entropygraph_v030_zipfactor_profile as ZF
-from experiments import entropygraph_v030_zipfactor_session as ZFS
+from experiments import entropygraph_v030_zipfactor_compact as ZFC
 
 
 def _verify_product_identity(archive: Path, source_tree: str) -> dict:
-    scan = ZFS.verify_and_identities(archive)
+    scan = ZFC.verify_and_identities(archive)
     manifest_raw = scan["manifest_raw"]
     identities = scan["identities"]
-    decoded = CANON._decode_manifest(manifest_raw)
+    decoded = scan["manifest"]
     expected_paths = set(decoded["regular"]) | {FS.FILESYSTEM_MANIFEST}
     if set(identities) != expected_paths:
-        raise RuntimeError("ZIP-factor profile/member manifest path mismatch")
+        raise RuntimeError("compact ZIP-factor profile/member manifest path mismatch")
     if identities[FS.FILESYSTEM_MANIFEST] != (len(manifest_raw), hashlib.sha256(manifest_raw).digest()):
-        raise RuntimeError("ZIP-factor filesystem manifest graph identity mismatch")
+        raise RuntimeError("compact ZIP-factor filesystem manifest graph identity mismatch")
     for rel, identity in decoded["regular"].items():
         if identities.get(rel) != identity:
-            raise RuntimeError(f"ZIP-factor manifest/content identity mismatch: {rel}")
+            raise RuntimeError(f"compact ZIP-factor manifest/content identity mismatch: {rel}")
     semantic = CANON._semantic_tree_sha(decoded)
     if semantic != source_tree:
-        raise RuntimeError("ZIP-factor canonical semantic tree differs from source")
-    verified = {key: value for key, value in scan.items() if key not in {"manifest_raw", "identities"}}
+        raise RuntimeError("compact ZIP-factor canonical semantic tree differs from source")
+    verified = {key: value for key, value in scan.items() if key not in {"manifest_raw", "manifest", "identities"}}
     return {
         "strong_verify": verified,
         "manifest_entries": len(decoded["manifest"]["entries"]),
@@ -74,7 +73,7 @@ def run(work_root: Path) -> dict:
 
         candidate = td / "candidate-r25-zf.cmpct"
         started = time.perf_counter()
-        build_stats = ZF.build(profile_tree, candidate, level=1, group_size=7)
+        build_stats = ZFC.build(profile_tree, candidate, level=6, group_size=7)
         build_s = time.perf_counter() - started
 
         started = time.perf_counter()
@@ -84,9 +83,9 @@ def run(work_root: Path) -> dict:
         archive_bytes = candidate.stat().st_size
 
         result = {
-            "schema": "cmpct-v030-zipfactor-canonical-productization-v1",
+            "schema": "cmpct-v030-zipfactor-canonical-productization-v2",
             "claim_boundary": (
-                "canonical Python product-boundary proof only; native/Android parity and canonical selector promotion remain mandatory"
+                "compact canonical Python product-boundary proof only; native/Android parity, two-way recovery, and selector promotion remain mandatory"
             ),
             "workload": "resemblance_hostile_v1/04_deflate_family",
             "historical_tree_sha256": historical_tree,
@@ -135,7 +134,7 @@ def main() -> None:
     args.output.write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8")
     print(json.dumps({"candidate": result["candidate"], "zip": result["zip"], "zstd": result["tar_zstd19"], "gate": result["gate"]}, indent=2), flush=True)
     if not result["gate"]["passed"]:
-        raise SystemExit("canonical ZIP-factor productization gate failed")
+        raise SystemExit("compact canonical ZIP-factor productization gate failed")
 
 
 if __name__ == "__main__":
