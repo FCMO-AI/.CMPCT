@@ -1,4 +1,4 @@
-# ci-lane: research
+# ci-lane: deep
 name: CMPCT v0.30 fast solid candidate oracle
 
 on:
@@ -56,14 +56,15 @@ jobs:
           import json
           from pathlib import Path
           d=json.loads(Path('benchmark-artifacts/v030-fast-solid.json').read_text())
-          assert d['schema']=='cmpct-v030-fast-solid-oracle-v1'
+          assert d['schema']=='cmpct-v030-fast-solid-oracle-v2'
           assert d['claim_boundary'].startswith('research-only')
-          assert d['timing_policy']=='every candidate create_s includes pack_source_s exactly once'
+          assert d['timing_policy']=='every candidate create_s includes its variant pack_source_s exactly once'
           assert d['summary']['workloads']==15
           assert len(d['rows'])==15
+          assert set(d['variants'])=={'sha32-path','compact-path','compact-ext'}
           for row in d['rows']:
-              assert row['timing_boundary']=='source-scan+sha256+metadata-pack+zstd-compress+archive-write'
-              assert len(row['candidates'])==len(d['levels'])
+              assert row['timing_boundary']=='source-scan+metadata-pack+integrity-hash+zstd-compress+archive-write'
+              assert len(row['candidates'])==len(d['levels'])*len(d['variants'])
               assert all(c['tree_verified'] is True for c in row['candidates'])
               for c in row['candidates']:
                   assert abs(c['create_s']-(c['pack_source_s']+c['compression_and_write_s'])) < 1e-9
@@ -79,5 +80,5 @@ jobs:
           if-no-files-found: error
           retention-days: 90
 
-# Research only. This workflow may discover a promising encoder architecture, but it cannot satisfy or weaken any
-# v0.30 release receipt. Promotion requires a canonical r25 implementation plus the unchanged full release gates.
+# Deep research only. This workflow may discover a promising encoder architecture, but it cannot satisfy or weaken
+# any v0.30 release receipt. Promotion requires a canonical r25 implementation plus the unchanged full release gates.
