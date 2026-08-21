@@ -12,11 +12,13 @@ on:
       - 'experiments/entropygraph_v030_zipfactor_profile.py'
       - 'experiments/entropygraph_v030_zipfactor_session.py'
       - 'experiments/entropygraph_v030_zipfactor_compact.py'
+      - 'experiments/entropygraph_v030_zipfactor_compact_v3.py'
       - 'experiments/entropygraph_v030_zipfactor_fused.py'
       - 'tests/test_v030_zip_framing_factor_admission.py'
       - 'tests/test_v030_zipfactor_profile.py'
       - 'tests/test_v030_zipfactor_session.py'
       - 'tests/test_v030_zipfactor_fused.py'
+      - 'tests/test_v030_zipfactor_compact_v3.py'
       - '.github/workflows/v030-zip-framing-factor-oracle.yml'
   workflow_dispatch:
 
@@ -54,6 +56,7 @@ jobs:
             experiments/entropygraph_v030_zipfactor_profile.py \
             experiments/entropygraph_v030_zipfactor_session.py \
             experiments/entropygraph_v030_zipfactor_compact.py \
+            experiments/entropygraph_v030_zipfactor_compact_v3.py \
             experiments/entropygraph_v030_zipfactor_fused.py
       - name: Run product-side profile hostile/admission tests
         run: |
@@ -61,14 +64,15 @@ jobs:
             tests/test_v030_zip_framing_factor_admission.py \
             tests/test_v030_zipfactor_profile.py \
             tests/test_v030_zipfactor_session.py \
-            tests/test_v030_zipfactor_fused.py
+            tests/test_v030_zipfactor_fused.py \
+            tests/test_v030_zipfactor_compact_v3.py
       - name: Run exact ZIP framing-factor experiment
         run: |
           mkdir -p benchmark-artifacts
           python benchmarks/v030_zip_framing_factor_oracle.py \
             --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-zip-framing-factor-work" \
             --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-zip-framing-factor.json"
-      - name: Run fused compact canonical product-boundary proof
+      - name: Run fused binary-control canonical product-boundary proof
         run: |
           python benchmarks/v030_zipfactor_canonical_productization.py \
             --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-zipfactor-product-work" \
@@ -100,18 +104,22 @@ jobs:
               assert c['create_s'] < d['tar_zstd19']['create_s']
 
           p=json.loads(Path('benchmark-artifacts/v030-zipfactor-product.json').read_text())
-          assert p['schema']=='cmpct-v030-zipfactor-canonical-productization-v3'
+          assert p['schema']=='cmpct-v030-zipfactor-canonical-productization-v5'
           assert 'native/Android parity' in p['claim_boundary']
           assert 'two-way recovery' in p['claim_boundary']
           assert p['workload']=='resemblance_hostile_v1/04_deflate_family'
-          assert p['candidate']['format_profile']=='zip-framing-factor-compact-v2'
+          assert p['candidate']['format_profile']=='zip-framing-factor-binary-control-v3'
           assert p['candidate']['fused_manifest_and_zip_parse'] is True
+          assert p['candidate']['binary_control'] is True
           assert p['candidate']['profile_prepare_s'] == 0.0
           assert p['candidate']['manifest_content_identity_exact'] is True
           assert p['candidate']['strong_verify']['ok'] is True
           assert p['candidate']['mandatory_verify_s'] >= 0.0
           assert p['candidate']['create_s'] == p['candidate']['profile_build_s'] + p['candidate']['mandatory_verify_s']
+          assert p['candidate']['measured_default_level'] == 3
+          assert p['candidate']['level'] == 3
           assert p['gate']['independent_source_truth'] is True
+          assert p['gate']['binary_control_v3_selected'] is True
           assert p['gate']['locality_green'] is True
           assert p['gate']['strictly_beats_zip_size'] is True
           assert p['gate']['strictly_beats_zstd19_size'] is True
@@ -131,5 +139,5 @@ jobs:
           if-no-files-found: error
           retention-days: 90
 
-# This remains pre-promotion evidence. A green fused compact product-boundary proof must survive mandatory
+# This remains pre-promotion evidence. A green fused binary-control product-boundary proof must survive mandatory
 # verification and independent source truth. Native/Android parity and two-way recovery remain hard prerequisites.
