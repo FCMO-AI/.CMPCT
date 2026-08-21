@@ -355,7 +355,55 @@ def treehash(root: Path) -> str:
     return C.treehash(root)
 
 
+def _terminal_r24_eligible(root: Path) -> bool:
+    """Admit only the measured single-large-file envelope that earned terminal publication.
+
+    The verified terminal-r24 oracle measures the complete shipping boundary (r24 build plus mandatory strong
+    verification) against accepted v0.29, deterministic ZIP/Deflate-9 and solid tar+Zstd-19. Only exactly one
+    regular source file of at least 8 MiB earned that proof. Other shapes continue through the exact r24-vs-r25
+    tournament, so this optimization cannot silently generalize beyond its evidence envelope.
+    """
+    regular_files, largest_member = _regular_user_shape(Path(root))
+    return regular_files == 1 and largest_member >= R24_RELEASE_WIDE_CHUNK_BYTES
+
+
+def _build_terminal_r24(root: Path, out: Path) -> dict:
+    """Publish a fully verified r24 winner without constructing a provably dominated speculative r25 branch."""
+    started = time.perf_counter()
+    root = Path(root)
+    out = Path(out)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(prefix=".cmpct-v030-terminal-r24-", dir=out.parent) as td:
+        candidate = Path(td) / "canonical-r24.cmpct"
+        r24_stats = _locality_bounded_r24_build(root, candidate)
+        if r24_stats.get("large_file_chunk_policy") != "fixed-8mib":
+            raise RuntimeError("terminal-r24 admission did not select the measured wide-chunk policy")
+        C._publish_atomic(candidate, out)
+    verified = strong_verify(out)
+    if not verified.get("ok") or int(verified.get("format_revision", -1)) != 24:
+        raise RuntimeError(f"terminal r24 publication failed strong verification: {verified!r}")
+    return {
+        "selected": "r24-fallback",
+        "archive_bytes": out.stat().st_size,
+        "format_revision": 24,
+        "format_profile": "canonical-r24",
+        "r24_product_bytes": out.stat().st_size,
+        "r25_product_bytes": None,
+        "r25_attempted": False,
+        "r25_reject_reason": "verified-terminal-r24-structural-envelope",
+        "r24": r24_stats,
+        "final_strong_verify": verified,
+        "portfolio_create_s": time.perf_counter() - started,
+        "release_facade": "cmpct-v030-canonical-final-v1",
+        "terminal_r24": True,
+        "terminal_r24_admission": "exactly-one-regular-file-and-largest-ge-8mib",
+        "terminal_r24_evidence": "verified complete-boundary oracle: beats accepted v0.29, ZIP and Zstd-19 in size and create time",
+    }
+
+
 def build(root: Path, out: Path) -> dict:
+    if _terminal_r24_eligible(Path(root)):
+        return _build_terminal_r24(Path(root), Path(out))
     return C.build(root, out)
 
 
