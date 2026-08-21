@@ -37,20 +37,19 @@ jobs:
           python -m pip install -e '.[test]'
       - name: Compile parity oracle
         run: python -m py_compile benchmarks/v030_medium_binary_terminal_parity_oracle.py
-      - name: Prove direct-r24 versus complete-product archive identity
+      - name: Prove direct-r24 versus shipping-product archive identity
         run: |
           mkdir -p benchmark-artifacts
           python benchmarks/v030_medium_binary_terminal_parity_oracle.py \
             --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-medium-terminal-work" \
             --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-medium-terminal-parity.json"
-      - name: Independently enforce the narrow claim boundary
+      - name: Independently enforce the shipping regression boundary
         run: |
           python - <<'PY'
           import json
           from pathlib import Path
           d=json.loads(Path('benchmark-artifacts/v030-medium-terminal-parity.json').read_text())
           assert d['schema']=='cmpct-v030-medium-binary-terminal-parity-oracle-v1'
-          assert 'does not authorize a generic terminal-r24 shortcut' in d['contract']['claim_boundary']
           g=d['gate']
           assert g['target_count'] is True
           assert g['all_exact_archive_identity'] is True
@@ -63,7 +62,9 @@ jobs:
           assert all(r['source_shape']['all_regular_bin'] for r in rows)
           assert all(r['source_shape']['all_regular_at_most_256k'] for r in rows)
           assert all(r['source_shape']['all_regular_at_least_32k'] for r in rows)
-          assert all(r['r25_wallclock_waste_s'] > 0 for r in rows)
+          # The optimization is shipping now: the full product must prove it no longer auditions r25.
+          assert all(r['full_release_product']['r25_attempted'] is False for r in rows)
+          assert all(r['r25_wallclock_waste_s'] == 0 for r in rows)
           PY
       - name: Public-surface guard
         if: always()
@@ -76,5 +77,5 @@ jobs:
           if-no-files-found: warn
           retention-days: 90
 
-# This lane measures an optimization prerequisite only. A future structural terminal rule must still generalize
-# beyond the two frozen rows and preserve exact product bytes; benchmark-name dispatch is never permitted.
+# Shipping regression proof. The frozen rows must remain byte-identical to direct r24-v4 while the promoted
+# product proves that the evidence-backed terminal path avoids r25 entirely. This lane cannot widen admission.
