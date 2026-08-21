@@ -7,6 +7,12 @@ improvement on its negative control. This gate answers the broader release quest
 r24 S_PACK encoder to <=256 KiB .bin/text-like members regress *any* frozen workload compared with the immediately
 preceding shipping r24-v3 policy?
 
+The v0.30 nested-container locality repair is an orthogonal safety invariant. Both sides of this A/B explicitly
+hold that repair enabled, so changing the micro-pack limit cannot accidentally toggle the <=8x nested-container
+law. The locality repair's own causality gate separately preserves and reports its byte cost versus historical r24.
+That separation is essential: this ratchet measures only the medium-pack promotion rather than conflating two
+independent release changes.
+
 It does not compare research grammars and cannot authorize release. Both sides are canonical revision-24 bytes,
 both are strongly verified, and every repaired/frozen workload must retain the same logical tree. Promotion is
 fail-closed: a single larger candidate row is a red, even if aggregate bytes improve.
@@ -18,6 +24,7 @@ from pathlib import Path
 import shutil
 import tempfile
 
+import cmpct.v030_release_locality as LOCALITY
 from benchmarks import v030_release_generalization as GENERAL
 from experiments import entropygraph_v030_release_product as P
 
@@ -28,13 +35,19 @@ NEW_MAX = 256 * 1024
 def _build(root: Path, out: Path, *, promoted: bool) -> dict:
     old_max = P.R24_RELEASE_MICRO_MAX_FILE_BYTES
     old_medium = getattr(P._R24_CDC_POLICY, "medium_binary_pack", False)
+    old_force_locality = getattr(LOCALITY._FORCE_RELEASE_LOCALITY, "enabled", False)
     try:
         P.R24_RELEASE_MICRO_MAX_FILE_BYTES = NEW_MAX if promoted else OLD_MAX
         P._R24_CDC_POLICY.medium_binary_pack = bool(promoted)
+        # Hold the independent release-locality safety law constant on both sides. Without this explicit causal
+        # boundary the old 32 KiB side looked historical while the 256 KiB side also picked up the newer nested
+        # container split, falsely charging that unrelated +2.2 KiB safety cost to medium-binary S_PACK.
+        LOCALITY._FORCE_RELEASE_LOCALITY.enabled = True
         stats = dict(P._locality_bounded_r24_build(root, out))
     finally:
         P.R24_RELEASE_MICRO_MAX_FILE_BYTES = old_max
         P._R24_CDC_POLICY.medium_binary_pack = old_medium
+        LOCALITY._FORCE_RELEASE_LOCALITY.enabled = old_force_locality
     verified = P.strong_verify(out)
     if not verified.get("ok") or int(verified.get("format_revision", -1)) != 24:
         raise RuntimeError(f"r24 verification failed: {verified!r}")
@@ -44,6 +57,7 @@ def _build(root: Path, out: Path, *, promoted: bool) -> dict:
         "format_revision": int(verified["format_revision"]),
         "micro_pack_max_file_bytes": NEW_MAX if promoted else OLD_MAX,
         "medium_binary_pack": bool(promoted),
+        "release_locality_forced_for_causal_isolation": True,
         "build_stats": stats,
     }
 
@@ -74,9 +88,6 @@ def run(work_root: Path) -> dict:
                 baseline = _build(workload, td_path / "r24-v3.cmpct", promoted=False)
                 candidate = _build(workload, td_path / "r24-v4.cmpct", promoted=True)
             same_tree = baseline["tree_sha256"] == candidate["tree_sha256"]
-            # The accepted-v0.29 tree hash is a historical regular-file identity domain, whereas strong_verify
-            # reports the canonical user-tree identity. Source continuity is already enforced by the frozen
-            # generalization loader; here we compare the two canonical r24 artifacts directly.
             delta = int(candidate["archive_bytes"]) - int(baseline["archive_bytes"])
             row = {
                 "suite": suite,
@@ -97,17 +108,22 @@ def run(work_root: Path) -> dict:
     gate = {
         "exact_workload_count": len(rows) == 15,
         "all_verified_tree_equal": all(row["same_verified_tree"] for row in rows),
+        "locality_constant_on_both_sides": all(
+            row[side]["release_locality_forced_for_causal_isolation"] is True
+            for row in rows for side in ("baseline", "candidate")
+        ),
         "zero_r24_byte_regressions": all(row["no_byte_regression"] for row in rows),
         "aggregate_no_regression": candidate_total <= baseline_total,
         "at_least_one_material_improvement": any(row["candidate_delta_bytes"] < 0 for row in rows),
     }
     gate["passed"] = all(gate.values())
     return {
-        "schema": "cmpct-v030-r24-medium-binary-pack-generalization-v1",
+        "schema": "cmpct-v030-r24-medium-binary-pack-generalization-v2",
         "contract": {
             "workloads": 15,
-            "baseline": "shipping r24-v3: 32 KiB micro-pack max; mature text hints only",
-            "candidate": "shipping r24-v4: 256 KiB micro-pack max; thread-local .bin admission",
+            "baseline": "r24-v3 medium-pack policy under current <=8x release locality",
+            "candidate": "r24-v4 256 KiB/.bin medium-pack policy under the same <=8x release locality",
+            "held_constant": "release nested-container locality repair enabled on both A/B sides",
             "grammar": "canonical revision-24 S_PACK on both sides",
             "row_rule": "candidate archive bytes <= baseline archive bytes on every frozen workload",
         },
