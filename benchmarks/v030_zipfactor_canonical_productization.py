@@ -7,6 +7,11 @@ hashes each graph-owned ZIP and parses its framing, then writes the compact prof
 strong verification. A second independent manifest capture is deliberately *outside* the creation timer and serves
 only as source-truth evidence, analogous to post-create extraction/tree verification for external competitors.
 Native/Android parity, two-way recovery and selector promotion remain separate hard prerequisites.
+
+The canonical proof follows the fused builder's measured level-3 default. The repeated level sweep established that
+level 3 preserves strict size wins over both ZIP and solid Zstd-19 while reducing complete candidate latency versus
+the former level-6 setting; this proof still fails unless the full build + mandatory verification boundary beats
+both competitors on the exact frozen workload.
 """
 
 import argparse
@@ -67,7 +72,7 @@ def run(work_root: Path) -> dict:
 
         candidate = td / "candidate-r25-zf.cmpct"
         started = time.perf_counter()
-        build_stats = ZFF.build(stage, candidate, level=6, group_size=7)
+        build_stats = ZFF.build(stage, candidate, level=ZFF.DEFAULT_LEVEL, group_size=7)
         build_s = time.perf_counter() - started
 
         started = time.perf_counter()
@@ -87,7 +92,7 @@ def run(work_root: Path) -> dict:
             raise RuntimeError("fused ZIP-factor semantic tree differs from independent source truth")
 
         result = {
-            "schema": "cmpct-v030-zipfactor-canonical-productization-v3",
+            "schema": "cmpct-v030-zipfactor-canonical-productization-v4",
             "claim_boundary": (
                 "fused compact canonical Python product-boundary proof only; native/Android parity, two-way recovery, and selector promotion remain mandatory"
             ),
@@ -106,6 +111,7 @@ def run(work_root: Path) -> dict:
                 "mandatory_verify_s": verify_s,
                 "create_s": create_s,
                 "fused_manifest_and_zip_parse": True,
+                "measured_default_level": ZFF.DEFAULT_LEVEL,
                 "beats_zip_size": archive_bytes < int(zip_result["archive_bytes"]),
                 "beats_zstd19_size": archive_bytes < int(zstd_result["archive_bytes"]),
                 "beats_zip_create": create_s < float(zip_result["create_s"]),
@@ -118,6 +124,7 @@ def run(work_root: Path) -> dict:
             "canonical_semantic_tree_exact": c["semantic_tree_sha256"] == source_tree,
             "independent_source_truth": True,
             "strong_verify_green": c["strong_verify"]["ok"] is True,
+            "measured_level_3_selected": c["measured_default_level"] == 3 and c["level"] == 3,
             "locality_green": (
                 float(c["verified_max_member_read_amplification"]) <= 8.0
                 and int(c["verified_max_decode_unit_bytes"]) <= 8 * 1024 * 1024
