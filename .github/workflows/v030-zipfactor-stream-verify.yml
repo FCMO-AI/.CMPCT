@@ -1,0 +1,79 @@
+# ci-lane: deep
+name: CMPCT v0.30 ZIP-factor streaming verification oracle
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'experiments/entropygraph_v030_zipfactor_stream_verify.py'
+      - 'experiments/entropygraph_v030_zipfactor_compact_v3.py'
+      - 'experiments/entropygraph_v030_zipfactor_profile.py'
+      - 'benchmarks/v030_zipfactor_stream_verify_oracle.py'
+      - '.github/workflows/v030-zipfactor-stream-verify.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-v030-zf-stream-verify-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+
+jobs:
+  stream-verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install deterministic dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y zstd
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[test]'
+      - name: Compile streaming verifier and oracle
+        run: |
+          python -m py_compile \
+            experiments/entropygraph_v030_zipfactor_stream_verify.py \
+            benchmarks/v030_zipfactor_stream_verify_oracle.py
+      - name: Run exact verification implementation A/B
+        run: |
+          mkdir -p benchmark-artifacts
+          python benchmarks/v030_zipfactor_stream_verify_oracle.py \
+            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-zf-stream-verify-work" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-zf-stream-verify.json"
+      - name: Independently enforce no-verification-loss boundary
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          d=json.loads(Path('benchmark-artifacts/v030-zf-stream-verify.json').read_text())
+          g=d['gate']
+          assert d['schema']=='cmpct-v030-zipfactor-stream-verify-oracle-v1'
+          assert g['identity_exact'] is True
+          assert g['semantic_tree_exact'] is True
+          assert g['locality_accounting_exact'] is True
+          assert g['strong_identity_count_exact'] is True
+          assert g['streaming_faster_median'] is True
+          assert g['passed'] is True
+          PY
+      - name: CI topology self-check
+        run: python tools/check_ci_topology.py .github/workflows/v030-zipfactor-stream-verify.yml
+      - name: Upload evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: v030-zf-stream-verify-${{ github.sha }}
+          path: benchmark-artifacts/v030-zf-stream-verify.json
+          if-no-files-found: warn
+          retention-days: 90
+
+# This lane can prove an implementation optimization only. It may not weaken logical SHA-256 verification,
+# locality accounting, decode-unit bounds, external competitor thresholds, selector rules, or release authority.
