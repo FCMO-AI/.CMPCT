@@ -6,6 +6,7 @@ on:
     branches: [main]
     paths:
       - 'benchmarks/v030_fast_solid_oracle.py'
+      - 'benchmarks/v030_fast_solid_oracle_canonical_identity.py'
       - 'benchmarks/v030_external_competitors.py'
       - 'benchmarks/v030_release_generalization.py'
       - '.github/workflows/v030-fast-solid-oracle.yml'
@@ -38,12 +39,15 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -e '.[audio,test]'
           python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
-      - name: Compile oracle
-        run: python -m py_compile benchmarks/v030_fast_solid_oracle.py
+      - name: Compile oracle and identity adapter
+        run: |
+          python -m py_compile \
+            benchmarks/v030_fast_solid_oracle.py \
+            benchmarks/v030_fast_solid_oracle_canonical_identity.py
       - name: Run exact-tree fast-solid sweep
         run: |
           mkdir -p benchmark-artifacts
-          python benchmarks/v030_fast_solid_oracle.py \
+          python benchmarks/v030_fast_solid_oracle_canonical_identity.py \
             --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-fast-solid-work" \
             --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-fast-solid.json"
       - name: Enforce evidence honesty
@@ -54,12 +58,15 @@ jobs:
           d=json.loads(Path('benchmark-artifacts/v030-fast-solid.json').read_text())
           assert d['schema']=='cmpct-v030-fast-solid-oracle-v1'
           assert d['claim_boundary'].startswith('research-only')
+          assert d['timing_policy']=='every candidate create_s includes pack_source_s exactly once'
           assert d['summary']['workloads']==15
           assert len(d['rows'])==15
           for row in d['rows']:
+              assert row['timing_boundary']=='source-scan+sha256+metadata-pack+zstd-compress+archive-write'
               assert len(row['candidates'])==len(d['levels'])
               assert all(c['tree_verified'] is True for c in row['candidates'])
               for c in row['candidates']:
+                  assert abs(c['create_s']-(c['pack_source_s']+c['compression_and_write_s'])) < 1e-9
                   expected = all(c[k] for k in ('beats_zip_size','beats_zstd19_size','beats_zip_create','beats_zstd19_create'))
                   assert c['viable'] is expected
           PY
