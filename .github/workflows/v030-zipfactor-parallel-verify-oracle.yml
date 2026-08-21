@@ -1,0 +1,80 @@
+# ci-lane: deep
+name: CMPCT v0.30 ZIP-factor parallel verification oracle
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'experiments/entropygraph_v030_zipfactor_compact_v3.py'
+      - 'experiments/entropygraph_v030_zipfactor_profile.py'
+      - 'experiments/entropygraph_v030_product_fs.py'
+      - 'benchmarks/v030_zipfactor_parallel_verify_oracle.py'
+      - '.github/workflows/v030-zipfactor-parallel-verify-oracle.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-v030-zf-parallel-verify-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+
+jobs:
+  parallel-verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install deterministic dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[test]'
+      - name: Compile exact A/B surface
+        run: |
+          python -m py_compile \
+            experiments/entropygraph_v030_zipfactor_compact_v3.py \
+            benchmarks/v030_zipfactor_parallel_verify_oracle.py
+      - name: Run repeated exact serial-vs-parallel verifier A/B
+        run: |
+          mkdir -p benchmark-artifacts
+          python benchmarks/v030_zipfactor_parallel_verify_oracle.py \
+            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-zf-parallel-verify-work" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-zf-parallel-verify.json" \
+            --rounds 31
+      - name: Independently enforce identity and speed result
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          d=json.loads(Path('benchmark-artifacts/v030-zf-parallel-verify.json').read_text())
+          g=d['gate']
+          assert d['schema']=='cmpct-v030-zipfactor-parallel-verify-oracle-v1'
+          assert g['exact_manifest_and_logical_identities'] is True
+          assert d['verification_snapshot']['verified_user_files']==14
+          assert d['verification_snapshot']['max_member_read_amplification']<=8.0
+          assert d['verification_snapshot']['max_decode_unit_bytes']<=8*1024*1024
+          assert g['parallel_strictly_faster'] is True
+          assert g['parallel_median_s'] < g['serial_median_s']
+          assert g['passed'] is True
+          PY
+      - name: CI topology self-check
+        run: python tools/check_ci_topology.py .github/workflows/v030-zipfactor-parallel-verify-oracle.yml
+      - name: Upload exact A/B evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: v030-zf-parallel-verify-${{ github.sha }}
+          path: benchmark-artifacts/v030-zf-parallel-verify.json
+          if-no-files-found: warn
+          retention-days: 90
+
+# This lane is deliberately non-authoritative. A green result only proves that the same ZIP-factor verification
+# facts can be obtained faster by bounded independent-group verification. Production dispatch, recovery, native/
+# Android support and the strict external competitor release gate remain separate mandatory blockers.
