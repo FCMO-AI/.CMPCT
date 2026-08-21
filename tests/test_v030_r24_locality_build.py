@@ -51,6 +51,7 @@ def test_shipping_r24_micro_pack_target_is_bounded_by_largest_member(tmp_path, m
     assert stats["locality_ceiling"] == 8.0
     assert stats["verified_files"] is None
     assert stats["verification_state"] == "deferred-to-selected-artifact"
+    assert stats["large_file_chunk_policy"] == "mature-cdc"
 
 
 def test_shipping_r24_uses_reader_cache_cap_for_large_members(tmp_path, monkeypatch) -> None:
@@ -97,6 +98,89 @@ def test_shipping_r24_uses_reader_cache_cap_for_large_members(tmp_path, monkeypa
     assert stats["micro_pack_target_release_bytes"] == product.R24_RELEASE_PACK_CAP_BYTES
     assert stats["locality_selected_member_bytes"] == 1024 * 1024
     assert stats["verification_state"] == "deferred-to-selected-artifact"
+    assert stats["large_file_chunk_policy"] == "mature-cdc"
+
+
+def test_shipping_r24_admits_wide_chunks_only_for_one_large_regular_file(tmp_path, monkeypatch) -> None:
+    root = tmp_path / "source"
+    root.mkdir()
+    (root / "large.bin").write_bytes(b"x" * (product.R24_RELEASE_WIDE_CHUNK_BYTES + 17))
+    out = tmp_path / "out.cmpct"
+    seen: dict[str, object] = {}
+
+    class FakeBuilder:
+        def __init__(self, _root: Path, *, deflate_reuse_min: int):
+            self.micro_pack_target = 256 * 1024
+            self.micro_pack_max_file = 32 * 1024
+
+        def build(self, target: Path):
+            seen["wide"] = getattr(product._R24_CDC_POLICY, "wide_single_file", False)
+            chunks = product._release_cdc_chunks(b"z" * (product.R24_RELEASE_WIDE_CHUNK_BYTES + 17))
+            seen["chunk_lengths"] = [len(chunk) for chunk in chunks]
+            target.write_bytes(b"fake-r24")
+            return {}
+
+    monkeypatch.setattr(product.C, "Builder", FakeBuilder)
+    stats = product._locality_bounded_r24_build(root, out)
+
+    assert seen["wide"] is True
+    assert seen["chunk_lengths"] == [product.R24_RELEASE_WIDE_CHUNK_BYTES, 17]
+    assert stats["regular_user_files"] == 1
+    assert stats["large_file_chunk_policy"] == "fixed-8mib"
+    assert stats["large_file_chunk_bytes"] == product.R24_RELEASE_WIDE_CHUNK_BYTES
+    assert getattr(product._R24_CDC_POLICY, "wide_single_file", False) is False
+
+
+def test_shipping_r24_does_not_widen_multi_file_tree(tmp_path, monkeypatch) -> None:
+    root = tmp_path / "source"
+    root.mkdir()
+    (root / "large.bin").write_bytes(b"x" * product.R24_RELEASE_WIDE_CHUNK_BYTES)
+    (root / "peer.bin").write_bytes(b"y")
+    out = tmp_path / "out.cmpct"
+    seen: dict[str, object] = {}
+
+    class FakeBuilder:
+        def __init__(self, _root: Path, *, deflate_reuse_min: int):
+            self.micro_pack_target = 256 * 1024
+            self.micro_pack_max_file = 32 * 1024
+
+        def build(self, target: Path):
+            seen["wide"] = getattr(product._R24_CDC_POLICY, "wide_single_file", False)
+            target.write_bytes(b"fake-r24")
+            return {}
+
+    monkeypatch.setattr(product.C, "Builder", FakeBuilder)
+    stats = product._locality_bounded_r24_build(root, out)
+
+    assert seen["wide"] is False
+    assert stats["regular_user_files"] == 2
+    assert stats["large_file_chunk_policy"] == "mature-cdc"
+    assert stats["large_file_chunk_bytes"] is None
+
+
+def test_wide_chunk_dispatch_is_thread_local(monkeypatch) -> None:
+    monkeypatch.setattr(product, "_R24_ORIGINAL_CDC_CHUNKS", lambda data: [b"original", bytes(str(len(data)), "ascii")])
+    barrier = threading.Barrier(2)
+    seen: dict[str, list[int] | list[bytes]] = {}
+
+    def wide_worker() -> None:
+        product._R24_CDC_POLICY.wide_single_file = True
+        barrier.wait()
+        chunks = product._release_cdc_chunks(b"x" * (product.R24_RELEASE_WIDE_CHUNK_BYTES + 3))
+        seen["wide"] = [len(chunk) for chunk in chunks]
+        product._R24_CDC_POLICY.wide_single_file = False
+
+    def normal_worker() -> None:
+        product._R24_CDC_POLICY.wide_single_file = False
+        barrier.wait()
+        seen["normal"] = product._release_cdc_chunks(b"abc")
+
+    first = threading.Thread(target=wide_worker)
+    second = threading.Thread(target=normal_worker)
+    first.start(); second.start(); first.join(); second.join()
+
+    assert seen["wide"] == [product.R24_RELEASE_WIDE_CHUNK_BYTES, 3]
+    assert seen["normal"] == [b"original", b"3"]
 
 
 def test_r24_prebuild_overlaps_filesystem_manifest_capture(tmp_path, monkeypatch) -> None:
