@@ -55,23 +55,21 @@ jobs:
           import json
           from pathlib import Path
           d=json.loads(Path('benchmark-artifacts/v030-r24-medium-pack.json').read_text())
-          assert d['schema']=='cmpct-v030-r24-medium-binary-pack-oracle-v1'
+          assert d['schema']=='cmpct-v030-r24-medium-binary-pack-regression-v2'
           assert d['contract']['grammar']=='existing canonical r24 S_PACK only'
+          assert d['contract']['shipping_micro_pack_max_file_bytes']==256*1024
           g=d['gate']
           assert g['all_verified_tree_equal'] is True
-          assert g['all_rows_no_r24_byte_regression'] is True
+          assert g['all_archive_bytes_deterministic'] is True
           assert g['positive_rows_strict_four_way'] is True
-          assert g['negative_controls_no_r24_byte_regression'] is True
-          assert g['promotion_recommended'] is True
+          assert g['negative_controls_verified_and_deterministic'] is True
+          assert g['shipping_regression_passed'] is True
           positives=[r for r in d['rows'] if r['positive_target']]
           assert len(positives)==2
-          # The medium-pack policy is already shipping as r24-v4, so baseline and candidate are now expected to
-          # converge. This lane is a regression proof: preserve the strict competitor wins and exact verified
-          # bytes, while the separate 15-workload generalization ratchet owns the original v3->v4 byte delta.
           for r in positives:
-              assert r['medium_binary_pack_r24']['archive_bytes'] <= r['baseline_r24']['archive_bytes']
+              assert r['shipping_r24']['archive_bytes']==r['repeat_r24']['archive_bytes']
+              assert r['shipping_r24']['release_byte_knobs']=='environment-independent-r24-v4'
               assert r['strict_four_way_win'] is True
-              assert r['medium_binary_pack_r24']['release_byte_knobs']=='environment-independent-r24-v4'
           PY
       - name: Public-surface guard
         if: always()
