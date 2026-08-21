@@ -56,8 +56,14 @@ pub struct MemberReadStats {
 }
 
 fn work_root(label: &str) -> PathBuf {
-    let stamp = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos();
-    let root = std::env::temp_dir().join(format!("cmpct-zf-{label}-{}-{stamp}", std::process::id()));
+    let stamp = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_nanos();
+    let root = std::env::temp_dir().join(format!(
+        "cmpct-zf-{label}-{}-{stamp}",
+        std::process::id()
+    ));
     fs::create_dir_all(&root).unwrap();
     root
 }
@@ -85,7 +91,10 @@ ZFF.build(source, root/'candidate.cmpct', level=6, group_size=7)
         .arg("-c")
         .arg(script)
         .arg(root)
-        .env("PYTHONPATH", std::env::var("PYTHONPATH").unwrap_or_else(|_| ".".into()))
+        .env(
+            "PYTHONPATH",
+            std::env::var("PYTHONPATH").unwrap_or_else(|_| ".".into()),
+        )
         .status()
         .expect("launch Python ZIP-factor fixture writer");
     assert!(status.success(), "Python ZIP-factor fixture writer failed");
@@ -103,17 +112,27 @@ ZFF.build(source, root/'candidate.cmpct', level=6, group_size=7)
 fn python_fused_writer_round_trips_through_native_candidate_decoder() {
     let root = work_root("roundtrip");
     let archive_path = python_fixture(&root, false);
-    let archive = zipfactor::ZipFactorArchive::open(&archive_path).expect("open Python compact-v2 bytes natively");
+    let archive = zipfactor::ZipFactorArchive::open(&archive_path)
+        .expect("open Python compact-v2 bytes natively");
 
     assert_eq!(archive.entries().len(), 8, "manifest + seven ZIP owners");
     assert!(archive.declared_amplification() <= 8.0);
-    assert!(!archive.tail_authenticated(), "recovery remains a promotion blocker, not a synthetic green");
+    assert!(
+        !archive.tail_authenticated(),
+        "recovery remains a promotion blocker, not a synthetic green"
+    );
     archive.verify().expect("native full verification");
 
     for bundle in 0..7 {
         let rel = format!("bundle-{bundle:02}.zip");
-        let index = archive.entries().iter().position(|entry| entry.path == rel).unwrap();
-        let (native, stats) = archive.read_member(index).expect("native ZIP-factor selective read");
+        let index = archive
+            .entries()
+            .iter()
+            .position(|entry| entry.path == rel)
+            .unwrap();
+        let (native, stats) = archive
+            .read_member(index)
+            .expect("native ZIP-factor selective read");
         assert_eq!(native, fs::read(root.join("source").join(&rel)).unwrap());
         assert!(stats.amplification <= 8.0);
         assert!(stats.decoded_context_bytes <= 8 * 1024 * 1024);
@@ -128,8 +147,11 @@ fn native_candidate_decoder_fails_closed_on_group_corruption() {
     let root = work_root("corrupt");
     let archive_path = python_fixture(&root, true);
     match zipfactor::ZipFactorArchive::open(&archive_path) {
-        Ok(archive) => assert!(archive.verify().is_err(), "corrupted ZIP-factor bytes must not verify"),
-        Err(_) => {}, // corruption may make the compressed group itself malformed, which is equally fail-closed.
+        Ok(archive) => assert!(
+            archive.verify().is_err(),
+            "corrupted ZIP-factor bytes must not verify"
+        ),
+        Err(_) => {} // corruption may make the compressed group itself malformed, which is equally fail-closed.
     }
     fs::remove_dir_all(root).ok();
 }
