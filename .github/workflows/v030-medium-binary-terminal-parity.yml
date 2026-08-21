@@ -62,9 +62,11 @@ jobs:
           assert all(r['source_shape']['all_regular_bin'] for r in rows)
           assert all(r['source_shape']['all_regular_at_most_256k'] for r in rows)
           assert all(r['source_shape']['all_regular_at_least_32k'] for r in rows)
-          # The optimization is shipping now: the full product must prove it no longer auditions r25.
+          # The shipping invariant is semantic ownership: r25 must never be constructed. A few milliseconds of
+          # classification/publication/verification overhead relative to a direct private r24 helper is not r25
+          # work and must not be mislabeled as such by subtracting two independent wall clocks.
           assert all(r['full_release_product']['r25_attempted'] is False for r in rows)
-          assert all(r['r25_wallclock_waste_s'] == 0 for r in rows)
+          assert all(r['full_release_product']['r25_product_bytes'] is None for r in rows)
           PY
       - name: Public-surface guard
         if: always()
@@ -78,4 +80,6 @@ jobs:
           retention-days: 90
 
 # Shipping regression proof. The frozen rows must remain byte-identical to direct r24-v4 while the promoted
-# product proves that the evidence-backed terminal path avoids r25 entirely. This lane cannot widen admission.
+# product proves that the evidence-backed terminal path avoids r25 entirely. Wall-clock deltas between the public
+# product and a private direct-r24 helper are diagnostic only; r25 ownership is proved by r25_attempted/bytes.
+# This lane cannot widen admission.
