@@ -112,19 +112,13 @@ impl ZipFactorArchive {
             "ZIP-factor manifest size",
             MAX_DECODE,
         )?;
-        let manifest_sha = digest32(
-            field(meta, "manifest_sha")?,
-            "ZIP-factor manifest SHA-256",
-        )?;
+        let manifest_sha = digest32(field(meta, "manifest_sha")?, "ZIP-factor manifest SHA-256")?;
         let template_raw_size = uint(
             field(meta, "template_raw")?,
             "ZIP-factor template size",
             MAX_DECODE,
         )?;
-        let template_sha = digest32(
-            field(meta, "template_sha")?,
-            "ZIP-factor template SHA-256",
-        )?;
+        let template_sha = digest32(field(meta, "template_sha")?, "ZIP-factor template SHA-256")?;
         let declared_amp = field(meta, "max_member_read_amplification")?
             .as_f64()
             .ok_or_else(|| {
@@ -502,9 +496,7 @@ fn read_uvarint<R: Read>(reader: &mut R) -> Result<u64, PortableError> {
             return Ok(value);
         }
     }
-    Err(PortableError::Format(
-        "oversized ZIP-factor uvarint".into(),
-    ))
+    Err(PortableError::Format("oversized ZIP-factor uvarint".into()))
 }
 
 fn read_blob(file: &mut File, limit: u64) -> Result<Vec<u8>, PortableError> {
