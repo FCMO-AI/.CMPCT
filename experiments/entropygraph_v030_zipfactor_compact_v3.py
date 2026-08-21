@@ -73,7 +73,10 @@ def build(root: Path, out: Path, *, level: int = 6, group_size: int = 7) -> dict
     template_raw = BASE._serialize_template(items[0][1])
     groups = [items[index:index + group_size] for index in range(0, len(items), group_size)]
     group_raws = [_pack_group(group) for group in groups]
-    regular_sizes = {rel: (root / rel).stat().st_size for rel, _item in items}
+    # _scan() has already read and parsed every ZIP. Re-statting every path here was redundant I/O on the
+    # millisecond-scale creation frontier; the parser's raw_size is the exact source byte length from that same
+    # fused read and is already covered by the canonical manifest identity captured in _scan().
+    regular_sizes = {rel: int(item["raw_size"]) for rel, item in items}
     max_decode = max(len(template_raw) + len(raw) for raw in group_raws)
     max_amp = max(
         (len(template_raw) + len(raw)) / max(1, min(regular_sizes[rel] for rel, _item in group))
@@ -108,7 +111,8 @@ def build(root: Path, out: Path, *, level: int = 6, group_size: int = 7) -> dict
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_bytes(payload)
     return {
-        "archive_bytes": out.stat().st_size,
+        # The complete publication bytes are already resident; a second filesystem stat was bookkeeping-only.
+        "archive_bytes": len(payload),
         "format_revision": REVISION,
         "format_profile": PROFILE,
         "user_files": len(items),
