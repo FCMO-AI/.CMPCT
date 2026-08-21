@@ -80,8 +80,10 @@ def run(work_root: Path) -> dict:
     work_root.mkdir(parents=True)
     neutral_root = work_root / "neutral"
     hostile_root = work_root / "hostile"
-    NEUTRAL.build(neutral_root)
+    # The neutral corpus must be generated through the accepted repair-v6 hooks before any row is measured.
+    # Installing the hooks after generation would silently benchmark an obsolete tree identity.
     REPAIR.install_generation_hooks(NEUTRAL)
+    NEUTRAL.build(neutral_root)
     REPAIR.normalize_root(neutral_root)
     HOSTILE.build(hostile_root)
 
