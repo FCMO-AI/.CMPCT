@@ -11,6 +11,7 @@ on:
       - 'benchmarks/v030_zipfactor_canonical_productization.py'
       - 'experiments/entropygraph_v030_zipfactor_profile.py'
       - 'experiments/entropygraph_v030_zipfactor_session.py'
+      - 'experiments/entropygraph_v030_zipfactor_compact.py'
       - 'tests/test_v030_zip_framing_factor_admission.py'
       - 'tests/test_v030_zipfactor_profile.py'
       - 'tests/test_v030_zipfactor_session.py'
@@ -43,13 +44,14 @@ jobs:
           sudo apt-get install -y zstd
           python -m pip install --upgrade pip
           python -m pip install -e '.[test]'
-      - name: Compile oracle and product-side profile engine
+      - name: Compile oracle and product-side profile engines
         run: |
           python -m py_compile \
             benchmarks/v030_zip_framing_factor_oracle.py \
             benchmarks/v030_zipfactor_canonical_productization.py \
             experiments/entropygraph_v030_zipfactor_profile.py \
-            experiments/entropygraph_v030_zipfactor_session.py
+            experiments/entropygraph_v030_zipfactor_session.py \
+            experiments/entropygraph_v030_zipfactor_compact.py
       - name: Run product-side profile hostile/admission tests
         run: |
           python -m pytest -q \
@@ -62,7 +64,7 @@ jobs:
           python benchmarks/v030_zip_framing_factor_oracle.py \
             --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-zip-framing-factor-work" \
             --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-zip-framing-factor.json"
-      - name: Run canonical staging/product-boundary proof
+      - name: Run compact canonical staging/product-boundary proof
         run: |
           python benchmarks/v030_zipfactor_canonical_productization.py \
             --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-zipfactor-product-work" \
@@ -94,9 +96,11 @@ jobs:
               assert c['create_s'] < d['tar_zstd19']['create_s']
 
           p=json.loads(Path('benchmark-artifacts/v030-zipfactor-product.json').read_text())
-          assert p['schema']=='cmpct-v030-zipfactor-canonical-productization-v1'
+          assert p['schema']=='cmpct-v030-zipfactor-canonical-productization-v2'
           assert 'native/Android parity' in p['claim_boundary']
+          assert 'two-way recovery' in p['claim_boundary']
           assert p['workload']=='resemblance_hostile_v1/04_deflate_family'
+          assert p['candidate']['format_profile']=='zip-framing-factor-compact-v2'
           assert p['candidate']['manifest_content_identity_exact'] is True
           assert p['candidate']['strong_verify']['ok'] is True
           assert p['candidate']['mandatory_verify_s'] >= 0.0
@@ -120,5 +124,5 @@ jobs:
           if-no-files-found: error
           retention-days: 90
 
-# This remains pre-promotion evidence. A green product-boundary proof shows the win survives canonical staging,
-# one-pass mandatory verification and exact filesystem identity; native/Android parity plus selector promotion remain hard prerequisites.
+# This remains pre-promotion evidence. A green compact product-boundary proof must survive canonical staging,
+# mandatory verification and exact filesystem identity. Native/Android parity and two-way recovery remain hard prerequisites.
