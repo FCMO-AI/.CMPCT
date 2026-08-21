@@ -10,8 +10,9 @@ public product operations should import this module.
 """
 from __future__ import annotations
 
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
 import hashlib
+import multiprocessing as mp
 import os
 from pathlib import Path
 import shutil
@@ -42,6 +43,9 @@ MAX_PROFILE_FILES = C.MAX_PROFILE_FILES
 MAX_PROFILE_LOGICAL_BYTES = C.MAX_PROFILE_LOGICAL_BYTES
 R24_RELEASE_PACK_CAP_BYTES = 2 * 1024 * 1024
 R24_RELEASE_MICRO_MAX_FILE_BYTES = 32 * 1024
+G04_PROCESS_MIN_GRAPH_BYTES = 4 * 1024 * 1024
+G04_PROCESS_MIN_RECORDS = 18
+G04_AUDITION_MAX_WORKERS = 4
 # Canonical r24 fallback must obey the same <=8x selected-member locality law as r25. Virtual ZIP/WHL reads can
 # otherwise regenerate a small Deflate stream from a much larger raw member when the historical 64 KiB reuse
 # cutoff drops that exact stream. Retain every exact Deflate stream in the release fallback so a selected virtual
@@ -51,13 +55,35 @@ R24_RELEASE_MICRO_MAX_FILE_BYTES = 32 * 1024
 R24_RELEASE_DEFLATE_REUSE_MIN_BYTES = 0
 
 
+def _g04_audition_worker(payload):
+    """Spawn-safe delegation to the one canonical G0-G4 audition implementation."""
+    record_id, record, member_lengths = payload
+    from experiments import entropygraph_v030_release_product as child_product
+
+    shared = child_product.C.SHARED
+    return shared.G._audition_record(record_id, record, member_lengths)
+
+
+def _g04_process_pool_eligible(graph_path: Path, graph_records: list) -> bool:
+    """Use processes only where the measured GIL win dominates spawn/serialization overhead.
+
+    The promotion oracle established exact-byte material wins on the frozen office and logs substrates at
+    11.5 MiB/35 records and 4.7 MiB/18 records respectively.  The lower bound is deliberately anchored at that
+    evidence envelope: smaller graphs keep the existing ordered thread scheduler, so this optimization cannot
+    impose process startup on tiny workloads that must also beat ZIP/Zstd creation time.
+    """
+    return len(graph_records) >= G04_PROCESS_MIN_RECORDS and Path(graph_path).stat().st_size >= G04_PROCESS_MIN_GRAPH_BYTES
+
+
 def _parallel_deferred_overlay(graph_path: Path, overlay_path: Path) -> dict:
     """Run canonical G0-G4 auditions in parallel but verify only if exact bytes can win.
 
     The shared portfolio's publication law owns strong verification after complete-artifact pricing. An overlay
     that is already >= the accepted v0.29 floor has no route to publication, so decoding its entire logical tree
     beforehand is pure creation latency. A byte-winning overlay is still strong-verified by ``SHARED.build``
-    before it can be selected. This preserves the bounded ordered audition schedule and exact transform bytes.
+    before it can be selected. Scheduling alone changes here: sufficiently large measured substrates use bounded
+    spawned processes to escape the CPython GIL, while small substrates retain the cheaper ordered thread path.
+    Candidate order, transform decisions, compression levels, bytes and locality rules are unchanged.
 
     Footnote: canonical-final originally patched the shared overlay helper before the later deferred-verification
     optimization existed. Keeping this release-product binding explicit prevents that older private override from
@@ -67,17 +93,27 @@ def _parallel_deferred_overlay(graph_path: Path, overlay_path: Path) -> dict:
     source_format, _source, graph_meta, graph_records = shared.strict._read_source_records(graph_path)
     users = shared.O._record_member_lengths(graph_meta, len(graph_records))
 
-    def audition(item):
-        record_id, record = item
-        return shared.G._audition_record(record_id, record, users[record_id])
+    if graph_records and _g04_process_pool_eligible(graph_path, graph_records):
+        worker_count = min(G04_AUDITION_MAX_WORKERS, len(graph_records), max(1, os.cpu_count() or 1))
+        payloads = [(record_id, record, users[record_id]) for record_id, record in enumerate(graph_records)]
+        ctx = mp.get_context("spawn")
+        with ProcessPoolExecutor(max_workers=worker_count, mp_context=ctx) as pool:
+            outcomes = list(pool.map(_g04_audition_worker, payloads, chunksize=1))
+        scheduler = "bounded-ordered-spawn-process-pool-v1"
+    elif graph_records:
+        worker_count = min(G04_AUDITION_MAX_WORKERS, len(graph_records))
 
-    if graph_records:
-        worker_count = min(4, len(graph_records))
+        def audition(item):
+            record_id, record = item
+            return shared.G._audition_record(record_id, record, users[record_id])
+
         with ThreadPoolExecutor(max_workers=worker_count, thread_name_prefix="cmpct-v030-g04") as pool:
             outcomes = list(pool.map(audition, enumerate(graph_records)))
+        scheduler = "bounded-ordered-thread-pool-v1"
     else:
         worker_count = 0
         outcomes = []
+        scheduler = "empty"
 
     records = [row[0] for row in outcomes]
     transforms = [row[1] for row in outcomes]
@@ -94,7 +130,9 @@ def _parallel_deferred_overlay(graph_path: Path, overlay_path: Path) -> dict:
         "verified": None,
         "verification_state": "deferred-until-byte-win",
         "audition_workers": worker_count,
-        "audition_scheduler": "bounded-ordered-thread-pool-v1",
+        "audition_scheduler": scheduler,
+        "audition_process_min_graph_bytes": G04_PROCESS_MIN_GRAPH_BYTES,
+        "audition_process_min_records": G04_PROCESS_MIN_RECORDS,
         "delimiter_transpose": "bulk-rectangular-prefix-v1",
     }
 
