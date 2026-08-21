@@ -1,9 +1,9 @@
 name: CMPCT v0.30 promote proven medium terminal r24
 
 on:
-  push:
-    branches:
-      - agent/v030-authoritative-integration
+  pull_request:
+    types: [synchronize]
+    branches: [main]
     paths:
       - '.github/workflows/v030-promote-medium-terminal-one-shot.yml'
 
@@ -11,11 +11,12 @@ permissions:
   contents: write
 
 concurrency:
-  group: cmpct-v030-promote-medium-terminal
+  group: cmpct-v030-promote-medium-terminal-${{ github.event.pull_request.number }}
   cancel-in-progress: false
 
 jobs:
   promote:
+    if: github.event.pull_request.head.ref == 'agent/v030-authoritative-integration'
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v6
