@@ -77,7 +77,11 @@ def test_release_r24_byte_knobs_ignore_ambient_environment(monkeypatch, tmp_path
     builder, stats = _exercise(monkeypatch, tmp_path, largest_bytes=300 * 1024)
 
     assert builder.deflate_reuse_min == 0
-    assert builder.micro_pack_max_file == 32 * 1024
+    # v0.30 r24-v4 deliberately admits medium .bin members to the existing S_PACK grammar up to 256 KiB.
+    # This is a frozen shipping byte knob now, so ambient CMPCT_MICRO_PACK_MAX_FILE must not pull it back down.
+    assert builder.micro_pack_max_file == 256 * 1024
     assert stats["deflate_reuse_min_release_bytes"] == 0
-    assert stats["micro_pack_max_file_release_bytes"] == 32 * 1024
-    assert stats["release_byte_knobs"] == "environment-independent-r24-v3"
+    assert stats["micro_pack_max_file_release_bytes"] == 256 * 1024
+    assert stats["micro_pack_medium_binary_extension"] == ".bin"
+    assert stats["micro_pack_medium_binary_policy"] == "shipping-r24-thread-local-existing-s-pack"
+    assert stats["release_byte_knobs"] == "environment-independent-r24-v4"
