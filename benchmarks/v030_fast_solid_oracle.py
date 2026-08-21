@@ -2,26 +2,27 @@ from __future__ import annotations
 
 """Fast solid-stream oracle for the v0.30 size+creation-speed contract.
 
-This is deliberately research-only: it does not create canonical r24/r25 bytes and cannot satisfy a release gate.
-Its job is to test a concrete architectural hypothesis suggested by current evidence: canonical r24 is already
-fast, while most v0.30 wall-clock is spent searching research graphs. A compact whole-tree stream may recover
-solid-compression gains without tar framing or subprocess overhead.
+This remains deliberately research-only: it does not create canonical r24/r25 bytes and cannot satisfy a release
+receipt. Its purpose is to test whether a much cheaper solid representation has enough raw size/speed headroom to
+justify productization. Every candidate is charged for source scanning, metadata construction, integrity hashing,
+compression and archive publication, then fully extracted and checked against the frozen regular-file tree.
 
-For each frozen regular-file workload, the oracle:
-- normalizes the exact same source tree used by the external competitor matrix;
-- encodes a deterministic compact stream of path/length/content records;
-- compresses that stream in-process with python-zstandard at several levels;
-- reconstructs and verifies the exact historical regular-file tree identity;
-- compares complete candidate bytes and end-to-end creation wall-clock against deterministic ZIP/Deflate-9 and
-  the existing tar+Zstd-19 competitor on the same normalized stage.
+The first oracle showed only 3/15 strict wins, but most misses were tiny while every row carried a 32-byte SHA-256
+per file inside the compressed stream. That tax is especially distorted on the 5,000-file corpus. v2 therefore
+compares three *honest* metadata/integrity layouts while preserving exact round-trip verification:
 
-Candidate creation time includes the complete source scan, content hashing, metadata packing, compression and
-archive write. The level sweep reuses the packed payload only as an experiment implementation detail; the measured
-``create_s`` for every candidate adds the independently measured pack-source cost back in, so no candidate is
-credited for work that a standalone encoder would have to perform.
+``sha32-path``
+    Original path-ordered rows with a full per-file SHA-256. This is the conservative control.
+``compact-path``
+    Path-ordered prefix-delta names + sizes, protected by one archive payload SHA-256.
+``compact-ext``
+    The same compact metadata, but payload members are deterministically grouped by extension before compression.
+    Extraction restores original paths, so ordering is a compression decision rather than a semantic change.
 
-No result is promoted automatically. A viable row requires one candidate level to be strictly smaller *and*
-strictly faster to create than both ZIP and tar+Zstd-19. Equality is failure, matching the frozen v0.30 law.
+The compact variants are not proposed as the final integrity model. A canonical implementation would still have
+to satisfy the existing strong/member-integrity and <=8x locality requirements, likely with authenticated segment
+hashes. This oracle only answers the prior question: is metadata/order overhead the reason a fast solid core misses
+Zstd by a few KiB, or is the compression substrate itself insufficient?
 """
 
 import argparse
@@ -39,63 +40,140 @@ import zstandard as zstd
 from benchmarks import v030_external_competitors as B
 from benchmarks import v030_release_generalization as GENERAL
 
-MAGIC = b"C30SOL1\0"
-HEADER = struct.Struct("<8sQ")
+MAGIC = b"C30SLD2\0"
+HEADER = struct.Struct("<8sQ32s")
 LEVELS = (1, 3, 6, 9, 12, 15, 19)
+VARIANTS = ("sha32-path", "compact-path", "compact-ext")
 
 
-def _pack_source(stage: Path) -> tuple[bytes, list[list[object]]]:
+def _common_prefix(a: str, b: str) -> int:
+    limit = min(len(a), len(b))
+    i = 0
+    while i < limit and a[i] == b[i]:
+        i += 1
+    return i
+
+
+def _ordered_files(stage: Path, variant: str) -> list[Path]:
+    files = B._files(stage)
+    if variant != "compact-ext":
+        return files
+    return sorted(
+        files,
+        key=lambda path: (
+            path.suffix.lower(),
+            path.name.lower(),
+            path.relative_to(stage).as_posix(),
+        ),
+    )
+
+
+def _pack_source(stage: Path, variant: str) -> tuple[bytes, int, int]:
     rows: list[list[object]] = []
     chunks: list[bytes] = []
     offset = 0
-    for path in B._files(stage):
+    previous = ""
+    files = _ordered_files(stage, variant)
+    for path in files:
         raw = path.read_bytes()
         rel = path.relative_to(stage).as_posix()
-        rows.append([rel, offset, len(raw), hashlib.sha256(raw).digest()])
+        if variant == "sha32-path":
+            rows.append([rel, offset, len(raw), hashlib.sha256(raw).digest()])
+        else:
+            prefix = _common_prefix(previous, rel)
+            rows.append([prefix, rel[prefix:], len(raw)])
+            previous = rel
         chunks.append(raw)
         offset += len(raw)
-    meta = msgpack.packb(["cmpct-fast-solid-oracle-v1", rows], use_bin_type=True)
-    return meta + b"".join(chunks), rows
+
+    profile = "cmpct-fast-solid-sha32-v2" if variant == "sha32-path" else "cmpct-fast-solid-compact-v2"
+    meta = msgpack.packb([profile, variant, rows], use_bin_type=True)
+    payload = meta + b"".join(chunks)
+    return payload, len(files), offset
 
 
-def _write_candidate(payload: bytes, archive: Path, level: int) -> dict:
+def _write_candidate(payload: bytes, archive: Path, level: int, variant: str) -> dict:
     started = time.perf_counter()
+    digest = hashlib.sha256(payload).digest()
     compressed = zstd.ZstdCompressor(level=level, threads=0).compress(payload)
-    archive.write_bytes(HEADER.pack(MAGIC, len(payload)) + compressed)
+    archive.write_bytes(HEADER.pack(MAGIC, len(payload), digest) + compressed)
     return {
+        "variant": variant,
         "level": level,
         "archive_bytes": archive.stat().st_size,
         "compression_and_write_s": time.perf_counter() - started,
     }
 
 
+def _decode_rows(head: list[object], content: bytes) -> list[tuple[str, bytes, bytes | None]]:
+    if len(head) != 3 or not isinstance(head[0], str) or not isinstance(head[1], str) or not isinstance(head[2], list):
+        raise RuntimeError("bad fast-solid metadata")
+    profile, variant, rows = head
+    decoded: list[tuple[str, bytes, bytes | None]] = []
+    cursor = 0
+    previous = ""
+    for row in rows:
+        if variant == "sha32-path":
+            if not isinstance(row, list) or len(row) != 4:
+                raise RuntimeError("bad sha32 row")
+            rel, offset, size, digest = row
+            start = int(offset)
+            end = start + int(size)
+            member = content[start:end]
+            expected = bytes(digest)
+            if start != cursor:
+                raise RuntimeError("non-contiguous sha32 offsets")
+        else:
+            if not isinstance(row, list) or len(row) != 3:
+                raise RuntimeError("bad compact row")
+            prefix, suffix, size = row
+            if not isinstance(prefix, int) or not isinstance(suffix, str) or prefix < 0 or prefix > len(previous):
+                raise RuntimeError("bad compact path delta")
+            rel = previous[:prefix] + suffix
+            start = cursor
+            end = start + int(size)
+            member = content[start:end]
+            expected = None
+            previous = rel
+        if not isinstance(rel, str) or not rel or rel.startswith("/") or ".." in Path(rel).parts:
+            raise RuntimeError("unsafe fast-solid path")
+        if len(member) != int(size):
+            raise RuntimeError("fast-solid member length mismatch")
+        if expected is not None and hashlib.sha256(member).digest() != expected:
+            raise RuntimeError("fast-solid member identity mismatch")
+        decoded.append((rel, member, expected))
+        cursor = end
+    if cursor != len(content):
+        raise RuntimeError("fast-solid payload has trailing/unowned content")
+    return decoded
+
+
 def _extract_candidate(archive: Path, dst: Path) -> None:
     raw = archive.read_bytes()
     if len(raw) < HEADER.size:
         raise RuntimeError("short fast-solid oracle archive")
-    magic, usize = HEADER.unpack(raw[: HEADER.size])
+    magic, usize, expected_payload_sha = HEADER.unpack(raw[: HEADER.size])
     if magic != MAGIC:
         raise RuntimeError("bad fast-solid oracle magic")
     payload = zstd.ZstdDecompressor().decompress(raw[HEADER.size :], max_output_size=int(usize))
-    if len(payload) != int(usize):
-        raise RuntimeError("fast-solid oracle payload length mismatch")
+    if len(payload) != int(usize) or hashlib.sha256(payload).digest() != expected_payload_sha:
+        raise RuntimeError("fast-solid payload identity mismatch")
+
     unpacker = msgpack.Unpacker(raw=False, strict_map_key=False)
     unpacker.feed(payload)
     head = next(unpacker)
-    if not isinstance(head, list) or len(head) != 2 or head[0] != "cmpct-fast-solid-oracle-v1":
-        raise RuntimeError("bad fast-solid oracle metadata")
+    if not isinstance(head, list):
+        raise RuntimeError("bad fast-solid metadata")
     meta = msgpack.packb(head, use_bin_type=True)
     content = payload[len(meta) :]
+    decoded = _decode_rows(head, content)
+
     dst.mkdir(parents=True, exist_ok=True)
-    for row in head[1]:
-        rel, offset, size, digest = row
-        if not isinstance(rel, str) or rel.startswith("/") or ".." in Path(rel).parts:
-            raise RuntimeError("unsafe fast-solid oracle path")
-        start = int(offset)
-        end = start + int(size)
-        member = content[start:end]
-        if len(member) != int(size) or hashlib.sha256(member).digest() != bytes(digest):
-            raise RuntimeError("fast-solid oracle member identity mismatch")
+    seen: set[str] = set()
+    for rel, member, _digest in decoded:
+        if rel in seen:
+            raise RuntimeError("duplicate fast-solid path")
+        seen.add(rel)
         target = dst / rel
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_bytes(member)
@@ -107,55 +185,68 @@ def _one(label: str, source: Path, work: Path) -> dict:
         root = Path(td)
         stage = B._normalized_stage(source, root)
 
-        pack_started = time.perf_counter()
-        payload, rows = _pack_source(stage)
-        pack_source_s = time.perf_counter() - pack_started
-
         zip_result = B._zip(stage, root / "baseline.zip", root / "zip-out")
         zstd_result = B._tar_zstd(stage, root / "baseline.tar.zst", root / "zstd-out", root)
         B._verify_extracted(root / "zip-out", expected_tree, "zip")
         B._verify_extracted(root / "zstd-out", expected_tree, "tar-zstd19")
 
         candidates = []
-        for level in LEVELS:
-            archive = root / f"solid-l{level}.bin"
-            result = _write_candidate(payload, archive, level)
-            result["pack_source_s"] = pack_source_s
-            result["create_s"] = pack_source_s + float(result["compression_and_write_s"])
-            extracted = root / f"solid-l{level}-out"
-            _extract_candidate(archive, extracted)
-            B._verify_extracted(extracted, expected_tree, f"fast-solid-l{level}")
-            result["tree_verified"] = True
-            result["beats_zip_size"] = result["archive_bytes"] < zip_result["archive_bytes"]
-            result["beats_zstd19_size"] = result["archive_bytes"] < zstd_result["archive_bytes"]
-            result["beats_zip_create"] = result["create_s"] < zip_result["create_s"]
-            result["beats_zstd19_create"] = result["create_s"] < zstd_result["create_s"]
-            result["viable"] = all(
-                result[key]
-                for key in (
-                    "beats_zip_size",
-                    "beats_zstd19_size",
-                    "beats_zip_create",
-                    "beats_zstd19_create",
+        variant_stats = {}
+        for variant in VARIANTS:
+            pack_started = time.perf_counter()
+            payload, logical_files, logical_bytes = _pack_source(stage, variant)
+            pack_source_s = time.perf_counter() - pack_started
+            variant_stats[variant] = {
+                "payload_bytes_before_zstd": len(payload),
+                "pack_source_s": pack_source_s,
+            }
+            for level in LEVELS:
+                archive = root / f"{variant}-l{level}.bin"
+                result = _write_candidate(payload, archive, level, variant)
+                result["pack_source_s"] = pack_source_s
+                result["create_s"] = pack_source_s + float(result["compression_and_write_s"])
+                extracted = root / f"{variant}-l{level}-out"
+                _extract_candidate(archive, extracted)
+                B._verify_extracted(extracted, expected_tree, f"fast-solid-{variant}-l{level}")
+                result["tree_verified"] = True
+                result["beats_zip_size"] = result["archive_bytes"] < zip_result["archive_bytes"]
+                result["beats_zstd19_size"] = result["archive_bytes"] < zstd_result["archive_bytes"]
+                result["beats_zip_create"] = result["create_s"] < zip_result["create_s"]
+                result["beats_zstd19_create"] = result["create_s"] < zstd_result["create_s"]
+                result["viable"] = all(
+                    result[key]
+                    for key in (
+                        "beats_zip_size",
+                        "beats_zstd19_size",
+                        "beats_zip_create",
+                        "beats_zstd19_create",
+                    )
                 )
-            )
-            candidates.append(result)
+                candidates.append(result)
 
         viable = [row for row in candidates if row["viable"]]
-        best = min(viable, key=lambda row: (row["archive_bytes"], row["create_s"], row["level"])) if viable else None
+        best = min(viable, key=lambda row: (row["archive_bytes"], row["create_s"], row["variant"], row["level"])) if viable else None
+        closest = min(
+            candidates,
+            key=lambda row: (
+                max(0, int(row["archive_bytes"]) - int(zstd_result["archive_bytes"])),
+                max(0.0, float(row["create_s"]) - float(zip_result["create_s"])),
+                row["archive_bytes"],
+            ),
+        )
         return {
             "label": label,
             "tree_sha256": expected_tree,
-            "logical_files": len(rows),
-            "logical_bytes": sum(int(row[2]) for row in rows),
-            "payload_bytes_before_zstd": len(payload),
-            "pack_source_s": pack_source_s,
-            "timing_boundary": "source-scan+sha256+metadata-pack+zstd-compress+archive-write",
+            "logical_files": logical_files,
+            "logical_bytes": logical_bytes,
+            "variant_stats": variant_stats,
+            "timing_boundary": "source-scan+metadata-pack+integrity-hash+zstd-compress+archive-write",
             "zip": zip_result,
             "tar_zstd19": zstd_result,
             "candidates": candidates,
-            "viable_level": None if best is None else best["level"],
             "viable_candidate": best,
+            "closest_candidate": closest,
+            "closest_zstd_size_gap_bytes": max(0, int(closest["archive_bytes"]) - int(zstd_result["archive_bytes"])),
         }
 
 
@@ -195,8 +286,8 @@ def run(work_root: Path) -> dict:
                         "label": row["label"],
                         "zip": [row["zip"]["archive_bytes"], row["zip"]["create_s"]],
                         "zstd19": [row["tar_zstd19"]["archive_bytes"], row["tar_zstd19"]["create_s"]],
-                        "pack_source_s": row["pack_source_s"],
-                        "viable": None if best is None else [best["level"], best["archive_bytes"], best["create_s"]],
+                        "viable": None if best is None else [best["variant"], best["level"], best["archive_bytes"], best["create_s"]],
+                        "closest_zstd_gap": row["closest_zstd_size_gap_bytes"],
                     },
                     separators=(",", ":"),
                 ),
@@ -204,17 +295,21 @@ def run(work_root: Path) -> dict:
             )
 
     viable_rows = [row for row in rows if row["viable_candidate"] is not None]
+    total_gap = sum(int(row["closest_zstd_size_gap_bytes"]) for row in rows)
     return {
-        "schema": "cmpct-v030-fast-solid-oracle-v1",
+        "schema": "cmpct-v030-fast-solid-oracle-v2",
         "claim_boundary": "research-only; not canonical r24/r25 and cannot authorize release",
-        "timing_policy": "every candidate create_s includes pack_source_s exactly once",
+        "timing_policy": "every candidate create_s includes its variant pack_source_s exactly once",
         "levels": list(LEVELS),
+        "variants": list(VARIANTS),
         "rows": rows,
         "summary": {
             "workloads": len(rows),
             "viable_workloads": len(viable_rows),
             "all_workloads_viable": len(viable_rows) == len(rows),
             "viable_labels": [row["label"] for row in viable_rows],
+            "aggregate_closest_zstd_gap_bytes": total_gap,
+            "max_closest_zstd_gap_bytes": max(int(row["closest_zstd_size_gap_bytes"]) for row in rows),
         },
     }
 
