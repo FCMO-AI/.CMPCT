@@ -140,6 +140,10 @@ def run(work_root: Path) -> dict:
     specs = (
         ("random-64x64k", "random", 64, 64 * 1024, 1101),
         ("random-96x128k", "random", 96, 128 * 1024, 1102),
+        # Third independent high-entropy point preserves the original >=3 admitted-case bar instead of
+        # weakening it after the first run proved only two such cases.  Its size/count envelope differs from
+        # both predecessors so an accidental narrow fit cannot satisfy the generalization requirement.
+        ("random-48x192k", "random", 48, 192 * 1024, 1103),
         ("false-neighbor-96x64k", "false-neighbor", 96, 64 * 1024, 1201),
         ("shifted-64x96k", "shifted", 64, 96 * 1024, 1301),
         ("half-shared-64x96k", "half-shared", 64, 96 * 1024, 1401),
