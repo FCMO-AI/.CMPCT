@@ -12,8 +12,13 @@ For each frozen regular-file workload, the oracle:
 - encodes a deterministic compact stream of path/length/content records;
 - compresses that stream in-process with python-zstandard at several levels;
 - reconstructs and verifies the exact historical regular-file tree identity;
-- compares complete candidate bytes and creation wall-clock against deterministic ZIP/Deflate-9 and the existing
-  tar+Zstd-19 competitor on the same normalized stage.
+- compares complete candidate bytes and end-to-end creation wall-clock against deterministic ZIP/Deflate-9 and
+  the existing tar+Zstd-19 competitor on the same normalized stage.
+
+Candidate creation time includes the complete source scan, content hashing, metadata packing, compression and
+archive write. The level sweep reuses the packed payload only as an experiment implementation detail; the measured
+``create_s`` for every candidate adds the independently measured pack-source cost back in, so no candidate is
+credited for work that a standalone encoder would have to perform.
 
 No result is promoted automatically. A viable row requires one candidate level to be strictly smaller *and*
 strictly faster to create than both ZIP and tar+Zstd-19. Equality is failure, matching the frozen v0.30 law.
@@ -60,7 +65,7 @@ def _write_candidate(payload: bytes, archive: Path, level: int) -> dict:
     return {
         "level": level,
         "archive_bytes": archive.stat().st_size,
-        "create_s": time.perf_counter() - started,
+        "compression_and_write_s": time.perf_counter() - started,
     }
 
 
@@ -79,7 +84,6 @@ def _extract_candidate(archive: Path, dst: Path) -> None:
     head = next(unpacker)
     if not isinstance(head, list) or len(head) != 2 or head[0] != "cmpct-fast-solid-oracle-v1":
         raise RuntimeError("bad fast-solid oracle metadata")
-    # Determine exact encoded metadata prefix length by repacking the decoded metadata canonically.
     meta = msgpack.packb(head, use_bin_type=True)
     content = payload[len(meta) :]
     dst.mkdir(parents=True, exist_ok=True)
@@ -87,7 +91,8 @@ def _extract_candidate(archive: Path, dst: Path) -> None:
         rel, offset, size, digest = row
         if not isinstance(rel, str) or rel.startswith("/") or ".." in Path(rel).parts:
             raise RuntimeError("unsafe fast-solid oracle path")
-        start = int(offset); end = start + int(size)
+        start = int(offset)
+        end = start + int(size)
         member = content[start:end]
         if len(member) != int(size) or hashlib.sha256(member).digest() != bytes(digest):
             raise RuntimeError("fast-solid oracle member identity mismatch")
@@ -101,7 +106,11 @@ def _one(label: str, source: Path, work: Path) -> dict:
     with tempfile.TemporaryDirectory(prefix="cmpct-v030-fast-solid-", dir=work) as td:
         root = Path(td)
         stage = B._normalized_stage(source, root)
+
+        pack_started = time.perf_counter()
         payload, rows = _pack_source(stage)
+        pack_source_s = time.perf_counter() - pack_started
+
         zip_result = B._zip(stage, root / "baseline.zip", root / "zip-out")
         zstd_result = B._tar_zstd(stage, root / "baseline.tar.zst", root / "zstd-out", root)
         B._verify_extracted(root / "zip-out", expected_tree, "zip")
@@ -111,6 +120,8 @@ def _one(label: str, source: Path, work: Path) -> dict:
         for level in LEVELS:
             archive = root / f"solid-l{level}.bin"
             result = _write_candidate(payload, archive, level)
+            result["pack_source_s"] = pack_source_s
+            result["create_s"] = pack_source_s + float(result["compression_and_write_s"])
             extracted = root / f"solid-l{level}-out"
             _extract_candidate(archive, extracted)
             B._verify_extracted(extracted, expected_tree, f"fast-solid-l{level}")
@@ -119,9 +130,15 @@ def _one(label: str, source: Path, work: Path) -> dict:
             result["beats_zstd19_size"] = result["archive_bytes"] < zstd_result["archive_bytes"]
             result["beats_zip_create"] = result["create_s"] < zip_result["create_s"]
             result["beats_zstd19_create"] = result["create_s"] < zstd_result["create_s"]
-            result["viable"] = all(result[key] for key in (
-                "beats_zip_size", "beats_zstd19_size", "beats_zip_create", "beats_zstd19_create"
-            ))
+            result["viable"] = all(
+                result[key]
+                for key in (
+                    "beats_zip_size",
+                    "beats_zstd19_size",
+                    "beats_zip_create",
+                    "beats_zstd19_create",
+                )
+            )
             candidates.append(result)
 
         viable = [row for row in candidates if row["viable"]]
@@ -132,6 +149,8 @@ def _one(label: str, source: Path, work: Path) -> dict:
             "logical_files": len(rows),
             "logical_bytes": sum(int(row[2]) for row in rows),
             "payload_bytes_before_zstd": len(payload),
+            "pack_source_s": pack_source_s,
+            "timing_boundary": "source-scan+sha256+metadata-pack+zstd-compress+archive-write",
             "zip": zip_result,
             "tar_zstd19": zstd_result,
             "candidates": candidates,
@@ -144,8 +163,12 @@ def run(work_root: Path) -> dict:
     shutil.rmtree(work_root, ignore_errors=True)
     work_root.mkdir(parents=True)
     accepted = GENERAL._accepted_v029_rows()
-    neutral = GENERAL.V029._load(GENERAL.V029.ROOT / "benchmarks" / "neutral_hostile_corpus_v1.py", "cmpct_fast_solid_neutral")
-    hostile = GENERAL.V029._load(GENERAL.V029.ROOT / "benchmarks" / "resemblance_hostile_corpus_v1.py", "cmpct_fast_solid_hostile")
+    neutral = GENERAL.V029._load(
+        GENERAL.V029.ROOT / "benchmarks" / "neutral_hostile_corpus_v1.py", "cmpct_fast_solid_neutral"
+    )
+    hostile = GENERAL.V029._load(
+        GENERAL.V029.ROOT / "benchmarks" / "resemblance_hostile_corpus_v1.py", "cmpct_fast_solid_hostile"
+    )
     repair = GENERAL.V029._load(GENERAL.V029.REPAIR_PATH, "cmpct_fast_solid_repair")
     repair.install_generation_hooks(neutral)
 
@@ -162,20 +185,29 @@ def run(work_root: Path) -> dict:
             if B._tree(workload) != accepted[key]["tree_sha256"]:
                 raise RuntimeError(f"fast-solid source drift: {suite}/{workload.name}")
             row = _one(f"{suite}/{workload.name}", workload, work_root)
-            row["suite"] = suite; row["name"] = workload.name
+            row["suite"] = suite
+            row["name"] = workload.name
             rows.append(row)
             best = row["viable_candidate"]
-            print(json.dumps({
-                "label": row["label"],
-                "zip": [row["zip"]["archive_bytes"], row["zip"]["create_s"]],
-                "zstd19": [row["tar_zstd19"]["archive_bytes"], row["tar_zstd19"]["create_s"]],
-                "viable": None if best is None else [best["level"], best["archive_bytes"], best["create_s"]],
-            }, separators=(",", ":")), flush=True)
+            print(
+                json.dumps(
+                    {
+                        "label": row["label"],
+                        "zip": [row["zip"]["archive_bytes"], row["zip"]["create_s"]],
+                        "zstd19": [row["tar_zstd19"]["archive_bytes"], row["tar_zstd19"]["create_s"]],
+                        "pack_source_s": row["pack_source_s"],
+                        "viable": None if best is None else [best["level"], best["archive_bytes"], best["create_s"]],
+                    },
+                    separators=(",", ":"),
+                ),
+                flush=True,
+            )
 
     viable_rows = [row for row in rows if row["viable_candidate"] is not None]
     return {
         "schema": "cmpct-v030-fast-solid-oracle-v1",
         "claim_boundary": "research-only; not canonical r24/r25 and cannot authorize release",
+        "timing_policy": "every candidate create_s includes pack_source_s exactly once",
         "levels": list(LEVELS),
         "rows": rows,
         "summary": {
