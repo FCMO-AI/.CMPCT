@@ -3,6 +3,7 @@ package ai.fcmo.cmpct;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 
 import android.content.Context;
 import android.net.Uri;
@@ -19,6 +20,7 @@ import org.junit.runner.RunWith;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileOutputStream;
+import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -129,6 +131,29 @@ public final class CmpctAndroidR25Test {
         }
     }
 
+    @Test
+    public void importRejectsNonCanonicalBytesBeforeRegistryPublication() throws Exception {
+        Context target = InstrumentationRegistry.getInstrumentation().getTargetContext();
+        File source = new File(target.getCacheDir(), "android-not-cmpct.bin");
+        byte[] garbage = "definitely-not-a-canonical-cmpct-archive".getBytes(StandardCharsets.UTF_8);
+        try (FileOutputStream out = new FileOutputStream(source)) {
+            out.write(garbage);
+            out.getFD().sync();
+        }
+
+        String id = sha256(garbage);
+        File published = new File(new File(target.getFilesDir(), "cmpct-archives"), id + ".cmpct");
+        if (published.exists()) assertTrue(published.delete());
+
+        try {
+            ArchiveRegistry.importArchive(target, Uri.fromFile(source));
+            fail("non-canonical bytes must be rejected by the production portable reader");
+        } catch (IOException expected) {
+            assertFalse("failed import must never publish into the archive registry", published.exists());
+            assertFalse("failed import must not create a durable registry record", ArchiveRegistry.get(target, id) != null);
+        }
+    }
+
     private static String readAsset(Context context, String name) throws Exception {
         try (InputStream in = context.getAssets().open(name);
              ByteArrayOutputStream out = new ByteArrayOutputStream()) {
@@ -154,4 +179,5 @@ public final class CmpctAndroidR25Test {
 // Footnote: canonical r25 goldens and the dynamically generated logs-inverse vector are both consumed through
 // libcmpct_portable. Android therefore proves the packaged JNI/C-ABI path sees the same public filesystem namespace,
 // link semantics, exact member bytes and strong-verification behavior as desktop native code rather than carrying
-// an Android-only archive parser.
+// an Android-only archive parser. Invalid inputs are likewise rejected by that same native authority before the
+// registry commits a content-addressed archive into app-private storage.
