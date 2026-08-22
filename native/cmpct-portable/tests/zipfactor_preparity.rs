@@ -65,12 +65,15 @@ fn python_writer_rust_reader_reconstructs_exact_zip_family() {
     let temp = tempfile::tempdir().unwrap();
     python_fixture(temp.path());
     let archive_bytes = fs::read(temp.path().join("candidate.cmpct")).unwrap();
-    let archive = ZipFactorArchive::parse(&archive_bytes).expect("Rust must parse Python writer output");
+    let archive =
+        ZipFactorArchive::parse(&archive_bytes).expect("Rust must parse Python writer output");
     let expected = expected_rows(&temp.path().join("expected.tsv"));
     assert_eq!(archive.member_count(), expected.len());
     assert!(archive.max_read_amplification() <= 8.0);
     assert!(archive.max_decode_unit_bytes() <= 8 * 1024 * 1024);
-    archive.verify_all().expect("Rust strong ZIP-factor verification");
+    archive
+        .verify_all()
+        .expect("Rust strong ZIP-factor verification");
     for (index, (rel, sha, size)) in expected.iter().enumerate() {
         assert_eq!(archive.member_name(index).unwrap(), rel);
         assert_eq!(archive.member_size(index).unwrap(), *size);
@@ -95,10 +98,15 @@ fn zipfactor_preparity_rejects_corruption_and_remains_outside_production_dispatc
 
     let middle = raw.len() / 2;
     raw[middle] ^= 0x5a;
-    assert!(ZipFactorArchive::parse(&raw)
-        .and_then(|archive| archive.verify_all().map(|_| archive))
-        .is_err());
+    assert!(
+        ZipFactorArchive::parse(&raw)
+            .and_then(|archive| archive.verify_all().map(|_| archive))
+            .is_err()
+    );
 
     let production = cmpct_portable::PortableArchive::open(&archive_path);
-    assert!(production.is_err(), "CMP25Z2 must remain outside production dispatch until recovery/native promotion is complete");
+    assert!(
+        production.is_err(),
+        "CMP25Z2 must remain outside production dispatch until recovery/native promotion is complete"
+    );
 }
