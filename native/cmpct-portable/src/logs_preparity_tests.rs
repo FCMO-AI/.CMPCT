@@ -1,4 +1,5 @@
 use super::logs::LogsInverseArchive;
+use super::logs_public::LogsPublicView;
 use sha2::{Digest, Sha256};
 use std::{
     fs,
@@ -21,6 +22,7 @@ fn python_fixture(root: &Path) {
     let script = r#"
 import gzip
 import hashlib
+import os
 import sys
 from pathlib import Path
 import zstandard as zstd
@@ -29,6 +31,7 @@ from experiments import entropygraph_v030_logs_inverse_profile_v3 as LOGS
 root=Path(sys.argv[1])
 src=root/'src'
 src.mkdir(parents=True)
+(src/'nested').mkdir()
 zstd_plain=(b'2026-08-21T20:00:00Z INFO request=alpha value=42\n' * 4096)
 gzip_plain=(b'2026-08-21T20:00:01Z WARN request=beta value=17\n' * 3584)
 unmatched=(b'2026-08-21T20:00:02Z INFO request=gamma value=99\n' * 2048)
@@ -37,6 +40,7 @@ unmatched=(b'2026-08-21T20:00:02Z INFO request=gamma value=99\n' * 2048)
 (src/'gzip.log').write_bytes(gzip_plain)
 (src/'gzip.log.gz').write_bytes(gzip.compress(gzip_plain, compresslevel=6, mtime=0))
 (src/'unmatched.log').write_bytes(unmatched)
+os.symlink('zstd.log', src/'zstd-link')
 archive=root/'candidate.cmpct'
 stats=LOGS.build(src, archive)
 verified=LOGS.strong_verify(archive)
@@ -46,7 +50,7 @@ assert 'gzip.log.gz' in stats['inverse_edge_sources'], stats
 assert 'zstd.log.zst' in stats['inverse_edge_sources'], stats
 (root/'expected.tsv').write_text(''.join(
     f"{p.relative_to(src).as_posix()}\t{hashlib.sha256(p.read_bytes()).hexdigest()}\t{p.stat().st_size}\n"
-    for p in sorted(src.rglob('*')) if p.is_file()
+    for p in sorted(src.rglob('*')) if p.is_file() and not p.is_symlink()
 ), encoding='utf-8')
 print(stats)
 "#;
@@ -118,6 +122,28 @@ fn python_logs_writer_rust_reader_roundtrips_gzip_zstd_inverse_edges_and_localit
         max_context = max_context.max(stats.decoded_context_bytes);
     }
     assert!(max_context <= 8 * 1024 * 1024);
+}
+
+#[test]
+fn native_logs_public_view_uses_authenticated_filesystem_manifest() {
+    let temp = tempfile::tempdir().unwrap();
+    python_fixture(temp.path());
+    let archive_path = temp.path().join("candidate.cmpct");
+    let archive = LogsInverseArchive::open(&archive_path).unwrap();
+    let view = LogsPublicView::new(&archive).expect("canonical filesystem manifest must parse in Rust");
+
+    assert!(view.entries().iter().all(|entry| !entry.path.starts_with(".__cmpct_r25_internal__/")));
+    let nested = view.entries().iter().position(|entry| entry.path == "nested").unwrap();
+    let link = view.entries().iter().position(|entry| entry.path == "zstd-link").unwrap();
+    let zstd = view.entries().iter().position(|entry| entry.path == "zstd.log").unwrap();
+    assert_eq!(view.entries()[nested].kind, 1);
+    assert_eq!(view.entries()[link].kind, 2);
+    assert_eq!(view.entries()[zstd].kind, 0);
+    assert!(view.read_member(nested).is_err());
+    assert!(view.read_member(link).is_err());
+    let (raw, stats) = view.read_member(zstd).unwrap();
+    assert_eq!(raw.len() as u64, view.entries()[zstd].size);
+    assert!(stats.amplification <= 8.0);
 }
 
 #[test]
