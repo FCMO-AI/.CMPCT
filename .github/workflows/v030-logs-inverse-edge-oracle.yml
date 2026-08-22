@@ -1,0 +1,98 @@
+# ci-lane: deep
+name: CMPCT v0.30 logs exact inverse-edge oracle
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'benchmarks/v030_logs_inverse_edge_oracle.py'
+      - 'benchmarks/v030_external_competitors.py'
+      - 'benchmarks/v030_release_generalization.py'
+      - '.github/workflows/v030-logs-inverse-edge-oracle.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-v030-logs-inverse-edge-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+
+jobs:
+  logs-inverse-edge:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install exact corpus and competitor dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y zstd gcc ffmpeg libsndfile1
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[audio,test]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
+      - name: Compile targeted oracle
+        run: python -m py_compile benchmarks/v030_logs_inverse_edge_oracle.py
+      - name: Run exact-tree inverse-edge sweep
+        run: |
+          mkdir -p benchmark-artifacts
+          python benchmarks/v030_logs_inverse_edge_oracle.py \
+            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-logs-inverse-edge-work" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-logs-inverse-edge.json"
+      - name: Enforce exact-edge, timing, restoration and locality evidence
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          d=json.loads(Path('benchmark-artifacts/v030-logs-inverse-edge.json').read_text())
+          assert d['schema']=='cmpct-v030-logs-inverse-edge-oracle-v1'
+          assert d['claim_boundary'].startswith('research-only')
+          assert d['target']=='neutral_hostile_v1/05_logs_and_telemetry'
+          assert d['accepted_v029_bytes']==3550609
+          e=d['edge_detection']
+          assert e['decoded_sidecars']==5
+          assert e['inverse_edges']==3
+          assert len(e['inverse_edge_targets'])==3 and len(e['inverse_edge_sources'])==3
+          assert d['timing_boundary']=='source-scan+sha256+sidecar-decompression+exact-edge-detection+segment-plan+zstd-unmatched-logs+direct-sidecars+metadata+archive-write'
+          assert d['max_member_read_amplification'] <= 8.0
+          assert d['max_decode_unit_bytes'] <= 8*1024*1024
+          s=d['summary']
+          assert s['all_tree_verified'] is True
+          assert s['all_locality_green'] is True
+          assert len(d['candidates'])==4
+          for c in d['candidates']:
+              assert c['tree_verified'] is True
+              assert c['locality_green'] is True
+              assert c['max_member_read_amplification'] <= 8.0
+              assert c['max_decode_unit_bytes'] <= 8*1024*1024
+              assert abs(c['create_s']-(c['source_plan_s']+c['candidate_encode_s'])) < 1e-9
+              strict=all(c[k] for k in ('beats_zip_size','beats_zstd19_size','beats_zip_create','beats_zstd19_create'))
+              expected_viable=strict and c['no_regression_vs_v029'] and c['locality_green']
+              assert c['viable'] is expected_viable
+          if s['release_floor_four_way_win']:
+              b=s['best']
+              assert b is not None and b['viable'] is True
+              assert b['archive_bytes'] <= d['accepted_v029_bytes']
+              assert b['archive_bytes'] < d['zip']['archive_bytes']
+              assert b['archive_bytes'] < d['tar_zstd19']['archive_bytes']
+              assert b['create_s'] < d['zip']['create_s']
+              assert b['create_s'] < d['tar_zstd19']['create_s']
+          PY
+      - name: Upload targeted evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: v030-logs-inverse-edge-${{ github.sha }}
+          path: benchmark-artifacts/v030-logs-inverse-edge.json
+          if-no-files-found: error
+          retention-days: 90
+
+# Research only. The edge direction requires only standard decompression and exact equality; promotion still
+# requires canonical grammar/recovery and Python/native/Android product authority.
