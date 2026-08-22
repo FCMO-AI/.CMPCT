@@ -20,7 +20,9 @@ impl<'a> LogsPublicView<'a> {
             .entries()
             .iter()
             .position(|entry| entry.path == FILESYSTEM_MANIFEST)
-            .ok_or_else(|| PortableError::Integrity("logs inverse filesystem manifest missing".into()))?;
+            .ok_or_else(|| {
+                PortableError::Integrity("logs inverse filesystem manifest missing".into())
+            })?;
         let (manifest_raw, _) = archive.read_member(manifest_index)?;
         let manifest = FsManifest::parse(&manifest_raw, archive.entries())?;
         let public_entries = manifest.public_entries()?;
@@ -47,10 +49,7 @@ impl<'a> LogsPublicView<'a> {
             })
     }
 
-    pub fn read_member(
-        &self,
-        index: usize,
-    ) -> Result<(Vec<u8>, MemberReadStats), PortableError> {
+    pub fn read_member(&self, index: usize) -> Result<(Vec<u8>, MemberReadStats), PortableError> {
         let entry = self.manifest.entry(index)?;
         let owner_path = match &entry.kind {
             FsKind::File { .. } => entry.path.as_str(),
