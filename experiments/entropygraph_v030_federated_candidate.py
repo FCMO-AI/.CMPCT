@@ -133,7 +133,7 @@ def _refs_packs(refs: list, out: set[int]) -> None:
 
 
 def locality_report(archive: Path) -> dict:
-    """Derive decoded physical context for every logical profile member from authenticated recipes."""
+    """Derive decoded physical context for every public logical file from authenticated recipes."""
     with _engine(archive.resolve()):
         f, meta, offsets = V25.open_ar()
         try:
@@ -202,6 +202,9 @@ def locality_report(archive: Path) -> dict:
             max_amp = 0.0
             max_unit = max(pack_sizes, default=0)
             for path in sorted(files):
+                # The authenticated filesystem manifest is control-plane state, not a user-addressable member.
+                if path == FS.FILESYSTEM_MANIFEST:
+                    continue
                 packs, logical = deps(path)
                 decoded = sum(pack_sizes[i] for i in packs)
                 amp = decoded / max(1, logical)
