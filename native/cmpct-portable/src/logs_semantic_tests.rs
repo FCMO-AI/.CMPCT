@@ -1,6 +1,7 @@
 use super::logs::LogsInverseArchive;
 use super::logs_public::LogsPublicView;
 use std::{
+    fs,
     path::{Path, PathBuf},
     process::Command,
 };
@@ -24,11 +25,14 @@ from experiments import entropygraph_v030_logs_inverse_profile_v3 as LOGS
 root=Path(sys.argv[1])
 src=root/'src'
 src.mkdir(parents=True)
+(src/'nested').mkdir()
 owner=src/'a-owner.log'
 raw=(b'2026-08-21T21:00:00Z INFO hardlink-owner value=42\n' * 4096)
 owner.write_bytes(raw)
 os.link(owner, src/'z-alias.log')
 (src/'a-owner.log.zst').write_bytes(zstd.ZstdCompressor(level=3, threads=0).compress(raw))
+(src/'nested'/'plain.log').write_bytes(b'nested filesystem semantics\n' * 128)
+os.symlink('a-owner.log', src/'owner-link')
 archive=root/'candidate.cmpct'
 stats=LOGS.build(src, archive)
 verified=LOGS.strong_verify(archive)
@@ -76,4 +80,48 @@ fn logs_public_view_resolves_authenticated_hardlink_to_owner_bytes() {
     assert_eq!(alias_stats.logical_bytes, owner_stats.logical_bytes);
     assert!(alias_stats.amplification <= 8.0);
     assert!(alias_stats.decoded_context_bytes <= 8 * 1024 * 1024);
+}
+
+#[test]
+fn logs_public_view_materializes_canonical_filesystem_without_semantic_loss() {
+    let temp = tempfile::tempdir().unwrap();
+    python_hardlink_fixture(temp.path());
+    let archive_path = temp.path().join("candidate.cmpct");
+    let archive = LogsInverseArchive::open(&archive_path).expect("open logs profile");
+    let view = LogsPublicView::new(&archive).expect("canonical filesystem view");
+    view.verify().expect("public filesystem verification");
+
+    let out = temp.path().join("out");
+    fs::create_dir(&out).unwrap();
+    view.extract_into(&out).expect("native logs extraction");
+
+    assert_eq!(
+        fs::read(out.join("a-owner.log")).unwrap(),
+        fs::read(out.join("z-alias.log")).unwrap()
+    );
+    assert_eq!(
+        fs::read(out.join("nested/plain.log")).unwrap(),
+        b"nested filesystem semantics\n".repeat(128)
+    );
+    assert!(out.join("nested").is_dir());
+
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::MetadataExt;
+        assert_eq!(
+            fs::metadata(out.join("a-owner.log")).unwrap().ino(),
+            fs::metadata(out.join("z-alias.log")).unwrap().ino(),
+            "hardlink alias must share the owner's inode after native extraction"
+        );
+        assert_eq!(
+            fs::read_link(out.join("owner-link")).unwrap(),
+            PathBuf::from("a-owner.log")
+        );
+    }
+
+    let zip_path = temp.path().join("portable.zip");
+    assert!(
+        view.export_zip(&zip_path).is_err(),
+        "ZIP export must refuse symlinks rather than silently flattening filesystem semantics"
+    );
 }
