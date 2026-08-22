@@ -17,6 +17,14 @@ crate-type = ["rlib", "cdylib"]
 name = "cmpct-portable"
 path = "src/bin/cmpct-portable.rs"
 
+# `cargo clippy --all-targets` compiles both the production library and its cfg(test) library target and, on the
+# current Rust/Clippy toolchain, `duplicate_mod` reports the same source modules as duplicate loads across those
+# target compilations. They are not declared twice inside either crate: the ordinary library build and
+# `cargo test --lib` both compile cleanly, and the release authority separately runs the full Rust test suite.
+# Keep every other Clippy warning denied by CI while narrowly neutralizing this cross-target bookkeeping lint.
+[lints.clippy]
+duplicate_mod = "allow"
+
 [dependencies]
 cmpct-core = { path = "../cmpct-core" }
 crc32fast = "1"
