@@ -21,6 +21,24 @@ def _capture(root: Path):
     )
 
 
+def _explicit_paths(payload: list) -> list[str]:
+    """Reconstruct only filesystem-owned explicit path declarations.
+
+    Symlink *targets* are semantic payload and may legitimately equal a regular path.
+    The ownership invariant is that regular paths are absent from the explicit-path
+    declarations themselves, not that their UTF-8 bytes can never appear anywhere
+    in the MessagePack stream.
+    """
+    previous = ""
+    paths: list[str] = []
+    for row in payload[3]:
+        prefix, suffix = row[0], row[1]
+        rel = previous[:prefix] + suffix
+        paths.append(rel)
+        previous = rel
+    return paths
+
+
 def test_implicit_manifest_preserves_semantics_and_removes_regular_paths(tmp_path: Path):
     root = tmp_path / "source"
     root.mkdir()
@@ -41,10 +59,23 @@ def test_implicit_manifest_preserves_semantics_and_removes_regular_paths(tmp_pat
 
     payload = msgpack.unpackb(raw_v3, raw=False)
     assert payload[0] == IFS.IMPLICIT_VERSION
-    # Regular paths are intentionally absent from the filesystem wire form. They remain authenticated by the
-    # federated content graph and are supplied to decoding only through its verified identity map.
-    for source, rel in regular_sources:
-        assert rel.encode() not in raw_v3
+    # Regular paths are intentionally absent from the filesystem-owned path declarations. They remain
+    # authenticated by the federated content graph and are supplied to decoding only through its verified
+    # identity map. A symlink target may legitimately contain the same path text, so raw-byte absence would
+    # overstate the ownership rule and reject valid semantics.
+    explicit_paths = set(_explicit_paths(payload))
+    regular_paths = {rel for _source, rel in regular_sources}
+    assert regular_paths.isdisjoint(explicit_paths)
+    assert len(payload[2]) == len(regular_paths)
+    assert all(isinstance(index, int) and not isinstance(index, bool) for index in payload[2])
+
+    # The fixture deliberately exercises the aliasing case that made raw-stream substring testing invalid:
+    # the symlink target names a regular file, but that name is semantic link payload rather than a second
+    # filesystem-owned regular-path declaration.
+    symlink_rows = [row for row in payload[3] if row[2] == 2]
+    assert len(symlink_rows) == 1
+    assert symlink_rows[0][4] == note.name
+    assert symlink_rows[0][4] in regular_paths
 
     profile = tmp_path / "profile"
     profile.mkdir()
