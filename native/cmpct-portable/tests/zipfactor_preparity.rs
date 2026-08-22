@@ -61,6 +61,10 @@ fn expected_rows(path: &Path) -> Vec<(String, String, u64)> {
         .collect()
 }
 
+fn digest_hex(digest: [u8; 32]) -> String {
+    digest.iter().map(|byte| format!("{byte:02x}")).collect()
+}
+
 #[test]
 fn python_writer_rust_reader_reconstructs_exact_zip_family() {
     let temp = tempfile::tempdir().unwrap();
@@ -69,22 +73,37 @@ fn python_writer_rust_reader_reconstructs_exact_zip_family() {
     let archive =
         ZipFactorArchive::open(&archive_path).expect("Rust must open Python writer output");
     let expected = expected_rows(&temp.path().join("expected.tsv"));
-    assert_eq!(archive.member_count(), expected.len());
-    assert!(archive.max_read_amplification() <= 8.0);
-    assert!(archive.max_decode_unit_bytes() <= 8 * 1024 * 1024);
-    archive
-        .verify_all()
-        .expect("Rust strong ZIP-factor verification");
-    for (index, (rel, sha, size)) in expected.iter().enumerate() {
-        assert_eq!(archive.member_name(index).unwrap(), rel);
-        assert_eq!(archive.member_size(index).unwrap(), *size);
-        assert_eq!(archive.member_sha256(index).unwrap(), sha);
+
+    // The production reader exposes the authenticated filesystem manifest as member zero.
+    assert_eq!(archive.entries().len(), expected.len() + 1);
+    assert!(archive.declared_amplification() <= 8.0);
+    assert!(
+        !archive.tail_authenticated(),
+        "CMP25Z2 remains preparity-only until its recovery envelope is wired into native production dispatch"
+    );
+    archive.verify().expect("Rust strong ZIP-factor verification");
+
+    let mut max_decode_unit = 0u64;
+    for (rel, sha, size) in &expected {
+        let index = archive
+            .entries()
+            .iter()
+            .position(|entry| &entry.path == rel)
+            .expect("Python writer path must exist in Rust logical table");
+        let entry = &archive.entries()[index];
+        assert_eq!(entry.size, *size);
+        let (identity_size, identity_sha) = archive.entry_identity(index).unwrap();
+        assert_eq!(identity_size, *size);
+        assert_eq!(digest_hex(identity_sha), *sha);
+
         let (raw, stats) = archive.read_member(index).unwrap();
         assert_eq!(raw.len() as u64, *size);
-        assert!(stats.read_amplification <= 8.0);
+        assert!(stats.amplification <= 8.0);
+        max_decode_unit = max_decode_unit.max(stats.decoded_context_bytes);
         let got = Sha256::digest(&raw);
         assert_eq!(format!("{got:x}"), *sha);
     }
+    assert!(max_decode_unit <= 8 * 1024 * 1024);
 }
 
 #[test]
@@ -93,8 +112,9 @@ fn zipfactor_preparity_rejects_corruption_and_remains_outside_production_dispatc
     python_fixture(temp.path());
     let archive_path = temp.path().join("candidate.cmpct");
     let parsed = ZipFactorArchive::open(&archive_path).unwrap();
-    let (_, stats) = parsed.read_member(0).unwrap();
-    assert!(stats.read_amplification <= 8.0);
+    let (_, stats) = parsed.read_member(1).unwrap();
+    assert!(stats.amplification <= 8.0);
+    assert!(!parsed.tail_authenticated());
     drop(parsed);
 
     let mut raw = fs::read(&archive_path).unwrap();
@@ -104,7 +124,7 @@ fn zipfactor_preparity_rejects_corruption_and_remains_outside_production_dispatc
     fs::write(&corrupted_path, raw).unwrap();
     assert!(
         ZipFactorArchive::open(&corrupted_path)
-            .and_then(|archive| archive.verify_all().map(|_| archive))
+            .and_then(|archive| archive.verify().map(|_| archive))
             .is_err()
     );
 
