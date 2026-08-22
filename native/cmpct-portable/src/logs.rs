@@ -183,7 +183,11 @@ impl LogsInverseArchive {
         let raw = match desc.codec {
             CODEC_RAW => payload,
             CODEC_ZSTD => bounded_zstd_decode(&payload, desc.usize, MAX_DECODE_UNIT, None)?,
-            _ => return Err(PortableError::Format("unknown logs inverse pack codec".into())),
+            _ => {
+                return Err(PortableError::Format(
+                    "unknown logs inverse pack codec".into(),
+                ));
+            }
         };
         if raw.len() as u64 != desc.usize
             || crc32fast::hash(&raw) != desc.crc32
@@ -210,9 +214,9 @@ impl LogsInverseArchive {
                         "logs inverse gzip output exceeds decode-unit policy".into(),
                     ));
                 }
-                let limit = expected_size
-                    .checked_add(1)
-                    .ok_or_else(|| PortableError::Limit("logs inverse gzip size overflow".into()))?;
+                let limit = expected_size.checked_add(1).ok_or_else(|| {
+                    PortableError::Limit("logs inverse gzip size overflow".into())
+                })?;
                 let decoder = GzDecoder::new(source);
                 let mut bounded = decoder.take(limit);
                 let capacity = usize::try_from(expected_size).map_err(|_| {
@@ -489,9 +493,7 @@ fn parse_metadata(raw: &[u8]) -> Result<Vec<LogicalFile>, PortableError> {
         let expected_sha = digest32(&row[3], "logs inverse logical SHA-256")?;
         let storage_row = as_array(&row[4], "logs inverse storage")?;
         if storage_row.is_empty() {
-            return Err(PortableError::Format(
-                "empty logs inverse storage".into(),
-            ));
+            return Err(PortableError::Format("empty logs inverse storage".into()));
         }
         let kind = text(&storage_row[0], "logs inverse storage kind")?;
         let storage = match kind {
@@ -511,16 +513,8 @@ fn parse_metadata(raw: &[u8]) -> Result<Vec<LogicalFile>, PortableError> {
                     .map_err(|_| {
                         PortableError::Limit("logs inverse pack id does not fit host".into())
                     })?,
-                    offset: uint(
-                        &storage_row[2],
-                        "logs inverse pack offset",
-                        MAX_DECODE_UNIT,
-                    )?,
-                    length: uint(
-                        &storage_row[3],
-                        "logs inverse pack length",
-                        MAX_DECODE_UNIT,
-                    )?,
+                    offset: uint(&storage_row[2], "logs inverse pack offset", MAX_DECODE_UNIT)?,
+                    length: uint(&storage_row[3], "logs inverse pack length", MAX_DECODE_UNIT)?,
                 }
             }
             "derive" => {
