@@ -23,7 +23,6 @@ fingerprint; the shipping module remains unchanged until then.
 from concurrent.futures import ThreadPoolExecutor
 import os
 from pathlib import Path, PurePosixPath
-import shutil
 import tempfile
 import time
 
@@ -101,8 +100,6 @@ def _logs_manifest(archive: Path) -> dict:
 
 
 def _logs_semantic_tree(decoded: dict) -> str:
-    # Canonical-final owns the revision-25 filesystem semantic tree grammar.  Reuse that one implementation rather
-    # than inventing a logs-specific tree hash that could drift from G0-G4/PrefixGraph.
     return BASE.C._semantic_tree_sha(decoded)
 
 
@@ -179,15 +176,13 @@ def _build_logs_terminal_if_eligible(root: Path, out: Path) -> dict | None:
     try:
         with tempfile.TemporaryDirectory(prefix=".cmpct-v030-logs-selector-", dir=out.parent) as td:
             temp = Path(td)
-            r24, logs, r24_path, logs_path, pair_create_s = _parallel_candidates(root, temp)
+            r24, logs, _r24_path, logs_path, pair_create_s = _parallel_candidates(root, temp)
             admitted, admission = _admission(r24, logs)
             if not admitted:
                 return None
             selected_bytes = logs_path.stat().st_size
             os.replace(logs_path, out)
     except (ProfileNotEligible, RuntimeError, OSError, ValueError):
-        # Structural eligibility is intentionally conservative.  Any unsupported metadata, codec, locality or
-        # writer condition falls through to the already-shipping exact tournament instead of weakening policy.
         return None
 
     verified = strong_verify(out)
@@ -228,6 +223,8 @@ def _build_logs_terminal_if_eligible(root: Path, out: Path) -> dict | None:
         "final_strong_verify": verified,
         "portfolio_create_s": total_s,
         "logs_candidate_pair_create_s": pair_create_s,
+        "selection_materialization": "same-filesystem-atomic-move",
+        "selection_extra_payload_write_bytes": 0,
         "logs_terminal": True,
         "logs_terminal_prefilter": prefilter,
         "logs_terminal_admission": admission,
@@ -382,8 +379,6 @@ def extract(
             target = PurePosixPath(row[7])
             if target.is_absolute() or ".." in target.parts:
                 raise RuntimeError(f"unsafe r25 symlink target in {row[0]!r}")
-    # LOGS.extract is already transactional and always applies the safe lexical symlink policy.  Keeping that
-    # stronger policy even when a caller disables the optional precheck cannot broaden extraction authority.
     LOGS.extract(archive, dst)
 
 
