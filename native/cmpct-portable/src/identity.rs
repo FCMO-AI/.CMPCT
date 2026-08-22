@@ -1,8 +1,8 @@
 #[cfg(test)]
-#[path = "../logs.rs"]
+#[path = "logs.rs"]
 mod logs;
 #[cfg(test)]
-#[path = "../logs_preparity_tests.rs"]
+#[path = "logs_preparity_tests.rs"]
 mod logs_preparity_tests;
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
