@@ -98,10 +98,17 @@ fn python_logs_writer_rust_reader_roundtrips_gzip_zstd_inverse_edges_and_localit
     let temp = tempfile::tempdir().unwrap();
     python_fixture(temp.path());
     let archive_path = temp.path().join("candidate.cmpct");
-    assert!(
-        crate::PortableArchive::open(&archive_path).is_err(),
-        "logs inverse profile must remain outside production native dispatch until promotion is complete"
-    );
+    let portable = crate::PortableArchive::open(&archive_path)
+        .expect("verified logs profile must now be admitted by production portable dispatch");
+    assert_eq!(portable.profile(), crate::Profile::LogsInverse);
+    assert_eq!(portable.revision(), 25);
+    assert!(portable.tail_metadata_authenticated());
+    assert_eq!(portable.declared_member_read_amplification(), Some(8.0));
+    portable.verify().expect("production dispatch strong verification");
+    assert!(portable.entries().iter().all(|entry| {
+        !entry.path.starts_with(".__cmpct_r25_internal__/")
+    }));
+
     let archive =
         LogsInverseArchive::open(&archive_path).expect("Rust must open Python logs output");
     let expected = expected_rows(&temp.path().join("expected.tsv"));
@@ -143,7 +150,7 @@ fn native_logs_public_view_uses_authenticated_filesystem_manifest() {
     assert!(
         view.entries()
             .iter()
-            .all(|entry| !entry.path.starts_with(".__cmpct_r25_internal__/"))
+            .all(|entry| !entry.path.starts_with(".__cmpct_r25_internal__/") )
     );
     let nested = view
         .entries()
@@ -190,6 +197,9 @@ fn native_logs_reader_recovers_either_metadata_copy_and_fails_when_both_are_dama
         LogsInverseArchive::open(&primary_path).expect("tail must recover damaged primary");
     assert_eq!(recovered.recovery_route(), "tail");
     recovered.verify().unwrap();
+    let portable_recovered = crate::PortableArchive::open(&primary_path)
+        .expect("production dispatch must preserve tail recovery");
+    portable_recovered.verify().unwrap();
 
     let tail_csize =
         le_u64(&original[original.len() - FOOTER_SIZE + 8..original.len() - FOOTER_SIZE + 16])
@@ -203,6 +213,10 @@ fn native_logs_reader_recovers_either_metadata_copy_and_fails_when_both_are_dama
         LogsInverseArchive::open(&tail_path).expect("primary must survive damaged tail");
     assert_eq!(primary_route.recovery_route(), "primary");
     primary_route.verify().unwrap();
+    crate::PortableArchive::open(&tail_path)
+        .expect("production dispatch must preserve primary recovery")
+        .verify()
+        .unwrap();
 
     let mut both = original;
     both[HEADER_SIZE + 3] ^= 0x5a;
@@ -210,4 +224,5 @@ fn native_logs_reader_recovers_either_metadata_copy_and_fails_when_both_are_dama
     let both_path = temp.path().join("both-damaged.cmpct");
     fs::write(&both_path, both).unwrap();
     assert!(LogsInverseArchive::open(&both_path).is_err());
+    assert!(crate::PortableArchive::open(&both_path).is_err());
 }
