@@ -11,6 +11,7 @@ import android.util.Base64;
 import androidx.test.ext.junit.runners.AndroidJUnit4;
 import androidx.test.platform.app.InstrumentationRegistry;
 
+import org.json.JSONArray;
 import org.json.JSONObject;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -78,6 +79,56 @@ public final class CmpctAndroidR25Test {
         }
     }
 
+    @Test
+    public void logsInverseProfileUsesProductionPortableDispatchOnAndroid() throws Exception {
+        Context target = InstrumentationRegistry.getInstrumentation().getTargetContext();
+        Context tests = InstrumentationRegistry.getInstrumentation().getContext();
+        JSONObject vector = new JSONObject(readAsset(tests, "v030-logs-android.json"));
+        assertEquals("cmpct-v030-android-logs-vector-v1", vector.getString("schema"));
+        assertEquals(25, vector.getInt("revision"));
+
+        byte[] archiveBytes = Base64.decode(vector.getString("archive_base64"), Base64.DEFAULT);
+        assertEquals(vector.getString("archive_sha256"), sha256(archiveBytes));
+        File source = new File(target.getCacheDir(), "android-r25-logs-inverse.cmpct");
+        try (FileOutputStream out = new FileOutputStream(source)) {
+            out.write(archiveBytes);
+            out.getFD().sync();
+        }
+
+        ArchiveRegistry.Record record = ArchiveRegistry.importArchive(target, Uri.fromFile(source));
+        try (CmpctNative.Archive archive = new CmpctNative.Archive(record.file.getAbsolutePath())) {
+            assertEquals(25, archive.revision());
+            archive.verify();
+            assertEquals(vector.getInt("expected_entry_count"), archive.entryCount());
+
+            Set<String> paths = new HashSet<>();
+            for (int i = 0; i < archive.entryCount(); i++) paths.add(archive.entry(i).path);
+            JSONArray expectedPaths = vector.getJSONArray("expected_paths");
+            for (int i = 0; i < expectedPaths.length(); i++) {
+                assertTrue("missing logs public entry: " + expectedPaths.getString(i), paths.contains(expectedPaths.getString(i)));
+            }
+            for (String path : paths) {
+                assertFalse("logs internal filesystem manifest must not leak into Android user view", path.startsWith(".__cmpct_r25_internal__/"));
+            }
+
+            int regular = archive.findEntry(vector.getString("regular_path"));
+            int hardlink = archive.findEntry(vector.getString("hardlink_path"));
+            int symlink = archive.findEntry(vector.getString("symlink_path"));
+            assertEquals(CmpctNative.KIND_FILE, archive.entry(regular).kind);
+            assertEquals(CmpctNative.KIND_HARDLINK, archive.entry(hardlink).kind);
+            assertEquals(CmpctNative.KIND_SYMLINK, archive.entry(symlink).kind);
+
+            byte[] expectedHead = Base64.decode(vector.getString("regular_head_base64"), Base64.DEFAULT);
+            byte[] regularHead = archive.readRange(regular, 0, expectedHead.length);
+            byte[] hardlinkHead = archive.readRange(hardlink, 0, expectedHead.length);
+            assertEquals(hex(expectedHead), hex(regularHead));
+            assertEquals(hex(regularHead), hex(hardlinkHead));
+
+            byte[] symlinkTarget = archive.readRange(symlink, 0, vector.getString("symlink_target").getBytes(StandardCharsets.UTF_8).length);
+            assertEquals(vector.getString("symlink_target"), new String(symlinkTarget, StandardCharsets.UTF_8));
+        }
+    }
+
     private static String readAsset(Context context, String name) throws Exception {
         try (InputStream in = context.getAssets().open(name);
              ByteArrayOutputStream out = new ByteArrayOutputStream()) {
@@ -100,6 +151,7 @@ public final class CmpctAndroidR25Test {
     }
 }
 
-// Footnote: these exact bytes are independently generated from the canonical r25 grammar and are shared with
-// native desktop acceptance. The emulator therefore proves Android packaging/JNI sees the same revision, hidden
-// internal namespace, link semantics and selected-member bytes rather than a second Android-only parser fixture.
+// Footnote: canonical r25 goldens and the dynamically generated logs-inverse vector are both consumed through
+// libcmpct_portable. Android therefore proves the packaged JNI/C-ABI path sees the same public filesystem namespace,
+// link semantics, exact member bytes and strong-verification behavior as desktop native code rather than carrying
+// an Android-only archive parser.
