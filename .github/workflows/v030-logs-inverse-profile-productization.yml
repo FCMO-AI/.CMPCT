@@ -7,8 +7,11 @@ on:
     paths:
       - 'experiments/entropygraph_v030_logs_inverse_profile.py'
       - 'experiments/entropygraph_v030_logs_inverse_profile_v2.py'
+      - 'experiments/entropygraph_v030_logs_inverse_profile_v3.py'
+      - 'experiments/entropygraph_v030_product_fs.py'
       - 'benchmarks/v030_logs_inverse_profile_productization.py'
       - 'benchmarks/v030_logs_inverse_profile_productization_v2.py'
+      - 'benchmarks/v030_logs_inverse_profile_productization_v3.py'
       - 'benchmarks/v030_logs_inverse_edge_oracle.py'
       - 'benchmarks/v030_external_competitors.py'
       - 'benchmarks/v030_release_generalization.py'
@@ -28,7 +31,7 @@ env:
 jobs:
   logs-inverse-profile-product:
     runs-on: ubuntu-24.04
-    timeout-minutes: 45
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-python@v6
@@ -42,37 +45,51 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -e '.[audio,test]'
           python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
-      - name: Compile profile and proof
+      - name: Compile profiles and proofs
         run: |
           python -m py_compile \
             experiments/entropygraph_v030_logs_inverse_profile.py \
             experiments/entropygraph_v030_logs_inverse_profile_v2.py \
+            experiments/entropygraph_v030_logs_inverse_profile_v3.py \
+            experiments/entropygraph_v030_product_fs.py \
             benchmarks/v030_logs_inverse_profile_productization.py \
-            benchmarks/v030_logs_inverse_profile_productization_v2.py
-      - name: Run complete recoverable physical-locality product-boundary proof
+            benchmarks/v030_logs_inverse_profile_productization_v2.py \
+            benchmarks/v030_logs_inverse_profile_productization_v3.py
+      - name: Run recoverable physical-locality content boundary
         run: |
           mkdir -p benchmark-artifacts
           python benchmarks/v030_logs_inverse_profile_productization_v2.py \
             --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-logs-profile-product-v2-work" \
             --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-logs-profile-product-v2.json"
-      - name: Independently enforce recovery, physical locality and competitor contract
+      - name: Run canonical-filesystem product boundary
+        run: |
+          python benchmarks/v030_logs_inverse_profile_productization_v3.py \
+            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-logs-profile-product-v3-work" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-logs-profile-product-v3.json"
+      - name: Independently enforce recovery, filesystem, locality and competitor contract
         run: |
           python - <<'PY'
           import json
           from pathlib import Path
-          d=json.loads(Path('benchmark-artifacts/v030-logs-profile-product-v2.json').read_text())
-          assert d['schema']=='cmpct-v030-logs-inverse-profile-productization-v2'
-          assert d['claim_boundary'].startswith('recoverable bounded profile prototype')
-          assert d['physical_locality_writer'] is True
+          v2=json.loads(Path('benchmark-artifacts/v030-logs-profile-product-v2.json').read_text())
+          d=json.loads(Path('benchmark-artifacts/v030-logs-profile-product-v3.json').read_text())
+          assert v2['schema']=='cmpct-v030-logs-inverse-profile-productization-v2'
+          assert v2['gate']['passed'] is True
+          assert d['schema']=='cmpct-v030-logs-inverse-profile-productization-v3'
+          assert d['canonical_filesystem_manifest'] is True
           assert d['accepted_v029_bytes']==3550609
           c=d['candidate']; g=d['gate']
           assert c['profile']=='cmpct-r25-logs-inverse-v1'
-          assert c['profile_writer_revision']==2
+          assert c['profile_writer_revision']==3
           assert c['level']==12
-          assert c['direct_sidecar_packs']==5
+          assert c['canonical_filesystem_manifest'] is True
+          assert c['filesystem_manifest_bytes'] > 0
+          assert c['filesystem_manifest_entries'] >= c['filesystem_regular_members']
           assert c['payload_copies']==1
           assert c['recovery_control_copies']==2
           assert c['strong_verify']['ok'] is True
+          assert c['strong_verify']['canonical_filesystem_manifest'] is True
+          assert c['strong_verify']['filesystem_regular_members']==c['filesystem_regular_members']
           assert c['strong_verify']['max_member_read_amplification'] <= 8.0
           assert c['strong_verify']['max_decode_unit_bytes'] <= 8*1024*1024
           assert c['recovery']['primary_damage']['recovery_route']=='tail'
@@ -85,6 +102,7 @@ jobs:
               'strong_verify_green','tree_verified','locality_green',
               'primary_recovers_from_tail','tail_recovers_from_primary',
               'both_metadata_copies_fail_closed','single_payload_copy','two_control_copies',
+              'canonical_filesystem_manifest',
           ):
               assert g[key] is True
           assert g['passed'] is True
@@ -96,10 +114,13 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v6
         with:
-          name: v030-logs-inverse-profile-v2-${{ github.sha }}
-          path: benchmark-artifacts/v030-logs-profile-product-v2.json
+          name: v030-logs-inverse-profile-${{ github.sha }}
+          path: |
+            benchmark-artifacts/v030-logs-profile-product-v2.json
+            benchmark-artifacts/v030-logs-profile-product-v3.json
           if-no-files-found: error
           retention-days: 90
 
-# This gate may establish a productizable Python profile, but it cannot authorize canonical selector/native/Android
-# dispatch. Those remain separate release obligations and the strict global release lock remains authoritative.
+# This gate may establish a productizable Python profile with canonical filesystem semantics, but it cannot
+# authorize selector/native/Android dispatch. Those remain separate release obligations and the strict global
+# release lock remains authoritative.
