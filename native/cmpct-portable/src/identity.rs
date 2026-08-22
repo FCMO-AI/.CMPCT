@@ -2,11 +2,11 @@
 #[path = "logs.rs"]
 mod logs;
 #[cfg(test)]
-#[path = "logs_public.rs"]
-mod logs_public;
-#[cfg(test)]
 #[path = "logs_preparity_tests.rs"]
 mod logs_preparity_tests;
+#[cfg(test)]
+#[path = "logs_public.rs"]
+mod logs_public;
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub(crate) enum R25Identity {
