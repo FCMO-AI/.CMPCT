@@ -3,6 +3,7 @@ use crate::format::{
 };
 use crate::manifest::{FILESYSTEM_MANIFEST, FsKind, FsManifest};
 use crate::{MemberReadStats, PortableEntry, PortableError};
+use flate2::read::GzDecoder;
 use std::collections::{HashMap, HashSet};
 use std::fs::File;
 use std::io::{Read, Seek, SeekFrom};
@@ -201,15 +202,35 @@ impl LogsInverseArchive {
         source: &[u8],
         expected_size: u64,
     ) -> Result<Vec<u8>, PortableError> {
-        // Zstd is deliberately the first native inverse codec because the writer's deterministic edge ranking
-        // prefers it. Gzip/XZ remain fail-closed until bounded native decoders are added and tested; preparity
-        // must not silently claim coverage it does not have.
-        if codec != "zstd" {
-            return Err(PortableError::Unsupported(format!(
+        match codec {
+            "zstd" => bounded_zstd_decode(source, expected_size, MAX_DECODE_UNIT, None),
+            "gzip" => {
+                if expected_size > MAX_DECODE_UNIT {
+                    return Err(PortableError::Limit(
+                        "logs inverse gzip output exceeds decode-unit policy".into(),
+                    ));
+                }
+                let limit = expected_size
+                    .checked_add(1)
+                    .ok_or_else(|| PortableError::Limit("logs inverse gzip size overflow".into()))?;
+                let decoder = GzDecoder::new(source);
+                let mut bounded = decoder.take(limit);
+                let capacity = usize::try_from(expected_size).map_err(|_| {
+                    PortableError::Limit("logs inverse gzip size does not fit host".into())
+                })?;
+                let mut output = Vec::with_capacity(capacity);
+                bounded.read_to_end(&mut output)?;
+                if output.len() as u64 != expected_size {
+                    return Err(PortableError::Integrity(
+                        "logs inverse gzip logical size mismatch".into(),
+                    ));
+                }
+                Ok(output)
+            }
+            _ => Err(PortableError::Unsupported(format!(
                 "logs inverse native codec preparity incomplete: {codec}"
-            )));
+            ))),
         }
-        bounded_zstd_decode(source, expected_size, MAX_DECODE_UNIT, None)
     }
 
     fn restore_member(
