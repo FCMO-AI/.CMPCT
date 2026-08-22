@@ -1,0 +1,101 @@
+# ci-lane: deep
+name: CMPCT v0.30 federated selective effort frontier
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'benchmarks/v030_federated_selective_effort_oracle.py'
+      - 'experiments/entropygraph_v030_federated_candidate.py'
+      - 'experiments/entropygraph_v025.py'
+      - 'experiments/entropygraph_v030_product_fs.py'
+      - 'benchmarks/neutral_hostile_corpus_v1.py'
+      - 'benchmarks/neutral_hostile_determinism_repair_v*.py'
+      - '.github/workflows/v030-federated-selective-effort.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-v030-federated-selective-effort-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+
+jobs:
+  selective-effort:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+
+      - name: Install exact corpus and comparator dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y zstd gcc ffmpeg libsndfile1
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[audio,test]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
+
+      - name: Compile selective-effort oracle
+        run: |
+          python -m py_compile \
+            benchmarks/v030_federated_selective_effort_oracle.py \
+            experiments/entropygraph_v030_federated_candidate.py \
+            experiments/entropygraph_v025.py
+
+      - name: Measure per-pack compression-effort frontier
+        run: |
+          mkdir -p benchmark-artifacts
+          python benchmarks/v030_federated_selective_effort_oracle.py \
+            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-eg01-selective-work" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-eg01-selective.json"
+
+      - name: Independently enforce evidence integrity
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          d=json.loads(Path('benchmark-artifacts/v030-eg01-selective.json').read_text())
+          assert d['schema']=='cmpct-v030-federated-selective-effort-v1'
+          assert d['targets']==['02_office_workspace','04_analytics_and_database']
+          assert d['levels']==[1,3,6,9,12,15,19]
+          assert len(d['rows'])==2
+          assert d['measurement_gate']['passed'] is True
+          for row in d['rows']:
+              assert row['accepted_v029_bytes'] > 0
+              assert row['baseline_level1']['archive_bytes'] > row['accepted_v029_bytes']
+              assert row['baseline_level1']['physical_pack_count'] > 0
+              ub=row['compression_effort_upper_bound']
+              assert ub['maximum_possible_saving_bytes'] >= 0
+              assert ub['all_best_archive_floor_bytes'] == row['baseline_level1']['archive_bytes']-ub['maximum_possible_saving_bytes']
+              assert len(row['comparators']['zip']['raw_create_s'])==3
+              assert len(row['comparators']['zstd19']['raw_create_s'])==3
+              measured=row['measured_zip_budget_policy']
+              assert len(measured['raw_verified_create_s'])==3
+              assert measured['locality']['max_member_read_amplification'] <= 8.0
+              assert measured['locality']['max_decode_unit_bytes'] <= 8*1024*1024
+              # A modeled or measured miss remains evidence.  This lane must never require a green performance
+              # conclusion and therefore cannot pressure future work to weaken the immutable release thresholds.
+          PY
+
+      - name: CI topology self-check
+        run: python tools/check_ci_topology.py .github/workflows/v030-federated-selective-effort.yml
+
+      - name: Upload selective-effort evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: v030-federated-selective-effort-${{ github.sha }}
+          path: benchmark-artifacts/v030-eg01-selective.json
+          if-no-files-found: warn
+          retention-days: 90
