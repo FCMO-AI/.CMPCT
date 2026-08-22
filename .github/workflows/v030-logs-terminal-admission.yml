@@ -11,6 +11,7 @@ on:
       - 'experiments/entropygraph_v030_logs_inverse_profile*.py'
       - 'experiments/entropygraph_v030_release_product.py'
       - 'experiments/entropygraph_v030_release_product_logs_candidate.py'
+      - 'tests/test_v030_logs_profile_tree_identity.py'
       - 'src/cmpct/**'
       - '.github/workflows/v030-logs-terminal-admission.yml'
   workflow_dispatch:
@@ -49,6 +50,9 @@ jobs:
 
       - name: Compile terminal ratchet
         run: python -m py_compile benchmarks/v030_logs_terminal_admission_oracle.py
+
+      - name: Prove independent logs verifier owns canonical tree identity
+        run: python -m pytest -q tests/test_v030_logs_profile_tree_identity.py
 
       - name: Run all-15 promoted logs terminal ratchet
         run: |
@@ -99,6 +103,7 @@ jobs:
           retention-days: 90
 
 # Logs is already promoted behind a generic structural/measured selector. This lane therefore proves the shipping
-# path rather than comparing a candidate with itself: an admitted row must select logs-inverse, match an independently
-# built logs archive/tree, and strictly beat accepted v0.29, ZIP and Zstd in the relevant size/create dimensions while
-# retaining the immutable locality/decode ceilings. Ordinary all-15 release authority remains decisive.
+# path rather than comparing a candidate with itself: the independent profile verifier must own the same canonical
+# tree identity as the release facade, and every admitted row must strictly beat accepted v0.29, ZIP and Zstd in the
+# relevant size/create dimensions while retaining immutable locality/decode ceilings. Ordinary all-15 release
+# authority remains decisive.
