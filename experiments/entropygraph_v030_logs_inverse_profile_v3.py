@@ -6,6 +6,8 @@ v2 proved the compression/locality/recovery envelope on exact file bytes but sti
 This wrapper pays the same authenticated filesystem-manifest tax as the other canonical r25 profiles. The manifest
 is stored as an ordinary bounded logical member inside the inverse profile, so its bytes are included in complete
 artifact pricing and its identity is covered by the existing pack/metadata authentication and two-way recovery.
+The internal manifest is placed in a bounded compressed direct pack: this changes no user-file representation and
+avoids spending the narrow v0.29 byte margin on highly compressible control metadata.
 
 This remains pre-selector until the resulting complete product boundary, native reader and Android parity all pass.
 """
@@ -44,10 +46,17 @@ def build(source: Path, archive: Path) -> dict:
             max_profile_logical_bytes=MAX_LOGICAL_BYTES,
             max_entries=FS.DEFAULT_MAX_MANIFEST_ENTRIES,
         )
-        stats = dict(V2.build(staging, archive))
+        stats = dict(
+            V2.build(
+                staging,
+                archive,
+                compressed_direct_paths={FS.FILESYSTEM_MANIFEST},
+            )
+        )
     stats.update({
         "profile_writer_revision": 3,
         "canonical_filesystem_manifest": True,
+        "filesystem_manifest_pack_compressed": True,
         "filesystem_manifest_bytes": int(fs_stats["manifest_bytes"]),
         "filesystem_manifest_sha256": str(fs_stats["manifest_sha256"]),
         "filesystem_manifest_entries": int(fs_stats["entries"]),
