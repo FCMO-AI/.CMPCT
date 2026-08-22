@@ -8,8 +8,16 @@ import json
 import os
 from pathlib import Path
 import shutil
+import sys
 
 import zstandard as zstd
+
+# This file is invoked directly by Android CI (`python tests/...py`), which puts tests/ rather than the
+# repository root on sys.path. Bind imports to the checked-out source tree explicitly so the generated vector
+# always exercises the exact PR-head experiments package instead of depending on ambient PYTHONPATH/install state.
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
 
 from experiments import entropygraph_v030_logs_inverse_profile_v3 as LOGS
 
