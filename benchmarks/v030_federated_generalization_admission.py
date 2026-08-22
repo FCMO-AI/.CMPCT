@@ -10,8 +10,9 @@ accepted v0.29, ZIP and solid Zstd-19 on complete size while beating ZIP and Zst
 Admission never uses a benchmark name.  A candidate must save at least 1 MiB versus the genuine shipping r24
 artifact, be at most 90% of r24 bytes, strongly verify the canonical user tree, and satisfy <=8x / <=8 MiB locality.
 Only admitted rows pay repeated external-comparator timing.  A single admitted counterexample makes the gate red;
-aggregate wins cannot hide it.  This is selector research only: native/Android parity and ordinary release authority
-remain mandatory before C25EG01 can be dispatched by the shipping product.
+aggregate wins cannot hide it.  Candidate construction must also complete on all 15 rows so an exception cannot
+silently turn a counterexample into an apparent non-admission.  This is selector research only: native/Android
+parity and ordinary release authority remain mandatory before C25EG01 can be dispatched by the shipping product.
 """
 
 import argparse
@@ -33,6 +34,7 @@ ROUNDS = 3
 
 
 def _r24(stage: Path, archive: Path) -> dict:
+    archive.parent.mkdir(parents=True, exist_ok=True)
     stats = dict(BASE._locality_bounded_r24_build(stage, archive))
     verified = BASE.strong_verify(archive)
     if not verified.get("ok"):
@@ -42,6 +44,7 @@ def _r24(stage: Path, archive: Path) -> dict:
 
 
 def _candidate(stage: Path, archive: Path) -> dict:
+    archive.parent.mkdir(parents=True, exist_ok=True)
     result = dict(CAND.build(stage, archive))
     if not result["verified"].get("ok"):
         raise RuntimeError("federated candidate did not strongly verify")
@@ -53,6 +56,7 @@ def _candidate(stage: Path, archive: Path) -> dict:
 
 
 def _internal_admission(stage: Path, work: Path) -> tuple[bool, dict]:
+    work.mkdir(parents=True, exist_ok=True)
     candidate_path = work / "candidate.cmpct"
     r24_path = work / "r24.cmpct"
     started = time.perf_counter()
@@ -86,6 +90,7 @@ def _internal_admission(stage: Path, work: Path) -> tuple[bool, dict]:
 
 
 def _external_strict(stage: Path, work: Path, accepted_v029_bytes: int) -> dict:
+    work.mkdir(parents=True, exist_ok=True)
     names = ["candidate", "zip", "zstd19"]
     samples = {name: [] for name in names}
     sizes = {name: set() for name in names}
@@ -158,11 +163,7 @@ def _one(label: str, source: Path, work: Path, accepted_v029_bytes: int) -> dict
             }
         row = {"label": label, "admitted": admitted, "admission": admission}
         if admitted:
-            row["external"] = _external_strict(
-                stage,
-                root / "external",
-                accepted_v029_bytes,
-            )
+            row["external"] = _external_strict(stage, root / "external", accepted_v029_bytes)
         return row
 
 
@@ -218,12 +219,13 @@ def run(work_root: Path) -> dict:
             )
 
     admitted = [row for row in rows if row["admitted"]]
+    candidate_errors = [row for row in rows if "candidate_error" in row]
     gate = {
         "exact_workload_count": len(rows) == 15,
         "at_least_two_measured_admissions": len(admitted) >= 2,
         "all_admitted_strictly_safe": bool(admitted)
         and all(row["external"]["strict"]["passed"] for row in admitted),
-        "no_candidate_errors_on_admitted_rows": not any("candidate_error" in row for row in admitted),
+        "all_15_candidate_attempts_completed": not candidate_errors,
         "dedicated_candidate_identity": CAND.MAGIC != CAND.V25.MAG,
     }
     gate["passed"] = all(gate.values())
@@ -244,7 +246,7 @@ def run(work_root: Path) -> dict:
         "rows": rows,
         "summary": {
             "admitted_rows": [row["label"] for row in admitted],
-            "candidate_error_rows": [row["label"] for row in rows if "candidate_error" in row],
+            "candidate_error_rows": [row["label"] for row in candidate_errors],
         },
         "gate": gate,
     }
