@@ -1,0 +1,103 @@
+# ci-lane: deep
+name: CMPCT v0.30 v0.25 canonical FS level-1 proof
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'benchmarks/v030_v025_canonical_fs_level1_oracle.py'
+      - 'benchmarks/neutral_hostile_corpus_v1.py'
+      - 'benchmarks/neutral_hostile_determinism_repair_v*.py'
+      - 'experiments/entropygraph_v025.py'
+      - 'experiments/entropygraph_v030_product_fs.py'
+      - 'experiments/entropygraph_v030_release_product.py'
+      - '.github/workflows/v030-v025-canonical-fs-level1.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-v030-v025-canonical-fs-level1-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+
+jobs:
+  canonical-fs-budget:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 240
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+
+      - name: Install frozen-corpus and comparator dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y zstd gcc ffmpeg libsndfile1
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[audio,test]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
+
+      - name: Compile canonical-filesystem budget proof
+        run: |
+          python -m py_compile \
+            benchmarks/v030_v025_canonical_fs_level1_oracle.py \
+            experiments/entropygraph_v025.py \
+            experiments/entropygraph_v030_product_fs.py
+
+      - name: Measure complete canonical-filesystem tax at the proven level-1 point
+        run: |
+          mkdir -p benchmark-artifacts
+          python benchmarks/v030_v025_canonical_fs_level1_oracle.py \
+            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-v025-canonical-fs-level1-work" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-v025-canonical-fs-level1.json"
+
+      - name: Independently enforce productization-budget contract
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          d=json.loads(Path('benchmark-artifacts/v030-v025-canonical-fs-level1.json').read_text())
+          assert d['schema']=='cmpct-v030-v025-canonical-fs-level1-v1'
+          assert d['targets']==['02_office_workspace','04_analytics_and_database']
+          assert d['level_cap']==1
+          assert d['rounds']==3
+          assert len(d['rows'])==2
+          for row in d['rows']:
+              assert len(row['candidate']['raw_complete_verified_create_s'])==3
+              assert len(row['comparators']['zip']['raw_create_s'])==3
+              assert len(row['comparators']['zstd19']['raw_create_s'])==3
+              assert all(part['filesystem_manifest_bytes'] > 0 for part in row['candidate']['parts'])
+              assert all(part['filesystem_manifest_entries'] > 0 for part in row['candidate']['parts'])
+              assert all(part['canonical_user_tree_sha256']==row['canonical_user_tree_sha256'] for part in row['candidate']['parts'])
+              assert row['strict']['smaller_than_zip'] is True
+              assert row['strict']['smaller_than_zstd19'] is True
+              assert row['strict']['verified_create_faster_than_zip'] is True
+              assert row['strict']['verified_create_faster_than_zstd19'] is True
+              assert row['strict']['four_way'] is True
+          assert d['gate']['all_rows_preserve_four_way_after_filesystem_tax'] is True
+          assert d['gate']['passed'] is True
+          PY
+
+      - name: CI topology self-check
+        run: python tools/check_ci_topology.py .github/workflows/v030-v025-canonical-fs-level1.yml
+
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: v030-v025-canonical-fs-level1-${{ github.sha }}
+          path: benchmark-artifacts/v030-v025-canonical-fs-level1.json
+          if-no-files-found: warn
+          retention-days: 90
+
+# This lane deliberately prices canonical filesystem semantics into the already-proven fast CMPNX5 mechanism.
+# It is a productization budget proof only: CMPNX5 remains research-only until the mechanism is re-expressed in a
+# bounded canonical r25 profile and earns native/Android/recovery/locality plus the ordinary 15-workload gates.
