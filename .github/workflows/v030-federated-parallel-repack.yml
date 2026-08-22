@@ -1,0 +1,106 @@
+# ci-lane: deep
+name: CMPCT v0.30 federated exact parallel repack
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'experiments/entropygraph_v030_fs_compact.py'
+      - 'experiments/entropygraph_v030_federated_compact_candidate.py'
+      - 'experiments/entropygraph_v030_federated_candidate.py'
+      - 'experiments/entropygraph_v025.py'
+      - 'benchmarks/v030_federated_compact_effort_oracle.py'
+      - 'benchmarks/v030_federated_parallel_repack_oracle.py'
+      - 'benchmarks/v030_federated_selective_effort_oracle*.py'
+      - 'benchmarks/neutral_hostile_corpus_v1.py'
+      - 'benchmarks/neutral_hostile_determinism_repair_v*.py'
+      - '.github/workflows/v030-federated-parallel-repack.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-v030-federated-parallel-repack-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+
+jobs:
+  exact-parallel-repack:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 240
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+
+      - name: Install frozen-corpus and comparator dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y zstd gcc ffmpeg libsndfile1
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[audio,test]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
+
+      - name: Compile exact scheduling proof
+        run: |
+          python -m py_compile \
+            experiments/entropygraph_v030_federated_compact_candidate.py \
+            benchmarks/v030_federated_compact_effort_oracle.py \
+            benchmarks/v030_federated_parallel_repack_oracle.py
+
+      - name: Run exact-byte parallel recompression proof
+        run: |
+          mkdir -p benchmark-artifacts
+          python benchmarks/v030_federated_parallel_repack_oracle.py \
+            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-eg02-parallel-repack-work" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-eg02-parallel-repack.json"
+
+      - name: Independently enforce byte identity and immutable boundaries
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          d=json.loads(Path('benchmark-artifacts/v030-eg02-parallel-repack.json').read_text())
+          assert d['schema']=='cmpct-v030-federated-eg02-parallel-repack-v1'
+          assert d['candidate']=='C25EG02'
+          assert d['max_workers']==8
+          assert len(d['rows'])==2
+          assert d['measurement_gate']['exact_target_count'] is True
+          assert d['measurement_gate']['frontier_measurement_valid'] is True
+          assert d['measurement_gate']['all_available_policies_exact_byte_identical'] is True
+          assert d['measurement_gate']['all_available_policies_locality_safe'] is True
+          assert d['measurement_gate']['passed'] is True
+          for row in d['rows']:
+              assert row['accepted_v029_bytes'] > 0
+              if not row['policy_available']:
+                  continue
+              assert row['strict']['byte_identical_to_sequential_policy'] is True
+              assert row['strict']['within_release_locality_bounds'] is True
+              assert row['locality']['max_member_read_amplification'] <= 8.0
+              assert row['locality']['max_decode_unit_bytes'] <= 8*1024*1024
+              assert row['parallel_repack']['workers'] >= 1
+              assert row['parallel_repack']['pack_count'] > 0
+              assert row['parallel_repack']['selected_high_effort_packs'] > 0
+              # A performance miss remains honest evidence. Promotion requires the normal release gates later;
+              # this lane proves scheduling equivalence and measures whether conservative duplicated work suffices.
+          PY
+
+      - name: CI topology self-check
+        run: python tools/check_ci_topology.py .github/workflows/v030-federated-parallel-repack.yml
+
+      - name: Upload exact scheduling evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: v030-federated-parallel-repack-${{ github.sha }}
+          path: benchmark-artifacts/v030-eg02-parallel-repack.json
+          if-no-files-found: warn
+          retention-days: 90
