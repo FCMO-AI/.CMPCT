@@ -6,6 +6,7 @@ on:
     branches: [main]
     paths:
       - 'benchmarks/v030_logs_inverse_edge_sidecar_pack_oracle.py'
+      - 'benchmarks/v030_logs_inverse_edge_sidecar_pack_entrypoint.py'
       - 'benchmarks/v030_logs_inverse_edge_oracle.py'
       - 'benchmarks/v030_external_competitors.py'
       - 'benchmarks/v030_release_generalization.py'
@@ -43,11 +44,12 @@ jobs:
         run: |
           python -m py_compile \
             benchmarks/v030_logs_inverse_edge_oracle.py \
-            benchmarks/v030_logs_inverse_edge_sidecar_pack_oracle.py
+            benchmarks/v030_logs_inverse_edge_sidecar_pack_oracle.py \
+            benchmarks/v030_logs_inverse_edge_sidecar_pack_entrypoint.py
       - name: Run exact-tree bounded sidecar-pack sweep
         run: |
           mkdir -p benchmark-artifacts
-          python benchmarks/v030_logs_inverse_edge_sidecar_pack_oracle.py \
+          python benchmarks/v030_logs_inverse_edge_sidecar_pack_entrypoint.py \
             --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-logs-sidecar-pack-work" \
             --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-logs-sidecar-pack.json"
       - name: Enforce release-floor, timing, restoration and conservative locality evidence
