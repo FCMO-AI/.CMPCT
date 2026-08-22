@@ -434,10 +434,7 @@ impl ZipFactorArchive {
         ))
     }
 
-    pub fn read_member(
-        &self,
-        index: usize,
-    ) -> Result<(Vec<u8>, MemberReadStats), PortableError> {
+    pub fn read_member(&self, index: usize) -> Result<(Vec<u8>, MemberReadStats), PortableError> {
         if index == self.manifest_index {
             let raw = self.manifest_raw.clone();
             return Ok((
