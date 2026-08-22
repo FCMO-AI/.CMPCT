@@ -82,6 +82,10 @@ def _build_logs(stage: Path, archive: Path) -> dict:
     verified = LOGS.strong_verify(archive)
     if not verified.get("ok"):
         raise RuntimeError(f"logs terminal-admission candidate failed strong verification: {verified!r}")
+    # Fail explicitly if the product profile stops exporting either locality fact.  A missing evidence field must
+    # never be silently converted into an apparent benchmark loss (or, worse, a permissive zero).
+    if "max_member_read_amplification" not in stats or "max_decode_unit_bytes" not in stats:
+        raise RuntimeError("logs profile did not expose required locality evidence")
     stats["archive_bytes"] = archive.stat().st_size
     stats["strong_verify"] = True
     stats["tree_sha256"] = verified.get("tree_sha256") or verified.get("user_tree_sha256")
@@ -140,12 +144,14 @@ def _one(label: str, source: Path, work: Path, accepted_v029_bytes: int) -> dict
             return row
 
         admitted, admission = _admitted(r24, logs)
+        logs_amp = float(logs["max_member_read_amplification"])
+        logs_decode_unit = int(logs["max_decode_unit_bytes"])
         row.update({
             "candidate_pair_create_verify_s": pair_wall_s,
             "r24_bytes": int(r24["archive_bytes"]),
             "logs_bytes": int(logs["archive_bytes"]),
-            "logs_max_member_read_amplification": float(logs.get("max_member_read_amplification") or 0.0),
-            "logs_max_decode_unit": int(logs.get("max_decode_unit") or 0),
+            "logs_max_member_read_amplification": logs_amp,
+            "logs_max_decode_unit_bytes": logs_decode_unit,
             "admission": admission,
             "admitted": admitted,
         })
@@ -182,8 +188,8 @@ def _one(label: str, source: Path, work: Path, accepted_v029_bytes: int) -> dict
             "logs_beats_zstd19_size": logs_bytes < zstd_bytes,
             "terminal_pair_beats_zip_create": pair_wall_s < float(zip_result["create_s"]),
             "terminal_pair_beats_zstd19_create": pair_wall_s < float(zstd_result["create_s"]),
-            "locality_le_8x": float(logs.get("max_member_read_amplification") or 999.0) <= 8.0,
-            "decode_unit_le_8mib": int(logs.get("max_decode_unit") or (1 << 60)) <= 8 * 1024 * 1024,
+            "locality_le_8x": logs_amp <= 8.0,
+            "decode_unit_le_8mib": logs_decode_unit <= 8 * 1024 * 1024,
         }
         strict["passed"] = all(strict.values())
         row.update({
@@ -252,6 +258,7 @@ def run(work_root: Path) -> dict:
             "source_prefilter": f">={MIN_SIDECAR_PAIRS} .gz/.zst sibling sidecar pairs",
             "measured_admission": f">={MIN_INVERSE_EDGES} proven inverse edges, >={MIN_SAVING_BYTES} B saving vs r24, logs/r24 <= {MAX_LOGS_TO_R24_RATIO}",
             "strict_size_floor": "logs must be strictly smaller than accepted v0.29, current product, ZIP and solid Zstd-19",
+            "locality_evidence": "writer-emitted max_member_read_amplification and max_decode_unit_bytes",
             "promotion_boundary": "evidence only; selector remains unchanged",
         },
         "rows": rows,
