@@ -9,6 +9,11 @@ artifact pricing and its identity is covered by the existing pack/metadata authe
 The internal manifest is placed in a bounded compressed direct pack: this changes no user-file representation and
 avoids spending the narrow v0.29 byte margin on highly compressible control metadata.
 
+Canonical v3 also freezes the inverse-codec set to codecs already implemented by the bounded native preparity
+reader. Discovery may observe XZ or future sidecars, but unsupported relations are encoded as ordinary direct or
+segmented files instead of emitting a derive edge that a required release reader cannot decode. This changes no
+frozen logs winner bytes because its selected inverse edges are gzip and Zstd.
+
 This remains pre-selector until the resulting complete product boundary, native reader and Android parity all pass.
 """
 
@@ -27,6 +32,7 @@ MAX_MEMBER_AMPLIFICATION = V2.MAX_MEMBER_AMPLIFICATION
 MAX_FILES = V2.P.MAX_FILES
 MAX_PATH_BYTES = V2.P.MAX_PATH_BYTES
 MAX_LOGICAL_BYTES = 512 * 1024 * 1024
+NATIVE_SUPPORTED_INVERSE_CODECS = frozenset({"gzip", "zstd"})
 
 Archive = V2.Archive
 
@@ -50,8 +56,12 @@ def build(source: Path, archive: Path) -> dict:
                 staging,
                 archive,
                 compressed_direct_paths={FS.FILESYSTEM_MANIFEST},
+                allowed_inverse_codecs=NATIVE_SUPPORTED_INVERSE_CODECS,
             )
         )
+    used_codecs = frozenset(stats["edge_detection"].get("inverse_edge_codecs", ()))
+    if not used_codecs <= NATIVE_SUPPORTED_INVERSE_CODECS:
+        raise RuntimeError("logs canonical writer emitted a non-portable inverse codec")
     stats.update({
         "profile_writer_revision": 3,
         "canonical_filesystem_manifest": True,
@@ -60,6 +70,9 @@ def build(source: Path, archive: Path) -> dict:
         "filesystem_manifest_sha256": str(fs_stats["manifest_sha256"]),
         "filesystem_manifest_entries": int(fs_stats["entries"]),
         "filesystem_regular_members": int(fs_stats["regular_graph_members"]),
+        "native_supported_inverse_codecs": sorted(NATIVE_SUPPORTED_INVERSE_CODECS),
+        "inverse_edge_codecs": sorted(used_codecs),
+        "native_inverse_codec_safe": True,
     })
     return stats
 
