@@ -14,13 +14,18 @@ reader. Discovery may observe XZ or future sidecars, but unsupported relations a
 segmented files instead of emitting a derive edge that a required release reader cannot decode. This changes no
 frozen logs winner bytes because its selected inverse edges are gzip and Zstd.
 
-This remains pre-selector until the resulting complete product boundary, native reader and Android parity all pass.
+The canonical user-tree digest is derived directly from the authenticated filesystem manifest.  Keeping that
+identity at the profile semantic owner prevents release wrappers and evidence harnesses from inventing different
+spellings of the same filesystem contract.
 """
 
+import hashlib
 import os
 from pathlib import Path, PurePosixPath
 import shutil
 import tempfile
+
+import msgpack
 
 from experiments import entropygraph_v030_logs_inverse_profile_v2 as V2
 from experiments import entropygraph_v030_product_fs as FS
@@ -88,6 +93,27 @@ def _manifest_from_archive(path: Path) -> bytes:
     return raw
 
 
+def semantic_tree_sha256(decoded: dict) -> str:
+    """Hash an authenticated filesystem manifest using the canonical r25 user-tree grammar."""
+    rows = []
+    for row in sorted(decoded["manifest"]["entries"], key=lambda item: item[0]):
+        rel, kind, _mode, _mtime, _uid, _gid, _xattrs, extra = row
+        if kind == "f":
+            size, digest = extra
+            semantic = [rel, "f", int(size), bytes(digest)]
+        elif kind == "d":
+            semantic = [rel, "d"]
+        elif kind == "l":
+            semantic = [rel, "l", extra]
+        elif kind == "h":
+            semantic = [rel, "h", extra]
+        else:
+            raise RuntimeError(f"unknown logs filesystem entry kind {kind!r} for {rel!r}")
+        rows.append(semantic)
+    encoded = msgpack.packb(["cmpct-user-tree-v1", rows], use_bin_type=True)
+    return hashlib.sha256(encoded).hexdigest()
+
+
 def strong_verify(path: Path) -> dict:
     verified = dict(V2.strong_verify(path))
     manifest_raw = _manifest_from_archive(path)
@@ -104,11 +130,15 @@ def strong_verify(path: Path) -> dict:
     }
     if identities != decoded["regular"]:
         raise RuntimeError("logs canonical profile filesystem/content identity mismatch")
+    user_tree = semantic_tree_sha256(decoded)
     verified.update({
         "canonical_filesystem_manifest": True,
         "filesystem_manifest_bytes": len(manifest_raw),
         "filesystem_manifest_entries": len(decoded["manifest"]["entries"]),
         "filesystem_regular_members": len(decoded["regular"]),
+        "tree_sha256": user_tree,
+        "user_tree_sha256": user_tree,
+        "canonical_user_tree_sha256": user_tree,
     })
     return verified
 
