@@ -2,29 +2,32 @@ from __future__ import annotations
 
 """Promotion candidate for structurally admitted canonical logs-inverse archives.
 
-This module deliberately wraps, rather than mutates, the mature v0.30 release-product facade.  It is the final
+This module deliberately wraps, rather than mutates, the mature v0.30 release-product facade. It is the final
 pre-promotion surface for the logs terminal path: a source is considered only when it contains at least two
 compressed sidecars with an uncompressed sibling, then the *real* shipping r24 and canonical logs candidates are
-constructed.  Logs terminates the expensive generic r25 search only when measured candidate facts match the
+constructed. Logs terminates the expensive generic r25 search only when measured candidate facts match the
 all-15 frozen admission proof: at least two proven inverse edges, >=1 MiB saving versus r24, logs/r24 <=0.80,
-<=8x member-read amplification and <=8 MiB decode context.  No benchmark name participates in dispatch.
+<=8x member-read amplification and <=8 MiB decode context. No benchmark name participates in dispatch.
 
 The frozen admission oracle separately proved that every admitted benchmark row is also strictly below accepted
-v0.29, the current product, ZIP and solid Zstd-19 in size and beats ZIP/Zstd-19 creation wall-clock.  This wrapper
-therefore tests the exact prospective product behavior without weakening the public release lock.  Non-admitted
+v0.29, the current product, ZIP and solid Zstd-19 in size and beats ZIP/Zstd-19 creation wall-clock. This wrapper
+therefore tests the exact prospective product behavior without weakening the public release lock. Non-admitted
 sources delegate byte-for-byte to ``entropygraph_v030_release_product``.
 
 Unlike the earlier shadow profile, this facade owns complete Python product operations for C25LG12: classify,
-strong verify, list/read with locality accounting, transactional extraction and semantic tree identity.  It is
+strong verify, list/read with locality accounting, transactional extraction and semantic tree identity. It is
 still a candidate until the exact all-15 shadow gates, Android, native and ordinary regression lanes validate one
 fingerprint; the shipping module remains unchanged until then.
 """
 
 from concurrent.futures import ThreadPoolExecutor
+import hashlib
 import os
 from pathlib import Path, PurePosixPath
 import tempfile
 import time
+
+import msgpack
 
 from experiments import entropygraph_v030_logs_inverse_profile_v3 as LOGS
 from experiments import entropygraph_v030_release_product as BASE
@@ -100,7 +103,24 @@ def _logs_manifest(archive: Path) -> dict:
 
 
 def _logs_semantic_tree(decoded: dict) -> str:
-    return BASE.C._semantic_tree_sha(decoded)
+    """Project the authenticated logs filesystem manifest into the canonical user-tree hash grammar."""
+    rows = []
+    for row in sorted(decoded["manifest"]["entries"], key=lambda item: item[0]):
+        rel, kind, _mode, _mtime, _uid, _gid, _xattrs, extra = row
+        if kind == "f":
+            size, digest = extra
+            semantic = [rel, "f", int(size), bytes(digest)]
+        elif kind == "d":
+            semantic = [rel, "d"]
+        elif kind == "l":
+            semantic = [rel, "l", extra]
+        elif kind == "h":
+            semantic = [rel, "h", extra]
+        else:
+            raise RuntimeError(f"unknown logs filesystem entry kind {kind!r} for {rel!r}")
+        rows.append(semantic)
+    encoded = msgpack.packb(["cmpct-user-tree-v1", rows], use_bin_type=True)
+    return hashlib.sha256(encoded).hexdigest()
 
 
 def _is_logs_archive(archive: Path) -> bool:
@@ -270,7 +290,7 @@ def strong_verify(archive: Path) -> dict:
             "user_tree_sha256": user_tree,
             "format_revision": REVISION,
             "format_profile": LOGS_PROFILE,
-            "filesystem_manifest_sha256": __import__("hashlib").sha256(decoded["raw"]).hexdigest(),
+            "filesystem_manifest_sha256": hashlib.sha256(decoded["raw"]).hexdigest(),
             "filesystem_entries": len(decoded["manifest"]["entries"]),
             "filesystem_semantics_verified": True,
             "reader": "cmpct-v030-logs-inverse-v3",
