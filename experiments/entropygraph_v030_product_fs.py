@@ -33,6 +33,9 @@ FILESYSTEM_MANIFEST = f"{INTERNAL_ROOT}/filesystem-v1.msgpack"
 FILESYSTEM_MANIFEST_VERSION = 1
 MAX_MANIFEST_BYTES = 8 * 1024 * 1024
 DEFAULT_MAX_MANIFEST_ENTRIES = 65_536
+SIGNED_MTIME_MIN = -(1 << 63)
+SIGNED_MTIME_MAX = (1 << 63) - 1
+UID_GID_MAX = (1 << 32) - 1
 
 
 class ProfileNotEligible(RuntimeError):
@@ -75,11 +78,18 @@ def _xattrs(path: Path) -> list[list]:
 
 
 def _metadata_fields(path: Path, st: os.stat_result) -> list:
+    mtime_ns = int(st.st_mtime_ns)
+    uid = int(getattr(st, "st_uid", 0))
+    gid = int(getattr(st, "st_gid", 0))
+    if not SIGNED_MTIME_MIN <= mtime_ns <= SIGNED_MTIME_MAX:
+        raise ProfileNotEligible("r25 filesystem mtime exceeds signed i64 domain")
+    if not 0 <= uid <= UID_GID_MAX or not 0 <= gid <= UID_GID_MAX:
+        raise ProfileNotEligible("r25 filesystem uid/gid exceeds portable u32 domain")
     return [
         stat.S_IMODE(st.st_mode),
-        int(st.st_mtime_ns),
-        int(getattr(st, "st_uid", 0)),
-        int(getattr(st, "st_gid", 0)),
+        mtime_ns,
+        uid,
+        gid,
         _xattrs(path),
     ]
 
@@ -265,8 +275,18 @@ def decode_manifest(raw: bytes, *, max_path_bytes: int, max_entries: int) -> dic
             raise RuntimeError("unknown r25 filesystem manifest entry kind")
         if not isinstance(mode, int) or isinstance(mode, bool) or not 0 <= mode <= 0o7777:
             raise RuntimeError("r25 filesystem mode declaration")
-        for value, label in ((mtime_ns, "mtime"), (uid, "uid"), (gid, "gid")):
-            if not isinstance(value, int) or isinstance(value, bool) or value < 0:
+        if (
+            not isinstance(mtime_ns, int)
+            or isinstance(mtime_ns, bool)
+            or not SIGNED_MTIME_MIN <= mtime_ns <= SIGNED_MTIME_MAX
+        ):
+            raise RuntimeError("r25 filesystem mtime declaration")
+        for value, label in ((uid, "uid"), (gid, "gid")):
+            if (
+                not isinstance(value, int)
+                or isinstance(value, bool)
+                or not 0 <= value <= UID_GID_MAX
+            ):
                 raise RuntimeError(f"r25 filesystem {label} declaration")
         if not isinstance(xattrs, list):
             raise RuntimeError("r25 filesystem xattr declaration")
