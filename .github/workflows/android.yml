@@ -9,6 +9,8 @@ on:
       - 'native/cmpct-core/**'
       - 'native/cmpct-portable/**'
       - 'tests/conformance/**'
+      - 'tests/generate_v030_logs_android_vector.py'
+      - 'experiments/entropygraph_v030_logs_inverse_profile*.py'
       - '.github/workflows/android.yml'
       - '.github/workflows/android-physical-arm64.yml'
   push:
@@ -18,6 +20,8 @@ on:
       - 'native/cmpct-core/**'
       - 'native/cmpct-portable/**'
       - 'tests/conformance/**'
+      - 'tests/generate_v030_logs_android_vector.py'
+      - 'experiments/entropygraph_v030_logs_inverse_profile*.py'
       - '.github/workflows/android.yml'
       - '.github/workflows/android-physical-arm64.yml'
   workflow_dispatch:
@@ -37,6 +41,11 @@ jobs:
           # identify the exact candidate source tree whose fingerprint is frozen, so tests explicitly check out
           # the PR head while still benefiting from GitHub's ordinary PR trigger/branch-protection semantics.
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
 
       - uses: actions/setup-java@v4
         with:
@@ -73,6 +82,18 @@ jobs:
             echo 'CMPCT_ANDROID_EMULATOR_ACCEL=off' >> "$GITHUB_ENV"
             echo 'Android emulator acceleration: software (hosted runner has no /dev/kvm)'
           fi
+
+      - name: Install deterministic Python vector dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[test]'
+
+      - name: Generate exact canonical logs portable-dispatch vector
+        run: |
+          python tests/generate_v030_logs_android_vector.py \
+            --output "$GITHUB_WORKSPACE/tests/conformance/v030-logs-android.json" \
+            --work-root "$RUNNER_TEMP/v030-logs-android-vector"
+          test -s tests/conformance/v030-logs-android.json
 
       - name: Install Rust Android targets
         run: |
@@ -198,6 +219,7 @@ jobs:
                   'emulator_api': 29,
                   'all_declared_abis_built': True,
                   'portable_jni_dependency_verified': True,
+                  'logs_inverse_portable_dispatch_green': True,
               },
           }
           (temp / 'cmpct-hosted-android-evidence.json').write_text(json.dumps(evidence, indent=2) + '\n')
@@ -217,11 +239,11 @@ jobs:
             ${{ runner.temp }}/cmpct-emulator.log
             ${{ runner.temp }}/cmpct-elf-dynamic.txt
             ${{ runner.temp }}/cmpct-hosted-android-evidence.json
+            tests/conformance/v030-logs-android.json
           if-no-files-found: warn
           retention-days: 30
 
-# Footnote: Android consumes libcmpct_portable through a parser-free JNI shim. Canonical r25 and inherited r24
-# therefore share one Rust admission/recovery/resource implementation; Android-specific parser drift is a release
-# blocker, not a supported portability strategy. This hosted emulator gate is intentionally not the physical ARM64
-# release receipt required by v0.30; it proves build/package/routing/JNI behavior while the physical device gate
-# independently proves real arm64-v8a provider and lifecycle behavior.
+# Footnote: Android consumes libcmpct_portable through a parser-free JNI shim. Canonical r25, the logs inverse
+# profile and inherited r24 therefore share one Rust admission/recovery/resource implementation; Android-specific
+# parser drift is a release blocker, not a supported portability strategy. This hosted emulator gate remains
+# intentionally distinct from the physical ARM64 receipt required by v0.30.
