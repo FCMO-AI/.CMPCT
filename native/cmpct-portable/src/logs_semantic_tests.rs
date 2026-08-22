@@ -33,7 +33,7 @@ archive=root/'candidate.cmpct'
 stats=LOGS.build(src, archive)
 verified=LOGS.strong_verify(archive)
 assert verified['ok'] is True
-assert stats['inverse_edges'] >= 1, stats
+assert stats['edge_detection']['inverse_edges'] >= 1, stats
 "#;
     let repo = repo_root();
     let status = Command::new("python")
