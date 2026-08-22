@@ -1,23 +1,22 @@
 from __future__ import annotations
 
-"""Promotion candidate for structurally admitted canonical logs-inverse archives.
+"""Promoted structural logs-inverse wrapper for the v0.30 release product.
 
-This module deliberately wraps, rather than mutates, the mature v0.30 release-product facade. It is the final
-pre-promotion surface for the logs terminal path: a source is considered only when it contains at least two
-compressed sidecars with an uncompressed sibling, then the *real* shipping r24 and canonical logs candidates are
-constructed. Logs terminates the expensive generic r25 search only when measured candidate facts match the
-all-15 frozen admission proof: at least two proven inverse edges, >=1 MiB saving versus r24, logs/r24 <=0.80,
-<=8x member-read amplification and <=8 MiB decode context. No benchmark name participates in dispatch.
+This module wraps, rather than mutates, the mature v0.30 release-product implementation. A source is considered
+only when it contains at least two compressed sidecars with an uncompressed sibling, then the real shipping r24
+and canonical logs candidates are constructed. Logs terminates the expensive generic r25 search only when measured
+candidate facts match the all-15 frozen admission proof: at least two proven inverse edges, >=1 MiB saving versus
+r24, logs/r24 <=0.80, <=8x member-read amplification and <=8 MiB decode context. No benchmark name participates
+in dispatch.
 
 The frozen admission oracle separately proved that every admitted benchmark row is also strictly below accepted
-v0.29, the current product, ZIP and solid Zstd-19 in size and beats ZIP/Zstd-19 creation wall-clock. This wrapper
-therefore tests the exact prospective product behavior without weakening the public release lock. Non-admitted
-sources delegate byte-for-byte to ``entropygraph_v030_release_product``.
+v0.29, the predecessor product, ZIP and solid Zstd-19 in size and beats ZIP/Zstd-19 creation wall-clock. Native
+production dispatch, Android/JNI parity and both all-15 selector shadow gates were green on the exact promotion
+parent fingerprint. Non-admitted sources delegate byte-for-byte to the mature release product.
 
-Unlike the earlier shadow profile, this facade owns complete Python product operations for C25LG12: classify,
-strong verify, list/read with locality accounting, transactional extraction and semantic tree identity. It is
-still a candidate until the exact all-15 shadow gates, Android, native and ordinary regression lanes validate one
-fingerprint; the shipping module remains unchanged until then.
+The base delegates are captured at import time. This matters because the public release-product module imports this
+wrapper only after defining its mature implementation and then binds its public operations to these promoted
+functions. Capturing the delegates prevents that late binding from recursively calling the wrapper itself.
 """
 
 from concurrent.futures import ThreadPoolExecutor
@@ -31,6 +30,16 @@ import msgpack
 
 from experiments import entropygraph_v030_logs_inverse_profile_v3 as LOGS
 from experiments import entropygraph_v030_release_product as BASE
+
+# Freeze mature delegates before the public module rebinds its product operations to this wrapper.
+_BASE_TREEHASH = BASE.treehash
+_BASE_REVISION_FOR_ARCHIVE = BASE._revision_for_archive
+_BASE_BUILD = BASE.build
+_BASE_STRONG_VERIFY = BASE.strong_verify
+_BASE_LIST_MEMBERS = BASE.list_members
+_BASE_READ_MEMBER_WITH_STATS = BASE.read_member_with_stats
+_BASE_EXTRACT = BASE.extract
+_BASE_BUILD_ABLATION = BASE.build_ablation
 
 REVISION = BASE.REVISION
 G04_MAGIC = BASE.G04_MAGIC
@@ -61,7 +70,7 @@ MAX_DECODE_UNIT_BYTES = 8 * 1024 * 1024
 
 
 def treehash(root: Path) -> str:
-    return BASE.treehash(root)
+    return _BASE_TREEHASH(root)
 
 
 def _regular_paths(root: Path) -> set[str]:
@@ -134,7 +143,7 @@ def _is_logs_archive(archive: Path) -> bool:
 def _revision_for_archive(archive: Path) -> tuple[int | None, str]:
     if _is_logs_archive(Path(archive)):
         return REVISION, LOGS_PROFILE
-    return BASE._revision_for_archive(Path(archive))
+    return _BASE_REVISION_FOR_ARCHIVE(Path(archive))
 
 
 def _build_r24(root: Path, archive: Path) -> dict:
@@ -257,7 +266,7 @@ def _build_logs_terminal_if_eligible(root: Path, out: Path) -> dict | None:
             "maximum_decode_unit_bytes": MAX_DECODE_UNIT_BYTES,
             "benchmark_name_dispatch": False,
         },
-        "release_facade": "cmpct-v030-release-product-logs-candidate-v1",
+        "release_facade": "cmpct-v030-release-product-v1",
     }
 
 
@@ -267,17 +276,17 @@ def build(root: Path, out: Path) -> dict:
     terminal = _build_logs_terminal_if_eligible(root, out)
     if terminal is not None:
         return terminal
-    stats = dict(BASE.build(root, out))
+    stats = dict(_BASE_BUILD(root, out))
     stats["logs_terminal"] = False
     stats["logs_terminal_prefilter"] = logs_source_prefilter(root)
-    stats["release_facade"] = "cmpct-v030-release-product-logs-candidate-v1"
+    stats["release_facade"] = "cmpct-v030-release-product-v1"
     return stats
 
 
 def strong_verify(archive: Path) -> dict:
     archive = Path(archive)
     if not _is_logs_archive(archive):
-        return BASE.strong_verify(archive)
+        return _BASE_STRONG_VERIFY(archive)
     try:
         verified = dict(LOGS.strong_verify(archive))
         decoded = _logs_manifest(archive)
@@ -294,7 +303,7 @@ def strong_verify(archive: Path) -> dict:
             "filesystem_entries": len(decoded["manifest"]["entries"]),
             "filesystem_semantics_verified": True,
             "reader": "cmpct-v030-logs-inverse-v3",
-            "canonical_release_facade": "cmpct-v030-release-product-logs-candidate-v1",
+            "canonical_release_facade": "cmpct-v030-release-product-v1",
         }
     except Exception as exc:
         return {
@@ -314,7 +323,7 @@ def _entry_rows(archive: Path) -> tuple[dict, dict[str, list]]:
 def list_members(archive: Path) -> list[dict]:
     archive = Path(archive)
     if not _is_logs_archive(archive):
-        return BASE.list_members(archive)
+        return _BASE_LIST_MEMBERS(archive)
     decoded, rows = _entry_rows(archive)
     result = []
     names = {"f": "file", "d": "directory", "l": "symlink", "h": "hardlink"}
@@ -337,7 +346,7 @@ def list_members(archive: Path) -> list[dict]:
 def read_member_with_stats(archive: Path, rel: str) -> tuple[bytes, dict]:
     archive = Path(archive)
     if not _is_logs_archive(archive):
-        return BASE.read_member_with_stats(archive, rel)
+        return _BASE_READ_MEMBER_WITH_STATS(archive, rel)
     decoded, rows = _entry_rows(archive)
     if rel not in rows:
         raise KeyError(rel)
@@ -385,7 +394,7 @@ def extract(
 ) -> None:
     archive = Path(archive)
     if not _is_logs_archive(archive):
-        return BASE.extract(archive, dst, max_output_bytes=max_output_bytes, safe_symlinks=safe_symlinks)
+        return _BASE_EXTRACT(archive, dst, max_output_bytes=max_output_bytes, safe_symlinks=safe_symlinks)
     if not isinstance(max_output_bytes, int) or isinstance(max_output_bytes, bool) or max_output_bytes < 1:
         raise ValueError("max_output_bytes must be a positive integer")
     decoded = _logs_manifest(archive)
@@ -403,4 +412,4 @@ def extract(
 
 
 def build_ablation(root: Path, out: Path, mode: str) -> dict:
-    return BASE.build_ablation(root, out, mode)
+    return _BASE_BUILD_ABLATION(root, out, mode)
