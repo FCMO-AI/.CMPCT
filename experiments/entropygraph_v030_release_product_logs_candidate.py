@@ -14,9 +14,9 @@ v0.29, the predecessor product, ZIP and solid Zstd-19 in size and beats ZIP/Zstd
 production dispatch, Android/JNI parity and both all-15 selector shadow gates were green on the exact promotion
 parent fingerprint. Non-admitted sources delegate byte-for-byte to the mature release product.
 
-The base delegates are captured at import time. This matters because the public release-product module imports this
-wrapper only after defining its mature implementation and then binds its public operations to these promoted
-functions. Capturing the delegates prevents that late binding from recursively calling the wrapper itself.
+The wrapper imports the preserved mature implementation directly. This keeps direct candidate/oracle imports
+acyclic after the public release-product module binds these promoted operations, while preserving the exact same
+base Git blob for every non-logs path.
 """
 
 from concurrent.futures import ThreadPoolExecutor
@@ -29,9 +29,9 @@ import time
 import msgpack
 
 from experiments import entropygraph_v030_logs_inverse_profile_v3 as LOGS
-from experiments import entropygraph_v030_release_product as BASE
+from experiments import entropygraph_v030_release_product_base as BASE
 
-# Freeze mature delegates before the public module rebinds its product operations to this wrapper.
+# Freeze mature delegates explicitly. They remain stable even after the public release-product facade is rebound.
 _BASE_TREEHASH = BASE.treehash
 _BASE_REVISION_FOR_ARCHIVE = BASE._revision_for_archive
 _BASE_BUILD = BASE.build
