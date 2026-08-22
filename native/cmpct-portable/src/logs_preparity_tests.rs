@@ -90,6 +90,10 @@ fn python_logs_writer_rust_reader_roundtrips_gzip_zstd_inverse_edges_and_localit
     let temp = tempfile::tempdir().unwrap();
     python_fixture(temp.path());
     let archive_path = temp.path().join("candidate.cmpct");
+    assert!(
+        crate::PortableArchive::open(&archive_path).is_err(),
+        "logs inverse profile must remain outside production native dispatch until promotion is complete"
+    );
     let archive = LogsInverseArchive::open(&archive_path).expect("Rust must open Python logs output");
     let expected = expected_rows(&temp.path().join("expected.tsv"));
 
