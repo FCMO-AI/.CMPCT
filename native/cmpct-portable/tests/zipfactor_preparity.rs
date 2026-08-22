@@ -1,110 +1,104 @@
-// Pre-dispatch parity harness for the bounded ZIP-factor reader.
-//
-// The production crate intentionally does not advertise CMP25Z2 yet. This integration test uses the production
-// cmpct-portable modules directly, asks the Python fused writer to produce real bytes, then proves native
-// verification and member reconstruction. Promotion can wire the identity only after this preparatory surface is
-// green.
+use std::{
+    fs,
+    path::{Path, PathBuf},
+    process::Command,
+};
 
-use cmpct_portable::zipfactor;
-use std::fs;
-use std::path::{Path, PathBuf};
-use std::process::Command;
-use std::time::{SystemTime, UNIX_EPOCH};
+use cmpct_portable::zipfactor::ZipFactorArchive;
 
-fn work_root(label: &str) -> PathBuf {
-    let stamp = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap()
-        .as_nanos();
-    let root =
-        std::env::temp_dir().join(format!("cmpct-zf-{label}-{}-{stamp}", std::process::id()));
-    fs::create_dir_all(&root).unwrap();
-    root
+fn repo_root() -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .and_then(Path::parent)
+        .expect("cmpct-portable must live under <repo>/native/")
+        .to_path_buf()
 }
 
-fn python_fixture(root: &Path, corrupt: bool) -> PathBuf {
-    let source = root.join("source");
-    let archive = root.join("candidate.cmpct");
+fn python_fixture(root: &Path) {
     let script = r#"
-import pathlib, sys, zipfile
+import sys
+from pathlib import Path
 from experiments import entropygraph_v030_zipfactor_fused as ZFF
-root=pathlib.Path(sys.argv[1]); source=root/'source'; source.mkdir()
-date=(2024,1,2,4,6,8)
-for bundle in range(7):
-    path=source/f'bundle-{bundle:02d}.zip'
-    with zipfile.ZipFile(path,'w',compression=zipfile.ZIP_DEFLATED,compresslevel=6) as zf:
-        for member in range(4):
-            info=zipfile.ZipInfo(f'member-{member:02d}.txt',date)
-            info.compress_type=zipfile.ZIP_DEFLATED
-            info.external_attr=0o100644 << 16
-            raw=''.join(f'row={row:04d} member={member} bundle={bundle} value={(row*313+member*17+bundle)%65521:05d}\n' for row in range(160+member*9)).encode()
-            zf.writestr(info,raw,compress_type=zipfile.ZIP_DEFLATED,compresslevel=6)
-ZFF.build(source, root/'candidate.cmpct', level=6, group_size=7)
+from tests import test_v030_zip_framing_factor_admission as ADMIT
+
+root=Path(sys.argv[1])
+src=root/'src'
+src.mkdir(parents=True)
+ADMIT._make_family(src, archives=5, members=3)
+product=ZFF._fused_scan(src)
+payload, stats=ZFF._build_archive(product, level=3)
+(root/'candidate.cmpct').write_bytes(payload)
+(root/'expected.tsv').write_text(''.join(
+    f"{entry.rel}\t{entry.sha256}\t{entry.size}\n" for entry in product.entries
+), encoding='utf-8')
+print(stats)
 "#;
+    let repo = repo_root();
     let status = Command::new("python")
         .arg("-c")
         .arg(script)
         .arg(root)
-        .env(
-            "PYTHONPATH",
-            std::env::var("PYTHONPATH").unwrap_or_else(|_| ".".into()),
-        )
+        .current_dir(&repo)
+        .env("PYTHONPATH", &repo)
         .status()
-        .expect("launch Python ZIP-factor fixture writer");
-    assert!(status.success(), "Python ZIP-factor fixture writer failed");
-    if corrupt {
-        let mut bytes = fs::read(&archive).unwrap();
-        let last = bytes.len() - 5;
-        bytes[last] ^= 0x40;
-        fs::write(&archive, bytes).unwrap();
-    }
-    assert!(source.is_dir());
-    archive
+        .expect("python fixture builder must start");
+    assert!(status.success(), "python ZIP-factor fixture builder failed");
+}
+
+fn expected_rows(path: &Path) -> Vec<(String, String, u64)> {
+    fs::read_to_string(path)
+        .unwrap()
+        .lines()
+        .map(|line| {
+            let mut fields = line.split('\t');
+            (
+                fields.next().unwrap().to_string(),
+                fields.next().unwrap().to_string(),
+                fields.next().unwrap().parse().unwrap(),
+            )
+        })
+        .collect()
 }
 
 #[test]
-fn python_fused_writer_round_trips_through_native_candidate_decoder() {
-    let root = work_root("roundtrip");
-    let archive_path = python_fixture(&root, false);
-    let archive = zipfactor::ZipFactorArchive::open(&archive_path)
-        .expect("open Python compact-v2 bytes natively");
-
-    assert_eq!(archive.entries().len(), 8, "manifest + seven ZIP owners");
-    assert!(archive.declared_amplification() <= 8.0);
-    assert!(
-        !archive.tail_authenticated(),
-        "recovery remains a promotion blocker, not a synthetic green"
-    );
-    archive.verify().expect("native full verification");
-
-    for bundle in 0..7 {
-        let rel = format!("bundle-{bundle:02}.zip");
-        let index = archive
-            .entries()
-            .iter()
-            .position(|entry| entry.path == rel)
-            .unwrap();
-        let (native, stats) = archive
-            .read_member(index)
-            .expect("native ZIP-factor selective read");
-        assert_eq!(native, fs::read(root.join("source").join(&rel)).unwrap());
-        assert!(stats.amplification <= 8.0);
-        assert!(stats.decoded_context_bytes <= 8 * 1024 * 1024);
-        assert_eq!(stats.profile, "zip-framing-factor-compact-v2");
+fn python_writer_rust_reader_reconstructs_exact_zip_family() {
+    let temp = tempfile::tempdir().unwrap();
+    python_fixture(temp.path());
+    let archive_bytes = fs::read(temp.path().join("candidate.cmpct")).unwrap();
+    let archive = ZipFactorArchive::parse(&archive_bytes).expect("Rust must parse Python writer output");
+    let expected = expected_rows(&temp.path().join("expected.tsv"));
+    assert_eq!(archive.member_count(), expected.len());
+    assert!(archive.max_read_amplification() <= 8.0);
+    assert!(archive.max_decode_unit_bytes() <= 8 * 1024 * 1024);
+    archive.verify_all().expect("Rust strong ZIP-factor verification");
+    for (index, (rel, sha, size)) in expected.iter().enumerate() {
+        assert_eq!(archive.member_name(index).unwrap(), rel);
+        assert_eq!(archive.member_size(index).unwrap(), *size);
+        assert_eq!(archive.member_sha256(index).unwrap(), sha);
+        let (raw, stats) = archive.read_member(index).unwrap();
+        assert_eq!(raw.len() as u64, *size);
+        assert!(stats.read_amplification <= 8.0);
+        let got = sha2::Digest::finalize(sha2::Sha256::new_with_prefix(&raw));
+        assert_eq!(format!("{got:x}"), *sha);
     }
-
-    fs::remove_dir_all(root).ok();
 }
 
 #[test]
-fn native_candidate_decoder_fails_closed_on_group_corruption() {
-    let root = work_root("corrupt");
-    let archive_path = python_fixture(&root, true);
-    if let Ok(archive) = zipfactor::ZipFactorArchive::open(&archive_path) {
-        assert!(
-            archive.verify().is_err(),
-            "corrupted ZIP-factor bytes must not verify"
-        );
-    } // malformed compressed-group bytes are equally fail-closed at open time.
-    fs::remove_dir_all(root).ok();
+fn zipfactor_preparity_rejects_corruption_and_remains_outside_production_dispatch() {
+    let temp = tempfile::tempdir().unwrap();
+    python_fixture(temp.path());
+    let archive_path = temp.path().join("candidate.cmpct");
+    let mut raw = fs::read(&archive_path).unwrap();
+    let parsed = ZipFactorArchive::parse(&raw).unwrap();
+    let (_, stats) = parsed.read_member(0).unwrap();
+    assert!(stats.read_amplification <= 8.0);
+
+    let middle = raw.len() / 2;
+    raw[middle] ^= 0x5a;
+    assert!(ZipFactorArchive::parse(&raw)
+        .and_then(|archive| archive.verify_all().map(|_| archive))
+        .is_err());
+
+    let production = cmpct_portable::PortableArchive::open(&archive_path);
+    assert!(production.is_err(), "CMP25Z2 must remain outside production dispatch until recovery/native promotion is complete");
 }
