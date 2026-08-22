@@ -19,32 +19,52 @@ from pathlib import Path
 from benchmarks import v030_federated_selective_effort_oracle as V1
 from benchmarks import v030_federated_selective_effort_oracle_v3 as V3
 
+# Capture the authoritative loader exactly once, before the compatibility shim is installed.  The prior v4
+# implementation called ``V1.GENERAL._accepted_v029_rows`` from inside the replacement itself; because GENERAL is
+# the same module object, that name already pointed back at the replacement and recursed until Python aborted.
+# Keeping this immutable function reference also makes the evidence provenance explicit: the shim can only add the
+# legacy field alias to rows returned by the original authoritative loader.
+_AUTHORITATIVE_ACCEPTED_ROWS = V1.GENERAL._accepted_v029_rows
+
 
 def _accepted_rows_with_legacy_alias() -> dict:
-    rows = V1.GENERAL._accepted_v029_rows()
+    rows = _AUTHORITATIVE_ACCEPTED_ROWS()
     adapted = {}
+    accepted_total = 0
     for key, source in rows.items():
         row = dict(source)
+        if "accepted_v029_bytes" not in row:
+            raise RuntimeError(f"authoritative accepted-v0.29 row lacks accepted_v029_bytes: {key!r}")
         accepted = int(row["accepted_v029_bytes"])
         if "archive_bytes" in row and int(row["archive_bytes"]) != accepted:
             raise RuntimeError(f"conflicting accepted-v0.29 byte aliases for {key!r}")
         row["archive_bytes"] = accepted
         adapted[key] = row
+        accepted_total += accepted
+    if len(adapted) != 15:
+        raise RuntimeError(f"accepted-v0.29 workload count drifted: {len(adapted)} != 15")
+    if accepted_total != 137_499_525:
+        raise RuntimeError(
+            f"accepted-v0.29 aggregate drifted: {accepted_total} != 137499525"
+        )
     return adapted
 
 
 def run(work_root: Path) -> dict:
-    original = V1.GENERAL._accepted_v029_rows
+    before = V1.GENERAL._accepted_v029_rows
     V1.GENERAL._accepted_v029_rows = _accepted_rows_with_legacy_alias
     try:
         result = dict(V3.run(work_root))
     finally:
-        V1.GENERAL._accepted_v029_rows = original
+        V1.GENERAL._accepted_v029_rows = before
     result["schema"] = "cmpct-v030-federated-selective-effort-v4"
     result["accepted_v029_schema_adapter"] = {
         "source_field": "accepted_v029_bytes",
         "compatibility_alias": "archive_bytes",
         "values_unchanged": True,
+        "workloads": 15,
+        "accepted_v029_aggregate_bytes": 137_499_525,
+        "authoritative_loader_restored": V1.GENERAL._accepted_v029_rows is before,
     }
     result["claim_boundary"] = (
         "research-only C25EG01 final-pack effort frontier using the authoritative accepted_v029_bytes values. "
