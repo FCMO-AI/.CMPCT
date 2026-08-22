@@ -22,10 +22,6 @@ import java.util.Map;
 /** Durable registry of CMPCT archives imported into app-private storage. */
 final class ArchiveRegistry {
     private static final String PREFS = "cmpct_archives";
-    private static final byte[] MAGIC_R24 = new byte[] {'C','M','P','C','T','2','4',0};
-    private static final byte[] MAGIC_R25_G04 = new byte[] {'C','M','P','2','5','G','4',0};
-    private static final byte[] MAGIC_R25_PREFIX = new byte[] {'C','M','P','2','5','P','G',0};
-    private static final int MAGIC_LENGTH = 8;
 
     static final class Record {
         final String id;
@@ -51,9 +47,6 @@ final class ArchiveRegistry {
             throw new IOException("SHA-256 is unavailable", impossible);
         }
 
-        byte[] first = new byte[MAGIC_LENGTH];
-        int firstUsed = 0;
-        long total = 0;
         try (InputStream raw = context.getContentResolver().openInputStream(uri)) {
             if (raw == null) throw new IOException("Android provider did not expose readable archive bytes");
             try (BufferedInputStream in = new BufferedInputStream(raw);
@@ -61,14 +54,8 @@ final class ArchiveRegistry {
                 byte[] buffer = new byte[256 * 1024];
                 int n;
                 while ((n = in.read(buffer)) != -1) {
-                    if (firstUsed < first.length) {
-                        int take = Math.min(n, first.length - firstUsed);
-                        System.arraycopy(buffer, 0, first, firstUsed, take);
-                        firstUsed += take;
-                    }
                     digest.update(buffer, 0, n);
                     out.write(buffer, 0, n);
-                    total += n;
                 }
                 out.getFD().sync();
             }
@@ -77,39 +64,32 @@ final class ArchiveRegistry {
             throw e;
         }
 
-        int expectedRevision = total < MAGIC_LENGTH ? 0 : releaseRevision(first);
-        if (expectedRevision == 0) {
+        // The shared portable reader is the single authority for canonical release identities. Keeping a Java
+        // magic whitelist here previously rejected a newly promoted canonical r25 profile (C25LG12) before JNI
+        // could dispatch it, and would require Android to duplicate every future canonical grammar addition.
+        // Authenticate the staged bytes *before* publication instead: only revision-24/25 archives that the
+        // production portable reader can completely verify are eligible to enter app-private storage.
+        try (CmpctNative.Archive archive = new CmpctNative.Archive(staging.getAbsolutePath())) {
+            int revision = archive.revision();
+            if (revision != 24 && revision != 25) {
+                throw new IOException(
+                        "Not a canonical CMPCT release archive (native reader reported revision " + revision + ")");
+            }
+            archive.verify();
+        } catch (IOException e) {
             staging.delete();
-            throw new IOException("Not a canonical CMPCT release archive (expected CMPCT24/CMP25 identity)");
+            throw e;
         }
 
         String id = hex(digest.digest());
         File destination = new File(directory, id + ".cmpct");
-        boolean created = false;
         if (!destination.exists()) {
             if (!staging.renameTo(destination)) {
                 staging.delete();
                 throw new IOException("Unable to commit imported CMPCT archive into app storage");
             }
-            created = true;
         } else {
             staging.delete();
-        }
-
-        try (CmpctNative.Archive archive = new CmpctNative.Archive(destination.getAbsolutePath())) {
-            int revision = archive.revision();
-            if (revision != expectedRevision) {
-                throw new IOException(
-                        "CMPCT release identity mismatch: magic expects revision "
-                                + expectedRevision + ", native reader reported " + revision);
-            }
-            archive.verify();
-        } catch (IOException e) {
-            // Footnote: never publish a DocumentsProvider root after magic/index-only validation. The shared
-            // native verifier must authenticate every complete regular member first; otherwise corrupted RAW
-            // payload bytes could survive import and fail later only when a user opens a document.
-            if (created) destination.delete();
-            throw e;
         }
 
         String name = displayName(context, uri);
@@ -151,19 +131,6 @@ final class ArchiveRegistry {
         return context.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
     }
 
-    private static int releaseRevision(byte[] actual) {
-        if (matchesMagic(actual, MAGIC_R24)) return 24;
-        if (matchesMagic(actual, MAGIC_R25_G04) || matchesMagic(actual, MAGIC_R25_PREFIX)) return 25;
-        return 0;
-    }
-
-    private static boolean matchesMagic(byte[] actual, byte[] expected) {
-        if (actual.length != expected.length) return false;
-        int diff = 0;
-        for (int i = 0; i < expected.length; i++) diff |= actual[i] ^ expected[i];
-        return diff == 0;
-    }
-
     private static String displayName(Context context, Uri uri) {
         try (Cursor c = context.getContentResolver().query(
                 uri, new String[] {OpenableColumns.DISPLAY_NAME}, null, null, null)) {
@@ -186,5 +153,6 @@ final class ArchiveRegistry {
     }
 }
 
-// Footnote: the rejection text names both release-family prefixes so old r24 Android regression tests retain a
-// stable diagnostic substring while canonical r25 becomes first-class. The diagnostic is not itself the parser.
+// Footnote: archive identity parsing intentionally lives only in cmpct-portable. Android copies provider bytes to
+// a private staging file, asks the production native reader to identify + strongly verify them, and atomically
+// publishes only after that succeeds. This keeps future canonical profiles from requiring a second Java parser.
