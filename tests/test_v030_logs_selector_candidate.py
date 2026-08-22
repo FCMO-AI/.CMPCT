@@ -94,7 +94,7 @@ def test_logs_admission_requires_every_measured_bound() -> None:
     assert CAND._admission(r24, mutated)[0] is False
 
 
-def test_non_sidecar_tree_delegates_to_shipping_product(monkeypatch, tmp_path: Path) -> None:
+def test_non_sidecar_tree_delegates_to_frozen_mature_product(monkeypatch, tmp_path: Path) -> None:
     source = tmp_path / "source"
     source.mkdir()
     (source / "plain.txt").write_text("plain\n" * 128, encoding="utf-8")
@@ -107,9 +107,12 @@ def test_non_sidecar_tree_delegates_to_shipping_product(monkeypatch, tmp_path: P
         archive.write_bytes(b"sentinel")
         return dict(sentinel)
 
-    monkeypatch.setattr(CAND.BASE, "build", fake_build)
+    # The promotion wrapper deliberately freezes the mature implementation before the public facade is rebound.
+    # Prove non-sidecar traffic delegates to that exact frozen callable rather than a mutable module attribute.
+    monkeypatch.setattr(CAND, "_BASE_BUILD", fake_build)
     result = CAND.build(source, out)
     assert len(calls) == 1
+    assert calls[0] == (source, out)
     assert result["selected"] == "sentinel"
     assert result["logs_terminal"] is False
     assert result["logs_terminal_prefilter"]["eligible"] is False
