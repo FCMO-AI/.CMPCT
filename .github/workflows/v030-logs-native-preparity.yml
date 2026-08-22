@@ -1,0 +1,68 @@
+# ci-lane: deep
+name: CMPCT v0.30 logs native preparity
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'experiments/entropygraph_v030_logs_inverse_profile*.py'
+      - 'benchmarks/v030_logs_inverse_edge_oracle.py'
+      - 'native/cmpct-portable/Cargo.toml'
+      - 'native/cmpct-portable/src/logs.rs'
+      - 'native/cmpct-portable/src/logs_preparity_tests.rs'
+      - 'native/cmpct-portable/src/identity.rs'
+      - '.github/workflows/v030-logs-native-preparity.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-v030-logs-native-preparity-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+
+jobs:
+  logs-native-preparity:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+
+      - name: Install deterministic Python dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y zstd
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[test]'
+
+      - name: Rust formatting and focused preparity tests
+        working-directory: native/cmpct-portable
+        run: |
+          cargo fmt --check
+          cargo test --lib logs -- --nocapture
+
+      - name: Prove production dispatch is still intentionally closed
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          identity=Path('native/cmpct-portable/src/identity.rs').read_text()
+          library=Path('native/cmpct-portable/src/lib.rs').read_text()
+          assert 'C25LG12' not in identity
+          assert 'LogsInverse' not in library
+          PY
+
+      - name: CI topology self-check
+        run: python tools/check_ci_topology.py .github/workflows/v030-logs-native-preparity.yml
+
+# This lane is intentionally pre-dispatch. It proves that the real Python logs writer can be consumed by the
+# bounded Rust parser/reader for the native-supported gzip+zstd inverse codecs, including exact logical SHA-256,
+# <=8x member-read amplification, <=8 MiB decode context and primary/tail recovery. It also fails if production
+# native dispatch is opened prematurely. Canonical selector, Android/JNI dispatch and release authority remain
+# separate blockers until the full profile surface is portable and evidence-bound.
