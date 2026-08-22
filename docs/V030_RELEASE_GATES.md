@@ -36,6 +36,10 @@ This checklist is normative for the authoritative integration branch. Research s
 ## Portability
 - [ ] Python reader/writer vectors
 - [ ] native/shared-reader parity for every new promoted transform/reference
+- [ ] logs inverse profile is admitted through production `cmpct-portable` dispatch, not a shadow parser
+- [ ] logs inverse native parity preserves gzip+Zstd inverse reconstruction, SHA-256 identity, <=8x locality, <=8 MiB decode units and primary/tail recovery
+- [ ] logs inverse public filesystem view preserves regular files, directories, symlinks and hardlinks without exposing internal manifest members
+- [ ] Android/JNI opens and verifies a canonical Python-generated logs inverse archive through the shared portable C ABI
 - [ ] deterministic builder-independent golden archives
 - [ ] ZIP/export parity and recovery semantics
 - [ ] malformed/fuzz corpus green
