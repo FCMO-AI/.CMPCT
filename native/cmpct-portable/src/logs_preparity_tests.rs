@@ -45,9 +45,10 @@ archive=root/'candidate.cmpct'
 stats=LOGS.build(src, archive)
 verified=LOGS.strong_verify(archive)
 assert verified['ok'] is True
-assert stats['inverse_edges'] >= 2, stats
-assert 'gzip.log.gz' in stats['inverse_edge_sources'], stats
-assert 'zstd.log.zst' in stats['inverse_edge_sources'], stats
+edges=stats['edge_detection']
+assert edges['inverse_edges'] >= 2, stats
+assert 'gzip.log.gz' in edges['inverse_edge_sources'], stats
+assert 'zstd.log.zst' in edges['inverse_edge_sources'], stats
 (root/'expected.tsv').write_text(''.join(
     f"{p.relative_to(src).as_posix()}\t{hashlib.sha256(p.read_bytes()).hexdigest()}\t{p.stat().st_size}\n"
     for p in sorted(src.rglob('*')) if p.is_file() and not p.is_symlink()
