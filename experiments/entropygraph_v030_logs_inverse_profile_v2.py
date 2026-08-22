@@ -11,6 +11,10 @@ The optional ``compressed_direct_paths`` hook exists for wrappers that add small
 control members such as the canonical filesystem manifest. The default is empty, preserving v2's exact historical
 product-boundary bytes. A compressed direct member is represented as ordinary ``pack`` storage so locality accounts
 for its decoded pack rather than pretending compressed storage is a raw range read.
+
+``allowed_inverse_codecs`` is a productization boundary, not a benchmark shortcut: edge discovery may observe
+additional standard sidecars, but the writer emits a derive edge only when the selected decoder is implemented by
+all required release readers. Unsupported relations remain ordinary directly stored/segmented logical files.
 """
 
 import hashlib
@@ -37,9 +41,25 @@ def build(
     archive: Path,
     *,
     compressed_direct_paths: set[str] | frozenset[str] | None = None,
+    allowed_inverse_codecs: set[str] | frozenset[str] | None = None,
 ) -> dict:
     compressed_direct_paths = frozenset(compressed_direct_paths or ())
+    allowed = None if allowed_inverse_codecs is None else frozenset(allowed_inverse_codecs)
     rows, edges, edge_stats = BASE._scan_and_edges(source)
+    if allowed is not None:
+        edges = {
+            target_index: edge
+            for target_index, edge in edges.items()
+            if edge[1] in allowed
+        }
+    edge_stats = dict(edge_stats)
+    edge_stats.update({
+        "inverse_edges": len(edges),
+        "inverse_edge_targets": [str(rows[index]["rel"]) for index in sorted(edges)],
+        "inverse_edge_sources": [str(rows[edges[index][0]]["rel"]) for index in sorted(edges)],
+        "inverse_edge_codecs": [str(edges[index][1]) for index in sorted(edges)],
+        "allowed_inverse_codecs": None if allowed is None else sorted(allowed),
+    })
     if not rows or len(rows) > P.MAX_FILES:
         raise RuntimeError("logs profile file-count bounds")
     segments, max_amp, max_unit = BASE._plan_segments(rows, edges)
