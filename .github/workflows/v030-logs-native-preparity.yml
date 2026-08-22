@@ -7,6 +7,7 @@ on:
     paths:
       - 'experiments/entropygraph_v030_logs_inverse_profile*.py'
       - 'benchmarks/v030_logs_inverse_edge_oracle.py'
+      - 'tests/test_v030_logs_inverse_native_safe.py'
       - 'native/cmpct-portable/Cargo.toml'
       - 'native/cmpct-portable/src/logs.rs'
       - 'native/cmpct-portable/src/logs_preparity_tests.rs'
@@ -42,6 +43,9 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -e '.[test]'
 
+      - name: Prove canonical writer emits only native-supported inverse codecs
+        run: python -m pytest -q tests/test_v030_logs_inverse_native_safe.py
+
       - name: Rust formatting and focused preparity tests
         working-directory: native/cmpct-portable
         run: |
@@ -61,8 +65,8 @@ jobs:
       - name: CI topology self-check
         run: python tools/check_ci_topology.py .github/workflows/v030-logs-native-preparity.yml
 
-# This lane is intentionally pre-dispatch. It proves that the real Python logs writer can be consumed by the
-# bounded Rust parser/reader for the native-supported gzip+zstd inverse codecs, including exact logical SHA-256,
-# <=8x member-read amplification, <=8 MiB decode context and primary/tail recovery. It also fails if production
-# native dispatch is opened prematurely. Canonical selector, Android/JNI dispatch and release authority remain
-# separate blockers until the full profile surface is portable and evidence-bound.
+# This lane is intentionally pre-dispatch. It proves that canonical logs v3 never emits a derive codec outside
+# the native-supported gzip+zstd set (XZ-only relations remain ordinary stored data), and that the real Python
+# writer can be consumed by the bounded Rust parser/reader with exact SHA-256, <=8x member-read amplification,
+# <=8 MiB decode context and primary/tail recovery. It also fails if production native dispatch is opened
+# prematurely. Canonical selector, Android/JNI dispatch and release authority remain separate blockers.
