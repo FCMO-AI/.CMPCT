@@ -69,6 +69,8 @@ jobs:
           assert gate['exact_workload_count'] is True
           assert gate['at_least_two_measured_admissions'] is True
           assert gate['dedicated_candidate_identity'] is True
+          assert gate['all_15_candidate_attempts_completed'] is True
+          assert d['summary']['candidate_error_rows']==[]
           assert gate['all_admitted_strictly_safe'] is True
           admitted=[row for row in d['rows'] if row['admitted']]
           assert len(admitted)>=2
@@ -88,6 +90,7 @@ jobs:
           if-no-files-found: warn
           retention-days: 90
 
-# This lane is intentionally stricter than an aggregate benchmark: one internally admitted row that loses any
-# frozen v0.29/ZIP/Zstd size or ZIP/Zstd creation comparison makes the entire gate red. It cannot authorize
-# C25EG01 selector/native/Android promotion; it only defines a falsifiable, benchmark-name-free admission envelope.
+# This lane is intentionally stricter than an aggregate benchmark: every candidate attempt must complete, and one
+# internally admitted row that loses any frozen v0.29/ZIP/Zstd size or ZIP/Zstd creation comparison makes the
+# entire gate red. It cannot authorize C25EG01 selector/native/Android promotion; it only defines a falsifiable,
+# benchmark-name-free admission envelope.
