@@ -138,7 +138,7 @@ impl<'a> LogsPublicView<'a> {
         // preparity honest about the exact public namespace that production dispatch will expose.
         for index in 0..self.public_entries.len() {
             let entry = self.manifest.entry(index)?;
-            if matches!(entry.kind, FsKind::File { .. } | FsKind::Hardlink { .. }) {
+            if matches!(&entry.kind, FsKind::File { .. } | FsKind::Hardlink { .. }) {
                 self.stream_member(index, std::io::sink())?;
             }
         }
