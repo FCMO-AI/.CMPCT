@@ -12,6 +12,7 @@ on:
       - 'native/cmpct-portable/src/logs.rs'
       - 'native/cmpct-portable/src/logs_public.rs'
       - 'native/cmpct-portable/src/logs_preparity_tests.rs'
+      - 'native/cmpct-portable/src/logs_semantic_tests.rs'
       - 'native/cmpct-portable/src/identity.rs'
       - '.github/workflows/v030-logs-native-preparity.yml'
   workflow_dispatch:
@@ -69,6 +70,6 @@ jobs:
 # This lane is intentionally pre-dispatch. It proves canonical logs v3 never emits a derive codec outside the
 # native-supported gzip+zstd set (XZ-only relations remain ordinary stored data), and that the real Python writer
 # can be consumed by the bounded Rust content reader plus canonical filesystem-manifest adapter with exact SHA-256,
-# <=8x member-read amplification, <=8 MiB decode context and primary/tail recovery. It also fails if production
-# native dispatch is opened prematurely. Canonical selector, Android/JNI dispatch and release authority remain
-# separate blockers.
+# <=8x member-read amplification, <=8 MiB decode context, regular/directory/symlink/hardlink semantics and
+# primary/tail recovery. It also fails if production native dispatch is opened prematurely. Canonical selector,
+# Android/JNI dispatch and release authority remain separate blockers.
