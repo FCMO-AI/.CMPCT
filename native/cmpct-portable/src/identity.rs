@@ -2,6 +2,9 @@
 #[path = "logs.rs"]
 mod logs;
 #[cfg(test)]
+#[path = "logs_public.rs"]
+mod logs_public;
+#[cfg(test)]
 #[path = "logs_preparity_tests.rs"]
 mod logs_preparity_tests;
 
@@ -61,4 +64,4 @@ pub(crate) fn classify(magic: &[u8; 8]) -> Option<R25Identity> {
 // decision changed the canonical eight-byte framing while retaining the measured G0-G4/PrefixGraph grammars;
 // keeping this table singular prevents research or pre-parity profile bytes from being silently described as
 // supported canonical revision 25 before native/Android dispatch is complete. The test-only logs modules above
-// compile and execute preparity/parser/recovery parity without admitting their magic to production dispatch.
+// compile and execute content, filesystem, parser and recovery parity without admitting their magic to dispatch.
