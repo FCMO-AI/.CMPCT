@@ -6,7 +6,9 @@ on:
     branches: [main]
     paths:
       - 'experiments/entropygraph_v030_logs_inverse_profile.py'
+      - 'experiments/entropygraph_v030_logs_inverse_profile_v2.py'
       - 'benchmarks/v030_logs_inverse_profile_productization.py'
+      - 'benchmarks/v030_logs_inverse_profile_productization_v2.py'
       - 'benchmarks/v030_logs_inverse_edge_oracle.py'
       - 'benchmarks/v030_external_competitors.py'
       - 'benchmarks/v030_release_generalization.py'
@@ -44,25 +46,30 @@ jobs:
         run: |
           python -m py_compile \
             experiments/entropygraph_v030_logs_inverse_profile.py \
-            benchmarks/v030_logs_inverse_profile_productization.py
-      - name: Run complete recoverable product-boundary proof
+            experiments/entropygraph_v030_logs_inverse_profile_v2.py \
+            benchmarks/v030_logs_inverse_profile_productization.py \
+            benchmarks/v030_logs_inverse_profile_productization_v2.py
+      - name: Run complete recoverable physical-locality product-boundary proof
         run: |
           mkdir -p benchmark-artifacts
-          python benchmarks/v030_logs_inverse_profile_productization.py \
-            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-logs-profile-product-work" \
-            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-logs-profile-product.json"
-      - name: Independently enforce recovery, locality and competitor contract
+          python benchmarks/v030_logs_inverse_profile_productization_v2.py \
+            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-logs-profile-product-v2-work" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-logs-profile-product-v2.json"
+      - name: Independently enforce recovery, physical locality and competitor contract
         run: |
           python - <<'PY'
           import json
           from pathlib import Path
-          d=json.loads(Path('benchmark-artifacts/v030-logs-profile-product.json').read_text())
-          assert d['schema']=='cmpct-v030-logs-inverse-profile-productization-v1'
+          d=json.loads(Path('benchmark-artifacts/v030-logs-profile-product-v2.json').read_text())
+          assert d['schema']=='cmpct-v030-logs-inverse-profile-productization-v2'
           assert d['claim_boundary'].startswith('recoverable bounded profile prototype')
+          assert d['physical_locality_writer'] is True
           assert d['accepted_v029_bytes']==3550609
           c=d['candidate']; g=d['gate']
           assert c['profile']=='cmpct-r25-logs-inverse-v1'
+          assert c['profile_writer_revision']==2
           assert c['level']==12
+          assert c['direct_sidecar_packs']==5
           assert c['payload_copies']==1
           assert c['recovery_control_copies']==2
           assert c['strong_verify']['ok'] is True
@@ -89,8 +96,8 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v6
         with:
-          name: v030-logs-inverse-profile-${{ github.sha }}
-          path: benchmark-artifacts/v030-logs-profile-product.json
+          name: v030-logs-inverse-profile-v2-${{ github.sha }}
+          path: benchmark-artifacts/v030-logs-profile-product-v2.json
           if-no-files-found: error
           retention-days: 90
 
