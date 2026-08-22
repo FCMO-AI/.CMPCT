@@ -10,6 +10,7 @@ on:
       - 'benchmarks/v030_release_generalization.py'
       - 'experiments/entropygraph_v030_logs_inverse_profile*.py'
       - 'experiments/entropygraph_v030_release_product.py'
+      - 'experiments/entropygraph_v030_release_product_logs_candidate.py'
       - 'src/cmpct/**'
       - '.github/workflows/v030-logs-terminal-admission.yml'
   workflow_dispatch:
@@ -46,38 +47,43 @@ jobs:
           python -m pip install -e '.[audio,test]'
           python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
 
-      - name: Compile terminal-admission proof
+      - name: Compile terminal ratchet
         run: python -m py_compile benchmarks/v030_logs_terminal_admission_oracle.py
 
-      - name: Run all-15 structural logs terminal-admission proof
+      - name: Run all-15 promoted logs terminal ratchet
         run: |
           mkdir -p benchmark-artifacts
           python benchmarks/v030_logs_terminal_admission_oracle.py \
             --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-logs-terminal-work" \
             --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-logs-terminal-admission.json"
 
-      - name: Independently enforce admission contract
+      - name: Independently enforce promoted shipping contract
         run: |
           python - <<'PY'
           import json
           from pathlib import Path
           d=json.loads(Path('benchmark-artifacts/v030-logs-terminal-admission.json').read_text())
-          assert d['schema']=='cmpct-v030-logs-terminal-admission-v1'
+          assert d['schema']=='cmpct-v030-logs-terminal-ratchet-v2'
           assert d['gate']['exact_workload_count'] is True
           assert d['gate']['at_least_one_structural_admission'] is True
-          assert d['gate']['all_admitted_strictly_safe'] is True
+          assert d['gate']['all_admitted_shipping_strictly_safe'] is True
           assert d['gate']['logs_workload_admitted'] is True
           assert d['gate']['no_candidate_errors'] is True
           admitted=[r for r in d['rows'] if r['admitted']]
           assert admitted
-          assert all(r['strict']['logs_beats_accepted_v029_size'] for r in admitted)
-          assert all(r['strict']['logs_smaller_than_current_product'] for r in admitted)
-          assert all(r['strict']['logs_beats_zip_size'] for r in admitted)
-          assert all(r['strict']['logs_beats_zstd19_size'] for r in admitted)
-          assert all(r['strict']['terminal_pair_beats_zip_create'] for r in admitted)
-          assert all(r['strict']['terminal_pair_beats_zstd19_create'] for r in admitted)
-          assert all(r['strict']['locality_le_8x'] for r in admitted)
-          assert all(r['strict']['decode_unit_le_8mib'] for r in admitted)
+          for r in admitted:
+              s=r['strict']
+              assert s['shipping_selects_logs_inverse'] is True
+              assert s['shipping_matches_independent_logs_bytes'] is True
+              assert s['shipping_matches_independent_logs_tree'] is True
+              assert s['shipping_beats_accepted_v029_size'] is True
+              assert s['shipping_beats_zip_size'] is True
+              assert s['shipping_beats_zstd19_size'] is True
+              assert s['shipping_beats_zip_create'] is True
+              assert s['shipping_beats_zstd19_create'] is True
+              assert s['shipping_locality_le_8x'] is True
+              assert s['shipping_decode_unit_le_8mib'] is True
+              assert s['passed'] is True
           assert d['gate']['passed'] is True
           PY
 
@@ -92,8 +98,7 @@ jobs:
           if-no-files-found: warn
           retention-days: 90
 
-# This lane is deliberately stricter than a benchmark-name shortcut. A source tree must first expose generic
-# .gz/.zst sibling relationships, then the real canonical candidates must prove enough inverse edges and a large
-# measured win over shipping r24. Every admitted frozen row is finally compared with accepted v0.29, the complete
-# current product, ZIP and Zstd. The workflow earns evidence for a future selector change; it cannot authorize
-# release itself.
+# Logs is already promoted behind a generic structural/measured selector. This lane therefore proves the shipping
+# path rather than comparing a candidate with itself: an admitted row must select logs-inverse, match an independently
+# built logs archive/tree, and strictly beat accepted v0.29, ZIP and Zstd in the relevant size/create dimensions while
+# retaining the immutable locality/decode ceilings. Ordinary all-15 release authority remains decisive.
