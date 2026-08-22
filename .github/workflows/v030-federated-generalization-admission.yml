@@ -63,18 +63,23 @@ jobs:
           import json
           from pathlib import Path
           d=json.loads(Path('benchmark-artifacts/v030-eg01-generalization.json').read_text())
-          assert d['schema']=='cmpct-v030-federated-eg01-generalization-admission-v1'
+          assert d['schema']=='cmpct-v030-federated-eg01-generalization-admission-v2'
           assert len(d['rows'])==15
           gate=d['gate']
           assert gate['exact_workload_count'] is True
           assert gate['at_least_two_measured_admissions'] is True
           assert gate['dedicated_candidate_identity'] is True
           assert gate['all_15_candidate_attempts_completed'] is True
+          assert gate['all_locality_rejections_fail_closed'] is True
           assert d['summary']['candidate_error_rows']==[]
+          rejected=[row for row in d['rows'] if row.get('candidate_rejected')]
+          assert all(row['admitted'] is False for row in rejected)
+          assert all(row['candidate_rejected']=='locality/decode-bound' for row in rejected)
           assert gate['all_admitted_strictly_safe'] is True
           admitted=[row for row in d['rows'] if row['admitted']]
           assert len(admitted)>=2
           assert all(row['external']['strict']['passed'] for row in admitted)
+          assert all(row['admission']['within_release_locality_bounds'] is True for row in admitted)
           assert all(row['admission']['max_member_read_amplification']<=8.0 for row in admitted)
           assert all(row['admission']['max_decode_unit_bytes']<=8*1024*1024 for row in admitted)
           assert gate['passed'] is True
@@ -90,7 +95,8 @@ jobs:
           if-no-files-found: warn
           retention-days: 90
 
-# This lane is intentionally stricter than an aggregate benchmark: every candidate attempt must complete, and one
-# internally admitted row that loses any frozen v0.29/ZIP/Zstd size or ZIP/Zstd creation comparison makes the
-# entire gate red. It cannot authorize C25EG01 selector/native/Android promotion; it only defines a falsifiable,
-# benchmark-name-free admission envelope.
+# This lane is intentionally stricter than an aggregate benchmark: every candidate attempt must complete. A
+# candidate that exceeds <=8x locality or <=8 MiB decode context is an explicit fail-closed non-admission, while
+# any other construction error still fails the lane. One admitted row that loses any frozen v0.29/ZIP/Zstd size
+# or ZIP/Zstd creation comparison makes the entire gate red. The lane cannot authorize selector/native/Android
+# promotion; it only defines a falsifiable benchmark-name-free admission envelope.
