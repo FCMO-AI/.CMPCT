@@ -81,7 +81,9 @@ fn python_writer_rust_reader_reconstructs_exact_zip_family() {
         !archive.tail_authenticated(),
         "CMP25Z2 remains preparity-only until its recovery envelope is wired into native production dispatch"
     );
-    archive.verify().expect("Rust strong ZIP-factor verification");
+    archive
+        .verify()
+        .expect("Rust strong ZIP-factor verification");
 
     let mut max_decode_unit = 0u64;
     for (rel, sha, size) in &expected {
