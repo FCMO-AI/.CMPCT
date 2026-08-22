@@ -2,17 +2,18 @@ from __future__ import annotations
 
 """All-15 structural/measured admission proof for the C25EG01 federated candidate.
 
-The office/analytics productization gate proves two high-value rows.  This harness asks the harder selector-design
+The office/analytics productization gate proves two high-value rows. This harness asks the harder selector-design
 question without changing production: if the dedicated candidate is cheaply attempted on every frozen workload,
 which rows earn a generic measured admission against the shipping r24 floor, and do *all* admitted rows still beat
 accepted v0.29, ZIP and solid Zstd-19 on complete size while beating ZIP and Zstd-19 on verified creation time?
 
-Admission never uses a benchmark name.  A candidate must save at least 1 MiB versus the genuine shipping r24
+Admission never uses a benchmark name. A candidate must save at least 1 MiB versus the genuine shipping r24
 artifact, be at most 90% of r24 bytes, strongly verify the canonical user tree, and satisfy <=8x / <=8 MiB locality.
-Only admitted rows pay repeated external-comparator timing.  A single admitted counterexample makes the gate red;
-aggregate wins cannot hide it.  Candidate construction must also complete on all 15 rows so an exception cannot
-silently turn a counterexample into an apparent non-admission.  This is selector research only: native/Android
-parity and ordinary release authority remain mandatory before C25EG01 can be dispatched by the shipping product.
+Only admitted rows pay repeated external-comparator timing. A single admitted counterexample makes the gate red;
+aggregate wins cannot hide it. Candidate construction must also complete on all 15 rows so an exception cannot
+silently turn a counterexample into an apparent non-admission. A deliberate fail-closed locality/decode rejection
+is recorded separately from an execution error and never counts as admission. This is selector research only:
+native/Android parity and ordinary release authority remain mandatory before C25EG01 can be dispatched.
 """
 
 import argparse
@@ -31,6 +32,10 @@ from experiments import entropygraph_v030_release_product_base as BASE
 MIN_SAVING_VS_R24_BYTES = 1024 * 1024
 MAX_CANDIDATE_TO_R24_RATIO = 0.90
 ROUNDS = 3
+_LOCALITY_REJECTIONS = (
+    "candidate physical pack exceeds 8 MiB decode ceiling",
+    "federated candidate locality/decode bounds",
+)
 
 
 def _r24(stage: Path, archive: Path) -> dict:
@@ -50,8 +55,6 @@ def _candidate(stage: Path, archive: Path) -> dict:
         raise RuntimeError("federated candidate did not strongly verify")
     if result["verified"]["canonical_user_tree_sha256"] != CAND._treehash(stage):
         raise RuntimeError("federated candidate canonical tree drift")
-    if not result["locality"]["within_release_bounds"]:
-        raise RuntimeError("federated candidate locality/decode bounds")
     return result
 
 
@@ -71,9 +74,11 @@ def _internal_admission(stage: Path, work: Path) -> tuple[bool, dict]:
     saving = r24_bytes - candidate_bytes
     ratio = candidate_bytes / max(1, r24_bytes)
     locality = candidate["locality"]
+    within_locality = bool(locality["within_release_bounds"])
     admitted = (
         saving >= MIN_SAVING_VS_R24_BYTES
         and ratio <= MAX_CANDIDATE_TO_R24_RATIO
+        and within_locality
         and float(locality["max_member_read_amplification"]) <= CAND.MAX_MEMBER_AMPLIFICATION
         and int(locality["max_decode_unit_bytes"]) <= CAND.MAX_DECODE_UNIT
     )
@@ -84,6 +89,7 @@ def _internal_admission(stage: Path, work: Path) -> tuple[bool, dict]:
         "r24_complete_create_s": r24_s,
         "saving_vs_r24_bytes": saving,
         "candidate_to_r24_ratio": ratio,
+        "within_release_locality_bounds": within_locality,
         "max_member_read_amplification": float(locality["max_member_read_amplification"]),
         "max_decode_unit_bytes": int(locality["max_decode_unit_bytes"]),
     }
@@ -109,6 +115,8 @@ def _external_strict(stage: Path, work: Path, accepted_v029_bytes: int) -> dict:
                 started = time.perf_counter()
                 result = _candidate(stage, archive)
                 elapsed = time.perf_counter() - started
+                if not result["locality"]["within_release_bounds"]:
+                    raise RuntimeError("admitted candidate lost locality bounds during repeated frontier")
                 if result["verified"]["canonical_user_tree_sha256"] != expected_user_tree:
                     raise RuntimeError("candidate tree drift during repeated frontier")
                 samples[name].append(elapsed)
@@ -155,6 +163,20 @@ def _one(label: str, source: Path, work: Path, accepted_v029_bytes: int) -> dict
         stage = EXT._normalized_stage(source, root / "normalized")
         try:
             admitted, admission = _internal_admission(stage, root / "admission")
+        except RuntimeError as exc:
+            message = str(exc)
+            if any(marker in message for marker in _LOCALITY_REJECTIONS):
+                return {
+                    "label": label,
+                    "admitted": False,
+                    "candidate_rejected": "locality/decode-bound",
+                    "rejection_detail": message,
+                }
+            return {
+                "label": label,
+                "admitted": False,
+                "candidate_error": f"RuntimeError: {message}",
+            }
         except Exception as exc:
             return {
                 "label": label,
@@ -211,6 +233,7 @@ def run(work_root: Path) -> dict:
                         "admitted": row["admitted"],
                         "admission": row.get("admission"),
                         "strict": row.get("external", {}).get("strict"),
+                        "candidate_rejected": row.get("candidate_rejected"),
                         "candidate_error": row.get("candidate_error"),
                     },
                     separators=(",", ":"),
@@ -220,17 +243,19 @@ def run(work_root: Path) -> dict:
 
     admitted = [row for row in rows if row["admitted"]]
     candidate_errors = [row for row in rows if "candidate_error" in row]
+    candidate_rejections = [row for row in rows if "candidate_rejected" in row]
     gate = {
         "exact_workload_count": len(rows) == 15,
         "at_least_two_measured_admissions": len(admitted) >= 2,
         "all_admitted_strictly_safe": bool(admitted)
         and all(row["external"]["strict"]["passed"] for row in admitted),
         "all_15_candidate_attempts_completed": not candidate_errors,
+        "all_locality_rejections_fail_closed": all(not row["admitted"] for row in candidate_rejections),
         "dedicated_candidate_identity": CAND.MAGIC != CAND.V25.MAG,
     }
     gate["passed"] = all(gate.values())
     return {
-        "schema": "cmpct-v030-federated-eg01-generalization-admission-v1",
+        "schema": "cmpct-v030-federated-eg01-generalization-admission-v2",
         "contract": {
             "workloads": 15,
             "internal_admission": {
@@ -241,11 +266,13 @@ def run(work_root: Path) -> dict:
                 "benchmark_name_dispatch": False,
             },
             "external_credit": "every admitted row must beat accepted v0.29 + ZIP + Zstd size and ZIP + Zstd verified creation time; ties fail",
+            "locality_rejection": "a completed candidate that violates <=8x or <=8 MiB is a fail-closed non-admission, never a passing row and never an execution error",
             "promotion_boundary": "selector research only; production Python/native/Android dispatch and ordinary release authority remain mandatory",
         },
         "rows": rows,
         "summary": {
             "admitted_rows": [row["label"] for row in admitted],
+            "candidate_rejected_rows": [row["label"] for row in candidate_rejections],
             "candidate_error_rows": [row["label"] for row in candidate_errors],
         },
         "gate": gate,
