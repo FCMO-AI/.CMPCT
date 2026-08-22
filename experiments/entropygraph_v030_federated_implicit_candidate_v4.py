@@ -58,12 +58,18 @@ def _engine(archive: Path, profile: Path | None = None):
 
 @contextmanager
 def _eg01_identity_bridge():
+    # EG01's locality walker treats FS.FILESYSTEM_MANIFEST as the hidden control member.  C25EG04 shortens that
+    # path inside the same already-reserved namespace, so temporarily bind the walker to the candidate path while
+    # holding the shared engine lock.  No shipping/global state can observe the temporary value.
     with _LOCK:
         old_magic, old_tail = EG01.MAGIC, EG01.TAIL_MAGIC
+        old_manifest = FS.FILESYSTEM_MANIFEST
         EG01.MAGIC, EG01.TAIL_MAGIC = MAGIC, TAIL_MAGIC
+        FS.FILESYSTEM_MANIFEST = INTERNAL_MANIFEST
         try:
             yield
         finally:
+            FS.FILESYSTEM_MANIFEST = old_manifest
             EG01.MAGIC, EG01.TAIL_MAGIC = old_magic, old_tail
 
 
