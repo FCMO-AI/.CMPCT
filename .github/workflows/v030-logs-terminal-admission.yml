@@ -70,6 +70,7 @@ jobs:
           assert d['gate']['no_candidate_errors'] is True
           admitted=[r for r in d['rows'] if r['admitted']]
           assert admitted
+          assert all(r['strict']['logs_beats_accepted_v029_size'] for r in admitted)
           assert all(r['strict']['logs_smaller_than_current_product'] for r in admitted)
           assert all(r['strict']['logs_beats_zip_size'] for r in admitted)
           assert all(r['strict']['logs_beats_zstd19_size'] for r in admitted)
@@ -93,5 +94,6 @@ jobs:
 
 # This lane is deliberately stricter than a benchmark-name shortcut. A source tree must first expose generic
 # .gz/.zst sibling relationships, then the real canonical candidates must prove enough inverse edges and a large
-# measured win over shipping r24. Every admitted frozen row is finally compared with the complete current product,
-# ZIP and Zstd. The workflow only earns evidence for a future selector change; it cannot authorize release itself.
+# measured win over shipping r24. Every admitted frozen row is finally compared with accepted v0.29, the complete
+# current product, ZIP and Zstd. The workflow earns evidence for a future selector change; it cannot authorize
+# release itself.
