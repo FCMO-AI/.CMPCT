@@ -5,6 +5,7 @@ use std::{
 };
 
 use cmpct_portable::zipfactor::ZipFactorArchive;
+use sha2::{Digest, Sha256};
 
 fn repo_root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -64,9 +65,8 @@ fn expected_rows(path: &Path) -> Vec<(String, String, u64)> {
 fn python_writer_rust_reader_reconstructs_exact_zip_family() {
     let temp = tempfile::tempdir().unwrap();
     python_fixture(temp.path());
-    let archive_bytes = fs::read(temp.path().join("candidate.cmpct")).unwrap();
-    let archive =
-        ZipFactorArchive::parse(&archive_bytes).expect("Rust must parse Python writer output");
+    let archive_path = temp.path().join("candidate.cmpct");
+    let archive = ZipFactorArchive::open(&archive_path).expect("Rust must open Python writer output");
     let expected = expected_rows(&temp.path().join("expected.tsv"));
     assert_eq!(archive.member_count(), expected.len());
     assert!(archive.max_read_amplification() <= 8.0);
@@ -81,7 +81,7 @@ fn python_writer_rust_reader_reconstructs_exact_zip_family() {
         let (raw, stats) = archive.read_member(index).unwrap();
         assert_eq!(raw.len() as u64, *size);
         assert!(stats.read_amplification <= 8.0);
-        let got = sha2::Digest::finalize(sha2::Sha256::new_with_prefix(&raw));
+        let got = Sha256::digest(&raw);
         assert_eq!(format!("{got:x}"), *sha);
     }
 }
@@ -91,15 +91,18 @@ fn zipfactor_preparity_rejects_corruption_and_remains_outside_production_dispatc
     let temp = tempfile::tempdir().unwrap();
     python_fixture(temp.path());
     let archive_path = temp.path().join("candidate.cmpct");
-    let mut raw = fs::read(&archive_path).unwrap();
-    let parsed = ZipFactorArchive::parse(&raw).unwrap();
+    let parsed = ZipFactorArchive::open(&archive_path).unwrap();
     let (_, stats) = parsed.read_member(0).unwrap();
     assert!(stats.read_amplification <= 8.0);
+    drop(parsed);
 
+    let mut raw = fs::read(&archive_path).unwrap();
     let middle = raw.len() / 2;
     raw[middle] ^= 0x5a;
+    let corrupted_path = temp.path().join("corrupted.cmpct");
+    fs::write(&corrupted_path, raw).unwrap();
     assert!(
-        ZipFactorArchive::parse(&raw)
+        ZipFactorArchive::open(&corrupted_path)
             .and_then(|archive| archive.verify_all().map(|_| archive))
             .is_err()
     );
