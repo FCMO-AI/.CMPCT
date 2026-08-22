@@ -1,0 +1,98 @@
+# ci-lane: deep
+name: CMPCT v0.30 logs inverse profile productization
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'experiments/entropygraph_v030_logs_inverse_profile.py'
+      - 'benchmarks/v030_logs_inverse_profile_productization.py'
+      - 'benchmarks/v030_logs_inverse_edge_oracle.py'
+      - 'benchmarks/v030_external_competitors.py'
+      - 'benchmarks/v030_release_generalization.py'
+      - '.github/workflows/v030-logs-inverse-profile-productization.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-v030-logs-inverse-profile-product-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+
+jobs:
+  logs-inverse-profile-product:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install exact corpus and competitor dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y zstd gcc ffmpeg libsndfile1
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[audio,test]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
+      - name: Compile profile and proof
+        run: |
+          python -m py_compile \
+            experiments/entropygraph_v030_logs_inverse_profile.py \
+            benchmarks/v030_logs_inverse_profile_productization.py
+      - name: Run complete recoverable product-boundary proof
+        run: |
+          mkdir -p benchmark-artifacts
+          python benchmarks/v030_logs_inverse_profile_productization.py \
+            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-logs-profile-product-work" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-logs-profile-product.json"
+      - name: Independently enforce recovery, locality and competitor contract
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          d=json.loads(Path('benchmark-artifacts/v030-logs-profile-product.json').read_text())
+          assert d['schema']=='cmpct-v030-logs-inverse-profile-productization-v1'
+          assert d['claim_boundary'].startswith('recoverable bounded profile prototype')
+          assert d['accepted_v029_bytes']==3550609
+          c=d['candidate']; g=d['gate']
+          assert c['profile']=='cmpct-r25-logs-inverse-v1'
+          assert c['level']==12
+          assert c['payload_copies']==1
+          assert c['recovery_control_copies']==2
+          assert c['strong_verify']['ok'] is True
+          assert c['strong_verify']['max_member_read_amplification'] <= 8.0
+          assert c['strong_verify']['max_decode_unit_bytes'] <= 8*1024*1024
+          assert c['recovery']['primary_damage']['recovery_route']=='tail'
+          assert c['recovery']['tail_damage']['recovery_route']=='primary'
+          assert c['recovery']['both_failed_closed'] is True
+          for key in (
+              'no_regression_vs_v029',
+              'strictly_smaller_than_zip','strictly_smaller_than_zstd19',
+              'strictly_faster_than_zip','strictly_faster_than_zstd19',
+              'strong_verify_green','tree_verified','locality_green',
+              'primary_recovers_from_tail','tail_recovers_from_primary',
+              'both_metadata_copies_fail_closed','single_payload_copy','two_control_copies',
+          ):
+              assert g[key] is True
+          assert g['passed'] is True
+          PY
+      - name: Public-surface guard
+        if: always()
+        run: python tools/check_public_surface.py
+      - name: Upload recoverable profile evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: v030-logs-inverse-profile-${{ github.sha }}
+          path: benchmark-artifacts/v030-logs-profile-product.json
+          if-no-files-found: error
+          retention-days: 90
+
+# This gate may establish a productizable Python profile, but it cannot authorize canonical selector/native/Android
+# dispatch. Those remain separate release obligations and the strict global release lock remains authoritative.
