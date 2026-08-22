@@ -56,6 +56,29 @@ def test_logs_v3_roundtrips_canonical_filesystem_semantics(tmp_path: Path) -> No
     assert stat.S_IMODE(os.stat(restored / "logs/a.log").st_mode) == 0o640
 
 
+def test_logs_v3_roundtrips_signed_pre_epoch_mtime(tmp_path: Path) -> None:
+    source = tmp_path / "source"
+    source.mkdir()
+    _source(source)
+    owner = source / "logs/a.log"
+    pre_epoch_ns = -1_000_000_000
+    try:
+        os.utime(owner, ns=(pre_epoch_ns, pre_epoch_ns))
+    except OSError:
+        pytest.skip("filesystem does not support pre-epoch nanosecond timestamps")
+    if owner.stat().st_mtime_ns >= 0:
+        pytest.skip("filesystem clamps pre-epoch timestamps")
+
+    archive = tmp_path / "pre-epoch.cmpct"
+    PROFILE.build(source, archive)
+    verified = PROFILE.strong_verify(archive)
+    assert verified["ok"] is True
+
+    restored = tmp_path / "restored"
+    PROFILE.extract(archive, restored)
+    assert (restored / "logs/a.log").stat().st_mtime_ns == owner.stat().st_mtime_ns
+
+
 def test_logs_v3_rejects_unsafe_symlink_on_restore(tmp_path: Path) -> None:
     source = tmp_path / "source"
     source.mkdir()
