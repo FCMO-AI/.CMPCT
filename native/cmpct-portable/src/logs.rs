@@ -1,9 +1,11 @@
-use crate::format::{as_array, bounded_zstd_decode, digest32, parse_msgpack, safe_relpath, sha256, text, uint};
+use crate::format::{
+    as_array, bounded_zstd_decode, digest32, parse_msgpack, safe_relpath, sha256, text, uint,
+};
 use crate::manifest::{FILESYSTEM_MANIFEST, FsKind, FsManifest};
 use crate::{MemberReadStats, PortableEntry, PortableError};
 use std::collections::{HashMap, HashSet};
 use std::fs::File;
-use std::io::{Cursor, Read, Seek, SeekFrom};
+use std::io::{Read, Seek, SeekFrom};
 use std::path::Path;
 use std::sync::Mutex;
 
@@ -58,9 +60,9 @@ struct PackDesc {
 
 /// Hidden pre-dispatch reader for the bounded recoverable logs inverse profile.
 ///
-/// The type is intentionally not wired into `PortableArchive` yet. It exists so Python-writer/Rust-reader
-/// parity, hostile parsing, recovery and locality can be proven before the profile is allowed into production
-/// identity/ABI/Android dispatch.
+/// This is public only so cross-language preparity can exercise the exact implementation. Production identity,
+/// ABI and Android dispatch deliberately do not recognize this profile until every native codec, hostile-input
+/// test and platform gate is complete.
 #[derive(Debug)]
 pub struct LogsInverseArchive {
     entries: Vec<PortableEntry>,
@@ -193,9 +195,15 @@ impl LogsInverseArchive {
         Ok(raw)
     }
 
-    fn decode_derived(&self, codec: &str, source: &[u8], expected_size: u64) -> Result<Vec<u8>, PortableError> {
-        // Zstd is the first native inverse codec because the profile's edge ranking prefers it. Gzip/XZ remain
-        // fail-closed until their bounded native decoders are added; this preparity surface cannot overclaim them.
+    fn decode_derived(
+        &self,
+        codec: &str,
+        source: &[u8],
+        expected_size: u64,
+    ) -> Result<Vec<u8>, PortableError> {
+        // Zstd is deliberately the first native inverse codec because the writer's deterministic edge ranking
+        // prefers it. Gzip/XZ remain fail-closed until bounded native decoders are added and tested; preparity
+        // must not silently claim coverage it does not have.
         if codec != "zstd" {
             return Err(PortableError::Unsupported(format!(
                 "logs inverse native codec preparity incomplete: {codec}"
@@ -231,18 +239,26 @@ impl LogsInverseArchive {
                     .checked_add(*length)
                     .ok_or_else(|| PortableError::Limit("logs inverse slice overflow".into()))?;
                 if *length != logical.size || end > raw.len() as u64 {
+                    active.remove(&index);
                     return Err(PortableError::Format("logs inverse slice bounds".into()));
                 }
-                let start = usize::try_from(*offset)
-                    .map_err(|_| PortableError::Limit("logs inverse slice offset does not fit host".into()))?;
-                let end = usize::try_from(end)
-                    .map_err(|_| PortableError::Limit("logs inverse slice end does not fit host".into()))?;
+                let start = usize::try_from(*offset).map_err(|_| {
+                    PortableError::Limit("logs inverse slice offset does not fit host".into())
+                })?;
+                let end = usize::try_from(end).map_err(|_| {
+                    PortableError::Limit("logs inverse slice end does not fit host".into())
+                })?;
                 let value = raw[start..end].to_vec();
-                let context = if *compressed { raw.len() as u64 } else { *length };
+                let context = if *compressed {
+                    raw.len() as u64
+                } else {
+                    *length
+                };
                 (value, context)
             }
             Storage::Derive { source, codec } => {
                 if *source == index {
+                    active.remove(&index);
                     return Err(PortableError::Format("logs inverse self dependency".into()));
                 }
                 let (source_raw, source_context) = self.restore_member(*source, cache, active)?;
@@ -254,6 +270,7 @@ impl LogsInverseArchive {
             }
         };
         if result.0.len() as u64 != logical.size || sha256(&result.0) != logical.sha256 {
+            active.remove(&index);
             return Err(PortableError::Integrity(
                 "logs inverse logical member identity mismatch".into(),
             ));
@@ -306,11 +323,10 @@ fn read_authenticated_metadata(
     file: &mut File,
     file_len: u64,
 ) -> Result<(Vec<u8>, u64, u64, &'static str), PortableError> {
-    let primary = read_primary_metadata(file);
-    if let Ok((meta, csize, packs)) = primary {
-        return Ok((meta, csize, packs, "primary"));
-    }
-    let primary_error = primary.err().expect("checked above");
+    let primary_error = match read_primary_metadata(file) {
+        Ok((meta, csize, packs)) => return Ok((meta, csize, packs, "primary")),
+        Err(error) => error,
+    };
     match read_tail_metadata(file, file_len) {
         Ok((meta, csize, packs)) => Ok((meta, csize, packs, "tail")),
         Err(tail_error) => Err(PortableError::Integrity(format!(
@@ -324,16 +340,21 @@ fn read_primary_metadata(file: &mut File) -> Result<(Vec<u8>, u64, u64), Portabl
     let mut header = [0u8; HEADER_SIZE as usize];
     file.read_exact(&mut header)?;
     if &header[..8] != MAGIC {
-        return Err(PortableError::Format("bad logs inverse primary magic".into()));
+        return Err(PortableError::Format(
+            "bad logs inverse primary magic".into(),
+        ));
     }
     let csize = le_u64(&header[8..16])?;
-    let usize = le_u64(&header[16..24])?;
+    let raw_size = le_u64(&header[16..24])?;
     let pack_count = u32::from_le_bytes(header[24..28].try_into().expect("fixed header")) as u64;
     let expected_sha: [u8; 32] = header[28..60].try_into().expect("fixed header");
-    read_metadata_body(file, csize, usize, pack_count, expected_sha)
+    read_metadata_body(file, csize, raw_size, pack_count, expected_sha)
 }
 
-fn read_tail_metadata(file: &mut File, file_len: u64) -> Result<(Vec<u8>, u64, u64), PortableError> {
+fn read_tail_metadata(
+    file: &mut File,
+    file_len: u64,
+) -> Result<(Vec<u8>, u64, u64), PortableError> {
     file.seek(SeekFrom::Start(file_len - FOOTER_SIZE))?;
     let mut footer = [0u8; FOOTER_SIZE as usize];
     file.read_exact(&mut footer)?;
@@ -341,26 +362,32 @@ fn read_tail_metadata(file: &mut File, file_len: u64) -> Result<(Vec<u8>, u64, u
         return Err(PortableError::Format("bad logs inverse tail magic".into()));
     }
     let csize = le_u64(&footer[8..16])?;
-    let usize = le_u64(&footer[16..24])?;
+    let raw_size = le_u64(&footer[16..24])?;
     let pack_count = u32::from_le_bytes(footer[24..28].try_into().expect("fixed footer")) as u64;
     let expected_sha: [u8; 32] = footer[28..60].try_into().expect("fixed footer");
-    if csize > MAX_META_COMP || usize > MAX_META_RAW || pack_count > MAX_PACKS {
-        return Err(PortableError::Limit("logs inverse tail metadata bounds".into()));
+    if csize > MAX_META_COMP || raw_size > MAX_META_RAW || pack_count > MAX_PACKS {
+        return Err(PortableError::Limit(
+            "logs inverse tail metadata bounds".into(),
+        ));
     }
     let offset = file_len
         .checked_sub(FOOTER_SIZE + csize)
         .ok_or_else(|| PortableError::Format("logs inverse tail metadata overlap".into()))?;
     if offset < HEADER_SIZE + csize {
-        return Err(PortableError::Format("logs inverse tail metadata overlaps primary".into()));
+        return Err(PortableError::Format(
+            "logs inverse tail metadata overlaps primary".into(),
+        ));
     }
     file.seek(SeekFrom::Start(offset))?;
     let size = usize::try_from(csize)
         .map_err(|_| PortableError::Limit("logs inverse metadata size does not fit host".into()))?;
     let mut comp = vec![0u8; size];
     file.read_exact(&mut comp)?;
-    let raw = bounded_zstd_decode(&comp, usize, MAX_META_RAW, None)?;
+    let raw = bounded_zstd_decode(&comp, raw_size, MAX_META_RAW, None)?;
     if sha256(&raw) != expected_sha {
-        return Err(PortableError::Integrity("logs inverse tail metadata SHA-256 mismatch".into()));
+        return Err(PortableError::Integrity(
+            "logs inverse tail metadata SHA-256 mismatch".into(),
+        ));
     }
     Ok((raw, csize, pack_count))
 }
@@ -368,20 +395,24 @@ fn read_tail_metadata(file: &mut File, file_len: u64) -> Result<(Vec<u8>, u64, u
 fn read_metadata_body(
     file: &mut File,
     csize: u64,
-    usize: u64,
+    raw_size: u64,
     pack_count: u64,
     expected_sha: [u8; 32],
 ) -> Result<(Vec<u8>, u64, u64), PortableError> {
-    if csize > MAX_META_COMP || usize > MAX_META_RAW || pack_count > MAX_PACKS {
-        return Err(PortableError::Limit("logs inverse primary metadata bounds".into()));
+    if csize > MAX_META_COMP || raw_size > MAX_META_RAW || pack_count > MAX_PACKS {
+        return Err(PortableError::Limit(
+            "logs inverse primary metadata bounds".into(),
+        ));
     }
     let size = usize::try_from(csize)
         .map_err(|_| PortableError::Limit("logs inverse metadata size does not fit host".into()))?;
     let mut comp = vec![0u8; size];
     file.read_exact(&mut comp)?;
-    let raw = bounded_zstd_decode(&comp, usize, MAX_META_RAW, None)?;
+    let raw = bounded_zstd_decode(&comp, raw_size, MAX_META_RAW, None)?;
     if sha256(&raw) != expected_sha {
-        return Err(PortableError::Integrity("logs inverse primary metadata SHA-256 mismatch".into()));
+        return Err(PortableError::Integrity(
+            "logs inverse primary metadata SHA-256 mismatch".into(),
+        ));
     }
     Ok((raw, csize, pack_count))
 }
@@ -393,11 +424,15 @@ fn parse_metadata(raw: &[u8]) -> Result<Vec<LogicalFile>, PortableError> {
         || text(&head[0], "logs inverse profile")? != PROFILE
         || uint(&head[1], "logs inverse level", LEVEL)? != LEVEL
     {
-        return Err(PortableError::Format("unsupported logs inverse metadata identity".into()));
+        return Err(PortableError::Format(
+            "unsupported logs inverse metadata identity".into(),
+        ));
     }
     let rows = as_array(&head[2], "logs inverse file table")?;
     if rows.is_empty() || rows.len() > MAX_FILES {
-        return Err(PortableError::Limit("logs inverse file count exceeds policy".into()));
+        return Err(PortableError::Limit(
+            "logs inverse file count exceeds policy".into(),
+        ));
     }
     let mut out = Vec::with_capacity(rows.len());
     let mut previous = String::new();
@@ -405,52 +440,91 @@ fn parse_metadata(raw: &[u8]) -> Result<Vec<LogicalFile>, PortableError> {
     for row_value in rows {
         let row = as_array(row_value, "logs inverse file row")?;
         if row.len() != 5 {
-            return Err(PortableError::Format("malformed logs inverse file row".into()));
+            return Err(PortableError::Format(
+                "malformed logs inverse file row".into(),
+            ));
         }
-        let prefix = usize::try_from(uint(&row[0], "logs inverse path prefix", MAX_PATH_BYTES as u64)?)
-            .map_err(|_| PortableError::Limit("logs inverse path prefix does not fit host".into()))?;
+        let prefix = usize::try_from(uint(
+            &row[0],
+            "logs inverse path prefix",
+            MAX_PATH_BYTES as u64,
+        )?)
+        .map_err(|_| PortableError::Limit("logs inverse path prefix does not fit host".into()))?;
         let suffix = text(&row[1], "logs inverse path suffix")?;
-        let previous_chars = previous.chars().count();
-        if prefix > previous_chars {
-            return Err(PortableError::Format("logs inverse path prefix exceeds previous path".into()));
+        if prefix > previous.len() || !previous.is_char_boundary(prefix) {
+            return Err(PortableError::Format(
+                "logs inverse path prefix exceeds UTF-8 byte boundary".into(),
+            ));
         }
-        let mut path = previous.chars().take(prefix).collect::<String>();
+        let mut path = previous[..prefix].to_owned();
         path.push_str(suffix);
         if path.len() > MAX_PATH_BYTES || !seen.insert(path.clone()) {
-            return Err(PortableError::Format("duplicate/oversized logs inverse path".into()));
+            return Err(PortableError::Format(
+                "duplicate/oversized logs inverse path".into(),
+            ));
         }
         safe_relpath(&path)?;
         let size = uint(&row[2], "logs inverse logical size", MAX_DECODE_UNIT)?;
         let expected_sha = digest32(&row[3], "logs inverse logical SHA-256")?;
         let storage_row = as_array(&row[4], "logs inverse storage")?;
         if storage_row.is_empty() {
-            return Err(PortableError::Format("empty logs inverse storage".into()));
+            return Err(PortableError::Format(
+                "empty logs inverse storage".into(),
+            ));
         }
         let kind = text(&storage_row[0], "logs inverse storage kind")?;
         let storage = match kind {
             "pack" | "raw" => {
                 if storage_row.len() != 4 {
-                    return Err(PortableError::Format("malformed logs inverse pack storage".into()));
+                    return Err(PortableError::Format(
+                        "malformed logs inverse pack storage".into(),
+                    ));
                 }
                 Storage::Pack {
                     compressed: kind == "pack",
-                    pack: usize::try_from(uint(&storage_row[1], "logs inverse pack id", MAX_PACKS - 1)?)
-                        .map_err(|_| PortableError::Limit("logs inverse pack id does not fit host".into()))?,
-                    offset: uint(&storage_row[2], "logs inverse pack offset", MAX_DECODE_UNIT)?,
-                    length: uint(&storage_row[3], "logs inverse pack length", MAX_DECODE_UNIT)?,
+                    pack: usize::try_from(uint(
+                        &storage_row[1],
+                        "logs inverse pack id",
+                        MAX_PACKS - 1,
+                    )?)
+                    .map_err(|_| {
+                        PortableError::Limit("logs inverse pack id does not fit host".into())
+                    })?,
+                    offset: uint(
+                        &storage_row[2],
+                        "logs inverse pack offset",
+                        MAX_DECODE_UNIT,
+                    )?,
+                    length: uint(
+                        &storage_row[3],
+                        "logs inverse pack length",
+                        MAX_DECODE_UNIT,
+                    )?,
                 }
             }
             "derive" => {
                 if storage_row.len() != 3 {
-                    return Err(PortableError::Format("malformed logs inverse derive storage".into()));
+                    return Err(PortableError::Format(
+                        "malformed logs inverse derive storage".into(),
+                    ));
                 }
                 Storage::Derive {
-                    source: usize::try_from(uint(&storage_row[1], "logs inverse source id", (MAX_FILES - 1) as u64)?)
-                        .map_err(|_| PortableError::Limit("logs inverse source id does not fit host".into()))?,
+                    source: usize::try_from(uint(
+                        &storage_row[1],
+                        "logs inverse source id",
+                        (MAX_FILES - 1) as u64,
+                    )?)
+                    .map_err(|_| {
+                        PortableError::Limit("logs inverse source id does not fit host".into())
+                    })?,
                     codec: text(&storage_row[2], "logs inverse derive codec")?.to_owned(),
                 }
             }
-            _ => return Err(PortableError::Format("unknown logs inverse storage kind".into())),
+            _ => {
+                return Err(PortableError::Format(
+                    "unknown logs inverse storage kind".into(),
+                ));
+            }
         };
         out.push(LogicalFile {
             path: path.clone(),
@@ -475,12 +549,17 @@ fn scan_packs(
         let mut header = [0u8; PACK_HEADER_SIZE as usize];
         file.read_exact(&mut header)?;
         let codec = header[0];
-        let usize = le_u64(&header[1..9])?;
+        let raw_size = le_u64(&header[1..9])?;
         let csize = le_u64(&header[9..17])?;
         let crc32 = u32::from_le_bytes(header[17..21].try_into().expect("fixed pack header"));
         let expected_sha: [u8; 32] = header[21..53].try_into().expect("fixed pack header");
-        if !matches!(codec, CODEC_RAW | CODEC_ZSTD) || usize > MAX_DECODE_UNIT || csize > MAX_DECODE_UNIT {
-            return Err(PortableError::Limit("logs inverse pack declaration exceeds policy".into()));
+        if !matches!(codec, CODEC_RAW | CODEC_ZSTD)
+            || raw_size > MAX_DECODE_UNIT
+            || csize > MAX_DECODE_UNIT
+        {
+            return Err(PortableError::Limit(
+                "logs inverse pack declaration exceeds policy".into(),
+            ));
         }
         let offset = file.stream_position()?;
         let end = offset
@@ -490,13 +569,15 @@ fn scan_packs(
             .checked_sub(FOOTER_SIZE + meta_csize)
             .ok_or_else(|| PortableError::Format("logs inverse tail metadata overlap".into()))?;
         if end > tail_meta_offset {
-            return Err(PortableError::Format("logs inverse pack overlaps tail metadata".into()));
+            return Err(PortableError::Format(
+                "logs inverse pack overlaps tail metadata".into(),
+            ));
         }
         file.seek(SeekFrom::Start(end))?;
         packs.push(PackDesc {
             offset,
             codec,
-            usize,
+            usize: raw_size,
             csize,
             crc32,
             sha256: expected_sha,
@@ -506,7 +587,9 @@ fn scan_packs(
         .checked_sub(FOOTER_SIZE + meta_csize)
         .ok_or_else(|| PortableError::Format("logs inverse tail metadata overlap".into()))?;
     if file.stream_position()? != expected_tail {
-        return Err(PortableError::Format("logs inverse pack table/tail boundary mismatch".into()));
+        return Err(PortableError::Format(
+            "logs inverse pack table/tail boundary mismatch".into(),
+        ));
     }
     Ok(packs)
 }
