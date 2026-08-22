@@ -52,8 +52,10 @@ fn logs_public_view_resolves_authenticated_hardlink_to_owner_bytes() {
     let temp = tempfile::tempdir().unwrap();
     python_hardlink_fixture(temp.path());
     let archive_path = temp.path().join("candidate.cmpct");
-    let archive = LogsInverseArchive::open(&archive_path).expect("Rust must open Python logs output");
-    let view = LogsPublicView::new(&archive).expect("Rust must parse canonical filesystem manifest");
+    let archive =
+        LogsInverseArchive::open(&archive_path).expect("Rust must open Python logs output");
+    let view =
+        LogsPublicView::new(&archive).expect("Rust must parse canonical filesystem manifest");
 
     let owner = view
         .entries()
