@@ -1,0 +1,97 @@
+# ci-lane: deep
+name: CMPCT v0.30 logs terminal admission
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'benchmarks/v030_logs_terminal_admission_oracle.py'
+      - 'benchmarks/v030_external_competitors.py'
+      - 'benchmarks/v030_release_generalization.py'
+      - 'experiments/entropygraph_v030_logs_inverse_profile*.py'
+      - 'experiments/entropygraph_v030_release_product.py'
+      - 'src/cmpct/**'
+      - '.github/workflows/v030-logs-terminal-admission.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-v030-logs-terminal-admission-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+
+jobs:
+  logs-terminal-admission:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+
+      - name: Install frozen-corpus and comparator dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y zstd gcc ffmpeg libsndfile1
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[audio,test]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
+
+      - name: Compile terminal-admission proof
+        run: python -m py_compile benchmarks/v030_logs_terminal_admission_oracle.py
+
+      - name: Run all-15 structural logs terminal-admission proof
+        run: |
+          mkdir -p benchmark-artifacts
+          python benchmarks/v030_logs_terminal_admission_oracle.py \
+            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-logs-terminal-work" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-logs-terminal-admission.json"
+
+      - name: Independently enforce admission contract
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          d=json.loads(Path('benchmark-artifacts/v030-logs-terminal-admission.json').read_text())
+          assert d['schema']=='cmpct-v030-logs-terminal-admission-v1'
+          assert d['gate']['exact_workload_count'] is True
+          assert d['gate']['at_least_one_structural_admission'] is True
+          assert d['gate']['all_admitted_strictly_safe'] is True
+          assert d['gate']['logs_workload_admitted'] is True
+          assert d['gate']['no_candidate_errors'] is True
+          admitted=[r for r in d['rows'] if r['admitted']]
+          assert admitted
+          assert all(r['strict']['logs_smaller_than_current_product'] for r in admitted)
+          assert all(r['strict']['logs_beats_zip_size'] for r in admitted)
+          assert all(r['strict']['logs_beats_zstd19_size'] for r in admitted)
+          assert all(r['strict']['terminal_pair_beats_zip_create'] for r in admitted)
+          assert all(r['strict']['terminal_pair_beats_zstd19_create'] for r in admitted)
+          assert all(r['strict']['locality_le_8x'] for r in admitted)
+          assert all(r['strict']['decode_unit_le_8mib'] for r in admitted)
+          assert d['gate']['passed'] is True
+          PY
+
+      - name: CI topology self-check
+        run: python tools/check_ci_topology.py .github/workflows/v030-logs-terminal-admission.yml
+
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: v030-logs-terminal-admission-${{ github.sha }}
+          path: benchmark-artifacts/v030-logs-terminal-admission.json
+          if-no-files-found: warn
+          retention-days: 90
+
+# This lane is deliberately stricter than a benchmark-name shortcut. A source tree must first expose generic
+# .gz/.zst sibling relationships, then the real canonical candidates must prove enough inverse edges and a large
+# measured win over shipping r24. Every admitted frozen row is finally compared with the complete current product,
+# ZIP and Zstd. The workflow only earns evidence for a future selector change; it cannot authorize release itself.
