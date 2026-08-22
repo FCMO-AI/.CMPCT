@@ -59,9 +59,17 @@ impl<'a> LogsPublicView<'a> {
                     "cannot read bytes from a logs inverse directory entry".into(),
                 ));
             }
-            FsKind::Symlink { .. } => {
-                return Err(PortableError::Unsupported(
-                    "cannot read bytes from a logs inverse symlink entry".into(),
+            FsKind::Symlink { target } => {
+                let raw = target.as_bytes().to_vec();
+                let size = raw.len() as u64;
+                return Ok((
+                    raw,
+                    MemberReadStats {
+                        logical_bytes: size,
+                        decoded_context_bytes: size,
+                        amplification: 1.0,
+                        profile: "logs-inverse-r25-preparity",
+                    },
                 ));
             }
         };
