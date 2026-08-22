@@ -1,0 +1,84 @@
+# ci-lane: deep
+name: CMPCT v0.30 federated candidate productization
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'experiments/entropygraph_v025.py'
+      - 'experiments/entropygraph_v030_federated_candidate.py'
+      - 'experiments/entropygraph_v030_product_fs.py'
+      - 'benchmarks/v030_federated_candidate_productization.py'
+      - 'benchmarks/neutral_hostile_corpus_v1.py'
+      - 'benchmarks/neutral_hostile_determinism_repair_v6.py'
+      - '.github/workflows/v030-federated-candidate-productization.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-v030-federated-productization-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+
+jobs:
+  office-analytics-productization:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install exact corpus and comparator dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y zstd gcc ffmpeg libsndfile1
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[audio,test]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
+      - name: Compile candidate and productization gate
+        run: |
+          python -m py_compile \
+            experiments/entropygraph_v030_federated_candidate.py \
+            benchmarks/v030_federated_candidate_productization.py
+      - name: Run dedicated-identity office/analytics productization gate
+        run: |
+          mkdir -p benchmark-artifacts
+          python benchmarks/v030_federated_candidate_productization.py \
+            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-eg01-productization-work" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-eg01-productization.json"
+      - name: Independently enforce evidence boundary
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          d=json.loads(Path('benchmark-artifacts/v030-eg01-productization.json').read_text())
+          assert d['schema']=='cmpct-v030-federated-eg01-productization-v1'
+          assert len(d['rows'])==2
+          assert d['gate']['dedicated_candidate_identity'] is True
+          assert d['gate']['all_locality_bounded'] is True
+          assert d['gate']['all_decode_units_bounded'] is True
+          assert d['gate']['all_two_way_recovery'] is True
+          assert d['gate']['all_four_way'] is True
+          assert all(row['strict']['four_way'] for row in d['rows'])
+          assert d['gate']['passed'] is True
+          PY
+      - name: CI topology self-check
+        run: python tools/check_ci_topology.py .github/workflows/v030-federated-candidate-productization.yml
+      - name: Upload productization evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: v030-federated-candidate-productization-${{ github.sha }}
+          path: benchmark-artifacts/v030-eg01-productization.json
+          if-no-files-found: warn
+          retention-days: 90
+
+# This lane cannot authorize release or selector/native/Android promotion. It exists to prove whether the
+# office/analytics level-1 EntropyGraph strength survives a distinct reader-visible identity, canonical filesystem
+# semantics, strong verification, two-way recovery and the frozen <=8x / <=8 MiB locality bounds.
