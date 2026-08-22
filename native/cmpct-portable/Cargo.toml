@@ -27,3 +27,6 @@ sha2 = "0.10"
 thiserror = "2"
 zstd = "0.13"
 zip = { version = "2", default-features = false, features = ["deflate"] }
+
+[dev-dependencies]
+tempfile = "3"
