@@ -63,7 +63,10 @@ print(stats)
         .env("PYTHONPATH", &repo)
         .status()
         .expect("python logs fixture builder must start");
-    assert!(status.success(), "python logs inverse fixture builder failed");
+    assert!(
+        status.success(),
+        "python logs inverse fixture builder failed"
+    );
 }
 
 fn expected_rows(path: &Path) -> Vec<(String, String, u64)> {
@@ -98,12 +101,15 @@ fn python_logs_writer_rust_reader_roundtrips_gzip_zstd_inverse_edges_and_localit
         crate::PortableArchive::open(&archive_path).is_err(),
         "logs inverse profile must remain outside production native dispatch until promotion is complete"
     );
-    let archive = LogsInverseArchive::open(&archive_path).expect("Rust must open Python logs output");
+    let archive =
+        LogsInverseArchive::open(&archive_path).expect("Rust must open Python logs output");
     let expected = expected_rows(&temp.path().join("expected.tsv"));
 
     assert!(archive.tail_authenticated());
     assert_eq!(archive.recovery_route(), "primary");
-    archive.verify().expect("Rust strong logs inverse verification");
+    archive
+        .verify()
+        .expect("Rust strong logs inverse verification");
 
     let mut max_context = 0u64;
     for (rel, sha, size) in &expected {
@@ -130,12 +136,29 @@ fn native_logs_public_view_uses_authenticated_filesystem_manifest() {
     python_fixture(temp.path());
     let archive_path = temp.path().join("candidate.cmpct");
     let archive = LogsInverseArchive::open(&archive_path).unwrap();
-    let view = LogsPublicView::new(&archive).expect("canonical filesystem manifest must parse in Rust");
+    let view =
+        LogsPublicView::new(&archive).expect("canonical filesystem manifest must parse in Rust");
 
-    assert!(view.entries().iter().all(|entry| !entry.path.starts_with(".__cmpct_r25_internal__/")));
-    let nested = view.entries().iter().position(|entry| entry.path == "nested").unwrap();
-    let link = view.entries().iter().position(|entry| entry.path == "zstd-link").unwrap();
-    let zstd = view.entries().iter().position(|entry| entry.path == "zstd.log").unwrap();
+    assert!(
+        view.entries()
+            .iter()
+            .all(|entry| !entry.path.starts_with(".__cmpct_r25_internal__/"))
+    );
+    let nested = view
+        .entries()
+        .iter()
+        .position(|entry| entry.path == "nested")
+        .unwrap();
+    let link = view
+        .entries()
+        .iter()
+        .position(|entry| entry.path == "zstd-link")
+        .unwrap();
+    let zstd = view
+        .entries()
+        .iter()
+        .position(|entry| entry.path == "zstd.log")
+        .unwrap();
     assert_eq!(view.entries()[nested].kind, 1);
     assert_eq!(view.entries()[link].kind, 2);
     assert_eq!(view.entries()[zstd].kind, 0);
@@ -158,17 +181,21 @@ fn native_logs_reader_recovers_either_metadata_copy_and_fails_when_both_are_dama
     primary[HEADER_SIZE + 3] ^= 0x5a;
     let primary_path = temp.path().join("primary-damaged.cmpct");
     fs::write(&primary_path, primary).unwrap();
-    let recovered = LogsInverseArchive::open(&primary_path).expect("tail must recover damaged primary");
+    let recovered =
+        LogsInverseArchive::open(&primary_path).expect("tail must recover damaged primary");
     assert_eq!(recovered.recovery_route(), "tail");
     recovered.verify().unwrap();
 
-    let tail_csize = le_u64(&original[original.len() - FOOTER_SIZE + 8..original.len() - FOOTER_SIZE + 16]) as usize;
+    let tail_csize =
+        le_u64(&original[original.len() - FOOTER_SIZE + 8..original.len() - FOOTER_SIZE + 16])
+            as usize;
     let tail_offset = original.len() - FOOTER_SIZE - tail_csize;
     let mut tail = original.clone();
     tail[tail_offset + 3] ^= 0xa5;
     let tail_path = temp.path().join("tail-damaged.cmpct");
     fs::write(&tail_path, tail).unwrap();
-    let primary_route = LogsInverseArchive::open(&tail_path).expect("primary must survive damaged tail");
+    let primary_route =
+        LogsInverseArchive::open(&tail_path).expect("primary must survive damaged tail");
     assert_eq!(primary_route.recovery_route(), "primary");
     primary_route.verify().unwrap();
 
