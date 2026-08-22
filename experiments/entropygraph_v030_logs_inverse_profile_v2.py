@@ -15,6 +15,11 @@ for its decoded pack rather than pretending compressed storage is a raw range re
 ``allowed_inverse_codecs`` is a productization boundary, not a benchmark shortcut: edge discovery may observe
 additional standard sidecars, but the writer emits a derive edge only when the selected decoder is implemented by
 all required release readers. Unsupported relations remain ordinary directly stored/segmented logical files.
+
+Whole-archive verify/extract uses one authenticated decode session. This is deliberately separate from
+``read_member``: selective reads retain the cold-cache operation boundary used by the frozen <=8x locality law,
+while archive-wide operations may legitimately reuse a pack or inverse dependency already decoded earlier in the
+same full-tree operation. Archive bytes and random-access semantics are unchanged.
 """
 
 import hashlib
@@ -26,14 +31,164 @@ import msgpack
 from benchmarks import v030_logs_inverse_edge_oracle as BASE
 from experiments import entropygraph_v030_logs_inverse_profile as P
 
-Archive = P.Archive
-extract = P.extract
-strong_verify = P.strong_verify
-recovery_probe = P.recovery_probe
 PROFILE = P.PROFILE
 LEVEL = P.LEVEL
 MAX_DECODE_UNIT = P.MAX_DECODE_UNIT
 MAX_MEMBER_AMPLIFICATION = P.MAX_MEMBER_AMPLIFICATION
+
+
+class Archive(P.Archive):
+    """v2 reader with cold selective reads and shared full-operation decode sessions."""
+
+    def _restore_session(
+        self,
+        item: int,
+        *,
+        member_cache: dict[int, tuple[bytes, int]],
+        pack_cache: dict[int, bytes],
+        active: set[int],
+    ) -> tuple[bytes, int]:
+        if item in member_cache:
+            return member_cache[item]
+        if item in active or item < 0 or item >= len(self.files):
+            raise RuntimeError("logs profile dependency error")
+        active.add(item)
+        try:
+            _prefix, _suffix, size, expected_sha, storage, _rel = self.files[item]
+            size = int(size)
+            kind = storage[0]
+            if kind in ("pack", "raw"):
+                pack_index, offset, length = map(int, storage[1:])
+                pack = pack_cache.get(pack_index)
+                if pack is None:
+                    pack = self._read_pack(pack_index)
+                    pack_cache[pack_index] = pack
+                if offset < 0 or length != size or offset + length > len(pack):
+                    raise RuntimeError("logs profile slice bounds")
+                value = pack[offset : offset + length]
+                # Context remains the cold selective-read context even though the full-tree operation reuses the
+                # authenticated pack. This preserves locality evidence while avoiding repeated decompression.
+                decoded_context = len(pack) if kind == "pack" else length
+            elif kind == "derive":
+                source_index = int(storage[1])
+                if source_index == item:
+                    raise RuntimeError("logs profile self dependency")
+                source, source_context = self._restore_session(
+                    source_index,
+                    member_cache=member_cache,
+                    pack_cache=pack_cache,
+                    active=active,
+                )
+                value = BASE._decode(storage[2], source)
+                decoded_context = source_context + len(value)
+            else:
+                raise RuntimeError("unknown logs profile storage")
+            if len(value) != size or hashlib.sha256(value).digest() != expected_sha:
+                raise RuntimeError("logs profile logical identity")
+            member_cache[item] = (value, decoded_context)
+            return member_cache[item]
+        finally:
+            active.discard(item)
+
+    def verify_all(self) -> dict:
+        max_amp = 1.0
+        max_context = 0
+        identities = []
+        member_cache: dict[int, tuple[bytes, int]] = {}
+        pack_cache: dict[int, bytes] = {}
+        active: set[int] = set()
+        for index, row in enumerate(self.files):
+            value, context = self._restore_session(
+                index,
+                member_cache=member_cache,
+                pack_cache=pack_cache,
+                active=active,
+            )
+            size = int(row[2])
+            amp = context / max(1, size)
+            if amp > P.MAX_MEMBER_AMPLIFICATION or context > P.MAX_DECODE_UNIT:
+                raise RuntimeError("logs profile locality violation")
+            max_amp = max(max_amp, amp)
+            max_context = max(max_context, context)
+            identities.append((row[5], size, hashlib.sha256(value).hexdigest()))
+        return {
+            "ok": True,
+            "files": len(self.files),
+            "identities": identities,
+            "recovery_route": self.recovery_route,
+            "max_member_read_amplification": max_amp,
+            "max_decode_unit_bytes": max_context,
+            "full_operation_unique_packs_decoded": len(pack_cache),
+            "full_operation_unique_members_restored": len(member_cache),
+        }
+
+    def extract(self, dst: Path) -> None:
+        dst.mkdir(parents=True, exist_ok=True)
+        member_cache: dict[int, tuple[bytes, int]] = {}
+        pack_cache: dict[int, bytes] = {}
+        active: set[int] = set()
+        root = dst.resolve()
+        for index, row in enumerate(self.files):
+            target = dst / row[5]
+            resolved = target.resolve()
+            if resolved != root and root not in resolved.parents:
+                raise RuntimeError("logs profile extraction traversal")
+            target.parent.mkdir(parents=True, exist_ok=True)
+            value, _context = self._restore_session(
+                index,
+                member_cache=member_cache,
+                pack_cache=pack_cache,
+                active=active,
+            )
+            target.write_bytes(value)
+
+
+def strong_verify(path: Path) -> dict:
+    with Archive(path) as archive:
+        return archive.verify_all()
+
+
+def extract(path: Path, dst: Path) -> None:
+    with Archive(path) as archive:
+        archive.extract(dst)
+
+
+def recovery_probe(path: Path) -> dict:
+    original = path.read_bytes()
+    results = {}
+    import tempfile
+
+    with tempfile.TemporaryDirectory(prefix="cmpct-v030-logs-recovery-") as td:
+        root = Path(td)
+        primary = root / "primary-damaged.cmpct"
+        raw = bytearray(original)
+        if len(raw) <= P.HEADER.size + 8:
+            raise RuntimeError("logs profile archive too short for recovery probe")
+        raw[P.HEADER.size + 3] ^= 0x5A
+        primary.write_bytes(raw)
+        results["primary_damage"] = strong_verify(primary)
+
+        tail = root / "tail-damaged.cmpct"
+        raw = bytearray(original)
+        footer = P.FOOTER.unpack(raw[-P.FOOTER.size:])
+        tail_csize = int(footer[1])
+        tail_meta_offset = len(raw) - P.FOOTER.size - tail_csize
+        raw[tail_meta_offset + 3] ^= 0xA5
+        tail.write_bytes(raw)
+        results["tail_damage"] = strong_verify(tail)
+
+        both = root / "both-damaged.cmpct"
+        raw = bytearray(original)
+        raw[P.HEADER.size + 3] ^= 0x5A
+        raw[tail_meta_offset + 3] ^= 0xA5
+        both.write_bytes(raw)
+        try:
+            strong_verify(both)
+            both_failed_closed = False
+        except Exception:
+            both_failed_closed = True
+        results["both_failed_closed"] = both_failed_closed
+    return results
 
 
 def build(
