@@ -10,9 +10,9 @@ inverse edges and beats the simultaneously-built shipping r24 candidate by both 
 
 For every admitted frozen workload this harness then requires:
 - canonical logs bytes/tree/strong verification are valid;
-- logs is strictly smaller than the current complete shipping product winner, so terminalization loses no bytes;
-- the complete prospective terminal boundary (parallel r24+logs construction plus mandatory logs verification)
-  is strictly smaller and faster than both deterministic ZIP/Deflate-9 and solid tar+Zstd-19;
+- logs is strictly smaller than the accepted v0.29 byte floor and the current complete shipping product winner;
+- the complete prospective terminal boundary (parallel r24+logs construction plus mandatory verification) is
+  strictly smaller and faster than both deterministic ZIP/Deflate-9 and solid tar+Zstd-19;
 - <=8x member-read amplification and <=8 MiB decode context remain intact.
 
 This is promotion evidence only.  It cannot change the selector or authorize release by itself.
@@ -117,19 +117,24 @@ def _admitted(r24: dict, logs: dict) -> tuple[bool, dict]:
     }
 
 
-def _one(label: str, source: Path, work: Path) -> dict:
+def _one(label: str, source: Path, work: Path, accepted_v029_bytes: int) -> dict:
     with tempfile.TemporaryDirectory(prefix="cmpct-v030-logs-terminal-", dir=work) as td:
         root = Path(td)
         stage = EXT._normalized_stage(source, root / "stage-root")
         prefilter = source_prefilter(stage)
-        row = {"label": label, "prefilter": prefilter, "admitted": False}
+        row = {
+            "label": label,
+            "prefilter": prefilter,
+            "accepted_v029_bytes": int(accepted_v029_bytes),
+            "admitted": False,
+        }
         if not prefilter["eligible"]:
             return row
 
         candidate_root = root / "candidates"
         candidate_root.mkdir()
         try:
-            r24, logs, pair_wall_s, _r24_path, logs_path = _parallel_candidates(stage, candidate_root)
+            r24, logs, pair_wall_s, _r24_path, _logs_path = _parallel_candidates(stage, candidate_root)
         except Exception as exc:
             row["candidate_error"] = f"{type(exc).__name__}: {exc}"
             return row
@@ -171,6 +176,7 @@ def _one(label: str, source: Path, work: Path) -> dict:
         zip_bytes = int(zip_result["archive_bytes"])
         zstd_bytes = int(zstd_result["archive_bytes"])
         strict = {
+            "logs_beats_accepted_v029_size": logs_bytes < int(accepted_v029_bytes),
             "logs_smaller_than_current_product": logs_bytes < int(full_path.stat().st_size),
             "logs_beats_zip_size": logs_bytes < zip_bytes,
             "logs_beats_zstd19_size": logs_bytes < zstd_bytes,
@@ -216,9 +222,15 @@ def run(work_root: Path) -> dict:
             repair.normalize_root(root)
         for workload in sorted(path for path in root.iterdir() if path.is_dir()):
             key = (suite, workload.name)
-            if EXT._tree(workload) != accepted[key]["tree_sha256"]:
+            expected = accepted[key]
+            if EXT._tree(workload) != expected["tree_sha256"]:
                 raise RuntimeError(f"source drift: {suite}/{workload.name}")
-            row = _one(f"{suite}/{workload.name}", workload, work_root)
+            row = _one(
+                f"{suite}/{workload.name}",
+                workload,
+                work_root,
+                int(expected["accepted_v029_bytes"]),
+            )
             row["suite"] = suite
             row["name"] = workload.name
             rows.append(row)
@@ -239,6 +251,7 @@ def run(work_root: Path) -> dict:
             "workloads": 15,
             "source_prefilter": f">={MIN_SIDECAR_PAIRS} .gz/.zst sibling sidecar pairs",
             "measured_admission": f">={MIN_INVERSE_EDGES} proven inverse edges, >={MIN_SAVING_BYTES} B saving vs r24, logs/r24 <= {MAX_LOGS_TO_R24_RATIO}",
+            "strict_size_floor": "logs must be strictly smaller than accepted v0.29, current product, ZIP and solid Zstd-19",
             "promotion_boundary": "evidence only; selector remains unchanged",
         },
         "rows": rows,
