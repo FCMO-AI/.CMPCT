@@ -16,7 +16,11 @@ fn repo_root() -> PathBuf {
 }
 
 fn python_fixture(root: &Path) {
+    // Build through the public fused writer boundary. The old preparity fixture reached into the deleted
+    // `_fused_scan` implementation detail, which made native authority fail before testing any Rust semantics.
+    // Expected identities are derived independently from the source ZIP bytes rather than from writer internals.
     let script = r#"
+import hashlib
 import sys
 from pathlib import Path
 from experiments import entropygraph_v030_zipfactor_fused as ZFF
@@ -26,12 +30,13 @@ root=Path(sys.argv[1])
 src=root/'src'
 src.mkdir(parents=True)
 ADMIT._unseen_family(src, count=5)
-product=ZFF._fused_scan(src)
-payload, stats=ZFF._build_archive(product, level=3)
-(root/'candidate.cmpct').write_bytes(payload)
-(root/'expected.tsv').write_text(''.join(
-    f"{entry.rel}\t{entry.sha256}\t{entry.size}\n" for entry in product.entries
-), encoding='utf-8')
+out=root/'candidate.cmpct'
+stats=ZFF.build(src, out, level=3)
+rows=[]
+for path in sorted(p for p in src.rglob('*') if p.is_file()):
+    raw=path.read_bytes()
+    rows.append(f"{path.relative_to(src).as_posix()}\t{hashlib.sha256(raw).hexdigest()}\t{len(raw)}\n")
+(root/'expected.tsv').write_text(''.join(rows), encoding='utf-8')
 print(stats)
 "#;
     let repo = repo_root();
