@@ -1,6 +1,9 @@
 #[cfg(test)]
 #[path = "logs.rs"]
 mod logs;
+#[cfg(test)]
+#[path = "logs_preparity_tests.rs"]
+mod logs_preparity_tests;
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub(crate) enum R25Identity {
@@ -57,5 +60,5 @@ pub(crate) fn classify(magic: &[u8; 8]) -> Option<R25Identity> {
 // Footnote: profile identity is isolated from reconstruction semantics on purpose. T03's productization
 // decision changed the canonical eight-byte framing while retaining the measured G0-G4/PrefixGraph grammars;
 // keeping this table singular prevents research or pre-parity profile bytes from being silently described as
-// supported canonical revision 25 before native/Android dispatch is complete. The test-only logs module above
-// compiles the preparity implementation under Rust unit/Clippy targets without admitting its magic to dispatch.
+// supported canonical revision 25 before native/Android dispatch is complete. The test-only logs modules above
+// compile and execute preparity/parser/recovery parity without admitting their magic to production dispatch.
