@@ -66,7 +66,8 @@ fn python_writer_rust_reader_reconstructs_exact_zip_family() {
     let temp = tempfile::tempdir().unwrap();
     python_fixture(temp.path());
     let archive_path = temp.path().join("candidate.cmpct");
-    let archive = ZipFactorArchive::open(&archive_path).expect("Rust must open Python writer output");
+    let archive =
+        ZipFactorArchive::open(&archive_path).expect("Rust must open Python writer output");
     let expected = expected_rows(&temp.path().join("expected.tsv"));
     assert_eq!(archive.member_count(), expected.len());
     assert!(archive.max_read_amplification() <= 8.0);
