@@ -3,10 +3,16 @@ name: CMPCT v0.29 Zstd category frontier
 
 on:
   pull_request:
+    branches: [main]
     paths:
       - "src/**"
+      - "experiments/entropygraph_v029_residual_strict.py"
       - "native/preflate-bridge/**"
-      - "benchmarks/**"
+      - "benchmarks/mosaic_v029_generalization_bench.py"
+      - "benchmarks/entropygraph_v028_bench.py"
+      - "benchmarks/neutral_hostile_determinism_repair_v5.py"
+      - "benchmarks/history/2026-08-16-entropygraph-v028.json"
+      - "benchmarks/history/2026-08-17-neutral-hostile-determinism-repair-v5.json"
       - "pyproject.toml"
       - ".github/workflows/mosaic-v029-category-frontier.yml"
   workflow_dispatch:
@@ -99,9 +105,12 @@ jobs:
       - name: Public-surface guard
         run: python tools/check_public_surface.py
 
+      - name: CI topology self-check
+        run: python tools/check_ci_topology.py .github/workflows/mosaic-v029-category-frontier.yml
+
       - name: Upload category evidence
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: cmpct-v029-zstd-category-${{ github.sha }}
           path: |
@@ -109,6 +118,9 @@ jobs:
             benchmark-artifacts/mosaic-v029-category-summary.json
             benchmark-artifacts/mosaic-v029-category.stdout.txt
           if-no-files-found: warn
+          retention-days: 30
 
 # Footnote: this workflow generates evidence only; it does not alter accepted v0.29 archive bytes.
-# Category claims are current exact-tree size comparisons and retain every Zstd loss.
+# Category claims are current exact-tree size comparisons and retain every Zstd loss. The historical frontier
+# now tracks the exact benchmark/engine/history files it consumes instead of every file under benchmarks/**,
+# so new v0.30 release harnesses cannot wake a 75-minute v0.29 research measurement by accident.

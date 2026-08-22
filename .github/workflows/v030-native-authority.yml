@@ -1,0 +1,79 @@
+name: CMPCT v0.30 native authority
+# ci-lane: release
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'native/cmpct-portable/**'
+      - 'native/cmpct-core/**'
+      - 'experiments/entropygraph_v030_canonical_final.py'
+      - 'experiments/entropygraph_v030_canonical_final_impl.py'
+      - 'experiments/entropygraph_v030_profile_isolation.py'
+      - 'experiments/entropygraph_v030_release_product.py'
+      - 'tests/test_v030_canonical_final.py'
+      - 'tests/test_v030_profile_isolation.py'
+      - 'tests/generate_v030_canonical_goldens.py'
+      - 'tests/conformance/v030-r25-canonical.json'
+      - 'tests/native_v030_canonical.py'
+      - 'tests/native_v030_r24_verify_authority.py'
+      - '.github/workflows/v030-native-authority.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-v030-native-authority-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  native-authority:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install deterministic Python dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y zstd
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[test]'
+      - name: Python canonical boundary and profile-isolation tests
+        run: |
+          python -m pytest -q \
+            tests/test_v030_canonical_final.py \
+            tests/test_v030_profile_isolation.py
+      - name: Reproduce independent canonical r25 golden bytes
+        run: python tests/generate_v030_canonical_goldens.py --check
+      - name: Rust format
+        working-directory: native/cmpct-portable
+        run: cargo fmt --check
+      - name: Rust lint
+        working-directory: native/cmpct-portable
+        run: cargo clippy --all-targets --message-format=short -- -D warnings
+      - name: Rust hostile/parser/native tests
+        working-directory: native/cmpct-portable
+        run: cargo test --all-targets
+      - name: Rust release build
+        working-directory: native/cmpct-portable
+        run: cargo build --release
+      - name: Canonical CMP25 CLI ABI recovery and filesystem acceptance
+        run: python tests/native_v030_canonical.py
+      - name: Prove complete r24 RAW verification and truthful locality surface
+        run: |
+          python tests/native_v030_r24_verify_authority.py \
+            --binary native/cmpct-portable/target/release/cmpct-portable
+      - name: CI topology self-check
+        run: python tools/check_ci_topology.py .github/workflows/v030-native-authority.yml
+
+# Footnote: this lane is release-scoped because it validates the shared native reader that can open every
+# representation the v0.30 selector may publish. Builder-independent CMP25 bytes are regenerated from primitive
+# framing, then consumed by both the CLI and C ABI; self-generated writer/reader agreement is not sufficient.
+# The wrapper, preserved implementation body and namespace-isolation loader are all trigger paths because any of
+# them can change the exact canonical bytes/dispatch contract native code is required to match.

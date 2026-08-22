@@ -1,0 +1,245 @@
+# ci-lane: release
+name: CMPCT v0.30 authoritative PR gates
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'experiments/entropygraph_v030_*.py'
+      - 'experiments/entropygraph_v029_parallel_portfolio.py'
+      - 'tests/test_v030_*.py'
+      - 'tests/test_v029_parallel_portfolio.py'
+      - 'benchmarks/v030_*.py'
+      - '.github/workflows/v030-*.yml'
+      - 'docs/V030_*.md'
+      - 'docs/V030_*.json'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-v030-authoritative-pr-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+
+jobs:
+  reader-fuzz:
+    name: reader-fuzz
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y zstd gcc
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[test]'
+      - name: Compile promoted reader surface
+        run: |
+          python -m py_compile \
+            experiments/entropygraph_v030_release_reader.py \
+            experiments/entropygraph_v030_release_reader_policy.py \
+            experiments/entropygraph_v030_member_reader.py \
+            experiments/entropygraph_v030_release_candidate.py \
+            experiments/entropygraph_v030_release.py \
+            experiments/entropygraph_v030_release_product.py
+      - name: Run reader, locality, recovery and deterministic mutation gates
+        run: |
+          python -m pytest -q \
+            tests/test_v030_release_reader.py \
+            tests/test_v030_release_reader_policy.py \
+            tests/test_v030_member_reader.py \
+            tests/test_v030_release_fuzz.py \
+            tests/test_v030_release_candidate.py
+      - name: Public-surface guard
+        if: always()
+        run: python tools/check_public_surface.py
+
+  shared-rehab:
+    name: shared-rehab
+    runs-on: ubuntu-latest
+    timeout-minutes: 210
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install workload dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y zstd gcc
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[test]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
+      - name: Prove byte identity before timing
+        run: |
+          python -m pytest -q \
+            tests/test_v029_parallel_portfolio.py \
+            tests/test_v030_g04_publish.py \
+            tests/test_v030_shared_portfolio.py
+      - name: Run frozen shared-build rehabilitation
+        run: |
+          mkdir -p benchmark-artifacts
+          python benchmarks/v030_shared_portfolio_rehab.py \
+            --work-root benchmark-artifacts/shared-work \
+            --output benchmark-artifacts/shared-rehab.json
+      - name: Enforce frozen rehabilitation contract
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          data=json.loads(Path('benchmark-artifacts/shared-rehab.json').read_text())
+          contract=data['contract']; gate=data['gate']
+          assert contract['minimum_wallclock_improvement_pct']==20.0
+          assert contract['minimum_absolute_improvement_s']==5.0
+          assert contract['attempt5_graph_build_count']==1
+          assert gate['all_byte_identical'] is True
+          assert gate['all_single_attempt5_build'] is True
+          assert gate['every_pair_pass'] is True
+          assert gate['median_pass'] is True
+          assert gate['passed'] is True
+          PY
+      - name: Upload rehabilitation evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: v030-pr-shared-rehab-${{ github.sha }}
+          path: benchmark-artifacts/shared-rehab.json
+          if-no-files-found: warn
+          retention-days: 90
+
+  generalization:
+    name: generalization
+    runs-on: ubuntu-latest
+    timeout-minutes: 330
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install corpus dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y zstd gcc ffmpeg
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[test,audio]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
+      - name: Pin release contract before expensive run
+        run: |
+          python -m pytest -q \
+            tests/test_v030_release_generalization_contract.py \
+            tests/test_v030_shared_portfolio.py \
+            tests/test_v030_release_candidate.py
+      - name: Run authoritative 15-workload gate
+        run: |
+          mkdir -p benchmark-artifacts
+          python benchmarks/v030_release_generalization_authoritative.py \
+            --work-root benchmark-artifacts/generalization-work \
+            --output benchmark-artifacts/generalization.json
+      - name: Enforce immutable release-worthiness contract
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          data=json.loads(Path('benchmark-artifacts/generalization.json').read_text())
+          contract=data['contract']; totals=data['totals']; gate=data['gate']
+          assert data['engine']=='experiments/entropygraph_v030_release.py'
+          assert contract['expected_v029_aggregate_bytes']==137499525
+          assert contract['minimum_release_saving_bytes']==687783
+          assert contract['inherited_absolute_revision_floor_bytes']==687783
+          assert totals['workloads']==15
+          assert totals['workloads_regressed']==0
+          assert totals['workloads_improved']>=3
+          assert totals['saving_vs_v029_bytes']>=687783
+          assert totals['max_selected_member_read_amplification']<=8.0
+          assert gate['passed'] is True
+          PY
+      - name: Upload generalization evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: v030-pr-generalization-${{ github.sha }}
+          path: benchmark-artifacts/generalization.json
+          if-no-files-found: warn
+          retention-days: 90
+
+  runtime:
+    name: runtime
+    runs-on: ubuntu-latest
+    timeout-minutes: 390
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install runtime benchmark dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y zstd gcc ffmpeg
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[test,audio]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
+      - name: Run runtime prerequisites
+        run: |
+          python -m pytest -q \
+            tests/test_v030_shared_portfolio.py \
+            tests/test_v030_release_reader.py \
+            tests/test_v030_release_reader_policy.py \
+            tests/test_v030_member_reader.py \
+            tests/test_v030_release_candidate.py
+      - name: Run fresh-process paired v0.29/promoted-v0.30 runtime gate
+        run: |
+          mkdir -p benchmark-artifacts
+          python benchmarks/v030_release_performance_v2.py \
+            --work-root benchmark-artifacts/runtime-work \
+            --output benchmark-artifacts/runtime.json
+      - name: Enforce frozen runtime policy
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          data=json.loads(Path('benchmark-artifacts/runtime.json').read_text())
+          contract=data['contract']; totals=data['totals']; gate=data['gate']
+          assert data['engine']=='experiments/entropygraph_v030_release_product.py'
+          assert data['release_facade']=='cmpct-v030-release-product-v1'
+          assert contract['maximum_median_create_ratio']==1.10
+          assert contract['maximum_workload_create_ratio']==1.25
+          assert contract['maximum_median_extract_ratio']==1.10
+          assert contract['maximum_workload_extract_ratio']==1.25
+          assert contract['maximum_peak_rss_ratio']==1.25
+          assert totals['median_create_ratio']<=1.10
+          assert totals['max_workload_create_ratio']<=1.25
+          assert totals['median_extract_ratio']<=1.10
+          assert totals['max_workload_extract_ratio']<=1.25
+          assert totals['max_peak_rss_ratio']<=1.25
+          assert gate['passed'] is True
+          PY
+      - name: Upload runtime evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: v030-pr-runtime-${{ github.sha }}
+          path: benchmark-artifacts/runtime.json
+          if-no-files-found: warn
+          retention-days: 90
+
+# Footnote: the dedicated `v030-g04-overlay-oracle.yml` keeps the frozen exact-ML G0-G4 research breakthrough
+# target intact. It is deliberately not duplicated as a release-PR blocker because v0.30 release authority is
+# governed by complete-product generalization/runtime/native/platform/competitor receipts, not by the separate
+# >=256 KiB mechanism-research target. No oracle threshold was changed or marked green by this routing cleanup.
+# The generalization job remains historical mechanism-causality evidence. Runtime is bound to the promoted
+# canonical product and the exact same frozen ratio/RSS thresholds, with correctness tree scans outside the codec
+# operation timer. A red product runtime remains a release blocker, and the PR remains merge-locked until the full
+# evidence ledger closes.

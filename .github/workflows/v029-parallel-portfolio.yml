@@ -1,11 +1,24 @@
+# ci-lane: deep
 name: CMPCT v0.29 byte-identical parallel portfolio
 
 on:
   pull_request:
+    branches: [main]
+    paths:
+      - 'experiments/entropygraph_v029_parallel_portfolio.py'
+      - 'experiments/entropygraph_v029_residual_program_packing.py'
+      - 'benchmarks/resemblance_hostile_corpus_v1.py'
+      - 'tests/test_v029_parallel_portfolio.py'
+      - 'native/preflate-bridge/**'
+      - '.github/workflows/v029-parallel-portfolio.yml'
   workflow_dispatch:
 
 permissions:
   contents: read
+
+concurrency:
+  group: cmpct-v029-parallel-portfolio-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 jobs:
   parallel-portfolio-oracle:
@@ -105,6 +118,9 @@ jobs:
       - name: Public-surface guard
         run: python tools/check_public_surface.py
 
+      - name: CI topology self-check
+        run: python tools/check_ci_topology.py .github/workflows/v029-parallel-portfolio.yml
+
       - name: Summarize scheduler result
         run: |
           python - <<'PY' >> "$GITHUB_STEP_SUMMARY"
@@ -127,9 +143,15 @@ jobs:
           PY
 
       - name: Upload scheduler evidence
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: cmpct-v029-parallel-portfolio-${{ github.sha }}
           path: |
             benchmark-artifacts/mosaic-v029-parallel-portfolio.json
             benchmark-artifacts/mosaic-v029-parallel-portfolio.stdout.txt
+          if-no-files-found: warn
+          retention-days: 30
+
+# Footnote: this scheduling oracle remains mandatory when its scheduler/accepted-engine substrate changes because
+# v0.30 inherits the same zero-copy publication primitive. It no longer runs for unrelated r25/docs/site changes,
+# which preserves the evidence while returning runner capacity to current release work.

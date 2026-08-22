@@ -1,0 +1,113 @@
+# ci-lane: release
+name: CMPCT v0.30 external competitor frontier
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'experiments/entropygraph_v030_*.py'
+      - 'benchmarks/v030_external_competitors.py'
+      - 'benchmarks/v030_external_competitors_canonical.py'
+      - '.github/workflows/v030-external-competitors.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-v030-external-frontier-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+
+jobs:
+  external-frontier:
+    runs-on: ubuntu-latest
+    timeout-minutes: 480
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+
+      - name: Install CMPCT, frozen-corpus media tools and external compressors
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y zstd p7zip-full zpaq gcc ffmpeg
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[test,audio]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
+          zstd --version
+          ffmpeg -version | head -n 1
+          (7z i | head -n 4) || true
+          zpaq 2>&1 | head -n 4 || true
+
+      - name: Compile release product and matrix
+        run: |
+          python -m py_compile \
+            experiments/entropygraph_v030_release_product.py \
+            experiments/entropygraph_v030_release_admission.py \
+            benchmarks/v030_external_competitors.py \
+            benchmarks/v030_external_competitors_canonical.py
+
+      - name: Run exact repaired 15-workload competitor matrix
+        run: |
+          mkdir -p benchmark-artifacts
+          python benchmarks/v030_external_competitors_canonical.py \
+            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-external-work" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-external-competitors.json"
+
+      - name: Independently enforce external frontier contract
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          data=json.loads(Path('benchmark-artifacts/v030-external-competitors.json').read_text())
+          gate=data['gate']; agg=data['aggregates']
+          assert gate['exact_workload_count'] is True
+          assert gate['all_cmpct_trees_verified'] is True
+          assert gate['all_zip_trees_verified'] is True
+          assert agg['all']['7z_lzma2_max_solid']['complete_for_suite'] is True
+          assert agg['all']['tar_zstd19_solid']['complete_for_suite'] is True
+          assert agg['all']['zpaq_method5']['complete_for_suite'] is True
+          assert gate['aggregate_beats_zip'] is True
+          assert gate['aggregate_beats_7z_when_available'] is True
+          assert gate['neutral_beats_solid_zstd19'] is True
+          assert gate['hostile_closes_solid_zstd19_frontier'] is True
+          assert gate['hostile_closes_zpaq5_frontier_when_available'] is True
+          for key in (
+              'all_workloads_strictly_beat_zip_size',
+              'all_workloads_strictly_beat_zstd19_size',
+              'all_workloads_strictly_beat_zip_create',
+              'all_workloads_strictly_beat_zstd19_create',
+              'strict_no_ties_size_or_create',
+          ):
+              assert gate[key] is True
+          strict=data['strict_per_workload_dominance']['rows']
+          assert len(strict)==15
+          assert all(row['strictly_beats_zip_size'] for row in strict)
+          assert all(row['strictly_beats_zstd19_size'] for row in strict)
+          assert all(row['strictly_beats_zip_create'] for row in strict)
+          assert all(row['strictly_beats_zstd19_create'] for row in strict)
+          assert gate['passed'] is True
+          PY
+
+      - name: Public-surface guard
+        if: always()
+        run: python tools/check_public_surface.py
+
+      - name: Upload external frontier evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: v030-external-frontier-${{ github.sha }}
+          path: benchmark-artifacts/v030-external-competitors.json
+          if-no-files-found: warn
+          retention-days: 90
+
+# ZIP and solid Zstd-19 are strict per-workload v0.30 release floors for both complete archive size and creation
+# wall-clock. Any tie or loss on any frozen workload fails v0.30 regardless of aggregate performance. The exact
+# source/extraction identity checks remain mandatory before a comparator row receives credit.

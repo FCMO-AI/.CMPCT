@@ -1,0 +1,88 @@
+# ci-lane: deep
+name: CMPCT v0.30 batch preflate oracle
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'native/preflate-bridge/**'
+      - 'benchmarks/v030_preflate_batch_oracle.py'
+      - 'benchmarks/resemblance_hostile_corpus_v1.py'
+      - 'benchmarks/v030_external_competitors.py'
+      - '.github/workflows/v030-preflate-batch-oracle.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-v030-preflate-batch-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+
+jobs:
+  oracle:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install deterministic dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y zstd
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[test]'
+      - name: Build audited preflate bridges
+        run: |
+          cargo build --release --manifest-path native/preflate-bridge/Cargo.toml \
+            --bin cmpct-preflate-bridge --bin cmpct-preflate-batch
+          native/preflate-bridge/target/release/cmpct-preflate-bridge 2>&1 | head -n 1 || true
+          native/preflate-bridge/target/release/cmpct-preflate-batch 2>&1 | head -n 1 || true
+      - name: Compile oracle
+        run: python -m py_compile benchmarks/v030_preflate_batch_oracle.py
+      - name: Run verified batch-preflate frontier
+        run: |
+          mkdir -p benchmark-artifacts
+          python benchmarks/v030_preflate_batch_oracle.py \
+            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-preflate-batch-work" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-preflate-batch.json"
+      - name: Independently enforce evidence boundary
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          d=json.loads(Path('benchmark-artifacts/v030-preflate-batch.json').read_text())
+          assert d['schema']=='cmpct-v030-preflate-batch-oracle-v1'
+          assert d['claim_boundary'].startswith('research-only')
+          assert d['workload']=='resemblance_hostile_v1/04_deflate_family'
+          assert d['source_zip_files']==14
+          assert d['gate']['exact_workload'] is True
+          assert d['gate']['all_candidates_exact_tree'] is True
+          assert d['gate']['all_candidates_locality_green'] is True
+          assert d['gate']['passed'] is True
+          assert len(d['candidates'])==12
+          assert all(c['max_member_read_amplification']<=8.0 for c in d['candidates'])
+          assert all(c['max_decode_unit_bytes']<=8*1024*1024 for c in d['candidates'])
+          if d['viable_candidate'] is not None:
+              c=d['viable_candidate']
+              assert c['tree_verified'] is True and c['locality_green'] is True
+              assert c['archive_bytes'] < d['zip']['archive_bytes']
+              assert c['archive_bytes'] < d['tar_zstd19']['archive_bytes']
+              assert c['create_s'] < d['zip']['create_s']
+              assert c['create_s'] < d['tar_zstd19']['create_s']
+          PY
+      - name: CI topology self-check
+        run: python tools/check_ci_topology.py .github/workflows/v030-preflate-batch-oracle.yml
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: v030-preflate-batch-${{ github.sha }}
+          path: benchmark-artifacts/v030-preflate-batch.json
+          if-no-files-found: error
+          retention-days: 90

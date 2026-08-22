@@ -1,7 +1,7 @@
+# ci-lane: deep
 name: CMPCT v0.29 shared dictionary context ceiling
 
 on:
-  pull_request:
   workflow_dispatch:
 
 permissions:
@@ -22,7 +22,7 @@ jobs:
         uses: actions/checkout@v6
         with:
           fetch-depth: 0
-          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          ref: ${{ github.sha }}
 
       - name: Set up Python
         uses: actions/setup-python@v6
@@ -87,7 +87,7 @@ jobs:
               assert row['locality']['weighted_direct_pack_read_amp'] <= 8.0, row
               assert row['locality']['max_dependent_node_read_amp'] <= 8.0, row
               assert row['locality']['max_additional_dictionary_read_amp'] <= 2.0, row
-          # Footnote: the research result may be REJECT.  CI verifies accounting, locality and exact
+          # Footnote: the research result may be REJECT. CI verifies accounting, locality and exact
           # round-trips; it does not mutate the frozen >=128 KiB gate to manufacture a green hypothesis.
           print(json.dumps({'best': r['best'], 'research_gate_pass': r['research_gate_pass']}, indent=2))
           PY
@@ -97,6 +97,9 @@ jobs:
 
       - name: Public-surface guard
         run: python tools/check_public_surface.py
+
+      - name: CI topology self-check
+        run: python tools/check_ci_topology.py .github/workflows/mosaic-v029-shared-dictionary.yml
 
       - name: Summarize shared dictionary ceiling
         if: always()
@@ -124,14 +127,16 @@ jobs:
 
       - name: Upload shared dictionary evidence
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: cmpct-v029-shared-dictionary-${{ github.sha }}
           path: |
             benchmark-artifacts/mosaic-v029-shared-dictionary-oracle.json
             benchmark-artifacts/mosaic-v029-shared-dictionary-oracle.stdout.txt
           if-no-files-found: warn
+          retention-days: 30
 
-# Footnote: this is a physical-context ceiling oracle, not a format implementation.  It keeps attempt-5
+# Footnote: this is a physical-context ceiling oracle, not a format implementation. It keeps attempt-5
 # record boundaries and output bytes unchanged while measuring whether an authenticated shared dictionary
-# can plausibly justify new reader/native/recovery surface.
+# can plausibly justify new reader/native/recovery surface. The historical ceiling is deliberate-only because
+# the subsequent one-hop experiment already superseded it as an active search question.

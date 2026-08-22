@@ -1,26 +1,51 @@
 name: CMPCT Android
+# ci-lane: release
 
 on:
   pull_request:
+    branches: [main]
     paths:
       - 'integrations/android/**'
       - 'native/cmpct-core/**'
+      - 'native/cmpct-portable/**'
       - 'tests/conformance/**'
+      - 'tests/generate_v030_logs_android_vector.py'
+      - 'experiments/entropygraph_v030_logs_inverse_profile*.py'
       - '.github/workflows/android.yml'
+      - '.github/workflows/android-physical-arm64.yml'
   push:
     branches: [main]
     paths:
       - 'integrations/android/**'
       - 'native/cmpct-core/**'
+      - 'native/cmpct-portable/**'
       - 'tests/conformance/**'
+      - 'tests/generate_v030_logs_android_vector.py'
+      - 'experiments/entropygraph_v030_logs_inverse_profile*.py'
       - '.github/workflows/android.yml'
+      - '.github/workflows/android-physical-arm64.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: cmpct-android-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 jobs:
   build-and-device-smoke:
-    runs-on: ubuntu-latest
-    timeout-minutes: 45
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
+        with:
+          # Footnote: PR workflow metadata points at GitHub's synthetic merge ref. Release evidence must instead
+          # identify the exact candidate source tree whose fingerprint is frozen, so tests explicitly check out
+          # the PR head while still benefiting from GitHub's ordinary PR trigger/branch-protection semantics.
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
 
       - uses: actions/setup-java@v4
         with:
@@ -36,18 +61,39 @@ jobs:
         with:
           packages: ''
 
-      - name: Enable KVM for Android emulator
+      - name: Select Android emulator acceleration
         run: |
-          # Footnote: GitHub Linux runners expose Android hardware acceleration, but /dev/kvm access
-          # must be granted to the runner process. Without this, a headless emulator can stall before
-          # adb ever sees a device and hide application-level failures behind CI infrastructure noise.
-          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' \
-            | sudo tee /etc/udev/rules.d/99-kvm4all.rules
-          sudo udevadm control --reload-rules
-          sudo udevadm trigger --name-match=kvm
-          test -e /dev/kvm
-          test -r /dev/kvm
-          test -w /dev/kvm
+          # Footnote: /dev/kvm is an optional hosted-runner capability, not an Android product requirement.
+          # When GitHub exposes it we grant the runner access and use hardware acceleration; when a runner
+          # instance has no KVM device at all, the same x86_64 instrumentation gate continues under the emulator's
+          # software engine instead of failing before Rust/Gradle compilation. Physical ARM64 acceptance remains
+          # a separate v0.30 release-lock fact and is never inferred from this emulator job.
+          if [ -e /dev/kvm ]; then
+            echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' \
+              | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+            sudo udevadm control --reload-rules
+            sudo udevadm trigger --name-match=kvm || true
+            sudo chmod 0666 /dev/kvm || true
+            test -r /dev/kvm
+            test -w /dev/kvm
+            echo 'CMPCT_ANDROID_EMULATOR_ACCEL=on' >> "$GITHUB_ENV"
+            echo 'Android emulator acceleration: KVM'
+          else
+            echo 'CMPCT_ANDROID_EMULATOR_ACCEL=off' >> "$GITHUB_ENV"
+            echo 'Android emulator acceleration: software (hosted runner has no /dev/kvm)'
+          fi
+
+      - name: Install deterministic Python vector dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[test]'
+
+      - name: Generate exact canonical logs portable-dispatch vector
+        run: |
+          python tests/generate_v030_logs_android_vector.py \
+            --output "$GITHUB_WORKSPACE/tests/conformance/v030-logs-android.json" \
+            --work-root "$RUNNER_TEMP/v030-logs-android-vector"
+          test -s tests/conformance/v030-logs-android.json
 
       - name: Install Rust Android targets
         run: |
@@ -79,15 +125,20 @@ jobs:
           export ANDROID_NDK_ROOT="$ANDROID_NDK_HOME"
           gradle --no-daemon :app:assembleDebug
 
-      - name: Verify packaged JNI dependency is relocatable
+      - name: Verify packaged JNI dependency is relocatable and portable
         working-directory: integrations/android
         run: |
           # Footnote: the first real emulator run caught an absolute /home/runner DT_NEEDED entry.
-          # Inspect the packaged ELF directly so that class of host-path leak fails before device boot.
+          # Inspect the packaged ELF directly so that class of host-path leak fails before device boot;
+          # also require the shared portable dispatcher rather than the obsolete r24-only dependency.
           unzip -p app/build/outputs/apk/debug/app-debug.apk \
             lib/x86_64/libcmpct_android.so > "$RUNNER_TEMP/libcmpct_android.so"
           readelf -d "$RUNNER_TEMP/libcmpct_android.so" | tee "$RUNNER_TEMP/cmpct-elf-dynamic.txt"
-          grep -Fq 'Shared library: [libcmpct_core.so]' "$RUNNER_TEMP/cmpct-elf-dynamic.txt"
+          grep -Fq 'Shared library: [libcmpct_portable.so]' "$RUNNER_TEMP/cmpct-elf-dynamic.txt"
+          if grep -Fq 'Shared library: [libcmpct_core.so]' "$RUNNER_TEMP/cmpct-elf-dynamic.txt"; then
+            echo 'Android JNI still links the r24-only core directly' >&2
+            exit 1
+          fi
           if grep -Fq '/home/' "$RUNNER_TEMP/cmpct-elf-dynamic.txt"; then
             echo 'host filesystem path leaked into Android DT_NEEDED' >&2
             exit 1
@@ -95,10 +146,6 @@ jobs:
 
       - name: Create Android 10 emulator
         run: |
-          # Footnote: Android documents ANDROID_AVD_HOME as the first directory searched by
-          # `emulator -avd`. Pin both creation and launch to the same explicit CI directory instead
-          # of relying on whichever HOME/SDK-home convention a particular command-line-tools build
-          # happens to choose.
           AVD_HOME="$RUNNER_TEMP/cmpct-avd"
           mkdir -p "$AVD_HOME"
           echo "ANDROID_AVD_HOME=$AVD_HOME" >> "$GITHUB_ENV"
@@ -113,22 +160,23 @@ jobs:
 
       - name: Start emulator
         run: |
-          # Footnote: sdkmanager installs the emulator under the SDK root, but setup-android does not
-          # promise that directory will be added to PATH after a later package install. Use the exact
-          # executable path so device acceptance cannot fail merely because command discovery drifted.
+          # Footnote: explicitly pass the acceleration mode chosen from the actual runner device state. The
+          # software fallback is slower but exercises the identical APK/system image and prevents transient KVM
+          # allocation from deciding whether Android code is tested at all.
           nohup "$ANDROID_SDK_ROOT/emulator/emulator" \
             -avd cmpct-api29 \
             -no-window \
             -no-audio \
             -no-snapshot \
             -no-boot-anim \
+            -accel "$CMPCT_ANDROID_EMULATOR_ACCEL" \
             -gpu swiftshader_indirect \
             > "$RUNNER_TEMP/cmpct-emulator.log" 2>&1 &
-          if ! timeout 180 adb wait-for-device; then
+          if ! timeout 300 adb wait-for-device; then
             cat "$RUNNER_TEMP/cmpct-emulator.log" >&2
             exit 1
           fi
-          for _ in $(seq 1 120); do
+          for _ in $(seq 1 180); do
             if [ "$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')" = "1" ]; then
               adb shell input keyevent 82 || true
               exit 0
@@ -138,18 +186,64 @@ jobs:
           cat "$RUNNER_TEMP/cmpct-emulator.log" >&2
           exit 1
 
-      - name: Run revision-24 Android archive UX and JNI conformance tests
+      - name: Run Android archive UX and shared JNI conformance tests
         working-directory: integrations/android
         run: |
           export ANDROID_NDK_HOME="$ANDROID_SDK_ROOT/ndk/29.0.14206865"
           export ANDROID_NDK_ROOT="$ANDROID_NDK_HOME"
           gradle --no-daemon :app:connectedDebugAndroidTest
 
-      - uses: actions/upload-artifact@v4
+      - name: Record exact-candidate hosted Android evidence
+        run: |
+          # Footnote: the physical ARM64 workflow consumes this machine-readable artifact and independently
+          # verifies its source SHA/fingerprint before it can claim the required Android platform matrix green.
+          # Generating it only after connectedDebugAndroidTest succeeds prevents a failed emulator run from
+          # leaving behind a superficially plausible positive receipt.
+          python -m experiments.entropygraph_v030_release_lock_strict --print-fingerprint \
+            > "$RUNNER_TEMP/cmpct-v030-fingerprint.json"
+          python - <<'PY'
+          import json, os, pathlib, subprocess
+          temp = pathlib.Path(os.environ['RUNNER_TEMP'])
+          fingerprint = json.loads((temp / 'cmpct-v030-fingerprint.json').read_text())['candidate_fingerprint']
+          candidate_sha = subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip()
+          evidence = {
+              'schema': 'cmpct-v030-hosted-android-evidence-v1',
+              'candidate_sha': candidate_sha,
+              'candidate_fingerprint': fingerprint,
+              'workflow': 'android.yml',
+              'run_id': int(os.environ['GITHUB_RUN_ID']),
+              'run_attempt': int(os.environ['GITHUB_RUN_ATTEMPT']),
+              'facts': {
+                  'hosted_android_emulator_green': True,
+                  'emulator_arch': 'x86_64',
+                  'emulator_api': 29,
+                  'all_declared_abis_built': True,
+                  'portable_jni_dependency_verified': True,
+                  'logs_inverse_portable_dispatch_green': True,
+              },
+          }
+          (temp / 'cmpct-hosted-android-evidence.json').write_text(json.dumps(evidence, indent=2) + '\n')
+          print(json.dumps(evidence, indent=2))
+          PY
+
+      - name: CI topology self-check
+        run: python tools/check_ci_topology.py .github/workflows/android.yml
+
+      - uses: actions/upload-artifact@v6
         if: always()
         with:
-          name: cmpct-android-debug
+          name: cmpct-android-debug-${{ github.sha }}
           path: |
             integrations/android/app/build/outputs/apk/debug/app-debug.apk
             integrations/android/app/build/reports/androidTests/connected/**
+            ${{ runner.temp }}/cmpct-emulator.log
+            ${{ runner.temp }}/cmpct-elf-dynamic.txt
+            ${{ runner.temp }}/cmpct-hosted-android-evidence.json
+            tests/conformance/v030-logs-android.json
           if-no-files-found: warn
+          retention-days: 30
+
+# Footnote: Android consumes libcmpct_portable through a parser-free JNI shim. Canonical r25, the logs inverse
+# profile and inherited r24 therefore share one Rust admission/recovery/resource implementation; Android-specific
+# parser drift is a release blocker, not a supported portability strategy. This hosted emulator gate remains
+# intentionally distinct from the physical ARM64 receipt required by v0.30.

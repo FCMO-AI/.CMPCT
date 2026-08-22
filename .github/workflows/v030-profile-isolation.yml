@@ -1,0 +1,67 @@
+# ci-lane: release
+name: CMPCT v0.30 canonical profile isolation
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'experiments/entropygraph_v030_canonical_final.py'
+      - 'experiments/entropygraph_v030_canonical_final_impl.py'
+      - 'experiments/entropygraph_v030_profile_isolation.py'
+      - 'experiments/entropygraph_v030_release_product.py'
+      - 'tests/test_v030_canonical_final.py'
+      - 'tests/test_v030_profile_isolation.py'
+      - '.github/workflows/v030-profile-isolation.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-v030-profile-isolation-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+
+jobs:
+  profile-isolation:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+
+      - name: Install focused dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y zstd gcc
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[test]'
+
+      - name: Compile isolated canonical product surface
+        run: |
+          python -m py_compile \
+            experiments/entropygraph_v030_profile_isolation.py \
+            experiments/entropygraph_v030_canonical_final.py \
+            experiments/entropygraph_v030_canonical_final_impl.py \
+            experiments/entropygraph_v030_release_product.py
+
+      - name: Prove import-order and concurrency isolation
+        run: |
+          python -m pytest -q \
+            tests/test_v030_profile_isolation.py \
+            tests/test_v030_canonical_final.py
+
+      - name: Public-surface guard
+        run: python tools/check_public_surface.py
+
+      - name: CI topology self-check
+        run: python tools/check_ci_topology.py .github/workflows/v030-profile-isolation.yml
+
+# Footnote: this gate is intentionally path-scoped around the canonical profile boundary.  It exists because
+# the release product now preserves its large reviewed implementation behind a small namespace-isolation wrapper;
+# edits to either half must trigger the same import-order/concurrency contract before promotion.

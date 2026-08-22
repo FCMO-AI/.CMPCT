@@ -1,0 +1,123 @@
+# ci-lane: release
+name: CMPCT v0.30 authoritative generalization
+
+on:
+  push:
+    branches:
+      - agent/v030-authoritative-integration
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-v030-authoritative-generalization-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  release-generalization:
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+    env:
+      PYTHONPATH: ${{ github.workspace }}
+    steps:
+      - name: Check out authoritative integration branch
+        uses: actions/checkout@v6
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install exact corpus and test dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y zstd gcc ffmpeg
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[test,audio]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
+
+      - name: Run integration, locality, reader and frozen-contract tests
+        run: |
+          python -m pytest -q \
+            tests/test_v030_geometry.py \
+            tests/test_v030_hierarchical_geometry.py \
+            tests/test_v030_geometry_overlay.py \
+            tests/test_v030_geometry_overlay_prefallback.py \
+            tests/test_v030_geometry_overlay_g04.py \
+            tests/test_v030_g04_publish.py \
+            tests/test_v030_prefixgraph.py \
+            tests/test_v030_release_reader.py \
+            tests/test_v030_release_reader_policy.py \
+            tests/test_v030_release_candidate.py \
+            tests/test_v030_release_generalization_contract.py
+
+      - name: Compile authoritative v0.30 modules
+        run: |
+          python -m py_compile \
+            experiments/entropygraph_v030_geometry_overlay_g04.py \
+            experiments/entropygraph_v030_geometry_overlay_g04_publish.py \
+            experiments/entropygraph_v030_prefixgraph.py \
+            experiments/entropygraph_v030_release_reader.py \
+            experiments/entropygraph_v030_release_reader_policy.py \
+            experiments/entropygraph_v030_release_candidate.py \
+            experiments/entropygraph_v030_release.py \
+            benchmarks/v030_release_generalization.py \
+            benchmarks/v030_release_generalization_authoritative.py
+
+      - name: Run exact repaired 15-workload v0.30 system gate
+        run: |
+          mkdir -p benchmark-artifacts
+          set -o pipefail
+          python benchmarks/v030_release_generalization_authoritative.py \
+            --work-root benchmark-artifacts/v030-release-generalization-work \
+            --output benchmark-artifacts/v030-release-generalization.json \
+            2>&1 | tee benchmark-artifacts/v030-release-generalization.stdout.txt
+
+      - name: Independently enforce frozen revision-worthiness contract
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          data=json.loads(Path('benchmark-artifacts/v030-release-generalization.json').read_text())
+          contract=data['contract']; totals=data['totals']; gate=data['gate']
+          assert data['schema']=='cmpct-v030-release-generalization-v1'
+          assert data['engine']=='experiments/entropygraph_v030_release.py'
+          assert data['release_facade']=='cmpct-v030-authoritative-integration-v1'
+          assert contract['expected_v029_aggregate_bytes']==137499525
+          assert contract['minimum_release_saving_bytes']==687783
+          assert contract['inherited_absolute_revision_floor_bytes']==687783
+          assert contract['minimum_release_saving_pct']==0.5
+          assert contract['minimum_improved_rows']==3
+          assert contract['maximum_member_read_amplification']==8.0
+          assert contract['regression_tolerance_bytes']==0
+          assert totals['workloads']==15
+          assert totals['accepted_v029_bytes']==137499525
+          assert totals['workloads_regressed']==0
+          assert totals['workloads_improved']>=3
+          assert totals['saving_vs_v029_bytes']>=687783
+          assert totals['max_selected_member_read_amplification']<=8.0
+          assert gate['passed'] is True
+          print(json.dumps({'totals': totals, 'gate': gate}, indent=2))
+          PY
+
+      - name: Public-surface guard
+        if: always()
+        run: python tools/check_public_surface.py
+
+      - name: Upload authoritative v0.30 compression evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: cmpct-v030-release-generalization-${{ github.sha }}
+          path: |
+            benchmark-artifacts/v030-release-generalization.json
+            benchmark-artifacts/v030-release-generalization.stdout.txt
+          if-no-files-found: warn
+          retention-days: 90
+
+# Footnote: `ffmpeg` and the package audio extra are frozen-corpus/runtime dependencies, not codec shortcuts.
+# Repair-v6 changes the accepted deterministic v0.29 identity to 137,499,525 B; it does not lower the inherited
+# 687,783-byte release hurdle. Timing/memory, direct promoted readers, recovery/fuzz, native/portability and
+# external-competitor gates remain independent mandatory evidence before v0.30 can release.

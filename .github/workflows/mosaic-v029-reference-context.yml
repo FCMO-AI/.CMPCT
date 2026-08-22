@@ -1,7 +1,7 @@
+# ci-lane: deep
 name: CMPCT v0.29 one-hop reference context ceiling
 
 on:
-  pull_request:
   workflow_dispatch:
 
 permissions:
@@ -22,7 +22,7 @@ jobs:
         uses: actions/checkout@v6
         with:
           fetch-depth: 0
-          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          ref: ${{ github.sha }}
 
       - name: Set up Python
         uses: actions/setup-python@v6
@@ -99,6 +99,9 @@ jobs:
       - name: Public-surface guard
         run: python tools/check_public_surface.py
 
+      - name: CI topology self-check
+        run: python tools/check_ci_topology.py .github/workflows/mosaic-v029-reference-context.yml
+
       - name: Summarize one-hop reference-context ceiling
         if: always()
         run: |
@@ -121,15 +124,16 @@ jobs:
 
       - name: Upload reference-context evidence
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: cmpct-v029-reference-context-${{ github.sha }}
           path: |
             benchmark-artifacts/mosaic-v029-reference-context-oracle.json
             benchmark-artifacts/mosaic-v029-reference-context-oracle.stdout.txt
           if-no-files-found: warn
+          retention-days: 30
 
-# Footnote: this workflow exists only because the simpler shared-dictionary oracle missed its frozen gate.
-# It preserves one-hop physical dependencies, bounded discovery, cold-access locality accounting and exact
-# attempt-5 output bytes. A negative result is expected to terminate zstd-context tuning rather than move
-# thresholds or deepen dependency chains.
+# Footnote: this workflow exists because the simpler shared-dictionary oracle missed its frozen gate. It preserves
+# one-hop physical dependencies, bounded discovery, cold-access locality accounting and exact attempt-5 output
+# bytes. Its own negative-result contract says failure terminates this Zstd-context search class rather than moving
+# thresholds or deepening dependency chains, so repeated automatic PR execution would be churn rather than evidence.

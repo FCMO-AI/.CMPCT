@@ -1,0 +1,78 @@
+# ci-lane: deep
+name: CMPCT v0.30 logs native dispatch
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'experiments/entropygraph_v030_logs_inverse_profile*.py'
+      - 'benchmarks/v030_logs_inverse_edge_oracle.py'
+      - 'tests/test_v030_logs_inverse_native_safe.py'
+      - 'native/cmpct-portable/Cargo.toml'
+      - 'native/cmpct-portable/src/lib.rs'
+      - 'native/cmpct-portable/src/logs.rs'
+      - 'native/cmpct-portable/src/logs_public.rs'
+      - 'native/cmpct-portable/src/logs_preparity_tests.rs'
+      - 'native/cmpct-portable/src/logs_semantic_tests.rs'
+      - 'native/cmpct-portable/src/identity.rs'
+      - '.github/workflows/v030-logs-native-preparity.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-v030-logs-native-dispatch-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+
+jobs:
+  logs-native-dispatch:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+
+      - name: Install deterministic Python dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y zstd
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[test]'
+
+      - name: Prove canonical writer emits only native-supported inverse codecs
+        run: python -m pytest -q tests/test_v030_logs_inverse_native_safe.py
+
+      - name: Rust formatting, production dispatch, filesystem and recovery tests
+        working-directory: native/cmpct-portable
+        run: |
+          cargo fmt --check
+          cargo test --lib logs -- --nocapture
+
+      - name: Independently ratchet production dispatch identity
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          library=Path('native/cmpct-portable/src/lib.rs').read_text()
+          assert 'LOGS_INVERSE_MAGIC' in library
+          assert 'LogsInverse {' in library
+          assert 'Profile::LogsInverse' in library
+          assert 'LogsPublicView::new' in library
+          assert 'mod logs;' in library
+          assert 'mod logs_public;' in library
+          PY
+
+      - name: CI topology self-check
+        run: python tools/check_ci_topology.py .github/workflows/v030-logs-native-preparity.yml
+
+# Native logs is now a production portable-dispatch profile, not a shadow parser. This lane therefore exercises
+# the real PortableArchive path and the same C-ABI surface consumed by Android/JNI while retaining exact SHA-256,
+# <=8x member-read amplification, <=8 MiB decode context, regular/directory/symlink/hardlink filesystem semantics,
+# primary/tail recovery, gzip+zstd inverse codecs and fail-closed corruption behavior. Canonical selector admission
+# and the full all-workload ZIP/Zstd release contract remain separate blockers; this lane cannot authorize release.

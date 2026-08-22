@@ -1,0 +1,59 @@
+# ci-lane: release
+name: CMPCT v0.30 hostile mutation gate
+
+on:
+  push:
+    branches:
+      - agent/v030-authoritative-integration
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-v030-release-fuzz-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  release-fuzz:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      PYTHONPATH: ${{ github.workspace }}
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install fuzz/test dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y zstd gcc
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[test]'
+
+      - name: Compile promoted Python reader surface
+        run: |
+          python -m py_compile \
+            experiments/entropygraph_v030_release_reader.py \
+            experiments/entropygraph_v030_release_reader_policy.py \
+            experiments/entropygraph_v030_release_candidate.py \
+            experiments/entropygraph_v030_release.py
+
+      - name: Run deterministic hostile mutation and recovery corpus
+        run: |
+          python -m pytest -q \
+            tests/test_v030_release_reader.py \
+            tests/test_v030_release_reader_policy.py \
+            tests/test_v030_release_fuzz.py
+
+      - name: Public-surface guard
+        if: always()
+        run: python tools/check_public_surface.py
+
+# Footnote: deterministic mutations make failures reproducible and reviewable. This gate is independent from
+# compression evidence: malformed-input rejection cannot be traded for better bytes, and a compression win
+# cannot turn a parser failure green.

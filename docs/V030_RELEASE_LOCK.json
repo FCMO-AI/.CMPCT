@@ -1,0 +1,209 @@
+{
+  "schema": "cmpct-v030-release-lock-manifest-v1",
+  "release": "0.30.0",
+  "target_format_revision": 25,
+  "receipt_directory": "docs/v030-release-receipts",
+  "required_task_states": [
+    {"path": "docs/v030-coordination/tasks/T00-main-reconciliation.md", "allowed": ["DONE"]},
+    {"path": "docs/v030-coordination/tasks/T01-native-portability.md", "allowed": ["DONE"]},
+    {"path": "docs/v030-coordination/tasks/T02-evidence-performance.md", "allowed": ["DONE"]},
+    {"path": "docs/v030-coordination/tasks/T03-graph-productization.md", "allowed": ["DONE"]},
+    {"path": "docs/v030-coordination/tasks/T04-final-release.md", "allowed": ["REVIEW"]}
+  ],
+  "fingerprint_globs": [
+    "AGENTS.md",
+    ".github/AGENTS.md",
+    "README.md",
+    "SURFACE_REVISION",
+    "pyproject.toml",
+    "src/**/*.py",
+    "experiments/entropygraph_v029_*.py",
+    "experiments/entropygraph_v030_*.py",
+    "native/Cargo.toml",
+    "native/Cargo.lock",
+    "native/**/Cargo.toml",
+    "native/**/Cargo.lock",
+    "native/**/build.rs",
+    "native/**/src/**/*",
+    "native/**/tests/**/*",
+    "native/**/benches/**/*",
+    "native/**/vectors/**/*",
+    "native/**/golden/**/*",
+    "benchmarks/v030_*.py",
+    "benchmarks/mosaic_v029_generalization_bench.py",
+    "benchmarks/neutral_hostile_corpus_v1.py",
+    "benchmarks/neutral_hostile_determinism_repair_v*.py",
+    "benchmarks/history/2026-08-16-entropygraph-v028.json",
+    "benchmarks/history/2026-08-17-neutral-hostile-determinism-repair-v5.json",
+    "benchmarks/history/2026-08-19-neutral-hostile-determinism-repair-v6.json",
+    "tests/test_v030_*.py",
+    ".github/workflows/v030-*.yml",
+    ".github/workflows/geometry-v030-breakthrough.yml",
+    ".github/workflows/android.yml",
+    ".github/workflows/android-physical-arm64.yml",
+    ".github/workflows/native-core.yml",
+    ".github/workflows/neutral-hostile-determinism-repair-v6.yml",
+    ".github/workflows/site-proof-contract.yml",
+    ".github/workflows/site-i18n-contract.yml",
+    ".github/workflows/tests.yml",
+    ".github/workflows/version-discipline.yml",
+    ".github/workflows/zip-parity.yml",
+    ".github/workflows/fuzz.yml",
+    ".github/workflows/ci-topology.yml",
+    "tools/check_v030_release_lock.py",
+    "tools/check_public_surface.py",
+    "tools/check_version_discipline.py",
+    "tools/check_ci_topology.py",
+    "docs/CI_ARCHITECTURE.md",
+    "docs/FORMAT.md",
+    "docs/CURRENT_STATE.md",
+    "docs/HISTORY.md",
+    "docs/NATIVE_CORE.md",
+    "docs/PORTABILITY.md",
+    "docs/PUBLIC_SURFACE.md",
+    "docs/SITE_I18N.md",
+    "docs/readme/**/*",
+    "docs/V030_RELEASE_GATES.md",
+    "docs/V030_RELEASE_LOCK.json",
+    "docs/releases/v0.30.0.md",
+    "site/build_site.py",
+    "site/enhance_site.py",
+    "site/src/**/*",
+    "site/tests/**/*"
+  ],
+  "required_receipts": [
+    {
+      "id": "canonical-architecture",
+      "owner_task": "T03",
+      "assertions": [
+        {"path": "facts.format_revision", "eq": 25},
+        {"path": "facts.exact_r24_fallback", "eq": true},
+        {"path": "facts.prefixgraph_promotion_debt_resolved", "eq": true},
+        {"path": "facts.single_semantic_owner_per_mechanism", "eq": true},
+        {"path": "facts.complete_artifact_pricing", "eq": true}
+      ]
+    },
+    {
+      "id": "compression-generalization",
+      "owner_task": "T02",
+      "assertions": [
+        {"path": "facts.accepted_v029_bytes", "eq": 137499525},
+        {"path": "facts.saving_vs_v029_bytes", "min": 687783},
+        {"path": "facts.workloads_improved", "min": 3},
+        {"path": "facts.workloads_regressed", "eq": 0},
+        {"path": "facts.max_selected_member_read_amplification", "max": 8.0},
+        {"path": "facts.exact_tree_identity", "eq": true},
+        {"path": "facts.exact_v029_row_identity", "eq": true}
+      ]
+    },
+    {
+      "id": "shared-build-rehab",
+      "owner_task": "T02",
+      "assertions": [
+        {"path": "facts.byte_identical", "eq": true},
+        {"path": "facts.wallclock_improvement_pct", "min": 20.0},
+        {"path": "facts.wallclock_improvement_s", "min": 5.0},
+        {"path": "facts.attempt5_graph_build_count", "eq": 1}
+      ]
+    },
+    {
+      "id": "runtime-memory-selective",
+      "owner_task": "T02",
+      "assertions": [
+        {"path": "facts.median_create_ratio", "max": 1.10},
+        {"path": "facts.median_extract_ratio", "max": 1.10},
+        {"path": "facts.max_workload_create_ratio", "max": 1.25},
+        {"path": "facts.max_workload_extract_ratio", "max": 1.25},
+        {"path": "facts.max_peak_rss_ratio", "max": 1.25},
+        {"path": "facts.selective_read_measured", "eq": true}
+      ]
+    },
+    {
+      "id": "external-competitors",
+      "owner_task": "T02",
+      "assertions": [
+        {"path": "facts.exact_tree_verified_before_credit", "eq": true},
+        {"path": "facts.symmetric_semantics_disclosed", "eq": true},
+        {"path": "facts.hostile_structural_frontier_pass", "eq": true},
+        {"path": "facts.fair_losses_preserved", "eq": true},
+        {"path": "facts.all_workloads_strictly_beat_zip_size", "eq": true},
+        {"path": "facts.all_workloads_strictly_beat_zstd19_size", "eq": true},
+        {"path": "facts.all_workloads_strictly_beat_zip_create", "eq": true},
+        {"path": "facts.all_workloads_strictly_beat_zstd19_create", "eq": true},
+        {"path": "facts.strict_no_ties_size_or_create", "eq": true}
+      ]
+    },
+    {
+      "id": "ci-topology",
+      "owner_task": "T02",
+      "assertions": [
+        {"path": "facts.all_v030_workflows_classified", "eq": true},
+        {"path": "facts.topology_checker_green", "eq": true},
+        {"path": "facts.thresholds_unchanged", "eq": true}
+      ]
+    },
+    {
+      "id": "reader-recovery-fuzz",
+      "owner_task": "T01",
+      "assertions": [
+        {"path": "facts.streamed_strong_verify", "eq": true},
+        {"path": "facts.primary_tail_two_way_recovery", "eq": true},
+        {"path": "facts.transactional_extract_rollback", "eq": true},
+        {"path": "facts.malformed_fuzz_green", "eq": true},
+        {"path": "facts.resource_bounds_green", "eq": true}
+      ]
+    },
+    {
+      "id": "native-r25",
+      "owner_task": "T01",
+      "assertions": [
+        {"path": "facts.g04_native_parity", "eq": true},
+        {"path": "facts.prefixgraph_native_parity", "eq": true},
+        {"path": "facts.logs_inverse_native_parity", "eq": true},
+        {"path": "facts.logs_inverse_recovery_green", "eq": true},
+        {"path": "facts.logs_inverse_filesystem_semantics_green", "eq": true},
+        {"path": "facts.builder_independent_goldens", "eq": true},
+        {"path": "facts.native_recovery_green", "eq": true},
+        {"path": "facts.shared_core_used", "eq": true}
+      ]
+    },
+    {
+      "id": "zip-portability",
+      "owner_task": "T01",
+      "assertions": [
+        {"path": "facts.stock_zip_extract_tree_equal", "eq": true},
+        {"path": "facts.r24_fallback_export", "eq": true},
+        {"path": "facts.g04_export", "eq": true},
+        {"path": "facts.prefixgraph_export", "eq": true},
+        {"path": "facts.atomic_publication", "eq": true}
+      ]
+    },
+    {
+      "id": "platform-android",
+      "owner_task": "T01",
+      "assertions": [
+        {"path": "facts.required_platform_matrix_green", "eq": true},
+        {"path": "facts.logs_inverse_android_dispatch_green", "eq": true},
+        {"path": "facts.physical_arm64_android_green", "eq": true}
+      ]
+    },
+    {
+      "id": "full-regression",
+      "owner_task": "T00",
+      "assertions": [
+        {"path": "facts.tests_green", "eq": true},
+        {"path": "facts.version_discipline_green", "eq": true},
+        {"path": "facts.public_surface_green", "eq": true}
+      ]
+    },
+    {
+      "id": "site-source-proof",
+      "owner_task": "T04",
+      "assertions": [
+        {"path": "facts.claims_generated_from_durable_evidence", "eq": true},
+        {"path": "facts.site_contract_green", "eq": true},
+        {"path": "facts.release_notes_consistent", "eq": true}
+      ]
+    }
+  ]
+}

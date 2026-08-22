@@ -1,0 +1,87 @@
+# ci-lane: deep
+name: CMPCT v0.30 r24 medium binary pack oracle
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'src/cmpct/builder.py'
+      - 'experiments/entropygraph_v030_release_product.py'
+      - 'benchmarks/v030_r24_medium_binary_pack_oracle.py'
+      - 'benchmarks/neutral_hostile_corpus_v1.py'
+      - 'benchmarks/resemblance_hostile_corpus_v1.py'
+      - 'benchmarks/neutral_hostile_determinism_repair_v6.py'
+      - '.github/workflows/v030-r24-medium-binary-pack-oracle.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-v030-r24-medium-pack-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+
+jobs:
+  oracle:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install exact corpus and compressor dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y zstd gcc ffmpeg libsndfile1
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[audio,test]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
+      - name: Compile oracle
+        run: python -m py_compile benchmarks/v030_r24_medium_binary_pack_oracle.py
+      - name: Run exact r24 medium-binary pack regression proof
+        run: |
+          mkdir -p benchmark-artifacts
+          python benchmarks/v030_r24_medium_binary_pack_oracle.py \
+            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-r24-medium-pack-work" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-r24-medium-pack.json"
+      - name: Independently enforce shipping regression evidence
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          d=json.loads(Path('benchmark-artifacts/v030-r24-medium-pack.json').read_text())
+          assert d['schema']=='cmpct-v030-r24-medium-binary-pack-regression-v2'
+          assert d['contract']['grammar']=='existing canonical r24 S_PACK only'
+          assert d['contract']['shipping_micro_pack_max_file_bytes']==256*1024
+          g=d['gate']
+          assert g['all_verified_tree_equal'] is True
+          assert g['all_archive_bytes_deterministic'] is True
+          assert g['positive_rows_strict_four_way'] is True
+          assert g['negative_controls_verified_and_deterministic'] is True
+          assert g['shipping_regression_passed'] is True
+          positives=[r for r in d['rows'] if r['positive_target']]
+          assert len(positives)==2
+          for r in positives:
+              assert r['shipping_r24']['archive_bytes']==r['repeat_r24']['archive_bytes']
+              assert r['shipping_r24']['release_byte_knobs']=='environment-independent-r24-v4'
+              assert r['strict_four_way_win'] is True
+          PY
+      - name: Public-surface guard
+        if: always()
+        run: python tools/check_public_surface.py
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: v030-r24-medium-binary-pack-${{ github.sha }}
+          path: benchmark-artifacts/v030-r24-medium-pack.json
+          if-no-files-found: warn
+          retention-days: 90
+
+# This workflow began as a promotion oracle and now serves as the focused shipping regression proof for r24-v4.
+# The separate all-15 medium-pack generalization lane owns the historical v3->v4 zero-byte-regression delta.
+# Neither lane can relax the external ZIP/Zstd frontier, locality, integrity, portability, or release lock.

@@ -1,0 +1,89 @@
+# ci-lane: deep
+name: CMPCT v0.30 verified terminal-r24 oracle
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'benchmarks/v030_r24_terminal_oracle.py'
+      - 'experiments/entropygraph_v030_release_product.py'
+      - '.github/workflows/v030-r24-terminal-oracle.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-v030-terminal-r24-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+
+jobs:
+  verified-terminal-r24:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install corpus and competitor dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y zstd gcc ffmpeg libsndfile1
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[audio,test]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
+      - name: Compile oracle
+        run: python -m py_compile benchmarks/v030_r24_terminal_oracle.py
+      - name: Run complete verified terminal-r24 proof
+        run: |
+          mkdir -p benchmark-artifacts
+          python benchmarks/v030_r24_terminal_oracle.py \
+            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-terminal-r24-work" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-terminal-r24.json"
+      - name: Independently enforce shipping regression proof
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          d=json.loads(Path('benchmark-artifacts/v030-terminal-r24.json').read_text())
+          assert d['schema']=='cmpct-v030-r24-terminal-oracle-v2'
+          assert d['claim_boundary'].startswith('shipping regression proof')
+          assert d['summary']['workloads']==15
+          eligible=[r for r in d['rows'] if r['eligible']]
+          assert len(eligible)==d['summary']['eligible_workloads']
+          assert eligible
+          for row in eligible:
+              assert row['regular_files']==1
+              assert row['largest_regular_file_bytes']>=8*1024*1024
+              assert row['build_stats']['large_file_chunk_policy']=='fixed-8mib'
+              assert row['strong_verify']['ok'] is True
+              assert row['strong_verify']['format_revision']==24
+              for key in (
+                  'strictly_smaller_than_v029',
+                  'strictly_smaller_than_zip',
+                  'strictly_smaller_than_zstd19',
+                  'strictly_faster_than_zip',
+                  'strictly_faster_than_zstd19',
+                  'strong_verify_green',
+                  'wide_policy_selected',
+                  'passed',
+              ):
+                  assert row['gate'][key] is True
+          assert d['summary']['all_eligible_pass'] is True
+          PY
+      - name: Upload terminal-r24 proof
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: v030-terminal-r24-${{ github.sha }}
+          path: benchmark-artifacts/v030-terminal-r24.json
+          if-no-files-found: error
+          retention-days: 90
+
+# Shipping regression proof for one measured structural envelope. This lane prevents that promoted shortcut from
+# regressing but cannot widen its admission or satisfy the full v0.30 release authority by itself.

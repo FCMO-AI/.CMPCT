@@ -1,0 +1,100 @@
+# ci-lane: deep
+name: CMPCT v0.30 logs selector v0.29 shadow
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'experiments/entropygraph_v030_release_product_logs_candidate.py'
+      - 'experiments/entropygraph_v030_release_product.py'
+      - 'experiments/entropygraph_v030_logs_inverse_profile*.py'
+      - 'experiments/entropygraph_v030_product_fs.py'
+      - 'benchmarks/v030_logs_selector_generalization_shadow.py'
+      - 'benchmarks/v030_release_generalization.py'
+      - 'benchmarks/v030_release_generalization_canonical.py'
+      - 'tests/test_v030_logs_selector_candidate.py'
+      - '.github/workflows/v030-logs-selector-generalization-shadow.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-v030-logs-selector-v029-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+
+jobs:
+  logs-selector-v029-shadow:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 420
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+
+      - name: Install frozen-corpus dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y zstd gcc ffmpeg libsndfile1
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[audio,test]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
+
+      - name: Compile selector and generalization shadow
+        run: |
+          python -m py_compile \
+            experiments/entropygraph_v030_release_product_logs_candidate.py \
+            benchmarks/v030_logs_selector_generalization_shadow.py
+          python -m pytest -q tests/test_v030_logs_selector_candidate.py
+
+      - name: Run exact repaired 15-workload v0.29 ratchet shadow
+        run: |
+          mkdir -p benchmark-artifacts
+          python benchmarks/v030_logs_selector_generalization_shadow.py \
+            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-logs-selector-generalization-work" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-logs-selector-generalization.json"
+
+      - name: Independently enforce historical-regression reduction
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          d=json.loads(Path('benchmark-artifacts/v030-logs-selector-generalization.json').read_text())
+          p=d['candidate_promotion_gate']
+          l=d['logs_candidate']
+          assert p['exact_workload_count'] is True
+          assert p['no_source_or_product_tree_drift'] is True
+          assert p['accepted_v029_identity_unchanged'] is True
+          assert p['logs_selected_canonical_profile'] is True
+          assert p['logs_strong_verify'] is True
+          assert p['logs_strictly_beats_v029'] is True
+          assert p['one_historical_regression_removed'] is True
+          assert p['aggregate_materially_advances'] is True
+          assert p['locality_preserved'] is True
+          assert l['candidate_bytes'] < l['accepted_v029_bytes']
+          assert d['totals']['workloads_regressed'] <= 6
+          assert d['totals']['candidate_bytes'] <= 149668374
+          assert p['passed'] is True
+          PY
+
+      - name: CI topology self-check
+        run: python tools/check_ci_topology.py .github/workflows/v030-logs-selector-generalization-shadow.yml
+
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: v030-logs-selector-v029-${{ github.sha }}
+          path: benchmark-artifacts/v030-logs-selector-generalization.json
+          if-no-files-found: warn
+          retention-days: 90
+
+# This lane only earns selector-promotion evidence. The canonical v0.29 generalization authority remains the
+# release gate and still requires zero byte-regressed rows plus the unchanged aggregate revision-saving floor.

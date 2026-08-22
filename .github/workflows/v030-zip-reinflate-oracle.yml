@@ -1,0 +1,76 @@
+# ci-lane: deep
+name: CMPCT v0.30 reversible ZIP reinflate oracle
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'benchmarks/v030_zip_reinflate_oracle.py'
+      - 'benchmarks/resemblance_hostile_corpus_v1.py'
+      - 'benchmarks/v030_external_competitors.py'
+      - '.github/workflows/v030-zip-reinflate-oracle.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-v030-zip-reinflate-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+
+jobs:
+  oracle:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install deterministic dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y zstd
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[test]'
+      - name: Compile oracle
+        run: python -m py_compile benchmarks/v030_zip_reinflate_oracle.py
+      - name: Run reversible ZIP normalization experiment
+        run: |
+          mkdir -p benchmark-artifacts
+          python benchmarks/v030_zip_reinflate_oracle.py \
+            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-zip-reinflate-work" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-zip-reinflate.json"
+      - name: Independently enforce evidence boundary
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          d=json.loads(Path('benchmark-artifacts/v030-zip-reinflate.json').read_text())
+          assert d['schema']=='cmpct-v030-zip-reinflate-oracle-v1'
+          assert d['gate']['exact_tree_reconstructed'] is True
+          assert d['gate']['passed'] is True
+          assert d['workload']=='resemblance_hostile_v1/04_deflate_family'
+          assert d['claim_boundary'].startswith('research-only')
+          # A four-way win is evidence, not a correctness precondition. Preserve an honest negative result.
+          if d['viable_candidate'] is not None:
+              c=d['viable_candidate']
+              assert c['tree_verified'] is True
+              assert c['archive_bytes'] < d['zip']['archive_bytes']
+              assert c['archive_bytes'] < d['tar_zstd19']['archive_bytes']
+              assert c['create_s'] < d['zip']['create_s']
+              assert c['create_s'] < d['tar_zstd19']['create_s']
+          PY
+      - name: CI topology self-check
+        run: python tools/check_ci_topology.py .github/workflows/v030-zip-reinflate-oracle.yml
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: v030-zip-reinflate-${{ github.sha }}
+          path: benchmark-artifacts/v030-zip-reinflate.json
+          if-no-files-found: error
+          retention-days: 90

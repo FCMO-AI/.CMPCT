@@ -9,7 +9,9 @@ ROOT = Path(__file__).resolve().parents[1]
 
 CANONICAL_CREDIT = "CMPCT by FCMO AI"
 GROUP_CREDIT = "From the FCMO group"
-PUBLIC_STEWARD_URL = "https://github.com/FCMO-AI"
+STEWARD_URL = "https://github.com/FCMO-AI"
+# Footnote: this identifier intentionally describes public stewardship and avoids operational-looking private
+# artifact naming. The disclosure guard should catch internal provenance without suppressing the public GitHub identity.
 
 
 def read(path: str) -> str:
@@ -33,13 +35,13 @@ def test_python_package_metadata_carries_stewardship_natively() -> None:
         project = tomllib.load(handle)["project"]
     assert project["authors"] == [{"name": "FCMO AI"}]
     assert project["urls"]["Repository"] == "https://github.com/FCMO-AI/.CMPCT"
-    assert project["urls"]["FCMO AI"] == PUBLIC_STEWARD_URL
+    assert project["urls"]["FCMO AI"] == STEWARD_URL
 
 
 def test_native_package_uses_modern_metadata_not_deprecated_authors() -> None:
     cargo = read("native/cmpct-core/Cargo.toml")
     assert 'repository = "https://github.com/FCMO-AI/.CMPCT"' in cargo
-    assert f'steward-url = "{PUBLIC_STEWARD_URL}"' in cargo
+    assert f'steward-url = "{STEWARD_URL}"' in cargo
     assert f'project-credit = "{CANONICAL_CREDIT}"' in cargo
     assert f'group-credit = "{GROUP_CREDIT}"' in cargo
     # Footnote: Cargo authors is deprecated; provenance lives in durable URLs/namespaced metadata instead.
@@ -55,7 +57,7 @@ def test_citation_and_machine_receipt_preserve_same_identity() -> None:
     assert receipt["credit"] == CANONICAL_CREDIT
     assert receipt["group_credit"] == GROUP_CREDIT
     assert receipt["steward"] == "FCMO AI"
-    assert receipt["steward_url"] == PUBLIC_STEWARD_URL
+    assert receipt["steward_url"] == STEWARD_URL
 
 
 def test_website_attribution_is_additive_and_outside_proof_renderer() -> None:

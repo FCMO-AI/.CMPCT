@@ -1,0 +1,82 @@
+# ci-lane: deep
+name: CMPCT v0.30 raw DEFLATE delta oracle
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'benchmarks/v030_raw_deflate_delta_oracle.py'
+      - 'benchmarks/v030_raw_deflate_segment_oracle.py'
+      - 'benchmarks/resemblance_hostile_corpus_v1.py'
+      - 'benchmarks/v030_external_competitors.py'
+      - '.github/workflows/v030-raw-deflate-delta-oracle.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-v030-raw-deflate-delta-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+
+jobs:
+  oracle:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install deterministic dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y zstd
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[test]'
+      - name: Compile oracle
+        run: python -m py_compile benchmarks/v030_raw_deflate_delta_oracle.py
+      - name: Run cross-version raw-DEFLATE delta experiment
+        run: |
+          mkdir -p benchmark-artifacts
+          python benchmarks/v030_raw_deflate_delta_oracle.py \
+            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-raw-deflate-delta-work" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-raw-deflate-delta.json"
+      - name: Independently enforce evidence boundary
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          d=json.loads(Path('benchmark-artifacts/v030-raw-deflate-delta.json').read_text())
+          assert d['schema']=='cmpct-v030-raw-deflate-delta-oracle-v1'
+          assert d['workload']=='resemblance_hostile_v1/04_deflate_family'
+          assert d['claim_boundary'].startswith('research-only')
+          assert d['gate']['source_admitted'] is True
+          assert d['gate']['all_candidates_exact_tree'] is True
+          assert d['gate']['all_candidates_locality_green'] is True
+          assert d['gate']['passed'] is True
+          assert len(d['candidates']) == 12
+          assert all(c['max_member_read_amplification'] <= 8.0 for c in d['candidates'])
+          assert all(c['max_decode_unit_bytes'] <= 8*1024*1024 for c in d['candidates'])
+          # A four-way win is evidence, never a correctness precondition.
+          if d['viable_candidate'] is not None:
+              c=d['viable_candidate']
+              assert c['tree_verified'] is True and c['locality_green'] is True
+              assert c['archive_bytes'] < d['zip']['archive_bytes']
+              assert c['archive_bytes'] < d['tar_zstd19']['archive_bytes']
+              assert c['create_s'] < d['zip']['create_s']
+              assert c['create_s'] < d['tar_zstd19']['create_s']
+          PY
+      - name: CI topology self-check
+        run: python tools/check_ci_topology.py .github/workflows/v030-raw-deflate-delta-oracle.yml
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: v030-raw-deflate-delta-${{ github.sha }}
+          path: benchmark-artifacts/v030-raw-deflate-delta.json
+          if-no-files-found: error
+          retention-days: 90

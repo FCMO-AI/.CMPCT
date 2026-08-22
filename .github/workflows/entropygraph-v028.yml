@@ -1,14 +1,23 @@
+# ci-lane: deep
 name: CMPCT EntropyGraph II research gate
 
 on:
   pull_request:
+    branches: [main]
+    paths:
+      - 'experiments/entropygraph_v028*.py'
+      - 'benchmarks/entropygraph_v028*.py'
+      - 'benchmarks/resemblance_hostile_corpus_v1.py'
+      - 'tests/test_resemblance.py'
+      - 'native/preflate-bridge/**'
+      - '.github/workflows/entropygraph-v028.yml'
   workflow_dispatch:
 
 permissions:
   contents: read
 
 concurrency:
-  group: cmpct-entropygraph-v028-${{ github.ref }}
+  group: cmpct-entropygraph-v028-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -75,6 +84,9 @@ jobs:
       - name: Public-surface guard
         run: python tools/check_public_surface.py
 
+      - name: CI topology self-check
+        run: python tools/check_ci_topology.py .github/workflows/entropygraph-v028.yml
+
       - name: Summarize research frontier
         if: always()
         run: |
@@ -98,12 +110,15 @@ jobs:
 
       - name: Upload research evidence
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: cmpct-entropygraph-v028-${{ github.sha }}
           path: benchmark-artifacts/
           if-no-files-found: warn
+          retention-days: 30
 
 # Footnote: this workflow does not promote CMPNX8 into canonical revision 24. It proves the research
 # mechanism first. Promotion still requires a reader-visible format revision, independent vectors,
 # hostile parser bounds, recovery/native parity and the normal canonical performance-release gate.
+# As a deep historical oracle it is path-scoped to its own mechanism/corpus/native bridge; unrelated v0.30
+# product, documentation, native-r25 and public-surface edits must not consume a 75-minute research runner.
