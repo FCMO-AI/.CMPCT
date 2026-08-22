@@ -1,0 +1,102 @@
+# ci-lane: deep
+name: CMPCT v0.30 logs chunk-trained dictionary oracle
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'benchmarks/v030_logs_chunked_dict_oracle.py'
+      - 'benchmarks/v030_segmented_dict_oracle.py'
+      - 'benchmarks/v030_segmented_solid_oracle.py'
+      - 'benchmarks/v030_external_competitors.py'
+      - 'benchmarks/v030_release_generalization.py'
+      - '.github/workflows/v030-logs-chunked-dict-oracle.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-v030-logs-chunked-dict-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+
+jobs:
+  logs-chunked-dict:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install exact corpus and competitor dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y zstd gcc ffmpeg libsndfile1
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[audio,test]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
+      - name: Compile targeted oracle
+        run: python -m py_compile benchmarks/v030_logs_chunked_dict_oracle.py
+      - name: Run exact-tree logs chunk-trained dictionary sweep
+        run: |
+          mkdir -p benchmark-artifacts
+          python benchmarks/v030_logs_chunked_dict_oracle.py \
+            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-logs-chunked-dict-work" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-logs-chunked-dict.json"
+      - name: Enforce honest timing, extraction and locality evidence
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          d=json.loads(Path('benchmark-artifacts/v030-logs-chunked-dict.json').read_text())
+          assert d['schema']=='cmpct-v030-logs-chunked-dict-oracle-v1'
+          assert d['claim_boundary'].startswith('research-only')
+          assert d['target']=='neutral_hostile_v1/05_logs_and_telemetry'
+          assert d['sample_policy']=={
+              'sample_bytes': 64*1024,
+              'max_samples': 128,
+              'non_overlapping': True,
+              'sampling_time_charged_inside_dictionary_train_s': True,
+          }
+          assert d['max_member_read_amplification']==8.0
+          assert d['max_decode_unit_bytes']==8*1024*1024
+          s=d['summary']; r=d['row']
+          assert s['available_candidates'] > 0
+          assert s['all_available_tree_verified'] is True
+          assert s['all_available_locality_green'] is True
+          assert r['timing_boundary']=='source-scan+segment-plan+dictionary-train+zstd-segments+manifest+sha256+archive-write'
+          for c in r['candidates']:
+              if not c.get('available'):
+                  continue
+              assert c['tree_verified'] is True
+              assert c['locality_green'] is True
+              assert c['max_member_read_amplification'] <= 8.0
+              assert c['max_decode_unit_bytes'] <= 8*1024*1024
+              expected=c['pack_source_s']+c['dictionary_train_s']+c['compress_manifest_hash_write_s']
+              assert abs(c['create_s']-expected) < 1e-9
+              strict=all(c[k] for k in ('beats_zip_size','beats_zstd19_size','beats_zip_create','beats_zstd19_create'))
+              assert c['viable'] is strict
+          if s['four_way_win']:
+              b=s['best']
+              assert b is not None and b['viable'] is True
+              assert b['archive_bytes'] < r['zip']['archive_bytes']
+              assert b['archive_bytes'] < r['tar_zstd19']['archive_bytes']
+              assert b['create_s'] < r['zip']['create_s']
+              assert b['create_s'] < r['tar_zstd19']['create_s']
+          PY
+      - name: Upload targeted evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: v030-logs-chunked-dict-${{ github.sha }}
+          path: benchmark-artifacts/v030-logs-chunked-dict.json
+          if-no-files-found: error
+          retention-days: 90
+
+# Research only. A positive result identifies a locality-safe compression architecture worth productizing; it
+# does not authorize release or bypass canonical recovery/native/Android/product evidence.
