@@ -13,6 +13,7 @@ strong verifier, and verifies the restored canonical user tree after extraction.
 """
 
 from contextlib import contextmanager
+import os
 from pathlib import Path, PurePosixPath
 import shutil
 import tempfile
@@ -102,15 +103,42 @@ def build(source: Path, archive: Path) -> dict:
     }
 
 
+def _remove_path(path: Path) -> None:
+    if path.is_symlink() or path.is_file():
+        path.unlink(missing_ok=True)
+    elif path.exists():
+        shutil.rmtree(path)
+
+
 def extract(archive: Path, destination: Path) -> None:
+    """Extract transactionally without flattening authenticated hardlink relationships.
+
+    ``shutil.copytree`` is intentionally not used for final publication: copying a materialized profile turns
+    hardlink aliases into independent files and therefore changes canonical r25 filesystem identity.  The work
+    tree is instead created on the destination filesystem and atomically renamed into place, preserving inodes,
+    symlinks and metadata exactly as ``restore_manifest_tree`` authenticated them.
+    """
     destination = destination.resolve()
-    shutil.rmtree(destination, ignore_errors=True)
-    with tempfile.TemporaryDirectory(prefix="cmpct-eg01-extract-") as td:
-        profile = Path(td) / "profile"
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(prefix=".cmpct-eg01-extract-", dir=destination.parent) as td:
+        work = Path(td)
+        profile = work / "profile"
+        previous = work / "previous"
         with _engine(archive.resolve()):
             V25.extract(profile)
         _restore_profile(profile)
-        shutil.copytree(profile, destination, symlinks=True)
+
+        had_previous = destination.exists() or destination.is_symlink()
+        if had_previous:
+            os.replace(destination, previous)
+        try:
+            os.replace(profile, destination)
+        except Exception:
+            if had_previous and (previous.exists() or previous.is_symlink()):
+                os.replace(previous, destination)
+            raise
+        if had_previous:
+            _remove_path(previous)
 
 
 def strong_verify(archive: Path, *, expected_tree: str | None = None) -> dict:
