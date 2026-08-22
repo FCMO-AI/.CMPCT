@@ -60,8 +60,7 @@ def run(work_root: Path) -> dict:
     logs_archive = work_root / "archives" / logs_row["suite"] / f"{logs_row['name']}.cmpct"
     verified = CAND.strong_verify(logs_archive)
     revision, profile = CAND._revision_for_archive(logs_archive)
-    product = logs_row.get("stats", {}).get("canonical_product_stats") or logs_row.get("stats", {})
-    selected = product.get("selected")
+    selected = logs_row["selected"]
 
     totals = result["totals"]
     promotion_gate = {
@@ -72,7 +71,7 @@ def run(work_root: Path) -> dict:
         "accepted_v029_identity_unchanged": int(totals["accepted_v029_bytes"]) == 137_499_525,
         "logs_selected_canonical_profile": selected == "logs-inverse" and revision == 25 and profile == CAND.LOGS_PROFILE,
         "logs_strong_verify": bool(verified.get("ok")) and verified.get("tree_sha256") == logs_row["tree_sha256"],
-        "logs_strictly_beats_v029": int(logs_row["archive_bytes"]) < int(logs_row["v029_bytes"]),
+        "logs_strictly_beats_v029": int(logs_row["candidate_bytes"]) < int(logs_row["accepted_v029_bytes"]),
         "one_historical_regression_removed": int(totals["workloads_regressed"]) <= PREDECESSOR_REGRESSED_ROWS - 1,
         "aggregate_materially_advances": int(totals["candidate_bytes"]) <= PREDECESSOR_CANDIDATE_BYTES - MIN_TOTAL_IMPROVEMENT_BYTES,
         "locality_preserved": float(totals["max_selected_member_read_amplification"]) <= 8.0,
@@ -82,9 +81,9 @@ def run(work_root: Path) -> dict:
     result["candidate_engine"] = "experiments/entropygraph_v030_release_product_logs_candidate.py"
     result["candidate_release_facade"] = "cmpct-v030-release-product-logs-candidate-v1"
     result["logs_candidate"] = {
-        "v029_bytes": int(logs_row["v029_bytes"]),
-        "archive_bytes": int(logs_row["archive_bytes"]),
-        "saving_vs_v029_bytes": int(logs_row["v029_bytes"]) - int(logs_row["archive_bytes"]),
+        "accepted_v029_bytes": int(logs_row["accepted_v029_bytes"]),
+        "candidate_bytes": int(logs_row["candidate_bytes"]),
+        "saving_vs_v029_bytes": int(logs_row["saving_vs_v029_bytes"]),
         "selected": selected,
         "format_revision": revision,
         "format_profile": profile,
