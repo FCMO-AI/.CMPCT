@@ -54,6 +54,10 @@ def test_shipping_selector_does_not_claim_candidate_identity(tmp_path: Path) -> 
     _tree(source)
     archive = tmp_path / "candidate.cmpct"
     CAND.build(source, archive)
-    # The candidate is deliberately pre-promotion: ordinary product authority must not silently accept it.
-    with pytest.raises(Exception):
-        PRODUCT.strong_verify(archive)
+    # The release verifier is deliberately non-throwing for unsupported profiles: rejection is represented by
+    # ok=false so callers can safely inspect hostile/unknown bytes.  Pre-promotion therefore means the shipping
+    # facade must refuse to *credit* C25EG01, not that it must raise an exception.
+    verified = PRODUCT.strong_verify(archive)
+    assert verified.get("ok") is False
+    assert verified.get("format_revision") is None
+    assert verified.get("reader") == "cmpct-v030-release-product-v1"
