@@ -25,7 +25,7 @@ from tests import test_v030_zip_framing_factor_admission as ADMIT
 root=Path(sys.argv[1])
 src=root/'src'
 src.mkdir(parents=True)
-ADMIT._make_family(src, archives=5, members=3)
+ADMIT._unseen_family(src, count=5)
 product=ZFF._fused_scan(src)
 payload, stats=ZFF._build_archive(product, level=3)
 (root/'candidate.cmpct').write_bytes(payload)
