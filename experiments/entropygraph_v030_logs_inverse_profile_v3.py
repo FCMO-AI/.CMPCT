@@ -29,7 +29,6 @@ MAX_PATH_BYTES = V2.P.MAX_PATH_BYTES
 MAX_LOGICAL_BYTES = 512 * 1024 * 1024
 
 Archive = V2.Archive
-recovery_probe = V2.recovery_probe
 
 
 def build(source: Path, archive: Path) -> dict:
@@ -99,6 +98,45 @@ def strong_verify(path: Path) -> dict:
         "filesystem_regular_members": len(decoded["regular"]),
     })
     return verified
+
+
+def recovery_probe(path: Path) -> dict:
+    """Exercise two-way metadata recovery through the full canonical verifier, not only content identity."""
+    original = Path(path).read_bytes()
+    results = {}
+    with tempfile.TemporaryDirectory(prefix="cmpct-v030-logs-fs-recovery-") as td:
+        root = Path(td)
+
+        primary = root / "primary-damaged.cmpct"
+        raw = bytearray(original)
+        if len(raw) <= V2.P.HEADER.size + 8:
+            raise RuntimeError("logs canonical profile archive too short for recovery probe")
+        raw[V2.P.HEADER.size + 3] ^= 0x5A
+        primary.write_bytes(raw)
+        results["primary_damage"] = strong_verify(primary)
+
+        footer = V2.P.FOOTER.unpack(original[-V2.P.FOOTER.size:])
+        tail_csize = int(footer[1])
+        tail_meta_offset = len(original) - V2.P.FOOTER.size - tail_csize
+
+        tail = root / "tail-damaged.cmpct"
+        raw = bytearray(original)
+        raw[tail_meta_offset + 3] ^= 0xA5
+        tail.write_bytes(raw)
+        results["tail_damage"] = strong_verify(tail)
+
+        both = root / "both-damaged.cmpct"
+        raw = bytearray(original)
+        raw[V2.P.HEADER.size + 3] ^= 0x5A
+        raw[tail_meta_offset + 3] ^= 0xA5
+        both.write_bytes(raw)
+        try:
+            strong_verify(both)
+            both_failed_closed = False
+        except Exception:
+            both_failed_closed = True
+        results["both_failed_closed"] = both_failed_closed
+    return results
 
 
 def extract(path: Path, dst: Path) -> None:
