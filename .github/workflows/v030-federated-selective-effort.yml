@@ -79,11 +79,12 @@ jobs:
           assert len(d['rows'])==2
           assert d['measurement_gate']['passed'] is True
           adapter=d['accepted_v029_schema_adapter']
-          assert adapter=={
-              'source_field':'accepted_v029_bytes',
-              'compatibility_alias':'archive_bytes',
-              'values_unchanged':True,
-          }
+          assert adapter['source_field']=='accepted_v029_bytes'
+          assert adapter['compatibility_alias']=='archive_bytes'
+          assert adapter['values_unchanged'] is True
+          assert adapter['workloads']==15
+          assert adapter['accepted_v029_aggregate_bytes']==137499525
+          assert adapter['authoritative_loader_restored'] is True
           for row in d['rows']:
               assert row['accepted_v029_bytes'] > 0
               assert row['baseline_level1']['archive_bytes'] > row['accepted_v029_bytes']
