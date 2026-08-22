@@ -1,3 +1,6 @@
+#[path = "logs.rs"]
+pub(crate) mod logs;
+
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub(crate) enum R25Identity {
     ResearchG04,
@@ -53,4 +56,5 @@ pub(crate) fn classify(magic: &[u8; 8]) -> Option<R25Identity> {
 // Footnote: profile identity is isolated from reconstruction semantics on purpose. T03's productization
 // decision changed the canonical eight-byte framing while retaining the measured G0-G4/PrefixGraph grammars;
 // keeping this table singular prevents research or pre-parity profile bytes from being silently described as
-// supported canonical revision 25 before native/Android dispatch is complete.
+// supported canonical revision 25 before native/Android dispatch is complete. The hidden `logs` module above is
+// compiled only to make preparity/parser tests executable; `classify` intentionally does not admit its magic.
