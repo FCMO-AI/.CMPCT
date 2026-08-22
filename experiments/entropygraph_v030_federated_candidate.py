@@ -2,9 +2,9 @@ from __future__ import annotations
 
 """Bounded r25-candidate wrapper for the strongest EntropyGraph-v0.25 representation.
 
-This module is intentionally *not* wired into the release selector.  It gives the office/analytics
+This module is intentionally *not* wired into the release selector. It gives the office/analytics
 productization campaign its own reader-visible identity and an operation-derived locality audit instead of
-crediting research-only ``CMPNX5`` bytes.  The underlying representation logic is reused while it is being
+crediting research-only ``CMPNX5`` bytes. The underlying representation logic is reused while it is being
 factored into a production implementation; native/Android dispatch and release receipts remain forbidden.
 
 The candidate pays canonical filesystem staging, uses a dedicated 8-byte primary/tail identity, caps every
@@ -13,7 +13,6 @@ strong verifier, and verifies the restored canonical user tree after extraction.
 """
 
 from contextlib import contextmanager
-import hashlib
 from pathlib import Path, PurePosixPath
 import shutil
 import tempfile
@@ -21,39 +20,22 @@ import threading
 
 from experiments import entropygraph_v025 as V25
 from experiments import entropygraph_v030_product_fs as FS
+from experiments import entropygraph_v030_release_product_base as BASE
 
 MAGIC = b"C25EG01\0"
 TAIL_MAGIC = b"C25EG1T\0"
 LEVEL_CAP = 1
 MAX_PATH_BYTES = 4096
-MAX_PROFILE_FILES = 200_000
-MAX_PROFILE_LOGICAL_BYTES = 8 * 1024 * 1024 * 1024
-MAX_MANIFEST_ENTRIES = 250_000
+MAX_PROFILE_FILES = BASE.MAX_PROFILE_FILES
+MAX_PROFILE_LOGICAL_BYTES = BASE.MAX_PROFILE_LOGICAL_BYTES
+MAX_MANIFEST_ENTRIES = BASE.MAX_MANIFEST_ENTRIES
 MAX_DECODE_UNIT = 8 * 1024 * 1024
 MAX_MEMBER_AMPLIFICATION = 8.0
 _LOCK = threading.RLock()
 
 
 def _treehash(root: Path) -> str:
-    """Canonical user-tree identity, including filesystem metadata and link semantics."""
-    h = hashlib.sha256()
-    for p in sorted(root.rglob("*"), key=lambda q: q.relative_to(root).as_posix()):
-        rel = p.relative_to(root).as_posix().encode("utf-8")
-        st = p.lstat()
-        h.update(len(rel).to_bytes(4, "little")); h.update(rel)
-        h.update(int(st.st_mode).to_bytes(4, "little", signed=False))
-        h.update(int(st.st_mtime_ns).to_bytes(8, "little", signed=True))
-        if p.is_symlink():
-            target = p.readlink().as_posix().encode("utf-8")
-            h.update(b"L"); h.update(len(target).to_bytes(4, "little")); h.update(target)
-        elif p.is_dir():
-            h.update(b"D")
-        elif p.is_file():
-            raw = p.read_bytes(); h.update(b"F")
-            h.update(len(raw).to_bytes(8, "little")); h.update(hashlib.sha256(raw).digest())
-        else:
-            raise RuntimeError(f"unsupported filesystem entry: {p}")
-    return h.hexdigest()
+    return BASE.treehash(root)
 
 
 @contextmanager
@@ -91,12 +73,14 @@ def _restore_profile(profile: Path) -> dict:
 
 def build(source: Path, archive: Path) -> dict:
     """Build a dedicated candidate-profile archive and strongly verify it before returning."""
-    source = source.resolve(); archive = archive.resolve()
+    source = source.resolve()
+    archive = archive.resolve()
     archive.parent.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix="cmpct-eg01-build-") as td:
         profile = Path(td) / "profile"
         fs = FS.prepare_profile_tree(
-            source, profile,
+            source,
+            profile,
             max_path_bytes=MAX_PATH_BYTES,
             max_profile_files=MAX_PROFILE_FILES,
             max_profile_logical_bytes=MAX_PROFILE_LOGICAL_BYTES,
@@ -184,36 +168,53 @@ def locality_report(archive: Path) -> dict:
                 if path in visiting:
                     raise RuntimeError("cycle in candidate reconstruction graph")
                 visiting.add(path)
-                desc = files[path]; typ = desc[0]; packs: set[int] = set()
+                desc = files[path]
+                typ = desc[0]
+                packs: set[int] = set()
                 if typ == "plain":
-                    _refs_packs(desc[1], packs); length = int(desc[2])
+                    _refs_packs(desc[1], packs)
+                    length = int(desc[2])
                 elif typ == "zipstreams":
                     _refs_packs(desc[1], packs)
-                    for start, size in desc[3]: stream_dependencies(int(start), int(size), packs)
+                    for start, size in desc[3]:
+                        stream_dependencies(int(start), int(size), packs)
                     length = int(desc[4])
                 elif typ == "inflate_stream":
-                    stream_dependencies(int(desc[1]), int(desc[2]), packs); length = int(desc[4])
+                    stream_dependencies(int(desc[1]), int(desc[2]), packs)
+                    length = int(desc[4])
                 elif typ == "decode_file":
-                    child, _ = deps(str(desc[1])); packs |= child; length = int(desc[3])
+                    child, _ = deps(str(desc[1]))
+                    packs |= child
+                    length = int(desc[3])
                 elif typ == "splice":
                     _refs_packs(desc[1], packs)
                     for child_path in desc[3]:
-                        child, _ = deps(str(child_path)); packs |= child
+                        child, _ = deps(str(child_path))
+                        packs |= child
                     length = int(desc[4])
                 else:
                     raise RuntimeError(f"unsupported candidate recipe {typ!r}")
-                visiting.remove(path); cache[path] = (set(packs), length)
+                visiting.remove(path)
+                cache[path] = (set(packs), length)
                 return packs, length
 
             rows = []
-            max_amp = 0.0; max_unit = max(pack_sizes, default=0)
+            max_amp = 0.0
+            max_unit = max(pack_sizes, default=0)
             for path in sorted(files):
                 packs, logical = deps(path)
                 decoded = sum(pack_sizes[i] for i in packs)
                 amp = decoded / max(1, logical)
                 max_amp = max(max_amp, amp)
-                rows.append({"path": path, "logical_bytes": logical, "decoded_context_bytes": decoded,
-                             "amplification": amp, "pack_count": len(packs)})
+                rows.append(
+                    {
+                        "path": path,
+                        "logical_bytes": logical,
+                        "decoded_context_bytes": decoded,
+                        "amplification": amp,
+                        "pack_count": len(packs),
+                    }
+                )
         finally:
             f.close()
     return {
