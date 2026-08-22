@@ -40,7 +40,10 @@ def build_vector(output: Path, work_root: Path) -> dict:
     (src / "gzip.log").write_bytes(gzip_plain)
     (src / "gzip.log.gz").write_bytes(gzip.compress(gzip_plain, compresslevel=6, mtime=0))
     (src / "unmatched.log").write_bytes(unmatched)
-    os.link(src / "zstd.log", src / "zstd-hard.log")
+    # Canonical r25 assigns hardlink ownership to the first deterministic pathname encountered. Keep the alias
+    # lexically after zstd.log so the Android vector's `regular_path` is guaranteed to be the regular owner and
+    # `hardlink_path` is guaranteed to exercise KIND_HARDLINK instead of depending on incidental inode ordering.
+    os.link(src / "zstd.log", src / "zz-zstd-hard.log")
     os.symlink("zstd.log", src / "zstd-link")
 
     archive = work_root / "v030-logs-android.cmpct"
@@ -63,7 +66,7 @@ def build_vector(output: Path, work_root: Path) -> dict:
         "expected_paths": expected_paths,
         "expected_entry_count": len(expected_paths),
         "regular_path": "zstd.log",
-        "hardlink_path": "zstd-hard.log",
+        "hardlink_path": "zz-zstd-hard.log",
         "symlink_path": "zstd-link",
         "symlink_target": "zstd.log",
         "regular_head_base64": base64.b64encode(zstd_plain[:64]).decode("ascii"),
