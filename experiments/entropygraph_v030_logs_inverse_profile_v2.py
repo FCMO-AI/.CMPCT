@@ -6,6 +6,11 @@ v1 used one raw payload pack for all retained compressed sidecars. Although thos
 a naive reader could still touch unrelated sidecar bytes. v2 stores each retained sidecar in its own authenticated
 RAW pack so physical bytes touched, decoded context and logical ownership all agree. The archive grammar and reader
 remain the same; only writer pack partitioning changes.
+
+The optional ``compressed_direct_paths`` hook exists for wrappers that add small, highly compressible internal
+control members such as the canonical filesystem manifest. The default is empty, preserving v2's exact historical
+product-boundary bytes. A compressed direct member is represented as ordinary ``pack`` storage so locality accounts
+for its decoded pack rather than pretending compressed storage is a raw range read.
 """
 
 import hashlib
@@ -27,7 +32,13 @@ MAX_DECODE_UNIT = P.MAX_DECODE_UNIT
 MAX_MEMBER_AMPLIFICATION = P.MAX_MEMBER_AMPLIFICATION
 
 
-def build(source: Path, archive: Path) -> dict:
+def build(
+    source: Path,
+    archive: Path,
+    *,
+    compressed_direct_paths: set[str] | frozenset[str] | None = None,
+) -> dict:
+    compressed_direct_paths = frozenset(compressed_direct_paths or ())
     rows, edges, edge_stats = BASE._scan_and_edges(source)
     if not rows or len(rows) > P.MAX_FILES:
         raise RuntimeError("logs profile file-count bounds")
@@ -47,13 +58,17 @@ def build(source: Path, archive: Path) -> dict:
             cursor += length
         packs.append(P._pack_row(raw, compress=True))
 
-    direct_packs: dict[int, int] = {}
+    direct_packs: dict[int, tuple[int, str]] = {}
+    compressed_direct_count = 0
     for index, row in enumerate(rows):
         if index in edges or index in owners:
             continue
+        rel = str(row["rel"])
+        compress = rel in compressed_direct_paths
         pack_index = len(packs)
-        packs.append(P._pack_row(row["raw"], compress=False))
-        direct_packs[index] = pack_index
+        packs.append(P._pack_row(row["raw"], compress=compress))
+        direct_packs[index] = (pack_index, "pack" if compress else "raw")
+        compressed_direct_count += int(compress)
     if len(packs) > P.MAX_PACKS:
         raise RuntimeError("logs profile pack-count bounds")
 
@@ -71,7 +86,8 @@ def build(source: Path, archive: Path) -> dict:
             pack_index, offset, length = owners[index]
             storage = ["pack", pack_index, offset, length]
         else:
-            storage = ["raw", direct_packs[index], 0, int(row["size"])]
+            pack_index, kind = direct_packs[index]
+            storage = [kind, pack_index, 0, int(row["size"])]
         files.append([prefix, rel[prefix:], int(row["size"]), row["sha256"], storage])
         previous = rel
 
@@ -104,6 +120,7 @@ def build(source: Path, archive: Path) -> dict:
         "files": len(rows),
         "packs": len(packs),
         "direct_sidecar_packs": len(direct_packs),
+        "compressed_direct_packs": compressed_direct_count,
         "meta_raw_bytes": len(meta),
         "meta_comp_bytes": len(meta_comp),
         "recovery_control_copies": 2,
