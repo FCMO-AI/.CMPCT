@@ -163,7 +163,11 @@ fn native_logs_public_view_uses_authenticated_filesystem_manifest() {
     assert_eq!(view.entries()[link].kind, 2);
     assert_eq!(view.entries()[zstd].kind, 0);
     assert!(view.read_member(nested).is_err());
-    assert!(view.read_member(link).is_err());
+    let (link_raw, link_stats) = view.read_member(link).unwrap();
+    assert_eq!(link_raw, b"zstd.log");
+    assert_eq!(link_stats.logical_bytes, b"zstd.log".len() as u64);
+    assert_eq!(link_stats.decoded_context_bytes, b"zstd.log".len() as u64);
+    assert_eq!(link_stats.amplification, 1.0);
     let (raw, stats) = view.read_member(zstd).unwrap();
     assert_eq!(raw.len() as u64, view.entries()[zstd].size);
     assert!(stats.amplification <= 8.0);
