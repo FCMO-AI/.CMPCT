@@ -19,6 +19,7 @@ fn repo_root() -> PathBuf {
 
 fn python_fixture(root: &Path) {
     let script = r#"
+import gzip
 import hashlib
 import sys
 from pathlib import Path
@@ -28,15 +29,19 @@ from experiments import entropygraph_v030_logs_inverse_profile_v3 as LOGS
 root=Path(sys.argv[1])
 src=root/'src'
 src.mkdir(parents=True)
-plain=(b'2026-08-21T20:00:00Z INFO request=alpha value=42\n' * 4096)
-other=(b'2026-08-21T20:00:01Z WARN request=beta value=17\n' * 3072)
-(src/'app.log').write_bytes(plain)
-(src/'app.log.zst').write_bytes(zstd.ZstdCompressor(level=3, threads=0).compress(plain))
-(src/'other.log').write_bytes(other)
+zstd_plain=(b'2026-08-21T20:00:00Z INFO request=alpha value=42\n' * 4096)
+gzip_plain=(b'2026-08-21T20:00:01Z WARN request=beta value=17\n' * 3584)
+unmatched=(b'2026-08-21T20:00:02Z INFO request=gamma value=99\n' * 2048)
+(src/'zstd.log').write_bytes(zstd_plain)
+(src/'zstd.log.zst').write_bytes(zstd.ZstdCompressor(level=3, threads=0).compress(zstd_plain))
+(src/'gzip.log').write_bytes(gzip_plain)
+(src/'gzip.log.gz').write_bytes(gzip.compress(gzip_plain, compresslevel=6, mtime=0))
+(src/'unmatched.log').write_bytes(unmatched)
 archive=root/'candidate.cmpct'
 stats=LOGS.build(src, archive)
 verified=LOGS.strong_verify(archive)
 assert verified['ok'] is True
+assert stats['inverse_edges'] >= 2, stats
 (root/'expected.tsv').write_text(''.join(
     f"{p.relative_to(src).as_posix()}\t{hashlib.sha256(p.read_bytes()).hexdigest()}\t{p.stat().st_size}\n"
     for p in sorted(src.rglob('*')) if p.is_file()
@@ -79,7 +84,7 @@ fn le_u64(raw: &[u8]) -> u64 {
 }
 
 #[test]
-fn python_logs_writer_rust_reader_roundtrips_zstd_inverse_edge_and_locality() {
+fn python_logs_writer_rust_reader_roundtrips_gzip_zstd_inverse_edges_and_locality() {
     let temp = tempfile::tempdir().unwrap();
     python_fixture(temp.path());
     let archive_path = temp.path().join("candidate.cmpct");
