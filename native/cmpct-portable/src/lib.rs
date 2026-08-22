@@ -2,10 +2,17 @@ mod canonical;
 mod format;
 mod g04;
 mod identity;
+mod logs;
+mod logs_public;
 mod manifest;
 mod prefix;
 #[doc(hidden)]
 pub mod zipfactor;
+
+#[cfg(test)]
+mod logs_preparity_tests;
+#[cfg(test)]
+mod logs_semantic_tests;
 
 #[doc(hidden)]
 pub use crate::canonical::Canonical25Archive;
@@ -13,6 +20,8 @@ use crate::format::safe_relpath;
 #[doc(hidden)]
 pub use crate::g04::G04Archive;
 use crate::identity::{R25Identity, classify};
+use crate::logs::LogsInverseArchive;
+use crate::logs_public::LogsPublicView;
 #[doc(hidden)]
 pub use crate::prefix::PrefixArchive;
 use cmpct_core::Archive as R24Archive;
@@ -26,6 +35,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use thiserror::Error;
 
 const R24_MAGIC: &[u8; 8] = b"CMPCT24\0";
+const LOGS_INVERSE_MAGIC: &[u8; 8] = b"C25LG12\0";
 const R24_VERIFY_MATERIALIZE_LIMIT: u64 = 256 * 1024 * 1024;
 
 #[derive(Debug, Error)]
@@ -55,6 +65,7 @@ pub enum Profile {
     Revision24,
     G04,
     PrefixGraph,
+    LogsInverse,
     ResearchG04,
     ResearchPrefixGraph,
 }
@@ -65,6 +76,7 @@ impl Profile {
             Self::Revision24 => "r24",
             Self::G04 => "g04-r25",
             Self::PrefixGraph => "prefixgraph-r25",
+            Self::LogsInverse => "logs-inverse-r25",
             Self::ResearchG04 => "research-g04",
             Self::ResearchPrefixGraph => "research-prefixgraph",
         }
@@ -73,7 +85,7 @@ impl Profile {
     pub fn revision(self) -> u32 {
         match self {
             Self::Revision24 => 24,
-            Self::G04 | Self::PrefixGraph => 25,
+            Self::G04 | Self::PrefixGraph | Self::LogsInverse => 25,
             Self::ResearchG04 | Self::ResearchPrefixGraph => 0,
         }
     }
@@ -100,6 +112,10 @@ pub struct MemberReadStats {
 pub enum PortableArchive {
     Revision24(R24Archive),
     Canonical25(Canonical25Archive),
+    LogsInverse {
+        archive: LogsInverseArchive,
+        entries: Vec<PortableEntry>,
+    },
     ResearchG04(G04Archive),
     ResearchPrefixGraph(PrefixArchive),
 }
@@ -111,6 +127,11 @@ impl PortableArchive {
         probe.read_exact(&mut magic)?;
         if &magic == R24_MAGIC {
             return Ok(Self::Revision24(R24Archive::open(path)?));
+        }
+        if &magic == LOGS_INVERSE_MAGIC {
+            let archive = LogsInverseArchive::open(path)?;
+            let entries = LogsPublicView::new(&archive)?.entries().to_vec();
+            return Ok(Self::LogsInverse { archive, entries });
         }
         let identity = classify(&magic).ok_or_else(|| {
             PortableError::Format("archive magic is not a supported r24/r25 representation".into())
@@ -130,6 +151,7 @@ impl PortableArchive {
         match self {
             Self::Revision24(_) => Profile::Revision24,
             Self::Canonical25(archive) => archive.profile(),
+            Self::LogsInverse { .. } => Profile::LogsInverse,
             Self::ResearchG04(_) => Profile::ResearchG04,
             Self::ResearchPrefixGraph(_) => Profile::ResearchPrefixGraph,
         }
@@ -143,6 +165,7 @@ impl PortableArchive {
         match self {
             Self::Revision24(_) => false,
             Self::Canonical25(archive) => archive.tail_authenticated(),
+            Self::LogsInverse { archive, .. } => archive.tail_authenticated(),
             Self::ResearchG04(archive) => archive.tail_authenticated(),
             Self::ResearchPrefixGraph(archive) => archive.tail_authenticated(),
         }
@@ -152,6 +175,7 @@ impl PortableArchive {
         match self {
             Self::Revision24(_) => None,
             Self::Canonical25(archive) => Some(archive.declared_amplification()),
+            Self::LogsInverse { .. } => Some(8.0),
             Self::ResearchG04(archive) => Some(archive.declared_amplification()),
             Self::ResearchPrefixGraph(_) => Some(8.0),
         }
@@ -171,6 +195,7 @@ impl PortableArchive {
                 })
                 .collect(),
             Self::Canonical25(archive) => archive.entries().to_vec(),
+            Self::LogsInverse { entries, .. } => entries.clone(),
             Self::ResearchG04(archive) => archive.entries().to_vec(),
             Self::ResearchPrefixGraph(archive) => archive.entries().to_vec(),
         }
@@ -220,6 +245,9 @@ impl PortableArchive {
                 })
             }
             Self::Canonical25(archive) => archive.stream_member(index, output),
+            Self::LogsInverse { archive, .. } => {
+                LogsPublicView::new(archive)?.stream_member(index, output)
+            }
             Self::ResearchG04(archive) => archive.stream_member(index, output),
             Self::ResearchPrefixGraph(archive) => archive.stream_member(index, output),
         }
@@ -256,6 +284,7 @@ impl PortableArchive {
                 ))
             }
             Self::Canonical25(archive) => archive.read_member(index),
+            Self::LogsInverse { archive, .. } => LogsPublicView::new(archive)?.read_member(index),
             Self::ResearchG04(archive) => archive.read_member(index),
             Self::ResearchPrefixGraph(archive) => archive.read_member(index),
         }
@@ -333,6 +362,7 @@ impl PortableArchive {
                 Ok(())
             }
             Self::Canonical25(archive) => archive.verify(),
+            Self::LogsInverse { archive, .. } => LogsPublicView::new(archive)?.verify(),
             Self::ResearchG04(archive) => archive.verify(),
             Self::ResearchPrefixGraph(archive) => archive.verify(),
         }
@@ -369,6 +399,9 @@ impl PortableArchive {
         if let Self::Canonical25(archive) = self {
             return archive.extract_into(root);
         }
+        if let Self::LogsInverse { archive, .. } = self {
+            return LogsPublicView::new(archive)?.extract_into(root);
+        }
         let entries = self.entries();
         for (index, entry) in entries.iter().enumerate() {
             let rel = safe_relpath(&entry.path)?;
@@ -401,6 +434,9 @@ impl PortableArchive {
     pub fn export_zip(&self, destination: &Path) -> Result<(), PortableError> {
         if let Self::Canonical25(archive) = self {
             return archive.export_zip(destination);
+        }
+        if let Self::LogsInverse { archive, .. } = self {
+            return LogsPublicView::new(archive)?.export_zip(destination);
         }
         let file = File::create(destination)?;
         let mut writer = zip::ZipWriter::new(file);
