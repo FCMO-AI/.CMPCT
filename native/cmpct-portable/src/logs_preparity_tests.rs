@@ -104,10 +104,15 @@ fn python_logs_writer_rust_reader_roundtrips_gzip_zstd_inverse_edges_and_localit
     assert_eq!(portable.revision(), 25);
     assert!(portable.tail_metadata_authenticated());
     assert_eq!(portable.declared_member_read_amplification(), Some(8.0));
-    portable.verify().expect("production dispatch strong verification");
-    assert!(portable.entries().iter().all(|entry| {
-        !entry.path.starts_with(".__cmpct_r25_internal__/")
-    }));
+    portable
+        .verify()
+        .expect("production dispatch strong verification");
+    assert!(
+        portable
+            .entries()
+            .iter()
+            .all(|entry| { !entry.path.starts_with(".__cmpct_r25_internal__/") })
+    );
 
     let archive =
         LogsInverseArchive::open(&archive_path).expect("Rust must open Python logs output");
@@ -150,7 +155,7 @@ fn native_logs_public_view_uses_authenticated_filesystem_manifest() {
     assert!(
         view.entries()
             .iter()
-            .all(|entry| !entry.path.starts_with(".__cmpct_r25_internal__/") )
+            .all(|entry| !entry.path.starts_with(".__cmpct_r25_internal__/"))
     );
     let nested = view
         .entries()
