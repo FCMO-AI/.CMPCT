@@ -5,7 +5,8 @@ from __future__ import annotations
 This oracle measures the complete candidate creation boundary used by the current ZIP-factor research profile:
 source scan + build + publication + cold mandatory strong verification.  ZIP and solid Zstd-19 are rebuilt on the
 same runner with rotated execution order.  The parallel candidate receives no performance credit unless its final
-archive is byte-for-byte identical to the serial level-3 C25Z3 reference and restores the exact canonical tree.
+archive is byte-for-byte identical to the serial level-3 C25Z3 reference, its verified member identities match an
+independent source-filesystem scan, and the canonical source tree remains unchanged.
 """
 
 import argparse
@@ -54,6 +55,17 @@ def _candidate(stage: Path, archive: Path, *, parallel: bool) -> dict:
     }
 
 
+def _source_identities(stage: Path) -> dict[str, list[object]]:
+    """Independent regular-file truth; does not reuse writer/parser state."""
+    result: dict[str, list[object]] = {}
+    for path in sorted(stage.rglob("*"), key=lambda item: item.relative_to(stage).as_posix()):
+        if not path.is_file() or path.is_symlink():
+            continue
+        raw = path.read_bytes()
+        result[path.relative_to(stage).as_posix()] = [len(raw), hashlib.sha256(raw).hexdigest()]
+    return result
+
+
 def _median(rows: list[dict], key: str) -> float:
     return float(statistics.median(float(row[key]) for row in rows))
 
@@ -70,6 +82,7 @@ def run(work_root: Path) -> dict:
         stage = EXT._normalized_stage(source, td)
         truth = CANON._prepare_profile_tree(stage, td / "truth")
         source_tree = CANON._semantic_tree_sha(CANON._decode_manifest(truth["manifest_raw"]))
+        source_identities = _source_identities(stage)
 
         serial_rows: list[dict] = []
         parallel_rows: list[dict] = []
@@ -101,17 +114,18 @@ def run(work_root: Path) -> dict:
         reference_sha = serial_rows[0]["archive_sha256"]
         reference_bytes = serial_rows[0]["archive_bytes"]
         reference_identities = serial_rows[0]["identities"]
-        serial_exact = all(
+        source_identity_exact = reference_identities == source_identities
+        serial_exact = source_identity_exact and all(
             row["archive_sha256"] == reference_sha
             and row["archive_bytes"] == reference_bytes
             and row["identities"] == reference_identities
             and row["strong_verify_green"]
             for row in serial_rows
         )
-        parallel_exact = all(
+        parallel_exact = source_identity_exact and all(
             row["archive_sha256"] == reference_sha
             and row["archive_bytes"] == reference_bytes
-            and row["identities"] == reference_identities
+            and row["identities"] == source_identities
             and row["strong_verify_green"]
             and row["max_member_read_amplification"] <= 8.0
             and row["max_decode_unit_bytes"] <= 8 * 1024 * 1024
@@ -126,8 +140,6 @@ def run(work_root: Path) -> dict:
         zstd_bytes = int(zstd_rows[0]["archive_bytes"])
         speedup = (serial_create - parallel_create) / serial_create if serial_create else 0.0
 
-        # Verify semantic truth independently from candidate-owned identities.
-        candidate_tree = CANON._semantic_tree_sha(CANON._decode_manifest(truth["manifest_raw"]))
         result = {
             "schema": "cmpct-v030-zipfactor-parallel-build-oracle-v1",
             "claim_boundary": "research scheduling proof only; selector/native/Android/recovery promotion forbidden",
@@ -137,7 +149,7 @@ def run(work_root: Path) -> dict:
             "group_size": GROUP_SIZE,
             "workers": WORKERS,
             "source_semantic_tree_sha256": source_tree,
-            "candidate_semantic_tree_sha256": candidate_tree,
+            "source_regular_identities": source_identities,
             "serial": {
                 "archive_bytes": reference_bytes,
                 "archive_sha256": reference_sha,
@@ -157,7 +169,7 @@ def run(work_root: Path) -> dict:
         result["gate"] = {
             "serial_exact": serial_exact,
             "parallel_exact_to_serial": parallel_exact,
-            "semantic_tree_exact": candidate_tree == source_tree,
+            "verified_identities_match_independent_source": source_identity_exact,
             "parallel_strictly_faster_than_serial": parallel_create < serial_create,
             "parallel_strictly_smaller_than_zip": reference_bytes < zip_bytes,
             "parallel_strictly_smaller_than_zstd19": reference_bytes < zstd_bytes,
