@@ -1,0 +1,79 @@
+name: CMPCT v0.30 EG08 feature-pruned executor
+
+on:
+  pull_request:
+    paths:
+      - 'benchmarks/v030_federated_compact_framing_v8_policy_exec_v6.py'
+      - 'benchmarks/v030_federated_compact_framing_v8_policy_distill_v5.py'
+      - 'benchmarks/v030_federated_compact_framing_v8_policy_distill_v4.py'
+      - 'benchmarks/v030_federated_compact_framing_v8_policy_distill_v3.py'
+      - 'experiments/entropygraph_v030_federated_compact_framing_candidate_v8.py'
+      - 'experiments/entropygraph_v030_federated_embedded_fs_candidate_v7.py'
+      - '.github/workflows/v030-eg08-feature-pruned-exec.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: v030-eg08-feature-pruned-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  feature-pruned-exec:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install deterministic corpus dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y zstd gcc ffmpeg libsndfile1
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[audio,test]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
+      - name: Compile feature-pruned execution surface
+        run: |
+          python -m py_compile \
+            benchmarks/v030_federated_compact_framing_v8_policy_exec_v6.py \
+            benchmarks/v030_federated_compact_framing_v8_policy_distill_v5.py
+      - name: Run exact-byte feature-pruned office execution proof
+        run: |
+          mkdir -p benchmark-artifacts
+          python benchmarks/v030_federated_compact_framing_v8_policy_exec_v6.py \
+            --work-root benchmark-artifacts/v030-eg08-policy-v6-work \
+            --output benchmark-artifacts/v030-eg08-policy-v6.json
+      - name: Independently enforce execution and release invariants
+        if: always()
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          p=Path('benchmark-artifacts/v030-eg08-policy-v6.json')
+          assert p.exists(), 'feature-pruned evidence missing'
+          d=json.loads(p.read_text())
+          x=d['execution_change']; m=d['measured_candidate']; s=d['strict']
+          assert d['schema']=='cmpct-v030-eg08-policy-exec-v6'
+          assert x['unused_policy_features_not_evaluated'] is True
+          assert x['final_high_effort_pack_compressed_once'] is True
+          assert x['archive_identity_required'] is True
+          assert m['exact_bytes_vs_serial_reference'] is True
+          assert s['content_identity_not_policy_input'] is True
+          assert s['exact_serial_archive_identity'] is True
+          assert s['same_selected_level_vector'] is True
+          assert s['beats_accepted_v029_size'] is True
+          assert s['beats_zip_size'] is True
+          assert s['beats_zstd19_size'] is True
+          assert s['within_release_locality_bounds'] is True
+          # This lane is allowed to falsify the performance hypothesis honestly.
+          # The ordinary external/final authorities remain the release decision.
+          PY
+      - name: Upload feature-pruned evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: v030-eg08-feature-pruned-${{ github.sha }}
+          path: benchmark-artifacts/v030-eg08-policy-v6.json
+          if-no-files-found: warn
+          retention-days: 90
