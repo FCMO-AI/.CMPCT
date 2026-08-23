@@ -95,11 +95,21 @@ def test_compact_framing_expands_to_exact_inherited_header_semantics(tmp_path: P
     assert sha == hashlib.sha256(pack_raw).digest()
 
 
+def test_compact_metadata_key_ownership_is_exactly_eg07() -> None:
+    # EG08 parses EG07-authenticated metadata after EG07 has restored EG06's process-global key to 6.
+    # The compact parser must therefore own key 7 explicitly, not accept either historical sibling key.
+    EG08._validate_metadata_map({"v": 4, EG07.EMBEDDED_FS_KEY: b"fs"}, root=True)
+    with pytest.raises(RuntimeError, match="unauthorized non-string root key"):
+        EG08._validate_metadata_map({"v": 4, 6: b"old-eg06-slot"}, root=True)
+    with pytest.raises(RuntimeError, match="non-string nested key"):
+        EG08._validate_metadata_map({"v": 4, "nested": {EG07.EMBEDDED_FS_KEY: b"not-root"}}, root=True)
+
+
 def test_compact_header_saving_formula_exceeds_office_remaining_gap() -> None:
     fixed = (V25.HDR.size - EG08.HDR.size) + (V25.FTR.size - EG08.FTR.size)
     per_pack = V25.PH.size - EG08.PH.size
     assert fixed == 20
     assert per_pack == 8
-    # Three packs are already enough to recover >42 bytes.  Office's federated graph has many more than this;
+    # Three packs are already enough to recover >42 bytes. Office's federated graph has many more than this;
     # the exact frontier workflow measures its real pack count before claiming the office result.
     assert fixed + 3 * per_pack > 42
