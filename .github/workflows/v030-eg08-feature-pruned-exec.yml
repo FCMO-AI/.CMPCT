@@ -41,7 +41,7 @@ jobs:
       - name: Run exact-byte feature-pruned office execution proof
         run: |
           mkdir -p benchmark-artifacts
-          python benchmarks/v030_federated_compact_framing_v8_policy_exec_v6.py \
+          python -m benchmarks.v030_federated_compact_framing_v8_policy_exec_v6 \
             --work-root benchmark-artifacts/v030-eg08-policy-v6-work \
             --output benchmark-artifacts/v030-eg08-policy-v6.json
       - name: Independently enforce execution and release invariants
