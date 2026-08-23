@@ -46,40 +46,49 @@ jobs:
             benchmarks/v030_federated_compact_framing_v8_direct_v4.py \
             benchmarks/v030_federated_compact_framing_v8_direct_v5.py \
             benchmarks/v030_federated_compact_framing_v8_policy_distill.py \
-            benchmarks/v030_federated_compact_framing_v8_policy_distill_v2.py
+            benchmarks/v030_federated_compact_framing_v8_policy_distill_v2.py \
+            benchmarks/v030_federated_compact_framing_v8_policy_distill_v3.py
       - name: Preserve compact-framing integrity and recovery regressions
         run: |
           python -m pytest -q \
             tests/test_v030_federated_compact_framing_v8.py \
             tests/test_v030_federated_fused_verify.py
-      - name: Run two-region content-agnostic office effort policy frontier
+      - name: Run identity-free feature policy frontier
         run: |
           mkdir -p benchmark-artifacts
-          python benchmarks/v030_federated_compact_framing_v8_policy_distill_v2.py \
-            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-eg08-policy-v2-work" \
-            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-eg08-policy-v2.json"
+          python benchmarks/v030_federated_compact_framing_v8_policy_distill_v3.py \
+            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-eg08-policy-v3-work" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-eg08-policy-v3.json"
       - name: Independently enforce no frozen-identity policy and four-way win
         run: |
           python - <<'PY'
           import json
           from pathlib import Path
-          d=json.loads(Path('benchmark-artifacts/v030-eg08-policy-v2.json').read_text())
-          assert d['schema']=='cmpct-v030-eg08-policy-distillation-v2'
+          d=json.loads(Path('benchmark-artifacts/v030-eg08-policy-v3.json').read_text())
+          assert d['schema']=='cmpct-v030-eg08-policy-distillation-v3'
           assert d['candidate']=='C25EG08'
           assert d['accepted_v029_bytes']==5954026
-          assert d['policy_inputs']==['raw_bytes','level1_ratio']
-          assert set(d['forbidden_policy_inputs'])=={'sha256','path','workload_label','benchmark_name'}
+          assert d['policy_inputs']==[
+              'raw_bytes','level1_ratio','entropy_bits_per_byte','zero_fraction','printable_fraction'
+          ]
+          assert set(d['forbidden_policy_inputs'])=={'sha256','path','filename','workload_label','benchmark_name'}
           assert d['predecessor_single_rule_family_falsified'] is True
+          assert d['predecessor_two_region_family_falsified'] is True
           p=d['selected_policy']
           assert set(p)=={'rules','overlap_resolution'}
           assert p['overlap_resolution']=='max_level'
-          assert 1 <= len(p['rules']) <= 2
+          assert 1 <= len(p['rules']) <= 4
+          allowed_features=set(d['policy_inputs'])
           for rule in p['rules']:
-              assert set(rule)=={'min_raw_bytes','max_raw_bytes_exclusive','max_level1_ratio','level'}
+              assert set(rule)=={'feature','operator','threshold','level'}
+              assert rule['feature'] in allowed_features
+              assert rule['operator'] in {'<=','>='}
               assert int(rule['level']) in {12,15,19,22}
           sf=d['search_family']
-          assert sf['max_rules']==2
-          assert sf['candidate_policies_clearing_size_floors']>=1
+          assert sf['max_rules']==4
+          assert sf['deduplicated_atomic_rules']>=1
+          assert sf['clearing_states']>=1
+          assert len(sf['state_counts_by_depth'])>=2
           m=d['measured_candidate']; c=d['comparators']; s=d['strict']
           assert int(m['archive_bytes']) == int(m['projected_archive_bytes'])
           assert int(m['archive_bytes']) < 5954026
@@ -89,8 +98,9 @@ jobs:
           assert float(m['median_verified_create_s']) < float(c['zstd19']['median_create_s'])
           assert float(m['max_member_read_amplification']) <= 8.0
           assert int(m['max_decode_unit_bytes']) <= 8*1024*1024
-          assert s['content_hash_not_policy_input'] is True
+          assert s['content_identity_not_policy_input'] is True
           assert s['exact_size_projection'] is True
+          assert s['rule_count_within_bound'] is True
           assert s['passed'] is True
           PY
       - name: CI topology self-check
@@ -99,12 +109,12 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v6
         with:
-          name: v030-eg08-policy-v2-${{ github.sha }}
-          path: benchmark-artifacts/v030-eg08-policy-v2.json
+          name: v030-eg08-policy-v3-${{ github.sha }}
+          path: benchmark-artifacts/v030-eg08-policy-v3.json
           if-no-files-found: warn
           retention-days: 90
 
-# v1's single monotone threshold family is retained as negative evidence. v2 expands only to two generic regions
-# over raw pack size and level-1 ratio; frozen pack hashes, paths and workload identity remain forbidden. This lane
-# is still promotion-incomplete: all-15/adversarial generalization, production selector ownership, native/Android
-# parity and strict release authority remain mandatory.
+# v1's single-rule and v2's two-region raw-size/level1-ratio families are retained as negative evidence. v3
+# expands only to cheap, content-derived pack statistics and at most four simple threshold rules. Pack hashes,
+# paths, filenames and workload identity remain forbidden. This lane is promotion-incomplete: all-15/adversarial
+# generalization, selector ownership, native/Android parity and strict release authority remain mandatory.
