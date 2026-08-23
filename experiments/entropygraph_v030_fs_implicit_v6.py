@@ -79,8 +79,6 @@ def _decode_runs(runs: list, *, max_entries: int) -> list[list]:
             raise RuntimeError("implicit-v6 malformed metadata run token")
         if not 1 <= count <= max_entries or len(out) + count > max_entries:
             raise RuntimeError("implicit-v6 expanded metadata count exceeds policy")
-        # Validate before logical expansion.
-        V4._apply_override([0, 0, 0, 0, []], encoded) if False else None
         out.extend([encoded] * count)
     return out
 
@@ -180,7 +178,8 @@ def _unpack(raw: bytes, *, max_path_bytes: int, max_entries: int):
                     raise RuntimeError("implicit-v6 symlink target declaration")
             elif not isinstance(extra, int) or isinstance(extra, bool) or not 0 <= extra < len(regular_meta):
                 raise RuntimeError("implicit-v6 hardlink target must reference a regular graph entry")
-        paths.append(rel); seen.add(rel)
+        paths.append(rel)
+        seen.add(rel)
         decoded_explicit.append((row, meta, rel, extra))
         previous = rel
     return default, regular_meta, decoded_explicit, paths
