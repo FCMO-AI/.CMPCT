@@ -9,6 +9,7 @@ on:
       - 'experiments/entropygraph_v030_federated_compact_framing_candidate_v8.py'
       - 'benchmarks/v030_federated_embedded_fs_v7_effort_oracle.py'
       - 'benchmarks/v030_federated_compact_framing_v8_oracle.py'
+      - 'benchmarks/v030_federated_compact_framing_v8_direct.py'
       - 'tests/test_v030_federated_compact_framing_v8.py'
       - '.github/workflows/v030-federated-compact-framing-v8.yml'
   workflow_dispatch:
@@ -26,7 +27,7 @@ env:
 jobs:
   compact-framing-frontier:
     runs-on: ubuntu-24.04
-    timeout-minutes: 360
+    timeout-minutes: 480
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-python@v6
@@ -40,20 +41,21 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -e '.[audio,test]'
           python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
-      - name: Compile compact framing and oracle
+      - name: Compile compact framing and direct office evidence
         run: |
           python -m py_compile \
             experiments/entropygraph_v030_federated_compact_framing_candidate_v8.py \
-            benchmarks/v030_federated_compact_framing_v8_oracle.py
+            benchmarks/v030_federated_compact_framing_v8_oracle.py \
+            benchmarks/v030_federated_compact_framing_v8_direct.py
       - name: Run bounded compact-framing and recovery regressions
         run: python -m pytest -q tests/test_v030_federated_compact_framing_v8.py
-      - name: Run exact office compact-framing frontier
+      - name: Run exact office compact-framing structural frontier
         run: |
           mkdir -p benchmark-artifacts
           python benchmarks/v030_federated_compact_framing_v8_oracle.py \
             --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-eg08-work" \
             --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-eg08-framing.json"
-      - name: Independently enforce immutable office byte identity
+      - name: Independently enforce immutable office structural byte identity
         run: |
           python - <<'PY'
           import json
@@ -77,6 +79,40 @@ jobs:
           assert o['strictly_beats_v029_at_same_payload_floor'] is True
           assert o['remaining_bytes_to_strict_v029_win']==0
           PY
+      - name: Run direct measured office productization frontier
+        run: |
+          python benchmarks/v030_federated_compact_framing_v8_direct.py \
+            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-eg08-direct-work" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-eg08-direct.json"
+      - name: Independently require direct v0.29 + ZIP + Zstd size/create win
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          d=json.loads(Path('benchmark-artifacts/v030-eg08-direct.json').read_text())
+          assert d['schema']=='cmpct-v030-eg08-direct-office-v1'
+          assert d['candidate']=='C25EG08'
+          assert d['accepted_v029_bytes']==5954026
+          assert d['eg07_all_best_floor_bytes']==5954067
+          assert d['framing_saving_bytes']==92
+          assert d['measurement_gate']['passed'] is True
+          m=d['measured_candidate']; s=m['strict']; c=d['comparators']
+          assert len(m['raw_verified_create_s'])==3
+          assert len(c['zip']['raw_create_s'])==3
+          assert len(c['zstd19']['raw_create_s'])==3
+          assert m['archive_bytes'] < d['accepted_v029_bytes']
+          assert m['archive_bytes'] < c['zip']['archive_bytes']
+          assert m['archive_bytes'] < c['zstd19']['archive_bytes']
+          assert m['median_verified_create_s'] < c['zip']['median_create_s']
+          assert m['median_verified_create_s'] < c['zstd19']['median_create_s']
+          assert s['beats_accepted_v029_size'] is True
+          assert s['beats_zip_size'] is True
+          assert s['beats_zstd19_size'] is True
+          assert s['verified_create_beats_zip'] is True
+          assert s['verified_create_beats_zstd19'] is True
+          assert s['within_release_locality_bounds'] is True
+          assert s['passed'] is True
+          PY
       - name: Public-surface guard
         if: always()
         run: python tools/check_public_surface.py
@@ -85,9 +121,12 @@ jobs:
         uses: actions/upload-artifact@v6
         with:
           name: v030-eg08-compact-framing-${{ github.sha }}
-          path: benchmark-artifacts/v030-eg08-framing.json
+          path: |
+            benchmark-artifacts/v030-eg08-framing.json
+            benchmark-artifacts/v030-eg08-direct.json
           if-no-files-found: warn
           retention-days: 90
 
-# C25EG08 is research-only. This lane proves a structural byte frontier; it cannot authorize selector/native/Android
-# promotion or weaken any ordinary all-15 external/generalization/runtime/native/final release gate.
+# C25EG08 is research-only. This lane now requires both the structural framing proof and a direct repeated candidate
+# build+compact+strong-verify win over immutable v0.29, ZIP and Zstd. It still cannot authorize selector/native/
+# Android promotion or weaken any ordinary all-15 external/generalization/runtime/native/final release gate.
