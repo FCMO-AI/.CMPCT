@@ -3,9 +3,9 @@ from __future__ import annotations
 """C25EG08: EG07 payload/metadata semantics with compact self-describing physical framing.
 
 Exact EG07 evidence leaves office 42 bytes above the immutable accepted-v0.29 floor while already beating ZIP
-and Zstd on size and verified creation time.  EG08 deliberately stops changing filesystem-control semantics and
+and Zstd on size and verified creation time. EG08 deliberately stops changing filesystem-control semantics and
 moves one layer down: Zstd frames already carry their decoded content size, and authenticated metadata already
-carries ``pack_count``.  The inherited CMPNX5 physical header redundantly stores those values again.
+carries ``pack_count``. The inherited CMPNX5 physical header redundantly stores those values again.
 
 EG08 removes only those redundant physical integers:
 - primary/tail metadata raw size is recovered from the Zstd frame content-size field;
@@ -13,11 +13,10 @@ EG08 removes only those redundant physical integers:
 - a Zstd pack's raw size is recovered from its frame, while an uncompressed pack's raw size equals its payload.
 
 SHA-256 metadata/pack authentication, CRC32 hot integrity, duplicated primary/tail metadata, pack payload bytes,
-reconstruction graph, filesystem semantics and locality limits are unchanged.  Research-only; shipping/native/
+reconstruction graph, filesystem semantics and locality limits are unchanged. Research-only; shipping/native/
 Android dispatch remain untouched.
 """
 
-import binascii
 import hashlib
 from pathlib import Path
 import struct
@@ -52,6 +51,29 @@ def _frame_size(payload: bytes, *, label: str) -> int:
     return size
 
 
+def _validate_metadata_map(value, *, root: bool = False) -> None:
+    """Keep EG07's metadata-key contract after its temporary EG06 binding is restored.
+
+    EG07 emits exactly one compact integer root key (7). Its implementation temporarily rebinds EG06's
+    ``EMBEDDED_FS_KEY`` while building/reading an EG07 archive, then restores EG06 to key 6. EG08 parses EG07
+    metadata outside that mutation context, so delegating to EG06's validator would incorrectly reject valid
+    EG07 metadata. Own the narrow key contract here instead: key 7 is allowed only at the authenticated root;
+    every other root key and every nested map key must remain a string.
+    """
+
+    if isinstance(value, dict):
+        for key, nested in value.items():
+            if root:
+                if not isinstance(key, str) and key != EG07.EMBEDDED_FS_KEY:
+                    raise RuntimeError("EG08 metadata contains an unauthorized non-string root key")
+            elif not isinstance(key, str):
+                raise RuntimeError("EG08 metadata contains a non-string nested key")
+            _validate_metadata_map(nested, root=False)
+    elif isinstance(value, (list, tuple)):
+        for nested in value:
+            _validate_metadata_map(nested, root=False)
+
+
 def _decode_metadata(payload: bytes, digest: bytes) -> tuple[bytes, dict]:
     raw_size = _frame_size(payload, label="metadata")
     raw = V25.zd(payload, raw_size)
@@ -61,8 +83,7 @@ def _decode_metadata(payload: bytes, digest: bytes) -> tuple[bytes, dict]:
         meta = msgpack.unpackb(raw, raw=False, strict_map_key=False)
     except Exception as exc:
         raise RuntimeError("compact framing metadata decode") from exc
-    # Reuse EG06/EG07's deliberately narrow integer-root-key validator; nested maps remain string-keyed.
-    EG07.EG06._validate_metadata_map(meta, root=True)
+    _validate_metadata_map(meta, root=True)
     if not isinstance(meta, dict) or meta.get("v") != 4:
         raise RuntimeError("compact framing metadata version")
     return raw, meta
@@ -133,7 +154,6 @@ def _parse(path: Path) -> dict:
     tail_meta_start = len(blob) - FTR.size - mcs
     if pos != tail_meta_start:
         raise RuntimeError("compact framing physical/tail boundary")
-    # Healthy archives have identical metadata copies.  Recovery may intentionally use one surviving copy.
     return {
         "meta_comp": meta_comp,
         "meta_raw": meta_raw,
@@ -173,6 +193,7 @@ def compact_existing(source: Path, target: Path) -> dict:
     if hashlib.sha256(meta_raw).digest() != digest:
         raise RuntimeError("compact source metadata authentication")
     meta = msgpack.unpackb(meta_raw, raw=False, strict_map_key=False)
+    _validate_metadata_map(meta, root=True)
     if int(meta.get("pack_count", -1)) != int(pack_count):
         raise RuntimeError("compact source pack-count disagreement")
 
