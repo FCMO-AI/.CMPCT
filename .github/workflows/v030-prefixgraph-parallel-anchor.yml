@@ -6,9 +6,12 @@ on:
     paths:
       - 'benchmarks/v030_prefixgraph_parallel_anchor_oracle.py'
       - 'benchmarks/v030_prefixgraph_parallel_anchor_oracle_v2.py'
+      - 'benchmarks/v030_prefixgraph_parallel_anchor_oracle_v3.py'
       - 'benchmarks/v030_prefixgraph_terminal_parity_oracle.py'
       - 'experiments/entropygraph_v030_prefixgraph.py'
+      - 'experiments/entropygraph_v030_prefixgraph_parallel.py'
       - 'experiments/entropygraph_v030_release_candidate.py'
+      - 'tests/test_v030_prefixgraph_parallel_release.py'
       - '.github/workflows/v030-prefixgraph-parallel-anchor.yml'
   workflow_dispatch:
 
@@ -33,17 +36,22 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -e '.[audio,test]'
           python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
-      - name: Compile PrefixGraph parallel oracle
+      - name: Compile promoted PrefixGraph scheduler and proof
         run: |
+          python -m py_compile experiments/entropygraph_v030_prefixgraph_parallel.py
+          python -m py_compile experiments/entropygraph_v030_release_candidate.py
           python -m py_compile benchmarks/v030_prefixgraph_parallel_anchor_oracle.py
           python -m py_compile benchmarks/v030_prefixgraph_parallel_anchor_oracle_v2.py
-      - name: Run exact-byte serial vs parallel PrefixGraph proof
+          python -m py_compile benchmarks/v030_prefixgraph_parallel_anchor_oracle_v3.py
+      - name: Run focused release binding regression
+        run: python -m pytest -q tests/test_v030_prefixgraph_parallel_release.py
+      - name: Run exact-byte serial vs promoted PrefixGraph proof
         run: |
           mkdir -p benchmark-artifacts
-          python -m benchmarks.v030_prefixgraph_parallel_anchor_oracle_v2 \
+          python -m benchmarks.v030_prefixgraph_parallel_anchor_oracle_v3 \
             --work-root benchmark-artifacts/v030-prefixgraph-parallel-work \
             --output benchmark-artifacts/v030-prefixgraph-parallel.json
-      - name: Independently enforce exactness and materiality
+      - name: Independently enforce shipping exactness and materiality
         if: always()
         run: |
           python - <<'PY'
@@ -52,10 +60,16 @@ jobs:
           p=Path('benchmark-artifacts/v030-prefixgraph-parallel.json')
           assert p.exists(), 'PrefixGraph parallel evidence missing'
           d=json.loads(p.read_text())
-          assert d['schema']=='cmpct-v030-prefixgraph-parallel-anchor-v2'
+          assert d['schema']=='cmpct-v030-prefixgraph-parallel-anchor-v3'
           assert d['target_discovery']['type']=='logical-name-normalization-only'
           assert d['target_discovery']['builder_or_tournament_changed'] is False
-          s=d['scheduling_change']; g=d['gate']; rows=d['rows']
+          ship=d['shipping_regression']; s=d['scheduling_change']; g=d['gate']; rows=d['rows']
+          assert ship['builder']=='experiments.entropygraph_v030_prefixgraph_parallel.build'
+          assert ship['prototype_builder_used'] is False
+          assert ship['release_candidate_imports_shipping_builder'] is True
+          assert ship['candidate_set_unchanged'] is True
+          assert ship['complete_byte_tournament_unchanged'] is True
+          assert ship['direct_payload_floor_unchanged'] is True
           assert s['candidate_set_unchanged'] is True
           assert s['complete_byte_tournament_unchanged'] is True
           assert s['direct_payload_floor_unchanged'] is True
@@ -63,11 +77,15 @@ jobs:
           assert all(row['exact_archive_identity'] for row in rows)
           assert all(row['exact_tree_identity'] for row in rows)
           assert all(row['within_release_locality'] for row in rows)
-          # A timing miss is honest negative evidence; no threshold is weakened here.
+          assert all(row['material_speedup'] for row in rows)
+          assert all(row['relative_improvement'] >= 0.20 for row in rows)
+          assert all(row['absolute_saving_s'] >= 1.0 for row in rows)
           assert g['exact_target_count'] is True
           assert g['exact_archive_identity_all'] is True
           assert g['exact_tree_identity_all'] is True
           assert g['locality_green_all'] is True
+          assert g['material_speedup_all'] is True
+          assert g['passed'] is True
           PY
       - name: Upload PrefixGraph scheduling evidence
         if: always()
