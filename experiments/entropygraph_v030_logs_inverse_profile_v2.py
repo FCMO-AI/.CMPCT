@@ -127,6 +127,7 @@ class Archive(P.Archive):
         member_cache: dict[int, tuple[bytes, int]] = {}
         pack_cache: dict[int, bytes] = {}
         active: set[int] = set()
+        prepared_parents: set[Path] = {dst}
         for index, row in enumerate(self.files):
             # ``P.Archive._parse_meta`` is the semantic owner of archive-path safety: before ``self.files`` can
             # exist it rejects absolute paths, NUL-free path overflows, duplicate paths and every ``..``
@@ -135,7 +136,10 @@ class Archive(P.Archive):
             # Join only the validated POSIX components; this keeps extraction fail-closed while removing that
             # filesystem-dependent hot-loop overhead.
             target = dst.joinpath(*PurePosixPath(row[5]).parts)
-            target.parent.mkdir(parents=True, exist_ok=True)
+            parent = target.parent
+            if parent not in prepared_parents:
+                parent.mkdir(parents=True, exist_ok=True)
+                prepared_parents.add(parent)
             value, _context = self._restore_session(
                 index,
                 member_cache=member_cache,
