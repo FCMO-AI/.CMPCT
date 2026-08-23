@@ -11,6 +11,7 @@ on:
       - 'benchmarks/v030_federated_embedded_fs_v7_effort_oracle.py'
       - 'benchmarks/v030_federated_compact_framing_v8_oracle.py'
       - 'benchmarks/v030_federated_compact_framing_v8_direct.py'
+      - 'benchmarks/v030_federated_compact_framing_v8_direct_v3.py'
       - 'tests/test_v030_federated_compact_framing_v8.py'
       - 'tests/test_v030_prefixgraph_admission_rejection.py'
       - '.github/workflows/v030-federated-compact-framing-v8.yml'
@@ -49,7 +50,8 @@ jobs:
             experiments/entropygraph_v030_federated_compact_framing_candidate_v8.py \
             experiments/entropygraph_v030_release_admission.py \
             benchmarks/v030_federated_compact_framing_v8_oracle.py \
-            benchmarks/v030_federated_compact_framing_v8_direct.py
+            benchmarks/v030_federated_compact_framing_v8_direct.py \
+            benchmarks/v030_federated_compact_framing_v8_direct_v3.py
       - name: Run bounded compact-framing, recovery and locality-admission regressions
         run: |
           python -m pytest -q \
@@ -85,20 +87,25 @@ jobs:
           assert o['strictly_beats_v029_at_same_payload_floor'] is True
           assert o['remaining_bytes_to_strict_v029_win']==0
           PY
-      - name: Run direct exact-parallel office productization frontier
+      - name: Run direct exact single-pass office productization frontier
         run: |
-          python benchmarks/v030_federated_compact_framing_v8_direct.py \
-            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-eg08-direct-work" \
-            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-eg08-direct.json"
+          python benchmarks/v030_federated_compact_framing_v8_direct_v3.py \
+            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-eg08-direct-v3-work" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-eg08-direct-v3.json"
       - name: Independently require exact bytes plus v0.29 ZIP and Zstd size/create wins
         run: |
           python - <<'PY'
           import json
           from pathlib import Path
-          d=json.loads(Path('benchmark-artifacts/v030-eg08-direct.json').read_text())
-          assert d['schema']=='cmpct-v030-eg08-direct-office-v2'
+          d=json.loads(Path('benchmark-artifacts/v030-eg08-direct-v3.json').read_text())
+          assert d['schema']=='cmpct-v030-eg08-direct-office-v3'
           assert d['candidate']=='C25EG08'
-          assert d['schedule']=='level1-build-plus-exact-parallel-final-pack-recompression'
+          assert d['schedule']=='raw-final-build-plus-exact-parallel-selected-pack-compression'
+          b=d['single_pass_boundary']
+          assert b['graph_search_changed'] is False
+          assert b['probe_compression_changed'] is False
+          assert b['final_pack_compressed_once'] is True
+          assert b['exact_serial_archive_identity_required'] is True
           assert d['accepted_v029_bytes']==5954026
           assert d['eg07_all_best_floor_bytes']==5954067
           assert d['framing_saving_bytes']==92
@@ -134,12 +141,13 @@ jobs:
           name: v030-eg08-compact-framing-${{ github.sha }}
           path: |
             benchmark-artifacts/v030-eg08-framing.json
-            benchmark-artifacts/v030-eg08-direct.json
+            benchmark-artifacts/v030-eg08-direct-v3.json
           if-no-files-found: warn
           retention-days: 90
 
 # C25EG08 is research-only. This lane requires both the structural framing proof and a direct repeated candidate
-# win over immutable v0.29, ZIP and Zstd. Parallel final-pack timing receives credit only after exact byte identity
-# with the ordinary serial selected-effort policy; the timed boundary still pays a complete level-1 build before
-# recompression, so no unrealized single-pass optimization is assumed. It cannot authorize selector/native/Android
-# promotion or weaken any ordinary all-15 external/generalization/runtime/native/final release gate.
+# win over immutable v0.29, ZIP and Zstd. The v3 timed boundary removes only duplicated compression of final
+# physical packs: graph/search auditions remain unchanged, final packs are compressed once with the exact selected
+# levels, and timing receives credit only after exact byte/SHA identity with the ordinary serial selected-effort
+# archive. It cannot authorize selector/native/Android promotion or weaken any ordinary all-15 external/
+# generalization/runtime/native/final release gate.
