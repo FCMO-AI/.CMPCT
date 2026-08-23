@@ -1,0 +1,74 @@
+# ci-lane: deep
+name: CMPCT v0.30 PrefixGraph parallel anchor oracle
+
+on:
+  pull_request:
+    paths:
+      - 'benchmarks/v030_prefixgraph_parallel_anchor_oracle.py'
+      - 'benchmarks/v030_prefixgraph_terminal_parity_oracle.py'
+      - 'experiments/entropygraph_v030_prefixgraph.py'
+      - 'experiments/entropygraph_v030_release_candidate.py'
+      - '.github/workflows/v030-prefixgraph-parallel-anchor.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: v030-prefixgraph-parallel-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  prefixgraph-parallel-anchor:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install benchmark dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y zstd gcc ffmpeg libsndfile1
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[audio,test]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
+      - name: Compile PrefixGraph parallel oracle
+        run: python -m py_compile benchmarks/v030_prefixgraph_parallel_anchor_oracle.py
+      - name: Run exact-byte serial vs parallel PrefixGraph proof
+        run: |
+          mkdir -p benchmark-artifacts
+          python -m benchmarks.v030_prefixgraph_parallel_anchor_oracle \
+            --work-root benchmark-artifacts/v030-prefixgraph-parallel-work \
+            --output benchmark-artifacts/v030-prefixgraph-parallel.json
+      - name: Independently enforce exactness and materiality
+        if: always()
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          p=Path('benchmark-artifacts/v030-prefixgraph-parallel.json')
+          assert p.exists(), 'PrefixGraph parallel evidence missing'
+          d=json.loads(p.read_text())
+          assert d['schema']=='cmpct-v030-prefixgraph-parallel-anchor-v1'
+          s=d['scheduling_change']; g=d['gate']; rows=d['rows']
+          assert s['candidate_set_unchanged'] is True
+          assert s['complete_byte_tournament_unchanged'] is True
+          assert s['direct_payload_floor_unchanged'] is True
+          assert len(rows)==2
+          assert all(row['exact_archive_identity'] for row in rows)
+          assert all(row['exact_tree_identity'] for row in rows)
+          assert all(row['within_release_locality'] for row in rows)
+          # A timing miss is honest negative evidence; no threshold is weakened here.
+          assert g['exact_target_count'] is True
+          assert g['exact_archive_identity_all'] is True
+          assert g['exact_tree_identity_all'] is True
+          assert g['locality_green_all'] is True
+          PY
+      - name: Upload PrefixGraph scheduling evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: v030-prefixgraph-parallel-${{ github.sha }}
+          path: benchmark-artifacts/v030-prefixgraph-parallel.json
+          if-no-files-found: warn
+          retention-days: 90
