@@ -112,6 +112,28 @@ def test_full_extract_does_not_repeat_filesystem_resolution_for_authenticated_pa
     assert (output / "events.log").read_bytes().startswith(b"2026-08-22T14:00:00Z")
 
 
+def test_full_extract_prepares_shared_parent_once(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    source = tmp_path / "source"
+    _source(source)
+    archive_path = tmp_path / "logs.cmpct"
+    V2.build(source, archive_path, allowed_inverse_codecs={"gzip", "zstd"})
+    output = tmp_path / "out"
+
+    original_mkdir = Path.mkdir
+    output_mkdir_calls = 0
+
+    def counted_mkdir(path: Path, *args, **kwargs):
+        nonlocal output_mkdir_calls
+        if path == output:
+            output_mkdir_calls += 1
+        return original_mkdir(path, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "mkdir", counted_mkdir)
+    V2.extract(archive_path, output)
+    # The extraction root is prepared once. Root-level members must not each repeat mkdir(exist_ok=True).
+    assert output_mkdir_calls == 1
+
+
 def test_metadata_parser_remains_fail_closed_for_parent_traversal():
     unsafe = msgpack.packb(
         [
