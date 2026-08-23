@@ -125,7 +125,10 @@ def run(work_root: Path) -> dict:
     for suite, root in roots:
         for source in sorted(path for path in root.iterdir() if path.is_dir()):
             expected = accepted[(suite, source.name)]["tree_sha256"]
-            if GENERAL.V029.treehash(source) != expected:
+            # The accepted repaired corpus is frozen in the release-candidate tree-hash domain.  The old
+            # v0.29 benchmark helper no longer owns a treehash API; binding to it made this oracle die before
+            # producing evidence.  Reuse the exact semantic owner used by PrefixGraph eligibility/selection.
+            if RC.treehash(source) != expected:
                 raise RuntimeError(f"frozen source drift for {suite}/{source.name}")
             with tempfile.TemporaryDirectory(prefix="cmpct-pg-terminal-row-", dir=work_root) as td:
                 rows.append(_one(suite, source, accepted, Path(td)))
