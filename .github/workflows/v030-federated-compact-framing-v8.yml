@@ -85,27 +85,30 @@ jobs:
           assert o['strictly_beats_v029_at_same_payload_floor'] is True
           assert o['remaining_bytes_to_strict_v029_win']==0
           PY
-      - name: Run direct measured office productization frontier
+      - name: Run direct exact-parallel office productization frontier
         run: |
           python benchmarks/v030_federated_compact_framing_v8_direct.py \
             --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-eg08-direct-work" \
             --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-eg08-direct.json"
-      - name: Independently require direct v0.29 + ZIP + Zstd size/create win
+      - name: Independently require exact bytes plus v0.29 ZIP and Zstd size/create wins
         run: |
           python - <<'PY'
           import json
           from pathlib import Path
           d=json.loads(Path('benchmark-artifacts/v030-eg08-direct.json').read_text())
-          assert d['schema']=='cmpct-v030-eg08-direct-office-v1'
+          assert d['schema']=='cmpct-v030-eg08-direct-office-v2'
           assert d['candidate']=='C25EG08'
+          assert d['schedule']=='level1-build-plus-exact-parallel-final-pack-recompression'
           assert d['accepted_v029_bytes']==5954026
           assert d['eg07_all_best_floor_bytes']==5954067
           assert d['framing_saving_bytes']==92
           assert d['measurement_gate']['passed'] is True
-          m=d['measured_candidate']; s=m['strict']; c=d['comparators']
+          m=d['measured_candidate']; s=m['strict']; c=d['comparators']; r=d['serial_reference']
           assert len(m['raw_verified_create_s'])==3
           assert len(c['zip']['raw_create_s'])==3
           assert len(c['zstd19']['raw_create_s'])==3
+          assert m['archive_bytes']==r['archive_bytes']
+          assert m['archive_sha256']==r['archive_sha256']
           assert m['archive_bytes'] < d['accepted_v029_bytes']
           assert m['archive_bytes'] < c['zip']['archive_bytes']
           assert m['archive_bytes'] < c['zstd19']['archive_bytes']
@@ -117,7 +120,9 @@ jobs:
           assert s['verified_create_beats_zip'] is True
           assert s['verified_create_beats_zstd19'] is True
           assert s['within_release_locality_bounds'] is True
+          assert s['byte_identical_to_serial_selected_policy'] is True
           assert s['passed'] is True
+          assert d['measurement_gate']['parallel_exact_byte_identity'] is True
           PY
       - name: Public-surface guard
         if: always()
@@ -133,7 +138,8 @@ jobs:
           if-no-files-found: warn
           retention-days: 90
 
-# C25EG08 is research-only. This lane now requires both the structural framing proof and a direct repeated candidate
-# build+compact+strong-verify win over immutable v0.29, ZIP and Zstd. Locality-admission policy changes also rerun
-# the lane so evidence stays exact-fingerprint-bound. It still cannot authorize selector/native/Android promotion
-# or weaken any ordinary all-15 external/generalization/runtime/native/final release gate.
+# C25EG08 is research-only. This lane requires both the structural framing proof and a direct repeated candidate
+# win over immutable v0.29, ZIP and Zstd. Parallel final-pack timing receives credit only after exact byte identity
+# with the ordinary serial selected-effort policy; the timed boundary still pays a complete level-1 build before
+# recompression, so no unrealized single-pass optimization is assumed. It cannot authorize selector/native/Android
+# promotion or weaken any ordinary all-15 external/generalization/runtime/native/final release gate.
