@@ -100,11 +100,15 @@ def run(work_root: Path) -> dict:
                 elif name == "zip":
                     results[name] = EXT._zip(stage, td / f"base-{round_index}.zip", td / f"zip-out-{round_index}")
                 else:
+                    # EXT._tar_zstd intentionally expects its scratch directory to exist.  Create it here so this
+                    # scheduling oracle measures codec work rather than failing before the comparator can start.
+                    zstd_work = td / f"zstd-work-{round_index}"
+                    zstd_work.mkdir(parents=True, exist_ok=True)
                     results[name] = EXT._tar_zstd(
                         stage,
                         td / f"base-{round_index}.tar.zst",
                         td / f"zstd-out-{round_index}",
-                        td / f"zstd-work-{round_index}",
+                        zstd_work,
                     )
             serial_rows.append(results["serial"])
             parallel_rows.append(results["parallel"])
