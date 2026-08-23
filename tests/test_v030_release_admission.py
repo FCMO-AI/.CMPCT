@@ -24,7 +24,11 @@ def test_metadata_only_locality_matches_prefixgraph_contract(tmp_path: Path) -> 
     assert locality["passed"] is True
     assert locality["max_member_read_amplification"] <= 8.0
     assert locality["prefix_records"] == stats["prefix_records"]
-    assert locality["accounting_source"] == "authenticated-metadata-only"
+    # Admission deliberately authenticates and accounts metadata without opening the strict release reader first:
+    # over-locality PrefixGraph candidates must remain visible as rejected negative evidence rather than crashing
+    # causality accounting.  Keep that evidence boundary explicit so a future refactor cannot silently conflate it
+    # with the ordinary reader's publication-time accounting path.
+    assert locality["accounting_source"] == "authenticated-metadata-only-admission-preflight"
     assert locality["payload_bytes_materialized_for_locality"] == 0
 
 
