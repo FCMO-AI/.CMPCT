@@ -8,6 +8,12 @@ shipping baseline naturally converges to identical bytes; the useful contract is
 verification and preserve the strict size + complete-create wins against ZIP/Deflate-9 and solid tar+Zstd-19 on
 the two hostile families that justified the policy, while never regressing the encrypted-like negative control.
 
+Creation times on these rows are often only a few tenths of a second. A single process/noise sample can therefore
+reverse a strict ZIP comparison even when the ordinary external frontier is stable. This ratchet uses repeated,
+rotated same-runner measurements and medians while keeping the exact same strict per-format inequalities. Every
+CMPCT timing still includes r24 build + mandatory strong verification; no preprocessing or verification cost is
+moved outside the measured boundary.
+
 The separate ``v030_r24_medium_binary_pack_generalization.py`` lane owns the historical r24-v3 -> r24-v4
 15-workload zero-byte-regression proof. This focused lane cannot authorize release or weaken any external gate.
 """
@@ -16,6 +22,7 @@ import argparse
 import json
 from pathlib import Path
 import shutil
+import statistics
 import tempfile
 import time
 
@@ -26,6 +33,7 @@ from benchmarks import v030_external_competitors as EXT
 from experiments import entropygraph_v030_release_product as P
 
 MEDIUM_MAX = 256 * 1024
+ROUNDS = 5
 TARGETS = (
     ("resemblance_hostile_v1/02_false_neighbors", "hostile", "02_false_neighbors", True),
     ("resemblance_hostile_v1/05_incompressible", "hostile", "05_incompressible", True),
@@ -58,10 +66,40 @@ def _verified_shipping_r24(root: Path, out: Path) -> dict:
     }
 
 
-def _comparators(root: Path, work: Path) -> dict:
-    z = EXT._zip(root, work / "cmp.zip", work / "zip-out")
-    s = EXT._tar_zstd(root, work / "cmp.tar.zst", work / "zstd-out", work)
-    return {"zip_deflate9": z, "tar_zstd19_solid": s}
+def _median(rows: list[dict], key: str) -> float:
+    return float(statistics.median(float(row[key]) for row in rows))
+
+
+def _measure_row(source: Path, work: Path) -> tuple[list[dict], list[dict], list[dict]]:
+    r24_rows: list[dict] = []
+    zip_rows: list[dict] = []
+    zstd_rows: list[dict] = []
+    order = ["r24", "zip", "zstd"]
+    for round_index in range(ROUNDS):
+        rotated = order[round_index % len(order):] + order[: round_index % len(order)]
+        results: dict[str, dict] = {}
+        for name in rotated:
+            if name == "r24":
+                results[name] = _verified_shipping_r24(source, work / f"r24-{round_index}.cmpct")
+            elif name == "zip":
+                results[name] = EXT._zip(
+                    source,
+                    work / f"zip-{round_index}.zip",
+                    work / f"zip-out-{round_index}",
+                )
+            else:
+                zstd_work = work / f"zstd-work-{round_index}"
+                zstd_work.mkdir(parents=True, exist_ok=True)
+                results[name] = EXT._tar_zstd(
+                    source,
+                    work / f"zstd-{round_index}.tar.zst",
+                    work / f"zstd-out-{round_index}",
+                    zstd_work,
+                )
+        r24_rows.append(results["r24"])
+        zip_rows.append(results["zip"])
+        zstd_rows.append(results["zstd"])
+    return r24_rows, zip_rows, zstd_rows
 
 
 def run(work_root: Path) -> dict:
@@ -79,50 +117,93 @@ def run(work_root: Path) -> dict:
         source = (neutral_root if suite == "neutral" else hostile_root) / name
         with tempfile.TemporaryDirectory(prefix="cmpct-v030-r24-medium-pack-regression-", dir=work_root) as td:
             w = Path(td)
-            first = _verified_shipping_r24(source, w / "first.cmpct")
-            second = _verified_shipping_r24(source, w / "second.cmpct")
-            comps = _comparators(source, w)
-        deterministic_bytes = first["archive_bytes"] == second["archive_bytes"]
-        same_tree = first["tree_sha256"] == second["tree_sha256"]
-        beats_zip_size = first["archive_bytes"] < comps["zip_deflate9"]["archive_bytes"]
-        beats_zstd_size = first["archive_bytes"] < comps["tar_zstd19_solid"]["archive_bytes"]
-        beats_zip_create = first["complete_create_s"] < comps["zip_deflate9"]["create_s"]
-        beats_zstd_create = first["complete_create_s"] < comps["tar_zstd19_solid"]["create_s"]
+            r24_rows, zip_rows, zstd_rows = _measure_row(source, w)
+
+        first = r24_rows[0]
+        r24_bytes = int(first["archive_bytes"])
+        tree = first["tree_sha256"]
+        deterministic_bytes = all(int(row["archive_bytes"]) == r24_bytes for row in r24_rows)
+        same_tree = all(row["tree_sha256"] == tree for row in r24_rows)
+        zip_size_deterministic = len({int(row["archive_bytes"]) for row in zip_rows}) == 1
+        zstd_size_deterministic = len({int(row["archive_bytes"]) for row in zstd_rows}) == 1
+        zip_bytes = int(zip_rows[0]["archive_bytes"])
+        zstd_bytes = int(zstd_rows[0]["archive_bytes"])
+        r24_create = _median(r24_rows, "complete_create_s")
+        zip_create = _median(zip_rows, "create_s")
+        zstd_create = _median(zstd_rows, "create_s")
+
+        beats_zip_size = r24_bytes < zip_bytes
+        beats_zstd_size = r24_bytes < zstd_bytes
+        beats_zip_create = r24_create < zip_create
+        beats_zstd_create = r24_create < zstd_create
         strict_four_way = beats_zip_size and beats_zstd_size and beats_zip_create and beats_zstd_create
         rows.append({
             "label": label,
             "positive_target": positive,
-            "shipping_r24": first,
-            "repeat_r24": second,
-            "comparators": comps,
+            "rounds": ROUNDS,
+            "shipping_r24": {
+                **first,
+                "median_complete_create_s": r24_create,
+                "complete_create_samples_s": [float(row["complete_create_s"]) for row in r24_rows],
+            },
+            "comparators": {
+                "zip_deflate9": {
+                    "archive_bytes": zip_bytes,
+                    "median_create_s": zip_create,
+                    "create_samples_s": [float(row["create_s"]) for row in zip_rows],
+                },
+                "tar_zstd19_solid": {
+                    "archive_bytes": zstd_bytes,
+                    "median_create_s": zstd_create,
+                    "create_samples_s": [float(row["create_s"]) for row in zstd_rows],
+                },
+            },
             "deterministic_archive_bytes": deterministic_bytes,
             "same_verified_tree": same_tree,
+            "comparator_archive_sizes_deterministic": zip_size_deterministic and zstd_size_deterministic,
             "beats_zip_size": beats_zip_size,
             "beats_zstd19_size": beats_zstd_size,
             "beats_zip_create": beats_zip_create,
             "beats_zstd19_create": beats_zstd_create,
             "strict_four_way_win": strict_four_way,
         })
-        print(json.dumps({"label": label, "bytes": first["archive_bytes"], "four_way": strict_four_way}, separators=(",", ":")), flush=True)
+        print(
+            json.dumps(
+                {
+                    "label": label,
+                    "bytes": r24_bytes,
+                    "median_create_s": r24_create,
+                    "zip_create_s": zip_create,
+                    "zstd_create_s": zstd_create,
+                    "four_way": strict_four_way,
+                },
+                separators=(",", ":"),
+            ),
+            flush=True,
+        )
 
     positives = [r for r in rows if r["positive_target"]]
     controls = [r for r in rows if not r["positive_target"]]
     gate = {
         "all_verified_tree_equal": all(r["same_verified_tree"] for r in rows),
         "all_archive_bytes_deterministic": all(r["deterministic_archive_bytes"] for r in rows),
+        "all_comparator_archive_sizes_deterministic": all(r["comparator_archive_sizes_deterministic"] for r in rows),
         "positive_rows_strict_four_way": all(r["strict_four_way_win"] for r in positives),
         # The negative control is intentionally allowed to remain a Zstd size loss; this lane only proves that
         # r24-v4 itself stays deterministic and verified there. The all-15 external frontier remains authoritative.
-        "negative_controls_verified_and_deterministic": all(r["same_verified_tree"] and r["deterministic_archive_bytes"] for r in controls),
+        "negative_controls_verified_and_deterministic": all(
+            r["same_verified_tree"] and r["deterministic_archive_bytes"] for r in controls
+        ),
     }
     gate["shipping_regression_passed"] = all(gate.values())
     return {
-        "schema": "cmpct-v030-r24-medium-binary-pack-regression-v2",
+        "schema": "cmpct-v030-r24-medium-binary-pack-regression-v3",
         "contract": {
             "grammar": "existing canonical r24 S_PACK only",
             "shipping_micro_pack_max_file_bytes": MEDIUM_MAX,
             "shipping_extra_pack_hint": ".bin",
             "locality_policy": "shipping r24 micro_pack_target remains min(2 MiB, 8x largest regular member)",
+            "timing_policy": f"{ROUNDS} rotated same-runner rounds; median; r24 timing includes build + mandatory strong verification",
             "claim_boundary": "focused shipping regression; historical v3->v4 byte delta belongs to all-15 generalization evidence",
         },
         "rows": rows,
