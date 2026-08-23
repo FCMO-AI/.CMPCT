@@ -25,6 +25,11 @@ MAX_PROFILE_LOGICAL_BYTES = EG05.MAX_PROFILE_LOGICAL_BYTES
 MAX_MANIFEST_ENTRIES = EG05.MAX_MANIFEST_ENTRIES
 MAX_DECODE_UNIT = EG05.MAX_DECODE_UNIT
 MAX_MEMBER_AMPLIFICATION = EG05.MAX_MEMBER_AMPLIFICATION
+# Benchmark adapters temporarily rebind the historical V25 engine while changing candidate identity.  EG06 is a
+# framing-only child of EG05 and must therefore expose the exact same semantic lock, not a fresh lock and not an
+# implicit private dependency.  Sharing the lock preserves the existing single-owner mutation boundary when the
+# selective-effort oracle swaps CAND from EG01/EG05 to EG06.
+_LOCK = EG05._LOCK
 _PENDING_CONTROL = EG05._PENDING_CONTROL
 
 
