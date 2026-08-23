@@ -92,3 +92,43 @@ def test_eg06_variant_rebinds_only_v25_open_ar_and_restores_it() -> None:
     with EG06._variant():
         assert EG05.V25.open_ar is EG06._open_ar_intkey
     assert EG05.V25.open_ar is original
+
+
+def test_eg06_authenticated_open_accepts_compact_key_without_broadening_v25(tmp_path: Path) -> None:
+    """Exercise the exact inherited open path which previously failed only in the expensive frontier."""
+
+    V25 = EG05.V25
+    metadata = {
+        "v": 4,
+        "target": "eg06-open-regression",
+        "stream_packs": [],
+        "files": [],
+        "micro": [],
+        "pack_count": 0,
+        "tree_sha256": "0" * 64,
+        EG06.EMBEDDED_FS_KEY: b"bounded-control",
+    }
+    metadata_raw = msgpack.packb(metadata, use_bin_type=True)
+    metadata_comp = V25.zc(metadata_raw, 1)
+    metadata_hash = V25.H(metadata_raw)
+    archive = tmp_path / "minimal-eg06.cmpct"
+    archive.write_bytes(
+        b"".join(
+            (
+                V25.HDR.pack(EG06.MAGIC, len(metadata_comp), len(metadata_raw), 0, metadata_hash),
+                metadata_comp,
+                metadata_comp,
+                V25.FTR.pack(EG06.TAIL_MAGIC, len(metadata_comp), len(metadata_raw), metadata_hash),
+            )
+        )
+    )
+
+    inherited_open = V25.open_ar
+    with EG06._engine(archive):
+        stream, decoded, packs = V25.open_ar()
+        try:
+            assert decoded[EG06.EMBEDDED_FS_KEY] == b"bounded-control"
+            assert packs == []
+        finally:
+            stream.close()
+    assert V25.open_ar is inherited_open
