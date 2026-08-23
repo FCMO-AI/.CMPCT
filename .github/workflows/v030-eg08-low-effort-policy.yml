@@ -1,0 +1,77 @@
+# ci-lane: deep
+name: CMPCT v0.30 EG08 lower-effort policy frontier
+
+on:
+  pull_request:
+    paths:
+      - 'benchmarks/v030_federated_compact_framing_v8_low_effort_policy.py'
+      - 'benchmarks/v030_federated_compact_framing_v8_policy_exec_v6.py'
+      - 'benchmarks/v030_federated_compact_framing_v8_policy_distill.py'
+      - 'benchmarks/v030_federated_compact_framing_v8_policy_distill_v3.py'
+      - 'experiments/entropygraph_v030_federated_compact_framing_candidate_v8.py'
+      - '.github/workflows/v030-eg08-low-effort-policy.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: v030-eg08-low-effort-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lower-effort-policy:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install deterministic corpus dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y zstd gcc ffmpeg libsndfile1
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[audio,test]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
+      - name: Compile lower-effort policy surface
+        run: |
+          python -m py_compile \
+            benchmarks/v030_federated_compact_framing_v8_low_effort_policy.py \
+            benchmarks/v030_federated_compact_framing_v8_policy_exec_v6.py
+      - name: Run expanded-level generic office frontier
+        run: |
+          mkdir -p benchmark-artifacts
+          python -m benchmarks.v030_federated_compact_framing_v8_low_effort_policy \
+            --work-root benchmark-artifacts/v030-eg08-low-effort-work \
+            --output benchmark-artifacts/v030-eg08-low-effort.json
+      - name: Independently enforce generic-policy and exactness invariants
+        if: always()
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          p=Path('benchmark-artifacts/v030-eg08-low-effort.json')
+          assert p.exists(), 'lower-effort EG08 evidence missing'
+          d=json.loads(p.read_text()); s=d['strict']; m=d['measured_candidate']
+          assert d['schema']=='cmpct-v030-eg08-low-effort-policy-v1'
+          assert d['effort_levels']==[1,3,6,9,12,15,19,22]
+          assert d['policy_family']=='one-or-two nested raw-size thresholds only'
+          assert s['content_identity_not_policy_input'] is True
+          assert s['only_raw_size_policy_input'] is True
+          assert s['exact_serial_archive_identity'] is True
+          assert s['same_selected_level_vector'] is True
+          assert s['beats_accepted_v029_size'] is True
+          assert s['beats_zip_size'] is True
+          assert s['beats_zstd19_size'] is True
+          assert s['within_release_locality_bounds'] is True
+          assert m['exact_bytes_vs_serial_reference'] is True
+          # Performance may honestly falsify the lower-effort hypothesis; final authority is unchanged.
+          PY
+      - name: Upload lower-effort policy evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: v030-eg08-low-effort-${{ github.sha }}
+          path: benchmark-artifacts/v030-eg08-low-effort.json
+          if-no-files-found: warn
+          retention-days: 90
