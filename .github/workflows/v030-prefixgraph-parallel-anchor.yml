@@ -5,6 +5,7 @@ on:
   pull_request:
     paths:
       - 'benchmarks/v030_prefixgraph_parallel_anchor_oracle.py'
+      - 'benchmarks/v030_prefixgraph_parallel_anchor_oracle_v2.py'
       - 'benchmarks/v030_prefixgraph_terminal_parity_oracle.py'
       - 'experiments/entropygraph_v030_prefixgraph.py'
       - 'experiments/entropygraph_v030_release_candidate.py'
@@ -33,11 +34,13 @@ jobs:
           python -m pip install -e '.[audio,test]'
           python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
       - name: Compile PrefixGraph parallel oracle
-        run: python -m py_compile benchmarks/v030_prefixgraph_parallel_anchor_oracle.py
+        run: |
+          python -m py_compile benchmarks/v030_prefixgraph_parallel_anchor_oracle.py
+          python -m py_compile benchmarks/v030_prefixgraph_parallel_anchor_oracle_v2.py
       - name: Run exact-byte serial vs parallel PrefixGraph proof
         run: |
           mkdir -p benchmark-artifacts
-          python -m benchmarks.v030_prefixgraph_parallel_anchor_oracle \
+          python -m benchmarks.v030_prefixgraph_parallel_anchor_oracle_v2 \
             --work-root benchmark-artifacts/v030-prefixgraph-parallel-work \
             --output benchmark-artifacts/v030-prefixgraph-parallel.json
       - name: Independently enforce exactness and materiality
@@ -49,7 +52,9 @@ jobs:
           p=Path('benchmark-artifacts/v030-prefixgraph-parallel.json')
           assert p.exists(), 'PrefixGraph parallel evidence missing'
           d=json.loads(p.read_text())
-          assert d['schema']=='cmpct-v030-prefixgraph-parallel-anchor-v1'
+          assert d['schema']=='cmpct-v030-prefixgraph-parallel-anchor-v2'
+          assert d['target_discovery']['type']=='logical-name-normalization-only'
+          assert d['target_discovery']['builder_or_tournament_changed'] is False
           s=d['scheduling_change']; g=d['gate']; rows=d['rows']
           assert s['candidate_set_unchanged'] is True
           assert s['complete_byte_tournament_unchanged'] is True
