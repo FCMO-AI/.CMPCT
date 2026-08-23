@@ -39,7 +39,7 @@ import tempfile
 import time
 
 from experiments import entropygraph_v030_geometry_overlay_g04 as G04
-from experiments import entropygraph_v030_prefixgraph as PG
+from experiments import entropygraph_v030_prefixgraph_parallel as PG
 from experiments import entropygraph_v030_release_reader_policy as READER
 
 MAX_MEMBER_READ_AMP = 8.0
