@@ -1,0 +1,95 @@
+# ci-lane: deep
+name: CMPCT v0.30 G0-G4 ML cache policy oracle
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'experiments/entropygraph_v030_release_reader.py'
+      - 'experiments/entropygraph_v030_release_product.py'
+      - 'experiments/entropygraph_v030_geometry_overlay_g04*.py'
+      - 'benchmarks/v030_release_performance*.py'
+      - 'benchmarks/v030_g04_ml_cache_policy_oracle.py'
+      - '.github/workflows/v030-g04-ml-cache-policy-oracle.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-v030-g04-ml-cache-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+
+jobs:
+  ml-cache-policy:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install deterministic ML-corpus dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y zstd gcc ffmpeg libsndfile1
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[audio,test]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
+      - name: Compile cache-policy surface
+        run: |
+          python -m py_compile \
+            experiments/entropygraph_v030_release_reader.py \
+            benchmarks/v030_release_performance.py \
+            benchmarks/v030_g04_ml_cache_policy_oracle.py
+      - name: Preserve G0-G4 streaming-reader correctness
+        run: |
+          python -m pytest -q \
+            tests/test_v030_release_reader.py \
+            tests/test_v030_member_reader.py \
+            tests/test_v030_release_fuzz.py
+      - name: Run same-memory ML cache-policy A/B
+        run: |
+          mkdir -p benchmark-artifacts
+          python benchmarks/v030_g04_ml_cache_policy_oracle.py \
+            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-g04-ml-cache-work" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-g04-ml-cache.json"
+      - name: Independently enforce unchanged memory budget and material speedup
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          d=json.loads(Path('benchmark-artifacts/v030-g04-ml-cache.json').read_text())
+          assert d['schema']=='cmpct-v030-g04-ml-cache-policy-v1'
+          assert d['target']=='neutral_hostile_v1/09_ml_artifacts'
+          assert d['cache_policy_inputs']==['authenticated_node_graph_reference_counts']
+          assert d['memory_budget_change_bytes']==0
+          b=d['results']['baseline']; o=d['results']['reuse_aware']; c=d['contract']; g=d['gate']
+          assert b['node_cache_limit_bytes']==o['node_cache_limit_bytes']==c['node_cache_limit_bytes']==32*1024*1024
+          assert b['record_cache_limit_bytes']==o['record_cache_limit_bytes']==c['record_cache_limit_bytes']==64*1024*1024
+          assert o['skipped_one_shot_cache_insertions']>0
+          assert float(d['verify_improvement_fraction'])>=float(c['minimum_verify_improvement_fraction'])
+          assert float(d['extract_improvement_fraction'])>=float(c['minimum_extract_improvement_fraction'])
+          assert float(o['median_extract_physical_record_reads'])<=float(b['median_extract_physical_record_reads'])
+          assert g['same_node_cache_limit'] is True
+          assert g['same_record_cache_limit'] is True
+          assert g['passed'] is True
+          PY
+      - name: CI topology self-check
+        run: python tools/check_ci_topology.py .github/workflows/v030-g04-ml-cache-policy-oracle.yml
+      - name: Upload ML cache-policy evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: v030-g04-ml-cache-${{ github.sha }}
+          path: benchmark-artifacts/v030-g04-ml-cache.json
+          if-no-files-found: warn
+          retention-days: 90
+
+# This lane changes no archive grammar, cache byte limit or release threshold. It only tests whether keeping
+# reusable direct bases/reused nodes resident instead of letting one-shot derived nodes churn the same 32 MiB
+# cache materially reduces the shipping ML G0-G4 verification/extraction cost.
