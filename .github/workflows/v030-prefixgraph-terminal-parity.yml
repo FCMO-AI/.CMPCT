@@ -1,0 +1,79 @@
+# ci-lane: deep
+name: CMPCT v0.30 PrefixGraph terminal parity
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'experiments/entropygraph_v030_prefixgraph.py'
+      - 'experiments/entropygraph_v030_release_candidate.py'
+      - 'benchmarks/v030_prefixgraph_terminal_parity_oracle.py'
+      - '.github/workflows/v030-prefixgraph-terminal-parity.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-v030-prefixgraph-terminal-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+
+jobs:
+  parity-map:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 360
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install corpus dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y zstd gcc ffmpeg libsndfile1
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[audio,test]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
+      - name: Compile parity oracle
+        run: python -m py_compile benchmarks/v030_prefixgraph_terminal_parity_oracle.py
+      - name: Run all-15 terminal-parity frontier
+        run: |
+          mkdir -p benchmark-artifacts
+          python benchmarks/v030_prefixgraph_terminal_parity_oracle.py \
+            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-prefixgraph-terminal-work" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-prefixgraph-terminal.json"
+      - name: Independently enforce parity evidence
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          d=json.loads(Path('benchmark-artifacts/v030-prefixgraph-terminal.json').read_text())
+          assert d['schema']=='cmpct-v030-prefixgraph-terminal-parity-v1'
+          assert d['gate']['passed'] is True
+          assert len(d['rows'])==15
+          assert len(d['envelopes'])==16
+          assert d['summary']['exact_prefixgraph_winners']
+          for row in d['rows']:
+              if row['eligible']:
+                  assert row['locality']['passed'] is True
+          for env in d['envelopes']:
+              assert env['zero_counterexamples'] == (len(env['counterexamples']) == 0)
+          PY
+      - name: Public-surface guard
+        if: always()
+        run: python tools/check_public_surface.py
+      - name: Upload parity evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: v030-prefixgraph-terminal-${{ github.sha }}
+          path: benchmark-artifacts/v030-prefixgraph-terminal.json
+          if-no-files-found: warn
+          retention-days: 90
+
+# Frozen-corpus parity is not a selector proof. Any future terminal rule requires separate adversarial/generalization
+# evidence and must preserve exact output bytes, locality, integrity, native/Android parity and all release gates.
