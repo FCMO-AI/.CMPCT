@@ -24,6 +24,8 @@ jobs:
           EXPECTED_SOURCE_COMMIT: 13742e49d8a0f5da32a9bdae6b57dd2de82d6c5b
           EXPECTED_DEPLOYMENT_BLOB: a235d72899137a525df4a1ae96dcf3f1d4ac3edf
           EXPECTED_INDEX_BLOB: 6348728524015a56cc261d1f56b4d1e2432c1607
+          EXPECTED_EXPERIENCE_JS_BLOB: 62c1d9721f47922be4ac39f8e0aae93d20e24edc
+          EXPECTED_EXPERIENCE_CSS_BLOB: 66205dd18a936d605b48a75481df90b7e3b7f2e8
           EXPECTED_I18N_BLOB: 489777cd9fd898488750a5912bb0ecf881bf6d79
           EXPECTED_JA_BLOB: 81fb363d428c3d994c0284d6b8d047a33163c7b9
         run: |
@@ -44,6 +46,8 @@ jobs:
 
           fetch_live deployment.json /tmp/cmpct-live/deployment.json
           fetch_live index.html /tmp/cmpct-live/index.html
+          fetch_live assets/experience.js /tmp/cmpct-live/experience.js
+          fetch_live assets/experience.css /tmp/cmpct-live/experience.css
           fetch_live assets/i18n.js /tmp/cmpct-live/i18n.js
           fetch_live assets/i18n/locales/ja.js /tmp/cmpct-live/ja.js
 
@@ -62,6 +66,8 @@ jobs:
           expected = {
               'deployment.json': os.environ['EXPECTED_DEPLOYMENT_BLOB'],
               'index.html': os.environ['EXPECTED_INDEX_BLOB'],
+              'experience.js': os.environ['EXPECTED_EXPERIENCE_JS_BLOB'],
+              'experience.css': os.environ['EXPECTED_EXPERIENCE_CSS_BLOB'],
               'i18n.js': os.environ['EXPECTED_I18N_BLOB'],
               'ja.js': os.environ['EXPECTED_JA_BLOB'],
           }
@@ -79,9 +85,15 @@ jobs:
           assert receipt['validation']['localization_failures'] == 0
           assert receipt['validation']['cjk_glyph_coverage'] is True
 
+          # Footnote: the generated HTML intentionally loads the stable experience assembly. Localization is
+          # wired one layer deeper so presentation modules can evolve without bloating index.html.
           html = (root / 'index.html').read_text(encoding='utf-8')
-          assert 'assets/i18n.css' in html and 'assets/i18n.js' in html
+          assert 'assets/experience.css' in html and 'assets/experience.js' in html
           assert '0.29.k' in html
+          experience_js = (root / 'experience.js').read_text(encoding='utf-8')
+          experience_css = (root / 'experience.css').read_text(encoding='utf-8')
+          assert 'import "./i18n.js";' in experience_js
+          assert '@import url("./i18n.css");' in experience_css
 
           runtime = (root / 'i18n.js').read_text(encoding='utf-8')
           assert 'SUPPORTED_LOCALES' in runtime and 'Canonical source' in runtime
@@ -92,7 +104,7 @@ jobs:
           print(f"source_commit={receipt['source_commit']}")
           print(f"surface_revision={receipt['surface_revision']}")
           print(f"localization={receipt['validation']['localization_cases']}/57; failures=0; cjk=true")
-          print('exact_blobs=deployment,index,i18n-runtime,japanese-pack')
+          print('exact_blobs=deployment,index,experience-js,experience-css,i18n-runtime,japanese-pack')
           PY
 
 # Footnote: this workflow is a one-shot external publication verifier. It exists on a disposable branch only,
