@@ -57,10 +57,11 @@ jobs:
           assert d['level']==3
           assert d['workers']==4
           assert d['claim_boundary'].startswith('research scheduling proof only')
+          assert d['source_regular_identities'], 'independent source identity set missing'
           g=d['gate']; s=d['serial']; q=d['parallel']
           assert g['serial_exact'] is True
           assert g['parallel_exact_to_serial'] is True
-          assert g['semantic_tree_exact'] is True
+          assert g['verified_identities_match_independent_source'] is True
           assert s['archive_bytes']==q['archive_bytes']
           assert s['archive_sha256']==q['archive_sha256']
           assert g['parallel_strictly_faster_than_serial'] is True
