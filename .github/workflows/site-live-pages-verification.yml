@@ -1,0 +1,99 @@
+name: CMPCT live Pages propagation verifier
+# ci-lane: publisher
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/site-live-pages-verification.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-live-pages-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  live-pages:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Verify public Pages receipt and exact promoted bytes
+        env:
+          BASE_URL: https://fcmo-ai.github.io/.CMPCT
+          EXPECTED_SOURCE_COMMIT: 13742e49d8a0f5da32a9bdae6b57dd2de82d6c5b
+          EXPECTED_DEPLOYMENT_BLOB: a235d72899137a525df4a1ae96dcf3f1d4ac3edf
+          EXPECTED_INDEX_BLOB: 6348728524015a56cc261d1f56b4d1e2432c1607
+          EXPECTED_I18N_BLOB: 489777cd9fd898488750a5912bb0ecf881bf6d79
+          EXPECTED_JA_BLOB: 81fb363d428c3d994c0284d6b8d047a33163c7b9
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/cmpct-live
+          bust="${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-$(date +%s)"
+
+          fetch_live() {
+            local relative="$1"
+            local output="$2"
+            # Footnote: cache-busting plus no-cache headers make this a propagation check against the public
+            # Pages endpoint rather than a silent acceptance of a stale CDN object.
+            curl --fail --silent --show-error --location \
+              --retry 12 --retry-delay 5 --retry-all-errors \
+              -H 'Cache-Control: no-cache' -H 'Pragma: no-cache' \
+              "${BASE_URL}/${relative}?verify=${bust}" -o "${output}"
+          }
+
+          fetch_live deployment.json /tmp/cmpct-live/deployment.json
+          fetch_live index.html /tmp/cmpct-live/index.html
+          fetch_live assets/i18n.js /tmp/cmpct-live/i18n.js
+          fetch_live assets/i18n/locales/ja.js /tmp/cmpct-live/ja.js
+
+          python - <<'PY'
+          import hashlib
+          import json
+          import os
+          from pathlib import Path
+
+          root = Path('/tmp/cmpct-live')
+
+          def git_blob_sha(path: Path) -> str:
+              data = path.read_bytes()
+              return hashlib.sha1(f'blob {len(data)}\0'.encode() + data).hexdigest()
+
+          expected = {
+              'deployment.json': os.environ['EXPECTED_DEPLOYMENT_BLOB'],
+              'index.html': os.environ['EXPECTED_INDEX_BLOB'],
+              'i18n.js': os.environ['EXPECTED_I18N_BLOB'],
+              'ja.js': os.environ['EXPECTED_JA_BLOB'],
+          }
+          for name, blob in expected.items():
+              actual = git_blob_sha(root / name)
+              assert actual == blob, f'{name}: live blob {actual} != promoted blob {blob}'
+
+          receipt = json.loads((root / 'deployment.json').read_text(encoding='utf-8'))
+          assert receipt['source_commit'] == os.environ['EXPECTED_SOURCE_COMMIT']
+          assert receipt['project_version'] == '0.29.0'
+          assert receipt['surface_revision'] == '0.29.k'
+          assert receipt['canonical_format_revision'] == 24
+          assert receipt['evidence_schema'] == 'cmpct-public-evidence-v1'
+          assert receipt['validation']['localization_cases'] == 57
+          assert receipt['validation']['localization_failures'] == 0
+          assert receipt['validation']['cjk_glyph_coverage'] is True
+
+          html = (root / 'index.html').read_text(encoding='utf-8')
+          assert 'assets/i18n.css' in html and 'assets/i18n.js' in html
+          assert '0.29.k' in html
+
+          runtime = (root / 'i18n.js').read_text(encoding='utf-8')
+          assert 'SUPPORTED_LOCALES' in runtime and 'Canonical source' in runtime
+          japanese = (root / 'ja.js').read_text(encoding='utf-8')
+          assert '本文へ移動' in japanese and 'メインナビゲーション' in japanese
+
+          print('LIVE_PAGES_VERIFIED')
+          print(f"source_commit={receipt['source_commit']}")
+          print(f"surface_revision={receipt['surface_revision']}")
+          print(f"localization={receipt['validation']['localization_cases']}/57; failures=0; cjk=true")
+          print('exact_blobs=deployment,index,i18n-runtime,japanese-pack')
+          PY
+
+# Footnote: this workflow is a one-shot external publication verifier. It exists on a disposable branch only,
+# makes no repository writes, and must be closed unmerged after the live Pages bytes match gh-pages exactly.
