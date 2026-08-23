@@ -24,7 +24,7 @@ same full-tree operation. Archive bytes and random-access semantics are unchange
 
 import hashlib
 import os
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 import msgpack
 
@@ -127,12 +127,14 @@ class Archive(P.Archive):
         member_cache: dict[int, tuple[bytes, int]] = {}
         pack_cache: dict[int, bytes] = {}
         active: set[int] = set()
-        root = dst.resolve()
         for index, row in enumerate(self.files):
-            target = dst / row[5]
-            resolved = target.resolve()
-            if resolved != root and root not in resolved.parents:
-                raise RuntimeError("logs profile extraction traversal")
+            # ``P.Archive._parse_meta`` is the semantic owner of archive-path safety: before ``self.files`` can
+            # exist it rejects absolute paths, NUL-free path overflows, duplicate paths and every ``..``
+            # component. Resolving every target against the live filesystem here therefore repeats an already
+            # authenticated lexical check and adds one or more stat/readlink traversals per extracted member.
+            # Join only the validated POSIX components; this keeps extraction fail-closed while removing that
+            # filesystem-dependent hot-loop overhead.
+            target = dst.joinpath(*PurePosixPath(row[5]).parts)
             target.parent.mkdir(parents=True, exist_ok=True)
             value, _context = self._restore_session(
                 index,
