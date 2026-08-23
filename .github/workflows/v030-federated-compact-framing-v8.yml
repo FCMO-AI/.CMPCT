@@ -15,6 +15,7 @@ on:
       - 'benchmarks/v030_federated_compact_framing_v8_direct_v4.py'
       - 'tests/test_v030_federated_compact_framing_v8.py'
       - 'tests/test_v030_federated_fused_verify.py'
+      - 'tests/test_v030_federated_direct_memory_v4.py'
       - 'tests/test_v030_prefixgraph_admission_rejection.py'
       - '.github/workflows/v030-federated-compact-framing-v8.yml'
   workflow_dispatch:
@@ -56,11 +57,12 @@ jobs:
             benchmarks/v030_federated_compact_framing_v8_direct.py \
             benchmarks/v030_federated_compact_framing_v8_direct_v3.py \
             benchmarks/v030_federated_compact_framing_v8_direct_v4.py
-      - name: Run bounded compact-framing, fused-verification, recovery and locality-admission regressions
+      - name: Run bounded compact-framing, fused-verification, publication, recovery and locality-admission regressions
         run: |
           python -m pytest -q \
             tests/test_v030_federated_compact_framing_v8.py \
             tests/test_v030_federated_fused_verify.py \
+            tests/test_v030_federated_direct_memory_v4.py \
             tests/test_v030_prefixgraph_admission_rejection.py
       - name: Run exact office compact-framing structural frontier
         run: |
