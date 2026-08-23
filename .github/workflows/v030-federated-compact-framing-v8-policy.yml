@@ -47,33 +47,33 @@ jobs:
             benchmarks/v030_federated_compact_framing_v8_direct_v5.py \
             benchmarks/v030_federated_compact_framing_v8_policy_distill.py \
             benchmarks/v030_federated_compact_framing_v8_policy_distill_v2.py \
-            benchmarks/v030_federated_compact_framing_v8_policy_distill_v3.py
+            benchmarks/v030_federated_compact_framing_v8_policy_distill_v3.py \
+            benchmarks/v030_federated_compact_framing_v8_policy_distill_v4.py
       - name: Preserve compact-framing integrity and recovery regressions
         run: |
           python -m pytest -q \
             tests/test_v030_federated_compact_framing_v8.py \
             tests/test_v030_federated_fused_verify.py
-      - name: Run identity-free feature policy frontier
+      - name: Run parallel identity-free feature policy frontier
         run: |
           mkdir -p benchmark-artifacts
-          python benchmarks/v030_federated_compact_framing_v8_policy_distill_v3.py \
-            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-eg08-policy-v3-work" \
-            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-eg08-policy-v3.json"
-      - name: Independently enforce no frozen-identity policy and four-way win
+          python benchmarks/v030_federated_compact_framing_v8_policy_distill_v4.py \
+            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-eg08-policy-v4-work" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-eg08-policy-v4.json"
+      - name: Independently enforce generic policy, exact bytes and four-way win
         run: |
           python - <<'PY'
           import json
           from pathlib import Path
-          d=json.loads(Path('benchmark-artifacts/v030-eg08-policy-v3.json').read_text())
-          assert d['schema']=='cmpct-v030-eg08-policy-distillation-v3'
+          d=json.loads(Path('benchmark-artifacts/v030-eg08-policy-v4.json').read_text())
+          assert d['schema']=='cmpct-v030-eg08-policy-distillation-v4'
           assert d['candidate']=='C25EG08'
           assert d['accepted_v029_bytes']==5954026
           assert d['policy_inputs']==[
               'raw_bytes','level1_ratio','entropy_bits_per_byte','zero_fraction','printable_fraction'
           ]
           assert set(d['forbidden_policy_inputs'])=={'sha256','path','filename','workload_label','benchmark_name'}
-          assert d['predecessor_single_rule_family_falsified'] is True
-          assert d['predecessor_two_region_family_falsified'] is True
+          assert d['predecessor_v3_size_green_speed_red'] is True
           p=d['selected_policy']
           assert set(p)=={'rules','overlap_resolution'}
           assert p['overlap_resolution']=='max_level'
@@ -88,7 +88,13 @@ jobs:
           assert sf['max_rules']==4
           assert sf['deduplicated_atomic_rules']>=1
           assert sf['clearing_states']>=1
-          assert len(sf['state_counts_by_depth'])>=2
+          schedule=d['schedule']
+          assert schedule['type']=='bounded-parallel-per-pack-policy-and-final-compression'
+          assert int(schedule['max_workers'])==8
+          assert schedule['level1_feature_compression_counted'] is True
+          assert schedule['high_effort_compression_counted'] is True
+          assert schedule['serial_reference_untimed'] is True
+          assert schedule['archive_identity_required'] is True
           m=d['measured_candidate']; c=d['comparators']; s=d['strict']
           assert int(m['archive_bytes']) == int(m['projected_archive_bytes'])
           assert int(m['archive_bytes']) < 5954026
@@ -96,10 +102,14 @@ jobs:
           assert int(m['archive_bytes']) < int(c['zstd19']['archive_bytes'])
           assert float(m['median_verified_create_s']) < float(c['zip']['median_create_s'])
           assert float(m['median_verified_create_s']) < float(c['zstd19']['median_create_s'])
+          assert 1 <= int(m['workers']) <= 8
           assert float(m['max_member_read_amplification']) <= 8.0
           assert int(m['max_decode_unit_bytes']) <= 8*1024*1024
+          assert m['exact_bytes_vs_serial_reference'] is True
           assert s['content_identity_not_policy_input'] is True
           assert s['exact_size_projection'] is True
+          assert s['exact_serial_parallel_archive_identity'] is True
+          assert s['same_selected_level_vector'] is True
           assert s['rule_count_within_bound'] is True
           assert s['passed'] is True
           PY
@@ -109,12 +119,14 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v6
         with:
-          name: v030-eg08-policy-v3-${{ github.sha }}
-          path: benchmark-artifacts/v030-eg08-policy-v3.json
+          name: v030-eg08-policy-v4-${{ github.sha }}
+          path: benchmark-artifacts/v030-eg08-policy-v4.json
           if-no-files-found: warn
           retention-days: 90
 
-# v1's single-rule and v2's two-region raw-size/level1-ratio families are retained as negative evidence. v3
-# expands only to cheap, content-derived pack statistics and at most four simple threshold rules. Pack hashes,
-# paths, filenames and workload identity remain forbidden. This lane is promotion-incomplete: all-15/adversarial
-# generalization, selector ownership, native/Android parity and strict release authority remain mandatory.
+# v1/v2 remain negative evidence. v3 found a genuine identity-free size policy but proved serial execution far too
+# slow. v4 keeps that same bounded feature/rule family and changes scheduling only: policy-visible level-1 work and
+# selected high-effort pack compression run in a bounded pool, with zero timing credit unless the complete archive
+# exactly matches the ordinary serial policy bytes/SHA. Pack hashes, paths, filenames and workload identity remain
+# forbidden. This lane is promotion-incomplete: all-15/adversarial generalization, selector ownership,
+# native/Android parity and strict release authority remain mandatory.
