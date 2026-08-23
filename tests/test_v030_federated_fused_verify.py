@@ -40,6 +40,30 @@ def test_eg07_strong_verify_reconstructs_logical_profile_once(tmp_path: Path, mo
     assert calls == 1
 
 
+def test_eg07_fused_verify_recovers_from_corrupt_primary_metadata(tmp_path: Path) -> None:
+    source = _source(tmp_path)
+    archive = tmp_path / "sample.c25eg07"
+    EG07.build(source, archive)
+
+    raw = bytearray(archive.read_bytes())
+    magic, metadata_csize, _metadata_usize, pack_count, _digest = V25.HDR.unpack_from(raw, 0)
+    assert magic == EG07.MAGIC
+    assert metadata_csize > 0
+    assert pack_count > 0
+
+    # Damage only the primary compressed metadata.  The independently authenticated duplicate immediately before
+    # the footer is untouched, so the optimized verifier must retain the exact historical tail-recovery route.
+    primary_meta_offset = V25.HDR.size
+    raw[primary_meta_offset + int(metadata_csize) // 2] ^= 0x01
+    recovered = tmp_path / "primary-corrupt.c25eg07"
+    recovered.write_bytes(raw)
+
+    result = EG07.strong_verify(recovered, expected_tree=EG07._treehash(source))
+    assert result["ok"] is True
+    assert result["logical_reconstruction_passes"] == 1
+    assert result["canonical_user_tree_sha256"] == EG07._treehash(source)
+
+
 def test_eg07_fused_verify_still_rejects_corrupt_pack_payload(tmp_path: Path) -> None:
     source = _source(tmp_path)
     archive = tmp_path / "sample.c25eg07"
