@@ -4,6 +4,8 @@ import os
 from pathlib import Path
 
 from experiments import entropygraph_v030_federated_candidate as EG01
+from experiments import entropygraph_v030_federated_embedded_fs_candidate_v5 as EG05
+from experiments import entropygraph_v030_federated_embedded_fs_candidate_v6 as EG06
 from experiments import entropygraph_v030_fs_implicit_v4 as V4
 from experiments import entropygraph_v030_fs_implicit_v5 as V5
 from experiments import entropygraph_v030_product_fs as FS
@@ -45,3 +47,17 @@ def test_implicit_v5_rejects_run_overflow() -> None:
         assert "exceeds policy" in str(exc) or "run length" in str(exc) or "count" in str(exc)
     else:
         raise AssertionError("oversized metadata run was accepted")
+
+
+def test_eg06_preserves_parent_engine_lock_contract() -> None:
+    """Framing-only descendants must keep the one audited V25 mutation owner.
+
+    The selective-effort harness temporarily swaps its candidate module and calls ``CAND._LOCK`` before it enters
+    the inherited V25 engine.  A child that keeps EG05's engine but drops the lock attribute can pass filesystem
+    unit tests and then fail only after the expensive frozen corpus is built.  Identity (not merely lock type)
+    matters here: a fresh lock would permit two competing mutations of the same process-global historical engine.
+    """
+
+    assert EG06._LOCK is EG05._LOCK
+    assert EG06._LOCK is EG01._LOCK
+    assert EG06._PENDING_CONTROL is EG05._PENDING_CONTROL
