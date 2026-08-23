@@ -1,0 +1,71 @@
+# ci-lane: deep
+name: CMPCT v0.30 EG08 verifier I/O oracle
+
+on:
+  pull_request:
+    paths:
+      - 'benchmarks/v030_eg08_verifier_io_oracle.py'
+      - 'benchmarks/v030_federated_compact_framing_v8_policy_distill.py'
+      - 'benchmarks/v030_federated_compact_framing_v8_policy_distill_v3.py'
+      - 'benchmarks/v030_federated_compact_framing_v8_policy_distill_v5.py'
+      - 'benchmarks/v030_federated_compact_framing_v8_direct_v4.py'
+      - 'benchmarks/v030_federated_compact_framing_v8_direct_v5.py'
+      - 'experiments/entropygraph_v030_federated_compact_framing_candidate_v8.py'
+      - 'experiments/entropygraph_v030_federated_embedded_fs_candidate_v7.py'
+      - '.github/workflows/v030-eg08-verifier-io.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: v030-eg08-verifier-io-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  eg08-verifier-io:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install benchmark dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y zstd gcc ffmpeg libsndfile1
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[audio,test]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
+      - name: Compile exact verifier-I/O oracle
+        run: python -m py_compile benchmarks/v030_eg08_verifier_io_oracle.py
+      - name: Run exact-semantics verifier-I/O A/B
+        run: |
+          mkdir -p benchmark-artifacts
+          python -m benchmarks.v030_eg08_verifier_io_oracle \
+            --work-root benchmark-artifacts/v030-eg08-verifier-io-work \
+            --output benchmark-artifacts/v030-eg08-verifier-io.json
+      - name: Independently enforce verification identity
+        if: always()
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          p=Path('benchmark-artifacts/v030-eg08-verifier-io.json')
+          assert p.exists(), 'EG08 verifier-I/O evidence missing'
+          d=json.loads(p.read_text())
+          assert d['schema']=='cmpct-v030-eg08-verifier-io-v1'
+          g=d['gate']
+          assert d['rounds']==15
+          assert g['exact_verification_identity'] is True
+          assert g['physical_corruption_rejected_by_both'] is True
+          # Materiality may honestly fail; no threshold is relaxed by this lane.
+          assert isinstance(g['material_speedup'], bool)
+          PY
+      - name: Upload verifier-I/O evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: v030-eg08-verifier-io-${{ github.sha }}
+          path: benchmark-artifacts/v030-eg08-verifier-io.json
+          if-no-files-found: warn
+          retention-days: 90
