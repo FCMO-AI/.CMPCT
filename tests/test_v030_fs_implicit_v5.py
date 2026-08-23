@@ -3,6 +3,9 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
+import msgpack
+import pytest
+
 from experiments import entropygraph_v030_federated_candidate as EG01
 from experiments import entropygraph_v030_federated_embedded_fs_candidate_v5 as EG05
 from experiments import entropygraph_v030_federated_embedded_fs_candidate_v6 as EG06
@@ -38,8 +41,6 @@ def test_implicit_v5_preserves_semantics_and_compresses_repeated_regular_metadat
 
 
 def test_implicit_v5_rejects_run_overflow() -> None:
-    import msgpack
-
     raw = msgpack.packb([5, [0, 0, 0, 0, []], [[9, [0]]], []], use_bin_type=True)
     try:
         V5._unpack(raw, max_path_bytes=EG01.MAX_PATH_BYTES, max_entries=8)
@@ -61,3 +62,33 @@ def test_eg06_preserves_parent_engine_lock_contract() -> None:
     assert EG06._LOCK is EG05._LOCK
     assert EG06._LOCK is EG01._LOCK
     assert EG06._PENDING_CONTROL is EG05._PENDING_CONTROL
+
+
+def test_eg06_metadata_decoder_allows_only_its_compact_root_integer_key() -> None:
+    base = {
+        "v": 4,
+        "pack_count": 0,
+        "files": [],
+        "micro": [],
+        EG06.EMBEDDED_FS_KEY: b"control",
+    }
+    raw = msgpack.packb(base, use_bin_type=True)
+    decoded = EG06._unpack_authenticated_metadata(raw)
+    assert decoded[EG06.EMBEDDED_FS_KEY] == b"control"
+
+    wrong_root = dict(base)
+    wrong_root[7] = b"not-authorized"
+    with pytest.raises(RuntimeError, match="unauthorized non-string root key"):
+        EG06._unpack_authenticated_metadata(msgpack.packb(wrong_root, use_bin_type=True))
+
+    nested_integer_key = dict(base)
+    nested_integer_key["bad"] = {1: "nested"}
+    with pytest.raises(RuntimeError, match="unauthorized nested non-string map key"):
+        EG06._unpack_authenticated_metadata(msgpack.packb(nested_integer_key, use_bin_type=True))
+
+
+def test_eg06_variant_rebinds_only_v25_open_ar_and_restores_it() -> None:
+    original = EG05.V25.open_ar
+    with EG06._variant():
+        assert EG05.V25.open_ar is EG06._open_ar_intkey
+    assert EG05.V25.open_ar is original
