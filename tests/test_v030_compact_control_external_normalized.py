@@ -51,7 +51,11 @@ def test_projection_preserves_canonical_verify_but_compares_external_tree_domain
     stage = EXT._normalized_stage(source, stage_parent)
 
     calls = {"extract": 0}
-    real_extract = PRODUCT.extract
+    # PRODUCT is a compatibility-mirroring module: assigning PRODUCT.extract also mirrors that override into
+    # the mature base module. Calling the promoted wrapper from the spy would therefore recurse through the
+    # mirrored base binding. Capture the immutable mature delegate instead; the spy still proves the public
+    # projection performs exactly one independent extraction while leaving product behavior unchanged.
+    real_extract = PRODUCT._BASE_ORIGINALS["extract"]
 
     def extract(archive: Path, dst: Path, **kwargs):
         calls["extract"] += 1
