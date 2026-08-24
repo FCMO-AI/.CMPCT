@@ -55,21 +55,32 @@ jobs:
           import json
           from pathlib import Path
           d=json.loads(Path('benchmark-artifacts/v030-r24-medium-pack.json').read_text())
-          assert d['schema']=='cmpct-v030-r24-medium-binary-pack-regression-v2'
+          assert d['schema']=='cmpct-v030-r24-medium-binary-pack-regression-v3'
           assert d['contract']['grammar']=='existing canonical r24 S_PACK only'
           assert d['contract']['shipping_micro_pack_max_file_bytes']==256*1024
+          assert d['contract']['timing_policy'].startswith('5 rotated same-runner rounds; median;')
           g=d['gate']
           assert g['all_verified_tree_equal'] is True
           assert g['all_archive_bytes_deterministic'] is True
+          assert g['all_comparator_archive_sizes_deterministic'] is True
           assert g['positive_rows_strict_four_way'] is True
           assert g['negative_controls_verified_and_deterministic'] is True
           assert g['shipping_regression_passed'] is True
           positives=[r for r in d['rows'] if r['positive_target']]
           assert len(positives)==2
           for r in positives:
-              assert r['shipping_r24']['archive_bytes']==r['repeat_r24']['archive_bytes']
+              assert r['rounds']==5
+              assert len(r['shipping_r24']['complete_create_samples_s'])==5
+              assert len(r['comparators']['zip_deflate9']['create_samples_s'])==5
+              assert len(r['comparators']['tar_zstd19_solid']['create_samples_s'])==5
+              assert r['deterministic_archive_bytes'] is True
+              assert r['comparator_archive_sizes_deterministic'] is True
               assert r['shipping_r24']['release_byte_knobs']=='environment-independent-r24-v4'
               assert r['strict_four_way_win'] is True
+          controls=[r for r in d['rows'] if not r['positive_target']]
+          assert len(controls)==1
+          assert controls[0]['same_verified_tree'] is True
+          assert controls[0]['deterministic_archive_bytes'] is True
           PY
       - name: Public-surface guard
         if: always()
