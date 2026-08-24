@@ -21,6 +21,7 @@ per-workload size/create requirements, locality/decode ceilings, integrity, reco
 """
 from __future__ import annotations
 
+from pathlib import Path
 import sys
 import types
 
@@ -35,6 +36,7 @@ _BASE_R24_BUILD = _BASE_IMPL._locality_bounded_r24_build
 
 
 def _locality_bounded_r24_build(root, out):
+    out = Path(out)
     stats = dict(_BASE_R24_BUILD(root, out))
     elision = _R24_DEAD_DICT.elide_dead_dictionary_in_place(out)
     return {
