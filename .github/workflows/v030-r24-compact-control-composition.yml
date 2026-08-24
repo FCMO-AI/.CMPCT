@@ -10,6 +10,8 @@ on:
       - 'experiments/entropygraph_v030_r24_dead_dictionary.py'
       - 'benchmarks/v030_r24_compact_control_oracle.py'
       - 'benchmarks/v030_r24_compact_control_composition_oracle.py'
+      - 'benchmarks/v030_r24_compact_control_composition_oracle_v2.py'
+      - 'benchmarks/v030_release_generalization.py'
       - 'benchmarks/neutral_hostile_corpus_v1.py'
       - 'benchmarks/resemblance_hostile_corpus_v1.py'
       - 'tests/test_v030_r24_compact_control_composition.py'
@@ -47,13 +49,14 @@ jobs:
         run: |
           python -m py_compile benchmarks/v030_r24_compact_control_oracle.py
           python -m py_compile benchmarks/v030_r24_compact_control_composition_oracle.py
+          python -m py_compile benchmarks/v030_r24_compact_control_composition_oracle_v2.py
           python -m py_compile tests/test_v030_r24_compact_control_composition.py
       - name: Run focused semantic ratchet
         run: pytest -q tests/test_v030_r24_compact_control_composition.py
       - name: Run all-15 shipping composition frontier
         run: |
           mkdir -p benchmark-artifacts
-          python benchmarks/v030_r24_compact_control_composition_oracle.py \
+          python benchmarks/v030_r24_compact_control_composition_oracle_v2.py \
             --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-r24-compact-control-composition-work" \
             --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-r24-compact-control-composition.json"
       - name: Enforce composition contract
@@ -81,6 +84,7 @@ jobs:
           assert t['faster_than_zip'] is True
           assert t['faster_than_zstd19'] is True
           assert t['strict_four_way_potential'] is True
+          assert d['gate']['all_15_workloads_executed'] is True
           assert d['gate']['passed'] is True
           PY
       - name: Public-surface guard
