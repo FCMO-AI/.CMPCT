@@ -76,7 +76,20 @@ impl CompactControlArchive {
 
         let mut expanded = expand_compact_control(&control)?;
         restore_native_pack_logical_hashes(&mut expanded, &payload, &copies)?;
-        let temp = tempfile::tempdir().map_err(PortableError::Io)?;
+        let temp = tempfile::tempdir().or_else(|system_error| {
+            let parent = path.parent().unwrap_or_else(|| Path::new("."));
+            tempfile::Builder::new()
+                .prefix(".cmpct-cc01-")
+                .tempdir_in(parent)
+                .map_err(|fallback_error| {
+                    std::io::Error::new(
+                        fallback_error.kind(),
+                        format!(
+                            "system temp failed ({system_error}); archive-local temp failed ({fallback_error})"
+                        ),
+                    )
+                })
+        }).map_err(PortableError::Io)?;
         let r24_path = temp.path().join("expanded-r24.cmpct");
         materialize_r24_from_compact(&payload, &copies, &expanded, &r24_path)?;
         let r24 = R24Archive::open(&r24_path)?;
