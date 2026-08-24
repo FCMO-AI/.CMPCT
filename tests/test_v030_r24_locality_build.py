@@ -3,7 +3,23 @@ from __future__ import annotations
 from pathlib import Path
 import threading
 
+import pytest
+
 from experiments import entropygraph_v030_release_product as product
+
+
+@pytest.fixture(autouse=True)
+def _isolate_dead_dictionary_postpass(monkeypatch):
+    """These tests exercise r24 locality/packing policy with deliberately fake archive bytes.
+
+    Dead-dictionary elision has its own real-r24 all-15 proof.  Stub only that orthogonal post-selection pass here so
+    the fake Builder payloads remain valid test doubles instead of being parsed as revision-24 archives.
+    """
+    monkeypatch.setattr(
+        product._R24_DEAD_DICT,
+        "elide_dead_dictionary_in_place",
+        lambda _path: {"reason": "test-isolated", "saving_bytes": 0},
+    )
 
 
 def test_shipping_r24_micro_pack_target_is_bounded_by_largest_member(tmp_path, monkeypatch) -> None:
