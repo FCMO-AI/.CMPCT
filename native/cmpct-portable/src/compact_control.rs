@@ -172,12 +172,16 @@ fn parse_copies(payload: &[u8]) -> Result<ParsedCopies, PortableError> {
         return Err(PortableError::Format("truncated C25CC01 archive".into()));
     }
     if &payload[..8] != MAGIC || le_u16(&payload[8..10])? != 25 {
-        return Err(PortableError::Format("not a canonical C25CC01 archive".into()));
+        return Err(PortableError::Format(
+            "not a canonical C25CC01 archive".into(),
+        ));
     }
-    let primary_len = usize::try_from(le_u64(&payload[12..20])?)
-        .map_err(|_| PortableError::Limit("C25CC01 primary control length exceeds native width".into()))?;
-    let primary_raw = usize::try_from(le_u64(&payload[20..28])?)
-        .map_err(|_| PortableError::Limit("C25CC01 primary raw length exceeds native width".into()))?;
+    let primary_len = usize::try_from(le_u64(&payload[12..20])?).map_err(|_| {
+        PortableError::Limit("C25CC01 primary control length exceeds native width".into())
+    })?;
+    let primary_raw = usize::try_from(le_u64(&payload[20..28])?).map_err(|_| {
+        PortableError::Limit("C25CC01 primary raw length exceeds native width".into())
+    })?;
     let data_span = usize::try_from(le_u64(&payload[28..36])?)
         .map_err(|_| PortableError::Limit("C25CC01 data span exceeds native width".into()))?;
     let mut primary_sha = [0u8; 32];
@@ -187,8 +191,10 @@ fn parse_copies(payload: &[u8]) -> Result<ParsedCopies, PortableError> {
     if &payload[footer_off..footer_off + 8] != TAIL_MAGIC {
         return Err(PortableError::Format("C25CC01 tail magic mismatch".into()));
     }
-    let tail_len = usize::try_from(le_u64(&payload[footer_off + 12..footer_off + 20])?)
-        .map_err(|_| PortableError::Limit("C25CC01 tail control length exceeds native width".into()))?;
+    let tail_len =
+        usize::try_from(le_u64(&payload[footer_off + 12..footer_off + 20])?).map_err(|_| {
+            PortableError::Limit("C25CC01 tail control length exceeds native width".into())
+        })?;
     let tail_raw = usize::try_from(le_u64(&payload[footer_off + 20..footer_off + 28])?)
         .map_err(|_| PortableError::Limit("C25CC01 tail raw length exceeds native width".into()))?;
     let mut tail_sha = [0u8; 32];
@@ -222,16 +228,21 @@ fn parse_copies(payload: &[u8]) -> Result<ParsedCopies, PortableError> {
 }
 
 fn blob_size(blobs: &[Value], index: usize) -> Result<u64, PortableError> {
-    let row = blobs
-        .get(index)
-        .and_then(Value::as_array)
-        .ok_or_else(|| PortableError::Format(format!("C25CC01 blob {index} is missing or malformed")))?;
+    let row = blobs.get(index).and_then(Value::as_array).ok_or_else(|| {
+        PortableError::Format(format!("C25CC01 blob {index} is missing or malformed"))
+    })?;
     row.get(1)
-        .ok_or_else(|| PortableError::Format(format!("C25CC01 blob {index} is missing logical size")))
+        .ok_or_else(|| {
+            PortableError::Format(format!("C25CC01 blob {index} is missing logical size"))
+        })
         .and_then(|value| value_u64(value, "blob logical size"))
 }
 
-fn derived_size(blobs: &[Value], recipes: &[Value], storage: &Value) -> Result<Option<u64>, PortableError> {
+fn derived_size(
+    blobs: &[Value],
+    recipes: &[Value],
+    storage: &Value,
+) -> Result<Option<u64>, PortableError> {
     let Some(row) = storage.as_array() else {
         return Ok(None);
     };
@@ -242,44 +253,56 @@ fn derived_size(blobs: &[Value], recipes: &[Value], storage: &Value) -> Result<O
     match tag {
         0 => {
             let index = usize::try_from(value_u64(
-                row.get(1).ok_or_else(|| PortableError::Format("direct storage missing blob index".into()))?,
+                row.get(1).ok_or_else(|| {
+                    PortableError::Format("direct storage missing blob index".into())
+                })?,
                 "direct blob index",
             )?)
             .map_err(|_| PortableError::Limit("direct blob index exceeds native width".into()))?;
             Ok(Some(blob_size(blobs, index)?))
         }
         1 => {
-            let ids = row
-                .get(1)
-                .and_then(Value::as_array)
-                .ok_or_else(|| PortableError::Format("fixed-chunk storage missing chunk list".into()))?;
+            let ids = row.get(1).and_then(Value::as_array).ok_or_else(|| {
+                PortableError::Format("fixed-chunk storage missing chunk list".into())
+            })?;
             let mut total = 0u64;
             for value in ids {
-                let index = usize::try_from(value_u64(value, "fixed chunk index")?)
-                    .map_err(|_| PortableError::Limit("fixed chunk index exceeds native width".into()))?;
-                total = total
-                    .checked_add(blob_size(blobs, index)?)
-                    .ok_or_else(|| PortableError::Limit("fixed-chunk logical size overflow".into()))?;
+                let index =
+                    usize::try_from(value_u64(value, "fixed chunk index")?).map_err(|_| {
+                        PortableError::Limit("fixed chunk index exceeds native width".into())
+                    })?;
+                total = total.checked_add(blob_size(blobs, index)?).ok_or_else(|| {
+                    PortableError::Limit("fixed-chunk logical size overflow".into())
+                })?;
             }
             Ok(Some(total))
         }
         2 => {
             let index = usize::try_from(value_u64(
-                row.get(1).ok_or_else(|| PortableError::Format("virtual-ZIP storage missing recipe index".into()))?,
+                row.get(1).ok_or_else(|| {
+                    PortableError::Format("virtual-ZIP storage missing recipe index".into())
+                })?,
                 "virtual-ZIP recipe index",
             )?)
-            .map_err(|_| PortableError::Limit("virtual-ZIP recipe index exceeds native width".into()))?;
+            .map_err(|_| {
+                PortableError::Limit("virtual-ZIP recipe index exceeds native width".into())
+            })?;
             let recipe = recipes
                 .get(index)
                 .and_then(Value::as_array)
-                .ok_or_else(|| PortableError::Format("virtual-ZIP recipe missing or malformed".into()))?;
+                .ok_or_else(|| {
+                    PortableError::Format("virtual-ZIP recipe missing or malformed".into())
+                })?;
             Ok(Some(value_u64(
-                recipe.get(4).ok_or_else(|| PortableError::Format("virtual-ZIP recipe missing logical size".into()))?,
+                recipe.get(4).ok_or_else(|| {
+                    PortableError::Format("virtual-ZIP recipe missing logical size".into())
+                })?,
                 "virtual-ZIP logical size",
             )?))
         }
         4 => Ok(Some(value_u64(
-            row.get(3).ok_or_else(|| PortableError::Format("pack storage missing length".into()))?,
+            row.get(3)
+                .ok_or_else(|| PortableError::Format("pack storage missing length".into()))?,
             "pack length",
         )?)),
         5 => {
@@ -294,7 +317,9 @@ fn derived_size(blobs: &[Value], recipes: &[Value], storage: &Value) -> Result<O
                     .ok_or_else(|| PortableError::Format("CDC chunk row is malformed".into()))?;
                 total = total
                     .checked_add(value_u64(
-                        chunk.first().ok_or_else(|| PortableError::Format("CDC chunk missing logical length".into()))?,
+                        chunk.first().ok_or_else(|| {
+                            PortableError::Format("CDC chunk missing logical length".into())
+                        })?,
                         "CDC logical length",
                     )?)
                     .ok_or_else(|| PortableError::Limit("CDC logical size overflow".into()))?;
@@ -326,7 +351,9 @@ fn expand_compact_control(envelope: &Value) -> Result<Value, PortableError> {
         .as_array()
         .ok_or_else(|| PortableError::Format("C25CC01 compact defaults are not an array".into()))?;
     if defaults.len() != 2 {
-        return Err(PortableError::Format("C25CC01 compact defaults have invalid shape".into()));
+        return Err(PortableError::Format(
+            "C25CC01 compact defaults have invalid shape".into(),
+        ));
     }
     let default_mode = value_u64(&defaults[0], "default mode")?;
     let default_mtime = value_i64(&defaults[1], "default mtime")?;
@@ -349,7 +376,9 @@ fn expand_compact_control(envelope: &Value) -> Result<Value, PortableError> {
             .as_array()
             .ok_or_else(|| PortableError::Format("C25CC01 compact path row is malformed".into()))?;
         if path_row.len() != 2 {
-            return Err(PortableError::Format("C25CC01 compact path row has invalid shape".into()));
+            return Err(PortableError::Format(
+                "C25CC01 compact path row has invalid shape".into(),
+            ));
         }
         let prefix = usize::try_from(value_u64(&path_row[0], "compact path prefix")?)
             .map_err(|_| PortableError::Limit("compact path prefix exceeds native width".into()))?;
@@ -358,9 +387,9 @@ fn expand_compact_control(envelope: &Value) -> Result<Value, PortableError> {
                 "C25CC01 compact path prefix is outside prior UTF-8 path".into(),
             ));
         }
-        let suffix = path_row[1]
-            .as_str()
-            .ok_or_else(|| PortableError::Format("C25CC01 compact path suffix is not UTF-8".into()))?;
+        let suffix = path_row[1].as_str().ok_or_else(|| {
+            PortableError::Format("C25CC01 compact path suffix is not UTF-8".into())
+        })?;
         let rel = format!("{}{}", &previous[..prefix], suffix);
         previous.clone_from(&rel);
 
@@ -368,7 +397,9 @@ fn expand_compact_control(envelope: &Value) -> Result<Value, PortableError> {
             .as_array()
             .ok_or_else(|| PortableError::Format("C25CC01 compact file row is malformed".into()))?;
         if encoded.len() < 3 {
-            return Err(PortableError::Format("C25CC01 compact file row is too short".into()));
+            return Err(PortableError::Format(
+                "C25CC01 compact file row is too short".into(),
+            ));
         }
         let kind = value_u64(&encoded[0], "file kind")?;
         let mode = if matches!(encoded[1], Value::Nil) {
@@ -384,27 +415,37 @@ fn expand_compact_control(envelope: &Value) -> Result<Value, PortableError> {
             1 => (0, Value::Nil, Value::Nil),
             3 => {
                 let owner_index = usize::try_from(value_u64(
-                    encoded.get(3).ok_or_else(|| PortableError::Format("hardlink missing owner index".into()))?,
+                    encoded.get(3).ok_or_else(|| {
+                        PortableError::Format("hardlink missing owner index".into())
+                    })?,
                     "hardlink owner index",
                 )?)
-                .map_err(|_| PortableError::Limit("hardlink owner index exceeds native width".into()))?;
+                .map_err(|_| {
+                    PortableError::Limit("hardlink owner index exceeds native width".into())
+                })?;
                 let owner = prior_paths
                     .get(owner_index)
-                    .ok_or_else(|| PortableError::Format("hardlink owner does not precede alias".into()))?
+                    .ok_or_else(|| {
+                        PortableError::Format("hardlink owner does not precede alias".into())
+                    })?
                     .clone();
-                let size = *prior_sizes
-                    .get(&owner)
-                    .ok_or_else(|| PortableError::Format("hardlink owner size is unavailable".into()))?;
+                let size = *prior_sizes.get(&owner).ok_or_else(|| {
+                    PortableError::Format("hardlink owner size is unavailable".into())
+                })?;
                 (size, Value::Nil, Value::Array(vec![Value::from(owner)]))
             }
             _ => {
                 if encoded.len() < 6 {
-                    return Err(PortableError::Format("regular compact file row is too short".into()));
+                    return Err(PortableError::Format(
+                        "regular compact file row is too short".into(),
+                    ));
                 }
                 let storage = encoded[3].clone();
                 let derived = derived_size(&blobs, &recipes, &storage)?;
                 let size = if matches!(encoded[4], Value::Nil) {
-                    derived.ok_or_else(|| PortableError::Format("C25CC01 file row cannot derive logical size".into()))?
+                    derived.ok_or_else(|| {
+                        PortableError::Format("C25CC01 file row cannot derive logical size".into())
+                    })?
                 } else {
                     value_u64(&encoded[4], "explicit logical size")?
                 };
@@ -454,10 +495,12 @@ fn materialize_r24_from_compact(
     out: &Path,
 ) -> Result<(), PortableError> {
     let mut raw = Vec::new();
-    rmpv::encode::write_value(&mut raw, expanded)
-        .map_err(|error| PortableError::Format(format!("C25CC01 r24 MessagePack encode: {error}")))?;
-    let compressed = zstd::stream::encode_all(Cursor::new(&raw), 12)
-        .map_err(|error| PortableError::Format(format!("C25CC01 r24 index Zstd encode: {error}")))?;
+    rmpv::encode::write_value(&mut raw, expanded).map_err(|error| {
+        PortableError::Format(format!("C25CC01 r24 MessagePack encode: {error}"))
+    })?;
+    let compressed = zstd::stream::encode_all(Cursor::new(&raw), 12).map_err(|error| {
+        PortableError::Format(format!("C25CC01 r24 index Zstd encode: {error}"))
+    })?;
     let digest = Sha256::digest(&raw);
     let data_end = copies
         .data_start
@@ -467,7 +510,8 @@ fn materialize_r24_from_compact(
         .get(copies.data_start..data_end)
         .ok_or_else(|| PortableError::Format("C25CC01 physical payload is truncated".into()))?;
 
-    let mut payload = Vec::with_capacity(HEADER_SIZE + compressed.len() * 2 + data.len() + FOOTER_SIZE);
+    let mut payload =
+        Vec::with_capacity(HEADER_SIZE + compressed.len() * 2 + data.len() + FOOTER_SIZE);
     payload.extend_from_slice(R24_MAGIC);
     payload.extend_from_slice(&24u16.to_le_bytes());
     payload.extend_from_slice(&0u16.to_le_bytes());
