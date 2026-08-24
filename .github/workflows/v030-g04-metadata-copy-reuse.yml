@@ -10,6 +10,7 @@ on:
       - 'benchmarks/v030_release_performance.py'
       - 'benchmarks/v030_g04_metadata_copy_reuse_oracle.py'
       - 'benchmarks/v030_g04_metadata_copy_reuse_oracle_v2.py'
+      - 'benchmarks/v030_g04_metadata_copy_reuse_oracle_v3.py'
       - '.github/workflows/v030-g04-metadata-copy-reuse.yml'
   workflow_dispatch:
 
@@ -41,11 +42,11 @@ jobs:
           python -m pip install -e '.[audio,test]'
           python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
       - name: Compile metadata-copy A/B
-        run: python -m py_compile benchmarks/v030_g04_metadata_copy_reuse_oracle.py benchmarks/v030_g04_metadata_copy_reuse_oracle_v2.py
+        run: python -m py_compile benchmarks/v030_g04_metadata_copy_reuse_oracle.py benchmarks/v030_g04_metadata_copy_reuse_oracle_v2.py benchmarks/v030_g04_metadata_copy_reuse_oracle_v3.py
       - name: Run exact shipping-ML A/B
         run: |
           mkdir -p benchmark-artifacts
-          python benchmarks/v030_g04_metadata_copy_reuse_oracle_v2.py \
+          python benchmarks/v030_g04_metadata_copy_reuse_oracle_v3.py \
             --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-g04-meta-reuse-work" \
             --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-g04-meta-reuse.json"
       - name: Independently enforce evidence semantics
@@ -54,9 +55,15 @@ jobs:
           import json
           from pathlib import Path
           d=json.loads(Path('benchmark-artifacts/v030-g04-meta-reuse.json').read_text())
-          assert d['schema']=='cmpct-v030-g04-metadata-copy-reuse-v2'
+          assert d['schema']=='cmpct-v030-g04-metadata-copy-reuse-v3'
           assert d['target']=='neutral_hostile_v1/09_ml_artifacts'
           assert d['rounds']==7
+          b=d['canonical_profile_binding']
+          assert b['format_revision']==25
+          assert b['magic']=='434d5032354734'
+          assert b['tail_magic']=='4332354734544c'
+          assert b['operation_scoped'] is True
+          assert b['research_globals_restored_after_run'] is True
           assert d['contract']['archive_bytes_change']==0
           assert d['contract']['record_cache_budget_change_bytes']==0
           assert d['contract']['node_cache_budget_change_bytes']==0
@@ -68,7 +75,6 @@ jobs:
           assert g['tail_difference_forces_full_decode_path'] is True
           assert g['tail_corruption_primary_recovery_same_tree'] is True
           assert g['experiment_valid'] is True
-          # Measured rejection is valid. Only a true material speedup may earn reader promotion.
           if g['promotion_earned']:
               assert g['verify_materially_faster'] is True
               assert g['extract_materially_faster'] is True
