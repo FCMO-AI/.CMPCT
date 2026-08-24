@@ -1,0 +1,90 @@
+# ci-lane: deep
+name: CMPCT v0.30 G0-G4 metadata-copy reuse oracle
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'experiments/entropygraph_v030_release_reader.py'
+      - 'experiments/entropygraph_v030_release_product.py'
+      - 'benchmarks/v030_release_performance.py'
+      - 'benchmarks/v030_g04_metadata_copy_reuse_oracle.py'
+      - 'benchmarks/v030_g04_metadata_copy_reuse_oracle_v2.py'
+      - '.github/workflows/v030-g04-metadata-copy-reuse.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-v030-g04-metadata-copy-reuse-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+
+jobs:
+  oracle:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install exact runtime/corpus dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y zstd gcc ffmpeg libsndfile1
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[audio,test]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
+      - name: Compile metadata-copy A/B
+        run: python -m py_compile benchmarks/v030_g04_metadata_copy_reuse_oracle.py benchmarks/v030_g04_metadata_copy_reuse_oracle_v2.py
+      - name: Run exact shipping-ML A/B
+        run: |
+          mkdir -p benchmark-artifacts
+          python benchmarks/v030_g04_metadata_copy_reuse_oracle_v2.py \
+            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-g04-meta-reuse-work" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-g04-meta-reuse.json"
+      - name: Independently enforce evidence semantics
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          d=json.loads(Path('benchmark-artifacts/v030-g04-meta-reuse.json').read_text())
+          assert d['schema']=='cmpct-v030-g04-metadata-copy-reuse-v2'
+          assert d['target']=='neutral_hostile_v1/09_ml_artifacts'
+          assert d['rounds']==7
+          assert d['contract']['archive_bytes_change']==0
+          assert d['contract']['record_cache_budget_change_bytes']==0
+          assert d['contract']['node_cache_budget_change_bytes']==0
+          assert d['contract']['locality_change']=='none'
+          g=d['gate']
+          assert g['candidate_reused_identical_tail_every_verify'] is True
+          assert g['candidate_reused_identical_tail_every_extract'] is True
+          assert g['physical_record_reads_unchanged'] is True
+          assert g['tail_difference_forces_full_decode_path'] is True
+          assert g['tail_corruption_primary_recovery_same_tree'] is True
+          assert g['experiment_valid'] is True
+          # Measured rejection is valid. Only a true material speedup may earn reader promotion.
+          if g['promotion_earned']:
+              assert g['verify_materially_faster'] is True
+              assert g['extract_materially_faster'] is True
+              assert d['verify_improvement_fraction'] >= d['contract']['minimum_verify_improvement_fraction']
+              assert d['extract_improvement_fraction'] >= d['contract']['minimum_extract_improvement_fraction']
+          PY
+      - name: Public-surface guard
+        if: always()
+        run: python tools/check_public_surface.py
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: v030-g04-metadata-copy-reuse-${{ github.sha }}
+          path: benchmark-artifacts/v030-g04-meta-reuse.json
+          if-no-files-found: warn
+          retention-days: 90
+
+# Research-only. Production reader changes remain blocked on material speed evidence plus ordinary tests, fuzzing,
+# native/Android parity, authoritative runtime and final release authority.
