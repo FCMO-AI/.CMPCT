@@ -2,7 +2,7 @@ use crate::PortableError;
 use cmpct_core::Archive as R24Archive;
 use rmpv::Value;
 use sha2::{Digest, Sha256};
-use std::collections::HashMap;
+use std::collections::{hash_map::Entry, HashMap};
 use std::fs;
 use std::io::Cursor;
 use std::path::Path;
@@ -715,18 +715,17 @@ fn restore_native_pack_logical_hashes(
                 "C25CC01 packed file {file_index} length disagrees with logical size"
             )));
         }
-        if !decoded_packs.contains_key(&blob_index) {
-            let descriptor = *descriptors.get(blob_index).ok_or_else(|| {
-                PortableError::Format(format!(
-                    "C25CC01 packed file {file_index} references missing blob"
-                ))
-            })?;
-            let raw = authenticate_pack_blob(candidate_payload, copies, descriptor)?;
-            decoded_packs.insert(blob_index, raw);
-        }
-        let pack = decoded_packs.get(&blob_index).ok_or_else(|| {
-            PortableError::Integrity("C25CC01 authenticated pack cache lost entry".into())
-        })?;
+        let pack = match decoded_packs.entry(blob_index) {
+            Entry::Occupied(entry) => entry.into_mut(),
+            Entry::Vacant(entry) => {
+                let descriptor = *descriptors.get(blob_index).ok_or_else(|| {
+                    PortableError::Format(format!(
+                        "C25CC01 packed file {file_index} references missing blob"
+                    ))
+                })?;
+                entry.insert(authenticate_pack_blob(candidate_payload, copies, descriptor)?)
+            }
+        };
         let end = offset
             .checked_add(length)
             .ok_or_else(|| PortableError::Limit("C25CC01 packed slice overflow".into()))?;
