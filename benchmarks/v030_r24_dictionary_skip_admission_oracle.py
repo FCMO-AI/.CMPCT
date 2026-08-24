@@ -72,20 +72,12 @@ def _pretraining_features(root: Path) -> dict[str, float]:
         P._R24_CDC_POLICY.wide_single_file = old_wide
         P._R24_CDC_POLICY.medium_binary_pack = old_medium
 
+    # Mirror Builder._train_dictionary's exact pre-training sample predicate without invoking the trainer.
     samples = [
         c.raw
         for c in builder.cands.values()
-        if len(c.raw) >= 64
-        and ".cmpct-pack" not in c.hints
-        and any(x in P.C.TEXT_EXT if hasattr(P.C, "TEXT_EXT") else x in P.TEXT_EXT for x in c.hints)
+        if len(c.raw) >= 64 and ".cmpct-pack" not in c.hints and any(x in P.C.TEXT_EXT for x in c.hints)
     ]
-    # P.C is the codec module on the release facade; TEXT_EXT is normally exported by the facade itself.
-    if not samples:
-        samples = [
-            c.raw
-            for c in builder.cands.values()
-            if len(c.raw) >= 64 and ".cmpct-pack" not in c.hints and any(x in P.TEXT_EXT for x in c.hints)
-        ]
     sample_bytes = sum(map(len, samples))
     return {
         "regular_files": float(regular),
