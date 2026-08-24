@@ -56,6 +56,7 @@ def _admitted(shape: dict, r24_bytes: int, candidate_bytes: int) -> bool:
 
 
 def _build_candidate(stage: Path, root: Path) -> dict:
+    root.mkdir(parents=True, exist_ok=True)
     r24 = root / "shipping-r24.cmpct"
     started = time.perf_counter()
     PRODUCT._locality_bounded_r24_build(stage, r24)
@@ -78,6 +79,7 @@ def _build_candidate(stage: Path, root: Path) -> dict:
 
 
 def _full_product(stage: Path, root: Path) -> dict:
+    root.mkdir(parents=True, exist_ok=True)
     archive = root / "full-product.cmpct"
     stats = dict(PRODUCT.build(stage, archive))
     verified = dict(PRODUCT.strong_verify(archive))
