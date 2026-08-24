@@ -1,5 +1,5 @@
 # ci-lane: deep
-name: CMPCT v0.30 r24 compact-control native preparity
+name: CMPCT v0.30 r24 compact-control native dispatch
 
 on:
   pull_request:
@@ -9,6 +9,7 @@ on:
       - 'benchmarks/v030_r24_compact_control_oracle.py'
       - 'tests/generate_v030_compact_control_android_vector.py'
       - 'native/cmpct-portable/tests/compact_control_preparity.rs'
+      - 'native/cmpct-portable/src/compact_control.rs'
       - 'native/cmpct-portable/src/lib.rs'
       - 'native/cmpct-portable/Cargo.toml'
       - '.github/workflows/v030-r24-compact-control-native-preparity.yml'
@@ -18,14 +19,14 @@ permissions:
   contents: read
 
 concurrency:
-  group: cmpct-v030-r24-compact-control-native-preparity-${{ github.event.pull_request.number || github.ref }}
+  group: cmpct-v030-r24-compact-control-native-dispatch-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 env:
   PYTHONPATH: ${{ github.workspace }}
 
 jobs:
-  native-preparity:
+  native-dispatch:
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     steps:
@@ -44,7 +45,7 @@ jobs:
         run: |
           cargo fmt --manifest-path native/cmpct-portable/Cargo.toml -- --check
           cargo clippy --manifest-path native/cmpct-portable/Cargo.toml --all-targets -- -D warnings
-      - name: Run C25CC01 cross-language control/recovery preparity
+      - name: Run C25CC01 production dispatch/recovery proof
         run: |
           cargo test --manifest-path native/cmpct-portable/Cargo.toml --test compact_control_preparity -- --nocapture
       - name: Generate deterministic Android C25CC01 conformance vector
@@ -68,16 +69,19 @@ jobs:
           assert v['facts']['strictly_smaller_than_source_r24'] is True
           assert v['facts']['archive_bytes'] < v['facts']['source_r24_bytes']
           PY
-      - name: Prove production dispatch remains closed
+      - name: Prove production dispatch is open and profile-owned
         run: |
           python - <<'PY'
           from pathlib import Path
           src=Path('native/cmpct-portable/src/lib.rs').read_text()
-          assert 'C25CC01' not in src
-          assert 'CompactControl' not in src
+          compact=Path('native/cmpct-portable/src/compact_control.rs').read_text()
+          assert 'Self::CompactControl' in src
+          assert 'CompactControlArchive::open' in src
+          assert 'r24-compact-control-v1' in src
+          assert 'C25CC01' in compact
           PY
       - name: CI topology self-check
         run: python tools/check_ci_topology.py .github/workflows/v030-r24-compact-control-native-preparity.yml
 
-# Pre-dispatch portability evidence only. Rust semantic expansion and deterministic Android vector generation are
-# prerequisites here; production PortableArchive/Android dispatch remains closed until explicit promotion evidence.
+# Production portable-dispatch ratchet for C25CC01. Android/selector/release promotion remain separately gated;
+# this lane proves the shared Rust reader opens, verifies, recovers, and delegates logical bytes to mature r24 semantics.
