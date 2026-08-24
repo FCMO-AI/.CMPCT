@@ -62,10 +62,13 @@ jobs:
           import json
           from pathlib import Path
           d=json.loads(Path('benchmark-artifacts/v030-r24-compact-control-extnorm.json').read_text())
-          assert d['schema']=='cmpct-v030-r24-compact-control-external-normalized-v1'
+          assert d['schema']=='cmpct-v030-r24-compact-control-external-normalized-v2'
           c=d['contract']
           assert c['workloads']==15
           assert c['normalization_matches_external_matrix'] is True
+          assert c['tree_domains_separated'] is True
+          assert c['canonical_strong_verification_mandatory'] is True
+          assert c['external_tree_verified_by_independent_extract'] is True
           assert c['release_credit'] is False
           assert c['production_selector_change'] is False
           assert c['format_revision_change'] is False
@@ -77,16 +80,18 @@ jobs:
           assert d['gate']['passed'] is True
           assert d['summary']['regressions']==[]
           assert all(r['semantic_index_roundtrip_exact'] for r in d['rows'])
+          assert all(r['external_tree_sha256'] for r in d['rows'])
+          assert all(r['canonical_tree_sha256'] for r in d['rows'])
           assert all(r['two_authenticated_control_copies_retained'] for r in d['rows'])
           assert all(r['physical_payload_records_unchanged'] for r in d['rows'])
           assert all(r['selected_projected_bytes']<=r['shipping_r24_bytes'] for r in d['rows'])
           t=d['target']
           assert t['rounds']==5
-          assert t['size_deterministic'] is True
+          assert t['size_and_tree_deterministic'] is True
           assert t['semantic_index_roundtrip_exact'] is True
           assert t['two_authenticated_control_copies_retained'] is True
           assert t['physical_payload_records_unchanged'] is True
-          # This lane is allowed to preserve a valid negative result. A promotion signal is much stricter.
+          # This lane may preserve valid negative evidence. Promotion requires the unchanged strict four-way bar.
           if d['gate']['promotion_signal']:
               assert t['projected_bytes'] < t['shipping_r24_bytes']
               assert t['projected_bytes'] < t['zip_bytes']
