@@ -2,15 +2,10 @@ from __future__ import annotations
 
 """All-15 exact-byte diagnostic for r24 dictionary-training cost.
 
-Shipping r24 may train a Zstd dictionary and later remove it when no selected physical record uses
-CODEC_ZSTDDICT.  That post-selection elision is byte-safe, but it does not recover dictionary-training
-CPU.  This research-only oracle rebuilds every frozen workload with dictionary training completely
-disabled and asks a narrow question: on which rows is the final verified archive already byte-for-byte
-identical to shipping r24, and how much complete build+verify time did dictionary training cost?
-
-This does *not* define a production admission rule.  A row may only be called an exact opportunity when
-archive bytes/SHA/tree are identical.  Any future production optimization must separately prove a
-content-agnostic way to decide that training is unnecessary before skipping it.
+Shipping r24 can train a Zstd dictionary and later remove it when no selected physical record uses
+CODEC_ZSTDDICT. Post-selection elision recovers bytes but not training CPU. This research-only A/B
+rebuilds every frozen workload with training disabled and reports only rows whose final verified archive
+is byte-for-byte identical to shipping r24. It deliberately does not define a production skip rule.
 """
 
 import argparse
@@ -21,7 +16,6 @@ from pathlib import Path
 import shutil
 import stat
 import statistics
-import tempfile
 import time
 
 from benchmarks import v030_r24_binary_dictionary_isolation_oracle as PRIOR
@@ -38,9 +32,8 @@ class _NoDictionaryBuilder(P.C.Builder):
         return None
 
 
-def _regular_shape(root: Path) -> tuple[int, int]:
-    count = 0
-    largest = 0
+def _shape(root: Path) -> tuple[int, int]:
+    count = largest = 0
     for dirpath, dirnames, filenames in os.walk(Path(root), followlinks=False):
         dirnames[:] = [n for n in dirnames if not os.path.islink(Path(dirpath) / n)]
         for name in filenames:
@@ -59,13 +52,12 @@ def _no_dictionary_build(root: Path, out: Path) -> dict:
     started = time.perf_counter()
     builder = _NoDictionaryBuilder(root, deflate_reuse_min=P.R24_RELEASE_DEFLATE_REUSE_MIN_BYTES)
     builder.micro_pack_max_file = P.R24_RELEASE_MICRO_MAX_FILE_BYTES
-    regular_files, largest_member = _regular_shape(root)
-    if largest_member > 0:
-        builder.micro_pack_target = min(P.R24_RELEASE_PACK_CAP_BYTES, 8 * largest_member)
-    wide_single = regular_files == 1 and largest_member >= P.R24_RELEASE_WIDE_CHUNK_BYTES
+    regular_files, largest = _shape(root)
+    if largest:
+        builder.micro_pack_target = min(P.R24_RELEASE_PACK_CAP_BYTES, 8 * largest)
     old_wide = getattr(P._R24_CDC_POLICY, "wide_single_file", False)
     old_medium = getattr(P._R24_CDC_POLICY, "medium_binary_pack", False)
-    P._R24_CDC_POLICY.wide_single_file = wide_single
+    P._R24_CDC_POLICY.wide_single_file = regular_files == 1 and largest >= P.R24_RELEASE_WIDE_CHUNK_BYTES
     P._R24_CDC_POLICY.medium_binary_pack = True
     try:
         builder.build(out)
@@ -82,29 +74,23 @@ def _no_dictionary_build(root: Path, out: Path) -> dict:
     return {
         "archive_bytes": len(raw),
         "archive_sha256": hashlib.sha256(raw).hexdigest(),
-        "tree_sha256": verified["tree_sha256"],
+        "tree_sha256": str(verified["tree_sha256"]),
         "complete_create_s": build_s + verify_s,
     }
 
 
 def _shipping_build(root: Path, out: Path) -> dict:
     row = PRIOR._shipping_build(root, out)
-    raw = out.read_bytes()
-    return {
-        **row,
-        "archive_sha256": hashlib.sha256(raw).hexdigest(),
-    }
+    return {**row, "archive_sha256": hashlib.sha256(out.read_bytes()).hexdigest()}
 
 
-def _measure(root: Path, work: Path) -> dict:
+def _measure(root: Path, work: Path, expected_tree: str) -> dict:
     samples = {"shipping": [], "no_dictionary": []}
     identities = {"shipping": set(), "no_dictionary": set()}
     trees = {"shipping": set(), "no_dictionary": set()}
     sizes = {"shipping": set(), "no_dictionary": set()}
     for rep in range(ROUNDS):
-        order = ["shipping", "no_dictionary"]
-        if rep % 2:
-            order.reverse()
+        order = ["shipping", "no_dictionary"] if rep % 2 == 0 else ["no_dictionary", "shipping"]
         for side in order:
             out = work / f"{side}-{rep}.cmpct"
             row = _shipping_build(root, out) if side == "shipping" else _no_dictionary_build(root, out)
@@ -112,15 +98,17 @@ def _measure(root: Path, work: Path) -> dict:
             identities[side].add(str(row["archive_sha256"]))
             trees[side].add(str(row["tree_sha256"]))
             sizes[side].add(int(row["archive_bytes"]))
-    deterministic = all(len(v) == 1 for v in identities.values()) and all(len(v) == 1 for v in sizes.values()) and all(len(v) == 1 for v in trees.values())
+    deterministic = all(len(v) == 1 for v in (*identities.values(), *trees.values(), *sizes.values()))
     exact_bytes = deterministic and identities["shipping"] == identities["no_dictionary"]
-    exact_tree = trees["shipping"] == trees["no_dictionary"] and len(trees["shipping"]) == 1
+    exact_tree = trees["shipping"] == trees["no_dictionary"] == {expected_tree}
     ship_t = statistics.median(samples["shipping"])
     nodict_t = statistics.median(samples["no_dictionary"])
     saved_s = ship_t - nodict_t
     saved_ratio = saved_s / max(ship_t, 1e-12)
     return {
         "rounds": ROUNDS,
+        "frozen_source_tree_sha256": expected_tree,
+        "verified_tree_sha256": next(iter(trees["shipping"])) if len(trees["shipping"]) == 1 else None,
         "shipping_bytes": next(iter(sizes["shipping"])) if len(sizes["shipping"]) == 1 else None,
         "no_dictionary_bytes": next(iter(sizes["no_dictionary"])) if len(sizes["no_dictionary"]) == 1 else None,
         "shipping_median_complete_create_s": ship_t,
@@ -129,39 +117,36 @@ def _measure(root: Path, work: Path) -> dict:
         "saved_ratio": saved_ratio,
         "deterministic": deterministic,
         "exact_archive_bytes_and_sha": exact_bytes,
-        "exact_verified_tree": exact_tree,
+        "exact_frozen_verified_tree": exact_tree,
         "material_exact_opportunity": exact_bytes and exact_tree and saved_s >= 0.005 and saved_ratio >= 0.10,
     }
 
 
-def _sources(work_root: Path) -> tuple[list[tuple[str, Path, str]], dict]:
+def _sources(work_root: Path) -> list[tuple[str, Path, str]]:
     accepted = PACKGEN.GENERAL._accepted_v029_rows()
     neutral = PACKGEN.GENERAL.V029._load(PACKGEN.GENERAL.V029.ROOT / "benchmarks" / "neutral_hostile_corpus_v1.py", "cmpct_v030_dictcost_neutral")
     hostile = PACKGEN.GENERAL.V029._load(PACKGEN.GENERAL.V029.ROOT / "benchmarks" / "resemblance_hostile_corpus_v1.py", "cmpct_v030_dictcost_hostile")
     repair = PACKGEN.GENERAL.V029._load(PACKGEN.GENERAL.V029.REPAIR_PATH, "cmpct_v030_dictcost_repair")
     repair.install_generation_hooks(neutral)
-    rows: list[tuple[str, Path, str]] = []
+    rows = []
     for suite, module, root in (("neutral_hostile_v1", neutral, work_root / "neutral"), ("resemblance_hostile_v1", hostile, work_root / "resemblance")):
         module.build(root)
         if suite == "neutral_hostile_v1":
             repair.normalize_root(root)
         for workload in sorted(p for p in root.iterdir() if p.is_dir()):
             rows.append((f"{suite}/{workload.name}", workload, accepted[(suite, workload.name)]["tree_sha256"]))
-    return rows, accepted
+    return rows
 
 
 def run(work_root: Path) -> dict:
     shutil.rmtree(work_root, ignore_errors=True)
     work_root.mkdir(parents=True)
-    sources, _accepted = _sources(work_root / "corpus")
     rows = []
-    for label, root, expected_tree in sources:
+    for label, root, expected_tree in _sources(work_root / "corpus"):
         work = work_root / "rows" / label.replace("/", "__")
         work.mkdir(parents=True, exist_ok=True)
-        row = _measure(root, work)
+        row = _measure(root, work, expected_tree)
         row["label"] = label
-        row["frozen_source_tree_sha256"] = expected_tree
-        row["source_tree_matches"] = row["exact_verified_tree"] and next(iter({expected_tree})) in {expected_tree}
         rows.append(row)
         print(json.dumps({"label": label, "exact": row["exact_archive_bytes_and_sha"], "saved_s": row["saved_s"], "saved_ratio": row["saved_ratio"]}), flush=True)
     opportunities = [r["label"] for r in rows if r["material_exact_opportunity"]]
@@ -181,7 +166,7 @@ def run(work_root: Path) -> dict:
         "rows": rows,
         "summary": {
             "exact_workload_count": len(rows) == 15,
-            "all_candidates_verify": all(r["exact_verified_tree"] for r in rows),
+            "all_candidates_verify_against_frozen_tree": all(r["exact_frozen_verified_tree"] for r in rows),
             "exact_byte_identity_rows": sum(bool(r["exact_archive_bytes_and_sha"]) for r in rows),
             "material_exact_opportunities": opportunities,
         },
