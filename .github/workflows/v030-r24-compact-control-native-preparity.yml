@@ -7,6 +7,7 @@ on:
     paths:
       - 'experiments/entropygraph_v030_r24_compact_control_profile.py'
       - 'benchmarks/v030_r24_compact_control_oracle.py'
+      - 'tests/generate_v030_compact_control_android_vector.py'
       - 'native/cmpct-portable/tests/compact_control_preparity.rs'
       - 'native/cmpct-portable/src/lib.rs'
       - 'native/cmpct-portable/Cargo.toml'
@@ -46,6 +47,27 @@ jobs:
       - name: Run C25CC01 cross-language control/recovery preparity
         run: |
           cargo test --manifest-path native/cmpct-portable/Cargo.toml --test compact_control_preparity -- --nocapture
+      - name: Generate deterministic Android C25CC01 conformance vector
+        run: |
+          python tests/generate_v030_compact_control_android_vector.py \
+            --output "$RUNNER_TEMP/v030-compact-control-android.json" \
+            --work-root "$RUNNER_TEMP/v030-compact-control-android-work"
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+          p = Path(os.environ['RUNNER_TEMP']) / 'v030-compact-control-android.json'
+          v = json.loads(p.read_text())
+          assert v['schema'] == 'cmpct-v030-android-compact-control-vector-v1'
+          assert v['profile'] == 'r24-compact-control-v1'
+          assert v['revision'] == 25
+          assert v['expected_entry_count'] == 296
+          assert v['facts']['strong_verify'] is True
+          assert v['facts']['physical_payload_records_unchanged'] is True
+          assert v['facts']['two_authenticated_control_copies'] is True
+          assert v['facts']['strictly_smaller_than_source_r24'] is True
+          assert v['facts']['archive_bytes'] < v['facts']['source_r24_bytes']
+          PY
       - name: Prove production dispatch remains closed
         run: |
           python - <<'PY'
@@ -57,4 +79,5 @@ jobs:
       - name: CI topology self-check
         run: python tools/check_ci_topology.py .github/workflows/v030-r24-compact-control-native-preparity.yml
 
-# Pre-dispatch portability evidence only. Full semantic index expansion/member parity is still required before native promotion.
+# Pre-dispatch portability evidence only. Rust semantic expansion and deterministic Android vector generation are
+# prerequisites here; production PortableArchive/Android dispatch remains closed until explicit promotion evidence.
