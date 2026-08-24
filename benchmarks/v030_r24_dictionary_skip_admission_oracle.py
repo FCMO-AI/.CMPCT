@@ -19,7 +19,6 @@ import shutil
 import stat
 
 from benchmarks import v030_r24_dictionary_training_cost_oracle as COST
-from cmpct import codec as R24
 from experiments import entropygraph_v030_release_product as P
 
 
@@ -55,7 +54,14 @@ def _source_shape(root: Path) -> tuple[int, int, int]:
 
 
 def _pretraining_features(root: Path) -> dict[str, float]:
-    """Derive only facts available immediately before Builder._train_dictionary()."""
+    """Derive the exact facts visible immediately before shipping Builder._train_dictionary().
+
+    Shipping v0.30 temporarily enables the release-only medium-binary policy while scan, S_PACK preparation and
+    dictionary training execute.  ``cmpct.builder.TEXT_EXT`` is a permanent thread-local dispatcher, so looking at
+    the mature codec extension set—or inspecting the dispatcher after restoring the policy—silently omits the
+    ``.bin`` samples the real shipping trainer sees.  Keep the policy active through sample collection and query the
+    actual builder-owned extension view.  This oracle remains observational: it still does not invoke the trainer.
+    """
     builder = P.C.Builder(root, deflate_reuse_min=P.R24_RELEASE_DEFLATE_REUSE_MIN_BYTES)
     builder.micro_pack_max_file = P.R24_RELEASE_MICRO_MAX_FILE_BYTES
     regular, logical, largest = _source_shape(root)
@@ -69,18 +75,20 @@ def _pretraining_features(root: Path) -> dict[str, float]:
         builder.scan()
         builder._build_micro_packs()
         builder._prepare_deflate_reuse()
+
+        # Mirror Builder._train_dictionary's exact sample predicate while the same release-only policy is active.
+        # The extension view is owned by cmpct.builder, not cmpct.codec, and is intentionally thread-local.
+        text_ext = P.R24_BUILDER_MODULE.TEXT_EXT
+        samples = [
+            c.raw
+            for c in builder.cands.values()
+            if len(c.raw) >= 64 and ".cmpct-pack" not in c.hints and any(x in text_ext for x in c.hints)
+        ]
+        sample_bytes = sum(map(len, samples))
     finally:
         P._R24_CDC_POLICY.wide_single_file = old_wide
         P._R24_CDC_POLICY.medium_binary_pack = old_medium
 
-    # Mirror Builder._train_dictionary's exact pre-training sample predicate without invoking the trainer.
-    # TEXT_EXT is owned by the mature r24 codec module; the canonical-final facade intentionally does not expose it.
-    samples = [
-        c.raw
-        for c in builder.cands.values()
-        if len(c.raw) >= 64 and ".cmpct-pack" not in c.hints and any(x in R24.TEXT_EXT for x in c.hints)
-    ]
-    sample_bytes = sum(map(len, samples))
     return {
         "regular_files": float(regular),
         "logical_bytes": float(logical),
@@ -149,11 +157,13 @@ def run(work_root: Path) -> dict:
         print(json.dumps({"label": label, "features": features, "material_exact": measurement["material_exact_opportunity"]}), flush=True)
     solutions = _search(rows)
     return {
-        "schema": "cmpct-v030-r24-dictionary-skip-admission-v1",
+        "schema": "cmpct-v030-r24-dictionary-skip-admission-v2",
         "contract": {
             "workloads": 15,
             "production_change": False,
             "release_credit": False,
+            "feature_owner": "shipping cmpct.builder.TEXT_EXT under active v0.30 r24 policy",
+            "release_medium_binary_policy_active_during_feature_capture": True,
             "policy_inputs": [
                 "regular_files",
                 "logical_bytes",
