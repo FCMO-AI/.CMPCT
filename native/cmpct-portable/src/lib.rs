@@ -1,5 +1,6 @@
 mod canonical;
-mod compact_control;
+#[doc(hidden)]
+pub mod compact_control;
 mod format;
 mod g04;
 mod identity;
