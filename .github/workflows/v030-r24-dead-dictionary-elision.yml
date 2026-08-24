@@ -1,0 +1,97 @@
+# ci-lane: deep
+name: CMPCT v0.30 r24 dead dictionary elision
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'src/cmpct/builder.py'
+      - 'experiments/entropygraph_v030_release_product.py'
+      - 'experiments/entropygraph_v030_release_product_base.py'
+      - 'benchmarks/v030_r24_dead_dictionary_elision_oracle.py'
+      - 'benchmarks/v030_r24_binary_dictionary_isolation_oracle.py'
+      - 'benchmarks/v030_r24_compact_control_oracle.py'
+      - 'benchmarks/neutral_hostile_corpus_v1.py'
+      - 'benchmarks/resemblance_hostile_corpus_v1.py'
+      - '.github/workflows/v030-r24-dead-dictionary-elision.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-v030-r24-dead-dict-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+
+jobs:
+  dead-dictionary-elision:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install exact corpus/compressor dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y zstd gcc ffmpeg libsndfile1
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[audio,test]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
+      - name: Compile proof
+        run: |
+          python -m py_compile benchmarks/v030_r24_dead_dictionary_elision_oracle.py
+          python -m py_compile benchmarks/v030_r24_binary_dictionary_isolation_oracle.py
+          python -m py_compile experiments/entropygraph_v030_release_product_base.py
+      - name: Run exact target and all-15 proof
+        run: |
+          mkdir -p benchmark-artifacts
+          python benchmarks/v030_r24_dead_dictionary_elision_oracle.py \
+            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-r24-dead-dict-work" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-r24-dead-dict.json"
+      - name: Enforce zero-regression promotion boundary
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          d=json.loads(Path('benchmark-artifacts/v030-r24-dead-dict.json').read_text())
+          assert d['schema']=='cmpct-v030-r24-dead-dictionary-elision-v1'
+          c=d['contract']
+          assert c['format_revision']==24
+          assert c['training_changed'] is False
+          assert c['codec_competition_changed'] is False
+          assert c['logical_semantics_changed'] is False
+          assert c['live_dictionary_archives_must_remain_byte_identical'] is True
+          t=d['target']
+          assert t['rounds']==5
+          assert t['deterministic'] is True
+          assert t['same_verified_tree'] is True
+          assert t['dead_dictionary_elided'] is True
+          assert t['delta_bytes'] < 0
+          a=d['all15']
+          assert len(a['rows'])==15
+          assert a['gate']['exact_workload_count'] is True
+          assert a['gate']['all_source_and_candidate_trees_match'] is True
+          assert a['gate']['zero_byte_regressions'] is True
+          assert a['gate']['at_least_one_strict_improvement'] is True
+          assert a['gate']['live_dictionaries_unchanged'] is True
+          assert a['gate']['promotion_candidate'] is True
+          assert a['candidate_total_bytes'] < a['shipping_total_bytes']
+          PY
+      - name: Public-surface guard
+        if: always()
+        run: python tools/check_public_surface.py
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: v030-r24-dead-dict-${{ github.sha }}
+          path: benchmark-artifacts/v030-r24-dead-dict.json
+          if-no-files-found: error
+          retention-days: 90
+
+# Evidence only until the builder materialization boundary is changed and ordinary exact-head authority regenerates.
