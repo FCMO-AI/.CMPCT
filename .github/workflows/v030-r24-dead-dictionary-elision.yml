@@ -11,6 +11,7 @@ on:
       - 'experiments/entropygraph_v030_r24_dead_dictionary.py'
       - 'benchmarks/v030_r24_dead_dictionary_elision_oracle.py'
       - 'benchmarks/v030_r24_dead_dictionary_elision_oracle_v2.py'
+      - 'benchmarks/v030_r24_dead_dictionary_elision_oracle_v3.py'
       - 'benchmarks/v030_r24_binary_dictionary_isolation_oracle.py'
       - 'benchmarks/v030_r24_compact_control_oracle.py'
       - 'benchmarks/neutral_hostile_corpus_v1.py'
@@ -49,27 +50,32 @@ jobs:
         run: |
           python -m py_compile benchmarks/v030_r24_dead_dictionary_elision_oracle.py
           python -m py_compile benchmarks/v030_r24_dead_dictionary_elision_oracle_v2.py
+          python -m py_compile benchmarks/v030_r24_dead_dictionary_elision_oracle_v3.py
           python -m py_compile benchmarks/v030_r24_binary_dictionary_isolation_oracle.py
           python -m py_compile experiments/entropygraph_v030_r24_dead_dictionary.py
           python -m py_compile experiments/entropygraph_v030_release_product.py
           python -m py_compile experiments/entropygraph_v030_release_product_base.py
-      - name: Run exact target and all-15 proof
+      - name: Run exact shipping regression proof
         run: |
           mkdir -p benchmark-artifacts
-          python benchmarks/v030_r24_dead_dictionary_elision_oracle_v2.py \
+          python benchmarks/v030_r24_dead_dictionary_elision_oracle_v3.py \
             --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-r24-dead-dict-work" \
             --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-r24-dead-dict.json"
-      - name: Enforce zero-regression promotion boundary
+      - name: Enforce promoted zero-regression ratchet
         run: |
           python - <<'PY'
           import json
           from pathlib import Path
           d=json.loads(Path('benchmark-artifacts/v030-r24-dead-dict.json').read_text())
-          assert d['schema']=='cmpct-v030-r24-dead-dictionary-elision-v2'
+          assert d['schema']=='cmpct-v030-r24-dead-dictionary-elision-v3-shipping-ratchet'
+          r=d['ratchet']
+          assert r['promotion_already_applied'] is True
+          assert r['training_changed'] is False
+          assert r['codec_competition_changed'] is False
+          assert r['threshold_changed'] is False
           repair=d['identity_domain_repair']
           assert repair['historical_source_digest_role']=='frozen corpus provenance only'
           assert repair['canonical_product_digest_role']=='shipping-vs-candidate semantic tree equivalence'
-          assert repair['bytes_or_timing_recomputed'] is False
           assert repair['threshold_changed'] is False
           c=d['contract']
           assert c['format_revision']==24
@@ -81,8 +87,8 @@ jobs:
           assert t['rounds']==5
           assert t['deterministic'] is True
           assert t['same_verified_tree'] is True
-          assert t['dead_dictionary_elided'] is True
-          assert t['delta_bytes'] < 0
+          assert t['shipping_dead_dictionary_elided'] is True
+          assert t['saving_bytes_vs_pre_elision'] > 0
           a=d['all15']
           assert len(a['rows'])==15
           assert a['gate']['exact_workload_count'] is True
@@ -91,11 +97,13 @@ jobs:
           assert a['gate']['zero_byte_regressions'] is True
           assert a['gate']['at_least_one_strict_improvement'] is True
           assert a['gate']['live_dictionaries_unchanged'] is True
-          assert a['gate']['promotion_candidate'] is True
-          assert a['candidate_total_bytes'] < a['shipping_total_bytes']
-          improved=[r for r in a['rows'] if r['delta_bytes'] < 0]
+          assert a['gate']['shipping_regression_green'] is True
+          assert a['shipping_total_bytes'] < a['pre_elision_total_bytes']
+          improved=[row for row in a['rows'] if row['saving_bytes_vs_pre_elision'] > 0]
           assert len(improved) >= 3
-          assert sum(r['delta_bytes'] for r in a['rows']) <= -74000
+          assert sum(row['saving_bytes_vs_pre_elision'] for row in a['rows']) >= 74000
+          live=[row for row in a['rows'] if row['transform']['reason']=='dictionary-live']
+          assert all(row['shipping_bytes']==row['pre_elision_bytes'] for row in live)
           PY
       - name: Public-surface guard
         if: always()
@@ -108,4 +116,4 @@ jobs:
           if-no-files-found: error
           retention-days: 90
 
-# Evidence plus shipping regression ratchet. Ordinary exact-head external/generalization/final authorities remain decisive.
+# Shipping regression ratchet. Ordinary exact-head external/generalization/final authorities remain decisive.
