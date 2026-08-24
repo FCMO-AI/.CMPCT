@@ -1,0 +1,86 @@
+# ci-lane: deep
+name: CMPCT v0.30 r24 physical-overhead oracle
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'src/cmpct/codec.py'
+      - 'src/cmpct/builder.py'
+      - 'experiments/entropygraph_v030_release_product.py'
+      - 'benchmarks/v030_r24_compact_control_oracle.py'
+      - 'benchmarks/v030_r24_compact_control_oracle_v3.py'
+      - 'benchmarks/v030_r24_physical_overhead_oracle.py'
+      - 'benchmarks/neutral_hostile_corpus_v1.py'
+      - '.github/workflows/v030-r24-physical-overhead.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-v030-r24-physical-overhead-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+
+jobs:
+  oracle:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install exact corpus/compressor dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y zstd gcc ffmpeg libsndfile1
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[audio,test]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
+      - name: Compile physical-overhead oracle
+        run: python -m py_compile benchmarks/v030_r24_physical_overhead_oracle.py
+      - name: Run exact physical decomposition
+        run: |
+          mkdir -p benchmark-artifacts
+          python benchmarks/v030_r24_physical_overhead_oracle.py \
+            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-r24-physical-overhead-work" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-r24-physical-overhead.json"
+      - name: Independently enforce diagnostic accounting
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          d=json.loads(Path('benchmark-artifacts/v030-r24-physical-overhead.json').read_text())
+          assert d['schema']=='cmpct-v030-r24-physical-overhead-v1'
+          assert d['verified_tree_sha256']
+          assert d['contract']['archive_bytes_changed']==0
+          assert d['contract']['payload_bytes_changed']==0
+          assert d['contract']['reader_or_recovery_changed'] is False
+          p=d['physical']
+          assert p['record_count'] > 0
+          assert p['blob_header_bytes'] == p['record_count'] * 64
+          assert p['blob_header_bytes'] + p['record_meta_bytes'] + p['compressed_payload_bytes'] > 0
+          assert d['remaining_zstd_deficit_after_compact_control_bytes'] == d['compact_control_projected_bytes']-d['zstd19_bytes']
+          f=d['non_productizable_floors']
+          assert f['compact_control_minus_all_blob_headers_bytes'] == d['compact_control_projected_bytes']-p['blob_header_bytes']
+          assert f['minus_all_blob_headers_and_record_metadata_bytes'] == f['compact_control_minus_all_blob_headers_bytes']-p['record_meta_bytes']
+          assert f['plus_raw_choice_for_nonproductive_compression_bytes'] == f['minus_all_blob_headers_and_record_metadata_bytes']-p['nonproductive_compression_bytes']
+          PY
+      - name: Public-surface guard
+        if: always()
+        run: python tools/check_public_surface.py
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: v030-r24-physical-overhead-${{ github.sha }}
+          path: benchmark-artifacts/v030-r24-physical-overhead.json
+          if-no-files-found: error
+          retention-days: 90
+
+# Diagnostic only. Hypothetical framing floors are not product candidates and cannot weaken salvage, recovery,
+# locality, external-competitor, v0.29, native, Android or final-release authority.
