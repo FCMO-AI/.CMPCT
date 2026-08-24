@@ -12,9 +12,15 @@ pub const MAGIC: &[u8; 8] = b"C25CC01\0";
 const TAIL_MAGIC: &[u8; 8] = b"C25CCT1\0";
 const R24_MAGIC: &[u8; 8] = b"CMPCT24\0";
 const R24_TAIL_MAGIC: &[u8; 8] = b"CMPTF24\0";
+const BLOB_MAGIC: &[u8; 4] = b"CMA4";
 const HEADER_SIZE: usize = 68;
 const FOOTER_SIZE: usize = 68;
+const BLOB_HEADER_SIZE: usize = 64;
+const CODEC_RAW: u8 = 0;
+const CODEC_ZSTD: u8 = 1;
+const STORAGE_PACK: u64 = 4;
 const MAX_CONTROL_RAW_BYTES: usize = 64 * 1024 * 1024;
+const MAX_PACK_RAW_BYTES: usize = 8 * 1024 * 1024;
 
 #[derive(Debug)]
 pub struct CompactControlArchive {
@@ -33,6 +39,15 @@ struct ParsedCopies {
     tail_sha: [u8; 32],
     data_start: usize,
     data_span: usize,
+}
+
+#[derive(Clone, Copy)]
+struct BlobDescriptor {
+    offset: usize,
+    raw_len: usize,
+    compressed_len: usize,
+    codec: u8,
+    meta_len: usize,
 }
 
 impl CompactControlArchive {
@@ -59,7 +74,8 @@ impl CompactControlArchive {
             }
         };
 
-        let expanded = expand_compact_control(&control)?;
+        let mut expanded = expand_compact_control(&control)?;
+        restore_native_pack_logical_hashes(&mut expanded, &payload, &copies)?;
         let temp = tempfile::tempdir().map_err(PortableError::Io)?;
         let r24_path = temp.path().join("expanded-r24.cmpct");
         materialize_r24_from_compact(&payload, &copies, &expanded, &r24_path)?;
@@ -85,6 +101,13 @@ fn le_u16(raw: &[u8]) -> Result<u16, PortableError> {
         .try_into()
         .map_err(|_| PortableError::Format("truncated C25CC01 u16".into()))?;
     Ok(u16::from_le_bytes(raw))
+}
+
+fn le_u32(raw: &[u8]) -> Result<u32, PortableError> {
+    let raw: [u8; 4] = raw
+        .try_into()
+        .map_err(|_| PortableError::Format("truncated C25CC01 u32".into()))?;
+    Ok(u32::from_le_bytes(raw))
 }
 
 fn le_u64(raw: &[u8]) -> Result<u64, PortableError> {
@@ -113,6 +136,15 @@ fn map_get<'a>(value: &'a Value, key: &str) -> Result<&'a Value, PortableError> 
         .as_map()
         .ok_or_else(|| PortableError::Format("expected MessagePack map".into()))?
         .iter()
+        .find_map(|(candidate, value)| (candidate.as_str() == Some(key)).then_some(value))
+        .ok_or_else(|| PortableError::Format(format!("missing compact-control key {key:?}")))
+}
+
+fn map_get_mut<'a>(value: &'a mut Value, key: &str) -> Result<&'a mut Value, PortableError> {
+    value
+        .as_map_mut()
+        .ok_or_else(|| PortableError::Format("expected mutable MessagePack map".into()))?
+        .iter_mut()
         .find_map(|(candidate, value)| (candidate.as_str() == Some(key)).then_some(value))
         .ok_or_else(|| PortableError::Format(format!("missing compact-control key {key:?}")))
 }
@@ -486,6 +518,186 @@ fn expand_compact_control(envelope: &Value) -> Result<Value, PortableError> {
         (Value::from("fsmeta"), map_get(compact, "m")?.clone()),
         (Value::from("features"), Value::Array(features)),
     ]))
+}
+
+fn parse_blob_descriptors(expanded: &Value) -> Result<Vec<BlobDescriptor>, PortableError> {
+    let blobs = map_get(expanded, "blobs")?
+        .as_array()
+        .ok_or_else(|| PortableError::Format("C25CC01 expanded blobs are not an array".into()))?;
+    let mut out = Vec::with_capacity(blobs.len());
+    for (index, value) in blobs.iter().enumerate() {
+        let row = value.as_array().ok_or_else(|| {
+            PortableError::Format(format!("C25CC01 expanded blob {index} is malformed"))
+        })?;
+        if row.len() < 5 {
+            return Err(PortableError::Format(format!(
+                "C25CC01 expanded blob {index} is too short"
+            )));
+        }
+        let offset = usize::try_from(value_u64(&row[0], "blob offset")?)
+            .map_err(|_| PortableError::Limit("blob offset exceeds native width".into()))?;
+        let raw_len = usize::try_from(value_u64(&row[1], "blob raw length")?)
+            .map_err(|_| PortableError::Limit("blob raw length exceeds native width".into()))?;
+        let compressed_len = usize::try_from(value_u64(&row[2], "blob compressed length")?)
+            .map_err(|_| PortableError::Limit("blob compressed length exceeds native width".into()))?;
+        let codec = u8::try_from(value_u64(&row[3], "blob codec")?)
+            .map_err(|_| PortableError::Format("blob codec exceeds u8".into()))?;
+        let meta_len = usize::try_from(value_u64(&row[4], "blob metadata length")?)
+            .map_err(|_| PortableError::Limit("blob metadata length exceeds native width".into()))?;
+        out.push(BlobDescriptor {
+            offset,
+            raw_len,
+            compressed_len,
+            codec,
+            meta_len,
+        });
+    }
+    Ok(out)
+}
+
+fn authenticate_pack_blob(
+    candidate_payload: &[u8],
+    copies: &ParsedCopies,
+    descriptor: BlobDescriptor,
+) -> Result<Vec<u8>, PortableError> {
+    if descriptor.raw_len > MAX_PACK_RAW_BYTES {
+        return Err(PortableError::Limit(
+            "C25CC01 packed decode unit exceeds frozen 8 MiB ceiling".into(),
+        ));
+    }
+    let record_start = copies
+        .data_start
+        .checked_add(descriptor.offset)
+        .ok_or_else(|| PortableError::Limit("C25CC01 pack record offset overflow".into()))?;
+    let payload_start = record_start
+        .checked_add(BLOB_HEADER_SIZE)
+        .and_then(|value| value.checked_add(descriptor.meta_len))
+        .ok_or_else(|| PortableError::Limit("C25CC01 pack payload offset overflow".into()))?;
+    let payload_end = payload_start
+        .checked_add(descriptor.compressed_len)
+        .ok_or_else(|| PortableError::Limit("C25CC01 pack payload end overflow".into()))?;
+    let data_end = copies
+        .data_start
+        .checked_add(copies.data_span)
+        .ok_or_else(|| PortableError::Limit("C25CC01 data span overflow".into()))?;
+    if payload_end > data_end || record_start + BLOB_HEADER_SIZE > candidate_payload.len() {
+        return Err(PortableError::Format(
+            "C25CC01 packed blob extends outside physical payload".into(),
+        ));
+    }
+    let header = &candidate_payload[record_start..record_start + BLOB_HEADER_SIZE];
+    if &header[..4] != BLOB_MAGIC
+        || header[4] != descriptor.codec
+        || usize::try_from(le_u64(&header[8..16])?).ok() != Some(descriptor.raw_len)
+        || usize::try_from(le_u64(&header[16..24])?).ok() != Some(descriptor.compressed_len)
+        || usize::try_from(le_u32(&header[24..28])?).ok() != Some(descriptor.meta_len)
+    {
+        return Err(PortableError::Integrity(
+            "C25CC01 pack header disagrees with authenticated control".into(),
+        ));
+    }
+    let expected_crc = le_u32(&header[28..32])?;
+    let expected_sha = &header[32..64];
+    let compressed = candidate_payload
+        .get(payload_start..payload_end)
+        .ok_or_else(|| PortableError::Format("C25CC01 packed payload is truncated".into()))?;
+    let raw = match descriptor.codec {
+        CODEC_RAW => {
+            if descriptor.compressed_len != descriptor.raw_len {
+                return Err(PortableError::Integrity(
+                    "C25CC01 RAW pack has mismatched compressed/raw length".into(),
+                ));
+            }
+            compressed.to_vec()
+        }
+        CODEC_ZSTD => zstd::stream::decode_all(Cursor::new(compressed)).map_err(|error| {
+            PortableError::Format(format!("C25CC01 packed Zstd decode: {error}"))
+        })?,
+        _ => {
+            return Err(PortableError::Unsupported(
+                "C25CC01 S_PACK compatibility bridge only admits RAW/Zstd pack codecs".into(),
+            ));
+        }
+    };
+    if raw.len() != descriptor.raw_len
+        || crc32fast::hash(&raw) != expected_crc
+        || Sha256::digest(&raw).as_slice() != expected_sha
+    {
+        return Err(PortableError::Integrity(
+            "C25CC01 packed blob failed complete physical authentication".into(),
+        ));
+    }
+    Ok(raw)
+}
+
+fn restore_native_pack_logical_hashes(
+    expanded: &mut Value,
+    candidate_payload: &[u8],
+    copies: &ParsedCopies,
+) -> Result<(), PortableError> {
+    let descriptors = parse_blob_descriptors(expanded)?;
+    let files = map_get_mut(expanded, "files")?
+        .as_array_mut()
+        .ok_or_else(|| PortableError::Format("C25CC01 expanded files are not an array".into()))?;
+    let mut decoded_packs = HashMap::<usize, Vec<u8>>::new();
+
+    for (file_index, value) in files.iter_mut().enumerate() {
+        let row = value.as_array_mut().ok_or_else(|| {
+            PortableError::Format(format!("C25CC01 expanded file {file_index} is malformed"))
+        })?;
+        if row.len() < 7 || value_u64(&row[1], "file kind")? != 0 || !matches!(row[5], Value::Nil)
+        {
+            continue;
+        }
+        let Some(storage) = row[6].as_array() else {
+            continue;
+        };
+        if storage.first().map(|value| value_u64(value, "storage tag")).transpose()?
+            != Some(STORAGE_PACK)
+        {
+            continue;
+        }
+        if storage.len() != 4 {
+            return Err(PortableError::Format(format!(
+                "C25CC01 packed file {file_index} has invalid storage shape"
+            )));
+        }
+        let blob_index = usize::try_from(value_u64(&storage[1], "pack blob index")?)
+            .map_err(|_| PortableError::Limit("pack blob index exceeds native width".into()))?;
+        let offset = usize::try_from(value_u64(&storage[2], "pack offset")?)
+            .map_err(|_| PortableError::Limit("pack offset exceeds native width".into()))?;
+        let length = usize::try_from(value_u64(&storage[3], "pack length")?)
+            .map_err(|_| PortableError::Limit("pack length exceeds native width".into()))?;
+        let logical_size = usize::try_from(value_u64(&row[4], "packed file logical size")?)
+            .map_err(|_| PortableError::Limit("packed file logical size exceeds native width".into()))?;
+        if length != logical_size {
+            return Err(PortableError::Integrity(format!(
+                "C25CC01 packed file {file_index} length disagrees with logical size"
+            )));
+        }
+        if !decoded_packs.contains_key(&blob_index) {
+            let descriptor = *descriptors.get(blob_index).ok_or_else(|| {
+                PortableError::Format(format!(
+                    "C25CC01 packed file {file_index} references missing blob"
+                ))
+            })?;
+            let raw = authenticate_pack_blob(candidate_payload, copies, descriptor)?;
+            decoded_packs.insert(blob_index, raw);
+        }
+        let pack = decoded_packs.get(&blob_index).ok_or_else(|| {
+            PortableError::Integrity("C25CC01 authenticated pack cache lost entry".into())
+        })?;
+        let end = offset
+            .checked_add(length)
+            .ok_or_else(|| PortableError::Limit("C25CC01 packed slice overflow".into()))?;
+        let slice = pack.get(offset..end).ok_or_else(|| {
+            PortableError::Integrity(format!(
+                "C25CC01 packed file {file_index} slice exceeds authenticated pack"
+            ))
+        })?;
+        row[5] = Value::Binary(Sha256::digest(slice).to_vec());
+    }
+    Ok(())
 }
 
 fn materialize_r24_from_compact(
