@@ -1,0 +1,106 @@
+# ci-lane: deep
+name: CMPCT v0.30 r24 suffix-path control oracle
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'src/cmpct/builder.py'
+      - 'src/cmpct/codec.py'
+      - 'experiments/entropygraph_v030_release_product.py'
+      - 'benchmarks/v030_r24_compact_control_oracle.py'
+      - 'benchmarks/v030_r24_compact_control_composition_oracle.py'
+      - 'benchmarks/v030_r24_compact_control_composition_oracle_v2.py'
+      - 'benchmarks/v030_r24_numeric_path_control_oracle.py'
+      - 'benchmarks/v030_r24_suffix_path_control_oracle.py'
+      - 'benchmarks/v030_release_generalization.py'
+      - 'benchmarks/neutral_hostile_corpus_v1.py'
+      - 'benchmarks/resemblance_hostile_corpus_v1.py'
+      - 'benchmarks/neutral_hostile_determinism_repair_v6.py'
+      - '.github/workflows/v030-r24-suffix-path-control.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-v030-r24-suffix-path-control-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+
+jobs:
+  suffix-path-control:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install exact corpus dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y zstd gcc ffmpeg libsndfile1
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[audio,test]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
+      - name: Compile suffix-path evidence surface
+        run: |
+          python -m py_compile \
+            benchmarks/v030_r24_compact_control_oracle.py \
+            benchmarks/v030_r24_compact_control_composition_oracle.py \
+            benchmarks/v030_r24_compact_control_composition_oracle_v2.py \
+            benchmarks/v030_r24_numeric_path_control_oracle.py \
+            benchmarks/v030_r24_suffix_path_control_oracle.py
+      - name: Run exact all-15 suffix-table compact-control proof
+        run: |
+          mkdir -p benchmark-artifacts
+          python benchmarks/v030_r24_suffix_path_control_oracle.py \
+            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-r24-suffix-path-control-work" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-r24-suffix-path-control.json"
+      - name: Independently enforce exactness and negative-evidence boundary
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          d=json.loads(Path('benchmark-artifacts/v030-r24-suffix-path-control.json').read_text())
+          assert d['schema']=='cmpct-v030-r24-suffix-path-control-v1'
+          assert d['contract']['workloads']==15
+          assert d['contract']['release_credit'] is False
+          assert d['contract']['two_authenticated_control_copies_retained'] is True
+          assert d['contract']['physical_payload_records_unchanged'] is True
+          assert set(d['contract']['policy_inputs'])=={
+              'previous_canonical_path','current_canonical_path','canonical_path_suffix_frequency'
+          }
+          assert 'benchmark_name' in d['contract']['forbidden_policy_inputs']
+          assert 'content_hash' in d['contract']['forbidden_policy_inputs']
+          assert len(d['rows'])==15
+          assert d['gate']['experiment_valid'] is True
+          assert d['gate']['zero_projected_byte_regressions'] is True
+          assert d['gate']['passed'] is True
+          assert d['summary']['regressions']==[]
+          assert all(r['semantic_index_roundtrip_exact'] for r in d['rows'])
+          assert all(r['two_control_copies'] for r in d['rows'])
+          assert all(r['payload_records_unchanged'] for r in d['rows'])
+          assert all(r['projected_bytes']<=r['shipping_bytes'] for r in d['rows'])
+          if d['gate']['promotion_signal']:
+              assert d['summary']['aggregate_incremental_saving_vs_numeric_bytes']>0
+              assert d['summary']['suffix_selected_workloads']
+          PY
+      - name: CI topology self-check
+        run: python tools/check_ci_topology.py .github/workflows/v030-r24-suffix-path-control.yml
+      - name: Upload suffix-path evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: v030-r24-suffix-path-control-${{ github.sha }}
+          path: benchmark-artifacts/v030-r24-suffix-path-control.json
+          if-no-files-found: warn
+          retention-days: 90
+
+# A green lane means the experiment completed exactly with zero regressions, not that a new profile is released.
+# Any positive byte signal still owes bounded canonical reader/recovery semantics, native/Android parity, selector
+# admission, exact fingerprint binding, and the ordinary all-15 external/final release authority.
