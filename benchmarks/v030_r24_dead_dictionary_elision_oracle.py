@@ -24,6 +24,7 @@ import msgpack
 
 from benchmarks import v030_r24_binary_dictionary_isolation_oracle as PRIOR
 from benchmarks import v030_r24_compact_control_oracle as CONTROL
+from cmpct import codec as R24
 from experiments import entropygraph_v030_release_product as P
 
 ROUNDS = 5
@@ -38,7 +39,7 @@ def _remap_ref(value: int, removed: int) -> int:
 
 
 def _remap_index(index: dict, removed: int) -> None:
-    C = P.C
+    C = R24
     for row in index.get("files", []):
         storage = row[6]
         if not storage:
@@ -63,7 +64,7 @@ def _remap_index(index: dict, removed: int) -> None:
 
 
 def elide_dead_dictionary(src: Path, dst: Path) -> dict:
-    C = P.C
+    C = R24
     raw = Path(src).read_bytes()
     magic, version, flags, ic_len, ib_len, data_len, ih = C.HDR.unpack_from(raw, 0)
     if magic != C.MAGIC or int(version) != 24:
@@ -156,7 +157,7 @@ def _target(work_root: Path) -> dict:
     deltas = set()
     trees = set()
     changed = set()
-    for i in range(ROUNDS):
+    for _i in range(ROUNDS):
         with tempfile.TemporaryDirectory(prefix="cmpct-dead-dict-target-", dir=work_root) as td_name:
             row = _build_pair(root, Path(td_name))
         samples.append(float(row["overcharged_complete_create_s"]))
