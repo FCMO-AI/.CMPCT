@@ -19,6 +19,7 @@ import shutil
 import stat
 
 from benchmarks import v030_r24_dictionary_training_cost_oracle as COST
+from cmpct import codec as R24
 from experiments import entropygraph_v030_release_product as P
 
 
@@ -73,10 +74,11 @@ def _pretraining_features(root: Path) -> dict[str, float]:
         P._R24_CDC_POLICY.medium_binary_pack = old_medium
 
     # Mirror Builder._train_dictionary's exact pre-training sample predicate without invoking the trainer.
+    # TEXT_EXT is owned by the mature r24 codec module; the canonical-final facade intentionally does not expose it.
     samples = [
         c.raw
         for c in builder.cands.values()
-        if len(c.raw) >= 64 and ".cmpct-pack" not in c.hints and any(x in P.C.TEXT_EXT for x in c.hints)
+        if len(c.raw) >= 64 and ".cmpct-pack" not in c.hints and any(x in R24.TEXT_EXT for x in c.hints)
     ]
     sample_bytes = sum(map(len, samples))
     return {
@@ -105,7 +107,6 @@ def _candidate_rules(rows: list[dict]) -> list[Rule]:
 def _search(rows: list[dict]) -> list[dict]:
     rules = _candidate_rules(rows)
     solutions = []
-    # Keep the family intentionally small: one rule or conjunction of two simple pre-training thresholds.
     candidates: list[tuple[Rule, ...]] = [(r,) for r in rules]
     for i, a in enumerate(rules):
         for b in rules[i + 1 :]:
