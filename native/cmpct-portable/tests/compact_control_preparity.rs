@@ -53,7 +53,10 @@ assert stats['two_authenticated_control_copies'] is True
         .env("PYTHONPATH", &repo)
         .status()
         .expect("python compact-control fixture builder must start");
-    assert!(status.success(), "python compact-control fixture builder failed");
+    assert!(
+        status.success(),
+        "python compact-control fixture builder failed"
+    );
 }
 
 fn le_u64(raw: &[u8]) -> u64 {
@@ -104,7 +107,9 @@ fn c25cc01_uses_real_production_portable_dispatch_and_mature_r24_semantics() {
     assert_eq!(archive.profile(), cmpct_portable::Profile::CompactControl);
     assert_eq!(archive.revision(), 25);
     assert!(archive.tail_metadata_authenticated());
-    archive.verify().expect("production C25CC01 verification must pass");
+    archive
+        .verify()
+        .expect("production C25CC01 verification must pass");
 
     let entries = archive.entries();
     assert_eq!(entries.len(), 296);
@@ -134,7 +139,9 @@ fn c25cc01_production_dispatch_recovers_one_control_copy_and_fails_when_both_are
     let recovered_from_tail = cmpct_portable::PortableArchive::open(&primary_bad_path)
         .expect("valid tail control must recover a corrupt primary copy");
     assert!(recovered_from_tail.tail_metadata_authenticated());
-    recovered_from_tail.verify().expect("tail recovery must preserve complete verification");
+    recovered_from_tail
+        .verify()
+        .expect("tail recovery must preserve complete verification");
 
     let mut tail_bad = original.clone();
     corrupt_middle(&mut tail_bad, ranges.tail_start, ranges.tail_end);
@@ -143,7 +150,9 @@ fn c25cc01_production_dispatch_recovers_one_control_copy_and_fails_when_both_are
     let recovered_from_primary = cmpct_portable::PortableArchive::open(&tail_bad_path)
         .expect("valid primary control must recover a corrupt tail copy");
     assert!(!recovered_from_primary.tail_metadata_authenticated());
-    recovered_from_primary.verify().expect("primary recovery must preserve complete verification");
+    recovered_from_primary
+        .verify()
+        .expect("primary recovery must preserve complete verification");
 
     let mut both_bad = primary_bad;
     corrupt_middle(&mut both_bad, ranges.tail_start, ranges.tail_end);
