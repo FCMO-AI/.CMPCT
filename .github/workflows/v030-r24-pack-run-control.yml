@@ -1,0 +1,112 @@
+# ci-lane: deep
+name: CMPCT v0.30 r24 pack-run compact control
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'benchmarks/v030_r24_pack_run_control_oracle.py'
+      - 'benchmarks/v030_r24_compact_control_oracle.py'
+      - 'benchmarks/v030_r24_numeric_path_control_oracle.py'
+      - 'benchmarks/v030_r24_suffix_path_control_oracle.py'
+      - 'benchmarks/v030_r24_compact_control_composition_oracle_v2.py'
+      - 'experiments/entropygraph_v030_release_product.py'
+      - 'src/cmpct/codec.py'
+      - '.github/workflows/v030-r24-pack-run-control.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-v030-r24-pack-run-control-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+
+jobs:
+  pack-run-control:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install exact corpus/compressor dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y zstd gcc ffmpeg libsndfile1
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[audio,test]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
+      - name: Compile pack-run evidence surface
+        run: |
+          python -m py_compile benchmarks/v030_r24_pack_run_control_oracle.py
+          python -m py_compile benchmarks/v030_r24_compact_control_oracle.py
+          python -m py_compile benchmarks/v030_r24_numeric_path_control_oracle.py
+          python -m py_compile benchmarks/v030_r24_suffix_path_control_oracle.py
+      - name: Run exact all-15 pack-run compact-control proof
+        run: |
+          mkdir -p benchmark-artifacts
+          python benchmarks/v030_r24_pack_run_control_oracle.py \
+            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-r24-pack-run-control-work" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-r24-pack-run-control.json"
+      - name: Independently enforce exactness and promotion boundary
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          d=json.loads(Path('benchmark-artifacts/v030-r24-pack-run-control.json').read_text())
+          assert d['schema']=='cmpct-v030-r24-pack-run-control-v1'
+          c=d['contract']
+          assert c['workloads']==15
+          assert c['release_credit'] is False
+          assert c['production_selector_change'] is False
+          assert c['format_revision_change'] is False
+          assert c['two_authenticated_control_copies_retained'] is True
+          assert c['physical_payload_records_unchanged'] is True
+          assert set(c['policy_inputs'])=={
+              'authenticated_storage_tag',
+              'authenticated_pack_blob_index',
+              'authenticated_pack_offset',
+              'authenticated_logical_size',
+          }
+          for forbidden in ('benchmark_name','workload_label','content_hash','file_path_literal','frozen_pack_hash'):
+              assert forbidden in c['forbidden_policy_inputs']
+          assert len(d['rows'])==15
+          assert d['gate']['experiment_valid'] is True
+          assert d['gate']['zero_projected_byte_regressions'] is True
+          assert d['gate']['passed'] is True
+          assert d['summary']['regressions']==[]
+          assert all(r['semantic_index_roundtrip_exact'] for r in d['rows'])
+          assert all(r['two_control_copies'] for r in d['rows'])
+          assert all(r['payload_records_unchanged'] for r in d['rows'])
+          assert all(r['projected_bytes']<=r['shipping_bytes'] for r in d['rows'])
+          target=d['target']
+          assert target['rounds']==5
+          assert target['size_deterministic'] is True
+          assert target['tree_deterministic'] is True
+          # A valid negative result is preserved as evidence. Promotion requires BOTH new control bytes and the
+          # unchanged strict four-way target contract; this lane itself never grants release credit.
+          if d['gate']['promotion_signal']:
+              assert d['summary']['target_incremental_saving_bytes'] > 0
+              assert d['gate']['target_strict_four_way_potential'] is True
+              assert target['projected_bytes'] < target['zip_bytes']
+              assert target['projected_bytes'] < target['zstd19_bytes']
+              assert target['median_conservative_create_s'] < target['median_zip_create_s']
+              assert target['median_conservative_create_s'] < target['median_zstd19_create_s']
+          PY
+      - name: CI topology self-check
+        run: python tools/check_ci_topology.py .github/workflows/v030-r24-pack-run-control.yml
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: v030-r24-pack-run-control-${{ github.sha }}
+          path: benchmark-artifacts/v030-r24-pack-run-control.json
+          if-no-files-found: warn
+          retention-days: 90
+
+# Research-only frontier. Ordinary external/generalization/final release authorities remain decisive.
