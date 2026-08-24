@@ -1,0 +1,93 @@
+# ci-lane: deep
+name: CMPCT v0.30 r24 dictionary training cost oracle
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'benchmarks/v030_r24_dictionary_training_cost_oracle.py'
+      - 'benchmarks/v030_r24_binary_dictionary_isolation_oracle.py'
+      - 'benchmarks/v030_r24_medium_binary_pack_generalization.py'
+      - 'experiments/entropygraph_v030_release_product.py'
+      - 'src/cmpct/builder.py'
+      - '.github/workflows/v030-r24-dictionary-training-cost.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-v030-r24-dict-training-cost-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+
+jobs:
+  dictionary-training-cost:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install frozen-corpus dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y zstd gcc ffmpeg libsndfile1
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[audio,test]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
+      - name: Compile exact evidence surface
+        run: |
+          python -m py_compile benchmarks/v030_r24_dictionary_training_cost_oracle.py
+          python -m py_compile benchmarks/v030_r24_binary_dictionary_isolation_oracle.py
+          python -m py_compile experiments/entropygraph_v030_release_product.py
+      - name: Run all-15 exact-byte dictionary-training A/B
+        run: |
+          mkdir -p benchmark-artifacts
+          python benchmarks/v030_r24_dictionary_training_cost_oracle.py \
+            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-r24-dict-training-work" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-r24-dict-training.json"
+      - name: Enforce research-only exactness contract
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          d=json.loads(Path('benchmark-artifacts/v030-r24-dict-training.json').read_text())
+          assert d['schema']=='cmpct-v030-r24-dictionary-training-cost-v1'
+          c=d['contract']
+          assert c['workloads']==15
+          assert c['format_revision']==24
+          assert c['production_change'] is False
+          assert c['release_credit'] is False
+          assert c['dictionary_training_disabled_only_in_research_candidate'] is True
+          assert c['exact_archive_identity_required_for_opportunity'] is True
+          assert c['future_skip_requires_separate_content_agnostic_admission_proof'] is True
+          assert len(d['rows'])==15
+          assert d['summary']['exact_workload_count'] is True
+          assert d['summary']['all_candidates_verify_against_frozen_tree'] is True
+          for r in d['rows']:
+              assert r['deterministic'] is True
+              assert r['verified_tree_sha256']==r['frozen_source_tree_sha256']
+              if r['material_exact_opportunity']:
+                  assert r['exact_archive_bytes_and_sha'] is True
+                  assert r['exact_frozen_verified_tree'] is True
+                  assert r['shipping_bytes']==r['no_dictionary_bytes']
+                  assert r['saved_s']>=c['minimum_material_saved_s']
+                  assert r['saved_ratio']>=c['minimum_material_saved_ratio']
+          # A valid experiment may find zero opportunities. Never turn research rejection into a release red.
+          PY
+      - name: CI topology self-check
+        run: python tools/check_ci_topology.py .github/workflows/v030-r24-dictionary-training-cost.yml
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: v030-r24-dictionary-training-cost-${{ github.sha }}
+          path: benchmark-artifacts/v030-r24-dict-training.json
+          if-no-files-found: warn
+          retention-days: 90
+
+# Research-only timing decomposition. It cannot authorize dictionary skipping or release promotion.
