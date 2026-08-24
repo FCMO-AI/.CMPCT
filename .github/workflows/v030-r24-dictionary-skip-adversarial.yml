@@ -1,0 +1,97 @@
+# ci-lane: deep
+name: CMPCT v0.30 r24 dictionary skip adversarial generalization
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'benchmarks/v030_r24_dictionary_skip_adversarial_oracle.py'
+      - 'benchmarks/v030_r24_dictionary_skip_admission_oracle.py'
+      - 'benchmarks/v030_r24_dictionary_training_cost_oracle.py'
+      - 'tests/test_v030_r24_dictionary_skip_admission.py'
+      - 'src/cmpct/builder.py'
+      - 'experiments/entropygraph_v030_release_product.py'
+      - '.github/workflows/v030-r24-dictionary-skip-adversarial.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-v030-r24-dictionary-skip-adversarial-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+
+jobs:
+  adversarial-generalization:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 240
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install exact corpus dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y zstd gcc ffmpeg libsndfile1
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[audio,test]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
+      - name: Compile adversarial evidence
+        run: |
+          python -m py_compile benchmarks/v030_r24_dictionary_skip_adversarial_oracle.py
+          python -m py_compile benchmarks/v030_r24_dictionary_skip_admission_oracle.py
+          python -m py_compile benchmarks/v030_r24_dictionary_training_cost_oracle.py
+      - name: Re-prove shipping feature ownership
+        run: python -m pytest -q tests/test_v030_r24_dictionary_skip_admission.py
+      - name: Run frozen plus adversarial campaign
+        run: |
+          mkdir -p benchmark-artifacts
+          python benchmarks/v030_r24_dictionary_skip_adversarial_oracle.py \
+            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-r24-dictionary-skip-adversarial-work" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-r24-dictionary-skip-adversarial.json"
+      - name: Enforce fail-closed generalization contract
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          d=json.loads(Path('benchmark-artifacts/v030-r24-dictionary-skip-adversarial.json').read_text())
+          assert d['schema']=='cmpct-v030-r24-dictionary-skip-adversarial-v1'
+          c=d['contract']
+          assert c['production_change'] is False
+          assert c['release_credit'] is False
+          assert c['frozen_workloads']==15
+          assert c['adversarial_cases']==7
+          assert c['exact_archive_identity_required_for_every_admission'] is True
+          assert c['canonical_tree_equality_required_for_every_admission'] is True
+          assert c['positive_saved_time_required_for_every_admission'] is True
+          assert c['adversarial_admission_required_for_promotion_signal'] is True
+          assert set(c['forbidden_policy_inputs'])=={'workload_name','benchmark_name','path','filename','content_hash','archive_hash'}
+          s=d['summary']
+          assert s['frozen_complete'] is True
+          assert s['adversarial_complete'] is True
+          # Zero generalized solutions is valid negative evidence and grants no promotion.
+          for solution in d['generalized_solutions']:
+              assert solution['adversarial_admissions']
+              assert solution['frozen_material_admissions']
+              assert solution['minimum_saved_s'] >= 0.005
+              for rule in solution['rules']:
+                  assert rule['feature'] in c['policy_inputs']
+                  assert rule['feature'] not in c['forbidden_policy_inputs']
+          assert s['promotion_signal'] == bool(d['generalized_solutions'])
+          PY
+      - name: CI topology self-check
+        run: python tools/check_ci_topology.py .github/workflows/v030-r24-dictionary-skip-adversarial.yml
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: v030-r24-dictionary-skip-adversarial-${{ github.sha }}
+          path: benchmark-artifacts/v030-r24-dictionary-skip-adversarial.json
+          if-no-files-found: warn
+          retention-days: 90
+
+# Promotion evidence only. A surviving generic rule still needs a focused shipping regression before encoder admission changes.
