@@ -13,6 +13,7 @@ on:
       - 'benchmarks/v030_r24_compact_control_oracle.py'
       - 'benchmarks/neutral_hostile_corpus_v1.py'
       - 'benchmarks/resemblance_hostile_corpus_v1.py'
+      - 'tests/test_v030_r24_binary_dictionary_isolation.py'
       - '.github/workflows/v030-r24-binary-dictionary-isolation.yml'
   workflow_dispatch:
 
@@ -43,11 +44,12 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -e '.[audio,test]'
           python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
-      - name: Compile evidence path
+      - name: Compile and run policy-isolation ratchet
         run: |
           python -m py_compile benchmarks/v030_r24_binary_dictionary_isolation_oracle.py
           python -m py_compile benchmarks/v030_r24_medium_binary_pack_generalization.py
           python -m py_compile experiments/entropygraph_v030_release_product_base.py
+          python -m pytest -q tests/test_v030_r24_binary_dictionary_isolation.py
       - name: Run exact target and all-15 A/B
         run: |
           mkdir -p benchmark-artifacts
@@ -74,7 +76,7 @@ jobs:
           assert len(a['rows'])==15
           assert a['gate']['exact_workload_count'] is True
           assert a['gate']['all_source_and_candidate_trees_match'] is True
-          # A regression is valid negative evidence, not permission to promote.  CI remains useful for
+          # A regression is valid negative evidence, not permission to promote. CI remains useful for
           # measuring the hypothesis while the explicit promotion_candidate fact stays fail-closed.
           if a['gate']['promotion_candidate']:
               assert a['gate']['zero_byte_regressions'] is True
@@ -92,5 +94,5 @@ jobs:
           if-no-files-found: error
           retention-days: 90
 
-# Research/promotion evidence only.  This lane cannot alter the shipping selector, accepted v0.29 bytes,
+# Research/promotion evidence only. This lane cannot alter the shipping selector, accepted v0.29 bytes,
 # ZIP/Zstd contract, locality/recovery law, native/Android requirements, or final release authority.
