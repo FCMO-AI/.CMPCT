@@ -2,7 +2,19 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from experiments import entropygraph_v030_release_product as product
+
+
+@pytest.fixture(autouse=True)
+def _isolate_dead_dictionary_postpass(monkeypatch):
+    """This module uses deliberately tiny fake archives to probe r24 pack knobs only."""
+    monkeypatch.setattr(
+        product._R24_DEAD_DICT,
+        "elide_dead_dictionary_in_place",
+        lambda _path: {"reason": "test-isolated", "saving_bytes": 0},
+    )
 
 
 class _FakeReader:
