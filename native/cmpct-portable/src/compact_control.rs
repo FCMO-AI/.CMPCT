@@ -141,10 +141,11 @@ fn map_get<'a>(value: &'a Value, key: &str) -> Result<&'a Value, PortableError> 
 }
 
 fn map_get_mut<'a>(value: &'a mut Value, key: &str) -> Result<&'a mut Value, PortableError> {
-    value
-        .as_map_mut()
-        .ok_or_else(|| PortableError::Format("expected mutable MessagePack map".into()))?
-        .iter_mut()
+    let map = match value {
+        Value::Map(map) => map,
+        _ => return Err(PortableError::Format("expected mutable MessagePack map".into())),
+    };
+    map.iter_mut()
         .find_map(|(candidate, value)| (candidate.as_str() == Some(key)).then_some(value))
         .ok_or_else(|| PortableError::Format(format!("missing compact-control key {key:?}")))
 }
@@ -643,15 +644,22 @@ fn restore_native_pack_logical_hashes(
     copies: &ParsedCopies,
 ) -> Result<(), PortableError> {
     let descriptors = parse_blob_descriptors(expanded)?;
-    let files = map_get_mut(expanded, "files")?
-        .as_array_mut()
-        .ok_or_else(|| PortableError::Format("C25CC01 expanded files are not an array".into()))?;
+    let files_value = map_get_mut(expanded, "files")?;
+    let files = match files_value {
+        Value::Array(files) => files,
+        _ => return Err(PortableError::Format("C25CC01 expanded files are not an array".into())),
+    };
     let mut decoded_packs = HashMap::<usize, Vec<u8>>::new();
 
     for (file_index, value) in files.iter_mut().enumerate() {
-        let row = value.as_array_mut().ok_or_else(|| {
-            PortableError::Format(format!("C25CC01 expanded file {file_index} is malformed"))
-        })?;
+        let row = match value {
+            Value::Array(row) => row,
+            _ => {
+                return Err(PortableError::Format(format!(
+                    "C25CC01 expanded file {file_index} is malformed"
+                )))
+            }
+        };
         if row.len() < 7 || value_u64(&row[1], "file kind")? != 0 || !matches!(row[5], Value::Nil) {
             continue;
         }
