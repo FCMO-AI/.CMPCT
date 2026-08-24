@@ -6,6 +6,11 @@ Shipping r24 can train a Zstd dictionary and later remove it when no selected ph
 CODEC_ZSTDDICT. Post-selection elision recovers bytes but not training CPU. This research-only A/B
 rebuilds every frozen workload with training disabled and reports only rows whose final verified archive
 is byte-for-byte identical to shipping r24. It deliberately does not define a production skip rule.
+
+The accepted-v0.29 corpus tree hash and the canonical r24 strong-verification tree hash are intentionally
+distinct evidence domains. The accepted hash binds the generated input to the frozen corpus. Promotion
+evidence compares shipping-r24 and no-dictionary *canonical product trees to each other*; it never equates
+a historical source-identity hash with a canonical product semantic-tree hash.
 """
 
 import argparse
@@ -84,7 +89,7 @@ def _shipping_build(root: Path, out: Path) -> dict:
     return {**row, "archive_sha256": hashlib.sha256(out.read_bytes()).hexdigest()}
 
 
-def _measure(root: Path, work: Path, expected_tree: str) -> dict:
+def _measure(root: Path, work: Path, accepted_source_tree: str) -> dict:
     samples = {"shipping": [], "no_dictionary": []}
     identities = {"shipping": set(), "no_dictionary": set()}
     trees = {"shipping": set(), "no_dictionary": set()}
@@ -100,15 +105,18 @@ def _measure(root: Path, work: Path, expected_tree: str) -> dict:
             sizes[side].add(int(row["archive_bytes"]))
     deterministic = all(len(v) == 1 for v in (*identities.values(), *trees.values(), *sizes.values()))
     exact_bytes = deterministic and identities["shipping"] == identities["no_dictionary"]
-    exact_tree = trees["shipping"] == trees["no_dictionary"] == {expected_tree}
+    product_tree_equal = deterministic and trees["shipping"] == trees["no_dictionary"]
     ship_t = statistics.median(samples["shipping"])
     nodict_t = statistics.median(samples["no_dictionary"])
     saved_s = ship_t - nodict_t
     saved_ratio = saved_s / max(ship_t, 1e-12)
     return {
         "rounds": ROUNDS,
-        "frozen_source_tree_sha256": expected_tree,
-        "verified_tree_sha256": next(iter(trees["shipping"])) if len(trees["shipping"]) == 1 else None,
+        "accepted_source_tree_sha256": accepted_source_tree,
+        "source_identity_domain": "accepted-v0.29 frozen corpus provenance",
+        "product_tree_domain": "canonical r24 strong-verification semantic tree",
+        "shipping_verified_tree_sha256": next(iter(trees["shipping"])) if len(trees["shipping"]) == 1 else None,
+        "no_dictionary_verified_tree_sha256": next(iter(trees["no_dictionary"])) if len(trees["no_dictionary"]) == 1 else None,
         "shipping_bytes": next(iter(sizes["shipping"])) if len(sizes["shipping"]) == 1 else None,
         "no_dictionary_bytes": next(iter(sizes["no_dictionary"])) if len(sizes["no_dictionary"]) == 1 else None,
         "shipping_median_complete_create_s": ship_t,
@@ -117,8 +125,8 @@ def _measure(root: Path, work: Path, expected_tree: str) -> dict:
         "saved_ratio": saved_ratio,
         "deterministic": deterministic,
         "exact_archive_bytes_and_sha": exact_bytes,
-        "exact_frozen_verified_tree": exact_tree,
-        "material_exact_opportunity": exact_bytes and exact_tree and saved_s >= 0.005 and saved_ratio >= 0.10,
+        "canonical_product_tree_equal": product_tree_equal,
+        "material_exact_opportunity": exact_bytes and product_tree_equal and saved_s >= 0.005 and saved_ratio >= 0.10,
     }
 
 
@@ -142,16 +150,16 @@ def run(work_root: Path) -> dict:
     shutil.rmtree(work_root, ignore_errors=True)
     work_root.mkdir(parents=True)
     rows = []
-    for label, root, expected_tree in _sources(work_root / "corpus"):
+    for label, root, accepted_source_tree in _sources(work_root / "corpus"):
         work = work_root / "rows" / label.replace("/", "__")
         work.mkdir(parents=True, exist_ok=True)
-        row = _measure(root, work, expected_tree)
+        row = _measure(root, work, accepted_source_tree)
         row["label"] = label
         rows.append(row)
-        print(json.dumps({"label": label, "exact": row["exact_archive_bytes_and_sha"], "saved_s": row["saved_s"], "saved_ratio": row["saved_ratio"]}), flush=True)
+        print(json.dumps({"label": label, "exact": row["exact_archive_bytes_and_sha"], "product_tree_equal": row["canonical_product_tree_equal"], "saved_s": row["saved_s"], "saved_ratio": row["saved_ratio"]}), flush=True)
     opportunities = [r["label"] for r in rows if r["material_exact_opportunity"]]
     return {
-        "schema": "cmpct-v030-r24-dictionary-training-cost-v1",
+        "schema": "cmpct-v030-r24-dictionary-training-cost-v2",
         "contract": {
             "workloads": 15,
             "format_revision": 24,
@@ -159,6 +167,8 @@ def run(work_root: Path) -> dict:
             "release_credit": False,
             "dictionary_training_disabled_only_in_research_candidate": True,
             "exact_archive_identity_required_for_opportunity": True,
+            "canonical_product_tree_equality_required_for_opportunity": True,
+            "accepted_source_hash_is_provenance_not_product_tree": True,
             "minimum_material_saved_ratio": 0.10,
             "minimum_material_saved_s": 0.005,
             "future_skip_requires_separate_content_agnostic_admission_proof": True,
@@ -166,7 +176,7 @@ def run(work_root: Path) -> dict:
         "rows": rows,
         "summary": {
             "exact_workload_count": len(rows) == 15,
-            "all_candidates_verify_against_frozen_tree": all(r["exact_frozen_verified_tree"] for r in rows),
+            "all_candidates_match_shipping_product_tree": all(r["canonical_product_tree_equal"] for r in rows),
             "exact_byte_identity_rows": sum(bool(r["exact_archive_bytes_and_sha"]) for r in rows),
             "material_exact_opportunities": opportunities,
         },
