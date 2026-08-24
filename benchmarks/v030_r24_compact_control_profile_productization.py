@@ -4,11 +4,12 @@ from __future__ import annotations
 
 Unlike the earlier projection oracle, this lane writes the real candidate archive, performs mandatory candidate
 strong verification, extracts it through the candidate reader, and times the complete candidate build+verify
-boundary against ZIP/Deflate-9 and solid Zstd-19.  It remains promotion evidence only: native, Android, shipping
+boundary against ZIP/Deflate-9 and solid Zstd-19. It remains promotion evidence only: native, Android, shipping
 selector and ordinary all-15 release authority are separate gates.
 """
 
 import argparse
+import hashlib
 import json
 from pathlib import Path
 import shutil
@@ -67,13 +68,16 @@ def _target(source: Path, work: Path) -> dict:
         root = Path(td)
         stage = EXT._normalized_stage(source, root / "stage-work")
         rows = []
+        archives = []
         for rep in range(ROUNDS):
             order = ["cmpct", "zip", "zstd"]
             order = order[rep % 3 :] + order[: rep % 3]
             cur = {}
+            candidate_path = root / f"candidate-{rep}.cmpct"
             for name in order:
                 if name == "cmpct":
-                    cur[name] = _candidate(stage, root / f"candidate-{rep}.cmpct", root / f"cmpct-out-{rep}")
+                    cur[name] = _candidate(stage, candidate_path, root / f"cmpct-out-{rep}")
+                    archives.append(candidate_path)
                 else:
                     cur[name] = _competitor(stage, root, rep, name)
             rows.append(cur)
@@ -81,7 +85,7 @@ def _target(source: Path, work: Path) -> dict:
         candidate_sizes = {int(row["cmpct"]["archive_bytes"]) for row in rows}
         zip_sizes = {int(row["zip"]["archive_bytes"]) for row in rows}
         zstd_sizes = {int(row["zstd"]["archive_bytes"]) for row in rows}
-        candidate_sha = {__import__("hashlib").sha256((root / f"candidate-{i}.cmpct").read_bytes()).hexdigest() for i in range(ROUNDS)}
+        candidate_sha = {hashlib.sha256(path.read_bytes()).hexdigest() for path in archives}
         trees = {row["cmpct"]["external_tree_sha256"] for row in rows}
         if not (len(candidate_sizes) == len(zip_sizes) == len(zstd_sizes) == len(candidate_sha) == len(trees) == 1):
             raise RuntimeError("C25CC01 target bytes/tree were not deterministic")
@@ -179,8 +183,8 @@ def main() -> None:
     shutil.rmtree(args.work_root, ignore_errors=True)
     args.work_root.mkdir(parents=True)
     sources = CORPUS._build_all(args.work_root / "corpus")
-    if set(sources) != set(CORPUS.ACCEPTED_ROWS):
-        raise RuntimeError("C25CC01 productization corpus is not the exact accepted 15-workload set")
+    if len(sources) != 15 or TARGET not in sources:
+        raise RuntimeError(f"C25CC01 productization requires the exact 15-row accepted builder; got {len(sources)} rows")
     all15 = _all15(sources, args.work_root / "all15")
     target = _target(sources[TARGET], args.work_root / "target")
     result = {
