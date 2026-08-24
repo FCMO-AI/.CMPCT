@@ -64,6 +64,7 @@ def _competitor(stage: Path, work: Path, rep: int, name: str) -> dict:
 
 
 def _target(source: Path, work: Path) -> dict:
+    work.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix="cmpct-v030-cc-direct-", dir=work) as td:
         root = Path(td)
         stage = EXT._normalized_stage(source, root / "stage-work")
