@@ -1,0 +1,83 @@
+# ci-lane: deep
+name: CMPCT v0.30 r24 compact-control terminal admission
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'benchmarks/v030_r24_compact_control_terminal_admission.py'
+      - 'benchmarks/v030_r24_compact_control_profile_productization.py'
+      - 'experiments/entropygraph_v030_r24_compact_control_profile.py'
+      - 'experiments/entropygraph_v030_release_product.py'
+      - 'benchmarks/v030_external_competitors.py'
+      - '.github/workflows/v030-r24-compact-control-terminal-admission.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-v030-r24-compact-control-terminal-admission-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+
+jobs:
+  admission:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install benchmark dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y zstd gcc
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[test]'
+      - name: Run exact all-15 structural admission proof
+        run: |
+          python -m benchmarks.v030_r24_compact_control_terminal_admission \
+            --work-root "$RUNNER_TEMP/v030-cc-terminal" \
+            --output "$RUNNER_TEMP/v030-cc-terminal.json"
+      - name: Independently ratchet admission contract
+        run: |
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          p=Path(os.environ['RUNNER_TEMP'])/'v030-cc-terminal.json'
+          e=json.loads(p.read_text())
+          assert e['schema']=='cmpct-v030-r24-compact-control-terminal-admission-v1'
+          c=e['contract']; g=e['gate']
+          assert c['predicate_inputs']==['logical_bytes','regular_files','r24_bytes','candidate_bytes']
+          assert set(c['forbidden_inputs'])=={'workload_name','path','filename','suffix','content_hash','archive_hash','pack_hash'}
+          assert c['release_credit'] is False and c['selector_change'] is False
+          assert c['min_logical_bytes']==1048576
+          assert c['min_regular_files']==32
+          assert c['min_r24_to_logical']==0.98
+          assert c['max_candidate_to_r24']==0.9995
+          assert c['rounds']==3
+          assert len(e['rows'])==15 and g['all15_complete'] is True
+          assert g['at_least_one_admitted'] is True
+          assert g['target_admitted'] is True
+          assert g['zero_counterexamples'] is True
+          assert g['all_admitted_payloads_unchanged'] is True
+          assert g['all_admitted_two_control_copies'] is True
+          assert e['counterexamples']==[]
+          for row in e['rows']:
+              if not row['admitted']:
+                  continue
+              assert row['candidate_no_larger_than_full_product'] is True
+              assert row['strict_four_way_win'] is True
+              assert row['competitors']['strict_four_way_win'] is True
+          assert g['passed'] is True
+          PY
+      - name: CI topology self-check
+        run: python tools/check_ci_topology.py .github/workflows/v030-r24-compact-control-terminal-admission.yml
+
+# Research-only selector admission proof.  A green lane authorizes neither selector changes nor release; it proves
+# only that one generic, content-identity-free terminal envelope has no counterexample on the exact frozen suite.
