@@ -67,6 +67,8 @@ fn le_u64(raw: &[u8]) -> u64 {
 struct ControlRanges {
     primary_start: usize,
     primary_end: usize,
+    data_start: usize,
+    data_end: usize,
     tail_start: usize,
     tail_end: usize,
 }
@@ -81,11 +83,15 @@ fn control_ranges(payload: &[u8]) -> ControlRanges {
     let tail_len = le_u64(&payload[footer_off + 12..footer_off + 20]) as usize;
     let primary_start = HEADER_SIZE;
     let primary_end = primary_start + primary_len;
+    let data_start = primary_end;
+    let data_end = data_start + data_span;
     let tail_start = footer_off - tail_len;
-    assert_eq!(primary_end + data_span, tail_start);
+    assert_eq!(data_end, tail_start);
     ControlRanges {
         primary_start,
         primary_end,
+        data_start,
+        data_end,
         tail_start,
         tail_end: footer_off,
     }
@@ -161,5 +167,21 @@ fn c25cc01_production_dispatch_recovers_one_control_copy_and_fails_when_both_are
     assert!(
         cmpct_portable::PortableArchive::open(&both_bad_path).is_err(),
         "C25CC01 must fail closed when both authenticated control copies are corrupt"
+    );
+}
+
+#[test]
+fn c25cc01_native_bridge_authenticates_packed_payload_before_deriving_slice_hashes() {
+    let temp = tempfile::tempdir().unwrap();
+    python_fixture(temp.path());
+    let source = temp.path().join("candidate.cmpct");
+    let mut payload = fs::read(&source).unwrap();
+    let ranges = control_ranges(&payload);
+    corrupt_middle(&mut payload, ranges.data_start, ranges.data_end);
+    let corrupt_path = temp.path().join("payload-bad.cmpct");
+    fs::write(&corrupt_path, payload).unwrap();
+    assert!(
+        cmpct_portable::PortableArchive::open(&corrupt_path).is_err(),
+        "C25CC01 native bridge must reject corrupted physical payload before synthesizing packed-member identities"
     );
 }
