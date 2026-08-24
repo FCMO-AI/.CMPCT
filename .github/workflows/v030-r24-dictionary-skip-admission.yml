@@ -1,0 +1,93 @@
+# ci-lane: deep
+name: CMPCT v0.30 r24 dictionary skip admission oracle
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'benchmarks/v030_r24_dictionary_skip_admission_oracle.py'
+      - 'benchmarks/v030_r24_dictionary_training_cost_oracle.py'
+      - 'src/cmpct/builder.py'
+      - 'experiments/entropygraph_v030_release_product.py'
+      - '.github/workflows/v030-r24-dictionary-skip-admission.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-v030-r24-dictionary-skip-admission-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+
+jobs:
+  dictionary-skip-admission:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install frozen-corpus dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y zstd gcc ffmpeg libsndfile1
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[audio,test]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
+      - name: Compile admission evidence
+        run: |
+          python -m py_compile benchmarks/v030_r24_dictionary_skip_admission_oracle.py
+          python -m py_compile benchmarks/v030_r24_dictionary_training_cost_oracle.py
+      - name: Search frozen-suite generic admission envelopes
+        run: |
+          mkdir -p benchmark-artifacts
+          python benchmarks/v030_r24_dictionary_skip_admission_oracle.py \
+            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-r24-dictionary-skip-admission-work" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-r24-dictionary-skip-admission.json"
+      - name: Enforce fail-closed research contract
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          d=json.loads(Path('benchmark-artifacts/v030-r24-dictionary-skip-admission.json').read_text())
+          assert d['schema']=='cmpct-v030-r24-dictionary-skip-admission-v1'
+          c=d['contract']
+          assert c['workloads']==15
+          assert c['production_change'] is False
+          assert c['release_credit'] is False
+          assert c['zero_nonexact_admissions_required'] is True
+          assert c['positive_saved_time_required_for_every_admission'] is True
+          assert c['material_exact_row_required'] is True
+          assert c['future_promotion_requires_adversarial_generalization'] is True
+          assert set(c['forbidden_policy_inputs'])=={'workload_name','benchmark_name','path','filename','content_hash','archive_hash'}
+          assert d['summary']['exact_workload_count'] is True
+          rows=d['rows']
+          assert len(rows)==15
+          by_feature={k for r in rows for k in r['pretraining_features']}
+          assert by_feature==set(c['policy_inputs'])
+          for solution in d['solutions']:
+              assert solution['admitted_rows']>=1
+              assert solution['material_rows']>=1
+              assert solution['minimum_saved_s']>=0.005
+              for rule in solution['rules']:
+                  assert rule['feature'] in c['policy_inputs']
+                  assert rule['feature'] not in c['forbidden_policy_inputs']
+                  assert rule['op'] in {'>=','<='}
+          # Zero solutions is valid negative evidence; this lane cannot promote a skip rule by itself.
+          PY
+      - name: CI topology self-check
+        run: python tools/check_ci_topology.py .github/workflows/v030-r24-dictionary-skip-admission.yml
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: v030-r24-dictionary-skip-admission-${{ github.sha }}
+          path: benchmark-artifacts/v030-r24-dictionary-skip-admission.json
+          if-no-files-found: warn
+          retention-days: 90
+
+# Research-only. Any surviving envelope still requires independent adversarial generalization before production use.
