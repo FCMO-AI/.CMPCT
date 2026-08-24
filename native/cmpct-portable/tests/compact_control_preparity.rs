@@ -183,12 +183,14 @@ fn c25cc01_control_copies_fail_and_recover_independently() {
     let copies = parse_copies(&payload);
 
     let mut bad_primary = copies.primary.clone();
-    bad_primary[bad_primary.len() / 2] ^= 0x01;
+    let primary_mid = bad_primary.len() / 2;
+    bad_primary[primary_mid] ^= 0x01;
     assert!(decode_copy(&bad_primary, copies.primary_raw, &copies.primary_sha).is_err());
     assert!(decode_copy(&copies.tail, copies.tail_raw, &copies.tail_sha).is_ok());
 
     let mut bad_tail = copies.tail.clone();
-    bad_tail[bad_tail.len() / 2] ^= 0x01;
+    let tail_mid = bad_tail.len() / 2;
+    bad_tail[tail_mid] ^= 0x01;
     assert!(decode_copy(&copies.primary, copies.primary_raw, &copies.primary_sha).is_ok());
     assert!(decode_copy(&bad_tail, copies.tail_raw, &copies.tail_sha).is_err());
 
