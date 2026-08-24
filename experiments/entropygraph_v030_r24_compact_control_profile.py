@@ -2,10 +2,10 @@ from __future__ import annotations
 
 """Bounded r25 compact-control candidate over the mature r24 physical payload.
 
-C25CC01 changes only the duplicated authenticated control representation.  It keeps the completed shipping r24
+C25CC01 changes only the duplicated authenticated control representation. It keeps the completed shipping r24
 physical data span byte-for-byte unchanged, stores two authenticated copies of a compact control object, and expands
 that object exactly back into the ordinary r24 semantic index before delegating logical operations to the mature r24
-reader.  It is intentionally a candidate profile: release-product/native/Android dispatch remains closed until the
+reader. It is intentionally a candidate profile: release-product/native/Android dispatch remains closed until the
 profile earns those independent promotion gates.
 """
 
@@ -13,7 +13,6 @@ from contextlib import contextmanager
 from pathlib import Path
 import hashlib
 import os
-import shutil
 import tempfile
 
 import msgpack
@@ -43,7 +42,10 @@ def _sha(data: bytes) -> bytes:
 
 
 def _compress_control(raw: bytes) -> tuple[int, bytes]:
-    rows = [(len(R24.zc(raw, level)), level, R24.zc(raw, level)) for level in LEVELS]
+    rows = []
+    for level in LEVELS:
+        comp = R24.zc(raw, level)
+        rows.append((len(comp), level, comp))
     _size, level, comp = min(rows, key=lambda row: (row[0], row[1]))
     return int(level), comp
 
@@ -180,7 +182,6 @@ def _parse(archive: Path) -> dict:
         recovery = "tail"
     compact = decoded["c"]
     index = CONTROL._expand_index(compact, version=R24.VERSION, features=list(decoded["x"]))
-    # Expansion must remain stable when compacted again; this catches malformed-but-decodable control aliases.
     if CONTROL._expand_index(CONTROL._compact_index(index), version=R24.VERSION, features=list(index["features"])) != index:
         raise CompactControlError("compact-control semantic expansion is not stable")
     return {
