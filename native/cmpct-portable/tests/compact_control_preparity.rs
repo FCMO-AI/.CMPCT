@@ -188,7 +188,11 @@ fn blob_size(blobs: &[Value], index: usize) -> Result<u64, String> {
         .and_then(|value| value_u64(value, "blob logical size"))
 }
 
-fn derived_size(blobs: &[Value], recipes: &[Value], storage: &Value) -> Result<Option<u64>, String> {
+fn derived_size(
+    blobs: &[Value],
+    recipes: &[Value],
+    storage: &Value,
+) -> Result<Option<u64>, String> {
     let Some(row) = storage.as_array() else {
         return Ok(None);
     };
@@ -222,7 +226,8 @@ fn derived_size(blobs: &[Value], recipes: &[Value], storage: &Value) -> Result<O
         }
         2 => {
             let index = usize::try_from(value_u64(
-                row.get(1).ok_or("virtual-ZIP storage missing recipe index")?,
+                row.get(1)
+                    .ok_or("virtual-ZIP storage missing recipe index")?,
                 "virtual-ZIP recipe index",
             )?)
             .map_err(|_| "virtual-ZIP recipe index exceeds native width".to_string())?;
@@ -231,7 +236,9 @@ fn derived_size(blobs: &[Value], recipes: &[Value], storage: &Value) -> Result<O
                 .and_then(Value::as_array)
                 .ok_or("virtual-ZIP recipe missing or malformed")?;
             Ok(Some(value_u64(
-                recipe.get(4).ok_or("virtual-ZIP recipe missing logical size")?,
+                recipe
+                    .get(4)
+                    .ok_or("virtual-ZIP recipe missing logical size")?,
                 "virtual-ZIP logical size",
             )?))
         }
@@ -415,7 +422,8 @@ fn materialize_r24_from_compact(
         .get(data_start..data_end)
         .ok_or("candidate data span is truncated")?;
 
-    let mut payload = Vec::with_capacity(HEADER_SIZE + compressed.len() * 2 + data.len() + FOOTER_SIZE);
+    let mut payload =
+        Vec::with_capacity(HEADER_SIZE + compressed.len() * 2 + data.len() + FOOTER_SIZE);
     payload.extend_from_slice(R24_MAGIC);
     payload.extend_from_slice(&24u16.to_le_bytes());
     payload.extend_from_slice(&0u16.to_le_bytes());
@@ -488,10 +496,17 @@ fn c25cc01_rust_expansion_reuses_mature_r24_core_for_all_regular_members() {
             .read_range(index, 0, &mut actual)
             .expect("mature r24 core must read expanded compact-control member");
         assert_eq!(read, expected.len());
-        assert_eq!(actual, expected, "native semantic expansion changed {}", entry.path);
+        assert_eq!(
+            actual, expected,
+            "native semantic expansion changed {}",
+            entry.path
+        );
         checked += 1;
     }
-    assert_eq!(checked, 296, "fixture must exercise every regular member through native r24 semantics");
+    assert_eq!(
+        checked, 296,
+        "fixture must exercise every regular member through native r24 semantics"
+    );
 }
 
 #[test]
