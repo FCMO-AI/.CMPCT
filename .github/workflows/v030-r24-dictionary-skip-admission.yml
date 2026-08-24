@@ -9,6 +9,7 @@ on:
       - 'benchmarks/v030_r24_dictionary_training_cost_oracle.py'
       - 'src/cmpct/builder.py'
       - 'experiments/entropygraph_v030_release_product.py'
+      - 'experiments/entropygraph_v030_release_product_base.py'
       - '.github/workflows/v030-r24-dictionary-skip-admission.yml'
   workflow_dispatch:
 
@@ -55,11 +56,13 @@ jobs:
           import json
           from pathlib import Path
           d=json.loads(Path('benchmark-artifacts/v030-r24-dictionary-skip-admission.json').read_text())
-          assert d['schema']=='cmpct-v030-r24-dictionary-skip-admission-v1'
+          assert d['schema']=='cmpct-v030-r24-dictionary-skip-admission-v2'
           c=d['contract']
           assert c['workloads']==15
           assert c['production_change'] is False
           assert c['release_credit'] is False
+          assert c['feature_owner']=='shipping cmpct.builder.TEXT_EXT under active v0.30 r24 policy'
+          assert c['release_medium_binary_policy_active_during_feature_capture'] is True
           assert c['zero_nonexact_admissions_required'] is True
           assert c['positive_saved_time_required_for_every_admission'] is True
           assert c['material_exact_row_required'] is True
