@@ -17,7 +17,7 @@ const FOOTER_SIZE: usize = 68;
 const MAX_CONTROL_RAW_BYTES: usize = 64 * 1024 * 1024;
 
 #[derive(Debug)]
-pub(crate) struct CompactControlArchive {
+pub struct CompactControlArchive {
     _temp: TempDir,
     r24: R24Archive,
     tail_authenticated: bool,
