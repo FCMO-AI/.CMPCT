@@ -43,8 +43,7 @@ jobs:
           python -m benchmarks.v030_zipfactor_parallel_build_oracle \
             --work-root benchmark-artifacts/v030-zf-parallel-work \
             --output benchmark-artifacts/v030-zf-parallel.json
-      - name: Independently enforce exactness and complete four-way win
-        if: always()
+      - name: Independently enforce exactness and promotion decision
         run: |
           python - <<'PY'
           import json
@@ -52,24 +51,36 @@ jobs:
           p=Path('benchmark-artifacts/v030-zf-parallel.json')
           assert p.exists(), 'parallel ZIP-factor evidence missing'
           d=json.loads(p.read_text())
-          assert d['schema']=='cmpct-v030-zipfactor-parallel-build-oracle-v1'
+          assert d['schema']=='cmpct-v030-zipfactor-parallel-build-oracle-v2'
           assert d['rounds']==9
           assert d['level']==3
           assert d['workers']==4
-          assert d['claim_boundary'].startswith('research scheduling proof only')
+          assert d['claim_boundary'].startswith('research scheduling decision only')
           assert d['source_regular_identities'], 'independent source identity set missing'
-          g=d['gate']; s=d['serial']; q=d['parallel']
+          g=d['gate']; s=d['serial']; q=d['parallel']; decision=d['decision']
           assert g['serial_exact'] is True
           assert g['parallel_exact_to_serial'] is True
-          assert g['verified_identities_match_independent_source'] is True
+          assert g['verified_user_identities_match_independent_source'] is True
           assert s['archive_bytes']==q['archive_bytes']
           assert s['archive_sha256']==q['archive_sha256']
-          assert g['parallel_strictly_faster_than_serial'] is True
-          assert g['parallel_strictly_smaller_than_zip'] is True
-          assert g['parallel_strictly_smaller_than_zstd19'] is True
-          assert g['parallel_strictly_faster_than_zip'] is True
-          assert g['parallel_strictly_faster_than_zstd19'] is True
-          assert g['passed'] is True
+          perf = (
+              g['parallel_strictly_faster_than_serial'] and
+              g['parallel_strictly_smaller_than_zip'] and
+              g['parallel_strictly_smaller_than_zstd19'] and
+              g['parallel_strictly_faster_than_zip'] and
+              g['parallel_strictly_faster_than_zstd19']
+          )
+          assert decision['research_evidence_valid'] is True
+          assert decision['promotion_earned'] is perf
+          assert decision['verdict']==('promote' if perf else 'reject')
+          if decision['promotion_earned']:
+              assert g['parallel_strictly_faster_than_serial'] is True
+              assert g['parallel_strictly_smaller_than_zip'] is True
+              assert g['parallel_strictly_smaller_than_zstd19'] is True
+              assert g['parallel_strictly_faster_than_zip'] is True
+              assert g['parallel_strictly_faster_than_zstd19'] is True
+          else:
+              assert not perf, 'rejected scheduling must have a measured performance miss'
           PY
       - name: CI topology self-check
         if: always()
