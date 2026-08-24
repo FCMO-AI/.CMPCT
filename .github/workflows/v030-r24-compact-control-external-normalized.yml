@@ -9,6 +9,7 @@ on:
       - 'benchmarks/v030_r24_compact_control_oracle.py'
       - 'benchmarks/v030_r24_compact_control_composition_oracle_v2.py'
       - 'benchmarks/v030_external_competitors.py'
+      - 'tests/test_v030_compact_control_external_normalized.py'
       - 'experiments/entropygraph_v030_release_product.py'
       - 'src/cmpct/codec.py'
       - '.github/workflows/v030-r24-compact-control-external-normalized.yml'
@@ -47,6 +48,8 @@ jobs:
           python -m py_compile benchmarks/v030_r24_compact_control_oracle.py
           python -m py_compile benchmarks/v030_r24_compact_control_composition_oracle_v2.py
           python -m py_compile benchmarks/v030_external_competitors.py
+      - name: Lock external-normalized measurement domain
+        run: pytest -q tests/test_v030_compact_control_external_normalized.py
       - name: Run exact external-normalized all-15 compact-control shadow
         run: |
           mkdir -p benchmark-artifacts
