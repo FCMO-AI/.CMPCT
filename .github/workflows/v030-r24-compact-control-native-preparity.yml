@@ -1,0 +1,60 @@
+# ci-lane: deep
+name: CMPCT v0.30 r24 compact-control native preparity
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'experiments/entropygraph_v030_r24_compact_control_profile.py'
+      - 'benchmarks/v030_r24_compact_control_oracle.py'
+      - 'native/cmpct-portable/tests/compact_control_preparity.rs'
+      - 'native/cmpct-portable/src/lib.rs'
+      - 'native/cmpct-portable/Cargo.toml'
+      - '.github/workflows/v030-r24-compact-control-native-preparity.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-v030-r24-compact-control-native-preparity-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+
+jobs:
+  native-preparity:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install Python candidate dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y zstd gcc
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[test]'
+      - name: Rust format and lint
+        run: |
+          cargo fmt --manifest-path native/cmpct-portable/Cargo.toml -- --check
+          cargo clippy --manifest-path native/cmpct-portable/Cargo.toml --all-targets -- -D warnings
+      - name: Run C25CC01 cross-language control/recovery preparity
+        run: |
+          cargo test --manifest-path native/cmpct-portable/Cargo.toml --test compact_control_preparity -- --nocapture
+      - name: Prove production dispatch remains closed
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          src=Path('native/cmpct-portable/src/lib.rs').read_text()
+          assert 'C25CC01' not in src
+          assert 'CompactControl' not in src
+          PY
+      - name: CI topology self-check
+        run: python tools/check_ci_topology.py .github/workflows/v030-r24-compact-control-native-preparity.yml
+
+# Pre-dispatch portability evidence only. Full semantic index expansion/member parity is still required before native promotion.
