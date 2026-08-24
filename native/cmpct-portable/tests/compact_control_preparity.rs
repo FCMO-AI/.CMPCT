@@ -58,7 +58,10 @@ print(stats)
         .env("PYTHONPATH", &repo)
         .status()
         .expect("python compact-control fixture builder must start");
-    assert!(status.success(), "python compact-control fixture builder failed");
+    assert!(
+        status.success(),
+        "python compact-control fixture builder failed"
+    );
 }
 
 fn le_u16(raw: &[u8]) -> u16 {
@@ -157,15 +160,14 @@ fn python_c25cc01_writer_has_bounded_authenticated_two_copy_control() {
     let copies = parse_copies(&payload);
     assert!(copies.data_span > 0);
 
-    let primary = decode_copy(
-        &copies.primary,
-        copies.primary_raw,
-        &copies.primary_sha,
-    )
-    .expect("primary compact-control copy must authenticate");
+    let primary = decode_copy(&copies.primary, copies.primary_raw, &copies.primary_sha)
+        .expect("primary compact-control copy must authenticate");
     let tail = decode_copy(&copies.tail, copies.tail_raw, &copies.tail_sha)
         .expect("tail compact-control copy must authenticate");
-    assert_eq!(primary, tail, "both authenticated control copies must be semantic peers");
+    assert_eq!(
+        primary, tail,
+        "both authenticated control copies must be semantic peers"
+    );
 
     // Pre-dispatch contract: native production dispatch must remain closed until full r24-index expansion/member
     // parity is implemented. This test makes preparity useful without manufacturing a portability green.
