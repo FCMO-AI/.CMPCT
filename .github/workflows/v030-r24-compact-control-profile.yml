@@ -1,0 +1,111 @@
+# ci-lane: deep
+name: CMPCT v0.30 r24 compact-control profile productization
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'experiments/entropygraph_v030_r24_compact_control_profile.py'
+      - 'benchmarks/v030_r24_compact_control_profile_productization.py'
+      - 'benchmarks/v030_r24_compact_control_external_normalized.py'
+      - 'benchmarks/v030_r24_compact_control_oracle.py'
+      - 'experiments/entropygraph_v030_release_product.py'
+      - 'experiments/entropygraph_v030_r24_dead_dictionary.py'
+      - 'tests/test_v030_r24_compact_control_profile.py'
+      - '.github/workflows/v030-r24-compact-control-profile.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-v030-r24-compact-control-profile-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+
+jobs:
+  productization:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 240
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install exact corpus/compressor dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y zstd gcc ffmpeg libsndfile1
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[audio,test]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
+      - name: Compile candidate and direct proof
+        run: |
+          python -m py_compile experiments/entropygraph_v030_r24_compact_control_profile.py
+          python -m py_compile benchmarks/v030_r24_compact_control_profile_productization.py
+          python -m py_compile tests/test_v030_r24_compact_control_profile.py
+      - name: Run focused semantics and recovery ratchet
+        run: pytest -q tests/test_v030_r24_compact_control_profile.py
+      - name: Run exact external-normalized direct profile proof
+        run: |
+          mkdir -p benchmark-artifacts
+          python benchmarks/v030_r24_compact_control_profile_productization.py \
+            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-r24-cc-profile-work" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-r24-cc-profile.json"
+      - name: Enforce productization boundary
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          d=json.loads(Path('benchmark-artifacts/v030-r24-cc-profile.json').read_text())
+          assert d['schema']=='cmpct-v030-r24-compact-control-profile-productization-v1'
+          c=d['contract']
+          assert c['profile']=='r24-compact-control-v1'
+          assert c['format_revision']==25
+          assert c['workloads']==15
+          assert c['external_metadata_normalization'] is True
+          assert c['candidate_strong_verification_inside_creation_timing'] is True
+          assert c['two_authenticated_control_copies'] is True
+          assert c['physical_payload_records_unchanged'] is True
+          assert c['release_credit'] is False
+          assert c['selector_change'] is False
+          assert c['native_dispatch_change'] is False
+          assert c['android_dispatch_change'] is False
+          a=d['all15']
+          assert a['all15_complete'] is True
+          assert a['zero_candidate_regressions_vs_r24'] is True
+          assert a['all_trees_equal'] is True
+          assert a['all_payloads_unchanged'] is True
+          assert a['strict_improvement_count'] > 0
+          t=d['target']
+          assert t['rounds']==5
+          assert t['archive_sha_deterministic'] is True
+          assert t['external_tree_deterministic'] is True
+          assert t['physical_payload_records_unchanged'] is True
+          assert t['two_authenticated_control_copies'] is True
+          assert t['semantic_index_roundtrip_exact'] is True
+          assert t['strictly_smaller_than_zip'] is True
+          assert t['strictly_smaller_than_zstd19'] is True
+          assert t['strictly_faster_than_zip'] is True
+          assert t['strictly_faster_than_zstd19'] is True
+          assert t['strict_four_way_win'] is True
+          assert d['gate']['experiment_valid'] is True
+          assert d['gate']['target_strict_four_way_win'] is True
+          assert d['gate']['promotion_signal'] is True
+          assert d['gate']['passed'] is True
+          PY
+      - name: Public-surface guard
+        if: always()
+        run: python tools/check_public_surface.py
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: v030-r24-compact-control-profile-${{ github.sha }}
+          path: benchmark-artifacts/v030-r24-cc-profile.json
+          if-no-files-found: error
+          retention-days: 90
+
+# Promotion evidence only. Native/Android/selector/all-15 ordinary release authorities remain independently mandatory.
