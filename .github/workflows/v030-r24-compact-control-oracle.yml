@@ -11,6 +11,7 @@ on:
       - 'experiments/entropygraph_v030_release_product_base.py'
       - 'benchmarks/v030_r24_compact_control_oracle.py'
       - 'benchmarks/v030_r24_compact_control_oracle_v2.py'
+      - 'benchmarks/v030_r24_compact_control_oracle_v3.py'
       - 'benchmarks/v030_external_competitors.py'
       - 'benchmarks/neutral_hostile_corpus_v1.py'
       - '.github/workflows/v030-r24-compact-control-oracle.yml'
@@ -44,11 +45,11 @@ jobs:
           python -m pip install -e '.[audio,test]'
           python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
       - name: Compile compact-control oracle
-        run: python -m py_compile benchmarks/v030_r24_compact_control_oracle.py benchmarks/v030_r24_compact_control_oracle_v2.py
+        run: python -m py_compile benchmarks/v030_r24_compact_control_oracle.py benchmarks/v030_r24_compact_control_oracle_v2.py benchmarks/v030_r24_compact_control_oracle_v3.py
       - name: Run exact compact-control frontier
         run: |
           mkdir -p benchmark-artifacts
-          python benchmarks/v030_r24_compact_control_oracle_v2.py \
+          python benchmarks/v030_r24_compact_control_oracle_v3.py \
             --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-r24-compact-control-work" \
             --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-r24-compact-control.json"
       - name: Independently enforce evidence boundary
@@ -57,7 +58,7 @@ jobs:
           import json
           from pathlib import Path
           d=json.loads(Path('benchmark-artifacts/v030-r24-compact-control.json').read_text())
-          assert d['schema']=='cmpct-v030-r24-compact-control-oracle-v1'
+          assert d['schema']=='cmpct-v030-r24-compact-control-oracle-v3'
           assert d['contract']['control_copies']==2
           assert d['contract']['payload_records']=='exact shipping r24 physical records, unchanged'
           assert d['contract']['levels']==[1,3,6,9,12,19]
@@ -67,6 +68,7 @@ jobs:
           assert g['target_payload_records_unchanged'] is True
           assert g['target_measurement_deterministic'] is True
           assert g['experiment_valid'] is True
+          assert g['promotion_earned'] == g['target_strict_four_way_potential']
           t=d['target']
           assert t['rounds']==5
           assert t['semantic_index_roundtrip_exact'] is True
@@ -74,15 +76,20 @@ jobs:
           assert t['physical_payload_records_unchanged'] is True
           assert t['projected_size_deterministic'] is True
           assert len(t['samples'])==5
-          # A measured rejection is valid research evidence. Promotion remains impossible here.
-          if g['target_strict_four_way_potential']:
+          diag=d['diagnosis']
+          assert diag['compact_control_total_saving_bytes'] == 2*t['saving_per_control_copy_bytes']
+          assert diag['remaining_zstd_size_deficit_bytes'] == t['projected_two_copy_archive_bytes']-t['zstd19_bytes']
+          if g['promotion_earned']:
               assert t['projected_two_copy_archive_bytes'] < t['zip_bytes']
               assert t['projected_two_copy_archive_bytes'] < t['zstd19_bytes']
               assert t['median_conservative_projected_create_s'] < t['median_zip_create_s']
               assert t['median_conservative_projected_create_s'] < t['median_zstd19_create_s']
-          diag=d['diagnostic']
-          assert diag['semantic_index_roundtrip_exact'] is True
-          assert diag['two_authenticated_control_copies_retained'] is True
+          else:
+              # Clean rejection is useful evidence and cannot authorize product promotion.
+              assert g['target_strict_four_way_potential'] is False
+          tiny=d['diagnostic']
+          assert tiny['semantic_index_roundtrip_exact'] is True
+          assert tiny['two_authenticated_control_copies_retained'] is True
           PY
       - name: Public-surface guard
         if: always()
@@ -95,5 +102,5 @@ jobs:
           if-no-files-found: warn
           retention-days: 90
 
-# Research-only. A positive result proves a compact control plane is worth productizing as a bounded canonical
-# profile; it cannot relax the ordinary all-15 ZIP/Zstd, v0.29, integrity, recovery, locality, native or Android gates.
+# Research-only. Valid negative evidence remains green, but promotion still requires the unchanged strict external,
+# v0.29, integrity, recovery, locality, native and Android authorities on a real canonical product profile.
