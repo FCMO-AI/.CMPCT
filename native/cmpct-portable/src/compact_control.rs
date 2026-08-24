@@ -143,7 +143,11 @@ fn map_get<'a>(value: &'a Value, key: &str) -> Result<&'a Value, PortableError> 
 fn map_get_mut<'a>(value: &'a mut Value, key: &str) -> Result<&'a mut Value, PortableError> {
     let map = match value {
         Value::Map(map) => map,
-        _ => return Err(PortableError::Format("expected mutable MessagePack map".into())),
+        _ => {
+            return Err(PortableError::Format(
+                "expected mutable MessagePack map".into(),
+            ));
+        }
     };
     map.iter_mut()
         .find_map(|(candidate, value)| (candidate.as_str() == Some(key)).then_some(value))
@@ -647,7 +651,11 @@ fn restore_native_pack_logical_hashes(
     let files_value = map_get_mut(expanded, "files")?;
     let files = match files_value {
         Value::Array(files) => files,
-        _ => return Err(PortableError::Format("C25CC01 expanded files are not an array".into())),
+        _ => {
+            return Err(PortableError::Format(
+                "C25CC01 expanded files are not an array".into(),
+            ));
+        }
     };
     let mut decoded_packs = HashMap::<usize, Vec<u8>>::new();
 
@@ -657,7 +665,7 @@ fn restore_native_pack_logical_hashes(
             _ => {
                 return Err(PortableError::Format(format!(
                     "C25CC01 expanded file {file_index} is malformed"
-                )))
+                )));
             }
         };
         if row.len() < 7 || value_u64(&row[1], "file kind")? != 0 || !matches!(row[5], Value::Nil) {
