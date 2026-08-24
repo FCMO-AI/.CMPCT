@@ -1,4 +1,5 @@
 mod canonical;
+mod compact_control;
 mod format;
 mod g04;
 mod identity;
@@ -16,6 +17,7 @@ mod logs_semantic_tests;
 
 #[doc(hidden)]
 pub use crate::canonical::Canonical25Archive;
+use crate::compact_control::CompactControlArchive;
 use crate::format::safe_relpath;
 #[doc(hidden)]
 pub use crate::g04::G04Archive;
@@ -66,6 +68,7 @@ pub enum Profile {
     G04,
     PrefixGraph,
     LogsInverse,
+    CompactControl,
     ResearchG04,
     ResearchPrefixGraph,
 }
@@ -77,6 +80,7 @@ impl Profile {
             Self::G04 => "g04-r25",
             Self::PrefixGraph => "prefixgraph-r25",
             Self::LogsInverse => "logs-inverse-r25",
+            Self::CompactControl => "r24-compact-control-v1",
             Self::ResearchG04 => "research-g04",
             Self::ResearchPrefixGraph => "research-prefixgraph",
         }
@@ -85,7 +89,7 @@ impl Profile {
     pub fn revision(self) -> u32 {
         match self {
             Self::Revision24 => 24,
-            Self::G04 | Self::PrefixGraph | Self::LogsInverse => 25,
+            Self::G04 | Self::PrefixGraph | Self::LogsInverse | Self::CompactControl => 25,
             Self::ResearchG04 | Self::ResearchPrefixGraph => 0,
         }
     }
@@ -116,6 +120,7 @@ pub enum PortableArchive {
         archive: LogsInverseArchive,
         entries: Vec<PortableEntry>,
     },
+    CompactControl(CompactControlArchive),
     ResearchG04(G04Archive),
     ResearchPrefixGraph(PrefixArchive),
 }
@@ -132,6 +137,9 @@ impl PortableArchive {
             let archive = LogsInverseArchive::open(path)?;
             let entries = LogsPublicView::new(&archive)?.entries().to_vec();
             return Ok(Self::LogsInverse { archive, entries });
+        }
+        if &magic == compact_control::MAGIC {
+            return Ok(Self::CompactControl(CompactControlArchive::open(path)?));
         }
         let identity = classify(&magic).ok_or_else(|| {
             PortableError::Format("archive magic is not a supported r24/r25 representation".into())
@@ -152,6 +160,7 @@ impl PortableArchive {
             Self::Revision24(_) => Profile::Revision24,
             Self::Canonical25(archive) => archive.profile(),
             Self::LogsInverse { .. } => Profile::LogsInverse,
+            Self::CompactControl(_) => Profile::CompactControl,
             Self::ResearchG04(_) => Profile::ResearchG04,
             Self::ResearchPrefixGraph(_) => Profile::ResearchPrefixGraph,
         }
@@ -166,6 +175,7 @@ impl PortableArchive {
             Self::Revision24(_) => false,
             Self::Canonical25(archive) => archive.tail_authenticated(),
             Self::LogsInverse { archive, .. } => archive.tail_authenticated(),
+            Self::CompactControl(archive) => archive.tail_authenticated(),
             Self::ResearchG04(archive) => archive.tail_authenticated(),
             Self::ResearchPrefixGraph(archive) => archive.tail_authenticated(),
         }
@@ -173,7 +183,7 @@ impl PortableArchive {
 
     pub fn declared_member_read_amplification(&self) -> Option<f64> {
         match self {
-            Self::Revision24(_) => None,
+            Self::Revision24(_) | Self::CompactControl(_) => None,
             Self::Canonical25(archive) => Some(archive.declared_amplification()),
             Self::LogsInverse { .. } => Some(8.0),
             Self::ResearchG04(archive) => Some(archive.declared_amplification()),
@@ -181,9 +191,17 @@ impl PortableArchive {
         }
     }
 
-    pub fn entries(&self) -> Vec<PortableEntry> {
+    fn r24_like(&self) -> Option<&R24Archive> {
         match self {
-            Self::Revision24(archive) => archive
+            Self::Revision24(archive) => Some(archive),
+            Self::CompactControl(archive) => Some(archive.r24()),
+            _ => None,
+        }
+    }
+
+    pub fn entries(&self) -> Vec<PortableEntry> {
+        if let Some(archive) = self.r24_like() {
+            return archive
                 .entries()
                 .iter()
                 .map(|entry| PortableEntry {
@@ -193,7 +211,10 @@ impl PortableArchive {
                     mode: entry.mode,
                     mtime_ns: entry.mtime_ns,
                 })
-                .collect(),
+                .collect();
+        }
+        match self {
+            Self::Revision24(_) | Self::CompactControl(_) => unreachable!(),
             Self::Canonical25(archive) => archive.entries().to_vec(),
             Self::LogsInverse { entries, .. } => entries.clone(),
             Self::ResearchG04(archive) => archive.entries().to_vec(),
@@ -210,40 +231,43 @@ impl PortableArchive {
         index: usize,
         mut output: W,
     ) -> Result<MemberReadStats, PortableError> {
-        match self {
-            Self::Revision24(archive) => {
-                let entry = archive
-                    .entries()
-                    .get(index)
-                    .ok_or_else(|| PortableError::Format("r24 entry id out of range".into()))?;
-                if entry.kind != 0 {
-                    return Err(PortableError::Unsupported(
-                        "r24 stream_member currently accepts regular files only".into(),
+        if let Some(archive) = self.r24_like() {
+            let entry = archive
+                .entries()
+                .get(index)
+                .ok_or_else(|| PortableError::Format("r24 entry id out of range".into()))?;
+            if entry.kind != 0 {
+                return Err(PortableError::Unsupported(
+                    "r24 stream_member currently accepts regular files only".into(),
+                ));
+            }
+            let mut offset = 0u64;
+            let mut buffer = vec![0u8; 1024 * 1024];
+            while offset < entry.size {
+                let take = usize::try_from((entry.size - offset).min(buffer.len() as u64))
+                    .map_err(|_| PortableError::Range)?;
+                let got = archive.read_range(index, offset, &mut buffer[..take])?;
+                if got != take {
+                    return Err(PortableError::Integrity(
+                        "r24 core returned short logical member range".into(),
                     ));
                 }
-                // Footnote: the r24 adapter delegates every byte read to cmpct-core. Chunking here is only
-                // output plumbing; no r24 MessagePack/blob grammar is duplicated in the r25 dispatcher.
-                let mut offset = 0u64;
-                let mut buffer = vec![0u8; 1024 * 1024];
-                while offset < entry.size {
-                    let take = usize::try_from((entry.size - offset).min(buffer.len() as u64))
-                        .map_err(|_| PortableError::Range)?;
-                    let got = archive.read_range(index, offset, &mut buffer[..take])?;
-                    if got != take {
-                        return Err(PortableError::Integrity(
-                            "r24 core returned short logical member range".into(),
-                        ));
-                    }
-                    output.write_all(&buffer[..take])?;
-                    offset += take as u64;
-                }
-                Ok(MemberReadStats {
-                    logical_bytes: entry.size,
-                    decoded_context_bytes: 0,
-                    amplification: f64::NAN,
-                    profile: "r24-locality-unavailable",
-                })
+                output.write_all(&buffer[..take])?;
+                offset += take as u64;
             }
+            return Ok(MemberReadStats {
+                logical_bytes: entry.size,
+                decoded_context_bytes: 0,
+                amplification: f64::NAN,
+                profile: if matches!(self, Self::CompactControl(_)) {
+                    "r24-compact-control-locality-inherited"
+                } else {
+                    "r24-locality-unavailable"
+                },
+            });
+        }
+        match self {
+            Self::Revision24(_) | Self::CompactControl(_) => unreachable!(),
             Self::Canonical25(archive) => archive.stream_member(index, output),
             Self::LogsInverse { archive, .. } => {
                 LogsPublicView::new(archive)?.stream_member(index, output)
@@ -254,35 +278,39 @@ impl PortableArchive {
     }
 
     pub fn read_member(&self, index: usize) -> Result<(Vec<u8>, MemberReadStats), PortableError> {
-        match self {
-            Self::Revision24(archive) => {
-                let entry = archive
-                    .entries()
-                    .get(index)
-                    .ok_or_else(|| PortableError::Format("r24 entry id out of range".into()))?;
-                if entry.kind != 0 || entry.size > R24_VERIFY_MATERIALIZE_LIMIT {
-                    return Err(PortableError::Limit(
-                        "r24 whole-member materialization is limited to regular files <=256 MiB"
-                            .into(),
-                    ));
-                }
-                let mut out = vec![0u8; entry.size as usize];
-                let got = archive.read_range(index, 0, &mut out)?;
-                if got != out.len() {
-                    return Err(PortableError::Integrity(
-                        "r24 core returned short whole-member read".into(),
-                    ));
-                }
-                Ok((
-                    out,
-                    MemberReadStats {
-                        logical_bytes: entry.size,
-                        decoded_context_bytes: 0,
-                        amplification: f64::NAN,
-                        profile: "r24-locality-unavailable",
-                    },
-                ))
+        if let Some(archive) = self.r24_like() {
+            let entry = archive
+                .entries()
+                .get(index)
+                .ok_or_else(|| PortableError::Format("r24 entry id out of range".into()))?;
+            if entry.kind != 0 || entry.size > R24_VERIFY_MATERIALIZE_LIMIT {
+                return Err(PortableError::Limit(
+                    "r24 whole-member materialization is limited to regular files <=256 MiB".into(),
+                ));
             }
+            let mut out = vec![0u8; entry.size as usize];
+            let got = archive.read_range(index, 0, &mut out)?;
+            if got != out.len() {
+                return Err(PortableError::Integrity(
+                    "r24 core returned short whole-member read".into(),
+                ));
+            }
+            return Ok((
+                out,
+                MemberReadStats {
+                    logical_bytes: entry.size,
+                    decoded_context_bytes: 0,
+                    amplification: f64::NAN,
+                    profile: if matches!(self, Self::CompactControl(_)) {
+                        "r24-compact-control-locality-inherited"
+                    } else {
+                        "r24-locality-unavailable"
+                    },
+                },
+            ));
+        }
+        match self {
+            Self::Revision24(_) | Self::CompactControl(_) => unreachable!(),
             Self::Canonical25(archive) => archive.read_member(index),
             Self::LogsInverse { archive, .. } => LogsPublicView::new(archive)?.read_member(index),
             Self::ResearchG04(archive) => archive.read_member(index),
@@ -319,13 +347,11 @@ impl PortableArchive {
         if wanted == 0 {
             return Ok(0);
         }
-        if let Self::Revision24(archive) = self {
+        if let Some(archive) = self.r24_like() {
             return Ok(archive.read_range(index, offset, &mut output[..wanted])?);
         }
 
-        // Footnote: r25's release locality contract is member-selective, not arbitrary sub-member random access.
-        // The bridge therefore avoids materializing a giant file but still authenticates the complete selected
-        // member before returning its requested window. r24 retains its mature exact range path above.
+        // r25's release locality contract is member-selective, not arbitrary sub-member random access.
         let mut writer = RangeWriter::new(offset, &mut output[..wanted]);
         self.stream_member(index, &mut writer)?;
         if writer.written != wanted {
@@ -337,30 +363,25 @@ impl PortableArchive {
     }
 
     pub fn member_stats(&self, index: usize) -> Result<MemberReadStats, PortableError> {
-        match self {
-            Self::Revision24(archive) => {
-                archive
-                    .entries()
-                    .get(index)
-                    .ok_or_else(|| PortableError::Format("r24 entry id out of range".into()))?;
-                Err(PortableError::Unsupported(
-                    "r24 decoded-context locality is not exposed by cmpct-core; use inherited r24 locality evidence rather than a synthetic 1.0x value".into(),
-                ))
-            }
-            _ => self.stream_member(index, std::io::sink()),
+        if let Some(archive) = self.r24_like() {
+            archive
+                .entries()
+                .get(index)
+                .ok_or_else(|| PortableError::Format("r24 entry id out of range".into()))?;
+            return Err(PortableError::Unsupported(
+                "r24 decoded-context locality is not exposed by cmpct-core; use inherited r24 locality evidence rather than a synthetic 1.0x value".into(),
+            ));
         }
+        self.stream_member(index, std::io::sink())
     }
 
     pub fn verify(&self) -> Result<(), PortableError> {
+        if let Some(archive) = self.r24_like() {
+            archive.verify_complete()?;
+            return Ok(());
+        }
         match self {
-            Self::Revision24(archive) => {
-                // Footnote: a full range read is not a complete verifier for direct RAW storage because the
-                // locality-preserving range path intentionally does not hash unseen bytes. The mature r24 core
-                // now exposes a streamed logical verifier that hashes every regular member against its
-                // authenticated index/recipe identity without the old 256 MiB materialization cap.
-                archive.verify_complete()?;
-                Ok(())
-            }
+            Self::Revision24(_) | Self::CompactControl(_) => unreachable!(),
             Self::Canonical25(archive) => archive.verify(),
             Self::LogsInverse { archive, .. } => LogsPublicView::new(archive)?.verify(),
             Self::ResearchG04(archive) => archive.verify(),
@@ -418,7 +439,7 @@ impl PortableArchive {
                 1 => fs::create_dir_all(&target)?,
                 2 | 3 => {
                     return Err(PortableError::Unsupported(
-                        "portable native extraction refuses r24 links rather than weakening link-safety semantics".into(),
+                        "portable native extraction refuses r24-derived links rather than weakening link-safety semantics".into(),
                     ));
                 }
                 _ => {
@@ -462,7 +483,7 @@ impl PortableArchive {
                 }
                 2 | 3 => {
                     return Err(PortableError::Unsupported(
-                        "ZIP export refuses r24 links until their fidelity policy is explicitly mapped".into(),
+                        "ZIP export refuses r24-derived links until their fidelity policy is explicitly mapped".into(),
                     ));
                 }
                 _ => return Err(PortableError::Format("unknown logical entry kind".into())),
@@ -581,7 +602,6 @@ fn status(error: &PortableError) -> PortableStatus {
 /// # Safety
 /// `path` must point to a readable NUL-terminated C string and `out` must point to writable storage for one
 /// `PortableArchive*`. The returned handle must later be passed to `cmpct_portable_close` exactly once.
-// Footnote: the ABI validates nulls, UTF-8, archive grammar and panics; pointer provenance remains the caller's contract.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn cmpct_portable_open(
     path: *const c_char,
