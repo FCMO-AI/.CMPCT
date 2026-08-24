@@ -539,11 +539,15 @@ fn parse_blob_descriptors(expanded: &Value) -> Result<Vec<BlobDescriptor>, Porta
         let raw_len = usize::try_from(value_u64(&row[1], "blob raw length")?)
             .map_err(|_| PortableError::Limit("blob raw length exceeds native width".into()))?;
         let compressed_len = usize::try_from(value_u64(&row[2], "blob compressed length")?)
-            .map_err(|_| PortableError::Limit("blob compressed length exceeds native width".into()))?;
+            .map_err(|_| {
+                PortableError::Limit("blob compressed length exceeds native width".into())
+            })?;
         let codec = u8::try_from(value_u64(&row[3], "blob codec")?)
             .map_err(|_| PortableError::Format("blob codec exceeds u8".into()))?;
-        let meta_len = usize::try_from(value_u64(&row[4], "blob metadata length")?)
-            .map_err(|_| PortableError::Limit("blob metadata length exceeds native width".into()))?;
+        let meta_len =
+            usize::try_from(value_u64(&row[4], "blob metadata length")?).map_err(|_| {
+                PortableError::Limit("blob metadata length exceeds native width".into())
+            })?;
         out.push(BlobDescriptor {
             offset,
             raw_len,
@@ -580,12 +584,15 @@ fn authenticate_pack_blob(
         .data_start
         .checked_add(copies.data_span)
         .ok_or_else(|| PortableError::Limit("C25CC01 data span overflow".into()))?;
-    if payload_end > data_end || record_start + BLOB_HEADER_SIZE > candidate_payload.len() {
+    let record_header_end = record_start
+        .checked_add(BLOB_HEADER_SIZE)
+        .ok_or_else(|| PortableError::Limit("C25CC01 pack header end overflow".into()))?;
+    if payload_end > data_end || record_header_end > candidate_payload.len() {
         return Err(PortableError::Format(
             "C25CC01 packed blob extends outside physical payload".into(),
         ));
     }
-    let header = &candidate_payload[record_start..record_start + BLOB_HEADER_SIZE];
+    let header = &candidate_payload[record_start..record_header_end];
     if &header[..4] != BLOB_MAGIC
         || header[4] != descriptor.codec
         || usize::try_from(le_u64(&header[8..16])?).ok() != Some(descriptor.raw_len)
@@ -645,14 +652,16 @@ fn restore_native_pack_logical_hashes(
         let row = value.as_array_mut().ok_or_else(|| {
             PortableError::Format(format!("C25CC01 expanded file {file_index} is malformed"))
         })?;
-        if row.len() < 7 || value_u64(&row[1], "file kind")? != 0 || !matches!(row[5], Value::Nil)
-        {
+        if row.len() < 7 || value_u64(&row[1], "file kind")? != 0 || !matches!(row[5], Value::Nil) {
             continue;
         }
         let Some(storage) = row[6].as_array() else {
             continue;
         };
-        if storage.first().map(|value| value_u64(value, "storage tag")).transpose()?
+        if storage
+            .first()
+            .map(|value| value_u64(value, "storage tag"))
+            .transpose()?
             != Some(STORAGE_PACK)
         {
             continue;
@@ -669,7 +678,9 @@ fn restore_native_pack_logical_hashes(
         let length = usize::try_from(value_u64(&storage[3], "pack length")?)
             .map_err(|_| PortableError::Limit("pack length exceeds native width".into()))?;
         let logical_size = usize::try_from(value_u64(&row[4], "packed file logical size")?)
-            .map_err(|_| PortableError::Limit("packed file logical size exceeds native width".into()))?;
+            .map_err(|_| {
+                PortableError::Limit("packed file logical size exceeds native width".into())
+            })?;
         if length != logical_size {
             return Err(PortableError::Integrity(format!(
                 "C25CC01 packed file {file_index} length disagrees with logical size"
