@@ -8,7 +8,9 @@ on:
       - 'src/cmpct/builder.py'
       - 'experiments/entropygraph_v030_release_product.py'
       - 'experiments/entropygraph_v030_release_product_base.py'
+      - 'experiments/entropygraph_v030_r24_dead_dictionary.py'
       - 'benchmarks/v030_r24_dead_dictionary_elision_oracle.py'
+      - 'benchmarks/v030_r24_dead_dictionary_elision_oracle_v2.py'
       - 'benchmarks/v030_r24_binary_dictionary_isolation_oracle.py'
       - 'benchmarks/v030_r24_compact_control_oracle.py'
       - 'benchmarks/neutral_hostile_corpus_v1.py'
@@ -43,15 +45,18 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -e '.[audio,test]'
           python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
-      - name: Compile proof
+      - name: Compile proof and shipping helper
         run: |
           python -m py_compile benchmarks/v030_r24_dead_dictionary_elision_oracle.py
+          python -m py_compile benchmarks/v030_r24_dead_dictionary_elision_oracle_v2.py
           python -m py_compile benchmarks/v030_r24_binary_dictionary_isolation_oracle.py
+          python -m py_compile experiments/entropygraph_v030_r24_dead_dictionary.py
+          python -m py_compile experiments/entropygraph_v030_release_product.py
           python -m py_compile experiments/entropygraph_v030_release_product_base.py
       - name: Run exact target and all-15 proof
         run: |
           mkdir -p benchmark-artifacts
-          python benchmarks/v030_r24_dead_dictionary_elision_oracle.py \
+          python benchmarks/v030_r24_dead_dictionary_elision_oracle_v2.py \
             --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-r24-dead-dict-work" \
             --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-r24-dead-dict.json"
       - name: Enforce zero-regression promotion boundary
@@ -60,7 +65,12 @@ jobs:
           import json
           from pathlib import Path
           d=json.loads(Path('benchmark-artifacts/v030-r24-dead-dict.json').read_text())
-          assert d['schema']=='cmpct-v030-r24-dead-dictionary-elision-v1'
+          assert d['schema']=='cmpct-v030-r24-dead-dictionary-elision-v2'
+          repair=d['identity_domain_repair']
+          assert repair['historical_source_digest_role']=='frozen corpus provenance only'
+          assert repair['canonical_product_digest_role']=='shipping-vs-candidate semantic tree equivalence'
+          assert repair['bytes_or_timing_recomputed'] is False
+          assert repair['threshold_changed'] is False
           c=d['contract']
           assert c['format_revision']==24
           assert c['training_changed'] is False
@@ -76,12 +86,16 @@ jobs:
           a=d['all15']
           assert len(a['rows'])==15
           assert a['gate']['exact_workload_count'] is True
-          assert a['gate']['all_source_and_candidate_trees_match'] is True
+          assert a['gate']['canonical_shipping_candidate_tree_identity'] is True
+          assert a['gate']['historical_source_digest_not_misused_as_product_digest'] is True
           assert a['gate']['zero_byte_regressions'] is True
           assert a['gate']['at_least_one_strict_improvement'] is True
           assert a['gate']['live_dictionaries_unchanged'] is True
           assert a['gate']['promotion_candidate'] is True
           assert a['candidate_total_bytes'] < a['shipping_total_bytes']
+          improved=[r for r in a['rows'] if r['delta_bytes'] < 0]
+          assert len(improved) >= 3
+          assert sum(r['delta_bytes'] for r in a['rows']) <= -74000
           PY
       - name: Public-surface guard
         if: always()
@@ -94,4 +108,4 @@ jobs:
           if-no-files-found: error
           retention-days: 90
 
-# Evidence only until the builder materialization boundary is changed and ordinary exact-head authority regenerates.
+# Evidence plus shipping regression ratchet. Ordinary exact-head external/generalization/final authorities remain decisive.
