@@ -27,6 +27,11 @@ REVISION = 25
 PROFILE = "r24-compact-control-v1"
 LEVELS = CONTROL.LEVELS
 MAX_CONTROL_RAW_BYTES = 64 * 1024 * 1024
+# The reconstructed r24 envelope is ephemeral verifier/reader compatibility state, not product bytes. Its compressed
+# index only has to round-trip exactly through the mature r24 grammar, so paying the mature encoder's level-12 size
+# optimization here is redundant CPU. Level 1 preserves the exact authenticated semantic index while minimizing the
+# compatibility bridge latency that is currently material to the ZIP-speed leg.
+COMPAT_INDEX_LEVEL = 1
 
 
 class CompactControlError(RuntimeError):
@@ -197,7 +202,7 @@ def _parse(archive: Path) -> dict:
 def _rebuild_r24_bytes(parsed: dict) -> bytes:
     index = parsed["index"]
     raw = msgpack.packb(index, use_bin_type=True)
-    comp = R24.zc(raw, 12)
+    comp = R24.zc(raw, COMPAT_INDEX_LEVEL)
     digest = _sha(raw)
     data = parsed["data"]
     header = R24.HDR.pack(R24.MAGIC, R24.VERSION, 0, len(comp), len(raw), len(data), digest)
@@ -229,6 +234,7 @@ def strong_verify(archive: Path) -> dict:
                 "two_authenticated_control_copies": True,
                 "physical_payload_records_unchanged": True,
                 "semantic_index_roundtrip_exact": True,
+                "compatibility_index_level": COMPAT_INDEX_LEVEL,
             }
     except Exception as exc:
         return {
