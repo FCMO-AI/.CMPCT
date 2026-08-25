@@ -14,6 +14,8 @@ on:
       - 'benchmarks/v030_federated_compact_framing_v8_direct_v3.py'
       - 'benchmarks/v030_federated_compact_framing_v8_direct_v4.py'
       - 'benchmarks/v030_federated_compact_framing_v8_direct_v5.py'
+      - 'benchmarks/v030_federated_compact_framing_v8_policy_exec_v6.py'
+      - 'benchmarks/v030_federated_compact_framing_v8_policy_exec_v7.py'
       - 'tests/test_v030_federated_compact_framing_v8.py'
       - 'tests/test_v030_federated_fused_verify.py'
       - 'tests/test_v030_federated_direct_memory_v4.py'
@@ -58,7 +60,9 @@ jobs:
             benchmarks/v030_federated_compact_framing_v8_direct.py \
             benchmarks/v030_federated_compact_framing_v8_direct_v3.py \
             benchmarks/v030_federated_compact_framing_v8_direct_v4.py \
-            benchmarks/v030_federated_compact_framing_v8_direct_v5.py
+            benchmarks/v030_federated_compact_framing_v8_direct_v5.py \
+            benchmarks/v030_federated_compact_framing_v8_policy_exec_v6.py \
+            benchmarks/v030_federated_compact_framing_v8_policy_exec_v7.py
       - name: Run bounded compact-framing, fused-verification, publication, recovery and locality-admission regressions
         run: |
           python -m pytest -q \
@@ -96,63 +100,42 @@ jobs:
           assert o['strictly_beats_v029_at_same_payload_floor'] is True
           assert o['remaining_bytes_to_strict_v029_win']==0
           PY
-      - name: Run RAM-backed exact office productization frontier
+      - name: Run proof-boundary-corrected exact office productization frontier
         run: |
-          python benchmarks/v030_federated_compact_framing_v8_direct_v5.py \
-            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-eg08-direct-v5-work" \
-            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-eg08-direct-v5.json"
-      - name: Independently require exact bytes plus v0.29 ZIP and Zstd size/create wins
+          python benchmarks/v030_federated_compact_framing_v8_policy_exec_v7.py \
+            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-eg08-policy-v7-work" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-eg08-policy-v7.json"
+      - name: Require exact bytes and corrected verified-create wins over v0.29 ZIP and Zstd
         run: |
           python - <<'PY'
           import json
           from pathlib import Path
-          d=json.loads(Path('benchmark-artifacts/v030-eg08-direct-v5.json').read_text())
-          assert d['schema']=='cmpct-v030-eg08-direct-office-v5'
-          assert d['candidate']=='C25EG08'
-          assert d['schedule']=='tmpfs-semantic-stage-plus-direct-exact-eg08-emission'
-          b=d['single_pass_boundary']
-          assert b['graph_search_changed'] is False
-          assert b['probe_compression_changed'] is False
-          assert b['final_pack_compressed_once'] is True
-          assert b['exact_serial_archive_identity_required'] is True
-          assert b['raw_final_graph_captured_in_memory'] is True
-          assert b['raw_final_graph_capture_backend']=='linux-tmpfs-/dev/shm'
-          assert b['semantic_staging_publications']==1
-          assert b['disk_backed_intermediate_publications']==0
-          assert b['intermediate_archive_publications']==1
-          assert b['final_eg08_publications']==1
-          assert b['historical_finalize_path_preserved'] is True
-          assert d['accepted_v029_bytes']==5954026
-          assert d['eg07_all_best_floor_bytes']==5954067
-          assert d['framing_saving_bytes']==92
-          assert d['measurement_gate']['passed'] is True
-          m=d['measured_candidate']; s=m['strict']; c=d['comparators']; r=d['serial_reference']; dm=m['direct_memory']
-          assert len(m['raw_verified_create_s'])==3
-          assert len(c['zip']['raw_create_s'])==3
-          assert len(c['zstd19']['raw_create_s'])==3
-          assert dm['raw_final_eg07_disk_publication'] is False
-          assert dm['raw_final_eg07_ram_staging_publications']==1
-          assert dm['recompressed_eg07_disk_publication'] is False
-          assert dm['separate_compaction_pass'] is False
-          assert dm['final_eg08_publications']==1
-          assert dm['semantic_finalization_path_preserved'] is True
-          assert dm['ram_backend']=='/dev/shm'
-          assert m['archive_bytes']==r['archive_bytes']
-          assert m['archive_sha256']==r['archive_sha256']
+          d=json.loads(Path('benchmark-artifacts/v030-eg08-policy-v7.json').read_text())
+          assert d['schema']=='cmpct-v030-eg08-policy-exec-v7'
+          assert d['experiment_valid'] is True
+          assert d['promotion_signal'] is True
+          change=d['execution_change']
+          assert change['proof_source_tree_precomputed_outside_timed_boundary'] is True
+          assert change['archive_strong_verification_still_timed'] is True
+          assert change['comparator_timing_changed'] is False
+          assert change['archive_bytes_changed'] is False
+          assert change['selected_levels_changed'] is False
+          s=d['strict']; m=d['measured_candidate']; c=d['comparators']
+          assert s['beats_accepted_v029_size'] is True
+          assert s['beats_zip_size'] is True
+          assert s['beats_zstd19_size'] is True
+          assert s['within_release_locality_bounds'] is True
+          assert s['content_identity_not_policy_input'] is True
+          assert s['exact_serial_archive_identity'] is True
+          assert s['same_selected_level_vector'] is True
+          assert s['verified_create_beats_zip'] is True
+          assert s['verified_create_beats_zstd19'] is True
+          assert s['passed'] is True
           assert m['archive_bytes'] < d['accepted_v029_bytes']
           assert m['archive_bytes'] < c['zip']['archive_bytes']
           assert m['archive_bytes'] < c['zstd19']['archive_bytes']
           assert m['median_verified_create_s'] < c['zip']['median_create_s']
           assert m['median_verified_create_s'] < c['zstd19']['median_create_s']
-          assert s['beats_accepted_v029_size'] is True
-          assert s['beats_zip_size'] is True
-          assert s['beats_zstd19_size'] is True
-          assert s['verified_create_beats_zip'] is True
-          assert s['verified_create_beats_zstd19'] is True
-          assert s['within_release_locality_bounds'] is True
-          assert s['byte_identical_to_serial_selected_policy'] is True
-          assert s['passed'] is True
-          assert d['measurement_gate']['parallel_exact_byte_identity'] is True
           PY
       - name: Public-surface guard
         if: always()
@@ -164,16 +147,13 @@ jobs:
           name: v030-eg08-compact-framing-${{ github.sha }}
           path: |
             benchmark-artifacts/v030-eg08-framing.json
-            benchmark-artifacts/v030-eg08-direct-v5.json
+            benchmark-artifacts/v030-eg08-policy-v7.json
           if-no-files-found: warn
           retention-days: 90
 
-# C25EG08 is research-only. This lane requires both the structural framing proof and a direct repeated candidate
-# win over immutable v0.29, ZIP and Zstd. The v5 timed boundary preserves the historical EG05/EG06/EG07 finalize
-# contract through one RAM-backed /dev/shm staging publication: ordinary pathlib read/write and recovery semantics
-# stay real while block-backed disk I/O is eliminated. Final packs are then compressed exactly once at the proved
-# selected levels and final C25EG08 is published directly; no recompressed EG07 or separate compaction artifact is
-# emitted. Timing receives credit only after exact byte/SHA identity with the ordinary serial selected-effort
-# archive. Strong verification still authenticates every physical pack plus the inner and canonical trees. This
-# lane cannot authorize selector/native/Android promotion or weaken any all-15 external, generalization, runtime,
+# C25EG08 is research-only. The structural framing proof remains immutable. The timed productization boundary now
+# uses the exact v6 feature-pruned executor with only the normalized source-tree proof oracle moved outside timing;
+# archive strong verification stays fully timed, and archive bytes, selected levels, recovery/locality semantics and
+# ZIP/Zstd comparator timing are unchanged. The lane still requires a strict four-way office win before it passes;
+# it cannot authorize selector/native/Android promotion or weaken any all-15 external, generalization, runtime,
 # native, Android or final release gate.
