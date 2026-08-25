@@ -1,0 +1,73 @@
+# ci-lane: deep
+name: CMPCT v0.30 r24 opaque-media terminal generalization
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'benchmarks/v030_r24_opaque_media_terminal_oracle.py'
+      - 'benchmarks/v030_r24_opaque_media_terminal_generalization.py'
+      - 'experiments/entropygraph_v030_release_product.py'
+      - '.github/workflows/v030-r24-opaque-media-terminal-generalization.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-v030-r24-opaque-media-gen-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+
+jobs:
+  opaque-media-generalization:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install comparator dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y zstd
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[test]'
+      - name: Compile adversarial generalization proof
+        run: python -m py_compile benchmarks/v030_r24_opaque_media_terminal_generalization.py
+      - name: Run unseen structural-admission cases
+        run: |
+          mkdir -p benchmark-artifacts
+          python benchmarks/v030_r24_opaque_media_terminal_generalization.py \
+            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-opaque-media-generalization-work" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-opaque-media-generalization.json"
+      - name: Enforce evidence validity without manufacturing promotion
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          d=json.loads(Path('benchmark-artifacts/v030-opaque-media-generalization.json').read_text())
+          assert d['schema']=='cmpct-v030-r24-opaque-media-terminal-generalization-v1'
+          assert d['summary']['cases'] == 7
+          assert d['summary']['eligible_cases'] >= 1
+          assert all(d['summary']['expected_rejections'].values())
+          for row in d['rows']:
+              if row['eligible']:
+                  assert row['gate'] is not None
+          # Counterexamples are valid negative evidence and keep the selector unchanged.
+          # promotion_signal is deliberately observational, never a CI-success requirement.
+          PY
+      - name: Public-surface guard
+        if: always()
+        run: python tools/check_public_surface.py
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: v030-r24-opaque-media-generalization-${{ github.sha }}
+          path: benchmark-artifacts/v030-opaque-media-generalization.json
+          if-no-files-found: error
+          retention-days: 90
