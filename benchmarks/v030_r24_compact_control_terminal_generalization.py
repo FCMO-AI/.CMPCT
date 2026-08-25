@@ -2,11 +2,17 @@ from __future__ import annotations
 
 """Unseen/adversarial generalization for the C25CC01 terminal-admission envelope.
 
-The frozen 15-workload proof is intentionally insufficient for selector promotion.  This campaign creates new,
+The frozen 15-workload proof is intentionally insufficient for selector promotion. This campaign creates new,
 deterministic trees that were not used to derive the admission constants, applies exactly the frozen structural
 predicate, and charges every admitted tree against complete C25CC01 build+strong-verification plus same-runner ZIP
-and solid Zstd-19 comparators.  A valid rejection is useful evidence; a single admitted counterexample blocks
+and solid Zstd-19 comparators. A valid rejection is useful evidence; a single admitted counterexample blocks
 promotion.
+
+The positive side deliberately includes two distinct high-entropy regimes. Flat medium-file entropy trees test that
+mere incompressibility is *not* enough to trigger compact control. High-file-count entropy trees test the actual
+structural hypothesis behind C25CC01: when payload compression has essentially no leverage and authenticated per-file
+control dominates, compact control should remove enough duplicated framing to justify admission. These families are
+newly generated and do not reuse the frozen encrypted-like corpus, paths, hashes, counts, or byte layout.
 """
 
 import argparse
@@ -30,6 +36,31 @@ def _write_entropy_tree(root: Path, *, seed: int, files: int, size: int) -> None
         (root / f"member-{i:04d}.bin").write_bytes(_bytes(seed + i * 7919, size))
 
 
+def _write_entropy_mosaic(
+    root: Path,
+    *,
+    seed: int,
+    tiny_files: int,
+    tiny_size: int,
+    large_bytes: int,
+    chunk_files: int,
+    chunk_size: int,
+) -> None:
+    """Create an unseen high-file-count/high-entropy family without copying the frozen corpus shape."""
+    root.mkdir(parents=True, exist_ok=True)
+    (root / "bulk.bin").write_bytes(_bytes(seed, large_bytes))
+    chunks = root / "chunks"
+    chunks.mkdir()
+    for i in range(chunk_files):
+        (chunks / f"part-{i:03d}.bin").write_bytes(_bytes(seed + 10_000 + i * 4253, chunk_size))
+    crumbs = root / "crumbs"
+    crumbs.mkdir()
+    for i in range(tiny_files):
+        # Variable tiny sizes prevent the test from depending on a single repeated recipe length.
+        n = tiny_size + ((i * 37) % max(1, tiny_size // 3))
+        (crumbs / f"piece-{i:05d}.bin").write_bytes(_bytes(seed + 1_000_000 + i * 7919, n))
+
+
 def _write_repeated_tree(root: Path, *, seed: int, files: int, size: int) -> None:
     root.mkdir(parents=True, exist_ok=True)
     block = _bytes(seed, size)
@@ -48,11 +79,12 @@ def _write_partly_redundant_tree(root: Path, *, seed: int, files: int, size: int
 def _cases(root: Path) -> dict[str, Path]:
     cases: dict[str, Path] = {}
     specs = {
-        # Strong positive candidates: multiple high-entropy shapes and file-count regimes.
+        # Flat high-entropy controls. These are intentionally expected to remain rejected if compact-control
+        # savings are too small; incompressibility alone must not authorize the profile.
         "entropy_40x256k": ("entropy", 1101, 40, 256 * 1024),
         "entropy_96x128k": ("entropy", 2202, 96, 128 * 1024),
         "entropy_256x48k": ("entropy", 3303, 256, 48 * 1024),
-        # Threshold-neighbor entropy family: should exercise the minimum-size/file-count boundary.
+        # Threshold-neighbor entropy family.
         "entropy_32x40k": ("entropy", 4404, 32, 40 * 1024),
         # Deliberate rejection families: strong cross-file redundancy should make r24 materially compressible.
         "repeated_40x256k": ("repeated", 5505, 40, 256 * 1024),
@@ -68,6 +100,20 @@ def _cases(root: Path) -> dict[str, Path]:
             _write_repeated_tree(dst, seed=seed, files=files, size=size)
         else:
             _write_partly_redundant_tree(dst, seed=seed, files=files, size=size)
+        cases[name] = dst
+
+    # Independent positive-shape probes. They intentionally differ from the frozen target's file count, large-blob
+    # size, chunk count, tiny-member size, names, and random seeds. Their only shared property is the generic one the
+    # selector claims to recognize: lots of authenticated control around payloads with essentially no compressible
+    # structure.
+    mosaics = {
+        "entropy_mosaic_640": dict(seed=8808, tiny_files=640, tiny_size=3072, large_bytes=7 * 1024 * 1024, chunk_files=17, chunk_size=48 * 1024),
+        "entropy_mosaic_1150": dict(seed=9909, tiny_files=1150, tiny_size=2048, large_bytes=6 * 1024 * 1024, chunk_files=11, chunk_size=80 * 1024),
+        "entropy_mosaic_1750": dict(seed=10110, tiny_files=1750, tiny_size=1536, large_bytes=5 * 1024 * 1024, chunk_files=29, chunk_size=40 * 1024),
+    }
+    for name, kwargs in mosaics.items():
+        dst = root / name
+        _write_entropy_mosaic(dst, **kwargs)
         cases[name] = dst
     return cases
 
@@ -109,8 +155,9 @@ def main() -> None:
     admitted = [row for row in rows if row["admitted"]]
     rejected = [row for row in rows if not row["admitted"]]
     counterexamples = [row["case"] for row in admitted if not row.get("strict_four_way_win", False)]
+    expected_cases = 10
     result = {
-        "schema": "cmpct-v030-r24-compact-control-terminal-generalization-v1",
+        "schema": "cmpct-v030-r24-compact-control-terminal-generalization-v2",
         "contract": {
             "predicate_inputs": ["logical_bytes", "regular_files", "r24_bytes", "candidate_bytes"],
             "forbidden_inputs": ["workload_name", "path", "filename", "suffix", "content_hash", "archive_hash", "pack_hash"],
@@ -127,13 +174,13 @@ def main() -> None:
         "rejected_count": len(rejected),
         "counterexamples": counterexamples,
         "gate": {
-            "all_cases_complete": len(rows) == 7,
+            "all_cases_complete": len(rows) == expected_cases,
             "at_least_one_unseen_admission": bool(admitted),
             "at_least_one_unseen_rejection": bool(rejected),
             "zero_admitted_counterexamples": not counterexamples,
             "all_admitted_payloads_unchanged": all(row["payload_unchanged"] for row in admitted),
             "all_admitted_two_control_copies": all(row["two_control_copies"] for row in admitted),
-            "passed": len(rows) == 7 and bool(admitted) and bool(rejected) and not counterexamples and all(
+            "passed": len(rows) == expected_cases and bool(admitted) and bool(rejected) and not counterexamples and all(
                 row["payload_unchanged"] and row["two_control_copies"] for row in admitted
             ),
         },
