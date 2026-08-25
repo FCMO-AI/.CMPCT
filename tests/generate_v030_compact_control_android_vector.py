@@ -34,6 +34,10 @@ def _source_truth(src: Path) -> dict[str, dict[str, object]]:
     return truth
 
 
+def _directory_truth(src: Path) -> list[str]:
+    return sorted(path.relative_to(src).as_posix() for path in src.rglob("*") if path.is_dir())
+
+
 def build_vector(output: Path, work_root: Path) -> dict:
     shutil.rmtree(work_root, ignore_errors=True)
     src = work_root / "src"
@@ -63,6 +67,7 @@ def build_vector(output: Path, work_root: Path) -> dict:
         raise RuntimeError(f"compact-control vector must exercise a strict control-plane size win: {stats!r}")
 
     truth = _source_truth(src)
+    directories = _directory_truth(src)
     archive_raw = archive.read_bytes()
     representative = "medium/chunk-000.bin"
     vector = {
@@ -72,7 +77,9 @@ def build_vector(output: Path, work_root: Path) -> dict:
         "archive_sha256": _sha256(archive_raw),
         "archive_base64": base64.b64encode(archive_raw).decode("ascii"),
         "expected_paths": sorted(truth),
-        "expected_entry_count": len(truth),
+        "expected_directory_paths": directories,
+        "expected_regular_entry_count": len(truth),
+        "expected_entry_count": len(truth) + len(directories),
         "representative_path": representative,
         "representative_size": truth[representative]["size"],
         "representative_sha256": truth[representative]["sha256"],
