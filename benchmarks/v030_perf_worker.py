@@ -3,10 +3,16 @@ from __future__ import annotations
 """Fresh-process worker used by the v0.30 runtime promotion gate.
 
 Each invocation performs exactly one operation so Python allocator state, imports and previous decoder caches do
-not leak across v0.29/v0.30 measurements.  Linux ``ru_maxrss`` is recorded alongside wall time.  The parent
+not leak across v0.29/v0.30 measurements. Linux ``ru_maxrss`` is recorded alongside wall time. The parent
 harness owns balanced ordering and exact source-tree validation.
 
-Footnote: this worker prints one JSON object to stdout and no benchmark conclusion.  Thresholds live only in
+The v0.30 engine is the *promoted release-product front door*, not the older authoritative tournament facade.
+This distinction is release-critical: structural terminals that have already earned promotion (logs inverse,
+opaque-media r24, compact control) must be included in the runtime authority exactly as they are in the shipping
+product. Measuring ``entropygraph_v030_release`` here would bypass those promotions and can falsely report
+minute-scale creation/RSS regressions for archives the shipping front door creates in sub-second terminal paths.
+
+Footnote: this worker prints one JSON object to stdout and no benchmark conclusion. Thresholds live only in
 the parent harness, preventing a worker implementation change from silently redefining release policy.
 """
 
@@ -22,7 +28,8 @@ def _engine(name: str):
     if name == "v029":
         from experiments import entropygraph_v029_release as engine
     elif name == "v030":
-        from experiments import entropygraph_v030_release as engine
+        # Runtime release authority must benchmark the same promoted front door that would ship.
+        from experiments import entropygraph_v030_release_product as engine
     else:  # pragma: no cover - argparse constrains this.
         raise ValueError(name)
     return engine
