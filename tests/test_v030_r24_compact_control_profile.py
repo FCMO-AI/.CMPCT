@@ -37,6 +37,8 @@ def test_compact_control_preserves_physical_payload_and_semantic_tree(tmp_path: 
     assert verified["ok"] is True
     assert verified["format_revision"] == 25
     assert verified["format_profile"] == CC.PROFILE
+    assert verified["pack_verification_policy"] == "authenticated-physical-pack-sha-once"
+    assert verified["verified_pack_records"] > 0
     assert stats["archive_bytes"] < stats["source_r24_bytes"]
     assert stats["physical_payload_records_unchanged"] is True
     assert stats["two_authenticated_control_copies"] is True
@@ -44,7 +46,7 @@ def test_compact_control_preserves_physical_payload_and_semantic_tree(tmp_path: 
     assert CC.physical_data_span(out) == CC._source_r24_parts(r24)[1]
     assert verified["tree_sha256"] == PRODUCT.strong_verify(r24)["tree_sha256"]
 
-    # Candidate remains outside the shipping facade until native/Android/selector promotion is independently earned.
+    # Candidate remains outside the shipping facade until selector promotion is independently earned.
     assert PRODUCT.strong_verify(out).get("ok") is not True
 
 
@@ -85,6 +87,33 @@ def test_compact_control_recovers_either_authenticated_copy(tmp_path: Path) -> N
     assert CC.strong_verify(both_bad)["ok"] is False
 
 
+def test_compact_control_rejects_corrupted_physical_pack(tmp_path: Path) -> None:
+    src = tmp_path / "src"
+    _tree(src)
+    r24 = tmp_path / "source.cmpct"
+    PRODUCT._locality_bounded_r24_build(src, r24)
+    out = tmp_path / "candidate.cmpct"
+    CC._write_profile(r24, out)
+
+    parsed = CC._parse(out)
+    index = parsed["index"]
+    packed = next(row for row in index["files"] if row[6] and row[6][0] == R24.S_PACK)
+    pack_idx = int(packed[6][1])
+    blob_off = int(index["blobs"][pack_idx][0])
+    payload = out.read_bytes()
+    _magic, _version, _flags, primary_cbytes, _raw_bytes, _data_bytes, _sha = R24.HDR.unpack_from(payload, 0)
+    record_pos = R24.HDR.size + int(primary_cbytes) + blob_off
+    _m, _codec, _flags2, _res, _usize, csize, meta_len, _crc, _blob_sha = R24.BHDR.unpack_from(payload, record_pos)
+    assert int(csize) > 0
+    corrupt_at = record_pos + R24.BHDR.size + int(meta_len) + min(3, int(csize) - 1)
+
+    bad = tmp_path / "physical-bad.cmpct"
+    bad.write_bytes(payload)
+    _flip(bad, corrupt_at)
+    verified = CC.strong_verify(bad)
+    assert verified["ok"] is False
+
+
 def test_compact_control_reader_roundtrip(tmp_path: Path) -> None:
     src = tmp_path / "src"
     _tree(src)
@@ -123,4 +152,5 @@ def test_compact_control_ephemeral_r24_uses_fast_index_without_semantic_change(t
     candidate = CC.strong_verify(out)
     assert candidate["ok"] is True
     assert candidate["compatibility_index_level"] == 1
+    assert candidate["pack_verification_policy"] == "authenticated-physical-pack-sha-once"
     assert candidate["tree_sha256"] == baseline["tree_sha256"]
