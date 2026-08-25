@@ -7,6 +7,7 @@ on:
     paths:
       - 'benchmarks/v030_r24_opaque_media_terminal_oracle.py'
       - 'benchmarks/v030_r24_opaque_media_terminal_generalization.py'
+      - 'benchmarks/v030_r24_opaque_media_terminal_generalization_v2.py'
       - 'experiments/entropygraph_v030_release_product.py'
       - '.github/workflows/v030-r24-opaque-media-terminal-generalization.yml'
   workflow_dispatch:
@@ -37,29 +38,39 @@ jobs:
           sudo apt-get install -y zstd
           python -m pip install --upgrade pip
           python -m pip install -e '.[test]'
-      - name: Compile adversarial generalization proof
-        run: python -m py_compile benchmarks/v030_r24_opaque_media_terminal_generalization.py
-      - name: Run unseen structural-admission cases
+      - name: Compile adversarial generalization proofs
+        run: |
+          python -m py_compile benchmarks/v030_r24_opaque_media_terminal_generalization.py
+          python -m py_compile benchmarks/v030_r24_opaque_media_terminal_generalization_v2.py
+      - name: Preserve v1 counterexample evidence
         run: |
           mkdir -p benchmark-artifacts
           python benchmarks/v030_r24_opaque_media_terminal_generalization.py \
             --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-opaque-media-generalization-work" \
             --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-opaque-media-generalization.json"
+      - name: Run entropy-refined unseen admission
+        run: |
+          python benchmarks/v030_r24_opaque_media_terminal_generalization_v2.py \
+            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-opaque-media-generalization-v2-work" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-opaque-media-generalization-v2.json"
       - name: Enforce evidence validity without manufacturing promotion
         run: |
           python - <<'PY'
           import json
           from pathlib import Path
-          d=json.loads(Path('benchmark-artifacts/v030-opaque-media-generalization.json').read_text())
-          assert d['schema']=='cmpct-v030-r24-opaque-media-terminal-generalization-v1'
-          assert d['summary']['cases'] == 7
-          assert d['summary']['eligible_cases'] >= 1
-          assert all(d['summary']['expected_rejections'].values())
-          for row in d['rows']:
+          v1=json.loads(Path('benchmark-artifacts/v030-opaque-media-generalization.json').read_text())
+          assert v1['schema']=='cmpct-v030-r24-opaque-media-terminal-generalization-v1'
+          assert v1['summary']['cases'] == 7
+          assert 'compressible-media-impostor' in v1['summary']['counterexamples']
+          v2=json.loads(Path('benchmark-artifacts/v030-opaque-media-generalization-v2.json').read_text())
+          assert v2['schema']=='cmpct-v030-r24-opaque-media-terminal-generalization-v2-entropy'
+          assert v2['summary']['cases'] == 7
+          assert all(v2['summary']['expected_rejections'].values())
+          for row in v2['rows']:
               if row['eligible']:
                   assert row['gate'] is not None
-          # Counterexamples are valid negative evidence and keep the selector unchanged.
-          # promotion_signal is deliberately observational, never a CI-success requirement.
+                  assert row['complete_create_s'] >= row['predicate_s']
+          # promotion_signal remains observational; negative evidence may not be relabeled as promotion.
           PY
       - name: Public-surface guard
         if: always()
@@ -68,6 +79,8 @@ jobs:
         if: always()
         with:
           name: v030-r24-opaque-media-generalization-${{ github.sha }}
-          path: benchmark-artifacts/v030-opaque-media-generalization.json
+          path: |
+            benchmark-artifacts/v030-opaque-media-generalization.json
+            benchmark-artifacts/v030-opaque-media-generalization-v2.json
           if-no-files-found: error
           retention-days: 90
