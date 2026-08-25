@@ -10,6 +10,7 @@ on:
       - 'benchmarks/v030_r24_compact_control_terminal_admission.py'
       - 'benchmarks/v030_r24_compact_control_terminal_generalization.py'
       - 'benchmarks/v030_r24_compact_control_cost_model_oracle.py'
+      - 'benchmarks/v030_r24_compact_control_cost_model_oracle_v2.py'
       - 'benchmarks/v030_r24_compact_control_composition_oracle_v2.py'
       - 'benchmarks/v030_external_competitors.py'
       - '.github/workflows/v030-c25cc01-cost-model.yml'
@@ -43,11 +44,13 @@ jobs:
           python -m pip install -e '.[audio,test]'
           python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
       - name: Compile structural cost oracle
-        run: python -m py_compile benchmarks/v030_r24_compact_control_cost_model_oracle.py
+        run: |
+          python -m py_compile benchmarks/v030_r24_compact_control_cost_model_oracle.py
+          python -m py_compile benchmarks/v030_r24_compact_control_cost_model_oracle_v2.py
       - name: Run exact structural cost decomposition
         run: |
           mkdir -p benchmark-artifacts
-          python benchmarks/v030_r24_compact_control_cost_model_oracle.py \
+          python benchmarks/v030_r24_compact_control_cost_model_oracle_v2.py \
             --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-c25cc01-cost-work" \
             --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-c25cc01-cost.json"
       - name: Require valid causal diagnostic without selector credit
@@ -74,6 +77,8 @@ jobs:
               assert row['candidate_bytes'] < row['r24_bytes']
               assert row['physical_blob_records'] >= 1
               assert row['compact_control_raw_bytes'] >= row['compact_control_comp_bytes_per_copy']
+              assert row['payload_unchanged'] is True
+              assert row['two_control_copies'] is True
               assert len(row['phase_samples']) == 5
           # This lane diagnoses the two known unseen speed counterexamples. It must never turn them into release
           # credit or weaken the strict four-way terminal-admission gate.
