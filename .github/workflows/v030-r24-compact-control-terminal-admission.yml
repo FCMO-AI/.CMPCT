@@ -65,7 +65,7 @@ jobs:
           assert c['min_regular_files']==32
           assert c['min_r24_to_logical']==0.98
           assert c['max_candidate_to_r24']==0.9995
-          assert c['rounds']==3
+          assert c['rounds']==5
           assert len(e['rows'])==15 and g['all15_complete'] is True
           assert g['at_least_one_admitted'] is True
           assert g['target_admitted'] is True
