@@ -20,8 +20,6 @@ continue to require ordinary node integrity unless separately proven.
 """
 
 import argparse
-import binascii
-import hashlib
 import json
 from pathlib import Path
 import shutil
@@ -120,13 +118,13 @@ def _corrupt_first_physical_payload(source: Path, target: Path) -> None:
         stream.close()
     with target.open("r+b") as fh:
         fh.seek(first)
-        header = fh.read(RR.PH.size)
-        if len(header) != RR.PH.size:
+        header = fh.read(A5.PH.size)
+        if len(header) != A5.PH.size:
             raise RuntimeError("short physical header while preparing corruption case")
-        _codec, _usize, csize, _crc, _sha = RR.PH.unpack(header)
+        _codec, _usize, csize, _crc, _sha = A5.PH.unpack(header)
         if csize <= 0:
             raise RuntimeError("cannot corrupt empty physical payload")
-        pos = first + RR.PH.size + min(7, int(csize) - 1)
+        pos = first + A5.PH.size + min(7, int(csize) - 1)
         fh.seek(pos)
         old = fh.read(1)
         if len(old) != 1:
