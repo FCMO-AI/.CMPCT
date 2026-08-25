@@ -118,16 +118,27 @@ fn c25cc01_uses_real_production_portable_dispatch_and_mature_r24_semantics() {
         .expect("production C25CC01 verification must pass");
 
     let entries = archive.entries();
-    assert_eq!(entries.len(), 296);
+    assert_eq!(entries.len(), 298, "public namespace must include 296 files plus two directories");
+    let mut regular_files = 0usize;
+    let mut directories = Vec::new();
     for (index, entry) in entries.iter().enumerate() {
-        assert_eq!(entry.kind, 0, "fixture is intentionally regular-file only");
-        let expected = fs::read(temp.path().join("src").join(&entry.path))
-            .expect("fixture source member must exist");
-        let (actual, _stats) = archive
-            .read_member(index)
-            .expect("production C25CC01 member read must delegate through mature r24 semantics");
-        assert_eq!(actual, expected, "portable dispatch changed {}", entry.path);
+        match entry.kind {
+            0 => {
+                regular_files += 1;
+                let expected = fs::read(temp.path().join("src").join(&entry.path))
+                    .expect("fixture source member must exist");
+                let (actual, _stats) = archive.read_member(index).expect(
+                    "production C25CC01 member read must delegate through mature r24 semantics",
+                );
+                assert_eq!(actual, expected, "portable dispatch changed {}", entry.path);
+            }
+            1 => directories.push(entry.path.clone()),
+            other => panic!("fixture must contain only regular files/directories, got kind {other}"),
+        }
     }
+    directories.sort();
+    assert_eq!(regular_files, 296);
+    assert_eq!(directories, vec!["medium".to_string(), "tiny".to_string()]);
 }
 
 #[test]
