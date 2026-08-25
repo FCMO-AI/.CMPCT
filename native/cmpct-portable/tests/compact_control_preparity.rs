@@ -137,17 +137,14 @@ fn c25cc01_uses_real_production_portable_dispatch_and_mature_r24_semantics() {
                 assert_eq!(actual, expected, "portable dispatch changed {}", entry.path);
             }
             1 => directories.push(entry.path.clone()),
-            other => panic!(
-                "fixture must contain only regular files/directories, got kind {other}"
-            ),
+            other => {
+                panic!("fixture must contain only regular files/directories, got kind {other}")
+            }
         }
     }
     directories.sort();
     assert_eq!(regular_files, 296);
-    assert_eq!(
-        directories,
-        vec!["medium".to_string(), "tiny".to_string()]
-    );
+    assert_eq!(directories, vec!["medium".to_string(), "tiny".to_string()]);
 }
 
 #[test]
