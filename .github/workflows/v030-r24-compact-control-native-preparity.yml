@@ -62,7 +62,17 @@ jobs:
           assert v['schema'] == 'cmpct-v030-android-compact-control-vector-v1'
           assert v['profile'] == 'r24-compact-control-v1'
           assert v['revision'] == 25
-          assert v['expected_entry_count'] == 296
+          # The public portable namespace contains 296 regular files plus the
+          # two real source directories. Keep the evidence model aligned with
+          # Android/JNI and native list semantics instead of silently dropping
+          # directory entries.
+          assert v['expected_regular_entry_count'] == 296
+          assert v['expected_directory_paths'] == ['medium', 'tiny']
+          assert v['expected_entry_count'] == 298
+          assert len(v['expected_paths']) == v['expected_regular_entry_count']
+          assert v['expected_entry_count'] == (
+              v['expected_regular_entry_count'] + len(v['expected_directory_paths'])
+          )
           assert v['facts']['strong_verify'] is True
           assert v['facts']['physical_payload_records_unchanged'] is True
           assert v['facts']['two_authenticated_control_copies'] is True
