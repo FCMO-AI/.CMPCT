@@ -1,0 +1,82 @@
+# ci-lane: deep
+name: CMPCT v0.30 r24 opaque-media terminal admission
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'experiments/entropygraph_v030_release_product.py'
+      - 'experiments/entropygraph_v030_release_product_base.py'
+      - 'benchmarks/v030_r24_opaque_media_terminal_oracle.py'
+      - 'benchmarks/v030_external_competitors.py'
+      - 'benchmarks/v030_release_generalization.py'
+      - 'benchmarks/neutral_hostile_corpus_v1.py'
+      - 'benchmarks/resemblance_hostile_corpus_v1.py'
+      - '.github/workflows/v030-r24-opaque-media-terminal.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-v030-r24-opaque-media-terminal-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+
+jobs:
+  opaque-media-terminal:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install exact corpus and comparator dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y zstd gcc ffmpeg libsndfile1
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[audio,test]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
+      - name: Compile structural terminal oracle
+        run: python -m py_compile benchmarks/v030_r24_opaque_media_terminal_oracle.py
+      - name: Run frozen all-15 admission proof
+        run: |
+          mkdir -p benchmark-artifacts
+          python benchmarks/v030_r24_opaque_media_terminal_oracle.py \
+            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-opaque-media-terminal-work" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-opaque-media-terminal.json"
+      - name: Enforce evidence validity without granting selector credit
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          d=json.loads(Path('benchmark-artifacts/v030-opaque-media-terminal.json').read_text())
+          assert d['schema']=='cmpct-v030-r24-opaque-media-terminal-v1'
+          assert len(d['rows']) == 15
+          assert d['summary']['workloads'] == 15
+          assert all('eligible' in row for row in d['rows'])
+          assert d['admission']['forbidden_inputs'] == [
+              'workload-name','path','filename','extension','content-hash','archive-hash','pack-hash'
+          ]
+          # A counterexample is valid negative evidence, not a fake green promotion. Promotion remains a separate
+          # adversarial/generalization + selector change after this frozen-suite experiment.
+          for row in d['rows']:
+              if row['eligible']:
+                  assert row['gate']['strong_verify_green'] is True
+                  assert row['gate']['product_tree_match'] is True
+          PY
+      - name: Public-surface guard
+        if: always()
+        run: python tools/check_public_surface.py
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: v030-r24-opaque-media-terminal-${{ github.sha }}
+          path: benchmark-artifacts/v030-opaque-media-terminal.json
+          if-no-files-found: error
+          retention-days: 90
