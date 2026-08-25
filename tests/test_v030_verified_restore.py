@@ -59,7 +59,13 @@ def test_verified_restorer_still_rejects_shape_drift(tmp_path: Path) -> None:
 
 
 def test_shipping_extract_authenticates_before_verified_restore_and_publish() -> None:
-    source = inspect.getsource(PRODUCT.extract)
+    # The promoted release front door now wraps logs/media dispatch and delegates ordinary archives to the
+    # preserved mature extractor.  The security-sensitive ordering therefore belongs to that delegated extractor,
+    # not to the thin wrapper's source text.  Ratchet both facts so a future wrapper cannot bypass the mature path.
+    wrapper_source = inspect.getsource(PRODUCT.extract)
+    assert "_BASE_IMPL.extract" in wrapper_source
+
+    source = inspect.getsource(PRODUCT._BASE_IMPL.extract)
     streamed = source.index("POLICY.extract_verified_into_staging")
     restored = source.index("VERIFIED_RESTORE.restore_verified_manifest_tree")
     published = source.index("C._publish_tree")
