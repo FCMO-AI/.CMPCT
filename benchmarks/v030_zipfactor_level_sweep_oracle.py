@@ -7,7 +7,8 @@ This oracle changes only the Zstd level used for the already-bounded canonical c
 pays fused source scanning, archive publication and cold strong identity verification; all candidates retain the
 same format grammar, exact semantic tree, <=8x member-read amplification and <=8 MiB decode-unit requirements.
 
-This is research evidence only. A winning level does not authorize selector/native/Android/recovery promotion.
+This is research evidence only. A valid sweep may be negative: lack of a four-way level records that compression-
+level tuning is not the missing ZIP-speed mechanism and grants zero promotion/release credit.
 """
 
 import argparse
@@ -153,10 +154,12 @@ def run(work_root: Path, *, rounds: int = ROUNDS) -> dict:
             and row["beats_zstd19_create_median"]
         ]
         best = min(viable, key=lambda row: (row["median_create_s"], row["archive_bytes"])) if viable else None
+        experiment_valid = all(row["all_rounds_exact"] for row in levels)
+        promotion_signal = best is not None
         return {
-            "schema": "cmpct-v030-zipfactor-level-sweep-v1",
+            "schema": "cmpct-v030-zipfactor-level-sweep-v2",
             "claim_boundary": (
-                "research level selection only; no selector/native/Android/recovery promotion authority"
+                "research level selection only; valid negative evidence grants no selector/native/Android/recovery promotion authority"
             ),
             "workload": "resemblance_hostile_v1/04_deflate_family",
             "rounds": rounds,
@@ -178,9 +181,11 @@ def run(work_root: Path, *, rounds: int = ROUNDS) -> dict:
             "levels": levels,
             "best_four_way": best,
             "gate": {
-                "all_levels_exact": all(row["all_rounds_exact"] for row in levels),
-                "four_way_level_found": best is not None,
-                "passed": all(row["all_rounds_exact"] for row in levels) and best is not None,
+                "experiment_valid": experiment_valid,
+                "four_way_level_found": promotion_signal,
+                "promotion_signal": promotion_signal,
+                "release_credit": False,
+                "passed": experiment_valid,
             },
         }
 
@@ -200,8 +205,8 @@ def main() -> None:
         "best_four_way": result["best_four_way"],
         "gate": result["gate"],
     }, indent=2), flush=True)
-    if not result["gate"]["passed"]:
-        raise SystemExit("ZIP-factor level sweep found no exact four-way level")
+    if not result["gate"]["experiment_valid"]:
+        raise SystemExit("ZIP-factor level sweep was not exact/valid")
 
 
 if __name__ == "__main__":
