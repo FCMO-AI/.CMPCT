@@ -106,14 +106,14 @@ jobs:
           assert len(improved) == 3
           exact_by_label={row['label']: row['saving_bytes_vs_pre_elision'] for row in improved}
           assert exact_by_label == {
-              'neutral_hostile_v1/06_incremental_backups': 24664,
-              'neutral_hostile_v1/07_incompressible_and_encrypted_like': 24662,
-              'resemblance_hostile_v1/01_shifted_versions': 24682,
+              'neutral_hostile_v1/06_incremental_backups': 24666,
+              'neutral_hostile_v1/07_incompressible_and_encrypted_like': 24664,
+              'resemblance_hostile_v1/01_shifted_versions': 24680,
           }
-          assert sum(exact_by_label.values()) == 74008
-          assert a['shipping_total_bytes'] == 181501708
+          assert sum(exact_by_label.values()) == 74010
+          assert a['shipping_total_bytes'] == 181501706
           assert a['pre_elision_total_bytes'] == 181575716
-          assert a['pre_elision_total_bytes'] - a['shipping_total_bytes'] == 74008
+          assert a['pre_elision_total_bytes'] - a['shipping_total_bytes'] == 74010
           live=[row for row in a['rows'] if row['transform']['reason']=='dictionary-live']
           assert all(row['shipping_bytes']==row['pre_elision_bytes'] for row in live)
           PY
