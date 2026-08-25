@@ -1,3 +1,4 @@
+# ci-lane: deep
 name: CMPCT v0.30 ZIP-factor streaming identity oracle
 
 on:
@@ -6,6 +7,10 @@ on:
 
 permissions:
   contents: read
+
+concurrency:
+  group: v030-zipfactor-streaming-identity-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   streaming-identity:
