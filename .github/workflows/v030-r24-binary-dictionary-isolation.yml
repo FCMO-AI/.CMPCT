@@ -67,6 +67,10 @@ jobs:
           assert d['contract']['archive_grammar_changed'] is False
           assert d['contract']['micro_pack_binary_admission_changed'] is False
           assert d['contract']['strong_verification_required'] is True
+          repair=d['identity_domain_repair']
+          assert repair['historical_source_digest_role']=='frozen corpus provenance only'
+          assert repair['canonical_product_digest_role']=='shipping-vs-candidate semantic tree equivalence'
+          assert repair['threshold_changed'] is False
           t=d['target']
           assert t['rounds']==5
           assert t['same_verified_tree'] is True
@@ -76,7 +80,8 @@ jobs:
           assert len(a['rows'])==15
           assert a['gate']['exact_workload_count'] is True
           assert a['gate']['all_source_and_candidate_trees_match'] is True
-          # A regression is valid negative evidence, not permission to promote. CI remains useful for
+          assert a['gate']['historical_source_digest_not_misused_as_product_digest'] is True
+          # A byte regression is valid negative evidence, not permission to promote. CI remains useful for
           # measuring the hypothesis while the explicit promotion_candidate fact stays fail-closed.
           if a['gate']['promotion_candidate']:
               assert a['gate']['zero_byte_regressions'] is True
