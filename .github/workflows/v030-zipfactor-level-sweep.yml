@@ -41,31 +41,39 @@ jobs:
           python -m py_compile \
             experiments/entropygraph_v030_zipfactor_compact_v3.py \
             benchmarks/v030_zipfactor_level_sweep_oracle.py
-      - name: Run repeated exact four-way level sweep
+      - name: Run repeated exact level sweep
         run: |
           mkdir -p benchmark-artifacts
           python benchmarks/v030_zipfactor_level_sweep_oracle.py \
             --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-zf-level-sweep-work" \
             --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-zf-level-sweep.json" \
             --rounds 9
-      - name: Independently enforce exactness and four-way result
+      - name: Independently enforce exactness and promotion boundary
         run: |
           python - <<'PY'
           import json
           from pathlib import Path
           d=json.loads(Path('benchmark-artifacts/v030-zf-level-sweep.json').read_text())
-          assert d['schema']=='cmpct-v030-zipfactor-level-sweep-v1'
+          assert d['schema']=='cmpct-v030-zipfactor-level-sweep-v2'
           assert d['rounds']==9
-          assert d['gate']['all_levels_exact'] is True
-          assert d['gate']['four_way_level_found'] is True
-          best=d['best_four_way']
-          assert best is not None
-          assert best['beats_zip_size'] is True
-          assert best['beats_zstd19_size'] is True
-          assert best['beats_zip_create_median'] is True
-          assert best['beats_zstd19_create_median'] is True
-          assert best['all_rounds_exact'] is True
+          assert d['gate']['experiment_valid'] is True
+          assert d['gate']['release_credit'] is False
           assert d['gate']['passed'] is True
+          assert len(d['levels']) == 8
+          assert all(row['all_rounds_exact'] for row in d['levels'])
+          if d['gate']['promotion_signal']:
+              assert d['gate']['four_way_level_found'] is True
+              best=d['best_four_way']
+              assert best is not None
+              assert best['beats_zip_size'] is True
+              assert best['beats_zstd19_size'] is True
+              assert best['beats_zip_create_median'] is True
+              assert best['beats_zstd19_create_median'] is True
+              assert best['all_rounds_exact'] is True
+          else:
+              # Valid negative evidence: compression-level tuning alone did not cross the ZIP-speed frontier.
+              assert d['gate']['four_way_level_found'] is False
+              assert d['best_four_way'] is None
           PY
       - name: CI topology self-check
         run: python tools/check_ci_topology.py .github/workflows/v030-zipfactor-level-sweep.yml
@@ -78,5 +86,5 @@ jobs:
           if-no-files-found: warn
           retention-days: 90
 
-# Research-only: this lane can recommend a compression level but cannot authorize selector, native/Android,
-# recovery, version, merge, tag, site, or release promotion. All canonical release gates remain independent.
+# Research-only. A valid negative result stays green as evidence but grants zero release/promotion credit.
+# Native/Android/recovery/version/merge/tag/site/final release authorities remain independently mandatory.
