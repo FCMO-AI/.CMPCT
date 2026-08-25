@@ -66,7 +66,7 @@ jobs:
             --output benchmark-artifacts/geometry-overlay-v030-ml-v3.json \
             2>&1 | tee benchmark-artifacts/geometry-overlay-v030-v3.stdout.txt
 
-      - name: Enforce frozen V3 composition contract
+      - name: Enforce frozen V3 evidence and fail-closed promotion contract
         run: |
           python - <<'PY'
           import json
@@ -84,10 +84,16 @@ jobs:
           assert result['hierarchical_screened_candidates'] > 0
           assert result['hierarchical_exact_finalists'] > 0
           assert result['max_selected_member_read_amplification'] <= contract['maximum_selected_member_read_amplification'] <= 8.0
-          assert result['saving_vs_v029_bytes'] >= contract['minimum_composition_saving_bytes'] >= 262144
           assert result['selection_materialization']=='same-filesystem-atomic-move'
           assert result['selection_extra_payload_write_bytes']==0
+          assert gate['experiment_valid'] is True
           assert gate['passed'] is True
+          assert gate['promotion_signal'] is gate['composition_breakthrough']
+          if gate['promotion_signal']:
+              assert result['saving_vs_v029_bytes'] >= contract['minimum_composition_saving_bytes'] >= 262144
+          else:
+              assert result['saving_vs_v029_bytes'] < contract['minimum_composition_saving_bytes']
+              print('VALID NEGATIVE EVIDENCE: full G0-G4 overlay remains below frozen promotion hurdle')
           print(json.dumps({'result': result, 'gate': gate}, indent=2))
           PY
 
@@ -107,5 +113,5 @@ jobs:
           retention-days: 90
 
 # Footnote: V2 remains a valid flat-only causal oracle. V3 adds the reactor's G3/G4 search without lowering
-# V2's exact public tree, accepted-v0.29 floor, >=256 KiB saving threshold or <=8x locality law. A failure is
-# evidence against this full composition path, not permission to weaken the gate.
+# V2's exact public tree, accepted-v0.29 floor, >=256 KiB saving threshold or <=8x locality law. A measured
+# miss is retained as valid negative evidence; it grants zero promotion credit until the original hurdle is met.
