@@ -46,8 +46,13 @@ def test_compact_control_preserves_physical_payload_and_semantic_tree(tmp_path: 
     assert CC.physical_data_span(out) == CC._source_r24_parts(r24)[1]
     assert verified["tree_sha256"] == PRODUCT.strong_verify(r24)["tree_sha256"]
 
-    # Candidate remains outside the shipping facade until selector promotion is independently earned.
-    assert PRODUCT.strong_verify(out).get("ok") is not True
+    # C25CC01 has earned the release-product reader boundary. Ratchet the public verifier to the same
+    # exact semantic tree instead of preserving the obsolete pre-selector rejection expectation.
+    product_verified = PRODUCT.strong_verify(out)
+    assert product_verified["ok"] is True
+    assert product_verified["format_revision"] == 25
+    assert product_verified["format_profile"] == CC.PROFILE
+    assert product_verified["tree_sha256"] == verified["tree_sha256"]
 
 
 def test_compact_control_recovers_either_authenticated_copy(tmp_path: Path) -> None:
