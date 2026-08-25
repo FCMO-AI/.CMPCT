@@ -1,0 +1,103 @@
+# ci-lane: deep
+name: CMPCT v0.30 G0-G4 ML deferred node digest oracle
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'experiments/entropygraph_v030_release_reader.py'
+      - 'experiments/entropygraph_v030_release_product.py'
+      - 'experiments/entropygraph_v030_geometry_overlay_g04*.py'
+      - 'benchmarks/v030_release_performance*.py'
+      - 'benchmarks/v030_g04_ml_deferred_node_digest_oracle.py'
+      - '.github/workflows/v030-g04-ml-deferred-node-digest.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-v030-g04-ml-deferred-node-digest-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+
+jobs:
+  ml-deferred-node-digest:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install deterministic ML-corpus dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y zstd gcc ffmpeg libsndfile1
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[audio,test]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
+      - name: Compile deferred-node-digest surface
+        run: |
+          python -m py_compile \
+            experiments/entropygraph_v030_release_reader.py \
+            benchmarks/v030_release_performance.py \
+            benchmarks/v030_g04_ml_deferred_node_digest_oracle.py
+      - name: Preserve ordinary streaming-reader and hostile-input correctness
+        run: |
+          python -m pytest -q \
+            tests/test_v030_release_reader.py \
+            tests/test_v030_member_reader.py \
+            tests/test_v030_release_fuzz.py
+      - name: Run canonical ML deferred-node-digest A/B
+        run: |
+          mkdir -p benchmark-artifacts
+          python benchmarks/v030_g04_ml_deferred_node_digest_oracle.py \
+            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-g04-ml-deferred-node-digest-work" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-g04-ml-deferred-node-digest.json"
+      - name: Independently enforce unchanged bytes, hostile rejection and material speedup
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          d=json.loads(Path('benchmark-artifacts/v030-g04-ml-deferred-node-digest.json').read_text())
+          assert d['schema']=='cmpct-v030-g04-ml-deferred-node-digest-v1'
+          assert d['target']=='neutral_hostile_v1/09_ml_artifacts'
+          assert d['canonical_profile']['format_revision']==25
+          assert bytes.fromhex(d['canonical_profile']['magic'])==b'CMP25G4\x00'
+          assert bytes.fromhex(d['canonical_profile']['tail_magic'])==b'C25G4TL\x00'
+          change=d['change']; contract=d['contract']; gate=d['gate']
+          assert change['scope']=='complete-file streaming only'
+          assert change['archive_bytes_changed'] is False
+          assert change['cache_budget_changed'] is False
+          assert change['physical_record_sha_changed'] is False
+          assert change['complete_file_sha_changed'] is False
+          assert change['selective_member_reader_changed'] is False
+          assert d['hostile_physical_corruption_rejected'] is True
+          assert gate['physical_record_authentication_preserved'] is True
+          assert gate['complete_file_sha_preserved'] is True
+          assert gate['complete_tree_identity_preserved'] is True
+          assert gate['physical_reads_not_increased'] is True
+          assert float(d['verify_improvement_fraction'])>=float(contract['minimum_verify_improvement_fraction'])
+          assert float(d['extract_improvement_fraction'])>=float(contract['minimum_extract_improvement_fraction'])
+          assert int(contract['node_cache_limit_bytes'])==32*1024*1024
+          assert int(contract['record_cache_limit_bytes'])==64*1024*1024
+          assert gate['passed'] is True
+          PY
+      - name: CI topology self-check
+        run: python tools/check_ci_topology.py .github/workflows/v030-g04-ml-deferred-node-digest.yml
+      - name: Upload deferred-node-digest evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: v030-g04-ml-deferred-node-digest-${{ github.sha }}
+          path: benchmark-artifacts/v030-g04-ml-deferred-node-digest.json
+          if-no-files-found: warn
+          retention-days: 90
+
+# Research-only complete-stream optimization. It may not weaken physical-record authentication,
+# complete-file SHA verification, cache budgets, resource limits, selective member semantics or
+# archive bytes. A green A/B is only permission to implement and re-earn ordinary release authority.
