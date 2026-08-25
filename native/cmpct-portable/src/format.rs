@@ -442,7 +442,9 @@ pub(crate) fn merkle_root(leaves: &[[u8; 32]]) -> [u8; 32] {
             level.push(last);
         }
         level = level
-            .chunks_exact(2)
+            .as_chunks::<2>()
+            .0
+            .iter()
             .map(|pair| {
                 let mut hasher = Sha256::new();
                 hasher.update([1]);
