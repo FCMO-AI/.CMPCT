@@ -36,7 +36,7 @@ jobs:
           python -m pip install -e '.[test]'
           python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
 
-      - name: Compile performance worker and authoritative release path
+      - name: Compile performance worker and promoted release product
         run: |
           python -m py_compile \
             experiments/entropygraph_v030_shared_portfolio.py \
@@ -44,8 +44,13 @@ jobs:
             experiments/entropygraph_v030_release_reader_policy.py \
             experiments/entropygraph_v030_release_candidate.py \
             experiments/entropygraph_v030_release.py \
+            experiments/entropygraph_v030_release_product.py \
             benchmarks/v030_perf_worker.py \
             benchmarks/v030_release_performance.py
+
+      - name: Ratchet runtime worker to the shipping v0.30 front door
+        run: |
+          python -m pytest -q tests/test_v030_perf_worker_product_binding.py
 
       - name: Run fast byte/resource prerequisite tests
         run: |
@@ -105,5 +110,7 @@ jobs:
 
 # Footnote: `ffmpeg` is required to construct the frozen neutral-hostile media workload before runtime is measured.
 # Installing it repairs the benchmark environment only; it does not participate in CMPCT compression or relax any
-# create/extract/RSS threshold. Hosted timing remains same-run paired promotion evidence, while absolute public
-# throughput claims still require controlled benchmark hardware. A miss is implementation debt, not a policy edit.
+# create/extract/RSS threshold. The v0.30 worker is explicitly bound to entropygraph_v030_release_product so the
+# authority measures the same promoted structural terminals that would ship; the historical v0.29 worker remains
+# unchanged. Hosted timing remains same-run paired promotion evidence, while absolute public throughput claims still
+# require controlled benchmark hardware. A miss is implementation debt, not a policy edit.
