@@ -32,7 +32,10 @@ MIN_LOGICAL_BYTES = 1 * 1024 * 1024
 MIN_REGULAR_FILES = 32
 MIN_R24_TO_LOGICAL = 0.98
 MAX_CC_TO_R24 = 0.9995
-ROUNDS = 3
+# Five rotated same-runner rounds make the sub-second ZIP comparison materially less sensitive to a single noisy
+# sample while preserving the exact same strict median win law. This is evidence strengthening, not a threshold
+# change: CMPCT must still be strictly smaller and strictly faster than both ZIP and Zstd-19.
+ROUNDS = 5
 TARGET_EVIDENCE_ROW = "07_incompressible_and_encrypted_like"
 
 
