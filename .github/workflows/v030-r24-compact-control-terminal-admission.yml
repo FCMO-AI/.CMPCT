@@ -79,6 +79,7 @@ jobs:
               assert row['candidate_no_larger_than_full_product'] is True
               assert row['strict_four_way_win'] is True
               assert row['competitors']['strict_four_way_win'] is True
+              assert len(row['competitors']['samples']) == 5
           assert g['passed'] is True
           PY
       - name: Run unseen/adversarial selector generalization
@@ -102,7 +103,7 @@ jobs:
           assert c['min_regular_files']==32
           assert c['min_r24_to_logical']==0.98
           assert c['max_candidate_to_r24']==0.9995
-          assert c['comparator_rounds']==3
+          assert c['comparator_rounds']==5
           assert len(e['rows'])==10 and g['all_cases_complete'] is True
           assert g['at_least_one_unseen_admission'] is True
           assert g['at_least_one_unseen_rejection'] is True
@@ -110,8 +111,6 @@ jobs:
           assert e['counterexamples']==[]
           assert g['all_admitted_payloads_unchanged'] is True
           assert g['all_admitted_two_control_copies'] is True
-          # The independent high-file-count entropy mosaics are the intended positive-shape probes. At least one
-          # must be admitted; flat entropy alone may remain rejected and is useful negative evidence.
           mosaics=[r for r in e['rows'] if r['case'].startswith('entropy_mosaic_')]
           assert len(mosaics)==3
           assert any(r['admitted'] for r in mosaics)
@@ -119,6 +118,7 @@ jobs:
               if row['admitted']:
                   assert row['strict_four_way_win'] is True
                   assert row['competitors']['strict_four_way_win'] is True
+                  assert len(row['competitors']['samples']) == 5
           assert g['passed'] is True
           PY
       - name: CI topology self-check
