@@ -10,6 +10,7 @@ on:
       - 'benchmarks/v030_r24_compact_control_profile_productization.py'
       - 'experiments/entropygraph_v030_r24_compact_control_profile.py'
       - 'experiments/entropygraph_v030_release_product.py'
+      - 'tests/test_v030_r24_compact_control_shipping_selector.py'
       - 'benchmarks/v030_external_competitors.py'
       - '.github/workflows/v030-r24-compact-control-terminal-admission.yml'
   workflow_dispatch:
@@ -44,6 +45,8 @@ jobs:
         run: |
           python -m py_compile benchmarks/v030_r24_compact_control_terminal_admission.py
           python -m py_compile benchmarks/v030_r24_compact_control_terminal_generalization.py
+      - name: Ratchet promoted shipping dispatch
+        run: pytest -q tests/test_v030_r24_compact_control_shipping_selector.py
       - name: Run exact all-15 structural admission proof
         run: |
           python -m benchmarks.v030_r24_compact_control_terminal_admission \
@@ -124,5 +127,5 @@ jobs:
       - name: CI topology self-check
         run: python tools/check_ci_topology.py .github/workflows/v030-r24-compact-control-terminal-admission.yml
 
-# Promotion prerequisite only. A green lane authorizes neither selector changes nor release; it proves that the
-# generic content-identity-free terminal envelope survives both the exact frozen suite and unseen/adversarial cases.
+# Promotion prerequisite plus shipping-dispatch ratchet. The frozen/unseen strict four-way evidence remains decisive;
+# the release selector may use only the identity-free structural envelope proven by these oracles.
