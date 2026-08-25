@@ -3,7 +3,9 @@
 The mature r24/r25 selector implementation is retained byte-for-byte in
 ``entropygraph_v030_release_product_base``.  This module exposes that exact implementation and adds the
 structurally admitted logs-inverse profile that earned all-15 shadow, native production-dispatch and Android/JNI
-promotion evidence on the parent fingerprint.  Non-logs operations remain transparent mature-product delegates;
+promotion evidence on the parent fingerprint.  It also terminalizes canonical r24 for the entropy-refined opaque-
+media family after frozen-suite and unseen/adversarial evidence proved that r24 is already smaller and faster than
+both ZIP/Deflate-9 and solid Zstd-19 there.  Non-admitted operations remain transparent mature-product delegates;
 no benchmark name participates in dispatch.
 
 A release-only r24 materialization post-pass also removes a trained dictionary only when the finished authenticated
@@ -27,11 +29,8 @@ import types
 
 from experiments import entropygraph_v030_release_product_base as _BASE_IMPL
 from experiments import entropygraph_v030_r24_dead_dictionary as _R24_DEAD_DICT
+from experiments import entropygraph_v030_r24_media_terminal as _R24_MEDIA
 
-# Post-selection r24 dictionary elision is release-only.  The base implementation already isolates its r24
-# encoder policies from historical v0.29/research modules.  Replacing this one base-module global means both the
-# overlapped prebuild path and direct fallback path receive the exact same post-pass, while all historical builders
-# remain byte-stable evidence oracles.
 _BASE_R24_BUILD = _BASE_IMPL._locality_bounded_r24_build
 
 
@@ -51,13 +50,9 @@ def _locality_bounded_r24_build(root, out):
 
 _BASE_IMPL._locality_bounded_r24_build = _locality_bounded_r24_build
 
-# Populate the public module with the exact mature implementation first.  Constants, helpers, ablation machinery
-# and shared objects therefore remain identical to the pre-promotion product surface, except for the measured
-# release-only r24 materialization post-pass above.
 for _name in dir(_BASE_IMPL):
     if not _name.startswith("__"):
         globals()[_name] = getattr(_BASE_IMPL, _name)
-# Ensure the public private-helper binding reflects the release wrapper rather than the pre-promotion copy.
 globals()["_locality_bounded_r24_build"] = _locality_bounded_r24_build
 
 _BASE_ORIGINALS = {
@@ -72,16 +67,25 @@ _BASE_ORIGINALS = {
 
 from experiments import entropygraph_v030_release_product_logs_candidate as _LOGS_PROMOTED
 
-# Candidate/oracle imports historically patch CAND.BASE.build directly.  Keep that direct-candidate contract
-# dynamic while the promoted public path below uses transparent mature fallbacks.
 _LOGS_PROMOTED._BASE_BUILD = lambda root, out: _LOGS_PROMOTED.BASE.build(root, out)
 
 
 def build(root, out):
-    """Build logs when structurally and empirically admitted; otherwise preserve the mature result exactly."""
+    """Build a promoted structural terminal when admitted; otherwise preserve the mature tournament exactly."""
     terminal = _LOGS_PROMOTED._build_logs_terminal_if_eligible(root, out)
     if terminal is not None:
         return terminal
+
+    media = _R24_MEDIA.analyze(root)
+    if media["eligible"]:
+        stats = dict(_locality_bounded_r24_build(root, out))
+        return {
+            **stats,
+            "terminal_r24": True,
+            "terminal_r24_reason": "opaque-media-entropy-v1",
+            "terminal_r24_media_admission": media,
+            "speculative_r25_search_skipped": True,
+        }
     return _BASE_IMPL.build(root, out)
 
 
@@ -117,10 +121,6 @@ def extract(archive, dst, *, max_output_bytes=POLICY.DEFAULT_MAX_EXTRACT_BYTES, 
             max_output_bytes=max_output_bytes,
             safe_symlinks=safe_symlinks,
         )
-    # The mature non-logs extraction contract remains, in this exact authenticated order:
-    # POLICY.extract_verified_into_staging
-    # VERIFIED_RESTORE.restore_verified_manifest_tree
-    # C._publish_tree
     return _BASE_IMPL.extract(
         archive,
         dst,
@@ -149,6 +149,10 @@ PROMOTED_R24_DEAD_DICTIONARY_ELISION = True
 PROMOTED_R24_DEAD_DICTIONARY_EVIDENCE = (
     "all-15 post-selection proof: 0 byte regressions, live dictionaries byte-identical, dead dictionaries smaller"
 )
+PROMOTED_R24_OPAQUE_MEDIA_TERMINAL = True
+PROMOTED_R24_OPAQUE_MEDIA_EVIDENCE = (
+    "all-15 strict four-way media win + unseen entropy-refined adversarial proof with compressible-media rejection"
+)
 
 _PROMOTED_BINDINGS = {
     "build": build,
@@ -166,7 +170,7 @@ class _ReleaseProductModule(types.ModuleType):
 
     def __setattr__(self, name, value):
         super().__setattr__(name, value)
-        if name.startswith("__") or name in {"_BASE_IMPL", "_LOGS_PROMOTED", "_R24_DEAD_DICT"}:
+        if name.startswith("__") or name in {"_BASE_IMPL", "_LOGS_PROMOTED", "_R24_DEAD_DICT", "_R24_MEDIA"}:
             return
         if not hasattr(_BASE_IMPL, name):
             return
