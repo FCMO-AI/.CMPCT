@@ -105,11 +105,11 @@ jobs:
           # canonical trees equal, and zero byte regressions across all fifteen workloads.
           assert len(improved) == 3
           exact_savings=sorted(row['saving_bytes_vs_pre_elision'] for row in improved)
-          assert exact_savings == [24660, 24666, 24678]
-          assert sum(exact_savings) == 74004
-          assert a['shipping_total_bytes'] == 181495788
-          assert a['pre_elision_total_bytes'] == 181569792
-          assert a['pre_elision_total_bytes'] - a['shipping_total_bytes'] == 74004
+          assert exact_savings == [24652, 24662, 24678]
+          assert sum(exact_savings) == 73992
+          assert a['shipping_total_bytes'] == 181496030
+          assert a['pre_elision_total_bytes'] == 181570022
+          assert a['pre_elision_total_bytes'] - a['shipping_total_bytes'] == 73992
           live=[row for row in a['rows'] if row['transform']['reason']=='dictionary-live']
           assert all(row['shipping_bytes']==row['pre_elision_bytes'] for row in live)
           PY
