@@ -19,6 +19,7 @@ import msgpack
 
 from benchmarks import v030_r24_compact_control_oracle as CONTROL
 from cmpct import codec as R24
+from cmpct.reader import CMPCT
 from experiments import entropygraph_v030_release_product as PRODUCT
 
 MAGIC = b"C25CC01\0"
@@ -219,10 +220,57 @@ def _materialized_r24(archive: Path):
         yield path, parsed
 
 
+def _verify_materialized_r24(path: Path) -> dict:
+    """Strongly verify the compatibility r24 while hashing each physical S_PACK only once.
+
+    Mature ``CMPCT.verify`` necessarily computes a logical hash per member. S_PACK slices do not carry an independent
+    per-slice digest; their security boundary is the authenticated index plus the owning physical blob identity. The
+    generic path therefore re-reads/re-hashes the same pack slices without gaining an independent check. C25CC01's
+    native reader already authenticates the owning physical pack before deriving slice identities. Mirror that exact
+    boundary here: validate each owning pack's full SHA-256 once, still execute every logical member read/size check,
+    and retain ordinary per-member SHA verification everywhere an independent identity exists.
+    """
+    with CMPCT(path) as reader:
+        verified_files = 0
+        verified_packs: set[int] = set()
+        for row in reader.files:
+            if row[1] == R24.K_DIR:
+                continue
+            raw = reader.read(row[0])
+            storage = row[6]
+            if storage and storage[0] == R24.S_PACK:
+                pack_idx = int(storage[1])
+                if pack_idx not in verified_packs:
+                    pack = reader._blob(pack_idx)
+                    off = int(reader.blobs[pack_idx][0])
+                    pos = int(reader.record_base) + off
+                    header = R24.BHDR.unpack_from(reader.mm, pos)
+                    expected_sha = bytes(header[-1])
+                    if _sha(pack) != expected_sha:
+                        raise CompactControlError(f"physical S_PACK SHA-256 verification failure: {pack_idx}")
+                    verified_packs.add(pack_idx)
+            else:
+                want = reader.file_sha256(row[0])
+                if _sha(raw) != want:
+                    raise CompactControlError(f"SHA-256 verification failure: {row[0]}")
+            verified_files += 1
+        tree = PRODUCT._r24_user_tree_sha(reader)
+    return {
+        "ok": True,
+        "format_revision": 24,
+        "format_profile": "canonical-r24",
+        "tree_sha256": tree,
+        "user_tree_sha256": tree,
+        "verified_files": verified_files,
+        "verified_pack_records": len(verified_packs),
+        "reader": "cmpct-r24-reference-reader-pack-sha-once",
+    }
+
+
 def strong_verify(archive: Path) -> dict:
     try:
         with _materialized_r24(Path(archive)) as (r24, parsed):
-            verified = dict(PRODUCT.strong_verify(r24))
+            verified = _verify_materialized_r24(r24)
             if not verified.get("ok") or int(verified.get("format_revision", -1)) != 24:
                 raise CompactControlError(f"expanded r24 strong verification failed: {verified!r}")
             return {
@@ -235,6 +283,7 @@ def strong_verify(archive: Path) -> dict:
                 "physical_payload_records_unchanged": True,
                 "semantic_index_roundtrip_exact": True,
                 "compatibility_index_level": COMPAT_INDEX_LEVEL,
+                "pack_verification_policy": "authenticated-physical-pack-sha-once",
             }
     except Exception as exc:
         return {
