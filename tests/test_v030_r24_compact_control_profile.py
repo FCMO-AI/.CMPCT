@@ -99,3 +99,28 @@ def test_compact_control_reader_roundtrip(tmp_path: Path) -> None:
     dst = tmp_path / "dst"
     CC.extract(out, dst)
     assert (dst / rel).read_bytes() == (src / rel).read_bytes()
+
+
+def test_compact_control_ephemeral_r24_uses_fast_index_without_semantic_change(tmp_path: Path) -> None:
+    src = tmp_path / "src"
+    _tree(src)
+    r24 = tmp_path / "source.cmpct"
+    PRODUCT._locality_bounded_r24_build(src, r24)
+    out = tmp_path / "candidate.cmpct"
+    CC._write_profile(r24, out)
+
+    parsed = CC._parse(out)
+    compat = tmp_path / "compat-r24.cmpct"
+    compat.write_bytes(CC._rebuild_r24_bytes(parsed))
+    baseline = PRODUCT.strong_verify(r24)
+    rebuilt = PRODUCT.strong_verify(compat)
+
+    assert CC.COMPAT_INDEX_LEVEL == 1
+    assert baseline["ok"] is True
+    assert rebuilt["ok"] is True
+    assert rebuilt["format_revision"] == 24
+    assert rebuilt["tree_sha256"] == baseline["tree_sha256"]
+    candidate = CC.strong_verify(out)
+    assert candidate["ok"] is True
+    assert candidate["compatibility_index_level"] == 1
+    assert candidate["tree_sha256"] == baseline["tree_sha256"]
