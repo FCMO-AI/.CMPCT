@@ -5,6 +5,7 @@ on:
   pull_request:
     paths:
       - 'benchmarks/v030_federated_compact_framing_v8_policy_exec_v6.py'
+      - 'benchmarks/v030_federated_compact_framing_v8_policy_exec_v7.py'
       - 'benchmarks/v030_federated_compact_framing_v8_policy_distill_v5.py'
       - 'benchmarks/v030_federated_compact_framing_v8_policy_distill_v4.py'
       - 'benchmarks/v030_federated_compact_framing_v8_policy_distill_v3.py'
@@ -38,27 +39,35 @@ jobs:
         run: |
           python -m py_compile \
             benchmarks/v030_federated_compact_framing_v8_policy_exec_v6.py \
+            benchmarks/v030_federated_compact_framing_v8_policy_exec_v7.py \
             benchmarks/v030_federated_compact_framing_v8_policy_distill_v5.py
       - name: Run exact-byte feature-pruned office execution proof
         run: |
           mkdir -p benchmark-artifacts
-          python -m benchmarks.v030_federated_compact_framing_v8_policy_exec_v6 \
-            --work-root benchmark-artifacts/v030-eg08-policy-v6-work \
-            --output benchmark-artifacts/v030-eg08-policy-v6.json
+          python -m benchmarks.v030_federated_compact_framing_v8_policy_exec_v7 \
+            --work-root benchmark-artifacts/v030-eg08-policy-v7-work \
+            --output benchmark-artifacts/v030-eg08-policy-v7.json
       - name: Independently enforce execution and release invariants
         if: always()
         run: |
           python - <<'PY'
           import json
           from pathlib import Path
-          p=Path('benchmark-artifacts/v030-eg08-policy-v6.json')
+          p=Path('benchmark-artifacts/v030-eg08-policy-v7.json')
           assert p.exists(), 'feature-pruned evidence missing'
           d=json.loads(p.read_text())
           x=d['execution_change']; m=d['measured_candidate']; s=d['strict']
-          assert d['schema']=='cmpct-v030-eg08-policy-exec-v6'
+          assert d['schema']=='cmpct-v030-eg08-policy-exec-v7'
+          assert d['experiment_valid'] is True
+          assert d['promotion_signal'] is s['passed']
           assert x['unused_policy_features_not_evaluated'] is True
           assert x['final_high_effort_pack_compressed_once'] is True
           assert x['archive_identity_required'] is True
+          assert x['proof_source_tree_precomputed_outside_timed_boundary'] is True
+          assert x['archive_strong_verification_still_timed'] is True
+          assert x['comparator_timing_changed'] is False
+          assert x['archive_bytes_changed'] is False
+          assert x['selected_levels_changed'] is False
           assert m['exact_bytes_vs_serial_reference'] is True
           assert s['content_identity_not_policy_input'] is True
           assert s['exact_serial_archive_identity'] is True
@@ -67,14 +76,14 @@ jobs:
           assert s['beats_zip_size'] is True
           assert s['beats_zstd19_size'] is True
           assert s['within_release_locality_bounds'] is True
-          # This lane is allowed to falsify the performance hypothesis honestly.
-          # The ordinary external/final authorities remain the release decision.
+          # Performance may still falsify this research hypothesis honestly.
+          # A valid negative result is evidence, not a broken CI lane.
           PY
       - name: Upload feature-pruned evidence
         if: always()
         uses: actions/upload-artifact@v6
         with:
           name: v030-eg08-feature-pruned-${{ github.sha }}
-          path: benchmark-artifacts/v030-eg08-policy-v6.json
-          if-no-files-found: warn
+          path: benchmark-artifacts/v030-eg08-policy-v7.json
+          if-no-files-found: error
           retention-days: 90
