@@ -56,12 +56,28 @@ public final class CmpctAndroidCompactControlTest {
             archive.verify();
             assertEquals(vector.getInt("expected_entry_count"), archive.entryCount());
 
-            Set<String> paths = new HashSet<>();
-            for (int i = 0; i < archive.entryCount(); i++) paths.add(archive.entry(i).path);
+            Set<String> filePaths = new HashSet<>();
+            Set<String> directoryPaths = new HashSet<>();
+            for (int i = 0; i < archive.entryCount(); i++) {
+                CmpctNative.Entry entry = archive.entry(i);
+                if (entry.kind == CmpctNative.KIND_FILE) {
+                    filePaths.add(entry.path);
+                } else if (entry.kind == CmpctNative.KIND_DIR) {
+                    directoryPaths.add(entry.path);
+                }
+            }
+            assertEquals(vector.getInt("expected_regular_entry_count"), filePaths.size());
+
             JSONArray expectedPaths = vector.getJSONArray("expected_paths");
             for (int i = 0; i < expectedPaths.length(); i++) {
-                assertTrue("missing compact-control public entry: " + expectedPaths.getString(i),
-                        paths.contains(expectedPaths.getString(i)));
+                assertTrue("missing compact-control public file: " + expectedPaths.getString(i),
+                        filePaths.contains(expectedPaths.getString(i)));
+            }
+            JSONArray expectedDirectories = vector.getJSONArray("expected_directory_paths");
+            assertEquals(expectedDirectories.length(), directoryPaths.size());
+            for (int i = 0; i < expectedDirectories.length(); i++) {
+                assertTrue("missing compact-control public directory: " + expectedDirectories.getString(i),
+                        directoryPaths.contains(expectedDirectories.getString(i)));
             }
 
             String representative = vector.getString("representative_path");
