@@ -1,0 +1,62 @@
+name: CMPCT v0.30 ZIP-factor streaming identity oracle
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  streaming-identity:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      PYTHONPATH: ${{ github.workspace }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install deterministic dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y zstd
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[test]'
+      - name: Compile streaming verifier oracle
+        run: python -m py_compile benchmarks/v030_zipfactor_streaming_identity_oracle.py
+      - name: Run repeated exact streaming identity experiment
+        run: |
+          mkdir -p benchmark-artifacts
+          python benchmarks/v030_zipfactor_streaming_identity_oracle.py \
+            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-zf-stream-id-work" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-zf-stream-id.json" \
+            --rounds 11
+      - name: Enforce experiment validity without converting negative evidence into release credit
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          row = json.loads(Path('benchmark-artifacts/v030-zf-stream-id.json').read_text())
+          assert row['schema'] == 'cmpct-v030-zipfactor-streaming-identity-v1'
+          assert row['rounds'] == 11
+          assert row['level'] == 3
+          assert row['gate']['experiment_valid'] is True
+          assert row['evidence']['archive_bytes_sha_identical'] is True
+          assert row['evidence']['complete_identity_map_identical'] is True
+          assert row['evidence']['semantic_tree_exact'] is True
+          assert row['evidence']['locality_decode_bounds_green'] is True
+          assert row['evidence']['corruption_rejected'] is True
+          # promotion_signal/four_way_complete_win are observations, not CI-success requirements.
+          # A valid negative result remains durable evidence and grants no release authority.
+          PY
+      - name: Upload streaming identity evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: v030-zf-stream-id-${{ github.sha }}
+          path: benchmark-artifacts/v030-zf-stream-id.json
+          if-no-files-found: warn
+          retention-days: 90
