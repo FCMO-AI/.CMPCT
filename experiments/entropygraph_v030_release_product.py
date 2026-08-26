@@ -73,14 +73,7 @@ _LOGS_PROMOTED._BASE_BUILD = lambda root, out: _LOGS_PROMOTED.BASE.build(root, o
 
 
 def _logs_streaming_source_prefilter(root: Path) -> dict:
-    """Prove the logs source predicate without materializing or sorting the complete tree.
-
-    The only decision needed before constructing the real r24/logs candidates is whether at least two regular
-    .gz/.zst sidecars have regular unsuffixed siblings. Pair discovery is monotonic, so the traversal may terminate
-    exactly after the second proven pair. Symlinks are excluded identically to the predecessor prefilter. The
-    nine-round oracle on a 12k-file early-positive tree measured ~0.17 ms versus ~214.6 ms for the predecessor while
-    preserving eligibility on positive, single-pair, no-pair and orphan-sidecar adversarial cases.
-    """
+    """Prove the logs source predicate without materializing or sorting the complete tree."""
     root = Path(root)
     plain: set[str] = set()
     sidecars: dict[str, str] = {}
@@ -95,13 +88,11 @@ def _logs_streaming_source_prefilter(root: Path) -> dict:
                 continue
             scanned_regular_files += 1
             rel = path.relative_to(root).as_posix()
-
             sidecar_base = None
             for suffix in (".gz", ".zst"):
                 if rel.endswith(suffix):
                     sidecar_base = rel[: -len(suffix)]
                     break
-
             if sidecar_base is not None:
                 sidecars[rel] = sidecar_base
                 if sidecar_base in plain:
@@ -112,7 +103,6 @@ def _logs_streaming_source_prefilter(root: Path) -> dict:
                     candidate = rel + suffix
                     if sidecars.get(candidate) == rel:
                         pairs.append((candidate, rel))
-
             if len(pairs) >= _LOGS_PROMOTED.MIN_SIDECAR_PAIRS:
                 return {
                     "sidecar_pairs": len(pairs),
@@ -122,7 +112,6 @@ def _logs_streaming_source_prefilter(root: Path) -> dict:
                     "short_circuited": True,
                     "prefilter": "streaming-sidecar-pairs-v1",
                 }
-
     return {
         "sidecar_pairs": len(pairs),
         "pair_examples": pairs[:8],
@@ -133,15 +122,8 @@ def _logs_streaming_source_prefilter(root: Path) -> dict:
     }
 
 
-# Promotion changes only the source preflight used by the already-promoted logs terminal. Actual r24/logs candidate
-# construction, admission, strong verification, publication and all external release gates remain unchanged.
 _LOGS_PROMOTED.logs_source_prefilter = _logs_streaming_source_prefilter
 
-# C25CC01's actual admission law is the already-audited four-feature envelope below. The source-only prefilter is a
-# deliberately conservative subset used solely to avoid building a redundant r24 candidate on unrelated families.
-# It does not grant publication: every prefiltered tree must still satisfy the exact r24/candidate byte ratios after
-# those real artifacts exist. The frozen encrypted-like target plus independent 1162- and 1780-file entropy mosaics
-# fall inside this cheap subset; developer/tiny-file/backups/medium-binary frozen families do not.
 _CC_MIN_LOGICAL_BYTES = 1 * 1024 * 1024
 _CC_MIN_REGULAR_FILES = 32
 _CC_MIN_R24_TO_LOGICAL = 0.98
@@ -151,22 +133,11 @@ _CC_PREFILTER_MIN_AVG_REGULAR_BYTES = 4096
 
 
 def _compact_control_module():
-    # Lazy import is required because the candidate module delegates reconstructed r24 logical operations back to
-    # this release-product facade. Importing it while this module is still initializing would create a cycle.
     from experiments import entropygraph_v030_r24_compact_control_profile as compact_control
-
     return compact_control
 
 
 def _compact_control_source_shape(root: Path) -> dict:
-    """Count regular files/bytes with a single DirEntry traversal.
-
-    This is deliberately semantics-equivalent to the former ``os.walk`` + ``Path`` + ``lstat`` pass: symlinked
-    files/directories are excluded, filesystem races remain fail-open for this cheap preflight, and only regular
-    files contribute. ``os.scandir`` lets the OS-provided DirEntry cache carry type/stat information so high-file-
-    count C25CC01 candidates do not burn part of their narrow ZIP speed margin constructing Path objects and issuing
-    redundant metadata calls before the real r24 build even starts.
-    """
     root = Path(root)
     regular_files = 0
     logical_bytes = 0
@@ -194,6 +165,80 @@ def _compact_control_source_shape(root: Path) -> dict:
         "regular_files": regular_files,
         "logical_bytes": logical_bytes,
         "average_regular_bytes": logical_bytes / max(1, regular_files),
+    }
+
+
+def _shared_frontdoor_preflight(root: Path) -> dict:
+    """One source walk for logs proof and, when logs is absent, the exact C25 source shape.
+
+    The research A/B earned promotion with exact predicate/shape agreement, 45.8% lower median cost on a
+    C25-shaped negative-logs tree (~18 ms saved), and a faster early-positive logs path. Metadata errors fall back to
+    the historical independent preflights rather than changing admission semantics.
+    """
+    root = Path(root)
+    plain: set[str] = set()
+    sidecars: dict[str, str] = {}
+    paired: set[str] = set()
+    regular_files = 0
+    logical_bytes = 0
+    scanned_regular_files = 0
+    stack = [os.fspath(root)]
+    while stack:
+        directory = stack.pop()
+        try:
+            with os.scandir(directory) as entries:
+                batch = list(entries)
+        except OSError:
+            return {"logs_eligible": False, "shape": None, "metadata_error": True}
+        for entry in batch:
+            try:
+                if entry.is_symlink():
+                    continue
+                if entry.is_dir(follow_symlinks=False):
+                    stack.append(entry.path)
+                    continue
+                if not entry.is_file(follow_symlinks=False):
+                    continue
+                size = int(entry.stat(follow_symlinks=False).st_size)
+            except OSError:
+                return {"logs_eligible": False, "shape": None, "metadata_error": True}
+            regular_files += 1
+            logical_bytes += size
+            scanned_regular_files += 1
+            rel = Path(entry.path).relative_to(root).as_posix()
+            sidecar_base = None
+            for suffix in (".gz", ".zst"):
+                if rel.endswith(suffix):
+                    sidecar_base = rel[: -len(suffix)]
+                    break
+            if sidecar_base is not None:
+                sidecars[rel] = sidecar_base
+                if sidecar_base in plain:
+                    paired.add(sidecar_base)
+            else:
+                plain.add(rel)
+                for suffix in (".gz", ".zst"):
+                    candidate = rel + suffix
+                    if sidecars.get(candidate) == rel:
+                        paired.add(rel)
+            if len(paired) >= _LOGS_PROMOTED.MIN_SIDECAR_PAIRS:
+                return {
+                    "logs_eligible": True,
+                    "shape": None,
+                    "metadata_error": False,
+                    "scanned_regular_files": scanned_regular_files,
+                    "short_circuited": True,
+                }
+    return {
+        "logs_eligible": False,
+        "shape": {
+            "logical_bytes": logical_bytes,
+            "regular_files": regular_files,
+            "average_regular_bytes": logical_bytes / max(1, regular_files),
+        },
+        "metadata_error": False,
+        "scanned_regular_files": scanned_regular_files,
+        "short_circuited": False,
     }
 
 
@@ -225,21 +270,13 @@ def _is_compact_control_archive(archive: Path) -> bool:
         return False
 
 
-def _build_compact_control_terminal_if_eligible(root: Path, out: Path) -> dict | None:
-    """Publish C25CC01 only inside the measured identity-free structural envelope.
-
-    The prefilter only decides whether the cheap r24+control preflight is worth paying. Publication is owned by the
-    frozen exact admission rule: actual r24 must be effectively incompressible and actual compact control must save
-    at least 0.05%. The selected candidate is strongly verified before atomic publication. No comparator result is
-    consulted at runtime; ZIP/Zstd remain external release authorities.
-    """
+def _build_compact_control_terminal_if_eligible(root: Path, out: Path, *, source_shape: dict | None = None) -> dict | None:
     started = time.perf_counter()
     root = Path(root)
     out = Path(out)
-    shape = _compact_control_source_shape(root)
+    shape = source_shape if source_shape is not None else _compact_control_source_shape(root)
     if not _compact_control_source_prefilter(shape):
         return None
-
     cc = _compact_control_module()
     out.parent.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix=".cmpct-v030-terminal-cc-", dir=out.parent) as td:
@@ -259,7 +296,6 @@ def _build_compact_control_terminal_if_eligible(root: Path, out: Path) -> dict |
         if not verified.get("ok"):
             raise RuntimeError(f"terminal compact-control candidate failed strong verification: {verified!r}")
         _BASE_IMPL.C._publish_atomic(candidate, out)
-
     return {
         **candidate_stats,
         "selected": "r24-compact-control",
@@ -290,7 +326,19 @@ def _build_compact_control_terminal_if_eligible(root: Path, out: Path) -> dict |
 
 def build(root, out):
     """Build a promoted structural terminal when admitted; otherwise preserve the mature tournament exactly."""
-    terminal = _LOGS_PROMOTED._build_logs_terminal_if_eligible(root, out)
+    root = Path(root)
+    preflight = _shared_frontdoor_preflight(root)
+    if preflight["metadata_error"]:
+        terminal = _LOGS_PROMOTED._build_logs_terminal_if_eligible(root, out)
+        shared_shape = None
+    elif preflight["logs_eligible"]:
+        # The second logs check is deliberately retained as the authoritative mature admission proof; on the
+        # early-positive path it costs ~0.1 ms and avoids introducing shared mutable selector state.
+        terminal = _LOGS_PROMOTED._build_logs_terminal_if_eligible(root, out)
+        shared_shape = None
+    else:
+        terminal = None
+        shared_shape = preflight["shape"]
     if terminal is not None:
         return terminal
 
@@ -305,7 +353,7 @@ def build(root, out):
             "speculative_r25_search_skipped": True,
         }
 
-    compact_control = _build_compact_control_terminal_if_eligible(root, out)
+    compact_control = _build_compact_control_terminal_if_eligible(root, out, source_shape=shared_shape)
     if compact_control is not None:
         return compact_control
     return _BASE_IMPL.build(root, out)
@@ -345,25 +393,10 @@ def read_member(archive, rel):
 
 def extract(archive, dst, *, max_output_bytes=POLICY.DEFAULT_MAX_EXTRACT_BYTES, safe_symlinks=True):
     if _is_compact_control_archive(archive):
-        return _compact_control_module().extract(
-            archive,
-            dst,
-            max_output_bytes=max_output_bytes,
-            safe_symlinks=safe_symlinks,
-        )
+        return _compact_control_module().extract(archive, dst, max_output_bytes=max_output_bytes, safe_symlinks=safe_symlinks)
     if _LOGS_PROMOTED._is_logs_archive(archive):
-        return _LOGS_PROMOTED.extract(
-            archive,
-            dst,
-            max_output_bytes=max_output_bytes,
-            safe_symlinks=safe_symlinks,
-        )
-    return _BASE_IMPL.extract(
-        archive,
-        dst,
-        max_output_bytes=max_output_bytes,
-        safe_symlinks=safe_symlinks,
-    )
+        return _LOGS_PROMOTED.extract(archive, dst, max_output_bytes=max_output_bytes, safe_symlinks=safe_symlinks)
+    return _BASE_IMPL.extract(archive, dst, max_output_bytes=max_output_bytes, safe_symlinks=safe_symlinks)
 
 
 def _revision_for_archive(archive):
@@ -382,25 +415,17 @@ LOGS_PROFILE = _LOGS_PROMOTED.LOGS_PROFILE
 logs_source_prefilter = _LOGS_PROMOTED.logs_source_prefilter
 
 PROMOTED_LOGS_INVERSE = True
-PROMOTED_LOGS_EVIDENCE = (
-    "all-15 structural admission + external/v0.29 selector shadows + native production dispatch + Android/JNI"
-)
+PROMOTED_LOGS_EVIDENCE = "all-15 structural admission + external/v0.29 selector shadows + native production dispatch + Android/JNI"
 PROMOTED_LOGS_STREAMING_PREFILTER = True
-PROMOTED_LOGS_STREAMING_PREFILTER_EVIDENCE = (
-    "exact adversarial eligibility + nine-round 12k-file A/B: ~99.9% prefilter speedup with early short-circuit"
-)
+PROMOTED_LOGS_STREAMING_PREFILTER_EVIDENCE = "exact adversarial eligibility + nine-round 12k-file A/B: ~99.9% prefilter speedup with early short-circuit"
+PROMOTED_SHARED_FRONTDOOR_PREFLIGHT = True
+PROMOTED_SHARED_FRONTDOOR_PREFLIGHT_EVIDENCE = "11-round exact A/B: 45.8% faster C25/no-logs preflight (~18 ms saved), logs early-positive also faster"
 PROMOTED_R24_DEAD_DICTIONARY_ELISION = True
-PROMOTED_R24_DEAD_DICTIONARY_EVIDENCE = (
-    "all-15 post-selection proof: 0 byte regressions, live dictionaries byte-identical, dead dictionaries smaller"
-)
+PROMOTED_R24_DEAD_DICTIONARY_EVIDENCE = "all-15 post-selection proof: 0 byte regressions, live dictionaries byte-identical, dead dictionaries smaller"
 PROMOTED_R24_OPAQUE_MEDIA_TERMINAL = True
-PROMOTED_R24_OPAQUE_MEDIA_EVIDENCE = (
-    "all-15 strict four-way media win + unseen entropy-refined adversarial proof with compressible-media rejection"
-)
+PROMOTED_R24_OPAQUE_MEDIA_EVIDENCE = "all-15 strict four-way media win + unseen entropy-refined adversarial proof with compressible-media rejection"
 PROMOTED_R24_COMPACT_CONTROL_TERMINAL = True
-PROMOTED_R24_COMPACT_CONTROL_EVIDENCE = (
-    "all-15 frozen admission + five-round unseen/adversarial strict four-way wins + native dispatch + Android/JNI"
-)
+PROMOTED_R24_COMPACT_CONTROL_EVIDENCE = "all-15 frozen admission + five-round unseen/adversarial strict four-way wins + native dispatch + Android/JNI"
 
 _PROMOTED_BINDINGS = {
     "build": build,
@@ -414,8 +439,6 @@ _PROMOTED_BINDINGS = {
 
 
 class _ReleaseProductModule(types.ModuleType):
-    """Mirror legacy public overrides into mature function globals without corrupting promotion bindings."""
-
     def __setattr__(self, name, value):
         super().__setattr__(name, value)
         if name.startswith("__") or name in {"_BASE_IMPL", "_LOGS_PROMOTED", "_R24_DEAD_DICT", "_R24_MEDIA"}:
