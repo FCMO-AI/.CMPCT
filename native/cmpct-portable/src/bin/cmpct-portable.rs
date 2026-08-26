@@ -26,9 +26,19 @@ fn run() -> Result<(), PortableError> {
             if args.next().is_some() {
                 usage();
             }
+            let entries = archive.entries();
+            let logical_regular_bytes = entries
+                .iter()
+                .filter(|entry| entry.kind == 0)
+                .try_fold(0u64, |total, entry| {
+                    total.checked_add(entry.size).ok_or_else(|| {
+                        PortableError::Limit("public regular-file byte total overflow".into())
+                    })
+                })?;
             println!("profile={}", archive.profile().as_str());
             println!("revision={}", archive.revision());
-            println!("entries={}", archive.entries().len());
+            println!("entries={}", entries.len());
+            println!("logical_regular_bytes={logical_regular_bytes}");
             println!(
                 "tail_metadata_authenticated={}",
                 archive.tail_metadata_authenticated()
@@ -111,3 +121,5 @@ fn main() {
 
 // Footnote: `revision` is intentionally emitted beside `profile`. Canonical r25 acceptance and Android can
 // assert both the exact representation profile and the release grammar revision without re-parsing archive bytes.
+// `logical_regular_bytes` is the same public-entry sum used to enforce caller extraction budgets without requiring
+// a second full namespace serialization through `list`.
