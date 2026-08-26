@@ -7,11 +7,11 @@ locality-bounded groups. This oracle changes no bytes and no integrity rule: it 
 verification algorithm with a bounded thread-parallel implementation that verifies each authenticated group
 independently, then deterministically merges the resulting logical identities.
 
-Promotion is intentionally strict. The parallel path only earns a recommendation when it returns the exact same
-authenticated filesystem manifest, complete logical identities, locality accounting and verified-member count as
-the serial verifier, and its repeated median full-verification wall-clock is lower. The manifest bytes plus every
-regular-file size/SHA-256 identity are the canonical semantic inputs, so the oracle does not invent a second tree
-hash implementation. This is research evidence only; it does not alter canonical dispatch or release authority.
+Experiment validity and promotion are intentionally separate. Exact authenticated filesystem identity, complete
+logical identities, locality accounting, decode bounds and deterministic repeated measurements are mandatory for
+a valid experiment. The parallel path earns a promotion signal only when it is also strictly faster. A valid but
+slower result is durable negative evidence with zero release/selector credit; it must not remain a permanent-red CI
+lane or be misrepresented as a performance win.
 """
 
 import argparse
@@ -198,19 +198,31 @@ def run(work_root: Path, rounds: int = ROUNDS) -> dict:
     improvement_s = serial_median - parallel_median
     improvement_pct = 100.0 * improvement_s / serial_median
     exact = serial_snapshot_a == parallel_snapshot_a
+    bounds_ok = (
+        serial_snapshot_a["verified_user_files"] == int(build["user_files"])
+        and serial_snapshot_a["max_member_read_amplification"] <= V3.MAX_AMP
+        and serial_snapshot_a["max_decode_unit_bytes"] <= V3.MAX_DECODE
+    )
     faster = parallel_median < serial_median
+    experiment_valid = exact and bounds_ok
+    promotion_signal = experiment_valid and faster
 
     gate = {
         "exact_manifest_and_logical_identities": exact,
+        "bounds_and_membership_valid": bounds_ok,
         "parallel_strictly_faster": faster,
         "serial_median_s": serial_median,
         "parallel_median_s": parallel_median,
         "improvement_s": improvement_s,
         "improvement_pct": improvement_pct,
-        "passed": exact and faster,
+        "experiment_valid": experiment_valid,
+        "promotion_signal": promotion_signal,
+        "release_credit": False,
+        # Backward-compatible diagnostic only. Release/promotion consumers must use promotion_signal.
+        "passed": promotion_signal,
     }
     return {
-        "schema": "cmpct-v030-zipfactor-parallel-verify-oracle-v1",
+        "schema": "cmpct-v030-zipfactor-parallel-verify-oracle-v2",
         "candidate": build,
         "rounds_per_order": rounds,
         "total_samples_per_implementation": len(serial_times),
@@ -228,9 +240,10 @@ def run(work_root: Path, rounds: int = ROUNDS) -> dict:
         "verification_snapshot": serial_snapshot_a,
         "gate": gate,
         "claim_boundary": (
-            "Research A/B only. A green result may justify replacing serial group verification with bounded "
-            "parallel verification, but does not authorize canonical ZIP-factor dispatch, recovery, native/Android "
-            "promotion, or release."
+            "Research A/B only. experiment_valid proves exact bounded measurement; promotion_signal additionally "
+            "requires bounded parallel verification to be strictly faster. A valid negative result has zero release "
+            "or selector credit. Canonical ZIP-factor dispatch, recovery, native/Android promotion and release remain "
+            "separate mandatory blockers."
         ),
     }
 
@@ -245,8 +258,8 @@ def main() -> None:
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8")
     print(json.dumps(result, indent=2), flush=True)
-    if not result["gate"]["passed"]:
-        raise SystemExit("ZIP-factor parallel verification did not earn promotion")
+    if not result["gate"]["experiment_valid"]:
+        raise SystemExit("ZIP-factor parallel verification experiment was invalid")
 
 
 if __name__ == "__main__":
