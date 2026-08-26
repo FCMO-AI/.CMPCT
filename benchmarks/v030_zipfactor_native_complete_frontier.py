@@ -2,10 +2,15 @@ from __future__ import annotations
 
 """Complete external frontier for the exact ZIP-factor v3 candidate with native strong verification.
 
-This is the next promotion boundary after the native verifier A/B.  It times the complete candidate operation as
-canonical v3 build + mandatory Rust strong verification, including native process startup/archive open.  The same
+This is the next promotion boundary after the native verifier A/B. It times the complete candidate operation as
+canonical v3 build + mandatory Rust strong verification, including native process startup/archive open. The same
 normalized source tree is compared in rotated same-runner rounds against deterministic ZIP/Deflate-9 and solid
-Zstd-19.  ZIP/Zstd creation boundaries remain exactly those used by the external competitor harness.
+Zstd-19. ZIP/Zstd creation boundaries remain exactly those used by the external competitor harness.
+
+Identity has two deliberately separate domains. External comparator extraction is checked with the historical
+external-matrix treehash because that is the frozen ZIP/Zstd contract. The r25 ZIP-factor filesystem manifest is
+checked against the canonical product semantic-tree hash because it binds directories/links as well as regular
+content. Comparing those two hashes directly is invalid even when both describe the same normalized source tree.
 
 Research-only: a positive result proves that native verification is sufficient to cross the complete size+create
 frontier; it does not itself promote CMP25Z3 into canonical dispatch, recovery, Android, or the release selector.
@@ -73,11 +78,6 @@ def _cmpct_once(stage: Path, archive: Path, binary: Path) -> dict:
     return {"archive_bytes": archive.stat().st_size, "create_verify_s": complete_s, "stats": stats}
 
 
-def _fresh_dir(path: Path) -> None:
-    shutil.rmtree(path, ignore_errors=True)
-    path.mkdir(parents=True)
-
-
 def run(work_root: Path, native_binary: Path) -> dict:
     shutil.rmtree(work_root, ignore_errors=True)
     work_root.mkdir(parents=True)
@@ -88,7 +88,8 @@ def run(work_root: Path, native_binary: Path) -> dict:
     with tempfile.TemporaryDirectory(prefix="cmpct-zf-native-frontier-", dir=work_root) as td_raw:
         td = Path(td_raw)
         stage = EXT._normalized_stage(source, td)
-        expected_tree = EXT._tree(stage)
+        expected_external_tree = EXT._tree(stage)
+        expected_canonical_tree = CANON.treehash(stage)
 
         # Establish exact candidate identity once outside timing; every timed build must reproduce it byte-for-byte.
         reference = td / "reference.cmpct"
@@ -96,8 +97,8 @@ def run(work_root: Path, native_binary: Path) -> dict:
         reference_sha = hashlib.sha256(reference.read_bytes()).hexdigest()
         identity = _python_identity(reference)
         _native_verify(native_binary, reference)
-        if identity["tree_sha256"] != expected_tree:
-            raise RuntimeError("ZIP-factor semantic tree differs from normalized source")
+        if identity["tree_sha256"] != expected_canonical_tree:
+            raise RuntimeError("ZIP-factor semantic tree differs from canonical normalized source")
         if identity["max_member_read_amplification"] > 8.0:
             raise RuntimeError("ZIP-factor locality exceeds 8x")
         if identity["max_decode_unit_bytes"] > 8 * 1024 * 1024:
@@ -127,7 +128,7 @@ def run(work_root: Path, native_binary: Path) -> dict:
                     archive = round_dir / "archive.zip"
                     extracted = round_dir / "zip-out"
                     result = EXT._zip(stage, archive, extracted)
-                    EXT._verify_extracted(extracted, expected_tree, "zip-native-frontier")
+                    EXT._verify_extracted(extracted, expected_external_tree, "zip-native-frontier")
                     samples[impl].append(float(result["create_s"]))
                     sizes.setdefault(impl, int(result["archive_bytes"]))
                     if sizes[impl] != int(result["archive_bytes"]):
@@ -140,7 +141,7 @@ def run(work_root: Path, native_binary: Path) -> dict:
                     result = EXT._tar_zstd(stage, archive, extracted, zwork)
                     if not result.get("available"):
                         raise RuntimeError("solid Zstd-19 unavailable")
-                    EXT._verify_extracted(extracted, expected_tree, "zstd19-native-frontier")
+                    EXT._verify_extracted(extracted, expected_external_tree, "zstd19-native-frontier")
                     samples[impl].append(float(result["create_s"]))
                     sizes.setdefault(impl, int(result["archive_bytes"]))
                     if sizes[impl] != int(result["archive_bytes"]):
@@ -154,7 +155,7 @@ def run(work_root: Path, native_binary: Path) -> dict:
             and medians["cmpct"] < medians["zstd19"]
         )
         return {
-            "schema": "cmpct-v030-zipfactor-native-complete-frontier-v1",
+            "schema": "cmpct-v030-zipfactor-native-complete-frontier-v2",
             "contract": {
                 "rounds": ROUNDS,
                 "cmpct_timing": "exact-v3-build-plus-native-strong-verify",
@@ -162,10 +163,16 @@ def run(work_root: Path, native_binary: Path) -> dict:
                 "native_compile_inside_timing": False,
                 "zip_timing": "external-harness-deflate9-create",
                 "zstd19_timing": "external-harness-solid-tar-plus-zstd19-create",
+                "external_identity_domain": "frozen-external-treehash",
+                "cmpct_identity_domain": "canonical-r25-semantic-tree",
                 "ties_fail": True,
                 "archive_bytes_changed": False,
                 "selector_change": False,
                 "release_credit": False,
+            },
+            "source_identity": {
+                "external_tree_sha256": expected_external_tree,
+                "canonical_tree_sha256": expected_canonical_tree,
             },
             "candidate": {
                 **reference_stats,
