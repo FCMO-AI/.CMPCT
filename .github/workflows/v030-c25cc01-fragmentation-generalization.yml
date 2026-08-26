@@ -55,13 +55,13 @@ jobs:
             --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-c25cc01-fragmentation-generalization-work" \
             --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-c25cc01-fragmentation-generalization.json"
 
-      - name: Independently enforce identity-free strict-four-way generalization
+      - name: Independently enforce identity-free experiment validity and no release credit
         run: |
           python - <<'PY'
           import json
           from pathlib import Path
           d=json.loads(Path('benchmark-artifacts/v030-c25cc01-fragmentation-generalization.json').read_text())
-          assert d['schema']=='cmpct-v030-c25cc01-fragmentation-generalization-v1'
+          assert d['schema']=='cmpct-v030-c25cc01-fragmentation-generalization-v2'
           c=d['contract']; g=d['gate']; rows=d['rows']
           assert c['base_predicate_inputs']==['logical_bytes','regular_files','r24_bytes','candidate_bytes']
           assert c['additional_candidate_inputs']==['physical_blob_records','non_pack_members']
@@ -72,18 +72,16 @@ jobs:
           assert c['release_credit'] is False
           assert set(c['forbidden_inputs'])=={'workload_name','path','filename','suffix','content_hash','archive_hash','pack_hash'}
           assert len(rows)==5
-          assert len(d['positive_green'])>=2
-          assert d['counterexamples']==[]
-          assert g['at_least_two_independent_positive_admissions'] is True
-          assert g['all_admitted_strict_four_way'] is True
-          assert g['nearly_solid_and_compressible_controls_rejected'] is True
-          assert g['integrity_preserved'] is True
-          assert g['refined_constants_unchanged'] is True
+          assert g['experiment_valid'] is True
+          assert g['release_credit'] is False
           assert g['passed'] is True
-          admitted=[row for row in rows if row['refined_admitted']]
-          assert admitted
-          assert all(row.get('strict_four_way_win') is True for row in admitted)
+          assert isinstance(g['hypothesis_supported'], bool)
+          assert g['promotion_signal'] is g['hypothesis_supported']
           assert all(row['payload_unchanged'] and row['two_control_copies'] for row in rows)
+          # Counterexamples are durable negative evidence. They must never be hidden to manufacture promotion.
+          if d['counterexamples']:
+              assert g['hypothesis_supported'] is False
+              assert g['promotion_signal'] is False
           PY
 
       - name: CI topology self-check
@@ -101,6 +99,5 @@ jobs:
           if-no-files-found: warn
           retention-days: 90
 
-# Research-only promotion prerequisite. A green result is permission to consider wiring the candidate-derived
-# fragmentation rule into the shipping selector; it does not itself alter dispatch or earn release credit. Ordinary
-# all-15, native, Android, integrity and exact external authority remain mandatory after any selector change.
+# Research-only evidence lane. A green job means the experiment was valid, not that the fragmentation hypothesis won.
+# Promotion remains possible only when hypothesis_supported/promotion_signal is true; this lane never earns release credit.
