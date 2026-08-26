@@ -75,7 +75,8 @@ jobs:
           d=json.loads(Path('benchmark-artifacts/v030-g04-ml-native-reader.json').read_text())
           assert d['schema']=='cmpct-v030-g04-ml-native-reader-v2'
           assert d['target']=='neutral_hostile_v1/09_ml_artifacts'
-          assert d['native_bridge']=='cmpct-portable-process-v1'
+          assert d['native_bridge']=='cmpct-portable-process-v2'
+          assert d['native_extract_budget_preflight']=='native-info-logical-regular-bytes-v1'
           assert d['native_extract_budget_preflight_timed'] is True
           assert int(d['rounds'])==5
           assert d['native_corruption_rejected'] is True
