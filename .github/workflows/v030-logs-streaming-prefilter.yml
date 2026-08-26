@@ -1,0 +1,90 @@
+# ci-lane: focused
+name: CMPCT v0.30 logs streaming prefilter oracle
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'benchmarks/v030_logs_streaming_prefilter_oracle.py'
+      - 'experiments/entropygraph_v030_release_product_logs_candidate.py'
+      - 'experiments/entropygraph_v030_release_product.py'
+      - '.github/workflows/v030-logs-streaming-prefilter.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-v030-logs-streaming-prefilter-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+
+jobs:
+  logs-streaming-prefilter:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+
+      - name: Install project
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[test]'
+
+      - name: Compile oracle
+        run: python -m py_compile benchmarks/v030_logs_streaming_prefilter_oracle.py
+
+      - name: Run exact streaming-prefilter A/B
+        run: |
+          mkdir -p benchmark-artifacts
+          python benchmarks/v030_logs_streaming_prefilter_oracle.py > benchmark-artifacts/v030-logs-streaming-prefilter.json
+          cat benchmark-artifacts/v030-logs-streaming-prefilter.json
+
+      - name: Independently ratchet semantics and promotion boundary
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          d=json.loads(Path('benchmark-artifacts/v030-logs-streaming-prefilter.json').read_text())
+          assert d['experiment']=='v030-logs-streaming-prefilter-v1'
+          assert d['research_only'] is True
+          assert d['selector_change'] is False
+          assert d['release_credit'] is False
+          assert d['experiment_valid'] is True
+          assert len(d['correctness'])==4
+          assert all(row['eligibility_equal'] for row in d['correctness'])
+          early=next(row for row in d['correctness'] if row['name']=='early-positive')
+          assert early['streaming_short_circuited'] is True
+          assert early['streaming_proven_pairs']>=2
+          # Performance may falsify the optimization without making the scientific
+          # experiment invalid. Promotion remains strict and explicit.
+          if d['promotion_signal']:
+              p=d['performance']; r=d['requirements']
+              assert p['speedup_fraction']>=r['minimum_speedup_fraction']
+              assert p['absolute_saving_s']>=r['minimum_absolute_saving_s']
+          PY
+
+      - name: CI topology self-check
+        run: python tools/check_ci_topology.py .github/workflows/v030-logs-streaming-prefilter.yml
+
+      - name: Public-surface guard
+        run: python tools/check_public_surface.py
+
+      - name: Upload logs-prefilter evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: v030-logs-streaming-prefilter-${{ github.sha }}
+          path: benchmark-artifacts/v030-logs-streaming-prefilter.json
+          if-no-files-found: warn
+          retention-days: 90
+
+# Research-only. A green lane proves exact boolean semantics; only promotion_signal
+# authorizes considering a shipping implementation. External ZIP/Zstd and ordinary
+# release authority remain mandatory after any future product change.
