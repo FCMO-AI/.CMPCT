@@ -52,12 +52,16 @@ jobs:
         run: |
           python tests/generate_v030_compact_control_android_vector.py \
             --output "$RUNNER_TEMP/v030-compact-control-android.json" \
+            --archive-output "$RUNNER_TEMP/v030-compact-control-android.cmpct" \
             --work-root "$RUNNER_TEMP/v030-compact-control-android-work"
           python - <<'PY'
+          import hashlib
           import json
           import os
           from pathlib import Path
-          p = Path(os.environ['RUNNER_TEMP']) / 'v030-compact-control-android.json'
+          root = Path(os.environ['RUNNER_TEMP'])
+          p = root / 'v030-compact-control-android.json'
+          archive = root / 'v030-compact-control-android.cmpct'
           v = json.loads(p.read_text())
           assert v['schema'] == 'cmpct-v030-android-compact-control-vector-v1'
           assert v['profile'] == 'r24-compact-control-v1'
@@ -73,6 +77,9 @@ jobs:
           assert v['expected_entry_count'] == (
               v['expected_regular_entry_count'] + len(v['expected_directory_paths'])
           )
+          assert archive.is_file()
+          assert archive.stat().st_size == v['archive_asset']['bytes']
+          assert hashlib.sha256(archive.read_bytes()).hexdigest() == v['archive_asset']['sha256']
           assert v['facts']['strong_verify'] is True
           assert v['facts']['physical_payload_records_unchanged'] is True
           assert v['facts']['two_authenticated_control_copies'] is True
