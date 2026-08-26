@@ -1,13 +1,13 @@
 from __future__ import annotations
 
-"""Evidence-bound repair for the C25CC01 structural cost-model oracle.
+"""Evidence-bound repair and extension for the C25CC01 structural cost-model oracle.
 
 The v1 oracle measured the required integrity facts in every phase round, but dropped
 ``payload_unchanged`` and ``two_control_copies`` while collapsing those rounds into the
-per-case summary.  The expensive campaign therefore crashed only when constructing its
-final gate.  This wrapper keeps the experiment, corpus, timings, competitor boundary,
-and schema unchanged; it repairs that summary boundary and additionally ratchets both
-integrity facts as deterministic across all five rounds.
+per-case summary.  This wrapper repairs that boundary and also exposes candidate/logical
+overhead signals needed after physical-fragmentation failed to separate a ZIP-speed
+counterexample from genuinely fragmented cases.  These are diagnostic candidate facts
+only; they do not change selector policy or earn release credit.
 """
 
 import statistics
@@ -42,18 +42,27 @@ def _measure_case_v2(stage: Path, root: Path) -> dict:
         if len(values) != 1:
             raise RuntimeError(f"non-deterministic structural field {key}: {values!r}")
 
-    admitted = BASE.ADM._admitted(shape, int(first["r24_bytes"]), int(first["candidate_bytes"]))
+    logical = max(1, int(shape["logical_bytes"]))
+    files = max(1, int(shape["regular_files"]))
+    r24_bytes = int(first["r24_bytes"])
+    candidate_bytes = int(first["candidate_bytes"])
+    admitted = BASE.ADM._admitted(shape, r24_bytes, candidate_bytes)
     competitors = BASE.ADM._competitors(stage, root / "competitors") if admitted else None
     med = lambda key: statistics.median(float(row[key]) for row in phase_rows)
     result = {
         **shape,
         **{key: first[key] for key in deterministic_keys},
-        "saving_vs_r24_bytes": int(first["r24_bytes"]) - int(first["candidate_bytes"]),
-        "saving_per_regular_file": (int(first["r24_bytes"]) - int(first["candidate_bytes"])) / max(1, int(shape["regular_files"])),
-        "r24_to_logical": int(first["r24_bytes"]) / max(1, int(shape["logical_bytes"])),
-        "candidate_to_r24": int(first["candidate_bytes"]) / max(1, int(first["r24_bytes"])),
-        "packed_member_fraction": int(first["s_pack_members"]) / max(1, int(shape["regular_files"])),
-        "files_per_physical_blob": int(shape["regular_files"]) / max(1, int(first["physical_blob_records"])),
+        "saving_vs_r24_bytes": r24_bytes - candidate_bytes,
+        "saving_per_regular_file": (r24_bytes - candidate_bytes) / files,
+        "r24_to_logical": r24_bytes / logical,
+        "candidate_to_r24": candidate_bytes / max(1, r24_bytes),
+        "candidate_to_logical": candidate_bytes / logical,
+        "r24_over_logical_bytes": r24_bytes - logical,
+        "candidate_over_logical_bytes": candidate_bytes - logical,
+        "candidate_overhead_per_regular_file": (candidate_bytes - logical) / files,
+        "control_bytes_per_regular_file": (2 * int(first["compact_control_comp_bytes_per_copy"])) / files,
+        "packed_member_fraction": int(first["s_pack_members"]) / files,
+        "files_per_physical_blob": files / max(1, int(first["physical_blob_records"])),
         "median_r24_build_s": med("r24_build_s"),
         "median_profile_transform_s": med("profile_transform_s"),
         "median_strong_verify_s": med("strong_verify_s"),
