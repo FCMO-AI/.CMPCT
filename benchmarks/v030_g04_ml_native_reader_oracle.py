@@ -4,9 +4,10 @@ from __future__ import annotations
 
 This is a research-only execution-path oracle. It changes no archive bytes, grammar, cache budget,
 locality law, recovery rule or SHA-256 requirement. The Rust CLI is built before timing. Native samples
-now pass through the fail-closed process bridge intended for any later release integration rather than
+pass through the fail-closed process bridge intended for any later release integration rather than
 calling the executable ad hoc; extraction therefore includes the caller output-budget preflight that
-shipping would require.
+shipping would require. That preflight uses the compact native ``info`` receipt, not full namespace
+serialization, so the A/B does not manufacture avoidable process/stdout overhead.
 
 A positive result does not switch shipping by itself. It establishes whether the already-existing
 portable Rust reader is fast enough, through a productizable call boundary, to justify wiring the ML
@@ -95,10 +96,12 @@ def run(work_root: Path, native_cli: Path) -> dict:
         if not strong.get("ok") or strong.get("tree_sha256") != source_tree:
             raise RuntimeError("shipping strong verification failed before native A/B")
 
-    # Untimed warm-up validates that the exact product bridge and native binary recognize the canonical archive.
     warm_verify = NATIVE.verify_g04(native_cli, archive)
+    warm_info = NATIVE.info_g04(native_cli, archive)
     if not warm_verify.get("ok") or warm_verify.get("profile") != NATIVE.CANONICAL_G04_PROFILE:
         raise RuntimeError("native bridge warm-up did not bind canonical G0-G4")
+    if warm_info.get("profile") != NATIVE.CANONICAL_G04_PROFILE or int(warm_info.get("revision", 0)) != 25:
+        raise RuntimeError("native info warm-up did not bind canonical G0-G4 revision")
 
     samples = {"python_verify": [], "native_verify": [], "python_extract": [], "native_extract": []}
     native_extract_receipts: list[dict] = []
@@ -145,6 +148,7 @@ def run(work_root: Path, native_cli: Path) -> dict:
     native_budget_preserved = all(
         int(receipt.get("declared_regular_bytes", -1)) <= int(receipt.get("caller_max_output_bytes", -2))
         and receipt.get("transactional_native_extract") is True
+        and receipt.get("budget_preflight") == "native-info-logical-regular-bytes-v1"
         for receipt in native_extract_receipts
     )
     medians = {key: float(statistics.median(values)) for key, values in samples.items()}
@@ -164,7 +168,8 @@ def run(work_root: Path, native_cli: Path) -> dict:
         "target": "neutral_hostile_v1/09_ml_artifacts",
         "shipping_build": built,
         "native_cli": str(native_cli),
-        "native_bridge": "cmpct-portable-process-v1",
+        "native_bridge": "cmpct-portable-process-v2",
+        "native_extract_budget_preflight": "native-info-logical-regular-bytes-v1",
         "native_extract_budget_preflight_timed": True,
         "rounds": ROUNDS,
         "samples_s": samples,
@@ -188,9 +193,9 @@ def run(work_root: Path, native_cli: Path) -> dict:
         "release_credit": False,
         "claim_boundary": (
             "Research-only A/B of the existing portable Rust G0-G4 reader through the fail-closed process bridge "
-            "against the canonical Python complete-stream reader. Native extraction timing includes the public-entry "
-            "budget preflight needed to preserve the caller max-output contract. A positive result only authorizes "
-            "explicit native hot-path integration; reader/fuzz/native/Android/runtime authority must be re-earned."
+            "against the canonical Python complete-stream reader. Native extraction timing includes the compact "
+            "native-info budget preflight needed to preserve the caller max-output contract. A positive result only "
+            "authorizes explicit native hot-path integration; reader/fuzz/native/Android/runtime authority must be re-earned."
         ),
     }
 
@@ -212,7 +217,6 @@ def main() -> None:
         "native_caller_budget_preserved": result["native_caller_budget_preserved"],
         "promotion_signal": result["promotion_signal"],
     }, indent=2), flush=True)
-    # A valid but slower native reader is still useful negative evidence. Integrity/identity failures raise above.
 
 
 if __name__ == "__main__":
