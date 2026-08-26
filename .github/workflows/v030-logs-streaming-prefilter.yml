@@ -8,6 +8,7 @@ on:
       - 'benchmarks/v030_logs_streaming_prefilter_oracle.py'
       - 'experiments/entropygraph_v030_release_product_logs_candidate.py'
       - 'experiments/entropygraph_v030_release_product.py'
+      - 'tests/test_v030_logs_streaming_prefilter_promotion.py'
       - '.github/workflows/v030-logs-streaming-prefilter.yml'
   workflow_dispatch:
 
@@ -37,8 +38,12 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -e '.[test]'
 
-      - name: Compile oracle
-        run: python -m py_compile benchmarks/v030_logs_streaming_prefilter_oracle.py
+      - name: Compile oracle and promoted front door
+        run: |
+          python -m py_compile \
+            benchmarks/v030_logs_streaming_prefilter_oracle.py \
+            experiments/entropygraph_v030_release_product.py \
+            tests/test_v030_logs_streaming_prefilter_promotion.py
 
       - name: Run exact streaming-prefilter A/B
         run: |
@@ -46,7 +51,7 @@ jobs:
           python benchmarks/v030_logs_streaming_prefilter_oracle.py > benchmark-artifacts/v030-logs-streaming-prefilter.json
           cat benchmark-artifacts/v030-logs-streaming-prefilter.json
 
-      - name: Independently ratchet semantics and promotion boundary
+      - name: Independently ratchet semantics and earned promotion boundary
         run: |
           python - <<'PY'
           import json
@@ -62,13 +67,15 @@ jobs:
           early=next(row for row in d['correctness'] if row['name']=='early-positive')
           assert early['streaming_short_circuited'] is True
           assert early['streaming_proven_pairs']>=2
-          # Performance may falsify the optimization without making the scientific
-          # experiment invalid. Promotion remains strict and explicit.
-          if d['promotion_signal']:
-              p=d['performance']; r=d['requirements']
-              assert p['speedup_fraction']>=r['minimum_speedup_fraction']
-              assert p['absolute_saving_s']>=r['minimum_absolute_saving_s']
+          # The shipping implementation is present only because the retained exact A/B earned this boundary.
+          assert d['promotion_signal'] is True
+          p=d['performance']; r=d['requirements']
+          assert p['speedup_fraction']>=r['minimum_speedup_fraction']
+          assert p['absolute_saving_s']>=r['minimum_absolute_saving_s']
           PY
+
+      - name: Prove shipping binding and fail-closed negative semantics
+        run: python -m pytest -q tests/test_v030_logs_streaming_prefilter_promotion.py
 
       - name: CI topology self-check
         run: python tools/check_ci_topology.py .github/workflows/v030-logs-streaming-prefilter.yml
@@ -85,6 +92,6 @@ jobs:
           if-no-files-found: warn
           retention-days: 90
 
-# Research-only. A green lane proves exact boolean semantics; only promotion_signal
-# authorizes considering a shipping implementation. External ZIP/Zstd and ordinary
-# release authority remain mandatory after any future product change.
+# The source prefilter is now promoted because the retained exact A/B crossed its predeclared speed boundary.
+# This lane still grants no standalone release credit: external ZIP/Zstd and ordinary release authority must
+# re-measure the complete shipping product on the exact candidate fingerprint.
