@@ -63,7 +63,7 @@ jobs:
           p = root / 'v030-compact-control-android.json'
           archive = root / 'v030-compact-control-android.cmpct'
           v = json.loads(p.read_text())
-          assert v['schema'] == 'cmpct-v030-android-compact-control-vector-v1'
+          assert v['schema'] == 'cmpct-v030-android-compact-control-vector-v2'
           assert v['profile'] == 'r24-compact-control-v1'
           assert v['revision'] == 25
           # The public portable namespace contains 296 regular files plus the
@@ -77,14 +77,19 @@ jobs:
           assert v['expected_entry_count'] == (
               v['expected_regular_entry_count'] + len(v['expected_directory_paths'])
           )
+          # V2 transports the multi-megabyte archive as a binary asset and
+          # binds the small JSON metadata to it by exact filename, byte count,
+          # and SHA-256. Do not regress to base64-in-JSON or a detached asset.
+          assert v['archive_asset'] == archive.name
           assert archive.is_file()
-          assert archive.stat().st_size == v['archive_asset']['bytes']
-          assert hashlib.sha256(archive.read_bytes()).hexdigest() == v['archive_asset']['sha256']
+          assert archive.stat().st_size == v['archive_bytes']
+          assert hashlib.sha256(archive.read_bytes()).hexdigest() == v['archive_sha256']
           assert v['facts']['strong_verify'] is True
           assert v['facts']['physical_payload_records_unchanged'] is True
           assert v['facts']['two_authenticated_control_copies'] is True
           assert v['facts']['strictly_smaller_than_source_r24'] is True
           assert v['facts']['archive_bytes'] < v['facts']['source_r24_bytes']
+          assert v['facts']['archive_bytes'] == v['archive_bytes']
           PY
       - name: Prove production dispatch is open and profile-owned
         run: |
