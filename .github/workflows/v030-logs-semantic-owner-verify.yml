@@ -1,0 +1,88 @@
+# ci-lane: deep
+name: CMPCT v0.30 logs semantic-owner verify oracle
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'benchmarks/v030_logs_semantic_owner_verify_oracle.py'
+      - 'benchmarks/v030_logs_terminal_admission_oracle.py'
+      - 'experiments/entropygraph_v030_logs_inverse_profile_v3.py'
+      - 'experiments/entropygraph_v030_release_product.py'
+      - 'experiments/entropygraph_v030_release_product_logs_candidate.py'
+      - '.github/workflows/v030-logs-semantic-owner-verify.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-v030-logs-semantic-owner-verify-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+
+jobs:
+  logs-semantic-owner-verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install frozen-corpus dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y zstd gcc ffmpeg libsndfile1
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[audio,test]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
+      - name: Compile oracle
+        run: python -m py_compile benchmarks/v030_logs_semantic_owner_verify_oracle.py
+      - name: Run rotated verifier A/B
+        run: |
+          python -m benchmarks.v030_logs_semantic_owner_verify_oracle \
+            --work-root "$RUNNER_TEMP/v030-logs-semantic-owner" \
+            --output "$RUNNER_TEMP/v030-logs-semantic-owner.json"
+      - name: Ratchet exact integrity and timing boundary
+        run: |
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          e=json.loads((Path(os.environ['RUNNER_TEMP'])/'v030-logs-semantic-owner.json').read_text())
+          assert e['schema']=='cmpct-v030-logs-semantic-owner-verify-oracle-v1'
+          c=e['contract']
+          assert c['rounds']==21
+          assert c['minimum_relative_speedup']==0.10
+          assert c['minimum_absolute_speedup_s']==0.001
+          assert c['archive_bytes_changed'] is False
+          assert c['selector_change'] is False
+          assert c['release_credit'] is False and e['release_credit'] is False
+          assert c['ordinary_logs_and_external_authority_remains_decisive'] is True
+          assert e['experiment_valid'] is True
+          assert e['same_integrity_receipt'] is True
+          assert e['corruption_rejected'] is True
+          assert len(e['current_samples_s'])==21 and len(e['semantic_owner_samples_s'])==21
+          expected=(
+              e['absolute_saving_s'] >= c['minimum_absolute_speedup_s']
+              and e['relative_speedup'] >= c['minimum_relative_speedup']
+              and e['same_integrity_receipt']
+              and e['corruption_rejected']
+          )
+          assert e['promotion_signal'] is expected
+          PY
+      - name: Upload evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: v030-logs-semantic-owner-verify
+          path: ${{ runner.temp }}/v030-logs-semantic-owner.json
+          if-no-files-found: warn
+      - name: CI topology self-check
+        run: python tools/check_ci_topology.py .github/workflows/v030-logs-semantic-owner-verify.yml
+
+# Research-only. A positive result identifies duplicate receipt work in the release wrapper; shipping still has to
+# preserve the canonical logs verifier and re-earn terminal/external/runtime/final authority before any release credit.
