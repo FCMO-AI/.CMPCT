@@ -52,17 +52,30 @@ jobs:
           import json
           from pathlib import Path
           d=json.loads(Path('benchmark-artifacts/v030-prefixgraph-terminal.json').read_text())
-          assert d['schema']=='cmpct-v030-prefixgraph-terminal-parity-v1'
-          assert d['gate']['passed'] is True
+          assert d['schema']=='cmpct-v030-prefixgraph-terminal-parity-v2'
+          assert d['research_only'] is True
+          assert d['selector_change'] is False
+          assert d['release_credit'] is False
+          assert d['gate']['experiment_valid'] is True
           assert len(d['rows'])==15
           assert len(d['envelopes'])==16
           assert d['summary']['exact_prefixgraph_winners']
-          for row in d['rows']:
-              if row['eligible']:
-                  assert row['locality']['passed'] is True
+          eligible=[row for row in d['rows'] if row['eligible']]
+          assert eligible
+          assert all(row['independent_prefixgraph_verified'] is True for row in eligible)
+          locality_failed={row['label'] for row in eligible if not row['locality']['passed']}
+          assert locality_failed == set(d['summary']['locality_counterexamples'])
           for env in d['envelopes']:
               assert env['zero_counterexamples'] == (len(env['counterexamples']) == 0)
+              # <=8x remains an absolute promotion law: locality failures are retained
+              # as negative evidence and can never enter an admission envelope.
+              assert locality_failed.isdisjoint(env['admitted'])
+          safe=[env for env in d['envelopes'] if env['zero_counterexamples'] and env['admitted']]
+          assert d['summary']['safe_nonempty_envelopes']==len(safe)
+          assert d['promotion_signal'] == bool(safe)
           PY
+      - name: CI topology self-check
+        run: python tools/check_ci_topology.py .github/workflows/v030-prefixgraph-terminal-parity.yml
       - name: Public-surface guard
         if: always()
         run: python tools/check_public_surface.py
@@ -75,5 +88,7 @@ jobs:
           if-no-files-found: warn
           retention-days: 90
 
-# Frozen-corpus parity is not a selector proof. Any future terminal rule requires separate adversarial/generalization
-# evidence and must preserve exact output bytes, locality, integrity, native/Android parity and all release gates.
+# Frozen-corpus parity is not a selector proof. Locality failures and losing envelopes are valid negative evidence,
+# never promotion evidence. Any future terminal rule requires a nonempty zero-counterexample <=8x envelope plus a
+# separate adversarial/generalization proof and must preserve exact output bytes, integrity, native/Android parity
+# and all ordinary release gates.
