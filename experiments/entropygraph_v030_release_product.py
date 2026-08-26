@@ -159,20 +159,37 @@ def _compact_control_module():
 
 
 def _compact_control_source_shape(root: Path) -> dict:
+    """Count regular files/bytes with a single DirEntry traversal.
+
+    This is deliberately semantics-equivalent to the former ``os.walk`` + ``Path`` + ``lstat`` pass: symlinked
+    files/directories are excluded, filesystem races remain fail-open for this cheap preflight, and only regular
+    files contribute. ``os.scandir`` lets the OS-provided DirEntry cache carry type/stat information so high-file-
+    count C25CC01 candidates do not burn part of their narrow ZIP speed margin constructing Path objects and issuing
+    redundant metadata calls before the real r24 build even starts.
+    """
     root = Path(root)
     regular_files = 0
     logical_bytes = 0
-    for dirpath, dirnames, filenames in os.walk(root, followlinks=False):
-        dirnames[:] = [name for name in dirnames if not os.path.islink(Path(dirpath) / name)]
-        for name in filenames:
-            path = Path(dirpath) / name
-            try:
-                st = os.lstat(path)
-            except OSError:
-                continue
-            if stat.S_ISREG(st.st_mode):
-                regular_files += 1
-                logical_bytes += int(st.st_size)
+    stack = [os.fspath(root)]
+    while stack:
+        directory = stack.pop()
+        try:
+            with os.scandir(directory) as entries:
+                for entry in entries:
+                    try:
+                        if entry.is_symlink():
+                            continue
+                        if entry.is_dir(follow_symlinks=False):
+                            stack.append(entry.path)
+                            continue
+                        st = entry.stat(follow_symlinks=False)
+                    except OSError:
+                        continue
+                    if stat.S_ISREG(st.st_mode):
+                        regular_files += 1
+                        logical_bytes += int(st.st_size)
+        except OSError:
+            continue
     return {
         "regular_files": regular_files,
         "logical_bytes": logical_bytes,
