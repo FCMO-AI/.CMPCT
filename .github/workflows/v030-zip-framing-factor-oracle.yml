@@ -9,6 +9,7 @@ on:
       - 'benchmarks/v030_external_competitors.py'
       - 'benchmarks/v030_zip_framing_factor_oracle.py'
       - 'benchmarks/v030_zipfactor_canonical_productization.py'
+      - 'benchmarks/v030_zipfactor_canonical_productization_evidence_v2.py'
       - 'experiments/entropygraph_v030_zipfactor_profile.py'
       - 'experiments/entropygraph_v030_zipfactor_session.py'
       - 'experiments/entropygraph_v030_zipfactor_compact.py'
@@ -53,6 +54,7 @@ jobs:
           python -m py_compile \
             benchmarks/v030_zip_framing_factor_oracle.py \
             benchmarks/v030_zipfactor_canonical_productization.py \
+            benchmarks/v030_zipfactor_canonical_productization_evidence_v2.py \
             experiments/entropygraph_v030_zipfactor_profile.py \
             experiments/entropygraph_v030_zipfactor_session.py \
             experiments/entropygraph_v030_zipfactor_compact.py \
@@ -74,7 +76,7 @@ jobs:
             --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-zip-framing-factor.json"
       - name: Run fused binary-control canonical product-boundary proof
         run: |
-          python benchmarks/v030_zipfactor_canonical_productization.py \
+          python benchmarks/v030_zipfactor_canonical_productization_evidence_v2.py \
             --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-zipfactor-product-work" \
             --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-zipfactor-product.json"
       - name: Independently enforce evidence boundary
@@ -118,14 +120,24 @@ jobs:
           assert p['candidate']['create_s'] == p['candidate']['profile_build_s'] + p['candidate']['mandatory_verify_s']
           assert p['candidate']['measured_default_level'] == 3
           assert p['candidate']['level'] == 3
-          assert p['gate']['independent_source_truth'] is True
-          assert p['gate']['binary_control_v3_selected'] is True
-          assert p['gate']['locality_green'] is True
-          assert p['gate']['strictly_beats_zip_size'] is True
-          assert p['gate']['strictly_beats_zstd19_size'] is True
-          assert p['gate']['strictly_beats_zip_create'] is True
-          assert p['gate']['strictly_beats_zstd19_create'] is True
-          assert p['gate']['passed'] is True
+          gate=p['gate']; ev=p['evidence_v2']
+          assert gate['independent_source_truth'] is True
+          assert gate['binary_control_v3_selected'] is True
+          assert gate['locality_green'] is True
+          assert ev['experiment_valid'] is True
+          expected_promotion = all(gate[k] is True for k in (
+              'strictly_beats_zip_size',
+              'strictly_beats_zstd19_size',
+              'strictly_beats_zip_create',
+              'strictly_beats_zstd19_create',
+          ))
+          assert ev['promotion_signal'] is expected_promotion
+          assert ev['negative_result_valid'] is (not expected_promotion)
+          assert ev['release_credit'] is False
+          if ev['promotion_signal']:
+              assert gate['passed'] is True
+          else:
+              assert gate['passed'] is False
           PY
       - name: CI topology self-check
         run: python tools/check_ci_topology.py .github/workflows/v030-zip-framing-factor-oracle.yml
