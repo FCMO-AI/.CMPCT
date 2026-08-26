@@ -2,9 +2,9 @@ from __future__ import annotations
 
 """Measure duplicate release-wrapper work around the canonical logs semantic verifier.
 
-The canonical logs profile already owns filesystem/content identity and the canonical user-tree digest.  The public
+The canonical logs profile already owns filesystem/content identity and the canonical user-tree digest. The public
 release wrapper currently calls that verifier and then reopens/decodes/hashes the filesystem manifest a second time.
-This oracle measures only that duplicate receipt-building tax.  It changes no archive byte and earns no release
+This oracle measures only that duplicate receipt-building tax. It changes no archive byte and earns no release
 credit; a positive result merely authorizes a later wrapper refactor that must re-earn the ordinary logs/external
 release gates.
 """
@@ -14,7 +14,6 @@ import json
 from pathlib import Path
 import shutil
 import statistics
-import tempfile
 import time
 
 from benchmarks import v030_logs_terminal_admission_oracle as TERMINAL
@@ -42,6 +41,14 @@ def _same_integrity(a: dict, b: dict) -> bool:
         "filesystem_regular_members",
     )
     return all(a.get(key) == b.get(key) for key in keys)
+
+
+def _corruption_rejected(path: Path) -> bool:
+    try:
+        receipt = LOGS.strong_verify(path)
+    except Exception:
+        return True
+    return not bool(receipt.get("ok"))
 
 
 def run(work_root: Path) -> dict:
@@ -95,7 +102,7 @@ def run(work_root: Path) -> dict:
         raise RuntimeError("logs archive unexpectedly tiny")
     raw[len(raw) // 2] ^= 0x5A
     corrupt.write_bytes(raw)
-    corruption_rejected = not bool(LOGS.strong_verify(corrupt).get("ok")) if hasattr(LOGS, "strong_verify") else False
+    corruption_rejected = _corruption_rejected(corrupt)
 
     promotion_signal = (
         saving >= MIN_ABSOLUTE_SPEEDUP_S
