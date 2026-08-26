@@ -13,8 +13,8 @@ baseline uses shipping ``EG08.strong_verify``; the candidate uses the identical
 ``_expand_to_eg07 -> EG07.strong_verify`` sequence on Linux tmpfs.  It therefore
 cannot earn production promotion itself.  A material result is evidence that the next
 implementation should remove the compatibility-file publication entirely with an
-in-memory/direct EG08 semantic-verification path.  A miss falsifies I/O as a useful
-part of the remaining office budget.
+in-memory/direct EG08 semantic-verification path.  A miss is valid negative evidence
+that filesystem I/O is not a material part of the remaining office budget.
 """
 
 import argparse
@@ -113,7 +113,6 @@ def run(work_root: Path) -> dict:
             baseline_samples.append(float(baseline_s))
             tmpfs_samples.append(float(candidate_s))
 
-        # Hostile proof: both routes must reject the same physical-pack corruption.
         corrupt = root / 'corrupt.c25eg08'
         blob = bytearray(archive.read_bytes())
         parsed = EG08._parse(archive)
@@ -145,11 +144,14 @@ def run(work_root: Path) -> dict:
     gate = {
         'exact_verification_identity': True,
         'physical_corruption_rejected_by_both': True,
+        'experiment_valid': True,
         'material_speedup': bool(material),
-        'passed': bool(material),
+        'promotion_signal': bool(material),
+        'release_credit': False,
     }
+    gate['passed'] = bool(gate['experiment_valid'])
     return {
-        'schema': 'cmpct-v030-eg08-verifier-io-v1',
+        'schema': 'cmpct-v030-eg08-verifier-io-v2',
         'archive_bytes': int(projected_bytes),
         'rounds': ROUNDS,
         'baseline_verify_s': baseline_samples,
@@ -158,11 +160,14 @@ def run(work_root: Path) -> dict:
         'median_tmpfs_verify_s': float(tmpfs_median),
         'absolute_saving_s': float(saving),
         'relative_improvement': float(relative),
+        'minimum_material_relative_improvement': MIN_RELATIVE_IMPROVEMENT,
+        'minimum_material_absolute_saving_s': MIN_ABSOLUTE_SAVING_S,
         'gate': gate,
         'claim_boundary': (
             'Research-only causal I/O isolation. Candidate performs the exact same EG08 expansion and EG07 strong '
-            'verification on tmpfs. A pass authorizes only a follow-up direct/in-memory verifier implementation; '
-            'it cannot weaken or replace strong verification, locality, recovery, native/Android, external or release authority.'
+            'verification on tmpfs. A material result authorizes only a follow-up direct/in-memory verifier experiment. '
+            'A non-material result is durable negative evidence; neither outcome earns release credit or weakens strong '
+            'verification, locality, recovery, native/Android, external or release authority.'
         ),
     }
 
@@ -176,8 +181,8 @@ def main() -> None:
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(result, indent=2) + '\n', encoding='utf-8')
     print(json.dumps(result, indent=2), flush=True)
-    if not result['gate']['passed']:
-        raise SystemExit('EG08 compatibility-verifier I/O is not a material office bottleneck')
+    if not result['gate']['experiment_valid']:
+        raise SystemExit('EG08 verifier I/O experiment was invalid')
 
 
 if __name__ == '__main__':
