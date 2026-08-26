@@ -27,14 +27,15 @@ fn run() -> Result<(), PortableError> {
                 usage();
             }
             let entries = archive.entries();
-            let logical_regular_bytes = entries
-                .iter()
-                .filter(|entry| entry.kind == 0)
-                .try_fold(0u64, |total, entry| {
-                    total.checked_add(entry.size).ok_or_else(|| {
-                        PortableError::Limit("public regular-file byte total overflow".into())
-                    })
-                })?;
+            let logical_regular_bytes =
+                entries
+                    .iter()
+                    .filter(|entry| entry.kind == 0)
+                    .try_fold(0u64, |total, entry| {
+                        total.checked_add(entry.size).ok_or_else(|| {
+                            PortableError::Limit("public regular-file byte total overflow".into())
+                        })
+                    })?;
             println!("profile={}", archive.profile().as_str());
             println!("revision={}", archive.revision());
             println!("entries={}", entries.len());
