@@ -7,7 +7,7 @@ use std::ffi::CStr;
 use std::os::raw::c_char;
 
 mod preparity {
-    include!("../../cmpct-portable/src/bin/cmpct-zipfactor-v3-preparity.rs");
+    include!(concat!(env!("OUT_DIR"), "/zipfactor_v3_preparity.rs"));
 
     pub(super) fn verify_path(path: &std::path::Path) -> Result<(), String> {
         verify(path)
