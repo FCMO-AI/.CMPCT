@@ -38,10 +38,38 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -e '.[test]'
 
-      - name: Compile shared preflight oracle
+      - name: Compile shared preflight oracle and shipping product
         run: |
           python -m py_compile benchmarks/v030_frontdoor_shared_preflight_oracle.py
           python -m py_compile benchmarks/v030_frontdoor_shared_preflight_oracle_v2.py
+          python -m py_compile experiments/entropygraph_v030_release_product.py
+
+      - name: Ratchet promoted shipping wiring
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          from benchmarks import v030_frontdoor_shared_preflight_oracle as oracle
+          from experiments import entropygraph_v030_release_product as product
+
+          assert product.PROMOTED_SHARED_FRONTDOOR_PREFLIGHT is True
+          assert callable(product._shared_frontdoor_preflight)
+
+          # The product helper must preserve the exact oracle semantics on both the
+          # negative-logs/C25-shape path and the early-positive logs path.
+          import tempfile
+          with tempfile.TemporaryDirectory(prefix='cmpct-shared-shipping-') as td:
+              base=Path(td)
+              nonlogs=base/'nonlogs'; logs=base/'logs'
+              oracle._make_nonlogs(nonlogs, files=1050, size=4096)
+              oracle._make_logs(logs, ordinary=256)
+              for root in (nonlogs, logs):
+                  expected=oracle.shared_preflight(root)
+                  actual=product._shared_frontdoor_preflight(root)
+                  assert actual['logs_eligible'] == expected['logs_eligible']
+                  assert actual['metadata_error'] == expected['metadata_error']
+                  assert actual.get('short_circuited') == expected.get('short_circuited')
+                  assert oracle._shape_equal(actual.get('shape'), expected.get('shape'))
+          PY
 
       - name: Run exact shared-preflight A/B
         run: |
@@ -62,12 +90,14 @@ jobs:
           assert d['experiment_valid'] is True
           c=d['correctness']
           assert all(c.values())
-          if d['promotion_signal']:
-              n=d['nonlogs_performance']; l=d['logs_performance']; r=d['requirements']
-              assert n['speedup_fraction']>=r['minimum_nonlogs_speedup_fraction']
-              assert n['absolute_saving_s']>=r['minimum_nonlogs_absolute_saving_s']
-              assert l['slowdown_fraction']<=r['maximum_logs_slowdown_fraction']
-              assert l['shared_median_s']-l['current_median_s']<=r['maximum_logs_absolute_slowdown_s']
+          # Shipping promotion is allowed only because the frozen research A/B earned
+          # its originally declared performance bar; a future regression must turn red.
+          assert d['promotion_signal'] is True
+          n=d['nonlogs_performance']; l=d['logs_performance']; r=d['requirements']
+          assert n['speedup_fraction']>=r['minimum_nonlogs_speedup_fraction']
+          assert n['absolute_saving_s']>=r['minimum_nonlogs_absolute_saving_s']
+          assert l['slowdown_fraction']<=r['maximum_logs_slowdown_fraction']
+          assert l['shared_median_s']-l['current_median_s']<=r['maximum_logs_absolute_slowdown_s']
           PY
 
       - name: CI topology self-check
@@ -85,4 +115,5 @@ jobs:
           if-no-files-found: warn
           retention-days: 90
 
-# Research-only: no selector or release credit without an exact, material A/B win.
+# Shipping integration is ratcheted above; the research A/B remains the unchanged
+# proof boundary that earned promotion, and carries no independent release credit.
