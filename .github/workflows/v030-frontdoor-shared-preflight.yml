@@ -6,6 +6,7 @@ on:
     branches: [main]
     paths:
       - 'benchmarks/v030_frontdoor_shared_preflight_oracle.py'
+      - 'benchmarks/v030_frontdoor_shared_preflight_oracle_v2.py'
       - 'experiments/entropygraph_v030_release_product.py'
       - 'experiments/entropygraph_v030_release_product_logs_candidate.py'
       - '.github/workflows/v030-frontdoor-shared-preflight.yml'
@@ -38,12 +39,14 @@ jobs:
           python -m pip install -e '.[test]'
 
       - name: Compile shared preflight oracle
-        run: python -m py_compile benchmarks/v030_frontdoor_shared_preflight_oracle.py
+        run: |
+          python -m py_compile benchmarks/v030_frontdoor_shared_preflight_oracle.py
+          python -m py_compile benchmarks/v030_frontdoor_shared_preflight_oracle_v2.py
 
       - name: Run exact shared-preflight A/B
         run: |
           mkdir -p benchmark-artifacts
-          python benchmarks/v030_frontdoor_shared_preflight_oracle.py > benchmark-artifacts/v030-frontdoor-shared-preflight.json
+          python benchmarks/v030_frontdoor_shared_preflight_oracle_v2.py > benchmark-artifacts/v030-frontdoor-shared-preflight.json
           cat benchmark-artifacts/v030-frontdoor-shared-preflight.json
 
       - name: Ratchet exactness and earned performance boundary
@@ -59,8 +62,6 @@ jobs:
           assert d['experiment_valid'] is True
           c=d['correctness']
           assert all(c.values())
-          # This lane may finish as valid negative evidence, but only a result crossing
-          # every predeclared speed boundary may justify a later product promotion.
           if d['promotion_signal']:
               n=d['nonlogs_performance']; l=d['logs_performance']; r=d['requirements']
               assert n['speedup_fraction']>=r['minimum_nonlogs_speedup_fraction']
