@@ -15,6 +15,7 @@ value to the verifier.  Strong verification itself remains inside the measured b
 
 A valid but still-slow result is durable negative evidence rather than broken CI.  Only
 ``promotion_signal`` means the strict four-way office contract was actually achieved.
+This research lane never carries release credit by itself.
 """
 
 import argparse
@@ -91,6 +92,10 @@ def run(work_root: Path) -> dict:
     )
     result["experiment_valid"] = bool(experiment_valid)
     result["promotion_signal"] = bool(strict["passed"])
+    # This oracle is diagnostic/productization research.  Even a strict four-way win
+    # must still cross canonical productization, native/Android and exact release
+    # authorities before it can affect release state.
+    result["release_credit"] = False
     result["claim_boundary"] = (
         "Research-only accounting correction over the exact v6 C25EG08 executor. The normalized source-tree "
         "digest used only as an external proof oracle is computed outside the measured boundary; archive strong "
@@ -117,6 +122,7 @@ def main() -> None:
                 "strict": result["strict"],
                 "experiment_valid": result["experiment_valid"],
                 "promotion_signal": result["promotion_signal"],
+                "release_credit": result["release_credit"],
             },
             indent=2,
         ),
