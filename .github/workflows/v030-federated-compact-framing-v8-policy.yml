@@ -60,7 +60,7 @@ jobs:
           python benchmarks/v030_federated_compact_framing_v8_policy_distill_v4.py \
             --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-eg08-policy-v4-work" \
             --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-eg08-policy-v4.json"
-      - name: Independently enforce generic policy, exact bytes and four-way win
+      - name: Independently enforce generic policy, exact bytes and strict promotion law
         run: |
           python - <<'PY'
           import json
@@ -69,14 +69,12 @@ jobs:
           assert d['schema']=='cmpct-v030-eg08-policy-distillation-v4'
           assert d['candidate']=='C25EG08'
           assert d['accepted_v029_bytes']==5954026
-          assert d['policy_inputs']==[
-              'raw_bytes','level1_ratio','entropy_bits_per_byte','zero_fraction','printable_fraction'
-          ]
+          assert d['experiment_valid'] is True
+          assert d['release_credit'] is False
+          assert d['policy_inputs']==['raw_bytes','level1_ratio','entropy_bits_per_byte','zero_fraction','printable_fraction']
           assert set(d['forbidden_policy_inputs'])=={'sha256','path','filename','workload_label','benchmark_name'}
           assert d['predecessor_v3_size_green_speed_red'] is True
-          p=d['selected_policy']
-          assert set(p)=={'rules','overlap_resolution'}
-          assert p['overlap_resolution']=='max_level'
+          p=d['selected_policy']; assert set(p)=={'rules','overlap_resolution'}; assert p['overlap_resolution']=='max_level'
           assert 1 <= len(p['rules']) <= 4
           allowed_features=set(d['policy_inputs'])
           for rule in p['rules']:
@@ -84,12 +82,8 @@ jobs:
               assert rule['feature'] in allowed_features
               assert rule['operator'] in {'<=','>='}
               assert int(rule['level']) in {12,15,19,22}
-          sf=d['search_family']
-          assert sf['max_rules']==4
-          assert sf['deduplicated_atomic_rules']>=1
-          assert sf['clearing_states']>=1
-          schedule=d['schedule']
-          assert schedule['type']=='bounded-parallel-per-pack-policy-and-final-compression'
+          sf=d['search_family']; assert sf['max_rules']==4; assert sf['deduplicated_atomic_rules']>=1; assert sf['clearing_states']>=1
+          schedule=d['schedule']; assert schedule['type']=='bounded-parallel-per-pack-policy-and-final-compression'
           assert int(schedule['max_workers'])==8
           assert schedule['level1_feature_compression_counted'] is True
           assert schedule['high_effort_compression_counted'] is True
@@ -100,18 +94,20 @@ jobs:
           assert int(m['archive_bytes']) < 5954026
           assert int(m['archive_bytes']) < int(c['zip']['archive_bytes'])
           assert int(m['archive_bytes']) < int(c['zstd19']['archive_bytes'])
-          assert float(m['median_verified_create_s']) < float(c['zip']['median_create_s'])
-          assert float(m['median_verified_create_s']) < float(c['zstd19']['median_create_s'])
           assert 1 <= int(m['workers']) <= 8
           assert float(m['max_member_read_amplification']) <= 8.0
           assert int(m['max_decode_unit_bytes']) <= 8*1024*1024
           assert m['exact_bytes_vs_serial_reference'] is True
-          assert s['content_identity_not_policy_input'] is True
-          assert s['exact_size_projection'] is True
-          assert s['exact_serial_parallel_archive_identity'] is True
-          assert s['same_selected_level_vector'] is True
-          assert s['rule_count_within_bound'] is True
-          assert s['passed'] is True
+          for key in ('content_identity_not_policy_input','exact_size_projection','exact_serial_parallel_archive_identity','same_selected_level_vector','rule_count_within_bound'):
+              assert s[key] is True
+          expected_promotion = bool(
+              s['passed']
+              and s['verified_create_beats_zip']
+              and s['verified_create_beats_zstd19']
+              and float(m['median_verified_create_s']) < float(c['zip']['median_create_s'])
+              and float(m['median_verified_create_s']) < float(c['zstd19']['median_create_s'])
+          )
+          assert d['promotion_signal'] is expected_promotion
           PY
       - name: CI topology self-check
         run: python tools/check_ci_topology.py .github/workflows/v030-federated-compact-framing-v8-policy.yml
@@ -125,8 +121,7 @@ jobs:
           retention-days: 90
 
 # v1/v2 remain negative evidence. v3 found a genuine identity-free size policy but proved serial execution far too
-# slow. v4 keeps that same bounded feature/rule family and changes scheduling only: policy-visible level-1 work and
-# selected high-effort pack compression run in a bounded pool, with zero timing credit unless the complete archive
-# exactly matches the ordinary serial policy bytes/SHA. Pack hashes, paths, filenames and workload identity remain
-# forbidden. This lane is promotion-incomplete: all-15/adversarial generalization, selector ownership,
-# native/Android parity and strict release authority remain mandatory.
+# slow. v4 keeps that same bounded feature/rule family and changes scheduling only. Exactness, locality and the frozen
+# size floors remain mandatory for a valid experiment; the unchanged strict four-way size+creation law alone turns
+# promotion_signal on. Valid ZIP-speed losses are preserved as negative research evidence with release_credit=false,
+# never as selector/native/Android/release authority.
