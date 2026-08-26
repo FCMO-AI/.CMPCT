@@ -44,7 +44,7 @@ jobs:
           python -m benchmarks.v030_eg08_verifier_io_oracle \
             --work-root benchmark-artifacts/v030-eg08-verifier-io-work \
             --output benchmark-artifacts/v030-eg08-verifier-io.json
-      - name: Independently enforce verification identity
+      - name: Independently enforce verification identity and evidence boundary
         if: always()
         run: |
           python - <<'PY'
@@ -53,13 +53,19 @@ jobs:
           p=Path('benchmark-artifacts/v030-eg08-verifier-io.json')
           assert p.exists(), 'EG08 verifier-I/O evidence missing'
           d=json.loads(p.read_text())
-          assert d['schema']=='cmpct-v030-eg08-verifier-io-v1'
+          assert d['schema']=='cmpct-v030-eg08-verifier-io-v2'
           g=d['gate']
           assert d['rounds']==15
           assert g['exact_verification_identity'] is True
           assert g['physical_corruption_rejected_by_both'] is True
-          # Materiality may honestly fail; no threshold is relaxed by this lane.
+          assert g['experiment_valid'] is True
+          assert g['release_credit'] is False
           assert isinstance(g['material_speedup'], bool)
+          assert isinstance(g['promotion_signal'], bool)
+          assert g['promotion_signal'] is g['material_speedup']
+          assert d['minimum_material_relative_improvement']==0.15
+          assert d['minimum_material_absolute_saving_s']==0.005
+          # A non-material result is valid negative evidence, never a release pass.
           PY
       - name: Upload verifier-I/O evidence
         if: always()
