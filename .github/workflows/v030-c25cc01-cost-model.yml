@@ -82,8 +82,12 @@ jobs:
               assert len(row['phase_samples']) == 5
               assert row['admitted_by_current_predicate'] is True
               assert 'strict_four_way_win' in row['competitors']
-          # Counterexamples are evidence, not a frozen expected outcome. Ratchet the current measurements causally:
-          # an admitted row is a counterexample iff its complete candidate boundary fails the strict four-way law.
+              # Diagnostic signals added after physical fragmentation failed to generalize.
+              assert row['candidate_to_logical'] == row['candidate_bytes'] / max(1,row['logical_bytes'])
+              assert row['candidate_over_logical_bytes'] == row['candidate_bytes'] - row['logical_bytes']
+              assert row['r24_over_logical_bytes'] == row['r24_bytes'] - row['logical_bytes']
+              assert isinstance(row['candidate_overhead_per_regular_file'], (int,float))
+              assert isinstance(row['control_bytes_per_regular_file'], (int,float))
           derived={
               name for name,row in rows.items()
               if row['admitted_by_current_predicate'] and not row['competitors']['strict_four_way_win']
@@ -102,5 +106,4 @@ jobs:
           retention-days: 90
 
 # Research-only causal cost decomposition. The ordinary terminal-admission/generalization/external gates remain decisive.
-# The post-check intentionally consumes the oracle's published schema names rather than maintaining a shadow schema;
-# a valid measured counterexample remains negative evidence and receives no selector or release credit.
+# A measured counterexample remains negative evidence; the new logical-overhead fields are diagnostics, not selector inputs.
