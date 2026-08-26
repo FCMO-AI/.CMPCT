@@ -6,7 +6,13 @@
 use std::ffi::CStr;
 use std::os::raw::c_char;
 
-include!("../../cmpct-portable/src/bin/cmpct-zipfactor-v3-preparity.rs");
+mod preparity {
+    include!("../../cmpct-portable/src/bin/cmpct-zipfactor-v3-preparity.rs");
+
+    pub(super) fn verify_path(path: &std::path::Path) -> Result<(), String> {
+        verify(path)
+    }
+}
 
 /// Verify an exact CMP25Z3 archive in-process.
 ///
@@ -21,7 +27,7 @@ pub unsafe extern "C" fn cmpct_zipfactor_v3_verify_path(path: *const c_char) -> 
         Ok(value) => value,
         Err(_) => return 2,
     };
-    match std::panic::catch_unwind(|| verify(std::path::Path::new(path))) {
+    match std::panic::catch_unwind(|| preparity::verify_path(std::path::Path::new(path))) {
         Ok(Ok(())) => 0,
         Ok(Err(_)) => 1,
         Err(_) => 1,
