@@ -1,4 +1,4 @@
-# ci-lane: focused
+# ci-lane: deep
 name: CMPCT v0.30 logs streaming prefilter oracle
 
 on:
