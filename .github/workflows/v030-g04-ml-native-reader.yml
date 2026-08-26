@@ -6,11 +6,13 @@ on:
     branches: [main]
     paths:
       - 'native/cmpct-portable/**'
+      - 'experiments/entropygraph_v030_native_reader_bridge.py'
       - 'experiments/entropygraph_v030_release_reader.py'
       - 'experiments/entropygraph_v030_release_product.py'
       - 'experiments/entropygraph_v030_geometry_overlay_g04*.py'
       - 'benchmarks/v030_release_performance*.py'
       - 'benchmarks/v030_g04_ml_native_reader_oracle.py'
+      - 'tests/test_v030_native_reader_bridge.py'
       - '.github/workflows/v030-g04-ml-native-reader.yml'
   workflow_dispatch:
 
@@ -45,43 +47,50 @@ jobs:
       - name: Compile Python and native surfaces
         run: |
           python -m py_compile \
+            experiments/entropygraph_v030_native_reader_bridge.py \
             experiments/entropygraph_v030_release_reader.py \
             benchmarks/v030_release_performance.py \
             benchmarks/v030_g04_ml_native_reader_oracle.py
           cargo build --manifest-path native/cmpct-portable/Cargo.toml --release --bin cmpct-portable
-      - name: Preserve native G0-G4 correctness before timing
+      - name: Preserve native G0-G4 and bridge correctness before timing
         run: |
           cargo test --manifest-path native/cmpct-portable/Cargo.toml g04 --release
           python -m pytest -q \
+            tests/test_v030_native_reader_bridge.py \
             tests/test_v030_release_reader.py \
             tests/test_v030_member_reader.py \
             tests/test_v030_release_fuzz.py
-      - name: Run canonical ML Python-vs-native A/B
+      - name: Run canonical ML Python-vs-native bridge A/B
         run: |
           mkdir -p benchmark-artifacts
           python benchmarks/v030_g04_ml_native_reader_oracle.py \
             --native-cli "$GITHUB_WORKSPACE/native/cmpct-portable/target/release/cmpct-portable" \
             --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-g04-ml-native-reader-work" \
             --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-g04-ml-native-reader.json"
-      - name: Independently enforce identity, hostile rejection and claim boundary
+      - name: Independently enforce identity, hostile rejection, caller budget and claim boundary
         run: |
           python - <<'PY'
           import json
           from pathlib import Path
           d=json.loads(Path('benchmark-artifacts/v030-g04-ml-native-reader.json').read_text())
-          assert d['schema']=='cmpct-v030-g04-ml-native-reader-v1'
+          assert d['schema']=='cmpct-v030-g04-ml-native-reader-v2'
           assert d['target']=='neutral_hostile_v1/09_ml_artifacts'
+          assert d['native_bridge']=='cmpct-portable-process-v1'
+          assert d['native_extract_budget_preflight_timed'] is True
           assert int(d['rounds'])==5
           assert d['native_corruption_rejected'] is True
+          assert d['native_caller_budget_preserved'] is True
           c=d['contract']; g=d['gate']
           assert c['archive_bytes_changed'] is False
           assert c['grammar_changed'] is False
           assert c['memory_budget_changed'] is False
+          assert c['caller_extract_budget_enforced_before_publication'] is True
           assert float(c['locality_limit'])==8.0
           assert int(c['decode_unit_limit_bytes'])==8*1024*1024
           assert g['archive_bytes_unchanged'] is True
           assert g['canonical_tree_preserved'] is True
           assert g['native_corruption_rejected'] is True
+          assert g['native_caller_budget_preserved'] is True
           assert d['release_credit'] is False
           assert len(d['samples_s']['python_verify'])==5
           assert len(d['samples_s']['native_verify'])==5
@@ -107,5 +116,5 @@ jobs:
           retention-days: 90
 
 # Research-only execution-path oracle. It may not change archive bytes, grammar, locality,
-# decode-unit, integrity or memory law. A positive A/B is only permission to integrate the
-# already-existing portable Rust G0-G4 reader and then re-earn ordinary release authority.
+# decode-unit, integrity, caller output budget or memory law. A positive A/B is only permission
+# to integrate the already-existing portable Rust G0-G4 reader and then re-earn ordinary release authority.
