@@ -1,0 +1,88 @@
+# ci-lane: deep
+name: CMPCT v0.30 C25CC01 fragmentation admission
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'experiments/entropygraph_v030_r24_compact_control_profile.py'
+      - 'benchmarks/v030_r24_compact_control_terminal_admission.py'
+      - 'benchmarks/v030_r24_compact_control_terminal_generalization.py'
+      - 'benchmarks/v030_c25cc01_fragmentation_admission_oracle.py'
+      - 'benchmarks/v030_r24_compact_control_composition_oracle_v2.py'
+      - 'benchmarks/v030_external_competitors.py'
+      - '.github/workflows/v030-c25cc01-fragmentation-admission.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-v030-c25cc01-fragmentation-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+
+jobs:
+  fragmentation-admission:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install deterministic corpus and comparator dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y zstd gcc ffmpeg libsndfile1
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[audio,test]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
+      - name: Compile fragmentation admission oracle
+        run: python -m py_compile benchmarks/v030_c25cc01_fragmentation_admission_oracle.py
+      - name: Run frozen plus unseen structural diagnostic
+        run: |
+          mkdir -p benchmark-artifacts
+          python benchmarks/v030_c25cc01_fragmentation_admission_oracle.py \
+            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-c25cc01-fragmentation-work" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-c25cc01-fragmentation.json"
+      - name: Ratchet identity-free causal boundary
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          d=json.loads(Path('benchmark-artifacts/v030-c25cc01-fragmentation.json').read_text())
+          assert d['schema']=='cmpct-v030-c25cc01-fragmentation-admission-v1'
+          c=d['contract']; g=d['gate']
+          assert c['selector_change'] is False
+          assert c['release_credit'] is False
+          assert c['base_predicate_inputs']==['logical_bytes','regular_files','r24_bytes','candidate_bytes']
+          assert c['additional_candidate_inputs']==['physical_blob_records','non_pack_members']
+          assert c['min_physical_blob_records']==40
+          assert c['min_non_pack_members']==8
+          assert set(c['forbidden_inputs'])=={'workload_name','path','filename','suffix','content_hash','archive_hash','pack_hash'}
+          assert g['exact_case_count'] is True
+          assert g['frozen_target_refined_admitted'] is True
+          assert g['frozen_target_strict_four_way_win'] is True
+          assert g['known_unstable_mosaics_rejected'] is True
+          assert g['zero_refined_counterexamples'] is True
+          assert g['integrity_preserved'] is True
+          assert g['diagnostic_valid'] is True
+          assert d['refined_counterexamples']==[]
+          PY
+      - name: Public-surface guard
+        if: always()
+        run: python tools/check_public_surface.py
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: v030-c25cc01-fragmentation-${{ github.sha }}
+          path: benchmark-artifacts/v030-c25cc01-fragmentation.json
+          if-no-files-found: error
+          retention-days: 90
+
+# Research-only admission refinement. It cannot alter the shipping selector; a green result only earns evidence for
+# a later independent promotion/generalization step. Current strict ZIP/Zstd and release authorities stay decisive.
