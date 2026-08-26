@@ -1,4 +1,4 @@
-# ci-lane: medium
+# ci-lane: deep
 name: CMPCT v0.30 C25CC01 scandir source-shape A/B
 
 on:
