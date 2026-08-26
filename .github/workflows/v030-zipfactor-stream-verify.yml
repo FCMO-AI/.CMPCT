@@ -9,6 +9,7 @@ on:
       - 'experiments/entropygraph_v030_zipfactor_compact_v3.py'
       - 'experiments/entropygraph_v030_zipfactor_profile.py'
       - 'benchmarks/v030_zipfactor_stream_verify_oracle.py'
+      - 'benchmarks/v030_zipfactor_stream_verify_evidence_v2.py'
       - '.github/workflows/v030-zipfactor-stream-verify.yml'
   workflow_dispatch:
 
@@ -42,11 +43,12 @@ jobs:
         run: |
           python -m py_compile \
             experiments/entropygraph_v030_zipfactor_stream_verify.py \
-            benchmarks/v030_zipfactor_stream_verify_oracle.py
+            benchmarks/v030_zipfactor_stream_verify_oracle.py \
+            benchmarks/v030_zipfactor_stream_verify_evidence_v2.py
       - name: Run exact verification implementation A/B
         run: |
           mkdir -p benchmark-artifacts
-          python benchmarks/v030_zipfactor_stream_verify_oracle.py \
+          python benchmarks/v030_zipfactor_stream_verify_evidence_v2.py \
             --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-zf-stream-verify-work" \
             --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-zf-stream-verify.json"
       - name: Independently enforce no-verification-loss boundary
@@ -55,14 +57,17 @@ jobs:
           import json
           from pathlib import Path
           d=json.loads(Path('benchmark-artifacts/v030-zf-stream-verify.json').read_text())
-          g=d['gate']
+          g=d['gate']; e=d['evidence_v2']
           assert d['schema']=='cmpct-v030-zipfactor-stream-verify-oracle-v1'
           assert g['identity_exact'] is True
           assert g['semantic_tree_exact'] is True
           assert g['locality_accounting_exact'] is True
           assert g['strong_identity_count_exact'] is True
-          assert g['streaming_faster_median'] is True
-          assert g['passed'] is True
+          assert e['experiment_valid'] is True
+          assert e['promotion_signal'] is g['streaming_faster_median']
+          assert e['negative_result_valid'] is (not g['streaming_faster_median'])
+          assert e['release_credit'] is False
+          assert g['passed'] is e['promotion_signal']
           PY
       - name: CI topology self-check
         run: python tools/check_ci_topology.py .github/workflows/v030-zipfactor-stream-verify.yml
