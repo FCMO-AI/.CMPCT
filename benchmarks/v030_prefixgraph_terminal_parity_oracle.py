@@ -3,14 +3,19 @@ from __future__ import annotations
 """All-15 PrefixGraph terminal-parity frontier.
 
 Current shifted-version and boundary-churn rows spend roughly a minute waiting for G0-G4 even though PrefixGraph
-is the final complete-artifact winner.  This oracle does not skip that work in production.  It builds PrefixGraph
+is the final complete-artifact winner. This oracle does not skip that work in production. It builds PrefixGraph
 independently and then the full release-candidate tournament on every frozen workload that PrefixGraph can
 represent, proving exact winner bytes/tree and mapping conservative *PrefixGraph-internal* admission envelopes.
 
 The envelopes use only facts available after the comparatively narrow PrefixGraph build: complete candidate bytes,
-payload saving versus its all-direct floor, prefix-record count/density and measured <=8x locality.  They do not use
-benchmark names or the expensive G0-G4 result as an admission input.  A zero-counterexample envelope is research
+payload saving versus its all-direct floor, prefix-record count/density and measured <=8x locality. They do not use
+benchmark names or the expensive G0-G4 result as an admission input. A zero-counterexample envelope is research
 evidence for a later adversarial/generalization campaign, never permission to alter the shipping selector.
+
+A representable PrefixGraph candidate exceeding the <=8x release locality law is valid negative evidence, not an
+invalid experiment. Such a row is excluded from every admission envelope and recorded as a locality counterexample;
+it can never earn terminal promotion. Measurement validity is reserved for corpus identity, independent PrefixGraph
+verification, exact workload coverage and complete envelope construction.
 """
 
 import argparse
@@ -106,6 +111,7 @@ def _one(suite: str, source: Path, accepted: dict, root: Path) -> dict:
         "prefix_records": int(pg_stats["prefix_records"]),
         "files": int(pg_stats["files"]),
         "anchor_auditions": int(pg_stats["anchor_auditions"]),
+        "independent_prefixgraph_verified": True,
         "locality": locality,
         "full_selected": full["selected"],
         "full_bytes": int(full["archive_bytes"]),
@@ -125,9 +131,9 @@ def run(work_root: Path) -> dict:
     for suite, root in roots:
         for source in sorted(path for path in root.iterdir() if path.is_dir()):
             expected = accepted[(suite, source.name)]["tree_sha256"]
-            # The accepted repaired corpus is frozen in the release-candidate tree-hash domain.  The old
+            # The accepted repaired corpus is frozen in the release-candidate tree-hash domain. The old
             # v0.29 benchmark helper no longer owns a treehash API; binding to it made this oracle die before
-            # producing evidence.  Reuse the exact semantic owner used by PrefixGraph eligibility/selection.
+            # producing evidence. Reuse the exact semantic owner used by PrefixGraph eligibility/selection.
             if RC.treehash(source) != expected:
                 raise RuntimeError(f"frozen source drift for {suite}/{source.name}")
             with tempfile.TemporaryDirectory(prefix="cmpct-pg-terminal-row-", dir=work_root) as td:
@@ -157,28 +163,36 @@ def run(work_root: Path) -> dict:
             })
 
     exact_winners = [row for row in eligible_rows if row.get("prefixgraph_exact_full_winner")]
+    locality_counterexamples = [row["label"] for row in eligible_rows if not row["locality"]["passed"]]
     useful_safe = [env for env in envelopes if env["zero_counterexamples"] and env["admitted"]]
     gate = {
         "exact_workload_count": len(rows) == 15,
-        "all_eligible_prefixgraph_verified": all(row["locality"]["passed"] for row in eligible_rows),
+        "all_eligible_prefixgraph_verified": all(row.get("independent_prefixgraph_verified") is True for row in eligible_rows),
         "at_least_one_exact_prefixgraph_winner": bool(exact_winners),
         "envelope_matrix_complete": len(envelopes) == len(REL_THRESHOLDS) * len(ABS_THRESHOLDS),
     }
-    gate["passed"] = all(gate.values())
+    gate["experiment_valid"] = all(gate.values())
+    promotion_signal = gate["experiment_valid"] and bool(useful_safe)
     return {
-        "schema": "cmpct-v030-prefixgraph-terminal-parity-v1",
+        "schema": "cmpct-v030-prefixgraph-terminal-parity-v2",
+        "research_only": True,
+        "selector_change": False,
+        "release_credit": False,
         "rows": rows,
         "envelopes": envelopes,
         "summary": {
             "eligible_rows": len(eligible_rows),
             "exact_prefixgraph_winners": [row["label"] for row in exact_winners],
+            "locality_counterexamples": locality_counterexamples,
             "safe_nonempty_envelopes": len(useful_safe),
             "best_observed_wait_elimination_s": max((env["observed_wait_elimination_s"] for env in useful_safe), default=0.0),
         },
         "gate": gate,
+        "promotion_signal": promotion_signal,
         "claim_boundary": (
-            "Research-only terminal-parity map. Frozen-corpus zero-counterexample envelopes are hypotheses for a "
-            "separate adversarial/generalization proof; they cannot modify release selection or authorize release."
+            "Research-only terminal-parity map. Locality failures and losing admitted envelopes are durable negative "
+            "evidence, not measurement failures. Only a nonempty zero-counterexample <=8x envelope may advance to a "
+            "separate adversarial/generalization proof; this oracle cannot modify release selection or authorize release."
         ),
     }
 
@@ -191,8 +205,8 @@ def main() -> None:
     result = run(args.work_root)
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8")
-    print(json.dumps({"summary": result["summary"], "gate": result["gate"]}, indent=2))
-    if not result["gate"]["passed"]:
+    print(json.dumps({"summary": result["summary"], "gate": result["gate"], "promotion_signal": result["promotion_signal"]}, indent=2))
+    if not result["gate"]["experiment_valid"]:
         raise SystemExit("PrefixGraph terminal-parity measurement invalid")
 
 
