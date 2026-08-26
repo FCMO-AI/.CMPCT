@@ -1,0 +1,121 @@
+# ci-lane: deep
+name: CMPCT v0.30 r24 tiny create ABBA diagnostic
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'src/cmpct/**'
+      - 'benchmarks/v030_r24_tiny_create_abba_oracle.py'
+      - 'benchmarks/universal_bench.py'
+      - 'pyproject.toml'
+      - '.github/workflows/v030-r24-tiny-create-abba.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-v030-r24-tiny-create-abba-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  tiny-abba:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install candidate dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[test]'
+      - name: Materialize direct main base
+        run: |
+          rm -rf "$RUNNER_TEMP/cmpct-tiny-base"
+          git worktree add --detach "$RUNNER_TEMP/cmpct-tiny-base" '${{ github.event.pull_request.base.sha || github.event.before }}'
+      - name: Build one immutable tiny corpus
+        run: |
+          python - <<'PY'
+          import os, shutil
+          from pathlib import Path
+          from benchmarks import universal_bench as U
+          root=Path(os.environ['RUNNER_TEMP'])/'cmpct-tiny-corpus'
+          shutil.rmtree(root, ignore_errors=True)
+          root.mkdir(parents=True)
+          old=U.CORP
+          try:
+              U.CORP=root
+              U.reset_rng()
+              U.make_corpora()
+          finally:
+              U.CORP=old
+          fixed_ns=1767225600*1_000_000_000
+          for p in sorted(root.rglob('*'), key=lambda x:(len(x.parts),x.as_posix()), reverse=True):
+              try: os.utime(p, ns=(fixed_ns,fixed_ns), follow_symlinks=False)
+              except (NotImplementedError,OSError):
+                  if not p.is_symlink(): raise
+          os.utime(root, ns=(fixed_ns,fixed_ns))
+          PY
+      - name: Run A-B-B-A focused workers
+        run: |
+          set -euo pipefail
+          SRC="$RUNNER_TEMP/cmpct-tiny-corpus/tiny"
+          OUT="$RUNNER_TEMP/cmpct-tiny-abba"
+          mkdir -p "$OUT"
+          BASE="$RUNNER_TEMP/cmpct-tiny-base/src"
+          CAND="$GITHUB_WORKSPACE/src"
+          PYTHONPATH="$BASE" python benchmarks/v030_r24_tiny_create_abba_oracle.py --src "$SRC" --archive "$OUT/base-a.cmpct" --output "$OUT/base-a.json" --reps 7
+          PYTHONPATH="$CAND" python benchmarks/v030_r24_tiny_create_abba_oracle.py --src "$SRC" --archive "$OUT/candidate-a.cmpct" --output "$OUT/candidate-a.json" --reps 7
+          PYTHONPATH="$CAND" python benchmarks/v030_r24_tiny_create_abba_oracle.py --src "$SRC" --archive "$OUT/candidate-b.cmpct" --output "$OUT/candidate-b.json" --reps 7
+          PYTHONPATH="$BASE" python benchmarks/v030_r24_tiny_create_abba_oracle.py --src "$SRC" --archive "$OUT/base-b.cmpct" --output "$OUT/base-b.json" --reps 7
+      - name: Aggregate causal diagnostic
+        run: |
+          python - <<'PY'
+          import json, os, statistics
+          from pathlib import Path
+          out=Path(os.environ['RUNNER_TEMP'])/'cmpct-tiny-abba'
+          rows={n:json.loads((out/f'{n}.json').read_text()) for n in ('base-a','candidate-a','candidate-b','base-b')}
+          base=statistics.median([rows['base-a']['median_s'], rows['base-b']['median_s']])
+          cand=statistics.median([rows['candidate-a']['median_s'], rows['candidate-b']['median_s']])
+          delta=cand-base
+          ratio=cand/base if base else float('inf')
+          base_ids={(rows[n]['archive_bytes'],rows[n]['archive_sha256']) for n in ('base-a','base-b')}
+          cand_ids={(rows[n]['archive_bytes'],rows[n]['archive_sha256']) for n in ('candidate-a','candidate-b')}
+          base_modules={rows[n]['builder_module'] for n in ('base-a','base-b')}
+          cand_modules={rows[n]['builder_module'] for n in ('candidate-a','candidate-b')}
+          evidence={
+            'schema':'cmpct-v030-r24-tiny-create-abba-v1',
+            'base_median_s':base,
+            'candidate_median_s':cand,
+            'ratio':ratio,
+            'delta_s':delta,
+            'reproducible_release_regression': bool(ratio>1.10 and delta>0.003),
+            'archive_identity_equal': base_ids==cand_ids and len(base_ids)==1,
+            'base_module_is_worktree': all('/cmpct-tiny-base/src/cmpct/' in p for p in base_modules),
+            'candidate_module_is_checkout': all('/.CMPCT/src/cmpct/' in p for p in cand_modules),
+            'arms':rows,
+            'release_credit':False,
+          }
+          evidence['experiment_valid']=evidence['archive_identity_equal'] and evidence['base_module_is_worktree'] and evidence['candidate_module_is_checkout']
+          (out/'evidence.json').write_text(json.dumps(evidence,indent=2)+'\n')
+          print(json.dumps(evidence,indent=2))
+          if not evidence['experiment_valid']:
+              raise SystemExit('tiny ABBA identity/engine binding invalid')
+          PY
+      - name: Upload focused evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: v030-r24-tiny-create-abba
+          path: ${{ runner.temp }}/cmpct-tiny-abba/
+          if-no-files-found: warn
+      - name: CI topology self-check
+        run: python tools/check_ci_topology.py .github/workflows/v030-r24-tiny-create-abba.yml
+
+# Diagnostic only. The authoritative r24/ZIP gate remains unchanged: >10% AND >3 ms slowdown is still red.
