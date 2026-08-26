@@ -31,8 +31,8 @@ public final class CmpctAndroidCompactControlTest {
     public void compactControlUsesSharedPortableReaderAndExactMemberBytes() throws Exception {
         Context target = InstrumentationRegistry.getInstrumentation().getTargetContext();
         Context tests = InstrumentationRegistry.getInstrumentation().getContext();
-        JSONObject vector = new JSONObject(readAsset(tests, "v030-compact-control-android.json"));
-        assertEquals("cmpct-v030-android-compact-control-vector-v1", vector.getString("schema"));
+        JSONObject vector = new JSONObject(readSmallAsset(tests, "v030-compact-control-android.json"));
+        assertEquals("cmpct-v030-android-compact-control-vector-v2", vector.getString("schema"));
         assertEquals("r24-compact-control-v1", vector.getString("profile"));
         assertEquals(25, vector.getInt("revision"));
 
@@ -42,13 +42,29 @@ public final class CmpctAndroidCompactControlTest {
         assertTrue(facts.getBoolean("two_authenticated_control_copies"));
         assertTrue(facts.getBoolean("strictly_smaller_than_source_r24"));
 
-        byte[] archiveBytes = Base64.decode(vector.getString("archive_base64"), Base64.DEFAULT);
-        assertEquals(vector.getString("archive_sha256"), sha256(archiveBytes));
+        // The archive is deliberately a separate binary asset. Copy + hash it incrementally so the
+        // low-memory API-29 instrumentation process never holds base64 text plus decoded bytes plus
+        // the native reader state at the same time.
         File source = new File(target.getCacheDir(), "android-r25-compact-control.cmpct");
-        try (FileOutputStream out = new FileOutputStream(source)) {
-            out.write(archiveBytes);
+        String archiveSha;
+        long archiveBytes;
+        try (InputStream in = tests.getAssets().open(vector.getString("archive_asset"));
+             FileOutputStream out = new FileOutputStream(source)) {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            byte[] buffer = new byte[16 * 1024];
+            long total = 0;
+            int n;
+            while ((n = in.read(buffer)) != -1) {
+                out.write(buffer, 0, n);
+                digest.update(buffer, 0, n);
+                total += n;
+            }
             out.getFD().sync();
+            archiveSha = hex(digest.digest());
+            archiveBytes = total;
         }
+        assertEquals(vector.getLong("archive_bytes"), archiveBytes);
+        assertEquals(vector.getString("archive_sha256"), archiveSha);
 
         ArchiveRegistry.Record record = ArchiveRegistry.importArchive(target, Uri.fromFile(source));
         try (CmpctNative.Archive archive = new CmpctNative.Archive(record.file.getAbsolutePath())) {
@@ -97,7 +113,7 @@ public final class CmpctAndroidCompactControlTest {
         return archive.readRange(index, 0, (int) size);
     }
 
-    private static String readAsset(Context context, String name) throws Exception {
+    private static String readSmallAsset(Context context, String name) throws Exception {
         try (InputStream in = context.getAssets().open(name);
              ByteArrayOutputStream out = new ByteArrayOutputStream()) {
             byte[] buffer = new byte[16 * 1024];
