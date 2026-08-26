@@ -39,6 +39,7 @@ def test_compact_control_preserves_physical_payload_and_semantic_tree(tmp_path: 
     assert verified["format_profile"] == CC.PROFILE
     assert verified["pack_verification_policy"] == "authenticated-physical-pack-sha-once"
     assert verified["verified_pack_records"] > 0
+    assert verified["compatibility_materialization"] is False
     assert stats["archive_bytes"] < stats["source_r24_bytes"]
     assert stats["physical_payload_records_unchanged"] is True
     assert stats["two_authenticated_control_copies"] is True
@@ -156,6 +157,27 @@ def test_compact_control_ephemeral_r24_uses_fast_index_without_semantic_change(t
     assert rebuilt["tree_sha256"] == baseline["tree_sha256"]
     candidate = CC.strong_verify(out)
     assert candidate["ok"] is True
-    assert candidate["compatibility_index_level"] == 1
+    assert candidate["compatibility_index_level"] is None
+    assert candidate["compatibility_materialization"] is False
     assert candidate["pack_verification_policy"] == "authenticated-physical-pack-sha-once"
     assert candidate["tree_sha256"] == baseline["tree_sha256"]
+
+
+def test_compact_control_strong_verify_never_materializes_compatibility_archive(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    src = tmp_path / "src"
+    _tree(src)
+    r24 = tmp_path / "source.cmpct"
+    PRODUCT._locality_bounded_r24_build(src, r24)
+    out = tmp_path / "candidate.cmpct"
+    CC._write_profile(r24, out)
+    baseline = PRODUCT.strong_verify(r24)
+    assert baseline["ok"] is True
+
+    def forbidden(_parsed: dict) -> bytes:
+        raise AssertionError("strong verification must not rebuild a compatibility r24 archive")
+
+    monkeypatch.setattr(CC, "_rebuild_r24_bytes", forbidden)
+    verified = CC.strong_verify(out)
+    assert verified["ok"] is True
+    assert verified["compatibility_materialization"] is False
+    assert verified["tree_sha256"] == baseline["tree_sha256"]
