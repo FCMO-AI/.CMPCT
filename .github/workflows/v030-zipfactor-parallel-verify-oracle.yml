@@ -48,21 +48,27 @@ jobs:
             --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-zf-parallel-verify-work" \
             --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-zf-parallel-verify.json" \
             --rounds 31
-      - name: Independently enforce identity and speed result
+      - name: Independently enforce valid experiment and fail-closed promotion boundary
         run: |
           python - <<'PY'
           import json
           from pathlib import Path
           d=json.loads(Path('benchmark-artifacts/v030-zf-parallel-verify.json').read_text())
           g=d['gate']
-          assert d['schema']=='cmpct-v030-zipfactor-parallel-verify-oracle-v1'
+          assert d['schema']=='cmpct-v030-zipfactor-parallel-verify-oracle-v2'
           assert g['exact_manifest_and_logical_identities'] is True
+          assert g['bounds_and_membership_valid'] is True
+          assert g['experiment_valid'] is True
           assert d['verification_snapshot']['verified_user_files']==14
           assert d['verification_snapshot']['max_member_read_amplification']<=8.0
           assert d['verification_snapshot']['max_decode_unit_bytes']<=8*1024*1024
-          assert g['parallel_strictly_faster'] is True
-          assert g['parallel_median_s'] < g['serial_median_s']
-          assert g['passed'] is True
+          assert g['release_credit'] is False
+          assert g['promotion_signal'] is (g['parallel_strictly_faster'] and g['parallel_median_s'] < g['serial_median_s'])
+          # A valid slower result is preserved negative evidence; it cannot silently become promotion credit.
+          if not g['parallel_strictly_faster']:
+              assert g['promotion_signal'] is False
+              assert g['improvement_s'] <= 0.0
+              assert g['improvement_pct'] <= 0.0
           PY
       - name: CI topology self-check
         run: python tools/check_ci_topology.py .github/workflows/v030-zipfactor-parallel-verify-oracle.yml
@@ -75,6 +81,7 @@ jobs:
           if-no-files-found: warn
           retention-days: 90
 
-# This lane is deliberately non-authoritative. A green result only proves that the same ZIP-factor verification
-# facts can be obtained faster by bounded independent-group verification. Production dispatch, recovery, native/
-# Android support and the strict external competitor release gate remain separate mandatory blockers.
+# This lane is deliberately non-authoritative. A green lane means the experiment itself is exact and bounded;
+# promotion_signal separately records whether bounded parallel verification is actually faster. A valid negative
+# result earns zero release/selector credit. Production dispatch, recovery, native/Android support and the strict
+# external competitor release gate remain separate mandatory blockers.
