@@ -38,7 +38,7 @@ def _directory_truth(src: Path) -> list[str]:
     return sorted(path.relative_to(src).as_posix() for path in src.rglob("*") if path.is_dir())
 
 
-def build_vector(output: Path, work_root: Path) -> dict:
+def build_vector(output: Path, archive_output: Path, work_root: Path) -> dict:
     shutil.rmtree(work_root, ignore_errors=True)
     src = work_root / "src"
     src.mkdir(parents=True)
@@ -70,12 +70,20 @@ def build_vector(output: Path, work_root: Path) -> dict:
     directories = _directory_truth(src)
     archive_raw = archive.read_bytes()
     representative = "medium/chunk-000.bin"
+
+    # Keep the multi-megabyte archive as a binary Android test asset instead of base64-embedding it
+    # in JSON. The latter transiently doubles the vector in a Java String and can exceed the API-29
+    # instrumentation heap before the JNI reader is even exercised. Metadata still binds the binary
+    # asset by exact size + SHA-256, so this changes test transport only, not the conformance vector.
+    archive_output.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copyfile(archive, archive_output)
     vector = {
-        "schema": "cmpct-v030-android-compact-control-vector-v1",
+        "schema": "cmpct-v030-android-compact-control-vector-v2",
         "profile": "r24-compact-control-v1",
         "revision": 25,
+        "archive_asset": archive_output.name,
         "archive_sha256": _sha256(archive_raw),
-        "archive_base64": base64.b64encode(archive_raw).decode("ascii"),
+        "archive_bytes": len(archive_raw),
         "expected_paths": sorted(truth),
         "expected_directory_paths": directories,
         "expected_regular_entry_count": len(truth),
@@ -102,14 +110,17 @@ def build_vector(output: Path, work_root: Path) -> dict:
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--archive-output", type=Path, required=True)
     parser.add_argument("--work-root", type=Path, required=True)
     args = parser.parse_args()
-    vector = build_vector(args.output, args.work_root)
+    vector = build_vector(args.output, args.archive_output, args.work_root)
     print(
         json.dumps(
             {
                 "schema": vector["schema"],
+                "archive_asset": vector["archive_asset"],
                 "archive_sha256": vector["archive_sha256"],
+                "archive_bytes": vector["archive_bytes"],
                 "expected_entry_count": vector["expected_entry_count"],
                 "facts": vector["facts"],
             },
