@@ -61,12 +61,14 @@ jobs:
           from pathlib import Path
           p=Path(os.environ['RUNNER_TEMP'])/'v030-zipfactor-native-complete.json'
           e=json.loads(p.read_text())
-          assert e['schema']=='cmpct-v030-zipfactor-native-complete-frontier-v1'
+          assert e['schema']=='cmpct-v030-zipfactor-native-complete-frontier-v2'
           c=e['contract']
           assert c['rounds']==9
           assert c['cmpct_timing']=='exact-v3-build-plus-native-strong-verify'
           assert c['native_process_startup_inside_timing'] is True
           assert c['native_compile_inside_timing'] is False
+          assert c['external_identity_domain']=='frozen-external-treehash'
+          assert c['cmpct_identity_domain']=='canonical-r25-semantic-tree'
           assert c['ties_fail'] is True
           assert c['archive_bytes_changed'] is False
           assert c['selector_change'] is False and c['release_credit'] is False
@@ -74,6 +76,8 @@ jobs:
           assert len(e['samples_s']['cmpct'])==9
           assert len(e['samples_s']['zip'])==9
           assert len(e['samples_s']['zstd19'])==9
+          assert e['candidate']['tree_sha256']==e['source_identity']['canonical_tree_sha256']
+          assert e['source_identity']['external_tree_sha256']
           assert e['candidate']['max_member_read_amplification'] <= 8.0
           assert e['candidate']['max_decode_unit_bytes'] <= 8*1024*1024
           assert e['sizes']['cmpct'] < e['sizes']['zip']
