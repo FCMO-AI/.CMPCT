@@ -3,15 +3,15 @@ from __future__ import annotations
 """Exact A/B for the C25CC01 source-shape preflight.
 
 The promoted C25CC01 shipping win has only a small ZIP creation-time margin on
-some runners.  Before the real r24 build starts, the release front door walks
-high-file-count trees once only to count regular files and logical bytes.  The
-current implementation pays Path construction plus lstat for every file.  This
-oracle tests whether a direct os.scandir traversal can remove a material part
-of that fixed preflight tax without changing eligibility semantics.
+some runners. Before the real r24 build starts, the historical release front
+door walked high-file-count trees once only to count regular files and logical
+bytes, paying Path construction plus lstat for every file. This oracle keeps
+that historical implementation frozen locally and compares it with the direct
+``os.scandir`` traversal now used by the release product.
 
-Research only: this file changes no selector or product behavior.  Promotion
-requires exact shape/prefilter parity on adversarial trees and a meaningful
-same-runner speedup.  A negative result remains valid negative evidence.
+Research evidence only: archive bytes and selector thresholds are unchanged.
+Promotion/evidence requires exact shape/prefilter parity on adversarial trees
+and a meaningful same-runner speedup. A negative result remains valid evidence.
 """
 
 import argparse
@@ -29,6 +29,29 @@ from experiments import entropygraph_v030_release_product as PRODUCT
 ROUNDS = 11
 MIN_RELATIVE_SPEEDUP = 0.20
 MIN_ABSOLUTE_SPEEDUP_S = 0.003
+
+
+def _legacy_shape(root: Path) -> dict:
+    """Frozen pre-promotion os.walk + Path + lstat source-shape implementation."""
+    root = Path(root)
+    regular_files = 0
+    logical_bytes = 0
+    for dirpath, dirnames, filenames in os.walk(root, followlinks=False):
+        dirnames[:] = [name for name in dirnames if not os.path.islink(Path(dirpath) / name)]
+        for name in filenames:
+            path = Path(dirpath) / name
+            try:
+                st = os.lstat(path)
+            except OSError:
+                continue
+            if stat.S_ISREG(st.st_mode):
+                regular_files += 1
+                logical_bytes += int(st.st_size)
+    return {
+        "regular_files": regular_files,
+        "logical_bytes": logical_bytes,
+        "average_regular_bytes": logical_bytes / max(1, regular_files),
+    }
 
 
 def _scandir_shape(root: Path) -> dict:
@@ -70,8 +93,6 @@ def _build_tree(root: Path) -> None:
         for i in range(128):
             size = 4096 + ((d * 131 + i * 17) % 2048)
             (directory / f"f{i:04d}.bin").write_bytes(rng.randbytes(size))
-    # Exercise zero-byte and small regular files without changing the expected
-    # prefilter verdict.  Symlinks, where supported, must remain excluded.
     (root / "empty").write_bytes(b"")
     (root / "tiny").write_bytes(b"x")
     try:
@@ -101,25 +122,29 @@ def main() -> None:
         samples = []
         baseline_shape = None
         candidate_shape = None
+        shipping_shape = None
         for rep in range(ROUNDS):
             order = ("baseline", "candidate") if rep % 2 == 0 else ("candidate", "baseline")
             row = {}
             for name in order:
                 if name == "baseline":
-                    shape, elapsed = _time(PRODUCT._compact_control_source_shape, source)
+                    shape, elapsed = _time(_legacy_shape, source)
                     baseline_shape = shape
                 else:
                     shape, elapsed = _time(_scandir_shape, source)
                     candidate_shape = shape
                 row[name] = elapsed
             samples.append(row)
+        shipping_shape = PRODUCT._compact_control_source_shape(source)
 
-        assert baseline_shape is not None and candidate_shape is not None
-        shape_exact = baseline_shape == candidate_shape
+        assert baseline_shape is not None and candidate_shape is not None and shipping_shape is not None
+        shape_exact = baseline_shape == candidate_shape == shipping_shape
         prefilter_exact = (
             PRODUCT._compact_control_source_prefilter(baseline_shape)
             == PRODUCT._compact_control_source_prefilter(candidate_shape)
+            == PRODUCT._compact_control_source_prefilter(shipping_shape)
         )
+        shipping_uses_candidate = shipping_shape == candidate_shape
         baseline_median = statistics.median(row["baseline"] for row in samples)
         candidate_median = statistics.median(row["candidate"] for row in samples)
         absolute = baseline_median - candidate_median
@@ -129,11 +154,11 @@ def main() -> None:
             and absolute >= MIN_ABSOLUTE_SPEEDUP_S
             and relative >= MIN_RELATIVE_SPEEDUP
         )
-        experiment_valid = shape_exact and prefilter_exact
+        experiment_valid = shape_exact and prefilter_exact and shipping_uses_candidate
         promotion_signal = experiment_valid and material_speedup
 
         result = {
-            "schema": "cmpct-v030-c25cc01-scandir-source-shape-v1",
+            "schema": "cmpct-v030-c25cc01-scandir-source-shape-v2",
             "contract": {
                 "rounds": ROUNDS,
                 "min_relative_speedup": MIN_RELATIVE_SPEEDUP,
@@ -141,9 +166,12 @@ def main() -> None:
                 "archive_bytes_changed": False,
                 "selector_changed": False,
                 "release_credit": False,
+                "baseline": "frozen-os-walk-path-lstat",
+                "candidate": "os-scandir-direntry",
             },
             "baseline_shape": baseline_shape,
             "candidate_shape": candidate_shape,
+            "shipping_shape": shipping_shape,
             "samples": samples,
             "median_baseline_s": baseline_median,
             "median_candidate_s": candidate_median,
@@ -152,6 +180,7 @@ def main() -> None:
             "gate": {
                 "shape_exact": shape_exact,
                 "prefilter_exact": prefilter_exact,
+                "shipping_uses_candidate": shipping_uses_candidate,
                 "experiment_valid": experiment_valid,
                 "material_speedup": material_speedup,
                 "promotion_signal": promotion_signal,
