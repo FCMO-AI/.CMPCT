@@ -81,11 +81,17 @@ jobs:
           assert result['integration_order']=='attempt5-graph -> G0-G4-geometry-overlay -> accepted-v029-tournament'
           assert result['selected']=='geometry-overlay-g04'
           assert result['transformed_records'] > 0
-          assert result['hierarchical_screened_candidates'] > 0
-          assert result['hierarchical_exact_finalists'] > 0
+          # Prove the G3/G4 reactor itself was actually invoked. Zero nominated
+          # candidates/finalists is a legitimate content-derived negative result,
+          # not evidence that the hierarchy stage was skipped.
+          assert result['hierarchical_audition_attempts'] > 0
+          assert result['hierarchical_screened_candidates'] >= 0
+          assert result['hierarchical_exact_finalists'] >= 0
+          assert result['hierarchical_exact_finalists'] <= result['hierarchical_screened_candidates']
           assert result['max_selected_member_read_amplification'] <= contract['maximum_selected_member_read_amplification'] <= 8.0
           assert result['selection_materialization']=='same-filesystem-atomic-move'
           assert result['selection_extra_payload_write_bytes']==0
+          assert gate['hierarchical_search_exercised'] is True
           assert gate['experiment_valid'] is True
           assert gate['passed'] is True
           assert gate['promotion_signal'] is gate['composition_breakthrough']
