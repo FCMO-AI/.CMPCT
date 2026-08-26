@@ -6,6 +6,9 @@ Both candidates pay fused source construction plus cold full identity verificati
 ZIP and solid-Zstd comparators and the <=8x / <=8 MiB locality laws. It cannot authorize selector promotion or
 native/Android support; its purpose is to determine whether removing compressed MessagePack control metadata is a
 material Pareto improvement worth carrying into the canonical/native profile.
+
+A valid exact experiment is deliberately distinct from a promotion signal. A candidate that is smaller but slower
+is durable negative evidence, not an invalid experiment and not release credit.
 """
 
 import argparse
@@ -18,7 +21,6 @@ import time
 from benchmarks import resemblance_hostile_corpus_v1 as CORPUS
 from benchmarks import v030_external_competitors as EXT
 from experiments import entropygraph_v030_canonical_final_impl as CANON
-from experiments import entropygraph_v030_product_fs as FS
 from experiments import entropygraph_v030_zipfactor_compact as V2
 from experiments import entropygraph_v030_zipfactor_compact_v3 as V3
 from experiments import entropygraph_v030_zipfactor_fused as FUSED
@@ -84,7 +86,7 @@ def run(work_root: Path) -> dict:
             candidate["beats_zstd19_create"] = float(candidate["create_s"]) < float(zstd_result["create_s"])
 
         result = {
-            "schema": "cmpct-v030-zipfactor-binary-control-oracle-v1",
+            "schema": "cmpct-v030-zipfactor-binary-control-oracle-v2",
             "claim_boundary": "research product-boundary A/B only; selector/native/Android/recovery promotion remains forbidden",
             "workload": "resemblance_hostile_v1/04_deflate_family",
             "source_semantic_tree_sha256": source_semantic,
@@ -99,7 +101,7 @@ def run(work_root: Path) -> dict:
             "build_s": float(v3["build_s"]) - float(v2["build_s"]),
             "verify_s": float(v3["verify_s"]) - float(v2["verify_s"]),
         }
-        result["gate"] = {
+        gate = {
             "v2_exact": v2["strong_verify_green"] and v2["semantic_tree_exact"] and v2["locality_green"],
             "v3_exact": v3["strong_verify_green"] and v3["semantic_tree_exact"] and v3["locality_green"],
             "v3_smaller_than_v2": int(v3["archive_bytes"]) < int(v2["archive_bytes"]),
@@ -109,7 +111,18 @@ def run(work_root: Path) -> dict:
             "v3_strictly_beats_zip_create": v3["beats_zip_create"],
             "v3_strictly_beats_zstd19_create": v3["beats_zstd19_create"],
         }
-        result["gate"]["passed"] = all(result["gate"].values())
+        gate["experiment_valid"] = bool(gate["v2_exact"] and gate["v3_exact"])
+        gate["promotion_signal"] = bool(
+            gate["experiment_valid"]
+            and gate["v3_smaller_than_v2"]
+            and gate["v3_faster_than_v2"]
+            and gate["v3_strictly_beats_zip_size"]
+            and gate["v3_strictly_beats_zstd19_size"]
+            and gate["v3_strictly_beats_zip_create"]
+            and gate["v3_strictly_beats_zstd19_create"]
+        )
+        gate["release_credit"] = False
+        result["gate"] = gate
         return result
 
 
@@ -122,8 +135,8 @@ def main() -> None:
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8")
     print(json.dumps({"delta": result["delta"], "v3": result["binary_control_v3"], "gate": result["gate"]}, indent=2), flush=True)
-    if not result["gate"]["passed"]:
-        raise SystemExit("binary-control ZIP-factor promotion oracle failed")
+    if not result["gate"]["experiment_valid"]:
+        raise SystemExit("binary-control ZIP-factor experiment invalid")
 
 
 if __name__ == "__main__":
