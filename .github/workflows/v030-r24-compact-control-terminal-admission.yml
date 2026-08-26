@@ -52,6 +52,13 @@ jobs:
           python -m benchmarks.v030_r24_compact_control_terminal_admission \
             --work-root "$RUNNER_TEMP/v030-cc-terminal" \
             --output "$RUNNER_TEMP/v030-cc-terminal.json"
+      - name: Retain all-15 admission evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: v030-r24-compact-control-terminal-admission
+          path: ${{ runner.temp }}/v030-cc-terminal.json
+          if-no-files-found: warn
       - name: Independently ratchet admission contract
         run: |
           python - <<'PY'
@@ -90,6 +97,13 @@ jobs:
           python -m benchmarks.v030_r24_compact_control_terminal_generalization \
             --work-root "$RUNNER_TEMP/v030-cc-terminal-generalization" \
             --output "$RUNNER_TEMP/v030-cc-terminal-generalization.json"
+      - name: Retain unseen/adversarial evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: v030-r24-compact-control-terminal-generalization
+          path: ${{ runner.temp }}/v030-cc-terminal-generalization.json
+          if-no-files-found: warn
       - name: Ratchet unseen/adversarial disproof surface
         run: |
           python - <<'PY'
