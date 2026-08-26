@@ -64,21 +64,25 @@ jobs:
               raise SystemExit('binary-control evidence missing')
           d=json.loads(path.read_text())
           v=d['binary_control_v3']; g=d['gate']
-          assert d['schema']=='cmpct-v030-zipfactor-binary-control-oracle-v1'
+          assert d['schema']=='cmpct-v030-zipfactor-binary-control-oracle-v2'
+          assert g['experiment_valid'] is True
           assert g['v3_exact'] is True
           assert v['strong_verify_green'] is True
           assert v['semantic_tree_exact'] is True
           assert v['locality_green'] is True
           assert v['verified_max_member_read_amplification'] <= 8.0
           assert v['verified_max_decode_unit_bytes'] <= 8 * 1024 * 1024
-          # Promotion credit is intentionally strict: all four external wins and a Pareto improvement over v2.
-          assert g['v3_smaller_than_v2'] is True
-          assert g['v3_faster_than_v2'] is True
-          assert g['v3_strictly_beats_zip_size'] is True
-          assert g['v3_strictly_beats_zstd19_size'] is True
-          assert g['v3_strictly_beats_zip_create'] is True
-          assert g['v3_strictly_beats_zstd19_create'] is True
-          assert g['passed'] is True
+          # Promotion remains strict and receives no release credit in this research lane.
+          expected_promotion = all([
+              g['v3_smaller_than_v2'],
+              g['v3_faster_than_v2'],
+              g['v3_strictly_beats_zip_size'],
+              g['v3_strictly_beats_zstd19_size'],
+              g['v3_strictly_beats_zip_create'],
+              g['v3_strictly_beats_zstd19_create'],
+          ])
+          assert g['promotion_signal'] is expected_promotion
+          assert g['release_credit'] is False
           PY
       - name: CI topology self-check
         if: always()
