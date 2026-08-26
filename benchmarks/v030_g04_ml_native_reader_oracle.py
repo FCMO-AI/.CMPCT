@@ -3,13 +3,14 @@ from __future__ import annotations
 """Measure the existing Rust G0-G4 reader against the canonical Python ML reader.
 
 This is a research-only execution-path oracle. It changes no archive bytes, grammar, cache budget,
-locality law, recovery rule or SHA-256 requirement. The Rust CLI is built before timing; each timed
-sample includes ordinary process startup plus native archive open/verify or transactional extract.
-The Python baseline is the current canonical G0-G4 streaming reader used by the release product.
+locality law, recovery rule or SHA-256 requirement. The Rust CLI is built before timing. Native samples
+now pass through the fail-closed process bridge intended for any later release integration rather than
+calling the executable ad hoc; extraction therefore includes the caller output-budget preflight that
+shipping would require.
 
 A positive result does not switch shipping by itself. It establishes whether the already-existing
-portable Rust reader is fast enough to justify wiring the ML complete verify/extract hot path to
-native code and then re-earning reader/fuzz/native/Android/runtime authority.
+portable Rust reader is fast enough, through a productizable call boundary, to justify wiring the ML
+complete verify/extract hot path to native code and then re-earning reader/fuzz/native/Android/runtime authority.
 """
 
 import argparse
@@ -17,10 +18,10 @@ import json
 from pathlib import Path
 import shutil
 import statistics
-import subprocess
 import time
 
 from benchmarks import v030_release_performance as PERF
+from experiments import entropygraph_v030_native_reader_bridge as NATIVE
 from experiments import entropygraph_v030_release_product as PRODUCT
 from experiments import entropygraph_v030_release_reader as RR
 
@@ -35,19 +36,21 @@ def _python_measure(archive: Path, destination: Path | None) -> tuple[float, dic
     return time.perf_counter() - started, result
 
 
-def _native_measure(cli: Path, command: str, archive: Path, destination: Path | None = None) -> float:
-    argv = [str(cli), command, str(archive)]
-    if destination is not None:
-        argv.append(str(destination))
+def _native_verify_measure(cli: Path, archive: Path) -> tuple[float, dict]:
     started = time.perf_counter()
-    completed = subprocess.run(argv, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
-    elapsed = time.perf_counter() - started
-    if completed.returncode != 0:
-        raise RuntimeError(
-            f"native {command} failed rc={completed.returncode}: "
-            + completed.stderr.decode("utf-8", errors="replace")[-2000:]
-        )
-    return elapsed
+    receipt = NATIVE.verify_g04(cli, archive)
+    return time.perf_counter() - started, receipt
+
+
+def _native_extract_measure(cli: Path, archive: Path, destination: Path) -> tuple[float, dict]:
+    started = time.perf_counter()
+    receipt = NATIVE.extract_g04(
+        cli,
+        archive,
+        destination,
+        max_output_bytes=RR.MAX_DECLARED_LOGICAL_BYTES,
+    )
+    return time.perf_counter() - started, receipt
 
 
 def _corrupt_first_physical_payload(source: Path, target: Path) -> None:
@@ -92,18 +95,26 @@ def run(work_root: Path, native_cli: Path) -> dict:
         if not strong.get("ok") or strong.get("tree_sha256") != source_tree:
             raise RuntimeError("shipping strong verification failed before native A/B")
 
-    # Untimed warm-up validates that the native binary recognizes the exact canonical archive.
-    _native_measure(native_cli, "verify", archive)
+    # Untimed warm-up validates that the exact product bridge and native binary recognize the canonical archive.
+    warm_verify = NATIVE.verify_g04(native_cli, archive)
+    if not warm_verify.get("ok") or warm_verify.get("profile") != NATIVE.CANONICAL_G04_PROFILE:
+        raise RuntimeError("native bridge warm-up did not bind canonical G0-G4")
 
     samples = {"python_verify": [], "native_verify": [], "python_extract": [], "native_extract": []}
+    native_extract_receipts: list[dict] = []
     for round_index in range(ROUNDS):
         native_first = bool(round_index % 2)
         for native in ((True, False) if native_first else (False, True)):
             if native:
-                samples["native_verify"].append(_native_measure(native_cli, "verify", archive))
+                verify_s, verify_receipt = _native_verify_measure(native_cli, archive)
+                if not verify_receipt.get("ok") or verify_receipt.get("profile") != NATIVE.CANONICAL_G04_PROFILE:
+                    raise RuntimeError("native bridge verification receipt drift")
+                samples["native_verify"].append(float(verify_s))
                 destination = work_root / f"native-extract-{round_index}"
                 shutil.rmtree(destination, ignore_errors=True)
-                samples["native_extract"].append(_native_measure(native_cli, "extract", archive, destination))
+                extract_s, extract_receipt = _native_extract_measure(native_cli, archive, destination)
+                samples["native_extract"].append(float(extract_s))
+                native_extract_receipts.append(dict(extract_receipt))
                 if PRODUCT.treehash(destination) != source_tree:
                     raise RuntimeError("native extraction tree identity drift")
                 shutil.rmtree(destination, ignore_errors=True)
@@ -124,13 +135,18 @@ def run(work_root: Path, native_cli: Path) -> dict:
 
     corrupt = work_root / "ml-corrupt.cmpct"
     _corrupt_first_physical_payload(archive, corrupt)
-    native_corruption_rejected = subprocess.run(
-        [str(native_cli), "verify", str(corrupt)],
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        check=False,
-    ).returncode != 0
+    try:
+        NATIVE.verify_g04(native_cli, corrupt)
+    except NATIVE.NativeReaderError:
+        native_corruption_rejected = True
+    else:
+        native_corruption_rejected = False
 
+    native_budget_preserved = all(
+        int(receipt.get("declared_regular_bytes", -1)) <= int(receipt.get("caller_max_output_bytes", -2))
+        and receipt.get("transactional_native_extract") is True
+        for receipt in native_extract_receipts
+    )
     medians = {key: float(statistics.median(values)) for key, values in samples.items()}
     verify_improvement = 1.0 - medians["native_verify"] / max(medians["python_verify"], 1e-9)
     extract_improvement = 1.0 - medians["native_extract"] / max(medians["python_extract"], 1e-9)
@@ -138,21 +154,25 @@ def run(work_root: Path, native_cli: Path) -> dict:
         "archive_bytes_unchanged": True,
         "canonical_tree_preserved": True,
         "native_corruption_rejected": native_corruption_rejected,
+        "native_caller_budget_preserved": native_budget_preserved,
         "verify_materially_faster": verify_improvement >= MIN_VERIFY_IMPROVEMENT,
         "extract_materially_faster": extract_improvement >= MIN_EXTRACT_IMPROVEMENT,
     }
     gate["passed"] = all(gate.values())
     return {
-        "schema": "cmpct-v030-g04-ml-native-reader-v1",
+        "schema": "cmpct-v030-g04-ml-native-reader-v2",
         "target": "neutral_hostile_v1/09_ml_artifacts",
         "shipping_build": built,
         "native_cli": str(native_cli),
+        "native_bridge": "cmpct-portable-process-v1",
+        "native_extract_budget_preflight_timed": True,
         "rounds": ROUNDS,
         "samples_s": samples,
         "medians_s": medians,
         "verify_improvement_fraction": float(verify_improvement),
         "extract_improvement_fraction": float(extract_improvement),
         "native_corruption_rejected": native_corruption_rejected,
+        "native_caller_budget_preserved": native_budget_preserved,
         "contract": {
             "minimum_verify_improvement_fraction": MIN_VERIFY_IMPROVEMENT,
             "minimum_extract_improvement_fraction": MIN_EXTRACT_IMPROVEMENT,
@@ -161,14 +181,16 @@ def run(work_root: Path, native_cli: Path) -> dict:
             "memory_budget_changed": False,
             "locality_limit": 8.0,
             "decode_unit_limit_bytes": 8 * 1024 * 1024,
+            "caller_extract_budget_enforced_before_publication": True,
         },
         "gate": gate,
         "promotion_signal": bool(gate["passed"]),
         "release_credit": False,
         "claim_boundary": (
-            "Research-only A/B of the already-existing portable Rust G0-G4 reader against the canonical Python "
-            "complete-stream reader. A positive result only authorizes explicit native hot-path integration work; "
-            "reader/fuzz/native/Android/runtime authority must be re-earned on the integrated candidate."
+            "Research-only A/B of the existing portable Rust G0-G4 reader through the fail-closed process bridge "
+            "against the canonical Python complete-stream reader. Native extraction timing includes the public-entry "
+            "budget preflight needed to preserve the caller max-output contract. A positive result only authorizes "
+            "explicit native hot-path integration; reader/fuzz/native/Android/runtime authority must be re-earned."
         ),
     }
 
@@ -187,6 +209,7 @@ def main() -> None:
         "verify_improvement_fraction": result["verify_improvement_fraction"],
         "extract_improvement_fraction": result["extract_improvement_fraction"],
         "native_corruption_rejected": result["native_corruption_rejected"],
+        "native_caller_budget_preserved": result["native_caller_budget_preserved"],
         "promotion_signal": result["promotion_signal"],
     }, indent=2), flush=True)
     # A valid but slower native reader is still useful negative evidence. Integrity/identity failures raise above.
