@@ -93,8 +93,10 @@ jobs:
         run: |
           python tests/generate_v030_compact_control_android_vector.py \
             --output "$GITHUB_WORKSPACE/tests/conformance/v030-compact-control-android.json" \
+            --archive-output "$GITHUB_WORKSPACE/tests/conformance/v030-compact-control-android.cmpct" \
             --work-root "$RUNNER_TEMP/v030-compact-control-android-vector"
           test -s tests/conformance/v030-compact-control-android.json
+          test -s tests/conformance/v030-compact-control-android.cmpct
 
       - name: Install Rust Android targets
         run: |
@@ -230,6 +232,7 @@ jobs:
             ${{ runner.temp }}/cmpct-hosted-android-evidence.json
             tests/conformance/v030-logs-android.json
             tests/conformance/v030-compact-control-android.json
+            tests/conformance/v030-compact-control-android.cmpct
           if-no-files-found: warn
           retention-days: 30
 
