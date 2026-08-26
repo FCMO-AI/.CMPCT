@@ -1,8 +1,53 @@
 from __future__ import annotations
 
+import os
+from pathlib import Path
 import random
+import stat
 
 from experiments import entropygraph_v030_release_product as PRODUCT
+
+
+def _legacy_compact_control_source_shape(root: Path) -> dict:
+    """Frozen pre-scandir semantics used only to ratchet source-shape identity."""
+    root = Path(root)
+    regular_files = 0
+    logical_bytes = 0
+    for dirpath, dirnames, filenames in os.walk(root, followlinks=False):
+        dirnames[:] = [name for name in dirnames if not os.path.islink(Path(dirpath) / name)]
+        for name in filenames:
+            path = Path(dirpath) / name
+            try:
+                st = os.lstat(path)
+            except OSError:
+                continue
+            if stat.S_ISREG(st.st_mode):
+                regular_files += 1
+                logical_bytes += int(st.st_size)
+    return {
+        "regular_files": regular_files,
+        "logical_bytes": logical_bytes,
+        "average_regular_bytes": logical_bytes / max(1, regular_files),
+    }
+
+
+def test_compact_control_scandir_source_shape_preserves_legacy_semantics(tmp_path):
+    source = tmp_path / "shape-source"
+    (source / "nested").mkdir(parents=True)
+    (source / "a.bin").write_bytes(b"a" * 4096)
+    (source / "nested" / "b.bin").write_bytes(b"b" * 8193)
+    (source / "empty").write_bytes(b"")
+    try:
+        (source / "file-link").symlink_to(source / "a.bin")
+        (source / "dir-link").symlink_to(source / "nested", target_is_directory=True)
+    except (OSError, NotImplementedError):
+        pass
+
+    expected = _legacy_compact_control_source_shape(source)
+    actual = PRODUCT._compact_control_source_shape(source)
+    assert actual == expected
+    assert actual["regular_files"] == 3
+    assert actual["logical_bytes"] == 4096 + 8193
 
 
 def test_compact_control_prefilter_is_only_a_conservative_work_filter():
