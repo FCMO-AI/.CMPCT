@@ -38,11 +38,11 @@ jobs:
           sudo apt-get install -y zstd gcc
           python -m pip install --upgrade pip
           python -m pip install -e '.[test]'
-      - name: Compile oracle and portable reader
+      - name: Compile oracle and exact v3 preparity verifier
         run: |
           python -m py_compile benchmarks/v030_zipfactor_native_verify_oracle.py
-          cargo build --release --manifest-path native/cmpct-portable/Cargo.toml --bin cmpct-portable
-      - name: Preserve ZIP-factor native correctness before timing
+          cargo build --release --manifest-path native/cmpct-portable/Cargo.toml --bin cmpct-zipfactor-v3-preparity
+      - name: Preserve native correctness before timing
         run: |
           cargo fmt --manifest-path native/cmpct-portable/Cargo.toml -- --check
           cargo clippy --manifest-path native/cmpct-portable/Cargo.toml --all-targets -- -D warnings
@@ -51,13 +51,14 @@ jobs:
         run: |
           python -m benchmarks.v030_zipfactor_native_verify_oracle \
             --work-root "$RUNNER_TEMP/v030-zipfactor-native-verify" \
-            --native-binary "$GITHUB_WORKSPACE/native/cmpct-portable/target/release/cmpct-portable" \
+            --native-binary "$GITHUB_WORKSPACE/native/cmpct-portable/target/release/cmpct-zipfactor-v3-preparity" \
             --output "$RUNNER_TEMP/v030-zipfactor-native-verify.json"
       - name: Ratchet identity, hostile rejection and promotion boundary
         run: |
           python - <<'PY'
           import json, os
           from pathlib import Path
+          from experiments import entropygraph_v030_zipfactor_compact_v3 as V3
           p=Path(os.environ['RUNNER_TEMP'])/'v030-zipfactor-native-verify.json'
           e=json.loads(p.read_text())
           assert e['schema']=='cmpct-v030-zipfactor-native-verify-oracle-v1'
@@ -68,7 +69,7 @@ jobs:
           assert c['native_process_startup_inside_timing'] is True
           assert c['archive_bytes_changed'] is False
           assert c['selector_change'] is False and c['release_credit'] is False
-          assert e['candidate']['profile']=='zipfactor-binary-v3'
+          assert e['candidate']['profile']==V3.PROFILE
           assert e['candidate']['revision']=='25'
           assert float(e['candidate']['max_member_read_amplification']) <= 8.0
           assert int(e['candidate']['max_decode_unit_bytes']) <= 8*1024*1024
@@ -91,5 +92,6 @@ jobs:
       - name: CI topology self-check
         run: python tools/check_ci_topology.py .github/workflows/v030-zipfactor-native-verify.yml
 
-# Research-only A/B. A positive result identifies the native verification path to productize;
-# it does not itself change selector behavior or earn release credit.
+# Research-only A/B. CMP25Z3 remains deliberately outside PortableArchive production dispatch while its
+# recovery/platform promotion gates are incomplete. A positive result identifies the native verification path
+# to productize; it does not itself change selector behavior or earn release credit.
