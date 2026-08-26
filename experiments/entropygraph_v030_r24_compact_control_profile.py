@@ -14,11 +14,14 @@ from pathlib import Path
 import hashlib
 import os
 import tempfile
+import threading
 
 import msgpack
 
 from benchmarks import v030_r24_compact_control_oracle as CONTROL
 from cmpct import codec as R24
+from cmpct import reader as R24_READER
+from cmpct.path_policy import canonical_logical_path
 from cmpct.reader import CMPCT
 from experiments import entropygraph_v030_release_product as PRODUCT
 
@@ -28,10 +31,9 @@ REVISION = 25
 PROFILE = "r24-compact-control-v1"
 LEVELS = CONTROL.LEVELS
 MAX_CONTROL_RAW_BYTES = 64 * 1024 * 1024
-# The reconstructed r24 envelope is ephemeral verifier/reader compatibility state, not product bytes. Its compressed
-# index only has to round-trip exactly through the mature r24 grammar, so paying the mature encoder's level-12 size
-# optimization here is redundant CPU. Level 1 preserves the exact authenticated semantic index while minimizing the
-# compatibility bridge latency that is currently material to the ZIP-speed leg.
+# Compatibility materialization remains available for ordinary list/read/extract delegation, but strong verification
+# no longer needs to synthesize and physically write a second ~10 MiB r24 archive. The authenticated expanded index
+# plus unchanged physical data span are already the exact inputs the mature r24 reader consumes.
 COMPAT_INDEX_LEVEL = 1
 
 
@@ -220,41 +222,106 @@ def _materialized_r24(archive: Path):
         yield path, parsed
 
 
-def _verify_materialized_r24(path: Path) -> dict:
-    """Strongly verify the compatibility r24 while hashing each physical S_PACK only once.
+def _validate_expanded_index(index: dict) -> None:
+    files = index.get("files")
+    if not isinstance(files, list):
+        raise CompactControlError("expanded compact-control index has invalid files table")
+    canonical_seen: set[str] = set()
+    logical_seen: set[str] = set()
+    for row in files:
+        if not isinstance(row, list) or len(row) < 7 or not isinstance(row[0], str):
+            raise CompactControlError("expanded compact-control index has invalid file row")
+        if row[0] in logical_seen:
+            raise CompactControlError(f"duplicate logical path in compact-control index: {row[0]!r}")
+        logical_seen.add(row[0])
+        try:
+            key, _ = canonical_logical_path(row[0])
+        except ValueError as exc:
+            raise CompactControlError(f"unsafe compact-control logical path: {exc}") from exc
+        if key in canonical_seen:
+            raise CompactControlError(f"duplicate canonical logical path in compact-control index: {row[0]!r}")
+        canonical_seen.add(key)
 
-    Mature ``CMPCT.verify`` necessarily computes a logical hash per member. S_PACK slices do not carry an independent
-    per-slice digest; their security boundary is the authenticated index plus the owning physical blob identity. The
-    generic path therefore re-reads/re-hashes the same pack slices without gaining an independent check. C25CC01's
-    native reader already authenticates the owning physical pack before deriving slice identities. Mirror that exact
-    boundary here: validate each owning pack's full SHA-256 once, still execute every logical member read/size check,
-    and retain ordinary per-member SHA verification everywhere an independent identity exists.
+
+@contextmanager
+def _direct_r24_reader(parsed: dict):
+    """Expose authenticated C25CC01 semantics through the mature r24 decoder without a compatibility file.
+
+    The expanded index was authenticated by one of the two C25CC01 control copies and the data span is byte-for-byte
+    the mature r24 physical span. Blob offsets are relative to that span, so the mature decoder can consume the bytes
+    directly with record_base=0. This removes recompressing the expanded index, concatenating a second archive, writing
+    ~10 MiB to a temporary file and mmaping/re-reading it during every mandatory strong verification.
     """
-    with CMPCT(path) as reader:
-        verified_files = 0
-        verified_packs: set[int] = set()
-        for row in reader.files:
-            if row[1] == R24.K_DIR:
-                continue
-            raw = reader.read(row[0])
-            storage = row[6]
-            if storage and storage[0] == R24.S_PACK:
-                pack_idx = int(storage[1])
-                if pack_idx not in verified_packs:
-                    pack = reader._blob(pack_idx)
-                    off = int(reader.blobs[pack_idx][0])
-                    pos = int(reader.record_base) + off
-                    header = R24.BHDR.unpack_from(reader.mm, pos)
-                    expected_sha = bytes(header[-1])
-                    if _sha(pack) != expected_sha:
-                        raise CompactControlError(f"physical S_PACK SHA-256 verification failure: {pack_idx}")
-                    verified_packs.add(pack_idx)
-            else:
-                want = reader.file_sha256(row[0])
-                if _sha(raw) != want:
-                    raise CompactControlError(f"SHA-256 verification failure: {row[0]}")
-            verified_files += 1
-        tree = PRODUCT._r24_user_tree_sha(reader)
+    index = parsed["index"]
+    _validate_expanded_index(index)
+    reader = CMPCT.__new__(CMPCT)
+    reader.path = Path("<c25cc01-direct>")
+    reader.f = None
+    reader.index = index
+    reader.record_base = 0
+    reader.mm = parsed["data"]
+    reader.files = index["files"]
+    reader.by = {row[0]: row for row in reader.files}
+    reader.blobs = index["blobs"]
+    reader.recipes = index["recipes"]
+    reader.dict_idx = index.get("dict_blob")
+    reader.fsmeta = index.get("fsmeta", {})
+    reader.cache = {}
+    reader.vcache = {}
+    reader._io_lock = threading.Lock()
+    reader._cache_lock = threading.Lock()
+    reader._zdict_lock = threading.Lock()
+    reader._inflate_lock = threading.Lock()
+    reader._dctx = None
+    reader._ddict = None
+    reader._dict_bytes = None
+    reader._inflater = None
+    reader._executor = None
+    try:
+        yield reader
+    finally:
+        if reader._executor is not None:
+            reader._executor.shutdown(wait=True)
+            reader._executor = None
+        if reader._ddict is not None:
+            R24_READER._z.ZSTD_freeDDict(reader._ddict)
+            reader._ddict = None
+        if reader._dctx is not None:
+            R24_READER._z.ZSTD_freeDCtx(reader._dctx)
+            reader._dctx = None
+
+
+def _verify_r24_reader(reader: CMPCT) -> dict:
+    """Strongly verify r24 semantics while hashing each physical S_PACK only once.
+
+    S_PACK slices do not carry independent per-slice digests; their security boundary is the authenticated index plus
+    the owning physical blob identity. Authenticate each owning pack's full SHA-256 once, still execute every logical
+    member read/size check, and retain ordinary per-member SHA verification anywhere an independent identity exists.
+    """
+    verified_files = 0
+    verified_packs: set[int] = set()
+    for row in reader.files:
+        if row[1] == R24.K_DIR:
+            continue
+        raw = reader.read(row[0])
+        storage = row[6]
+        if storage and storage[0] == R24.S_PACK:
+            pack_idx = int(storage[1])
+            if pack_idx not in verified_packs:
+                pack = reader._blob(pack_idx)
+                off = int(reader.blobs[pack_idx][0])
+                pos = int(reader.record_base) + off
+                header = R24.BHDR.unpack_from(reader.mm, pos)
+                expected_sha = bytes(header[-1])
+                if _sha(pack) != expected_sha:
+                    raise CompactControlError(f"physical S_PACK SHA-256 verification failure: {pack_idx}")
+                verified_packs.add(pack_idx)
+        else:
+            want = reader.file_sha256(row[0])
+            if _sha(raw) != want:
+                raise CompactControlError(f"SHA-256 verification failure: {row[0]}")
+        verified_files += 1
+    tree = PRODUCT._r24_user_tree_sha(reader)
     return {
         "ok": True,
         "format_revision": 24,
@@ -267,30 +334,37 @@ def _verify_materialized_r24(path: Path) -> dict:
     }
 
 
+def _verify_materialized_r24(path: Path) -> dict:
+    with CMPCT(path) as reader:
+        return _verify_r24_reader(reader)
+
+
 def strong_verify(archive: Path) -> dict:
     try:
-        with _materialized_r24(Path(archive)) as (r24, parsed):
-            verified = _verify_materialized_r24(r24)
-            if not verified.get("ok") or int(verified.get("format_revision", -1)) != 24:
-                raise CompactControlError(f"expanded r24 strong verification failed: {verified!r}")
-            return {
-                **verified,
-                "format_revision": REVISION,
-                "format_profile": PROFILE,
-                "reader": "cmpct-v030-r24-compact-control-v1",
-                "compact_control_recovery_source": parsed["recovery_source"],
-                "two_authenticated_control_copies": True,
-                "physical_payload_records_unchanged": True,
-                "semantic_index_roundtrip_exact": True,
-                "compatibility_index_level": COMPAT_INDEX_LEVEL,
-                "pack_verification_policy": "authenticated-physical-pack-sha-once",
-            }
+        parsed = _parse(Path(archive))
+        with _direct_r24_reader(parsed) as reader:
+            verified = _verify_r24_reader(reader)
+        if not verified.get("ok") or int(verified.get("format_revision", -1)) != 24:
+            raise CompactControlError(f"expanded r24 strong verification failed: {verified!r}")
+        return {
+            **verified,
+            "format_revision": REVISION,
+            "format_profile": PROFILE,
+            "reader": "cmpct-v030-r24-compact-control-v1-direct",
+            "compact_control_recovery_source": parsed["recovery_source"],
+            "two_authenticated_control_copies": True,
+            "physical_payload_records_unchanged": True,
+            "semantic_index_roundtrip_exact": True,
+            "compatibility_index_level": None,
+            "compatibility_materialization": False,
+            "pack_verification_policy": "authenticated-physical-pack-sha-once",
+        }
     except Exception as exc:
         return {
             "ok": False,
             "format_revision": REVISION,
             "format_profile": PROFILE,
-            "reader": "cmpct-v030-r24-compact-control-v1",
+            "reader": "cmpct-v030-r24-compact-control-v1-direct",
             "error": repr(exc),
         }
 
