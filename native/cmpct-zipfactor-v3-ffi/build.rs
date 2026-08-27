@@ -20,6 +20,41 @@ fn main() {
         .collect::<Vec<_>>()
         .join("\n");
 
+    // The preparity verifier is path-oriented because it is also a standalone CLI. For the in-process research
+    // ABI, expose the exact same parser/verifier over an already-resident byte slice so callers do not have to
+    // publish and reopen an otherwise transient CMP25Z3 reconstruction. These textual rewrites only split I/O
+    // from the existing semantic owner; all parsing, SHA-256, reconstruction and locality logic remains verbatim.
+    let parse_old = "fn parse(path: &Path) -> Result<Parsed, String> {\n    let raw = fs::read(path).map_err(|e| format!(\"read archive: {e}\"))?;";
+    let parse_new = "fn parse_bytes(raw: &[u8]) -> Result<Parsed, String> {";
+    let mut generated = generated.replacen(parse_old, parse_new, 1);
+    assert_ne!(generated, raw, "preparity parse rewrite did not apply");
+
+    let verify_old = "fn verify(path: &Path) -> Result<(), String> {\n    let parsed = parse(path)?;";
+    let verify_new = "fn verify_parsed(parsed: Parsed) -> Result<(), String> {";
+    let before_verify = generated.clone();
+    generated = generated.replacen(verify_old, verify_new, 1);
+    assert_ne!(generated, before_verify, "preparity verify rewrite did not apply");
+
+    let main_marker = "\nfn main() {";
+    let wrappers = r#"
+
+fn parse(path: &Path) -> Result<Parsed, String> {
+    let raw = fs::read(path).map_err(|e| format!("read archive: {e}"))?;
+    parse_bytes(&raw)
+}
+
+fn verify(path: &Path) -> Result<(), String> {
+    verify_parsed(parse(path)?)
+}
+
+fn verify_slice(raw: &[u8]) -> Result<(), String> {
+    verify_parsed(parse_bytes(raw)?)
+}
+"#;
+    let before_wrappers = generated.clone();
+    generated = generated.replacen(main_marker, &format!("{wrappers}{main_marker}"), 1);
+    assert_ne!(generated, before_wrappers, "preparity byte-slice wrappers did not apply");
+
     let out =
         PathBuf::from(env::var_os("OUT_DIR").expect("OUT_DIR")).join("zipfactor_v3_preparity.rs");
     fs::write(out, format!("{generated}\n")).expect("write generated preparity source");
