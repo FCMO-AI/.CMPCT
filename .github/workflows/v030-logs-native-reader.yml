@@ -1,0 +1,123 @@
+# ci-lane: deep
+name: CMPCT v0.30 logs native reader oracle
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'experiments/entropygraph_v030_native_logs_reader_bridge.py'
+      - 'benchmarks/v030_logs_native_reader_oracle.py'
+      - 'experiments/entropygraph_v030_release_product.py'
+      - 'experiments/entropygraph_v030_release_product_logs_candidate.py'
+      - 'experiments/entropygraph_v030_logs_inverse_profile_v3.py'
+      - 'native/cmpct-portable/src/lib.rs'
+      - 'native/cmpct-portable/src/logs.rs'
+      - 'native/cmpct-portable/src/logs_public.rs'
+      - 'native/cmpct-portable/src/bin/cmpct-portable.rs'
+      - '.github/workflows/v030-logs-native-reader.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-v030-logs-native-reader-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+
+jobs:
+  logs-native-reader:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Install deterministic logs-corpus dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y zstd gcc ffmpeg libsndfile1
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[audio,test]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
+
+      - name: Compile Python and production native surfaces
+        run: |
+          python -m py_compile experiments/entropygraph_v030_native_logs_reader_bridge.py
+          python -m py_compile benchmarks/v030_logs_native_reader_oracle.py
+          cargo fmt --check --manifest-path native/cmpct-portable/Cargo.toml
+          cargo build --release --manifest-path native/cmpct-portable/Cargo.toml --bin cmpct-portable
+
+      - name: Preserve production logs native correctness before timing
+        run: |
+          python -m pytest -q tests/test_v030_logs_inverse_native_safe.py
+          cargo test --manifest-path native/cmpct-portable/Cargo.toml --lib logs -- --nocapture
+
+      - name: Run canonical logs Python-vs-native reader A/B
+        run: |
+          mkdir -p benchmark-artifacts
+          python benchmarks/v030_logs_native_reader_oracle.py \
+            --native-cli "$GITHUB_WORKSPACE/native/cmpct-portable/target/release/cmpct-portable" \
+            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-logs-native-reader-work" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-logs-native-reader.json"
+
+      - name: Independently enforce identity, hostile rejection, budget and claim boundary
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          d = json.loads(Path('benchmark-artifacts/v030-logs-native-reader.json').read_text())
+          assert d['schema'] == 'cmpct-v030-logs-native-reader-v1'
+          assert d['target'] == 'neutral_hostile_v1/05_logs_and_telemetry'
+          assert d['native_bridge'] == 'cmpct-portable-logs-process-v1'
+          assert d['rounds'] == 5
+          assert d['archive_bytes'] > 0
+          c = d['contract']
+          assert c['minimum_verify_improvement_fraction'] == 0.20
+          assert c['minimum_extract_improvement_fraction'] == 0.20
+          assert c['archive_bytes_changed'] is False
+          assert c['grammar_changed'] is False
+          assert c['selector_changed'] is False
+          assert c['locality_limit'] == 8.0
+          assert c['decode_unit_limit_bytes'] == 8 * 1024 * 1024
+          assert c['caller_extract_budget_enforced_before_publication'] is True
+          assert d['native_corruption_rejected'] is True
+          assert d['native_caller_budget_preserved'] is True
+          assert all(len(d['samples_s'][key]) == 5 for key in (
+              'python_verify', 'native_verify', 'python_extract', 'native_extract'
+          ))
+          g = d['gate']
+          assert g['archive_bytes_unchanged'] is True
+          assert g['canonical_tree_preserved'] is True
+          assert g['native_tail_metadata_authenticated'] is True
+          assert g['native_corruption_rejected'] is True
+          assert g['native_caller_budget_preserved'] is True
+          expected = (
+              d['verify_improvement_fraction'] >= 0.20
+              and d['extract_improvement_fraction'] >= 0.20
+          )
+          assert d['promotion_signal'] == expected
+          assert g['passed'] == expected
+          assert d['release_credit'] is False
+          PY
+
+      - name: CI topology self-check
+        run: python tools/check_ci_topology.py .github/workflows/v030-logs-native-reader.yml
+
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: v030-logs-native-reader-${{ github.sha }}
+          path: benchmark-artifacts/v030-logs-native-reader.json
+          if-no-files-found: warn
+          retention-days: 90
+
+# Research-only reader A/B. A positive result authorizes a separate explicit shipping integration only; the normal
+# reader/fuzz/native/Android/runtime/final authorities remain mandatory and no archive/selector rule changes here.
