@@ -1,21 +1,22 @@
 from __future__ import annotations
 
-"""Release-only r24 dictionary cost removal after exact promotion evidence.
+"""Release-only r24 dictionary lifecycle optimizations.
 
-Two independent optimizations live here because they address the same trained-dictionary lifecycle while keeping
+Two independent mechanisms live here because they address the same trained-dictionary lifecycle while keeping
 historical revision-24 builders untouched:
 
-* Before training, the promoted release r24 build skips dictionary training only inside its own thread-local build
-  boundary when the generic proven envelope ``regular_files >= 5`` and ``dictionary_sample_count >= 32`` holds.
-  The frozen 15-workload campaign plus nine unseen/adversarial families found zero byte/tree counterexamples; two
-  positive unseen trees exercised real training and saved ~127 ms and ~163 ms while remaining byte-identical.
+* Before training, a generic release-only skip envelope was investigated. The broad rule
+  ``regular_files >= 5`` and ``dictionary_sample_count >= 32`` is now deliberately DISABLED after the correlated
+  positive-sample disproof surface produced multiple real counterexamples where mature training was faster. The
+  dispatcher remains installed so the historical experiment stays reproducible, but shipping delegates to the
+  mature trainer unless a future independently proven rule replaces this one.
 * After codec selection, a trained dictionary is removed only when the authenticated blob table proves that no
   selected physical record uses ``CODEC_ZSTDDICT``. Live dictionaries remain byte-identical.
 
-The pre-training optimization is deliberately scoped around the promoted release r24 builder rather than installed
+The disabled pre-training experiment remains scoped around the promoted release r24 builder rather than installed
 as a new mature Builder heuristic. Research and historical callers therefore continue to observe the unmodified
-trainer unless they explicitly enter the release r24 build boundary. Neither optimization changes revision-24
-grammar, reader semantics, locality, recovery, or codec selection for a live dictionary.
+trainer unless they explicitly enter the release r24 build boundary. Dead-dictionary elision does not change
+revision-24 grammar, reader semantics, locality, recovery, or codec selection for a live dictionary.
 """
 
 import os
@@ -31,6 +32,8 @@ from cmpct import codec as C
 
 DICTIONARY_SKIP_MIN_REGULAR_FILES = 5
 DICTIONARY_SKIP_MIN_SAMPLE_COUNT = 32
+DICTIONARY_SKIP_ENABLED = False
+DICTIONARY_SKIP_DISABLED_REASON = "correlated-positive-sample-counterexamples"
 _DICTIONARY_SKIP_POLICY = threading.local()
 
 
@@ -62,14 +65,20 @@ def _dictionary_training_features(builder) -> dict[str, int]:
 
 
 def _dictionary_training_skip_admitted(features: dict[str, int]) -> bool:
-    return (
+    """Return whether the currently shipping pre-training skip may run.
+
+    The previously promoted broad envelope is intentionally fail-closed after correlated large-text cases showed
+    that skipping mature training can be slower. Keeping the feature predicate here preserves the exact disproof
+    surface while making production behavior explicit and auditable.
+    """
+    return bool(DICTIONARY_SKIP_ENABLED) and (
         int(features["regular_files"]) >= DICTIONARY_SKIP_MIN_REGULAR_FILES
         and int(features["dictionary_sample_count"]) >= DICTIONARY_SKIP_MIN_SAMPLE_COUNT
     )
 
 
 def _release_dictionary_train(self):
-    """Dispatch to the mature trainer except inside the promoted release-r24 build boundary."""
+    """Dispatch to the mature trainer except inside a future proven release-r24 skip boundary."""
     if not getattr(_DICTIONARY_SKIP_POLICY, "active", False):
         return _ORIGINAL_TRAIN_DICTIONARY(self)
 
@@ -96,7 +105,8 @@ def _install_release_r24_boundary() -> None:
 
     ``entropygraph_v030_release_product`` imports its base first and this module second, then captures the resulting
     r24 build function. Direct research Builder calls therefore remain outside this boundary and preserve the
-    independent promotion oracle's historical shipping-vs-no-dictionary A/B.
+    independent shipping-vs-no-dictionary A/B. The wrapper remains installed even while the broad skip is disabled
+    so future evidence can be tested without mutating the mature Builder globally.
     """
     base = sys.modules.get("experiments.entropygraph_v030_release_product_base")
     if base is None or getattr(base, "_cmpct_v030_dictionary_skip_boundary_installed", False):
@@ -113,7 +123,13 @@ def _install_release_r24_boundary() -> None:
             _DICTIONARY_SKIP_POLICY.active = previous
         return {
             **stats,
-            "r24_dictionary_training_skip": "structural-pretraining-v1",
+            "r24_dictionary_training_skip": (
+                "structural-pretraining-v1" if DICTIONARY_SKIP_ENABLED else "disabled-correlated-disproof"
+            ),
+            "r24_dictionary_training_skip_enabled": bool(DICTIONARY_SKIP_ENABLED),
+            "r24_dictionary_training_skip_disabled_reason": (
+                None if DICTIONARY_SKIP_ENABLED else DICTIONARY_SKIP_DISABLED_REASON
+            ),
             "r24_dictionary_training_skip_min_regular_files": DICTIONARY_SKIP_MIN_REGULAR_FILES,
             "r24_dictionary_training_skip_min_sample_count": DICTIONARY_SKIP_MIN_SAMPLE_COUNT,
         }
