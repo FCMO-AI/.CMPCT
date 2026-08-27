@@ -1,21 +1,129 @@
 from __future__ import annotations
 
-"""Release-only post-selection elision for dead r24 dictionaries.
+"""Release-only r24 dictionary cost removal after exact promotion evidence.
 
-A trained dictionary is pure payload overhead when the finished authenticated r24 blob table proves that no
-selected physical record uses CODEC_ZSTDDICT.  This transform runs only after the ordinary revision-24 builder has
-finished codec competition.  It never changes training or candidate choice.  If a dictionary is live, the archive
-is left byte-identical.  If it is dead, the dictionary blob is removed, all surviving references are remapped, and
-both authenticated index copies are regenerated.
+Two independent optimizations live here because they address the same trained-dictionary lifecycle while keeping
+historical revision-24 builders untouched:
+
+* Before training, the promoted release r24 build skips dictionary training only inside its own thread-local build
+  boundary when the generic proven envelope ``regular_files >= 5`` and ``dictionary_sample_count >= 32`` holds.
+  The frozen 15-workload campaign plus nine unseen/adversarial families found zero byte/tree counterexamples; two
+  positive unseen trees exercised real training and saved ~127 ms and ~163 ms while remaining byte-identical.
+* After codec selection, a trained dictionary is removed only when the authenticated blob table proves that no
+  selected physical record uses ``CODEC_ZSTDDICT``. Live dictionaries remain byte-identical.
+
+The pre-training optimization is deliberately scoped around the promoted release r24 builder rather than installed
+as a new mature Builder heuristic. Research and historical callers therefore continue to observe the unmodified
+trainer unless they explicitly enter the release r24 build boundary. Neither optimization changes revision-24
+grammar, reader semantics, locality, recovery, or codec selection for a live dictionary.
 """
 
 import os
 from pathlib import Path
+import sys
 import tempfile
+import threading
 
 import msgpack
 
+from cmpct import builder as R24_BUILDER
 from cmpct import codec as C
+
+DICTIONARY_SKIP_MIN_REGULAR_FILES = 5
+DICTIONARY_SKIP_MIN_SAMPLE_COUNT = 32
+_DICTIONARY_SKIP_POLICY = threading.local()
+
+
+# Preserve the mature trainer once even if this release-only module is reloaded by tests/diagnostics.
+if not hasattr(R24_BUILDER.Builder, "_cmpct_v030_original_train_dictionary"):
+    R24_BUILDER.Builder._cmpct_v030_original_train_dictionary = R24_BUILDER.Builder._train_dictionary
+_ORIGINAL_TRAIN_DICTIONARY = R24_BUILDER.Builder._cmpct_v030_original_train_dictionary
+
+
+def _dictionary_training_features(builder) -> dict[str, int]:
+    """Return the exact cheap facts available immediately before mature dictionary training."""
+    regular_files = sum(
+        1
+        for row in builder.files
+        if row and int(row[1]) in (C.K_FILE, C.K_HARDLINK)
+    )
+    samples = [
+        cand.raw
+        for cand in builder.cands.values()
+        if len(cand.raw) >= 64
+        and ".cmpct-pack" not in cand.hints
+        and any(hint in R24_BUILDER.TEXT_EXT for hint in cand.hints)
+    ]
+    return {
+        "regular_files": regular_files,
+        "dictionary_sample_count": len(samples),
+        "dictionary_sample_bytes": sum(map(len, samples)),
+    }
+
+
+def _dictionary_training_skip_admitted(features: dict[str, int]) -> bool:
+    return (
+        int(features["regular_files"]) >= DICTIONARY_SKIP_MIN_REGULAR_FILES
+        and int(features["dictionary_sample_count"]) >= DICTIONARY_SKIP_MIN_SAMPLE_COUNT
+    )
+
+
+def _release_dictionary_train(self):
+    """Dispatch to the mature trainer except inside the promoted release-r24 build boundary."""
+    if not getattr(_DICTIONARY_SKIP_POLICY, "active", False):
+        return _ORIGINAL_TRAIN_DICTIONARY(self)
+
+    features = _dictionary_training_features(self)
+    self._v030_dictionary_training_features = dict(features)
+    if _dictionary_training_skip_admitted(features):
+        self.dictionary = b""
+        self.dict_hash = None
+        self._v030_dictionary_training_skip_applied = True
+        return None
+
+    self._v030_dictionary_training_skip_applied = False
+    return _ORIGINAL_TRAIN_DICTIONARY(self)
+
+
+# The dispatcher itself is permanent and thread-safe; outside the release-owned thread-local boundary it is an
+# exact delegation to the mature trainer. This avoids process-global mutate/restore races with concurrent r25 and
+# research builds.
+R24_BUILDER.Builder._train_dictionary = _release_dictionary_train
+
+
+def _install_release_r24_boundary() -> None:
+    """Wrap only the promoted release r24 materializer when its base module is already loaded.
+
+    ``entropygraph_v030_release_product`` imports its base first and this module second, then captures the resulting
+    r24 build function. Direct research Builder calls therefore remain outside this boundary and preserve the
+    independent promotion oracle's historical shipping-vs-no-dictionary A/B.
+    """
+    base = sys.modules.get("experiments.entropygraph_v030_release_product_base")
+    if base is None or getattr(base, "_cmpct_v030_dictionary_skip_boundary_installed", False):
+        return
+
+    original = base._locality_bounded_r24_build
+
+    def release_r24_build(root, out):
+        previous = getattr(_DICTIONARY_SKIP_POLICY, "active", False)
+        _DICTIONARY_SKIP_POLICY.active = True
+        try:
+            stats = dict(original(root, out))
+        finally:
+            _DICTIONARY_SKIP_POLICY.active = previous
+        return {
+            **stats,
+            "r24_dictionary_training_skip": "structural-pretraining-v1",
+            "r24_dictionary_training_skip_min_regular_files": DICTIONARY_SKIP_MIN_REGULAR_FILES,
+            "r24_dictionary_training_skip_min_sample_count": DICTIONARY_SKIP_MIN_SAMPLE_COUNT,
+        }
+
+    base._locality_bounded_r24_build = release_r24_build
+    base._cmpct_v030_dictionary_skip_boundary_installed = True
+    base._cmpct_v030_dictionary_skip_original_r24_build = original
+
+
+_install_release_r24_boundary()
 
 
 def _remap_ref(value: int, removed: int) -> int:
