@@ -72,8 +72,16 @@ jobs:
               'dictionary_sample_count': 31,
               'dictionary_sample_bytes': 1,
           }) is False
+
+          # Import order is intentional: dead_dictionary wraps the mature r24 builder first; the
+          # public product captures that release-only wrapper as _BASE_R24_BUILD, then installs its
+          # dead-dictionary post-pass as the base module's public r24 materializer.  These must be
+          # distinct functions or either pre-training skip or post-selection elision has disappeared.
           assert getattr(P._BASE_IMPL, '_cmpct_v030_dictionary_skip_boundary_installed', False) is True
-          assert P._BASE_R24_BUILD is P._BASE_IMPL._locality_bounded_r24_build
+          original = P._BASE_IMPL._cmpct_v030_dictionary_skip_original_r24_build
+          assert P._BASE_R24_BUILD is not original
+          assert P._BASE_R24_BUILD is not P._BASE_IMPL._locality_bounded_r24_build
+          assert P._BASE_IMPL._locality_bounded_r24_build is P._locality_bounded_r24_build
           PY
       - name: Run frozen plus correlated positive-sample campaign
         run: |
