@@ -1,0 +1,108 @@
+# ci-lane: deep
+name: CMPCT v0.30 ZIP-factor recovery memory FFI frontier
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'benchmarks/v030_zipfactor_recovery_memory_ffi_frontier.py'
+      - 'benchmarks/v030_zipfactor_recovery_native_ffi_frontier.py'
+      - 'benchmarks/v030_zipfactor_recovery_oracle.py'
+      - 'experiments/entropygraph_v030_zipfactor_compact_v3.py'
+      - 'experiments/entropygraph_v030_zipfactor_compact_v3_fused_finalize.py'
+      - 'native/cmpct-zipfactor-v3-ffi/**'
+      - 'native/cmpct-portable/src/bin/cmpct-zipfactor-v3-preparity.rs'
+      - '.github/workflows/v030-zipfactor-recovery-memory-ffi-frontier.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-v030-zipfactor-recovery-memory-ffi-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+
+jobs:
+  recovery-memory-ffi-frontier:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Install exact comparator dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y zstd gcc
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[test]'
+      - name: Compile exact in-memory recovery frontier
+        run: |
+          python -m py_compile benchmarks/v030_zipfactor_recovery_memory_ffi_frontier.py
+          cargo build --release --manifest-path native/cmpct-zipfactor-v3-ffi/Cargo.toml
+          cargo fmt --manifest-path native/cmpct-zipfactor-v3-ffi/Cargo.toml -- --check
+          cargo clippy --manifest-path native/cmpct-zipfactor-v3-ffi/Cargo.toml -- -D warnings
+      - name: Run recovered candidate without scratch V3 publication
+        run: |
+          python -m benchmarks.v030_zipfactor_recovery_memory_ffi_frontier \
+            --work-root "$RUNNER_TEMP/v030-zf-recovery-memory-ffi" \
+            --native-library "$GITHUB_WORKSPACE/native/cmpct-zipfactor-v3-ffi/target/release/libcmpct_zipfactor_v3_ffi.so" \
+            --output "$RUNNER_TEMP/v030-zf-recovery-memory-ffi.json"
+      - name: Ratchet exact bytes, recovery and strict four-way boundary
+        run: |
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          e=json.loads((Path(os.environ['RUNNER_TEMP'])/'v030-zf-recovery-memory-ffi.json').read_text())
+          assert e['schema']=='cmpct-v030-zipfactor-recovery-memory-ffi-frontier-v1'
+          c=e['contract']
+          assert c['rounds']==9 and c['ties_fail'] is True
+          assert c['native_compile_inside_timing'] is False
+          assert c['native_library_load_inside_timing'] is False
+          assert c['native_ffi_call_inside_timing'] is True
+          assert c['scratch_v3_publication_inside_timing'] is False
+          assert c['native_archive_open_inside_timing'] is False
+          assert c['native_byte_slice_ffi'] is True
+          assert c['ffi_reuses_exact_preparity_verifier'] is True
+          assert c['archive_bytes_changed'] is False and c['selector_change'] is False
+          assert c['release_credit'] is False and e['release_credit'] is False
+          assert e['experiment_valid'] is True
+          assert e['legacy_recovery_byte_identical'] is True
+          assert e['legacy_recovery_sha256'] == e['direct_probe_sha256']
+          assert e['recovery_semantics_passed'] is True
+          assert e['memory_ffi_corruption_rejected'] is True
+          assert e['candidate']['archive_bytes'] == 14227
+          assert e['candidate']['base_v3_bytes'] == 14033
+          assert e['candidate']['recovery_overhead_bytes'] == 194
+          assert e['candidate']['payload_body_copies'] == 1
+          assert e['candidate']['control_copies'] == 2
+          assert e['sizes']['cmpct'] < e['sizes']['zip']
+          assert e['sizes']['cmpct'] < e['sizes']['zstd19']
+          assert len(e['samples_s']['cmpct'])==len(e['samples_s']['zip'])==len(e['samples_s']['zstd19'])==9
+          expected=(
+              e['sizes']['cmpct'] < e['sizes']['zip']
+              and e['sizes']['cmpct'] < e['sizes']['zstd19']
+              and e['medians_s']['cmpct'] < e['medians_s']['zip']
+              and e['medians_s']['cmpct'] < e['medians_s']['zstd19']
+          )
+          assert e['strict_four_way_win'] is expected
+          assert e['promotion_signal'] is expected
+          PY
+      - name: Upload evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: v030-zipfactor-recovery-memory-ffi-frontier
+          path: ${{ runner.temp }}/v030-zf-recovery-memory-ffi.json
+          if-no-files-found: warn
+      - name: CI topology self-check
+        run: python tools/check_ci_topology.py .github/workflows/v030-zipfactor-recovery-memory-ffi-frontier.yml
+
+# Research-only. A positive result advances exact recovered ZIP-factor bytes toward portable/native productization.
+# It cannot alter production dispatch, selector policy, archive bytes, or the v0.30 release lock.
