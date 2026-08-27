@@ -6,6 +6,7 @@ on:
     branches: [main]
     paths:
       - 'src/cmpct/builder.py'
+      - 'experiments/entropygraph_v030_r24_streaming_finalize.py'
       - 'experiments/entropygraph_v030_release_product.py'
       - 'experiments/entropygraph_v030_release_product_base.py'
       - 'benchmarks/v030_r24_streaming_finalize_rss_oracle.py'
@@ -13,6 +14,7 @@ on:
       - 'benchmarks/v030_release_generalization.py'
       - 'benchmarks/neutral_hostile_corpus_v1.py'
       - 'benchmarks/resemblance_hostile_corpus_v1.py'
+      - 'tests/test_v030_r24_streaming_finalize.py'
       - '.github/workflows/v030-r24-streaming-finalize-rss.yml'
   workflow_dispatch:
 
@@ -43,11 +45,13 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -e '.[audio,test]'
           python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
-      - name: Compile streaming-finalize oracle
+      - name: Compile and ratchet reusable streaming finalizer
         run: |
+          python -m py_compile experiments/entropygraph_v030_r24_streaming_finalize.py
           python -m py_compile benchmarks/v030_r24_streaming_finalize_rss_oracle.py
           python -m py_compile experiments/entropygraph_v030_release_product.py
           python -m py_compile experiments/entropygraph_v030_release_product_base.py
+          python -m pytest -q tests/test_v030_r24_streaming_finalize.py
       - name: Measure byte-identical streaming r24 floor inside promoted product
         run: |
           mkdir -p benchmark-artifacts
