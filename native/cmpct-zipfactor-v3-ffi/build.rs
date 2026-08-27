@@ -26,8 +26,9 @@ fn main() {
     // from the existing semantic owner; all parsing, SHA-256, reconstruction and locality logic remains verbatim.
     let parse_old = "fn parse(path: &Path) -> Result<Parsed, String> {\n    let raw = fs::read(path).map_err(|e| format!(\"read archive: {e}\"))?;";
     let parse_new = "fn parse_bytes(raw: &[u8]) -> Result<Parsed, String> {";
+    let before_parse = generated.clone();
     let mut generated = generated.replacen(parse_old, parse_new, 1);
-    assert_ne!(generated, raw, "preparity parse rewrite did not apply");
+    assert_ne!(generated, before_parse, "preparity parse rewrite did not apply");
 
     let verify_old = "fn verify(path: &Path) -> Result<(), String> {\n    let parsed = parse(path)?;";
     let verify_new = "fn verify_parsed(parsed: Parsed) -> Result<(), String> {";
