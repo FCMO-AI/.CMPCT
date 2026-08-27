@@ -43,13 +43,14 @@ def test_historical_tree_identity_is_independent_of_candidate_product_hash(tmp_p
 def test_canonical_projection_cannot_substitute_staged_r25_floor_for_historical_v029(tmp_path, monkeypatch) -> None:
     # This reproduces the exact class of evidence bug that broke the first canonical-generalization run. The
     # shipping product may expose a staged-r25 research floor, but the frozen gate must use the independently
-    # rebuilt original-tree v0.29 bytes supplied by the adapter.
+    # rebuilt original-tree v0.29 bytes supplied by the adapter. The canonical projection must also use the
+    # caller-observed complete product wall time rather than trusting a narrower terminal-internal timer.
     product = {
         "selected": "g04-overlay",
         "archive_bytes": 900,
         "format_revision": canonical.CANON.REVISION,
         "format_profile": "geometry-g04",
-        "portfolio_create_s": 2.0,
+        "portfolio_create_s": 999.0,
         "v029_research_floor_bytes": 9_999_999,
         "r25": {
             "g04_bytes": 950,
@@ -65,13 +66,22 @@ def test_canonical_projection_cannot_substitute_staged_r25_floor_for_historical_
         },
     }
     historical_stats = {"portfolio_create_s": 1.0, "archive_bytes": 1_234}
+    complete_product_create_s = 2.0
 
-    normalized = canonical._normalize_product_stats(product, 1_234, historical_stats, tmp_path / "unused.cmpct")
+    normalized = canonical._normalize_product_stats(
+        product,
+        1_234,
+        historical_stats,
+        tmp_path / "unused.cmpct",
+        complete_product_create_s,
+    )
 
     assert normalized["v029_bytes"] == 1_234
     assert normalized["v029_bytes"] != product["v029_research_floor_bytes"]
     assert normalized["g04"]["v029"] == historical_stats
     assert normalized["archive_bytes"] == 900
+    assert normalized["portfolio_create_s"] == complete_product_create_s
+    assert normalized["portfolio_create_s"] != product["portfolio_create_s"]
     assert normalized["max_selected_member_read_amplification"] == 1.25
     assert normalized["historical_v029_measurement"] == "independent-original-tree-build"
 
@@ -98,6 +108,7 @@ def test_r24_locality_measures_largest_regular_user_member(monkeypatch, tmp_path
             return None
 
         def _blob(self, idx):
+            self.observed_blob_ids.add(int(idx))
             return b"x" * int(self.blobs[idx][1])
 
         def read(self, name):
@@ -106,6 +117,8 @@ def test_r24_locality_measures_largest_regular_user_member(monkeypatch, tmp_path
             if name == "large.bin":
                 return self._blob(1)[:100]
             raise KeyError(name)
+
+        observed_blob_ids: set[int] = set()
 
     monkeypatch.setattr(canonical.CANON, "CMPCT", FakeR24)
 
