@@ -73,11 +73,14 @@ jobs:
             2>&1 | tee benchmark-artifacts/v030-release-performance.stdout.txt
 
       - name: Independently enforce frozen performance policy
+        if: always()
         run: |
           python - <<'PY'
           import json
           from pathlib import Path
-          data=json.loads(Path('benchmark-artifacts/v030-release-performance.json').read_text())
+          p=Path('benchmark-artifacts/v030-release-performance.json')
+          assert p.is_file(), 'runtime evidence missing after promoted-product gate'
+          data=json.loads(p.read_text())
           contract=data['contract']; totals=data['totals']; gate=data['gate']
           assert data['schema']=='cmpct-v030-release-performance-product-v1'
           assert data['engine']=='experiments/entropygraph_v030_release_product.py'
@@ -115,6 +118,7 @@ jobs:
 # Installing it repairs the benchmark environment only; it does not participate in CMPCT compression or relax any
 # create/extract/RSS threshold. Runtime authority is explicitly bound to entropygraph_v030_release_product and the
 # canonical fresh-process worker, so promoted structural terminals are measured exactly as they would ship while
-# the accepted v0.29 side remains unchanged. Hosted timing remains same-run paired promotion evidence; absolute
-# public throughput claims still require controlled benchmark hardware. A miss is implementation debt, not a
-# policy edit.
+# the accepted v0.29 side remains unchanged. The independent policy step intentionally runs even after a measured
+# runtime miss so the artifact receives a second, fail-closed assertion pass instead of losing diagnostic authority.
+# Hosted timing remains same-run paired promotion evidence; absolute public throughput claims still require controlled
+# benchmark hardware. A miss is implementation debt, not a policy edit.
