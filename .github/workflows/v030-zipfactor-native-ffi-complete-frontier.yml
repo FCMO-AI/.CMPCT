@@ -75,6 +75,13 @@ jobs:
           assert c['release_credit'] is False and e['release_credit'] is False
           assert e['experiment_valid'] is True and e['ffi_corruption_rejected'] is True
           assert len(e['samples_s']['cmpct'])==9 and len(e['samples_s']['zip'])==9 and len(e['samples_s']['zstd19'])==9
+          assert len(e['cmpct_phase_samples_s']['build'])==9
+          assert len(e['cmpct_phase_samples_s']['verify'])==9
+          assert e['cmpct_phase_medians_s']['build'] > 0
+          assert e['cmpct_phase_medians_s']['verify'] > 0
+          # Phase measurements are diagnostic only and must remain bounded by the complete measured operation.
+          assert e['cmpct_phase_medians_s']['build'] < e['medians_s']['cmpct']
+          assert e['cmpct_phase_medians_s']['verify'] < e['medians_s']['cmpct']
           assert e['candidate']['tree_sha256']==e['source_identity']['canonical_tree_sha256']
           assert e['candidate']['max_member_read_amplification'] <= 8.0
           assert e['candidate']['max_decode_unit_bytes'] <= 8*1024*1024
