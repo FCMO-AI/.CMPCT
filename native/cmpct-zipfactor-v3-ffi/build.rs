@@ -13,10 +13,14 @@ fn main() {
     // documentation marker; every executable token remains sourced from the exact preparity verifier.
     let generated = raw
         .lines()
-        .map(|line| line.strip_prefix("//!").map_or(line.to_owned(), |rest| format!("//{rest}")))
+        .map(|line| {
+            line.strip_prefix("//!")
+                .map_or(line.to_owned(), |rest| format!("//{rest}"))
+        })
         .collect::<Vec<_>>()
         .join("\n");
 
-    let out = PathBuf::from(env::var_os("OUT_DIR").expect("OUT_DIR")).join("zipfactor_v3_preparity.rs");
+    let out =
+        PathBuf::from(env::var_os("OUT_DIR").expect("OUT_DIR")).join("zipfactor_v3_preparity.rs");
     fs::write(out, format!("{generated}\n")).expect("write generated preparity source");
 }
