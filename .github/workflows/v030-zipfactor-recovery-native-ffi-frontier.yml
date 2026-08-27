@@ -46,37 +46,46 @@ jobs:
       - name: Compile exact recovery FFI frontier
         run: |
           python -m py_compile benchmarks/v030_zipfactor_recovery_native_ffi_frontier.py
+          python -m py_compile experiments/entropygraph_v030_zipfactor_compact_v3_fused_finalize.py
           cargo build --release --manifest-path native/cmpct-zipfactor-v3-ffi/Cargo.toml
       - name: Preserve Rust correctness before timing
         run: |
           cargo fmt --manifest-path native/cmpct-zipfactor-v3-ffi/Cargo.toml -- --check
           cargo clippy --manifest-path native/cmpct-zipfactor-v3-ffi/Cargo.toml -- -D warnings
-      - name: Run recovered candidate against ZIP and Zstd-19
+      - name: Run direct recovered candidate against ZIP and Zstd-19
         run: |
           python -m benchmarks.v030_zipfactor_recovery_native_ffi_frontier \
             --work-root "$RUNNER_TEMP/v030-zf-recovery-native-ffi" \
             --native-library "$GITHUB_WORKSPACE/native/cmpct-zipfactor-v3-ffi/target/release/libcmpct_zipfactor_v3_ffi.so" \
             --output "$RUNNER_TEMP/v030-zf-recovery-native-ffi.json"
-      - name: Ratchet exact recovery and four-way boundary
+      - name: Ratchet exact recovery, direct-build identity and four-way boundary
         run: |
           python - <<'PY'
           import json, os
           from pathlib import Path
           e=json.loads((Path(os.environ['RUNNER_TEMP'])/'v030-zf-recovery-native-ffi.json').read_text())
-          assert e['schema']=='cmpct-v030-zipfactor-recovery-native-ffi-frontier-v1'
+          assert e['schema']=='cmpct-v030-zipfactor-recovery-native-ffi-frontier-v2'
           c=e['contract']
           assert c['rounds']==9 and c['ties_fail'] is True
           assert c['native_compile_inside_timing'] is False
           assert c['native_library_load_inside_timing'] is False
           assert c['native_ffi_call_inside_timing'] is True
           assert c['scratch_v3_publication_inside_timing'] is True
+          assert c['legacy_identity_proof_inside_timing'] is False
+          assert c['intermediate_v3_publication_inside_build_timing'] is False
           assert c['archive_bytes_changed'] is False and c['selector_change'] is False
           assert c['release_credit'] is False and e['release_credit'] is False
           assert e['experiment_valid'] is True
+          assert e['legacy_recovery_byte_identical'] is True
+          assert e['legacy_recovery_sha256'] == e['direct_probe_sha256']
           assert e['recovery_semantics_passed'] is True
           assert e['candidate']['payload_body_copies']==1
           assert e['candidate']['control_copies']==2
           assert e['candidate']['fused_group_finalize'] is True
+          assert e['candidate']['direct_v3_in_memory'] is True
+          assert e['candidate']['archive_bytes'] == 14227
+          assert e['candidate']['base_v3_bytes'] == 14033
+          assert e['candidate']['recovery_overhead_bytes'] == 194
           assert e['sizes']['cmpct'] < e['sizes']['zip']
           assert e['sizes']['cmpct'] < e['sizes']['zstd19']
           assert len(e['samples_s']['cmpct'])==len(e['samples_s']['zip'])==len(e['samples_s']['zstd19'])==9
