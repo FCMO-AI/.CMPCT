@@ -67,6 +67,17 @@ def test_canonical_projection_cannot_substitute_staged_r25_floor_for_historical_
     }
     historical_stats = {"portfolio_create_s": 1.0, "archive_bytes": 1_234}
     complete_product_create_s = 2.0
+    revision_queries: list[Path] = []
+
+    def fake_revision_for_archive(archive: Path) -> tuple[int, str]:
+        revision_queries.append(Path(archive))
+        return canonical.CANON.REVISION, "geometry-g04"
+
+    # This is a projection-contract test, not an archive-parser test.  The production adapter now deliberately
+    # derives revision/profile from the published archive so promoted terminals cannot spoof historical stats.
+    # Preserve that call boundary while supplying the synthetic archive identity explicitly instead of pointing
+    # the stricter adapter at a file that this unit test never created.
+    monkeypatch.setattr(canonical.CANON, "_revision_for_archive", fake_revision_for_archive)
 
     normalized = canonical._normalize_product_stats(
         product,
@@ -76,6 +87,7 @@ def test_canonical_projection_cannot_substitute_staged_r25_floor_for_historical_
         complete_product_create_s,
     )
 
+    assert revision_queries == [tmp_path / "unused.cmpct"]
     assert normalized["v029_bytes"] == 1_234
     assert normalized["v029_bytes"] != product["v029_research_floor_bytes"]
     assert normalized["g04"]["v029"] == historical_stats
