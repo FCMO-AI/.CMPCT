@@ -1,0 +1,106 @@
+# ci-lane: deep
+name: CMPCT v0.30 ZIP-factor fused FFI complete frontier
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'benchmarks/v030_zipfactor_fused_ffi_complete_frontier.py'
+      - 'benchmarks/v030_zipfactor_native_ffi_complete_frontier.py'
+      - 'benchmarks/v030_zipfactor_native_complete_frontier.py'
+      - 'benchmarks/v030_external_competitors.py'
+      - 'experiments/entropygraph_v030_zipfactor_compact_v3.py'
+      - 'experiments/entropygraph_v030_zipfactor_compact_v3_fused_finalize.py'
+      - 'native/cmpct-zipfactor-v3-ffi/**'
+      - 'native/cmpct-portable/src/bin/cmpct-zipfactor-v3-preparity.rs'
+      - '.github/workflows/v030-zipfactor-fused-ffi-complete-frontier.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-v030-zipfactor-fused-ffi-complete-frontier-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+
+jobs:
+  fused-ffi-complete-frontier:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Install exact comparator dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y zstd gcc
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[test]'
+      - name: Compile fused builder, FFI verifier and oracle
+        run: |
+          python -m py_compile experiments/entropygraph_v030_zipfactor_compact_v3_fused_finalize.py
+          python -m py_compile benchmarks/v030_zipfactor_fused_ffi_complete_frontier.py
+          cargo build --release --manifest-path native/cmpct-zipfactor-v3-ffi/Cargo.toml
+          cargo fmt --manifest-path native/cmpct-zipfactor-v3-ffi/Cargo.toml -- --check
+          cargo clippy --manifest-path native/cmpct-zipfactor-v3-ffi/Cargo.toml -- -D warnings
+      - name: Run fused plus FFI rotated external frontier
+        run: |
+          python -m benchmarks.v030_zipfactor_fused_ffi_complete_frontier \
+            --work-root "$RUNNER_TEMP/v030-zipfactor-fused-ffi-complete" \
+            --native-library "$GITHUB_WORKSPACE/native/cmpct-zipfactor-v3-ffi/target/release/libcmpct_zipfactor_v3_ffi.so" \
+            --output "$RUNNER_TEMP/v030-zipfactor-fused-ffi-complete.json"
+      - name: Ratchet exact combined four-way boundary
+        run: |
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          e=json.loads((Path(os.environ['RUNNER_TEMP'])/'v030-zipfactor-fused-ffi-complete.json').read_text())
+          assert e['schema']=='cmpct-v030-zipfactor-fused-ffi-complete-frontier-v1'
+          c=e['contract']
+          assert c['rounds']==9 and c['ties_fail'] is True
+          assert c['cmpct_timing']=='byte-identical-fused-v3-build-plus-inprocess-native-strong-verify'
+          assert c['fused_builder_required'] is True
+          assert c['native_process_startup_inside_timing'] is False
+          assert c['native_ffi_call_inside_timing'] is True
+          assert c['archive_open_inside_timing'] is True
+          assert c['native_compile_inside_timing'] is False
+          assert c['native_library_load_inside_timing'] is False
+          assert c['archive_bytes_changed'] is False and c['selector_change'] is False
+          assert c['release_credit'] is False and e['release_credit'] is False
+          assert e['experiment_valid'] is True and e['ffi_corruption_rejected'] is True
+          assert e['candidate']['fused_group_finalize'] is True
+          assert e['candidate']['archive_sha256']=='75bdc866b4b7b63c8f83f7d9a88c9ff3d712c51b93700033984433819b014e31'
+          assert e['sizes']['cmpct']==14033
+          assert e['candidate']['tree_sha256']==e['source_identity']['canonical_tree_sha256']
+          assert e['candidate']['max_member_read_amplification'] <= 8.0
+          assert e['candidate']['max_decode_unit_bytes'] <= 8*1024*1024
+          assert len(e['samples_s']['cmpct'])==9 and len(e['samples_s']['zip'])==9 and len(e['samples_s']['zstd19'])==9
+          assert len(e['cmpct_phase_samples_s']['build'])==9 and len(e['cmpct_phase_samples_s']['verify'])==9
+          expected=(
+              e['sizes']['cmpct'] < e['sizes']['zip']
+              and e['sizes']['cmpct'] < e['sizes']['zstd19']
+              and e['medians_s']['cmpct'] < e['medians_s']['zip']
+              and e['medians_s']['cmpct'] < e['medians_s']['zstd19']
+          )
+          assert e['strict_four_way_win'] is expected
+          assert e['promotion_signal'] is expected
+          PY
+      - name: Upload evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: v030-zipfactor-fused-ffi-complete-frontier
+          path: ${{ runner.temp }}/v030-zipfactor-fused-ffi-complete.json
+          if-no-files-found: warn
+      - name: CI topology self-check
+        run: python tools/check_ci_topology.py .github/workflows/v030-zipfactor-fused-ffi-complete-frontier.yml
+
+# Research-only. A positive result proves the exact byte-identical fused builder plus in-process verifier crosses the
+# full Deflate-family frontier; recovery/platform/productization and selector authority remain separate blockers.
