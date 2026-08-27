@@ -19,6 +19,7 @@ import hashlib
 import json
 from pathlib import Path
 import tempfile
+import time
 
 from benchmarks import v030_release_generalization as B
 from experiments import entropygraph_v030_release_product as CANON
@@ -67,8 +68,21 @@ def _r24_selected_member_amplification(archive: Path) -> float:
         return max(len(raw), decoded) / max(1, len(raw))
 
 
-def _normalize_product_stats(product: dict, historical_bytes: int, historical_stats: dict, archive: Path) -> dict:
-    """Project measured canonical product facts into the immutable historical gate schema."""
+def _normalize_product_stats(
+    product: dict,
+    historical_bytes: int,
+    historical_stats: dict,
+    archive: Path,
+    product_create_s: float,
+) -> dict:
+    """Project measured canonical product facts into the immutable historical gate schema.
+
+    Promoted structural terminals intentionally expose a smaller product-native stats surface than the historical
+    research tournament.  Legacy fields used only for evidence reporting are therefore derived from the *actual
+    published archive* rather than assumed present.  The release timing is always the caller-observed complete
+    ``CANON.build`` wall time, so promoted preflights/terminals cannot accidentally hide dispatch work by reporting
+    a narrower internal timer.
+    """
     r25 = product.get("r25") if isinstance(product.get("r25"), dict) else {}
     g04 = r25.get("g04") if isinstance(r25.get("g04"), dict) else {}
     g04 = dict(g04)
@@ -76,21 +90,41 @@ def _normalize_product_stats(product: dict, historical_bytes: int, historical_st
     # staged-r25 research floor.  Keep it inside the legacy location only because B's diagnostic helper reads it.
     g04["v029"] = dict(historical_stats)
 
-    final_revision = int(product.get("format_revision", 24))
+    final_revision, final_profile = CANON._revision_for_archive(archive)
+    final_revision = int(final_revision)
     if final_revision == 24:
         max_amp = _r24_selected_member_amplification(archive)
     elif final_revision == CANON.REVISION:
         observed = r25.get("max_selected_member_read_amplification")
+        if not isinstance(observed, (int, float)):
+            # Promoted revision-25 terminals (for example compact-control/logs) own their own locality proof and
+            # do not necessarily carry the mature tournament's nested r25 receipt.  Ask the public operation for
+            # one deterministic selected-member measurement instead of defaulting locality to zero.
+            members = [row for row in CANON.list_members(archive) if row.get("kind") == "file"]
+            if not members:
+                raise RuntimeError("canonical r25 product locality measurement found no regular user-visible member")
+            selected_member = max(members, key=lambda row: (int(row.get("size", 0)), str(row.get("path", ""))))
+            _raw, read_stats = CANON.read_member_with_stats(archive, str(selected_member["path"]))
+            observed = read_stats.get("decoded_context_amplification")
         if not isinstance(observed, (int, float)):
             raise RuntimeError("canonical r25 product omitted selected-member locality accounting")
         max_amp = float(observed)
     else:
         raise RuntimeError(f"canonical product emitted unexpected revision {final_revision!r}")
 
+    selected = product.get("selected")
+    if not isinstance(selected, str) or not selected:
+        # ``selected`` is a historical diagnostic label, not an admission input.  Bind it to the independently
+        # parsed published profile so a new structural terminal cannot crash authority merely by omitting a
+        # research-tournament-only stats key.
+        selected = f"canonical-r{final_revision}:{final_profile}"
+
     g04_bytes = int(r25.get("g04_bytes", product["archive_bytes"]))
     prefixgraph_bytes = r25.get("prefixgraph_bytes")
     return {
         **product,
+        "selected": selected,
+        "portfolio_create_s": float(product_create_s),
         "v029_bytes": int(historical_bytes),
         "g04_bytes": g04_bytes,
         "g04_selected": r25.get("g04_selected", "not-attempted"),
@@ -123,8 +157,10 @@ class _CanonicalGeneralizationAdapter:
             historical_path = Path(td) / "accepted-v029.cmpct"
             historical_stats = dict(HIST_G04.BASE.build(root, historical_path))
             historical_bytes = historical_path.stat().st_size
+            product_started = time.perf_counter()
             product = dict(CANON.build(root, out))
-        return _normalize_product_stats(product, historical_bytes, historical_stats, out)
+            product_create_s = time.perf_counter() - product_started
+        return _normalize_product_stats(product, historical_bytes, historical_stats, out, product_create_s)
 
 
 ADAPTER = _CanonicalGeneralizationAdapter()
