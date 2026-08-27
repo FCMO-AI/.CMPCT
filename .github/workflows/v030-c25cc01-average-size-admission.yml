@@ -1,0 +1,95 @@
+# ci-lane: deep
+name: CMPCT v0.30 C25CC01 average-size admission oracle
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'benchmarks/v030_c25cc01_average_size_admission_oracle.py'
+      - 'benchmarks/v030_r24_compact_control_terminal_admission.py'
+      - 'benchmarks/v030_r24_compact_control_terminal_generalization.py'
+      - 'benchmarks/v030_external_competitors.py'
+      - 'experiments/entropygraph_v030_r24_compact_control_profile.py'
+      - '.github/workflows/v030-c25cc01-average-size-admission.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-v030-c25cc01-average-size-admission-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+
+jobs:
+  c25-average-size-admission:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install exact comparator dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y zstd gcc
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[test]'
+      - name: Compile CPU-aware admission oracle
+        run: python -m py_compile benchmarks/v030_c25cc01_average_size_admission_oracle.py
+      - name: Run unseen boundary campaign
+        run: |
+          python -m benchmarks.v030_c25cc01_average_size_admission_oracle \
+            --work-root "$RUNNER_TEMP/v030-c25-average-admission" \
+            --output "$RUNNER_TEMP/v030-c25-average-admission.json"
+      - name: Ratchet disproof surface without changing shipping
+        run: |
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          e=json.loads((Path(os.environ['RUNNER_TEMP'])/'v030-c25-average-admission.json').read_text())
+          assert e['schema']=='cmpct-v030-c25cc01-average-size-admission-oracle-v1'
+          c=e['contract']
+          assert c['source_inputs']==['logical_bytes','regular_files','average_regular_bytes']
+          assert c['candidate_inputs']==['r24_bytes','candidate_bytes']
+          assert set(c['forbidden_inputs'])=={'workload_name','path','filename','suffix','content_hash','archive_hash','pack_hash'}
+          assert c['min_prefilter_regular_files']==1000
+          assert c['min_average_regular_bytes']==6144
+          assert c['broad_predicate_unchanged'] is True
+          assert c['comparator_rounds']==5 and c['ties_fail'] is True
+          assert c['selector_change'] is False and c['release_credit'] is False
+          assert e['selector_change'] is False and e['release_credit'] is False
+          assert e['experiment_valid'] is True
+          assert len(e['rows'])==16
+          assert e['known_1750_rejected'] is True
+          assert e['rejected_below_boundary_count']==2
+          for row in e['rows']:
+              if row['proposed_shipping_admitted']:
+                  assert row['payload_unchanged'] is True
+                  assert row['two_control_copies'] is True
+                  assert len(row['competitors']['samples'])==5
+          expected=(
+              e['admitted_count'] >= 1
+              and e['counterexamples'] == []
+              and e['known_1750_rejected'] is True
+              and e['positive_above_boundary_count'] >= 1
+              and e['rejected_below_boundary_count'] == 2
+          )
+          assert e['promotion_signal'] is expected
+          PY
+      - name: Upload evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: v030-c25cc01-average-size-admission
+          path: ${{ runner.temp }}/v030-c25-average-admission.json
+          if-no-files-found: warn
+      - name: CI topology self-check
+        run: python tools/check_ci_topology.py .github/workflows/v030-c25cc01-average-size-admission.yml
+
+# Research-only. Even a positive signal cannot change the shipping selector without a separate promotion commit,
+# shipping regression coverage, and fresh exact external authority.
