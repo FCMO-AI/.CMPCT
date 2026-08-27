@@ -28,13 +28,20 @@ fn main() {
     let parse_new = "fn parse_bytes(raw: &[u8]) -> Result<Parsed, String> {";
     let before_parse = generated.clone();
     let mut generated = generated.replacen(parse_old, parse_new, 1);
-    assert_ne!(generated, before_parse, "preparity parse rewrite did not apply");
+    assert_ne!(
+        generated, before_parse,
+        "preparity parse rewrite did not apply"
+    );
 
-    let verify_old = "fn verify(path: &Path) -> Result<(), String> {\n    let parsed = parse(path)?;";
+    let verify_old =
+        "fn verify(path: &Path) -> Result<(), String> {\n    let parsed = parse(path)?;";
     let verify_new = "fn verify_parsed(parsed: Parsed) -> Result<(), String> {";
     let before_verify = generated.clone();
     generated = generated.replacen(verify_old, verify_new, 1);
-    assert_ne!(generated, before_verify, "preparity verify rewrite did not apply");
+    assert_ne!(
+        generated, before_verify,
+        "preparity verify rewrite did not apply"
+    );
 
     let main_marker = "\nfn main() {";
     let wrappers = r#"
@@ -54,7 +61,10 @@ fn verify_slice(raw: &[u8]) -> Result<(), String> {
 "#;
     let before_wrappers = generated.clone();
     generated = generated.replacen(main_marker, &format!("{wrappers}{main_marker}"), 1);
-    assert_ne!(generated, before_wrappers, "preparity byte-slice wrappers did not apply");
+    assert_ne!(
+        generated, before_wrappers,
+        "preparity byte-slice wrappers did not apply"
+    );
 
     let out =
         PathBuf::from(env::var_os("OUT_DIR").expect("OUT_DIR")).join("zipfactor_v3_preparity.rs");
