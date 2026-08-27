@@ -1,9 +1,13 @@
 """Exact-byte ZIP-factor V3 builder experiment with fused group finalization.
 
 The shipping/research format is unchanged: this module emits the exact CMP25Z3 grammar owned by
-``entropygraph_v030_zipfactor_compact_v3``.  It only removes repeated Python passes over completed group buffers:
+``entropygraph_v030_zipfactor_compact_v3``. It only removes repeated Python passes over completed group buffers:
 pack -> hash -> compress -> descriptor bookkeeping is performed once per group instead of materializing all group
 raw buffers and traversing them again for compression and control hashing.
+
+``build_bytes`` exposes the exact in-memory payload before publication. It exists so later recovery experiments can
+reuse the single semantic owner without publishing a temporary V3 archive and reading it back before wrapping the
+same bytes. ``build`` remains the public research builder and writes those exact bytes unchanged.
 
 Research-only until exact-byte identity and same-runner timing prove a material win.
 """
@@ -19,9 +23,9 @@ from experiments import entropygraph_v030_zipfactor_fused as FUSED
 from experiments import entropygraph_v030_zipfactor_profile as BASE
 
 
-def build(root: Path, out: Path, *, level: int = 6, group_size: int = 7) -> dict:
+def build_bytes(root: Path, *, level: int = 6, group_size: int = 7) -> tuple[bytes, dict]:
+    """Return the exact CMP25Z3 payload and stats without publishing an intermediate file."""
     root = Path(root)
-    out = Path(out)
     if group_size < 1 or group_size > V3.MAX_FILES:
         raise V3.ProfileNotEligible("binary-control ZIP-factor group size exceeds policy")
 
@@ -46,7 +50,7 @@ def build(root: Path, out: Path, *, level: int = 6, group_size: int = 7) -> dict
     group_count = 0
 
     # The old V3 builder first materialized every group raw buffer, then traversed the list again for locality,
-    # compression, and SHA/control construction.  Keep only the compressed publication buffers after each group.
+    # compression, and SHA/control construction. Keep only the compressed publication buffers after each group.
     for index in range(0, len(items), group_size):
         group = items[index:index + group_size]
         raw = V3._pack_group(group)
@@ -79,9 +83,7 @@ def build(root: Path, out: Path, *, level: int = 6, group_size: int = 7) -> dict
     for blob in group_blobs:
         payload += BASE._blob(blob)
 
-    out.parent.mkdir(parents=True, exist_ok=True)
-    out.write_bytes(payload)
-    return {
+    stats = {
         "archive_bytes": len(payload),
         "format_revision": V3.REVISION,
         "format_profile": V3.PROFILE,
@@ -96,3 +98,12 @@ def build(root: Path, out: Path, *, level: int = 6, group_size: int = 7) -> dict
         "fused_group_finalize": True,
         **fs_stats,
     }
+    return bytes(payload), stats
+
+
+def build(root: Path, out: Path, *, level: int = 6, group_size: int = 7) -> dict:
+    payload, stats = build_bytes(root, level=level, group_size=group_size)
+    out = Path(out)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_bytes(payload)
+    return stats
