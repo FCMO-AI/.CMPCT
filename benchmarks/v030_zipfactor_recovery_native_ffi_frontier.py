@@ -1,12 +1,16 @@
 from __future__ import annotations
 
-"""Strict external frontier for ZIP-factor recovery with in-process Rust verification.
+"""Strict external frontier for ZIP-factor recovery with direct build + in-process Rust verification.
 
-The recovery envelope bytes are unchanged. Only the clean-path strong verifier is replaced by the already-proven
-research-only CMP25Z3 FFI verifier. Recovery correctness remains separately proven with the Python recovery oracle:
-primary/tail corruption must recover from the other authenticated control copy and double corruption must fail.
-Compilation/library load are outside timing; recovery build, V3 reconstruction, scratch publication, archive open
-and the Rust FFI verification call are inside CMPCT creation timing. No selector or release credit is granted.
+The recovery envelope bytes are unchanged. The exact fused CMP25Z3 payload is now obtained in memory from its
+single semantic owner and wrapped directly, removing the old temporary-V3 publication/readback from the timed
+build. A legacy build is still performed once outside timing and must be byte-identical before measurements begin.
+
+Clean strong verification uses the already-proven research-only CMP25Z3 FFI verifier. Recovery correctness remains
+separately proven with the Python recovery oracle: primary/tail corruption must recover from the other authenticated
+control copy and double corruption must fail. Compilation/library load and the one-time legacy identity proof are
+outside timing; direct recovery build, V3 reconstruction, scratch publication, archive open and Rust FFI verification
+are inside CMPCT creation timing. No selector or release credit is granted.
 """
 
 import argparse
@@ -32,6 +36,38 @@ GROUP_SIZE = 7
 
 def _median(v: list[float]) -> float:
     return float(statistics.median(v))
+
+
+def _direct_recovery_bytes(root: Path, *, level: int, group_size: int) -> tuple[bytes, dict]:
+    """Build exact recovery bytes without publishing/re-reading an intermediate CMP25Z3 file."""
+    raw, base_stats = FUSED.build_bytes(root, level=level, group_size=group_size)
+    if raw[:8] != V3.MAGIC:
+        raise RuntimeError("unexpected ZIP-factor v3 identity")
+    *_, group_count = V3._HEADER.unpack_from(raw, 8)
+    control_len = V3._HEADER.size + int(group_count) * V3._GROUP.size
+    control = raw[8 : 8 + control_len]
+    body = raw[8 + control_len :]
+    footer = REC._FOOTER.pack(REC.TAIL_MAGIC, control_len, REC._sha(control))
+    recovery = REC.REC_MAGIC + control + body + control + footer
+    return recovery, {
+        **base_stats,
+        "format_profile": "zip-framing-factor-recovery-oracle-v4",
+        "archive_bytes": len(recovery),
+        "base_v3_bytes": len(raw),
+        "recovery_overhead_bytes": len(recovery) - len(raw),
+        "control_bytes": control_len,
+        "payload_body_bytes": len(body),
+        "payload_body_copies": 1,
+        "control_copies": 2,
+        "direct_v3_in_memory": True,
+    }
+
+
+def _build_recovery_direct(root: Path, out: Path, *, level: int, group_size: int) -> dict:
+    recovery, stats = _direct_recovery_bytes(root, level=level, group_size=group_size)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_bytes(recovery)
+    return stats
 
 
 def _native_recovery_verify(path: Path, verifier: NativeVerifier, scratch: Path) -> str:
@@ -72,6 +108,23 @@ def run(work_root: Path, native_library: Path) -> dict:
         td = Path(td_raw)
         stage = EXT._normalized_stage(source, td)
         external_tree = EXT._tree(stage)
+
+        # Before timing, prove the new no-intermediate path is exactly the historical recovery representation.
+        legacy = td / "legacy-recovery.cmpct"
+        original_build = V3.build
+        V3.build = FUSED.build
+        try:
+            REC.build_recovery(stage, legacy, level=LEVEL, group_size=GROUP_SIZE)
+        finally:
+            V3.build = original_build
+        direct_probe = td / "direct-recovery.cmpct"
+        probe_stats = _build_recovery_direct(stage, direct_probe, level=LEVEL, group_size=GROUP_SIZE)
+        legacy_bytes = legacy.read_bytes()
+        direct_bytes = direct_probe.read_bytes()
+        legacy_recovery_byte_identical = legacy_bytes == direct_bytes
+        if not legacy_recovery_byte_identical:
+            raise RuntimeError("direct recovery build changed canonical candidate bytes")
+
         cmpct: list[float] = []
         build: list[float] = []
         verify: list[float] = []
@@ -81,44 +134,39 @@ def run(work_root: Path, native_library: Path) -> dict:
         shas: set[str] = set()
         stats: dict | None = None
         order = ("cmpct", "zip", "zstd")
-        original_build = V3.build
-        V3.build = FUSED.build
-        try:
-            for i in range(ROUNDS):
-                for kind in order[i % 3 :] + order[: i % 3]:
-                    if kind == "cmpct":
-                        archive = td / f"candidate-{i}.cmpct"
-                        scratch = td / f"verify-{i}.cmpct"
-                        t0 = time.perf_counter()
-                        row = REC.build_recovery(stage, archive, level=LEVEL, group_size=GROUP_SIZE)
-                        t1 = time.perf_counter()
-                        recovered_from = _native_recovery_verify(archive, verifier, scratch)
-                        t2 = time.perf_counter()
-                        if recovered_from != "primary":
-                            raise RuntimeError("clean recovery archive did not verify from primary control")
-                        if not row.get("fused_group_finalize"):
-                            raise RuntimeError("recovery build did not use fused V3 builder")
-                        stats = row
-                        sizes.add(archive.stat().st_size)
-                        shas.add(hashlib.sha256(archive.read_bytes()).hexdigest())
-                        build.append(t1 - t0)
-                        verify.append(t2 - t1)
-                        cmpct.append(t2 - t0)
-                    elif kind == "zip":
-                        a, out = td / f"z-{i}.zip", td / f"zo-{i}"
-                        r = EXT._zip(stage, a, out)
-                        EXT._verify_extracted(out, external_tree, "zf-rec-ffi-zip")
-                        zip_s.append(float(r["create_s"]))
-                    else:
-                        a, out, w = td / f"s-{i}.tar.zst", td / f"so-{i}", td / f"sw-{i}"
-                        w.mkdir()
-                        r = EXT._tar_zstd(stage, a, out, w)
-                        if not r.get("available"):
-                            raise RuntimeError("solid Zstd-19 unavailable")
-                        EXT._verify_extracted(out, external_tree, "zf-rec-ffi-zstd")
-                        zstd_s.append(float(r["create_s"]))
-        finally:
-            V3.build = original_build
+        for i in range(ROUNDS):
+            for kind in order[i % 3 :] + order[: i % 3]:
+                if kind == "cmpct":
+                    archive = td / f"candidate-{i}.cmpct"
+                    scratch = td / f"verify-{i}.cmpct"
+                    t0 = time.perf_counter()
+                    row = _build_recovery_direct(stage, archive, level=LEVEL, group_size=GROUP_SIZE)
+                    t1 = time.perf_counter()
+                    recovered_from = _native_recovery_verify(archive, verifier, scratch)
+                    t2 = time.perf_counter()
+                    if recovered_from != "primary":
+                        raise RuntimeError("clean recovery archive did not verify from primary control")
+                    if not row.get("fused_group_finalize") or not row.get("direct_v3_in_memory"):
+                        raise RuntimeError("recovery build did not use direct fused V3 builder")
+                    stats = row
+                    sizes.add(archive.stat().st_size)
+                    shas.add(hashlib.sha256(archive.read_bytes()).hexdigest())
+                    build.append(t1 - t0)
+                    verify.append(t2 - t1)
+                    cmpct.append(t2 - t0)
+                elif kind == "zip":
+                    a, out = td / f"z-{i}.zip", td / f"zo-{i}"
+                    r = EXT._zip(stage, a, out)
+                    EXT._verify_extracted(out, external_tree, "zf-rec-ffi-zip")
+                    zip_s.append(float(r["create_s"]))
+                else:
+                    a, out, w = td / f"s-{i}.tar.zst", td / f"so-{i}", td / f"sw-{i}"
+                    w.mkdir()
+                    r = EXT._tar_zstd(stage, a, out, w)
+                    if not r.get("available"):
+                        raise RuntimeError("solid Zstd-19 unavailable")
+                    EXT._verify_extracted(out, external_tree, "zf-rec-ffi-zstd")
+                    zstd_s.append(float(r["create_s"]))
 
         if len(sizes) != 1 or len(shas) != 1 or stats is None:
             raise RuntimeError("recovery candidate was not deterministic")
@@ -126,12 +174,7 @@ def run(work_root: Path, native_library: Path) -> dict:
         # Recovery semantics and semantic identity are proven outside the timing A/B, without weakening the timed
         # verifier: the Rust verifier above still authenticates every reconstructed V3 member on every round.
         proof_archive = td / "recovery-proof.cmpct"
-        original_build = V3.build
-        V3.build = FUSED.build
-        try:
-            REC.build_recovery(stage, proof_archive, level=LEVEL, group_size=GROUP_SIZE)
-        finally:
-            V3.build = original_build
+        _build_recovery_direct(stage, proof_archive, level=LEVEL, group_size=GROUP_SIZE)
         clean = REC.recover_verify(proof_archive)
         if not clean.get("ok"):
             raise RuntimeError("Python recovery semantic proof failed")
@@ -169,22 +212,28 @@ def run(work_root: Path, native_library: Path) -> dict:
         mc, mz, ms = _median(cmpct), _median(zip_s), _median(zstd_s)
         strict = cb < zb and cb < sb and mc < mz and mc < ms
         return {
-            "schema": "cmpct-v030-zipfactor-recovery-native-ffi-frontier-v1",
+            "schema": "cmpct-v030-zipfactor-recovery-native-ffi-frontier-v2",
             "contract": {
                 "rounds": ROUNDS,
                 "level": LEVEL,
                 "group_size": GROUP_SIZE,
                 "ties_fail": True,
-                "cmpct_timing": "fused-recovery-build-plus-v3-reconstruction-plus-inprocess-rust-strong-verify",
+                "cmpct_timing": "direct-fused-recovery-build-plus-v3-reconstruction-plus-inprocess-rust-strong-verify",
                 "native_compile_inside_timing": False,
                 "native_library_load_inside_timing": False,
                 "native_ffi_call_inside_timing": True,
                 "scratch_v3_publication_inside_timing": True,
+                "legacy_identity_proof_inside_timing": False,
+                "intermediate_v3_publication_inside_build_timing": False,
                 "archive_bytes_changed": False,
                 "selector_change": False,
                 "release_credit": False,
             },
             "candidate": {**stats, "archive_sha256": next(iter(shas))},
+            "legacy_recovery_byte_identical": legacy_recovery_byte_identical,
+            "legacy_recovery_sha256": hashlib.sha256(legacy_bytes).hexdigest(),
+            "direct_probe_sha256": hashlib.sha256(direct_bytes).hexdigest(),
+            "probe_stats": probe_stats,
             "sizes": {"cmpct": cb, "zip": zb, "zstd19": sb},
             "samples_s": {"cmpct": cmpct, "zip": zip_s, "zstd19": zstd_s},
             "cmpct_phase_samples_s": {"build": build, "verify": verify},
@@ -194,6 +243,7 @@ def run(work_root: Path, native_library: Path) -> dict:
             "strict_four_way_win": strict,
             "experiment_valid": (
                 len(cmpct) == len(zip_s) == len(zstd_s) == ROUNDS
+                and legacy_recovery_byte_identical
                 and cb < zb and cb < sb
                 and float(REC._snapshot(clean)["max_member_read_amplification"]) <= 8.0
                 and int(REC._snapshot(clean)["max_decode_unit_bytes"]) <= 8 * 1024 * 1024
@@ -215,7 +265,7 @@ def main() -> None:
     a.output.write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8")
     print(json.dumps(result, indent=2), flush=True)
     if not result["experiment_valid"]:
-        raise SystemExit("ZIP-factor recovery native FFI frontier invalid")
+        raise SystemExit("ZIP-factor direct recovery native FFI frontier invalid")
 
 
 if __name__ == "__main__":
