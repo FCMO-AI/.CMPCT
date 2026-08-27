@@ -1,0 +1,112 @@
+# ci-lane: deep
+name: CMPCT v0.30 product phase RSS oracle
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'experiments/entropygraph_v030_release_product.py'
+      - 'experiments/entropygraph_v030_release_product_base.py'
+      - 'experiments/entropygraph_v030_canonical_final.py'
+      - 'benchmarks/v030_release_performance.py'
+      - 'benchmarks/v030_product_phase_rss_oracle.py'
+      - 'benchmarks/neutral_hostile_corpus_v1.py'
+      - 'benchmarks/resemblance_hostile_corpus_v1.py'
+      - '.github/workflows/v030-product-phase-rss.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-v030-product-phase-rss-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+
+jobs:
+  product-phase-rss:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install frozen runtime-corpus dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y zstd gcc ffmpeg libsndfile1
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[audio,test]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
+      - name: Compile RSS decomposition surface
+        run: |
+          python -m py_compile benchmarks/v030_product_phase_rss_oracle.py
+          python -m py_compile benchmarks/v030_release_performance.py
+          python -m py_compile experiments/entropygraph_v030_release_product.py
+          python -m py_compile experiments/entropygraph_v030_release_product_base.py
+      - name: Measure isolated r24, profile capture and complete product RSS
+        run: |
+          mkdir -p benchmark-artifacts
+          python benchmarks/v030_product_phase_rss_oracle.py \
+            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-product-phase-rss-work" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-product-phase-rss.json"
+      - name: Enforce exact diagnostic boundary
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          p=Path('benchmark-artifacts/v030-product-phase-rss.json')
+          if not p.is_file():
+              raise SystemExit('phase-RSS evidence missing')
+          d=json.loads(p.read_text())
+          assert d['schema']=='cmpct-v030-product-phase-rss-v1'
+          assert d['rounds']==2
+          assert d['experiment_valid'] is True
+          assert d['promotion_signal'] is False
+          assert d['selector_change'] is False
+          assert d['release_credit'] is False
+          c=d['contract']
+          assert c['fresh_process_per_arm'] is True
+          assert c['operation_rss_snapshot_precedes_correctness_checks'] is True
+          for key in (
+              'archive_bytes_changed','selector_changed','scheduling_changed','grammar_changed','integrity_changed',
+              'rss_release_threshold_changed','locality_limit_changed','decode_unit_limit_changed',
+          ):
+              assert c[key] is False
+          assert len(d['rows'])==3
+          expected={
+              'resemblance_hostile_v1/01_shifted_versions',
+              'neutral_hostile_v1/05_logs_and_telemetry',
+              'neutral_hostile_v1/09_ml_artifacts',
+          }
+          assert {row['target'] for row in d['rows']}==expected
+          for row in d['rows']:
+              assert len(row['repetitions'])==2
+              for mode in ('r24','profile','full'):
+                  m=row['median'][mode]
+                  assert m['wall_s'] > 0
+                  assert m['baseline_rss_kib'] > 0
+                  assert m['operation_peak_rss_kib'] >= m['baseline_rss_kib']
+                  assert m['incremental_peak_rss_kib'] >= 0
+              for mode in ('r24','full'):
+                  shas={rep[mode]['archive_sha256'] for rep in row['repetitions']}
+                  sizes={int(rep[mode]['archive_bytes']) for rep in row['repetitions']}
+                  trees={rep[mode]['verified_tree_sha256'] for rep in row['repetitions']}
+                  assert len(shas)==1 and len(sizes)==1 and len(trees)==1
+          PY
+      - name: CI topology self-check
+        run: python tools/check_ci_topology.py .github/workflows/v030-product-phase-rss.yml
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: v030-product-phase-rss-${{ github.sha }}
+          path: benchmark-artifacts/v030-product-phase-rss.json
+          if-no-files-found: error
+          retention-days: 90
+
+# Diagnostic only. No scheduling or selector change is authorized by this lane. Runtime/RSS release authority
+# remains the sole promotion gate; this evidence only identifies which phase owns the measured peak working set.
