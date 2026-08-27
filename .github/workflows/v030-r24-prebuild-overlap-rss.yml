@@ -1,0 +1,106 @@
+# ci-lane: deep
+name: CMPCT v0.30 r24 prebuild overlap RSS oracle
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'experiments/entropygraph_v030_release_product.py'
+      - 'experiments/entropygraph_v030_release_product_base.py'
+      - 'benchmarks/v030_release_performance.py'
+      - 'benchmarks/v030_r24_prebuild_overlap_rss_worker.py'
+      - 'benchmarks/v030_r24_prebuild_overlap_rss_oracle.py'
+      - '.github/workflows/v030-r24-prebuild-overlap-rss.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-v030-r24-prebuild-overlap-rss-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+
+jobs:
+  r24-prebuild-overlap-rss:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install frozen runtime-corpus dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y zstd gcc ffmpeg libsndfile1
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[audio,test]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
+      - name: Compile exact scheduling oracle
+        run: |
+          python -m py_compile \
+            experiments/entropygraph_v030_release_product.py \
+            experiments/entropygraph_v030_release_product_base.py \
+            benchmarks/v030_release_performance.py \
+            benchmarks/v030_r24_prebuild_overlap_rss_worker.py \
+            benchmarks/v030_r24_prebuild_overlap_rss_oracle.py
+      - name: Measure shipping overlap against serial r24 schedule
+        run: |
+          mkdir -p benchmark-artifacts
+          python benchmarks/v030_r24_prebuild_overlap_rss_oracle.py \
+            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-r24-prebuild-overlap-rss-work" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-r24-prebuild-overlap-rss.json"
+      - name: Enforce exact-byte diagnostic boundary
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          d=json.loads(Path('benchmark-artifacts/v030-r24-prebuild-overlap-rss.json').read_text())
+          assert d['schema']=='cmpct-v030-r24-prebuild-overlap-rss-v1'
+          assert int(d['rounds'])==2
+          assert len(d['rows'])==3
+          assert d['experiment_valid'] is True
+          assert d['selector_change'] is False
+          assert d['release_credit'] is False
+          c=d['contract']
+          assert c['archive_bytes_changed'] is False
+          assert c['selector_changed'] is False
+          assert c['grammar_changed'] is False
+          assert c['integrity_changed'] is False
+          assert c['locality_limit_changed'] is False
+          assert c['decode_unit_limit_changed'] is False
+          assert c['recovery_changed'] is False
+          for row in d['rows']:
+              assert len(row['repetitions'])==2
+              shas=set()
+              sizes=set()
+              trees=set()
+              for rep in row['repetitions']:
+                  for key in ('shipping','serial_r24'):
+                      shas.add(rep[key]['archive_sha256'])
+                      sizes.add(int(rep[key]['archive_bytes']))
+                      trees.add(rep[key]['tree_sha256'])
+              assert len(shas)==1 and len(sizes)==1 and len(trees)==1
+              assert float(row['shipping_median_wall_s'])>0
+              assert float(row['serial_r24_median_wall_s'])>0
+              assert int(row['shipping_median_peak_rss_kib'])>0
+              assert int(row['serial_r24_median_peak_rss_kib'])>0
+          # A false causal_signal is valid negative evidence; no scheduling promotion is hidden here.
+          PY
+      - name: CI topology self-check
+        run: python tools/check_ci_topology.py .github/workflows/v030-r24-prebuild-overlap-rss.yml
+      - name: Upload overlap/RSS evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: v030-r24-prebuild-overlap-rss-${{ github.sha }}
+          path: benchmark-artifacts/v030-r24-prebuild-overlap-rss.json
+          if-no-files-found: warn
+          retention-days: 90
+
+# Research-only scheduling diagnostic. It never changes product bytes or release law. Shipping may change only
+# after a separate integration proves the frozen v0.29 create/RSS thresholds on ordinary authority.
