@@ -71,11 +71,21 @@ def _python_identity(path: Path) -> dict:
 
 
 def _cmpct_once(stage: Path, archive: Path, binary: Path) -> dict:
-    started = time.perf_counter()
+    complete_started = time.perf_counter()
+    build_started = time.perf_counter()
     stats = V3.build(stage, archive, level=LEVEL, group_size=GROUP_SIZE)
+    build_s = time.perf_counter() - build_started
+    verify_started = time.perf_counter()
     _native_verify(binary, archive)
-    complete_s = time.perf_counter() - started
-    return {"archive_bytes": archive.stat().st_size, "create_verify_s": complete_s, "stats": stats}
+    verify_s = time.perf_counter() - verify_started
+    complete_s = time.perf_counter() - complete_started
+    return {
+        "archive_bytes": archive.stat().st_size,
+        "create_verify_s": complete_s,
+        "build_s": build_s,
+        "verify_s": verify_s,
+        "stats": stats,
+    }
 
 
 def run(work_root: Path, native_binary: Path) -> dict:
@@ -105,6 +115,7 @@ def run(work_root: Path, native_binary: Path) -> dict:
             raise RuntimeError("ZIP-factor decode unit exceeds 8 MiB")
 
         samples = {"cmpct": [], "zip": [], "zstd19": []}
+        cmpct_phases = {"build": [], "verify": []}
         sizes: dict[str, int] = {}
         orders = (
             ("cmpct", "zip", "zstd19"),
@@ -121,6 +132,8 @@ def run(work_root: Path, native_binary: Path) -> dict:
                     if hashlib.sha256(archive.read_bytes()).hexdigest() != reference_sha:
                         raise RuntimeError("timed ZIP-factor build drifted from exact reference bytes")
                     samples[impl].append(float(result["create_verify_s"]))
+                    cmpct_phases["build"].append(float(result["build_s"]))
+                    cmpct_phases["verify"].append(float(result["verify_s"]))
                     sizes.setdefault(impl, int(result["archive_bytes"]))
                     if sizes[impl] != int(result["archive_bytes"]):
                         raise RuntimeError("ZIP-factor archive size drifted between rounds")
@@ -148,6 +161,7 @@ def run(work_root: Path, native_binary: Path) -> dict:
                         raise RuntimeError("Zstd archive size drifted between rounds")
 
         medians = {name: statistics.median(values) for name, values in samples.items()}
+        phase_medians = {name: statistics.median(values) for name, values in cmpct_phases.items()}
         strict_four_way = bool(
             sizes["cmpct"] < sizes["zip"]
             and sizes["cmpct"] < sizes["zstd19"]
@@ -169,6 +183,7 @@ def run(work_root: Path, native_binary: Path) -> dict:
                 "archive_bytes_changed": False,
                 "selector_change": False,
                 "release_credit": False,
+                "phase_timing_is_diagnostic_only": True,
             },
             "source_identity": {
                 "external_tree_sha256": expected_external_tree,
@@ -182,7 +197,9 @@ def run(work_root: Path, native_binary: Path) -> dict:
             },
             "sizes": sizes,
             "samples_s": samples,
+            "cmpct_phase_samples_s": cmpct_phases,
             "medians_s": medians,
+            "cmpct_phase_medians_s": phase_medians,
             "strict_four_way_win": strict_four_way,
             "experiment_valid": True,
             "promotion_signal": strict_four_way,
