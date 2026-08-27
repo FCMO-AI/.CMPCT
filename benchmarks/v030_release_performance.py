@@ -93,6 +93,13 @@ def _run_worker(*args: str) -> dict:
 
 
 def _build_corpora(work_root: Path) -> dict[tuple[str, str], Path]:
+    """Materialize only the three frozen runtime targets, then prove exact corpus identity.
+
+    The old helper called both suite-level ``build()`` functions, which generated fifteen workloads even though this
+    gate reads only Shifted, Logs and ML.  Every relevant generator owns an independent deterministic PRNG stream,
+    so target-only generation produces the same bytes.  The accepted-v0.29 tree hash remains the fail-closed proof:
+    any generator/repair assumption drift aborts before a timed worker runs.
+    """
     accepted = GENERAL._accepted_v029_rows()
     neutral = GENERAL.V029._load(
         GENERAL.V029.ROOT / "benchmarks" / "neutral_hostile_corpus_v1.py",
@@ -107,9 +114,26 @@ def _build_corpora(work_root: Path) -> dict[tuple[str, str], Path]:
 
     neutral_root = work_root / "neutral"
     hostile_root = work_root / "resemblance"
-    neutral.build(neutral_root)
+    shutil.rmtree(neutral_root, ignore_errors=True)
+    shutil.rmtree(hostile_root, ignore_errors=True)
+    neutral_root.mkdir(parents=True, exist_ok=True)
+    hostile_root.mkdir(parents=True, exist_ok=True)
+
+    neutral_builders = {
+        "05_logs_and_telemetry": neutral.corpus_logs,
+        "09_ml_artifacts": neutral.corpus_ml,
+    }
+    hostile_builders = {
+        "01_shifted_versions": hostile.shifted_versions,
+    }
+    for suite, name in TARGETS:
+        if suite == "neutral_hostile_v1":
+            neutral_builders[name](neutral_root)
+        elif suite == "resemblance_hostile_v1":
+            hostile_builders[name](hostile_root)
+        else:
+            raise RuntimeError(f"runtime-gate target has unknown suite: {suite}/{name}")
     repair.normalize_root(neutral_root)
-    hostile.build(hostile_root)
 
     roots = {
         ("neutral_hostile_v1", name): neutral_root / name
@@ -268,6 +292,7 @@ def run(work_root: Path) -> dict:
             "size_regression_tolerance_bytes": 0,
             "timing_semantics": "fresh-process same-run paired hosted-runner release gate",
             "tree_identity_semantics": "historical substrate and measured product identities are engine-owned and independently verified",
+            "corpus_materialization": "target-only deterministic generators with accepted-v0.29 tree-hash revalidation before timing",
         },
         "rows": rows,
         "totals": {
