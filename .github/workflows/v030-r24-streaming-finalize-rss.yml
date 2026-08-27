@@ -1,0 +1,114 @@
+# ci-lane: deep
+name: CMPCT v0.30 r24 streaming-finalize RSS oracle
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'src/cmpct/builder.py'
+      - 'experiments/entropygraph_v030_release_product.py'
+      - 'experiments/entropygraph_v030_release_product_base.py'
+      - 'benchmarks/v030_r24_streaming_finalize_rss_oracle.py'
+      - 'benchmarks/v030_release_performance.py'
+      - 'benchmarks/v030_release_generalization.py'
+      - 'benchmarks/neutral_hostile_corpus_v1.py'
+      - 'benchmarks/resemblance_hostile_corpus_v1.py'
+      - '.github/workflows/v030-r24-streaming-finalize-rss.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-v030-r24-streaming-finalize-rss-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+
+jobs:
+  r24-streaming-finalize-rss:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install frozen runtime-corpus dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y zstd gcc ffmpeg libsndfile1
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[audio,test]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
+      - name: Compile streaming-finalize oracle
+        run: |
+          python -m py_compile benchmarks/v030_r24_streaming_finalize_rss_oracle.py
+          python -m py_compile experiments/entropygraph_v030_release_product.py
+          python -m py_compile experiments/entropygraph_v030_release_product_base.py
+      - name: Measure byte-identical streaming r24 floor inside promoted product
+        run: |
+          mkdir -p benchmark-artifacts
+          python benchmarks/v030_r24_streaming_finalize_rss_oracle.py \
+            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-r24-streaming-rss-work" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-r24-streaming-rss.json"
+      - name: Enforce exact experimental boundary
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          p=Path('benchmark-artifacts/v030-r24-streaming-rss.json')
+          if not p.is_file():
+              raise SystemExit('streaming-finalize RSS evidence missing')
+          d=json.loads(p.read_text())
+          assert d['schema']=='cmpct-v030-r24-streaming-finalize-rss-v1'
+          assert d['rounds']==2
+          assert d['experiment_valid'] is True
+          assert d['selector_change'] is False
+          assert d['release_credit'] is False
+          c=d['contract']
+          assert c['archive_bytes_changed'] is False
+          assert c['r24_policy_changed'] is False
+          assert c['selector_changed'] is False
+          assert c['grammar_changed'] is False
+          assert c['integrity_changed'] is False
+          assert c['rss_release_threshold_changed'] is False
+          assert c['bounded_encode_in_flight'] is True
+          assert c['spool_memory_bytes']==1048576
+          assert c['promotion_shifted_full_rss_max_ratio']==0.75
+          assert c['promotion_shifted_r24_rss_max_ratio']==0.50
+          assert c['maximum_full_wall_regression_ratio']==1.05
+          assert {r['target'] for r in d['rows']} == {
+              'resemblance_hostile_v1/01_shifted_versions',
+              'neutral_hostile_v1/09_ml_artifacts',
+          }
+          for row in d['rows']:
+              assert len(row['repetitions'])==2
+              for rep in row['repetitions']:
+                  for op in ('r24','full'):
+                      a=rep['shipping'][op]
+                      b=rep['streaming'][op]
+                      assert a['archive_bytes']==b['archive_bytes']
+                      assert a['archive_sha256']==b['archive_sha256']
+                      assert a['tree_sha256']==b['tree_sha256']
+              assert row['full_wall_ratio_streaming_to_shipping'] is not None
+              assert row['full_rss_ratio_streaming_to_shipping'] is not None
+              assert row['r24_rss_ratio_streaming_to_shipping'] is not None
+          # A valid negative result stays green here. Promotion is a separate signal and cannot grant
+          # release credit by itself; runtime authority remains unchanged and fail-closed.
+          PY
+      - name: CI topology self-check
+        run: python tools/check_ci_topology.py .github/workflows/v030-r24-streaming-finalize-rss.yml
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: v030-r24-streaming-finalize-rss-${{ github.sha }}
+          path: benchmark-artifacts/v030-r24-streaming-rss.json
+          if-no-files-found: error
+          retention-days: 90
+
+# Research-only causality test. It cannot change shipping, RSS limits or archive semantics. A positive result
+# only authorizes the next step: promote the byte-identical finalizer with focused regression coverage, then
+# regenerate exact-head runtime/external/native/Android/final release authority.
