@@ -146,17 +146,20 @@ jobs:
           python -m pip install -e '.[audio,test]'
           python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
       - name: Run paired release-product runtime gate
+        continue-on-error: true
         run: |
           mkdir -p benchmark-artifacts
           python benchmarks/v030_release_performance_product.py \
             --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/final-runtime-work" \
             --output "$GITHUB_WORKSPACE/benchmark-artifacts/final-runtime.json"
       - name: Run operation-derived selective-read gate
+        if: always()
         run: |
           python benchmarks/v030_release_selective_read_product.py \
             --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/final-selective-work" \
             --output "$GITHUB_WORKSPACE/benchmark-artifacts/final-selective.json"
       - name: Enforce runtime/locality policy
+        if: always()
         run: |
           python - <<'PY'
           import json
