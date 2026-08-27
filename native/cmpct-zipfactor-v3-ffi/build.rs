@@ -33,6 +33,26 @@ fn main() {
         "preparity parse rewrite did not apply"
     );
 
+    // In the standalone owner `raw` is a Vec<u8>, so its parser correctly passes `&raw` to slice helpers. After
+    // the signature rewrite above `raw` is already `&[u8]`; retaining those borrows creates `&&[u8]` and newer
+    // Clippy rejects them as needless borrows. Normalize only the rewritten parser body, leaving the standalone
+    // source and the path wrapper untouched. This changes no parser semantics or archive bytes.
+    let parse_start = generated
+        .find(parse_new)
+        .expect("rewritten preparity parser start");
+    let verify_marker = "\nfn verify(path: &Path) -> Result<(), String> {";
+    let parse_end = generated[parse_start..]
+        .find(verify_marker)
+        .map(|offset| parse_start + offset)
+        .expect("preparity verifier marker after parser");
+    let parse_body = &generated[parse_start..parse_end];
+    let normalized_parse_body = parse_body.replace("&raw", "raw");
+    assert_ne!(
+        normalized_parse_body, parse_body,
+        "preparity slice-borrow normalization did not apply"
+    );
+    generated.replace_range(parse_start..parse_end, &normalized_parse_body);
+
     let verify_old =
         "fn verify(path: &Path) -> Result<(), String> {\n    let parsed = parse(path)?;";
     let verify_new = "fn verify_parsed(parsed: Parsed) -> Result<(), String> {";
