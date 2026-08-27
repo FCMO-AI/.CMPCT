@@ -6,6 +6,9 @@
 use std::ffi::CStr;
 use std::os::raw::c_char;
 
+// The included source is also a standalone preparity binary. Its binary-only entry point/profile constants are
+// intentionally unused when the exact same verifier is compiled as this research-only library wrapper.
+#[allow(dead_code)]
 mod preparity {
     include!(concat!(env!("OUT_DIR"), "/zipfactor_v3_preparity.rs"));
 
@@ -18,6 +21,12 @@ mod preparity {
 ///
 /// Returns 0 on success, 1 on verification failure, and 2 for an invalid ABI/path argument. Panics are caught
 /// and fail closed. Archive open/read/decompression/identity/locality work remains inside the call.
+///
+/// # Safety
+///
+/// `path` must be either null or point to a valid, NUL-terminated C string for the duration of this call. The
+/// pointed-to bytes must remain readable and unmodified until the function returns. A null, non-UTF-8, or
+/// otherwise invalid path is rejected with status 2; the function never takes ownership of the pointer.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn cmpct_zipfactor_v3_verify_path(path: *const c_char) -> i32 {
     if path.is_null() {
