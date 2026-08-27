@@ -12,6 +12,7 @@ import argparse
 import json
 from pathlib import Path
 import tempfile
+import time
 
 from benchmarks import v030_release_generalization as HIST
 from benchmarks import v030_release_generalization_canonical as CANON_BENCH
@@ -33,11 +34,21 @@ class _CandidateAdapter:
             historical_path = Path(td) / "accepted-v029.cmpct"
             historical_stats = dict(CANON_BENCH.HIST_G04.BASE.build(root, historical_path))
             historical_bytes = historical_path.stat().st_size
+            product_started = time.perf_counter()
             product = dict(CAND.build(root, out))
+            product_create_s = time.perf_counter() - product_started
         old_canon = CANON_BENCH.CANON
         CANON_BENCH.CANON = CAND
         try:
-            return CANON_BENCH._normalize_product_stats(product, historical_bytes, historical_stats, out)
+            # Canonical authority charges the complete product front-door wall time. Keep this shadow on exactly
+            # the same timing boundary instead of inheriting the candidate's narrower internal timer.
+            return CANON_BENCH._normalize_product_stats(
+                product,
+                historical_bytes,
+                historical_stats,
+                out,
+                product_create_s,
+            )
         finally:
             CANON_BENCH.CANON = old_canon
 
