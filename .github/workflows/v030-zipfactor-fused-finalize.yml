@@ -1,0 +1,86 @@
+# ci-lane: deep
+name: CMPCT v0.30 ZIP-factor fused-finalize oracle
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'benchmarks/v030_zipfactor_fused_finalize_oracle.py'
+      - 'benchmarks/v030_external_competitors.py'
+      - 'experiments/entropygraph_v030_zipfactor_compact_v3.py'
+      - 'experiments/entropygraph_v030_zipfactor_compact_v3_fused_finalize.py'
+      - '.github/workflows/v030-zipfactor-fused-finalize.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-v030-zipfactor-fused-finalize-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+
+jobs:
+  fused-finalize:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install exact corpus/compressor dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y zstd gcc
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[test]'
+      - name: Compile exact-byte candidate and oracle
+        run: |
+          python -m py_compile experiments/entropygraph_v030_zipfactor_compact_v3_fused_finalize.py
+          python -m py_compile benchmarks/v030_zipfactor_fused_finalize_oracle.py
+      - name: Run rotated exact-byte builder A/B
+        run: |
+          python -m benchmarks.v030_zipfactor_fused_finalize_oracle \
+            --work-root "$RUNNER_TEMP/v030-zipfactor-fused-finalize" \
+            --output "$RUNNER_TEMP/v030-zipfactor-fused-finalize.json"
+      - name: Ratchet exact-byte and performance boundary
+        run: |
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          e=json.loads((Path(os.environ['RUNNER_TEMP'])/'v030-zipfactor-fused-finalize.json').read_text())
+          assert e['schema']=='cmpct-v030-zipfactor-fused-finalize-oracle-v1'
+          c=e['contract']
+          assert c['rounds']==15
+          assert c['level']==3 and c['group_size']==7
+          assert c['exact_archive_bytes_required'] is True
+          assert c['strong_verification_required'] is True
+          assert c['selector_change'] is False and c['release_credit'] is False
+          assert e['experiment_valid'] is True and e['exact_byte_identity'] is True
+          assert e['candidate']['fused_group_finalize'] is True
+          assert e['candidate']['max_member_read_amplification'] <= 8.0
+          assert e['candidate']['max_decode_unit_bytes'] <= 8*1024*1024
+          assert len(e['samples_s']['baseline'])==15 and len(e['samples_s']['candidate'])==15
+          expected=(
+              e['absolute_speedup_s'] >= c['min_absolute_speedup_s']
+              and e['relative_speedup'] >= c['min_relative_speedup']
+          )
+          assert e['promotion_signal'] is expected
+          assert e['release_credit'] is False
+          PY
+      - name: Upload evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: v030-zipfactor-fused-finalize
+          path: ${{ runner.temp }}/v030-zipfactor-fused-finalize.json
+          if-no-files-found: warn
+      - name: CI topology self-check
+        run: python tools/check_ci_topology.py .github/workflows/v030-zipfactor-fused-finalize.yml
+
+# Research-only. A positive result may replace only the byte-identical V3 builder after the complete FFI frontier
+# re-earns the strict ZIP/Zstd size+creation contract. It cannot itself change dispatch, recovery, or release credit.
