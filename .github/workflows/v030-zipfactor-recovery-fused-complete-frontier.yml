@@ -1,0 +1,92 @@
+# ci-lane: deep
+name: CMPCT v0.30 ZIP-factor recovery fused complete frontier
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'benchmarks/v030_zipfactor_recovery_fused_complete_frontier.py'
+      - 'benchmarks/v030_zipfactor_v3_recovery_budget_oracle.py'
+      - 'benchmarks/v030_zipfactor_recovery_oracle.py'
+      - 'benchmarks/v030_external_competitors.py'
+      - 'experiments/entropygraph_v030_zipfactor_compact_v3.py'
+      - 'experiments/entropygraph_v030_zipfactor_compact_v3_fused_finalize.py'
+      - '.github/workflows/v030-zipfactor-recovery-fused-complete-frontier.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-v030-zipfactor-recovery-fused-complete-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+
+jobs:
+  recovery-fused-complete-frontier:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install exact comparator dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y zstd
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[test]'
+      - name: Compile exact recovery complete frontier
+        run: python -m py_compile benchmarks/v030_zipfactor_recovery_fused_complete_frontier.py
+      - name: Run recovered candidate against ZIP and Zstd-19
+        run: |
+          python -m benchmarks.v030_zipfactor_recovery_fused_complete_frontier \
+            --work-root "$RUNNER_TEMP/v030-zipfactor-recovery-fused-complete" \
+            --output "$RUNNER_TEMP/v030-zipfactor-recovery-fused-complete.json"
+      - name: Ratchet exact recovery productization boundary
+        run: |
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          e=json.loads((Path(os.environ['RUNNER_TEMP'])/'v030-zipfactor-recovery-fused-complete.json').read_text())
+          assert e['schema']=='cmpct-v030-zipfactor-recovery-fused-complete-frontier-v1'
+          c=e['contract']
+          assert c['rounds']==9
+          assert c['level']==3 and c['group_size']==7
+          assert c['ties_fail'] is True
+          assert c['selector_change'] is False and c['release_credit'] is False
+          assert c['archive_bytes_changed_from_recovery_candidate'] is False
+          assert e['release_credit'] is False
+          assert e['experiment_valid'] is True
+          assert len(e['samples_s']['cmpct'])==len(e['samples_s']['zip'])==len(e['samples_s']['zstd19'])==9
+          assert len(e['cmpct_phase_samples_s']['build'])==len(e['cmpct_phase_samples_s']['verify'])==9
+          assert e['sizes']['cmpct'] < e['sizes']['zip']
+          assert e['sizes']['cmpct'] < e['sizes']['zstd19']
+          assert e['candidate']['payload_body_copies']==1
+          assert e['candidate']['control_copies']==2
+          assert e['candidate']['fused_group_finalize'] is True
+          assert e['candidate']['max_member_read_amplification'] <= 8.0
+          assert e['candidate']['max_decode_unit_bytes'] <= 8 * 1024 * 1024
+          # A green experiment may be either a strict four-way win or valid negative evidence. Promotion remains
+          # exactly the complete external contract; no timing tolerance or release credit is introduced here.
+          assert e['promotion_signal'] is e['strict_four_way_win']
+          if e['promotion_signal']:
+              assert e['medians_s']['cmpct'] < e['medians_s']['zip']
+              assert e['medians_s']['cmpct'] < e['medians_s']['zstd19']
+          PY
+      - name: Upload evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: v030-zipfactor-recovery-fused-complete-frontier
+          path: ${{ runner.temp }}/v030-zipfactor-recovery-fused-complete.json
+          if-no-files-found: warn
+      - name: CI topology self-check
+        run: python tools/check_ci_topology.py .github/workflows/v030-zipfactor-recovery-fused-complete-frontier.yml
+
+# Research-only productization boundary. Recovery is fully charged inside CMPCT verified creation timing. A positive
+# result may advance to native/platform dispatch work, but this lane alone grants no selector or release credit.
