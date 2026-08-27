@@ -44,7 +44,7 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -e '.[audio,test]'
           python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
-      - name: Compile promoted skip and correlated disproof surface
+      - name: Compile disabled skip and correlated disproof surface
         run: |
           python -m py_compile experiments/entropygraph_v030_r24_dead_dictionary.py
           python -m py_compile benchmarks/v030_r24_dictionary_skip_correlated_adversarial_v3.py
@@ -55,28 +55,21 @@ jobs:
           from experiments import entropygraph_v030_release_product as P
           from experiments import entropygraph_v030_r24_dead_dictionary as D
 
+          # Preserve the exact disproven envelope as evidence, but fail closed in shipping.
           assert D.DICTIONARY_SKIP_MIN_REGULAR_FILES == 5
           assert D.DICTIONARY_SKIP_MIN_SAMPLE_COUNT == 32
+          assert D.DICTIONARY_SKIP_ENABLED is False
+          assert D.DICTIONARY_SKIP_DISABLED_REASON == 'correlated-positive-sample-counterexamples'
           assert D._dictionary_training_skip_admitted({
               'regular_files': 5,
               'dictionary_sample_count': 32,
-              'dictionary_sample_bytes': 1,
-          }) is True
-          assert D._dictionary_training_skip_admitted({
-              'regular_files': 4,
-              'dictionary_sample_count': 32,
-              'dictionary_sample_bytes': 1,
-          }) is False
-          assert D._dictionary_training_skip_admitted({
-              'regular_files': 5,
-              'dictionary_sample_count': 31,
               'dictionary_sample_bytes': 1,
           }) is False
 
-          # Import order is intentional: dead_dictionary wraps the mature r24 builder first; the
+          # Import order remains intentional: dead_dictionary wraps the mature r24 builder first; the
           # public product captures that release-only wrapper as _BASE_R24_BUILD, then installs its
-          # dead-dictionary post-pass as the base module's public r24 materializer.  These must be
-          # distinct functions or either pre-training skip or post-selection elision has disappeared.
+          # dead-dictionary post-pass as the base module's public r24 materializer. These remain distinct
+          # so post-selection dead-dictionary elision stays active while the disproven pre-training skip is off.
           assert getattr(P._BASE_IMPL, '_cmpct_v030_dictionary_skip_boundary_installed', False) is True
           original = P._BASE_IMPL._cmpct_v030_dictionary_skip_original_r24_build
           assert P._BASE_R24_BUILD is not original
@@ -89,11 +82,12 @@ jobs:
           python benchmarks/v030_r24_dictionary_skip_correlated_adversarial_v3.py \
             --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-r24-dictionary-skip-correlated-v3-work" \
             --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-r24-dictionary-skip-correlated-v3.json"
-      - name: Enforce promoted broad-rule disproof contract
+      - name: Preserve broad-rule disproof and require shipping disablement
         run: |
           python - <<'PY'
           import json
           from pathlib import Path
+          from experiments import entropygraph_v030_r24_dead_dictionary as D
 
           d = json.loads(Path('benchmark-artifacts/v030-r24-dictionary-skip-correlated-v3.json').read_text())
           assert d['schema'] == 'cmpct-v030-r24-dictionary-skip-correlated-adversarial-v3'
@@ -112,10 +106,12 @@ jobs:
           assert s['correlated_training_surface_exercised'] is True
           assert s['broad_v2_rule_admissions'] >= 2
 
-          # This is now a shipping rule, so unlike the research-only v2 lane a correlated
-          # counterexample is release-significant and must fail CI rather than being averaged away.
-          assert s['broad_v2_rule_counterexamples'] == 0, s['broad_v2_rule_counterexample_labels']
-          assert s['broad_v2_rule_survives'] is True
+          # Negative evidence is now the expected scientific outcome. It must remain visible and it must
+          # disable the broad shipping rule rather than being averaged away or hidden by threshold changes.
+          assert s['broad_v2_rule_counterexamples'] >= 1
+          assert s['broad_v2_rule_survives'] is False
+          assert len(s['broad_v2_rule_counterexample_labels']) == s['broad_v2_rule_counterexamples']
+          assert D.DICTIONARY_SKIP_ENABLED is False
           assert d['release_credit'] is False
           PY
       - name: CI topology self-check
@@ -128,4 +124,5 @@ jobs:
           if-no-files-found: warn
           retention-days: 90
 
-# Shipping rule is fail-closed against this positive-sample correlated-text disproof surface.
+# The broad pre-training skip is disproven and disabled. This lane preserves the counterexamples and fails if
+# shipping silently re-enables the rule without a new independent promotion boundary.
