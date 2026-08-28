@@ -108,3 +108,60 @@ def test_isolated_candidates_use_their_own_semantic_owners(tmp_path: Path) -> No
     assert owner == "prefixgraph-grammar-owner"
 
     assert calls == ["candidate", "prefixgraph"]
+
+
+def test_oracle_accepts_shipping_canonical_identity_bound_to_same_research_tree(tmp_path: Path) -> None:
+    archive = tmp_path / "shipping.cmpct"
+    archive.write_bytes(b"archive")
+    receipt = {
+        "mode": "shipping",
+        "eligible": True,
+        "worker_failed": False,
+        "research_tree_sha256": "research-tree",
+        "expected_verification_tree_sha256": "canonical-tree",
+        "verified_tree_sha256": "canonical-tree",
+        "tree_sha256": "canonical-tree",
+        "verification_identity_domain": "canonical-filesystem-user-tree-v1",
+    }
+    assert oracle._receipt_identity_valid("shipping", receipt, "research-tree", archive) is True
+    receipt["tree_sha256"] = "research-tree"
+    assert oracle._receipt_identity_valid("shipping", receipt, "research-tree", archive) is False
+
+
+def test_oracle_accepts_structural_prefixgraph_ineligibility_without_archive(tmp_path: Path) -> None:
+    archive = tmp_path / "prefixgraph.cmpct"
+    receipt = {
+        "mode": "prefixgraph",
+        "eligible": False,
+        "worker_failed": False,
+        "research_tree_sha256": "research-tree",
+        "expected_verification_tree_sha256": "research-tree",
+        "verification_identity_domain": "research-content-tree-v1",
+        "reject_reason": "structural-contract-ineligible",
+    }
+    assert oracle._receipt_identity_valid("prefixgraph", receipt, "research-tree", archive) is True
+    assert oracle._receipt_identity_valid("g04", receipt, "research-tree", archive) is False
+
+
+def test_oracle_rejects_identity_mismatch_or_ineligible_archive_publication(tmp_path: Path) -> None:
+    archive = tmp_path / "candidate.cmpct"
+    archive.write_bytes(b"unexpected")
+    ineligible = {
+        "mode": "prefixgraph",
+        "eligible": False,
+        "worker_failed": False,
+        "research_tree_sha256": "research-tree",
+        "reject_reason": "structural-contract-ineligible",
+    }
+    assert oracle._receipt_identity_valid("prefixgraph", ineligible, "research-tree", archive) is False
+
+    eligible = {
+        "mode": "g04",
+        "eligible": True,
+        "worker_failed": False,
+        "research_tree_sha256": "research-tree",
+        "expected_verification_tree_sha256": "research-tree",
+        "verified_tree_sha256": "wrong-tree",
+        "tree_sha256": "wrong-tree",
+    }
+    assert oracle._receipt_identity_valid("g04", eligible, "research-tree", archive) is False
