@@ -27,6 +27,7 @@ concurrency:
 
 env:
   PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
 
 jobs:
   r24-streaming-finalize-rss:
@@ -34,6 +35,10 @@ jobs:
     timeout-minutes: 120
     steps:
       - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - name: Verify exact evidence head
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
       - uses: actions/setup-python@v6
         with:
           python-version: '3.11'
@@ -59,6 +64,7 @@ jobs:
             --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-r24-streaming-rss-work" \
             --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-r24-streaming-rss.json"
       - name: Enforce exact experimental boundary
+        if: always()
         run: |
           python - <<'PY'
           import json
@@ -100,15 +106,14 @@ jobs:
               assert row['full_wall_ratio_streaming_to_shipping'] is not None
               assert row['full_rss_ratio_streaming_to_shipping'] is not None
               assert row['r24_rss_ratio_streaming_to_shipping'] is not None
-          # A valid negative result stays green here. Promotion is a separate signal and cannot grant
-          # release credit by itself; runtime authority remains unchanged and fail-closed.
           PY
       - name: CI topology self-check
+        if: always()
         run: python tools/check_ci_topology.py .github/workflows/v030-r24-streaming-finalize-rss.yml
       - uses: actions/upload-artifact@v6
         if: always()
         with:
-          name: v030-r24-streaming-finalize-rss-${{ github.sha }}
+          name: v030-r24-streaming-finalize-rss-${{ env.EVIDENCE_HEAD }}
           path: benchmark-artifacts/v030-r24-streaming-rss.json
           if-no-files-found: error
           retention-days: 90
