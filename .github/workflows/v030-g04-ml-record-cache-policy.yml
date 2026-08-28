@@ -10,9 +10,16 @@ on:
       - '.github/workflows/v030-g04-ml-record-cache-policy.yml'
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 concurrency:
   group: v030-g04-ml-record-cache-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
 
 jobs:
   ml-record-cache-policy:
@@ -20,6 +27,11 @@ jobs:
     timeout-minutes: 90
     steps:
       - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - name: Bind exact candidate head
+        run: |
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
       - uses: actions/setup-python@v6
         with:
           python-version: '3.11'
@@ -72,7 +84,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v6
         with:
-          name: v030-g04-ml-record-cache-${{ github.sha }}
+          name: v030-g04-ml-record-cache-${{ env.EVIDENCE_HEAD }}
           path: benchmark-artifacts/v030-g04-ml-record-cache.json
-          if-no-files-found: warn
+          if-no-files-found: error
           retention-days: 90
