@@ -22,6 +22,7 @@ concurrency:
 
 env:
   PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
 
 jobs:
   ml-deferred-node-digest:
@@ -29,6 +30,10 @@ jobs:
     timeout-minutes: 180
     steps:
       - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - name: Bind exact candidate head
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
       - uses: actions/setup-python@v6
         with:
           python-version: '3.11'
@@ -59,13 +64,16 @@ jobs:
             --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-g04-ml-deferred-node-digest-work" \
             --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-g04-ml-deferred-node-digest.json"
       - name: Independently enforce unchanged bytes, hostile rejection and material speedup
+        if: always()
         run: |
+          test -f benchmark-artifacts/v030-g04-ml-deferred-node-digest.json
           python - <<'PY'
-          import json
+          import json, os
           from pathlib import Path
           d=json.loads(Path('benchmark-artifacts/v030-g04-ml-deferred-node-digest.json').read_text())
           assert d['schema']=='cmpct-v030-g04-ml-deferred-node-digest-v1'
           assert d['target']=='neutral_hostile_v1/09_ml_artifacts'
+          assert d.get('source_commit', os.environ['EVIDENCE_HEAD']) == os.environ['EVIDENCE_HEAD']
           assert d['canonical_profile']['format_revision']==25
           assert bytes.fromhex(d['canonical_profile']['magic'])==b'CMP25G4\x00'
           assert bytes.fromhex(d['canonical_profile']['tail_magic'])==b'C25G4TL\x00'
@@ -88,14 +96,15 @@ jobs:
           assert gate['passed'] is True
           PY
       - name: CI topology self-check
+        if: always()
         run: python tools/check_ci_topology.py .github/workflows/v030-g04-ml-deferred-node-digest.yml
       - name: Upload deferred-node-digest evidence
         if: always()
         uses: actions/upload-artifact@v6
         with:
-          name: v030-g04-ml-deferred-node-digest-${{ github.sha }}
+          name: v030-g04-ml-deferred-node-digest-${{ env.EVIDENCE_HEAD }}
           path: benchmark-artifacts/v030-g04-ml-deferred-node-digest.json
-          if-no-files-found: warn
+          if-no-files-found: error
           retention-days: 90
 
 # Research-only complete-stream optimization. It may not weaken physical-record authentication,
