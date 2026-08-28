@@ -113,6 +113,81 @@ jobs:
           path: ${{ runner.temp }}/v030-cc-terminal-generalization.json
           if-no-files-found: error
           retention-days: 90
+      - name: Evaluate identity-free prefilter refinement
+        if: always()
+        run: |
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+
+          root=Path(os.environ['RUNNER_TEMP'])
+          frozen_path=root/'v030-cc-terminal.json'
+          general_path=root/'v030-cc-terminal-generalization.json'
+          assert frozen_path.is_file(), 'compact-control frozen receipt missing'
+          assert general_path.is_file(), 'compact-control generalization receipt missing'
+          frozen=json.loads(frozen_path.read_text())
+          general=json.loads(general_path.read_text())
+
+          # Candidate source-only work filter. This does not publish anything and earns no release credit by itself.
+          # It is intentionally expressed only in generic source-shape facts already collected by the shared frontdoor.
+          min_regular_files=1200
+          min_average_regular_bytes=4096.0
+          def prefilter(row):
+              files=int(row['regular_files'])
+              logical=int(row['logical_bytes'])
+              return (
+                  files >= min_regular_files
+                  and logical / max(1, files) >= min_average_regular_bytes
+              )
+
+          frozen_admitted=[row for row in frozen['rows'] if row['admitted']]
+          unseen_strict=[row for row in general['rows'] if row['admitted'] and row.get('strict_four_way_win', False)]
+          counterexamples=[row for row in general['rows'] if row['case'] in set(general['counterexamples'])]
+          retained_frozen=[row for row in frozen_admitted if prefilter(row)]
+          retained_unseen=[row for row in unseen_strict if prefilter(row)]
+          leaked_counterexamples=[row for row in counterexamples if prefilter(row)]
+
+          result={
+              'schema':'cmpct-v030-r24-compact-control-prefilter-refinement-v1',
+              'candidate':{
+                  'predicate_inputs':['regular_files','logical_bytes'],
+                  'min_regular_files':min_regular_files,
+                  'min_average_regular_bytes':min_average_regular_bytes,
+                  'forbidden_inputs':['workload_name','path','filename','suffix','content_hash','archive_hash','pack_hash'],
+                  'release_credit':False,
+                  'selector_change':False,
+              },
+              'evidence':{
+                  'frozen_admitted_count':len(frozen_admitted),
+                  'frozen_retained_count':len(retained_frozen),
+                  'unseen_strict_count':len(unseen_strict),
+                  'unseen_strict_retained_count':len(retained_unseen),
+                  'counterexample_count':len(counterexamples),
+                  'counterexample_leaks':[
+                      {'case':row['case'],'regular_files':row['regular_files'],'logical_bytes':row['logical_bytes']}
+                      for row in leaked_counterexamples
+                  ],
+              },
+          }
+          result['gate']={
+              'retains_all_frozen_admitted':len(retained_frozen)==len(frozen_admitted) and bool(frozen_admitted),
+              'retains_unseen_strict_win':bool(retained_unseen),
+              'rejects_all_current_counterexamples':not leaked_counterexamples,
+          }
+          result['gate']['passed']=all(result['gate'].values())
+          out=root/'v030-cc-prefilter-refinement.json'
+          out.write_text(json.dumps(result, indent=2, sort_keys=True)+'\n')
+          print(json.dumps(result, indent=2, sort_keys=True))
+          assert result['gate']['passed'] is True
+          PY
+      - name: Retain prefilter refinement evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: v030-r24-compact-control-prefilter-refinement-${{ env.EVIDENCE_HEAD }}
+          path: ${{ runner.temp }}/v030-cc-prefilter-refinement.json
+          if-no-files-found: error
+          retention-days: 90
       - name: Ratchet unseen/adversarial disproof surface and shipping envelope
         if: always()
         run: |
