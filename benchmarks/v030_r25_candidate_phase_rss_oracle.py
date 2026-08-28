@@ -93,6 +93,36 @@ def _run_worker(mode: str, source: Path, archive: Path) -> dict:
     return receipt
 
 
+def _receipt_identity_valid(mode: str, receipt: dict, source_tree: str, archive: Path) -> bool:
+    """Validate the worker receipt without conflating research and canonical identity domains.
+
+    Every mode must bind back to the same historical research content tree. Eligible modes must additionally prove
+    that the semantic owner's verified tree equals the worker's explicitly declared verification identity. Shipping
+    therefore remains canonical-filesystem exact, while G0-G4/PrefixGraph remain research-content exact. A
+    structurally ineligible PrefixGraph result is valid diagnostic evidence only when it explains the rejection and
+    did not publish an archive; shipping and G0-G4 are never allowed to become silently ineligible.
+    """
+    if receipt.get("worker_failed") is True:
+        return False
+    if str(receipt.get("research_tree_sha256") or "") != source_tree:
+        return False
+
+    eligible = receipt.get("eligible") is True
+    if not eligible:
+        return (
+            mode == "prefixgraph"
+            and bool(receipt.get("reject_reason"))
+            and not archive.is_file()
+        )
+
+    if not archive.is_file():
+        return False
+    expected = str(receipt.get("expected_verification_tree_sha256") or "")
+    verified = str(receipt.get("verified_tree_sha256") or receipt.get("tree_sha256") or "")
+    observed = str(receipt.get("tree_sha256") or "")
+    return bool(expected) and verified == expected and observed == expected
+
+
 def _median(rows: list[dict], mode: str, field: str) -> float | None:
     values = [float(row[mode][field]) for row in rows if row.get(mode, {}).get("eligible") is True]
     return statistics.median(values) if values else None
@@ -120,9 +150,7 @@ def run(work_root: Path) -> dict:
                     experiment_valid = False
                     worker_failures.append({"suite": suite, "name": name, "round": round_index, **receipt})
                     continue
-                if str(receipt.get("tree_sha256")) != source_tree:
-                    experiment_valid = False
-                if receipt.get("eligible") is True and not archive.is_file():
+                if not _receipt_identity_valid(mode, receipt, source_tree, archive):
                     experiment_valid = False
             repetitions.append({"round": round_index, "execution_order": list(order), **measured})
 
@@ -163,6 +191,8 @@ def run(work_root: Path) -> dict:
             "fresh_process_per_measurement": True,
             "worker_failure_output_is_durable": True,
             "strong_verification_outside_pack_timer": True,
+            "mode_specific_identity_domains_preserved": True,
+            "structural_ineligibility_is_not_reclassified_as_failure": True,
             "candidate_bytes_are_not_combined_or_credited": True,
             "selector_changed": False,
             "admission_changed": False,
