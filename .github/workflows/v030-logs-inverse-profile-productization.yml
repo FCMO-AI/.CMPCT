@@ -28,6 +28,7 @@ concurrency:
 
 env:
   PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
 
 jobs:
   logs-inverse-profile-product:
@@ -35,6 +36,11 @@ jobs:
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          clean: true
+      - name: Verify exact evidence head
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
       - uses: actions/setup-python@v6
         with:
           python-version: '3.11'
@@ -70,12 +76,17 @@ jobs:
             --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-logs-profile-product-v3-work" \
             --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-logs-profile-product-v3.json"
       - name: Independently enforce recovery, filesystem, locality and competitor contract
+        if: always()
         run: |
           python - <<'PY'
           import json
           from pathlib import Path
-          v2=json.loads(Path('benchmark-artifacts/v030-logs-profile-product-v2.json').read_text())
-          d=json.loads(Path('benchmark-artifacts/v030-logs-profile-product-v3.json').read_text())
+          p2=Path('benchmark-artifacts/v030-logs-profile-product-v2.json')
+          p3=Path('benchmark-artifacts/v030-logs-profile-product-v3.json')
+          assert p2.is_file(), 'logs profile v2 evidence missing'
+          assert p3.is_file(), 'logs profile v3 evidence missing'
+          v2=json.loads(p2.read_text())
+          d=json.loads(p3.read_text())
           assert v2['schema']=='cmpct-v030-logs-inverse-profile-productization-v2'
           assert v2['gate']['passed'] is True
           assert d['schema']=='cmpct-v030-logs-inverse-profile-productization-v3'
@@ -117,12 +128,15 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v6
         with:
-          name: v030-logs-inverse-profile-${{ github.sha }}
+          name: v030-logs-inverse-profile-${{ env.EVIDENCE_HEAD }}
           path: |
             benchmark-artifacts/v030-logs-profile-product-v2.json
             benchmark-artifacts/v030-logs-profile-product-v3.json
           if-no-files-found: error
           retention-days: 90
+      - name: CI topology self-check
+        if: always()
+        run: python tools/check_ci_topology.py .github/workflows/v030-logs-inverse-profile-productization.yml
 
 # This gate may establish a productizable Python profile with canonical filesystem semantics, but it cannot
 # authorize selector/native/Android dispatch. Those remain separate release obligations and the strict global
