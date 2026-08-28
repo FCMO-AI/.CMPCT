@@ -27,6 +27,7 @@ concurrency:
 
 env:
   PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
 
 jobs:
   office-analytics-productization:
@@ -34,6 +35,12 @@ jobs:
     timeout-minutes: 180
     steps:
       - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - name: Bind evidence to exact candidate head
+        run: |
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          echo "exact_head=$EVIDENCE_HEAD"
       - uses: actions/setup-python@v6
         with:
           python-version: '3.11'
@@ -102,11 +109,11 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v6
         with:
-          name: v030-federated-candidate-productization-${{ github.sha }}
+          name: v030-federated-candidate-productization-${{ env.EVIDENCE_HEAD }}
           path: |
             benchmark-artifacts/v030-eg01-productization.json
             benchmark-artifacts/v030-eg01-portability.json
-          if-no-files-found: warn
+          if-no-files-found: error
           retention-days: 90
 
 # This lane cannot authorize release or selector/native/Android promotion. It proves that the office/analytics
