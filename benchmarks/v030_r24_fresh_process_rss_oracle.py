@@ -122,8 +122,8 @@ def _worker(mode: str, source: Path, archive: Path) -> dict:
     peak = _peak_rss_kib()
 
     verified = dict(product.strong_verify(archive))
-    tree = product.treehash(source)
-    if not verified.get("ok") or verified.get("tree_sha256") != tree:
+    product_tree = product.treehash(source)
+    if not verified.get("ok") or verified.get("tree_sha256") != product_tree:
         raise RuntimeError(f"{mode} archive failed strong verification: {verified!r}")
 
     child_peak = max((int(row["peak_rss_kib"]) for row in child_reports), default=0)
@@ -133,7 +133,11 @@ def _worker(mode: str, source: Path, archive: Path) -> dict:
         "mode": mode,
         "archive_bytes": archive.stat().st_size,
         "archive_sha256": _sha256_file(archive),
-        "tree_sha256": tree,
+        # This is the release-product semantic tree domain used by strong_verify. The accepted frozen corpus uses
+        # a separate historical benchmark-tree domain; run() validates that identity independently before workers
+        # start. Conflating the two hashes made v1 reject both shipping and isolated modes despite each archive
+        # already proving exact semantic identity against product.treehash(source).
+        "tree_sha256": product_tree,
         "wall_s": wall_s,
         "parent_baseline_rss_kib": baseline,
         "parent_peak_rss_kib": peak,
@@ -183,8 +187,9 @@ def run(work_root: Path) -> dict:
     roots = PERF._build_corpora(work_root / "corpora")
     source = roots[TARGET]
     accepted = GENERAL._accepted_v029_rows()[TARGET]
-    expected_tree = str(accepted["tree_sha256"])
-    if GENERAL._historical_treehash(source) != expected_tree:
+    expected_historical_tree = str(accepted["tree_sha256"])
+    actual_historical_tree = GENERAL._historical_treehash(source)
+    if actual_historical_tree != expected_historical_tree:
         raise RuntimeError("Shifted source tree does not match the accepted frozen identity")
 
     by_mode = {"shipping": [], "isolated-r24": []}
@@ -199,8 +204,9 @@ def run(work_root: Path) -> dict:
         raise RuntimeError("fresh-process r24 isolation changed complete product archive bytes")
     if len({int(row["archive_bytes"]) for row in all_rows}) != 1:
         raise RuntimeError("fresh-process r24 isolation changed complete product archive size")
-    if {row["tree_sha256"] for row in all_rows} != {expected_tree}:
-        raise RuntimeError("fresh-process r24 isolation changed complete product tree identity")
+    product_trees = {row["tree_sha256"] for row in all_rows}
+    if len(product_trees) != 1:
+        raise RuntimeError("fresh-process r24 isolation changed complete product semantic tree identity")
 
     shipping_rss = _median(by_mode["shipping"], "parent_incremental_peak_rss_kib")
     isolated_parent_rss = _median(by_mode["isolated-r24"], "parent_incremental_peak_rss_kib")
@@ -214,11 +220,14 @@ def run(work_root: Path) -> dict:
     allocator_highwater_signal = parent_ratio <= 0.75
 
     return {
-        "schema": "cmpct-v030-r24-fresh-process-rss-v1",
+        "schema": "cmpct-v030-r24-fresh-process-rss-v2",
         "target": "/".join(TARGET),
         "rounds_per_mode": ROUNDS,
         "order": list(order),
-        "expected_tree_sha256": expected_tree,
+        "expected_historical_tree_sha256": expected_historical_tree,
+        "actual_historical_tree_sha256": actual_historical_tree,
+        "product_semantic_tree_sha256": next(iter(product_trees)),
+        "tree_identity_domains_separate": True,
         "accepted_v029_bytes": int(accepted["archive_bytes"]),
         "rows": by_mode,
         "shipping_median_parent_incremental_peak_rss_kib": shipping_rss,
@@ -246,8 +255,10 @@ def run(work_root: Path) -> dict:
             "next_gate_if_signal": "implement total-process-accounted child boundary then re-earn authoritative runtime",
         },
         "claim_boundary": (
-            "Research-only allocator-high-water diagnostic. A lower parent RSS may justify a separately accounted "
-            "subprocess architecture, but child memory is reported explicitly and this result cannot itself change shipping."
+            "Research-only allocator-high-water diagnostic. Frozen-corpus identity is checked in the historical "
+            "benchmark-tree domain; archive semantic identity is checked independently in the release-product tree "
+            "domain. A lower parent RSS may justify a separately accounted subprocess architecture, but child memory "
+            "is reported explicitly and this result cannot itself change shipping."
         ),
     }
 
