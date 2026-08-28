@@ -24,6 +24,7 @@ concurrency:
 
 env:
   PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
 
 jobs:
   r25-candidate-overlap-rss:
@@ -31,6 +32,10 @@ jobs:
     timeout-minutes: 300
     steps:
       - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - name: Verify exact evidence head
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
       - uses: actions/setup-python@v6
         with:
           python-version: '3.11'
@@ -112,9 +117,9 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v6
         with:
-          name: v030-r25-candidate-overlap-rss-${{ github.sha }}
+          name: v030-r25-candidate-overlap-rss-${{ env.EVIDENCE_HEAD }}
           path: benchmark-artifacts/v030-r25-candidate-overlap-rss.json
-          if-no-files-found: warn
+          if-no-files-found: error
           retention-days: 90
 
 # Research-only scheduling oracle. A positive result does not alter bytes, selector, locality, recovery or release
