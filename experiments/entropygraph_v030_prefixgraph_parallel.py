@@ -6,13 +6,19 @@ schedule: every nominated anchor still calls the historical serializer, the comp
 serialized-byte tournament and tie law are unchanged, and all reader/recovery/locality
 semantics remain owned by ``entropygraph_v030_prefixgraph``.
 
+Anchor results are consumed through a bounded submission window instead of retaining
+the complete set of serialized candidate archives.  At most the current winner plus the
+configured in-flight auditions remain reachable.  This removes an O(anchor_count *
+archive_size) memory retention term without changing a candidate byte, nomination rule,
+comparison key, or completion-order-independent winner.
+
 Keep this wrapper deliberately thin so canonical operation-scoped profile bindings on
 the historical PrefixGraph module remain authoritative.  Unknown attributes are
 forwarded dynamically rather than copied at import time.
 """
 from __future__ import annotations
 
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
 import os
 from pathlib import Path
 import time
@@ -24,6 +30,13 @@ MAX_ANCHOR_WORKERS = 4
 
 def __getattr__(name: str):
     return getattr(BASE, name)
+
+
+def _candidate_key(item: tuple[bytes, dict]) -> tuple[int, int]:
+    return (
+        len(item[0]),
+        -1 if item[1]["anchor"] is None else int(item[1]["anchor"]),
+    )
 
 
 def build(root: Path, out: Path) -> dict:
@@ -53,29 +66,59 @@ def build(root: Path, out: Path) -> dict:
             rels, raws, direct_payloads, expected_tree, anchor
         )
 
+    # Keep only the deterministic current winner plus a bounded number of in-flight
+    # auditions.  The previous ``list(pool.map(...))`` retained every complete archive
+    # until all anchors finished, which made RSS scale with the audition count even
+    # though the tournament only needs one winner.
+    best: tuple[bytes, dict] = (all_direct, direct_stats)
+    max_inflight = 0
     audition_started = time.perf_counter()
     if workers == 1:
-        anchor_candidates = [audition(anchor) for anchor in anchors]
-        scheduler = "serial-single-worker-v1"
+        for anchor in anchors:
+            candidate = audition(anchor)
+            if _candidate_key(candidate) < _candidate_key(best):
+                best = candidate
+        scheduler = "serial-streaming-winner-v2"
+        max_inflight = 1 if anchors else 0
     else:
         with ThreadPoolExecutor(
             max_workers=workers,
             thread_name_prefix="cmpct-prefixgraph",
         ) as pool:
-            # map preserves anchor order.  Selection below remains the historical
-            # complete-byte/tie tournament and therefore cannot depend on completion order.
-            anchor_candidates = list(pool.map(audition, anchors))
-        scheduler = "parallel-independent-anchor-auditions-v1"
+            anchor_iter = iter(anchors)
+            pending = {}
+
+            def submit_one() -> bool:
+                try:
+                    anchor = next(anchor_iter)
+                except StopIteration:
+                    return False
+                future = pool.submit(audition, anchor)
+                pending[future] = anchor
+                return True
+
+            for _ in range(workers):
+                if not submit_one():
+                    break
+            max_inflight = max(max_inflight, len(pending))
+
+            while pending:
+                done, _ = wait(tuple(pending), return_when=FIRST_COMPLETED)
+                # ``done`` is intentionally unordered.  The winner key contains the
+                # historical anchor tie-break, so completion order cannot affect bytes.
+                for future in done:
+                    pending.pop(future)
+                    candidate = future.result()
+                    if _candidate_key(candidate) < _candidate_key(best):
+                        best = candidate
+                    # Drop the losing result before admitting another full candidate.
+                    candidate = None
+                    submit_one()
+                max_inflight = max(max_inflight, len(pending))
+        scheduler = "parallel-bounded-streaming-winner-v2"
     audition_s = time.perf_counter() - audition_started
 
-    candidates = [(all_direct, direct_stats), *anchor_candidates]
-    blob, stats = min(
-        candidates,
-        key=lambda item: (
-            len(item[0]),
-            -1 if item[1]["anchor"] is None else item[1]["anchor"],
-        ),
-    )
+    blob, stats = best
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_bytes(blob)
     stats = dict(stats)
@@ -92,6 +135,9 @@ def build(root: Path, out: Path) -> dict:
             "anchor_audition_s": audition_s,
             "anchor_audition_workers": workers,
             "anchor_audition_scheduler": scheduler,
+            "max_anchor_results_inflight": max_inflight,
+            "full_candidate_list_retained": False,
+            "candidate_retention_policy": "winner-plus-bounded-inflight-v1",
             "candidate_set_unchanged": True,
             "complete_byte_tournament_unchanged": True,
             "direct_payload_floor_unchanged": True,
