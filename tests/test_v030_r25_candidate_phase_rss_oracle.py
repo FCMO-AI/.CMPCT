@@ -50,6 +50,12 @@ def test_shipping_verification_uses_product_dispatcher_for_portfolio_fallbacks(t
             calls.append("product")
             return {"ok": True, "tree_sha256": "tree", "representation": "accepted-v029"}
 
+    class PrefixGraph:
+        @staticmethod
+        def strong_verify(path):
+            calls.append("prefixgraph")
+            raise AssertionError("shipping fallback must not be forced through the PrefixGraph research reader")
+
     class CandidateReader:
         @staticmethod
         def strong_verify(path):
@@ -57,21 +63,29 @@ def test_shipping_verification_uses_product_dispatcher_for_portfolio_fallbacks(t
             raise AssertionError("shipping fallback must not be forced through the canonical-r25 reader")
 
     candidate = SimpleNamespace(READER=CandidateReader())
-    verified, owner = worker._strong_verify_for_mode("shipping", candidate, Product(), tmp_path / "shipping.cmpct")
+    verified, owner = worker._strong_verify_for_mode(
+        "shipping", PrefixGraph(), candidate, Product(), tmp_path / "shipping.cmpct"
+    )
     assert verified["ok"] is True
     assert verified["representation"] == "accepted-v029"
     assert owner == "release-product-dispatcher"
     assert calls == ["product"]
 
 
-def test_isolated_r25_candidates_remain_independently_verified(tmp_path: Path) -> None:
+def test_isolated_candidates_use_their_own_semantic_owners(tmp_path: Path) -> None:
     calls: list[str] = []
 
     class Product:
         @staticmethod
         def strong_verify(path):
             calls.append("product")
-            raise AssertionError("isolated r25 candidate should not use the shipping portfolio dispatcher")
+            raise AssertionError("isolated candidate should not use the shipping portfolio dispatcher")
+
+    class PrefixGraph:
+        @staticmethod
+        def strong_verify(path):
+            calls.append("prefixgraph")
+            return {"ok": True, "tree_sha256": "tree"}
 
     class CandidateReader:
         @staticmethod
@@ -80,8 +94,17 @@ def test_isolated_r25_candidates_remain_independently_verified(tmp_path: Path) -
             return {"ok": True, "tree_sha256": "tree"}
 
     candidate = SimpleNamespace(READER=CandidateReader())
-    for mode in ("g04", "prefixgraph"):
-        verified, owner = worker._strong_verify_for_mode(mode, candidate, Product(), tmp_path / f"{mode}.cmpct")
-        assert verified["ok"] is True
-        assert owner == "canonical-r25-candidate-reader"
-    assert calls == ["candidate", "candidate"]
+
+    verified, owner = worker._strong_verify_for_mode(
+        "g04", PrefixGraph(), candidate, Product(), tmp_path / "g04.cmpct"
+    )
+    assert verified["ok"] is True
+    assert owner == "canonical-r25-candidate-reader"
+
+    verified, owner = worker._strong_verify_for_mode(
+        "prefixgraph", PrefixGraph(), candidate, Product(), tmp_path / "prefixgraph.cmpct"
+    )
+    assert verified["ok"] is True
+    assert owner == "prefixgraph-grammar-owner"
+
+    assert calls == ["candidate", "prefixgraph"]
