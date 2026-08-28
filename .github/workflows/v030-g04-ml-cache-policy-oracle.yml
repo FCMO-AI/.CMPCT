@@ -22,6 +22,7 @@ concurrency:
 
 env:
   PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
 
 jobs:
   ml-cache-policy:
@@ -29,6 +30,10 @@ jobs:
     timeout-minutes: 180
     steps:
       - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - name: Bind exact candidate head
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
       - uses: actions/setup-python@v6
         with:
           python-version: '3.11'
@@ -60,13 +65,16 @@ jobs:
             --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-g04-ml-cache-v2-work" \
             --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-g04-ml-cache-v2.json"
       - name: Independently enforce canonical binding, unchanged memory and material speedup
+        if: always()
         run: |
+          test -f benchmark-artifacts/v030-g04-ml-cache-v2.json
           python - <<'PY'
-          import json
+          import json, os
           from pathlib import Path
           d=json.loads(Path('benchmark-artifacts/v030-g04-ml-cache-v2.json').read_text())
           assert d['schema']=='cmpct-v030-g04-ml-cache-policy-v2'
           assert d['target']=='neutral_hostile_v1/09_ml_artifacts'
+          assert d.get('source_commit', os.environ['EVIDENCE_HEAD']) == os.environ['EVIDENCE_HEAD']
           binding=d['canonical_profile_binding']
           assert binding['format_revision']==25
           assert bytes.fromhex(binding['magic'])==b'CMP25G4\x00'
@@ -87,14 +95,15 @@ jobs:
           assert g['passed'] is True
           PY
       - name: CI topology self-check
+        if: always()
         run: python tools/check_ci_topology.py .github/workflows/v030-g04-ml-cache-policy-oracle.yml
       - name: Upload ML cache-policy evidence
         if: always()
         uses: actions/upload-artifact@v6
         with:
-          name: v030-g04-ml-cache-v2-${{ github.sha }}
+          name: v030-g04-ml-cache-v2-${{ env.EVIDENCE_HEAD }}
           path: benchmark-artifacts/v030-g04-ml-cache-v2.json
-          if-no-files-found: warn
+          if-no-files-found: error
           retention-days: 90
 
 # The predecessor lane never measured its cache hypothesis because it restored research CMPNXG4 globals before
