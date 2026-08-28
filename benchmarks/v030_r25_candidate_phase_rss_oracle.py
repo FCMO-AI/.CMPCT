@@ -5,6 +5,9 @@ from __future__ import annotations
 The preceding shipping-vs-serial A/B falsified inter-candidate overlap as the owner of the peak. This oracle
 therefore measures each exact complete candidate in a fresh process and compares its incremental RSS with the
 promoted full product. It is diagnostic only: it cannot change admission, scheduling, selection or release state.
+
+Worker failures are evidence too. A failed child process is retained verbatim in the durable JSON instead of being
+lost behind CalledProcessError; the oracle then fails closed with experiment_valid=false.
 """
 
 import argparse
@@ -31,21 +34,63 @@ TARGETS = (
 )
 
 
+def _source_commit() -> str:
+    return subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip()
+
+
 def _run_worker(mode: str, source: Path, archive: Path) -> dict:
     env = os.environ.copy()
     env["PYTHONPATH"] = str(ROOT) + (os.pathsep + env["PYTHONPATH"] if env.get("PYTHONPATH") else "")
+    command = [sys.executable, str(WORKER), "--mode", mode, "--source", str(source), "--archive", str(archive)]
     completed = subprocess.run(
-        [sys.executable, str(WORKER), "--mode", mode, "--source", str(source), "--archive", str(archive)],
+        command,
         cwd=ROOT,
         env=env,
-        check=True,
+        check=False,
         capture_output=True,
         text=True,
     )
     lines = [line for line in completed.stdout.splitlines() if line.strip()]
+    if completed.returncode != 0:
+        return {
+            "mode": mode,
+            "eligible": False,
+            "worker_failed": True,
+            "returncode": int(completed.returncode),
+            "command": command,
+            "stdout": completed.stdout,
+            "stderr": completed.stderr,
+            "archive_exists": archive.is_file(),
+        }
     if not lines:
-        raise RuntimeError(f"candidate-phase RSS worker produced no JSON for {mode}: {completed.stderr!r}")
-    return json.loads(lines[-1])
+        return {
+            "mode": mode,
+            "eligible": False,
+            "worker_failed": True,
+            "returncode": 0,
+            "command": command,
+            "stdout": completed.stdout,
+            "stderr": completed.stderr,
+            "archive_exists": archive.is_file(),
+            "failure": "worker completed without a JSON receipt",
+        }
+    try:
+        receipt = json.loads(lines[-1])
+    except json.JSONDecodeError as exc:
+        return {
+            "mode": mode,
+            "eligible": False,
+            "worker_failed": True,
+            "returncode": 0,
+            "command": command,
+            "stdout": completed.stdout,
+            "stderr": completed.stderr,
+            "archive_exists": archive.is_file(),
+            "failure": f"invalid final JSON receipt: {exc}",
+        }
+    receipt["worker_failed"] = False
+    receipt["returncode"] = 0
+    return receipt
 
 
 def _median(rows: list[dict], mode: str, field: str) -> float | None:
@@ -59,6 +104,7 @@ def run(work_root: Path) -> dict:
     roots = PERF._build_corpora(work_root / "corpora")
     output_rows = []
     experiment_valid = True
+    worker_failures: list[dict] = []
 
     for suite, name in TARGETS:
         source = roots[(suite, name)]
@@ -70,6 +116,10 @@ def run(work_root: Path) -> dict:
                 archive = work_root / "archives" / f"{suite}-{name}-r{round_index}-{mode}.cmpct"
                 receipt = _run_worker(mode, source, archive)
                 measured[mode] = receipt
+                if receipt.get("worker_failed") is True:
+                    experiment_valid = False
+                    worker_failures.append({"suite": suite, "name": name, "round": round_index, **receipt})
+                    continue
                 if str(receipt.get("tree_sha256")) != source_tree:
                     experiment_valid = False
                 if receipt.get("eligible") is True and not archive.is_file():
@@ -104,11 +154,14 @@ def run(work_root: Path) -> dict:
 
     return {
         "schema": "cmpct-v030-r25-candidate-phase-rss-v1",
+        "source_commit": _source_commit(),
         "targets": [list(item) for item in TARGETS],
         "orders": [list(item) for item in ORDERS],
         "rows": output_rows,
+        "worker_failures": worker_failures,
         "contract": {
             "fresh_process_per_measurement": True,
+            "worker_failure_output_is_durable": True,
             "strong_verification_outside_pack_timer": True,
             "candidate_bytes_are_not_combined_or_credited": True,
             "selector_changed": False,
@@ -140,6 +193,7 @@ def main() -> None:
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8")
     print(json.dumps({
+        "source_commit": result["source_commit"],
         "rows": [{
             "target": f"{row['suite']}/{row['name']}",
             "g04_rss_ratio": row["g04_to_shipping_rss_ratio"],
@@ -147,9 +201,18 @@ def main() -> None:
             "g04_wall_ratio": row["g04_to_shipping_wall_ratio"],
             "prefixgraph_wall_ratio": row["prefixgraph_to_shipping_wall_ratio"],
         } for row in result["rows"]],
+        "worker_failures": len(result["worker_failures"]),
         "experiment_valid": result["experiment_valid"],
     }, indent=2), flush=True)
     if not result["experiment_valid"]:
+        for failure in result["worker_failures"]:
+            print(
+                f"worker failure {failure['suite']}/{failure['name']} round={failure['round']} "
+                f"mode={failure['mode']} rc={failure.get('returncode')}\n"
+                f"stdout:\n{failure.get('stdout', '')}\nstderr:\n{failure.get('stderr', '')}",
+                file=sys.stderr,
+                flush=True,
+            )
         raise SystemExit("r25 candidate-phase RSS ownership evidence is invalid")
 
 
