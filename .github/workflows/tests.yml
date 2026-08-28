@@ -1,12 +1,18 @@
+# ci-lane: fast
 name: CMPCT tests
 
 on:
   push:
+    branches: [main]
   pull_request:
   workflow_dispatch:
 
 permissions:
   contents: read
+
+concurrency:
+  group: cmpct-tests-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 jobs:
   test:
@@ -63,4 +69,5 @@ jobs:
 # The retained pytest stream is diagnostic evidence only; `set -o pipefail` preserves the real pytest
 # exit code so logging can never convert a red suite into a green one. Pull-request runs deliberately
 # execute the exact PR head rather than GitHub's synthetic merge commit so a green artifact belongs to
-# the same source fingerprint consumed by the v0.30 release authority.
+# the same source fingerprint consumed by the v0.30 release authority. Push is scoped to main so
+# feature-branch work is exercised once through the PR lane instead of duplicated automatically.
