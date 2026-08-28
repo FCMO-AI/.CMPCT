@@ -21,6 +21,7 @@ concurrency:
 
 env:
   PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
 
 jobs:
   canonical-fast:
@@ -29,6 +30,10 @@ jobs:
     timeout-minutes: 90
     steps:
       - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - name: Bind evidence to exact candidate head
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
       - uses: actions/setup-python@v6
         with:
           python-version: '3.11'
@@ -82,6 +87,10 @@ jobs:
     timeout-minutes: 360
     steps:
       - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - name: Bind evidence to exact candidate head
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
       - uses: actions/setup-python@v6
         with:
           python-version: '3.11'
@@ -133,9 +142,9 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v6
         with:
-          name: v030-canonical-generalization-${{ github.sha }}
+          name: v030-canonical-generalization-${{ env.EVIDENCE_HEAD }}
           path: benchmark-artifacts/canonical-generalization.json
-          if-no-files-found: warn
+          if-no-files-found: error
           retention-days: 90
 
   canonical-runtime:
@@ -144,6 +153,10 @@ jobs:
     timeout-minutes: 420
     steps:
       - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - name: Bind evidence to exact candidate head
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
       - uses: actions/setup-python@v6
         with:
           python-version: '3.11'
@@ -191,9 +204,9 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v6
         with:
-          name: v030-canonical-runtime-${{ github.sha }}
+          name: v030-canonical-runtime-${{ env.EVIDENCE_HEAD }}
           path: benchmark-artifacts/canonical-runtime.json
-          if-no-files-found: warn
+          if-no-files-found: error
           retention-days: 90
 
   canonical-external-frontier:
@@ -202,6 +215,10 @@ jobs:
     timeout-minutes: 540
     steps:
       - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - name: Bind evidence to exact candidate head
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
       - uses: actions/setup-python@v6
         with:
           python-version: '3.11'
@@ -259,9 +276,9 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v6
         with:
-          name: v030-canonical-external-${{ github.sha }}
+          name: v030-canonical-external-${{ env.EVIDENCE_HEAD }}
           path: benchmark-artifacts/canonical-external.json
-          if-no-files-found: warn
+          if-no-files-found: error
           retention-days: 90
 
 # Footnote: this workflow now binds every canonical release measurement to the promoted
