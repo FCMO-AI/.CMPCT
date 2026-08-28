@@ -28,6 +28,7 @@ concurrency:
 
 env:
   PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
 
 jobs:
   all-15-admission:
@@ -35,6 +36,12 @@ jobs:
     timeout-minutes: 360
     steps:
       - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - name: Bind evidence to exact candidate head
+        run: |
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          echo "exact_head=$EVIDENCE_HEAD"
       - uses: actions/setup-python@v6
         with:
           python-version: '3.11'
@@ -60,11 +67,14 @@ jobs:
             --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-eg01-generalization-work" \
             --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-eg01-generalization.json"
       - name: Independently enforce experiment-validity and promotion boundary
+        if: always()
         run: |
           python - <<'PY'
           import json
           from pathlib import Path
-          d=json.loads(Path('benchmark-artifacts/v030-eg01-generalization.json').read_text())
+          p=Path('benchmark-artifacts/v030-eg01-generalization.json')
+          assert p.exists(), 'federated all-15 evidence missing'
+          d=json.loads(p.read_text())
           assert d['schema']=='cmpct-v030-federated-eg01-generalization-admission-v3'
           assert d['predecessor_schema']=='cmpct-v030-federated-eg01-generalization-admission-v2'
           assert len(d['rows'])==15
@@ -105,9 +115,9 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v6
         with:
-          name: v030-federated-all15-${{ github.sha }}
+          name: v030-federated-all15-${{ env.EVIDENCE_HEAD }}
           path: benchmark-artifacts/v030-eg01-generalization.json
-          if-no-files-found: warn
+          if-no-files-found: error
           retention-days: 90
 
 # This lane distinguishes a technically valid falsification from an invalid experiment. Every candidate attempt
