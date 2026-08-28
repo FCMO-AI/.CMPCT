@@ -1,0 +1,111 @@
+# ci-lane: deep
+name: CMPCT v0.30 r24 fresh-process RSS oracle
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'experiments/entropygraph_v030_release_product.py'
+      - 'experiments/entropygraph_v030_release_product_base.py'
+      - 'benchmarks/v030_release_generalization.py'
+      - 'benchmarks/v030_release_performance.py'
+      - 'benchmarks/v030_r24_fresh_process_rss_oracle.py'
+      - '.github/workflows/v030-r24-fresh-process-rss.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-v030-r24-fresh-process-rss-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+
+jobs:
+  r24-fresh-process-rss:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - name: Bind exact candidate head
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install frozen runtime-corpus dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y zstd gcc ffmpeg libsndfile1
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[audio,test]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
+      - name: Compile allocator-high-water oracle
+        run: |
+          python -m py_compile \
+            experiments/entropygraph_v030_release_product.py \
+            experiments/entropygraph_v030_release_product_base.py \
+            benchmarks/v030_release_generalization.py \
+            benchmarks/v030_release_performance.py \
+            benchmarks/v030_r24_fresh_process_rss_oracle.py
+      - name: Measure exact shipping versus isolated-r24 parent RSS
+        run: |
+          mkdir -p benchmark-artifacts
+          python benchmarks/v030_r24_fresh_process_rss_oracle.py \
+            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-r24-fresh-process-rss-work" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-r24-fresh-process-rss.json"
+      - name: Enforce exact-byte and honest-memory evidence boundary
+        if: always()
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          p=Path('benchmark-artifacts/v030-r24-fresh-process-rss.json')
+          assert p.exists(), 'fresh-process r24 RSS evidence missing'
+          d=json.loads(p.read_text())
+          assert d['schema']=='cmpct-v030-r24-fresh-process-rss-v1'
+          assert d['target']=='resemblance_hostile_v1/01_shifted_versions'
+          assert int(d['rounds_per_mode'])==2
+          assert d['experiment_valid'] is True
+          assert d['promotion_signal'] is False
+          assert d['release_credit'] is False
+          c=d['contract']
+          assert c['archive_bytes_changed'] is False
+          assert c['grammar_changed'] is False
+          assert c['selector_changed'] is False
+          assert c['integrity_changed'] is False
+          assert c['locality_limit_changed'] is False
+          assert c['decode_unit_limit_changed'] is False
+          assert c['recovery_changed'] is False
+          assert c['rss_accounting_hides_child'] is False
+          rows=d['rows']['shipping'] + d['rows']['isolated-r24']
+          assert len(rows)==4
+          assert len({r['archive_sha256'] for r in rows})==1
+          assert len({int(r['archive_bytes']) for r in rows})==1
+          assert len({r['tree_sha256'] for r in rows})==1
+          for row in d['rows']['isolated-r24']:
+              assert len(row['child_reports'])==1
+              assert int(row['child_peak_rss_kib'])>0
+              assert int(row['conservative_combined_incremental_upper_bound_kib']) >= int(row['parent_incremental_peak_rss_kib'])
+          # Both true and false allocator_highwater_signal are valid research outcomes. No product promotion occurs here.
+          PY
+      - name: CI topology self-check
+        if: always()
+        run: python tools/check_ci_topology.py .github/workflows/v030-r24-fresh-process-rss.yml
+      - name: Upload exact-head RSS evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: v030-r24-fresh-process-rss-${{ env.EVIDENCE_HEAD }}
+          path: benchmark-artifacts/v030-r24-fresh-process-rss.json
+          if-no-files-found: error
+          retention-days: 90
+
+# Research-only allocator-high-water diagnostic. It reports parent and child RSS separately and grants no release
+# credit. Any subprocess productization must separately account total resources and re-earn ordinary runtime,
+# integrity, native/Android and final release authority on one exact candidate fingerprint.
