@@ -33,6 +33,13 @@ def _imports():
     return g04, pg, candidate, product
 
 
+def _strong_verify_for_mode(mode: str, candidate, product, archive: Path) -> tuple[dict, str]:
+    """Use the semantic owner that can actually read the bytes each measured builder may emit."""
+    if mode == "shipping":
+        return dict(product.strong_verify(archive)), "release-product-dispatcher"
+    return dict(candidate.READER.strong_verify(archive)), "canonical-r25-candidate-reader"
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--mode", choices=("shipping", "g04", "prefixgraph"), required=True)
@@ -73,12 +80,7 @@ def main() -> None:
     # terminals, or the accepted-v0.29 research fallback. Its own dispatcher is therefore the semantic
     # verification owner. Isolated G0-G4/PrefixGraph candidates are fixed r25 candidate grammars and remain
     # verified by the independent canonical candidate reader.
-    if args.mode == "shipping":
-        verified = dict(product.strong_verify(args.archive))
-        verification_owner = "release-product-dispatcher"
-    else:
-        verified = dict(candidate.READER.strong_verify(args.archive))
-        verification_owner = "canonical-r25-candidate-reader"
+    verified, verification_owner = _strong_verify_for_mode(args.mode, candidate, product, args.archive)
     if not verified.get("ok") or verified.get("tree_sha256") != expected_tree:
         raise RuntimeError(f"{args.mode} candidate failed strong verification: {verified!r}")
 
