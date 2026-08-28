@@ -97,11 +97,14 @@ jobs:
             --work-root benchmark-artifacts/generalization-v2-work \
             --output benchmark-artifacts/generalization-v2.json
       - name: Enforce frozen authority-v2 contract
+        if: always()
         run: |
           python - <<'PY'
           import json
           from pathlib import Path
-          data=json.loads(Path('benchmark-artifacts/generalization-v2.json').read_text())
+          path=Path('benchmark-artifacts/generalization-v2.json')
+          assert path.is_file(), 'authority-v2 generalization did not publish evidence'
+          data=json.loads(path.read_text())
           c=data['contract']; t=data['totals']; g=data['gate']
           assert data['engine']=='experiments/entropygraph_v030_authoritative.py'
           assert data['release_facade']=='cmpct-v030-authoritative-v2'
@@ -158,11 +161,14 @@ jobs:
             --work-root benchmark-artifacts/runtime-v2-work \
             --output benchmark-artifacts/runtime-v2.json
       - name: Enforce frozen runtime policy on promoted product
+        if: always()
         run: |
           python - <<'PY'
           import json
           from pathlib import Path
-          data=json.loads(Path('benchmark-artifacts/runtime-v2.json').read_text())
+          path=Path('benchmark-artifacts/runtime-v2.json')
+          assert path.is_file(), 'authority-v2 runtime did not publish evidence'
+          data=json.loads(path.read_text())
           c=data['contract']; t=data['totals']; g=data['gate']
           assert data['engine']=='experiments/entropygraph_v030_release_product.py'
           assert data['release_facade']=='cmpct-v030-release-product-v1'
