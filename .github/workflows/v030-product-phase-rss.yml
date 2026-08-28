@@ -24,6 +24,7 @@ concurrency:
 
 env:
   PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
 
 jobs:
   product-phase-rss:
@@ -31,6 +32,10 @@ jobs:
     timeout-minutes: 120
     steps:
       - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - name: Verify exact evidence head
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
       - uses: actions/setup-python@v6
         with:
           python-version: '3.11'
@@ -55,6 +60,7 @@ jobs:
             --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-product-phase-rss-work" \
             --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-product-phase-rss.json"
       - name: Enforce exact diagnostic boundary
+        if: always()
         run: |
           python - <<'PY'
           import json
@@ -99,11 +105,12 @@ jobs:
                   assert len(shas)==1 and len(sizes)==1 and len(trees)==1
           PY
       - name: CI topology self-check
+        if: always()
         run: python tools/check_ci_topology.py .github/workflows/v030-product-phase-rss.yml
       - uses: actions/upload-artifact@v6
         if: always()
         with:
-          name: v030-product-phase-rss-${{ github.sha }}
+          name: v030-product-phase-rss-${{ env.EVIDENCE_HEAD }}
           path: benchmark-artifacts/v030-product-phase-rss.json
           if-no-files-found: error
           retention-days: 90
