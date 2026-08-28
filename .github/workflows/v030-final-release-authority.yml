@@ -31,6 +31,7 @@ concurrency:
 
 env:
   PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
 
 jobs:
   contracts:
@@ -38,6 +39,10 @@ jobs:
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - name: Bind evidence to exact candidate head
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
       - uses: actions/setup-python@v6
         with:
           python-version: '3.11'
@@ -80,6 +85,10 @@ jobs:
     timeout-minutes: 420
     steps:
       - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - name: Bind evidence to exact candidate head
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
       - uses: actions/setup-python@v6
         with:
           python-version: '3.11'
@@ -98,11 +107,14 @@ jobs:
             --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/final-ablation-work" \
             --output "$GITHUB_WORKSPACE/benchmark-artifacts/final-ablation.json"
       - name: Enforce immutable compression and product floors
+        if: always()
         run: |
           python - <<'PY'
           import json
           from pathlib import Path
-          a=json.loads(Path('benchmark-artifacts/final-ablation.json').read_text())
+          path=Path('benchmark-artifacts/final-ablation.json')
+          assert path.is_file(), 'final ablation did not publish evidence'
+          a=json.loads(path.read_text())
           h=a['historical_causality']; p=a['canonical_product_parity']
           c=h['totals']['combined']
           assert a['product_engine']=='experiments/entropygraph_v030_release_product.py'
@@ -123,9 +135,9 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v6
         with:
-          name: v030-final-compression-${{ github.sha }}
+          name: v030-final-compression-${{ env.EVIDENCE_HEAD }}
           path: benchmark-artifacts/final-ablation.json
-          if-no-files-found: warn
+          if-no-files-found: error
           retention-days: 90
 
   runtime-and-selective-read:
@@ -134,6 +146,10 @@ jobs:
     timeout-minutes: 480
     steps:
       - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - name: Bind evidence to exact candidate head
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
       - uses: actions/setup-python@v6
         with:
           python-version: '3.11'
@@ -164,8 +180,12 @@ jobs:
           python - <<'PY'
           import json
           from pathlib import Path
-          r=json.loads(Path('benchmark-artifacts/final-runtime.json').read_text())
-          s=json.loads(Path('benchmark-artifacts/final-selective.json').read_text())
+          rpath=Path('benchmark-artifacts/final-runtime.json')
+          spath=Path('benchmark-artifacts/final-selective.json')
+          assert rpath.is_file(), 'final runtime did not publish evidence'
+          assert spath.is_file(), 'final selective-read did not publish evidence'
+          r=json.loads(rpath.read_text())
+          s=json.loads(spath.read_text())
           assert r['engine']=='experiments/entropygraph_v030_release_product.py'
           assert r['release_facade']=='cmpct-v030-release-product-v1'
           assert r['totals']['median_create_ratio']<=1.10
@@ -183,11 +203,11 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v6
         with:
-          name: v030-final-runtime-${{ github.sha }}
+          name: v030-final-runtime-${{ env.EVIDENCE_HEAD }}
           path: |
             benchmark-artifacts/final-runtime.json
             benchmark-artifacts/final-selective.json
-          if-no-files-found: warn
+          if-no-files-found: error
           retention-days: 90
 
   external-frontier:
@@ -196,6 +216,10 @@ jobs:
     timeout-minutes: 540
     steps:
       - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - name: Bind evidence to exact candidate head
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
       - uses: actions/setup-python@v6
         with:
           python-version: '3.11'
@@ -214,11 +238,14 @@ jobs:
             --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/final-external-work" \
             --output "$GITHUB_WORKSPACE/benchmark-artifacts/final-external.json"
       - name: Enforce competitor extraction/size contract
+        if: always()
         run: |
           python - <<'PY'
           import json
           from pathlib import Path
-          d=json.loads(Path('benchmark-artifacts/final-external.json').read_text())
+          path=Path('benchmark-artifacts/final-external.json')
+          assert path.is_file(), 'final external frontier did not publish evidence'
+          d=json.loads(path.read_text())
           assert d['engine']=='experiments/entropygraph_v030_release_product.py'
           assert d['release_facade']=='cmpct-v030-release-product-v1'
           assert d['gate']['passed'] is True
@@ -227,9 +254,9 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v6
         with:
-          name: v030-final-external-${{ github.sha }}
+          name: v030-final-external-${{ env.EVIDENCE_HEAD }}
           path: benchmark-artifacts/final-external.json
-          if-no-files-found: warn
+          if-no-files-found: error
           retention-days: 90
 
 # Footnote: historical mechanism causality and canonical product parity intentionally remain different byte/tree
