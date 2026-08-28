@@ -12,9 +12,17 @@ jobs:
   test:
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    env:
+      EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
     steps:
-      - name: Check out repository
+      - name: Check out exact repository head
         uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          clean: true
+
+      - name: Bind regression evidence to exact head
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
 
       - name: Set up Python 3.11
         uses: actions/setup-python@v5
@@ -40,9 +48,9 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: pytest-${{ github.sha }}
+          name: pytest-${{ env.EVIDENCE_HEAD }}
           path: test-artifacts/pytest.txt
-          if-no-files-found: warn
+          if-no-files-found: error
 
       - name: Smoke-test CLI surface
         run: python -m cmpct --help
@@ -53,4 +61,6 @@ jobs:
 # This workflow does not turn shared-runner timing into marketing evidence; reproducible performance
 # claims still require the benchmark provenance/semantic discipline documented under docs/BENCHMARKS.md.
 # The retained pytest stream is diagnostic evidence only; `set -o pipefail` preserves the real pytest
-# exit code so logging can never convert a red suite into a green one.
+# exit code so logging can never convert a red suite into a green one. Pull-request runs deliberately
+# execute the exact PR head rather than GitHub's synthetic merge commit so a green artifact belongs to
+# the same source fingerprint consumed by the v0.30 release authority.
