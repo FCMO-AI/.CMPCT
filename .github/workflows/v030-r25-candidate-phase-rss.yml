@@ -1,0 +1,92 @@
+# ci-lane: deep
+name: CMPCT v0.30 r25 candidate phase RSS oracle
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'experiments/entropygraph_v030_*.py'
+      - 'benchmarks/v030_r25_candidate_phase_rss_*.py'
+      - '.github/workflows/v030-r25-candidate-phase-rss.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-v030-r25-candidate-phase-rss-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+
+jobs:
+  candidate-phase-rss:
+    runs-on: ubuntu-latest
+    timeout-minutes: 210
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install corpus dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y zstd gcc ffmpeg
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[test,audio]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
+      - name: Compile exact candidate ownership surfaces
+        run: |
+          python -m py_compile \
+            benchmarks/v030_r25_candidate_phase_rss_worker.py \
+            benchmarks/v030_r25_candidate_phase_rss_oracle.py \
+            experiments/entropygraph_v030_release_candidate.py \
+            experiments/entropygraph_v030_release_product.py
+      - name: Measure G0-G4 and PrefixGraph RSS ownership in fresh processes
+        run: |
+          mkdir -p benchmark-artifacts
+          python benchmarks/v030_r25_candidate_phase_rss_oracle.py \
+            --work-root benchmark-artifacts/v030-r25-candidate-phase-rss-work \
+            --output benchmark-artifacts/v030-r25-candidate-phase-rss.json
+      - name: Ratchet diagnostic-only evidence boundary
+        if: always()
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          path=Path('benchmark-artifacts/v030-r25-candidate-phase-rss.json')
+          assert path.is_file(), 'candidate-phase RSS oracle did not publish evidence'
+          data=json.loads(path.read_text())
+          assert data['schema']=='cmpct-v030-r25-candidate-phase-rss-v1'
+          assert data['experiment_valid'] is True
+          assert data['promotion_signal'] is False
+          assert data['selector_change'] is False
+          assert data['release_credit'] is False
+          assert len(data['rows'])==2
+          contract=data['contract']
+          assert contract['fresh_process_per_measurement'] is True
+          assert contract['strong_verification_outside_pack_timer'] is True
+          assert contract['candidate_bytes_are_not_combined_or_credited'] is True
+          for key in ('selector_changed','admission_changed','scheduling_changed','grammar_changed',
+                      'integrity_changed','locality_limit_changed','decode_unit_limit_changed','recovery_changed'):
+              assert contract[key] is False
+          for row in data['rows']:
+              assert row['shipping_median_incremental_peak_rss_kib'] is not None
+              assert row['g04_median_incremental_peak_rss_kib'] is not None
+              assert len(row['repetitions'])==2
+          PY
+      - name: Upload candidate ownership evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: v030-r25-candidate-phase-rss-${{ github.sha }}
+          path: benchmark-artifacts/v030-r25-candidate-phase-rss.json
+          if-no-files-found: warn
+          retention-days: 90
+
+# This lane only attributes resource ownership. It cannot authorize candidate cancellation or promotion.
+# Every future production optimization remains subject to the frozen all-15, v0.29, locality, recovery,
+# runtime/RSS, native/Android and strict final release authorities.
