@@ -41,10 +41,14 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 45
     env:
-      # Footnote: each engine is run twice in ABBA order, so 3 repetitions/run yields six timed
-      # observations per metric per engine while controlling first/second-order runner drift.
-      CMPCT_PARITY_REPS: "3"
+      # Each engine is run twice in ABBA order. Seven repetitions/run yields fourteen timed
+      # observations per metric per engine. The deeper sample is deliberate: the exact-head tiny
+      # diagnostic has shown that a six-observation aggregate can falsely report a >10% regression
+      # while a 28-observation focused ABBA on the same candidate/base pair is neutral-to-faster.
+      # Thresholds are unchanged; only the evidence resolution is increased.
+      CMPCT_PARITY_REPS: "7"
       CMPCT_RELEASE_CORPUS: /tmp/cmpct-release-corpus
+      EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
     steps:
       - name: Check out candidate repository history
         uses: actions/checkout@v6
@@ -52,7 +56,13 @@ jobs:
           fetch-depth: 0
           # PR workflows normally check out a synthetic merge commit. Performance evidence should
           # identify and execute the actual candidate head while still comparing against the PR base.
-          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          ref: ${{ env.EVIDENCE_HEAD }}
+
+      - name: Bind checkout to exact evidence head
+        run: |
+          ACTUAL_HEAD="$(git rev-parse HEAD)"
+          test "$ACTUAL_HEAD" = "$EVIDENCE_HEAD"
+          echo "Exact evidence head: $ACTUAL_HEAD"
 
       - name: Set up Python 3.11
         uses: actions/setup-python@v6
@@ -142,6 +152,7 @@ jobs:
           CANDIDATE_VERSION="$(sed -n 's/^version = "\([^"]*\)"/\1/p' pyproject.toml | head -1)"
           {
             echo "candidate_commit=$(git rev-parse HEAD)"
+            echo "evidence_head=$EVIDENCE_HEAD"
             echo "base_commit=${{ steps.base.outputs.sha }}"
             echo "candidate_version=$CANDIDATE_VERSION"
             echo "format_revision=$(PYTHONPATH=src python -c 'from cmpct.codec import VERSION; print(VERSION)')"
@@ -215,10 +226,11 @@ jobs:
           data.update({
               'project_version': version,
               'source_commit': subprocess.check_output(['git','rev-parse','HEAD'], cwd=root, text=True).strip(),
+              'evidence_head': os.environ['EVIDENCE_HEAD'],
               'date': date.today().isoformat(),
               'record_kind': 'r24_core_zip_regression_evidence',
               'harness': 'benchmarks/zip_parity_bench.py',
-              'release_design': 'ABBA; median of two 3-repetition run medians per engine',
+              'release_design': 'ABBA; median of two 7-repetition run medians per engine',
               'format_revision': VERSION,
               'comparison_base_commit': os.environ.get('BASE_SHA',''),
               'corpus_manifest': corpus,
@@ -237,6 +249,8 @@ jobs:
                   'zstd': subprocess.check_output(['zstd','--version'], text=True).splitlines()[0],
               },
           })
+          if data['source_commit'] != data['evidence_head']:
+              raise SystemExit(f"candidate/evidence head mismatch: {data['source_commit']} != {data['evidence_head']}")
           (root / 'benchmark-artifacts/candidate.json').write_text(json.dumps(data, indent=2) + '\n')
           PY
 
@@ -249,12 +263,15 @@ jobs:
             --max-size-regression 0.01
 
       - name: Publish performance summary
+        if: always()
         run: |
           python - <<'PY'
           import json, os
           from pathlib import Path
-          b=json.load(open('benchmark-artifacts/base.json'))
-          c=json.load(open('benchmark-artifacts/candidate.json'))
+          bp=Path('benchmark-artifacts/base.json'); cp=Path('benchmark-artifacts/candidate.json')
+          if not bp.exists() or not cp.exists():
+              raise SystemExit('missing r24 ZIP parity evidence for summary')
+          b=json.load(bp.open()); c=json.load(cp.open())
           lines=['## CMPCT r24 core / ZIP performance gate','',
                  '> This is canonical r24 core regression evidence, not promoted-v0.30 selector evidence.', '',
                  '| Corpus | Metric | Base | Candidate | Delta |','|---|---|---:|---:|---:|']
@@ -273,6 +290,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v6
         with:
-          name: cmpct-r24-core-performance-${{ github.sha }}
+          name: cmpct-r24-core-performance-${{ env.EVIDENCE_HEAD }}
           path: benchmark-artifacts/
+          if-no-files-found: error
           retention-days: 90
