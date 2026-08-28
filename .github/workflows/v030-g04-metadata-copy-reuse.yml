@@ -23,6 +23,7 @@ concurrency:
 
 env:
   PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
 
 jobs:
   oracle:
@@ -30,6 +31,10 @@ jobs:
     timeout-minutes: 120
     steps:
       - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - name: Bind exact candidate head
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
       - uses: actions/setup-python@v6
         with:
           python-version: '3.11'
@@ -50,11 +55,14 @@ jobs:
             --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-g04-meta-reuse-work" \
             --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-g04-meta-reuse.json"
       - name: Independently enforce evidence semantics
+        if: always()
         run: |
           python - <<'PY'
           import json
           from pathlib import Path
-          d=json.loads(Path('benchmark-artifacts/v030-g04-meta-reuse.json').read_text())
+          p=Path('benchmark-artifacts/v030-g04-meta-reuse.json')
+          assert p.exists(), 'metadata-copy evidence missing'
+          d=json.loads(p.read_text())
           assert d['schema']=='cmpct-v030-g04-metadata-copy-reuse-v3'
           assert d['target']=='neutral_hostile_v1/09_ml_artifacts'
           assert d['rounds']==7
@@ -81,15 +89,18 @@ jobs:
               assert d['verify_improvement_fraction'] >= d['contract']['minimum_verify_improvement_fraction']
               assert d['extract_improvement_fraction'] >= d['contract']['minimum_extract_improvement_fraction']
           PY
+      - name: CI topology self-check
+        if: always()
+        run: python tools/check_ci_topology.py .github/workflows/v030-g04-metadata-copy-reuse.yml
       - name: Public-surface guard
         if: always()
         run: python tools/check_public_surface.py
       - uses: actions/upload-artifact@v6
         if: always()
         with:
-          name: v030-g04-metadata-copy-reuse-${{ github.sha }}
+          name: v030-g04-metadata-copy-reuse-${{ env.EVIDENCE_HEAD }}
           path: benchmark-artifacts/v030-g04-meta-reuse.json
-          if-no-files-found: warn
+          if-no-files-found: error
           retention-days: 90
 
 # Research-only. Production reader changes remain blocked on material speed evidence plus ordinary tests, fuzzing,
