@@ -34,10 +34,18 @@ def _imports():
     return canonical, g04, pg, candidate, product
 
 
-def _strong_verify_for_mode(mode: str, candidate, product, archive: Path) -> tuple[dict, str]:
-    """Use the semantic owner that can actually read the bytes each measured builder may emit."""
+def _strong_verify_for_mode(mode: str, pg, candidate, product, archive: Path) -> tuple[dict, str]:
+    """Use the semantic owner that can actually read the bytes each measured builder emits.
+
+    PrefixGraph remains research-only and has its own authenticated grammar. Sending those bytes through the
+    canonical-r25 candidate reader silently asks a different parser to own them and can misclassify a valid
+    PrefixGraph archive as an accepted-v0.29 fallback. Keep verification strict by dispatching directly to the
+    grammar owner instead of weakening any parser or accepting a fallback classification.
+    """
     if mode == "shipping":
         return dict(product.strong_verify(archive)), "release-product-dispatcher"
+    if mode == "prefixgraph":
+        return dict(pg.strong_verify(archive)), "prefixgraph-grammar-owner"
     return dict(candidate.READER.strong_verify(archive)), "canonical-r25-candidate-reader"
 
 
@@ -108,9 +116,9 @@ def main() -> None:
     # Correctness stays mandatory but outside the pack timer, matching the other RSS ownership oracles.
     # The promoted product is a portfolio and may legally publish r24, canonical r25 profiles, logs/CC
     # terminals, or the accepted-v0.29 research fallback. Its own dispatcher is therefore the semantic
-    # verification owner. Isolated G0-G4/PrefixGraph candidates are fixed r25 candidate grammars and remain
-    # verified by the independent canonical candidate reader.
-    verified, verification_owner = _strong_verify_for_mode(args.mode, candidate, product, args.archive)
+    # verification owner. G0-G4 is a canonical r25 candidate grammar. PrefixGraph is a distinct research
+    # grammar and is verified by its own authenticated reader, never by fallback classification.
+    verified, verification_owner = _strong_verify_for_mode(args.mode, pg, candidate, product, args.archive)
     verified_tree = _require_verified_tree(args.mode, verified, expected_verification_tree)
 
     print(json.dumps({
