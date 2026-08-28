@@ -35,9 +35,9 @@ def test_parallel_prefixgraph_is_exact_byte_drop_in(tmp_path: Path) -> None:
     assert parallel_stats["direct_payload_floor_unchanged"] is True
     assert parallel_stats["full_candidate_list_retained"] is False
     assert parallel_stats["candidate_retention_policy"] == "winner-plus-bounded-inflight-v1"
-    assert PARALLEL.MAX_ANCHOR_WORKERS == 2
-    assert PARALLEL.WORKER_POLICY == "global-two-worker-rss-bound-v1"
-    assert 1 <= parallel_stats["anchor_audition_workers"] <= 2
+    assert PARALLEL.MAX_ANCHOR_WORKERS == 4
+    assert PARALLEL.WORKER_POLICY == "global-four-worker-throughput-bounded-retention-v2"
+    assert 1 <= parallel_stats["anchor_audition_workers"] <= 4
     assert parallel_stats["anchor_audition_worker_policy"] == PARALLEL.WORKER_POLICY
     assert parallel_stats["max_anchor_results_inflight"] <= parallel_stats["anchor_audition_workers"]
     assert SERIAL.strong_verify(serial)["tree_sha256"] == PARALLEL.strong_verify(parallel)["tree_sha256"]
