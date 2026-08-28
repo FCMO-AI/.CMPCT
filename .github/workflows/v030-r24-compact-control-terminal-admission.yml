@@ -24,6 +24,7 @@ concurrency:
 
 env:
   PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
 
 jobs:
   admission:
@@ -31,6 +32,10 @@ jobs:
     timeout-minutes: 120
     steps:
       - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - name: Verify exact evidence head
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
       - uses: actions/setup-python@v6
         with:
           python-version: '3.11'
@@ -54,17 +59,20 @@ jobs:
             --output "$RUNNER_TEMP/v030-cc-terminal.json"
       - name: Retain all-15 admission evidence
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
-          name: v030-r24-compact-control-terminal-admission
+          name: v030-r24-compact-control-terminal-admission-${{ env.EVIDENCE_HEAD }}
           path: ${{ runner.temp }}/v030-cc-terminal.json
-          if-no-files-found: warn
+          if-no-files-found: error
+          retention-days: 90
       - name: Independently ratchet admission contract
+        if: always()
         run: |
           python - <<'PY'
           import json, os
           from pathlib import Path
           p=Path(os.environ['RUNNER_TEMP'])/'v030-cc-terminal.json'
+          assert p.is_file(), 'compact-control all-15 receipt missing'
           e=json.loads(p.read_text())
           assert e['schema']=='cmpct-v030-r24-compact-control-terminal-admission-v1'
           c=e['contract']; g=e['gate']
@@ -99,12 +107,14 @@ jobs:
             --output "$RUNNER_TEMP/v030-cc-terminal-generalization.json"
       - name: Retain unseen/adversarial evidence
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
-          name: v030-r24-compact-control-terminal-generalization
+          name: v030-r24-compact-control-terminal-generalization-${{ env.EVIDENCE_HEAD }}
           path: ${{ runner.temp }}/v030-cc-terminal-generalization.json
-          if-no-files-found: warn
+          if-no-files-found: error
+          retention-days: 90
       - name: Ratchet unseen/adversarial disproof surface and shipping envelope
+        if: always()
         run: |
           python - <<'PY'
           import json, os
@@ -112,6 +122,7 @@ jobs:
           from experiments import entropygraph_v030_release_product as product
 
           p=Path(os.environ['RUNNER_TEMP'])/'v030-cc-terminal-generalization.json'
+          assert p.is_file(), 'compact-control generalization receipt missing'
           e=json.loads(p.read_text())
           assert e['schema']=='cmpct-v030-r24-compact-control-terminal-generalization-v2'
           c=e['contract']; g=e['gate']
@@ -129,11 +140,6 @@ jobs:
           assert g['all_admitted_payloads_unchanged'] is True
           assert g['all_admitted_two_control_copies'] is True
 
-          # Historical broad-predicate counterexamples remain preserved in prior retained
-          # artifacts/Git history, but a noisy strict timing comparison is not required to
-          # reproduce the same named loser forever. Ratchet the current evidence causally:
-          # every current broad-predicate loser must be reported as a counterexample, and
-          # the actual two-stage shipping selector must admit no such loser.
           broad_counterexamples=set(e['counterexamples'])
           measured_broad_counterexamples={
               row['case'] for row in e['rows']
@@ -167,15 +173,13 @@ jobs:
                   assert row['competitors']['strict_four_way_win'] is True
                   assert len(row['competitors']['samples']) == 5
 
-          # Any broad counterexample that reaches the shipping selector remains a hard red.
-          # It is acceptable for the current broad experiment to have no counterexamples;
-          # strict comparisons are still required for every current shipping admission.
           assert set(shipping_rejected_broad_counterexamples) == broad_counterexamples
           assert shipping_counterexamples == []
           assert len(shipping_admitted) >= 1
           assert all(r['strict_four_way_win'] for r in shipping_admitted)
           PY
       - name: CI topology self-check
+        if: always()
         run: python tools/check_ci_topology.py .github/workflows/v030-r24-compact-control-terminal-admission.yml
 
 # The broad research predicate remains falsifiable and historical counterexamples stay retained in evidence.
