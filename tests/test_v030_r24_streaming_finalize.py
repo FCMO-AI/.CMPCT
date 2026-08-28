@@ -3,7 +3,11 @@ from __future__ import annotations
 from pathlib import Path
 
 from cmpct.builder import Builder
-from experiments.entropygraph_v030_r24_streaming_finalize import StreamingFinalizeBuilder, PROMOTION_BOUNDARY
+from experiments.entropygraph_v030_r24_streaming_finalize import (
+    MAX_IN_FLIGHT_FACTOR,
+    PROMOTION_BOUNDARY,
+    StreamingFinalizeBuilder,
+)
 
 
 def _fixture(root: Path) -> None:
@@ -42,6 +46,13 @@ def test_streaming_finalize_is_exact_r24_byte_identity_single_and_parallel(tmp_p
         assert stats["unique_blobs"] == base_stats["unique_blobs"]
         assert stats["logical_files"] == base_stats["logical_files"]
         assert stats["recipes"] == base_stats["recipes"]
+
+
+def test_streaming_finalize_does_not_queue_more_full_results_than_workers() -> None:
+    # The RSS refinement deliberately permits no speculative second wave of full encoded results. Worker-level
+    # raw buffers are released as soon as their codec competition completes; exact byte identity above guards the
+    # CRC/header consequence of moving that release earlier than ordered publication.
+    assert MAX_IN_FLIGHT_FACTOR == 1
 
 
 def test_streaming_finalize_remains_research_only_until_rss_authority() -> None:
