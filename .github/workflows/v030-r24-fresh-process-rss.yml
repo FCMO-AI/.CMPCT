@@ -68,12 +68,15 @@ jobs:
           p=Path('benchmark-artifacts/v030-r24-fresh-process-rss.json')
           assert p.exists(), 'fresh-process r24 RSS evidence missing'
           d=json.loads(p.read_text())
-          assert d['schema']=='cmpct-v030-r24-fresh-process-rss-v1'
+          assert d['schema']=='cmpct-v030-r24-fresh-process-rss-v2'
           assert d['target']=='resemblance_hostile_v1/01_shifted_versions'
           assert int(d['rounds_per_mode'])==2
           assert d['experiment_valid'] is True
           assert d['promotion_signal'] is False
           assert d['release_credit'] is False
+          assert d['tree_identity_domains_separate'] is True
+          assert d['expected_historical_tree_sha256']==d['actual_historical_tree_sha256']
+          assert isinstance(d['product_semantic_tree_sha256'], str) and len(d['product_semantic_tree_sha256'])==64
           c=d['contract']
           assert c['archive_bytes_changed'] is False
           assert c['grammar_changed'] is False
@@ -88,6 +91,7 @@ jobs:
           assert len({r['archive_sha256'] for r in rows})==1
           assert len({int(r['archive_bytes']) for r in rows})==1
           assert len({r['tree_sha256'] for r in rows})==1
+          assert next(iter({r['tree_sha256'] for r in rows}))==d['product_semantic_tree_sha256']
           for row in d['rows']['isolated-r24']:
               assert len(row['child_reports'])==1
               assert int(row['child_peak_rss_kib'])>0
@@ -107,5 +111,6 @@ jobs:
           retention-days: 90
 
 # Research-only allocator-high-water diagnostic. It reports parent and child RSS separately and grants no release
-# credit. Any subprocess productization must separately account total resources and re-earn ordinary runtime,
-# integrity, native/Android and final release authority on one exact candidate fingerprint.
+# credit. Frozen-corpus and release-product tree hashes intentionally occupy separate identity domains and are each
+# checked independently. Any subprocess productization must separately account total resources and re-earn ordinary
+# runtime, integrity, native/Android and final release authority on one exact candidate fingerprint.
