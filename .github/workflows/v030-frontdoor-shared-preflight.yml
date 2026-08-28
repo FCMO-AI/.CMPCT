@@ -21,6 +21,7 @@ concurrency:
 
 env:
   PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
 
 jobs:
   shared-frontdoor-preflight:
@@ -28,6 +29,10 @@ jobs:
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - name: Verify exact evidence head
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
       - uses: actions/setup-python@v6
         with:
           python-version: '3.11'
@@ -78,11 +83,15 @@ jobs:
           cat benchmark-artifacts/v030-frontdoor-shared-preflight.json
 
       - name: Ratchet exactness and earned performance boundary
+        if: always()
         run: |
           python - <<'PY'
           import json
           from pathlib import Path
-          d=json.loads(Path('benchmark-artifacts/v030-frontdoor-shared-preflight.json').read_text())
+          p=Path('benchmark-artifacts/v030-frontdoor-shared-preflight.json')
+          if not p.is_file():
+              raise SystemExit('shared front-door preflight evidence missing')
+          d=json.loads(p.read_text())
           assert d['experiment']=='v030-frontdoor-shared-preflight-v1'
           assert d['research_only'] is True
           assert d['selector_change'] is False
@@ -101,18 +110,20 @@ jobs:
           PY
 
       - name: CI topology self-check
+        if: always()
         run: python tools/check_ci_topology.py .github/workflows/v030-frontdoor-shared-preflight.yml
 
       - name: Public-surface guard
+        if: always()
         run: python tools/check_public_surface.py
 
       - name: Upload shared-preflight evidence
         if: always()
         uses: actions/upload-artifact@v6
         with:
-          name: v030-frontdoor-shared-preflight-${{ github.sha }}
+          name: v030-frontdoor-shared-preflight-${{ env.EVIDENCE_HEAD }}
           path: benchmark-artifacts/v030-frontdoor-shared-preflight.json
-          if-no-files-found: warn
+          if-no-files-found: error
           retention-days: 90
 
 # Shipping integration is ratcheted above; the research A/B remains the unchanged
