@@ -42,7 +42,9 @@ jobs:
       - name: Install deterministic Office benchmark dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y zstd gcc
+          sudo apt-get install -y zstd gcc ffmpeg
+          command -v ffmpeg
+          ffmpeg -version | head -n 1
           python -m pip install --upgrade pip
           python -m pip install -e '.[test]'
           python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
@@ -109,4 +111,6 @@ jobs:
           retention-days: 90
 
 # Diagnostic only: this lane may identify a productization owner but cannot change selectors, bytes,
-# benchmark accounting, native/Android state or release authority.
+# benchmark accounting, native/Android state or release authority. The frozen Office source fixture
+# transitively builds the deterministic neutral/hostile corpus, whose media slice requires ffmpeg;
+# dependency absence is a harness defect and must fail before any candidate measurement is accepted.
