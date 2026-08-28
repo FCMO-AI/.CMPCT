@@ -14,9 +14,15 @@ on:
       - '.github/workflows/v030-eg08-feature-pruned-exec.yml'
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 concurrency:
   group: v030-eg08-feature-pruned-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
+
+env:
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
 
 jobs:
   feature-pruned-exec:
@@ -24,6 +30,12 @@ jobs:
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - name: Bind evidence to exact candidate head
+        run: |
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          echo "exact_head=$EVIDENCE_HEAD"
       - uses: actions/setup-python@v6
         with:
           python-version: '3.11'
@@ -79,11 +91,13 @@ jobs:
           # Performance may still falsify this research hypothesis honestly.
           # A valid negative result is evidence, not a broken CI lane.
           PY
+      - name: CI topology self-check
+        run: python tools/check_ci_topology.py .github/workflows/v030-eg08-feature-pruned-exec.yml
       - name: Upload feature-pruned evidence
         if: always()
         uses: actions/upload-artifact@v6
         with:
-          name: v030-eg08-feature-pruned-${{ github.sha }}
+          name: v030-eg08-feature-pruned-${{ env.EVIDENCE_HEAD }}
           path: benchmark-artifacts/v030-eg08-policy-v7.json
           if-no-files-found: error
           retention-days: 90
