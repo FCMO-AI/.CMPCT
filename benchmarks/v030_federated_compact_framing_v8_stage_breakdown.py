@@ -17,6 +17,7 @@ import json
 from pathlib import Path
 import statistics
 import time
+import traceback
 
 from benchmarks import v030_federated_compact_framing_v8_policy_exec_v7 as V7
 from benchmarks import v030_federated_compact_framing_v8_policy_exec_v6 as V6
@@ -159,13 +160,36 @@ def run(work_root: Path) -> dict:
     return result
 
 
+def _failure_receipt(exc: BaseException) -> dict:
+    """Preserve an invalid diagnostic as durable negative evidence without converting it into a pass."""
+    return {
+        "schema": "cmpct-v030-eg08-stage-breakdown-failure-v1",
+        "experiment_valid": False,
+        "promotion_signal": False,
+        "release_credit": False,
+        "error_type": type(exc).__name__,
+        "error": str(exc),
+        "traceback": traceback.format_exc(),
+        "claim_boundary": (
+            "Diagnostic failure receipt only. No benchmark threshold, archive byte, selector, locality/recovery, "
+            "native/Android or release requirement is changed; the lane must remain red until the causal defect is fixed."
+        ),
+    }
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--work-root", type=Path, default=Path("benchmark-artifacts/v030-eg08-stage-breakdown-work"))
     parser.add_argument("--output", type=Path, default=Path("benchmark-artifacts/v030-eg08-stage-breakdown.json"))
     args = parser.parse_args()
-    result = run(args.work_root)
     args.output.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        result = run(args.work_root)
+    except BaseException as exc:
+        failure = _failure_receipt(exc)
+        args.output.write_text(json.dumps(failure, indent=2) + "\n", encoding="utf-8")
+        print(json.dumps(failure, indent=2), flush=True)
+        raise
     args.output.write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8")
     print(json.dumps({
         "measured_candidate": result["measured_candidate"],
