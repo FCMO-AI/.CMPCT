@@ -102,11 +102,14 @@ jobs:
             --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/canonical-generalization-work" \
             --output "$GITHUB_WORKSPACE/benchmark-artifacts/canonical-generalization.json"
       - name: Enforce immutable canonical release contract
+        if: always()
         run: |
           python - <<'PY'
           import json
           from pathlib import Path
-          d=json.loads(Path('benchmark-artifacts/canonical-generalization.json').read_text())
+          path=Path('benchmark-artifacts/canonical-generalization.json')
+          assert path.is_file(), 'canonical generalization did not publish evidence'
+          d=json.loads(path.read_text())
           c=d['contract']; t=d['totals']; g=d['gate']; f=d['canonical_format']
           assert d['engine']=='experiments/entropygraph_v030_release_product.py'
           assert d['release_facade']=='cmpct-v030-release-product-v1'
@@ -161,11 +164,14 @@ jobs:
             --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/canonical-runtime-work" \
             --output "$GITHUB_WORKSPACE/benchmark-artifacts/canonical-runtime.json"
       - name: Enforce frozen runtime policy
+        if: always()
         run: |
           python - <<'PY'
           import json
           from pathlib import Path
-          d=json.loads(Path('benchmark-artifacts/canonical-runtime.json').read_text())
+          path=Path('benchmark-artifacts/canonical-runtime.json')
+          assert path.is_file(), 'canonical runtime did not publish evidence'
+          d=json.loads(path.read_text())
           c=d['contract']; t=d['totals']; g=d['gate']
           assert d['engine']=='experiments/entropygraph_v030_release_product.py'
           assert d['release_facade']=='cmpct-v030-release-product-v1'
@@ -214,11 +220,14 @@ jobs:
             --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/canonical-external-work" \
             --output "$GITHUB_WORKSPACE/benchmark-artifacts/canonical-external.json"
       - name: Enforce strict per-workload external frontier contract
+        if: always()
         run: |
           python - <<'PY'
           import json
           from pathlib import Path
-          d=json.loads(Path('benchmark-artifacts/canonical-external.json').read_text())
+          path=Path('benchmark-artifacts/canonical-external.json')
+          assert path.is_file(), 'canonical external frontier did not publish evidence'
+          d=json.loads(path.read_text())
           a=d['aggregates']; g=d['gate']
           assert d['engine']=='experiments/entropygraph_v030_release_product.py'
           assert d['release_facade']=='cmpct-v030-release-product-v1'
