@@ -21,6 +21,7 @@ concurrency:
 
 env:
   PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
 
 jobs:
   logs-inverse-high-level:
@@ -28,6 +29,11 @@ jobs:
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          clean: true
+      - name: Verify exact evidence head
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
       - uses: actions/setup-python@v6
         with:
           python-version: '3.11'
@@ -51,11 +57,14 @@ jobs:
             --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-logs-inverse-high-level-work" \
             --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-logs-inverse-high-level.json"
       - name: Enforce unchanged release-floor, timing, restoration and locality contract
+        if: always()
         run: |
           python - <<'PY'
-          import json
+          import json, os
           from pathlib import Path
-          d=json.loads(Path('benchmark-artifacts/v030-logs-inverse-high-level.json').read_text())
+          p=Path('benchmark-artifacts/v030-logs-inverse-high-level.json')
+          assert p.is_file(), 'logs inverse high-level evidence missing'
+          d=json.loads(p.read_text())
           assert d['schema']=='cmpct-v030-logs-inverse-edge-high-level-oracle-v1'
           assert d['claim_boundary'].startswith('research-only')
           assert d['target']=='neutral_hostile_v1/05_logs_and_telemetry'
@@ -89,10 +98,13 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v6
         with:
-          name: v030-logs-inverse-high-level-${{ github.sha }}
+          name: v030-logs-inverse-high-level-${{ env.EVIDENCE_HEAD }}
           path: benchmark-artifacts/v030-logs-inverse-high-level.json
           if-no-files-found: error
           retention-days: 90
+      - name: CI topology self-check
+        if: always()
+        run: python tools/check_ci_topology.py .github/workflows/v030-logs-inverse-edge-high-level-oracle.yml
 
 # Research only. The existing inverse-edge grammar and all frozen floors remain unchanged; a red result is kept as
 # negative evidence instead of relaxing v0.29, ZIP/Zstd, locality or integrity requirements.
