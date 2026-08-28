@@ -21,6 +21,7 @@ concurrency:
 
 env:
   PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
 
 jobs:
   authority-fast:
@@ -29,6 +30,10 @@ jobs:
     timeout-minutes: 75
     steps:
       - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - name: Bind exact candidate head
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
       - uses: actions/setup-python@v6
         with:
           python-version: '3.11'
@@ -66,7 +71,8 @@ jobs:
             tests/test_v030_member_reader.py \
             tests/test_v030_release_fuzz.py \
             tests/test_v030_release_candidate.py \
-            tests/test_v030_release_generalization_contract.py
+            tests/test_v030_release_generalization_contract.py \
+            tests/test_v030_r25_candidate_phase_rss_worker.py
       - name: Public-surface guard
         if: always()
         run: python tools/check_public_surface.py
@@ -77,6 +83,10 @@ jobs:
     timeout-minutes: 330
     steps:
       - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - name: Bind exact candidate head
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
       - uses: actions/setup-python@v6
         with:
           python-version: '3.11'
@@ -124,9 +134,9 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v6
         with:
-          name: v030-authority-v2-generalization-${{ github.sha }}
+          name: v030-authority-v2-generalization-${{ env.EVIDENCE_HEAD }}
           path: benchmark-artifacts/generalization-v2.json
-          if-no-files-found: warn
+          if-no-files-found: error
           retention-days: 90
 
   authority-runtime:
@@ -135,6 +145,10 @@ jobs:
     timeout-minutes: 390
     steps:
       - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - name: Bind exact candidate head
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
       - uses: actions/setup-python@v6
         with:
           python-version: '3.11'
@@ -188,9 +202,9 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v6
         with:
-          name: v030-authority-v2-runtime-${{ github.sha }}
+          name: v030-authority-v2-runtime-${{ env.EVIDENCE_HEAD }}
           path: benchmark-artifacts/runtime-v2.json
-          if-no-files-found: warn
+          if-no-files-found: error
           retention-days: 90
 
 # Footnote: `ffmpeg` and the package audio extra are frozen-corpus/runtime dependencies, not codec shortcuts for
