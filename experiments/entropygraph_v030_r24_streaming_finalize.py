@@ -20,7 +20,7 @@ import msgpack
 import cmpct.builder as B
 
 SPOOL_MEMORY_BYTES = 1024 * 1024
-MAX_IN_FLIGHT_FACTOR = 2
+MAX_IN_FLIGHT_FACTOR = 1
 
 
 class StreamingFinalizeBuilder(B.Builder):
@@ -44,8 +44,16 @@ class StreamingFinalizeBuilder(B.Builder):
 
         def encode(h):
             c = self.cands[h]
+            raw = c.raw
             codec, comp, meta = self._encode_candidate(h, c)
-            return h, len(c.raw), codec, comp, meta
+            raw_len = len(raw)
+            raw_crc32 = binascii.crc32(raw) & 0xFFFFFFFF
+            # Once this candidate's codec competition has completed, neither publication nor index construction
+            # needs its raw/deflate material again. Release it in the worker instead of keeping it alive behind an
+            # earlier slow ordered result. The returned record ingredients are immutable and preserve exact bytes.
+            c.raw = b""
+            c.deflates.clear()
+            return h, raw_len, raw_crc32, codec, comp, meta
 
         with tempfile.SpooledTemporaryFile(max_size=SPOOL_MEMORY_BYTES, mode="w+b") as spool:
             if self.encode_workers > 1 and len(ordered_hashes) > 1:
@@ -62,12 +70,11 @@ class StreamingFinalizeBuilder(B.Builder):
                         pending[submit_index] = pool.submit(encode, h)
                         submit_index += 1
                     while consume_index < len(ordered_hashes):
-                        h, raw_len, codec, comp, meta = pending.pop(consume_index).result()
+                        h, raw_len, raw_crc32, codec, comp, meta = pending.pop(consume_index).result()
                         if submit_index < len(ordered_hashes):
                             nh = ordered_hashes[submit_index]
                             pending[submit_index] = pool.submit(encode, nh)
                             submit_index += 1
-                        raw = self.cands[h].raw
                         rec = (
                             B.BHDR.pack(
                                 B.BMAGIC,
@@ -77,7 +84,7 @@ class StreamingFinalizeBuilder(B.Builder):
                                 raw_len,
                                 len(comp),
                                 len(meta),
-                                binascii.crc32(raw) & 0xFFFFFFFF,
+                                raw_crc32,
                                 h,
                             )
                             + meta
@@ -87,13 +94,10 @@ class StreamingFinalizeBuilder(B.Builder):
                         blobs.append([offset, raw_len, len(comp), codec, len(meta)])
                         spool.write(rec)
                         offset += len(rec)
-                        self.cands[h].raw = b""
-                        self.cands[h].deflates.clear()
                         consume_index += 1
             else:
                 for h in ordered_hashes:
-                    h, raw_len, codec, comp, meta = encode(h)
-                    raw = self.cands[h].raw
+                    h, raw_len, raw_crc32, codec, comp, meta = encode(h)
                     rec = (
                         B.BHDR.pack(
                             B.BMAGIC,
@@ -103,7 +107,7 @@ class StreamingFinalizeBuilder(B.Builder):
                             raw_len,
                             len(comp),
                             len(meta),
-                            binascii.crc32(raw) & 0xFFFFFFFF,
+                            raw_crc32,
                             h,
                         )
                         + meta
@@ -113,8 +117,6 @@ class StreamingFinalizeBuilder(B.Builder):
                     blobs.append([offset, raw_len, len(comp), codec, len(meta)])
                     spool.write(rec)
                     offset += len(rec)
-                    self.cands[h].raw = b""
-                    self.cands[h].deflates.clear()
 
             def mapref(value):
                 return href[bytes(value)]
