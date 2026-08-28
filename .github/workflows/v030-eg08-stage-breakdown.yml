@@ -1,0 +1,112 @@
+# ci-lane: deep
+name: CMPCT v0.30 EG08 stage breakdown
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'benchmarks/v030_federated_compact_framing_v8_stage_breakdown.py'
+      - 'benchmarks/v030_federated_compact_framing_v8_policy_exec_v6.py'
+      - 'benchmarks/v030_federated_compact_framing_v8_policy_exec_v7.py'
+      - 'benchmarks/v030_federated_compact_framing_v8_direct_v5.py'
+      - 'experiments/entropygraph_v030_federated_compact_framing_candidate_v8.py'
+      - 'experiments/entropygraph_v030_federated_embedded_fs_candidate_v7.py'
+      - '.github/workflows/v030-eg08-stage-breakdown.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-v030-eg08-stage-breakdown-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+
+jobs:
+  eg08-stage-breakdown:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - name: Verify exact evidence head
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install deterministic Office benchmark dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y zstd gcc
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[test]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
+      - name: Compile diagnostic surface
+        run: |
+          python -m py_compile \
+            benchmarks/v030_federated_compact_framing_v8_stage_breakdown.py \
+            benchmarks/v030_federated_compact_framing_v8_policy_exec_v6.py \
+            benchmarks/v030_federated_compact_framing_v8_policy_exec_v7.py
+      - name: Decompose the exact byte-identical C25EG08 candidate
+        run: |
+          mkdir -p benchmark-artifacts
+          python benchmarks/v030_federated_compact_framing_v8_stage_breakdown.py \
+            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-eg08-stage-breakdown-work" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-eg08-stage-breakdown.json"
+      - name: Enforce diagnostic and inherited candidate boundaries
+        if: always()
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          p=Path('benchmark-artifacts/v030-eg08-stage-breakdown.json')
+          assert p.is_file(), 'EG08 stage-breakdown evidence missing'
+          d=json.loads(p.read_text())
+          assert d['schema']=='cmpct-v030-eg08-stage-breakdown-v1'
+          assert d['experiment_valid'] is True
+          assert d['promotion_signal'] is False
+          assert d['release_credit'] is False
+          s=d['strict']
+          for key in (
+              'beats_accepted_v029_size','beats_zip_size','beats_zstd19_size',
+              'verified_create_beats_zstd19','within_release_locality_bounds',
+              'content_identity_not_policy_input','exact_serial_archive_identity','same_selected_level_vector',
+          ):
+              assert s[key] is True, key
+          m=d['measured_candidate']
+          assert m['archive_bytes'] < d['accepted_v029_bytes']
+          assert m['archive_bytes'] < d['comparators']['zip']['archive_bytes']
+          assert m['archive_bytes'] < d['comparators']['zstd19']['archive_bytes']
+          assert m['exact_bytes_vs_serial_reference'] is True
+          assert m['max_member_read_amplification'] <= 8.0
+          assert m['max_decode_unit_bytes'] <= 8 * 1024 * 1024
+          b=d['stage_breakdown']
+          assert len(b['raw_rounds']) == 3
+          assert b['candidate_verified_create_s'] > 0
+          assert b['zip_create_s'] > 0
+          assert b['zip_create_gap_s'] >= 0
+          assert b['largest_owner'] in b['median_s']
+          for row in b['raw_rounds']:
+              assert row['calls']=={'profile_prepare':1,'strong_verify':1,'locality':1}
+              assert row['accounted_fraction'] >= 0.0
+              assert row['accounted_fraction'] <= 1.0
+          PY
+      - name: CI topology self-check
+        if: always()
+        run: python tools/check_ci_topology.py .github/workflows/v030-eg08-stage-breakdown.yml
+      - name: Upload exact-head stage evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: v030-eg08-stage-breakdown-${{ env.EVIDENCE_HEAD }}
+          path: benchmark-artifacts/v030-eg08-stage-breakdown.json
+          if-no-files-found: error
+          retention-days: 90
+
+# Diagnostic only: this lane may identify a productization owner but cannot change selectors, bytes,
+# benchmark accounting, native/Android state or release authority.
