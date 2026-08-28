@@ -55,6 +55,7 @@ def build(root: Path, out: Path) -> dict:
     all_direct, direct_stats = BASE._serialize_candidate(
         rels, raws, direct_payloads, expected_tree, None
     )
+    all_direct_bytes = len(all_direct)
     anchors = BASE._anchor_indices(len(raws))
     workers = max(
         1,
@@ -71,6 +72,10 @@ def build(root: Path, out: Path) -> dict:
     # until all anchors finished, which made RSS scale with the audition count even
     # though the tournament only needs one winner.
     best: tuple[bytes, dict] = (all_direct, direct_stats)
+    # ``best`` is now the sole owner of the direct full-archive candidate.  If an
+    # anchor displaces it, that byte buffer can be reclaimed immediately instead of
+    # surviving just because the reporting path still names ``all_direct``.
+    all_direct = None
     max_inflight = 0
     audition_started = time.perf_counter()
     if workers == 1:
@@ -78,6 +83,7 @@ def build(root: Path, out: Path) -> dict:
             candidate = audition(anchor)
             if _candidate_key(candidate) < _candidate_key(best):
                 best = candidate
+            candidate = None
         scheduler = "serial-streaming-winner-v2"
         max_inflight = 1 if anchors else 0
     else:
@@ -125,8 +131,8 @@ def build(root: Path, out: Path) -> dict:
     stats.update(
         {
             "archive_bytes": len(blob),
-            "all_direct_bytes": len(all_direct),
-            "saving_vs_all_direct_bytes": len(all_direct) - len(blob),
+            "all_direct_bytes": all_direct_bytes,
+            "saving_vs_all_direct_bytes": all_direct_bytes - len(blob),
             "anchor_auditions": len(anchors),
             "files": len(files),
             "logical_bytes": sum(map(len, raws)),
@@ -137,6 +143,7 @@ def build(root: Path, out: Path) -> dict:
             "anchor_audition_scheduler": scheduler,
             "max_anchor_results_inflight": max_inflight,
             "full_candidate_list_retained": False,
+            "displaced_direct_archive_retained": False,
             "candidate_retention_policy": "winner-plus-bounded-inflight-v1",
             "candidate_set_unchanged": True,
             "complete_byte_tournament_unchanged": True,
