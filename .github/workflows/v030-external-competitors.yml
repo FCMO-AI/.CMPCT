@@ -21,6 +21,7 @@ concurrency:
 
 env:
   PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
 
 jobs:
   external-frontier:
@@ -28,10 +29,15 @@ jobs:
     timeout-minutes: 480
     steps:
       - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
       - uses: actions/setup-python@v6
         with:
           python-version: '3.11'
           cache: pip
+
+      - name: Bind runner to exact candidate head
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
 
       - name: Install CMPCT, frozen-corpus media tools and external compressors
         run: |
@@ -61,11 +67,14 @@ jobs:
             --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-external-competitors.json"
 
       - name: Independently enforce external frontier contract
+        if: always()
         run: |
           python - <<'PY'
           import json
           from pathlib import Path
-          data=json.loads(Path('benchmark-artifacts/v030-external-competitors.json').read_text())
+          path=Path('benchmark-artifacts/v030-external-competitors.json')
+          assert path.is_file(), 'external frontier matrix did not publish evidence'
+          data=json.loads(path.read_text())
           gate=data['gate']; agg=data['aggregates']
           assert gate['exact_workload_count'] is True
           assert gate['all_cmpct_trees_verified'] is True
@@ -103,9 +112,9 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v6
         with:
-          name: v030-external-frontier-${{ github.sha }}
+          name: v030-external-frontier-${{ env.EVIDENCE_HEAD }}
           path: benchmark-artifacts/v030-external-competitors.json
-          if-no-files-found: warn
+          if-no-files-found: error
           retention-days: 90
 
 # ZIP and solid Zstd-19 are strict per-workload v0.30 release floors for both complete archive size and creation
