@@ -31,9 +31,10 @@ REVISION = 25
 PROFILE = "r24-compact-control-v1"
 LEVELS = CONTROL.LEVELS
 MAX_CONTROL_RAW_BYTES = 64 * 1024 * 1024
-# Compatibility materialization remains available for ordinary list/read/extract delegation, but strong verification
-# no longer needs to synthesize and physically write a second ~10 MiB r24 archive. The authenticated expanded index
-# plus unchanged physical data span are already the exact inputs the mature r24 reader consumes.
+# Compatibility materialization remains available for ordinary extraction delegation, but strong verification and
+# selected-member reads no longer need to synthesize and physically write a second ~10 MiB r24 archive. The
+# authenticated expanded index plus unchanged physical data span are already the exact inputs the mature reader
+# consumes.
 COMPAT_INDEX_LEVEL = 1
 
 
@@ -182,12 +183,14 @@ def _parse(archive: Path) -> dict:
     tail = payload[tail_start:footer_off]
     decoded = None
     recovery = None
+    control_raw_bytes = int(raw_bytes)
     try:
         decoded = _read_control_copy(primary, int(raw_bytes), primary_sha)
         recovery = "primary"
     except Exception:
         decoded = _read_control_copy(tail, int(tail_raw_bytes), tail_sha)
         recovery = "tail"
+        control_raw_bytes = int(tail_raw_bytes)
     compact = decoded["c"]
     index = CONTROL._expand_index(compact, version=R24.VERSION, features=list(decoded["x"]))
     if CONTROL._expand_index(CONTROL._compact_index(index), version=R24.VERSION, features=list(index["features"])) != index:
@@ -198,6 +201,7 @@ def _parse(archive: Path) -> dict:
         "recovery_source": recovery,
         "primary_control_bytes": int(primary_cbytes),
         "tail_control_bytes": int(tail_cbytes),
+        "control_raw_bytes": control_raw_bytes,
         "archive_bytes": len(payload),
     }
 
@@ -370,14 +374,55 @@ def strong_verify(archive: Path) -> dict:
 
 
 def list_members(archive: Path):
-    with _materialized_r24(Path(archive)) as (r24, _parsed):
-        return PRODUCT.list_members(r24)
+    parsed = _parse(Path(archive))
+    with _direct_r24_reader(parsed) as reader:
+        return [
+            {"path": row[0], "kind": "file" if row[1] == R24.K_FILE else "dir" if row[1] == R24.K_DIR else "symlink" if row[1] == R24.K_SYMLINK else "hardlink", "size": int(row[4])}
+            for row in reader.files
+        ]
 
 
 def read_member_with_stats(archive: Path, rel: str):
-    with _materialized_r24(Path(archive)) as (r24, parsed):
-        data, stats = PRODUCT.read_member_with_stats(r24, rel)
-        return data, {**stats, "compact_control_recovery_source": parsed["recovery_source"]}
+    """Read one authenticated member directly and report operation-derived physical decode context.
+
+    The frozen locality law measures the physical records that must be decoded for the selected logical member.
+    C25CC01 preserves the r24 physical data span byte-for-byte, so tracking mature-reader ``_blob`` calls gives the
+    exact same payload context while avoiding the old compatibility-index recompression/temp-file path. Blob IDs are
+    deduplicated because mature r24 caches may request the same authenticated record more than once during one logical
+    operation. The compact control itself is bounded metadata, not a member payload decode unit; its raw/encoded sizes
+    are reported separately rather than being smuggled into or out of the payload-locality number.
+    """
+    parsed = _parse(Path(archive))
+    with _direct_r24_reader(parsed) as reader:
+        touched: set[int] = set()
+        original_blob = reader._blob
+
+        def tracked_blob(idx):
+            touched.add(int(idx))
+            return original_blob(idx)
+
+        reader._blob = tracked_blob
+        data = reader.read(rel)
+        decoded_context_bytes = sum(int(reader.blobs[idx][1]) for idx in touched)
+        # Direct/metadata-only logical entries may not touch a physical payload blob. Keep their operation-defined
+        # context at the logical result size; regular selected-member authority always receives a positive denominator.
+        decoded_context_bytes = max(len(data), decoded_context_bytes)
+        amplification = decoded_context_bytes / max(1, len(data))
+        return data, {
+            "format_revision": REVISION,
+            "format_profile": PROFILE,
+            "source_format_revision": 24,
+            "reader": "cmpct-v030-r24-compact-control-v1-direct",
+            "compact_control_recovery_source": parsed["recovery_source"],
+            "compatibility_materialization": False,
+            "physical_payload_records_unchanged": True,
+            "physical_blob_reads": len(touched),
+            "physical_blob_indices": sorted(touched),
+            "decoded_context_bytes": decoded_context_bytes,
+            "decoded_context_amplification": amplification,
+            "wrapper_control_raw_bytes": int(parsed["control_raw_bytes"]),
+            "wrapper_control_comp_bytes": int(parsed["primary_control_bytes"] if parsed["recovery_source"] == "primary" else parsed["tail_control_bytes"]),
+        }
 
 
 def read_member(archive: Path, rel: str):
