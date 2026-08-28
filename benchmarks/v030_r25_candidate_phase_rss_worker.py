@@ -26,11 +26,12 @@ def _sha256_file(path: Path) -> str:
 def _imports():
     # Import every candidate surface before freezing the baseline so mode-to-mode RSS deltas do not merely
     # measure different module import sets.
+    from experiments import entropygraph_v030_canonical_final as canonical
     from experiments import entropygraph_v030_geometry_overlay_g04 as g04
     from experiments import entropygraph_v030_prefixgraph_parallel as pg
     from experiments import entropygraph_v030_release_candidate as candidate
     from experiments import entropygraph_v030_release_product as product
-    return g04, pg, candidate, product
+    return canonical, g04, pg, candidate, product
 
 
 def _strong_verify_for_mode(mode: str, candidate, product, archive: Path) -> tuple[dict, str]:
@@ -40,6 +41,31 @@ def _strong_verify_for_mode(mode: str, candidate, product, archive: Path) -> tup
     return dict(candidate.READER.strong_verify(archive)), "canonical-r25-candidate-reader"
 
 
+def _verification_identity_for_mode(mode: str, source: Path, candidate, canonical) -> tuple[str, str, str]:
+    """Return research identity, verification identity, and the identity domain used by the selected reader.
+
+    The research candidates intentionally hash only their historical content-tree domain. The promoted shipping
+    product instead strong-verifies the canonical filesystem/user tree, which includes directory/symlink semantics.
+    Both are exact identities, but comparing them directly is a category error. Keep both visible and require the
+    reader result to match the identity of the grammar being measured rather than weakening verification.
+    """
+    research_tree = str(candidate.treehash(source))
+    if mode == "shipping":
+        return research_tree, str(canonical.treehash(source)), "canonical-filesystem-user-tree-v1"
+    return research_tree, research_tree, "research-content-tree-v1"
+
+
+def _require_verified_tree(mode: str, verified: dict, expected_tree: str) -> str:
+    if not verified.get("ok"):
+        raise RuntimeError(f"{mode} candidate failed strong verification: {verified!r}")
+    observed = str(verified.get("tree_sha256") or "")
+    if observed != expected_tree:
+        raise RuntimeError(
+            f"{mode} candidate verification identity mismatch: observed={observed!r} expected={expected_tree!r}"
+        )
+    return observed
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--mode", choices=("shipping", "g04", "prefixgraph"), required=True)
@@ -47,20 +73,24 @@ def main() -> None:
     parser.add_argument("--archive", type=Path, required=True)
     args = parser.parse_args()
 
-    g04, pg, candidate, product = _imports()
+    canonical, g04, pg, candidate, product = _imports()
     args.archive.parent.mkdir(parents=True, exist_ok=True)
-    expected_tree = candidate.treehash(args.source)
+    research_tree, expected_verification_tree, verification_identity_domain = _verification_identity_for_mode(
+        args.mode, args.source, candidate, canonical
+    )
 
     eligible = True
     reject_reason = None
     if args.mode == "prefixgraph":
-        eligible, reject_reason = candidate._prefixgraph_eligibility(args.source, expected_tree)
+        eligible, reject_reason = candidate._prefixgraph_eligibility(args.source, research_tree)
         if not eligible:
             print(json.dumps({
                 "mode": args.mode,
                 "eligible": False,
                 "reject_reason": reject_reason,
-                "tree_sha256": expected_tree,
+                "research_tree_sha256": research_tree,
+                "expected_verification_tree_sha256": expected_verification_tree,
+                "verification_identity_domain": verification_identity_domain,
             }, separators=(",", ":")), flush=True)
             return
 
@@ -81,15 +111,18 @@ def main() -> None:
     # verification owner. Isolated G0-G4/PrefixGraph candidates are fixed r25 candidate grammars and remain
     # verified by the independent canonical candidate reader.
     verified, verification_owner = _strong_verify_for_mode(args.mode, candidate, product, args.archive)
-    if not verified.get("ok") or verified.get("tree_sha256") != expected_tree:
-        raise RuntimeError(f"{args.mode} candidate failed strong verification: {verified!r}")
+    verified_tree = _require_verified_tree(args.mode, verified, expected_verification_tree)
 
     print(json.dumps({
         "mode": args.mode,
         "eligible": True,
         "archive_bytes": args.archive.stat().st_size,
         "archive_sha256": _sha256_file(args.archive),
-        "tree_sha256": expected_tree,
+        "tree_sha256": verified_tree,
+        "research_tree_sha256": research_tree,
+        "expected_verification_tree_sha256": expected_verification_tree,
+        "verified_tree_sha256": verified_tree,
+        "verification_identity_domain": verification_identity_domain,
         "wall_s": wall_s,
         "baseline_rss_kib": baseline_rss_kib,
         "peak_rss_kib": peak_rss_kib,
