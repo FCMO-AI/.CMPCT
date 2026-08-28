@@ -1,0 +1,48 @@
+{
+  "schema": "cmpct-v030-prefixgraph-worker-count-rss-history-v1",
+  "source_commit": "b4d6f3ae130ddbebcfa2a158b3733c98f6acc015",
+  "workflow_run": 33166300205,
+  "artifact_id": 9683906318,
+  "artifact_digest": "sha256:09c5b63c175fad5e910f4454d823e5b7db23035a7d1f892966d18df0e3ab698a",
+  "target": "resemblance_hostile_v1/01_shifted_versions",
+  "fresh_process_per_measurement": true,
+  "exact_archive_identity_all_arms": true,
+  "archive_bytes": 1700242,
+  "archive_sha256": "8994cb83c2f62944795144ee775d9395147681bb1156892d72d4cc5d4ca417fe",
+  "tree_sha256": "d9106dcdc8f965d45236c241d6c45f773e10b84ac204acc3c3521d889cd3a8fd",
+  "arms": {
+    "1": {
+      "median_incremental_peak_rss_kib": 63550,
+      "median_wall_s": 10.934672856500015,
+      "rss_ratio_vs_4_workers": 0.21356175984299597,
+      "wall_ratio_vs_4_workers": 1.4996727266139038
+    },
+    "2": {
+      "median_incremental_peak_rss_kib": 145070,
+      "median_wall_s": 7.626779147500002,
+      "rss_ratio_vs_4_workers": 0.48751226593899966,
+      "wall_ratio_vs_4_workers": 1.0460004455107568
+    },
+    "4": {
+      "median_incremental_peak_rss_kib": 297572,
+      "median_wall_s": 7.29137275250001,
+      "rss_ratio_vs_4_workers": 1.0,
+      "wall_ratio_vs_4_workers": 1.0
+    }
+  },
+  "decision": {
+    "production_cap": 2,
+    "policy": "global-two-worker-rss-bound-v1",
+    "reason": "Two workers retained exact candidate/archive/tree identity while reducing median incremental RSS by about 51.25% versus four workers at only about 4.60% median wall-time cost. One worker reduced memory further but cost about 49.97% wall time versus four workers.",
+    "content_agnostic": true,
+    "benchmark_identity_dispatch": false
+  },
+  "contract": {
+    "candidate_set_changed": false,
+    "serializer_changed": false,
+    "tie_law_changed": false,
+    "strong_verification_preserved": true,
+    "threshold_changed": false
+  },
+  "claim_boundary": "This exact-head diagnostic justifies a global resource-policy candidate only. The two-worker cap receives no release credit until exact-head product runtime/RSS, byte identity, recovery/locality, native/Android and final authority are regenerated and accepted."
+}
