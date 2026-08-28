@@ -1,0 +1,40 @@
+{
+  "schema": "cmpct-v030-runtime-negative-evidence-2026-08-28-v1",
+  "source_commit": "4c119b699c12c869a8bcde96fbfa28d1b86f7350",
+  "office_eg08_decoded_pack_reuse": {
+    "workflow_run": 33162291697,
+    "artifact_id": 9682168958,
+    "artifact_digest": "sha256:e447e767c94bfd4d5f2909c9d99b869b5175f467635fc3ffbe9a709072c2da4a",
+    "archive_bytes": 5951527,
+    "rounds": 15,
+    "median_baseline_verify_s": 0.07407282200000509,
+    "median_candidate_verify_s": 0.07190811999998914,
+    "absolute_saving_s": 0.00216470200001595,
+    "relative_improvement": 0.029223970972994673,
+    "minimum_material_relative_improvement": 0.15,
+    "minimum_material_absolute_saving_s": 0.005,
+    "experiment_valid": true,
+    "material_speedup": false,
+    "promotion_signal": false,
+    "release_credit": false,
+    "conclusion": "Exact decoded-pack reuse is not a material Office creation fix. It preserved the second archive read, physical pack SHA-256, logical/canonical tree checks and corruption rejection but recovered only 2.16 ms median (2.92%). Pivot to graph/compression construction rather than verifier decode reuse."
+  },
+  "shifted_prefixgraph_candidate_phase_rss": {
+    "workflow_run": 33162291440,
+    "artifact_id": 9682401695,
+    "artifact_digest": "sha256:e0ad80a7587520c2636bff199d91424bd1590b86265c2b486dae76113004b2c8",
+    "target": "resemblance_hostile_v1/01_shifted_versions",
+    "shipping_median_incremental_peak_rss_kib": 275594,
+    "shipping_median_wall_s": 59.33129291250003,
+    "g04_median_incremental_peak_rss_kib": 25704,
+    "g04_median_wall_s": 104.96788813450007,
+    "prefixgraph_median_incremental_peak_rss_kib": 308058,
+    "prefixgraph_median_wall_s": 5.328031422499976,
+    "prefixgraph_to_shipping_rss_ratio": 1.1177950165823638,
+    "experiment_valid": true,
+    "promotion_signal": false,
+    "release_credit": false,
+    "conclusion": "After bounded result retention, isolated PrefixGraph still exceeds full shipping RSS on Shifted while G0-G4 is only about 9.3% of shipping RSS. The next causal frontier is worker-count working-set pressure, not inter-candidate overlap or retaining the completed candidate list."
+  },
+  "claim_boundary": "Historical exact-head diagnostic evidence only. These observations cannot authorize production scheduling, selector changes, promotion or release and do not survive as release receipts for later fingerprints."
+}
