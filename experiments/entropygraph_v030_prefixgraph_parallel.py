@@ -12,11 +12,13 @@ configured in-flight auditions remain reachable.  This removes an O(anchor_count
 archive_size) memory retention term without changing a candidate byte, nomination rule,
 comparison key, or completion-order-independent winner.
 
-The exact-head fresh-process 1/2/4-worker frontier on the frozen Shifted workload showed
-that two workers preserve exact archive bytes while cutting incremental PrefixGraph RSS
-by about 51% versus four workers for only about 4.6% median wall-time cost.  The release
-wrapper therefore caps auditions at two workers globally.  This is a content-agnostic
-resource policy: it does not inspect workload names, paths, hashes, or candidate bytes.
+A fresh-process 1/2/4-worker diagnostic initially showed a large isolated RSS reduction
+at two workers.  Exact shipping evidence then falsified that as a product-level fix:
+Shifted remained near the same full-product RSS peak and far above the frozen release
+limit, while the two-worker arm was about 4.6% slower than four workers in the exact-byte
+candidate A/B.  The release wrapper therefore restores four workers globally while
+retaining bounded result ownership.  This is a content-agnostic throughput policy: it
+does not inspect workload names, paths, hashes, or candidate bytes.
 
 Keep this wrapper deliberately thin so canonical operation-scoped profile bindings on
 the historical PrefixGraph module remain authoritative.  Unknown attributes are
@@ -31,12 +33,15 @@ import time
 
 from experiments import entropygraph_v030_prefixgraph as BASE
 
-# Exact-head RSS frontier (b4d6f3ae): median incremental RSS was 63,550 / 145,070 /
-# 297,572 KiB for 1 / 2 / 4 workers, while median wall time was 10.935 / 7.627 /
-# 7.291 s.  Two workers retain ~48.8% of the four-worker RSS at ~1.046x wall time.
-# Keep this a global resource ceiling rather than a workload-dependent selector.
-MAX_ANCHOR_WORKERS = 2
-WORKER_POLICY = "global-two-worker-rss-bound-v1"
+# The isolated frontier measured 63,550 / 145,070 / 297,572 KiB incremental RSS for
+# 1 / 2 / 4 workers, but the exact product-phase run after the two-worker promotion
+# still measured 273,618 KiB incremental / 396,754 KiB operation peak on Shifted and
+# the authoritative runtime RSS ratio remained 3.38485x.  The isolated memory win did
+# not retire or materially move the shipping blocker.  Recover the measured ~4.6%
+# audition throughput loss while preserving the bounded winner/in-flight ownership that
+# removed complete-candidate-list retention.
+MAX_ANCHOR_WORKERS = 4
+WORKER_POLICY = "global-four-worker-throughput-bounded-retention-v2"
 
 
 def __getattr__(name: str):
