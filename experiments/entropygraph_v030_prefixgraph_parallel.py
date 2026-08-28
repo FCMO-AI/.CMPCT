@@ -12,6 +12,12 @@ configured in-flight auditions remain reachable.  This removes an O(anchor_count
 archive_size) memory retention term without changing a candidate byte, nomination rule,
 comparison key, or completion-order-independent winner.
 
+The exact-head fresh-process 1/2/4-worker frontier on the frozen Shifted workload showed
+that two workers preserve exact archive bytes while cutting incremental PrefixGraph RSS
+by about 51% versus four workers for only about 4.6% median wall-time cost.  The release
+wrapper therefore caps auditions at two workers globally.  This is a content-agnostic
+resource policy: it does not inspect workload names, paths, hashes, or candidate bytes.
+
 Keep this wrapper deliberately thin so canonical operation-scoped profile bindings on
 the historical PrefixGraph module remain authoritative.  Unknown attributes are
 forwarded dynamically rather than copied at import time.
@@ -25,7 +31,12 @@ import time
 
 from experiments import entropygraph_v030_prefixgraph as BASE
 
-MAX_ANCHOR_WORKERS = 4
+# Exact-head RSS frontier (b4d6f3ae): median incremental RSS was 63,550 / 145,070 /
+# 297,572 KiB for 1 / 2 / 4 workers, while median wall time was 10.935 / 7.627 /
+# 7.291 s.  Two workers retain ~48.8% of the four-worker RSS at ~1.046x wall time.
+# Keep this a global resource ceiling rather than a workload-dependent selector.
+MAX_ANCHOR_WORKERS = 2
+WORKER_POLICY = "global-two-worker-rss-bound-v1"
 
 
 def __getattr__(name: str):
@@ -140,6 +151,7 @@ def build(root: Path, out: Path) -> dict:
             "create_s": time.perf_counter() - started,
             "anchor_audition_s": audition_s,
             "anchor_audition_workers": workers,
+            "anchor_audition_worker_policy": WORKER_POLICY,
             "anchor_audition_scheduler": scheduler,
             "max_anchor_results_inflight": max_inflight,
             "full_candidate_list_retained": False,
