@@ -22,6 +22,7 @@ concurrency:
 
 env:
   PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
 
 jobs:
   r24-prebuild-overlap-rss:
@@ -29,6 +30,10 @@ jobs:
     timeout-minutes: 90
     steps:
       - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - name: Bind exact candidate head
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
       - uses: actions/setup-python@v6
         with:
           python-version: '3.11'
@@ -55,12 +60,15 @@ jobs:
             --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-r24-prebuild-overlap-rss-work" \
             --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-r24-prebuild-overlap-rss.json"
       - name: Enforce exact-byte diagnostic boundary
+        if: always()
         run: |
+          test -f benchmark-artifacts/v030-r24-prebuild-overlap-rss.json
           python - <<'PY'
-          import json
+          import json, os
           from pathlib import Path
           d=json.loads(Path('benchmark-artifacts/v030-r24-prebuild-overlap-rss.json').read_text())
           assert d['schema']=='cmpct-v030-r24-prebuild-overlap-rss-v1'
+          assert d.get('source_commit', os.environ['EVIDENCE_HEAD']) == os.environ['EVIDENCE_HEAD']
           assert int(d['rounds'])==2
           assert len(d['rows'])==3
           assert d['experiment_valid'] is True
@@ -76,9 +84,7 @@ jobs:
           assert c['recovery_changed'] is False
           for row in d['rows']:
               assert len(row['repetitions'])==2
-              shas=set()
-              sizes=set()
-              trees=set()
+              shas=set(); sizes=set(); trees=set()
               for rep in row['repetitions']:
                   for key in ('shipping','serial_r24'):
                       shas.add(rep[key]['archive_sha256'])
@@ -89,17 +95,17 @@ jobs:
               assert float(row['serial_r24_median_wall_s'])>0
               assert int(row['shipping_median_peak_rss_kib'])>0
               assert int(row['serial_r24_median_peak_rss_kib'])>0
-          # A false causal_signal is valid negative evidence; no scheduling promotion is hidden here.
           PY
       - name: CI topology self-check
+        if: always()
         run: python tools/check_ci_topology.py .github/workflows/v030-r24-prebuild-overlap-rss.yml
       - name: Upload overlap/RSS evidence
         if: always()
         uses: actions/upload-artifact@v6
         with:
-          name: v030-r24-prebuild-overlap-rss-${{ github.sha }}
+          name: v030-r24-prebuild-overlap-rss-${{ env.EVIDENCE_HEAD }}
           path: benchmark-artifacts/v030-r24-prebuild-overlap-rss.json
-          if-no-files-found: warn
+          if-no-files-found: error
           retention-days: 90
 
 # Research-only scheduling diagnostic. It never changes product bytes or release law. Shipping may change only
