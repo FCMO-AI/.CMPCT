@@ -17,6 +17,7 @@ import subprocess
 import sys
 
 from benchmarks import v030_release_performance as PERF
+from experiments import entropygraph_v030_release_candidate as CAND
 
 ROOT = Path(__file__).resolve().parents[1]
 WORKER = ROOT / "benchmarks" / "v030_r25_candidate_phase_rss_worker.py"
@@ -61,7 +62,7 @@ def run(work_root: Path) -> dict:
 
     for suite, name in TARGETS:
         source = roots[(suite, name)]
-        source_tree = PERF._treehash(source)
+        source_tree = CAND.treehash(source)
         repetitions = []
         for round_index, order in enumerate(ORDERS):
             measured: dict[str, dict] = {}
