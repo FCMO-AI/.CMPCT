@@ -25,6 +25,7 @@ concurrency:
 
 env:
   PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
 
 jobs:
   logs-selector-external-shadow:
@@ -33,7 +34,11 @@ jobs:
     steps:
       - uses: actions/checkout@v6
         with:
-          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          ref: ${{ env.EVIDENCE_HEAD }}
+
+      - name: Verify exact evidence head
+        run: |
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
 
       - uses: actions/setup-python@v6
         with:
@@ -63,11 +68,14 @@ jobs:
             --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-logs-selector-external.json"
 
       - name: Independently enforce material selector advance
+        if: always()
         run: |
           python - <<'PY'
           import json
           from pathlib import Path
-          d=json.loads(Path('benchmark-artifacts/v030-logs-selector-external.json').read_text())
+          path=Path('benchmark-artifacts/v030-logs-selector-external.json')
+          assert path.is_file(), 'logs selector external receipt missing'
+          d=json.loads(path.read_text())
           p=d['candidate_promotion_gate']
           f=d['candidate_frontier']
           assert p['exact_workload_count'] is True
@@ -85,14 +93,15 @@ jobs:
           PY
 
       - name: CI topology self-check
+        if: always()
         run: python tools/check_ci_topology.py .github/workflows/v030-logs-selector-external-shadow.yml
 
       - uses: actions/upload-artifact@v6
         if: always()
         with:
-          name: v030-logs-selector-external-${{ github.sha }}
+          name: v030-logs-selector-external-${{ env.EVIDENCE_HEAD }}
           path: benchmark-artifacts/v030-logs-selector-external.json
-          if-no-files-found: warn
+          if-no-files-found: error
           retention-days: 90
 
 # This is promotion evidence, not a replacement release gate. The canonical external authority remains red until
