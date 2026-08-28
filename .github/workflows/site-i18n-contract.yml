@@ -69,8 +69,19 @@ jobs:
           # family as the base public-proof workflow so locale failures are comparable to ordinary viewport proof.
           # Ubuntu runner images do not guarantee CJK glyph coverage; install Noto CJK so Japanese, Korean and
           # both Chinese scripts are rendered as actual language rather than tofu boxes during visual proof.
-          sudo apt-get update
-          sudo apt-get install -y fonts-noto-cjk
+          # Hosted runners also inject unrelated third-party apt feeds. A transient packages.microsoft.com 403
+          # must not block an Ubuntu-native font dependency, so update/install against the runner's canonical
+          # Ubuntu source only and then prove the expected font family is actually present.
+          test -f /etc/apt/sources.list.d/ubuntu.sources
+          sudo apt-get \
+            -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" \
+            -o Dir::Etc::sourceparts="-" \
+            update
+          sudo apt-get \
+            -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" \
+            -o Dir::Etc::sourceparts="-" \
+            install -y fonts-noto-cjk
+          fc-list | grep -qi 'Noto Sans CJK'
           npm install --no-save --no-package-lock playwright@1.55.0
           npx playwright install chromium
 
