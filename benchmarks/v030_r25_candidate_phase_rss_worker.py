@@ -69,7 +69,16 @@ def main() -> None:
     peak_rss_kib = int(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss)
 
     # Correctness stays mandatory but outside the pack timer, matching the other RSS ownership oracles.
-    verified = dict(candidate.READER.strong_verify(args.archive))
+    # The promoted product is a portfolio and may legally publish r24, canonical r25 profiles, logs/CC
+    # terminals, or the accepted-v0.29 research fallback. Its own dispatcher is therefore the semantic
+    # verification owner. Isolated G0-G4/PrefixGraph candidates are fixed r25 candidate grammars and remain
+    # verified by the independent canonical candidate reader.
+    if args.mode == "shipping":
+        verified = dict(product.strong_verify(args.archive))
+        verification_owner = "release-product-dispatcher"
+    else:
+        verified = dict(candidate.READER.strong_verify(args.archive))
+        verification_owner = "canonical-r25-candidate-reader"
     if not verified.get("ok") or verified.get("tree_sha256") != expected_tree:
         raise RuntimeError(f"{args.mode} candidate failed strong verification: {verified!r}")
 
@@ -84,6 +93,7 @@ def main() -> None:
         "peak_rss_kib": peak_rss_kib,
         "incremental_peak_rss_kib": max(0, peak_rss_kib - baseline_rss_kib),
         "selected": stats.get("selected"),
+        "verification_owner": verification_owner,
         "build_stats": stats,
     }, separators=(",", ":"), default=str), flush=True)
 
