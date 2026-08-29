@@ -1,25 +1,13 @@
 from __future__ import annotations
 
-"""Complete ZIP-factor frontier with the exact-byte EOCD-indexed source parser.
-
-The isolated parser A/B saves ~0.2 ms while the existing fused-build + in-process-native-verify
-frontier trails ZIP by only ~0.15 ms. This composition measures the actual hard timing boundary:
-source scan/build, publication and in-process native strong verification versus rotated ZIP and
-solid Zstd-19 creation. The candidate parser is allowed into this composition only after the
-hostile differential oracle proves it is not more permissive than the mature parser.
-
-Research-only: even a strict four-way signal authorizes canonical parser integration and the
-next portability/recovery gates, not release promotion.
-"""
+"""Complete ZIP-factor frontier with the product-default EOCD-indexed source parser."""
 
 import argparse
 import json
 from pathlib import Path
 
 from benchmarks import v030_zipfactor_eocd_hostile_equivalence_oracle as HOSTILE
-from benchmarks import v030_zipfactor_eocd_indexed_parser_oracle as EOCD
 from benchmarks import v030_zipfactor_fused_ffi_complete_frontier as COMPLETE
-from experiments import entropygraph_v030_zipfactor_profile as BASE
 
 EXPECTED_BYTES = 14033
 EXPECTED_SHA = "75bdc866b4b7b63c8f83f7d9a88c9ff3d712c51b93700033984433819b014e31"
@@ -30,19 +18,20 @@ def run(work_root: Path, library: Path) -> dict:
     if not hostile["gate"]["passed"]:
         raise RuntimeError("EOCD parser hostile-equivalence prerequisite is red")
 
-    old = BASE._parse_zip
-    BASE._parse_zip = EOCD._candidate_parse_zip
-    try:
-        result = COMPLETE.run(work_root, library)
-    finally:
-        BASE._parse_zip = old
+    # The fused builder now owns parser selection. Do not modify parser globals here: this composition must
+    # measure the same ordinary product-side path that downstream recovery/platform gates consume.
+    result = COMPLETE.run(work_root, library)
+    if result["contract"].get("source_parser") != "EOCD-indexed-central-first-v1":
+        raise RuntimeError("complete frontier did not use the product-default EOCD parser")
+    if result["contract"].get("source_parser_is_fused_default") is not True:
+        raise RuntimeError("complete frontier EOCD parser is not the fused default")
 
-    result["schema"] = "cmpct-v030-zipfactor-eocd-ffi-complete-frontier-v1"
+    result["schema"] = "cmpct-v030-zipfactor-eocd-ffi-complete-frontier-v2"
     result["contract"].update(
         {
-            "source_parser": "EOCD-indexed-central-first-v1",
             "source_parser_hostile_equivalence_required": True,
             "source_parser_hostile_cases": int(hostile["coverage"]["cases"]),
+            "process_global_parser_mutation": False,
             "archive_bytes_changed": False,
             "selector_change": False,
             "release_credit": False,
@@ -63,8 +52,8 @@ def run(work_root: Path, library: Path) -> dict:
     result["release_credit"] = False
     result["promotion_signal"] = bool(result.get("strict_four_way_win", False))
     result["claim_boundary"] = (
-        "Research-only complete timing composition. A strict four-way result permits canonical EOCD-parser "
-        "productization work only; exact reader/recovery/native/Android/all-15/final authority must be re-earned."
+        "Research-only complete timing composition on the product-default EOCD parser. A strict four-way result "
+        "advances exact recovery/native/Android/all-15/final authority; it does not unlock release alone."
     )
     return result
 
