@@ -8,6 +8,7 @@ on:
       - 'benchmarks/v030_zipfactor_struct_parser_oracle.py'
       - 'benchmarks/v030_zipfactor_eocd_indexed_parser_oracle.py'
       - 'benchmarks/v030_zipfactor_eocd_hostile_equivalence_oracle.py'
+      - 'experiments/entropygraph_v030_zipfactor_eocd_parser.py'
       - 'experiments/entropygraph_v030_zipfactor_fused.py'
       - 'experiments/entropygraph_v030_zipfactor_profile.py'
       - 'experiments/entropygraph_v030_zipfactor_compact_v3_fused_finalize.py'
@@ -50,8 +51,9 @@ jobs:
           sudo apt-get install -y zstd
           python -m pip install --upgrade pip
           python -m pip install -e '.[test]'
-      - name: Compile oracles
+      - name: Compile product parser and oracles
         run: |
+          python -m py_compile experiments/entropygraph_v030_zipfactor_eocd_parser.py
           python -m py_compile benchmarks/v030_zipfactor_scan_hotpath_oracle.py
           python -m py_compile benchmarks/v030_zipfactor_struct_parser_oracle.py
           python -m py_compile benchmarks/v030_zipfactor_eocd_indexed_parser_oracle.py
@@ -67,12 +69,12 @@ jobs:
           python benchmarks/v030_zipfactor_struct_parser_oracle.py \
             --work-root "$RUNNER_TEMP/v030-zf-struct-parser" \
             --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-zf-struct-parser.json"
-      - name: Measure EOCD-indexed parser A/B
+      - name: Measure product-side EOCD-indexed parser A/B
         run: |
           python benchmarks/v030_zipfactor_eocd_indexed_parser_oracle.py \
             --work-root "$RUNNER_TEMP/v030-zf-eocd-parser" \
             --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-zf-eocd-parser.json"
-      - name: Differentially harden EOCD parser on hostile and valid ZIPs
+      - name: Differentially harden product EOCD parser on hostile and valid ZIPs
         run: |
           python benchmarks/v030_zipfactor_eocd_hostile_equivalence_oracle.py \
             --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-zf-eocd-hostile-equivalence.json"
@@ -98,9 +100,10 @@ jobs:
           assert p['candidate']['archive_sha256']=='75bdc866b4b7b63c8f83f7d9a88c9ff3d712c51b93700033984433819b014e31'
           assert p['gate']['experiment_valid'] is True
           e=json.loads(Path('benchmark-artifacts/v030-zf-eocd-parser.json').read_text())
-          assert e['schema']=='cmpct-v030-zipfactor-eocd-indexed-parser-oracle-v1'
+          assert e['schema']=='cmpct-v030-zipfactor-eocd-indexed-parser-oracle-v2'
           assert e['contract']['release_credit'] is False
-          assert e['contract']['production_change'] is False
+          assert e['contract']['production_parser_module']=='experiments.entropygraph_v030_zipfactor_eocd_parser'
+          assert e['contract']['production_selection_change'] is False
           assert e['candidate']['archive_bytes']==14033
           assert e['candidate']['archive_sha256']=='75bdc866b4b7b63c8f83f7d9a88c9ff3d712c51b93700033984433819b014e31'
           assert e['gate']['experiment_valid'] is True
