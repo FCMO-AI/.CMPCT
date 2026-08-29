@@ -27,6 +27,7 @@ concurrency:
 
 env:
   PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
 
 jobs:
   compact-control-composition:
@@ -34,6 +35,10 @@ jobs:
     timeout-minutes: 240
     steps:
       - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - name: Bind exact candidate head
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
       - uses: actions/setup-python@v6
         with:
           python-version: '3.11'
@@ -107,7 +112,7 @@ jobs:
       - uses: actions/upload-artifact@v6
         if: always()
         with:
-          name: v030-r24-compact-control-composition-${{ github.sha }}
+          name: v030-r24-compact-control-composition-${{ env.EVIDENCE_HEAD }}
           path: benchmark-artifacts/v030-r24-compact-control-composition.json
           if-no-files-found: error
           retention-days: 90
