@@ -105,12 +105,14 @@ jobs:
           assert p['gate']['experiment_valid'] is True
           assert p['gate']['passed'] is True
           m=json.loads(Path('benchmark-artifacts/v030-c25cc01-packmap.json').read_text())
-          assert m['schema']=='cmpct-v030-c25cc01-packmap-control-oracle-v1'
+          assert m['schema']=='cmpct-v030-c25cc01-packmap-control-oracle-v2'
           assert m['contract']['release_credit'] is False
           assert m['contract']['production_change'] is False
           assert m['contract']['physical_data_span_changed'] is False
           assert m['contract']['semantic_index_roundtrip_exact'] is True
+          assert m['contract']['file_index_not_duplicated_in_size_column'] is True
           assert m['contract']['locality_ceiling']==8
+          assert m['membership']['contiguous_pack_groups'] + m['membership']['delta_pack_groups'] > 0
           assert m['gate']['experiment_valid'] is True
           assert m['gate']['passed'] is True
           PY
