@@ -49,12 +49,48 @@ def _reused_final_pack_contexts():
         V6._emit_pruned = original
 
 
+@contextmanager
+def _capture_single_expansion_telemetry(observed: list[int]):
+    """Keep V8's exact execution evidence across LOW's intentionally narrow result schema.
+
+    LOW.run() retains only the release-facing aggregate fields from each measured candidate.
+    The V8 candidate owner returns ``compact_expansion_passes`` explicitly, so capture that
+    value at the semantic-owner boundary instead of inferring it from the aggregate result.
+    """
+    original = V6._candidate_once
+
+    def candidate(*args, **kwargs):
+        row = original(*args, **kwargs)
+        passes = row.get("compact_expansion_passes")
+        if passes is None:
+            raise RuntimeError("single-expansion candidate omitted compact-expansion telemetry")
+        observed.append(int(passes))
+        return row
+
+    V6._candidate_once = candidate
+    try:
+        yield
+    finally:
+        V6._candidate_once = original
+
+
 def run(work_root: Path) -> dict:
-    with V8._single_expansion_boundary(), _reused_final_pack_contexts():
+    observed_expansion_passes: list[int] = []
+    # Order is deliberate: V8 installs the semantic owner first, then the telemetry wrapper
+    # observes its returned evidence without changing execution or timing.
+    with V8._single_expansion_boundary(), _capture_single_expansion_telemetry(observed_expansion_passes), _reused_final_pack_contexts():
         result = dict(LOW.run(work_root))
 
     strict = dict(result["strict"])
     measured = dict(result["measured_candidate"])
+    expected_rounds = int(LOW.ROUNDS)
+    telemetry_complete = (
+        len(observed_expansion_passes) == expected_rounds
+        and all(passes == 1 for passes in observed_expansion_passes)
+    )
+    measured["compact_expansion_passes"] = 1 if telemetry_complete else None
+    measured["compact_expansion_passes_observed"] = list(observed_expansion_passes)
+    result["measured_candidate"] = measured
     experiment_valid = bool(
         strict["beats_accepted_v029_size"]
         and strict["beats_zip_size"]
@@ -64,12 +100,13 @@ def run(work_root: Path) -> dict:
         and strict["only_raw_size_policy_input"]
         and strict["exact_serial_archive_identity"]
         and strict["same_selected_level_vector"]
-        and measured.get("compact_expansion_passes") == 1
+        and telemetry_complete
     )
     result["schema"] = "cmpct-v030-eg08-low-effort-composed-oracle-v1"
     result["execution_composition"] = {
         "base_policy": "one-or-two nested raw-size thresholds only",
         "single_compact_expansion_verify_locality": True,
+        "compact_expansion_passes_observed": list(observed_expansion_passes),
         "reused_zstd_context_per_final_pack_worker": True,
         "graph_semantics_changed": False,
         "archive_bytes_changed_vs_same_selected_policy": False,
