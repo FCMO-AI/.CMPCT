@@ -24,6 +24,7 @@ concurrency:
 
 env:
   PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
 
 jobs:
   oracle:
@@ -31,6 +32,10 @@ jobs:
     timeout-minutes: 120
     steps:
       - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - name: Bind exact candidate head
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
       - uses: actions/setup-python@v6
         with:
           python-version: '3.11'
@@ -53,7 +58,7 @@ jobs:
       - name: Independently enforce diagnostic accounting
         run: |
           python - <<'PY'
-          import json
+          import json, os
           from pathlib import Path
           d=json.loads(Path('benchmark-artifacts/v030-r24-physical-overhead.json').read_text())
           assert d['schema']=='cmpct-v030-r24-physical-overhead-v1'
@@ -70,6 +75,7 @@ jobs:
           assert f['compact_control_minus_all_blob_headers_bytes'] == d['compact_control_projected_bytes']-p['blob_header_bytes']
           assert f['minus_all_blob_headers_and_record_metadata_bytes'] == f['compact_control_minus_all_blob_headers_bytes']-p['record_meta_bytes']
           assert f['plus_raw_choice_for_nonproductive_compression_bytes'] == f['minus_all_blob_headers_and_record_metadata_bytes']-p['nonproductive_compression_bytes']
+          Path('benchmark-artifacts/v030-r24-physical-overhead-candidate.txt').write_text(os.environ['EVIDENCE_HEAD']+'\n')
           PY
       - name: Public-surface guard
         if: always()
@@ -77,8 +83,10 @@ jobs:
       - uses: actions/upload-artifact@v6
         if: always()
         with:
-          name: v030-r24-physical-overhead-${{ github.sha }}
-          path: benchmark-artifacts/v030-r24-physical-overhead.json
+          name: v030-r24-physical-overhead-${{ env.EVIDENCE_HEAD }}
+          path: |
+            benchmark-artifacts/v030-r24-physical-overhead.json
+            benchmark-artifacts/v030-r24-physical-overhead-candidate.txt
           if-no-files-found: error
           retention-days: 90
 
