@@ -8,6 +8,7 @@ on:
       - 'benchmarks/v030_r25_manifest_derived_identity_oracle.py'
       - 'benchmarks/v030_release_generalization.py'
       - 'experiments/entropygraph_v030_product_fs.py'
+      - 'experiments/entropygraph_v030_fs_implicit_v4.py'
       - 'experiments/entropygraph_v030_canonical_final_impl.py'
       - 'experiments/entropygraph_v030_release_candidate.py'
       - '.github/workflows/v030-r25-manifest-derived-identity.yml'
@@ -64,11 +65,14 @@ jobs:
           from pathlib import Path
           p=Path('benchmark-artifacts/v030-r25-manifest-derived-identity.json')
           e=json.loads(p.read_text())
-          assert e['schema']=='cmpct-v030-r25-manifest-derived-identity-oracle-v1'
+          assert e['schema']=='cmpct-v030-r25-manifest-derived-identity-oracle-v2'
           assert e['target']=='neutral_hostile_v1/01_developer_repository'
-          assert e['identity_join_proof']['source_identities_match_current_manifest'] is True
-          assert e['manifest']['regular_rows'] == e['identity_join_proof']['regular_identity_count']
-          assert e['manifest']['derived_manifest_bytes'] < e['manifest']['current_manifest_bytes']
+          i=e['implicit_v4']
+          assert i['expands_to_exact_filesystem_v1_semantics'] is True
+          assert i['existing_research_grammar'] is True
+          assert i['regular_identity_count'] > 0
+          assert i['duplicated_sha256_bytes_avoided'] == i['regular_identity_count'] * 32
+          assert i['implicit_control_bytes'] < i['current_manifest_bytes']
           assert e['release_credit'] is False
           assert e['selector_change'] is False
           assert e['canonical_grammar_change'] is False
@@ -87,5 +91,6 @@ jobs:
       - name: CI topology self-check
         run: python tools/check_ci_topology.py .github/workflows/v030-r25-manifest-derived-identity.yml
 
-# Research-only: the projected manifest is deliberately noncanonical. A positive byte result authorizes only the
-# next productization prerequisite: a bounded grammar/read/recovery/native/Android design with exact all-15 proof.
+# Research-only: the projected manifest uses the already-bounded implicit-v4 grammar but remains noncanonical.
+# A positive result authorizes only the next productization prerequisite: canonical grammar/read/recovery/native/
+# Android integration with exact all-15 proof. It grants no release or selector credit by itself.
