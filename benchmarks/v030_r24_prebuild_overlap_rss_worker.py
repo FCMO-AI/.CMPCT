@@ -1,12 +1,14 @@
 from __future__ import annotations
 
-"""Fresh-process pack worker for the r24-prebuild overlap RSS oracle.
+"""Fresh-process pack worker for the r24/PrefixGraph scheduling RSS oracle.
 
-This worker exists only to separate scheduling from format semantics. ``shipping`` uses the promoted v0.30 product
-unchanged. ``serial-r24`` imports that same product and then restores the canonical profile-tree preparation and
-r24 builder to serial ordering before the first build. The two modes therefore exercise identical archive grammar,
-selection, integrity and publication logic while differing only in whether r24 compression overlaps profile-tree
-manifest capture.
+``shipping`` is the promoted v0.30 product unchanged. ``serial-r24`` restores the
+canonical profile-tree preparation and r24 builder to serial ordering. The
+``serial-r24-pg2`` arm makes that same scheduling change and additionally bounds
+PrefixGraph anchor auditions to two workers. The latter interaction is worth testing
+because each isolated change has already been falsified at the full-product RSS
+boundary while the PrefixGraph-only receipt shows a ~50% isolated RSS reduction at
+2 workers. All arms retain the same candidate set, byte tournament and archive grammar.
 """
 
 import argparse
@@ -28,21 +30,25 @@ def _sha256_file(path: Path) -> str:
 def _engine(mode: str):
     from experiments import entropygraph_v030_release_product as product
 
-    if mode == "serial-r24":
+    if mode in {"serial-r24", "serial-r24-pg2"}:
         from experiments import entropygraph_v030_release_product_base as base
 
         if base._R24_PREBUILDS:
-            raise RuntimeError("serial-r24 oracle imported with an unexpected in-flight r24 prebuild")
+            raise RuntimeError(f"{mode} oracle imported with an unexpected in-flight r24 prebuild")
         base.C._prepare_profile_tree = base._ORIGINAL_PREPARE_PROFILE_TREE
         base.C._r24_build = base._locality_bounded_r24_build
-    elif mode != "shipping":  # pragma: no cover
+    if mode == "serial-r24-pg2":
+        from experiments import entropygraph_v030_prefixgraph_parallel as pg
+
+        pg.MAX_ANCHOR_WORKERS = 2
+    elif mode not in {"shipping", "serial-r24"}:  # pragma: no cover
         raise ValueError(mode)
     return product
 
 
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--mode", choices=("shipping", "serial-r24"), required=True)
+    parser.add_argument("--mode", choices=("shipping", "serial-r24", "serial-r24-pg2"), required=True)
     parser.add_argument("--source", type=Path, required=True)
     parser.add_argument("--archive", type=Path, required=True)
     args = parser.parse_args()
