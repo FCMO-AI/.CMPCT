@@ -69,7 +69,9 @@ jobs:
           assert c['scratch_v3_publication_inside_timing'] is False
           assert c['native_archive_open_inside_timing'] is False
           assert c['native_byte_slice_ffi'] is True
-          assert c['ffi_reuses_exact_preparity_verifier'] is True
+          assert c['ffi_preparity_semantics_preserved'] is True
+          assert c['ffi_streams_reconstructed_zip_sha256'] is True
+          assert c['ffi_full_reconstructed_zip_allocation'] is False
           assert c['archive_bytes_changed'] is False and c['selector_change'] is False
           assert c['release_credit'] is False and e['release_credit'] is False
           assert e['experiment_valid'] is True
