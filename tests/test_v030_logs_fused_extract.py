@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from pathlib import Path
-import os
 
 import pytest
 
@@ -33,20 +32,21 @@ def _files(root: Path) -> dict[str, bytes]:
     }
 
 
-def test_fused_extract_matches_canonical_product(tmp_path: Path) -> None:
+def test_promoted_extract_matches_legacy_logs_semantics(tmp_path: Path) -> None:
     src = tmp_path / "src"
     _source(src)
     archive = tmp_path / "logs.cmpct"
     LOGS.build(src, archive)
     assert PRODUCT.strong_verify(archive)["ok"] is True
-    current = tmp_path / "current"
-    fused = tmp_path / "fused"
-    PRODUCT.extract(archive, current)
-    FUSED.extract(archive, fused)
-    assert _files(fused) == _files(current) == _files(src)
+    legacy = tmp_path / "legacy"
+    promoted = tmp_path / "promoted"
+    LOGS.extract(archive, legacy)
+    PRODUCT.extract(archive, promoted)
+    assert PRODUCT.LOGS_FUSED is FUSED
+    assert _files(promoted) == _files(legacy) == _files(src)
 
 
-def test_fused_extract_budget_fails_before_publication(tmp_path: Path) -> None:
+def test_promoted_extract_budget_fails_before_publication(tmp_path: Path) -> None:
     src = tmp_path / "src"
     _source(src)
     archive = tmp_path / "logs.cmpct"
@@ -56,12 +56,12 @@ def test_fused_extract_budget_fails_before_publication(tmp_path: Path) -> None:
     sentinel = dst / "sentinel.txt"
     sentinel.write_text("keep")
     with pytest.raises(RuntimeError, match="output budget"):
-        FUSED.extract(archive, dst, max_output_bytes=1024)
+        PRODUCT.extract(archive, dst, max_output_bytes=1024)
     assert sentinel.read_text() == "keep"
     assert list(dst.iterdir()) == [sentinel]
 
 
-def test_fused_extract_corruption_fails_closed(tmp_path: Path) -> None:
+def test_promoted_extract_corruption_fails_closed(tmp_path: Path) -> None:
     src = tmp_path / "src"
     _source(src)
     archive = tmp_path / "logs.cmpct"
@@ -73,5 +73,5 @@ def test_fused_extract_corruption_fails_closed(tmp_path: Path) -> None:
     bad.write_bytes(raw)
     dst = tmp_path / "bad-out"
     with pytest.raises(Exception):
-        FUSED.extract(bad, dst)
+        PRODUCT.extract(bad, dst)
     assert not dst.exists()
