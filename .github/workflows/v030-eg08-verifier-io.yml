@@ -19,12 +19,22 @@ concurrency:
   group: v030-eg08-verifier-io-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
+permissions:
+  contents: read
+
+env:
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+
 jobs:
   eg08-verifier-io:
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - name: Bind exact candidate head
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
       - uses: actions/setup-python@v6
         with:
           python-version: '3.11'
@@ -71,7 +81,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v6
         with:
-          name: v030-eg08-verifier-io-${{ github.sha }}
+          name: v030-eg08-verifier-io-${{ env.EVIDENCE_HEAD }}
           path: benchmark-artifacts/v030-eg08-verifier-io.json
           if-no-files-found: warn
           retention-days: 90
