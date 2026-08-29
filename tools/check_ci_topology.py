@@ -19,7 +19,10 @@ CONCURRENCY_RE = re.compile(r"(?m)^concurrency:\s*$")
 CONCURRENCY_HEAD_SHA_RE = re.compile(r"(?m)^\s+group:.*github\.event\.pull_request\.head\.sha")
 CANCEL_RE = re.compile(r"(?m)^\s+cancel-in-progress:\s*true\s*$")
 PRESERVE_EXACT_RECEIPT_RE = re.compile(r"(?m)^# ci-cancel-policy: preserve-running-exact-receipt\s*$")
-EXACT_HEAD_RE = re.compile(r"github\.event\.pull_request\.head\.sha")
+EXACT_HEAD_BINDING_RE = re.compile(
+    r"(?m)^\s+EVIDENCE_HEAD:\s*\$\{\{\s*github\.event\.pull_request\.head\.sha\s*\|\|\s*github\.sha\s*\}\}\s*$"
+)
+EXACT_HEAD_CHECKOUT_RE = re.compile(r"(?m)^\s+ref:\s*\$\{\{\s*env\.EVIDENCE_HEAD\s*\}\}\s*$")
 PATH_SCOPE_RE = re.compile(r"(?m)^\s+(paths|paths-ignore):\s*$")
 BRANCH_SCOPE_RE = re.compile(r"(?m)^\s+branches(?:-ignore)?:\s*")
 
@@ -56,7 +59,8 @@ def validate(path: Path) -> list[str]:
                 and PULL_REQUEST_RE.search(text)
                 and PATH_SCOPE_RE.search(text)
                 and CONCURRENCY_RE.search(text)
-                and EXACT_HEAD_RE.search(text)
+                and EXACT_HEAD_BINDING_RE.search(text)
+                and EXACT_HEAD_CHECKOUT_RE.search(text)
             ):
                 errors.append(
                     "automatic runner workflow lacks 'cancel-in-progress: true' or the narrow "
@@ -78,8 +82,9 @@ def validate(path: Path) -> list[str]:
     # Very long exact-head A/Bs are a separate case: cancelling a 20+ minute measurement whenever an
     # unrelated PR commit lands can prevent any receipt from completing at all. A deep lane may preserve
     # its running receipt only with the explicit directive above, PR path scoping, a concurrency group,
-    # and direct pull_request.head.sha custody. The completed predecessor remains research-only; this
-    # exception changes runner scheduling, never release-evidence inheritance.
+    # concrete EVIDENCE_HEAD binding to pull_request.head.sha, and checkout of that exact env value. The
+    # completed predecessor remains research-only; this exception changes runner scheduling, never evidence
+    # inheritance.
     #
     # Conversely, a normal cancel-on-new-head lane must not key its concurrency group by that same head SHA:
     # different commits would then enter different groups and could never cancel one another. Scheduling identity
