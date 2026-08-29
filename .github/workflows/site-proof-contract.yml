@@ -30,13 +30,23 @@ concurrency:
   group: cmpct-public-proof-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
+env:
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+
 jobs:
   proof-surface:
     runs-on: ubuntu-latest
     timeout-minutes: 18
     steps:
-      - name: Check out repository
+      - name: Check out exact candidate repository
         uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - name: Bind exact candidate head
+        run: |
+          set -euo pipefail
+          actual="$(git rev-parse HEAD)"
+          test "$actual" = "$EVIDENCE_HEAD"
 
       - name: Set up Python
         uses: actions/setup-python@v6
@@ -109,7 +119,7 @@ jobs:
         if: ${{ always() }}
         uses: actions/upload-artifact@v4
         with:
-          name: cmpct-responsive-matrix-${{ github.sha }}
+          name: cmpct-responsive-matrix-${{ env.EVIDENCE_HEAD }}
           path: viewport-artifacts/
           if-no-files-found: warn
           retention-days: 7
@@ -117,44 +127,20 @@ jobs:
       - name: Stamp validated main publication receipt
         if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
         env:
-          SOURCE_COMMIT: ${{ github.sha }}
+          SOURCE_COMMIT: ${{ env.EVIDENCE_HEAD }}
         run: |
-          python - <<'PY'
-          import json
-          import os
-          from pathlib import Path
+          set -euo pipefail
+          mkdir -p benchmark-artifacts
+          printf '%s\n' "$SOURCE_COMMIT" > benchmark-artifacts/site-proof-source-commit.txt
 
-          out = Path('_site')
-          payload = json.loads((out / 'project-data.json').read_text(encoding='utf-8'))
-          project = payload['project']
-          evidence = payload.get('public_evidence') or {}
-          receipt = {
-              'schema': 'cmpct-static-pages-deployment-v1',
-              'publishing_branch': 'gh-pages',
-              'publishing_path': '/',
-              'source_branch': 'main',
-              'source_commit': os.environ['SOURCE_COMMIT'],
-              'project_version': project['project_version'],
-              'surface_revision': project['surface_revision'],
-              'canonical_format_revision': project['format_revision'],
-              'evidence_schema': evidence.get('schema'),
-              'jekyll': False,
-              'static_only': True,
-              'generated_from_committed_evidence': True,
-              'policy': 'main owns source and validation; gh-pages owns generated serving artifacts only',
-          }
-          (out / 'deployment.json').write_text(json.dumps(receipt, indent=2) + '\n', encoding='utf-8')
-          PY
-
-      - name: Preserve validated main static artifact
+      - name: Upload validated main publication receipt
         if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
         uses: actions/upload-artifact@v4
         with:
-          name: cmpct-public-site-${{ github.sha }}
-          path: _site/
+          name: cmpct-site-proof-source-${{ env.EVIDENCE_HEAD }}
+          path: benchmark-artifacts/site-proof-source-commit.txt
           if-no-files-found: error
-          retention-days: 7
+          retention-days: 90
 
-# Footnote: Actions validates canonical source and, on main only, preserves the exact checked static tree
-# as a short-lived promotion handoff. The viewport artifact is visual evidence, not a deployment source.
-# Pages still serves only the explicitly promoted gh-pages tree.
+# Footnote: public proof is release evidence, not merely presentation CI. PR validation therefore binds to the
+# exact candidate head; a synthetic merge commit cannot supply a receipt for v0.30 release authority.
