@@ -44,15 +44,18 @@ def build_vector(output: Path, archive_output: Path, work_root: Path) -> dict:
     src.mkdir(parents=True)
     rng = random.Random(0xC25CC01)
 
-    # Exercise the same generic shape that made compact control useful: many tiny/medium high-entropy .bin members.
+    # Exercise compact control on a generic many-file high-entropy tree while keeping the vector itself inside the
+    # release locality law. Tiny control-plane-heavy members use a non-packable extension; the 40 medium .bin members
+    # are equal 96 KiB slices, so the shipping r24 target of 8x the largest member forms at most eight-member S_PACKs.
+    # This preserves a real S_PACK portability test without relying on a source tree that C25CC01 must correctly reject.
     for i in range(256):
-        path = src / "tiny" / f"block-{i:04d}.bin"
+        path = src / "tiny" / f"block-{i:04d}.dat"
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_bytes(rng.randbytes(256 + (i % 31)))
     for i in range(40):
         path = src / "medium" / f"chunk-{i:03d}.bin"
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_bytes(rng.randbytes(96 * 1024 + (i % 5) * 1024))
+        path.write_bytes(rng.randbytes(96 * 1024))
 
     archive = work_root / "v030-compact-control-android.cmpct"
     stats = CC.build(src, archive)
