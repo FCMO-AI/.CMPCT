@@ -210,6 +210,7 @@ def _project(index: dict, data: bytes) -> dict:
 
 
 def _candidate_once(source: Path, root: Path, tag: str) -> dict:
+    root.mkdir(parents=True, exist_ok=True)
     archive = root / f"{tag}.cmpct"
     started = time.perf_counter()
     with STABLE._patched():
