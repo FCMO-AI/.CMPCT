@@ -24,15 +24,24 @@ concurrency:
   group: cmpct-ci-topology-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
+env:
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+
 jobs:
   topology:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - name: Check out repository history
+      - name: Check out exact candidate history
         uses: actions/checkout@v6
         with:
+          ref: ${{ env.EVIDENCE_HEAD }}
           fetch-depth: 0
+      - name: Bind exact candidate head
+        run: |
+          set -euo pipefail
+          actual="$(git rev-parse HEAD)"
+          test "$actual" = "$EVIDENCE_HEAD"
 
       - name: Select workflow files that this change actually touched
         id: changed
