@@ -1,12 +1,13 @@
 from __future__ import annotations
 
-"""Recovery ZIP-factor frontier using the exact Rust verifier directly over reconstructed V3 bytes.
+"""Recovery ZIP-factor frontier using the Rust verifier directly over reconstructed V3 bytes.
 
 The recovery envelope remains byte-identical to the existing CMP25Z4 research candidate. This experiment changes
-only the verification transport: the authenticated recovery control reconstructs exact CMP25Z3 bytes in memory and
-passes those bytes to the same Rust parser/verifier through a research-only C ABI. It therefore removes scratch V3
-publication/open from the timed boundary without changing grammar, SHA-256 checks, locality, recovery, or archive
-bytes. Rust compilation/library load remain outside timing; the FFI call remains inside. No release credit.
+only verification transport/allocation: the authenticated recovery control reconstructs exact CMP25Z3 bytes in
+memory and passes them to the preparity-derived Rust parser/verifier through a research-only C ABI. The generated
+FFI verifier preserves the same parser, decompression, SHA-256 identity, locality and decode-unit checks, but streams
+each reconstructed logical ZIP directly through SHA-256 instead of materializing a second full ZIP Vec solely to
+hash it. Rust compilation/library load remain outside timing; the FFI call remains inside. No release credit.
 """
 
 import argparse
@@ -91,7 +92,9 @@ def run(work_root: Path, native_library: Path) -> dict:
             "scratch_v3_publication_inside_timing": False,
             "native_archive_open_inside_timing": False,
             "native_byte_slice_ffi": True,
-            "ffi_reuses_exact_preparity_verifier": True,
+            "ffi_preparity_semantics_preserved": True,
+            "ffi_streams_reconstructed_zip_sha256": True,
+            "ffi_full_reconstructed_zip_allocation": False,
         }
     )
     result["memory_ffi_corruption_rejected"] = corruption_rejected
