@@ -66,13 +66,36 @@ def test_compact_control_prefilter_is_only_a_conservative_work_filter():
     )
 
 
-def test_release_product_rejects_compact_control_when_preserved_r24_pack_breaks_locality(tmp_path):
-    """A source-shape prefilter is not authority to publish a locality-unsafe C25CC01 wrapper.
+def test_compact_control_representation_audit_rejects_locality_unsafe_pack():
+    """Admission must fail closed from authenticated representation facts, independent of workload identity."""
+    cc = PRODUCT._compact_control_module()
+    r24 = cc.R24
+    index = {
+        "files": [
+            ["tiny.bin", r24.K_FILE, 0, 0, 37, None, [r24.S_PACK, 0, 0, 37]],
+        ],
+        # The locality audit intentionally consumes only the decoded-byte field for the referenced physical blob.
+        "blobs": [[0, 213_969, 0, 0, 0]],
+    }
+    try:
+        cc._audit_s_pack_locality(index)
+    except cc.ProfileNotEligible as exc:
+        message = str(exc)
+        assert "exceeds release locality" in message
+        assert "decoded=213969" in message
+        assert "logical=37" in message
+    else:
+        raise AssertionError("locality-unsafe S_PACK unexpectedly passed compact-control admission")
 
-    This deterministic high-file-count incompressible tree is intentionally inside the cheap structural prefilter,
-    but its mature r24 physical packing contains selected-member amplification above the release <=8x law. C25CC01
-    preserves that physical span byte-for-byte, so the promoted front door must fail closed and keep the ordinary
-    r24 product instead of terminalizing a smaller but locality-invalid wrapper.
+
+def test_release_product_compact_control_never_publishes_above_locality_limit(tmp_path):
+    """A source-shape prefilter is never publication authority for C25CC01.
+
+    This deterministic high-file-count tree is intentionally inside the cheap structural prefilter. Earlier r24
+    packing revisions made this fixture locality-unsafe; the current locality-bounded r24 builder may instead produce
+    a safe pack layout. The regression therefore ratchets the invariant that matters: if C25CC01 is published, its
+    authenticated representation audit must prove both the <=8x selected-member amplification law and the <=8 MiB
+    decode-unit law. Unsafe layouts are covered directly by the representation-level test above.
     """
     source = tmp_path / "source"
     source.mkdir()
@@ -90,10 +113,17 @@ def test_release_product_rejects_compact_control_when_preserved_r24_pack_breaks_
     archive = tmp_path / "shipping.cmpct"
     stats = PRODUCT.build(source, archive)
 
-    assert stats["selected"] == "r24-fallback"
-    assert stats.get("terminal_compact_control") is not True
-    assert PRODUCT._is_compact_control_archive(archive) is False
-    assert PRODUCT._revision_for_archive(archive)[0] == 24
+    assert stats["selected"] in {"r24-fallback", "r24-compact-control"}
+    if stats["selected"] == "r24-compact-control":
+        locality = stats["locality_admission"]
+        assert locality["max_s_pack_member_amplification"] <= locality["max_member_read_amplification"] <= 8.0
+        assert locality["max_s_pack_decode_unit_bytes"] <= locality["max_decode_unit_bytes"] <= 8 * 1024 * 1024
+        assert stats.get("terminal_compact_control") is True
+        assert PRODUCT._is_compact_control_archive(archive) is True
+    else:
+        assert stats.get("terminal_compact_control") is not True
+        assert PRODUCT._is_compact_control_archive(archive) is False
+        assert PRODUCT._revision_for_archive(archive)[0] == 24
 
     verified = PRODUCT.strong_verify(archive)
     assert verified["ok"] is True
