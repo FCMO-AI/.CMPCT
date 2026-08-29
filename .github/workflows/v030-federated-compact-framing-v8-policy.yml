@@ -21,6 +21,7 @@ concurrency:
 
 env:
   PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
 
 jobs:
   policy-distillation:
@@ -28,6 +29,10 @@ jobs:
     timeout-minutes: 180
     steps:
       - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - name: Bind exact candidate head
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
       - uses: actions/setup-python@v6
         with:
           python-version: '3.11'
@@ -63,7 +68,7 @@ jobs:
       - name: Independently enforce generic policy, exact bytes and strict promotion law
         run: |
           python - <<'PY'
-          import json
+          import json, os
           from pathlib import Path
           d=json.loads(Path('benchmark-artifacts/v030-eg08-policy-v4.json').read_text())
           assert d['schema']=='cmpct-v030-eg08-policy-distillation-v4'
@@ -108,6 +113,7 @@ jobs:
               and float(m['median_verified_create_s']) < float(c['zstd19']['median_create_s'])
           )
           assert d['promotion_signal'] is expected_promotion
+          Path('benchmark-artifacts/v030-eg08-policy-v4-candidate.txt').write_text(os.environ['EVIDENCE_HEAD']+'\n')
           PY
       - name: CI topology self-check
         run: python tools/check_ci_topology.py .github/workflows/v030-federated-compact-framing-v8-policy.yml
@@ -115,8 +121,10 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v6
         with:
-          name: v030-eg08-policy-v4-${{ github.sha }}
-          path: benchmark-artifacts/v030-eg08-policy-v4.json
+          name: v030-eg08-policy-v4-${{ env.EVIDENCE_HEAD }}
+          path: |
+            benchmark-artifacts/v030-eg08-policy-v4.json
+            benchmark-artifacts/v030-eg08-policy-v4-candidate.txt
           if-no-files-found: warn
           retention-days: 90
 
