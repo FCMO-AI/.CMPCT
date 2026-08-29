@@ -100,8 +100,7 @@ jobs:
           assert a['all_trees_equal'] is True
           assert a['all_payloads_unchanged'] is True
           assert a['strict_improvement_count'] > 0
-          t=d['target']
-          g=d['gate']
+          t=d['target']; g=d['gate']
           assert t['rounds']==5
           assert g['experiment_valid'] is True
           if t['eligible']:
@@ -145,17 +144,27 @@ jobs:
           import json
           from pathlib import Path
           d=json.loads(Path('benchmark-artifacts/v030-c25cc01-self-describing-blobtable.json').read_text())
-          assert d['schema']=='cmpct-v030-c25cc01-self-describing-blobtable-oracle-v1'
+          assert d['schema']=='cmpct-v030-c25cc01-self-describing-blobtable-oracle-v2'
           assert d['contract']['release_credit'] is False
           assert d['contract']['blob_table_in_control'] is False
           assert d['contract']['physical_blob_header_semantic_owner'] is True
           assert d['contract']['physical_payload_records_changed'] is False
+          assert d['contract']['all15_projection_required'] is True
           assert d['gate']['experiment_valid'] is True
-          c=d['candidate']
+          c=d['candidate']; a=d['all15']; g=d['gate']
           assert c['semantic_index_roundtrip_exact'] is True
           assert c['physical_payload_records_unchanged'] is True
           assert c['blob_table_reconstructed_from_physical_records'] is True
           assert c['blob_rows_elided'] > 0
+          assert a['workloads']==15
+          assert len(a['rows'])==15
+          assert a['all_semantic_roundtrips_exact'] is True
+          assert a['zero_projected_byte_regressions_vs_v4'] is True
+          assert a['strict_improvement_count'] > 0
+          assert g['all15_projection_complete'] is True
+          assert g['all15_semantic_roundtrips_exact'] is True
+          assert g['zero_projected_byte_regressions_vs_v4'] is True
+          assert g['passed'] is True
           Path('benchmark-artifacts/v030-r24-cc-profile-candidate.txt').write_text('${{ steps.candidate.outputs.sha }}\n')
           PY
       - name: Public-surface guard
