@@ -1,0 +1,91 @@
+# ci-lane: deep
+name: CMPCT v0.30 r25 manifest derived-identity oracle
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'benchmarks/v030_r25_manifest_derived_identity_oracle.py'
+      - 'benchmarks/v030_release_generalization.py'
+      - 'experiments/entropygraph_v030_product_fs.py'
+      - 'experiments/entropygraph_v030_canonical_final_impl.py'
+      - 'experiments/entropygraph_v030_release_candidate.py'
+      - '.github/workflows/v030-r25-manifest-derived-identity.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-v030-r25-manifest-derived-identity-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+
+jobs:
+  manifest-derived-identity:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - name: Bind exact candidate head
+        id: candidate
+        run: |
+          set -euo pipefail
+          actual="$(git rev-parse HEAD)"
+          test "$actual" = "$EVIDENCE_HEAD"
+          echo "sha=$actual" >> "$GITHUB_OUTPUT"
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install exact corpus dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y zstd ffmpeg libsndfile1
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[test,audio]'
+      - name: Compile research oracle
+        run: python -m py_compile benchmarks/v030_r25_manifest_derived_identity_oracle.py
+      - name: Run repaired developer-workload manifest A/B
+        run: |
+          mkdir -p benchmark-artifacts
+          python -m benchmarks.v030_r25_manifest_derived_identity_oracle \
+            --work-root "$RUNNER_TEMP/v030-r25-manifest-derived-identity" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-r25-manifest-derived-identity.json"
+      - name: Ratchet evidence boundary without granting release credit
+        run: |
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          p=Path('benchmark-artifacts/v030-r25-manifest-derived-identity.json')
+          e=json.loads(p.read_text())
+          assert e['schema']=='cmpct-v030-r25-manifest-derived-identity-oracle-v1'
+          assert e['target']=='neutral_hostile_v1/01_developer_repository'
+          assert e['identity_join_proof']['source_identities_match_current_manifest'] is True
+          assert e['manifest']['regular_rows'] == e['identity_join_proof']['regular_identity_count']
+          assert e['manifest']['derived_manifest_bytes'] < e['manifest']['current_manifest_bytes']
+          assert e['release_credit'] is False
+          assert e['selector_change'] is False
+          assert e['canonical_grammar_change'] is False
+          Path('benchmark-artifacts/v030-r25-manifest-derived-identity-candidate.txt').write_text(os.environ['EVIDENCE_HEAD']+'\n')
+          PY
+      - name: Upload evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: v030-r25-manifest-derived-identity-${{ steps.candidate.outputs.sha || github.sha }}
+          path: |
+            benchmark-artifacts/v030-r25-manifest-derived-identity.json
+            benchmark-artifacts/v030-r25-manifest-derived-identity-candidate.txt
+          if-no-files-found: warn
+          retention-days: 90
+      - name: CI topology self-check
+        run: python tools/check_ci_topology.py .github/workflows/v030-r25-manifest-derived-identity.yml
+
+# Research-only: the projected manifest is deliberately noncanonical. A positive byte result authorizes only the
+# next productization prerequisite: a bounded grammar/read/recovery/native/Android design with exact all-15 proof.
