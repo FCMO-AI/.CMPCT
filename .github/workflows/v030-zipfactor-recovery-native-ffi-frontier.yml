@@ -7,6 +7,7 @@ on:
     paths:
       - 'benchmarks/v030_zipfactor_recovery_native_ffi_frontier.py'
       - 'benchmarks/v030_zipfactor_recovery_memory_ffi_frontier.py'
+      - 'benchmarks/v030_zipfactor_recovery_envelope_ffi_frontier.py'
       - 'benchmarks/v030_zipfactor_recovery_oracle.py'
       - 'benchmarks/v030_zipfactor_native_ffi_complete_frontier.py'
       - 'benchmarks/v030_external_competitors.py'
@@ -64,6 +65,7 @@ jobs:
           python -m py_compile experiments/entropygraph_v030_zipfactor_fused.py
           python -m py_compile benchmarks/v030_zipfactor_recovery_native_ffi_frontier.py
           python -m py_compile benchmarks/v030_zipfactor_recovery_memory_ffi_frontier.py
+          python -m py_compile benchmarks/v030_zipfactor_recovery_envelope_ffi_frontier.py
           python -m py_compile experiments/entropygraph_v030_zipfactor_compact_v3_fused_finalize.py
           cargo build --release --manifest-path native/cmpct-zipfactor-v3-ffi/Cargo.toml
           cargo build --release --manifest-path native/cmpct-portable/Cargo.toml \
@@ -133,6 +135,12 @@ jobs:
             --work-root "$RUNNER_TEMP/v030-zf-recovery-memory-ffi" \
             --native-library "$GITHUB_WORKSPACE/native/cmpct-zipfactor-v3-ffi/target/release/libcmpct_zipfactor_v3_ffi.so" \
             --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-zf-recovery-memory-ffi.json"
+      - name: Run native recovery-envelope candidate against ZIP and Zstd-19
+        run: |
+          python -m benchmarks.v030_zipfactor_recovery_envelope_ffi_frontier \
+            --work-root "$RUNNER_TEMP/v030-zf-recovery-envelope-ffi" \
+            --native-library "$GITHUB_WORKSPACE/native/cmpct-zipfactor-v3-ffi/target/release/libcmpct_zipfactor_v3_ffi.so" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-zf-recovery-envelope-ffi.json"
       - name: Ratchet exact recovery, direct-build identity and four-way boundary
         run: |
           python - <<'PY'
@@ -199,6 +207,37 @@ jobs:
                       and m['medians_s']['cmpct'] < m['medians_s']['zip'] and m['medians_s']['cmpct'] < m['medians_s']['zstd19'])
           assert m['strict_four_way_win'] is m_expected
           assert m['promotion_signal'] is m_expected
+
+          r=json.loads(Path('benchmark-artifacts/v030-zf-recovery-envelope-ffi.json').read_text())
+          assert r['schema']=='cmpct-v030-zipfactor-recovery-envelope-ffi-frontier-v1'
+          rc=r['contract']
+          assert rc['rounds']==9 and rc['ties_fail'] is True
+          assert rc['archive_bytes_changed'] is False and rc['selector_change'] is False
+          assert rc['release_credit'] is False and r['release_credit'] is False
+          assert rc['native_compile_inside_timing'] is False
+          assert rc['native_library_load_inside_timing'] is False
+          assert rc['native_ffi_call_inside_timing'] is True
+          assert rc['scratch_v3_publication_inside_timing'] is False
+          assert rc['native_archive_open_inside_timing'] is False
+          assert rc['native_recovery_control_parse_inside_timing'] is True
+          assert rc['native_v3_reconstruction_inside_timing'] is True
+          assert rc['python_v3_reconstruction_inside_timing'] is False
+          assert rc['native_byte_slice_ffi'] is True
+          assert rc['ffi_reuses_exact_v3_preparity_semantics'] is True
+          assert r['experiment_valid'] is True
+          assert r['legacy_recovery_byte_identical'] is True
+          assert r['legacy_recovery_sha256'] == r['direct_probe_sha256']
+          assert r['recovery_semantics_passed'] is True
+          assert all(r['native_envelope_semantics'].values())
+          assert r['candidate']['archive_bytes'] == 14227
+          assert r['candidate']['base_v3_bytes'] == 14033
+          assert r['candidate']['recovery_overhead_bytes'] == 194
+          assert r['sizes']['cmpct'] < r['sizes']['zip']
+          assert r['sizes']['cmpct'] < r['sizes']['zstd19']
+          r_expected=(r['sizes']['cmpct'] < r['sizes']['zip'] and r['sizes']['cmpct'] < r['sizes']['zstd19']
+                      and r['medians_s']['cmpct'] < r['medians_s']['zip'] and r['medians_s']['cmpct'] < r['medians_s']['zstd19'])
+          assert r['strict_four_way_win'] is r_expected
+          assert r['promotion_signal'] is r_expected
           Path('benchmark-artifacts/v030-zf-recovery-native-ffi-candidate.txt').write_text(os.environ['EVIDENCE_HEAD']+'\n')
           PY
       - name: Upload evidence
@@ -209,6 +248,7 @@ jobs:
           path: |
             benchmark-artifacts/v030-zf-recovery-native-ffi.json
             benchmark-artifacts/v030-zf-recovery-memory-ffi.json
+            benchmark-artifacts/v030-zf-recovery-envelope-ffi.json
             benchmark-artifacts/v030-zf-recovery-native-ffi-candidate.txt
             benchmark-artifacts/v030-zf-portable-clean.txt
             benchmark-artifacts/v030-zf-portable-primary-bad.txt
@@ -219,6 +259,7 @@ jobs:
         run: python tools/check_ci_topology.py .github/workflows/v030-zipfactor-recovery-native-ffi-frontier.yml
 
 # Research-only. A positive exact-head native FFI result advances the exact recovery representation toward
-# portable/native productization. The byte-slice A/B removes scratch V3 publication/open, while portable preparity
-# independently proves primary/tail recovery on the same exact winning bytes using the unchanged V3 CLI as semantic
-# owner. None of these paths alter production dispatch, selector policy, archive bytes, or the v0.30 release lock.
+# portable/native productization. The byte-slice A/B removes scratch V3 publication/open; the direct envelope A/B
+# additionally moves authenticated recovery-control parsing/failover into native code while delegating V3 semantics
+# to the exact preparity owner. Portable preparity independently proves primary/tail recovery on the same winning
+# bytes. None of these paths alter production dispatch, selector policy, archive bytes, or the v0.30 release lock.
