@@ -9,6 +9,8 @@ on:
       - 'benchmarks/v030_zipfactor_recovery_oracle.py'
       - 'benchmarks/v030_zipfactor_native_ffi_complete_frontier.py'
       - 'benchmarks/v030_external_competitors.py'
+      - 'experiments/entropygraph_v030_zipfactor_eocd_parser.py'
+      - 'experiments/entropygraph_v030_zipfactor_fused.py'
       - 'experiments/entropygraph_v030_zipfactor_compact_v3.py'
       - 'experiments/entropygraph_v030_zipfactor_compact_v3_fused_finalize.py'
       - 'native/cmpct-zipfactor-v3-ffi/**'
@@ -25,6 +27,7 @@ concurrency:
 
 env:
   PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
 
 jobs:
   recovery-native-ffi-frontier:
@@ -32,6 +35,16 @@ jobs:
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - name: Bind exact candidate head
+        id: candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          actual="$(git rev-parse HEAD)"
+          test "$actual" = "$EVIDENCE_HEAD"
+          echo "sha=$actual" >> "$GITHUB_OUTPUT"
       - uses: actions/setup-python@v6
         with:
           python-version: '3.11'
@@ -45,6 +58,8 @@ jobs:
           python -m pip install -e '.[test]'
       - name: Compile exact recovery FFI frontier
         run: |
+          python -m py_compile experiments/entropygraph_v030_zipfactor_eocd_parser.py
+          python -m py_compile experiments/entropygraph_v030_zipfactor_fused.py
           python -m py_compile benchmarks/v030_zipfactor_recovery_native_ffi_frontier.py
           python -m py_compile experiments/entropygraph_v030_zipfactor_compact_v3_fused_finalize.py
           cargo build --release --manifest-path native/cmpct-zipfactor-v3-ffi/Cargo.toml
@@ -54,16 +69,17 @@ jobs:
           cargo clippy --manifest-path native/cmpct-zipfactor-v3-ffi/Cargo.toml -- -D warnings
       - name: Run direct recovered candidate against ZIP and Zstd-19
         run: |
+          mkdir -p benchmark-artifacts
           python -m benchmarks.v030_zipfactor_recovery_native_ffi_frontier \
             --work-root "$RUNNER_TEMP/v030-zf-recovery-native-ffi" \
             --native-library "$GITHUB_WORKSPACE/native/cmpct-zipfactor-v3-ffi/target/release/libcmpct_zipfactor_v3_ffi.so" \
-            --output "$RUNNER_TEMP/v030-zf-recovery-native-ffi.json"
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-zf-recovery-native-ffi.json"
       - name: Ratchet exact recovery, direct-build identity and four-way boundary
         run: |
           python - <<'PY'
           import json, os
           from pathlib import Path
-          e=json.loads((Path(os.environ['RUNNER_TEMP'])/'v030-zf-recovery-native-ffi.json').read_text())
+          e=json.loads(Path('benchmark-artifacts/v030-zf-recovery-native-ffi.json').read_text())
           assert e['schema']=='cmpct-v030-zipfactor-recovery-native-ffi-frontier-v2'
           c=e['contract']
           assert c['rounds']==9 and c['ties_fail'] is True
@@ -90,24 +106,24 @@ jobs:
           assert e['sizes']['cmpct'] < e['sizes']['zstd19']
           assert len(e['samples_s']['cmpct'])==len(e['samples_s']['zip'])==len(e['samples_s']['zstd19'])==9
           assert len(e['cmpct_phase_samples_s']['build'])==len(e['cmpct_phase_samples_s']['verify'])==9
-          expected=(
-              e['sizes']['cmpct'] < e['sizes']['zip']
-              and e['sizes']['cmpct'] < e['sizes']['zstd19']
-              and e['medians_s']['cmpct'] < e['medians_s']['zip']
-              and e['medians_s']['cmpct'] < e['medians_s']['zstd19']
-          )
+          expected=(e['sizes']['cmpct'] < e['sizes']['zip'] and e['sizes']['cmpct'] < e['sizes']['zstd19']
+                    and e['medians_s']['cmpct'] < e['medians_s']['zip'] and e['medians_s']['cmpct'] < e['medians_s']['zstd19'])
           assert e['strict_four_way_win'] is expected
           assert e['promotion_signal'] is expected
+          Path('benchmark-artifacts/v030-zf-recovery-native-ffi-candidate.txt').write_text(os.environ['EVIDENCE_HEAD']+'\n')
           PY
       - name: Upload evidence
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
-          name: v030-zipfactor-recovery-native-ffi-frontier
-          path: ${{ runner.temp }}/v030-zf-recovery-native-ffi.json
+          name: v030-zipfactor-recovery-native-ffi-frontier-${{ steps.candidate.outputs.sha || github.sha }}
+          path: |
+            benchmark-artifacts/v030-zf-recovery-native-ffi.json
+            benchmark-artifacts/v030-zf-recovery-native-ffi-candidate.txt
           if-no-files-found: warn
+          retention-days: 90
       - name: CI topology self-check
         run: python tools/check_ci_topology.py .github/workflows/v030-zipfactor-recovery-native-ffi-frontier.yml
 
-# Research-only. A positive result advances the exact recovery representation toward portable/native productization.
-# It cannot alter production dispatch, selector policy, archive bytes, or the v0.30 release lock.
+# Research-only. A positive exact-head result advances the exact recovery representation toward portable/native
+# productization. It cannot alter production dispatch, selector policy, archive bytes, or the v0.30 release lock.
