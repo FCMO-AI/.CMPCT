@@ -23,7 +23,21 @@ def test_entropy_refinement_rejects_compressible_media_magic(tmp_path: Path) -> 
 def test_release_product_terminalizes_only_when_media_policy_admits(monkeypatch, tmp_path: Path) -> None:
     out = tmp_path / "out.cmpct"
     calls: list[str] = []
+    media_files = [(tmp_path / f"f{index}", 1024 * 1024) for index in range(8)]
+    preflight = {
+        "logs_eligible": False,
+        "shape": {
+            "regular_files": 8,
+            "logical_bytes": 8 * 1024 * 1024,
+            "average_regular_bytes": 1024 * 1024,
+        },
+        "media_files": media_files,
+        "metadata_error": False,
+        "scanned_regular_files": 8,
+        "short_circuited": False,
+    }
 
+    monkeypatch.setattr(PRODUCT, "_shared_frontdoor_preflight", lambda root: preflight)
     monkeypatch.setattr(
         PRODUCT._LOGS_PROMOTED,
         "_build_logs_terminal_if_eligible",
@@ -39,6 +53,13 @@ def test_release_product_terminalizes_only_when_media_policy_admits(monkeypatch,
         "build",
         lambda root, target: calls.append("tournament") or {"archive_bytes": 456},
     )
+    # The complete shared preflight must now own source traversal; an independent media walk would regress the
+    # productization boundary this test is ratcheting.
+    monkeypatch.setattr(
+        PRODUCT._R24_MEDIA,
+        "analyze",
+        lambda root: (_ for _ in ()).throw(AssertionError("unexpected second media source walk")),
+    )
 
     admitted = {
         "eligible": True,
@@ -48,16 +69,16 @@ def test_release_product_terminalizes_only_when_media_policy_admits(monkeypatch,
         "sample_bytes": MEDIA.MIN_SAMPLE_BYTES,
         "sample_entropy_bits_per_byte": 7.99,
     }
-    monkeypatch.setattr(PRODUCT._R24_MEDIA, "analyze", lambda root: admitted)
+    monkeypatch.setattr(PRODUCT._R24_MEDIA, "analyze_precollected", lambda rows: admitted)
     result = PRODUCT.build(tmp_path, out)
     assert calls == ["r24"]
     assert result["terminal_r24"] is True
     assert result["terminal_r24_reason"] == "opaque-media-entropy-v1"
     assert result["speculative_r25_search_skipped"] is True
-    assert result["terminal_r24_media_admission"] is admitted
+    assert result["terminal_r24_media_admission"] == {**admitted, "source_walk_reused": True}
 
     calls.clear()
-    monkeypatch.setattr(PRODUCT._R24_MEDIA, "analyze", lambda root: {"eligible": False})
+    monkeypatch.setattr(PRODUCT._R24_MEDIA, "analyze_precollected", lambda rows: {"eligible": False})
     result = PRODUCT.build(tmp_path, out)
     assert calls == ["tournament"]
     assert result == {"archive_bytes": 456}
