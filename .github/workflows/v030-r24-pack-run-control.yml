@@ -7,6 +7,7 @@ on:
     paths:
       - 'benchmarks/v030_r24_pack_run_control_oracle.py'
       - 'benchmarks/v030_r24_pack_group_control_oracle.py'
+      - 'benchmarks/v030_r24_pack_group_control_oracle_v2.py'
       - 'benchmarks/v030_r24_compact_control_oracle.py'
       - 'benchmarks/v030_r24_numeric_path_control_oracle.py'
       - 'benchmarks/v030_r24_suffix_path_control_oracle.py'
@@ -58,6 +59,7 @@ jobs:
         run: |
           python -m py_compile benchmarks/v030_r24_pack_run_control_oracle.py
           python -m py_compile benchmarks/v030_r24_pack_group_control_oracle.py
+          python -m py_compile benchmarks/v030_r24_pack_group_control_oracle_v2.py
           python -m py_compile benchmarks/v030_r24_compact_control_oracle.py
           python -m py_compile benchmarks/v030_r24_numeric_path_control_oracle.py
           python -m py_compile benchmarks/v030_r24_suffix_path_control_oracle.py
@@ -72,6 +74,11 @@ jobs:
           python benchmarks/v030_r24_pack_group_control_oracle.py \
             --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-r24-pack-group-control-work" \
             --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-r24-pack-group-control.json"
+      - name: Run exact all-15 delta-grouped pack control proof
+        run: |
+          python benchmarks/v030_r24_pack_group_control_oracle_v2.py \
+            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-r24-pack-group-control-v2-work" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-r24-pack-group-control-v2.json"
       - name: Independently enforce exactness and promotion boundary
         run: |
           python - <<'PY'
@@ -138,6 +145,31 @@ jobs:
           if g['gate']['promotion_signal']:
               assert g['summary']['target_incremental_saving_bytes'] > 0
               assert g['target']['selected_kind']=='pack_groups'
+
+          v2=json.loads(Path('benchmark-artifacts/v030-r24-pack-group-control-v2.json').read_text())
+          assert v2['schema']=='cmpct-v030-r24-pack-group-control-v2'
+          assert v2['contract']['workloads']==15
+          assert v2['contract']['release_credit'] is False
+          assert v2['contract']['production_selector_change'] is False
+          assert v2['contract']['format_revision_change'] is False
+          assert v2['contract']['physical_pack_boundaries_changed'] is False
+          assert v2['contract']['locality_rule_changed'] is False
+          assert v2['contract']['recovery_rule_changed'] is False
+          assert v2['contract']['two_authenticated_control_copies_retained'] is True
+          assert v2['contract']['benchmark_identity_not_policy_input'] is True
+          assert len(v2['rows'])==15
+          assert v2['gate']['experiment_valid'] is True
+          assert v2['gate']['zero_projected_byte_regressions'] is True
+          assert v2['gate']['passed'] is True
+          assert v2['summary']['regressions']==[]
+          assert all(r['semantic_index_roundtrip_exact'] for r in v2['rows'])
+          assert all(r['v1_group_coordinates_roundtrip_exact'] for r in v2['rows'])
+          assert all(r['two_authenticated_control_copies_retained'] for r in v2['rows'])
+          assert all(r['physical_payload_records_unchanged'] for r in v2['rows'])
+          assert all(r['projected_archive_bytes']<=r['archive_bytes'] for r in v2['rows'])
+          if v2['gate']['promotion_signal']:
+              assert v2['summary']['target_incremental_saving_bytes'] > 0
+              assert v2['target']['selected_kind']=='delta_pack_groups_v2'
           PY
       - name: Record candidate fingerprint
         run: printf '%s\n' '${{ steps.candidate.outputs.sha }}' > benchmark-artifacts/v030-r24-pack-run-control-candidate.txt
@@ -150,6 +182,7 @@ jobs:
           path: |
             benchmark-artifacts/v030-r24-pack-run-control.json
             benchmark-artifacts/v030-r24-pack-group-control.json
+            benchmark-artifacts/v030-r24-pack-group-control-v2.json
             benchmark-artifacts/v030-r24-pack-run-control-candidate.txt
           if-no-files-found: warn
           retention-days: 90
