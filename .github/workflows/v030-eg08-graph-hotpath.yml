@@ -6,6 +6,7 @@ on:
     paths:
       - 'benchmarks/v030_eg08_graph_hotpath_oracle.py'
       - 'benchmarks/v030_eg08_zip_plain_prefilter_oracle.py'
+      - 'benchmarks/v030_eg08_raw_hash_cache_oracle.py'
       - 'benchmarks/v030_federated_compact_framing_v8_direct_v5.py'
       - 'experiments/entropygraph_v025.py'
       - 'experiments/entropygraph_v030_federated_embedded_fs_candidate_v7.py'
@@ -53,17 +54,23 @@ jobs:
         run: |
           python -m py_compile benchmarks/v030_eg08_graph_hotpath_oracle.py
           python -m py_compile benchmarks/v030_eg08_zip_plain_prefilter_oracle.py
+          python -m py_compile benchmarks/v030_eg08_raw_hash_cache_oracle.py
       - name: Profile exact EG08 graph stage
         run: |
           mkdir -p benchmark-artifacts
           python benchmarks/v030_eg08_graph_hotpath_oracle.py \
             --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-eg08-graph-hotpath-work" \
             --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-eg08-graph-hotpath.json"
-      - name: Run byte-neutral ZIP plaintext prefilter A/B
+      - name: Run ZIP plaintext prefilter falsification A/B
         run: |
           python benchmarks/v030_eg08_zip_plain_prefilter_oracle.py \
             --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-eg08-zip-prefilter-work" \
             --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-eg08-zip-prefilter.json"
+      - name: Run exact-byte raw SHA-256 cache A/B
+        run: |
+          python benchmarks/v030_eg08_raw_hash_cache_oracle.py \
+            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-eg08-raw-hash-cache-work" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-eg08-raw-hash-cache.json"
       - name: Evidence-boundary check
         run: |
           python - <<'PY'
@@ -79,10 +86,8 @@ jobs:
           assert d['gate']['passed'] is True
           assert d['profiled']['top_by_cumulative_cpu']
 
-          # The prefilter oracle is deliberately fail-closed: a byte-changing
+          # The plaintext prefilter is deliberately fail-closed: a byte-changing
           # candidate is useful negative evidence, not a broken measurement.
-          # Require the current v2 receipt and only demand byte neutrality and
-          # speed when the oracle itself says promotion is eligible.
           p=json.loads(Path('benchmark-artifacts/v030-eg08-zip-prefilter.json').read_text())
           assert p['schema']=='cmpct-v030-eg08-zip-plain-prefilter-oracle-v2'
           assert p['contract']['release_credit'] is False
@@ -102,6 +107,26 @@ jobs:
               if not p['gate']['byte_neutral']:
                   assert p['office']['byte_identical_all_completed_pairs'] is False
                   assert p['office']['first_mismatch'] is not None
+
+          # Hash caching receives promotion signal only when the exact artifact
+          # survives all 11 paired builds and the median saving clears 10 ms.
+          h=json.loads(Path('benchmark-artifacts/v030-eg08-raw-hash-cache.json').read_text())
+          assert h['schema']=='cmpct-v030-eg08-raw-hash-cache-oracle-v1'
+          assert h['contract']['release_credit'] is False
+          assert h['contract']['production_change'] is False
+          assert h['contract']['required_byte_identity'] is True
+          assert h['office']['planned_rounds']==11
+          assert h['office']['completed_pairs'] >= 1
+          assert h['gate']['experiment_valid'] is True
+          assert h['gate']['passed'] is True
+          if h['gate']['promotion_eligible']:
+              assert h['office']['completed_pairs']==11
+              assert h['gate']['byte_neutral'] is True
+              assert h['gate']['materially_faster'] is True
+              assert h['office']['byte_identical_all_rounds'] is True
+              assert h['office']['median_saving_s'] >= 0.010
+          elif not h['gate']['byte_neutral']:
+              assert h['office']['first_mismatch'] is not None
           PY
       - name: Record candidate fingerprint
         run: printf '%s\n' '${{ steps.candidate.outputs.sha }}' > benchmark-artifacts/v030-eg08-candidate.txt
@@ -117,6 +142,7 @@ jobs:
           path: |
             benchmark-artifacts/v030-eg08-graph-hotpath.json
             benchmark-artifacts/v030-eg08-zip-prefilter.json
+            benchmark-artifacts/v030-eg08-raw-hash-cache.json
             benchmark-artifacts/v030-eg08-candidate.txt
           if-no-files-found: warn
           retention-days: 90
