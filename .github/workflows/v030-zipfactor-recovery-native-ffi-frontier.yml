@@ -16,6 +16,7 @@ on:
       - 'experiments/entropygraph_v030_zipfactor_compact_v3_fused_finalize.py'
       - 'native/cmpct-zipfactor-v3-ffi/**'
       - 'native/cmpct-portable/src/bin/cmpct-zipfactor-v3-preparity.rs'
+      - 'native/cmpct-portable/src/bin/cmpct-zipfactor-v4-recovery-preparity.rs'
       - '.github/workflows/v030-zipfactor-recovery-native-ffi-frontier.yml'
   workflow_dispatch:
 
@@ -65,10 +66,56 @@ jobs:
           python -m py_compile benchmarks/v030_zipfactor_recovery_memory_ffi_frontier.py
           python -m py_compile experiments/entropygraph_v030_zipfactor_compact_v3_fused_finalize.py
           cargo build --release --manifest-path native/cmpct-zipfactor-v3-ffi/Cargo.toml
+          cargo build --release --manifest-path native/cmpct-portable/Cargo.toml --bin cmpct-zipfactor-v4-recovery-preparity
       - name: Preserve Rust correctness before timing
         run: |
           cargo fmt --manifest-path native/cmpct-zipfactor-v3-ffi/Cargo.toml -- --check
           cargo clippy --manifest-path native/cmpct-zipfactor-v3-ffi/Cargo.toml -- -D warnings
+          cargo clippy --manifest-path native/cmpct-portable/Cargo.toml --bin cmpct-zipfactor-v4-recovery-preparity -- -D warnings
+      - name: Prove portable recovery semantics on the exact winning bytes
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p benchmark-artifacts
+          python - <<'PY'
+          from pathlib import Path
+          import hashlib, shutil
+          from benchmarks import resemblance_hostile_corpus_v1 as CORPUS
+          from benchmarks import v030_external_competitors as EXT
+          from benchmarks import v030_zipfactor_recovery_oracle as REC
+          from benchmarks.v030_zipfactor_recovery_native_ffi_frontier import _build_recovery_direct
+
+          root=Path('benchmark-artifacts/v030-zf-portable-recovery-work')
+          shutil.rmtree(root, ignore_errors=True)
+          root.mkdir(parents=True)
+          corpus=root/'corpus'; CORPUS.build(corpus)
+          stage=EXT._normalized_stage(corpus/'04_deflate_family', root/'normalized')
+          clean=root/'clean.cmpct'
+          stats=_build_recovery_direct(stage, clean, level=3, group_size=7)
+          raw=clean.read_bytes()
+          assert len(raw)==14227
+          assert hashlib.sha256(raw).hexdigest()=='d6220839e6ab57509b6adaf080b7325250febc53e81d5fd3862bf48c14b5473f'
+          assert stats['base_v3_bytes']==14033 and stats['recovery_overhead_bytes']==194
+          control_len=int(stats['control_bytes'])
+          primary_bad=REC._flip(raw, 8+7)
+          (root/'primary-bad.cmpct').write_bytes(primary_bad)
+          _, tail_start=REC._tail_control(raw)
+          tail_index=tail_start+min(7, control_len-1)
+          (root/'tail-bad.cmpct').write_bytes(REC._flip(raw, tail_index))
+          (root/'both-bad.cmpct').write_bytes(REC._flip(primary_bad, tail_index))
+          PY
+          BIN="$GITHUB_WORKSPACE/native/cmpct-portable/target/release/cmpct-zipfactor-v4-recovery-preparity"
+          WORK="$GITHUB_WORKSPACE/benchmark-artifacts/v030-zf-portable-recovery-work"
+          "$BIN" verify "$WORK/clean.cmpct" | tee benchmark-artifacts/v030-zf-portable-clean.txt
+          grep -q 'recovered_from=primary' benchmark-artifacts/v030-zf-portable-clean.txt
+          "$BIN" verify "$WORK/primary-bad.cmpct" | tee benchmark-artifacts/v030-zf-portable-primary-bad.txt
+          grep -q 'recovered_from=tail' benchmark-artifacts/v030-zf-portable-primary-bad.txt
+          "$BIN" verify "$WORK/tail-bad.cmpct" | tee benchmark-artifacts/v030-zf-portable-tail-bad.txt
+          grep -q 'recovered_from=primary' benchmark-artifacts/v030-zf-portable-tail-bad.txt
+          if "$BIN" verify "$WORK/both-bad.cmpct"; then
+            echo 'both damaged controls unexpectedly verified' >&2
+            exit 1
+          fi
       - name: Run direct recovered candidate against ZIP and Zstd-19
         run: |
           mkdir -p benchmark-artifacts
@@ -159,12 +206,15 @@ jobs:
             benchmark-artifacts/v030-zf-recovery-native-ffi.json
             benchmark-artifacts/v030-zf-recovery-memory-ffi.json
             benchmark-artifacts/v030-zf-recovery-native-ffi-candidate.txt
+            benchmark-artifacts/v030-zf-portable-clean.txt
+            benchmark-artifacts/v030-zf-portable-primary-bad.txt
+            benchmark-artifacts/v030-zf-portable-tail-bad.txt
           if-no-files-found: warn
           retention-days: 90
       - name: CI topology self-check
         run: python tools/check_ci_topology.py .github/workflows/v030-zipfactor-recovery-native-ffi-frontier.yml
 
-# Research-only. A positive exact-head path-based result already advances the exact recovery representation toward
-# portable/native productization. The byte-slice A/B now tests removal of the remaining scratch V3 publication/open
-# without changing recovery bytes or verifier semantics. Neither path can alter production dispatch, selector policy,
-# archive bytes, or the v0.30 release lock.
+# Research-only. A positive exact-head native FFI result advances the exact recovery representation toward
+# portable/native productization. The byte-slice A/B removes scratch V3 publication/open, while portable preparity
+# independently proves primary/tail recovery on the same exact winning bytes using the shared V3 grammar source.
+# None of these paths alter production dispatch, selector policy, archive bytes, or the v0.30 release lock.
