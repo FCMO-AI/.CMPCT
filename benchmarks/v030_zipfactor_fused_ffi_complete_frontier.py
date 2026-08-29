@@ -2,8 +2,9 @@ from __future__ import annotations
 
 """Complete ZIP-factor V3 frontier using the byte-identical fused builder plus in-process Rust verification.
 
-This combines two independently validated, archive-byte-neutral mechanisms:
-- fused group finalization, which preserves the exact CMP25Z3 bytes; and
+This composes independently validated, archive-byte-neutral mechanisms on the product-side builder path:
+- fused group finalization, which preserves the exact CMP25Z3 bytes;
+- the hardened EOCD-indexed ZIP source parser now used by the fused scanner; and
 - the research-only Rust FFI verifier, which preserves the exact V3 verification semantics.
 
 The external comparison remains the same rotated ZIP/Deflate-9 and solid Zstd-19 contract. Research-only until
@@ -32,10 +33,12 @@ def run(work_root: Path, library: Path) -> dict:
         V3.build = original_build
         BASE._native_verify = original_verify
 
-    result["schema"] = "cmpct-v030-zipfactor-fused-ffi-complete-frontier-v1"
+    result["schema"] = "cmpct-v030-zipfactor-fused-ffi-complete-frontier-v2"
     result["contract"].update(
         {
-            "cmpct_timing": "byte-identical-fused-v3-build-plus-inprocess-native-strong-verify",
+            "cmpct_timing": "byte-identical-fused-v3-eocd-build-plus-inprocess-native-strong-verify",
+            "source_parser": "EOCD-indexed-central-first-v1",
+            "source_parser_is_fused_default": True,
             "native_process_startup_inside_timing": False,
             "native_ffi_call_inside_timing": True,
             "archive_open_inside_timing": True,
