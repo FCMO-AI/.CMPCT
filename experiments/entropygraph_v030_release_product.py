@@ -223,8 +223,6 @@ def _shared_frontdoor_preflight(root: Path) -> dict:
                 if regular_files <= _R24_MEDIA.MAX_REGULAR_FILES:
                     media_files.append((Path(entry.path), size))
                 else:
-                    # Path retention would only add memory after the hard file-count policy has made media
-                    # admission impossible. Shape counting continues for C25 admission.
                     media_files = None
             rel = Path(entry.path).relative_to(root).as_posix()
             sidecar_base = None
@@ -266,19 +264,15 @@ def _shared_frontdoor_preflight(root: Path) -> dict:
 
 
 def _media_admission_after_preflight(root: Path, preflight: dict) -> dict:
-    """Preserve the media predicate while reusing facts already owned by the shared source walk."""
     shape = preflight.get("shape")
     if preflight.get("metadata_error") or shape is None:
         return _R24_MEDIA.analyze(root)
-
     regular_files = int(shape["regular_files"])
     logical_bytes = int(shape["logical_bytes"])
     if not (
         _R24_MEDIA.MIN_REGULAR_FILES <= regular_files <= _R24_MEDIA.MAX_REGULAR_FILES
         and logical_bytes >= _R24_MEDIA.MIN_LOGICAL_BYTES
     ):
-        # These are exact necessary conditions of the media predicate. No header or entropy inspection can turn
-        # this shape into an admission, so a second source-tree walk is pure speculative work.
         return {
             "regular_files": regular_files,
             "logical_bytes": logical_bytes,
@@ -286,15 +280,10 @@ def _media_admission_after_preflight(root: Path, preflight: dict) -> dict:
             "reason": "shape-preflight",
             "source_walk_reused": True,
         }
-
     media_files = preflight.get("media_files")
     if media_files is None or len(media_files) != regular_files:
-        # Fail safe on incomplete custody rather than infer source facts.
         return _R24_MEDIA.analyze(root)
-    return {
-        **_R24_MEDIA.analyze_precollected(media_files),
-        "source_walk_reused": True,
-    }
+    return {**_R24_MEDIA.analyze_precollected(media_files), "source_walk_reused": True}
 
 
 def _compact_control_source_prefilter(shape: dict) -> bool:
@@ -380,15 +369,12 @@ def _build_compact_control_terminal_if_eligible(root: Path, out: Path, *, source
 
 
 def build(root, out):
-    """Build a promoted structural terminal when admitted; otherwise preserve the mature tournament exactly."""
     root = Path(root)
     preflight = _shared_frontdoor_preflight(root)
     if preflight["metadata_error"]:
         terminal = _LOGS_PROMOTED._build_logs_terminal_if_eligible(root, out)
         shared_shape = None
     elif preflight["logs_eligible"]:
-        # The second logs check is deliberately retained as the authoritative mature admission proof; on the
-        # early-positive path it costs ~0.1 ms and avoids introducing shared mutable selector state.
         terminal = _LOGS_PROMOTED._build_logs_terminal_if_eligible(root, out)
         shared_shape = None
     else:
@@ -396,7 +382,6 @@ def build(root, out):
         shared_shape = preflight["shape"]
     if terminal is not None:
         return terminal
-
     media = _media_admission_after_preflight(root, preflight)
     if media["eligible"]:
         stats = dict(_locality_bounded_r24_build(root, out))
@@ -407,7 +392,6 @@ def build(root, out):
             "terminal_r24_media_admission": media,
             "speculative_r25_search_skipped": True,
         }
-
     compact_control = _build_compact_control_terminal_if_eligible(root, out, source_shape=shared_shape)
     if compact_control is not None:
         return compact_control
@@ -415,34 +399,43 @@ def build(root, out):
 
 
 def _revision_for_archive(archive: Path):
-    """Classify promoted compact-control through its single-sourced profile owner."""
     if _is_compact_control_archive(Path(archive)):
         cc = _compact_control_module()
         return int(cc.REVISION), cc.PROFILE
+    if _LOGS_PROMOTED._is_logs_archive(Path(archive)):
+        return REVISION, _LOGS_PROMOTED.LOGS_PROFILE
     return _BASE_ORIGINALS["_revision_for_archive"](archive)
 
 
 def strong_verify(archive: Path):
     if _is_compact_control_archive(Path(archive)):
         return _compact_control_module().strong_verify(archive)
+    if _LOGS_PROMOTED._is_logs_archive(Path(archive)):
+        return _LOGS_PROMOTED.strong_verify(archive)
     return _BASE_ORIGINALS["strong_verify"](archive)
 
 
 def list_members(archive: Path):
     if _is_compact_control_archive(Path(archive)):
         return _compact_control_module().list_members(archive)
+    if _LOGS_PROMOTED._is_logs_archive(Path(archive)):
+        return _LOGS_PROMOTED.list_members(archive)
     return _BASE_ORIGINALS["list_members"](archive)
 
 
 def read_member_with_stats(archive: Path, rel: str):
     if _is_compact_control_archive(Path(archive)):
         return _compact_control_module().read_member_with_stats(archive, rel)
+    if _LOGS_PROMOTED._is_logs_archive(Path(archive)):
+        return _LOGS_PROMOTED.read_member_with_stats(archive, rel)
     return _BASE_ORIGINALS["read_member_with_stats"](archive, rel)
 
 
 def read_member(archive: Path, rel: str):
     if _is_compact_control_archive(Path(archive)):
         return _compact_control_module().read_member(archive, rel)
+    if _LOGS_PROMOTED._is_logs_archive(Path(archive)):
+        return _LOGS_PROMOTED.read_member(archive, rel)
     return _BASE_ORIGINALS["read_member"](archive, rel)
 
 
@@ -455,14 +448,59 @@ def extract(
 ):
     if _is_compact_control_archive(Path(archive)):
         return _compact_control_module().extract(
-            archive,
-            dst,
-            max_output_bytes=max_output_bytes,
-            safe_symlinks=safe_symlinks,
+            archive, dst, max_output_bytes=max_output_bytes, safe_symlinks=safe_symlinks
+        )
+    if _LOGS_PROMOTED._is_logs_archive(Path(archive)):
+        return _LOGS_PROMOTED.extract(
+            archive, dst, max_output_bytes=max_output_bytes, safe_symlinks=safe_symlinks
         )
     return _BASE_ORIGINALS["extract"](
-        archive,
-        dst,
-        max_output_bytes=max_output_bytes,
-        safe_symlinks=safe_symlinks,
+        archive, dst, max_output_bytes=max_output_bytes, safe_symlinks=safe_symlinks
     )
+
+
+LOGS = _LOGS_PROMOTED.LOGS
+LOGS_MAGIC = _LOGS_PROMOTED.LOGS_MAGIC
+LOGS_TAIL = _LOGS_PROMOTED.LOGS_TAIL
+LOGS_PROFILE = _LOGS_PROMOTED.LOGS_PROFILE
+logs_source_prefilter = _logs_streaming_source_prefilter
+
+PROMOTED_LOGS_INVERSE = True
+PROMOTED_LOGS_EVIDENCE = "all-15 structural admission + external/v0.29 selector shadows + native production dispatch + Android/JNI"
+PROMOTED_LOGS_STREAMING_PREFILTER = True
+PROMOTED_LOGS_STREAMING_PREFILTER_EVIDENCE = "exact adversarial eligibility + nine-round 12k-file A/B: ~99.9% prefilter speedup with early short-circuit"
+PROMOTED_SHARED_FRONTDOOR_PREFLIGHT = True
+PROMOTED_SHARED_FRONTDOOR_PREFLIGHT_EVIDENCE = "11-round exact A/B: 45.8% faster C25/no-logs preflight (~18 ms saved), logs early-positive also faster"
+PROMOTED_R24_DEAD_DICTIONARY_ELISION = True
+PROMOTED_R24_DEAD_DICTIONARY_EVIDENCE = "all-15 post-selection proof: 0 byte regressions, live dictionaries byte-identical, dead dictionaries smaller"
+PROMOTED_R24_OPAQUE_MEDIA_TERMINAL = True
+PROMOTED_R24_OPAQUE_MEDIA_EVIDENCE = "all-15 strict four-way media win + unseen entropy-refined adversarial proof with compressible-media rejection"
+PROMOTED_R24_COMPACT_CONTROL_TERMINAL = True
+PROMOTED_R24_COMPACT_CONTROL_EVIDENCE = "all-15 frozen admission + five-round unseen/adversarial strict four-way wins + native dispatch + Android/JNI"
+
+_PROMOTED_BINDINGS = {
+    "build": build,
+    "strong_verify": strong_verify,
+    "list_members": list_members,
+    "read_member_with_stats": read_member_with_stats,
+    "read_member": read_member,
+    "extract": extract,
+    "_revision_for_archive": _revision_for_archive,
+}
+
+
+class _ReleaseProductModule(types.ModuleType):
+    def __setattr__(self, name, value):
+        super().__setattr__(name, value)
+        if name.startswith("__") or name in {"_BASE_IMPL", "_LOGS_PROMOTED", "_R24_DEAD_DICT", "_R24_MEDIA"}:
+            return
+        if not hasattr(_BASE_IMPL, name):
+            return
+        promoted = _PROMOTED_BINDINGS.get(name)
+        if promoted is not None and value is promoted:
+            setattr(_BASE_IMPL, name, _BASE_ORIGINALS[name])
+        else:
+            setattr(_BASE_IMPL, name, value)
+
+
+sys.modules[__name__].__class__ = _ReleaseProductModule
