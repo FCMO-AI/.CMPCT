@@ -13,14 +13,21 @@ const TAIL_MAGIC: &[u8; 8] = b"ZFRTAIL1";
 const FOOTER_SIZE: usize = 8 + 4 + 32;
 const MAX_CONTROL: usize = 1024 * 1024;
 
-// Compile the exact same V3 grammar used by the existing preparity binary and research FFI. The wrapper lives
-// inside the child module so it may call the source's private byte-slice verifier without making research API public.
+// Compile the exact same V3 grammar used by the existing preparity binary. This parity lane is intentionally not
+// timed, so reconstructed V3 bytes are published to a temporary file and passed to the unchanged path verifier.
+// The optimized in-process research FFI owns its byte-slice transformation separately and remains performance-only.
 #[allow(dead_code)]
 mod v3 {
     include!("cmpct-zipfactor-v3-preparity.rs");
 
     pub(super) fn verify_exact_bytes(raw: &[u8]) -> Result<(), String> {
-        verify_slice(raw)
+        use std::io::Write;
+        let mut file = tempfile::NamedTempFile::new().map_err(|e| format!("V3 parity tempfile: {e}"))?;
+        file.write_all(raw)
+            .map_err(|e| format!("V3 parity tempfile write: {e}"))?;
+        file.flush()
+            .map_err(|e| format!("V3 parity tempfile flush: {e}"))?;
+        verify(file.path())
     }
 }
 
