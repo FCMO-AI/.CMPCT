@@ -412,3 +412,57 @@ def build(root, out):
     if compact_control is not None:
         return compact_control
     return _BASE_IMPL.build(root, out)
+
+
+def _revision_for_archive(archive: Path):
+    """Classify promoted compact-control through its single-sourced profile owner."""
+    if _is_compact_control_archive(Path(archive)):
+        cc = _compact_control_module()
+        return int(cc.REVISION), cc.PROFILE
+    return _BASE_ORIGINALS["_revision_for_archive"](archive)
+
+
+def strong_verify(archive: Path):
+    if _is_compact_control_archive(Path(archive)):
+        return _compact_control_module().strong_verify(archive)
+    return _BASE_ORIGINALS["strong_verify"](archive)
+
+
+def list_members(archive: Path):
+    if _is_compact_control_archive(Path(archive)):
+        return _compact_control_module().list_members(archive)
+    return _BASE_ORIGINALS["list_members"](archive)
+
+
+def read_member_with_stats(archive: Path, rel: str):
+    if _is_compact_control_archive(Path(archive)):
+        return _compact_control_module().read_member_with_stats(archive, rel)
+    return _BASE_ORIGINALS["read_member_with_stats"](archive, rel)
+
+
+def read_member(archive: Path, rel: str):
+    if _is_compact_control_archive(Path(archive)):
+        return _compact_control_module().read_member(archive, rel)
+    return _BASE_ORIGINALS["read_member"](archive, rel)
+
+
+def extract(
+    archive: Path,
+    dst: Path,
+    *,
+    max_output_bytes: int = _BASE_IMPL.POLICY.DEFAULT_MAX_EXTRACT_BYTES,
+    safe_symlinks: bool = True,
+):
+    if _is_compact_control_archive(Path(archive)):
+        return _compact_control_module().extract(
+            archive,
+            dst,
+            max_output_bytes=max_output_bytes,
+            safe_symlinks=safe_symlinks,
+        )
+    return _BASE_ORIGINALS["extract"](
+        archive,
+        dst,
+        max_output_bytes=max_output_bytes,
+        safe_symlinks=safe_symlinks,
+    )
