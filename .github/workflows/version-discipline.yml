@@ -8,15 +8,24 @@ on:
 permissions:
   contents: read
 
+env:
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+
 jobs:
   version-discipline:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - name: Check out full history
+      - name: Check out exact candidate with full history
         uses: actions/checkout@v6
         with:
+          ref: ${{ env.EVIDENCE_HEAD }}
           fetch-depth: 0
+      - name: Bind exact candidate head
+        run: |
+          set -euo pipefail
+          actual="$(git rev-parse HEAD)"
+          test "$actual" = "$EVIDENCE_HEAD"
       - name: Set up Python
         uses: actions/setup-python@v6
         with:
