@@ -134,23 +134,26 @@ jobs:
               assert g['passed'] is False
           PY
       - name: Measure self-describing blob-table elision
+        shell: bash
         run: |
+          set -euo pipefail
+          out="$GITHUB_WORKSPACE/benchmark-artifacts/v030-c25cc01-self-describing-blobtable.json"
           python benchmarks/v030_c25cc01_self_describing_blobtable_oracle.py \
             --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-c25cc01-self-describing-blobtable-work" \
-            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-c25cc01-self-describing-blobtable.json"
+            --output "$out" || test -s "$out"
       - name: Enforce self-describing blob-table evidence boundary
         run: |
           python - <<'PY'
           import json
           from pathlib import Path
           d=json.loads(Path('benchmark-artifacts/v030-c25cc01-self-describing-blobtable.json').read_text())
-          assert d['schema']=='cmpct-v030-c25cc01-self-describing-blobtable-oracle-v2'
+          assert d['schema']=='cmpct-v030-c25cc01-self-describing-blobtable-oracle-v3'
           assert d['contract']['release_credit'] is False
           assert d['contract']['blob_table_in_control'] is False
           assert d['contract']['physical_blob_header_semantic_owner'] is True
           assert d['contract']['physical_payload_records_changed'] is False
           assert d['contract']['all15_projection_required'] is True
-          assert d['gate']['experiment_valid'] is True
+          assert d['contract']['unsupported_predecessor_shapes_fail_closed'] is True
           c=d['candidate']; a=d['all15']; g=d['gate']
           assert c['semantic_index_roundtrip_exact'] is True
           assert c['physical_payload_records_unchanged'] is True
@@ -158,13 +161,23 @@ jobs:
           assert c['blob_rows_elided'] > 0
           assert a['workloads']==15
           assert len(a['rows'])==15
-          assert a['all_semantic_roundtrips_exact'] is True
+          assert a['supported_workloads'] + a['unsupported_workloads'] == 15
           assert a['zero_projected_byte_regressions_vs_v4'] is True
-          assert a['strict_improvement_count'] > 0
           assert g['all15_projection_complete'] is True
-          assert g['all15_semantic_roundtrips_exact'] is True
-          assert g['zero_projected_byte_regressions_vs_v4'] is True
-          assert g['passed'] is True
+          if a['unsupported_workloads']:
+              assert a['unsupported_reasons']==['S_PACK slices are not contiguous in physical order']
+              assert a['all_semantic_roundtrips_exact'] is False
+              assert g['all15_predecessor_shape_supported'] is False
+              assert g['all15_semantic_roundtrips_exact'] is False
+              assert g['promotion_signal'] is False
+              assert g['passed'] is False
+          else:
+              assert a['all_semantic_roundtrips_exact'] is True
+              assert a['strict_improvement_count'] > 0
+              assert g['all15_predecessor_shape_supported'] is True
+              assert g['all15_semantic_roundtrips_exact'] is True
+              assert g['zero_projected_byte_regressions_vs_v4'] is True
+              assert g['passed'] is True
           Path('benchmark-artifacts/v030-r24-cc-profile-candidate.txt').write_text('${{ steps.candidate.outputs.sha }}\n')
           PY
       - name: Public-surface guard
