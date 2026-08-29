@@ -22,7 +22,9 @@ permissions:
   contents: read
 
 concurrency:
-  group: v030-logs-runtime-product-${{ github.event.pull_request.head.sha || github.sha }}
+  # Scheduling is PR-scoped so a newer candidate cancels stale product measurements. The measurement itself
+  # remains exact-head-bound below and therefore cannot inherit evidence from an older candidate.
+  group: v030-logs-runtime-product-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:
