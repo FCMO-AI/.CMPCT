@@ -70,6 +70,7 @@ def _target(source: Path, work: Path) -> dict:
         stage = EXT._normalized_stage(source, root / "stage-work")
         rows = []
         archives = []
+        rejection_reasons = []
         for rep in range(ROUNDS):
             order = ["cmpct", "zip", "zstd"]
             order = order[rep % 3 :] + order[: rep % 3]
@@ -77,27 +78,79 @@ def _target(source: Path, work: Path) -> dict:
             candidate_path = root / f"candidate-{rep}.cmpct"
             for name in order:
                 if name == "cmpct":
-                    cur[name] = _candidate(stage, candidate_path, root / f"cmpct-out-{rep}")
-                    archives.append(candidate_path)
+                    try:
+                        cur[name] = _candidate(stage, candidate_path, root / f"cmpct-out-{rep}")
+                        archives.append(candidate_path)
+                    except CC.ProfileNotEligible as exc:
+                        cur[name] = None
+                        rejection_reasons.append(str(exc))
                 else:
                     cur[name] = _competitor(stage, root, rep, name)
             rows.append(cur)
 
-        candidate_sizes = {int(row["cmpct"]["archive_bytes"]) for row in rows}
+        successful = [row for row in rows if row["cmpct"] is not None]
+        rejected = [row for row in rows if row["cmpct"] is None]
+        if successful and rejected:
+            raise RuntimeError("C25CC01 target eligibility was nondeterministic across repeated rounds")
+
         zip_sizes = {int(row["zip"]["archive_bytes"]) for row in rows}
         zstd_sizes = {int(row["zstd"]["archive_bytes"]) for row in rows}
-        candidate_sha = {hashlib.sha256(path.read_bytes()).hexdigest() for path in archives}
-        trees = {row["cmpct"]["external_tree_sha256"] for row in rows}
-        if not (len(candidate_sizes) == len(zip_sizes) == len(zstd_sizes) == len(candidate_sha) == len(trees) == 1):
-            raise RuntimeError("C25CC01 target bytes/tree were not deterministic")
-        cb = next(iter(candidate_sizes))
+        if len(zip_sizes) != 1 or len(zstd_sizes) != 1:
+            raise RuntimeError("C25CC01 target competitor bytes were not deterministic")
         zb = next(iter(zip_sizes))
         sb = next(iter(zstd_sizes))
-        cc = statistics.median(float(row["cmpct"]["complete_create_s"]) for row in rows)
         zc = statistics.median(float(row["zip"]["create_s"]) for row in rows)
         sc = statistics.median(float(row["zstd"]["create_s"]) for row in rows)
+
+        if rejected:
+            reasons = set(rejection_reasons)
+            if len(rejection_reasons) != ROUNDS or len(reasons) != 1:
+                raise RuntimeError("C25CC01 target rejection reason was not deterministic")
+            reason = next(iter(reasons))
+            return {
+                "rounds": ROUNDS,
+                "eligible": False,
+                "deterministic_rejection": True,
+                "rejection_reason": reason,
+                "candidate_bytes": None,
+                "zip_bytes": zb,
+                "zstd19_bytes": sb,
+                "median_candidate_complete_create_s": None,
+                "median_zip_create_s": zc,
+                "median_zstd19_create_s": sc,
+                "strictly_smaller_than_zip": False,
+                "strictly_smaller_than_zstd19": False,
+                "strictly_faster_than_zip": False,
+                "strictly_faster_than_zstd19": False,
+                "strict_four_way_win": False,
+                "archive_sha_deterministic": None,
+                "external_tree_deterministic": None,
+                "physical_payload_records_unchanged": None,
+                "two_authenticated_control_copies": None,
+                "semantic_index_roundtrip_exact": None,
+                "samples": [
+                    {
+                        "candidate_create_s": None,
+                        "zip_create_s": float(row["zip"]["create_s"]),
+                        "zstd19_create_s": float(row["zstd"]["create_s"]),
+                        "candidate_rejection_reason": reason,
+                    }
+                    for row in rows
+                ],
+            }
+
+        candidate_sizes = {int(row["cmpct"]["archive_bytes"]) for row in rows}
+        candidate_sha = {hashlib.sha256(path.read_bytes()).hexdigest() for path in archives}
+        trees = {row["cmpct"]["external_tree_sha256"] for row in rows}
+        if not (len(candidate_sizes) == len(candidate_sha) == len(trees) == 1):
+            raise RuntimeError("C25CC01 target bytes/tree were not deterministic")
+        cb = next(iter(candidate_sizes))
+        cc = statistics.median(float(row["cmpct"]["complete_create_s"]) for row in rows)
         return {
             "rounds": ROUNDS,
+            "eligible": True,
+            "deterministic_rejection": False,
+            "rejection_reason": None,
             "candidate_bytes": cb,
             "zip_bytes": zb,
             "zstd19_bytes": sb,
@@ -119,6 +172,7 @@ def _target(source: Path, work: Path) -> dict:
                     "candidate_create_s": float(row["cmpct"]["complete_create_s"]),
                     "zip_create_s": float(row["zip"]["create_s"]),
                     "zstd19_create_s": float(row["zstd"]["create_s"]),
+                    "candidate_rejection_reason": None,
                 }
                 for row in rows
             ],
@@ -147,16 +201,18 @@ def _all15(sources: dict[str, Path], work: Path) -> dict:
                 rows.append({
                     "workload": name,
                     "eligible": True,
+                    "rejection_reason": None,
                     "r24_bytes": r24.stat().st_size,
                     "candidate_bytes": candidate.stat().st_size,
                     "delta_vs_r24_bytes": candidate.stat().st_size - r24.stat().st_size,
                     "same_tree": True,
                     "physical_payload_records_unchanged": stats["physical_payload_records_unchanged"],
                 })
-            except CC.ProfileNotEligible:
+            except CC.ProfileNotEligible as exc:
                 rows.append({
                     "workload": name,
                     "eligible": False,
+                    "rejection_reason": str(exc),
                     "r24_bytes": r24.stat().st_size,
                     "candidate_bytes": None,
                     "delta_vs_r24_bytes": 0,
@@ -188,6 +244,13 @@ def main() -> None:
         raise RuntimeError(f"C25CC01 productization requires the exact 15-row accepted builder; got {len(sources)} rows")
     all15 = _all15(sources, args.work_root / "all15")
     target = _target(sources[TARGET], args.work_root / "target")
+    experiment_valid = (
+        all15["all15_complete"]
+        and all15["zero_candidate_regressions_vs_r24"]
+        and all15["all_trees_equal"]
+        and all15["all_payloads_unchanged"]
+        and (target["eligible"] or target["deterministic_rejection"])
+    )
     result = {
         "schema": "cmpct-v030-r24-compact-control-profile-productization-v1",
         "contract": {
@@ -206,10 +269,12 @@ def main() -> None:
         "all15": all15,
         "target": target,
         "gate": {
-            "experiment_valid": all15["all15_complete"] and all15["zero_candidate_regressions_vs_r24"] and all15["all_trees_equal"] and all15["all_payloads_unchanged"],
+            "experiment_valid": experiment_valid,
+            "target_eligible": target["eligible"],
+            "target_deterministic_rejection": target["deterministic_rejection"],
             "target_strict_four_way_win": target["strict_four_way_win"],
-            "promotion_signal": target["strict_four_way_win"],
-            "passed": all15["all15_complete"] and all15["zero_candidate_regressions_vs_r24"] and all15["all_trees_equal"] and all15["all_payloads_unchanged"] and target["strict_four_way_win"],
+            "promotion_signal": target["eligible"] and target["strict_four_way_win"],
+            "passed": experiment_valid and target["eligible"] and target["strict_four_way_win"],
         },
     }
     args.output.parent.mkdir(parents=True, exist_ok=True)
