@@ -50,6 +50,56 @@ jobs:
     assert validate(path) == []
 
 
+def test_branch_push_deep_lane_may_preserve_running_receipt(tmp_path: Path) -> None:
+    path = _write(tmp_path, """# ci-lane: deep
+# ci-cancel-policy: preserve-running-exact-receipt
+on:
+  push:
+    branches:
+      - agent/v030-authoritative-integration
+    paths:
+      - 'benchmarks/**'
+concurrency:
+  group: long-ab-${{ github.ref }}
+  cancel-in-progress: false
+env:
+  EVIDENCE_HEAD: ${{ github.sha }}
+jobs:
+  proof:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+""")
+    assert validate(path) == []
+
+
+def test_push_preserved_receipt_requires_branch_scope(tmp_path: Path) -> None:
+    path = _write(tmp_path, """# ci-lane: deep
+# ci-cancel-policy: preserve-running-exact-receipt
+on:
+  push:
+    paths:
+      - 'benchmarks/**'
+concurrency:
+  group: long-ab-${{ github.ref }}
+  cancel-in-progress: false
+env:
+  EVIDENCE_HEAD: ${{ github.sha }}
+jobs:
+  proof:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+""")
+    errors = validate(path)
+    assert any("preserved-receipt policy" in error for error in errors)
+    assert any("must scope branches" in error for error in errors)
+
+
 def test_preserved_receipt_policy_fails_without_path_scope(tmp_path: Path) -> None:
     path = _write(tmp_path, """# ci-lane: deep
 # ci-cancel-policy: preserve-running-exact-receipt
