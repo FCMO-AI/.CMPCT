@@ -1,0 +1,73 @@
+name: CMPCT v0.30 C25CC01 semantic-root floor
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: v030-c25cc01-semantic-root-${{ github.event.pull_request.head.sha || github.sha }}
+  cancel-in-progress: true
+
+jobs:
+  semantic-root-floor:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      PYTHONPATH: ${{ github.workspace }}
+      EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - name: Bind exact candidate head
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install deterministic corpus/comparator dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y zstd gcc ffmpeg libsndfile1
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[audio,test]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
+      - name: Compile semantic-root oracle
+        run: python -m py_compile benchmarks/v030_c25cc01_semantic_root_floor_oracle.py
+      - name: Measure salvage physical plus duplicated semantic-root floor
+        run: |
+          mkdir -p benchmark-artifacts
+          python -m benchmarks.v030_c25cc01_semantic_root_floor_oracle \
+            --work-root benchmark-artifacts/v030-c25cc01-semantic-root-work \
+            --output benchmark-artifacts/v030-c25cc01-semantic-root.json
+      - name: Enforce evidence boundary
+        run: |
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          p=Path('benchmark-artifacts/v030-c25cc01-semantic-root.json')
+          d=json.loads(p.read_text())
+          assert d['schema']=='cmpct-v030-c25cc01-semantic-root-floor-v1'
+          assert d['gate']['experiment_valid'] is True
+          assert d['gate']['exact_current_control_accounting'] is True
+          assert d['gate']['locality_within_8x'] is True
+          assert d['gate']['salvage_record_self_description_retained'] is True
+          assert d['gate']['release_credit'] is False
+          assert d['semantic_root']['two_copy_bytes'] == 2*d['semantic_root']['compressed_bytes']
+          Path('benchmark-artifacts/v030-c25cc01-semantic-root-candidate.txt').write_text(os.environ['EVIDENCE_HEAD']+'\n')
+          PY
+      - name: CI topology self-check
+        run: python tools/check_ci_topology.py .github/workflows/v030-c25cc01-semantic-root-floor.yml
+      - name: Public-surface guard
+        run: python tools/check_public_surface.py
+      - uses: actions/upload-artifact@v6
+        with:
+          name: v030-c25cc01-semantic-root-${{ env.EVIDENCE_HEAD }}
+          path: |
+            benchmark-artifacts/v030-c25cc01-semantic-root.json
+            benchmark-artifacts/v030-c25cc01-semantic-root-candidate.txt
+          if-no-files-found: error
+          retention-days: 90
