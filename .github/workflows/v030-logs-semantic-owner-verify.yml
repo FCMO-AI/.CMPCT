@@ -1,15 +1,18 @@
 # ci-lane: deep
-name: CMPCT v0.30 logs semantic-owner verify oracle
+name: CMPCT v0.30 logs semantic-owner runtime oracle
 
 on:
   pull_request:
     branches: [main]
     paths:
       - 'benchmarks/v030_logs_semantic_owner_verify_oracle.py'
+      - 'benchmarks/v030_logs_fused_extract_oracle.py'
       - 'benchmarks/v030_logs_terminal_admission_oracle.py'
       - 'experiments/entropygraph_v030_logs_inverse_profile_v3.py'
+      - 'experiments/entropygraph_v030_logs_fused_extract.py'
       - 'experiments/entropygraph_v030_release_product.py'
       - 'experiments/entropygraph_v030_release_product_logs_candidate.py'
+      - 'tests/test_v030_logs_fused_extract.py'
       - '.github/workflows/v030-logs-semantic-owner-verify.yml'
   workflow_dispatch:
 
@@ -17,18 +20,27 @@ permissions:
   contents: read
 
 concurrency:
-  group: cmpct-v030-logs-semantic-owner-verify-${{ github.event.pull_request.number || github.ref }}
+  group: cmpct-v030-logs-semantic-owner-runtime-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 env:
   PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
 
 jobs:
-  logs-semantic-owner-verify:
+  logs-semantic-owner-runtime:
     runs-on: ubuntu-24.04
     timeout-minutes: 90
     steps:
       - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - name: Bind exact candidate head
+        id: candidate
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
       - uses: actions/setup-python@v6
         with:
           python-version: '3.11'
@@ -40,49 +52,73 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -e '.[audio,test]'
           python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
-      - name: Compile oracle
-        run: python -m py_compile benchmarks/v030_logs_semantic_owner_verify_oracle.py
+      - name: Compile runtime proof surfaces
+        run: |
+          python -m py_compile benchmarks/v030_logs_semantic_owner_verify_oracle.py
+          python -m py_compile benchmarks/v030_logs_fused_extract_oracle.py
+          python -m py_compile experiments/entropygraph_v030_logs_fused_extract.py
+          python -m py_compile tests/test_v030_logs_fused_extract.py
+      - name: Run fused extraction semantic ratchets
+        run: pytest -q tests/test_v030_logs_fused_extract.py
       - name: Run rotated verifier A/B
         run: |
+          mkdir -p benchmark-artifacts
           python -m benchmarks.v030_logs_semantic_owner_verify_oracle \
             --work-root "$RUNNER_TEMP/v030-logs-semantic-owner" \
-            --output "$RUNNER_TEMP/v030-logs-semantic-owner.json"
-      - name: Ratchet exact integrity and timing boundary
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-logs-semantic-owner.json"
+      - name: Preserve verifier negative/positive evidence honestly
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          e=json.loads(Path('benchmark-artifacts/v030-logs-semantic-owner.json').read_text()); c=e['contract']
+          assert e['schema']=='cmpct-v030-logs-semantic-owner-verify-oracle-v1'
+          assert c['rounds']==21 and c['release_credit'] is False and e['release_credit'] is False
+          assert e['experiment_valid'] is True and e['same_integrity_receipt'] is True and e['corruption_rejected'] is True
+          expected=(e['absolute_saving_s']>=c['minimum_absolute_speedup_s'] and e['relative_speedup']>=c['minimum_relative_speedup'])
+          assert e['promotion_signal'] is expected
+          PY
+      - name: Run one-session extraction A/B
+        run: |
+          python -m benchmarks.v030_logs_fused_extract_oracle \
+            --work-root "$RUNNER_TEMP/v030-logs-fused-extract" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-logs-fused-extract.json"
+      - name: Ratchet exact fused extraction boundary
         run: |
           python - <<'PY'
           import json, os
           from pathlib import Path
-          e=json.loads((Path(os.environ['RUNNER_TEMP'])/'v030-logs-semantic-owner.json').read_text())
-          assert e['schema']=='cmpct-v030-logs-semantic-owner-verify-oracle-v1'
-          c=e['contract']
-          assert c['rounds']==21
-          assert c['minimum_relative_speedup']==0.10
-          assert c['minimum_absolute_speedup_s']==0.001
-          assert c['archive_bytes_changed'] is False
-          assert c['selector_change'] is False
+          e=json.loads(Path('benchmark-artifacts/v030-logs-fused-extract.json').read_text()); c=e['contract']
+          assert e['schema']=='cmpct-v030-logs-fused-extract-oracle-v1'
+          assert c['rounds']==11 and c['minimum_relative_speedup']==0.10
+          assert c['same_archive_bytes'] is True and c['same_archive_semantic_owner'] is True
+          assert c['same_filesystem_manifest'] is True and c['one_authenticated_archive_session'] is True
+          assert c['second_on_disk_sha_pass'] is False
+          assert c['archive_bytes_changed'] is False and c['selector_change'] is False
           assert c['release_credit'] is False and e['release_credit'] is False
-          assert c['ordinary_logs_and_external_authority_remains_decisive'] is True
-          assert e['experiment_valid'] is True
-          assert e['same_integrity_receipt'] is True
-          assert e['corruption_rejected'] is True
-          assert len(e['current_samples_s'])==21 and len(e['semantic_owner_samples_s'])==21
-          expected=(
-              e['absolute_saving_s'] >= c['minimum_absolute_speedup_s']
-              and e['relative_speedup'] >= c['minimum_relative_speedup']
-              and e['same_integrity_receipt']
-              and e['corruption_rejected']
-          )
+          assert e['all_outputs_exact'] is True
+          assert len(e['samples_s']['current'])==len(e['samples_s']['fused'])==11
+          expected=e['all_outputs_exact'] and e['relative_speedup']>=c['minimum_relative_speedup']
           assert e['promotion_signal'] is expected
+          Path('benchmark-artifacts/v030-logs-runtime-candidate.txt').write_text(os.environ['EVIDENCE_HEAD']+'\n')
           PY
+      - name: Public-surface guard
+        if: always()
+        run: python tools/check_public_surface.py
+      - name: CI topology self-check
+        if: always()
+        run: python tools/check_ci_topology.py .github/workflows/v030-logs-semantic-owner-verify.yml
       - name: Upload evidence
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
-          name: v030-logs-semantic-owner-verify
-          path: ${{ runner.temp }}/v030-logs-semantic-owner.json
+          name: v030-logs-semantic-owner-runtime-${{ steps.candidate.outputs.sha || github.sha }}
+          path: |
+            benchmark-artifacts/v030-logs-semantic-owner.json
+            benchmark-artifacts/v030-logs-fused-extract.json
+            benchmark-artifacts/v030-logs-runtime-candidate.txt
           if-no-files-found: warn
-      - name: CI topology self-check
-        run: python tools/check_ci_topology.py .github/workflows/v030-logs-semantic-owner-verify.yml
+          retention-days: 90
 
-# Research-only. A positive result identifies duplicate receipt work in the release wrapper; shipping still has to
-# preserve the canonical logs verifier and re-earn terminal/external/runtime/final authority before any release credit.
+# Research-only. Positive extraction evidence must still re-earn ordinary logs/external/runtime/native/Android/final
+# authority before product promotion. Negative verifier evidence remains durable and earns zero release credit.
