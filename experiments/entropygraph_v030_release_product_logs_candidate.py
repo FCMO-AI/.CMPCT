@@ -29,6 +29,7 @@ import time
 import msgpack
 
 from experiments import entropygraph_v030_logs_inverse_profile_v3 as LOGS
+from experiments import entropygraph_v030_logs_fused_extract as LOGS_FUSED
 from experiments import entropygraph_v030_release_product_base as BASE
 
 # Freeze mature delegates explicitly. They remain stable even after the public release-product facade is rebound.
@@ -395,20 +396,12 @@ def extract(
     archive = Path(archive)
     if not _is_logs_archive(archive):
         return _BASE_EXTRACT(archive, dst, max_output_bytes=max_output_bytes, safe_symlinks=safe_symlinks)
-    if not isinstance(max_output_bytes, int) or isinstance(max_output_bytes, bool) or max_output_bytes < 1:
-        raise ValueError("max_output_bytes must be a positive integer")
-    decoded = _logs_manifest(archive)
-    user_bytes = sum(int(identity[0]) for identity in decoded["regular"].values())
-    if user_bytes > max_output_bytes:
-        raise RuntimeError("logs extraction exceeds caller output budget")
-    if safe_symlinks:
-        for row in decoded["manifest"]["entries"]:
-            if row[1] != "l":
-                continue
-            target = PurePosixPath(row[7])
-            if target.is_absolute() or ".." in target.parts:
-                raise RuntimeError(f"unsafe r25 symlink target in {row[0]!r}")
-    LOGS.extract(archive, dst)
+    return LOGS_FUSED.extract(
+        archive,
+        dst,
+        max_output_bytes=max_output_bytes,
+        safe_symlinks=safe_symlinks,
+    )
 
 
 def build_ablation(root: Path, out: Path, mode: str) -> dict:
