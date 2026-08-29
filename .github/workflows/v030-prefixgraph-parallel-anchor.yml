@@ -7,6 +7,7 @@ on:
       - 'benchmarks/v030_prefixgraph_parallel_anchor_oracle.py'
       - 'benchmarks/v030_prefixgraph_parallel_anchor_oracle_v2.py'
       - 'benchmarks/v030_prefixgraph_parallel_anchor_oracle_v3.py'
+      - 'benchmarks/v030_prefixgraph_hash_cache_oracle.py'
       - 'benchmarks/v030_prefixgraph_terminal_parity_oracle.py'
       - 'experiments/entropygraph_v030_prefixgraph.py'
       - 'experiments/entropygraph_v030_prefixgraph_parallel.py'
@@ -19,12 +20,22 @@ concurrency:
   group: v030-prefixgraph-parallel-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
+permissions:
+  contents: read
+
+env:
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+
 jobs:
   prefixgraph-parallel-anchor:
     runs-on: ubuntu-24.04
-    timeout-minutes: 60
+    timeout-minutes: 75
     steps:
       - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - name: Bind exact candidate head
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
       - uses: actions/setup-python@v6
         with:
           python-version: '3.11'
@@ -36,13 +47,14 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -e '.[audio,test]'
           python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
-      - name: Compile promoted PrefixGraph scheduler and proof
+      - name: Compile PrefixGraph scheduler and proofs
         run: |
           python -m py_compile experiments/entropygraph_v030_prefixgraph_parallel.py
           python -m py_compile experiments/entropygraph_v030_release_candidate.py
           python -m py_compile benchmarks/v030_prefixgraph_parallel_anchor_oracle.py
           python -m py_compile benchmarks/v030_prefixgraph_parallel_anchor_oracle_v2.py
           python -m py_compile benchmarks/v030_prefixgraph_parallel_anchor_oracle_v3.py
+          python -m py_compile benchmarks/v030_prefixgraph_hash_cache_oracle.py
       - name: Run focused release binding regression
         run: python -m pytest -q tests/test_v030_prefixgraph_parallel_release.py
       - name: Run exact-byte serial vs promoted PrefixGraph proof
@@ -51,11 +63,16 @@ jobs:
           python -m benchmarks.v030_prefixgraph_parallel_anchor_oracle_v3 \
             --work-root benchmark-artifacts/v030-prefixgraph-parallel-work \
             --output benchmark-artifacts/v030-prefixgraph-parallel.json
-      - name: Independently enforce shipping exactness and materiality
+      - name: Run invariant hash-cache causal A/B
+        run: |
+          EVIDENCE_HEAD="$EVIDENCE_HEAD" python -m benchmarks.v030_prefixgraph_hash_cache_oracle \
+            --work-root benchmark-artifacts/v030-prefixgraph-hash-cache-work \
+            --output benchmark-artifacts/v030-prefixgraph-hash-cache.json
+      - name: Independently enforce shipping exactness and research boundaries
         if: always()
         run: |
           python - <<'PY'
-          import json
+          import json, os
           from pathlib import Path
           p=Path('benchmark-artifacts/v030-prefixgraph-parallel.json')
           assert p.exists(), 'PrefixGraph parallel evidence missing'
@@ -86,12 +103,39 @@ jobs:
           assert g['locality_green_all'] is True
           assert g['material_speedup_all'] is True
           assert g['passed'] is True
+
+          h_path=Path('benchmark-artifacts/v030-prefixgraph-hash-cache.json')
+          assert h_path.exists(), 'PrefixGraph hash-cache evidence missing'
+          h=json.loads(h_path.read_text())
+          assert h['schema']=='cmpct-v030-prefixgraph-invariant-hash-cache-v1'
+          assert h['source_commit']==os.environ['EVIDENCE_HEAD']
+          assert h['rounds']==3
+          assert h['contract']['release_credit'] is False
+          assert h['contract']['production_change'] is False
+          assert h['contract']['candidate_set_changed'] is False
+          assert h['contract']['anchor_nomination_changed'] is False
+          assert h['contract']['complete_byte_tournament_changed'] is False
+          assert h['contract']['archive_grammar_changed'] is False
+          assert h['contract']['hash_algorithm_changed'] is False
+          assert h['gate']['experiment_valid'] is True
+          assert h['gate']['passed'] is True
+          assert len(h['pairs'])==3
+          for pair in h['pairs']:
+              assert pair['baseline']['bytes']==pair['cached']['bytes']==h['archive_bytes']
+              assert pair['baseline']['sha256']==pair['cached']['sha256']==h['archive_sha256']
           PY
-      - name: Upload PrefixGraph scheduling evidence
+      - name: Record exact candidate fingerprint
+        run: printf '%s\n' "$EVIDENCE_HEAD" > benchmark-artifacts/v030-prefixgraph-candidate.txt
+      - name: CI topology self-check
+        run: python tools/check_ci_topology.py .github/workflows/v030-prefixgraph-parallel-anchor.yml
+      - name: Upload PrefixGraph evidence
         if: always()
         uses: actions/upload-artifact@v6
         with:
-          name: v030-prefixgraph-parallel-${{ github.sha }}
-          path: benchmark-artifacts/v030-prefixgraph-parallel.json
+          name: v030-prefixgraph-parallel-${{ env.EVIDENCE_HEAD }}
+          path: |
+            benchmark-artifacts/v030-prefixgraph-parallel.json
+            benchmark-artifacts/v030-prefixgraph-hash-cache.json
+            benchmark-artifacts/v030-prefixgraph-candidate.txt
           if-no-files-found: warn
           retention-days: 90
