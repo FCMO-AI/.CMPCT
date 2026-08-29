@@ -1,3 +1,4 @@
+# ci-lane: deep
 name: CMPCT v0.30 broad compression landscape
 
 on:
@@ -16,6 +17,10 @@ on:
 
 permissions:
   contents: read
+
+concurrency:
+  group: cmpct-v030-compression-landscape-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 jobs:
   landscape:
