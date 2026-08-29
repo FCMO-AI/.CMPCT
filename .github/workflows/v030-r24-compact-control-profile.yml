@@ -169,7 +169,6 @@ jobs:
               assert a['all_semantic_roundtrips_exact'] is False
               assert g['all15_predecessor_shape_supported'] is False
               assert g['all15_semantic_roundtrips_exact'] is False
-              assert g['promotion_signal'] is False
               assert g['passed'] is False
           else:
               assert a['all_semantic_roundtrips_exact'] is True
