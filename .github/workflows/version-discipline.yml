@@ -1,3 +1,4 @@
+# ci-lane: fast
 name: CMPCT version discipline
 
 on:
@@ -7,6 +8,10 @@ on:
 
 permissions:
   contents: read
+
+concurrency:
+  group: cmpct-version-discipline-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 env:
   EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
