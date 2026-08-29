@@ -101,12 +101,18 @@ def _scan(
             raw = path.read_bytes()
             parsed = parse_zip(raw)
             if parsed is None:
-                raise ProfileNotEligible("ZIP-factor requires every graph-owned regular file to be a supported ZIP structure")
+                # Keep the historical diagnostic phrase for downstream tests/log parsers while admission itself is
+                # now content-derived. A misleading `.zip` suffix therefore cannot make unsupported bytes eligible.
+                raise ProfileNotEligible(
+                    "ZIP-factor graph-owned regular files must all be ZIPs with a supported structural encoding"
+                )
             sig = BASE._signature(parsed)
             if signature is None:
                 signature = sig
             elif sig != signature:
-                raise ProfileNotEligible("ZIP-factor requires one shared structural framing signature")
+                raise ProfileNotEligible(
+                    "ZIP-factor framing layout drift: requires one shared structural framing signature"
+                )
 
             digest = hashlib.sha256(raw).digest()
             if st.st_nlink > 1 and inode[1]:
