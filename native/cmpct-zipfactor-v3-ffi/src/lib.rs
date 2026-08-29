@@ -199,3 +199,4 @@ pub unsafe extern "C" fn cmpct_zipfactor_v4_recovery_verify_bytes(
         Err(_) => 1,
     }
 }
+
