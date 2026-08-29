@@ -52,10 +52,13 @@ jobs:
           BEFORE: ${{ github.event.before }}
         run: |
           set -euo pipefail
-          if [ "${{ github.event_name }}" = "pull_request" ] && [ -n "${PR_BASE:-}" ]; then
-            base="$PR_BASE"
-          elif [ -n "${BEFORE:-}" ] && [ "$BEFORE" != "0000000000000000000000000000000000000000" ]; then
+          # Pull-request synchronize payloads expose the previous head as `before`; prefer that so a 1,600-commit
+          # integration PR does not re-ratchet every historical workflow edit on each new commit. Initial/opened
+          # events may not have a usable before SHA, in which case the PR base is the correct first-diff boundary.
+          if [ -n "${BEFORE:-}" ] && [ "$BEFORE" != "0000000000000000000000000000000000000000" ]; then
             base="$BEFORE"
+          elif [ "${{ github.event_name }}" = "pull_request" ] && [ -n "${PR_BASE:-}" ]; then
+            base="$PR_BASE"
           else
             base="HEAD^"
           fi
@@ -71,5 +74,5 @@ jobs:
       - name: Ratchet topology checker policy
         run: python -m pytest -q tests/test_ci_topology.py
 
-# Footnote: this ratchet deliberately checks only new/materially edited workflow files. Existing legacy
-# workflows are migration debt, not precedent; touching one makes the new topology contract apply.
+# This ratchet deliberately checks the latest synchronization/push delta. Existing workflow debt is not precedent,
+# but it is also not reintroduced work: touching a workflow makes the current topology contract apply immediately.
