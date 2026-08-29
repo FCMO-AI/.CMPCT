@@ -25,6 +25,7 @@ concurrency:
 
 env:
   PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
 
 jobs:
   selector-cost-model:
@@ -32,6 +33,10 @@ jobs:
     timeout-minutes: 120
     steps:
       - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - name: Bind exact candidate head
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
       - uses: actions/setup-python@v6
         with:
           python-version: '3.11'
@@ -57,6 +62,7 @@ jobs:
         run: |
           python - <<'PY'
           import json
+          import os
           from pathlib import Path
           d=json.loads(Path('benchmark-artifacts/v030-c25cc01-cost.json').read_text())
           assert d['schema']=='cmpct-v030-c25cc01-structural-cost-model-v1'
@@ -114,6 +120,7 @@ jobs:
               assert g['frozen_target_admitted'] is False
               assert g['integrity_preserved'] is False
               assert g['diagnostic_valid'] is False
+          Path('benchmark-artifacts/v030-c25cc01-cost-candidate.txt').write_text(os.environ['EVIDENCE_HEAD']+'\n')
           PY
       - name: Public-surface guard
         if: always()
@@ -121,8 +128,10 @@ jobs:
       - uses: actions/upload-artifact@v6
         if: always()
         with:
-          name: v030-c25cc01-cost-${{ github.sha }}
-          path: benchmark-artifacts/v030-c25cc01-cost.json
+          name: v030-c25cc01-cost-${{ env.EVIDENCE_HEAD }}
+          path: |
+            benchmark-artifacts/v030-c25cc01-cost.json
+            benchmark-artifacts/v030-c25cc01-cost-candidate.txt
           if-no-files-found: error
           retention-days: 90
 
