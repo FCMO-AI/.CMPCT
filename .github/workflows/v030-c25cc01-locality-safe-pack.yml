@@ -7,6 +7,7 @@ on:
       - 'benchmarks/v030_c25cc01_locality_safe_pack_oracle.py'
       - 'benchmarks/v030_c25cc01_locality_pack_strategy_oracle.py'
       - 'benchmarks/v030_c25cc01_packmap_control_oracle.py'
+      - 'benchmarks/v030_c25cc01_stable_order_packmap_oracle.py'
       - 'experiments/entropygraph_v030_r24_compact_control_profile.py'
       - 'experiments/entropygraph_v030_release_product*.py'
       - 'src/cmpct/builder.py'
@@ -56,6 +57,7 @@ jobs:
           python -m py_compile benchmarks/v030_c25cc01_locality_safe_pack_oracle.py
           python -m py_compile benchmarks/v030_c25cc01_locality_pack_strategy_oracle.py
           python -m py_compile benchmarks/v030_c25cc01_packmap_control_oracle.py
+          python -m py_compile benchmarks/v030_c25cc01_stable_order_packmap_oracle.py
       - name: Run exact 15-workload locality-safe A/B
         run: |
           mkdir -p benchmark-artifacts
@@ -72,6 +74,11 @@ jobs:
           python benchmarks/v030_c25cc01_packmap_control_oracle.py \
             --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-c25cc01-packmap-work" \
             --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-c25cc01-packmap.json"
+      - name: Measure stable-order locality pack plus implicit control
+        run: |
+          python benchmarks/v030_c25cc01_stable_order_packmap_oracle.py \
+            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-c25cc01-stable-order-packmap-work" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-c25cc01-stable-order-packmap.json"
       - name: Enforce diagnostic evidence boundary
         run: |
           python - <<'PY'
@@ -115,6 +122,23 @@ jobs:
           assert m['membership']['contiguous_pack_groups'] + m['membership']['delta_pack_groups'] > 0
           assert m['gate']['experiment_valid'] is True
           assert m['gate']['passed'] is True
+          s=json.loads(Path('benchmark-artifacts/v030-c25cc01-stable-order-packmap.json').read_text())
+          assert s['schema']=='cmpct-v030-c25cc01-stable-order-packmap-oracle-v1'
+          assert s['contract']['release_credit'] is False
+          assert s['contract']['production_change'] is False
+          assert s['contract']['format_revision_change'] is False
+          assert s['contract']['semantic_index_roundtrip_exact'] is True
+          assert s['contract']['locality_ceiling']==8
+          assert s['rounds']==5
+          assert s['candidate']['locality']['max_member_read_amplification'] <= 8
+          assert s['gate']['experiment_valid'] is True
+          assert s['gate']['passed'] is True
+          if s['gate']['strict_four_way_signal']:
+              x=s['competitors']
+              assert x['cmpct_projected_bytes'] < x['zip_bytes']
+              assert x['cmpct_projected_bytes'] < x['zstd19_bytes']
+              assert x['median_cmpct_complete_create_s'] < x['median_zip_create_s']
+              assert x['median_cmpct_complete_create_s'] < x['median_zstd19_create_s']
           PY
       - name: Record candidate fingerprint
         run: printf '%s\n' '${{ steps.candidate.outputs.sha }}' > benchmark-artifacts/v030-c25cc01-candidate.txt
@@ -131,6 +155,7 @@ jobs:
             benchmark-artifacts/v030-c25cc01-locality-safe-pack.json
             benchmark-artifacts/v030-c25cc01-pack-strategy.json
             benchmark-artifacts/v030-c25cc01-packmap.json
+            benchmark-artifacts/v030-c25cc01-stable-order-packmap.json
             benchmark-artifacts/v030-c25cc01-candidate.txt
           if-no-files-found: warn
           retention-days: 90
