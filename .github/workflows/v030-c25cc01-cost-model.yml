@@ -53,7 +53,7 @@ jobs:
           python benchmarks/v030_r24_compact_control_cost_model_oracle_v2.py \
             --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-c25cc01-cost-work" \
             --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-c25cc01-cost.json"
-      - name: Require valid causal diagnostic without selector credit
+      - name: Require complete causal receipt without converting locality rejection into pass
         run: |
           python - <<'PY'
           import json
@@ -67,32 +67,53 @@ jobs:
           assert c['actual_archive_strong_verification_timed'] is True
           assert c['diagnostic_structure_scan_excluded_from_product_time'] is True
           assert g['all_four_cases_complete'] is True
-          assert g['frozen_target_admitted'] is True
           assert g['structural_fields_deterministic'] is True
-          assert g['integrity_preserved'] is True
-          assert g['diagnostic_valid'] is True
           rows=d['rows']
           assert set(rows)=={'frozen_encrypted_like','entropy_mosaic_640','entropy_mosaic_1150','entropy_mosaic_1750'}
-          for row in rows.values():
-              assert row['candidate_bytes'] < row['r24_bytes']
+          admitted=set()
+          for name,row in rows.items():
               assert row['physical_blob_records'] >= 1
+              assert row['r24_bytes'] > 0
+              assert row['r24_over_logical_bytes'] == row['r24_bytes'] - row['logical_bytes']
+              if not row['profile_eligible']:
+                  # This is complete negative evidence, not a substitute candidate. Locality rejection must remain
+                  # non-admitted with no fabricated candidate, timing, integrity, or competitor claims.
+                  assert row['profile_reject_reason']
+                  assert row['candidate_bytes'] is None
+                  assert row['candidate_to_r24'] is None
+                  assert row['candidate_to_logical'] is None
+                  assert row['candidate_over_logical_bytes'] is None
+                  assert row['candidate_overhead_per_regular_file'] is None
+                  assert row['control_bytes_per_regular_file'] is None
+                  assert row['payload_unchanged'] is False
+                  assert row['two_control_copies'] is False
+                  assert row['phase_samples'] == []
+                  assert row['admitted_by_current_predicate'] is False
+                  assert row['competitors'] is None
+                  continue
+              assert row['profile_reject_reason'] is None
+              assert row['candidate_bytes'] < row['r24_bytes']
               assert row['compact_control_raw_bytes'] >= row['compact_control_comp_bytes_per_copy']
               assert row['payload_unchanged'] is True
               assert row['two_control_copies'] is True
               assert len(row['phase_samples']) == 5
-              assert row['admitted_by_current_predicate'] is True
-              assert 'strict_four_way_win' in row['competitors']
-              # Diagnostic signals added after physical fragmentation failed to generalize.
               assert row['candidate_to_logical'] == row['candidate_bytes'] / max(1,row['logical_bytes'])
               assert row['candidate_over_logical_bytes'] == row['candidate_bytes'] - row['logical_bytes']
-              assert row['r24_over_logical_bytes'] == row['r24_bytes'] - row['logical_bytes']
               assert isinstance(row['candidate_overhead_per_regular_file'], (int,float))
               assert isinstance(row['control_bytes_per_regular_file'], (int,float))
-          derived={
-              name for name,row in rows.items()
-              if row['admitted_by_current_predicate'] and not row['competitors']['strict_four_way_win']
-          }
+              if row['admitted_by_current_predicate']:
+                  admitted.add(name)
+                  assert row['competitors'] is not None
+                  assert 'strict_four_way_win' in row['competitors']
+          assert set(d['admitted_by_current_predicate']) == admitted
+          derived={name for name in admitted if not rows[name]['competitors']['strict_four_way_win']}
           assert set(d['current_predicate_counterexamples']) == derived
+          # Candidate-valid remains distinct from receipt-complete. If every source is rejected by the locality law,
+          # the diagnostic is intentionally red in its product gate while this custody lane remains healthy.
+          if not admitted:
+              assert g['frozen_target_admitted'] is False
+              assert g['integrity_preserved'] is False
+              assert g['diagnostic_valid'] is False
           PY
       - name: Public-surface guard
         if: always()
@@ -106,4 +127,4 @@ jobs:
           retention-days: 90
 
 # Research-only causal cost decomposition. The ordinary terminal-admission/generalization/external gates remain decisive.
-# A measured counterexample remains negative evidence; the new logical-overhead fields are diagnostics, not selector inputs.
+# A measured locality rejection/counterexample remains negative evidence; receipt completeness never earns selector/release credit.
