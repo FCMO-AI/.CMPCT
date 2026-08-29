@@ -15,7 +15,11 @@ permissions:
 
 concurrency:
   group: v030-g04-ml-record-cache-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
+  # This A/B legitimately needs ~20+ minutes on hosted runners.  Keep the PR-level group so at most one
+  # measurement runs and one newer head waits, but do not throw away a nearly-complete exact-head receipt
+  # whenever unrelated convergence work advances the PR.  A predecessor receipt remains research-only;
+  # release authority still requires the newest exact fingerprint.
+  cancel-in-progress: false
 
 env:
   PYTHONPATH: ${{ github.workspace }}
