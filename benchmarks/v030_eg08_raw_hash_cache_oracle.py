@@ -2,15 +2,15 @@ from __future__ import annotations
 
 """Research-only exact-byte A/B for caching repeated top-level SHA-256 work in EG08.
 
-The EG08 graph hot-path profile shows SHA-256 as one of the dominant CPU owners.  The
+The EG08 graph hot-path profile shows SHA-256 as one of the dominant CPU owners. The
 v0.25 semantic builder currently hashes the same already-materialized top-level bytes
 again while building multiple exact lookup tables and while probing inverse transforms.
 This oracle changes only that computation: one authoritative SHA-256 is cached per
 source file and reused wherever the baseline recomputes the identical digest.
 
 No ZIP member is skipped, no equality condition is weakened, and no format/selector
-semantics change.  Promotion requires byte-for-byte identical artifacts across every
-paired run plus a material median wall-time saving.  This lane grants no release credit.
+semantics change. Promotion requires byte-for-byte identical artifacts across every
+paired run plus a material median wall-time saving. This lane grants no release credit.
 """
 
 import argparse
@@ -29,7 +29,7 @@ ROUNDS = 11
 MIN_MEDIAN_SAVING_S = 0.010
 
 _OLD_INIT = "t0=time.perf_counter();files=sorted(p for p in ROOT.rglob('*') if p.is_file());rels={p:p.relative_to(ROOT).as_posix() for p in files};raws={p:p.read_bytes() for p in files}"
-_NEW_INIT = """t0=time.perf_counter();files=sorted(p for p in ROOT.rglob('*') if p.is_file());rels={p:p.relative_to(ROOT).as_posix() for p in files};raws={p:p.read_bytes() for p in files]\n raw_hash={p:H(raws[p]) for p in files};top_by_hash={}\n for tp in files:top_by_hash.setdefault(raw_hash[tp],[]).append(tp)"""
+_NEW_INIT = """t0=time.perf_counter();files=sorted(p for p in ROOT.rglob('*') if p.is_file());rels={p:p.relative_to(ROOT).as_posix() for p in files};raws={p:p.read_bytes() for p in files}\n raw_hash={p:H(raws[p]) for p in files};top_by_hash={}\n for tp in files:top_by_hash.setdefault(raw_hash[tp],[]).append(tp)"""
 _OLD_TOP = """top_by_hash={}\n for tp in files:top_by_hash.setdefault(H(raws[tp]),[]).append(tp)"""
 _OLD_RAW_HASH_PATHS = """decode_derived={};raw_hash_paths={}\n for tp in files:raw_hash_paths.setdefault(H(raws[tp]),[]).append(tp)"""
 
@@ -45,10 +45,15 @@ def _candidate_module() -> types.ModuleType:
     source = Path(V25.__file__).read_text(encoding="utf-8")
     source = _replace_once(source, _OLD_INIT, _NEW_INIT, "build-init")
     source = _replace_once(source, _OLD_TOP, "", "top-hash-duplicate")
-    source = _replace_once(source, _OLD_RAW_HASH_PATHS, "decode_derived={};raw_hash_paths=top_by_hash", "raw-hash-paths-duplicate")
+    source = _replace_once(
+        source,
+        _OLD_RAW_HASH_PATHS,
+        "decode_derived={};raw_hash_paths=top_by_hash",
+        "raw-hash-paths-duplicate",
+    )
     source = source.replace("member_plain.get(H(raws[p]),[])", "member_plain.get(raw_hash[p],[])")
     source = source.replace("if H(cand)==H(raws[tp]):plain=cand;break", "if H(cand)==raw_hash[tp]:plain=cand;break")
-    # The only remaining top-level raw hash expression should be the one cache fill above.
+    # The only remaining top-level raw hash expression is the one cache fill above.
     if source.count("H(raws[") != 1:
         raise RuntimeError("unexpected uncached top-level raw SHA-256 boundary")
     module = types.ModuleType("cmpct_v025_raw_hash_cache_candidate")
