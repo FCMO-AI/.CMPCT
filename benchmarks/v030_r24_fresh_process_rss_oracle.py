@@ -228,7 +228,7 @@ def run(work_root: Path) -> dict:
         "actual_historical_tree_sha256": actual_historical_tree,
         "product_semantic_tree_sha256": next(iter(product_trees)),
         "tree_identity_domains_separate": True,
-        "accepted_v029_bytes": int(accepted["archive_bytes"]),
+        "accepted_v029_bytes": int(accepted["accepted_v029_bytes"]),
         "rows": by_mode,
         "shipping_median_parent_incremental_peak_rss_kib": shipping_rss,
         "isolated_median_parent_incremental_peak_rss_kib": isolated_parent_rss,
