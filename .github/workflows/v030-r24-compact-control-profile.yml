@@ -31,6 +31,17 @@ jobs:
     timeout-minutes: 240
     steps:
       - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: Bind exact candidate
+        id: candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          expected='${{ github.event.pull_request.head.sha || github.sha }}'
+          actual="$(git rev-parse HEAD)"
+          test "$actual" = "$expected"
+          echo "sha=$actual" >> "$GITHUB_OUTPUT"
       - uses: actions/setup-python@v6
         with:
           python-version: '3.11'
@@ -81,8 +92,9 @@ jobs:
           assert a['all_payloads_unchanged'] is True
           assert a['strict_improvement_count'] > 0
           t=d['target']
+          g=d['gate']
           assert t['rounds']==5
-          assert d['gate']['experiment_valid'] is True
+          assert g['experiment_valid'] is True
           if t['eligible']:
               assert t['deterministic_rejection'] is False
               assert t['rejection_reason'] is None
@@ -96,32 +108,38 @@ jobs:
               assert t['strictly_faster_than_zip'] is True
               assert t['strictly_faster_than_zstd19'] is True
               assert t['strict_four_way_win'] is True
-              assert d['gate']['target_eligible'] is True
-              assert d['gate']['target_deterministic_rejection'] is False
-              assert d['gate']['target_strict_four_way_win'] is True
-              assert d['gate']['promotion_signal'] is True
+              assert g['target_eligible'] is True
+              assert g['target_deterministic_rejection'] is False
+              assert g['target_strict_four_way_win'] is True
+              assert g['promotion_signal'] is True
+              assert g['passed'] is True
           else:
+              # Deterministic locality rejection is a valid completed measurement, but never a promotion pass.
               assert t['deterministic_rejection'] is True
               assert t['rejection_reason']
               assert t['candidate_bytes'] is None
               assert t['median_candidate_complete_create_s'] is None
               assert t['strict_four_way_win'] is False
-              assert d['gate']['target_eligible'] is False
-              assert d['gate']['target_deterministic_rejection'] is True
-              assert d['gate']['target_strict_four_way_win'] is False
-              assert d['gate']['promotion_signal'] is False
-          # This remains a promotion gate: deterministic negative evidence is valid
-          # evidence, but it must not turn an ineligible candidate into a pass.
-          assert d['gate']['passed'] is True
+              assert g['target_eligible'] is False
+              assert g['target_deterministic_rejection'] is True
+              assert g['target_strict_four_way_win'] is False
+              assert g['promotion_signal'] is False
+              assert g['passed'] is False
+          Path('benchmark-artifacts/v030-r24-cc-profile-candidate.txt').write_text('${{ steps.candidate.outputs.sha }}\n')
           PY
       - name: Public-surface guard
         if: always()
         run: python tools/check_public_surface.py
+      - name: CI topology self-check
+        if: always()
+        run: python tools/check_ci_topology.py .github/workflows/v030-r24-compact-control-profile.yml
       - uses: actions/upload-artifact@v6
         if: always()
         with:
-          name: v030-r24-compact-control-profile-${{ github.sha }}
-          path: benchmark-artifacts/v030-r24-cc-profile.json
+          name: v030-r24-compact-control-profile-${{ steps.candidate.outputs.sha || github.sha }}
+          path: |
+            benchmark-artifacts/v030-r24-cc-profile.json
+            benchmark-artifacts/v030-r24-cc-profile-candidate.txt
           if-no-files-found: error
           retention-days: 90
 
