@@ -31,6 +31,9 @@ from benchmarks import v030_r24_compact_control_oracle as CONTROL
 from cmpct import codec as R24
 
 
+_UNSUPPORTED_V4_LAYOUT = "S_PACK slices are not contiguous in physical order"
+
+
 def _scan_blob_table(data: bytes) -> list[list[int]]:
     """Reconstruct the canonical five-column r24 blob table from physical records only."""
     rows: list[list[int]] = []
@@ -100,6 +103,24 @@ def _project_v5(index: dict, data: bytes) -> dict:
     }
 
 
+def _project_pair(index: dict, data: bytes) -> tuple[dict | None, dict | None, str | None]:
+    """Project v4/v5 or fail closed for the known non-canonical v4 layout assumption.
+
+    v4 is a research predecessor, not the canonical grammar. Some valid r24 S_PACK layouts are
+    physically sparse, and v4 deliberately cannot represent them. That is a falsified research
+    candidate, not an invalid source archive. Preserve the negative result instead of crashing
+    the all-15 custody lane. Any other exception remains a hard error.
+    """
+    try:
+        baseline = V4._project_v4(index, data)
+        candidate = _project_v5(index, data)
+    except RuntimeError as exc:
+        if str(exc) != _UNSUPPORTED_V4_LAYOUT:
+            raise
+        return None, None, str(exc)
+    return baseline, candidate, None
+
+
 def _all15_projection(work_root: Path) -> dict:
     """Prove exact reconstruction and non-regression against v4 on every deterministic source."""
     matrix_root = Path(work_root) / "all15-projection"
@@ -122,14 +143,32 @@ def _all15_projection(work_root: Path) -> dict:
         locality = V4.V3.PROFILE._audit_s_pack_locality(index)
         if float(locality["max_member_read_amplification"]) > V4.V3.LOCALITY:
             raise RuntimeError(f"all-15 self-describing source violated locality: {label}")
-        baseline = V4._project_v4(index, data)
-        candidate = _project_v5(index, data)
+        baseline, candidate, rejection = _project_pair(index, data)
+        if rejection is not None:
+            rows.append(
+                {
+                    "workload": label,
+                    "tree_sha256": verified.get("tree_sha256"),
+                    "supported": False,
+                    "rejection_reason": rejection,
+                    "v4_projected_bytes": None,
+                    "v5_projected_bytes": None,
+                    "saving_vs_v4_bytes": 0,
+                    "semantic_index_roundtrip_exact": False,
+                    "physical_payload_records_unchanged": True,
+                    "max_member_read_amplification": float(locality["max_member_read_amplification"]),
+                }
+            )
+            continue
+        assert baseline is not None and candidate is not None
         baseline_bytes = int(baseline["projected_archive_bytes"])
         candidate_bytes = int(candidate["projected_archive_bytes"])
         rows.append(
             {
                 "workload": label,
                 "tree_sha256": verified.get("tree_sha256"),
+                "supported": True,
+                "rejection_reason": None,
                 "blob_rows_elided": int(candidate["blob_rows_elided"]),
                 "blob_table_msgpack_bytes_elided": int(candidate["blob_table_msgpack_bytes_elided"]),
                 "v4_projected_bytes": baseline_bytes,
@@ -140,15 +179,22 @@ def _all15_projection(work_root: Path) -> dict:
                 "max_member_read_amplification": float(locality["max_member_read_amplification"]),
             }
         )
-    zero_regressions = all(int(row["saving_vs_v4_bytes"]) >= 0 for row in rows)
-    exact = all(row["semantic_index_roundtrip_exact"] and row["physical_payload_records_unchanged"] for row in rows)
+    comparable = [row for row in rows if row["supported"]]
+    unsupported = [row for row in rows if not row["supported"]]
+    zero_regressions = all(int(row["saving_vs_v4_bytes"]) >= 0 for row in comparable)
+    exact = len(unsupported) == 0 and all(
+        row["semantic_index_roundtrip_exact"] and row["physical_payload_records_unchanged"] for row in comparable
+    )
     return {
         "workloads": len(rows),
         "rows": rows,
+        "supported_workloads": len(comparable),
+        "unsupported_workloads": len(unsupported),
+        "unsupported_reasons": sorted({str(row["rejection_reason"]) for row in unsupported}),
         "all_semantic_roundtrips_exact": exact,
         "zero_projected_byte_regressions_vs_v4": zero_regressions,
-        "strict_improvement_count": sum(int(row["saving_vs_v4_bytes"]) > 0 for row in rows),
-        "aggregate_saving_vs_v4_bytes": sum(int(row["saving_vs_v4_bytes"]) for row in rows),
+        "strict_improvement_count": sum(int(row["saving_vs_v4_bytes"]) > 0 for row in comparable),
+        "aggregate_saving_vs_v4_bytes": sum(int(row["saving_vs_v4_bytes"]) for row in comparable),
     }
 
 
@@ -161,7 +207,7 @@ def run(work_root):
     finally:
         V4._project_v4 = old
     matrix = _all15_projection(work_root)
-    result["schema"] = "cmpct-v030-c25cc01-self-describing-blobtable-oracle-v2"
+    result["schema"] = "cmpct-v030-c25cc01-self-describing-blobtable-oracle-v3"
     result["contract"].update(
         {
             "blob_table_in_control": False,
@@ -169,23 +215,28 @@ def run(work_root):
             "physical_blob_header_semantic_owner": True,
             "physical_payload_records_changed": False,
             "all15_projection_required": True,
+            "unsupported_predecessor_shapes_fail_closed": True,
             "release_credit": False,
         }
     )
     result["all15"] = matrix
     result["gate"]["all15_projection_complete"] = matrix["workloads"] == 15
+    result["gate"]["all15_predecessor_shape_supported"] = matrix["unsupported_workloads"] == 0
     result["gate"]["all15_semantic_roundtrips_exact"] = matrix["all_semantic_roundtrips_exact"]
     result["gate"]["zero_projected_byte_regressions_vs_v4"] = matrix["zero_projected_byte_regressions_vs_v4"]
     result["gate"]["passed"] = bool(
         result["gate"]["passed"]
         and matrix["workloads"] == 15
+        and matrix["unsupported_workloads"] == 0
         and matrix["all_semantic_roundtrips_exact"]
         and matrix["zero_projected_byte_regressions_vs_v4"]
     )
     result["claim_boundary"] = (
-        "Research-only exact representation estimate. A strict target signal plus the all-15 non-regression matrix "
-        "authorizes only canonical grammar/reader productization prerequisites; hostile parsing, recovery, native, "
-        "Android, selector timing and final release authority remain mandatory."
+        "Research-only exact representation estimate. Unsupported predecessor v4 S_PACK shapes are durable "
+        "negative evidence and receive zero promotion credit rather than being relabeled as source failures. "
+        "A strict target signal plus a fully supported all-15 non-regression matrix authorizes only canonical "
+        "grammar/reader productization prerequisites; hostile parsing, recovery, native, Android, selector timing "
+        "and final release authority remain mandatory."
     )
     return result
 
