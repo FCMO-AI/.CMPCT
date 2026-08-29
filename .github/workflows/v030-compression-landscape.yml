@@ -1,0 +1,122 @@
+name: CMPCT v0.30 broad compression landscape
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'benchmarks/v030_compression_landscape.py'
+      - 'benchmarks/v030_external_competitors.py'
+      - 'benchmarks/neutral_hostile_corpus_v1.py'
+      - 'benchmarks/resemblance_hostile_corpus_v1.py'
+      - 'benchmarks/v030_release_generalization.py'
+      - 'experiments/entropygraph_v030_release_product.py'
+      - 'experiments/entropygraph_v030_release_product_base.py'
+      - '.github/workflows/v030-compression-landscape.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  landscape:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    env:
+      PYTHONUNBUFFERED: '1'
+    steps:
+      - name: Checkout exact PR head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Bind exact candidate
+        id: candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          expected='${{ github.event.pull_request.head.sha || github.sha }}'
+          actual="$(git rev-parse HEAD)"
+          test "$actual" = "$expected"
+          echo "sha=$actual" >> "$GITHUB_OUTPUT"
+
+      - name: Install compression landscape tools
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            zstd zip unzip p7zip-full zpaq brotli lz4 lzip ffmpeg gcc
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+
+      - name: Install project benchmark dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install --upgrade pip
+          if [ -f requirements.txt ]; then python -m pip install -r requirements.txt; fi
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx zstandard
+
+      - name: Record tool identities
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p benchmark-artifacts
+          {
+            echo "candidate=${{ steps.candidate.outputs.sha }}"
+            python --version
+            zstd --version | head -1
+            7z | head -3 | tail -1 || true
+            zpaq 2>&1 | head -2 | tail -1 || true
+            brotli --version || true
+            lz4 --version || true
+            lzip --version | head -1 || true
+            xz --version | head -1
+            gzip --version | head -1
+            bzip2 --help 2>&1 | head -1 || true
+          } > benchmark-artifacts/v030-compression-landscape-tools.txt
+
+      - name: Run exact 15-workload landscape
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m benchmarks.v030_compression_landscape \
+            --candidate-sha '${{ steps.candidate.outputs.sha }}' \
+            --output benchmark-artifacts/v030-compression-landscape.json \
+            --markdown benchmark-artifacts/v030-compression-landscape.md
+
+      - name: Verify receipt identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          p=Path('benchmark-artifacts/v030-compression-landscape.json')
+          obj=json.loads(p.read_text())
+          expected=os.environ['EXPECTED_SHA']
+          assert obj['candidate_sha'] == expected, (obj['candidate_sha'], expected)
+          assert len(obj['rows']) == 15
+          assert obj['contract']['release_gate_impact'] == 'none-reference-only'
+          for row in obj['rows']:
+              for name, item in row['formats'].items():
+                  if item.get('available'):
+                      assert item.get('tree_verified') is True, (row['label'], name)
+          PY
+        env:
+          EXPECTED_SHA: ${{ steps.candidate.outputs.sha }}
+
+      - name: Upload reference landscape
+        uses: actions/upload-artifact@v4
+        with:
+          name: v030-compression-landscape-${{ steps.candidate.outputs.sha }}
+          path: |
+            benchmark-artifacts/v030-compression-landscape.json
+            benchmark-artifacts/v030-compression-landscape.md
+            benchmark-artifacts/v030-compression-landscape-tools.txt
+          if-no-files-found: error
+          retention-days: 90
