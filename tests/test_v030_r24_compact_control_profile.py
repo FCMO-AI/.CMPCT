@@ -12,10 +12,14 @@ from experiments import entropygraph_v030_release_product as PRODUCT
 def _tree(root: Path) -> None:
     root.mkdir(parents=True, exist_ok=True)
     # Long repeated path structure makes compact control unambiguously smaller without depending on a frozen corpus.
+    # Keep every text member exactly 32 KiB: the shipping r24 release pack target is bounded to 8x the largest
+    # regular member, so equal-size members form at most eight-member S_PACKs and the fixture itself obeys the
+    # <=8x selective-read locality law that C25CC01 is required to inherit unchanged.
     for i in range(192):
         p = root / "records" / f"group-{i // 32:02d}" / f"measurement-record-with-a-long-stable-prefix-{i:04d}.txt"
         p.parent.mkdir(parents=True, exist_ok=True)
-        p.write_bytes((f"row={i}\n" * 8).encode())
+        seed = f"row={i:04d}\n".encode()
+        p.write_bytes((seed * ((32 * 1024 + len(seed) - 1) // len(seed)))[: 32 * 1024])
 
 
 def _flip(path: Path, offset: int) -> None:
