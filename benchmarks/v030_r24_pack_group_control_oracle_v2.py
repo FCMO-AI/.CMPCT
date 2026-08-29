@@ -61,8 +61,7 @@ def _restore_groups(encoded: list[list]) -> list[list]:
     for desc in encoded:
         if not isinstance(desc, list) or len(desc) not in (3, 4):
             raise RuntimeError("invalid delta pack group")
-        gap = int(desc[0])
-        blob_delta = int(desc[1])
+        gap = int(desc[0]); blob_delta = int(desc[1])
         if len(desc) == 3:
             offset, lengths = 0, list(desc[2])
         else:
@@ -105,7 +104,10 @@ def _once(archive: Path) -> dict:
 
     predecessor = GROUP._once(archive)
     baseline_bytes = int(predecessor["selected_compact_bytes_per_copy"])
-    selected_bytes, selected_kind = min(((baseline_bytes, "existing_best"), (delta_bytes, "delta_pack_groups_v2")), key=lambda item: (item[0], item[1]))
+    selected_bytes, selected_kind = min(
+        ((baseline_bytes, "existing_best"), (delta_bytes, "delta_pack_groups_v2")),
+        key=lambda item: (item[0], item[1]),
+    )
     projected = int(physical["archive_bytes"]) - 2 * int(physical["index_comp_bytes_per_copy"]) + 2 * selected_bytes
     return {
         **physical,
@@ -132,21 +134,24 @@ def _once(archive: Path) -> dict:
 def run(work_root: Path) -> dict:
     shutil.rmtree(work_root, ignore_errors=True)
     work_root.mkdir(parents=True)
-    roots = CORPUS._build_all_sources(work_root / "corpora")
+    roots = CORPUS._build_all(work_root / "corpora")
+    if len(roots) != 15:
+        raise RuntimeError(f"expected exact 15-workload corpus, got {len(roots)}")
     rows = []
-    for suite, name in CORPUS.TARGETS:
-        source = roots[(suite, name)]
+    for workload in sorted(roots):
+        suite, name = GROUP._split_workload(workload)
+        source = roots[workload]
         archive = work_root / "archives" / f"{suite}-{name}.cmpct"
         archive.parent.mkdir(parents=True, exist_ok=True)
         CC._verified_r24(source, archive)
-        rows.append({"suite": suite, "name": name, **_once(archive)})
+        rows.append({"suite": suite, "name": name, "workload": workload, **_once(archive)})
     target = next(row for row in rows if row["name"].endswith(TARGET_SUFFIX))
-    regressions = [f"{row['suite']}/{row['name']}" for row in rows if int(row["projected_archive_bytes"]) > int(row["archive_bytes"])]
+    regressions = [row["workload"] for row in rows if int(row["projected_archive_bytes"]) > int(row["archive_bytes"])]
     exact = all(bool(row["semantic_index_roundtrip_exact"] and row["v1_group_coordinates_roundtrip_exact"]) for row in rows)
     return {
         "schema": "cmpct-v030-r24-pack-group-control-v2",
         "contract": {
-            "workloads": len(CORPUS.TARGETS),
+            "workloads": 15,
             "release_credit": False,
             "production_selector_change": False,
             "format_revision_change": False,
@@ -168,10 +173,10 @@ def run(work_root: Path) -> dict:
             "target_pack_groups": int(target["pack_groups"]),
         },
         "gate": {
-            "experiment_valid": bool(exact),
+            "experiment_valid": exact,
             "zero_projected_byte_regressions": not regressions,
             "promotion_signal": bool(exact and not regressions and int(target["incremental_saving_vs_existing_best_bytes"]) > 0),
-            "passed": bool(exact),
+            "passed": exact,
         },
         "claim_boundary": "Research-only delta/run control map; exact all-15 semantic roundtrip is necessary but not sufficient for productization.",
     }
