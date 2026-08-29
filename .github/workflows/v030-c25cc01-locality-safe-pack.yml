@@ -9,6 +9,7 @@ on:
       - 'benchmarks/v030_c25cc01_packmap_control_oracle.py'
       - 'benchmarks/v030_c25cc01_stable_order_packmap_oracle.py'
       - 'benchmarks/v030_c25cc01_implicit_packmap_v3_oracle.py'
+      - 'benchmarks/v030_c25cc01_implicit_packmap_v4_oracle.py'
       - 'experiments/entropygraph_v030_r24_compact_control_profile.py'
       - 'experiments/entropygraph_v030_release_product*.py'
       - 'src/cmpct/builder.py'
@@ -60,6 +61,7 @@ jobs:
           python -m py_compile benchmarks/v030_c25cc01_packmap_control_oracle.py
           python -m py_compile benchmarks/v030_c25cc01_stable_order_packmap_oracle.py
           python -m py_compile benchmarks/v030_c25cc01_implicit_packmap_v3_oracle.py
+          python -m py_compile benchmarks/v030_c25cc01_implicit_packmap_v4_oracle.py
       - name: Run exact 15-workload locality-safe A/B
         run: |
           mkdir -p benchmark-artifacts
@@ -81,11 +83,11 @@ jobs:
           python benchmarks/v030_c25cc01_stable_order_packmap_oracle.py \
             --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-c25cc01-stable-order-packmap-work" \
             --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-c25cc01-stable-order-packmap.json"
-      - name: Measure marker-free delta/run pack map v3
+      - name: Measure order-safe marker-free pack map v4
         run: |
-          python benchmarks/v030_c25cc01_implicit_packmap_v3_oracle.py \
-            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-c25cc01-implicit-packmap-v3-work" \
-            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-c25cc01-implicit-packmap-v3.json"
+          python benchmarks/v030_c25cc01_implicit_packmap_v4_oracle.py \
+            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-c25cc01-implicit-packmap-v4-work" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-c25cc01-implicit-packmap-v4.json"
       - name: Enforce diagnostic evidence boundary
         run: |
           python - <<'PY'
@@ -146,23 +148,27 @@ jobs:
               assert x['cmpct_projected_bytes'] < x['zstd19_bytes']
               assert x['median_cmpct_complete_create_s'] < x['median_zip_create_s']
               assert x['median_cmpct_complete_create_s'] < x['median_zstd19_create_s']
-          v3=json.loads(Path('benchmark-artifacts/v030-c25cc01-implicit-packmap-v3.json').read_text())
-          assert v3['schema']=='cmpct-v030-c25cc01-implicit-packmap-v3-oracle-v1'
-          assert v3['contract']['release_credit'] is False
-          assert v3['contract']['production_change'] is False
-          assert v3['contract']['format_revision_change'] is False
-          assert v3['contract']['physical_pack_boundaries_changed'] is False
-          assert v3['contract']['locality_ceiling']==8
-          assert v3['contract']['two_authenticated_control_copies_retained'] is True
-          assert v3['contract']['semantic_index_roundtrip_exact'] is True
-          assert v3['rounds']==5
-          assert v3['candidate']['semantic_index_roundtrip_exact'] is True
-          assert v3['candidate']['locality']['max_member_read_amplification'] <= 8
-          assert v3['candidate']['pack_groups'] > 0 and v3['candidate']['packed_rows'] > 0
-          assert v3['gate']['experiment_valid'] is True
-          assert v3['gate']['passed'] is True
-          if v3['gate']['strict_four_way_signal']:
-              x=v3['competitors']
+          v4=json.loads(Path('benchmark-artifacts/v030-c25cc01-implicit-packmap-v4.json').read_text())
+          assert v4['schema']=='cmpct-v030-c25cc01-implicit-packmap-v4-oracle-v1'
+          assert v4['contract']['release_credit'] is False
+          assert v4['contract']['production_change'] is False
+          assert v4['contract']['format_revision_change'] is False
+          assert v4['contract']['physical_pack_boundaries_changed'] is False
+          assert v4['contract']['locality_ceiling']==8
+          assert v4['contract']['two_authenticated_control_copies_retained'] is True
+          assert v4['contract']['semantic_index_roundtrip_exact'] is True
+          assert v4['contract']['blob_id_order_assumption'] is False
+          assert v4['contract']['descriptor_order']=='first_file_table_member'
+          assert v4['contract']['sparse_membership_encoding']=='absolute_file_indices'
+          assert v4['rounds']==5
+          assert v4['candidate']['semantic_index_roundtrip_exact'] is True
+          assert v4['candidate']['locality']['max_member_read_amplification'] <= 8
+          assert v4['candidate']['pack_groups'] > 0 and v4['candidate']['packed_rows'] > 0
+          assert v4['candidate']['blob_id_encoding']=='absolute_authenticated_id'
+          assert v4['gate']['experiment_valid'] is True
+          assert v4['gate']['passed'] is True
+          if v4['gate']['strict_four_way_signal']:
+              x=v4['competitors']
               assert x['cmpct_projected_bytes'] < x['zip_bytes']
               assert x['cmpct_projected_bytes'] < x['zstd19_bytes']
               assert x['median_cmpct_complete_create_s'] < x['median_zip_create_s']
@@ -184,7 +190,7 @@ jobs:
             benchmark-artifacts/v030-c25cc01-pack-strategy.json
             benchmark-artifacts/v030-c25cc01-packmap.json
             benchmark-artifacts/v030-c25cc01-stable-order-packmap.json
-            benchmark-artifacts/v030-c25cc01-implicit-packmap-v3.json
+            benchmark-artifacts/v030-c25cc01-implicit-packmap-v4.json
             benchmark-artifacts/v030-c25cc01-candidate.txt
           if-no-files-found: warn
           retention-days: 90
