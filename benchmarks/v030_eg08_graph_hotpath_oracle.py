@@ -57,6 +57,9 @@ def run(work_root: Path) -> dict:
     with tempfile.TemporaryDirectory(prefix="cmpct-v030-eg08-hotpath-", dir=work_root) as td:
         root = Path(td)
         stage = V1.EXT._normalized_stage(source, root / "normalized")
+        # Bind the normalized corpus while the temporary stage still exists.  Computing this after leaving
+        # TemporaryDirectory turns an evidence field into a harness crash because the directory has been removed.
+        normalized_tree_sha256 = V1.EG07._treehash(stage)
         times = []
         digests = set()
         sizes = set()
@@ -96,7 +99,7 @@ def run(work_root: Path) -> dict:
         },
         "office": {
             "accepted_v029_bytes": int(accepted_v029),
-            "normalized_tree_sha256": V1.EG08.EG07._treehash(stage) if hasattr(V1, "EG08") else None,
+            "normalized_tree_sha256": normalized_tree_sha256,
         },
         "unprofiled": {
             "rounds": ROUNDS,
