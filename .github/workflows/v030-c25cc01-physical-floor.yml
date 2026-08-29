@@ -1,0 +1,83 @@
+# ci-lane: deep
+name: CMPCT v0.30 C25CC01 physical byte-floor oracle
+
+on:
+  pull_request:
+    paths:
+      - 'benchmarks/v030_c25cc01_physical_floor_oracle.py'
+      - 'benchmarks/v030_c25cc01_locality_pack_strategy_oracle.py'
+      - 'benchmarks/v030_c25cc01_locality_safe_pack_oracle.py'
+      - 'experiments/entropygraph_v030_r24_compact_control_profile.py'
+      - 'src/cmpct/codec.py'
+      - '.github/workflows/v030-c25cc01-physical-floor.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: v030-c25cc01-physical-floor-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  physical-floor:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      PYTHONPATH: ${{ github.workspace }}
+      EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - name: Bind exact candidate head
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install deterministic corpus/comparator dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y zstd gcc ffmpeg libsndfile1
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[audio,test]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
+      - name: Compile physical-floor oracle
+        run: python -m py_compile benchmarks/v030_c25cc01_physical_floor_oracle.py
+      - name: Measure locality-safe physical lower bound against Zstd-19
+        run: |
+          mkdir -p benchmark-artifacts
+          python -m benchmarks.v030_c25cc01_physical_floor_oracle \
+            --work-root benchmark-artifacts/v030-c25cc01-physical-floor-work \
+            --output benchmark-artifacts/v030-c25cc01-physical-floor.json
+      - name: Enforce lower-bound evidence contract
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          d=json.loads(Path('benchmark-artifacts/v030-c25cc01-physical-floor.json').read_text())
+          assert d['schema']=='cmpct-v030-c25cc01-physical-floor-oracle-v1'
+          assert d['strategy']=='descending_greedy'
+          assert d['gate']['exact_wrapped_accounting'] is True
+          assert d['gate']['locality_within_8x'] is True
+          assert d['gate']['experiment_valid'] is True
+          assert d['gate']['release_credit'] is False
+          assert d['candidate']['current_total_control_bytes']==2*d['candidate']['compact_control_bytes_per_copy']
+          assert d['zero_control_physical_floor_bytes']==d['candidate']['physical_data_bytes']+d['candidate']['fixed_header_footer_bytes']
+          # The hypothesis may succeed or fail. Either outcome is durable architectural evidence and must not be
+          # turned into a workflow failure merely because the current physical grammar proves impossible.
+          assert isinstance(d['gate']['zero_control_physical_floor_beats_zstd19'], bool)
+          PY
+      - name: CI topology self-check
+        run: python tools/check_ci_topology.py .github/workflows/v030-c25cc01-physical-floor.yml
+      - name: Public-surface guard
+        run: python tools/check_public_surface.py
+      - name: Upload exact-head receipt
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: v030-c25cc01-physical-floor-${{ env.EVIDENCE_HEAD }}
+          path: benchmark-artifacts/v030-c25cc01-physical-floor.json
+          if-no-files-found: error
+          retention-days: 90
