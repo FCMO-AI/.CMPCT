@@ -2,7 +2,9 @@
 name: CMPCT v0.30 logs runtime productization
 
 on:
-  pull_request:
+  push:
+    branches:
+      - agent/v030-authoritative-integration
     paths:
       - 'benchmarks/v030_logs_semantic_owner_runtime_oracle.py'
       - 'benchmarks/neutral_hostile_corpus_v1.py'
@@ -22,18 +24,17 @@ permissions:
   contents: read
 
 concurrency:
-  # Scheduling is PR-scoped so a newer candidate cancels stale product measurements. The measurement itself
-  # remains exact-head-bound below and therefore cannot inherit evidence from an older candidate.
-  group: v030-logs-runtime-product-${{ github.event.pull_request.number || github.ref }}
+  group: v030-logs-runtime-product-${{ github.ref }}
   cancel-in-progress: true
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.sha }}
 
 jobs:
   logs-runtime-productization:
     runs-on: ubuntu-24.04
     timeout-minutes: 25
-    env:
-      PYTHONPATH: ${{ github.workspace }}
-      EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
     steps:
       - uses: actions/checkout@v6
         with:
@@ -51,8 +52,8 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -e '.[test]'
           # The frozen corpus module imports its full deterministic producer surface at module load even though
-          # this lane generates only 05_logs_and_telemetry. Keep those producer dependencies inside the untimed
-          # environment setup rather than duplicating the corpus generator and risking benchmark-identity drift.
+          # this lane generates only 05_logs_and_telemetry. Keep those producer dependencies inside untimed setup
+          # rather than duplicating the corpus generator and risking benchmark-identity drift.
           python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
       - name: Compile product boundary
         run: |
@@ -103,3 +104,6 @@ jobs:
             benchmark-artifacts/v030-logs-runtime-product-candidate.txt
           if-no-files-found: error
           retention-days: 90
+
+# Research/productization evidence only. Final release authority remains the exact frozen candidate gate; moving this
+# lane from PR synchronize to branch push changes scheduling, not its benchmark, thresholds, semantics, or evidence.
