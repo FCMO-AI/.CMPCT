@@ -46,7 +46,7 @@ jobs:
           python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
       - name: Compile derived-header oracle
         run: python -m py_compile benchmarks/v030_c25cc01_derived_blob_header_oracle.py
-      - name: Measure derived physical framing frontier
+      - name: Measure self-describing physical framing frontier
         run: |
           mkdir -p benchmark-artifacts
           python -m benchmarks.v030_c25cc01_derived_blob_header_oracle \
@@ -58,29 +58,31 @@ jobs:
           import json
           from pathlib import Path
           d=json.loads(Path('benchmark-artifacts/v030-c25cc01-derived-header.json').read_text())
-          assert d['schema']=='cmpct-v030-c25cc01-derived-blob-header-oracle-v2'
+          assert d['schema']=='cmpct-v030-c25cc01-derived-blob-header-oracle-v3'
           assert d['strategy']=='descending_greedy'
-          c=d['candidate']; g=d['gate']; p=d['projection']
+          c=d['candidate']; g=d['gate']; p=d['projection']; s=p['salvage_varint']['header_accounting']
           assert g['exact_current_wrapped_accounting'] is True
           assert g['locality_within_8x'] is True
           assert g['full_sha256_digest_cost_retained'] is True
-          assert g['crc32_cost_retained_in_conservative_projection'] is True
+          assert g['crc32_cost_retained_in_salvage_projection'] is True
+          assert g['physical_self_description_retained_in_salvage_projection'] is True
+          assert g['reserved_state_proven_elidable'] is True
           assert g['existing_control_cost_retained'] is True
           assert g['experiment_valid'] is True
           assert g['release_credit'] is False
           assert c['current_blob_header_bytes_per_record']==64
           assert c['retained_sha256_bytes_per_record']==32
           assert c['retained_crc32_bytes_per_record']==4
-          assert c['digest_only_header_bytes_per_record']==32
-          assert c['integrity_header_bytes_per_record']==36
-          assert p['digest_plus_crc']['projected_wrapped_bytes_with_existing_two_copy_control'] == (
-              p['digest_only']['projected_wrapped_bytes_with_existing_two_copy_control'] + 4*c['record_count']
-          )
-          assert p['digest_plus_crc']['bytes_saved_vs_current_wrapped'] == 28*c['record_count']
+          assert s['record_count']==c['record_count']
+          assert s['nonzero_reserved_records']==0
+          assert 0 < s['minimum_header_bytes'] <= s['average_header_bytes'] <= s['maximum_header_bytes'] < 64
           assert p['digest_only']['bytes_saved_vs_current_wrapped'] == 32*c['record_count']
-          # Crossing Zstd is a research outcome, not a CI truth requirement. Negative evidence remains valid.
-          assert isinstance(g['integrity_header_large_enough_to_cross_zstd19'], bool)
+          assert p['digest_plus_crc']['bytes_saved_vs_current_wrapped'] == 28*c['record_count']
+          assert p['salvage_varint']['bytes_saved_vs_current_wrapped'] == c['current_blob_header_bytes']-s['header_bytes']
+          # Crossing Zstd remains a measured research outcome, not a CI truth requirement. Negative evidence is valid.
+          assert isinstance(g['salvage_header_large_enough_to_cross_zstd19'], bool)
           assert isinstance(p['digest_only']['strictly_smaller_than_zstd19'], bool)
+          assert isinstance(p['digest_plus_crc']['strictly_smaller_than_zstd19'], bool)
           PY
       - name: CI topology self-check
         run: python tools/check_ci_topology.py .github/workflows/v030-c25cc01-derived-blob-header.yml
