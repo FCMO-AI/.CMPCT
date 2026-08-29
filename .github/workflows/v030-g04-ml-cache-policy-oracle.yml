@@ -10,6 +10,7 @@ on:
       - 'experiments/entropygraph_v030_geometry_overlay_g04*.py'
       - 'benchmarks/v030_release_performance*.py'
       - 'benchmarks/v030_g04_ml_cache_policy_oracle*.py'
+      - 'benchmarks/v030_g04_ml_reader_hotpath_oracle.py'
       - '.github/workflows/v030-g04-ml-cache-policy-oracle.yml'
   workflow_dispatch:
 
@@ -51,16 +52,41 @@ jobs:
             experiments/entropygraph_v030_release_reader.py \
             benchmarks/v030_release_performance.py \
             benchmarks/v030_g04_ml_cache_policy_oracle.py \
-            benchmarks/v030_g04_ml_cache_policy_oracle_v2.py
+            benchmarks/v030_g04_ml_cache_policy_oracle_v2.py \
+            benchmarks/v030_g04_ml_reader_hotpath_oracle.py
       - name: Preserve G0-G4 streaming-reader correctness
         run: |
           python -m pytest -q \
             tests/test_v030_release_reader.py \
             tests/test_v030_member_reader.py \
             tests/test_v030_release_fuzz.py
-      - name: Run canonical same-memory ML cache-policy A/B
+      - name: Profile canonical ML semantic-owner hot path
         run: |
           mkdir -p benchmark-artifacts
+          python benchmarks/v030_g04_ml_reader_hotpath_oracle.py \
+            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-g04-ml-reader-hotpath-work" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-g04-ml-reader-hotpath.json"
+      - name: Enforce profiler claim boundary
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          d=json.loads(Path('benchmark-artifacts/v030-g04-ml-reader-hotpath.json').read_text())
+          assert d['schema']=='cmpct-v030-g04-ml-reader-hotpath-oracle-v1'
+          assert d['target']=='neutral_hostile_v1/09_ml_artifacts'
+          assert d['contract']['release_credit'] is False
+          assert d['contract']['production_change'] is False
+          assert d['contract']['archive_byte_change'] is False
+          assert d['contract']['profiled_timing_receives_performance_credit'] is False
+          assert d['archive']['selected']=='g04-overlay'
+          assert d['verify']['top_by_cumulative_cpu']
+          assert d['extract']['top_by_cumulative_cpu']
+          assert d['gate']['archive_identity_preserved'] is True
+          assert d['gate']['logical_identity_preserved'] is True
+          assert d['gate']['passed'] is True
+          PY
+      - name: Run canonical same-memory ML cache-policy A/B
+        run: |
           python benchmarks/v030_g04_ml_cache_policy_oracle_v2.py \
             --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-g04-ml-cache-v2-work" \
             --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-g04-ml-cache-v2.json"
@@ -102,8 +128,10 @@ jobs:
         uses: actions/upload-artifact@v6
         with:
           name: v030-g04-ml-cache-v2-${{ env.EVIDENCE_HEAD }}
-          path: benchmark-artifacts/v030-g04-ml-cache-v2.json
-          if-no-files-found: error
+          path: |
+            benchmark-artifacts/v030-g04-ml-reader-hotpath.json
+            benchmark-artifacts/v030-g04-ml-cache-v2.json
+          if-no-files-found: warn
           retention-days: 90
 
 # The predecessor lane never measured its cache hypothesis because it restored research CMPNXG4 globals before
