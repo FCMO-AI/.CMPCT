@@ -23,6 +23,7 @@ concurrency:
 
 env:
   PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
 
 jobs:
   fragmentation-admission:
@@ -30,6 +31,10 @@ jobs:
     timeout-minutes: 180
     steps:
       - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - name: Bind exact candidate head
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
       - uses: actions/setup-python@v6
         with:
           python-version: '3.11'
@@ -52,7 +57,7 @@ jobs:
       - name: Ratchet identity-free causal boundary
         run: |
           python - <<'PY'
-          import json
+          import json, os
           from pathlib import Path
           d=json.loads(Path('benchmark-artifacts/v030-c25cc01-fragmentation.json').read_text())
           assert d['schema']=='cmpct-v030-c25cc01-fragmentation-admission-v1'
@@ -72,6 +77,7 @@ jobs:
           assert g['integrity_preserved'] is True
           assert g['diagnostic_valid'] is True
           assert d['refined_counterexamples']==[]
+          Path('benchmark-artifacts/v030-c25cc01-fragmentation-candidate.txt').write_text(os.environ['EVIDENCE_HEAD']+'\n')
           PY
       - name: Public-surface guard
         if: always()
@@ -79,8 +85,10 @@ jobs:
       - uses: actions/upload-artifact@v6
         if: always()
         with:
-          name: v030-c25cc01-fragmentation-${{ github.sha }}
-          path: benchmark-artifacts/v030-c25cc01-fragmentation.json
+          name: v030-c25cc01-fragmentation-${{ env.EVIDENCE_HEAD }}
+          path: |
+            benchmark-artifacts/v030-c25cc01-fragmentation.json
+            benchmark-artifacts/v030-c25cc01-fragmentation-candidate.txt
           if-no-files-found: error
           retention-days: 90
 
