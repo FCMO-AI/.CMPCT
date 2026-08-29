@@ -23,6 +23,7 @@ import os
 from pathlib import Path
 from pathlib import PurePosixPath
 import stat
+from typing import Callable
 
 import msgpack
 import zstandard as zstd
@@ -40,7 +41,16 @@ class ProfileNotEligible(RuntimeError):
     pass
 
 
-def _scan(root: Path) -> tuple[bytes, list[tuple[str, dict]], dict]:
+def _scan(
+    root: Path,
+    *,
+    parse_zip: Callable[[bytes], dict | None] = ZIP_PARSER.parse_zip,
+) -> tuple[bytes, list[tuple[str, dict]], dict]:
+    """Scan once using the shipping parser by default.
+
+    ``parse_zip`` exists only as an explicit differential-test seam. Production callers do not override it; oracles
+    can compare the mature semantic owner without mutating module globals or changing concurrent build behavior.
+    """
     root = Path(root)
     if not root.is_dir():
         raise ProfileNotEligible("ZIP-factor fused source must be a directory tree")
@@ -86,7 +96,7 @@ def _scan(root: Path) -> tuple[bytes, list[tuple[str, dict]], dict]:
                 raise ProfileNotEligible("ZIP-factor graph-owned regular files must all be ZIPs")
             raw = path.read_bytes()
             digest = hashlib.sha256(raw).digest()
-            parsed = ZIP_PARSER.parse_zip(raw)
+            parsed = parse_zip(raw)
             if parsed is None:
                 raise ProfileNotEligible(f"unsupported ZIP structure: {rel}")
             sig = BASE._signature(parsed)
