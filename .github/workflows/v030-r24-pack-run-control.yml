@@ -6,6 +6,7 @@ on:
     branches: [main]
     paths:
       - 'benchmarks/v030_r24_pack_run_control_oracle.py'
+      - 'benchmarks/v030_r24_pack_group_control_oracle.py'
       - 'benchmarks/v030_r24_compact_control_oracle.py'
       - 'benchmarks/v030_r24_numeric_path_control_oracle.py'
       - 'benchmarks/v030_r24_suffix_path_control_oracle.py'
@@ -53,9 +54,10 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -e '.[audio,test]'
           python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
-      - name: Compile pack-run evidence surface
+      - name: Compile pack-control evidence surface
         run: |
           python -m py_compile benchmarks/v030_r24_pack_run_control_oracle.py
+          python -m py_compile benchmarks/v030_r24_pack_group_control_oracle.py
           python -m py_compile benchmarks/v030_r24_compact_control_oracle.py
           python -m py_compile benchmarks/v030_r24_numeric_path_control_oracle.py
           python -m py_compile benchmarks/v030_r24_suffix_path_control_oracle.py
@@ -65,6 +67,11 @@ jobs:
           python benchmarks/v030_r24_pack_run_control_oracle.py \
             --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-r24-pack-run-control-work" \
             --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-r24-pack-run-control.json"
+      - name: Run exact all-15 grouped-pack control proof
+        run: |
+          python benchmarks/v030_r24_pack_group_control_oracle.py \
+            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-r24-pack-group-control-work" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-r24-pack-group-control.json"
       - name: Independently enforce exactness and promotion boundary
         run: |
           python - <<'PY'
@@ -100,8 +107,6 @@ jobs:
           assert target['rounds']==5
           assert target['size_deterministic'] is True
           assert target['tree_deterministic'] is True
-          # A valid negative result is preserved as evidence. Promotion requires BOTH new control bytes and the
-          # unchanged strict four-way target contract; this lane itself never grants release credit.
           if d['gate']['promotion_signal']:
               assert d['summary']['target_incremental_saving_bytes'] > 0
               assert d['gate']['target_strict_four_way_potential'] is True
@@ -109,6 +114,30 @@ jobs:
               assert target['projected_bytes'] < target['zstd19_bytes']
               assert target['median_conservative_create_s'] < target['median_zip_create_s']
               assert target['median_conservative_create_s'] < target['median_zstd19_create_s']
+
+          g=json.loads(Path('benchmark-artifacts/v030-r24-pack-group-control.json').read_text())
+          assert g['schema']=='cmpct-v030-r24-pack-group-control-v1'
+          assert g['contract']['workloads']==15
+          assert g['contract']['release_credit'] is False
+          assert g['contract']['production_selector_change'] is False
+          assert g['contract']['format_revision_change'] is False
+          assert g['contract']['physical_pack_boundaries_changed'] is False
+          assert g['contract']['locality_rule_changed'] is False
+          assert g['contract']['recovery_rule_changed'] is False
+          assert g['contract']['two_authenticated_control_copies_retained'] is True
+          assert g['contract']['benchmark_identity_not_policy_input'] is True
+          assert len(g['rows'])==15
+          assert g['gate']['experiment_valid'] is True
+          assert g['gate']['zero_projected_byte_regressions'] is True
+          assert g['gate']['passed'] is True
+          assert g['summary']['regressions']==[]
+          assert all(r['semantic_index_roundtrip_exact'] for r in g['rows'])
+          assert all(r['two_authenticated_control_copies_retained'] for r in g['rows'])
+          assert all(r['physical_payload_records_unchanged'] for r in g['rows'])
+          assert all(r['projected_archive_bytes']<=r['archive_bytes'] for r in g['rows'])
+          if g['gate']['promotion_signal']:
+              assert g['summary']['target_incremental_saving_bytes'] > 0
+              assert g['target']['selected_kind']=='pack_groups'
           PY
       - name: Record candidate fingerprint
         run: printf '%s\n' '${{ steps.candidate.outputs.sha }}' > benchmark-artifacts/v030-r24-pack-run-control-candidate.txt
@@ -117,9 +146,10 @@ jobs:
       - uses: actions/upload-artifact@v6
         if: always()
         with:
-          name: v030-r24-pack-run-control-${{ steps.candidate.outputs.sha }}
+          name: v030-r24-pack-control-${{ steps.candidate.outputs.sha }}
           path: |
             benchmark-artifacts/v030-r24-pack-run-control.json
+            benchmark-artifacts/v030-r24-pack-group-control.json
             benchmark-artifacts/v030-r24-pack-run-control-candidate.txt
           if-no-files-found: warn
           retention-days: 90
