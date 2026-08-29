@@ -5,7 +5,7 @@ on:
   pull_request:
     paths:
       - 'benchmarks/v030_c25cc01_semantic_root_floor_oracle.py'
-      - 'benchmarks/v030_c25cc01_derived_blob_v1_oracle.py'
+      - 'benchmarks/v030_c25cc01_derived_blob_header_oracle.py'
       - 'benchmarks/v030_c25cc01_locality_pack_strategy_oracle.py'
       - 'benchmarks/v030_c25cc01_locality_safe_pack_oracle.py'
       - 'benchmarks/v030_external_competitors.py'
