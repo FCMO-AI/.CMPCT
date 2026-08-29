@@ -2,17 +2,9 @@ from __future__ import annotations
 
 """Research-only CPU-aware source prefilter for C25CC01.
 
-The current shipping two-stage selector is structurally sound on the frozen target but admits an unseen high-file-
-count entropy mosaic whose compact-control archive is smaller than ZIP/Zstd yet a few milliseconds slower than ZIP.
-The observed difference is consistent with fixed per-file/control work being insufficiently amortized when average
-regular-file size becomes too small.
-
-This oracle tests a deliberately conservative source-only refinement before any selector change: keep the existing
->=1000-file shape requirement and require >=6 KiB average regular-file size. It preserves the existing broad
-candidate/r24 predicate unchanged. The suite includes the existing ten unseen/adversarial cases plus fresh flat
-high-file-count entropy probes immediately below, at, and above the proposed average-size boundary. Every case that
-would pass the proposed two-stage selector must strictly beat both ZIP and Zstd-19 in size and complete C25CC01
-build+strong-verification time. A single admitted loser blocks promotion. No benchmark/path/hash identity is used.
+This diagnostic tests whether a minimum average regular-file size can safely narrow compact-control admission.
+Profile ineligibility under the release locality/decode-unit law is negative evidence: it is recorded explicitly,
+never passed into the broad candidate predicate, and never earns selector or release credit.
 """
 
 import argparse
@@ -66,21 +58,31 @@ def run(work_root: Path) -> dict:
             stage = EXT._normalized_stage(source, td / "stage")
             shape = ADM._source_shape(stage)
             candidate = ADM._build_candidate(stage, td / "preflight")
-            broad = ADM._admitted(shape, candidate["r24_bytes"], candidate["candidate_bytes"])
+            eligible = bool(candidate.get("profile_eligible"))
+            candidate_bytes = candidate.get("candidate_bytes")
+            broad = (
+                eligible
+                and candidate_bytes is not None
+                and ADM._admitted(shape, int(candidate["r24_bytes"]), int(candidate_bytes))
+            )
             source_prefilter = _proposed_source_prefilter(shape)
             proposed = bool(source_prefilter and broad)
             row = {
                 "case": name,
                 **shape,
                 "average_regular_bytes": float(shape["logical_bytes"]) / max(1, int(shape["regular_files"])),
+                "profile_eligible": eligible,
+                "profile_reject_reason": candidate.get("profile_reject_reason"),
                 "r24_bytes": int(candidate["r24_bytes"]),
-                "candidate_bytes": int(candidate["candidate_bytes"]),
-                "candidate_to_r24": int(candidate["candidate_bytes"]) / max(1, int(candidate["r24_bytes"])),
+                "candidate_bytes": int(candidate_bytes) if candidate_bytes is not None else None,
+                "candidate_to_r24": (
+                    int(candidate_bytes) / max(1, int(candidate["r24_bytes"])) if candidate_bytes is not None else None
+                ),
                 "broad_candidate_admitted": bool(broad),
                 "proposed_source_prefilter": bool(source_prefilter),
                 "proposed_shipping_admitted": proposed,
-                "payload_unchanged": bool(candidate["payload_unchanged"]),
-                "two_control_copies": bool(candidate["two_control_copies"]),
+                "payload_unchanged": candidate.get("payload_unchanged"),
+                "two_control_copies": candidate.get("two_control_copies"),
             }
             if proposed:
                 competitors = ADM._competitors(stage, td / "competitors")
@@ -90,6 +92,7 @@ def run(work_root: Path) -> dict:
 
     admitted = [r for r in rows if r["proposed_shipping_admitted"]]
     losers = [r for r in admitted if not r.get("strict_four_way_win", False)]
+    ineligible = [r for r in rows if not r["profile_eligible"]]
     counterexample_1750 = next(r for r in rows if r["case"] == "entropy_mosaic_1750")
     positive_above_boundary = [
         r for r in admitted
@@ -105,7 +108,16 @@ def run(work_root: Path) -> dict:
         and not counterexample_1750["proposed_shipping_admitted"]
         and len(positive_above_boundary) >= 1
         and len(rejected_below_boundary) == 2
-        and all(r["payload_unchanged"] and r["two_control_copies"] for r in admitted)
+        and all(r["payload_unchanged"] is True and r["two_control_copies"] is True for r in admitted)
+    )
+    experiment_valid = (
+        len(rows) == 16
+        and all(
+            (not r["profile_eligible"])
+            or (r["payload_unchanged"] is True and r["two_control_copies"] is True)
+            for r in rows
+        )
+        and all(bool(r["profile_reject_reason"]) for r in ineligible)
     )
     return {
         "schema": "cmpct-v030-c25cc01-average-size-admission-oracle-v1",
@@ -120,14 +132,16 @@ def run(work_root: Path) -> dict:
             "ties_fail": True,
             "selector_change": False,
             "release_credit": False,
+            "profile_ineligibility_is_negative_evidence": True,
         },
         "rows": rows,
+        "profile_ineligible_cases": [r["case"] for r in ineligible],
         "admitted_count": len(admitted),
         "counterexamples": [r["case"] for r in losers],
         "known_1750_rejected": not counterexample_1750["proposed_shipping_admitted"],
         "positive_above_boundary_count": len(positive_above_boundary),
         "rejected_below_boundary_count": len(rejected_below_boundary),
-        "experiment_valid": len(rows) == 16 and all(r["payload_unchanged"] and r["two_control_copies"] for r in rows),
+        "experiment_valid": experiment_valid,
         "promotion_signal": promotion,
         "selector_change": False,
         "release_credit": False,
