@@ -1,0 +1,74 @@
+# ci-lane: deep
+name: CMPCT v0.30 EG08 graph hotpath oracle
+
+on:
+  pull_request:
+    paths:
+      - 'benchmarks/v030_eg08_graph_hotpath_oracle.py'
+      - 'benchmarks/v030_federated_compact_framing_v8_direct_v5.py'
+      - 'experiments/entropygraph_v025.py'
+      - 'experiments/entropygraph_v030_federated_embedded_fs_candidate_v7.py'
+      - '.github/workflows/v030-eg08-graph-hotpath.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: v030-eg08-graph-hotpath-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  profile:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      PYTHONPATH: ${{ github.workspace }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y zstd gcc ffmpeg libsndfile1
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[audio,test]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
+      - name: Compile profiler
+        run: python -m py_compile benchmarks/v030_eg08_graph_hotpath_oracle.py
+      - name: Profile exact EG08 graph stage
+        run: |
+          mkdir -p benchmark-artifacts
+          python benchmarks/v030_eg08_graph_hotpath_oracle.py \
+            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-eg08-graph-hotpath-work" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-eg08-graph-hotpath.json"
+      - name: Evidence-boundary check
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          d=json.loads(Path('benchmark-artifacts/v030-eg08-graph-hotpath.json').read_text())
+          assert d['schema']=='cmpct-v030-eg08-graph-hotpath-oracle-v1'
+          assert d['contract']['release_credit'] is False
+          assert d['contract']['production_change'] is False
+          assert d['contract']['profiled_timing_receives_speed_credit'] is False
+          assert d['unprofiled']['rounds']==7
+          assert d['gate']['experiment_valid'] is True
+          assert d['gate']['passed'] is True
+          assert d['profiled']['top_by_cumulative_cpu']
+          PY
+      - name: Public-surface guard
+        run: python tools/check_public_surface.py
+      - name: CI topology self-check
+        run: python tools/check_ci_topology.py .github/workflows/v030-eg08-graph-hotpath.yml
+      - name: Upload hotpath receipt
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: v030-eg08-graph-hotpath-${{ github.sha }}
+          path: benchmark-artifacts/v030-eg08-graph-hotpath.json
+          if-no-files-found: warn
+          retention-days: 90
