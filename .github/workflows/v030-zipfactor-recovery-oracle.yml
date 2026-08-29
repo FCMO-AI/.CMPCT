@@ -19,6 +19,7 @@ concurrency:
 
 env:
   PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
 
 jobs:
   recovery:
@@ -26,6 +27,10 @@ jobs:
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - name: Bind exact candidate head
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
       - uses: actions/setup-python@v6
         with:
           python-version: '3.11'
@@ -50,7 +55,7 @@ jobs:
       - name: Independently enforce recovery and size boundary
         run: |
           python - <<'PY'
-          import json
+          import json, os
           from pathlib import Path
           d=json.loads(Path('benchmark-artifacts/v030-zf-recovery.json').read_text())
           g=d['gate']
@@ -67,6 +72,7 @@ jobs:
           assert d['candidate']['control_copies']==2
           assert d['candidate']['archive_bytes'] < d['zstd19_bytes']
           assert g['passed'] is True
+          Path('benchmark-artifacts/v030-zf-recovery-candidate.txt').write_text(os.environ['EVIDENCE_HEAD']+'\n')
           PY
       - name: CI topology self-check
         run: python tools/check_ci_topology.py .github/workflows/v030-zipfactor-recovery-oracle.yml
@@ -74,8 +80,10 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v6
         with:
-          name: v030-zf-recovery-${{ github.sha }}
-          path: benchmark-artifacts/v030-zf-recovery.json
+          name: v030-zf-recovery-${{ env.EVIDENCE_HEAD }}
+          path: |
+            benchmark-artifacts/v030-zf-recovery.json
+            benchmark-artifacts/v030-zf-recovery-candidate.txt
           if-no-files-found: warn
           retention-days: 90
 
