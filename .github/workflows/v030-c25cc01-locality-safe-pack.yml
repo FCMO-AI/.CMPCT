@@ -6,6 +6,7 @@ on:
     paths:
       - 'benchmarks/v030_c25cc01_locality_safe_pack_oracle.py'
       - 'benchmarks/v030_c25cc01_locality_pack_strategy_oracle.py'
+      - 'benchmarks/v030_c25cc01_packmap_control_oracle.py'
       - 'experiments/entropygraph_v030_r24_compact_control_profile.py'
       - 'experiments/entropygraph_v030_release_product*.py'
       - 'src/cmpct/builder.py'
@@ -23,7 +24,7 @@ permissions:
 jobs:
   locality-safe-pack:
     runs-on: ubuntu-24.04
-    timeout-minutes: 50
+    timeout-minutes: 55
     env:
       PYTHONPATH: ${{ github.workspace }}
     steps:
@@ -54,6 +55,7 @@ jobs:
         run: |
           python -m py_compile benchmarks/v030_c25cc01_locality_safe_pack_oracle.py
           python -m py_compile benchmarks/v030_c25cc01_locality_pack_strategy_oracle.py
+          python -m py_compile benchmarks/v030_c25cc01_packmap_control_oracle.py
       - name: Run exact 15-workload locality-safe A/B
         run: |
           mkdir -p benchmark-artifacts
@@ -65,6 +67,11 @@ jobs:
           python benchmarks/v030_c25cc01_locality_pack_strategy_oracle.py \
             --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-c25cc01-pack-strategy-work" \
             --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-c25cc01-pack-strategy.json"
+      - name: Measure implicit S_PACK control map
+        run: |
+          python benchmarks/v030_c25cc01_packmap_control_oracle.py \
+            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-c25cc01-packmap-work" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-c25cc01-packmap.json"
       - name: Enforce diagnostic evidence boundary
         run: |
           python - <<'PY'
@@ -97,6 +104,15 @@ jobs:
           assert len(p['strategies'])==4
           assert p['gate']['experiment_valid'] is True
           assert p['gate']['passed'] is True
+          m=json.loads(Path('benchmark-artifacts/v030-c25cc01-packmap.json').read_text())
+          assert m['schema']=='cmpct-v030-c25cc01-packmap-control-oracle-v1'
+          assert m['contract']['release_credit'] is False
+          assert m['contract']['production_change'] is False
+          assert m['contract']['physical_data_span_changed'] is False
+          assert m['contract']['semantic_index_roundtrip_exact'] is True
+          assert m['contract']['locality_ceiling']==8
+          assert m['gate']['experiment_valid'] is True
+          assert m['gate']['passed'] is True
           PY
       - name: Record candidate fingerprint
         run: printf '%s\n' '${{ steps.candidate.outputs.sha }}' > benchmark-artifacts/v030-c25cc01-candidate.txt
@@ -112,6 +128,7 @@ jobs:
           path: |
             benchmark-artifacts/v030-c25cc01-locality-safe-pack.json
             benchmark-artifacts/v030-c25cc01-pack-strategy.json
+            benchmark-artifacts/v030-c25cc01-packmap.json
             benchmark-artifacts/v030-c25cc01-candidate.txt
           if-no-files-found: warn
           retention-days: 90
