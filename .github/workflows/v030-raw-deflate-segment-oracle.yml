@@ -27,6 +27,17 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: Bind exact candidate
+        id: candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          expected='${{ github.event.pull_request.head.sha || github.sha }}'
+          actual="$(git rev-parse HEAD)"
+          test "$actual" = "$expected"
+          echo "sha=$actual" >> "$GITHUB_OUTPUT"
       - uses: actions/setup-python@v6
         with:
           python-version: '3.11'
@@ -61,7 +72,6 @@ jobs:
           assert len(d['candidates']) == 12
           assert all(c['max_member_read_amplification'] <= 8.0 for c in d['candidates'])
           assert all(c['max_decode_unit_bytes'] <= 8*1024*1024 for c in d['candidates'])
-          # A four-way win is evidence, not a correctness precondition. Preserve an honest negative result.
           if d['viable_candidate'] is not None:
               c=d['viable_candidate']
               assert c['tree_verified'] is True and c['locality_green'] is True
@@ -69,13 +79,16 @@ jobs:
               assert c['archive_bytes'] < d['tar_zstd19']['archive_bytes']
               assert c['create_s'] < d['zip']['create_s']
               assert c['create_s'] < d['tar_zstd19']['create_s']
+          Path('benchmark-artifacts/v030-raw-deflate-segment-candidate.txt').write_text('${{ steps.candidate.outputs.sha }}\n')
           PY
       - name: CI topology self-check
         run: python tools/check_ci_topology.py .github/workflows/v030-raw-deflate-segment-oracle.yml
       - uses: actions/upload-artifact@v6
         if: always()
         with:
-          name: v030-raw-deflate-segment-${{ github.sha }}
-          path: benchmark-artifacts/v030-raw-deflate-segment.json
+          name: v030-raw-deflate-segment-${{ steps.candidate.outputs.sha || github.sha }}
+          path: |
+            benchmark-artifacts/v030-raw-deflate-segment.json
+            benchmark-artifacts/v030-raw-deflate-segment-candidate.txt
           if-no-files-found: error
           retention-days: 90
