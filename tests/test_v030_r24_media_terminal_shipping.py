@@ -82,3 +82,41 @@ def test_release_product_terminalizes_only_when_media_policy_admits(monkeypatch,
     result = PRODUCT.build(tmp_path, out)
     assert calls == ["tournament"]
     assert result == {"archive_bytes": 456}
+
+
+def test_media_shape_impossibility_skips_all_media_io(monkeypatch, tmp_path: Path) -> None:
+    """Once the shared walk proves >128 files, neither another walk nor media header reads may run."""
+    out = tmp_path / "out.cmpct"
+    calls: list[str] = []
+    preflight = {
+        "logs_eligible": False,
+        "shape": {
+            "regular_files": MEDIA.MAX_REGULAR_FILES + 1,
+            "logical_bytes": 64 * 1024 * 1024,
+            "average_regular_bytes": 64 * 1024 * 1024 / (MEDIA.MAX_REGULAR_FILES + 1),
+        },
+        "media_files": None,
+        "metadata_error": False,
+        "scanned_regular_files": MEDIA.MAX_REGULAR_FILES + 1,
+        "short_circuited": False,
+    }
+    monkeypatch.setattr(PRODUCT, "_shared_frontdoor_preflight", lambda root: preflight)
+    monkeypatch.setattr(
+        PRODUCT._R24_MEDIA,
+        "analyze",
+        lambda root: (_ for _ in ()).throw(AssertionError("unexpected second media source walk")),
+    )
+    monkeypatch.setattr(
+        PRODUCT._R24_MEDIA,
+        "analyze_precollected",
+        lambda rows: (_ for _ in ()).throw(AssertionError("unexpected media header/entropy pass")),
+    )
+    monkeypatch.setattr(PRODUCT, "_build_compact_control_terminal_if_eligible", lambda root, target, source_shape=None: None)
+    monkeypatch.setattr(
+        PRODUCT._BASE_IMPL,
+        "build",
+        lambda root, target: calls.append("tournament") or {"archive_bytes": 456},
+    )
+    result = PRODUCT.build(tmp_path, out)
+    assert calls == ["tournament"]
+    assert result == {"archive_bytes": 456}
