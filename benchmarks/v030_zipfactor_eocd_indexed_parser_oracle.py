@@ -9,7 +9,8 @@ EOCD, walk the declared central directory once, and validate each owning local h
 local-offset. The returned structure must remain equality-identical to the mature parser.
 
 The measurement itself has zero release credit. It is valid only if the parsed object, fused-scan fingerprint, and
-exact 14,033-byte candidate/SHA remain unchanged across alternating timing rounds.
+exact 14,033-byte candidate/SHA remain unchanged across alternating timing rounds. Parser selection is injected
+through the fused scanner's explicit differential-test seam; no process-global parser mutation is permitted.
 """
 
 import argparse
@@ -55,37 +56,30 @@ def run(work_root: Path) -> dict:
     with tempfile.TemporaryDirectory(prefix="cmpct-zf-eocd-parser-", dir=work_root) as td_raw:
         stage = EXT._normalized_stage(source, Path(td_raw))
         baseline_parse = BASE._parse_zip
-        baseline_result = FUSED._scan(stage)
+        baseline_result = FUSED._scan(stage, parse_zip=baseline_parse)
         baseline_fp = _fingerprint(baseline_result)
-        try:
-            BASE._parse_zip = _candidate_parse_zip
-            candidate_result = FUSED._scan(stage)
-            candidate_fp = _fingerprint(candidate_result)
-        finally:
-            BASE._parse_zip = baseline_parse
+        candidate_result = FUSED._scan(stage, parse_zip=_candidate_parse_zip)
+        candidate_fp = _fingerprint(candidate_result)
         if candidate_result != baseline_result or candidate_fp != baseline_fp:
             raise RuntimeError("EOCD-indexed ZIP parser changed fused scan semantics")
 
         baseline_times: list[float] = []
         candidate_times: list[float] = []
         raw_rows = []
-        try:
-            for rep in range(ROUNDS):
-                order = ("baseline", "candidate") if rep % 2 == 0 else ("candidate", "baseline")
-                row = {}
-                for kind in order:
-                    BASE._parse_zip = baseline_parse if kind == "baseline" else _candidate_parse_zip
-                    t0 = time.perf_counter_ns()
-                    result = FUSED._scan(stage)
-                    elapsed = (time.perf_counter_ns() - t0) / 1e9
-                    if _fingerprint(result) != baseline_fp:
-                        raise RuntimeError(f"{kind} scan fingerprint drifted on repetition {rep}")
-                    row[kind] = elapsed
-                baseline_times.append(row["baseline"])
-                candidate_times.append(row["candidate"])
-                raw_rows.append(row)
-        finally:
-            BASE._parse_zip = baseline_parse
+        for rep in range(ROUNDS):
+            order = ("baseline", "candidate") if rep % 2 == 0 else ("candidate", "baseline")
+            row = {}
+            for kind in order:
+                parser = baseline_parse if kind == "baseline" else _candidate_parse_zip
+                t0 = time.perf_counter_ns()
+                result = FUSED._scan(stage, parse_zip=parser)
+                elapsed = (time.perf_counter_ns() - t0) / 1e9
+                if _fingerprint(result) != baseline_fp:
+                    raise RuntimeError(f"{kind} scan fingerprint drifted on repetition {rep}")
+                row[kind] = elapsed
+            baseline_times.append(row["baseline"])
+            candidate_times.append(row["candidate"])
+            raw_rows.append(row)
         archive, _stats = BUILD.build_bytes(stage, level=3, group_size=7)
 
     archive_sha = hashlib.sha256(archive).hexdigest()
@@ -96,11 +90,12 @@ def run(work_root: Path) -> dict:
     faster = saving >= MIN_MEDIAN_SAVING_S and cand_med < base_med
     valid = exact and candidate_fp == baseline_fp and len(baseline_times) == ROUNDS and len(candidate_times) == ROUNDS
     return {
-        "schema": "cmpct-v030-zipfactor-eocd-indexed-parser-oracle-v2",
+        "schema": "cmpct-v030-zipfactor-eocd-indexed-parser-oracle-v3",
         "contract": {
             "release_credit": False,
             "production_parser_module": "experiments.entropygraph_v030_zipfactor_eocd_parser",
             "production_selection_change": False,
+            "process_global_mutation": False,
             "required_archive_bytes": EXPECTED_BYTES,
             "required_archive_sha256": EXPECTED_SHA,
             "minimum_median_saving_s": MIN_MEDIAN_SAVING_S,
@@ -121,8 +116,8 @@ def run(work_root: Path) -> dict:
         },
         "gate": {"experiment_valid": valid, "materially_faster": faster, "passed": valid},
         "claim_boundary": (
-            "Product-side parser implementation under exact research A/B. A material speed win still requires "
-            "builder wiring plus complete ZIP/Zstd/recovery/native/Android/final-authority evidence before promotion."
+            "Product-side parser implementation under exact research A/B. The fused builder now uses the candidate "
+            "by default, but complete ZIP/Zstd/recovery/native/Android/final-authority evidence remains mandatory."
         ),
     }
 
