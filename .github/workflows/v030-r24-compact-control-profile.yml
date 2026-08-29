@@ -13,6 +13,7 @@ on:
       - 'benchmarks/v030_c25cc01_implicit_packmap_v3_oracle.py'
       - 'benchmarks/v030_c25cc01_implicit_packmap_v4_oracle.py'
       - 'benchmarks/v030_c25cc01_self_describing_blobtable_oracle.py'
+      - 'benchmarks/v030_c25cc01_direct_extract_oracle.py'
       - 'experiments/entropygraph_v030_release_product.py'
       - 'experiments/entropygraph_v030_r24_dead_dictionary.py'
       - 'tests/test_v030_r24_compact_control_profile.py'
@@ -65,6 +66,7 @@ jobs:
           python -m py_compile experiments/entropygraph_v030_r24_compact_control_direct_extract.py
           python -m py_compile benchmarks/v030_r24_compact_control_profile_productization.py
           python -m py_compile benchmarks/v030_c25cc01_self_describing_blobtable_oracle.py
+          python -m py_compile benchmarks/v030_c25cc01_direct_extract_oracle.py
           python -m py_compile tests/test_v030_r24_compact_control_profile.py
           python -m py_compile tests/test_v030_r24_compact_control_direct_extract.py
           python -m py_compile tests/test_v030_c25cc01_self_describing_blobtable.py
@@ -74,9 +76,35 @@ jobs:
             tests/test_v030_r24_compact_control_profile.py \
             tests/test_v030_r24_compact_control_direct_extract.py \
             tests/test_v030_c25cc01_self_describing_blobtable.py
-      - name: Run exact external-normalized direct profile proof
+      - name: Measure direct C25 extraction without compatibility archive
         run: |
           mkdir -p benchmark-artifacts
+          python -m benchmarks.v030_c25cc01_direct_extract_oracle \
+            --work-root "$RUNNER_TEMP/v030-c25cc01-direct-extract" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-c25cc01-direct-extract.json"
+      - name: Ratchet direct-extract semantic boundary
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          d=json.loads(Path('benchmark-artifacts/v030-c25cc01-direct-extract.json').read_text())
+          assert d['schema']=='cmpct-v030-c25cc01-direct-extract-oracle-v1'
+          c=d['contract']
+          assert c['rounds']==7
+          assert c['same_archive_bytes'] is True
+          assert c['same_mature_r24_decoder'] is True
+          assert c['legacy_compatibility_materialization'] is True
+          assert c['direct_compatibility_materialization'] is False
+          assert c['publication_inside_timing'] is True
+          assert c['archive_bytes_changed'] is False
+          assert c['selector_change'] is False
+          assert c['release_credit'] is False and d['release_credit'] is False
+          assert d['all_outputs_exact'] is True
+          assert len(d['samples_s']['legacy'])==7 and len(d['samples_s']['direct'])==7
+          assert d['median_s']['legacy'] > 0 and d['median_s']['direct'] > 0
+          PY
+      - name: Run exact external-normalized direct profile proof
+        run: |
           python benchmarks/v030_r24_compact_control_profile_productization.py \
             --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-r24-cc-profile-work" \
             --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-r24-cc-profile.json"
@@ -197,6 +225,7 @@ jobs:
           path: |
             benchmark-artifacts/v030-r24-cc-profile.json
             benchmark-artifacts/v030-c25cc01-self-describing-blobtable.json
+            benchmark-artifacts/v030-c25cc01-direct-extract.json
             benchmark-artifacts/v030-r24-cc-profile-candidate.txt
           if-no-files-found: error
           retention-days: 90
