@@ -9,6 +9,9 @@ on:
       - 'benchmarks/v030_r24_compact_control_profile_productization.py'
       - 'benchmarks/v030_r24_compact_control_external_normalized.py'
       - 'benchmarks/v030_r24_compact_control_oracle.py'
+      - 'benchmarks/v030_c25cc01_implicit_packmap_v3_oracle.py'
+      - 'benchmarks/v030_c25cc01_implicit_packmap_v4_oracle.py'
+      - 'benchmarks/v030_c25cc01_self_describing_blobtable_oracle.py'
       - 'experiments/entropygraph_v030_release_product.py'
       - 'experiments/entropygraph_v030_r24_dead_dictionary.py'
       - 'tests/test_v030_r24_compact_control_profile.py'
@@ -57,6 +60,7 @@ jobs:
         run: |
           python -m py_compile experiments/entropygraph_v030_r24_compact_control_profile.py
           python -m py_compile benchmarks/v030_r24_compact_control_profile_productization.py
+          python -m py_compile benchmarks/v030_c25cc01_self_describing_blobtable_oracle.py
           python -m py_compile tests/test_v030_r24_compact_control_profile.py
       - name: Run focused semantics and recovery ratchet
         run: pytest -q tests/test_v030_r24_compact_control_profile.py
@@ -125,6 +129,30 @@ jobs:
               assert g['target_strict_four_way_win'] is False
               assert g['promotion_signal'] is False
               assert g['passed'] is False
+          PY
+      - name: Measure self-describing blob-table elision
+        run: |
+          python benchmarks/v030_c25cc01_self_describing_blobtable_oracle.py \
+            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-c25cc01-self-describing-blobtable-work" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-c25cc01-self-describing-blobtable.json"
+      - name: Enforce self-describing blob-table evidence boundary
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          d=json.loads(Path('benchmark-artifacts/v030-c25cc01-self-describing-blobtable.json').read_text())
+          assert d['schema']=='cmpct-v030-c25cc01-self-describing-blobtable-oracle-v1'
+          assert d['contract']['release_credit'] is False
+          assert d['contract']['blob_table_in_control'] is False
+          assert d['contract']['physical_blob_header_semantic_owner'] is True
+          assert d['contract']['physical_payload_records_changed'] is False
+          assert d['gate']['experiment_valid'] is True
+          c=d['candidate']
+          assert c['semantic_index_roundtrip_exact'] is True
+          assert c['physical_payload_records_unchanged'] is True
+          assert c['blob_table_reconstructed_from_physical_records'] is True
+          assert c['blob_rows_elided'] > 0
+          # Strict four-way status is evidence, not a workflow-pass condition: losing research remains durable.
           Path('benchmark-artifacts/v030-r24-cc-profile-candidate.txt').write_text('${{ steps.candidate.outputs.sha }}\n')
           PY
       - name: Public-surface guard
@@ -139,6 +167,7 @@ jobs:
           name: v030-r24-compact-control-profile-${{ steps.candidate.outputs.sha || github.sha }}
           path: |
             benchmark-artifacts/v030-r24-cc-profile.json
+            benchmark-artifacts/v030-c25cc01-self-describing-blobtable.json
             benchmark-artifacts/v030-r24-cc-profile-candidate.txt
           if-no-files-found: error
           retention-days: 90
