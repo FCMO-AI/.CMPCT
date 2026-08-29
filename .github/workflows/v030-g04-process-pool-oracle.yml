@@ -26,6 +26,17 @@ jobs:
     timeout-minutes: 90
     steps:
       - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: Bind exact candidate
+        id: candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          expected='${{ github.event.pull_request.head.sha || github.sha }}'
+          actual="$(git rev-parse HEAD)"
+          test "$actual" = "$expected"
+          echo "sha=$actual" >> "$GITHUB_OUTPUT"
       - uses: actions/setup-python@v6
         with:
           python-version: '3.11'
@@ -71,24 +82,29 @@ jobs:
               assert row['all_byte_identical'] is True
               assert len(row['repetitions'])==2
               assert row['substrate_graph_bytes'] > 0
-          # Material speedup is intentionally checked too: a byte-identical scheduler that does not move wall-clock
-          # enough is negative research evidence and must not be promoted into the release product.
+          # This is regression evidence for an already-promoted scheduling-only optimization.
           assert d['gate']['all_materially_faster'] is True
           assert d['gate']['passed'] is True
+          Path('benchmark-artifacts/v030-g04-process-candidate.txt').write_text('${{ steps.candidate.outputs.sha }}\n')
           PY
 
       - name: Public-surface guard
         if: always()
         run: python tools/check_public_surface.py
+      - name: CI topology self-check
+        if: always()
+        run: python tools/check_ci_topology.py .github/workflows/v030-g04-process-pool-oracle.yml
 
       - name: Upload scheduler evidence
         if: always()
         uses: actions/upload-artifact@v6
         with:
-          name: v030-g04-process-pool-oracle-${{ github.sha }}
-          path: benchmark-artifacts/v030-g04-process-oracle.json
+          name: v030-g04-process-pool-oracle-${{ steps.candidate.outputs.sha || github.sha }}
+          path: |
+            benchmark-artifacts/v030-g04-process-oracle.json
+            benchmark-artifacts/v030-g04-process-candidate.txt
           if-no-files-found: warn
           retention-days: 90
 
-# Deep diagnostic only. A green result proves an exact-byte scheduling optimization worth integrating; it does
-# not itself satisfy release performance, ZIP/Zstd dominance, or strict release authority.
+# Deep regression evidence for the already-promoted process scheduler. Green proves exact-byte scheduling parity
+# plus material overlay speedup; it does not itself satisfy ZIP/Zstd dominance or strict release authority.
