@@ -37,10 +37,16 @@ jobs:
       - name: Compile product boundary
         run: |
           python -m py_compile experiments/entropygraph_v030_release_product_logs_runtime.py
+          python -m py_compile experiments/entropygraph_v030_release_product_runtime.py
           python -m py_compile tests/test_v030_logs_runtime_productization.py
+          python -m py_compile tests/test_v030_release_product_runtime.py
           python -m py_compile benchmarks/v030_logs_semantic_owner_runtime_oracle.py
       - name: Ratchet product semantics and fail-closed behavior
-        run: pytest -q tests/test_v030_logs_runtime_productization.py tests/test_v030_logs_fused_extract.py
+        run: |
+          pytest -q \
+            tests/test_v030_logs_runtime_productization.py \
+            tests/test_v030_release_product_runtime.py \
+            tests/test_v030_logs_fused_extract.py
       - name: Re-measure one-session extraction on exact product head
         run: |
           mkdir -p benchmark-artifacts
