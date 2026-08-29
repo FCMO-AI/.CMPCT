@@ -7,6 +7,11 @@ subset already owned by ``entropygraph_v030_zipfactor_profile`` (single disk, no
 no data descriptors, store/deflate members, contiguous local records, exact central/local
 metadata agreement).
 
+EOCD discovery deliberately validates every backwards signature candidate rather than trusting
+a single ``rfind`` result: ZIP comments are arbitrary bytes and may legally contain the EOCD
+signature themselves. A candidate is accepted only if its comment length reaches exact EOF and
+its complete central/local topology validates.
+
 The parser returns the exact mature object shape. No benchmark identity or workload metadata
 participates. Promotion still requires hostile-equivalence, exact archive identity, recovery,
 native/Android and release-authority evidence.
@@ -24,12 +29,8 @@ EOCD_HDR = struct.Struct("<IHHHHIIH")
 MAX_EOCD_SEARCH = 22 + 65535
 
 
-def parse_zip(raw: bytes) -> dict | None:
+def _parse_at(raw: bytes, eocd_at: int) -> dict | None:
     nraw = len(raw)
-    if nraw < EOCD_HDR.size:
-        return None
-
-    eocd_at = raw.rfind(EOCD_SIG, max(0, nraw - MAX_EOCD_SEARCH))
     if eocd_at < 0 or eocd_at + EOCD_HDR.size > nraw:
         return None
     sig, disk, disk_cd, entries_disk, entries_total, cd_size, cd_offset, comment_len = EOCD_HDR.unpack_from(raw, eocd_at)
@@ -130,3 +131,22 @@ def parse_zip(raw: bytes) -> dict | None:
             "comment": raw[eocd_at + EOCD_HDR.size:],
         },
     }
+
+
+def parse_zip(raw: bytes) -> dict | None:
+    nraw = len(raw)
+    if nraw < EOCD_HDR.size:
+        return None
+
+    lower = max(0, nraw - MAX_EOCD_SEARCH)
+    search_end = nraw
+    while True:
+        eocd_at = raw.rfind(EOCD_SIG, lower, search_end)
+        if eocd_at < 0:
+            return None
+        parsed = _parse_at(raw, eocd_at)
+        if parsed is not None:
+            return parsed
+        # A signature inside the arbitrary ZIP comment is not the EOCD. Keep walking backwards
+        # through the bounded EOCD search window until a fully valid topology is found.
+        search_end = eocd_at
