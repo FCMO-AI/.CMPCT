@@ -16,6 +16,7 @@ PULL_REQUEST_RE = re.compile(r"(?m)^  pull_request:(?:\s|$)")
 PUSH_RE = re.compile(r"(?m)^  push:(?:\s|$)")
 RUNNER_RE = re.compile(r"(?m)^\s+runs-on:")
 CONCURRENCY_RE = re.compile(r"(?m)^concurrency:\s*$")
+CONCURRENCY_HEAD_SHA_RE = re.compile(r"(?m)^\s+group:.*github\.event\.pull_request\.head\.sha")
 CANCEL_RE = re.compile(r"(?m)^\s+cancel-in-progress:\s*true\s*$")
 PRESERVE_EXACT_RECEIPT_RE = re.compile(r"(?m)^# ci-cancel-policy: preserve-running-exact-receipt\s*$")
 EXACT_HEAD_RE = re.compile(r"github\.event\.pull_request\.head\.sha")
@@ -42,6 +43,11 @@ def validate(path: Path) -> list[str]:
     if consumes_runner and auto_events:
         if not CONCURRENCY_RE.search(text):
             errors.append("automatic runner workflow lacks a top-level concurrency group")
+        if CANCEL_RE.search(text) and PULL_REQUEST_RE.search(text) and CONCURRENCY_HEAD_SHA_RE.search(text):
+            errors.append(
+                "cancel-in-progress is ineffective because the concurrency group is keyed by pull_request.head.sha; "
+                "use a PR/ref scheduling key and keep exact SHA custody in checkout/evidence instead"
+            )
         if not CANCEL_RE.search(text):
             preserve_exact_receipt = bool(PRESERVE_EXACT_RECEIPT_RE.search(text))
             if not (
@@ -74,6 +80,10 @@ def validate(path: Path) -> list[str]:
     # its running receipt only with the explicit directive above, PR path scoping, a concurrency group,
     # and direct pull_request.head.sha custody. The completed predecessor remains research-only; this
     # exception changes runner scheduling, never release-evidence inheritance.
+    #
+    # Conversely, a normal cancel-on-new-head lane must not key its concurrency group by that same head SHA:
+    # different commits would then enter different groups and could never cancel one another. Scheduling identity
+    # belongs to the PR/ref; evidence identity belongs to the checked-out candidate SHA.
 
     return errors
 
