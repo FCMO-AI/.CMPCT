@@ -17,6 +17,8 @@ PUSH_RE = re.compile(r"(?m)^  push:(?:\s|$)")
 RUNNER_RE = re.compile(r"(?m)^\s+runs-on:")
 CONCURRENCY_RE = re.compile(r"(?m)^concurrency:\s*$")
 CANCEL_RE = re.compile(r"(?m)^\s+cancel-in-progress:\s*true\s*$")
+PRESERVE_EXACT_RECEIPT_RE = re.compile(r"(?m)^# ci-cancel-policy: preserve-running-exact-receipt\s*$")
+EXACT_HEAD_RE = re.compile(r"github\.event\.pull_request\.head\.sha")
 PATH_SCOPE_RE = re.compile(r"(?m)^\s+(paths|paths-ignore):\s*$")
 BRANCH_SCOPE_RE = re.compile(r"(?m)^\s+branches(?:-ignore)?:\s*")
 
@@ -41,7 +43,19 @@ def validate(path: Path) -> list[str]:
         if not CONCURRENCY_RE.search(text):
             errors.append("automatic runner workflow lacks a top-level concurrency group")
         if not CANCEL_RE.search(text):
-            errors.append("automatic runner workflow lacks 'cancel-in-progress: true'")
+            preserve_exact_receipt = bool(PRESERVE_EXACT_RECEIPT_RE.search(text))
+            if not (
+                preserve_exact_receipt
+                and lane == "deep"
+                and PULL_REQUEST_RE.search(text)
+                and PATH_SCOPE_RE.search(text)
+                and CONCURRENCY_RE.search(text)
+                and EXACT_HEAD_RE.search(text)
+            ):
+                errors.append(
+                    "automatic runner workflow lacks 'cancel-in-progress: true' or the narrow "
+                    "deep/exact-head preserved-receipt policy"
+                )
 
     if consumes_runner and PULL_REQUEST_RE.search(text):
         if lane in {"deep", "release", "publisher"} and not PATH_SCOPE_RE.search(text):
@@ -54,6 +68,12 @@ def validate(path: Path) -> list[str]:
     # often discover at runtime that the durable target already exists. The lane rule makes that choice
     # explicit and forces path scoping at minimum; once one-shot publication is complete they should be
     # workflow_dispatch-only per docs/CI_ARCHITECTURE.md.
+    #
+    # Very long exact-head A/Bs are a separate case: cancelling a 20+ minute measurement whenever an
+    # unrelated PR commit lands can prevent any receipt from completing at all. A deep lane may preserve
+    # its running receipt only with the explicit directive above, PR path scoping, a concurrency group,
+    # and direct pull_request.head.sha custody. The completed predecessor remains research-only; this
+    # exception changes runner scheduling, never release-evidence inheritance.
 
     return errors
 
