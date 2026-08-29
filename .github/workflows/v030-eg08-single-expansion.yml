@@ -2,9 +2,20 @@
 name: CMPCT v0.30 EG08 single-expansion verify locality
 
 on:
+  push:
+    branches: [agent/v030-authoritative-integration]
+    paths:
+      - 'benchmarks/.v030-research-trigger'
+      - 'experiments/entropygraph_v030_federated_embedded_fs_candidate_v7.py'
+      - 'experiments/entropygraph_v030_federated_compact_framing_candidate_v8.py'
+      - 'benchmarks/v030_federated_compact_framing_v8_policy_exec_v6.py'
+      - 'benchmarks/v030_federated_compact_framing_v8_policy_exec_v7.py'
+      - 'benchmarks/v030_federated_compact_framing_v8_policy_exec_v8.py'
+      - '.github/workflows/v030-eg08-single-expansion.yml'
   pull_request:
     branches: [main]
     paths:
+      - 'benchmarks/.v030-research-trigger'
       - 'experiments/entropygraph_v030_federated_embedded_fs_candidate_v7.py'
       - 'experiments/entropygraph_v030_federated_compact_framing_candidate_v8.py'
       - 'benchmarks/v030_federated_compact_framing_v8_policy_exec_v6.py'
