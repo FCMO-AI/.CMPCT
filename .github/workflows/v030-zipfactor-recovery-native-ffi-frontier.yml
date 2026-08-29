@@ -6,6 +6,7 @@ on:
     branches: [main]
     paths:
       - 'benchmarks/v030_zipfactor_recovery_native_ffi_frontier.py'
+      - 'benchmarks/v030_zipfactor_recovery_memory_ffi_frontier.py'
       - 'benchmarks/v030_zipfactor_recovery_oracle.py'
       - 'benchmarks/v030_zipfactor_native_ffi_complete_frontier.py'
       - 'benchmarks/v030_external_competitors.py'
@@ -61,6 +62,7 @@ jobs:
           python -m py_compile experiments/entropygraph_v030_zipfactor_eocd_parser.py
           python -m py_compile experiments/entropygraph_v030_zipfactor_fused.py
           python -m py_compile benchmarks/v030_zipfactor_recovery_native_ffi_frontier.py
+          python -m py_compile benchmarks/v030_zipfactor_recovery_memory_ffi_frontier.py
           python -m py_compile experiments/entropygraph_v030_zipfactor_compact_v3_fused_finalize.py
           cargo build --release --manifest-path native/cmpct-zipfactor-v3-ffi/Cargo.toml
       - name: Preserve Rust correctness before timing
@@ -74,6 +76,12 @@ jobs:
             --work-root "$RUNNER_TEMP/v030-zf-recovery-native-ffi" \
             --native-library "$GITHUB_WORKSPACE/native/cmpct-zipfactor-v3-ffi/target/release/libcmpct_zipfactor_v3_ffi.so" \
             --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-zf-recovery-native-ffi.json"
+      - name: Run byte-slice recovered candidate against ZIP and Zstd-19
+        run: |
+          python -m benchmarks.v030_zipfactor_recovery_memory_ffi_frontier \
+            --work-root "$RUNNER_TEMP/v030-zf-recovery-memory-ffi" \
+            --native-library "$GITHUB_WORKSPACE/native/cmpct-zipfactor-v3-ffi/target/release/libcmpct_zipfactor_v3_ffi.so" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-zf-recovery-memory-ffi.json"
       - name: Ratchet exact recovery, direct-build identity and four-way boundary
         run: |
           python - <<'PY'
@@ -110,6 +118,36 @@ jobs:
                     and e['medians_s']['cmpct'] < e['medians_s']['zip'] and e['medians_s']['cmpct'] < e['medians_s']['zstd19'])
           assert e['strict_four_way_win'] is expected
           assert e['promotion_signal'] is expected
+
+          m=json.loads(Path('benchmark-artifacts/v030-zf-recovery-memory-ffi.json').read_text())
+          assert m['schema']=='cmpct-v030-zipfactor-recovery-memory-ffi-frontier-v1'
+          mc=m['contract']
+          assert mc['rounds']==9 and mc['ties_fail'] is True
+          assert mc['archive_bytes_changed'] is False and mc['selector_change'] is False
+          assert mc['release_credit'] is False and m['release_credit'] is False
+          assert mc['native_compile_inside_timing'] is False
+          assert mc['native_library_load_inside_timing'] is False
+          assert mc['native_ffi_call_inside_timing'] is True
+          assert mc['scratch_v3_publication_inside_timing'] is False
+          assert mc['native_archive_open_inside_timing'] is False
+          assert mc['native_byte_slice_ffi'] is True
+          assert mc['ffi_preparity_semantics_preserved'] is True
+          assert mc['ffi_streams_reconstructed_zip_sha256'] is True
+          assert mc['ffi_full_reconstructed_zip_allocation'] is False
+          assert m['memory_ffi_corruption_rejected'] is True
+          assert m['experiment_valid'] is True
+          assert m['legacy_recovery_byte_identical'] is True
+          assert m['legacy_recovery_sha256'] == m['direct_probe_sha256']
+          assert m['recovery_semantics_passed'] is True
+          assert m['candidate']['archive_bytes'] == 14227
+          assert m['candidate']['base_v3_bytes'] == 14033
+          assert m['candidate']['recovery_overhead_bytes'] == 194
+          assert m['sizes']['cmpct'] < m['sizes']['zip']
+          assert m['sizes']['cmpct'] < m['sizes']['zstd19']
+          m_expected=(m['sizes']['cmpct'] < m['sizes']['zip'] and m['sizes']['cmpct'] < m['sizes']['zstd19']
+                      and m['medians_s']['cmpct'] < m['medians_s']['zip'] and m['medians_s']['cmpct'] < m['medians_s']['zstd19'])
+          assert m['strict_four_way_win'] is m_expected
+          assert m['promotion_signal'] is m_expected
           Path('benchmark-artifacts/v030-zf-recovery-native-ffi-candidate.txt').write_text(os.environ['EVIDENCE_HEAD']+'\n')
           PY
       - name: Upload evidence
@@ -119,11 +157,14 @@ jobs:
           name: v030-zipfactor-recovery-native-ffi-frontier-${{ steps.candidate.outputs.sha || github.sha }}
           path: |
             benchmark-artifacts/v030-zf-recovery-native-ffi.json
+            benchmark-artifacts/v030-zf-recovery-memory-ffi.json
             benchmark-artifacts/v030-zf-recovery-native-ffi-candidate.txt
           if-no-files-found: warn
           retention-days: 90
       - name: CI topology self-check
         run: python tools/check_ci_topology.py .github/workflows/v030-zipfactor-recovery-native-ffi-frontier.yml
 
-# Research-only. A positive exact-head result advances the exact recovery representation toward portable/native
-# productization. It cannot alter production dispatch, selector policy, archive bytes, or the v0.30 release lock.
+# Research-only. A positive exact-head path-based result already advances the exact recovery representation toward
+# portable/native productization. The byte-slice A/B now tests removal of the remaining scratch V3 publication/open
+# without changing recovery bytes or verifier semantics. Neither path can alter production dispatch, selector policy,
+# archive bytes, or the v0.30 release lock.
