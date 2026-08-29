@@ -11,6 +11,10 @@ Every admitted row is then forced through the *complete current product* and sam
 candidate earns no promotion signal unless it restores the exact tree, is no larger than the complete product, and
 is strictly smaller and faster to create than both competitors.  This is intentionally expensive evidence for a
 cheap future terminal decision.
+
+A source whose inherited r24 physical layout violates the compact-control locality/decode contract is a legitimate
+negative result, not a harness crash.  Such a row is recorded as profile-ineligible and can never be admitted or
+earn promotion credit.  This preserves the <=8x law while keeping the all-15 evidence artifact complete.
 """
 
 import argparse
@@ -64,12 +68,28 @@ def _build_candidate(stage: Path, root: Path) -> dict:
     started = time.perf_counter()
     PRODUCT._locality_bounded_r24_build(stage, r24)
     candidate = root / "candidate.cmpct"
-    stats = dict(CC._write_profile(r24, candidate))
+    try:
+        stats = dict(CC._write_profile(r24, candidate))
+    except CC.ProfileNotEligible as exc:
+        return {
+            "profile_eligible": False,
+            "profile_reject_reason": str(exc),
+            "r24": r24,
+            "candidate": None,
+            "r24_bytes": r24.stat().st_size,
+            "candidate_bytes": None,
+            "candidate_create_verify_s": time.perf_counter() - started,
+            "candidate_tree": None,
+            "payload_unchanged": None,
+            "two_control_copies": None,
+        }
     verified = dict(CC.strong_verify(candidate))
     complete = time.perf_counter() - started
     if not verified.get("ok"):
         raise RuntimeError("C25CC01 candidate strong verification failed")
     return {
+        "profile_eligible": True,
+        "profile_reject_reason": None,
         "r24": r24,
         "candidate": candidate,
         "r24_bytes": r24.stat().st_size,
@@ -107,7 +127,13 @@ def _competitors(stage: Path, root: Path) -> dict:
             if name == "candidate":
                 cand_root = root / f"candidate-{rep}"
                 cand_root.mkdir(parents=True, exist_ok=True)
-                row[name] = _build_candidate(stage, cand_root)
+                candidate = _build_candidate(stage, cand_root)
+                if not candidate["profile_eligible"]:
+                    raise RuntimeError(
+                        "an admitted compact-control row became profile-ineligible during repeated measurement: "
+                        f"{candidate['profile_reject_reason']}"
+                    )
+                row[name] = candidate
             elif name == "zip":
                 out = root / f"zip-out-{rep}"
                 row[name] = EXT._zip(stage, root / f"row-{rep}.zip", out)
@@ -171,14 +197,19 @@ def main() -> None:
             stage = EXT._normalized_stage(sources[name], root / "stage-work")
             shape = _source_shape(stage)
             candidate = _build_candidate(stage, root / "candidate-preflight")
-            admitted = _admitted(shape, candidate["r24_bytes"], candidate["candidate_bytes"])
+            eligible = bool(candidate["profile_eligible"])
+            admitted = eligible and _admitted(shape, int(candidate["r24_bytes"]), int(candidate["candidate_bytes"]))
             row = {
                 "workload": name,
                 **shape,
+                "profile_eligible": eligible,
+                "profile_reject_reason": candidate["profile_reject_reason"],
                 "r24_bytes": candidate["r24_bytes"],
                 "candidate_bytes": candidate["candidate_bytes"],
                 "r24_to_logical": candidate["r24_bytes"] / max(1, shape["logical_bytes"]),
-                "candidate_to_r24": candidate["candidate_bytes"] / max(1, candidate["r24_bytes"]),
+                "candidate_to_r24": (
+                    candidate["candidate_bytes"] / max(1, candidate["r24_bytes"]) if eligible else None
+                ),
                 "admitted": admitted,
                 "payload_unchanged": candidate["payload_unchanged"],
                 "two_control_copies": candidate["two_control_copies"],
@@ -204,9 +235,10 @@ def main() -> None:
         for row in admitted_rows
         if not row.get("candidate_no_larger_than_full_product", False) or not row.get("strict_four_way_win", False)
     ]
+    ineligible_rows = [row["workload"] for row in rows if not row["profile_eligible"]]
     target = next(row for row in rows if row["workload"] == TARGET_EVIDENCE_ROW)
     result = {
-        "schema": "cmpct-v030-r24-compact-control-terminal-admission-v1",
+        "schema": "cmpct-v030-r24-compact-control-terminal-admission-v2",
         "contract": {
             "predicate_inputs": ["logical_bytes", "regular_files", "r24_bytes", "candidate_bytes"],
             "forbidden_inputs": ["workload_name", "path", "filename", "suffix", "content_hash", "archive_hash", "pack_hash"],
@@ -217,20 +249,31 @@ def main() -> None:
             "rounds": ROUNDS,
             "release_credit": False,
             "selector_change": False,
+            "profile_ineligibility_is_negative_evidence": True,
         },
         "rows": rows,
+        "profile_ineligible_rows": ineligible_rows,
         "admitted_count": len(admitted_rows),
         "counterexamples": counterexamples,
+        "target_profile_eligible": bool(target["profile_eligible"]),
         "target_admitted": bool(target["admitted"]),
         "target_four_way_win": bool(target.get("strict_four_way_win", False)),
         "gate": {
             "all15_complete": len(rows) == 15,
             "at_least_one_admitted": bool(admitted_rows),
+            "target_profile_eligible": bool(target["profile_eligible"]),
             "target_admitted": bool(target["admitted"]),
             "zero_counterexamples": not counterexamples,
             "all_admitted_payloads_unchanged": all(row["payload_unchanged"] for row in admitted_rows),
             "all_admitted_two_control_copies": all(row["two_control_copies"] for row in admitted_rows),
-            "passed": len(rows) == 15 and bool(admitted_rows) and bool(target["admitted"]) and not counterexamples and all(row["payload_unchanged"] and row["two_control_copies"] for row in admitted_rows),
+            "passed": (
+                len(rows) == 15
+                and bool(admitted_rows)
+                and bool(target["profile_eligible"])
+                and bool(target["admitted"])
+                and not counterexamples
+                and all(row["payload_unchanged"] and row["two_control_copies"] for row in admitted_rows)
+            ),
         },
     }
     args.output.parent.mkdir(parents=True, exist_ok=True)
