@@ -32,6 +32,7 @@ concurrency:
 
 env:
   PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
 
 jobs:
   compact-framing-frontier:
@@ -39,6 +40,10 @@ jobs:
     timeout-minutes: 480
     steps:
       - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - name: Bind exact candidate head
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
       - uses: actions/setup-python@v6
         with:
           python-version: '3.11'
@@ -140,7 +145,7 @@ jobs:
           )
           assert d['promotion_signal'] is expected_promotion
           # A genuine ZIP-speed loss is valid negative evidence, never a silent pass or
-          # release credit.  If performance improves enough, the same unchanged strict
+          # release credit. If performance improves enough, the same unchanged strict
           # conditions turn promotion_signal on automatically.
           if not expected_promotion:
               assert not (s['verified_create_beats_zip'] and s['verified_create_beats_zstd19'] and s['passed'])
@@ -152,7 +157,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v6
         with:
-          name: v030-eg08-compact-framing-${{ github.sha }}
+          name: v030-eg08-compact-framing-${{ env.EVIDENCE_HEAD }}
           path: |
             benchmark-artifacts/v030-eg08-framing.json
             benchmark-artifacts/v030-eg08-policy-v7.json
