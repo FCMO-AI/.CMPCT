@@ -78,15 +78,30 @@ jobs:
           assert d['gate']['experiment_valid'] is True
           assert d['gate']['passed'] is True
           assert d['profiled']['top_by_cumulative_cpu']
+
+          # The prefilter oracle is deliberately fail-closed: a byte-changing
+          # candidate is useful negative evidence, not a broken measurement.
+          # Require the current v2 receipt and only demand byte neutrality and
+          # speed when the oracle itself says promotion is eligible.
           p=json.loads(Path('benchmark-artifacts/v030-eg08-zip-prefilter.json').read_text())
-          assert p['schema']=='cmpct-v030-eg08-zip-plain-prefilter-oracle-v1'
+          assert p['schema']=='cmpct-v030-eg08-zip-plain-prefilter-oracle-v2'
           assert p['contract']['release_credit'] is False
           assert p['contract']['production_change'] is False
           assert p['contract']['required_byte_identity'] is True
-          assert p['office']['rounds']==11
-          assert p['office']['byte_identical_all_rounds'] is True
+          assert p['contract']['negative_evidence_is_successful_measurement_not_candidate_promotion'] is True
+          assert p['office']['planned_rounds']==11
+          assert p['office']['completed_pairs'] >= 1
           assert p['gate']['experiment_valid'] is True
           assert p['gate']['passed'] is True
+          if p['gate']['promotion_eligible']:
+              assert p['gate']['byte_neutral'] is True
+              assert p['gate']['materially_faster'] is True
+              assert p['office']['byte_identical_all_completed_pairs'] is True
+          else:
+              assert not (p['gate']['byte_neutral'] and p['gate']['materially_faster'])
+              if not p['gate']['byte_neutral']:
+                  assert p['office']['byte_identical_all_completed_pairs'] is False
+                  assert p['office']['first_mismatch'] is not None
           PY
       - name: Record candidate fingerprint
         run: printf '%s\n' '${{ steps.candidate.outputs.sha }}' > benchmark-artifacts/v030-eg08-candidate.txt
