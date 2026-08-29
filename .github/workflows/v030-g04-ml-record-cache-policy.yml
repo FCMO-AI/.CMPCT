@@ -3,7 +3,9 @@
 name: CMPCT v0.30 G0-G4 ML record-cache policy oracle
 
 on:
-  pull_request:
+  push:
+    branches:
+      - agent/v030-authoritative-integration
     paths:
       - 'benchmarks/v030_g04_ml_record_cache_policy_oracle.py'
       - 'experiments/entropygraph_v030_release_reader.py'
@@ -15,16 +17,15 @@ permissions:
   contents: read
 
 concurrency:
-  group: v030-g04-ml-record-cache-${{ github.event.pull_request.number || github.ref }}
-  # This A/B legitimately needs ~20+ minutes on hosted runners.  Keep the PR-level group so at most one
-  # measurement runs and one newer head waits, but do not throw away a nearly-complete exact-head receipt
-  # whenever unrelated convergence work advances the PR.  A predecessor receipt remains research-only;
-  # release authority still requires the newest exact fingerprint.
+  group: v030-g04-ml-record-cache-${{ github.ref }}
+  # This exact A/B legitimately needs ~20+ minutes. Branch-push path filtering means unrelated integration commits
+  # no longer enqueue it at all; if another relevant ML change arrives, preserve the running exact receipt and leave
+  # only the newest relevant push pending. Research evidence never substitutes for final exact-candidate authority.
   cancel-in-progress: false
 
 env:
   PYTHONPATH: ${{ github.workspace }}
-  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+  EVIDENCE_HEAD: ${{ github.sha }}
 
 jobs:
   ml-record-cache-policy:
@@ -35,8 +36,7 @@ jobs:
         with:
           ref: ${{ env.EVIDENCE_HEAD }}
       - name: Bind exact candidate head
-        run: |
-          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
       - uses: actions/setup-python@v6
         with:
           python-version: '3.11'
