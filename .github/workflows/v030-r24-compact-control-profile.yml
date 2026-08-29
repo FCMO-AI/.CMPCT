@@ -82,19 +82,36 @@ jobs:
           assert a['strict_improvement_count'] > 0
           t=d['target']
           assert t['rounds']==5
-          assert t['archive_sha_deterministic'] is True
-          assert t['external_tree_deterministic'] is True
-          assert t['physical_payload_records_unchanged'] is True
-          assert t['two_authenticated_control_copies'] is True
-          assert t['semantic_index_roundtrip_exact'] is True
-          assert t['strictly_smaller_than_zip'] is True
-          assert t['strictly_smaller_than_zstd19'] is True
-          assert t['strictly_faster_than_zip'] is True
-          assert t['strictly_faster_than_zstd19'] is True
-          assert t['strict_four_way_win'] is True
           assert d['gate']['experiment_valid'] is True
-          assert d['gate']['target_strict_four_way_win'] is True
-          assert d['gate']['promotion_signal'] is True
+          if t['eligible']:
+              assert t['deterministic_rejection'] is False
+              assert t['rejection_reason'] is None
+              assert t['archive_sha_deterministic'] is True
+              assert t['external_tree_deterministic'] is True
+              assert t['physical_payload_records_unchanged'] is True
+              assert t['two_authenticated_control_copies'] is True
+              assert t['semantic_index_roundtrip_exact'] is True
+              assert t['strictly_smaller_than_zip'] is True
+              assert t['strictly_smaller_than_zstd19'] is True
+              assert t['strictly_faster_than_zip'] is True
+              assert t['strictly_faster_than_zstd19'] is True
+              assert t['strict_four_way_win'] is True
+              assert d['gate']['target_eligible'] is True
+              assert d['gate']['target_deterministic_rejection'] is False
+              assert d['gate']['target_strict_four_way_win'] is True
+              assert d['gate']['promotion_signal'] is True
+          else:
+              assert t['deterministic_rejection'] is True
+              assert t['rejection_reason']
+              assert t['candidate_bytes'] is None
+              assert t['median_candidate_complete_create_s'] is None
+              assert t['strict_four_way_win'] is False
+              assert d['gate']['target_eligible'] is False
+              assert d['gate']['target_deterministic_rejection'] is True
+              assert d['gate']['target_strict_four_way_win'] is False
+              assert d['gate']['promotion_signal'] is False
+          # This remains a promotion gate: deterministic negative evidence is valid
+          # evidence, but it must not turn an ineligible candidate into a pass.
           assert d['gate']['passed'] is True
           PY
       - name: Public-surface guard
