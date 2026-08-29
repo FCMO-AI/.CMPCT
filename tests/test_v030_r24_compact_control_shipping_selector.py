@@ -66,7 +66,14 @@ def test_compact_control_prefilter_is_only_a_conservative_work_filter():
     )
 
 
-def test_release_product_terminalizes_proven_compact_control_shape(tmp_path):
+def test_release_product_rejects_compact_control_when_preserved_r24_pack_breaks_locality(tmp_path):
+    """A source-shape prefilter is not authority to publish a locality-unsafe C25CC01 wrapper.
+
+    This deterministic high-file-count incompressible tree is intentionally inside the cheap structural prefilter,
+    but its mature r24 physical packing contains selected-member amplification above the release <=8x law. C25CC01
+    preserves that physical span byte-for-byte, so the promoted front door must fail closed and keep the ordinary
+    r24 product instead of terminalizing a smaller but locality-invalid wrapper.
+    """
     source = tmp_path / "source"
     source.mkdir()
     rng = random.Random(0xC25CC01)
@@ -77,23 +84,19 @@ def test_release_product_terminalizes_proven_compact_control_shape(tmp_path):
         (source / rel).write_bytes(payload)
         expected[rel] = payload
 
+    shape = PRODUCT._compact_control_source_shape(source)
+    assert PRODUCT._compact_control_source_prefilter(shape) is True
+
     archive = tmp_path / "shipping.cmpct"
     stats = PRODUCT.build(source, archive)
 
-    assert stats["selected"] == "r24-compact-control"
-    assert stats["format_revision"] == 25
-    assert stats["format_profile"] == "r24-compact-control-v1"
-    assert stats["terminal_compact_control"] is True
-    assert stats["speculative_r25_search_skipped"] is True
-    assert stats["terminal_compact_control_source_shape"]["regular_files"] == 1250
-    assert stats["terminal_compact_control_admission"]["r24_to_logical"] >= 0.98
-    assert stats["terminal_compact_control_admission"]["candidate_to_r24"] <= 0.9995
-    assert PRODUCT._revision_for_archive(archive) == (25, "r24-compact-control-v1")
+    assert stats["selected"] == "r24-fallback"
+    assert stats.get("terminal_compact_control") is not True
+    assert PRODUCT._is_compact_control_archive(archive) is False
+    assert PRODUCT._revision_for_archive(archive)[0] == 24
 
     verified = PRODUCT.strong_verify(archive)
     assert verified["ok"] is True
-    assert verified["format_revision"] == 25
-    assert verified["format_profile"] == "r24-compact-control-v1"
     assert PRODUCT.read_member(archive, "shard-0000.dat") == expected["shard-0000.dat"]
     assert PRODUCT.read_member(archive, "shard-1249.dat") == expected["shard-1249.dat"]
     members = PRODUCT.list_members(archive)
