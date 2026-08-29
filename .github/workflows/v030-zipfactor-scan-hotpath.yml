@@ -72,7 +72,7 @@ jobs:
           python benchmarks/v030_zipfactor_eocd_indexed_parser_oracle.py \
             --work-root "$RUNNER_TEMP/v030-zf-eocd-parser" \
             --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-zf-eocd-parser.json"
-      - name: Differentially harden EOCD parser on hostile ZIPs
+      - name: Differentially harden EOCD parser on hostile and valid ZIPs
         run: |
           python benchmarks/v030_zipfactor_eocd_hostile_equivalence_oracle.py \
             --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-zf-eocd-hostile-equivalence.json"
@@ -105,13 +105,17 @@ jobs:
           assert e['candidate']['archive_sha256']=='75bdc866b4b7b63c8f83f7d9a88c9ff3d712c51b93700033984433819b014e31'
           assert e['gate']['experiment_valid'] is True
           h=json.loads(Path('benchmark-artifacts/v030-zf-eocd-hostile-equivalence.json').read_text())
-          assert h['schema']=='cmpct-v030-zipfactor-eocd-hostile-equivalence-oracle-v1'
+          assert h['schema']=='cmpct-v030-zipfactor-eocd-hostile-equivalence-oracle-v2'
           assert h['contract']['release_credit'] is False
           assert h['contract']['production_change'] is False
           assert h['contract']['timing_credit'] is False
+          assert h['contract']['independent_valid_generalization_required'] is True
           assert h['coverage']['cases'] >= 150
+          assert h['coverage']['valid_cases'] >= 7
+          assert h['valid_generalization']['all_exact'] is True
           assert h['gate']['candidate_not_more_permissive'] is True
           assert h['gate']['exact_on_shared_acceptance'] is True
+          assert h['gate']['valid_generalization_exact'] is True
           assert h['gate']['experiment_valid'] is True
           assert h['gate']['passed'] is True
           Path('benchmark-artifacts/v030-zf-scan-candidate.txt').write_text('${{ steps.candidate.outputs.sha }}\n')
