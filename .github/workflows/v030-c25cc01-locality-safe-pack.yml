@@ -5,6 +5,7 @@ on:
   pull_request:
     paths:
       - 'benchmarks/v030_c25cc01_locality_safe_pack_oracle.py'
+      - 'benchmarks/v030_c25cc01_locality_pack_strategy_oracle.py'
       - 'experiments/entropygraph_v030_r24_compact_control_profile.py'
       - 'experiments/entropygraph_v030_release_product*.py'
       - 'src/cmpct/builder.py'
@@ -22,17 +23,26 @@ permissions:
 jobs:
   locality-safe-pack:
     runs-on: ubuntu-24.04
-    timeout-minutes: 45
+    timeout-minutes: 50
     env:
       PYTHONPATH: ${{ github.workspace }}
     steps:
       - uses: actions/checkout@v6
-
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: Bind exact candidate
+        id: candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          expected='${{ github.event.pull_request.head.sha || github.sha }}'
+          actual="$(git rev-parse HEAD)"
+          test "$actual" = "$expected"
+          echo "sha=$actual" >> "$GITHUB_OUTPUT"
       - uses: actions/setup-python@v6
         with:
           python-version: '3.11'
           cache: pip
-
       - name: Install exact corpus/compressor dependencies
         run: |
           sudo apt-get update
@@ -40,17 +50,21 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -e '.[audio,test]'
           python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
-
-      - name: Compile locality-safe pack oracle
-        run: python -m py_compile benchmarks/v030_c25cc01_locality_safe_pack_oracle.py
-
+      - name: Compile locality-safe pack diagnostics
+        run: |
+          python -m py_compile benchmarks/v030_c25cc01_locality_safe_pack_oracle.py
+          python -m py_compile benchmarks/v030_c25cc01_locality_pack_strategy_oracle.py
       - name: Run exact 15-workload locality-safe A/B
         run: |
           mkdir -p benchmark-artifacts
           python benchmarks/v030_c25cc01_locality_safe_pack_oracle.py \
             --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-c25cc01-locality-safe-pack-work" \
             --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-c25cc01-locality-safe-pack.json"
-
+      - name: Compare locality-safe packing strategies
+        run: |
+          python benchmarks/v030_c25cc01_locality_pack_strategy_oracle.py \
+            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-c25cc01-pack-strategy-work" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-c25cc01-pack-strategy.json"
       - name: Enforce diagnostic evidence boundary
         run: |
           python - <<'PY'
@@ -69,26 +83,35 @@ jobs:
           assert d['target']['rounds']==5
           assert d['gate']['experiment_valid'] is True
           assert d['gate']['passed'] is True
-          # Negative results are evidence, not gate weakening. Promotion still requires all of these stronger facts.
           if d['gate']['target_strict_four_way_win']:
               assert d['gate']['target_compact_control_eligible'] is True
               assert d['target']['cmpct_bytes'] < d['target']['zip_bytes']
               assert d['target']['cmpct_bytes'] < d['target']['zstd19_bytes']
               assert d['target']['median_cmpct_complete_create_s'] < d['target']['median_zip_create_s']
               assert d['target']['median_cmpct_complete_create_s'] < d['target']['median_zstd19_create_s']
+          p=json.loads(Path('benchmark-artifacts/v030-c25cc01-pack-strategy.json').read_text())
+          assert p['schema']=='cmpct-v030-c25cc01-locality-pack-strategy-oracle-v1'
+          assert p['contract']['release_credit'] is False
+          assert p['contract']['production_change'] is False
+          assert p['contract']['locality_ceiling']==8
+          assert len(p['strategies'])==4
+          assert p['gate']['experiment_valid'] is True
+          assert p['gate']['passed'] is True
           PY
-
+      - name: Record candidate fingerprint
+        run: printf '%s\n' '${{ steps.candidate.outputs.sha }}' > benchmark-artifacts/v030-c25cc01-candidate.txt
       - name: Public-surface guard
         run: python tools/check_public_surface.py
-
       - name: CI topology self-check
         run: python tools/check_ci_topology.py .github/workflows/v030-c25cc01-locality-safe-pack.yml
-
       - name: Upload locality-safe pack evidence
         if: always()
         uses: actions/upload-artifact@v6
         with:
-          name: v030-c25cc01-locality-safe-pack-${{ github.sha }}
-          path: benchmark-artifacts/v030-c25cc01-locality-safe-pack.json
+          name: v030-c25cc01-locality-safe-pack-${{ steps.candidate.outputs.sha }}
+          path: |
+            benchmark-artifacts/v030-c25cc01-locality-safe-pack.json
+            benchmark-artifacts/v030-c25cc01-pack-strategy.json
+            benchmark-artifacts/v030-c25cc01-candidate.txt
           if-no-files-found: warn
           retention-days: 90
