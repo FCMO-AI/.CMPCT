@@ -1,16 +1,17 @@
 from __future__ import annotations
 
-"""Research-only A/B for removing duplicated regular-file identities from the r25 filesystem manifest.
+"""Research-only developer-workload A/B for the already-proven implicit-v4 filesystem control grammar.
 
-Canonical r25 currently authenticates every regular file twice: once in the selected content graph and again as
-``[size, sha256]`` inside the filesystem-semantics manifest. The duplication is especially expensive on
-high-file-count workloads because SHA-256 values are deliberately incompressible. This oracle does *not* change
-the shipping grammar. It creates a projection in which regular-file manifest rows retain metadata but replace
-the duplicated content identity with ``None``; the user-file identities are then derived from the content graph.
+Canonical r25 currently stores the full filesystem-v1 manifest as a graph member, duplicating every regular
+file's path/content identity even though the selected content graph already authenticates those facts. The
+federated EG04/EG05 research family already has a bounded grammar (`implicit-v4`) that removes those duplicate
+regular identities, delta-codes metadata, and expands back to exact filesystem-v1 semantics when joined with the
+authenticated content graph.
 
-The projected manifest is deliberately marked as a research v2 identity and is never handed to canonical product
-readers. We measure complete release-candidate bytes only to decide whether a real cross-platform grammar change
-is worth productizing. Release/native/Android/recovery credit is always false here.
+This oracle applies that existing grammar to the repaired developer workload *without* changing shipping bytes.
+It compares complete release-candidate artifacts whose only staged-tree difference is current filesystem-v1 bytes
+versus implicit-v4 bytes. A positive result can justify canonical productization work; it grants no release,
+selector, native, Android or recovery credit by itself.
 """
 
 import argparse
@@ -19,15 +20,13 @@ import json
 from pathlib import Path, PurePosixPath
 import shutil
 
-import msgpack
-
 from benchmarks import v030_release_generalization as GENERAL
 from experiments import entropygraph_v030_canonical_final_impl as CANON
+from experiments import entropygraph_v030_fs_implicit_v4 as IFS4
 from experiments import entropygraph_v030_product_fs as FS
 from experiments import entropygraph_v030_release_candidate as RC
 
 TARGET = "01_developer_repository"
-RESEARCH_PROFILE = "cmpct-r25-filesystem-manifest-v2-derived-regular-identities-research"
 MIN_USEFUL_ARCHIVE_SAVING = 16 * 1024
 
 
@@ -54,68 +53,14 @@ def _capture(root: Path) -> tuple[bytes, list[tuple[Path, str]], dict]:
     )
 
 
-def _derived_manifest(current_raw: bytes) -> tuple[bytes, dict]:
-    manifest = msgpack.unpackb(current_raw, raw=False)
-    regular_rows = 0
-    duplicated_digest_bytes = 0
-    for row in manifest["entries"]:
-        if row[1] != "f":
-            continue
-        extra = row[7]
-        if (
-            not isinstance(extra, list)
-            or len(extra) != 2
-            or not isinstance(extra[0], int)
-            or not isinstance(extra[1], bytes)
-            or len(extra[1]) != 32
-        ):
-            raise RuntimeError("current r25 manifest regular identity drift")
-        regular_rows += 1
-        duplicated_digest_bytes += len(extra[1])
-        row[7] = None
-    manifest["v"] = 2
-    manifest["profile"] = RESEARCH_PROFILE
-    raw = msgpack.packb(manifest, use_bin_type=True)
-    return raw, {
-        "regular_rows": regular_rows,
-        "duplicated_sha256_bytes": duplicated_digest_bytes,
-        "current_manifest_bytes": len(current_raw),
-        "derived_manifest_bytes": len(raw),
-        "manifest_saving_bytes": len(current_raw) - len(raw),
-    }
-
-
-def _stage(regular_sources: list[tuple[Path, str]], manifest_raw: bytes, target: Path) -> None:
+def _stage(regular_sources: list[tuple[Path, str]], control_raw: bytes, target: Path) -> None:
     shutil.rmtree(target, ignore_errors=True)
     target.mkdir(parents=True)
     for source, rel in regular_sources:
         FS._link_or_copy(source, target.joinpath(*PurePosixPath(rel).parts))
     manifest_path = target.joinpath(*PurePosixPath(FS.FILESYSTEM_MANIFEST).parts)
     manifest_path.parent.mkdir(parents=True, exist_ok=True)
-    manifest_path.write_bytes(manifest_raw)
-
-
-def _hash_file(path: Path) -> tuple[int, bytes]:
-    digest = hashlib.sha256()
-    size = 0
-    with path.open("rb") as stream:
-        for block in iter(lambda: stream.read(1024 * 1024), b""):
-            size += len(block)
-            digest.update(block)
-    return size, digest.digest()
-
-
-def _identity_join_proof(current_raw: bytes, regular_sources: list[tuple[Path, str]]) -> dict:
-    manifest = msgpack.unpackb(current_raw, raw=False)
-    declared = {row[0]: (int(row[7][0]), bytes(row[7][1])) for row in manifest["entries"] if row[1] == "f"}
-    observed = {rel: _hash_file(source) for source, rel in regular_sources}
-    if declared != observed:
-        raise RuntimeError("current manifest and graph-owned source identities disagree")
-    return {
-        "regular_identity_count": len(observed),
-        "source_identities_match_current_manifest": True,
-        "derivation_rule": "join manifest regular path to authenticated content-graph (size, sha256)",
-    }
+    manifest_path.write_bytes(control_raw)
 
 
 def _build(stage: Path, out: Path) -> dict:
@@ -137,26 +82,51 @@ def run(work_root: Path) -> dict:
     work_root.mkdir(parents=True)
     source = _source(work_root)
     current_raw, regular_sources, capture = _capture(source)
-    derived_raw, manifest_stats = _derived_manifest(current_raw)
-    join = _identity_join_proof(current_raw, regular_sources)
+    implicit_raw = IFS4.encode_v1(
+        current_raw,
+        max_path_bytes=CANON.POLICY.R.MAX_PATH_BYTES,
+        max_entries=CANON.MAX_MANIFEST_ENTRIES,
+    )
+    semantic_exact = IFS4.semantics_equal(
+        current_raw,
+        implicit_raw,
+        max_path_bytes=CANON.POLICY.R.MAX_PATH_BYTES,
+        max_entries=CANON.MAX_MANIFEST_ENTRIES,
+    )
+    if not semantic_exact:
+        raise RuntimeError("implicit-v4 failed exact filesystem-v1 semantic expansion")
+
+    current_decoded = FS.decode_manifest(
+        current_raw,
+        max_path_bytes=CANON.POLICY.R.MAX_PATH_BYTES,
+        max_entries=CANON.MAX_MANIFEST_ENTRIES,
+    )
+    regular_count = len(current_decoded["regular"])
 
     current_stage = work_root / "current-stage"
-    derived_stage = work_root / "derived-stage"
+    implicit_stage = work_root / "implicit-stage"
     _stage(regular_sources, current_raw, current_stage)
-    _stage(regular_sources, derived_raw, derived_stage)
+    _stage(regular_sources, implicit_raw, implicit_stage)
 
     current = _build(current_stage, work_root / "current.cmpct")
-    derived = _build(derived_stage, work_root / "derived.cmpct")
-    archive_saving = int(current["archive_bytes"]) - int(derived["archive_bytes"])
+    implicit = _build(implicit_stage, work_root / "implicit.cmpct")
+    archive_saving = int(current["archive_bytes"]) - int(implicit["archive_bytes"])
 
     return {
-        "schema": "cmpct-v030-r25-manifest-derived-identity-oracle-v1",
+        "schema": "cmpct-v030-r25-manifest-derived-identity-oracle-v2",
         "target": f"neutral_hostile_v1/{TARGET}",
         "capture": capture,
-        "manifest": manifest_stats,
-        "identity_join_proof": join,
+        "implicit_v4": {
+            "regular_identity_count": regular_count,
+            "duplicated_sha256_bytes_avoided": regular_count * 32,
+            "current_manifest_bytes": len(current_raw),
+            "implicit_control_bytes": len(implicit_raw),
+            "control_saving_bytes": len(current_raw) - len(implicit_raw),
+            "expands_to_exact_filesystem_v1_semantics": semantic_exact,
+            "existing_research_grammar": True,
+        },
         "current_candidate": current,
-        "derived_identity_projection": derived,
+        "implicit_v4_projection": implicit,
         "archive_saving_bytes": archive_saving,
         "minimum_useful_archive_saving_bytes": MIN_USEFUL_ARCHIVE_SAVING,
         "promotion_signal": archive_saving >= MIN_USEFUL_ARCHIVE_SAVING,
@@ -164,9 +134,9 @@ def run(work_root: Path) -> dict:
         "selector_change": False,
         "canonical_grammar_change": False,
         "claim_boundary": (
-            "Research-only byte projection. A positive signal only justifies designing a bounded filesystem-manifest "
-            "grammar whose regular content identities are joined from the already-authenticated graph. Python/native/"
-            "Android readers, recovery, locality, no-regression and exact all-15 authority remain mandatory."
+            "Research-only canonicalization-gap projection using the existing bounded implicit-v4 grammar. A "
+            "positive signal only justifies integrating that control grammar into canonical r25 with exact reader, "
+            "recovery, native, Android, locality, no-regression and all-15 authority."
         ),
     }
 
@@ -190,9 +160,9 @@ def main() -> None:
     print(
         json.dumps(
             {
-                "manifest": result["manifest"],
+                "implicit_v4": result["implicit_v4"],
                 "current_candidate_bytes": result["current_candidate"]["archive_bytes"],
-                "derived_candidate_bytes": result["derived_identity_projection"]["archive_bytes"],
+                "implicit_candidate_bytes": result["implicit_v4_projection"]["archive_bytes"],
                 "archive_saving_bytes": result["archive_saving_bytes"],
                 "promotion_signal": result["promotion_signal"],
             },
