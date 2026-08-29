@@ -23,6 +23,7 @@ concurrency:
 
 env:
   PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
 
 jobs:
   embedded-fs-frontier:
@@ -30,6 +31,15 @@ jobs:
     timeout-minutes: 360
     steps:
       - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - name: Bind exact candidate head
+        id: candidate
+        run: |
+          set -euo pipefail
+          actual="$(git rev-parse HEAD)"
+          test "$actual" = "$EVIDENCE_HEAD"
+          echo "sha=$actual" >> "$GITHUB_OUTPUT"
       - uses: actions/setup-python@v6
         with:
           python-version: '3.11'
@@ -57,7 +67,7 @@ jobs:
       - name: Independently enforce evidence identity and arithmetic
         run: |
           python - <<'PY'
-          import json
+          import json, os
           from pathlib import Path
           d=json.loads(Path('benchmark-artifacts/v030-eg05-effort.json').read_text())
           assert d['schema']=='cmpct-v030-federated-eg05-embedded-fs-effort-v1'
@@ -75,6 +85,7 @@ jobs:
           # Negative evidence is valid. Never lower the immutable v0.29 floor to make this experiment green.
           for row in d['rows']:
               assert row['measured_zip_budget_policy']['locality']['within_release_bounds'] is True
+          Path('benchmark-artifacts/v030-eg05-candidate.txt').write_text(os.environ['EVIDENCE_HEAD']+'\n')
           PY
       - name: Public-surface guard
         if: always()
@@ -83,10 +94,14 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v6
         with:
-          name: v030-eg05-embedded-fs-${{ github.sha }}
-          path: benchmark-artifacts/v030-eg05-effort.json
+          name: v030-eg05-embedded-fs-${{ steps.candidate.outputs.sha || github.sha }}
+          path: |
+            benchmark-artifacts/v030-eg05-effort.json
+            benchmark-artifacts/v030-eg05-candidate.txt
           if-no-files-found: warn
           retention-days: 90
+      - name: CI topology self-check
+        run: python tools/check_ci_topology.py .github/workflows/v030-federated-embedded-fs-v5-effort.yml
 
 # C25EG05 is research-only. A byte win does not authorize selector/native/Android promotion or alter any v0.30
 # release threshold. The ordinary all-15 external/generalization/runtime/native/final authorities remain decisive.
