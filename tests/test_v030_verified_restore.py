@@ -42,8 +42,8 @@ def test_verified_restorer_skips_only_redundant_digest_pass(tmp_path: Path) -> N
     decoded = _decoded_for_regular("model.bin", payload, digest=b"\x00" * 32)
 
     # This helper is intentionally provenance-sensitive: the release streamer, not this helper, owns content
-    # authentication.  Same-size bytes therefore reach metadata restoration here, while the generic entry point
-    # above still rejects them.  The shipping call-order contract below prevents use before authenticated stream.
+    # authentication. Same-size bytes therefore reach metadata restoration here, while the generic entry point
+    # above still rejects them. The shipping call-order contract below prevents use before authenticated stream.
     VERIFIED.restore_verified_manifest_tree(staging, decoded)
     assert target.read_bytes() == payload
 
@@ -59,13 +59,14 @@ def test_verified_restorer_still_rejects_shape_drift(tmp_path: Path) -> None:
 
 
 def test_shipping_extract_authenticates_before_verified_restore_and_publish() -> None:
-    # The promoted release front door now wraps logs/media dispatch and delegates ordinary archives to the
-    # preserved mature extractor.  The security-sensitive ordering therefore belongs to that delegated extractor,
-    # not to the thin wrapper's source text.  Ratchet both facts so a future wrapper cannot bypass the mature path.
+    # The promoted release front door dispatches logs/C25 itself and delegates ordinary archives through the frozen
+    # mature-function table. Ratchet that exact indirection: using _BASE_ORIGINALS prevents the compatibility bridge
+    # from recursively installing a promoted wrapper into the preserved base implementation.
     wrapper_source = inspect.getsource(PRODUCT.extract)
-    assert "_BASE_IMPL.extract" in wrapper_source
+    assert '_BASE_ORIGINALS["extract"]' in wrapper_source
+    assert PRODUCT._BASE_ORIGINALS["extract"] is PRODUCT._BASE_IMPL.extract
 
-    source = inspect.getsource(PRODUCT._BASE_IMPL.extract)
+    source = inspect.getsource(PRODUCT._BASE_ORIGINALS["extract"])
     streamed = source.index("POLICY.extract_verified_into_staging")
     restored = source.index("VERIFIED_RESTORE.restore_verified_manifest_tree")
     published = source.index("C._publish_tree")
