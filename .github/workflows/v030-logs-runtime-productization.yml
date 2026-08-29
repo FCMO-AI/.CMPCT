@@ -3,6 +3,19 @@ name: CMPCT v0.30 logs runtime productization
 
 on:
   pull_request:
+    paths:
+      - 'benchmarks/v030_logs_semantic_owner_runtime_oracle.py'
+      - 'benchmarks/neutral_hostile_corpus_v1.py'
+      - 'experiments/entropygraph_v030_logs_fused_extract.py'
+      - 'experiments/entropygraph_v030_logs_inverse_profile_v3.py'
+      - 'experiments/entropygraph_v030_release_product_logs_candidate.py'
+      - 'experiments/entropygraph_v030_release_product_logs_runtime.py'
+      - 'experiments/entropygraph_v030_release_product_runtime.py'
+      - 'experiments/entropygraph_v030_product_fs.py'
+      - 'tests/test_v030_logs_runtime_productization.py'
+      - 'tests/test_v030_release_product_runtime.py'
+      - 'tests/test_v030_logs_fused_extract.py'
+      - '.github/workflows/v030-logs-runtime-productization.yml'
   workflow_dispatch:
 
 permissions:
