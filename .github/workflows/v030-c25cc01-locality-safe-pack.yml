@@ -1,3 +1,4 @@
+# ci-lane: deep
 name: CMPCT v0.30 C25CC01 locality-safe pack oracle
 
 on:
@@ -10,6 +11,10 @@ on:
       - 'src/cmpct/codec.py'
       - '.github/workflows/v030-c25cc01-locality-safe-pack.yml'
   workflow_dispatch:
+
+concurrency:
+  group: v030-c25cc01-locality-safe-pack-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
