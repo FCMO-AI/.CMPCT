@@ -6,6 +6,7 @@ on:
     branches: [main]
     paths:
       - 'experiments/entropygraph_v030_r24_compact_control_profile.py'
+      - 'experiments/entropygraph_v030_r24_compact_control_direct_extract.py'
       - 'benchmarks/v030_r24_compact_control_profile_productization.py'
       - 'benchmarks/v030_r24_compact_control_external_normalized.py'
       - 'benchmarks/v030_r24_compact_control_oracle.py'
@@ -15,6 +16,7 @@ on:
       - 'experiments/entropygraph_v030_release_product.py'
       - 'experiments/entropygraph_v030_r24_dead_dictionary.py'
       - 'tests/test_v030_r24_compact_control_profile.py'
+      - 'tests/test_v030_r24_compact_control_direct_extract.py'
       - 'tests/test_v030_c25cc01_self_describing_blobtable.py'
       - '.github/workflows/v030-r24-compact-control-profile.yml'
   workflow_dispatch:
@@ -60,14 +62,17 @@ jobs:
       - name: Compile candidate and direct proof
         run: |
           python -m py_compile experiments/entropygraph_v030_r24_compact_control_profile.py
+          python -m py_compile experiments/entropygraph_v030_r24_compact_control_direct_extract.py
           python -m py_compile benchmarks/v030_r24_compact_control_profile_productization.py
           python -m py_compile benchmarks/v030_c25cc01_self_describing_blobtable_oracle.py
           python -m py_compile tests/test_v030_r24_compact_control_profile.py
+          python -m py_compile tests/test_v030_r24_compact_control_direct_extract.py
           python -m py_compile tests/test_v030_c25cc01_self_describing_blobtable.py
-      - name: Run focused semantics, recovery and physical-table ratchets
+      - name: Run focused semantics, recovery, extraction and physical-table ratchets
         run: |
           pytest -q \
             tests/test_v030_r24_compact_control_profile.py \
+            tests/test_v030_r24_compact_control_direct_extract.py \
             tests/test_v030_c25cc01_self_describing_blobtable.py
       - name: Run exact external-normalized direct profile proof
         run: |
