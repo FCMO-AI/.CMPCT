@@ -2,8 +2,9 @@
 name: CMPCT v0.30 ZIP-factor fused FFI complete frontier
 
 on:
-  pull_request:
-    branches: [main]
+  push:
+    branches:
+      - agent/v030-authoritative-integration
     paths:
       - 'benchmarks/v030_zipfactor_fused_ffi_complete_frontier.py'
       - 'benchmarks/v030_zipfactor_eocd_ffi_complete_frontier.py'
@@ -26,12 +27,12 @@ permissions:
   contents: read
 
 concurrency:
-  group: cmpct-v030-zipfactor-fused-ffi-complete-frontier-${{ github.event.pull_request.number || github.ref }}
+  group: cmpct-v030-zipfactor-fused-ffi-complete-frontier-${{ github.ref }}
   cancel-in-progress: true
 
 env:
   PYTHONPATH: ${{ github.workspace }}
-  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+  EVIDENCE_HEAD: ${{ github.sha }}
 
 jobs:
   fused-ffi-complete-frontier:
@@ -147,6 +148,6 @@ jobs:
       - name: CI topology self-check
         run: python tools/check_ci_topology.py .github/workflows/v030-zipfactor-fused-ffi-complete-frontier.yml
 
-# Research-only. A positive product-default EOCD result proves the exact byte-identical fused builder plus
-# in-process verifier crosses the full Deflate-family frontier on this candidate; recovery/platform/all-15
-# productization and final authority remain separate blockers.
+# Research-only. This 60-minute-cap frontier now runs only when its branch-push dependency slice changes. A
+# positive result still grants no release credit by itself: recovery/platform/all-15/final exact-candidate authority
+# remain separate blockers.
