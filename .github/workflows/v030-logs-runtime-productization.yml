@@ -1,0 +1,79 @@
+name: CMPCT v0.30 logs runtime productization
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: v030-logs-runtime-product-${{ github.event.pull_request.head.sha || github.sha }}
+  cancel-in-progress: true
+
+jobs:
+  logs-runtime-productization:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      PYTHONPATH: ${{ github.workspace }}
+      EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - name: Bind exact candidate head
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install runtime dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y zstd gcc
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[test]'
+      - name: Compile product boundary
+        run: |
+          python -m py_compile experiments/entropygraph_v030_release_product_logs_runtime.py
+          python -m py_compile tests/test_v030_logs_runtime_productization.py
+          python -m py_compile benchmarks/v030_logs_semantic_owner_runtime_oracle.py
+      - name: Ratchet product semantics and fail-closed behavior
+        run: pytest -q tests/test_v030_logs_runtime_productization.py tests/test_v030_logs_fused_extract.py
+      - name: Re-measure one-session extraction on exact product head
+        run: |
+          mkdir -p benchmark-artifacts
+          python -m benchmarks.v030_logs_semantic_owner_runtime_oracle \
+            --work-root benchmark-artifacts/v030-logs-runtime-product-work \
+            --output benchmark-artifacts/v030-logs-runtime-product.json
+      - name: Enforce productization boundary
+        run: |
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          p=Path('benchmark-artifacts/v030-logs-runtime-product.json')
+          d=json.loads(p.read_text())
+          f=d['fused_extract']
+          assert d['experiment_valid'] is True
+          assert f['rounds']==11
+          assert f['all_exact'] is True
+          assert f['one_authenticated_archive_session'] is True
+          assert f['graph_identities_match_fs_manifest'] is True
+          assert f['promotion_signal'] is True
+          assert f['improvement_fraction'] >= 0.10
+          assert d['release_credit'] is False
+          Path('benchmark-artifacts/v030-logs-runtime-product-candidate.txt').write_text(os.environ['EVIDENCE_HEAD']+'\n')
+          PY
+      - name: CI topology self-check
+        run: python tools/check_ci_topology.py .github/workflows/v030-logs-runtime-productization.yml
+      - name: Public-surface guard
+        run: python tools/check_public_surface.py
+      - uses: actions/upload-artifact@v6
+        with:
+          name: v030-logs-runtime-product-${{ env.EVIDENCE_HEAD }}
+          path: |
+            benchmark-artifacts/v030-logs-runtime-product.json
+            benchmark-artifacts/v030-logs-runtime-product-candidate.txt
+          if-no-files-found: error
+          retention-days: 90
