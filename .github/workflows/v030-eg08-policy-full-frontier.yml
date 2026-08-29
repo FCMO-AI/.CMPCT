@@ -2,8 +2,9 @@
 name: CMPCT v0.30 EG08 full-frontier effort policy
 
 on:
-  pull_request:
-    branches: [main]
+  push:
+    branches:
+      - agent/v030-authoritative-integration
     paths:
       - 'benchmarks/v030_federated_compact_framing_v8_policy_distill_v3.py'
       - 'benchmarks/v030_federated_compact_framing_v8_policy_distill_v4.py'
@@ -17,12 +18,12 @@ permissions:
   contents: read
 
 concurrency:
-  group: cmpct-v030-eg08-full-frontier-${{ github.event.pull_request.number || github.ref }}
+  group: cmpct-v030-eg08-full-frontier-${{ github.ref }}
   cancel-in-progress: true
 
 env:
   PYTHONPATH: ${{ github.workspace }}
-  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+  EVIDENCE_HEAD: ${{ github.sha }}
 
 jobs:
   full-frontier-policy:
@@ -101,9 +102,6 @@ jobs:
           assert upgrade['strictly_reduces_high_effort_pack_count'] is (
               upgrade['selected_high_effort_packs'] < upgrade['predecessor_selected_high_effort_packs']
           )
-          # This search family is allowed to falsify its CPU-reduction hypothesis. A non-reduction is
-          # durable negative evidence, not a release pass and not an invalid experiment. Absolute product
-          # promotion remains fail-closed under the ordinary strict external authority.
           promotion_signal = upgrade['strictly_reduces_high_effort_pack_count'] and strict['passed']
           if not upgrade['strictly_reduces_high_effort_pack_count']:
               assert upgrade['selected_high_effort_packs'] >= upgrade['predecessor_selected_high_effort_packs']
@@ -114,7 +112,7 @@ jobs:
           PY
 
       - name: CI topology self-check
-        run: python tools/check_ci_topology.py
+        run: python tools/check_ci_topology.py .github/workflows/v030-eg08-policy-full-frontier.yml
 
       - name: Upload full-frontier evidence
         if: always()
@@ -125,7 +123,6 @@ jobs:
           if-no-files-found: warn
           retention-days: 90
 
-# This lane records whether deeper bounded, content-identity-free search actually reduces office effort. A valid
-# negative result is preserved as such and earns no promotion. Selector/native/Android/release promotion remains
-# blocked by the ordinary strict external authority, which still requires every frozen workload to beat ZIP and
-# Zstd in both size and creation time.
+# This four-hour-cap research lane records whether deeper bounded, content-identity-free search reduces office
+# effort. It now runs only when its branch-push dependency slice changes; valid negative evidence earns no release
+# credit, and final exact-candidate external/native/Android authority remains unchanged.
