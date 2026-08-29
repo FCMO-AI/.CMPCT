@@ -13,6 +13,10 @@ mere incompressibility is *not* enough to trigger compact control. High-file-cou
 structural hypothesis behind C25CC01: when payload compression has essentially no leverage and authenticated per-file
 control dominates, compact control should remove enough duplicated framing to justify admission. These families are
 newly generated and do not reuse the frozen encrypted-like corpus, paths, hashes, counts, or byte layout.
+
+As with the frozen all-15 oracle, inherited r24 layouts that violate the compact-control locality/decode contract are
+recorded as profile-ineligible negative evidence. They are never forced through the byte-ratio admission predicate,
+never benchmarked as admitted candidates, and never converted into harness crashes.
 """
 
 import argparse
@@ -134,14 +138,19 @@ def main() -> None:
             stage = EXT._normalized_stage(source, root / "stage")
             shape = ADM._source_shape(stage)
             candidate = ADM._build_candidate(stage, root / "preflight")
-            admitted = ADM._admitted(shape, candidate["r24_bytes"], candidate["candidate_bytes"])
+            eligible = bool(candidate["profile_eligible"])
+            admitted = eligible and ADM._admitted(shape, int(candidate["r24_bytes"]), int(candidate["candidate_bytes"]))
             row = {
                 "case": name,
                 **shape,
+                "profile_eligible": eligible,
+                "profile_reject_reason": candidate["profile_reject_reason"],
                 "r24_bytes": candidate["r24_bytes"],
                 "candidate_bytes": candidate["candidate_bytes"],
                 "r24_to_logical": candidate["r24_bytes"] / max(1, shape["logical_bytes"]),
-                "candidate_to_r24": candidate["candidate_bytes"] / max(1, candidate["r24_bytes"]),
+                "candidate_to_r24": (
+                    candidate["candidate_bytes"] / max(1, candidate["r24_bytes"]) if eligible else None
+                ),
                 "admitted": admitted,
                 "payload_unchanged": candidate["payload_unchanged"],
                 "two_control_copies": candidate["two_control_copies"],
@@ -154,10 +163,11 @@ def main() -> None:
 
     admitted = [row for row in rows if row["admitted"]]
     rejected = [row for row in rows if not row["admitted"]]
+    ineligible = [row for row in rows if not row["profile_eligible"]]
     counterexamples = [row["case"] for row in admitted if not row.get("strict_four_way_win", False)]
     expected_cases = 10
     result = {
-        "schema": "cmpct-v030-r24-compact-control-terminal-generalization-v2",
+        "schema": "cmpct-v030-r24-compact-control-terminal-generalization-v3",
         "contract": {
             "predicate_inputs": ["logical_bytes", "regular_files", "r24_bytes", "candidate_bytes"],
             "forbidden_inputs": ["workload_name", "path", "filename", "suffix", "content_hash", "archive_hash", "pack_hash"],
@@ -166,10 +176,12 @@ def main() -> None:
             "min_r24_to_logical": ADM.MIN_R24_TO_LOGICAL,
             "max_candidate_to_r24": ADM.MAX_CC_TO_R24,
             "comparator_rounds": ADM.ROUNDS,
+            "profile_ineligibility_is_negative_evidence": True,
             "selector_change": False,
             "release_credit": False,
         },
         "rows": rows,
+        "profile_ineligible_cases": [row["case"] for row in ineligible],
         "admitted_count": len(admitted),
         "rejected_count": len(rejected),
         "counterexamples": counterexamples,
