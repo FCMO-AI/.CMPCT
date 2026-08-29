@@ -1,0 +1,88 @@
+# ci-lane: deep
+name: CMPCT v0.30 C25CC01 derived blob-header oracle
+
+on:
+  pull_request:
+    paths:
+      - 'benchmarks/v030_c25cc01_derived_blob_header_oracle.py'
+      - 'benchmarks/v030_c25cc01_locality_pack_strategy_oracle.py'
+      - 'benchmarks/v030_c25cc01_locality_safe_pack_oracle.py'
+      - 'benchmarks/v030_r24_physical_overhead_oracle.py'
+      - 'experiments/entropygraph_v030_r24_compact_control_profile.py'
+      - 'src/cmpct/codec.py'
+      - '.github/workflows/v030-c25cc01-derived-blob-header.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: v030-c25cc01-derived-header-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  derived-header:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      PYTHONPATH: ${{ github.workspace }}
+      EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - name: Bind exact candidate head
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install deterministic corpus/comparator dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y zstd gcc ffmpeg libsndfile1
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[audio,test]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
+      - name: Compile derived-header oracle
+        run: python -m py_compile benchmarks/v030_c25cc01_derived_blob_header_oracle.py
+      - name: Measure derived physical framing frontier
+        run: |
+          mkdir -p benchmark-artifacts
+          python -m benchmarks.v030_c25cc01_derived_blob_header_oracle \
+            --work-root benchmark-artifacts/v030-c25cc01-derived-header-work \
+            --output benchmark-artifacts/v030-c25cc01-derived-header.json
+      - name: Enforce evidence boundary
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          d=json.loads(Path('benchmark-artifacts/v030-c25cc01-derived-header.json').read_text())
+          assert d['schema']=='cmpct-v030-c25cc01-derived-blob-header-oracle-v1'
+          assert d['strategy']=='descending_greedy'
+          c=d['candidate']; g=d['gate']; p=d['projection']
+          assert g['exact_current_wrapped_accounting'] is True
+          assert g['locality_within_8x'] is True
+          assert g['full_sha256_digest_cost_retained'] is True
+          assert g['existing_control_cost_retained'] is True
+          assert g['experiment_valid'] is True
+          assert g['release_credit'] is False
+          assert c['current_blob_header_bytes_per_record']==64
+          assert c['retained_sha256_bytes_per_record']==32
+          assert c['duplicated_non_digest_header_bytes']==32*c['record_count']
+          assert p['bytes_saved_vs_current_wrapped']==c['duplicated_non_digest_header_bytes']
+          # Crossing Zstd is a research outcome, not a CI truth requirement. Negative evidence remains valid.
+          assert isinstance(g['derived_header_large_enough_to_cross_zstd19'], bool)
+          PY
+      - name: CI topology self-check
+        run: python tools/check_ci_topology.py .github/workflows/v030-c25cc01-derived-blob-header.yml
+      - name: Public-surface guard
+        run: python tools/check_public_surface.py
+      - name: Upload exact-head receipt
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: v030-c25cc01-derived-header-${{ env.EVIDENCE_HEAD }}
+          path: benchmark-artifacts/v030-c25cc01-derived-header.json
+          if-no-files-found: error
+          retention-days: 90
