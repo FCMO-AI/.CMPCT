@@ -1,0 +1,95 @@
+# ci-lane: fast
+name: CMPCT v0.30 ZIP-factor build phase oracle
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'benchmarks/v030_zipfactor_build_phase_oracle.py'
+      - 'experiments/entropygraph_v030_zipfactor_compact_v3.py'
+      - 'experiments/entropygraph_v030_zipfactor_compact_v3_fused_finalize.py'
+      - 'experiments/entropygraph_v030_zipfactor_fused.py'
+      - '.github/workflows/v030-zipfactor-build-phase-oracle.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-v030-zf-build-phase-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+
+jobs:
+  exact-build-phase-oracle:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: Bind exact candidate
+        id: candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          expected='${{ github.event.pull_request.head.sha || github.sha }}'
+          actual="$(git rev-parse HEAD)"
+          test "$actual" = "$expected"
+          echo "sha=$actual" >> "$GITHUB_OUTPUT"
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install benchmark dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y zstd
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[test]'
+      - name: Compile exact phase oracle
+        run: python -m py_compile benchmarks/v030_zipfactor_build_phase_oracle.py
+      - name: Run exact phase oracle
+        run: |
+          mkdir -p benchmark-artifacts
+          python -m benchmarks.v030_zipfactor_build_phase_oracle \
+            --work-root "$RUNNER_TEMP/v030-zf-build-phase" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-zf-build-phase.json"
+      - name: Ratchet evidence identity
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          e=json.loads(Path('benchmark-artifacts/v030-zf-build-phase.json').read_text())
+          assert e['schema']=='cmpct-v030-zipfactor-build-phase-oracle-v1'
+          c=e['contract']
+          assert c['rounds']==21 and c['level']==3 and c['group_size']==7
+          assert c['builder_changed'] is False and c['archive_bytes_changed'] is False
+          assert c['exact_output_identity_each_round'] is True
+          assert c['selector_change'] is False and c['release_credit'] is False
+          assert e['candidate']['archive_bytes']==14033
+          assert e['candidate']['archive_sha256']=='75bdc866b4b7b63c8f83f7d9a88c9ff3d712c51b93700033984433819b014e31'
+          assert e['experiment_valid'] is True
+          assert e['promotion_signal'] is False and e['release_credit'] is False
+          shares=e['median_share']
+          assert all(v >= 0.0 for v in shares.values())
+          PY
+      - name: Record candidate fingerprint
+        run: printf '%s\n' '${{ steps.candidate.outputs.sha }}' > benchmark-artifacts/v030-zf-build-phase-candidate.txt
+      - name: CI topology self-check
+        run: python tools/check_ci_topology.py .github/workflows/v030-zipfactor-build-phase-oracle.yml
+      - name: Upload exact evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: v030-zipfactor-build-phase-${{ steps.candidate.outputs.sha }}
+          path: |
+            benchmark-artifacts/v030-zf-build-phase.json
+            benchmark-artifacts/v030-zf-build-phase-candidate.txt
+          if-no-files-found: warn
+          retention-days: 90
+
+# Measurement-only phase attribution for the exact 14,033-byte V3 candidate. The existing builder and exact bytes
+# are unchanged. No selector, product or release credit is granted by this lane.
