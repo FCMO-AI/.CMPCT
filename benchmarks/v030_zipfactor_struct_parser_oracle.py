@@ -2,14 +2,15 @@ from __future__ import annotations
 
 """Research-only A/B for the measured ZIP-factor parser hot path.
 
-The exact scan profiler attributes the dominant source-scan CPU cost to BASE._parse_zip. cProfile also shows
-thousands of struct.unpack_from calls, including a separate 4-byte signature unpack before each full local/central
-header unpack. This oracle tests the smallest semantics-preserving change: use bytes.startswith for the signature
-guard and precompiled Struct objects for the one authoritative full header decode.
+The exact scan profiler attributed the dominant source-scan CPU cost to the mature BASE._parse_zip implementation.
+cProfile also showed thousands of struct.unpack_from calls, including a separate 4-byte signature unpack before each
+full local/central header unpack. This oracle keeps the already-falsified micro-optimization as durable negative
+evidence: bytes.startswith signature guards plus precompiled Struct objects.
 
 The candidate must return an exactly identical parsed structure, produce an exactly identical fused scan
-fingerprint, and reproduce the exact 14,033-byte ZIP-factor archive/SHA. Timing is alternating and research-only;
-no production or release credit is granted here.
+fingerprint, and reproduce the exact 14,033-byte ZIP-factor archive/SHA. Parser selection is injected through the
+fused scanner's explicit test seam; this oracle never mutates process-global parser state. Timing is research-only
+and grants no production or release credit.
 """
 
 import argparse
@@ -126,14 +127,10 @@ def run(work_root: Path) -> dict:
     with tempfile.TemporaryDirectory(prefix="cmpct-zf-struct-parser-", dir=work_root) as td_raw:
         stage = EXT._normalized_stage(source, Path(td_raw))
         baseline_parse = BASE._parse_zip
-        baseline_result = FUSED._scan(stage)
+        baseline_result = FUSED._scan(stage, parse_zip=baseline_parse)
         baseline_fp = _fingerprint(baseline_result)
-        try:
-            BASE._parse_zip = _candidate_parse_zip
-            candidate_result = FUSED._scan(stage)
-            candidate_fp = _fingerprint(candidate_result)
-        finally:
-            BASE._parse_zip = baseline_parse
+        candidate_result = FUSED._scan(stage, parse_zip=_candidate_parse_zip)
+        candidate_fp = _fingerprint(candidate_result)
         if candidate_result != baseline_result or candidate_fp != baseline_fp:
             raise RuntimeError("candidate ZIP parser changed fused scan semantics")
 
@@ -144,9 +141,9 @@ def run(work_root: Path) -> dict:
             order = ("baseline", "candidate") if rep % 2 == 0 else ("candidate", "baseline")
             row = {}
             for kind in order:
-                BASE._parse_zip = baseline_parse if kind == "baseline" else _candidate_parse_zip
+                parser = baseline_parse if kind == "baseline" else _candidate_parse_zip
                 t0 = time.perf_counter_ns()
-                result = FUSED._scan(stage)
+                result = FUSED._scan(stage, parse_zip=parser)
                 elapsed = (time.perf_counter_ns() - t0) / 1e9
                 if _fingerprint(result) != baseline_fp:
                     raise RuntimeError(f"{kind} scan fingerprint drifted on repetition {rep}")
@@ -154,7 +151,6 @@ def run(work_root: Path) -> dict:
             baseline_times.append(row["baseline"])
             candidate_times.append(row["candidate"])
             raw_rows.append(row)
-        BASE._parse_zip = baseline_parse
         archive, _stats = BUILD.build_bytes(stage, level=3, group_size=7)
 
     archive_sha = hashlib.sha256(archive).hexdigest()
@@ -165,10 +161,11 @@ def run(work_root: Path) -> dict:
     faster = saving >= MIN_MEDIAN_SAVING_S and cand_med < base_med
     valid = exact and candidate_fp == baseline_fp and len(baseline_times) == ROUNDS and len(candidate_times) == ROUNDS
     return {
-        "schema": "cmpct-v030-zipfactor-struct-parser-oracle-v1",
+        "schema": "cmpct-v030-zipfactor-struct-parser-oracle-v2",
         "contract": {
             "release_credit": False,
             "production_change": False,
+            "process_global_mutation": False,
             "required_archive_bytes": EXPECTED_BYTES,
             "required_archive_sha256": EXPECTED_SHA,
             "minimum_median_saving_s": MIN_MEDIAN_SAVING_S,
@@ -184,7 +181,7 @@ def run(work_root: Path) -> dict:
             "raw": raw_rows,
         },
         "gate": {"experiment_valid": valid, "materially_faster": faster, "passed": valid},
-        "claim_boundary": "Research A/B only. Even a speed win requires canonical implementation and complete ZIP/Zstd/recovery/native/Android/final-authority evidence before promotion.",
+        "claim_boundary": "Durable negative research A/B. The candidate is not the shipping parser and receives no production/release credit.",
     }
 
 
