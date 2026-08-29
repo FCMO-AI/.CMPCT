@@ -1,14 +1,14 @@
 """Release-only structural terminal admission for already-encoded opaque media.
 
 This policy exists to stop the v0.30 product from building expensive r25/G0-G4 candidates when canonical r24 is
-already a strict size+creation win against the frozen ZIP/Deflate-9 and solid Zstd-19 comparators.  Admission is
+already a strict size+creation win against the frozen ZIP/Deflate-9 and solid Zstd-19 comparators. Admission is
 content-agnostic with respect to benchmark identity: it uses only regular-file shape, bounded magic-byte inspection,
 and a bounded entropy sample from files recognized as already-encoded media.
 
 The original magic/shape rule was intentionally rejected after an unseen compressible JPEG-magic impostor showed
-that magic alone can terminalize a file family which Zstd-19 compresses much better.  The promoted rule therefore
+that magic alone can terminalize a file family which Zstd-19 compresses much better. The promoted rule therefore
 retains that counterexample as a design constraint and requires >=7.50 bits/byte on at least 256 KiB of bounded
-sampled media bytes.  The predicate itself performs no comparator lookup and does not inspect workload names,
+sampled media bytes. The predicate itself performs no comparator lookup and does not inspect workload names,
 filenames/extensions, content hashes, archive hashes, or pack hashes.
 
 Evidence boundary before promotion:
@@ -18,7 +18,7 @@ Evidence boundary before promotion:
   wins with predicate time charged, while the compressible media impostor, below-count case, and ZIP-container
   case were all rejected with zero counterexamples.
 
-This module only decides whether the existing canonical r24 builder may terminate the tournament.  It does not
+This module only decides whether the existing canonical r24 builder may terminate the tournament. It does not
 change r24 bytes, reader grammar, integrity, recovery, locality, native, or Android semantics.
 """
 from __future__ import annotations
@@ -28,6 +28,7 @@ import math
 import os
 from pathlib import Path
 import stat
+from typing import Iterable
 
 MIN_REGULAR_FILES = 8
 MAX_REGULAR_FILES = 128
@@ -71,29 +72,23 @@ def _entropy(data: bytes) -> float:
     return -sum((count / n) * math.log2(count / n) for count in counts.values())
 
 
-def analyze(root: Path | str) -> dict:
-    root = Path(root)
-    regular_files = 0
-    logical_bytes = 0
+def analyze_precollected(files: Iterable[tuple[Path | str, int]]) -> dict:
+    """Run the exact media predicate from already-collected regular-file paths and sizes.
+
+    The release front door already performs a fail-closed source metadata walk for logs/C25 admission. Reusing
+    those immutable path/size facts avoids a second directory traversal and lstat pass without changing any media
+    feature. Header reads and entropy sampling remain owned by this module and are unchanged.
+    """
+    rows = [(Path(path), int(size)) for path, size in files]
+    regular_files = len(rows)
+    logical_bytes = sum(size for _, size in rows)
     opaque_bytes = 0
     opaque_paths: list[Path] = []
 
-    for dirpath, dirnames, filenames in os.walk(root, followlinks=False):
-        dirnames[:] = [name for name in dirnames if not os.path.islink(Path(dirpath) / name)]
-        for name in filenames:
-            path = Path(dirpath) / name
-            try:
-                st = os.lstat(path)
-            except OSError:
-                continue
-            if not stat.S_ISREG(st.st_mode):
-                continue
-            size = int(st.st_size)
-            regular_files += 1
-            logical_bytes += size
-            if _is_opaque_encoded_media(path, size):
-                opaque_bytes += size
-                opaque_paths.append(path)
+    for path, size in rows:
+        if _is_opaque_encoded_media(path, size):
+            opaque_bytes += size
+            opaque_paths.append(path)
 
     opaque_share = opaque_bytes / max(1, logical_bytes)
     base_eligible = (
@@ -140,6 +135,25 @@ def analyze(root: Path | str) -> dict:
         "eligible": eligible,
         "reason": "eligible" if eligible else "entropy-or-sample-floor",
     }
+
+
+def analyze(root: Path | str) -> dict:
+    root = Path(root)
+    files: list[tuple[Path, int]] = []
+
+    for dirpath, dirnames, filenames in os.walk(root, followlinks=False):
+        dirnames[:] = [name for name in dirnames if not os.path.islink(Path(dirpath) / name)]
+        for name in filenames:
+            path = Path(dirpath) / name
+            try:
+                st = os.lstat(path)
+            except OSError:
+                continue
+            if not stat.S_ISREG(st.st_mode):
+                continue
+            files.append((path, int(st.st_size)))
+
+    return analyze_precollected(files)
 
 
 def eligible(root: Path | str) -> bool:
