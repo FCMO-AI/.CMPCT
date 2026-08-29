@@ -46,7 +46,10 @@ jobs:
       - name: Install benchmark dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y zstd
+          # The exact 15-workload deterministic corpus includes media fixtures.
+          # ffmpeg is therefore part of the benchmark harness, not optional
+          # preprocessing outside the timed/release evidence boundary.
+          sudo apt-get install -y zstd ffmpeg
           python -m pip install --upgrade pip
           python -m pip install -e '.[test]'
 
