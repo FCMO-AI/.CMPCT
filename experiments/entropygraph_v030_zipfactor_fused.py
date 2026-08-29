@@ -3,7 +3,8 @@
 Canonical staging normally hashes every regular file for the filesystem manifest and the content encoder then reads
 it again. This builder preserves the exact filesystem-manifest grammar while parsing/hashing each graph-owned ZIP
 from the same in-memory read. It emits the same compact-v2 archive grammar and fails closed on unsupported source
-semantics. The optimization is creation-time machinery only; reader semantics remain owned by zipfactor_compact.
+semantics. Eligibility is structural: bounded ZIP parsing plus one shared framing signature. File names and suffixes
+are metadata only and never decide whether the mechanism runs.
 
 ZIP source parsing uses the product-side EOCD-indexed parser. Exact-head A/B evidence showed that traversal to be
 materially faster than the mature linear parser while returning the identical parsed object and preserving the exact
@@ -21,7 +22,6 @@ from __future__ import annotations
 import hashlib
 import os
 from pathlib import Path
-from pathlib import PurePosixPath
 import stat
 from typing import Callable
 
@@ -46,10 +46,11 @@ def _scan(
     *,
     parse_zip: Callable[[bytes], dict | None] = ZIP_PARSER.parse_zip,
 ) -> tuple[bytes, list[tuple[str, dict]], dict]:
-    """Scan once using the shipping parser by default.
+    """Scan once using structural admission and the shipping parser by default.
 
     ``parse_zip`` exists only as an explicit differential-test seam. Production callers do not override it; oracles
     can compare the mature semantic owner without mutating module globals or changing concurrent build behavior.
+    No filename, suffix, benchmark identity or path pattern participates in ZIP-factor eligibility.
     """
     root = Path(root)
     if not root.is_dir():
@@ -79,31 +80,35 @@ def _scan(
             st = child.stat(follow_symlinks=False)
             fields = FS._metadata_fields(path, st)
             if stat.S_ISDIR(st.st_mode):
-                entries.append([rel, "d", *fields, None]); walk(path, rel); continue
+                entries.append([rel, "d", *fields, None])
+                walk(path, rel)
+                continue
             if stat.S_ISLNK(st.st_mode):
                 target = os.readlink(path)
                 if "\x00" in target:
                     raise ProfileNotEligible("ZIP-factor symlink target contains NUL")
-                entries.append([rel, "l", *fields, target]); continue
+                entries.append([rel, "l", *fields, target])
+                continue
             if not stat.S_ISREG(st.st_mode):
                 raise ProfileNotEligible(f"ZIP-factor special file: {rel}")
             if FS._is_sparse(st):
                 raise ProfileNotEligible(f"ZIP-factor sparse file: {rel}")
             inode = (int(getattr(st, "st_dev", 0)), int(getattr(st, "st_ino", 0)))
             if st.st_nlink > 1 and inode[1] and inode in inode_first:
-                entries.append([rel, "h", *fields, inode_first[inode]]); continue
-            if path.suffix.lower() != ".zip":
-                raise ProfileNotEligible("ZIP-factor graph-owned regular files must all be ZIPs")
+                entries.append([rel, "h", *fields, inode_first[inode]])
+                continue
+
             raw = path.read_bytes()
-            digest = hashlib.sha256(raw).digest()
             parsed = parse_zip(raw)
             if parsed is None:
-                raise ProfileNotEligible(f"unsupported ZIP structure: {rel}")
+                raise ProfileNotEligible("ZIP-factor requires every graph-owned regular file to be a supported ZIP structure")
             sig = BASE._signature(parsed)
             if signature is None:
                 signature = sig
             elif sig != signature:
-                raise ProfileNotEligible(f"ZIP framing layout drift: {rel}")
+                raise ProfileNotEligible("ZIP-factor requires one shared structural framing signature")
+
+            digest = hashlib.sha256(raw).digest()
             if st.st_nlink > 1 and inode[1]:
                 inode_first[inode] = rel
             entries.append([rel, "f", *fields, [len(raw), digest]])
@@ -114,7 +119,7 @@ def _scan(
 
     walk(root)
     if len(items) < 2:
-        raise ProfileNotEligible("ZIP-factor requires at least two graph-owned ZIPs")
+        raise ProfileNotEligible("ZIP-factor requires at least two structurally compatible ZIP members")
     manifest = {
         "v": FS.FILESYSTEM_MANIFEST_VERSION,
         "profile": "cmpct-r25-filesystem-manifest-v1",
@@ -133,6 +138,8 @@ def _scan(
         "logical_regular_bytes": logical_bytes,
         "manifest_bytes": len(manifest_raw),
         "manifest_sha256": hashlib.sha256(manifest_raw).hexdigest(),
+        "admission": "supported-zip-structure+shared-framing-signature-v1",
+        "path_identity_used_for_admission": False,
     }
 
 
@@ -141,8 +148,11 @@ def build(root: Path, out: Path, *, level: int = DEFAULT_LEVEL, group_size: int 
     template_raw = BASE._serialize_template(items[0][1])
     groups = [items[index:index + group_size] for index in range(0, len(items), group_size)]
     group_raws = [ZFC._pack_group(group) for group in groups]
-    decoded_manifest = FS.decode_manifest(manifest_raw, max_path_bytes=ZFC.MAX_PATH,
-                                          max_entries=FS.DEFAULT_MAX_MANIFEST_ENTRIES)
+    decoded_manifest = FS.decode_manifest(
+        manifest_raw,
+        max_path_bytes=ZFC.MAX_PATH,
+        max_entries=FS.DEFAULT_MAX_MANIFEST_ENTRIES,
+    )
     regular = decoded_manifest["regular"]
     max_decode = max(len(template_raw) + len(raw) for raw in group_raws)
     max_amp = max(
@@ -150,7 +160,8 @@ def build(root: Path, out: Path, *, level: int = DEFAULT_LEVEL, group_size: int 
         for group, raw in zip(groups, group_raws, strict=True)
     )
     if max_decode > ZFC.MAX_DECODE or max_amp > ZFC.MAX_AMP:
-        raise ProfileNotEligible("ZIP-factor locality ceiling")
+        raise ProfileNotEligible("binary-control ZIP-factor locality ceiling")
+
     compressor = zstd.ZstdCompressor(level=level, threads=0)
     manifest_blob = compressor.compress(manifest_raw)
     template_blob = compressor.compress(template_raw)
@@ -163,8 +174,10 @@ def build(root: Path, out: Path, *, level: int = DEFAULT_LEVEL, group_size: int 
         "manifest_sha": hashlib.sha256(manifest_raw).digest(),
         "template_raw": len(template_raw),
         "template_sha": hashlib.sha256(template_raw).digest(),
-        "groups": [[len(raw), hashlib.sha256(raw).digest(), [rel for rel, _item in group]]
-                   for group, raw in zip(groups, group_raws, strict=True)],
+        "groups": [
+            [len(raw), hashlib.sha256(raw).digest(), [rel for rel, _item in group]]
+            for group, raw in zip(groups, group_raws, strict=True)
+        ],
         "max_decode_unit": max_decode,
         "max_member_read_amplification": float(max_amp),
     }
@@ -174,13 +187,18 @@ def build(root: Path, out: Path, *, level: int = DEFAULT_LEVEL, group_size: int 
     meta_blob = compressor.compress(meta_raw)
     payload = bytearray(ZFC.MAGIC)
     import struct as _struct
+
     payload += _struct.pack("<I", len(meta_raw))
-    payload += BASE._blob(meta_blob); payload += BASE._blob(manifest_blob); payload += BASE._blob(template_blob)
+    payload += BASE._blob(meta_blob)
+    payload += BASE._blob(manifest_blob)
+    payload += BASE._blob(template_blob)
     for blob in group_blobs:
         payload += BASE._blob(blob)
-    out = Path(out); out.parent.mkdir(parents=True, exist_ok=True); out.write_bytes(payload)
+    out = Path(out)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_bytes(payload)
     return {
-        "archive_bytes": out.stat().st_size,
+        "archive_bytes": len(payload),
         "format_revision": ZFC.REVISION,
         "format_profile": ZFC.PROFILE,
         "user_files": len(items),
