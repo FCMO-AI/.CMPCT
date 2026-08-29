@@ -1,35 +1,17 @@
 //! Research-only native preparity verifier for the recovery-safe ZIP-factor v4 envelope.
 //!
 //! This intentionally does not enter `PortableArchive` dispatch. It proves that the exact recovery envelope can
-//! be validated natively while delegating all reconstructed CMP25Z3 semantics to the single existing V3 source.
-//! Primary control is tried first; if it fails, the authenticated tail control is used. Both-invalid fails closed.
+//! be validated natively while delegating every reconstructed CMP25Z3 semantic check to the unchanged V3 preparity
+//! binary. Primary control is tried first; if it fails, the authenticated tail control is used. Both-invalid fails closed.
 
 use sha2::{Digest, Sha256};
-use std::{env, fs, path::Path};
+use std::{env, fs, path::{Path, PathBuf}, process::Command};
 
 const REC_MAGIC: &[u8; 8] = b"CMP25Z4\0";
 const V3_MAGIC: &[u8; 8] = b"CMP25Z3\0";
 const TAIL_MAGIC: &[u8; 8] = b"ZFRTAIL1";
 const FOOTER_SIZE: usize = 8 + 4 + 32;
 const MAX_CONTROL: usize = 1024 * 1024;
-
-// Compile the exact same V3 grammar used by the existing preparity binary. This parity lane is intentionally not
-// timed, so reconstructed V3 bytes are published to a temporary file and passed to the unchanged path verifier.
-// The optimized in-process research FFI owns its byte-slice transformation separately and remains performance-only.
-#[allow(dead_code)]
-mod v3 {
-    include!("cmpct-zipfactor-v3-preparity.rs");
-
-    pub(super) fn verify_exact_bytes(raw: &[u8]) -> Result<(), String> {
-        use std::io::Write;
-        let mut file = tempfile::NamedTempFile::new().map_err(|e| format!("V3 parity tempfile: {e}"))?;
-        file.write_all(raw)
-            .map_err(|e| format!("V3 parity tempfile write: {e}"))?;
-        file.flush()
-            .map_err(|e| format!("V3 parity tempfile flush: {e}"))?;
-        verify(file.path())
-    }
-}
 
 fn u32_at(raw: &[u8], at: usize, label: &str) -> Result<u32, String> {
     let bytes: [u8; 4] = raw
@@ -74,6 +56,32 @@ fn candidate(raw: &[u8], control: &[u8], body_start: usize, body_end: usize) -> 
     Ok(out)
 }
 
+fn v3_binary() -> Result<PathBuf, String> {
+    let current = env::current_exe().map_err(|e| format!("resolve recovery verifier executable: {e}"))?;
+    let name = if cfg!(windows) {
+        "cmpct-zipfactor-v3-preparity.exe"
+    } else {
+        "cmpct-zipfactor-v3-preparity"
+    };
+    Ok(current.with_file_name(name))
+}
+
+fn verify_v3_bytes(raw: &[u8]) -> Result<(), String> {
+    // Portability parity, not performance: use the single existing V3 CLI as semantic owner instead of copying its
+    // grammar. The performance authority independently measures the byte-slice FFI with all verification in timing.
+    let temp = tempfile::NamedTempFile::new().map_err(|e| format!("V3 parity tempfile: {e}"))?;
+    fs::write(temp.path(), raw).map_err(|e| format!("V3 parity tempfile write: {e}"))?;
+    let status = Command::new(v3_binary()?)
+        .arg("verify")
+        .arg(temp.path())
+        .status()
+        .map_err(|e| format!("launch V3 semantic owner: {e}"))?;
+    if !status.success() {
+        return Err(format!("V3 semantic owner rejected reconstructed candidate: {status}"));
+    }
+    Ok(())
+}
+
 fn verify_recovery_bytes(raw: &[u8]) -> Result<&'static str, String> {
     let (control_len, tail_start, tail_sha) = tail_layout(raw)?;
     let primary_start = 8usize;
@@ -88,7 +96,7 @@ fn verify_recovery_bytes(raw: &[u8]) -> Result<&'static str, String> {
         .get(primary_start..body_start)
         .ok_or("truncated primary control")?;
     let primary_candidate = candidate(raw, primary, body_start, tail_start)?;
-    if v3::verify_exact_bytes(&primary_candidate).is_ok() {
+    if verify_v3_bytes(&primary_candidate).is_ok() {
         return Ok("primary");
     }
 
@@ -100,7 +108,7 @@ fn verify_recovery_bytes(raw: &[u8]) -> Result<&'static str, String> {
         return Err("primary invalid and tail control authentication failed".into());
     }
     let tail_candidate = candidate(raw, tail, body_start, tail_start)?;
-    v3::verify_exact_bytes(&tail_candidate)
+    verify_v3_bytes(&tail_candidate)
         .map(|()| "tail")
         .map_err(|e| format!("both recovery controls invalid: {e}"))
 }
