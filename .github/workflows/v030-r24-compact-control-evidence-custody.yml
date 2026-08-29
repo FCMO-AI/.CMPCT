@@ -46,12 +46,13 @@ jobs:
       - name: Install benchmark dependencies
         run: |
           sudo apt-get update
-          # The exact 15-workload deterministic corpus includes media fixtures.
-          # ffmpeg is therefore part of the benchmark harness, not optional
-          # preprocessing outside the timed/release evidence boundary.
-          sudo apt-get install -y zstd ffmpeg
+          # Keep this custody lane on the same deterministic-corpus dependency
+          # boundary as the authoritative all-15 admission workflow. Media fixture
+          # generation needs ffmpeg/soundfile and native probes may compile helpers;
+          # none of those costs are hidden from the benchmark/release evidence.
+          sudo apt-get install -y zstd gcc ffmpeg
           python -m pip install --upgrade pip
-          python -m pip install -e '.[test]'
+          python -m pip install -e '.[test]' soundfile
 
       - name: Compile exact all-15 admission owner
         run: python -m py_compile benchmarks/v030_r24_compact_control_terminal_admission.py
