@@ -31,6 +31,17 @@ jobs:
     timeout-minutes: 180
     steps:
       - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: Bind exact candidate
+        id: candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          expected='${{ github.event.pull_request.head.sha || github.sha }}'
+          actual="$(git rev-parse HEAD)"
+          test "$actual" = "$expected"
+          echo "sha=$actual" >> "$GITHUB_OUTPUT"
       - uses: actions/setup-python@v6
         with:
           python-version: '3.11'
@@ -99,13 +110,17 @@ jobs:
               assert target['median_conservative_create_s'] < target['median_zip_create_s']
               assert target['median_conservative_create_s'] < target['median_zstd19_create_s']
           PY
+      - name: Record candidate fingerprint
+        run: printf '%s\n' '${{ steps.candidate.outputs.sha }}' > benchmark-artifacts/v030-r24-pack-run-control-candidate.txt
       - name: CI topology self-check
         run: python tools/check_ci_topology.py .github/workflows/v030-r24-pack-run-control.yml
       - uses: actions/upload-artifact@v6
         if: always()
         with:
-          name: v030-r24-pack-run-control-${{ github.sha }}
-          path: benchmark-artifacts/v030-r24-pack-run-control.json
+          name: v030-r24-pack-run-control-${{ steps.candidate.outputs.sha }}
+          path: |
+            benchmark-artifacts/v030-r24-pack-run-control.json
+            benchmark-artifacts/v030-r24-pack-run-control-candidate.txt
           if-no-files-found: warn
           retention-days: 90
 
