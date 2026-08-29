@@ -48,6 +48,10 @@ jobs:
           sudo apt-get install -y zstd gcc
           python -m pip install --upgrade pip
           python -m pip install -e '.[test]'
+          # The frozen corpus module imports its full deterministic producer surface at module load even though
+          # this lane generates only 05_logs_and_telemetry. Keep those producer dependencies inside the untimed
+          # environment setup rather than duplicating the corpus generator and risking benchmark-identity drift.
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
       - name: Compile product boundary
         run: |
           python -m py_compile experiments/entropygraph_v030_release_product_logs_runtime.py
