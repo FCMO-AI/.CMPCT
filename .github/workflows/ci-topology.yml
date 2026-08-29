@@ -8,6 +8,7 @@ on:
       - ".github/AGENTS.md"
       - "docs/CI_ARCHITECTURE.md"
       - "tools/check_ci_topology.py"
+      - "tests/test_ci_topology.py"
   push:
     branches: [main]
     paths:
@@ -15,6 +16,7 @@ on:
       - ".github/AGENTS.md"
       - "docs/CI_ARCHITECTURE.md"
       - "tools/check_ci_topology.py"
+      - "tests/test_ci_topology.py"
   workflow_dispatch:
 
 permissions:
@@ -65,6 +67,9 @@ jobs:
         run: |
           mapfile -t files < /tmp/changed-workflows.txt
           python tools/check_ci_topology.py "${files[@]}"
+
+      - name: Ratchet topology checker policy
+        run: python -m pytest -q tests/test_ci_topology.py
 
 # Footnote: this ratchet deliberately checks only new/materially edited workflow files. Existing legacy
 # workflows are migration debt, not precedent; touching one makes the new topology contract apply.
