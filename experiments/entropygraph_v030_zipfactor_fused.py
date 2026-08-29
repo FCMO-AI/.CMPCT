@@ -5,6 +5,11 @@ it again. This builder preserves the exact filesystem-manifest grammar while par
 from the same in-memory read. It emits the same compact-v2 archive grammar and fails closed on unsupported source
 semantics. The optimization is creation-time machinery only; reader semantics remain owned by zipfactor_compact.
 
+ZIP source parsing uses the product-side EOCD-indexed parser. Exact-head A/B evidence showed that traversal to be
+materially faster than the mature linear parser while returning the identical parsed object and preserving the exact
+14,033-byte pre-recovery candidate/SHA. Hostile-equivalence and valid-comment-signature oracles remain the semantic
+promotion boundary; the mature profile parser is retained as the differential reference rather than duplicated here.
+
 The default compression level is 3. A repeated same-runner level sweep found no level that by itself beat ZIP on
 complete creation time. Level 2 was marginally faster but left only a 36-byte size margin versus solid Zstd-19;
 level 3 retained a 219-byte margin at essentially the same latency and was materially faster than the old level-6
@@ -25,6 +30,7 @@ import zstandard as zstd
 from experiments import entropygraph_v030_product_fs as FS
 from experiments import entropygraph_v030_zipfactor_compact as ZFC
 from experiments import entropygraph_v030_zipfactor_profile as BASE
+from experiments import entropygraph_v030_zipfactor_eocd_parser as ZIP_PARSER
 
 MAX_LOGICAL_BYTES = 512 * 1024 * 1024
 DEFAULT_LEVEL = 3
@@ -80,7 +86,7 @@ def _scan(root: Path) -> tuple[bytes, list[tuple[str, dict]], dict]:
                 raise ProfileNotEligible("ZIP-factor graph-owned regular files must all be ZIPs")
             raw = path.read_bytes()
             digest = hashlib.sha256(raw).digest()
-            parsed = BASE._parse_zip(raw)
+            parsed = ZIP_PARSER.parse_zip(raw)
             if parsed is None:
                 raise ProfileNotEligible(f"unsupported ZIP structure: {rel}")
             sig = BASE._signature(parsed)
