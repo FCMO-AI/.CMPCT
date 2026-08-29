@@ -22,6 +22,7 @@ concurrency:
 
 env:
   PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
 
 jobs:
   c25-average-size-admission:
@@ -29,6 +30,10 @@ jobs:
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - name: Bind exact candidate head
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
       - uses: actions/setup-python@v6
         with:
           python-version: '3.11'
@@ -80,14 +85,18 @@ jobs:
               and e['rejected_below_boundary_count'] == 2
           )
           assert e['promotion_signal'] is expected
+          Path(os.environ['RUNNER_TEMP']).joinpath('v030-c25-average-admission-candidate.txt').write_text(os.environ['EVIDENCE_HEAD']+'\n')
           PY
       - name: Upload evidence
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
-          name: v030-c25cc01-average-size-admission
-          path: ${{ runner.temp }}/v030-c25-average-admission.json
+          name: v030-c25cc01-average-size-admission-${{ env.EVIDENCE_HEAD }}
+          path: |
+            ${{ runner.temp }}/v030-c25-average-admission.json
+            ${{ runner.temp }}/v030-c25-average-admission-candidate.txt
           if-no-files-found: warn
+          retention-days: 90
       - name: CI topology self-check
         run: python tools/check_ci_topology.py .github/workflows/v030-c25cc01-average-size-admission.yml
 
