@@ -20,7 +20,9 @@ permissions:
   contents: read
 
 concurrency:
-  group: v030-c25cc01-semantic-root-${{ github.event.pull_request.head.sha || github.sha }}
+  # Scheduling is PR-scoped so a newer candidate cancels stale expensive work. Evidence remains independently
+  # bound to pull_request.head.sha below; the concurrency key is never an evidence fingerprint.
+  group: v030-c25cc01-semantic-root-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:
