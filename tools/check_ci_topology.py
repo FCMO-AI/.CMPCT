@@ -19,12 +19,27 @@ CONCURRENCY_RE = re.compile(r"(?m)^concurrency:\s*$")
 CONCURRENCY_HEAD_SHA_RE = re.compile(r"(?m)^\s+group:.*github\.event\.pull_request\.head\.sha")
 CANCEL_RE = re.compile(r"(?m)^\s+cancel-in-progress:\s*true\s*$")
 PRESERVE_EXACT_RECEIPT_RE = re.compile(r"(?m)^# ci-cancel-policy: preserve-running-exact-receipt\s*$")
-EXACT_HEAD_BINDING_RE = re.compile(
+PR_EXACT_HEAD_BINDING_RE = re.compile(
     r"(?m)^\s+EVIDENCE_HEAD:\s*\$\{\{\s*github\.event\.pull_request\.head\.sha\s*\|\|\s*github\.sha\s*\}\}\s*$"
+)
+PUSH_EXACT_HEAD_BINDING_RE = re.compile(
+    r"(?m)^\s+EVIDENCE_HEAD:\s*\$\{\{\s*github\.sha\s*\}\}\s*$"
 )
 EXACT_HEAD_CHECKOUT_RE = re.compile(r"(?m)^\s+ref:\s*\$\{\{\s*env\.EVIDENCE_HEAD\s*\}\}\s*$")
 PATH_SCOPE_RE = re.compile(r"(?m)^\s+(paths|paths-ignore):\s*$")
 BRANCH_SCOPE_RE = re.compile(r"(?m)^\s+branches(?:-ignore)?:\s*")
+
+
+def _preserved_receipt_is_exact(text: str, lane: str | None) -> bool:
+    if not PRESERVE_EXACT_RECEIPT_RE.search(text) or lane != "deep":
+        return False
+    if not PATH_SCOPE_RE.search(text) or not CONCURRENCY_RE.search(text) or not EXACT_HEAD_CHECKOUT_RE.search(text):
+        return False
+    if PULL_REQUEST_RE.search(text) and PR_EXACT_HEAD_BINDING_RE.search(text):
+        return True
+    if PUSH_RE.search(text) and BRANCH_SCOPE_RE.search(text) and PUSH_EXACT_HEAD_BINDING_RE.search(text):
+        return True
+    return False
 
 
 def validate(path: Path) -> list[str]:
@@ -51,21 +66,11 @@ def validate(path: Path) -> list[str]:
                 "cancel-in-progress is ineffective because the concurrency group is keyed by pull_request.head.sha; "
                 "use a PR/ref scheduling key and keep exact SHA custody in checkout/evidence instead"
             )
-        if not CANCEL_RE.search(text):
-            preserve_exact_receipt = bool(PRESERVE_EXACT_RECEIPT_RE.search(text))
-            if not (
-                preserve_exact_receipt
-                and lane == "deep"
-                and PULL_REQUEST_RE.search(text)
-                and PATH_SCOPE_RE.search(text)
-                and CONCURRENCY_RE.search(text)
-                and EXACT_HEAD_BINDING_RE.search(text)
-                and EXACT_HEAD_CHECKOUT_RE.search(text)
-            ):
-                errors.append(
-                    "automatic runner workflow lacks 'cancel-in-progress: true' or the narrow "
-                    "deep/exact-head preserved-receipt policy"
-                )
+        if not CANCEL_RE.search(text) and not _preserved_receipt_is_exact(text, lane):
+            errors.append(
+                "automatic runner workflow lacks 'cancel-in-progress: true' or the narrow "
+                "deep/exact-head preserved-receipt policy"
+            )
 
     if consumes_runner and PULL_REQUEST_RE.search(text):
         if lane in {"deep", "release", "publisher"} and not PATH_SCOPE_RE.search(text):
@@ -74,19 +79,16 @@ def validate(path: Path) -> list[str]:
     if consumes_runner and PUSH_RE.search(text) and not BRANCH_SCOPE_RE.search(text):
         errors.append("automatic push workflow must scope branches; bare feature-branch push duplicates PR work")
 
-    # Footnote: historical publishers that remain PR-triggered are particularly expensive because they
-    # often discover at runtime that the durable target already exists. The lane rule makes that choice
-    # explicit and forces path scoping at minimum; once one-shot publication is complete they should be
-    # workflow_dispatch-only per docs/CI_ARCHITECTURE.md.
+    # Deep research receipts are allowed to run from a branch-scoped push instead of a long-lived PR synchronize
+    # event. Push-path filters apply to the new push rather than the PR's entire accumulated diff, which prevents a
+    # research lane introduced early in a large integration PR from retriggering on every unrelated commit. These
+    # receipts remain research-only unless a separate exact-candidate release authority explicitly consumes them.
     #
-    # Very long exact-head A/Bs are a separate case: cancelling a 20+ minute measurement whenever an
-    # unrelated PR commit lands can prevent any receipt from completing at all. A deep lane may preserve
-    # its running receipt only with the explicit directive above, PR path scoping, a concurrency group,
-    # concrete EVIDENCE_HEAD binding to pull_request.head.sha, and checkout of that exact env value. The
-    # completed predecessor remains research-only; this exception changes runner scheduling, never evidence
-    # inheritance.
+    # Very long exact-head A/Bs may preserve a running receipt with the explicit directive above. PR-triggered
+    # variants must bind EVIDENCE_HEAD to pull_request.head.sha; branch-push variants bind it to github.sha. Both
+    # must check out that exact env value and be path scoped. This changes scheduling only, never evidence identity.
     #
-    # Conversely, a normal cancel-on-new-head lane must not key its concurrency group by that same head SHA:
+    # Conversely, a normal cancel-on-new-head PR lane must not key its concurrency group by that same head SHA:
     # different commits would then enter different groups and could never cancel one another. Scheduling identity
     # belongs to the PR/ref; evidence identity belongs to the checked-out candidate SHA.
 
@@ -102,7 +104,6 @@ def main(argv: list[str]) -> int:
     failed = False
     for path in paths:
         if not path.exists():
-            # Deleted workflows cannot introduce new fan-out.
             continue
         errors = validate(path)
         if errors:
