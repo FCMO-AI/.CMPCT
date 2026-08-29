@@ -4,20 +4,24 @@ from __future__ import annotations
 
 Canonical r24 physical blob records are self-describing: every record carries codec, decoded
 size, compressed size and metadata length in ``BHDR`` while its byte offset is implied by the
-preceding record length.  The ordinary authenticated index repeats exactly those five values in
-``index['blobs']``.  C25CC01 already preserves the complete physical data span byte-for-byte, so
+preceding record length. The ordinary authenticated index repeats exactly those five values in
+``index['blobs']``. C25CC01 already preserves the complete physical data span byte-for-byte, so
 this oracle asks whether the compact control can omit that duplicate table and reconstruct it by
 one bounded structural scan of the authenticated payload span before expanding to the exact r24
 semantic index.
 
-This is a representation experiment only.  It changes no payload record, pack boundary, codec,
-locality rule, selector, reader dispatch or release authority.  A candidate is valid only if the
+This is a representation experiment only. It changes no payload record, pack boundary, codec,
+locality rule, selector, reader dispatch or release authority. A candidate is valid only if the
 scanned table equals the shipping r24 blob table exactly and the final expanded semantic index is
-identical.  Two authenticated control copies remain charged in the projected archive size.
+identical. Two authenticated control copies remain charged in the projected archive size. The
+same projection is also run across all 15 deterministic sources and may not regress the preceding
+order-safe v4 control representation on any source.
 """
 
 import copy
 import json
+from pathlib import Path
+import shutil
 
 import msgpack
 
@@ -96,27 +100,92 @@ def _project_v5(index: dict, data: bytes) -> dict:
     }
 
 
+def _all15_projection(work_root: Path) -> dict:
+    """Prove exact reconstruction and non-regression against v4 on every deterministic source."""
+    matrix_root = Path(work_root) / "all15-projection"
+    shutil.rmtree(matrix_root, ignore_errors=True)
+    matrix_root.mkdir(parents=True)
+    roots = V4.V3.SAFE._build_all(matrix_root / "corpus")
+    rows = []
+    for key, source in sorted(roots.items(), key=lambda item: str(item[0])):
+        label = "/".join(key) if isinstance(key, tuple) else str(key)
+        tag = label.replace("/", "__")
+        case_root = matrix_root / "cases" / tag
+        case_root.mkdir(parents=True, exist_ok=True)
+        archive = case_root / "source-r24.cmpct"
+        with V4.V3.STABLE._patched():
+            V4.V3.PRODUCT._locality_bounded_r24_build(source, archive)
+        verified = V4.V3.PRODUCT.strong_verify(archive)
+        if not verified.get("ok") or int(verified.get("format_revision", -1)) != 24:
+            raise RuntimeError(f"all-15 self-describing source failed strong verification: {label}")
+        index, data, _physical = V4.V3.PROFILE._source_r24_parts(archive)
+        locality = V4.V3.PROFILE._audit_s_pack_locality(index)
+        if float(locality["max_member_read_amplification"]) > V4.V3.LOCALITY:
+            raise RuntimeError(f"all-15 self-describing source violated locality: {label}")
+        baseline = V4._project_v4(index, data)
+        candidate = _project_v5(index, data)
+        baseline_bytes = int(baseline["projected_archive_bytes"])
+        candidate_bytes = int(candidate["projected_archive_bytes"])
+        rows.append(
+            {
+                "workload": label,
+                "tree_sha256": verified.get("tree_sha256"),
+                "blob_rows_elided": int(candidate["blob_rows_elided"]),
+                "blob_table_msgpack_bytes_elided": int(candidate["blob_table_msgpack_bytes_elided"]),
+                "v4_projected_bytes": baseline_bytes,
+                "v5_projected_bytes": candidate_bytes,
+                "saving_vs_v4_bytes": baseline_bytes - candidate_bytes,
+                "semantic_index_roundtrip_exact": bool(candidate["semantic_index_roundtrip_exact"]),
+                "physical_payload_records_unchanged": bool(candidate["physical_payload_records_unchanged"]),
+                "max_member_read_amplification": float(locality["max_member_read_amplification"]),
+            }
+        )
+    zero_regressions = all(int(row["saving_vs_v4_bytes"]) >= 0 for row in rows)
+    exact = all(row["semantic_index_roundtrip_exact"] and row["physical_payload_records_unchanged"] for row in rows)
+    return {
+        "workloads": len(rows),
+        "rows": rows,
+        "all_semantic_roundtrips_exact": exact,
+        "zero_projected_byte_regressions_vs_v4": zero_regressions,
+        "strict_improvement_count": sum(int(row["saving_vs_v4_bytes"]) > 0 for row in rows),
+        "aggregate_saving_vs_v4_bytes": sum(int(row["saving_vs_v4_bytes"]) for row in rows),
+    }
+
+
 def run(work_root):
+    work_root = Path(work_root)
     old = V4._project_v4
     V4._project_v4 = _project_v5
     try:
-        result = V4.run(work_root)
+        result = V4.run(work_root / "target")
     finally:
         V4._project_v4 = old
-    result["schema"] = "cmpct-v030-c25cc01-self-describing-blobtable-oracle-v1"
+    matrix = _all15_projection(work_root)
+    result["schema"] = "cmpct-v030-c25cc01-self-describing-blobtable-oracle-v2"
     result["contract"].update(
         {
             "blob_table_in_control": False,
             "blob_table_reconstruction": "bounded sequential scan of unchanged authenticated r24 physical records",
             "physical_blob_header_semantic_owner": True,
             "physical_payload_records_changed": False,
+            "all15_projection_required": True,
             "release_credit": False,
         }
     )
+    result["all15"] = matrix
+    result["gate"]["all15_projection_complete"] = matrix["workloads"] == 15
+    result["gate"]["all15_semantic_roundtrips_exact"] = matrix["all_semantic_roundtrips_exact"]
+    result["gate"]["zero_projected_byte_regressions_vs_v4"] = matrix["zero_projected_byte_regressions_vs_v4"]
+    result["gate"]["passed"] = bool(
+        result["gate"]["passed"]
+        and matrix["workloads"] == 15
+        and matrix["all_semantic_roundtrips_exact"]
+        and matrix["zero_projected_byte_regressions_vs_v4"]
+    )
     result["claim_boundary"] = (
-        "Research-only exact representation estimate. A strict signal authorizes only canonical grammar/reader "
-        "productization prerequisites; hostile parsing, recovery, native, Android, all-15 selector and final "
-        "release authority remain mandatory."
+        "Research-only exact representation estimate. A strict target signal plus the all-15 non-regression matrix "
+        "authorizes only canonical grammar/reader productization prerequisites; hostile parsing, recovery, native, "
+        "Android, selector timing and final release authority remain mandatory."
     )
     return result
 
@@ -129,9 +198,9 @@ def main() -> None:
     result = run(a.work_root)
     a.output.parent.mkdir(parents=True, exist_ok=True)
     a.output.write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8")
-    print(json.dumps({"candidate": result["candidate"], "competitors": result["competitors"], "gate": result["gate"]}, indent=2), flush=True)
+    print(json.dumps({"candidate": result["candidate"], "competitors": result["competitors"], "all15": {k: v for k, v in result["all15"].items() if k != "rows"}, "gate": result["gate"]}, indent=2), flush=True)
     if not result["gate"]["passed"]:
-        raise SystemExit("self-describing blob-table experiment was not deterministic")
+        raise SystemExit("self-describing blob-table experiment failed exact all-15 non-regression")
 
 
 if __name__ == "__main__":
