@@ -5,7 +5,11 @@
 //! binary. Primary control is tried first; if it fails, the authenticated tail control is used. Both-invalid fails closed.
 
 use sha2::{Digest, Sha256};
-use std::{env, fs, path::{Path, PathBuf}, process::Command};
+use std::{
+    env, fs,
+    path::{Path, PathBuf},
+    process::Command,
+};
 
 const REC_MAGIC: &[u8; 8] = b"CMP25Z4\0";
 const V3_MAGIC: &[u8; 8] = b"CMP25Z3\0";
@@ -45,7 +49,12 @@ fn tail_layout(raw: &[u8]) -> Result<(usize, usize, [u8; 32]), String> {
     Ok((control_len, control_start, expected))
 }
 
-fn candidate(raw: &[u8], control: &[u8], body_start: usize, body_end: usize) -> Result<Vec<u8>, String> {
+fn candidate(
+    raw: &[u8],
+    control: &[u8],
+    body_start: usize,
+    body_end: usize,
+) -> Result<Vec<u8>, String> {
     if body_start > body_end || body_end > raw.len() {
         return Err("recovery body bounds".into());
     }
@@ -57,7 +66,8 @@ fn candidate(raw: &[u8], control: &[u8], body_start: usize, body_end: usize) -> 
 }
 
 fn v3_binary() -> Result<PathBuf, String> {
-    let current = env::current_exe().map_err(|e| format!("resolve recovery verifier executable: {e}"))?;
+    let current =
+        env::current_exe().map_err(|e| format!("resolve recovery verifier executable: {e}"))?;
     let name = if cfg!(windows) {
         "cmpct-zipfactor-v3-preparity.exe"
     } else {
@@ -77,7 +87,9 @@ fn verify_v3_bytes(raw: &[u8]) -> Result<(), String> {
         .status()
         .map_err(|e| format!("launch V3 semantic owner: {e}"))?;
     if !status.success() {
-        return Err(format!("V3 semantic owner rejected reconstructed candidate: {status}"));
+        return Err(format!(
+            "V3 semantic owner rejected reconstructed candidate: {status}"
+        ));
     }
     Ok(())
 }
