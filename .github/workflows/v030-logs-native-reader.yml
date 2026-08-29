@@ -7,9 +7,11 @@ on:
     paths:
       - 'experiments/entropygraph_v030_native_logs_reader_bridge.py'
       - 'benchmarks/v030_logs_native_reader_oracle.py'
+      - 'benchmarks/v030_logs_manifest_identity_handoff_oracle.py'
       - 'experiments/entropygraph_v030_release_product.py'
       - 'experiments/entropygraph_v030_release_product_logs_candidate.py'
       - 'experiments/entropygraph_v030_logs_inverse_profile_v3.py'
+      - 'experiments/entropygraph_v030_product_fs.py'
       - 'native/cmpct-portable/src/lib.rs'
       - 'native/cmpct-portable/src/logs.rs'
       - 'native/cmpct-portable/src/logs_public.rs'
@@ -30,9 +32,20 @@ env:
 jobs:
   logs-native-reader:
     runs-on: ubuntu-24.04
-    timeout-minutes: 90
+    timeout-minutes: 120
     steps:
       - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: Bind exact candidate
+        id: candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          expected='${{ github.event.pull_request.head.sha || github.sha }}'
+          actual="$(git rev-parse HEAD)"
+          test "$actual" = "$expected"
+          echo "sha=$actual" >> "$GITHUB_OUTPUT"
       - uses: actions/setup-python@v6
         with:
           python-version: '3.11'
@@ -51,6 +64,7 @@ jobs:
         run: |
           python -m py_compile experiments/entropygraph_v030_native_logs_reader_bridge.py
           python -m py_compile benchmarks/v030_logs_native_reader_oracle.py
+          python -m py_compile benchmarks/v030_logs_manifest_identity_handoff_oracle.py
           cargo fmt --check --manifest-path native/cmpct-portable/Cargo.toml
           cargo build --release --manifest-path native/cmpct-portable/Cargo.toml --bin cmpct-portable
 
@@ -72,7 +86,6 @@ jobs:
           python - <<'PY'
           import json
           from pathlib import Path
-
           d = json.loads(Path('benchmark-artifacts/v030-logs-native-reader.json').read_text())
           assert d['schema'] == 'cmpct-v030-logs-native-reader-v1'
           assert d['target'] == 'neutral_hostile_v1/05_logs_and_telemetry'
@@ -90,22 +103,55 @@ jobs:
           assert c['caller_extract_budget_enforced_before_publication'] is True
           assert d['native_corruption_rejected'] is True
           assert d['native_caller_budget_preserved'] is True
-          assert all(len(d['samples_s'][key]) == 5 for key in (
-              'python_verify', 'native_verify', 'python_extract', 'native_extract'
-          ))
+          assert all(len(d['samples_s'][key]) == 5 for key in ('python_verify', 'native_verify', 'python_extract', 'native_extract'))
           g = d['gate']
           assert g['archive_bytes_unchanged'] is True
           assert g['canonical_tree_preserved'] is True
           assert g['native_tail_metadata_authenticated'] is True
           assert g['native_corruption_rejected'] is True
           assert g['native_caller_budget_preserved'] is True
-          expected = (
-              d['verify_improvement_fraction'] >= 0.20
-              and d['extract_improvement_fraction'] >= 0.20
-          )
+          expected = d['verify_improvement_fraction'] >= 0.20 and d['extract_improvement_fraction'] >= 0.20
           assert d['promotion_signal'] == expected
           assert g['passed'] == expected
           assert d['release_credit'] is False
+          PY
+
+      - name: Run authenticated manifest-identity handoff A/B
+        run: |
+          python benchmarks/v030_logs_manifest_identity_handoff_oracle.py \
+            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-logs-manifest-handoff-work" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-logs-manifest-handoff.json"
+
+      - name: Enforce identity-handoff evidence boundary
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          d=json.loads(Path('benchmark-artifacts/v030-logs-manifest-handoff.json').read_text())
+          assert d['schema']=='cmpct-v030-logs-manifest-identity-handoff-v1'
+          assert d['target']=='neutral_hostile_v1/05_logs_and_telemetry'
+          assert d['rounds']==7
+          assert d['archive_bytes']>0
+          c=d['contract']; g=d['gate']
+          assert c['minimum_improvement_fraction']==0.10
+          assert c['archive_bytes_changed'] is False
+          assert c['grammar_changed'] is False
+          assert c['selector_changed'] is False
+          assert c['second_disk_content_hash_removed_only_after_authenticated_identity_map_equality'] is True
+          assert c['release_credit'] is False
+          assert g['archive_bytes_unchanged'] is True
+          assert g['grammar_unchanged'] is True
+          assert g['canonical_tree_preserved'] is True
+          assert g['authenticated_identity_map_required_exact'] is True
+          assert g['post_write_shape_checks_preserved'] is True
+          assert len(d['samples_s']['baseline_extract'])==7
+          assert len(d['samples_s']['handoff_extract'])==7
+          expected=d['improvement_fraction']>=0.10
+          assert g['materially_faster']==expected
+          assert d['promotion_signal']==expected
+          assert g['passed']==expected
+          # Negative timing evidence is valid and stays durable; it must not be relabeled a workflow defect.
+          Path('benchmark-artifacts/v030-logs-native-reader-candidate.txt').write_text('${{ steps.candidate.outputs.sha }}\n')
           PY
 
       - name: CI topology self-check
@@ -114,10 +160,13 @@ jobs:
       - uses: actions/upload-artifact@v6
         if: always()
         with:
-          name: v030-logs-native-reader-${{ github.sha }}
-          path: benchmark-artifacts/v030-logs-native-reader.json
+          name: v030-logs-native-reader-${{ steps.candidate.outputs.sha || github.sha }}
+          path: |
+            benchmark-artifacts/v030-logs-native-reader.json
+            benchmark-artifacts/v030-logs-manifest-handoff.json
+            benchmark-artifacts/v030-logs-native-reader-candidate.txt
           if-no-files-found: warn
           retention-days: 90
 
-# Research-only reader A/B. A positive result authorizes a separate explicit shipping integration only; the normal
+# Research-only reader A/B. Positive results authorize separate explicit shipping integration only; the normal
 # reader/fuzz/native/Android/runtime/final authorities remain mandatory and no archive/selector rule changes here.
