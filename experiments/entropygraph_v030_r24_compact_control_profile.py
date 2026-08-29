@@ -31,6 +31,8 @@ REVISION = 25
 PROFILE = "r24-compact-control-v1"
 LEVELS = CONTROL.LEVELS
 MAX_CONTROL_RAW_BYTES = 64 * 1024 * 1024
+MAX_MEMBER_READ_AMPLIFICATION = 8.0
+MAX_DECODE_UNIT_BYTES = 8 * 1024 * 1024
 # Compatibility materialization remains available for ordinary extraction delegation, but strong verification and
 # selected-member reads no longer need to synthesize and physically write a second ~10 MiB r24 archive. The
 # authenticated expanded index plus unchanged physical data span are already the exact inputs the mature reader
@@ -88,6 +90,54 @@ def _source_r24_parts(archive: Path) -> tuple[dict, bytes, dict]:
     }
 
 
+def _audit_s_pack_locality(index: dict) -> dict:
+    """Fail closed before C25CC01 inherits an r24 physical pack that violates the release locality law.
+
+    C25CC01 deliberately preserves the r24 data span byte-for-byte, so it cannot repair an oversized S_PACK after
+    wrapping it. The authenticated index already contains enough information to prove the worst possible selected
+    member context without decoding payloads: an S_PACK read decodes its owning physical blob, and each logical slice
+    records its own size. This is representation-derived admission, not workload identity.
+    """
+    files = index.get("files")
+    blobs = index.get("blobs")
+    if not isinstance(files, list) or not isinstance(blobs, list):
+        raise CompactControlError("compact-control source has invalid r24 locality tables")
+    max_amp = 1.0
+    max_unit = 0
+    packed_members = 0
+    for row in files:
+        if not isinstance(row, list) or len(row) < 7:
+            raise CompactControlError("compact-control source has invalid r24 file row")
+        storage = row[6]
+        if row[1] != R24.K_FILE or not storage or storage[0] != R24.S_PACK:
+            continue
+        try:
+            pack_idx = int(storage[1])
+            member_bytes = int(row[4])
+            blob = blobs[pack_idx]
+            decoded_bytes = int(blob[1])
+        except (IndexError, TypeError, ValueError) as exc:
+            raise CompactControlError("compact-control source has invalid S_PACK locality reference") from exc
+        if pack_idx < 0 or member_bytes < 0 or decoded_bytes < 0:
+            raise CompactControlError("compact-control source has negative S_PACK locality field")
+        amplification = decoded_bytes / max(1, member_bytes)
+        packed_members += 1
+        max_amp = max(max_amp, amplification)
+        max_unit = max(max_unit, decoded_bytes)
+        if decoded_bytes > MAX_DECODE_UNIT_BYTES or amplification > MAX_MEMBER_READ_AMPLIFICATION:
+            raise ProfileNotEligible(
+                "compact control source S_PACK exceeds release locality: "
+                f"path={row[0]!r} decoded={decoded_bytes} logical={member_bytes} amp={amplification:.6f}"
+            )
+    return {
+        "s_pack_members": packed_members,
+        "max_s_pack_member_amplification": max_amp,
+        "max_s_pack_decode_unit_bytes": max_unit,
+        "max_member_read_amplification": MAX_MEMBER_READ_AMPLIFICATION,
+        "max_decode_unit_bytes": MAX_DECODE_UNIT_BYTES,
+    }
+
+
 def _compact_raw(index: dict) -> tuple[bytes, dict]:
     compact = CONTROL._compact_index(index)
     expanded = CONTROL._expand_index(compact, version=int(index["v"]), features=list(index["features"]))
@@ -102,6 +152,7 @@ def _compact_raw(index: dict) -> tuple[bytes, dict]:
 
 def _write_profile(source_r24: Path, out: Path) -> dict:
     index, data, physical = _source_r24_parts(source_r24)
+    locality = _audit_s_pack_locality(index)
     raw, _compact = _compact_raw(index)
     level, comp = _compress_control(raw)
     projected = R24.HDR.size + len(comp) + len(data) + len(comp) + R24.FTR.size
@@ -134,6 +185,7 @@ def _write_profile(source_r24: Path, out: Path) -> dict:
         "compact_control_comp_bytes_per_copy": len(comp),
         "source_index_comp_bytes_per_copy": int(physical["index_comp_bytes_per_copy"]),
         "semantic_index_roundtrip_exact": True,
+        "locality_admission": locality,
     }
 
 
@@ -296,19 +348,24 @@ def _direct_r24_reader(parsed: dict):
 
 
 def _verify_r24_reader(reader: CMPCT) -> dict:
-    """Strongly verify r24 semantics while hashing each physical S_PACK only once.
+    """Strongly verify r24 semantics and build the canonical user-tree digest in the same logical pass.
 
     S_PACK slices do not carry independent per-slice digests; their security boundary is the authenticated index plus
     the owning physical blob identity. Authenticate each owning pack's full SHA-256 once, still execute every logical
     member read/size check, and retain ordinary per-member SHA verification anywhere an independent identity exists.
+    The previous implementation then walked the entire tree again through ``_r24_user_tree_sha``. Building that exact
+    semantic grammar from bytes already authenticated in this loop removes redundant reads/hashes without weakening
+    any physical or logical identity check.
     """
     verified_files = 0
     verified_packs: set[int] = set()
-    for row in reader.files:
-        if row[1] == R24.K_DIR:
+    semantic_rows = []
+    for row in sorted(reader.files, key=lambda item: item[0]):
+        rel, kind, _mode, _mtime, size, _digest, storage = row
+        if kind == R24.K_DIR:
+            semantic_rows.append([rel, "d"])
             continue
-        raw = reader.read(row[0])
-        storage = row[6]
+        raw = reader.read(rel)
         if storage and storage[0] == R24.S_PACK:
             pack_idx = int(storage[1])
             if pack_idx not in verified_packs:
@@ -321,11 +378,21 @@ def _verify_r24_reader(reader: CMPCT) -> dict:
                     raise CompactControlError(f"physical S_PACK SHA-256 verification failure: {pack_idx}")
                 verified_packs.add(pack_idx)
         else:
-            want = reader.file_sha256(row[0])
+            want = reader.file_sha256(rel)
             if _sha(raw) != want:
-                raise CompactControlError(f"SHA-256 verification failure: {row[0]}")
+                raise CompactControlError(f"SHA-256 verification failure: {rel}")
+        if kind == R24.K_FILE:
+            semantic_rows.append([rel, "f", int(size), _sha(raw)])
+        elif kind == R24.K_SYMLINK:
+            semantic_rows.append([rel, "l", raw.decode("utf-8", "surrogateescape")])
+        elif kind == R24.K_HARDLINK:
+            if not storage or not isinstance(storage[0], str):
+                raise CompactControlError(f"malformed r24 hardlink storage for {rel!r}")
+            semantic_rows.append([rel, "h", storage[0]])
+        else:
+            raise CompactControlError(f"unknown r24 entry kind {kind!r} for {rel!r}")
         verified_files += 1
-    tree = PRODUCT._r24_user_tree_sha(reader)
+    tree = hashlib.sha256(msgpack.packb(["cmpct-user-tree-v1", semantic_rows], use_bin_type=True)).hexdigest()
     return {
         "ok": True,
         "format_revision": 24,
@@ -334,7 +401,7 @@ def _verify_r24_reader(reader: CMPCT) -> dict:
         "user_tree_sha256": tree,
         "verified_files": verified_files,
         "verified_pack_records": len(verified_packs),
-        "reader": "cmpct-r24-reference-reader-pack-sha-once",
+        "reader": "cmpct-r24-reference-reader-pack-sha-once-single-semantic-pass",
     }
 
 
@@ -346,6 +413,7 @@ def _verify_materialized_r24(path: Path) -> dict:
 def strong_verify(archive: Path) -> dict:
     try:
         parsed = _parse(Path(archive))
+        _audit_s_pack_locality(parsed["index"])
         with _direct_r24_reader(parsed) as reader:
             verified = _verify_r24_reader(reader)
         if not verified.get("ok") or int(verified.get("format_revision", -1)) != 24:
@@ -362,6 +430,7 @@ def strong_verify(archive: Path) -> dict:
             "compatibility_index_level": None,
             "compatibility_materialization": False,
             "pack_verification_policy": "authenticated-physical-pack-sha-once",
+            "locality_verified": True,
         }
     except Exception as exc:
         return {
@@ -408,6 +477,11 @@ def read_member_with_stats(archive: Path, rel: str):
         # context at the logical result size; regular selected-member authority always receives a positive denominator.
         decoded_context_bytes = max(len(data), decoded_context_bytes)
         amplification = decoded_context_bytes / max(1, len(data))
+        if decoded_context_bytes > MAX_DECODE_UNIT_BYTES or amplification > MAX_MEMBER_READ_AMPLIFICATION:
+            raise CompactControlError(
+                f"compact-control selected-member locality violation: decoded={decoded_context_bytes} "
+                f"logical={len(data)} amp={amplification:.6f}"
+            )
         return data, {
             "format_revision": REVISION,
             "format_profile": PROFILE,
