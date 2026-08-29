@@ -7,6 +7,7 @@ on:
       - 'benchmarks/v030_zipfactor_scan_hotpath_oracle.py'
       - 'benchmarks/v030_zipfactor_struct_parser_oracle.py'
       - 'benchmarks/v030_zipfactor_eocd_indexed_parser_oracle.py'
+      - 'benchmarks/v030_zipfactor_eocd_hostile_equivalence_oracle.py'
       - 'experiments/entropygraph_v030_zipfactor_fused.py'
       - 'experiments/entropygraph_v030_zipfactor_profile.py'
       - 'experiments/entropygraph_v030_zipfactor_compact_v3_fused_finalize.py'
@@ -54,6 +55,7 @@ jobs:
           python -m py_compile benchmarks/v030_zipfactor_scan_hotpath_oracle.py
           python -m py_compile benchmarks/v030_zipfactor_struct_parser_oracle.py
           python -m py_compile benchmarks/v030_zipfactor_eocd_indexed_parser_oracle.py
+          python -m py_compile benchmarks/v030_zipfactor_eocd_hostile_equivalence_oracle.py
       - name: Profile exact source scan
         run: |
           mkdir -p benchmark-artifacts
@@ -70,6 +72,10 @@ jobs:
           python benchmarks/v030_zipfactor_eocd_indexed_parser_oracle.py \
             --work-root "$RUNNER_TEMP/v030-zf-eocd-parser" \
             --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-zf-eocd-parser.json"
+      - name: Differentially harden EOCD parser on hostile ZIPs
+        run: |
+          python benchmarks/v030_zipfactor_eocd_hostile_equivalence_oracle.py \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-zf-eocd-hostile-equivalence.json"
       - name: Evidence-boundary check
         run: |
           python - <<'PY'
@@ -98,6 +104,16 @@ jobs:
           assert e['candidate']['archive_bytes']==14033
           assert e['candidate']['archive_sha256']=='75bdc866b4b7b63c8f83f7d9a88c9ff3d712c51b93700033984433819b014e31'
           assert e['gate']['experiment_valid'] is True
+          h=json.loads(Path('benchmark-artifacts/v030-zf-eocd-hostile-equivalence.json').read_text())
+          assert h['schema']=='cmpct-v030-zipfactor-eocd-hostile-equivalence-oracle-v1'
+          assert h['contract']['release_credit'] is False
+          assert h['contract']['production_change'] is False
+          assert h['contract']['timing_credit'] is False
+          assert h['coverage']['cases'] >= 150
+          assert h['gate']['candidate_not_more_permissive'] is True
+          assert h['gate']['exact_on_shared_acceptance'] is True
+          assert h['gate']['experiment_valid'] is True
+          assert h['gate']['passed'] is True
           Path('benchmark-artifacts/v030-zf-scan-candidate.txt').write_text('${{ steps.candidate.outputs.sha }}\n')
           PY
       - name: Public-surface guard
@@ -113,6 +129,7 @@ jobs:
             benchmark-artifacts/v030-zf-scan-hotpath.json
             benchmark-artifacts/v030-zf-struct-parser.json
             benchmark-artifacts/v030-zf-eocd-parser.json
+            benchmark-artifacts/v030-zf-eocd-hostile-equivalence.json
             benchmark-artifacts/v030-zf-scan-candidate.txt
           if-no-files-found: warn
           retention-days: 90
