@@ -8,6 +8,9 @@ of the completed r24 candidate explains the difference.  It never consumes workl
 
 The proposed refinement is intentionally research-only: the ordinary frozen admission remains untouched and no release
 or selector credit is granted here.  A future promotion must independently generalize the refined rule before shipping.
+
+A compact-control profile rejection is negative evidence, not a harness exception.  The diagnostic therefore records
+profile-ineligible cases explicitly and keeps them outside both the current and refined admission predicates.
 """
 
 import argparse
@@ -57,6 +60,8 @@ def _candidate_structure(r24_path: Path) -> dict:
 
 
 def _refined_admitted(shape: dict, candidate: dict, structure: dict) -> bool:
+    if not candidate.get("profile_eligible") or candidate.get("candidate_bytes") is None:
+        return False
     return (
         ADM._admitted(shape, int(candidate["r24_bytes"]), int(candidate["candidate_bytes"]))
         and int(structure["physical_blob_records"]) >= MIN_PHYSICAL_BLOB_RECORDS
@@ -71,18 +76,28 @@ def _measure_case(label: str, source: Path, work: Path, *, compare: bool) -> dic
         shape = ADM._source_shape(stage)
         candidate = ADM._build_candidate(stage, root / "candidate")
         structure = _candidate_structure(candidate["r24"])
-        current = ADM._admitted(shape, candidate["r24_bytes"], candidate["candidate_bytes"])
+        eligible = bool(candidate.get("profile_eligible"))
+        current = (
+            eligible
+            and candidate.get("candidate_bytes") is not None
+            and ADM._admitted(shape, int(candidate["r24_bytes"]), int(candidate["candidate_bytes"]))
+        )
         refined = _refined_admitted(shape, candidate, structure)
+        candidate_bytes = candidate.get("candidate_bytes")
         row = {
             "label": label,
             **shape,
+            "profile_eligible": eligible,
+            "profile_reject_reason": candidate.get("profile_reject_reason"),
             "r24_bytes": int(candidate["r24_bytes"]),
-            "candidate_bytes": int(candidate["candidate_bytes"]),
-            "candidate_to_r24": int(candidate["candidate_bytes"]) / max(1, int(candidate["r24_bytes"])),
+            "candidate_bytes": int(candidate_bytes) if candidate_bytes is not None else None,
+            "candidate_to_r24": (
+                int(candidate_bytes) / max(1, int(candidate["r24_bytes"])) if candidate_bytes is not None else None
+            ),
             "current_admitted": bool(current),
             "refined_admitted": bool(refined),
-            "payload_unchanged": bool(candidate["payload_unchanged"]),
-            "two_control_copies": bool(candidate["two_control_copies"]),
+            "payload_unchanged": candidate.get("payload_unchanged"),
+            "two_control_copies": candidate.get("two_control_copies"),
             **structure,
         }
         if compare and refined:
@@ -117,13 +132,22 @@ def main() -> None:
     }
     by_label = {row["label"]: row for row in rows}
     target = by_label["frozen/07_incompressible_and_encrypted_like"]
+    ineligible = [row["label"] for row in rows if not row["profile_eligible"]]
     gate = {
         "exact_case_count": len(rows) == 25,
+        "frozen_target_profile_eligible": target["profile_eligible"] is True,
         "frozen_target_refined_admitted": target["refined_admitted"] is True,
         "frozen_target_strict_four_way_win": target.get("strict_four_way_win") is True,
         "known_unstable_mosaics_rejected": all(by_label[name]["refined_admitted"] is False for name in known_unstable),
         "zero_refined_counterexamples": not refined_counterexamples,
-        "integrity_preserved": all(row["payload_unchanged"] and row["two_control_copies"] for row in rows),
+        "integrity_preserved": all(
+            (not row["profile_eligible"]) or (row["payload_unchanged"] is True and row["two_control_copies"] is True)
+            for row in rows
+        ),
+        "profile_ineligibility_recorded": all(
+            row["profile_eligible"] or bool(row["profile_reject_reason"])
+            for row in rows
+        ),
     }
     gate["diagnostic_valid"] = all(gate.values())
     result = {
@@ -136,18 +160,30 @@ def main() -> None:
             "forbidden_inputs": ["workload_name", "path", "filename", "suffix", "content_hash", "archive_hash", "pack_hash"],
             "selector_change": False,
             "release_credit": False,
+            "profile_ineligibility_is_negative_evidence": True,
             "purpose": "causal admission refinement after unseen ZIP-speed counterexamples",
         },
         "rows": rows,
+        "profile_ineligible": ineligible,
         "refined_admitted": [row["label"] for row in refined],
         "refined_counterexamples": refined_counterexamples,
         "gate": gate,
     }
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(result, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-    print(json.dumps({"refined_admitted": result["refined_admitted"], "gate": gate}, indent=2), flush=True)
+    print(
+        json.dumps(
+            {
+                "profile_ineligible": result["profile_ineligible"],
+                "refined_admitted": result["refined_admitted"],
+                "gate": gate,
+            },
+            indent=2,
+        ),
+        flush=True,
+    )
     if not gate["diagnostic_valid"]:
-        raise SystemExit("C25CC01 fragmentation admission diagnostic failed")
+        raise SystemExit("C25CC01 fragmentation admission diagnostic failed; negative evidence was preserved in artifact")
 
 
 if __name__ == "__main__":
