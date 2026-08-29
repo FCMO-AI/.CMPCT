@@ -2,7 +2,9 @@
 name: CMPCT v0.30 C25CC01 semantic-root floor
 
 on:
-  pull_request:
+  push:
+    branches:
+      - agent/v030-authoritative-integration
     paths:
       - 'benchmarks/v030_c25cc01_semantic_root_floor_oracle.py'
       - 'benchmarks/v030_c25cc01_derived_blob_header_oracle.py'
@@ -20,18 +22,17 @@ permissions:
   contents: read
 
 concurrency:
-  # Scheduling is PR-scoped so a newer candidate cancels stale expensive work. Evidence remains independently
-  # bound to pull_request.head.sha below; the concurrency key is never an evidence fingerprint.
-  group: v030-c25cc01-semantic-root-${{ github.event.pull_request.number || github.ref }}
+  group: v030-c25cc01-semantic-root-${{ github.ref }}
   cancel-in-progress: true
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.sha }}
 
 jobs:
   semantic-root-floor:
     runs-on: ubuntu-24.04
     timeout-minutes: 30
-    env:
-      PYTHONPATH: ${{ github.workspace }}
-      EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
     steps:
       - uses: actions/checkout@v6
         with:
@@ -85,3 +86,7 @@ jobs:
             benchmark-artifacts/v030-c25cc01-semantic-root-candidate.txt
           if-no-files-found: error
           retention-days: 90
+
+# Research-only architecture-floor evidence. Final release authority still requires the exact frozen release
+# candidate; this branch-push trigger only prevents the long-lived PR diff from retriggering the lane on unrelated
+# commits.
