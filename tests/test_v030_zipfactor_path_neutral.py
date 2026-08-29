@@ -35,5 +35,7 @@ def test_misleading_zip_suffix_cannot_admit_non_zip_bytes(tmp_path):
     _zip(source / "valid.bin", b"A" * 256)
     (source / "looks-valid.zip").write_bytes(b"not a zip archive")
 
-    with pytest.raises(ZF.ProfileNotEligible, match="supported ZIP structure"):
+    # Ratchet the semantic rejection reason without coupling the test to incidental wording: admission is based on
+    # parseable ZIP structure, never the filename suffix.
+    with pytest.raises(ZF.ProfileNotEligible, match=r"supported .*structur"):
         ZF._scan(source)
