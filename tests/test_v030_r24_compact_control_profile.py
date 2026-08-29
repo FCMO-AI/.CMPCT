@@ -58,6 +58,7 @@ def test_compact_control_preserves_physical_payload_and_semantic_tree(tmp_path: 
     assert product_verified["format_revision"] == 25
     assert product_verified["format_profile"] == CC.PROFILE
     assert product_verified["tree_sha256"] == verified["tree_sha256"]
+    assert PRODUCT._revision_for_archive(out) == (CC.REVISION, CC.PROFILE)
 
 
 def test_compact_control_recovers_either_authenticated_copy(tmp_path: Path) -> None:
@@ -95,6 +96,7 @@ def test_compact_control_recovers_either_authenticated_copy(tmp_path: Path) -> N
     _flip(both_bad, primary_offset)
     _flip(both_bad, tail_offset)
     assert CC.strong_verify(both_bad)["ok"] is False
+    assert PRODUCT.strong_verify(both_bad)["ok"] is False
 
 
 def test_compact_control_rejects_corrupted_physical_pack(tmp_path: Path) -> None:
@@ -122,6 +124,7 @@ def test_compact_control_rejects_corrupted_physical_pack(tmp_path: Path) -> None
     _flip(bad, corrupt_at)
     verified = CC.strong_verify(bad)
     assert verified["ok"] is False
+    assert PRODUCT.strong_verify(bad)["ok"] is False
 
 
 def test_compact_control_reader_roundtrip(tmp_path: Path) -> None:
@@ -134,10 +137,25 @@ def test_compact_control_reader_roundtrip(tmp_path: Path) -> None:
     files = [row for row in members if row["kind"] == "file"]
     assert len(files) == 192
     rel = files[73]["path"]
-    assert CC.read_member(out, rel) == (src / rel).read_bytes()
+    expected = (src / rel).read_bytes()
+    assert CC.read_member(out, rel) == expected
+    direct, direct_stats = CC.read_member_with_stats(out, rel)
+    assert direct == expected
+    assert direct_stats["decoded_context_amplification"] <= 8.0
+
+    # Public release-product dispatch must use the exact same C25CC01 semantic owner rather than a second grammar.
+    assert PRODUCT.list_members(out) == members
+    public, public_stats = PRODUCT.read_member_with_stats(out, rel)
+    assert public == expected
+    assert public_stats == direct_stats
+    assert PRODUCT.read_member(out, rel) == expected
+
     dst = tmp_path / "dst"
     CC.extract(out, dst)
-    assert (dst / rel).read_bytes() == (src / rel).read_bytes()
+    assert (dst / rel).read_bytes() == expected
+    public_dst = tmp_path / "public-dst"
+    PRODUCT.extract(out, public_dst)
+    assert (public_dst / rel).read_bytes() == expected
 
 
 def test_compact_control_ephemeral_r24_uses_fast_index_without_semantic_change(tmp_path: Path) -> None:
