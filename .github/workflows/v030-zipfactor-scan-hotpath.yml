@@ -8,6 +8,7 @@ on:
       - 'benchmarks/v030_zipfactor_struct_parser_oracle.py'
       - 'benchmarks/v030_zipfactor_eocd_indexed_parser_oracle.py'
       - 'benchmarks/v030_zipfactor_eocd_hostile_equivalence_oracle.py'
+      - 'benchmarks/v030_zipfactor_eocd_comment_signature_oracle.py'
       - 'experiments/entropygraph_v030_zipfactor_eocd_parser.py'
       - 'experiments/entropygraph_v030_zipfactor_fused.py'
       - 'experiments/entropygraph_v030_zipfactor_profile.py'
@@ -58,6 +59,7 @@ jobs:
           python -m py_compile benchmarks/v030_zipfactor_struct_parser_oracle.py
           python -m py_compile benchmarks/v030_zipfactor_eocd_indexed_parser_oracle.py
           python -m py_compile benchmarks/v030_zipfactor_eocd_hostile_equivalence_oracle.py
+          python -m py_compile benchmarks/v030_zipfactor_eocd_comment_signature_oracle.py
       - name: Profile exact source scan
         run: |
           mkdir -p benchmark-artifacts
@@ -78,6 +80,10 @@ jobs:
         run: |
           python benchmarks/v030_zipfactor_eocd_hostile_equivalence_oracle.py \
             --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-zf-eocd-hostile-equivalence.json"
+      - name: Prove EOCD signatures inside valid comments remain exact
+        run: |
+          python benchmarks/v030_zipfactor_eocd_comment_signature_oracle.py \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-zf-eocd-comment-signature.json"
       - name: Evidence-boundary check
         run: |
           python - <<'PY'
@@ -121,6 +127,15 @@ jobs:
           assert h['gate']['valid_generalization_exact'] is True
           assert h['gate']['experiment_valid'] is True
           assert h['gate']['passed'] is True
+          q=json.loads(Path('benchmark-artifacts/v030-zf-eocd-comment-signature.json').read_text())
+          assert q['schema']=='cmpct-v030-zipfactor-eocd-comment-signature-oracle-v1'
+          assert q['contract']['release_credit'] is False
+          assert q['contract']['production_change'] is False
+          assert q['contract']['frozen_workload_dependency'] is False
+          assert len(q['cases'])==4
+          assert all(row['mature_accept'] and row['candidate_accept'] and row['semantic_exact'] for row in q['cases'])
+          assert q['gate']['valid_generalization_exact'] is True
+          assert q['gate']['passed'] is True
           Path('benchmark-artifacts/v030-zf-scan-candidate.txt').write_text('${{ steps.candidate.outputs.sha }}\n')
           PY
       - name: Public-surface guard
@@ -137,6 +152,7 @@ jobs:
             benchmark-artifacts/v030-zf-struct-parser.json
             benchmark-artifacts/v030-zf-eocd-parser.json
             benchmark-artifacts/v030-zf-eocd-hostile-equivalence.json
+            benchmark-artifacts/v030-zf-eocd-comment-signature.json
             benchmark-artifacts/v030-zf-scan-candidate.txt
           if-no-files-found: warn
           retention-days: 90
