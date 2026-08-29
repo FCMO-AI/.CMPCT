@@ -3,16 +3,16 @@ from __future__ import annotations
 """Research-only grouped S_PACK control representation.
 
 The current compact-control grammar repeats ``[S_PACK, blob, offset, length]`` in every
-packed file row.  When consecutive file rows are consecutive physical slices of the
-same pack, the per-row blob/offset recipe is redundant.  This oracle factors each such
+packed file row. When consecutive file rows are consecutive physical slices of the
+same pack, the per-row blob/offset recipe is redundant. This oracle factors each such
 run into one descriptor ``[first_file_index, blob, first_offset, lengths...]`` and
-replaces the participating row storage recipes with a null placeholder.  Before any
+replaces the participating row storage recipes with a null placeholder. Before any
 byte result is accepted, the descriptor map reconstructs the ordinary compact grammar
 and that grammar must expand exactly to the shipping r24 semantic index.
 
 No physical payload, pack boundary, locality rule, recovery rule, selector, benchmark
-identity, or release threshold changes.  The representation is research-only and keeps
-both authenticated control copies.  It is compared against the already-audited compact
+identity, or release threshold changes. The representation is research-only and keeps
+both authenticated control copies. It is compared against the already-audited compact
 control tournament and grants no release/native/Android credit.
 """
 
@@ -48,8 +48,6 @@ def _group_rows(base: dict, index: dict) -> tuple[list, list, int]:
             continue
         blob, offset, length = int(storage[1]), int(storage[2]), int(storage[3])
         if int(source_row[4]) != length or row[4] is not None:
-            # Keep unusual S_PACK rows verbatim; the grouped grammar only removes a
-            # recipe when logical size is exactly the physical slice length.
             current = None
             continue
         if current is None or int(current[1]) != blob or int(current[2]) + sum(int(x) for x in current[3]) != offset:
@@ -82,7 +80,6 @@ def _restore_rows(rows: list, groups: list) -> list:
             row[3] = [int(R24.S_PACK), blob, cursor, length]
             cursor += length
             claimed.add(idx)
-    # No null storage placeholder may remain on a regular encoded file row.
     for row in out:
         if len(row) >= 6 and row[3] is None:
             raise RuntimeError("unrestored grouped S_PACK placeholder")
@@ -136,22 +133,33 @@ def _once(archive: Path) -> dict:
     }
 
 
+def _split_workload(label: str) -> tuple[str, str]:
+    parts = str(label).split("/", 1)
+    return (parts[0], parts[1]) if len(parts) == 2 else ("frozen", parts[0])
+
+
 def run(work_root: Path) -> dict:
     shutil.rmtree(work_root, ignore_errors=True)
     work_root.mkdir(parents=True)
-    roots = CORPUS._build_all_sources(work_root / "corpora")
+    # The canonical corpus builder was renamed from the provisional _build_all_sources helper.
+    # Reuse the same exact 15-workload owner as the already-green pack-run proof instead of
+    # carrying a second stale corpus API.
+    roots = CORPUS._build_all(work_root / "corpora")
+    if len(roots) != 15:
+        raise RuntimeError(f"expected exact 15-workload corpus, got {len(roots)}")
     rows = []
-    for suite, name in CORPUS.TARGETS:
-        source = roots[(suite, name)]
+    for workload in sorted(roots):
+        suite, name = _split_workload(workload)
+        source = roots[workload]
         archive = work_root / "archives" / f"{suite}-{name}.cmpct"
         archive.parent.mkdir(parents=True, exist_ok=True)
         CC._verified_r24(source, archive)
         measured = _once(archive)
-        rows.append({"suite": suite, "name": name, **measured})
+        rows.append({"suite": suite, "name": name, "workload": workload, **measured})
 
     target = next(row for row in rows if row["name"].endswith(TARGET_SUFFIX))
     regressions = [
-        f"{row['suite']}/{row['name']}"
+        row["workload"]
         for row in rows
         if int(row["projected_archive_bytes"]) > int(row["archive_bytes"])
     ]
@@ -159,7 +167,7 @@ def run(work_root: Path) -> dict:
     return {
         "schema": "cmpct-v030-r24-pack-group-control-v1",
         "contract": {
-            "workloads": len(CORPUS.TARGETS),
+            "workloads": 15,
             "release_credit": False,
             "production_selector_change": False,
             "format_revision_change": False,
@@ -182,7 +190,7 @@ def run(work_root: Path) -> dict:
             "experiment_valid": exact,
             "zero_projected_byte_regressions": not regressions,
             "promotion_signal": bool(exact and not regressions and int(target["incremental_saving_vs_existing_best_bytes"]) > 0),
-            "passed": bool(exact),
+            "passed": exact,
         },
         "claim_boundary": "Research-only grouped control map; exact semantic roundtrip is necessary but not sufficient for productization.",
     }
