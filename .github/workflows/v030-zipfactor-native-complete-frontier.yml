@@ -21,6 +21,7 @@ concurrency:
 
 env:
   PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
 
 jobs:
   complete-frontier:
@@ -28,6 +29,10 @@ jobs:
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - name: Bind exact candidate head
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
       - uses: actions/setup-python@v6
         with:
           python-version: '3.11'
@@ -83,8 +88,6 @@ jobs:
           assert e['sizes']['cmpct'] < e['sizes']['zip']
           assert e['sizes']['cmpct'] < e['sizes']['zstd19']
           assert e['release_credit'] is False
-          # This lane may finish green as exact negative evidence. Promotion remains strictly equivalent to
-          # beating both external comparators in both size and complete verified creation time.
           expected=(
               e['sizes']['cmpct'] < e['sizes']['zip']
               and e['sizes']['cmpct'] < e['sizes']['zstd19']
@@ -93,14 +96,18 @@ jobs:
           )
           assert e['strict_four_way_win'] is expected
           assert e['promotion_signal'] is expected
+          Path(os.environ['RUNNER_TEMP']).joinpath('v030-zipfactor-native-complete-candidate.txt').write_text(os.environ['EVIDENCE_HEAD']+'\n')
           PY
       - name: Upload evidence
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
-          name: v030-zipfactor-native-complete-frontier
-          path: ${{ runner.temp }}/v030-zipfactor-native-complete.json
+          name: v030-zipfactor-native-complete-${{ env.EVIDENCE_HEAD }}
+          path: |
+            ${{ runner.temp }}/v030-zipfactor-native-complete.json
+            ${{ runner.temp }}/v030-zipfactor-native-complete-candidate.txt
           if-no-files-found: warn
+          retention-days: 90
       - name: CI topology self-check
         run: python tools/check_ci_topology.py .github/workflows/v030-zipfactor-native-complete-frontier.yml
 
