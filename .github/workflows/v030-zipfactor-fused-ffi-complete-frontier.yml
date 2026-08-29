@@ -114,9 +114,11 @@ jobs:
           assert e['promotion_signal'] is expected
 
           x=json.loads((root/'v030-zipfactor-eocd-ffi-complete.json').read_text())
-          assert x['schema']=='cmpct-v030-zipfactor-eocd-ffi-complete-frontier-v1'
+          assert x['schema']=='cmpct-v030-zipfactor-eocd-ffi-complete-frontier-v2'
           assert x['contract']['source_parser']=='EOCD-indexed-central-first-v1'
+          assert x['contract']['source_parser_is_fused_default'] is True
           assert x['contract']['source_parser_hostile_equivalence_required'] is True
+          assert x['contract']['process_global_parser_mutation'] is False
           assert x['contract']['archive_bytes_changed'] is False
           assert x['contract']['selector_change'] is False
           assert x['contract']['release_credit'] is False and x['release_credit'] is False
