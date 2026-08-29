@@ -21,6 +21,7 @@ concurrency:
 
 env:
   PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
 
 jobs:
   recovery-budget:
@@ -28,6 +29,15 @@ jobs:
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - name: Bind exact candidate head
+        id: candidate
+        run: |
+          set -euo pipefail
+          actual="$(git rev-parse HEAD)"
+          test "$actual" = "$EVIDENCE_HEAD"
+          echo "sha=$actual" >> "$GITHUB_OUTPUT"
       - uses: actions/setup-python@v6
         with:
           python-version: '3.11'
@@ -42,15 +52,17 @@ jobs:
         run: python -m py_compile benchmarks/v030_zipfactor_v3_recovery_budget_oracle.py
       - name: Run exact level-3 recovery budget
         run: |
+          mkdir -p benchmark-artifacts
           python -m benchmarks.v030_zipfactor_v3_recovery_budget_oracle \
             --work-root "$RUNNER_TEMP/v030-zipfactor-v3-recovery-budget" \
-            --output "$RUNNER_TEMP/v030-zipfactor-v3-recovery-budget.json"
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-zipfactor-v3-recovery-budget.json"
       - name: Ratchet recovery inside strict Zstd size margin
         run: |
           python - <<'PY'
           import json, os
           from pathlib import Path
-          e=json.loads((Path(os.environ['RUNNER_TEMP'])/'v030-zipfactor-v3-recovery-budget.json').read_text())
+          p=Path('benchmark-artifacts/v030-zipfactor-v3-recovery-budget.json')
+          e=json.loads(p.read_text())
           assert e['schema']=='cmpct-v030-zipfactor-v3-recovery-budget-v1'
           c=e['contract']
           assert c['candidate_profile']=='zip-framing-factor-binary-control-v3'
@@ -73,14 +85,18 @@ jobs:
           assert s['recovery'] < s['zstd19'] and s['recovery'] < s['zip']
           assert s['recovery_overhead'] < s['zstd_headroom_before_recovery']
           assert s['zstd_headroom_after_recovery'] > 0
+          Path('benchmark-artifacts/v030-zipfactor-v3-recovery-budget-candidate.txt').write_text(os.environ['EVIDENCE_HEAD']+'\n')
           PY
       - name: Upload evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: v030-zipfactor-v3-recovery-budget
-          path: ${{ runner.temp }}/v030-zipfactor-v3-recovery-budget.json
+          name: v030-zipfactor-v3-recovery-budget-${{ steps.candidate.outputs.sha || github.sha }}
+          path: |
+            benchmark-artifacts/v030-zipfactor-v3-recovery-budget.json
+            benchmark-artifacts/v030-zipfactor-v3-recovery-budget-candidate.txt
           if-no-files-found: warn
+          retention-days: 90
       - name: CI topology self-check
         run: python tools/check_ci_topology.py .github/workflows/v030-zipfactor-v3-recovery-budget.yml
 
