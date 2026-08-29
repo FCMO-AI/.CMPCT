@@ -6,7 +6,10 @@ on:
     paths:
       - 'benchmarks/v030_federated_compact_framing_v8_low_effort_policy.py'
       - 'benchmarks/v030_federated_compact_framing_v8_low_effort_policy_evidence_v2.py'
+      - 'benchmarks/v030_eg08_low_effort_composed_oracle.py'
+      - 'benchmarks/v030_eg08_reused_zstd_context_oracle.py'
       - 'benchmarks/v030_federated_compact_framing_v8_policy_exec_v6.py'
+      - 'benchmarks/v030_federated_compact_framing_v8_policy_exec_v8.py'
       - 'benchmarks/v030_federated_compact_framing_v8_policy_distill.py'
       - 'benchmarks/v030_federated_compact_framing_v8_policy_distill_v3.py'
       - 'experiments/entropygraph_v030_federated_compact_framing_candidate_v8.py'
@@ -17,12 +20,22 @@ concurrency:
   group: v030-eg08-low-effort-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
+permissions:
+  contents: read
+
+env:
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+
 jobs:
   lower-effort-policy:
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - name: Bind exact candidate head
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
       - uses: actions/setup-python@v6
         with:
           python-version: '3.11'
@@ -39,18 +52,26 @@ jobs:
           python -m py_compile \
             benchmarks/v030_federated_compact_framing_v8_low_effort_policy.py \
             benchmarks/v030_federated_compact_framing_v8_low_effort_policy_evidence_v2.py \
-            benchmarks/v030_federated_compact_framing_v8_policy_exec_v6.py
+            benchmarks/v030_eg08_low_effort_composed_oracle.py \
+            benchmarks/v030_eg08_reused_zstd_context_oracle.py \
+            benchmarks/v030_federated_compact_framing_v8_policy_exec_v6.py \
+            benchmarks/v030_federated_compact_framing_v8_policy_exec_v8.py
       - name: Run expanded-level generic office frontier
         run: |
           mkdir -p benchmark-artifacts
           python -m benchmarks.v030_federated_compact_framing_v8_low_effort_policy_evidence_v2 \
             --work-root benchmark-artifacts/v030-eg08-low-effort-work \
             --output benchmark-artifacts/v030-eg08-low-effort.json
+      - name: Run composed complete-boundary office frontier
+        run: |
+          python -m benchmarks.v030_eg08_low_effort_composed_oracle \
+            --work-root benchmark-artifacts/v030-eg08-low-effort-composed-work \
+            --output benchmark-artifacts/v030-eg08-low-effort-composed.json
       - name: Independently enforce generic-policy and exactness invariants
         if: always()
         run: |
           python - <<'PY'
-          import json
+          import json, os
           from pathlib import Path
           p=Path('benchmark-artifacts/v030-eg08-low-effort.json')
           assert p.exists(), 'lower-effort EG08 evidence missing'
@@ -66,22 +87,50 @@ jobs:
           assert m['exact_bytes_vs_serial_reference'] is True
           assert e['experiment_valid'] is True
           expected_promotion = all(s[k] is True for k in (
-              'beats_accepted_v029_size',
-              'beats_zip_size',
-              'beats_zstd19_size',
-              'verified_create_beats_zip',
-              'verified_create_beats_zstd19',
-          ))
+              'beats_accepted_v029_size','beats_zip_size','beats_zstd19_size',
+              'verified_create_beats_zip','verified_create_beats_zstd19'))
           assert e['promotion_signal'] is expected_promotion
           assert e['negative_result_valid'] is (not expected_promotion)
           assert e['release_credit'] is False
           assert s['passed'] is expected_promotion
+
+          q=Path('benchmark-artifacts/v030-eg08-low-effort-composed.json')
+          assert q.exists(), 'composed EG08 evidence missing'
+          c=json.loads(q.read_text()); cs=c['strict']; cm=c['measured_candidate']; x=c['execution_composition']
+          assert c['schema']=='cmpct-v030-eg08-low-effort-composed-oracle-v1'
+          assert c['accepted_v029_bytes']==d['accepted_v029_bytes']
+          assert c['policy_family']==d['policy_family']
+          assert x['single_compact_expansion_verify_locality'] is True
+          assert x['reused_zstd_context_per_final_pack_worker'] is True
+          assert x['archive_bytes_changed_vs_same_selected_policy'] is False
+          assert x['selected_levels_changed'] is False
+          assert x['comparator_timing_changed'] is False
+          assert x['release_credit'] is False and c['release_credit'] is False
+          assert cm['exact_bytes_vs_serial_reference'] is True
+          assert cm['compact_expansion_passes']==1
+          assert cs['content_identity_not_policy_input'] is True
+          assert cs['only_raw_size_policy_input'] is True
+          assert cs['exact_serial_archive_identity'] is True
+          assert cs['same_selected_level_vector'] is True
+          assert cs['within_release_locality_bounds'] is True
+          assert c['experiment_valid'] is True
+          expected_composed=all(cs[k] is True for k in (
+              'beats_accepted_v029_size','beats_zip_size','beats_zstd19_size',
+              'verified_create_beats_zip','verified_create_beats_zstd19'))
+          assert c['promotion_signal'] is expected_composed
+          assert cs['passed'] is expected_composed
+          Path('benchmark-artifacts/v030-eg08-low-effort-candidate.txt').write_text(os.environ['EVIDENCE_HEAD']+'\n')
           PY
+      - name: CI topology self-check
+        run: python tools/check_ci_topology.py .github/workflows/v030-eg08-low-effort-policy.yml
       - name: Upload lower-effort policy evidence
         if: always()
         uses: actions/upload-artifact@v6
         with:
-          name: v030-eg08-low-effort-${{ github.sha }}
-          path: benchmark-artifacts/v030-eg08-low-effort.json
+          name: v030-eg08-low-effort-${{ env.EVIDENCE_HEAD }}
+          path: |
+            benchmark-artifacts/v030-eg08-low-effort.json
+            benchmark-artifacts/v030-eg08-low-effort-composed.json
+            benchmark-artifacts/v030-eg08-low-effort-candidate.txt
           if-no-files-found: warn
           retention-days: 90
