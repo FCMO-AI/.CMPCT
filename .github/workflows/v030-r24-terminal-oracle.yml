@@ -19,6 +19,7 @@ concurrency:
 
 env:
   PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
 
 jobs:
   verified-terminal-r24:
@@ -26,6 +27,13 @@ jobs:
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - name: Bind exact candidate head
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
       - uses: actions/setup-python@v6
         with:
           python-version: '3.11'
@@ -48,7 +56,7 @@ jobs:
       - name: Independently enforce shipping regression proof
         run: |
           python - <<'PY'
-          import json
+          import json, os
           from pathlib import Path
           d=json.loads(Path('benchmark-artifacts/v030-terminal-r24.json').read_text())
           assert d['schema']=='cmpct-v030-r24-terminal-oracle-v2'
@@ -75,13 +83,16 @@ jobs:
               ):
                   assert row['gate'][key] is True
           assert d['summary']['all_eligible_pass'] is True
+          Path('benchmark-artifacts/v030-terminal-r24-candidate.txt').write_text(os.environ['EVIDENCE_HEAD']+'\n')
           PY
       - name: Upload terminal-r24 proof
         if: always()
         uses: actions/upload-artifact@v6
         with:
-          name: v030-terminal-r24-${{ github.sha }}
-          path: benchmark-artifacts/v030-terminal-r24.json
+          name: v030-terminal-r24-${{ env.EVIDENCE_HEAD }}
+          path: |
+            benchmark-artifacts/v030-terminal-r24.json
+            benchmark-artifacts/v030-terminal-r24-candidate.txt
           if-no-files-found: error
           retention-days: 90
 
