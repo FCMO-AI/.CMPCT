@@ -1,0 +1,102 @@
+# ci-lane: deep
+name: CMPCT v0.30 compact-control evidence custody
+
+on:
+  pull_request:
+    paths:
+      - 'benchmarks/v030_r24_compact_control_terminal_admission.py'
+      - 'experiments/entropygraph_v030_release_product.py'
+      - 'experiments/entropygraph_v029_r24_compact_control.py'
+      - '.github/workflows/v030-r24-compact-control-evidence-custody.yml'
+      - '.github/workflows/v030-r24-compact-control-terminal-admission.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-v030-cc-evidence-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  all15-evidence:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          clean: true
+
+      - name: Bind exact candidate
+        id: candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          expected='${{ github.event.pull_request.head.sha || github.sha }}'
+          actual="$(git rev-parse HEAD)"
+          test "$actual" = "$expected"
+          echo "sha=$actual" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+
+      - name: Install benchmark dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y zstd
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[test]'
+
+      - name: Compile exact all-15 admission owner
+        run: python -m py_compile benchmarks/v030_r24_compact_control_terminal_admission.py
+
+      - name: Run exact all-15 structural admission proof
+        run: |
+          python -m benchmarks.v030_r24_compact_control_terminal_admission \
+            --work-root "$RUNNER_TEMP/v030-cc-terminal" \
+            --output "$RUNNER_TEMP/v030-cc-terminal.json"
+
+      - name: Bind receipt to exact candidate and preserve negative evidence
+        env:
+          CANDIDATE_SHA: ${{ steps.candidate.outputs.sha }}
+        run: |
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          src=Path(os.environ['RUNNER_TEMP'])/'v030-cc-terminal.json'
+          data=json.loads(src.read_text())
+          # This lane deliberately does not assert product promotion. A legitimate
+          # locality/admission rejection must still leave the complete all-15 receipt.
+          envelope={
+              'schema':'cmpct-v030-compact-control-evidence-custody-v1',
+              'candidate_sha':os.environ['CANDIDATE_SHA'],
+              'release_credit':False,
+              'shipping_promotion_asserted':False,
+              'all15':data,
+          }
+          out=Path('benchmark-artifacts/v030-compact-control-evidence-custody.json')
+          out.parent.mkdir(parents=True, exist_ok=True)
+          out.write_text(json.dumps(envelope, indent=2)+'\n')
+          print(json.dumps({
+              'candidate_sha':envelope['candidate_sha'],
+              'all15_schema':data.get('schema'),
+              'all15_gate':data.get('gate'),
+          }, indent=2))
+          PY
+
+      - name: Public-surface guard
+        run: python tools/check_public_surface.py
+
+      - name: CI topology self-check
+        run: python tools/check_ci_topology.py .github/workflows/v030-r24-compact-control-evidence-custody.yml
+
+      - name: Upload exact all-15 receipt
+        uses: actions/upload-artifact@v6
+        with:
+          name: v030-compact-control-evidence-${{ steps.candidate.outputs.sha }}
+          path: benchmark-artifacts/v030-compact-control-evidence-custody.json
+          if-no-files-found: error
+          retention-days: 90
