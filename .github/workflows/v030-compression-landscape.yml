@@ -58,8 +58,12 @@ jobs:
         run: |
           set -euo pipefail
           python -m pip install --upgrade pip
-          if [ -f requirements.txt ]; then python -m pip install -r requirements.txt; fi
-          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx zstandard
+          # Install the checked-out project rather than duplicating its dependency list here.
+          # The previous hand-maintained list omitted msgpack, so the benchmark could not even
+          # import the canonical v0.29/v0.30 engines. Keeping CI dependency authority in
+          # pyproject.toml makes future benchmark imports fail only when the project itself is
+          # genuinely missing a declared requirement.
+          python -m pip install -e '.[test]'
 
       - name: Record tool identities
         shell: bash
