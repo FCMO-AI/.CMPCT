@@ -28,14 +28,17 @@ root=Path(sys.argv[1])
 src=root/'src'
 src.mkdir(parents=True)
 rng=random.Random(0xC25CC01)
+# Keep the portability fixture inside the same <=8x S_PACK locality law as the product profile.
+# Tiny high-entropy members remain useful control-plane pressure but use a non-packable extension;
+# equal 96 KiB .bin members form at most eight-member release S_PACKs.
 for i in range(256):
-    p=src/'tiny'/f'block-{i:04d}.bin'
+    p=src/'tiny'/f'block-{i:04d}.dat'
     p.parent.mkdir(parents=True, exist_ok=True)
     p.write_bytes(rng.randbytes(256 + (i % 31)))
 for i in range(40):
     p=src/'medium'/f'chunk-{i:03d}.bin'
     p.parent.mkdir(parents=True, exist_ok=True)
-    p.write_bytes(rng.randbytes(96*1024 + (i % 5)*1024))
+    p.write_bytes(rng.randbytes(96*1024))
 archive=root/'candidate.cmpct'
 stats=CC.build(src, archive)
 verified=CC.strong_verify(archive)
