@@ -11,9 +11,15 @@ on:
       - '.github/workflows/v030-zipfactor-parallel-build.yml'
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 concurrency:
   group: v030-zf-parallel-build-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
+
+env:
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
 
 jobs:
   zipfactor-parallel-build:
@@ -21,6 +27,10 @@ jobs:
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - name: Bind exact candidate head
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
       - uses: actions/setup-python@v6
         with:
           python-version: '3.11'
@@ -46,7 +56,7 @@ jobs:
       - name: Independently enforce exactness and promotion decision
         run: |
           python - <<'PY'
-          import json
+          import json, os
           from pathlib import Path
           p=Path('benchmark-artifacts/v030-zf-parallel.json')
           assert p.exists(), 'parallel ZIP-factor evidence missing'
@@ -81,6 +91,7 @@ jobs:
               assert g['parallel_strictly_faster_than_zstd19'] is True
           else:
               assert not perf, 'rejected scheduling must have a measured performance miss'
+          Path('benchmark-artifacts/v030-zf-parallel-candidate.txt').write_text(os.environ['EVIDENCE_HEAD']+'\n')
           PY
       - name: CI topology self-check
         if: always()
@@ -89,7 +100,9 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v6
         with:
-          name: v030-zf-parallel-build-${{ github.sha }}
-          path: benchmark-artifacts/v030-zf-parallel.json
+          name: v030-zf-parallel-build-${{ env.EVIDENCE_HEAD }}
+          path: |
+            benchmark-artifacts/v030-zf-parallel.json
+            benchmark-artifacts/v030-zf-parallel-candidate.txt
           if-no-files-found: warn
           retention-days: 90
