@@ -66,12 +66,16 @@ jobs:
           python -m py_compile benchmarks/v030_zipfactor_recovery_memory_ffi_frontier.py
           python -m py_compile experiments/entropygraph_v030_zipfactor_compact_v3_fused_finalize.py
           cargo build --release --manifest-path native/cmpct-zipfactor-v3-ffi/Cargo.toml
-          cargo build --release --manifest-path native/cmpct-portable/Cargo.toml --bin cmpct-zipfactor-v4-recovery-preparity
+          cargo build --release --manifest-path native/cmpct-portable/Cargo.toml \
+            --bin cmpct-zipfactor-v3-preparity \
+            --bin cmpct-zipfactor-v4-recovery-preparity
       - name: Preserve Rust correctness before timing
         run: |
           cargo fmt --manifest-path native/cmpct-zipfactor-v3-ffi/Cargo.toml -- --check
           cargo clippy --manifest-path native/cmpct-zipfactor-v3-ffi/Cargo.toml -- -D warnings
-          cargo clippy --manifest-path native/cmpct-portable/Cargo.toml --bin cmpct-zipfactor-v4-recovery-preparity -- -D warnings
+          cargo clippy --manifest-path native/cmpct-portable/Cargo.toml \
+            --bin cmpct-zipfactor-v3-preparity \
+            --bin cmpct-zipfactor-v4-recovery-preparity -- -D warnings
       - name: Prove portable recovery semantics on the exact winning bytes
         shell: bash
         run: |
@@ -216,5 +220,5 @@ jobs:
 
 # Research-only. A positive exact-head native FFI result advances the exact recovery representation toward
 # portable/native productization. The byte-slice A/B removes scratch V3 publication/open, while portable preparity
-# independently proves primary/tail recovery on the same exact winning bytes using the shared V3 grammar source.
-# None of these paths alter production dispatch, selector policy, archive bytes, or the v0.30 release lock.
+# independently proves primary/tail recovery on the same exact winning bytes using the unchanged V3 CLI as semantic
+# owner. None of these paths alter production dispatch, selector policy, archive bytes, or the v0.30 release lock.
