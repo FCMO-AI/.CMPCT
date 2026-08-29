@@ -1,12 +1,12 @@
-"""Research-only one-session extraction for canonical logs-inverse archives.
+"""One-session extraction implementation for canonical logs-inverse archives.
 
-The promoted release path currently decodes the authenticated filesystem manifest once for caller-budget/symlink
-policy, opens the archive again for V2 extraction, materializes the internal manifest, reads/decodes it again, and
-then re-reads every extracted regular file to SHA-256 it during filesystem restoration.  The logs Archive already
-SHA-256 verifies every restored logical member.  This experiment keeps one authenticated Archive session, proves
-its declared regular identities exactly equal the filesystem manifest, restores each value once, and therefore
-avoids the second on-disk identity pass.  Archive bytes, public selector, locality policy, and release credit are
-unchanged.
+The promoted release path historically decoded the authenticated filesystem manifest once for caller-budget/symlink
+policy, opened the archive again for V2 extraction, materialized the internal manifest, read/decoded it again, and
+then re-read every extracted regular file to SHA-256 it during filesystem restoration. The logs Archive already
+SHA-256 verifies every restored logical member. This implementation keeps one authenticated Archive session,
+proves its declared regular identities exactly equal the filesystem manifest, restores each value once, and
+therefore avoids the second on-disk identity pass. Archive bytes, public selector, locality policy, and release
+credit are unchanged.
 """
 from __future__ import annotations
 
@@ -17,7 +17,7 @@ import tempfile
 
 from experiments import entropygraph_v030_logs_inverse_profile_v3 as LOGS
 from experiments import entropygraph_v030_product_fs as FS
-from experiments import entropygraph_v030_release_product_logs_candidate as PRODUCT_LOGS
+from experiments import entropygraph_v030_release_product_base as BASE
 
 
 def _restore_filesystem_metadata(staging: Path, decoded: dict, *, safe_symlinks: bool) -> None:
@@ -110,7 +110,7 @@ def extract(
     archive: Path,
     dst: Path,
     *,
-    max_output_bytes: int = PRODUCT_LOGS.POLICY.DEFAULT_MAX_EXTRACT_BYTES,
+    max_output_bytes: int = BASE.POLICY.DEFAULT_MAX_EXTRACT_BYTES,
     safe_symlinks: bool = True,
 ) -> None:
     archive = Path(archive)
