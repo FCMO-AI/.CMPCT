@@ -6,7 +6,9 @@ import zipfile
 
 from experiments import entropygraph_v030_product_fs as FS
 from experiments import entropygraph_v030_zipfactor_compact as ZFC
+from experiments import entropygraph_v030_zipfactor_eocd_parser as EOCD
 from experiments import entropygraph_v030_zipfactor_fused as ZFF
+from experiments import entropygraph_v030_zipfactor_profile as BASE
 
 _DATE = (2023, 4, 5, 6, 8, 10)
 
@@ -44,6 +46,21 @@ def test_fused_zipfactor_scan_emits_exact_generic_filesystem_manifest(tmp_path: 
     assert fused_stats["manifest_sha256"] == generic_stats["manifest_sha256"]
     assert fused_stats["regular_graph_members"] == generic_stats["regular_graph_members"] == len(items) == 5
     assert fused_stats["logical_regular_bytes"] == generic_stats["logical_regular_bytes"]
+
+
+def test_fused_zipfactor_default_eocd_parser_matches_mature_semantic_owner(tmp_path: Path) -> None:
+    root = tmp_path / "source"
+    root.mkdir()
+    for index in range(5):
+        _bundle(root / f"bundle-{index:02d}.zip", 1500 + index)
+
+    original_mature = BASE._parse_zip
+    default_result = ZFF._scan(root)
+    mature_result = ZFF._scan(root, parse_zip=BASE._parse_zip)
+
+    assert ZFF.ZIP_PARSER.parse_zip is EOCD.parse_zip
+    assert BASE._parse_zip is original_mature
+    assert default_result == mature_result
 
 
 def test_fused_zipfactor_build_verifies_with_compact_reader(tmp_path: Path) -> None:
