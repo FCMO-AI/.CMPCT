@@ -119,3 +119,46 @@ jobs:
     )
     errors = validate(path)
     assert any("preserved-receipt policy" in error for error in errors)
+
+
+def test_cancel_true_cannot_key_group_by_exact_head_sha(tmp_path: Path) -> None:
+    path = _write(
+        tmp_path,
+        """# ci-lane: deep
+on:
+  pull_request:
+    paths:
+      - 'benchmarks/**'
+concurrency:
+  group: expensive-${{ github.event.pull_request.head.sha || github.sha }}
+  cancel-in-progress: true
+env:
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+jobs:
+  proof:
+    runs-on: ubuntu-24.04
+""",
+    )
+    errors = validate(path)
+    assert any("concurrency group is keyed by pull_request.head.sha" in error for error in errors)
+
+
+def test_cancel_true_pr_group_keeps_exact_sha_as_evidence_only(tmp_path: Path) -> None:
+    path = _write(
+        tmp_path,
+        """# ci-lane: deep
+on:
+  pull_request:
+    paths:
+      - 'benchmarks/**'
+concurrency:
+  group: expensive-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+env:
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+jobs:
+  proof:
+    runs-on: ubuntu-24.04
+""",
+    )
+    assert validate(path) == []
