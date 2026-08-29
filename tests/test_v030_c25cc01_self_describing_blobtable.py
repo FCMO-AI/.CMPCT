@@ -48,3 +48,23 @@ def test_blob_table_scan_fails_closed_on_bad_record_magic():
     record[:4] = b"NOPE"
     with pytest.raises(RuntimeError, match="invalid r24 blob magic"):
         O._scan_blob_table(bytes(record))
+
+
+def test_project_pair_preserves_known_sparse_pack_shape_as_negative_evidence(monkeypatch):
+    def unsupported(_index, _data):
+        raise RuntimeError(O._UNSUPPORTED_V4_LAYOUT)
+
+    monkeypatch.setattr(O.V4, "_project_v4", unsupported)
+    baseline, candidate, rejection = O._project_pair({}, b"")
+    assert baseline is None
+    assert candidate is None
+    assert rejection == O._UNSUPPORTED_V4_LAYOUT
+
+
+def test_project_pair_does_not_hide_unrelated_projection_errors(monkeypatch):
+    def broken(_index, _data):
+        raise RuntimeError("unexpected semantic corruption")
+
+    monkeypatch.setattr(O.V4, "_project_v4", broken)
+    with pytest.raises(RuntimeError, match="unexpected semantic corruption"):
+        O._project_pair({}, b"")
