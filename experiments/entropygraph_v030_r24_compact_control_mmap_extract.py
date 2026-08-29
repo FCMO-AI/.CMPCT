@@ -1,10 +1,11 @@
 """Research-only zero-copy C25CC01 extraction over the mature r24 semantic owner.
 
 The direct C25 extractor removes compatibility-r24 materialization, but its ordinary parser still reads the whole
-archive into a bytes object and slices the complete physical payload into a second bytes object.  This experiment
-keeps the archive mapped read-only, authenticates/expands the exact same compact control, and exposes the unchanged
-physical payload to the mature r24 reader through a zero-copy memoryview.  It changes neither archive bytes nor
-selector policy and grants no release credit until exact-output/error and timing evidence are complete.
+archive into a bytes object and slices the complete physical payload into a second bytes object. This experiment
+keeps the archive mapped read-only, authenticates/expands the exact same compact control, and points the mature r24
+reader at that mapping with an adjusted record base. mmap slices remain ordinary bytes at blob boundaries, so codec
+FFI never receives exported memoryviews and the mapping can close deterministically. It changes neither archive bytes
+nor selector policy and grants no release credit until exact-output/error and timing evidence are complete.
 """
 from __future__ import annotations
 
@@ -13,8 +14,11 @@ import mmap
 from pathlib import Path
 import shutil
 import tempfile
+import threading
 
 from cmpct import codec as R24
+from cmpct import reader as R24_READER
+from cmpct.reader import CMPCT
 from experiments import entropygraph_v030_r24_compact_control_profile as CC
 from experiments import entropygraph_v030_release_product as PRODUCT
 
@@ -24,7 +28,6 @@ def _mapped_parse(archive: Path):
     archive = Path(archive)
     with archive.open("rb") as fh:
         mm = mmap.mmap(fh.fileno(), 0, access=mmap.ACCESS_READ)
-        data_view = None
         try:
             if len(mm) < R24.HDR.size + R24.FTR.size:
                 raise CC.CompactControlError("truncated compact-control archive")
@@ -42,7 +45,7 @@ def _mapped_parse(archive: Path):
             if primary_end + int(data_bytes) != tail_start:
                 raise CC.CompactControlError("compact-control physical span accounting mismatch")
 
-            # Control copies are small bounded metadata.  Copying one of them is intentional; the eliminated copy is
+            # Control copies are small bounded metadata. Copying one of them is intentional; the eliminated copy is
             # the potentially multi-megabyte physical payload span.
             primary = mm[primary_start:primary_end]
             tail = mm[tail_start:footer_off]
@@ -62,10 +65,13 @@ def _mapped_parse(archive: Path):
             ) != index:
                 raise CC.CompactControlError("compact-control semantic expansion is not stable")
 
-            data_view = memoryview(mm)[primary_end:tail_start]
+            # Keep the whole mmap as the reader substrate and shift record_base to the physical-data start. This is
+            # truly archive-wide zero-copy while preserving the mature reader's expectation that blob slices are bytes.
             yield {
                 "index": index,
-                "data": data_view,
+                "data": mm,
+                "record_base": primary_end,
+                "physical_data_bytes": int(data_bytes),
                 "recovery_source": recovery,
                 "primary_control_bytes": int(primary_cbytes),
                 "tail_control_bytes": int(tail_cbytes),
@@ -75,9 +81,52 @@ def _mapped_parse(archive: Path):
                 "physical_payload_copy": False,
             }
         finally:
-            if data_view is not None:
-                data_view.release()
             mm.close()
+
+
+@contextmanager
+def _mapped_r24_reader(parsed: dict):
+    """Bind the mature r24 semantic decoder directly to the C25 archive mmap without exporting subviews."""
+    index = parsed["index"]
+    CC._validate_expanded_index(index)
+    reader = CMPCT.__new__(CMPCT)
+    reader.path = Path("<c25cc01-mmap-direct>")
+    reader.f = None
+    reader.index = index
+    reader.record_base = int(parsed["record_base"])
+    reader.mm = parsed["data"]
+    reader.files = index["files"]
+    reader.by = {row[0]: row for row in reader.files}
+    reader.blobs = index["blobs"]
+    reader.recipes = index["recipes"]
+    reader.dict_idx = index.get("dict_blob")
+    reader.fsmeta = index.get("fsmeta", {})
+    reader.cache = {}
+    reader.vcache = {}
+    reader._io_lock = threading.Lock()
+    reader._cache_lock = threading.Lock()
+    reader._zdict_lock = threading.Lock()
+    reader._inflate_lock = threading.Lock()
+    reader._dctx = None
+    reader._ddict = None
+    reader._dict_bytes = None
+    reader._inflater = None
+    reader._executor = None
+    try:
+        yield reader
+    finally:
+        if reader._executor is not None:
+            reader._executor.shutdown(wait=True)
+            reader._executor = None
+        if reader._ddict is not None:
+            R24_READER._z.ZSTD_freeDDict(reader._ddict)
+            reader._ddict = None
+        if reader._dctx is not None:
+            R24_READER._z.ZSTD_freeDCtx(reader._dctx)
+            reader._dctx = None
+        if reader._inflater is not None and R24_READER._ld is not None:
+            R24_READER._ld.libdeflate_free_decompressor(reader._inflater)
+            reader._inflater = None
 
 
 def extract(
@@ -98,7 +147,7 @@ def extract(
         staging = Path(tempfile.mkdtemp(prefix=f".{dst.name}.cmpct-v030-c25-mmap-", dir=dst.parent))
         installed = False
         try:
-            with CC._direct_r24_reader(parsed) as reader:
+            with _mapped_r24_reader(parsed) as reader:
                 reader.extractall(staging, max_bytes=max_output_bytes, safe_symlinks=safe_symlinks)
             PRODUCT._BASE_IMPL.C._publish_tree(staging, dst)
             installed = True
