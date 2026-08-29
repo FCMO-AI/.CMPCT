@@ -13,6 +13,8 @@ on:
       - 'benchmarks/v030_zipfactor_native_complete_frontier.py'
       - 'benchmarks/v030_external_competitors.py'
       - 'experiments/entropygraph_v030_zipfactor_profile.py'
+      - 'experiments/entropygraph_v030_zipfactor_eocd_parser.py'
+      - 'experiments/entropygraph_v030_zipfactor_fused.py'
       - 'experiments/entropygraph_v030_zipfactor_compact_v3.py'
       - 'experiments/entropygraph_v030_zipfactor_compact_v3_fused_finalize.py'
       - 'native/cmpct-zipfactor-v3-ffi/**'
@@ -54,6 +56,8 @@ jobs:
           python -m pip install -e '.[test]'
       - name: Compile fused builder, parser gates, FFI verifier and oracles
         run: |
+          python -m py_compile experiments/entropygraph_v030_zipfactor_eocd_parser.py
+          python -m py_compile experiments/entropygraph_v030_zipfactor_fused.py
           python -m py_compile experiments/entropygraph_v030_zipfactor_compact_v3_fused_finalize.py
           python -m py_compile benchmarks/v030_zipfactor_fused_ffi_complete_frontier.py
           python -m py_compile benchmarks/v030_zipfactor_eocd_indexed_parser_oracle.py
@@ -81,10 +85,12 @@ jobs:
           from pathlib import Path
           root=Path(os.environ['RUNNER_TEMP'])
           e=json.loads((root/'v030-zipfactor-fused-ffi-complete.json').read_text())
-          assert e['schema']=='cmpct-v030-zipfactor-fused-ffi-complete-frontier-v1'
+          assert e['schema']=='cmpct-v030-zipfactor-fused-ffi-complete-frontier-v2'
           c=e['contract']
           assert c['rounds']==9 and c['ties_fail'] is True
-          assert c['cmpct_timing']=='byte-identical-fused-v3-build-plus-inprocess-native-strong-verify'
+          assert c['cmpct_timing']=='byte-identical-fused-v3-eocd-build-plus-inprocess-native-strong-verify'
+          assert c['source_parser']=='EOCD-indexed-central-first-v1'
+          assert c['source_parser_is_fused_default'] is True
           assert c['fused_builder_required'] is True
           assert c['native_process_startup_inside_timing'] is False
           assert c['native_ffi_call_inside_timing'] is True
@@ -139,6 +145,6 @@ jobs:
       - name: CI topology self-check
         run: python tools/check_ci_topology.py .github/workflows/v030-zipfactor-fused-ffi-complete-frontier.yml
 
-# Research-only. A positive EOCD result proves the exact byte-identical fused builder plus in-process verifier
-# crosses the full Deflate-family frontier on this candidate; canonical parser integration, recovery/platform,
-# all-15 productization and final authority remain separate blockers.
+# Research-only. A positive product-default EOCD result proves the exact byte-identical fused builder plus
+# in-process verifier crosses the full Deflate-family frontier on this candidate; recovery/platform/all-15
+# productization and final authority remain separate blockers.
