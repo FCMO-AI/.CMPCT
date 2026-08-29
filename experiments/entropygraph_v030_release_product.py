@@ -169,11 +169,14 @@ def _compact_control_source_shape(root: Path) -> dict:
 
 
 def _shared_frontdoor_preflight(root: Path) -> dict:
-    """One source walk for logs proof and, when logs is absent, the exact C25 source shape.
+    """One source walk for logs proof, media source facts, and the exact C25 source shape.
 
-    The research A/B earned promotion with exact predicate/shape agreement, 45.8% lower median cost on a
-    C25-shaped negative-logs tree (~18 ms saved), and a faster early-positive logs path. Metadata errors fall back to
-    the historical independent preflights rather than changing admission semantics.
+    The logs/C25 research A/B earned promotion with exact predicate/shape agreement, 45.8% lower median cost on a
+    C25-shaped negative-logs tree (~18 ms saved), and a faster early-positive logs path. Media admission previously
+    repeated a complete os.walk/lstat traversal immediately afterwards. While the shared walk remains complete we
+    now retain only the bounded set of regular path/size facts that media could use. Once the media policy's hard
+    128-file maximum is exceeded, that cache is discarded because media admission is then mathematically impossible.
+    Metadata errors still fall back to the historical independent preflights rather than changing admission.
     """
     root = Path(root)
     plain: set[str] = set()
@@ -182,6 +185,7 @@ def _shared_frontdoor_preflight(root: Path) -> dict:
     regular_files = 0
     logical_bytes = 0
     scanned_regular_files = 0
+    media_files: list[tuple[Path, int]] | None = []
     stack = [os.fspath(root)]
     while stack:
         directory = stack.pop()
@@ -189,7 +193,12 @@ def _shared_frontdoor_preflight(root: Path) -> dict:
             with os.scandir(directory) as entries:
                 batch = list(entries)
         except OSError:
-            return {"logs_eligible": False, "shape": None, "metadata_error": True}
+            return {
+                "logs_eligible": False,
+                "shape": None,
+                "media_files": None,
+                "metadata_error": True,
+            }
         for entry in batch:
             try:
                 if entry.is_symlink():
@@ -201,10 +210,22 @@ def _shared_frontdoor_preflight(root: Path) -> dict:
                     continue
                 size = int(entry.stat(follow_symlinks=False).st_size)
             except OSError:
-                return {"logs_eligible": False, "shape": None, "metadata_error": True}
+                return {
+                    "logs_eligible": False,
+                    "shape": None,
+                    "media_files": None,
+                    "metadata_error": True,
+                }
             regular_files += 1
             logical_bytes += size
             scanned_regular_files += 1
+            if media_files is not None:
+                if regular_files <= _R24_MEDIA.MAX_REGULAR_FILES:
+                    media_files.append((Path(entry.path), size))
+                else:
+                    # Path retention would only add memory after the hard file-count policy has made media
+                    # admission impossible. Shape counting continues for C25 admission.
+                    media_files = None
             rel = Path(entry.path).relative_to(root).as_posix()
             sidecar_base = None
             for suffix in (".gz", ".zst"):
@@ -225,6 +246,7 @@ def _shared_frontdoor_preflight(root: Path) -> dict:
                 return {
                     "logs_eligible": True,
                     "shape": None,
+                    "media_files": None,
                     "metadata_error": False,
                     "scanned_regular_files": scanned_regular_files,
                     "short_circuited": True,
@@ -236,9 +258,42 @@ def _shared_frontdoor_preflight(root: Path) -> dict:
             "regular_files": regular_files,
             "average_regular_bytes": logical_bytes / max(1, regular_files),
         },
+        "media_files": media_files,
         "metadata_error": False,
         "scanned_regular_files": scanned_regular_files,
         "short_circuited": False,
+    }
+
+
+def _media_admission_after_preflight(root: Path, preflight: dict) -> dict:
+    """Preserve the media predicate while reusing facts already owned by the shared source walk."""
+    shape = preflight.get("shape")
+    if preflight.get("metadata_error") or shape is None:
+        return _R24_MEDIA.analyze(root)
+
+    regular_files = int(shape["regular_files"])
+    logical_bytes = int(shape["logical_bytes"])
+    if not (
+        _R24_MEDIA.MIN_REGULAR_FILES <= regular_files <= _R24_MEDIA.MAX_REGULAR_FILES
+        and logical_bytes >= _R24_MEDIA.MIN_LOGICAL_BYTES
+    ):
+        # These are exact necessary conditions of the media predicate. No header or entropy inspection can turn
+        # this shape into an admission, so a second source-tree walk is pure speculative work.
+        return {
+            "regular_files": regular_files,
+            "logical_bytes": logical_bytes,
+            "eligible": False,
+            "reason": "shape-preflight",
+            "source_walk_reused": True,
+        }
+
+    media_files = preflight.get("media_files")
+    if media_files is None or len(media_files) != regular_files:
+        # Fail safe on incomplete custody rather than infer source facts.
+        return _R24_MEDIA.analyze(root)
+    return {
+        **_R24_MEDIA.analyze_precollected(media_files),
+        "source_walk_reused": True,
     }
 
 
@@ -342,7 +397,7 @@ def build(root, out):
     if terminal is not None:
         return terminal
 
-    media = _R24_MEDIA.analyze(root)
+    media = _media_admission_after_preflight(root, preflight)
     if media["eligible"]:
         stats = dict(_locality_bounded_r24_build(root, out))
         return {
@@ -357,99 +412,3 @@ def build(root, out):
     if compact_control is not None:
         return compact_control
     return _BASE_IMPL.build(root, out)
-
-
-def strong_verify(archive):
-    if _is_compact_control_archive(archive):
-        return _compact_control_module().strong_verify(archive)
-    if _LOGS_PROMOTED._is_logs_archive(archive):
-        return _LOGS_PROMOTED.strong_verify(archive)
-    return _BASE_IMPL.strong_verify(archive)
-
-
-def list_members(archive):
-    if _is_compact_control_archive(archive):
-        return _compact_control_module().list_members(archive)
-    if _LOGS_PROMOTED._is_logs_archive(archive):
-        return _LOGS_PROMOTED.list_members(archive)
-    return _BASE_IMPL.list_members(archive)
-
-
-def read_member_with_stats(archive, rel):
-    if _is_compact_control_archive(archive):
-        return _compact_control_module().read_member_with_stats(archive, rel)
-    if _LOGS_PROMOTED._is_logs_archive(archive):
-        return _LOGS_PROMOTED.read_member_with_stats(archive, rel)
-    return _BASE_IMPL.read_member_with_stats(archive, rel)
-
-
-def read_member(archive, rel):
-    if _is_compact_control_archive(archive):
-        return _compact_control_module().read_member(archive, rel)
-    if _LOGS_PROMOTED._is_logs_archive(archive):
-        return _LOGS_PROMOTED.read_member(archive, rel)
-    return _BASE_IMPL.read_member(archive, rel)
-
-
-def extract(archive, dst, *, max_output_bytes=POLICY.DEFAULT_MAX_EXTRACT_BYTES, safe_symlinks=True):
-    if _is_compact_control_archive(archive):
-        return _compact_control_module().extract(archive, dst, max_output_bytes=max_output_bytes, safe_symlinks=safe_symlinks)
-    if _LOGS_PROMOTED._is_logs_archive(archive):
-        return _LOGS_PROMOTED.extract(archive, dst, max_output_bytes=max_output_bytes, safe_symlinks=safe_symlinks)
-    return _BASE_IMPL.extract(archive, dst, max_output_bytes=max_output_bytes, safe_symlinks=safe_symlinks)
-
-
-def _revision_for_archive(archive):
-    if _is_compact_control_archive(archive):
-        cc = _compact_control_module()
-        return cc.REVISION, cc.PROFILE
-    if _LOGS_PROMOTED._is_logs_archive(archive):
-        return REVISION, _LOGS_PROMOTED.LOGS_PROFILE
-    return _BASE_IMPL._revision_for_archive(archive)
-
-
-LOGS = _LOGS_PROMOTED.LOGS
-LOGS_MAGIC = _LOGS_PROMOTED.LOGS_MAGIC
-LOGS_TAIL = _LOGS_PROMOTED.LOGS_TAIL
-LOGS_PROFILE = _LOGS_PROMOTED.LOGS_PROFILE
-logs_source_prefilter = _LOGS_PROMOTED.logs_source_prefilter
-
-PROMOTED_LOGS_INVERSE = True
-PROMOTED_LOGS_EVIDENCE = "all-15 structural admission + external/v0.29 selector shadows + native production dispatch + Android/JNI"
-PROMOTED_LOGS_STREAMING_PREFILTER = True
-PROMOTED_LOGS_STREAMING_PREFILTER_EVIDENCE = "exact adversarial eligibility + nine-round 12k-file A/B: ~99.9% prefilter speedup with early short-circuit"
-PROMOTED_SHARED_FRONTDOOR_PREFLIGHT = True
-PROMOTED_SHARED_FRONTDOOR_PREFLIGHT_EVIDENCE = "11-round exact A/B: 45.8% faster C25/no-logs preflight (~18 ms saved), logs early-positive also faster"
-PROMOTED_R24_DEAD_DICTIONARY_ELISION = True
-PROMOTED_R24_DEAD_DICTIONARY_EVIDENCE = "all-15 post-selection proof: 0 byte regressions, live dictionaries byte-identical, dead dictionaries smaller"
-PROMOTED_R24_OPAQUE_MEDIA_TERMINAL = True
-PROMOTED_R24_OPAQUE_MEDIA_EVIDENCE = "all-15 strict four-way media win + unseen entropy-refined adversarial proof with compressible-media rejection"
-PROMOTED_R24_COMPACT_CONTROL_TERMINAL = True
-PROMOTED_R24_COMPACT_CONTROL_EVIDENCE = "all-15 frozen admission + five-round unseen/adversarial strict four-way wins + native dispatch + Android/JNI"
-
-_PROMOTED_BINDINGS = {
-    "build": build,
-    "strong_verify": strong_verify,
-    "list_members": list_members,
-    "read_member_with_stats": read_member_with_stats,
-    "read_member": read_member,
-    "extract": extract,
-    "_revision_for_archive": _revision_for_archive,
-}
-
-
-class _ReleaseProductModule(types.ModuleType):
-    def __setattr__(self, name, value):
-        super().__setattr__(name, value)
-        if name.startswith("__") or name in {"_BASE_IMPL", "_LOGS_PROMOTED", "_R24_DEAD_DICT", "_R24_MEDIA"}:
-            return
-        if not hasattr(_BASE_IMPL, name):
-            return
-        promoted = _PROMOTED_BINDINGS.get(name)
-        if promoted is not None and value is promoted:
-            setattr(_BASE_IMPL, name, _BASE_ORIGINALS[name])
-        else:
-            setattr(_BASE_IMPL, name, value)
-
-
-sys.modules[__name__].__class__ = _ReleaseProductModule
