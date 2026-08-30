@@ -1,19 +1,12 @@
 # ci-lane: deep
+# ci-auto-policy: retired-manual-only
 name: CMPCT v0.30 C25CC01 selector cost model
 
+# The C25CC01 physical family is shipping-retired and exact byte-floor evidence
+# proves its current locality-safe representation cannot beat Zstd-19 even with
+# zero control bytes. Preserve this causal decomposition for manual replay only;
+# a two-hour automatic selector study cannot change that physical impossibility.
 on:
-  push:
-    branches: [agent/v030-authoritative-integration]
-    paths:
-      - 'experiments/entropygraph_v030_r24_compact_control_profile.py'
-      - 'experiments/entropygraph_v030_release_product.py'
-      - 'benchmarks/v030_r24_compact_control_terminal_admission.py'
-      - 'benchmarks/v030_r24_compact_control_terminal_generalization.py'
-      - 'benchmarks/v030_r24_compact_control_cost_model_oracle.py'
-      - 'benchmarks/v030_r24_compact_control_cost_model_oracle_v2.py'
-      - 'benchmarks/v030_r24_compact_control_composition_oracle_v2.py'
-      - 'benchmarks/v030_external_competitors.py'
-      - '.github/workflows/v030-c25cc01-cost-model.yml'
   workflow_dispatch:
 
 permissions:
@@ -131,5 +124,4 @@ jobs:
           if-no-files-found: error
           retention-days: 90
 
-# Research-only causal decomposition for a shipping-retired physical family. Preserve the negative evidence on
-# relevant changes, but do not re-run this two-hour lane for unrelated PR history. Release authority is unchanged.
+# Research-only causal decomposition for a shipping-retired physical family. Release authority is unchanged.
