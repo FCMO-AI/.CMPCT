@@ -2,20 +2,18 @@ from __future__ import annotations
 
 """Diagnose why the valid 2 KiB multi-root mosaic loses as a complete research artifact.
 
-This is a causal probe, not an acceptance benchmark.  It builds the exact small-metadata workload under
+This is a causal probe, not an acceptance benchmark. It builds the exact small-metadata workload under
 three independently useful envelopes:
 
 - inherited EntropyGraph v0.25 / CMPNX5;
 - raw EntropyGraph II v0.28 graph / CMPNX8;
 - Mosaic Placement Compiler attempt #4 / CMPNX10.
 
-It then separates fixed header/footer bytes, duplicated compressed metadata, and physical-record bytes,
-and computes a compact-metadata oracle for CMPNX10 without changing any physical representation.
-
-Footnote: the compact oracle is deliberately non-promotional.  It can remove metadata fields that are
-already fixed by magic/header policy and replace verbose descriptor labels with integer tags, but the
-result is never emitted as an archive.  Its only purpose is to answer whether metadata compactness alone
-could plausibly recover the fourth frozen v2 workload win.
+It separates fixed framing, duplicated compressed metadata, and physical-record bytes. Besides the existing
+compact-metadata oracle it now computes exact lower bounds for the entire metadata-only optimization family.
+Those lower bounds are deliberately more optimistic than a shippable recovery design: they include a zero-
+metadata floor and a compact single-copy floor. If even those lose, metadata-only work is terminal and the
+next design must also reduce record/framing bytes.
 """
 
 import argparse
@@ -54,7 +52,6 @@ def _parse(path: Path, module) -> dict:
     if magic != module.MAG:
         raise RuntimeError(f"unexpected magic {magic!r} for {path.name}")
     header = module.HDR.unpack(raw[: module.HDR.size])
-    # CMPNX5 header is <8sQQI32s>; later research headers append resource ceilings + Merkle root.
     mcs = int(header[1]); mus = int(header[2]); count = int(header[3])
     meta_start = module.HDR.size
     meta_comp = raw[meta_start : meta_start + mcs]
@@ -92,8 +89,6 @@ def _parse(path: Path, module) -> dict:
 
 
 def _compact_meta(meta: dict) -> dict:
-    # Fields below are fixed by CMPNX10 magic or already declared/authenticated in the fixed header; a
-    # future compact grammar could make them reader policy rather than repeating verbose map keys.
     omit = {
         "engine", "max_decode_unit", "max_decoder_memory", "max_dependency_depth",
         "max_mosaic_bases", "max_mosaic_source_index", "pack_limit", "pack_read_amplification",
@@ -137,8 +132,8 @@ def run(work_root: Path) -> dict:
     placement_portfolio_path = out_dir / "placement-portfolio.cmpct"
 
     V025.ROOT = source; V025.OUT = v025_path
-    v025_stats = V025.build()
-    v028_graph_stats = V028._build_graph(source, v028_graph_path)
+    V025.build()
+    V028._build_graph(source, v028_graph_path)
     v028_portfolio_stats = V028.build(source, v028_portfolio_path)
     placement_stats = PLACEMENT.build_graph(source, placement_path)
     placement_portfolio_stats = PLACEMENT.build(source, placement_portfolio_path)
@@ -150,21 +145,28 @@ def run(work_root: Path) -> dict:
     compact = _compact_meta(placement["meta"])
     compact_raw = msgpack.packb(compact, use_bin_type=True)
     compact_comp = PLACEMENT.IMPL.zc(compact_raw, 12)
-    compact_total = (
-        placement["header_bytes"] + placement["footer_bytes"] + placement["record_area_bytes"]
-        + 2 * len(compact_comp)
-    )
+    fixed_framing = placement["header_bytes"] + placement["footer_bytes"]
+    baseline_bytes = int(v028_portfolio_stats["archive_bytes"])
+    compact_total = fixed_framing + placement["record_area_bytes"] + 2 * len(compact_comp)
+
+    # These are proof-oriented lower bounds, not format proposals. A recoverable grammar cannot literally
+    # use zero metadata, and a single metadata copy is intentionally optimistic. Therefore a loss here is a
+    # strict terminal result for metadata-only work under the current record/framing representation.
+    zero_metadata_floor = fixed_framing + placement["record_area_bytes"]
+    current_single_copy_floor = zero_metadata_floor + placement["metadata_compressed_one_copy_bytes"]
+    compact_single_copy_floor = zero_metadata_floor + len(compact_comp)
+    required_nonmetadata_reduction = max(0, compact_single_copy_floor - baseline_bytes + 1)
 
     return {
-        "schema": "cmpct-mosaic-v029-small-envelope-diagnostic-v1",
-        "claim_boundary": "diagnostic only; compact metadata is a non-emitted oracle and not a format proposal",
+        "schema": "cmpct-mosaic-v029-small-envelope-diagnostic-v2",
+        "claim_boundary": "diagnostic only; compact/single-copy/zero-metadata values are non-emitted lower-bound oracles",
         "tree_sha256": V028.treehash(source),
         "v025": {key: value for key, value in v025.items() if key != "meta"},
         "v028_graph": {key: value for key, value in v028_graph.items() if key != "meta"},
         "placement": {key: value for key, value in placement.items() if key != "meta"},
         "portfolio": {
             "v028_selected": v028_portfolio_stats["selected"],
-            "v028_archive_bytes": v028_portfolio_stats["archive_bytes"],
+            "v028_archive_bytes": baseline_bytes,
             "v028_legacy_bytes": v028_portfolio_stats["legacy_bytes"],
             "v028_graph_bytes": v028_portfolio_stats["graph_bytes"],
             "placement_selected": placement_portfolio_stats["selected"],
@@ -177,8 +179,21 @@ def run(work_root: Path) -> dict:
             "metadata_compressed_one_copy_bytes": len(compact_comp),
             "hypothetical_total_bytes": compact_total,
             "saving_vs_current_placement_bytes": placement["total_bytes"] - compact_total,
-            "saving_vs_v028_portfolio_bytes": v028_portfolio_stats["archive_bytes"] - compact_total,
-            "would_beat_v028_portfolio": compact_total < v028_portfolio_stats["archive_bytes"],
+            "saving_vs_v028_portfolio_bytes": baseline_bytes - compact_total,
+            "would_beat_v028_portfolio": compact_total < baseline_bytes,
+        },
+        "metadata_only_terminal_floor": {
+            "fixed_framing_bytes": fixed_framing,
+            "record_area_bytes": placement["record_area_bytes"],
+            "zero_metadata_floor_bytes": zero_metadata_floor,
+            "zero_metadata_headroom_vs_v028_bytes": baseline_bytes - zero_metadata_floor,
+            "current_single_copy_floor_bytes": current_single_copy_floor,
+            "current_single_copy_delta_vs_v028_bytes": current_single_copy_floor - baseline_bytes,
+            "compact_single_copy_floor_bytes": compact_single_copy_floor,
+            "compact_single_copy_delta_vs_v028_bytes": compact_single_copy_floor - baseline_bytes,
+            "minimum_additional_nonmetadata_reduction_for_strict_win_bytes": required_nonmetadata_reduction,
+            "metadata_only_family_terminal": compact_single_copy_floor >= baseline_bytes,
+            "recovery_note": "single-copy and zero-metadata floors are optimistic non-emitted bounds; shipping recovery may require more bytes",
         },
         "comparisons": {
             "v025_vs_v028_graph_bytes": v028_graph["total_bytes"] - v025["total_bytes"],
@@ -188,7 +203,7 @@ def run(work_root: Path) -> dict:
             "placement_record_area_vs_v028_graph_bytes": placement["record_area_bytes"] - v028_graph["record_area_bytes"],
             "placement_two_metadata_copies_vs_v025_bytes": placement["metadata_compressed_two_copies_bytes"] - v025["metadata_compressed_two_copies_bytes"],
             "placement_two_metadata_copies_vs_v028_graph_bytes": placement["metadata_compressed_two_copies_bytes"] - v028_graph["metadata_compressed_two_copies_bytes"],
-            "placement_fixed_header_footer_vs_v025_bytes": (placement["header_bytes"] + placement["footer_bytes"]) - (v025["header_bytes"] + v025["footer_bytes"]),
+            "placement_fixed_header_footer_vs_v025_bytes": fixed_framing - (v025["header_bytes"] + v025["footer_bytes"]),
         },
     }
 
