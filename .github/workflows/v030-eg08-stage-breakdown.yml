@@ -2,8 +2,8 @@
 name: CMPCT v0.30 EG08 stage breakdown
 
 on:
-  pull_request:
-    branches: [main]
+  push:
+    branches: [agent/v030-authoritative-integration]
     paths:
       - 'benchmarks/v030_federated_compact_framing_v8_stage_breakdown.py'
       - 'benchmarks/v030_federated_compact_framing_v8_policy_exec_v6.py'
@@ -18,12 +18,12 @@ permissions:
   contents: read
 
 concurrency:
-  group: cmpct-v030-eg08-stage-breakdown-${{ github.event.pull_request.number || github.ref }}
+  group: cmpct-v030-eg08-stage-breakdown-${{ github.ref }}
   cancel-in-progress: true
 
 env:
   PYTHONPATH: ${{ github.workspace }}
-  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+  EVIDENCE_HEAD: ${{ github.sha }}
 
 jobs:
   eg08-stage-breakdown:
@@ -110,7 +110,5 @@ jobs:
           if-no-files-found: error
           retention-days: 90
 
-# Diagnostic only: this lane may identify a productization owner but cannot change selectors, bytes,
-# benchmark accounting, native/Android state or release authority. The frozen Office source fixture
-# transitively builds the deterministic neutral/hostile corpus, whose media slice requires ffmpeg;
-# dependency absence is a harness defect and must fail before any candidate measurement is accepted.
+# Diagnostic only: preserve the exact stage-decomposition receipt when its EG08 inputs change; do not retrigger this
+# two-hour lane on unrelated accumulated PR history. It earns no release credit and changes no thresholds.
