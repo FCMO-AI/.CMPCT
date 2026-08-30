@@ -1,15 +1,13 @@
 # ci-lane: deep
+# ci-auto-policy: retired-manual-only
 name: CMPCT v0.30 C25CC01 locality pack strategy oracle
 
+# Exact evidence compared four deterministic <=8x micro-pack binning strategies and
+# found only a 24-byte best-vs-ascending spread. The optimistic semantic co-location
+# floor still needs 28,097 additional bytes of physical shrink to beat Zstd-19.
+# Reordering the same payload family is therefore the wrong scale of intervention.
+# Preserve this campaign for manual replay; new automatic work must change payload coding.
 on:
-  push:
-    branches: [agent/v030-authoritative-integration]
-    paths:
-      - 'benchmarks/v030_c25cc01_locality_pack_strategy_oracle.py'
-      - 'benchmarks/v030_c25cc01_locality_safe_pack_oracle.py'
-      - 'cmpct/builder.py'
-      - 'experiments/entropygraph_v030_r24_compact_control_profile.py'
-      - '.github/workflows/v030-c25cc01-locality-pack-strategy.yml'
   workflow_dispatch:
 
 concurrency:
@@ -78,5 +76,4 @@ jobs:
           if-no-files-found: warn
           retention-days: 90
 
-# Research-only strategy evidence for a shipping-retired physical family. Run only when the relevant C25 locality
-# inputs change; unrelated integration pushes must not consume this lane. No release credit or threshold changes.
+# Research-only historical strategy evidence. No release credit or threshold changes.
