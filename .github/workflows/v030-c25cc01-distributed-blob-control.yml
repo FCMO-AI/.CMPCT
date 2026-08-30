@@ -1,0 +1,91 @@
+# ci-lane: deep
+name: CMPCT v0.30 C25CC01 distributed blob-control oracle
+
+on:
+  push:
+    branches:
+      - agent/v030-authoritative-integration
+    paths:
+      - 'benchmarks/v030_c25cc01_distributed_blob_control_oracle.py'
+      - 'benchmarks/v030_c25cc01_derived_blob_header_oracle.py'
+      - 'benchmarks/v030_c25cc01_locality_pack_strategy_oracle.py'
+      - 'benchmarks/v030_c25cc01_locality_safe_pack_oracle.py'
+      - 'benchmarks/v030_r24_compact_control_oracle.py'
+      - 'benchmarks/v030_r24_physical_overhead_oracle.py'
+      - 'experiments/entropygraph_v030_r24_compact_control_profile.py'
+      - 'src/cmpct/codec.py'
+      - '.github/workflows/v030-c25cc01-distributed-blob-control.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: v030-c25cc01-distributed-blob-control-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  distributed-control:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      PYTHONPATH: ${{ github.workspace }}
+      EVIDENCE_HEAD: ${{ github.sha }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - name: Bind exact candidate head
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install deterministic corpus/comparator dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y zstd gcc ffmpeg libsndfile1
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[audio,test]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
+      - name: Compile distributed-control oracle
+        run: python -m py_compile benchmarks/v030_c25cc01_distributed_blob_control_oracle.py
+      - name: Measure distributed blob-table frontier
+        run: |
+          mkdir -p benchmark-artifacts
+          python -m benchmarks.v030_c25cc01_distributed_blob_control_oracle \
+            --work-root benchmark-artifacts/v030-c25cc01-distributed-control-work \
+            --output benchmark-artifacts/v030-c25cc01-distributed-control.json
+      - name: Enforce research boundary and reconstruction invariants
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          d=json.loads(Path('benchmark-artifacts/v030-c25cc01-distributed-control.json').read_text())
+          assert d['schema']=='cmpct-v030-c25cc01-distributed-blob-control-oracle-v1'
+          assert d['strategy']=='descending_greedy'
+          g=d['gate']; p=d['projection']
+          assert g['physical_blob_table_exactly_derivable'] is True
+          assert g['semantic_index_roundtrip_exact'] is True
+          assert g['locality_within_8x'] is True
+          assert g['salvage_self_description_retained'] is True
+          assert g['two_authenticated_semantic_roots_priced'] is True
+          assert g['experiment_valid'] is True
+          assert g['release_credit'] is False
+          assert p['two_authenticated_blobless_root_bytes']==2*d['distributed_root']['compressed_bytes']
+          # A strict win is a measured research outcome, not a CI truth requirement. Negative evidence must remain
+          # green and durable so the combined family can be killed rather than retried until lucky.
+          assert isinstance(g['strictly_smaller_than_zstd19'], bool)
+          PY
+      - name: CI topology self-check
+        run: python tools/check_ci_topology.py .github/workflows/v030-c25cc01-distributed-blob-control.yml
+      - name: Public-surface guard
+        run: python tools/check_public_surface.py
+      - name: Upload exact-head receipt
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: v030-c25cc01-distributed-control-${{ env.EVIDENCE_HEAD }}
+          path: benchmark-artifacts/v030-c25cc01-distributed-control.json
+          if-no-files-found: error
+          retention-days: 90
