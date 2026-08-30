@@ -8,8 +8,11 @@ are metadata only and never decide whether the mechanism runs.
 
 ZIP source parsing uses the product-side EOCD-indexed parser. Exact-head A/B evidence showed that traversal to be
 materially faster than the mature linear parser while returning the identical parsed object and preserving the exact
-14,033-byte pre-recovery candidate/SHA. Hostile-equivalence and valid-comment-signature oracles remain the semantic
-promotion boundary; the mature profile parser is retained as the differential reference rather than duplicated here.
+14,033-byte pre-recovery candidate/SHA. A later 41-round exact A/B proved that comparing the same static framing
+signature while those central/local fields are already live in the EOCD traversal removes another complete parsed-row
+walk (2.061 ms -> 1.796 ms full scan, -12.84%) with identical scan/archive identity. Production therefore uses the
+inline proof for the default parser; the mature comparator remains the differential reference for injected parsers.
+Hostile-equivalence and valid-comment-signature oracles remain semantic promotion boundaries.
 
 The default compression level is 3. A repeated same-runner level sweep found no level that by itself beat ZIP on
 complete creation time. Level 2 was marginally faster but left only a 36-byte size margin versus solid Zstd-19;
@@ -52,12 +55,13 @@ _EOCD_SIGNATURE_FIELDS = ("disk", "disk_cd", "comment")
 
 
 def _same_framing_signature(reference: dict, candidate: dict) -> bool:
-    """Exact BASE._signature equivalence without allocating nested signature tuples.
+    """Exact BASE._signature equivalence retained as the differential reference.
 
     ZIP-factor admission cares only about the static framing fields owned by ``BASE._signature``. Dynamic CRC,
-    compressed/uncompressed sizes, payload bytes and physical local offsets intentionally do not participate. Direct
-    comparison against the first accepted parsed member preserves that law exactly while avoiding a complete nested
-    tuple allocation for every subsequent source ZIP in the source-scan hot path.
+    compressed/uncompressed sizes, payload bytes and physical local offsets intentionally do not participate.
+    Production no longer needs this second parsed-row traversal when using the default EOCD parser: those fields are
+    compared while parsing instead. Injected differential parsers still use this function so equivalence testing does
+    not silently inherit the candidate implementation.
     """
     ref_locals = reference["locals"]
     candidate_locals = candidate["locals"]
@@ -89,9 +93,10 @@ def _scan(
 ) -> tuple[bytes, list[tuple[str, dict]], dict]:
     """Scan once using structural admission and the shipping parser by default.
 
-    ``parse_zip`` exists only as an explicit differential-test seam. Production callers do not override it; oracles
-    can compare the mature semantic owner without mutating module globals or changing concurrent build behavior.
-    No filename, suffix, benchmark identity or path pattern participates in ZIP-factor eligibility.
+    For the default parser the first accepted ZIP compiles the exact immutable static-framing reference; subsequent
+    ZIPs prove that reference during their existing EOCD traversal. ``parse_zip`` remains an explicit differential
+    seam: injected parsers are compared by the independent mature parsed-row comparator instead, so tests can still
+    detect semantic drift. No filename, suffix, benchmark identity or path pattern participates in eligibility.
     """
     root = Path(root)
     if not root.is_dir():
@@ -100,14 +105,16 @@ def _scan(
     items: list[tuple[str, dict]] = []
     inode_first: dict[tuple[int, int], str] = {}
     logical_bytes = 0
-    signature_reference = None
+    signature_reference: dict | None = None
+    inline_reference: ZIP_PARSER.FramingReference | None = None
+    use_inline_framing = parse_zip is ZIP_PARSER.parse_zip
 
     def reserve() -> None:
         if len(entries) >= FS.DEFAULT_MAX_MANIFEST_ENTRIES:
             raise ProfileNotEligible("ZIP-factor filesystem entry count exceeds policy")
 
     def walk(abs_dir: Path, prefix: str = "") -> None:
-        nonlocal logical_bytes, signature_reference
+        nonlocal logical_bytes, signature_reference, inline_reference
         with os.scandir(abs_dir) as iterator:
             children = sorted(iterator, key=lambda item: item.name)
         for child in children:
@@ -140,15 +147,26 @@ def _scan(
                 continue
 
             raw = path.read_bytes()
-            parsed = parse_zip(raw)
+            framing_match = True
+            if use_inline_framing and inline_reference is not None:
+                parsed, framing_match = ZIP_PARSER.parse_zip_with_framing(raw, inline_reference)
+            else:
+                parsed = parse_zip(raw)
             if parsed is None:
                 # Keep the historical diagnostic phrase for downstream tests/log parsers while admission itself is
-                # now content-derived. A misleading `.zip` suffix therefore cannot make unsupported bytes eligible.
+                # content-derived. A misleading `.zip` suffix therefore cannot make unsupported bytes eligible.
                 raise ProfileNotEligible(
                     "ZIP-factor graph-owned regular files must all be ZIPs with a supported structural encoding"
                 )
             if signature_reference is None:
                 signature_reference = parsed
+                if use_inline_framing:
+                    inline_reference = ZIP_PARSER.framing_reference(parsed)
+            elif use_inline_framing:
+                if not framing_match:
+                    raise ProfileNotEligible(
+                        "ZIP-factor framing layout drift: requires one shared structural framing signature"
+                    )
             elif not _same_framing_signature(signature_reference, parsed):
                 raise ProfileNotEligible(
                     "ZIP-factor framing layout drift: requires one shared structural framing signature"
