@@ -1,4 +1,5 @@
 # ci-lane: deep
+# ci-pr-scope: latest-head-commit-gate
 name: CMPCT v0.29 byte-identical parallel portfolio
 
 on:
@@ -20,18 +21,61 @@ concurrency:
   group: cmpct-v029-parallel-portfolio-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
+env:
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+
 jobs:
+  latest-head-scope:
+    runs-on: ubuntu-latest
+    outputs:
+      relevant: ${{ steps.scope.outputs.relevant }}
+    steps:
+      - name: Check out exact candidate
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 2
+          ref: ${{ env.EVIDENCE_HEAD }}
+
+      - name: Bind exact evidence head
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+
+      - id: scope
+        name: Classify only the newest exact HEAD commit
+        shell: bash
+        run: |
+          relevant=false
+          while IFS= read -r path; do
+            case "$path" in
+              experiments/entropygraph_v029_parallel_portfolio.py|\
+              experiments/entropygraph_v029_residual_program_packing.py|\
+              benchmarks/resemblance_hostile_corpus_v1.py|\
+              tests/test_v029_parallel_portfolio.py|\
+              native/preflate-bridge/*|\
+              .github/workflows/v029-parallel-portfolio.yml)
+                relevant=true
+                break
+                ;;
+            esac
+          done < <(git diff-tree --no-commit-id --name-only -r HEAD)
+          echo "relevant=$relevant" >> "$GITHUB_OUTPUT"
+          echo "latest exact-head substrate change: $relevant"
+
   parallel-portfolio-oracle:
+    needs: latest-head-scope
+    if: github.event_name == 'workflow_dispatch' || needs.latest-head-scope.outputs.relevant == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 55
     env:
       CMPCT_PREFLATE_BRIDGE: ${{ github.workspace }}/native/preflate-bridge/target/release/cmpct-preflate-bridge
     steps:
-      - name: Check out candidate
+      - name: Check out exact candidate
         uses: actions/checkout@v6
         with:
           fetch-depth: 0
-          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          ref: ${{ env.EVIDENCE_HEAD }}
+
+      - name: Bind exact evidence head
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
 
       - name: Set up Python
         uses: actions/setup-python@v6
@@ -104,9 +148,6 @@ jobs:
           assert all(row['accepted_engine'] == r['accepted_engine'] for row in r['rows'])
           assert all(row['scheduler_mode'] == 'parallel-independent-portfolio' for row in r['rows'])
           assert all(row['byte_identical'] for row in r['rows'])
-          # Footnote: the fixed hostile aggregate is a known accepted attempt-5 winner. Requiring a
-          # strict win over its embedded v0.28 artifact prevents a stale research engine from producing
-          # byte-identical scheduler evidence while silently benchmarking the wrong portfolio again.
           assert all(row['selected'] == 'mosaic' for row in r['rows'])
           assert all(row['archive_bytes'] < row['v028_bytes'] for row in r['rows'])
           assert all(row['pair_gate_pass'] for row in r['rows'])
@@ -153,5 +194,5 @@ jobs:
           retention-days: 30
 
 # Footnote: this scheduling oracle remains mandatory when its scheduler/accepted-engine substrate changes because
-# v0.30 inherits the same zero-copy publication primitive. It no longer runs for unrelated r25/docs/site changes,
-# which preserves the evidence while returning runner capacity to current release work.
+# v0.30 inherits the same zero-copy publication primitive. PR path filters are cumulative across this long-lived
+# integration diff, so the lightweight exact-HEAD classifier above decides whether the expensive evidence job runs.
