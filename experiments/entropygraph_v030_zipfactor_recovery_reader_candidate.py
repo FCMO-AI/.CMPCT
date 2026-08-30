@@ -4,7 +4,7 @@ from __future__ import annotations
 
 Strong verification still authenticates the complete archive. Selective reads must not do that work first: doing so
 would decompress every group and then pretend only the target group counted toward locality. This reader authenticates
-the duplicated binary control from the footer SHA, parses only bounded direct metadata, and decompresses exactly the
+the duplicated binary control from the footer SHA, parses bounded direct metadata once, and decompresses exactly the
 one target group. It delegates build/full verification/extraction to the canonical recovery product candidate.
 """
 
@@ -38,24 +38,20 @@ def _select_v3_candidate(raw: bytes) -> tuple[str, bytes]:
         primary = raw[len(PRODUCT.MAGIC):len(PRODUCT.MAGIC) + primary_len]
         if _sha(primary) != expected_sha:
             raise RuntimeError("primary control SHA mismatch")
-        return "primary", PRODUCT._v3_candidate(
-            raw, primary, len(PRODUCT.MAGIC) + primary_len, tail_start
-        )
+        return "primary", PRODUCT._v3_candidate(raw, primary, len(PRODUCT.MAGIC) + primary_len, tail_start)
     except Exception as exc:
         errors.append(f"primary={exc!r}")
 
     try:
         tail, tail_start = PRODUCT._tail_control(raw)
-        return "tail", PRODUCT._v3_candidate(
-            raw, tail, len(PRODUCT.MAGIC) + len(tail), tail_start
-        )
+        return "tail", PRODUCT._v3_candidate(raw, tail, len(PRODUCT.MAGIC) + len(tail), tail_start)
     except Exception as exc:
         errors.append(f"tail={exc!r}")
     raise RuntimeError("ZIP-factor selective reader failed closed: " + "; ".join(errors))
 
 
 def _open_v3(candidate: bytes):
-    # V3._open authenticates/decompresses only the direct manifest/template here; group blobs remain compressed.
+    # V3._open authenticates/decompresses only direct manifest/template metadata; group blobs stay compressed.
     with tempfile.TemporaryDirectory(prefix="cmpct-zf-selective-") as td:
         path = Path(td) / "candidate.cmpct"
         path.write_bytes(candidate)
@@ -85,8 +81,7 @@ def list_members(path: Path) -> list[dict]:
     return out
 
 
-def _decode_target(candidate: bytes, rel: str) -> tuple[bytes, int]:
-    manifest_raw, manifest, template_raw, groups = _open_v3(candidate)
+def _decode_target_opened(manifest_raw: bytes, manifest: dict, template_raw: bytes, groups, rel: str) -> tuple[bytes, int]:
     if rel not in manifest["regular"]:
         raise KeyError(rel)
     template = V3.BASE._parse_template(template_raw)
@@ -103,7 +98,7 @@ def _decode_target(candidate: bytes, rel: str) -> tuple[bytes, int]:
         count, at = V3.BASE._read_uvarint(view, at)
         if count != len(paths):
             raise RuntimeError("ZIP-factor selective group count mismatch")
-        # Count everything actually decompressed for this operation, including direct metadata.
+        # Count every decompressed byte owned by this single read: manifest + template + target group.
         decoded_context = len(manifest_raw) + len(template_raw) + len(group_raw)
         if decoded_context > MAX_DECODE:
             raise RuntimeError("ZIP-factor selective decode-unit ceiling")
@@ -136,7 +131,7 @@ def _decode_target(candidate: bytes, rel: str) -> tuple[bytes, int]:
 def read_member_with_stats(path: Path, rel: str) -> tuple[bytes, dict]:
     raw = Path(path).read_bytes()
     recovered_from, candidate = _select_v3_candidate(raw)
-    _manifest_raw, manifest, _template_raw, _groups = _open_v3(candidate)
+    manifest_raw, manifest, template_raw, groups = _open_v3(candidate)
     rows = PRODUCT.FS.entry_map(manifest)
     if rel not in rows:
         raise KeyError(rel)
@@ -146,10 +141,10 @@ def read_member_with_stats(path: Path, rel: str) -> tuple[bytes, dict]:
         raise IsADirectoryError(rel)
     if kind == "l":
         value = row[7].encode("utf-8")
-        context = len(_manifest_raw)
+        context = len(manifest_raw)
     else:
         owner = row[7] if kind == "h" else rel
-        value, context = _decode_target(candidate, owner)
+        value, context = _decode_target_opened(manifest_raw, manifest, template_raw, groups, owner)
     amp = context / max(1, len(value))
     if amp > MAX_AMP or context > MAX_DECODE:
         raise RuntimeError("ZIP-factor selective public read exceeded locality contract")
@@ -159,6 +154,8 @@ def read_member_with_stats(path: Path, rel: str) -> tuple[bytes, dict]:
         "decoded_context_amplification": amp,
         "recovered_from": recovered_from,
         "full_archive_verify_before_read": False,
+        "direct_metadata_decode_passes": 1,
+        "payload_group_decode_passes": 1 if kind not in {"l"} else 0,
         "format_revision": PRODUCT.REVISION,
         "format_profile": PRODUCT.PROFILE,
     }
