@@ -1,17 +1,12 @@
-# ci-lane: focused
+# ci-lane: deep
 # ci-cancel-policy: preserve-running-exact-receipt
 name: CMPCT v0.30 ZIP-factor signature compare A/B
 
+# Exact-head 41-round A/B at cd76bc6bcf9dc8fc8d077297b794803cf8035b00 preserved the exact scan result
+# and 14,033-byte archive but saved only 28.153 us (1.03%), below the frozen 50 us absolute promotion floor.
+# Preserve the oracle and exhaustive field-equivalence tests as negative evidence, but do not spend automatic CI
+# capacity re-proving a micro-optimization that cannot materially close the remaining ZIP creation gap.
 on:
-  push:
-    branches: [agent/v030-authoritative-integration]
-    paths:
-      - 'experiments/entropygraph_v030_zipfactor_fused.py'
-      - 'experiments/entropygraph_v030_zipfactor_eocd_parser.py'
-      - 'benchmarks/v030_zipfactor_signature_compare_abba.py'
-      - 'tests/test_v030_zipfactor_path_neutral.py'
-      - 'tests/test_v030_zipfactor_signature_compare_equivalence.py'
-      - '.github/workflows/v030-zipfactor-signature-compare-abba.yml'
   workflow_dispatch:
 
 permissions:
@@ -89,3 +84,6 @@ jobs:
             benchmark-artifacts/v030-zf-signature-abba-candidate.txt
           if-no-files-found: error
           retention-days: 90
+
+# Research-only negative evidence. Re-enable automatic execution only after a materially different comparator
+# architecture is proposed; never by lowering the exact-byte or timing gates.
