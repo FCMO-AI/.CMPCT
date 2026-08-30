@@ -1,22 +1,19 @@
 # ci-lane: deep
 name: CMPCT v0.30 raw DEFLATE delta oracle
 
+# Exact-head 2026-08-29 evidence falsified this family as an automatic frontier lane:
+# Zstd-19 is 14,252 B while the raw-DEFLATE delta candidates remain roughly
+# 30–33 KiB (best fast candidate 32,907 B). Preserve the oracle for manual
+# replay and negative-evidence custody, but do not spend every PR synchronization
+# rebuilding a family that is not within striking distance of the frozen gate.
 on:
-  pull_request:
-    branches: [main]
-    paths:
-      - 'benchmarks/v030_raw_deflate_delta_oracle.py'
-      - 'benchmarks/v030_raw_deflate_segment_oracle.py'
-      - 'benchmarks/resemblance_hostile_corpus_v1.py'
-      - 'benchmarks/v030_external_competitors.py'
-      - '.github/workflows/v030-raw-deflate-delta-oracle.yml'
   workflow_dispatch:
 
 permissions:
   contents: read
 
 concurrency:
-  group: cmpct-v030-raw-deflate-delta-${{ github.event.pull_request.number || github.ref }}
+  group: cmpct-v030-raw-deflate-delta-${{ github.ref }}
   cancel-in-progress: true
 
 env:
