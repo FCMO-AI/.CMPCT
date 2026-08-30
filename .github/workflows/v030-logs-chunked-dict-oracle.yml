@@ -1,27 +1,20 @@
 # ci-lane: deep
+# ci-auto-policy: retired-manual-only
 name: CMPCT v0.30 logs chunk-trained dictionary oracle
 
+# Logs already has a promoted inverse profile and active selector/runtime/native
+# productization lanes. This 90-minute alternative-family sweep is preserved for
+# reproduction, but it is no longer allowed to consume every accumulated-diff PR
+# wave while the release-critical Logs work is convergence and runtime parity.
 on:
-  pull_request:
-    branches: [main]
-    paths:
-      - 'benchmarks/v030_logs_chunked_dict_oracle.py'
-      - 'benchmarks/v030_segmented_dict_oracle.py'
-      - 'benchmarks/v030_segmented_solid_oracle.py'
-      - 'benchmarks/v030_external_competitors.py'
-      - 'benchmarks/v030_release_generalization.py'
-      - '.github/workflows/v030-logs-chunked-dict-oracle.yml'
   workflow_dispatch:
 
 permissions:
   contents: read
 
-concurrency:
-  group: cmpct-v030-logs-chunked-dict-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
-
 env:
   PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.sha }}
 
 jobs:
   logs-chunked-dict:
@@ -29,6 +22,10 @@ jobs:
     timeout-minutes: 90
     steps:
       - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - name: Bind exact candidate head
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
       - uses: actions/setup-python@v6
         with:
           python-version: '3.11'
@@ -93,10 +90,11 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v6
         with:
-          name: v030-logs-chunked-dict-${{ github.sha }}
+          name: v030-logs-chunked-dict-${{ env.EVIDENCE_HEAD }}
           path: benchmark-artifacts/v030-logs-chunked-dict.json
           if-no-files-found: error
           retention-days: 90
+      - name: CI topology self-check
+        run: python tools/check_ci_topology.py .github/workflows/v030-logs-chunked-dict-oracle.yml
 
-# Research only. A positive result identifies a locality-safe compression architecture worth productizing; it
-# does not authorize release or bypass canonical recovery/native/Android/product evidence.
+# Historical research only. Promoted Logs convergence lanes remain automatic.
