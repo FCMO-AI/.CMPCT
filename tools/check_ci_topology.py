@@ -34,7 +34,9 @@ BRANCH_SCOPE_RE = re.compile(r"(?m)^\s+branches(?:-ignore)?:\s*")
 
 
 def _has_exact_head_commit_scope(text: str) -> bool:
-    return bool(HEAD_CHANGE_GATE_RE.search(text) and HEAD_CHANGE_DIFF_RE.search(text))
+    # The executable classifier is the authority. The optional marker exists for readability and lets us
+    # fail closed when somebody claims to have a gate but removes the classifier itself.
+    return bool(HEAD_CHANGE_DIFF_RE.search(text))
 
 
 def _preserved_receipt_is_exact(text: str, lane: str | None) -> bool:
@@ -102,13 +104,12 @@ def validate(path: Path) -> list[str]:
 
     # GitHub evaluates PR `paths:` against the whole accumulated PR diff. On a long-lived integration PR that can
     # cause a deep lane introduced hundreds of commits ago to rerun on every unrelated synchronization. A workflow
-    # may instead declare `# ci-pr-scope: latest-head-commit-gate` and cheaply classify only the newest exact HEAD
-    # commit with `git diff-tree ... HEAD`; the expensive job must then depend on that classifier output. This is a
-    # scheduling optimization only: exact candidate SHA custody remains mandatory.
+    # may instead cheaply classify only the newest exact HEAD commit with `git diff-tree ... HEAD`; the expensive
+    # job then depends on that classifier output. This is scheduling only: exact candidate SHA custody remains
+    # mandatory. The optional latest-head marker is descriptive; the actual diff-tree classifier is authoritative.
     #
-    # Very long exact-head A/Bs may preserve a running receipt with the explicit directive above. PR-triggered
-    # variants must bind EVIDENCE_HEAD to pull_request.head.sha; branch-push variants bind it to github.sha. Both
-    # must check out that exact env value. A falsified or superseded lane may instead be retired-manual-only.
+    # Very long exact-head A/Bs may preserve a running receipt with the explicit cancellation-policy directive.
+    # PR-triggered variants bind EVIDENCE_HEAD to pull_request.head.sha; branch-push variants bind it to github.sha.
 
     return errors
 
