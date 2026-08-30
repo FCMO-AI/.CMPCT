@@ -3,30 +3,49 @@
 name: CMPCT v0.30 G0-G4 ML operation record-cache A/B
 
 on:
-  push:
-    branches: [agent/v030-authoritative-integration]
-    paths:
-      - 'benchmarks/patches/v030_g04_operation_record_cache.patch'
-      - 'benchmarks/v030_g04_ml_operation_record_cache_ab_oracle.py'
-      - 'benchmarks/v030_g04_ml_native_reader_oracle.py'
-      - 'native/cmpct-portable/src/g04.rs'
-      - 'experiments/entropygraph_v030_native_reader_bridge.py'
-      - '.github/workflows/v030-g04-ml-operation-record-cache-ab.yml'
+  pull_request:
+    branches: [main]
   workflow_dispatch:
 
 permissions:
   contents: read
 
 concurrency:
-  group: cmpct-v030-g04-ml-operation-record-cache-ab-${{ github.ref }}
+  group: cmpct-v030-g04-ml-operation-record-cache-ab-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: false
 
 env:
   PYTHONPATH: ${{ github.workspace }}
-  EVIDENCE_HEAD: ${{ github.sha }}
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
 
 jobs:
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      relevant: ${{ steps.filter.outputs.relevant }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 2
+      - id: filter
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ '${{ github.event_name }}' = 'workflow_dispatch' ]; then
+            echo 'relevant=true' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          changed="$(git diff-tree --no-commit-id --name-only -r HEAD)"
+          if grep -Eq '^(benchmarks/patches/v030_g04_operation_record_cache\.patch|benchmarks/v030_g04_ml_operation_record_cache_ab_oracle\.py|benchmarks/v030_g04_ml_native_reader_oracle\.py|native/cmpct-portable/src/g04\.rs|experiments/entropygraph_v030_native_reader_bridge\.py|\.github/workflows/v030-g04-ml-operation-record-cache-ab\.yml)$' <<<"$changed"; then
+            echo 'relevant=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'relevant=false' >> "$GITHUB_OUTPUT"
+          fi
+
   native-ab:
+    needs: changes
+    if: needs.changes.outputs.relevant == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 90
     steps:
@@ -50,21 +69,17 @@ jobs:
       - name: Compile oracle and build exact baseline CLI
         run: |
           python -m py_compile benchmarks/v030_g04_ml_operation_record_cache_ab_oracle.py
-          CARGO_TARGET_DIR="$RUNNER_TEMP/baseline-target" \
-            cargo build --manifest-path native/cmpct-portable/Cargo.toml --release --bin cmpct-portable
+          CARGO_TARGET_DIR="$RUNNER_TEMP/baseline-target" cargo build --manifest-path native/cmpct-portable/Cargo.toml --release --bin cmpct-portable
           cp "$RUNNER_TEMP/baseline-target/release/cmpct-portable" "$RUNNER_TEMP/cmpct-portable-baseline"
       - name: Apply locality-neutral candidate and prove it compiles
         run: |
           git apply --check --recount benchmarks/patches/v030_g04_operation_record_cache.patch
           git apply --recount benchmarks/patches/v030_g04_operation_record_cache.patch
           cargo fmt --manifest-path native/cmpct-portable/Cargo.toml -- --check
-          CARGO_TARGET_DIR="$RUNNER_TEMP/candidate-target" \
-            cargo build --manifest-path native/cmpct-portable/Cargo.toml --release --bin cmpct-portable
+          CARGO_TARGET_DIR="$RUNNER_TEMP/candidate-target" cargo build --manifest-path native/cmpct-portable/Cargo.toml --release --bin cmpct-portable
           cp "$RUNNER_TEMP/candidate-target/release/cmpct-portable" "$RUNNER_TEMP/cmpct-portable-candidate"
       - name: Preserve native G0-G4 correctness after candidate patch
-        run: |
-          CARGO_TARGET_DIR="$RUNNER_TEMP/candidate-target" \
-            cargo test --manifest-path native/cmpct-portable/Cargo.toml g04 --release
+        run: CARGO_TARGET_DIR="$RUNNER_TEMP/candidate-target" cargo test --manifest-path native/cmpct-portable/Cargo.toml g04 --release
       - name: Run exact baseline-vs-candidate ML A/B
         run: |
           mkdir -p benchmark-artifacts
@@ -88,18 +103,11 @@ jobs:
           assert c['record_cache_limit_bytes']==64*1024*1024
           assert c['node_cache_scope']=='fresh per member'
           assert c['member_locality_charged_on_shared_record_hit'] is True
-          assert c['archive_bytes_changed'] is False
-          assert c['grammar_changed'] is False
-          assert g['same_archive_bytes'] is True
-          assert g['same_public_info'] is True
-          assert g['same_extracted_tree'] is True
-          assert g['baseline_corruption_rejected'] is True
-          assert g['candidate_corruption_rejected'] is True
+          assert c['archive_bytes_changed'] is False and c['grammar_changed'] is False
+          assert g['same_archive_bytes'] is True and g['same_public_info'] is True and g['same_extracted_tree'] is True
+          assert g['baseline_corruption_rejected'] is True and g['candidate_corruption_rejected'] is True
           assert d['release_credit'] is False
-          expected=(
-              float(d['verify_improvement_fraction'])>=float(c['minimum_verify_improvement_fraction'])
-              and float(d['extract_delta_fraction'])<=float(c['maximum_extract_regression_fraction'])
-          )
+          expected=(float(d['verify_improvement_fraction'])>=float(c['minimum_verify_improvement_fraction']) and float(d['extract_delta_fraction'])<=float(c['maximum_extract_regression_fraction']))
           assert d['promotion_signal'] is expected
           assert g['passed'] is expected
           PY
@@ -121,5 +129,5 @@ jobs:
           if-no-files-found: error
           retention-days: 90
 
-# Research-only ephemeral native patch. Product source is unchanged until a positive exact A/B earns promotion.
-# Push-only triggering prevents the accumulated integration-PR diff from repeatedly relaunching this 90-minute lane.
+# PR synchronization remains observable, but the 90-minute job runs only when the newest head commit actually
+# changes this lane. Running exact receipts are never cancelled by unrelated synchronization commits.
