@@ -1,13 +1,12 @@
 # ci-lane: deep
 name: CMPCT v0.30 ZIP-factor streaming identity oracle
 
+# Exact-head negative evidence on 5adff8d0a8f329ede15542b155a3f8a63f8b2c04 preserved exact archive/SHA,
+# complete identity, semantic tree, locality/decode bounds and corruption rejection, but the streaming arm remained
+# slower than ZIP creation (3.696 ms CMPCT vs 2.903 ms ZIP) and did not emit a promotion signal. Keep this lane
+# available for deliberate archaeology only. Do not spend automatic PR capacity re-proving this implementation
+# unless its architecture materially changes; never relax the identity or external speed contract.
 on:
-  pull_request:
-    paths:
-      - 'benchmarks/v030_zipfactor_streaming_identity_oracle.py'
-      - '.github/workflows/v030-zipfactor-streaming-identity.yml'
-      - 'experiments/entropygraph_v030_zip_framing_factor.py'
-      - 'tests/test_v030_zipfactor_streaming_identity.py'
   workflow_dispatch:
 
 permissions:
