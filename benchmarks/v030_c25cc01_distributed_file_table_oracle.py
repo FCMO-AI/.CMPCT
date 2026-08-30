@@ -20,6 +20,7 @@ record grammar. It grants zero product, selector, locality, recovery, or release
 import argparse
 import hashlib
 import json
+import os
 from pathlib import Path
 import shutil
 
@@ -143,9 +144,11 @@ def run(work_root: Path) -> dict:
     zstd = EXT._tar_zstd(source, work_root / "competitor.tar.zst", work_root / "zstd-out", zstd_work)
     zstd_bytes = int(zstd["archive_bytes"])
     required_physical_shrink = max(0, projected_bytes - (zstd_bytes - 1))
+    candidate_head = os.environ.get("EVIDENCE_HEAD") or os.environ.get("GITHUB_SHA")
 
     return {
         "schema": "cmpct-v030-c25cc01-distributed-file-table-oracle-v1",
+        "candidate_head": candidate_head,
         "target": target_name,
         "strategy": STRATEGY_NAME,
         "tree_sha256": row["tree_sha256"],
