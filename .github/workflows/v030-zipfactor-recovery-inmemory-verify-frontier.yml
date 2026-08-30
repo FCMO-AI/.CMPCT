@@ -1,9 +1,10 @@
 # ci-lane: deep
+# ci-cancel-policy: preserve-running-exact-receipt
 name: CMPCT v0.30 ZIP-factor recovery in-memory verify frontier
 
 on:
-  pull_request:
-    branches: [main]
+  push:
+    branches: [agent/v030-authoritative-integration]
     paths:
       - 'benchmarks/v030_zipfactor_recovery_inmemory_verify_frontier.py'
       - 'benchmarks/v030_zipfactor_recovery_oracle.py'
@@ -17,11 +18,12 @@ permissions:
   contents: read
 
 concurrency:
-  group: cmpct-v030-zf-recovery-inmemory-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
+  group: cmpct-v030-zf-recovery-inmemory-${{ github.ref }}
+  cancel-in-progress: false
 
 env:
   PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.sha }}
 
 jobs:
   in-memory-frontier:
@@ -30,13 +32,12 @@ jobs:
     steps:
       - uses: actions/checkout@v6
         with:
-          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          ref: ${{ env.EVIDENCE_HEAD }}
       - name: Bind exact candidate head
         shell: bash
         run: |
-          EXPECTED='${{ github.event.pull_request.head.sha || github.sha }}'
           ACTUAL="$(git rev-parse HEAD)"
-          test "$ACTUAL" = "$EXPECTED"
+          test "$ACTUAL" = "$EVIDENCE_HEAD"
           printf '%s\n' "$ACTUAL" > "$RUNNER_TEMP/v030-zf-recovery-inmemory-candidate-sha.txt"
       - uses: actions/setup-python@v6
         with:
@@ -88,7 +89,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v6
         with:
-          name: v030-zipfactor-recovery-inmemory-${{ github.event.pull_request.head.sha || github.sha }}
+          name: v030-zipfactor-recovery-inmemory-${{ env.EVIDENCE_HEAD }}
           path: |
             ${{ runner.temp }}/v030-zf-recovery-inmemory.json
             ${{ runner.temp }}/v030-zf-recovery-inmemory-candidate-sha.txt
@@ -97,5 +98,6 @@ jobs:
       - name: CI topology self-check
         run: python tools/check_ci_topology.py .github/workflows/v030-zipfactor-recovery-inmemory-verify-frontier.yml
 
-# Research-only verifier-cost boundary. It removes only a temporary-file round trip and cross-checks every in-memory
-# result against the existing recovery verifier. No selector or release credit is granted by this lane.
+# Research-only verifier-cost boundary. Relevant semantic changes re-run it; unrelated integration commits do not.
+# Exact receipts are preserved rather than canceled. It removes only a temporary-file round trip and cross-checks
+# every in-memory result against the existing recovery verifier. No selector or release credit is granted.
