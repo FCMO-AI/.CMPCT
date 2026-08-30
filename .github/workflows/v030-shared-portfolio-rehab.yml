@@ -1,10 +1,22 @@
-# ci-lane: release
+# ci-lane: deep
+# ci-cancel-policy: preserve-running-exact-receipt
 name: CMPCT v0.30 shared portfolio rehabilitation
 
 on:
   push:
     branches:
       - agent/v030-authoritative-integration
+    paths:
+      - 'experiments/entropygraph_v029_parallel_portfolio.py'
+      - 'experiments/entropygraph_v030_geometry_overlay_g04.py'
+      - 'experiments/entropygraph_v030_geometry_overlay_g04_publish.py'
+      - 'experiments/entropygraph_v030_shared_portfolio.py'
+      - 'experiments/entropygraph_v030_release.py'
+      - 'benchmarks/v030_shared_portfolio_rehab.py'
+      - 'tests/test_v029_parallel_portfolio.py'
+      - 'tests/test_v030_g04_publish.py'
+      - 'tests/test_v030_shared_portfolio.py'
+      - '.github/workflows/v030-shared-portfolio-rehab.yml'
   workflow_dispatch:
 
 permissions:
@@ -12,7 +24,10 @@ permissions:
 
 concurrency:
   group: cmpct-v030-shared-portfolio-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: false
+
+env:
+  EVIDENCE_HEAD: ${{ github.sha }}
 
 jobs:
   shared-portfolio:
@@ -22,6 +37,11 @@ jobs:
       PYTHONPATH: ${{ github.workspace }}
     steps:
       - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+
+      - name: Bind checkout to exact evidence head
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
 
       - uses: actions/setup-python@v6
         with:
@@ -86,16 +106,21 @@ jobs:
         if: always()
         run: python tools/check_public_surface.py
 
+      - name: CI topology self-check
+        if: always()
+        run: python tools/check_ci_topology.py .github/workflows/v030-shared-portfolio-rehab.yml
+
       - name: Upload shared-portfolio evidence
         if: always()
         uses: actions/upload-artifact@v6
         with:
-          name: cmpct-v030-shared-portfolio-${{ github.sha }}
+          name: cmpct-v030-shared-portfolio-${{ env.EVIDENCE_HEAD }}
           path: |
             benchmark-artifacts/v030-shared-rehab.json
             benchmark-artifacts/v030-shared-rehab.stdout.txt
           if-no-files-found: warn
           retention-days: 90
 
-# Footnote: this gate proves a byte-neutral build-cost rehabilitation only. It cannot substitute for the
-# integrated 15-workload compression gate or final v0.30-vs-v0.29 performance measurements.
+# Byte-neutral rehabilitation evidence only. Relevant semantic changes re-run it; unrelated integration commits do
+# not consume up to three runner-hours. Exact receipts are preserved rather than canceled. This lane cannot substitute
+# for the integrated 15-workload or final v0.30-vs-v0.29 authorities.
