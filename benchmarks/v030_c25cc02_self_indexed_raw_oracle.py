@@ -9,9 +9,9 @@ boundary instead of shaving the impossible envelope.
 For archives whose physical records are all RAW, unflagged, metadata-free and size-preserving, the ordinary r24 blob
 table duplicates facts that already live in every physical record. C25CC02 projects a self-indexing record grammar:
 ``magic:u32 | payload_len:u32 | sha256:32`` followed by raw payload. Codec=RAW and meta_len=0 become profile-level
-facts. Scanning the authenticated records reconstructs the *exact* ordinary r24 blob table (offset, usize, csize,
-codec, meta_len), so the compact semantic control can omit ``b`` entirely while retaining two authenticated copies.
-The projection keeps the ordinary 136-byte r24 header/footer cost as a conservative fixed-framing charge.
+facts. Scanning those records reconstructs every blob fact; physical offsets are naturally recomputed because the
+record headers are shorter. The compact semantic control can therefore omit ``b`` entirely while retaining two
+authenticated copies. The projection keeps the ordinary 136-byte r24 header/footer cost as a conservative charge.
 
 This is not a shipping grammar. It grants zero selector/release credit and cannot weaken locality, recovery, output
 identity or SHA-256. A positive result only authorizes implementing the bounded grammar and timing its complete
@@ -42,7 +42,7 @@ LEVELS = CONTROL.LEVELS
 
 
 def _scan_current_raw_records(data: bytes) -> tuple[list[list[int]], int]:
-    """Prove the source physical span is eligible and reconstruct its current blob table from bytes alone."""
+    """Prove source eligibility and reconstruct the current r24 blob table from physical bytes alone."""
     blobs: list[list[int]] = []
     at = 0
     payload_bytes = 0
@@ -63,8 +63,6 @@ def _scan_current_raw_records(data: bytes) -> tuple[list[list[int]], int]:
         payload = data[start:end]
         if hashlib.sha256(payload).digest() != bytes(digest):
             raise RuntimeError("source r24 RAW record SHA mismatch")
-        # CRC is intentionally not repeated in the proposed grammar: SHA-256 remains the stronger required integrity
-        # owner. The exact source blob table itself never contained CRC or SHA, only the five fields below.
         if (R24.binascii.crc32(payload) & 0xFFFFFFFF) != int(crc32):
             raise RuntimeError("source r24 RAW record CRC mismatch")
         blobs.append([at, int(usize), int(csize), int(codec), int(meta_len)])
@@ -76,12 +74,11 @@ def _scan_current_raw_records(data: bytes) -> tuple[list[list[int]], int]:
 
 
 def _project_self_indexed_data(data: bytes) -> tuple[int, list[list[int]], int]:
-    """Return projected bytes and the exact ordinary blob table reconstructed from the proposed record stream."""
+    """Project shorter records and the blob table a reader derives by scanning that new stream."""
     projected_blobs: list[list[int]] = []
     source_at = 0
     projected_at = 0
     payload_bytes = 0
-    records = 0
     while source_at < len(data):
         magic, codec, flags, reserved, usize, csize, meta_len, _crc32, digest = R24.BHDR.unpack_from(data, source_at)
         if magic != R24.BMAGIC or int(codec) != R24.CODEC_RAW or int(flags) or int(reserved) or int(meta_len):
@@ -93,20 +90,26 @@ def _project_self_indexed_data(data: bytes) -> tuple[int, list[list[int]], int]:
         payload = data[payload_start:payload_end]
         if hashlib.sha256(payload).digest() != bytes(digest):
             raise RuntimeError("self-indexed RAW projection source SHA mismatch")
-        # Proposed record is independently discoverable/salvageable by magic, bounded payload length and SHA-256.
-        _encoded_header = SELF_HEADER.pack(SELF_MAGIC, int(csize), bytes(digest))
+        SELF_HEADER.pack(SELF_MAGIC, int(csize), bytes(digest))
         projected_blobs.append([projected_at, int(usize), int(csize), R24.CODEC_RAW, 0])
         projected_at += SELF_HEADER.size + int(csize)
         payload_bytes += int(csize)
-        records += 1
         source_at = payload_end
     return projected_at, projected_blobs, payload_bytes
 
 
-def _best_control(index: dict, derived_blobs: list[list[int]]) -> dict:
+def _same_blob_semantics(source_blobs: list, projected_blobs: list) -> bool:
+    if len(source_blobs) != len(projected_blobs):
+        return False
+    # Offsets are the one field expected to move. Size, codec, metadata and blob ordinal must remain exact.
+    return all(list(a[1:]) == list(b[1:]) for a, b in zip(source_blobs, projected_blobs, strict=True))
+
+
+def _best_control(index: dict, projected_blobs: list[list[int]]) -> dict:
     compact = CONTROL._compact_index(index)
-    if compact["b"] != derived_blobs:
-        raise RuntimeError("physical scan did not reconstruct the exact ordinary blob table")
+    source_blobs = compact["b"]
+    if not _same_blob_semantics(source_blobs, projected_blobs):
+        raise RuntimeError("self-indexed RAW projection changed blob semantics beyond physical offsets")
     stripped = dict(compact)
     stripped.pop("b")
     envelope = {"x": list(index["features"]), "c": stripped}
@@ -118,16 +121,23 @@ def _best_control(index: dict, derived_blobs: list[list[int]]) -> dict:
     comp_bytes, level, _comp = min(rows, key=lambda row: (row[0], row[1]))
 
     restored_compact = dict(stripped)
-    restored_compact["b"] = derived_blobs
+    restored_compact["b"] = projected_blobs
     expanded = CONTROL._expand_index(restored_compact, version=int(index["v"]), features=list(index["features"]))
-    if expanded != index:
-        raise RuntimeError("self-indexed RAW semantic control failed exact index reconstruction")
+    expected = dict(index)
+    expected["blobs"] = projected_blobs
+    if expanded != expected:
+        raise RuntimeError("self-indexed RAW semantic control failed exact projected-index reconstruction")
+    # File rows reference blob ordinals rather than byte offsets, so the entire logical file/tree mapping is exact.
+    if expanded["files"] != index["files"] or expanded["recipes"] != index["recipes"] or expanded["fsmeta"] != index["fsmeta"]:
+        raise RuntimeError("self-indexed RAW projection changed logical archive semantics")
     return {
         "raw_bytes": len(raw),
         "comp_bytes_per_copy": int(comp_bytes),
         "level": int(level),
         "semantic_index_roundtrip_exact": True,
+        "logical_file_rows_exact": True,
         "blob_table_omitted_from_control": True,
+        "blob_offsets_derived_from_self_indexed_records": True,
         "two_authenticated_control_copies": True,
     }
 
@@ -145,7 +155,7 @@ def run(work_root: Path) -> dict:
     index, data, physical = PROFILE._source_r24_parts(candidate)
     scanned_blobs, source_payload_bytes = _scan_current_raw_records(data)
     if scanned_blobs != index["blobs"]:
-        raise RuntimeError("ordinary r24 blob table is not derivable from physical scan")
+        raise RuntimeError("ordinary r24 blob table is not exactly derivable from its physical records")
 
     projected_data_bytes, projected_blobs, projected_payload_bytes = _project_self_indexed_data(data)
     if source_payload_bytes != projected_payload_bytes:
@@ -194,6 +204,7 @@ def run(work_root: Path) -> dict:
         "locality": locality,
         "gate": {
             "source_blob_table_derived_exactly": scanned_blobs == index["blobs"],
+            "projected_blob_semantics_preserved": _same_blob_semantics(scanned_blobs, projected_blobs),
             "semantic_index_roundtrip_exact": bool(control["semantic_index_roundtrip_exact"]),
             "payload_bytes_unchanged": source_payload_bytes == projected_payload_bytes,
             "locality_within_8x": float(locality["max_member_read_amplification"]) <= 8.0,
