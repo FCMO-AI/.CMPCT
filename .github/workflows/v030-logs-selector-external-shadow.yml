@@ -10,6 +10,7 @@ on:
       - 'experiments/entropygraph_v030_logs_inverse_profile*.py'
       - 'experiments/entropygraph_v030_product_fs.py'
       - 'benchmarks/v030_logs_selector_external_shadow.py'
+      - 'benchmarks/v030_logs_prefilter_reuse_abba.py'
       - 'benchmarks/v030_external_competitors.py'
       - 'benchmarks/v030_external_competitors_canonical.py'
       - 'tests/test_v030_logs_selector_candidate.py'
@@ -28,6 +29,53 @@ env:
   EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
 
 jobs:
+  logs-prefilter-reuse-abba:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - name: Verify exact evidence head
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install product and frozen-corpus dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y zstd gcc ffmpeg libsndfile1
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[audio,test]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
+      - name: Run exact full-build prefilter ownership ABBA
+        run: |
+          mkdir -p benchmark-artifacts
+          python benchmarks/v030_logs_prefilter_reuse_abba.py \
+            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-logs-prefilter-reuse-work" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-logs-prefilter-reuse.json"
+      - name: Enforce claim boundary and exact identity
+        if: always()
+        run: |
+          test -f benchmark-artifacts/v030-logs-prefilter-reuse.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          d=json.loads(Path('benchmark-artifacts/v030-logs-prefilter-reuse.json').read_text())
+          assert d['schema']=='cmpct-v030-logs-prefilter-reuse-abba-v1'
+          assert d['promotion_gate']['exact_product_identity'] is True
+          assert d['promotion_gate']['candidate_real_prefilter_scans_exactly_one'] is True
+          assert d['claim_boundary'].startswith('A/B ownership oracle only')
+          PY
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: v030-logs-prefilter-reuse-${{ env.EVIDENCE_HEAD }}
+          path: benchmark-artifacts/v030-logs-prefilter-reuse.json
+          if-no-files-found: warn
+          retention-days: 90
+
   logs-selector-external-shadow:
     runs-on: ubuntu-24.04
     timeout-minutes: 540
