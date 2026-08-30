@@ -2,6 +2,15 @@ diff --git a/native/cmpct-portable/src/g04.rs b/native/cmpct-portable/src/g04.rs
 index 78b9a9a..0000000 100644
 --- a/native/cmpct-portable/src/g04.rs
 +++ b/native/cmpct-portable/src/g04.rs
+@@ -10,7 +10,7 @@ use preflate_container::{PreflateContainerConfig, ProcessBuffer, RecreateContai
+ use rmpv::Value;
+ use sha2::{Digest, Sha256};
+ use std::collections::{BTreeMap, HashMap, HashSet};
+-use std::fs::File;
++use std::fs::{self, File};
+ use std::io::{Cursor, Read, Seek, SeekFrom, Write};
+ use std::path::Path;
+ use std::sync::{Arc, Mutex};
 @@ -327,9 +327,19 @@ impl G04Archive {
          &self,
          index: usize,
@@ -23,7 +32,7 @@ index 78b9a9a..0000000 100644
          let (expected_size, expected_sha) = match file {
              GFile::Preflate { size, sha, .. } | GFile::Nodes { size, sha, .. } => (*size, *sha),
          };
-@@ -399,9 +409,10 @@ impl G04Archive {
+@@ -399,9 +409,32 @@ impl G04Archive {
  
      pub(crate) fn verify(&self) -> Result<(), PortableError> {
          let mut tree = Sha256::new();
@@ -36,7 +45,29 @@ index 78b9a9a..0000000 100644
          }
          let got: [u8; 32] = tree.finalize().into();
          if got != self.tree_sha {
-@@ -426,19 +437,31 @@ impl Write for DigestWriter<'_> {
+@@ -411,6 +444,25 @@ impl G04Archive {
+         }
+         Ok(())
+     }
++
++    pub(crate) fn extract_into(&self, root: &Path) -> Result<(), PortableError> {
++        let mut record_cache = SharedRecordCache::new();
++        for (index, entry) in self.entries.iter().enumerate() {
++            let rel = safe_relpath(&entry.path)?;
++            let target = root.join(rel);
++            if let Some(parent) = target.parent() {
++                fs::create_dir_all(parent)?;
++            }
++            let mut file = File::create(&target)?;
++            self.stream_member_with_record_cache(index, &mut file, &mut record_cache)?;
++            file.flush()?;
++        }
++        Ok(())
++    }
+ }
+ 
+ struct DigestWriter<'a>(&'a mut Sha256);
+@@ -426,19 +478,31 @@ impl Write for DigestWriter<'_> {
      }
  }
  
@@ -77,7 +108,7 @@ index 78b9a9a..0000000 100644
              node_cache: HashMap::new(),
              node_cache_bytes: 0,
              touched_records: HashMap::new(),
-@@ -463,6 +486,9 @@ impl<'a> DecodeContext<'a> {
+@@ -463,6 +527,9 @@ impl<'a> DecodeContext<'a> {
      }
  
      fn record(&mut self, record_id: usize) -> Result<Arc<Vec<u8>>, PortableError> {
@@ -89,7 +120,7 @@ index 78b9a9a..0000000 100644
              return Ok(Arc::clone(value));
          }
          let record =
-@@ -541,9 +567,11 @@ impl<'a> DecodeContext<'a> {
+@@ -541,9 +608,11 @@ impl<'a> DecodeContext<'a> {
              .entry(record_id)
              .or_insert(original.len() as u64);
          let value = Arc::new(original);
@@ -104,3 +135,17 @@ index 78b9a9a..0000000 100644
          }
          Ok(value)
      }
+diff --git a/native/cmpct-portable/src/lib.rs b/native/cmpct-portable/src/lib.rs
+index c8e865b..0000000 100644
+--- a/native/cmpct-portable/src/lib.rs
++++ b/native/cmpct-portable/src/lib.rs
+@@ -417,6 +417,9 @@ impl PortableArchive {
+         if let Self::LogsInverse { archive, .. } = self {
+             return LogsPublicView::new(archive)?.extract_into(root);
+         }
++        if let Self::ResearchG04(archive) = self {
++            return archive.extract_into(root);
++        }
+         let entries = self.entries();
+         for (index, entry) in entries.iter().enumerate() {
+             let rel = safe_relpath(&entry.path)?;
