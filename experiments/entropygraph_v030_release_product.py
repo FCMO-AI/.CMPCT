@@ -2,9 +2,10 @@
 
 The mature r24/r25 selector implementation is retained byte-for-byte in
 ``entropygraph_v030_release_product_base``. This module exposes that exact implementation and adds only structural
-terminals that have earned frozen-suite plus unseen/adversarial evidence: logs inverse, entropy-refined opaque-media
-r24, and C25CC01 compact control for a conservative subset of the proven high-file-count incompressible envelope.
-No benchmark name, path, suffix, content hash, archive hash, or pack hash participates in dispatch.
+terminals that have earned frozen-suite plus unseen/adversarial evidence: logs inverse and entropy-refined
+opaque-media r24. C25CC01 compact-control remains readable for compatibility/research, but its shipping terminal
+is disabled after exact-head frozen plus unseen authority found zero valid admissions under the current locality
+law. No benchmark name, path, suffix, content hash, archive hash, or pack hash participates in dispatch.
 
 A release-only r24 materialization post-pass also removes a trained dictionary only when the finished authenticated
 blob table proves that no selected physical record uses it. Training and codec competition remain unchanged; live
@@ -373,13 +374,10 @@ def build(root, out):
     preflight = _shared_frontdoor_preflight(root)
     if preflight["metadata_error"]:
         terminal = _LOGS_PROMOTED._build_logs_terminal_if_eligible(root, out)
-        shared_shape = None
     elif preflight["logs_eligible"]:
         terminal = _LOGS_PROMOTED._build_logs_terminal_if_eligible(root, out)
-        shared_shape = None
     else:
         terminal = None
-        shared_shape = preflight["shape"]
     if terminal is not None:
         return terminal
     media = _media_admission_after_preflight(root, preflight)
@@ -392,9 +390,10 @@ def build(root, out):
             "terminal_r24_media_admission": media,
             "speculative_r25_search_skipped": True,
         }
-    compact_control = _build_compact_control_terminal_if_eligible(root, out, source_shape=shared_shape)
-    if compact_control is not None:
-        return compact_control
+    # Exact-head frozen + unseen authority now proves zero valid C25CC01 terminal admissions under the release
+    # locality law. Do not pay a complete r24 build plus profile conversion merely to discover that fact again.
+    # The reader remains available for existing research artifacts; shipping dispatch stays fail-closed until a
+    # new physical representation earns fresh positive evidence.
     return _BASE_IMPL.build(root, out)
 
 
@@ -475,8 +474,11 @@ PROMOTED_R24_DEAD_DICTIONARY_ELISION = True
 PROMOTED_R24_DEAD_DICTIONARY_EVIDENCE = "all-15 post-selection proof: 0 byte regressions, live dictionaries byte-identical, dead dictionaries smaller"
 PROMOTED_R24_OPAQUE_MEDIA_TERMINAL = True
 PROMOTED_R24_OPAQUE_MEDIA_EVIDENCE = "all-15 strict four-way media win + unseen entropy-refined adversarial proof with compressible-media rejection"
-PROMOTED_R24_COMPACT_CONTROL_TERMINAL = True
-PROMOTED_R24_COMPACT_CONTROL_EVIDENCE = "all-15 frozen admission + five-round unseen/adversarial strict four-way wins + native dispatch + Android/JNI"
+PROMOTED_R24_COMPACT_CONTROL_TERMINAL = False
+PROMOTED_R24_COMPACT_CONTROL_EVIDENCE = (
+    "retired by exact-head 226cd350 authority: zero frozen admissions and zero unseen admissions under <=8x locality; "
+    "profile-ineligible rows include 5782.95x encrypted-like amplification, while eligible rows save only tiny control bytes"
+)
 
 _PROMOTED_BINDINGS = {
     "build": build,
