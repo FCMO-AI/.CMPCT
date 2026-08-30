@@ -14,7 +14,7 @@ reader. Discovery may observe XZ or future sidecars, but unsupported relations a
 segmented files instead of emitting a derive edge that a required release reader cannot decode. This changes no
 frozen logs winner bytes because its selected inverse edges are gzip and Zstd.
 
-The canonical user-tree digest is derived directly from the authenticated filesystem manifest.  Keeping that
+The canonical user-tree digest is derived directly from the authenticated filesystem manifest. Keeping that
 identity at the profile semantic owner prevents release wrappers and evidence harnesses from inventing different
 spellings of the same filesystem contract.
 """
@@ -141,6 +141,73 @@ def strong_verify(path: Path) -> dict:
         "canonical_user_tree_sha256": user_tree,
     })
     return verified
+
+
+def read_member_with_stats(path: Path, rel: str) -> tuple[bytes, dict]:
+    """Read one user-visible member with exact cold-operation locality accounting.
+
+    Resolving a user-visible path requires the authenticated filesystem manifest, so its decoded context belongs
+    to the selective-read operation rather than being hidden outside the locality budget. Regular files and
+    hardlink aliases then read the authenticated graph owner through the v2 cold reader. Symlink bytes come from
+    the authenticated manifest itself. Directories are not byte-valued members.
+    """
+    path = Path(path)
+    if not isinstance(rel, str):
+        raise TypeError("logs member path must be text")
+    with Archive(path) as archive:
+        paths = archive._paths()
+        try:
+            manifest_index = paths.index(FS.FILESYSTEM_MANIFEST)
+        except ValueError as exc:
+            raise RuntimeError("logs canonical profile is missing filesystem manifest") from exc
+        manifest_raw, manifest_context = archive.read_member(manifest_index)
+        decoded = FS.decode_manifest(
+            manifest_raw,
+            max_path_bytes=MAX_PATH_BYTES,
+            max_entries=FS.DEFAULT_MAX_MANIFEST_ENTRIES,
+        )
+        rows = FS.entry_map(decoded)
+        if rel not in rows:
+            raise KeyError(rel)
+        row = rows[rel]
+        kind = row[1]
+        extra = row[7]
+
+        if kind == "d":
+            raise IsADirectoryError(rel)
+        if kind == "l":
+            value = extra.encode("utf-8")
+            content_context = 0
+        else:
+            owner = rel if kind == "f" else extra
+            try:
+                owner_index = paths.index(owner)
+            except ValueError as exc:
+                raise RuntimeError("logs canonical filesystem owner is missing from content graph") from exc
+            value, content_context = archive.read_member(owner_index)
+            expected_size, expected_sha = decoded["regular"][owner]
+            if len(value) != int(expected_size) or hashlib.sha256(value).digest() != bytes(expected_sha):
+                raise RuntimeError("logs canonical selective-read filesystem/content identity mismatch")
+
+    decoded_context = int(manifest_context) + int(content_context)
+    logical_bytes = len(value)
+    amplification = decoded_context / max(1, logical_bytes)
+    if decoded_context > MAX_DECODE_UNIT or amplification > MAX_MEMBER_AMPLIFICATION:
+        raise RuntimeError("logs canonical selective-read locality violation")
+    return value, {
+        "logical_bytes": logical_bytes,
+        "decoded_context_bytes": decoded_context,
+        "decoded_context_amplification": amplification,
+        "filesystem_manifest_decoded_context_bytes": int(manifest_context),
+        "content_decoded_context_bytes": int(content_context),
+        "locality_accounting": "authenticated-manifest-plus-cold-content-v1",
+        "max_member_read_amplification": MAX_MEMBER_AMPLIFICATION,
+        "max_decode_unit_bytes": MAX_DECODE_UNIT,
+    }
+
+
+def read_member(path: Path, rel: str) -> bytes:
+    return read_member_with_stats(path, rel)[0]
 
 
 def recovery_probe(path: Path) -> dict:
