@@ -91,7 +91,7 @@ def logs_source_prefilter(root: Path) -> dict:
 
     Eligibility needs only two compressed sidecars whose uncompressed sibling exists in the same directory.
     The real candidate builder later performs exact edge discovery, so walking every remaining directory after
-    those two witnesses are found is pure speculative work.  Deterministic ``scandir`` order keeps diagnostics
+    those two witnesses are found is pure speculative work. Deterministic ``scandir`` order keeps diagnostics
     stable while allowing the positive path to terminate as soon as the structural lower bound is proven.
     """
     root = Path(root)
@@ -101,11 +101,7 @@ def logs_source_prefilter(root: Path) -> dict:
         abs_dir, prefix = stack.pop()
         with os.scandir(abs_dir) as iterator:
             entries = sorted(iterator, key=lambda item: item.name)
-        regular_names = {
-            item.name
-            for item in entries
-            if item.is_file(follow_symlinks=False)
-        }
+        regular_names = {item.name for item in entries if item.is_file(follow_symlinks=False)}
         for name in sorted(regular_names):
             for suffix in (".gz", ".zst"):
                 if not name.endswith(suffix):
@@ -139,11 +135,7 @@ def logs_source_prefilter(root: Path) -> dict:
 
 def _logs_manifest(archive: Path) -> dict:
     raw = LOGS._manifest_from_archive(Path(archive))
-    return FS.decode_manifest(
-        raw,
-        max_path_bytes=LOGS.MAX_PATH_BYTES,
-        max_entries=FS.DEFAULT_MAX_MANIFEST_ENTRIES,
-    )
+    return FS.decode_manifest(raw, max_path_bytes=LOGS.MAX_PATH_BYTES, max_entries=FS.DEFAULT_MAX_MANIFEST_ENTRIES)
 
 
 def _logs_semantic_tree(decoded: dict) -> str:
@@ -230,8 +222,28 @@ def _admission(r24: dict, logs: dict) -> tuple[bool, dict]:
     return admitted, facts
 
 
-def _build_logs_terminal_if_eligible(root: Path, out: Path) -> dict | None:
-    prefilter = logs_source_prefilter(root)
+def _trusted_positive_prefilter(prefilter: dict | None) -> dict | None:
+    """Accept only a positive structural proof; final candidate admission remains authoritative.
+
+    This token can remove a duplicate release-front-door tree walk, but it can never admit a logs archive by
+    itself: exact inverse-edge, saving, locality, and decode-unit facts are still recomputed by ``_admission``.
+    """
+    if prefilter is None:
+        return None
+    if not bool(prefilter.get("eligible")) or int(prefilter.get("sidecar_pairs", 0)) < MIN_SIDECAR_PAIRS:
+        return None
+    return dict(prefilter)
+
+
+def _build_logs_terminal_if_eligible(
+    root: Path,
+    out: Path,
+    *,
+    proven_positive_prefilter: dict | None = None,
+) -> dict | None:
+    prefilter = _trusted_positive_prefilter(proven_positive_prefilter)
+    if prefilter is None:
+        prefilter = logs_source_prefilter(root)
     if not prefilter["eligible"]:
         return None
 
@@ -291,6 +303,7 @@ def _build_logs_terminal_if_eligible(root: Path, out: Path) -> dict | None:
         "selection_extra_payload_write_bytes": 0,
         "logs_terminal": True,
         "logs_terminal_prefilter": prefilter,
+        "logs_terminal_prefilter_reused": proven_positive_prefilter is not None and prefilter is not None,
         "logs_terminal_admission": admission,
         "logs_terminal_contract": {
             "minimum_sidecar_pairs": MIN_SIDECAR_PAIRS,
@@ -378,65 +391,29 @@ def list_members(archive: Path) -> list[dict]:
     return result
 
 
-def read_member_with_stats(archive: Path, rel: str) -> tuple[bytes, dict]:
+def read_member_with_stats(archive: Path, rel: str):
     archive = Path(archive)
     if not _is_logs_archive(archive):
         return _BASE_READ_MEMBER_WITH_STATS(archive, rel)
-    decoded, rows = _entry_rows(archive)
-    if rel not in rows:
-        raise KeyError(rel)
-    row = rows[rel]
-    kind = row[1]
-    if kind == "d":
-        raise IsADirectoryError(rel)
-    if kind == "l":
-        raw = row[7].encode("utf-8")
-        return raw, {
-            "logical_bytes": len(raw),
-            "decoded_context_bytes": len(raw),
-            "decoded_context_amplification": 1.0,
-            "format_profile": LOGS_PROFILE,
-        }
-    owner = row[7] if kind == "h" else rel
-    with LOGS.Archive(archive) as reader:
-        paths = reader._paths()
-        try:
-            index = paths.index(owner)
-        except ValueError as exc:
-            raise RuntimeError(f"logs filesystem owner missing from content graph: {owner!r}") from exc
-        raw, context = reader.read_member(index)
-    amp = int(context) / max(1, len(raw))
-    if amp > MAX_MEMBER_AMPLIFICATION or int(context) > MAX_DECODE_UNIT_BYTES:
-        raise RuntimeError("logs public read exceeded locality contract")
-    return raw, {
-        "logical_bytes": len(raw),
-        "decoded_context_bytes": int(context),
-        "decoded_context_amplification": amp,
+    data, stats = LOGS.read_member_with_stats(archive, rel)
+    return data, {
+        **stats,
+        "format_revision": REVISION,
         "format_profile": LOGS_PROFILE,
+        "canonical_release_facade": "cmpct-v030-release-product-v1",
     }
 
 
 def read_member(archive: Path, rel: str) -> bytes:
-    return read_member_with_stats(archive, rel)[0]
+    return read_member_with_stats(Path(archive), rel)[0]
 
 
-def extract(
-    archive: Path,
-    dst: Path,
-    *,
-    max_output_bytes: int = POLICY.DEFAULT_MAX_EXTRACT_BYTES,
-    safe_symlinks: bool = True,
-) -> None:
+def extract(archive: Path, dst: Path, *, max_output_bytes: int = POLICY.DEFAULT_MAX_EXTRACT_BYTES, safe_symlinks: bool = True):
     archive = Path(archive)
     if not _is_logs_archive(archive):
         return _BASE_EXTRACT(archive, dst, max_output_bytes=max_output_bytes, safe_symlinks=safe_symlinks)
-    return LOGS_FUSED.extract(
-        archive,
-        dst,
-        max_output_bytes=max_output_bytes,
-        safe_symlinks=safe_symlinks,
-    )
+    return LOGS_FUSED.extract(archive, dst, max_output_bytes=max_output_bytes, safe_symlinks=safe_symlinks)
 
 
-def build_ablation(root: Path, out: Path, mode: str) -> dict:
-    return _BASE_BUILD_ABLATION(root, out, mode)
+def build_ablation(root: Path, out: Path, *, disable_g04: bool = False, disable_prefixgraph: bool = False) -> dict:
+    return _BASE_BUILD_ABLATION(root, out, disable_g04=disable_g04, disable_prefixgraph=disable_prefixgraph)
