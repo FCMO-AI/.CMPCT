@@ -55,8 +55,8 @@ jobs:
           cp "$RUNNER_TEMP/baseline-target/release/cmpct-portable" "$RUNNER_TEMP/cmpct-portable-baseline"
       - name: Apply locality-neutral candidate and prove it compiles
         run: |
-          git apply --check benchmarks/patches/v030_g04_operation_record_cache.patch
-          git apply benchmarks/patches/v030_g04_operation_record_cache.patch
+          git apply --check --recount benchmarks/patches/v030_g04_operation_record_cache.patch
+          git apply --recount benchmarks/patches/v030_g04_operation_record_cache.patch
           cargo fmt --manifest-path native/cmpct-portable/Cargo.toml -- --check
           CARGO_TARGET_DIR="$RUNNER_TEMP/candidate-target" \
             cargo build --manifest-path native/cmpct-portable/Cargo.toml --release --bin cmpct-portable
