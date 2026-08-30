@@ -2,8 +2,8 @@
 name: CMPCT v0.30 r24 streaming-finalize RSS oracle
 
 on:
-  pull_request:
-    branches: [main]
+  push:
+    branches: [agent/v030-authoritative-integration]
     paths:
       - 'src/cmpct/builder.py'
       - 'experiments/entropygraph_v030_r24_streaming_finalize.py'
@@ -24,12 +24,12 @@ permissions:
   contents: read
 
 concurrency:
-  group: cmpct-v030-r24-streaming-finalize-rss-${{ github.event.pull_request.number || github.ref }}
+  group: cmpct-v030-r24-streaming-finalize-rss-${{ github.ref }}
   cancel-in-progress: true
 
 env:
   PYTHONPATH: ${{ github.workspace }}
-  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+  EVIDENCE_HEAD: ${{ github.sha }}
 
 jobs:
   shifted-combined-rss-frontier:
@@ -185,5 +185,5 @@ jobs:
           if-no-files-found: error
           retention-days: 90
 
-# Research-only causality tests. Neither job can change shipping, RSS limits or archive semantics. Positive results
-# authorize focused productization followed by exact-head runtime/external/native/Android/final release authority.
+# Research-only causality tests are isolated to relevant integration-branch pushes so the accumulated PR diff
+# cannot repeatedly relaunch them. Positive arms still require productization and exact release authorities.
