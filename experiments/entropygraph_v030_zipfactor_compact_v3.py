@@ -127,8 +127,16 @@ def build(root: Path, out: Path, *, level: int = 6, group_size: int = 7) -> dict
     }
 
 
-def _open(archive: Path) -> tuple[bytes, dict, bytes, list[tuple[int, bytes, list[str], bytes]]]:
-    raw = memoryview(Path(archive).read_bytes())
+def _open(archive: Path | bytes | bytearray | memoryview) -> tuple[bytes, dict, bytes, list[tuple[int, bytes, list[str], bytes]]]:
+    """Open either an on-disk V3 archive or already-resident exact candidate bytes.
+
+    Accepting resident bytes lets recovery/selective readers preserve one semantic parser while avoiding a
+    temporary-file publication+reread round trip. The same bounded parser and authentication checks own both paths.
+    """
+    if isinstance(archive, (bytes, bytearray, memoryview)):
+        raw = memoryview(archive)
+    else:
+        raw = memoryview(Path(archive).read_bytes())
     if len(raw) < len(MAGIC) + _HEADER.size or bytes(raw[: len(MAGIC)]) != MAGIC:
         raise RuntimeError("not a binary-control ZIP-factor profile")
     at = len(MAGIC)
