@@ -9,7 +9,9 @@ on:
       - 'experiments/entropygraph_v030_r24_streaming_finalize.py'
       - 'experiments/entropygraph_v030_release_product.py'
       - 'experiments/entropygraph_v030_release_product_base.py'
+      - 'experiments/entropygraph_v030_prefixgraph_parallel.py'
       - 'benchmarks/v030_r24_streaming_finalize_rss_oracle.py'
+      - 'benchmarks/v030_shifted_streaming_prefix_workers_oracle.py'
       - 'benchmarks/v030_release_performance.py'
       - 'benchmarks/v030_release_generalization.py'
       - 'benchmarks/neutral_hostile_corpus_v1.py'
@@ -30,6 +32,71 @@ env:
   EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
 
 jobs:
+  shifted-combined-rss-frontier:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - name: Verify exact evidence head
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install frozen runtime-corpus dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y zstd gcc ffmpeg libsndfile1
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[audio,test]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
+      - name: Run exact-byte combined streaming and PrefixGraph-worker frontier
+        run: |
+          mkdir -p benchmark-artifacts
+          python benchmarks/v030_shifted_streaming_prefix_workers_oracle.py \
+            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-shifted-streaming-prefix-workers-work" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-shifted-streaming-prefix-workers.json"
+      - name: Enforce unchanged release law and exact identity
+        if: always()
+        run: |
+          test -f benchmark-artifacts/v030-shifted-streaming-prefix-workers.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          d=json.loads(Path('benchmark-artifacts/v030-shifted-streaming-prefix-workers.json').read_text())
+          assert d['schema']=='cmpct-v030-shifted-streaming-prefix-workers-v2'
+          assert d['exact_archive_identity_all_arms'] is True
+          assert d['experiment_valid'] is True
+          assert d['release_credit'] is False
+          c=d['contract']
+          assert c['archive_bytes_changed'] is False
+          assert c['candidate_set_changed'] is False
+          assert c['selector_changed'] is False
+          assert c['tie_law_changed'] is False
+          assert c['grammar_changed'] is False
+          assert c['integrity_changed'] is False
+          assert c['locality_limit_changed'] is False
+          assert c['recovery_changed'] is False
+          assert c['rss_threshold_changed'] is False
+          assert float(c['promotion_full_rss_max_ratio'])==0.75
+          assert float(c['maximum_full_wall_regression_ratio'])==1.05
+          if d['promotion_signal']:
+              arm=d['promotion_arm']
+              assert arm and arm!='shipping'
+              s=d['summary'][arm]
+              assert float(s['rss_ratio_vs_shipping'])<=0.75
+              assert float(s['wall_ratio_vs_shipping'])<=1.05
+          PY
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: v030-shifted-combined-rss-${{ env.EVIDENCE_HEAD }}
+          path: benchmark-artifacts/v030-shifted-streaming-prefix-workers.json
+          if-no-files-found: warn
+          retention-days: 90
+
   r24-streaming-finalize-rss:
     runs-on: ubuntu-24.04
     timeout-minutes: 120
@@ -118,6 +185,5 @@ jobs:
           if-no-files-found: error
           retention-days: 90
 
-# Research-only causality test. It cannot change shipping, RSS limits or archive semantics. A positive result
-# only authorizes the next step: promote the byte-identical finalizer with focused regression coverage, then
-# regenerate exact-head runtime/external/native/Android/final release authority.
+# Research-only causality tests. Neither job can change shipping, RSS limits or archive semantics. Positive results
+# authorize focused productization followed by exact-head runtime/external/native/Android/final release authority.
