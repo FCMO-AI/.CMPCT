@@ -1,17 +1,12 @@
 # ci-lane: deep
+# ci-auto-policy: retired-manual-only
 name: CMPCT v0.30 C25CC01 fragmentation admission
 
+# The refined admission logic cannot rescue the shipping-retired C25CC01
+# representation after the exact locality-safe physical byte floor exceeded
+# Zstd-19 before control metadata. Preserve this 180-minute campaign for manual
+# historical replay, not automatic frontier scheduling.
 on:
-  push:
-    branches: [agent/v030-authoritative-integration]
-    paths:
-      - 'experiments/entropygraph_v030_r24_compact_control_profile.py'
-      - 'benchmarks/v030_r24_compact_control_terminal_admission.py'
-      - 'benchmarks/v030_r24_compact_control_terminal_generalization.py'
-      - 'benchmarks/v030_c25cc01_fragmentation_admission_oracle.py'
-      - 'benchmarks/v030_r24_compact_control_composition_oracle_v2.py'
-      - 'benchmarks/v030_external_competitors.py'
-      - '.github/workflows/v030-c25cc01-fragmentation-admission.yml'
   workflow_dispatch:
 
 permissions:
@@ -92,5 +87,4 @@ jobs:
           if-no-files-found: error
           retention-days: 90
 
-# Research-only admission refinement for a shipping-retired family. Keep the negative evidence reproducible, but
-# do not re-run this 180-minute lane on unrelated PR synchronizations. No release threshold or authority is changed.
+# Research-only admission refinement for a shipping-retired family. No release threshold or authority is changed.
