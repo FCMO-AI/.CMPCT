@@ -14,6 +14,11 @@ EOCD discovery deliberately validates every backwards signature candidate rather
 result: ZIP comments are arbitrary bytes and may legally contain the EOCD signature themselves. A candidate is
 accepted only if its comment length reaches exact EOF and its complete central/local topology validates.
 
+A research-only inline framing API can additionally compare the exact static ZIP-factor admission signature while
+those same central/local values are already live scalar locals. The ordinary ``parse_zip`` path does not use that
+API and therefore retains byte-for-byte/branch-for-branch behavior. Promotion of inline admission still requires an
+exact full-scan A/B and hostile semantic equivalence; this module does not select the profile by itself.
+
 No benchmark identity or workload metadata participates. Promotion still requires hostile-equivalence, exact archive
 identity, recovery, native/Android and release-authority evidence.
 """
@@ -29,8 +34,36 @@ CENTRAL_HDR = struct.Struct("<IHHHHHHIIIHHHHHII")
 EOCD_HDR = struct.Struct("<IHHHHIIH")
 MAX_EOCD_SEARCH = 22 + 65535
 
+# One immutable projection of the exact BASE._signature static fields. Dynamic CRC/sizes/payload/offsets are
+# intentionally excluded. Keeping this ownership here lets the inline parser compare scalar values without a second
+# walk over the candidate dictionaries and gives tests one canonical reference projection to ratchet.
+FramingReference = tuple[tuple[tuple, ...], tuple[tuple, ...], tuple]
 
-def _parse_at(raw: bytes, eocd_at: int) -> dict | None:
+
+def framing_reference(parsed: dict) -> FramingReference:
+    return (
+        tuple(
+            (r["version"], r["flags"], r["method"], r["mtime"], r["mdate"], r["name"], r["extra"])
+            for r in parsed["locals"]
+        ),
+        tuple(
+            (
+                r["made"], r["needed"], r["flags"], r["method"], r["mtime"], r["mdate"],
+                r["name"], r["extra"], r["comment"], r["disk"], r["internal_attr"], r["external_attr"],
+            )
+            for r in parsed["centrals"]
+        ),
+        (parsed["eocd"]["disk"], parsed["eocd"]["disk_cd"], parsed["eocd"]["comment"]),
+    )
+
+
+def _parse_at(
+    raw: bytes,
+    eocd_at: int,
+    *,
+    _framing_reference: FramingReference | None = None,
+    _framing_match_out: list[bool] | None = None,
+) -> dict | None:
     nraw = len(raw)
     if eocd_at < 0 or eocd_at + EOCD_HDR.size > nraw:
         return None
@@ -42,11 +75,20 @@ def _parse_at(raw: bytes, eocd_at: int) -> dict | None:
     if cd_offset < 0 or cd_size < 0 or cd_offset + cd_size != eocd_at:
         return None
 
+    framing_match = True
+    ref_locals: tuple[tuple, ...] = ()
+    ref_centrals: tuple[tuple, ...] = ()
+    ref_eocd: tuple = ()
+    if _framing_reference is not None:
+        ref_locals, ref_centrals, ref_eocd = _framing_reference
+        if len(ref_locals) != entries_total or len(ref_centrals) != entries_total:
+            framing_match = False
+
     central_rows = []
     local_rows = []
     central_at = cd_offset
     local_at = 0
-    for _ in range(entries_total):
+    for row_index in range(entries_total):
         if central_at + CENTRAL_HDR.size > eocd_at:
             return None
         fields = CENTRAL_HDR.unpack_from(raw, central_at)
@@ -89,6 +131,17 @@ def _parse_at(raw: bytes, eocd_at: int) -> dict | None:
         ):
             return None
 
+        if _framing_reference is not None and framing_match:
+            if (
+                (version, local_flags, local_method, local_mtime, local_mdate, local_name, local_extra)
+                != ref_locals[row_index]
+                or (
+                    made, needed, flags, method, mtime, mdate, central_name, central_extra, central_comment,
+                    row_disk, internal_attr, external_attr,
+                ) != ref_centrals[row_index]
+            ):
+                framing_match = False
+
         central_rows.append({
             "made": made,
             "needed": needed,
@@ -126,6 +179,12 @@ def _parse_at(raw: bytes, eocd_at: int) -> dict | None:
     if central_at != eocd_at or local_at != cd_offset:
         return None
 
+    eocd_comment = raw[eocd_at + EOCD_HDR.size:]
+    if _framing_reference is not None and framing_match:
+        framing_match = (disk, disk_cd, eocd_comment) == ref_eocd
+    if _framing_match_out is not None:
+        _framing_match_out[:] = [framing_match]
+
     return {
         "raw_size": nraw,
         "locals": local_rows,
@@ -133,7 +192,7 @@ def _parse_at(raw: bytes, eocd_at: int) -> dict | None:
         "eocd": {
             "disk": disk,
             "disk_cd": disk_cd,
-            "comment": raw[eocd_at + EOCD_HDR.size:],
+            "comment": eocd_comment,
         },
     }
 
@@ -154,4 +213,32 @@ def parse_zip(raw: bytes) -> dict | None:
             return parsed
         # A signature inside the arbitrary ZIP comment is not the EOCD. Keep walking backwards
         # through the bounded EOCD search window until a fully valid topology is found.
+        search_end = eocd_at
+
+
+def parse_zip_with_framing(raw: bytes, reference: FramingReference) -> tuple[dict | None, bool]:
+    """Parse with the exact normal acceptance law and compare static framing during that same traversal.
+
+    ``False`` framing is distinct from malformed ZIP: callers can preserve the mature framing-drift diagnostic while
+    avoiding a second pass over the candidate dictionaries. The parsed object is byte-for-byte the same shape as
+    ``parse_zip``; the API is currently a research seam and is not used by shipping selection.
+    """
+    nraw = len(raw)
+    if nraw < EOCD_HDR.size:
+        return None, False
+    lower = max(0, nraw - MAX_EOCD_SEARCH)
+    search_end = nraw
+    while True:
+        eocd_at = raw.rfind(EOCD_SIG, lower, search_end)
+        if eocd_at < 0:
+            return None, False
+        match_out: list[bool] = []
+        parsed = _parse_at(
+            raw,
+            eocd_at,
+            _framing_reference=reference,
+            _framing_match_out=match_out,
+        )
+        if parsed is not None:
+            return parsed, bool(match_out and match_out[0])
         search_end = eocd_at
