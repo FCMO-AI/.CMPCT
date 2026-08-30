@@ -73,9 +73,8 @@ fn candidate(
 fn verify_v3_bytes(raw: &[u8]) -> Result<(), String> {
     // SAFETY: the owned candidate slice remains readable and stable for the complete call; the ABI neither retains
     // nor mutates it. This is the same exact semantic owner used by the winning in-memory FFI frontier.
-    let status = unsafe {
-        cmpct_zipfactor_v3_ffi::cmpct_zipfactor_v3_verify_bytes(raw.as_ptr(), raw.len())
-    };
+    let status =
+        unsafe { cmpct_zipfactor_v3_ffi::cmpct_zipfactor_v3_verify_bytes(raw.as_ptr(), raw.len()) };
     match status {
         0 => Ok(()),
         1 => Err("V3 semantic owner rejected reconstructed candidate".into()),
@@ -127,7 +126,9 @@ fn main() {
         std::process::exit(2);
     }
     match verify_path(Path::new(&args[2])) {
-        Ok(copy) => println!("ok profile=zip-framing-factor-recovery-v4 recovered_from={copy} verifier=in-process"),
+        Ok(copy) => println!(
+            "ok profile=zip-framing-factor-recovery-v4 recovered_from={copy} verifier=in-process"
+        ),
         Err(message) => {
             eprintln!("cmpct-zipfactor-v4-recovery-preparity: {message}");
             std::process::exit(1);
