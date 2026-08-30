@@ -81,10 +81,9 @@ def _v3_candidate(raw: bytes, control: bytes, body_start: int, body_end: int) ->
 
 
 def _verify_v3_bytes(candidate: bytes) -> dict:
-    with tempfile.TemporaryDirectory(prefix="cmpct-zf-product-verify-") as td:
-        path = Path(td) / "candidate.cmpct"
-        path.write_bytes(candidate)
-        result = V3.verify_and_identities(path)
+    # The recovery envelope already reconstructed the exact V3 candidate in memory. Keep verification under the
+    # single audited V3 semantic owner without publishing+rereading an otherwise throwaway temporary archive.
+    result = V3.verify_and_identities(candidate)
     if not result.get("ok"):
         raise RuntimeError(f"reconstructed ZIP-factor v3 failed verification: {result!r}")
     if float(result["max_member_read_amplification"]) > MAX_AMP:
@@ -230,11 +229,8 @@ def list_members(path: Path) -> list[dict]:
 
 
 def _open_v3_bytes(candidate: bytes):
-    """Use the single audited V3 parser; temporary publication is reader-internal and not selector timing."""
-    with tempfile.TemporaryDirectory(prefix="cmpct-zf-product-read-") as td:
-        path = Path(td) / "candidate.cmpct"
-        path.write_bytes(candidate)
-        return V3._open(path)
+    """Use the single audited V3 parser directly on the already-resident exact candidate bytes."""
+    return V3._open(candidate)
 
 
 def _decode_group(template: dict, template_raw: bytes, manifest: dict, group) -> tuple[dict[str, bytes], int]:
