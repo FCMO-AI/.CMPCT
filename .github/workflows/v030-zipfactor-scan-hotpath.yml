@@ -1,8 +1,10 @@
 # ci-lane: deep
+# ci-cancel-policy: preserve-running-exact-receipt
 name: CMPCT v0.30 ZIP-factor scan hotpath oracle
 
 on:
-  pull_request:
+  push:
+    branches: [agent/v030-authoritative-integration]
     paths:
       - 'benchmarks/v030_zipfactor_scan_hotpath_oracle.py'
       - 'benchmarks/v030_zipfactor_struct_parser_oracle.py'
@@ -17,11 +19,14 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: v030-zf-scan-hotpath-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
+  group: v030-zf-scan-hotpath-${{ github.ref }}
+  cancel-in-progress: false
 
 permissions:
   contents: read
+
+env:
+  EVIDENCE_HEAD: ${{ github.sha }}
 
 jobs:
   profile:
@@ -32,15 +37,14 @@ jobs:
     steps:
       - uses: actions/checkout@v6
         with:
-          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          ref: ${{ env.EVIDENCE_HEAD }}
       - name: Bind exact candidate
         id: candidate
         shell: bash
         run: |
           set -euo pipefail
-          expected='${{ github.event.pull_request.head.sha || github.sha }}'
           actual="$(git rev-parse HEAD)"
-          test "$actual" = "$expected"
+          test "$actual" = "$EVIDENCE_HEAD"
           echo "sha=$actual" >> "$GITHUB_OUTPUT"
       - uses: actions/setup-python@v6
         with:
@@ -148,7 +152,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v6
         with:
-          name: v030-zf-scan-hotpath-${{ steps.candidate.outputs.sha || github.sha }}
+          name: v030-zf-scan-hotpath-${{ steps.candidate.outputs.sha || env.EVIDENCE_HEAD }}
           path: |
             benchmark-artifacts/v030-zf-scan-hotpath.json
             benchmark-artifacts/v030-zf-struct-parser.json
