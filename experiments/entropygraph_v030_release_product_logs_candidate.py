@@ -87,19 +87,53 @@ def _regular_paths(root: Path) -> set[str]:
 
 
 def logs_source_prefilter(root: Path) -> dict:
-    paths = _regular_paths(root)
+    """Prove the minimum sidecar shape without materializing the whole source-path set.
+
+    Eligibility needs only two compressed sidecars whose uncompressed sibling exists in the same directory.
+    The real candidate builder later performs exact edge discovery, so walking every remaining directory after
+    those two witnesses are found is pure speculative work.  Deterministic ``scandir`` order keeps diagnostics
+    stable while allowing the positive path to terminate as soon as the structural lower bound is proven.
+    """
+    root = Path(root)
     pairs: list[tuple[str, str]] = []
-    for rel in sorted(paths):
-        for suffix in (".gz", ".zst"):
-            if rel.endswith(suffix):
-                sibling = rel[: -len(suffix)]
-                if sibling in paths:
+    stack: list[tuple[Path, str]] = [(root, "")]
+    while stack:
+        abs_dir, prefix = stack.pop()
+        with os.scandir(abs_dir) as iterator:
+            entries = sorted(iterator, key=lambda item: item.name)
+        regular_names = {
+            item.name
+            for item in entries
+            if item.is_file(follow_symlinks=False)
+        }
+        for name in sorted(regular_names):
+            for suffix in (".gz", ".zst"):
+                if not name.endswith(suffix):
+                    continue
+                sibling_name = name[: -len(suffix)]
+                if sibling_name in regular_names:
+                    rel = f"{prefix}/{name}" if prefix else name
+                    sibling = f"{prefix}/{sibling_name}" if prefix else sibling_name
                     pairs.append((rel, sibling))
+                    if len(pairs) >= MIN_SIDECAR_PAIRS:
+                        return {
+                            "sidecar_pairs": len(pairs),
+                            "sidecar_pairs_exact": False,
+                            "pair_examples": pairs[:8],
+                            "eligible": True,
+                            "scan_terminated_at_admission_floor": True,
+                        }
                 break
+        for item in reversed(entries):
+            if item.is_dir(follow_symlinks=False):
+                child_prefix = f"{prefix}/{item.name}" if prefix else item.name
+                stack.append((Path(item.path), child_prefix))
     return {
         "sidecar_pairs": len(pairs),
+        "sidecar_pairs_exact": True,
         "pair_examples": pairs[:8],
-        "eligible": len(pairs) >= MIN_SIDECAR_PAIRS,
+        "eligible": False,
+        "scan_terminated_at_admission_floor": False,
     }
 
 
