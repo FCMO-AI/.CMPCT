@@ -10,6 +10,7 @@ on:
       - 'experiments/entropygraph_v030_zipfactor_fused.py'
       - 'benchmarks/v030_zipfactor_inline_framing_abba.py'
       - 'tests/test_v030_zipfactor_inline_framing.py'
+      - 'tests/test_v030_zipfactor_path_neutral.py'
       - '.github/workflows/v030-zipfactor-inline-framing-abba.yml'
   workflow_dispatch:
 
@@ -44,7 +45,7 @@ jobs:
           sudo apt-get install -y zstd
           python -m pip install --upgrade pip
           python -m pip install -e '.[test]'
-      - name: Compile and ratchet parser semantics
+      - name: Compile and ratchet parser/product semantics
         run: |
           python -m py_compile experiments/entropygraph_v030_zipfactor_eocd_parser.py
           python -m py_compile benchmarks/v030_zipfactor_inline_framing_abba.py
@@ -52,7 +53,7 @@ jobs:
             tests/test_v030_zipfactor_eocd_parser_equivalence.py \
             tests/test_v030_zipfactor_path_neutral.py \
             tests/test_v030_zipfactor_inline_framing.py
-      - name: Run exact alternating full-scan A/B
+      - name: Run exact alternating product-path full-scan A/B
         run: |
           mkdir -p benchmark-artifacts
           python -m benchmarks.v030_zipfactor_inline_framing_abba \
@@ -64,12 +65,15 @@ jobs:
           import json
           from pathlib import Path
           e=json.loads(Path('benchmark-artifacts/v030-zf-inline-framing.json').read_text())
-          assert e['schema']=='cmpct-v030-zipfactor-inline-framing-abba-v1'
+          assert e['schema']=='cmpct-v030-zipfactor-inline-framing-abba-v2'
           c=e['contract']
           assert c['rounds']==41 and c['same_runner_alternating'] is True
           assert c['minimum_absolute_saving_s']==0.0002
           assert c['minimum_relative_saving']==0.05
-          assert c['selector_change'] is False and c['release_credit'] is False
+          assert c['baseline']=='same-eocd-parser-plus-independent-second-static-framing-walk'
+          assert c['candidate']=='production-eocd-parse-plus-inline-static-framing-proof'
+          assert c['selector_change'] is False and c['archive_semantics_changed'] is False
+          assert c['release_credit'] is False
           assert e['identity']['scan_result_identity'] is True
           assert e['identity']['final_archive_identity'] is True
           assert e['candidate']['archive_bytes']==14033
@@ -95,5 +99,5 @@ jobs:
           if-no-files-found: error
           retention-days: 90
 
-# Research-only. A positive signal means only that the second static framing traversal can be removed materially;
-# product/native/recovery/Android/external authority must still be re-earned on one exact candidate.
+# Product-path exact scan evidence only. Promotion still requires complete create+verify, recovery, native/Android,
+# full external comparator and final exact-candidate authority; no release threshold is relaxed here.
