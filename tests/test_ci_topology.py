@@ -224,3 +224,33 @@ jobs:
     runs-on: ubuntu-24.04
 """)
     assert validate(path) == []
+
+
+def test_retired_manual_only_lane_accepts_workflow_dispatch(tmp_path: Path) -> None:
+    path = _write(tmp_path, """# ci-lane: deep
+# ci-auto-policy: retired-manual-only
+on:
+  workflow_dispatch:
+jobs:
+  proof:
+    runs-on: ubuntu-24.04
+""")
+    assert validate(path) == []
+
+
+def test_retired_manual_only_lane_rejects_automatic_trigger(tmp_path: Path) -> None:
+    path = _write(tmp_path, """# ci-lane: deep
+# ci-auto-policy: retired-manual-only
+on:
+  pull_request:
+    paths:
+      - 'benchmarks/**'
+  workflow_dispatch:
+concurrency:
+  group: stale-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+jobs:
+  proof:
+    runs-on: ubuntu-24.04
+""")
+    assert any("retired-manual-only workflow" in error for error in validate(path))
