@@ -3,52 +3,36 @@
 name: CMPCT v0.30 G0-G4 ML operation record-cache A/B
 
 on:
-  pull_request:
-    branches: [main]
+  push:
+    branches: [agent/v030-authoritative-integration]
+    paths:
+      - 'benchmarks/patches/v030_g04_operation_record_cache.patch'
+      - 'benchmarks/v030_g04_ml_operation_record_cache_ab_oracle.py'
+      - 'benchmarks/v030_g04_ml_native_reader_oracle.py'
+      - 'benchmarks/v030_release_performance.py'
+      - 'native/cmpct-portable/src/**.rs'
+      - 'native/cmpct-portable/Cargo.toml'
+      - 'Cargo.lock'
+      - 'pyproject.toml'
+      - 'experiments/entropygraph_v030_native_reader_bridge.py'
+      - 'experiments/entropygraph_v030_release_product.py'
+      - 'experiments/entropygraph_v030_release_reader.py'
+      - '.github/workflows/v030-g04-ml-operation-record-cache-ab.yml'
   workflow_dispatch:
 
 permissions:
   contents: read
 
 concurrency:
-  group: cmpct-v030-g04-ml-operation-record-cache-ab-${{ github.event.pull_request.number || github.ref }}
+  group: cmpct-v030-g04-ml-operation-record-cache-ab-${{ github.ref }}
   cancel-in-progress: false
 
 env:
   PYTHONPATH: ${{ github.workspace }}
-  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+  EVIDENCE_HEAD: ${{ github.sha }}
 
 jobs:
-  changes:
-    runs-on: ubuntu-latest
-    outputs:
-      relevant: ${{ steps.filter.outputs.relevant }}
-    steps:
-      - uses: actions/checkout@v6
-        with:
-          ref: ${{ env.EVIDENCE_HEAD }}
-          fetch-depth: 2
-      - id: filter
-        shell: bash
-        run: |
-          set -euo pipefail
-          if [ '${{ github.event_name }}' = 'workflow_dispatch' ]; then
-            echo 'relevant=true' >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-          changed="$(git diff-tree --no-commit-id --name-only -r HEAD)"
-          # The A/B imports the canonical corpus/build/read stack and links the complete
-          # portable crate. Any change to one of those semantic inputs invalidates the
-          # prior timing receipt even when g04.rs itself is untouched.
-          if grep -Eq '^(benchmarks/patches/v030_g04_operation_record_cache\.patch|benchmarks/v030_g04_ml_operation_record_cache_ab_oracle\.py|benchmarks/v030_g04_ml_native_reader_oracle\.py|benchmarks/v030_release_performance\.py|native/cmpct-portable/src/.*\.rs|native/cmpct-portable/Cargo\.toml|Cargo\.lock|pyproject\.toml|experiments/entropygraph_v030_native_reader_bridge\.py|experiments/entropygraph_v030_release_product\.py|experiments/entropygraph_v030_release_reader\.py|\.github/workflows/v030-g04-ml-operation-record-cache-ab\.yml)$' <<<"$changed"; then
-            echo 'relevant=true' >> "$GITHUB_OUTPUT"
-          else
-            echo 'relevant=false' >> "$GITHUB_OUTPUT"
-          fi
-
   native-ab:
-    needs: changes
-    if: needs.changes.outputs.relevant == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 90
     steps:
@@ -99,18 +83,21 @@ jobs:
           import json
           from pathlib import Path
           d=json.loads(Path('benchmark-artifacts/v030-g04-ml-operation-record-cache.json').read_text())
-          assert d['schema']=='cmpct-v030-g04-ml-operation-record-cache-ab-v1'
+          assert d['schema']=='cmpct-v030-g04-ml-operation-record-cache-ab-v2'
           assert d['target']=='neutral_hostile_v1/09_ml_artifacts'
           assert int(d['rounds'])==7
           c=d['contract']; g=d['gate']
           assert c['record_cache_limit_bytes']==64*1024*1024
           assert c['node_cache_scope']=='fresh per member'
           assert c['member_locality_charged_on_shared_record_hit'] is True
+          assert c['selective_member_cache_scope']=='fresh per member'
+          assert c['complete_verify_cache_scope']=='one bounded cache per verify operation'
+          assert c['complete_extract_cache_scope']=='one bounded cache per extract operation'
           assert c['archive_bytes_changed'] is False and c['grammar_changed'] is False
           assert g['same_archive_bytes'] is True and g['same_public_info'] is True and g['same_extracted_tree'] is True
           assert g['baseline_corruption_rejected'] is True and g['candidate_corruption_rejected'] is True
           assert d['release_credit'] is False
-          expected=(float(d['verify_improvement_fraction'])>=float(c['minimum_verify_improvement_fraction']) and float(d['extract_delta_fraction'])<=float(c['maximum_extract_regression_fraction']))
+          expected=(float(d['verify_improvement_fraction'])>=float(c['minimum_verify_improvement_fraction']) and float(d['extract_improvement_fraction'])>=float(c['minimum_extract_improvement_fraction']))
           assert d['promotion_signal'] is expected
           assert g['passed'] is expected
           PY
@@ -132,6 +119,5 @@ jobs:
           if-no-files-found: error
           retention-days: 90
 
-# PR synchronization remains observable, but the 90-minute job runs only when the newest head commit changes
-# the A/B itself or one of its semantic/runtime inputs. Running exact receipts are never cancelled by unrelated
-# synchronization commits.
+# Research-only exact receipt. A pass can authorize productizing bounded operation-scoped record ownership;
+# it cannot itself earn release credit or alter selector/locality/grammar policy.
