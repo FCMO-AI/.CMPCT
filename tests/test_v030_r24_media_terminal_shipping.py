@@ -58,10 +58,18 @@ def test_release_product_terminalizes_only_when_media_policy_admits(monkeypatch,
         "_locality_bounded_r24_build",
         lambda root, target: calls.append("r24") or {"archive_bytes": 123, "format_revision": 24},
     )
+    # When all source-only mature-terminal predicates are impossible, the promoted front door now enters
+    # canonical-final directly. Mock that exact ownership boundary rather than the older module-level tournament
+    # wrapper, which would also start the overlapping r24 prebuild and make this unit test depend on a fake archive.
+    monkeypatch.setattr(
+        PRODUCT._BASE_IMPL.C,
+        "build",
+        lambda root, target: calls.append("canonical-final") or {"archive_bytes": 456},
+    )
     monkeypatch.setattr(
         PRODUCT._BASE_IMPL,
         "build",
-        lambda root, target: calls.append("tournament") or {"archive_bytes": 456},
+        lambda root, target: (_ for _ in ()).throw(AssertionError("unexpected mature terminal preflight")),
     )
     # The complete shared preflight must now own source traversal; an independent media walk would regress the
     # productization boundary this test is ratcheting.
@@ -90,7 +98,7 @@ def test_release_product_terminalizes_only_when_media_policy_admits(monkeypatch,
     calls.clear()
     monkeypatch.setattr(PRODUCT._R24_MEDIA, "analyze_precollected", lambda rows: {"eligible": False})
     result = PRODUCT.build(tmp_path, out)
-    assert calls == ["tournament"]
+    assert calls == ["canonical-final"]
     assert result == {"archive_bytes": 456}
 
 
@@ -126,10 +134,15 @@ def test_media_shape_impossibility_skips_all_media_io(monkeypatch, tmp_path: Pat
     )
     monkeypatch.setattr(PRODUCT, "_build_compact_control_terminal_if_eligible", lambda root, target, source_shape=None: None)
     monkeypatch.setattr(
+        PRODUCT._BASE_IMPL.C,
+        "build",
+        lambda root, target: calls.append("canonical-final") or {"archive_bytes": 456},
+    )
+    monkeypatch.setattr(
         PRODUCT._BASE_IMPL,
         "build",
-        lambda root, target: calls.append("tournament") or {"archive_bytes": 456},
+        lambda root, target: (_ for _ in ()).throw(AssertionError("unexpected mature terminal preflight")),
     )
     result = PRODUCT.build(tmp_path, out)
-    assert calls == ["tournament"]
+    assert calls == ["canonical-final"]
     assert result == {"archive_bytes": 456}
