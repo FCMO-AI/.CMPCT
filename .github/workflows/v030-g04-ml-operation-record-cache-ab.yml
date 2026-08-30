@@ -37,7 +37,10 @@ jobs:
             exit 0
           fi
           changed="$(git diff-tree --no-commit-id --name-only -r HEAD)"
-          if grep -Eq '^(benchmarks/patches/v030_g04_operation_record_cache\.patch|benchmarks/v030_g04_ml_operation_record_cache_ab_oracle\.py|benchmarks/v030_g04_ml_native_reader_oracle\.py|native/cmpct-portable/src/g04\.rs|experiments/entropygraph_v030_native_reader_bridge\.py|\.github/workflows/v030-g04-ml-operation-record-cache-ab\.yml)$' <<<"$changed"; then
+          # The A/B imports the canonical corpus/build/read stack and links the complete
+          # portable crate. Any change to one of those semantic inputs invalidates the
+          # prior timing receipt even when g04.rs itself is untouched.
+          if grep -Eq '^(benchmarks/patches/v030_g04_operation_record_cache\.patch|benchmarks/v030_g04_ml_operation_record_cache_ab_oracle\.py|benchmarks/v030_g04_ml_native_reader_oracle\.py|benchmarks/v030_release_performance\.py|native/cmpct-portable/src/.*\.rs|native/cmpct-portable/Cargo\.toml|Cargo\.lock|pyproject\.toml|experiments/entropygraph_v030_native_reader_bridge\.py|experiments/entropygraph_v030_release_product\.py|experiments/entropygraph_v030_release_reader\.py|\.github/workflows/v030-g04-ml-operation-record-cache-ab\.yml)$' <<<"$changed"; then
             echo 'relevant=true' >> "$GITHUB_OUTPUT"
           else
             echo 'relevant=false' >> "$GITHUB_OUTPUT"
@@ -129,5 +132,6 @@ jobs:
           if-no-files-found: error
           retention-days: 90
 
-# PR synchronization remains observable, but the 90-minute job runs only when the newest head commit actually
-# changes this lane. Running exact receipts are never cancelled by unrelated synchronization commits.
+# PR synchronization remains observable, but the 90-minute job runs only when the newest head commit changes
+# the A/B itself or one of its semantic/runtime inputs. Running exact receipts are never cancelled by unrelated
+# synchronization commits.
