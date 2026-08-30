@@ -97,6 +97,27 @@ def test_product_candidate_exact_semantics_recovery_random_access_and_extract(tm
     assert not corrupt_dst.exists()
 
 
+def test_product_candidate_v3_semantics_never_require_temp_publication(tmp_path: Path, monkeypatch) -> None:
+    source = _source(tmp_path)
+    archive = tmp_path / "candidate.cmpct"
+    ZF.build(source, archive, level=3, group_size=7)
+    expected = _regular_bytes(source)
+    sample_rel = sorted(expected)[0]
+
+    def forbidden_tempdir(*_args, **_kwargs):
+        raise AssertionError("reconstructed V3 semantics must remain resident in memory")
+
+    # Extraction staging uses mkdtemp intentionally for transactional publication; TemporaryDirectory was only the
+    # obsolete V3 publish+reread bridge. Any future reintroduction of that bridge fails this ratchet immediately.
+    monkeypatch.setattr(ZF.tempfile, "TemporaryDirectory", forbidden_tempdir)
+    verified = ZF.verify_and_identities(archive)
+    assert verified["ok"] is True
+    assert ZF.read_member(archive, sample_rel) == expected[sample_rel]
+    dst = tmp_path / "extracted-resident-v3"
+    ZF.extract(archive, dst)
+    assert _regular_bytes(dst) == expected
+
+
 def test_product_candidate_budget_fails_before_publication(tmp_path: Path) -> None:
     source = _source(tmp_path)
     archive = tmp_path / "candidate.cmpct"
