@@ -405,7 +405,13 @@ def read_member_with_stats(archive: Path, rel: str):
 
 
 def read_member(archive: Path, rel: str) -> bytes:
-    return read_member_with_stats(Path(archive), rel)[0]
+    archive = Path(archive)
+    if not _is_logs_archive(archive):
+        return _BASE_READ_MEMBER_WITH_STATS(archive, rel)[0]
+    # Symlink targets are authenticated filesystem metadata, not graph-owned content members.
+    # The measured content API intentionally rejects metadata-only values when their manifest context
+    # exceeds the content amplification law; the ordinary reader must still expose that authenticated value.
+    return LOGS.read_member(archive, rel)
 
 
 def extract(archive: Path, dst: Path, *, max_output_bytes: int = POLICY.DEFAULT_MAX_EXTRACT_BYTES, safe_symlinks: bool = True):
