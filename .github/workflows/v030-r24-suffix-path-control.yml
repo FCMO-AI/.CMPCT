@@ -1,9 +1,10 @@
 # ci-lane: deep
+# ci-cancel-policy: preserve-running-exact-receipt
 name: CMPCT v0.30 r24 suffix-path control oracle
 
 on:
-  pull_request:
-    branches: [main]
+  push:
+    branches: [agent/v030-authoritative-integration]
     paths:
       - 'src/cmpct/builder.py'
       - 'src/cmpct/codec.py'
@@ -24,11 +25,12 @@ permissions:
   contents: read
 
 concurrency:
-  group: cmpct-v030-r24-suffix-path-control-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
+  group: cmpct-v030-r24-suffix-path-control-${{ github.ref }}
+  cancel-in-progress: false
 
 env:
   PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.sha }}
 
 jobs:
   suffix-path-control:
@@ -36,6 +38,10 @@ jobs:
     timeout-minutes: 180
     steps:
       - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - name: Bind exact candidate head
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
       - uses: actions/setup-python@v6
         with:
           python-version: '3.11'
@@ -96,11 +102,13 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v6
         with:
-          name: v030-r24-suffix-path-control-${{ github.sha }}
+          name: v030-r24-suffix-path-control-${{ env.EVIDENCE_HEAD }}
           path: benchmark-artifacts/v030-r24-suffix-path-control.json
           if-no-files-found: warn
           retention-days: 90
 
-# A green lane means the experiment completed exactly with zero regressions, not that a new profile is released.
-# Any positive byte signal still owes bounded canonical reader/recovery semantics, native/Android parity, selector
-# admission, exact fingerprint binding, and the ordinary all-15 external/final release authority.
+# Research evidence only. Relevant semantic changes re-run it; unrelated integration commits do not consume up to
+# three runner-hours. Exact receipts are preserved rather than canceled. A green lane means the experiment completed
+# exactly with zero regressions, not that a new profile is released. Any positive byte signal still owes bounded
+# canonical reader/recovery semantics, native/Android parity, selector admission, exact fingerprint binding, and the
+# ordinary all-15 external/final release authority.
