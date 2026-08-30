@@ -27,6 +27,7 @@ duplicate_mod = "allow"
 
 [dependencies]
 cmpct-core = { path = "../cmpct-core" }
+cmpct-zipfactor-v3-ffi = { path = "../cmpct-zipfactor-v3-ffi" }
 crc32fast = "1"
 flate2 = { version = "1", default-features = false, features = ["rust_backend"] }
 libc = "0.2"
