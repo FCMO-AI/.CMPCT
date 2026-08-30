@@ -2,8 +2,8 @@
 name: CMPCT v0.30 C25CC01 selector cost model
 
 on:
-  pull_request:
-    branches: [main]
+  push:
+    branches: [agent/v030-authoritative-integration]
     paths:
       - 'experiments/entropygraph_v030_r24_compact_control_profile.py'
       - 'experiments/entropygraph_v030_release_product.py'
@@ -20,12 +20,12 @@ permissions:
   contents: read
 
 concurrency:
-  group: cmpct-v030-c25cc01-cost-${{ github.event.pull_request.number || github.ref }}
+  group: cmpct-v030-c25cc01-cost-${{ github.ref }}
   cancel-in-progress: true
 
 env:
   PYTHONPATH: ${{ github.workspace }}
-  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+  EVIDENCE_HEAD: ${{ github.sha }}
 
 jobs:
   selector-cost-model:
@@ -82,8 +82,6 @@ jobs:
               assert row['r24_bytes'] > 0
               assert row['r24_over_logical_bytes'] == row['r24_bytes'] - row['logical_bytes']
               if not row['profile_eligible']:
-                  # This is complete negative evidence, not a substitute candidate. Locality rejection must remain
-                  # non-admitted with no fabricated candidate, timing, integrity, or competitor claims.
                   assert row['profile_reject_reason']
                   assert row['candidate_bytes'] is None
                   assert row['candidate_to_r24'] is None
@@ -114,8 +112,6 @@ jobs:
           assert set(d['admitted_by_current_predicate']) == admitted
           derived={name for name in admitted if not rows[name]['competitors']['strict_four_way_win']}
           assert set(d['current_predicate_counterexamples']) == derived
-          # Candidate-valid remains distinct from receipt-complete. If every source is rejected by the locality law,
-          # the diagnostic is intentionally red in its product gate while this custody lane remains healthy.
           if not admitted:
               assert g['frozen_target_admitted'] is False
               assert g['integrity_preserved'] is False
@@ -135,5 +131,5 @@ jobs:
           if-no-files-found: error
           retention-days: 90
 
-# Research-only causal cost decomposition. The ordinary terminal-admission/generalization/external gates remain decisive.
-# A measured locality rejection/counterexample remains negative evidence; receipt completeness never earns selector/release credit.
+# Research-only causal decomposition for a shipping-retired physical family. Preserve the negative evidence on
+# relevant changes, but do not re-run this two-hour lane for unrelated PR history. Release authority is unchanged.
