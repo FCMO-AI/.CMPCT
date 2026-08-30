@@ -16,6 +16,7 @@ member inflate counts. No production behavior or release authority is changed he
 import argparse
 import hashlib
 import json
+import os
 from pathlib import Path
 import shutil
 import statistics
@@ -40,7 +41,7 @@ def _materialize(stage: Path) -> tuple[list[Path], dict[Path, bytes], dict[bytes
     return files, raws, top_by_hash, cheap
 
 
-def _scan(files: list[Path], raws: dict[Path, bytes], top_by_hash: dict[bytes, list[Path]], cheap: set[tuple[int, int]], lazy: bool) -> dict:
+def _scan(stage: Path, files: list[Path], raws: dict[Path, bytes], top_by_hash: dict[bytes, list[Path]], cheap: set[tuple[int, int]], lazy: bool) -> dict:
     edges = []
     zip_members = 0
     inflates = 0
@@ -91,7 +92,7 @@ def run(work_root: Path) -> dict:
         pair = {}
         for lazy in order:
             started = time.perf_counter()
-            result = _scan(files, raws, top_by_hash, cheap, lazy)
+            result = _scan(stage, files, raws, top_by_hash, cheap, lazy)
             elapsed = time.perf_counter() - started
             label = 'lazy' if lazy else 'eager'
             pair[label] = {'wall_s': float(elapsed), **result}
@@ -118,6 +119,7 @@ def run(work_root: Path) -> dict:
     byte_removed = int(eager_ref['inflated_bytes']) - int(lazy_ref['inflated_bytes'])
     return {
         'schema': 'cmpct-v030-eg08-zip-plain-lazy-prefilter-v1',
+        'candidate_head': os.environ.get('EVIDENCE_HEAD') or os.environ.get('GITHUB_SHA'),
         'contract': {
             'release_credit': False,
             'production_change': False,
@@ -176,7 +178,7 @@ def main() -> None:
     result = run(a.work_root)
     a.output.parent.mkdir(parents=True, exist_ok=True)
     a.output.write_text(json.dumps(result, indent=2) + '\n', encoding='utf-8')
-    print(json.dumps({'office': result['office'], 'work_removed': result['work_removed'], 'timing': result['timing'], 'gate': result['gate']}, indent=2), flush=True)
+    print(json.dumps({'candidate_head': result['candidate_head'], 'office': result['office'], 'work_removed': result['work_removed'], 'timing': result['timing'], 'gate': result['gate']}, indent=2), flush=True)
     if not result['gate']['experiment_valid']:
         raise SystemExit('EG08 lazy ZIP plaintext prefilter oracle invalid')
 
