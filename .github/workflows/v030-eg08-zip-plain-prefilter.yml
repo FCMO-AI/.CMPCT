@@ -1,13 +1,12 @@
 # ci-lane: deep
+# Negative evidence retained for archaeology/manual reproduction only.
+# Exact-head A/B at 230c57a98d442d4170addbd00b609f4faf6c5e11 changed Office bytes
+# from ~5.95 MiB to ~15.31 MiB and slowed creation ~2.46x on the first pair,
+# proving this implementation changes candidate-discovery semantics rather than
+# merely skipping impossible nested ZIP inflations. Do not auto-spend CI on it.
 name: CMPCT v0.30 EG08 ZIP plaintext prefilter oracle
 
 on:
-  pull_request:
-    paths:
-      - 'benchmarks/v030_eg08_zip_plain_prefilter_oracle.py'
-      - 'benchmarks/v030_federated_compact_framing_v8_policy_distill.py'
-      - 'experiments/entropygraph_v025.py'
-      - '.github/workflows/v030-eg08-zip-plain-prefilter.yml'
   workflow_dispatch:
 
 concurrency:
