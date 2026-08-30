@@ -1,10 +1,26 @@
 # ci-lane: deep
+# ci-cancel-policy: preserve-running-exact-receipt
 name: CMPCT v0.30 full G0-G4 overlay oracle
 
 on:
   push:
     branches:
       - agent/v030-authoritative-integration
+    paths:
+      - 'benchmarks/geometry_overlay_v030_ml_oracle_v3.py'
+      - 'benchmarks/geometry_v030_generalization_bench.py'
+      - 'experiments/entropygraph_v025.py'
+      - 'experiments/entropygraph_v030_geometry.py'
+      - 'experiments/entropygraph_v030_hierarchical_geometry.py'
+      - 'experiments/entropygraph_v030_geometry_overlay.py'
+      - 'experiments/entropygraph_v030_geometry_overlay_strict.py'
+      - 'experiments/entropygraph_v030_geometry_overlay_g04.py'
+      - 'tests/test_v030_geometry.py'
+      - 'tests/test_v030_hierarchical_geometry.py'
+      - 'tests/test_v030_geometry_overlay.py'
+      - 'tests/test_v030_geometry_overlay_prefallback.py'
+      - 'tests/test_v030_geometry_overlay_g04.py'
+      - '.github/workflows/v030-g04-overlay-oracle.yml'
   workflow_dispatch:
 
 permissions:
@@ -12,7 +28,10 @@ permissions:
 
 concurrency:
   group: cmpct-v030-g04-overlay-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: false
+
+env:
+  EVIDENCE_HEAD: ${{ github.sha }}
 
 jobs:
   g04-overlay-ml:
@@ -21,8 +40,13 @@ jobs:
     env:
       PYTHONPATH: ${{ github.workspace }}
     steps:
-      - name: Check out authoritative integration branch
+      - name: Check out exact authoritative candidate
         uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+
+      - name: Bind checkout to exact evidence head
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
 
       - name: Set up Python
         uses: actions/setup-python@v6
@@ -81,9 +105,6 @@ jobs:
           assert result['integration_order']=='attempt5-graph -> G0-G4-geometry-overlay -> accepted-v029-tournament'
           assert result['selected']=='geometry-overlay-g04'
           assert result['transformed_records'] > 0
-          # Prove the G3/G4 reactor itself was actually invoked. Zero nominated
-          # candidates/finalists is a legitimate content-derived negative result,
-          # not evidence that the hierarchy stage was skipped.
           assert result['hierarchical_audition_attempts'] > 0
           assert result['hierarchical_screened_candidates'] >= 0
           assert result['hierarchical_exact_finalists'] >= 0
@@ -107,17 +128,21 @@ jobs:
         if: always()
         run: python tools/check_public_surface.py
 
+      - name: CI topology self-check
+        if: always()
+        run: python tools/check_ci_topology.py .github/workflows/v030-g04-overlay-oracle.yml
+
       - name: Upload full G0-G4 overlay evidence
         if: always()
         uses: actions/upload-artifact@v6
         with:
-          name: cmpct-v030-g04-overlay-v3-${{ github.sha }}
+          name: cmpct-v030-g04-overlay-v3-${{ env.EVIDENCE_HEAD }}
           path: |
             benchmark-artifacts/geometry-overlay-v030-ml-v3.json
             benchmark-artifacts/geometry-overlay-v030-v3.stdout.txt
           if-no-files-found: warn
           retention-days: 90
 
-# Footnote: V2 remains a valid flat-only causal oracle. V3 adds the reactor's G3/G4 search without lowering
-# V2's exact public tree, accepted-v0.29 floor, >=256 KiB saving threshold or <=8x locality law. A measured
-# miss is retained as valid negative evidence; it grants zero promotion credit until the original hurdle is met.
+# Historical composition research only. Relevant semantic changes re-run it; unrelated integration commits do not.
+# Exact receipts are preserved rather than canceled. A measured miss remains valid negative evidence and grants no
+# promotion credit until the original >=256 KiB and <=8x constraints are met.
