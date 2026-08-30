@@ -1,8 +1,10 @@
 # ci-lane: deep
+# ci-cancel-policy: preserve-running-exact-receipt
 name: CMPCT v0.30 EG08 graph hotpath oracle
 
 on:
-  pull_request:
+  push:
+    branches: [agent/v030-authoritative-integration]
     paths:
       - 'benchmarks/v030_eg08_graph_hotpath_oracle.py'
       - 'benchmarks/v030_eg08_zip_plain_prefilter_oracle.py'
@@ -14,11 +16,16 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: v030-eg08-graph-hotpath-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
+  group: v030-eg08-graph-hotpath-${{ github.ref }}
+  # The profiler plus paired A/Bs are expensive. Branch-push path filtering prevents the historical PR-wide diff
+  # from re-enqueueing unchanged Office work. Preserve the running exact receipt; a later relevant push may wait.
+  cancel-in-progress: false
 
 permissions:
   contents: read
+
+env:
+  EVIDENCE_HEAD: ${{ github.sha }}
 
 jobs:
   profile:
@@ -29,13 +36,13 @@ jobs:
     steps:
       - uses: actions/checkout@v6
         with:
-          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          ref: ${{ env.EVIDENCE_HEAD }}
       - name: Bind exact candidate
         id: candidate
         shell: bash
         run: |
           set -euo pipefail
-          expected='${{ github.event.pull_request.head.sha || github.sha }}'
+          expected="$EVIDENCE_HEAD"
           actual="$(git rev-parse HEAD)"
           test "$actual" = "$expected"
           echo "sha=$actual" >> "$GITHUB_OUTPUT"
@@ -86,8 +93,6 @@ jobs:
           assert d['gate']['passed'] is True
           assert d['profiled']['top_by_cumulative_cpu']
 
-          # The plaintext prefilter is deliberately fail-closed: a byte-changing
-          # candidate is useful negative evidence, not a broken measurement.
           p=json.loads(Path('benchmark-artifacts/v030-eg08-zip-prefilter.json').read_text())
           assert p['schema']=='cmpct-v030-eg08-zip-plain-prefilter-oracle-v2'
           assert p['contract']['release_credit'] is False
@@ -108,8 +113,6 @@ jobs:
                   assert p['office']['byte_identical_all_completed_pairs'] is False
                   assert p['office']['first_mismatch'] is not None
 
-          # Hash caching receives promotion signal only when the exact artifact
-          # survives all 11 paired builds and the median saving clears 10 ms.
           h=json.loads(Path('benchmark-artifacts/v030-eg08-raw-hash-cache.json').read_text())
           assert h['schema']=='cmpct-v030-eg08-raw-hash-cache-oracle-v1'
           assert h['contract']['release_credit'] is False
