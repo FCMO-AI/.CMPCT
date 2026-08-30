@@ -66,22 +66,23 @@ jobs:
           import json, os
           from pathlib import Path
           d=json.loads(Path('benchmark-artifacts/v030-shifted-combined-rss.json').read_text())
-          assert d['schema']=='cmpct-v030-shifted-streaming-prefix-workers-v1'
+          assert d['schema']=='cmpct-v030-shifted-streaming-prefix-workers-v2'
           assert d['source_commit']==os.environ['EVIDENCE_HEAD']
           assert d['target']=='resemblance_hostile_v1/01_shifted_versions'
           assert d['exact_archive_identity_all_arms'] is True
           assert d['experiment_valid'] is True
           assert d['release_credit'] is False
-          assert set(d['summary'])=={'shipping-w4','streaming-w4','streaming-w3','streaming-w2','streaming-w1'}
+          assert set(d['summary'])=={'shipping','streaming-w4','streaming-w3','streaming-w2','streaming-w1'}
           c=d['contract']
           assert float(c['promotion_full_rss_max_ratio'])==0.75
           assert float(c['maximum_full_wall_regression_ratio'])==1.05
+          assert c['shipping_arm_unchanged'] is True
           for key in ('archive_bytes_changed','candidate_set_changed','selector_changed','tie_law_changed','grammar_changed','integrity_changed','locality_limit_changed','recovery_changed','rss_threshold_changed'):
               assert c[key] is False
           if d['promotion_signal']:
               arm=d['promotion_arm']; row=d['summary'][arm]
-              assert float(row['rss_ratio_vs_shipping_w4'])<=0.75
-              assert float(row['wall_ratio_vs_shipping_w4'])<=1.05
+              assert float(row['rss_ratio_vs_shipping'])<=0.75
+              assert float(row['wall_ratio_vs_shipping'])<=1.05
           PY
       - name: CI topology self-check
         if: always()
