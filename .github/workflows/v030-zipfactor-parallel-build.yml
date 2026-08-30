@@ -1,25 +1,21 @@
 # ci-lane: deep
 name: CMPCT v0.30 ZIP-factor parallel build oracle
 
+# Exact evidence on de1683ec measured the bounded 4-worker construction 11.5% slower than serial
+# while preserving identical archive bytes. Preserve the oracle for manual archaeology, but do not
+# spend automatic PR capacity retesting a falsified scheduling family whenever compact-v3 changes.
 on:
-  pull_request:
-    paths:
-      - 'experiments/entropygraph_v030_zipfactor_parallel_build.py'
-      - 'experiments/entropygraph_v030_zipfactor_compact_v3.py'
-      - 'benchmarks/v030_zipfactor_parallel_build_oracle.py'
-      - 'tests/test_v030_zipfactor_parallel_build.py'
-      - '.github/workflows/v030-zipfactor-parallel-build.yml'
   workflow_dispatch:
 
 permissions:
   contents: read
 
 concurrency:
-  group: v030-zf-parallel-build-${{ github.event.pull_request.number || github.ref }}
+  group: v030-zf-parallel-build-${{ github.ref }}
   cancel-in-progress: true
 
 env:
-  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+  EVIDENCE_HEAD: ${{ github.sha }}
 
 jobs:
   zipfactor-parallel-build:
