@@ -12,6 +12,9 @@ on:
       - 'benchmarks/v030_federated_compact_framing_v8_direct_v5.py'
       - 'benchmarks/v030_federated_embedded_fs_v7_effort_oracle.py'
       - 'benchmarks/v030_federated_selective_effort_oracle.py'
+      - 'benchmarks/neutral_hostile_corpus_v1.py'
+      - 'benchmarks/neutral_hostile_determinism_repair_v5.py'
+      - 'benchmarks/neutral_hostile_determinism_repair_v6.py'
       - 'experiments/entropygraph_v025.py'
       - '.github/workflows/v030-office-graph-hotpath-profile.yml'
   workflow_dispatch:
@@ -44,7 +47,10 @@ jobs:
       - name: Install exact frozen-corpus dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y zstd gcc
+          # _frozen_office() intentionally regenerates and identity-checks the accepted neutral-hostile corpus before
+          # selecting 02_office_workspace.  That generator traverses the media fixture as well, so ffmpeg is a real
+          # deterministic-corpus dependency of this evidence lane even though the measured target is Office.
+          sudo apt-get install -y zstd gcc ffmpeg libsndfile1
           python -m pip install --upgrade pip
           python -m pip install -e '.[test]'
           python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
