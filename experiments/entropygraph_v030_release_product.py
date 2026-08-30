@@ -255,6 +255,11 @@ def _shared_frontdoor_preflight(root: Path) -> dict:
                     "metadata_error": False,
                     "scanned_regular_files": scanned_regular_files,
                     "short_circuited": True,
+                    "logs_prefilter_proof": {
+                        "eligible": True,
+                        "sidecar_pairs": len(paired),
+                        "source": "shared-frontdoor-preflight-v1",
+                    },
                 }
     return {
         "logs_eligible": False,
@@ -385,7 +390,11 @@ def build(root, out):
     if preflight["metadata_error"]:
         terminal = _LOGS_PROMOTED._build_logs_terminal_if_eligible(root, out)
     elif preflight["logs_eligible"]:
-        terminal = _LOGS_PROMOTED._build_logs_terminal_if_eligible(root, out)
+        terminal = _LOGS_PROMOTED._build_logs_terminal_if_eligible(
+            root,
+            out,
+            proven_positive_prefilter=preflight["logs_prefilter_proof"],
+        )
     else:
         terminal = None
     if terminal is not None:
@@ -491,7 +500,7 @@ PROMOTED_LOGS_EVIDENCE = "all-15 structural admission + external/v0.29 selector 
 PROMOTED_LOGS_STREAMING_PREFILTER = True
 PROMOTED_LOGS_STREAMING_PREFILTER_EVIDENCE = "exact adversarial eligibility + nine-round 12k-file A/B: ~99.9% prefilter speedup with early short-circuit"
 PROMOTED_SHARED_FRONTDOOR_PREFLIGHT = True
-PROMOTED_SHARED_FRONTDOOR_PREFLIGHT_EVIDENCE = "exact source-fact reuse: logs/media plus base terminal predicates share one complete walk; mature scans retained on metadata errors or possible admission"
+PROMOTED_SHARED_FRONTDOOR_PREFLIGHT_EVIDENCE = "exact source-fact reuse: logs/media plus base terminal predicates share one complete walk; mature scans retained on metadata errors or possible admission; positive logs proof is reused to avoid a second source scan"
 PROMOTED_R24_DEAD_DICTIONARY_ELISION = True
 PROMOTED_R24_DEAD_DICTIONARY_EVIDENCE = "all-15 post-selection proof: 0 byte regressions, live dictionaries byte-identical, dead dictionaries smaller"
 PROMOTED_R24_OPAQUE_MEDIA_TERMINAL = True
