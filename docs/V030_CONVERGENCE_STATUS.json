@@ -3,15 +3,15 @@
   "release_authority": false,
   "execution_model": "single-executor",
   "integration_branch": "agent/v030-authoritative-integration",
-  "integration_head_observed_before_status_write": "fe6877165a37083606884115ea15f27d9a46911e",
-  "canonical_main_head_observed": "11e6497781becab8dc0c92c9af981920b56aa5b1",
+  "integration_head_observed_before_status_write": "532703ed3cba344d5ffb04888c360ca5a113fe71",
+  "canonical_main_head_observed": "13742e49d8a0f5da32a9bdae6b57dd2de82d6c5b",
   "canonical_project_version": "0.29.0",
   "canonical_format_revision": 24,
   "branch_relation_to_main_before_status_write": {
     "status": "ahead",
-    "ahead_by": 382,
+    "ahead_by": 1726,
     "behind_by": 0,
-    "merge_base": "11e6497781becab8dc0c92c9af981920b56aa5b1"
+    "merge_base": "13742e49d8a0f5da32a9bdae6b57dd2de82d6c5b"
   },
   "latest_main_reconciliation": {
     "pull_request": 78,
@@ -37,7 +37,7 @@
     "obtain strict release lock UNLOCKED before merge, tag or public v0.30 claims"
   ],
   "frozen_thresholds": {
-    "accepted_v029_bytes": 137501815,
+    "accepted_v029_bytes": 137499525,
     "minimum_saving_vs_v029_bytes": 687783,
     "minimum_improved_workloads": 3,
     "maximum_regressed_workloads": 0,
