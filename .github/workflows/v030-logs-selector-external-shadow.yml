@@ -2,8 +2,8 @@
 name: CMPCT v0.30 logs selector external shadow
 
 on:
-  pull_request:
-    branches: [main]
+  push:
+    branches: [agent/v030-authoritative-integration]
     paths:
       - 'experiments/entropygraph_v030_release_product_logs_candidate.py'
       - 'experiments/entropygraph_v030_release_product.py'
@@ -21,12 +21,12 @@ permissions:
   contents: read
 
 concurrency:
-  group: cmpct-v030-logs-selector-external-${{ github.event.pull_request.number || github.ref }}
+  group: cmpct-v030-logs-selector-external-${{ github.ref }}
   cancel-in-progress: true
 
 env:
   PYTHONPATH: ${{ github.workspace }}
-  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+  EVIDENCE_HEAD: ${{ github.sha }}
 
 jobs:
   logs-prefilter-reuse-abba:
@@ -152,6 +152,5 @@ jobs:
           if-no-files-found: error
           retention-days: 90
 
-# This is promotion evidence, not a replacement release gate. The canonical external authority remains red until
-# all 15 workloads strictly beat both ZIP and solid Zstd-19 in complete size and creation wall-clock. This shadow
-# may only demonstrate that the measured, benchmark-name-independent logs selector advances that unchanged frontier.
+# Deep promotion evidence is isolated to relevant integration-branch pushes so the accumulated PR diff cannot
+# relaunch a 9-hour lane on unrelated commits. The canonical external/final authorities remain separate.
