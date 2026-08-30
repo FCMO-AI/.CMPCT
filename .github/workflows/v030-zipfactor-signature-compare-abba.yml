@@ -3,8 +3,8 @@
 name: CMPCT v0.30 ZIP-factor signature compare A/B
 
 on:
-  pull_request:
-    branches: [main]
+  push:
+    branches: [agent/v030-authoritative-integration]
     paths:
       - 'experiments/entropygraph_v030_zipfactor_fused.py'
       - 'experiments/entropygraph_v030_zipfactor_eocd_parser.py'
@@ -17,12 +17,12 @@ permissions:
   contents: read
 
 concurrency:
-  group: cmpct-v030-zf-signature-abba-${{ github.event.pull_request.number || github.ref }}
+  group: cmpct-v030-zf-signature-abba-${{ github.ref }}
   cancel-in-progress: false
 
 env:
   PYTHONPATH: ${{ github.workspace }}
-  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+  EVIDENCE_HEAD: ${{ github.sha }}
 
 jobs:
   abba:
