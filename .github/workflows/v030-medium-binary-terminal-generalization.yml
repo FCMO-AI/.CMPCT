@@ -1,5 +1,6 @@
-name: CMPCT v0.30 medium-binary terminal generalization
 # ci-lane: deep
+# ci-pr-scope: latest-head-commit-gate
+name: CMPCT v0.30 medium-binary terminal generalization
 
 on:
   pull_request:
@@ -19,13 +20,50 @@ concurrency:
 
 env:
   PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
 
 jobs:
+  latest-head-impact:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      run_deep: ${{ steps.scope.outputs.run_deep }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 2
+      - name: Bind exact head and classify only its changed files
+        id: scope
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            echo 'run_deep=true' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          git diff-tree --no-commit-id --name-only -r HEAD > /tmp/latest-head-files.txt
+          cat /tmp/latest-head-files.txt
+          if grep -Eq '^(experiments/entropygraph_v030_release_product\.py|benchmarks/v030_medium_binary_terminal_generalization\.py|\.github/workflows/v030-medium-binary-terminal-generalization\.yml)$' /tmp/latest-head-files.txt; then
+            echo 'run_deep=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'run_deep=false' >> "$GITHUB_OUTPUT"
+            echo 'Accumulated PR paths matched, but newest exact commit does not affect this proof; skipping 120-minute replay.'
+          fi
+
   prove-generalization:
+    needs: latest-head-impact
+    if: needs.latest-head-impact.outputs.run_deep == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 120
     steps:
       - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - name: Bind exact candidate head
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
       - uses: actions/setup-python@v6
         with:
           python-version: '3.11'
@@ -64,22 +102,24 @@ jobs:
           assert rejected
           assert all(r['exact_archive_identity'] for r in admitted)
           assert all(r['exact_tree_identity'] for r in admitted)
-          # Promotion already happened. This lane is read-only: admitted shipping cases must still avoid r25,
-          # while rejected controls retain the exact tournament path. Bind to the field actually emitted by
-          # the oracle instead of a stale pre-promotion key name.
           assert all(r['full_product']['r25_attempted'] is False for r in admitted)
           PY
       - name: Public-surface guard
         if: always()
         run: python tools/check_public_surface.py
+      - name: CI topology self-check
+        if: always()
+        run: python tools/check_ci_topology.py .github/workflows/v030-medium-binary-terminal-generalization.yml
       - name: Upload generalization evidence
         if: always()
         uses: actions/upload-artifact@v6
         with:
-          name: v030-medium-terminal-generalization-${{ github.sha }}
+          name: v030-medium-terminal-generalization-${{ env.EVIDENCE_HEAD }}
           path: benchmark-artifacts/v030-medium-terminal-generalization.json
           if-no-files-found: warn
           retention-days: 90
 
 # Read-only shipping regression gate. The promotion step was intentionally one-shot; this lane now proves the
-# evidence-backed predicate still generalizes and cannot mutate the release candidate or widen admission.
+# evidence-backed predicate still generalizes and cannot mutate the release candidate or widen admission. GitHub
+# evaluates pull_request paths over the accumulated integration diff, so the cheap classifier above prevents an
+# unrelated newest commit from consuming another two-hour deep-run slot while preserving manual exact replay.
