@@ -4,10 +4,10 @@ version = "0.1.0"
 edition = "2024"
 rust-version = "1.89"
 publish = false
-description = "Research-only in-process C ABI for exact CMP25Z3 verification"
+description = "In-process exact CMP25Z3/CMP25Z4 verification semantic owner"
 
 [lib]
-crate-type = ["cdylib"]
+crate-type = ["rlib", "cdylib"]
 
 [dependencies]
 rmpv = "1.3"
