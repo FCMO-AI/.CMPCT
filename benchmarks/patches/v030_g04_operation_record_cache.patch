@@ -92,7 +92,7 @@ index 78b9a9a..0000000 100644
              return Ok(Arc::clone(value));
          }
          let record =
-@@ -541,9 +574,14 @@ impl<'a> DecodeContext<'a> {
+@@ -541,9 +574,11 @@ impl<'a> DecodeContext<'a> {
              .entry(record_id)
              .or_insert(original.len() as u64);
          let value = Arc::new(original);
