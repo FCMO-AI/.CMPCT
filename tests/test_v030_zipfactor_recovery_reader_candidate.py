@@ -44,7 +44,7 @@ def test_selective_reader_decodes_only_direct_metadata_and_target_group(tmp_path
         assert stats["decoded_context_bytes"] <= 8 * 1024 * 1024
 
 
-def test_v3_parser_has_exact_path_and_resident_byte_semantics(tmp_path: Path) -> None:
+def test_v3_parser_and_verifier_have_exact_path_and_resident_byte_semantics(tmp_path: Path) -> None:
     source = _source(tmp_path)
     archive = tmp_path / "candidate.cmpct"
     READER.build(source, archive, level=3, group_size=7)
@@ -58,6 +58,15 @@ def test_v3_parser_has_exact_path_and_resident_byte_semantics(tmp_path: Path) ->
     assert resident[1] == on_disk[1]
     assert resident[2] == on_disk[2]
     assert resident[3] == on_disk[3]
+
+    resident_verified = V3.verify_and_identities(candidate)
+    on_disk_verified = V3.verify_and_identities(candidate_path)
+    assert resident_verified["ok"] is True
+    assert on_disk_verified["ok"] is True
+    assert resident_verified["identities"] == on_disk_verified["identities"]
+    assert resident_verified["manifest_raw"] == on_disk_verified["manifest_raw"]
+    assert resident_verified["max_member_read_amplification"] == on_disk_verified["max_member_read_amplification"]
+    assert resident_verified["max_decode_unit_bytes"] == on_disk_verified["max_decode_unit_bytes"]
 
 
 def test_selective_reader_uses_authenticated_tail_without_full_verify(tmp_path: Path) -> None:
