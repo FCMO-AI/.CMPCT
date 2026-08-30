@@ -19,6 +19,7 @@ CONCURRENCY_RE = re.compile(r"(?m)^concurrency:\s*$")
 CONCURRENCY_HEAD_SHA_RE = re.compile(r"(?m)^\s+group:.*github\.event\.pull_request\.head\.sha")
 CANCEL_RE = re.compile(r"(?m)^\s+cancel-in-progress:\s*true\s*$")
 PRESERVE_EXACT_RECEIPT_RE = re.compile(r"(?m)^# ci-cancel-policy: preserve-running-exact-receipt\s*$")
+RETIRED_MANUAL_ONLY_RE = re.compile(r"(?m)^# ci-auto-policy: retired-manual-only\s*$")
 PR_EXACT_HEAD_BINDING_RE = re.compile(
     r"(?m)^\s+EVIDENCE_HEAD:\s*\$\{\{\s*github\.event\.pull_request\.head\.sha\s*\|\|\s*github\.sha\s*\}\}\s*$"
 )
@@ -58,6 +59,12 @@ def validate(path: Path) -> list[str]:
     consumes_runner = bool(RUNNER_RE.search(text))
     auto_events = AUTO_EVENT_RE.findall(text)
 
+    if RETIRED_MANUAL_ONLY_RE.search(text) and auto_events:
+        errors.append(
+            "retired-manual-only workflow must not declare pull_request, push, or schedule triggers; "
+            "preserve it for workflow_dispatch replay only"
+        )
+
     if consumes_runner and auto_events:
         if not CONCURRENCY_RE.search(text):
             errors.append("automatic runner workflow lacks a top-level concurrency group")
@@ -87,6 +94,10 @@ def validate(path: Path) -> list[str]:
     # Very long exact-head A/Bs may preserve a running receipt with the explicit directive above. PR-triggered
     # variants must bind EVIDENCE_HEAD to pull_request.head.sha; branch-push variants bind it to github.sha. Both
     # must check out that exact env value and be path scoped. This changes scheduling only, never evidence identity.
+    #
+    # A falsified or fully superseded research lane may instead declare `# ci-auto-policy: retired-manual-only`.
+    # That declaration is a durable no-run ratchet: the workflow may remain available through workflow_dispatch for
+    # reproducibility and historical evidence, but it may not silently resume consuming runners on PR/push/schedule.
     #
     # Conversely, a normal cancel-on-new-head PR lane must not key its concurrency group by that same head SHA:
     # different commits would then enter different groups and could never cancel one another. Scheduling identity
