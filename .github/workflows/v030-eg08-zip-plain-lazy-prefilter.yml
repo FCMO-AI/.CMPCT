@@ -1,0 +1,89 @@
+# ci-lane: deep
+name: CMPCT v0.30 EG08 lazy ZIP plaintext prefilter
+
+on:
+  push:
+    branches: [agent/v030-authoritative-integration]
+    paths:
+      - 'benchmarks/v030_eg08_zip_plain_lazy_prefilter_oracle.py'
+      - 'benchmarks/v030_federated_compact_framing_v8_policy_distill.py'
+      - 'experiments/entropygraph_v025.py'
+      - '.github/workflows/v030-eg08-zip-plain-lazy-prefilter.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-v030-eg08-zip-plain-lazy-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.sha }}
+
+jobs:
+  office-lazy-plain:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - name: Bind exact candidate head
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install deterministic Office corpus dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y zstd gcc ffmpeg libsndfile1
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[audio,test]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
+      - name: Compile exact causal oracle
+        run: python -m py_compile benchmarks/v030_eg08_zip_plain_lazy_prefilter_oracle.py
+      - name: Compare eager versus exact-prefiltered member inflation
+        run: |
+          mkdir -p benchmark-artifacts
+          python -m benchmarks.v030_eg08_zip_plain_lazy_prefilter_oracle \
+            --work-root benchmark-artifacts/v030-eg08-zip-plain-lazy-work \
+            --output benchmark-artifacts/v030-eg08-zip-plain-lazy.json
+      - name: Ratchet no-false-negative evidence boundary
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          d=json.loads(Path('benchmark-artifacts/v030-eg08-zip-plain-lazy.json').read_text())
+          assert d['schema']=='cmpct-v030-eg08-zip-plain-lazy-prefilter-v1'
+          c=d['contract']; g=d['gate']; w=d['work_removed']
+          assert c['benchmark_identity_not_policy_input'] is True
+          assert c['cheap_prefilter_inputs']==['zip_member_uncompressed_size','zip_member_crc32','top_level_size','top_level_crc32']
+          assert c['exact_admission_proof']=='SHA-256 plaintext equality'
+          assert c['rounds']==11 and c['ties_fail'] is True
+          assert g['exact_edge_identity'] is True
+          assert g['member_census_identity'] is True
+          assert g['experiment_valid'] is True
+          assert g['release_credit'] is False
+          assert w['lazy_member_inflates'] <= w['eager_member_inflates']
+          assert w['lazy_plaintext_bytes_inflated'] <= w['eager_plaintext_bytes_inflated']
+          if g['promotion_signal']:
+              assert g['removed_real_inflate_work'] is True
+              assert d['timing']['lazy_median_s'] < d['timing']['eager_median_s']
+          PY
+      - name: CI topology self-check
+        run: python tools/check_ci_topology.py .github/workflows/v030-eg08-zip-plain-lazy-prefilter.yml
+      - name: Public-surface guard
+        run: python tools/check_public_surface.py
+      - name: Upload exact-head receipt
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: v030-eg08-zip-plain-lazy-${{ env.EVIDENCE_HEAD }}
+          path: benchmark-artifacts/v030-eg08-zip-plain-lazy.json
+          if-no-files-found: error
+          retention-days: 90
+
+# Research-only causal work-removal evidence. Final EG08 byte/timing and release authority remain separate.
