@@ -1,21 +1,12 @@
 # ci-lane: deep
+# Automatic execution retired: exact encrypted-like byte-floor authority proved
+# the locality-safe physical family loses Zstd-19 even with zero control bytes.
+# This historical header oracle remains manually reproducible, but header-only
+# work can no longer change the release decision and must not consume every PR wave.
 name: CMPCT v0.30 C25CC01 derived blob-header oracle
 
 on:
-  pull_request:
-    paths:
-      - 'benchmarks/v030_c25cc01_derived_blob_header_oracle.py'
-      - 'benchmarks/v030_c25cc01_locality_pack_strategy_oracle.py'
-      - 'benchmarks/v030_c25cc01_locality_safe_pack_oracle.py'
-      - 'benchmarks/v030_r24_physical_overhead_oracle.py'
-      - 'experiments/entropygraph_v030_r24_compact_control_profile.py'
-      - 'src/cmpct/codec.py'
-      - '.github/workflows/v030-c25cc01-derived-blob-header.yml'
   workflow_dispatch:
-
-concurrency:
-  group: v030-c25cc01-derived-header-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
 
 permissions:
   contents: read
@@ -26,7 +17,7 @@ jobs:
     timeout-minutes: 30
     env:
       PYTHONPATH: ${{ github.workspace }}
-      EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+      EVIDENCE_HEAD: ${{ github.sha }}
     steps:
       - uses: actions/checkout@v6
         with:
@@ -79,7 +70,6 @@ jobs:
           assert p['digest_only']['bytes_saved_vs_current_wrapped'] == 32*c['record_count']
           assert p['digest_plus_crc']['bytes_saved_vs_current_wrapped'] == 28*c['record_count']
           assert p['salvage_varint']['bytes_saved_vs_current_wrapped'] == c['current_blob_header_bytes']-s['header_bytes']
-          # Crossing Zstd remains a measured research outcome, not a CI truth requirement. Negative evidence is valid.
           assert isinstance(g['salvage_header_large_enough_to_cross_zstd19'], bool)
           assert isinstance(p['digest_only']['strictly_smaller_than_zstd19'], bool)
           assert isinstance(p['digest_plus_crc']['strictly_smaller_than_zstd19'], bool)
@@ -96,3 +86,5 @@ jobs:
           path: benchmark-artifacts/v030-c25cc01-derived-header.json
           if-no-files-found: error
           retention-days: 90
+
+# Historical negative-evidence reproduction only. No automatic release credit.
