@@ -1,35 +1,54 @@
 # ci-lane: deep
+# ci-cancel-policy: preserve-running-exact-receipt
 name: CMPCT v0.30 logs selector external shadow
 
 on:
-  push:
-    branches: [agent/v030-authoritative-integration]
-    paths:
-      - 'experiments/entropygraph_v030_release_product_logs_candidate.py'
-      - 'experiments/entropygraph_v030_release_product.py'
-      - 'experiments/entropygraph_v030_logs_inverse_profile*.py'
-      - 'experiments/entropygraph_v030_product_fs.py'
-      - 'benchmarks/v030_logs_selector_external_shadow.py'
-      - 'benchmarks/v030_logs_prefilter_reuse_abba.py'
-      - 'benchmarks/v030_external_competitors.py'
-      - 'benchmarks/v030_external_competitors_canonical.py'
-      - 'tests/test_v030_logs_selector_candidate.py'
-      - '.github/workflows/v030-logs-selector-external-shadow.yml'
+  pull_request:
+    branches: [main]
   workflow_dispatch:
 
 permissions:
   contents: read
 
 concurrency:
-  group: cmpct-v030-logs-selector-external-${{ github.ref }}
-  cancel-in-progress: true
+  group: cmpct-v030-logs-selector-external-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: false
 
 env:
   PYTHONPATH: ${{ github.workspace }}
-  EVIDENCE_HEAD: ${{ github.sha }}
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
 
 jobs:
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      abba: ${{ steps.filter.outputs.abba }}
+      external: ${{ steps.filter.outputs.external }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 2
+      - id: filter
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ '${{ github.event_name }}' = 'workflow_dispatch' ]; then
+            echo 'abba=true' >> "$GITHUB_OUTPUT"
+            echo 'external=true' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          changed="$(git diff-tree --no-commit-id --name-only -r HEAD)"
+          abba=false
+          external=false
+          if grep -Eq '^(experiments/entropygraph_v030_release_product(_logs_candidate)?\.py|benchmarks/v030_logs_prefilter_reuse_abba\.py|benchmarks/v030_external_competitors\.py|benchmarks/v030_release_generalization\.py|\.github/workflows/v030-logs-selector-external-shadow\.yml)$' <<<"$changed"; then abba=true; fi
+          if grep -Eq '^(experiments/entropygraph_v030_release_product_logs_candidate\.py|experiments/entropygraph_v030_release_product\.py|experiments/entropygraph_v030_logs_inverse_profile.*\.py|experiments/entropygraph_v030_product_fs\.py|benchmarks/v030_logs_selector_external_shadow\.py|benchmarks/v030_external_competitors(_canonical)?\.py|tests/test_v030_logs_selector_candidate\.py|\.github/workflows/v030-logs-selector-external-shadow\.yml)$' <<<"$changed"; then external=true; fi
+          echo "abba=$abba" >> "$GITHUB_OUTPUT"
+          echo "external=$external" >> "$GITHUB_OUTPUT"
+
   logs-prefilter-reuse-abba:
+    needs: changes
+    if: needs.changes.outputs.abba == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     steps:
@@ -79,6 +98,8 @@ jobs:
           retention-days: 90
 
   logs-selector-external-shadow:
+    needs: changes
+    if: needs.changes.outputs.external == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 540
     steps:
@@ -100,9 +121,7 @@ jobs:
           python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
       - name: Compile and test candidate facade
         run: |
-          python -m py_compile \
-            experiments/entropygraph_v030_release_product_logs_candidate.py \
-            benchmarks/v030_logs_selector_external_shadow.py
+          python -m py_compile experiments/entropygraph_v030_release_product_logs_candidate.py benchmarks/v030_logs_selector_external_shadow.py
           python -m pytest -q tests/test_v030_logs_selector_candidate.py
       - name: Run exact all-15 external selector shadow
         run: |
@@ -116,20 +135,12 @@ jobs:
           python - <<'PY'
           import json
           from pathlib import Path
-          path=Path('benchmark-artifacts/v030-logs-selector-external.json')
-          assert path.is_file(), 'logs selector external receipt missing'
-          d=json.loads(path.read_text())
+          d=json.loads(Path('benchmark-artifacts/v030-logs-selector-external.json').read_text())
           p=d['candidate_promotion_gate']; f=d['candidate_frontier']
-          assert p['exact_workload_count'] is True
-          assert p['all_cmpct_trees_verified'] is True
-          assert p['only_logs_row_terminalized'] is True
-          assert p['logs_is_strict_four_way_win'] is True
-          assert p['zip_size_frontier_preserved'] is True
-          assert p['zstd_size_frontier_materially_advances'] is True
-          assert p['full_four_way_frontier_materially_advances'] is True
-          assert f['zip_size_wins']==15
-          assert f['zstd_size_wins']>=7
-          assert f['full_four_way_wins']>=4
+          assert p['exact_workload_count'] and p['all_cmpct_trees_verified'] and p['only_logs_row_terminalized']
+          assert p['logs_is_strict_four_way_win'] and p['zip_size_frontier_preserved']
+          assert p['zstd_size_frontier_materially_advances'] and p['full_four_way_frontier_materially_advances']
+          assert f['zip_size_wins']==15 and f['zstd_size_wins']>=7 and f['full_four_way_wins']>=4
           assert f['terminal_logs_rows']==['neutral_hostile_v1/05_logs_and_telemetry']
           assert p['passed'] is True
           PY
@@ -144,5 +155,5 @@ jobs:
           if-no-files-found: error
           retention-days: 90
 
-# Deep promotion evidence is isolated to relevant integration-branch pushes so the accumulated PR diff cannot
-# relaunch a 9-hour lane on unrelated commits. The canonical external/final authorities remain separate.
+# Each PR synchronization pays only the tiny head-commit classifier. Deep jobs run only when the newest commit
+# changes their lane, and unrelated later commits do not cancel an exact receipt already in flight.
