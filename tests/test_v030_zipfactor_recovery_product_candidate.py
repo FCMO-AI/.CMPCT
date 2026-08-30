@@ -18,7 +18,7 @@ def _flip(raw: bytes, index: int) -> bytes:
     return bytes(out)
 
 
-def test_product_candidate_exact_semantics_and_recovery(tmp_path: Path) -> None:
+def test_product_candidate_exact_semantics_recovery_and_random_access(tmp_path: Path) -> None:
     source = _source(tmp_path)
     archive = tmp_path / "candidate.cmpct"
     stats = ZF.build(source, archive, level=3, group_size=7)
@@ -37,6 +37,21 @@ def test_product_candidate_exact_semantics_and_recovery(tmp_path: Path) -> None:
     assert clean["recovered_from"] == "primary"
     identities = clean["identities"]
 
+    expected_files = {
+        path.relative_to(source).as_posix(): path.read_bytes()
+        for path in source.rglob("*")
+        if path.is_file() and not path.is_symlink()
+    }
+    listed = ZF.list_members(archive)
+    listed_files = {row["path"] for row in listed if row["kind"] == "file"}
+    assert listed_files == set(expected_files)
+    for rel, expected in expected_files.items():
+        got, read_stats = ZF.read_member_with_stats(archive, rel)
+        assert got == expected
+        assert read_stats["recovered_from"] == "primary"
+        assert read_stats["decoded_context_amplification"] <= 8.0
+        assert read_stats["decoded_context_bytes"] <= 8 * 1024 * 1024
+
     raw = archive.read_bytes()
     primary_len = ZF._control_len_from_primary(raw)
     _, tail_start, _ = ZF._tail_layout(raw)
@@ -47,6 +62,10 @@ def test_product_candidate_exact_semantics_and_recovery(tmp_path: Path) -> None:
     assert recovered["ok"] is True
     assert recovered["recovered_from"] == "tail"
     assert recovered["identities"] == identities
+    sample_rel = sorted(expected_files)[0]
+    sample, sample_stats = ZF.read_member_with_stats(primary_bad, sample_rel)
+    assert sample == expected_files[sample_rel]
+    assert sample_stats["recovered_from"] == "tail"
 
     tail_bad = tmp_path / "tail-bad.cmpct"
     tail_bad.write_bytes(_flip(raw, tail_start + min(7, primary_len - 1)))
@@ -62,7 +81,8 @@ def test_product_candidate_exact_semantics_and_recovery(tmp_path: Path) -> None:
 
 
 def test_product_candidate_is_not_selector_promoted() -> None:
-    assert ZF.PROMOTION_STATE == "canonical-semantics-candidate-only"
+    assert ZF.PROMOTION_STATE == "canonical-random-access-candidate-only"
     assert ZF.SELECTOR_ENABLED is False
-    assert ZF.PUBLIC_READER_COMPLETE is False
+    assert ZF.PUBLIC_RANDOM_ACCESS_COMPLETE is True
+    assert ZF.PUBLIC_EXTRACT_COMPLETE is False
     assert ZF.RELEASE_CREDIT is False
