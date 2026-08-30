@@ -2,15 +2,15 @@ from __future__ import annotations
 
 """Exact full-build A/B for reusing the shipping Logs structural preflight.
 
-The public v0.30 facade already computes ``logs_source_prefilter`` in its shared
-front door before dispatching the promoted Logs terminal.  The terminal helper
-currently recomputes the same proof.  This oracle changes no product bytes or
-admission law: the candidate arm memoizes only that already-produced structural
-proof for the duration of one public ``CANON.build`` call.
+The public v0.30 facade already proves Logs structural eligibility in
+``_shared_frontdoor_preflight`` before dispatching the promoted terminal.  The
+terminal currently performs a second independent source walk through
+``logs_source_prefilter``.  The candidate arm captures the already-produced
+front-door proof and lets only that second terminal predicate consume it.
 
-Promotion signal requires exact archive identity, exact verified tree identity,
-and a material wall-clock reduction.  The ordinary external ZIP/Zstd authority
-remains unchanged and this oracle cannot unlock release by itself.
+No archive bytes, exact candidate discovery, admission law, verification, timer
+boundary or external threshold changes.  The ordinary ZIP/Zstd authority remains
+separate and this oracle cannot unlock release by itself.
 """
 
 import argparse
@@ -56,23 +56,41 @@ def _sha(path: Path) -> str:
 
 
 def _one(stage: Path, out: Path, *, reuse: bool) -> dict:
-    original = LOGS.logs_source_prefilter
-    cache: dict[str, dict] = {}
+    original_frontdoor = CANON._shared_frontdoor_preflight
+    original_terminal_prefilter = LOGS.logs_source_prefilter
+    captured: dict[str, dict] = {}
+    terminal_real_scans = 0
 
-    def memoized(root: Path) -> dict:
-        key = str(Path(root).resolve())
-        if key not in cache:
-            cache[key] = original(root)
-        return cache[key]
+    def capturing_frontdoor(root: Path) -> dict:
+        proof = original_frontdoor(root)
+        captured[str(Path(root).resolve())] = proof
+        return proof
+
+    def reused_terminal_prefilter(root: Path) -> dict:
+        nonlocal terminal_real_scans
+        proof = captured.get(str(Path(root).resolve()))
+        if proof is not None and not proof.get("metadata_error") and proof.get("logs_eligible"):
+            return {
+                "sidecar_pairs": LOGS.MIN_SIDECAR_PAIRS,
+                "sidecar_pairs_exact": False,
+                "pair_examples": [],
+                "eligible": True,
+                "scan_terminated_at_admission_floor": True,
+                "shared_frontdoor_reused": True,
+            }
+        terminal_real_scans += 1
+        return original_terminal_prefilter(root)
 
     if reuse:
-        LOGS.logs_source_prefilter = memoized
+        CANON._shared_frontdoor_preflight = capturing_frontdoor
+        LOGS.logs_source_prefilter = reused_terminal_prefilter
     started = time.perf_counter()
     try:
         stats = dict(CANON.build(stage, out))
     finally:
         elapsed = time.perf_counter() - started
-        LOGS.logs_source_prefilter = original
+        CANON._shared_frontdoor_preflight = original_frontdoor
+        LOGS.logs_source_prefilter = original_terminal_prefilter
     verified = dict(CANON.strong_verify(out))
     if not verified.get("ok"):
         raise RuntimeError(f"candidate failed strong verification: {verified!r}")
@@ -83,7 +101,8 @@ def _one(stage: Path, out: Path, *, reuse: bool) -> dict:
         "archive_bytes": out.stat().st_size,
         "archive_sha256": _sha(out),
         "tree_sha256": verified.get("tree_sha256") or verified.get("user_tree_sha256"),
-        "prefilter_calls_with_real_scan": len(cache) if reuse else None,
+        "shared_frontdoor_captures": len(captured) if reuse else None,
+        "terminal_real_prefilter_scans": terminal_real_scans if reuse else None,
     }
 
 
@@ -126,14 +145,15 @@ def run(work_root: Path) -> dict:
     relative = delta_s / base_median if base_median > 0 else 0.0
     promotion = {
         "exact_product_identity": len(identities) == 1,
-        "candidate_real_prefilter_scans_exactly_one": all(row["prefilter_calls_with_real_scan"] == 1 for row in candidate),
+        "candidate_captured_one_shared_frontdoor": all(row["shared_frontdoor_captures"] == 1 for row in candidate),
+        "candidate_terminal_second_scan_eliminated": all(row["terminal_real_prefilter_scans"] == 0 for row in candidate),
         "minimum_absolute_reduction": delta_s >= MIN_DELTA_MS / 1000.0,
         "minimum_relative_reduction": relative >= MIN_RELATIVE_IMPROVEMENT,
     }
     promotion["passed"] = all(promotion.values())
     archive_bytes, archive_sha256, tree_sha256 = next(iter(identities))
     return {
-        "schema": "cmpct-v030-logs-prefilter-reuse-abba-v1",
+        "schema": "cmpct-v030-logs-prefilter-reuse-abba-v2",
         "rounds": ROUNDS,
         "samples_per_arm": len(baseline),
         "archive_bytes": archive_bytes,
