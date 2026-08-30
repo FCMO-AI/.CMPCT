@@ -44,7 +44,8 @@ jobs:
             experiments/entropygraph_v030_release_reader.py \
             experiments/entropygraph_v030_release_reader_policy.py \
             experiments/entropygraph_v030_release_candidate.py \
-            experiments/entropygraph_v030_release.py
+            experiments/entropygraph_v030_release.py \
+            experiments/entropygraph_v030_zipfactor_recovery_product_candidate.py
 
       - name: Run direct-reader, promotion-policy, recovery, locality and publication tests
         run: |
@@ -58,6 +59,7 @@ jobs:
             tests/test_v030_release_reader.py \
             tests/test_v030_release_reader_policy.py \
             tests/test_v030_release_candidate.py \
+            tests/test_v030_zipfactor_recovery_product_candidate.py \
             tests/test_v029_parallel_portfolio.py
 
       - name: Public-surface guard
@@ -65,5 +67,6 @@ jobs:
         run: python tools/check_public_surface.py
 
 # Footnote: this workflow proves direct Python reader semantics, strict promotion admission, bounded recovery,
-# and transactional publication. Native/shared-reader parity and malformed-input fuzz remain independent
-# promotion gates; a green run is not itself release authority.
+# and transactional publication. The ZIP-factor recovery candidate is intentionally ratcheted here before its
+# public list/read/extract surface and selector are enabled. Native/shared-reader parity and malformed-input fuzz
+# remain independent promotion gates; a green run is not itself release authority.
