@@ -1,16 +1,13 @@
 # ci-lane: deep
+# ci-auto-policy: retired-manual-only
 name: CMPCT v0.30 C25CC01 distributed file-table frontier
 
+# Exact-head evidence on 2026-08-29 preserved reconstruction/locality but projected
+# 10,249,998 B versus 10,199,302 B Zstd-19: +50,696 B, and +20,581 B versus the
+# current wrapped representation. The separately framed-table question is therefore
+# answered. Preserve this receipt for manual replay; automatic work continues in the
+# stricter co-located semantic floor, which gives framing/descriptors zero-byte cost.
 on:
-  push:
-    branches: [agent/v030-authoritative-integration]
-    paths:
-      - 'benchmarks/v030_c25cc01_distributed_file_table_oracle.py'
-      - 'benchmarks/v030_c25cc01_locality_pack_strategy_oracle.py'
-      - 'benchmarks/v030_c25cc01_locality_safe_pack_oracle.py'
-      - 'benchmarks/v030_r24_compact_control_oracle.py'
-      - 'experiments/entropygraph_v030_r24_compact_control_profile.py'
-      - '.github/workflows/v030-c25cc01-distributed-file-table.yml'
   workflow_dispatch:
 
 concurrency:
@@ -19,13 +16,14 @@ concurrency:
 permissions:
   contents: read
 
+env:
+  PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.sha }}
+
 jobs:
   distributed-file-table:
     runs-on: ubuntu-24.04
     timeout-minutes: 35
-    env:
-      PYTHONPATH: ${{ github.workspace }}
-      EVIDENCE_HEAD: ${{ github.sha }}
     steps:
       - uses: actions/checkout@v6
         with:
