@@ -34,7 +34,11 @@ env:
 jobs:
   native-ab:
     runs-on: ubuntu-24.04
-    timeout-minutes: 90
+    # Exact run c175f56 reached the real seven-round baseline/candidate measurement only after both release binaries
+    # and native correctness had passed, then the runner killed that measurement at the old 90-minute job ceiling
+    # after ~87 minutes inside the oracle. Preserve the seven-round evidence law rather than weakening it to fit the
+    # harness: this deep, path-scoped, preserve-running lane gets enough wall-clock budget to finish one exact receipt.
+    timeout-minutes: 150
     steps:
       - uses: actions/checkout@v6
         with:
@@ -122,5 +126,5 @@ jobs:
           if-no-files-found: error
           retention-days: 90
 
-# Research-only exact receipt. A pass can authorize productizing bounded operation-scoped record ownership;
+# Research-only exact receipt. A pass can authorize productizing bounded operation-scoped decoded-record ownership;
 # it cannot itself earn release credit or alter selector/locality/grammar policy.
