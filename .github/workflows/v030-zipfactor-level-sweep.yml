@@ -1,20 +1,18 @@
 # ci-lane: deep
 name: CMPCT v0.30 ZIP-factor level sweep
 
+# Exact evidence on de1683ec swept levels 1/2/3/4/5/6/7/9 with identical verified bytes.
+# Levels >=2 beat Zstd-19 size and every arm beat Zstd-19 creation time, but no level beat ZIP
+# creation once mandatory verification was charged. Preserve this negative oracle for manual use;
+# automatic PR reruns would consume capacity without a new architectural hypothesis.
 on:
-  pull_request:
-    branches: [main]
-    paths:
-      - 'experiments/entropygraph_v030_zipfactor_compact_v3.py'
-      - 'benchmarks/v030_zipfactor_level_sweep_oracle.py'
-      - '.github/workflows/v030-zipfactor-level-sweep.yml'
   workflow_dispatch:
 
 permissions:
   contents: read
 
 concurrency:
-  group: cmpct-v030-zf-level-sweep-${{ github.event.pull_request.number || github.ref }}
+  group: cmpct-v030-zf-level-sweep-${{ github.ref }}
   cancel-in-progress: true
 
 env:
@@ -71,7 +69,6 @@ jobs:
               assert best['beats_zstd19_create_median'] is True
               assert best['all_rounds_exact'] is True
           else:
-              # Valid negative evidence: compression-level tuning alone did not cross the ZIP-speed frontier.
               assert d['gate']['four_way_level_found'] is False
               assert d['best_four_way'] is None
           PY
@@ -86,5 +83,5 @@ jobs:
           if-no-files-found: warn
           retention-days: 90
 
-# Research-only. A valid negative result stays green as evidence but grants zero release/promotion credit.
+# Research-only. Historical negative evidence is preserved but no automatic release/promotion credit exists.
 # Native/Android/recovery/version/merge/tag/site/final release authorities remain independently mandatory.
