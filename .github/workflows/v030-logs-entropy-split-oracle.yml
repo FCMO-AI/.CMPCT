@@ -1,25 +1,19 @@
 # ci-lane: deep
+# ci-auto-policy: retired-manual-only
 name: CMPCT v0.30 logs entropy-split oracle
 
+# Logs already has a promoted inverse profile and active selector/runtime/native
+# convergence lanes. Preserve this alternative 90-minute architecture for manual
+# reproduction, but do not rerun it on every accumulated-diff PR synchronize.
 on:
-  pull_request:
-    branches: [main]
-    paths:
-      - 'benchmarks/v030_logs_entropy_split_oracle.py'
-      - 'benchmarks/v030_external_competitors.py'
-      - 'benchmarks/v030_release_generalization.py'
-      - '.github/workflows/v030-logs-entropy-split-oracle.yml'
   workflow_dispatch:
 
 permissions:
   contents: read
 
-concurrency:
-  group: cmpct-v030-logs-entropy-split-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
-
 env:
   PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.sha }}
 
 jobs:
   logs-entropy-split:
@@ -27,6 +21,10 @@ jobs:
     timeout-minutes: 90
     steps:
       - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - name: Bind exact candidate head
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
       - uses: actions/setup-python@v6
         with:
           python-version: '3.11'
@@ -85,10 +83,11 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v6
         with:
-          name: v030-logs-entropy-split-${{ github.sha }}
+          name: v030-logs-entropy-split-${{ env.EVIDENCE_HEAD }}
           path: benchmark-artifacts/v030-logs-entropy-split.json
           if-no-files-found: error
           retention-days: 90
+      - name: CI topology self-check
+        run: python tools/check_ci_topology.py .github/workflows/v030-logs-entropy-split-oracle.yml
 
-# Research only. A positive result identifies a locality-safe source-derived architecture worth productizing;
-# it cannot authorize release or bypass canonical recovery/native/Android/product evidence.
+# Historical research only. Promoted Logs convergence lanes remain automatic.
