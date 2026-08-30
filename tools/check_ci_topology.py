@@ -98,15 +98,21 @@ def validate(path: Path) -> list[str]:
             errors.append(
                 f"{lane} PR workflow must use paths/paths-ignore or an exact latest-head-commit gate"
             )
+        if lane == "deep" and not _has_exact_head_commit_scope(text):
+            errors.append(
+                "deep PR workflow must use an exact latest-head-commit gate; accumulated PR paths are not "
+                "sufficient scheduling scope for long-lived integration branches"
+            )
 
     if consumes_runner and PUSH_RE.search(text) and not BRANCH_SCOPE_RE.search(text):
         errors.append("automatic push workflow must scope branches; bare feature-branch push duplicates PR work")
 
     # GitHub evaluates PR `paths:` against the whole accumulated PR diff. On a long-lived integration PR that can
-    # cause a deep lane introduced hundreds of commits ago to rerun on every unrelated synchronization. A workflow
-    # may instead cheaply classify only the newest exact HEAD commit with `git diff-tree ... HEAD`; the expensive
-    # job then depends on that classifier output. This is scheduling only: exact candidate SHA custody remains
-    # mandatory. The optional latest-head marker is descriptive; the actual diff-tree classifier is authoritative.
+    # cause a deep lane introduced hundreds of commits ago to rerun on every unrelated synchronization. Deep lanes
+    # are expensive enough that path filtering alone is therefore not acceptable for newly touched workflows: they
+    # must cheaply classify only the newest exact HEAD commit with `git diff-tree ... HEAD`, and the expensive job
+    # must depend on that classifier output. Release/publisher lanes may still use path scope when every candidate
+    # touching that release surface genuinely requires the authority. Exact candidate SHA custody remains mandatory.
     #
     # Very long exact-head A/Bs may preserve a running receipt with the explicit cancellation-policy directive.
     # PR-triggered variants bind EVIDENCE_HEAD to pull_request.head.sha; branch-push variants bind it to github.sha.
