@@ -2,7 +2,8 @@
 name: CMPCT v0.30 C25CC01 locality pack strategy oracle
 
 on:
-  pull_request:
+  push:
+    branches: [agent/v030-authoritative-integration]
     paths:
       - 'benchmarks/v030_c25cc01_locality_pack_strategy_oracle.py'
       - 'benchmarks/v030_c25cc01_locality_safe_pack_oracle.py'
@@ -12,7 +13,7 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: v030-c25cc01-pack-strategy-${{ github.event.pull_request.number || github.ref }}
+  group: v030-c25cc01-pack-strategy-${{ github.ref }}
   cancel-in-progress: true
 
 permissions:
@@ -24,7 +25,7 @@ jobs:
     timeout-minutes: 30
     env:
       PYTHONPATH: ${{ github.workspace }}
-      EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+      EVIDENCE_HEAD: ${{ github.sha }}
     steps:
       - uses: actions/checkout@v6
         with:
@@ -76,3 +77,6 @@ jobs:
           path: benchmark-artifacts/v030-c25cc01-pack-strategy.json
           if-no-files-found: warn
           retention-days: 90
+
+# Research-only strategy evidence for a shipping-retired physical family. Run only when the relevant C25 locality
+# inputs change; unrelated integration pushes must not consume this lane. No release credit or threshold changes.
