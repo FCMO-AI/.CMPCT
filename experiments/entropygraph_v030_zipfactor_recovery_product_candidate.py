@@ -2,10 +2,11 @@ from __future__ import annotations
 
 """Production-facing semantic owner for the v0.30 ZIP framing-factor recovery candidate.
 
-This module deliberately stops one step before selector promotion. It owns the exact CMP25Z4 envelope bytes,
-content-agnostic structural admission, fail-closed two-control recovery and canonical strong verification while
-reusing the already-audited CMP25Z3 logical grammar. The release front door must not dispatch here until public
-list/read/extract, native/Android parity and exact all-15 selector authority are green on one fingerprint.
+This module deliberately stops before selector promotion. It owns the exact CMP25Z4 envelope bytes,
+content-agnostic structural admission, fail-closed two-control recovery, canonical strong verification, and the
+public list/read semantic boundary while reusing the already-audited CMP25Z3 logical grammar. The release front
+door must not dispatch here until transactional full extraction, native/Android parity and exact all-15 selector
+authority are green on one fingerprint.
 
 No workload name, path, suffix, source hash, archive hash or frozen-corpus identity participates in admission.
 """
@@ -15,6 +16,7 @@ from pathlib import Path
 import struct
 import tempfile
 
+from experiments import entropygraph_v030_product_fs as FS
 from experiments import entropygraph_v030_zipfactor_compact_v3 as V3
 from experiments import entropygraph_v030_zipfactor_compact_v3_fused_finalize as FUSED
 
@@ -89,7 +91,8 @@ def _verify_v3_bytes(candidate: bytes) -> dict:
     return result
 
 
-def _recover_verified(raw: bytes) -> tuple[str, dict]:
+def _recover_candidate(raw: bytes) -> tuple[str, bytes, dict]:
+    """Recover one exact V3 stream and authenticate its complete logical tree before exposing it."""
     errors: list[str] = []
     try:
         primary_len = _control_len_from_primary(raw)
@@ -98,14 +101,14 @@ def _recover_verified(raw: bytes) -> tuple[str, dict]:
             raise RuntimeError("ZIP-factor recovery control copy length mismatch")
         primary = raw[len(MAGIC) : len(MAGIC) + primary_len]
         candidate = _v3_candidate(raw, primary, len(MAGIC) + primary_len, tail_start)
-        return "primary", _verify_v3_bytes(candidate)
+        return "primary", candidate, _verify_v3_bytes(candidate)
     except Exception as exc:
         errors.append(f"primary={exc!r}")
 
     try:
         control, tail_start = _tail_control(raw)
         candidate = _v3_candidate(raw, control, len(MAGIC) + len(control), tail_start)
-        return "tail", _verify_v3_bytes(candidate)
+        return "tail", candidate, _verify_v3_bytes(candidate)
     except Exception as exc:
         errors.append(f"tail={exc!r}")
     raise RuntimeError("ZIP-factor recovery failed closed: " + "; ".join(errors))
@@ -167,7 +170,7 @@ def is_archive(path: Path) -> bool:
 
 def verify_and_identities(path: Path) -> dict:
     raw = Path(path).read_bytes()
-    recovered_from, verified = _recover_verified(raw)
+    recovered_from, _candidate, verified = _recover_candidate(raw)
     return {
         **verified,
         "format_revision": REVISION,
@@ -196,7 +199,118 @@ def strong_verify(path: Path) -> dict:
         }
 
 
-PROMOTION_STATE = "canonical-semantics-candidate-only"
+def _entry_rows(verified: dict) -> dict[str, list]:
+    return FS.entry_map({"manifest": verified["manifest"]})
+
+
+def list_members(path: Path) -> list[dict]:
+    verified = verify_and_identities(Path(path))
+    rows = _entry_rows(verified)
+    names = {"f": "file", "d": "directory", "l": "symlink", "h": "hardlink"}
+    result: list[dict] = []
+    regular = verified["manifest"]["entries"]
+    regular_sizes = {row[0]: int(row[7][0]) for row in regular if row[1] == "f"}
+    for rel in sorted(rows):
+        row = rows[rel]
+        kind = row[1]
+        if kind == "f":
+            size = int(row[7][0])
+        elif kind == "h":
+            size = regular_sizes[row[7]]
+        elif kind == "l":
+            size = len(row[7].encode("utf-8"))
+        else:
+            size = 0
+        result.append({"path": rel, "kind": names[kind], "size": size})
+    return result
+
+
+def _read_regular_v3(candidate: bytes, rel: str) -> tuple[bytes, int]:
+    """Decode exactly the authenticated group owning rel; group parsing remains owned by the V3 grammar."""
+    with tempfile.TemporaryDirectory(prefix="cmpct-zf-product-read-") as td:
+        path = Path(td) / "candidate.cmpct"
+        path.write_bytes(candidate)
+        _manifest_raw, manifest, template_raw, groups = V3._open(path)
+    if rel not in manifest["regular"]:
+        raise KeyError(rel)
+    template = V3.BASE._parse_template(template_raw)
+    for raw_size, expected_group_sha, paths, blob in groups:
+        if rel not in paths:
+            continue
+        group_raw = V3._decompress(blob, raw_size, "group")
+        if _sha(group_raw) != expected_group_sha:
+            raise RuntimeError("ZIP-factor recovery group authentication")
+        view = memoryview(group_raw)
+        if bytes(view[:4]) != V3.GROUP_MAGIC:
+            raise RuntimeError("bad ZIP-factor recovery group magic")
+        at = 4
+        count, at = V3.BASE._read_uvarint(view, at)
+        if count != len(paths):
+            raise RuntimeError("ZIP-factor recovery group count mismatch")
+        context = len(template_raw) + len(group_raw)
+        if context > MAX_DECODE:
+            raise RuntimeError("ZIP-factor recovery decode-unit ceiling")
+        for member in paths:
+            dynamics = []
+            for _row in template["rows"]:
+                if at + 12 > len(view):
+                    raise RuntimeError("truncated ZIP-factor recovery dynamics")
+                crc, csize, usize = struct.unpack_from("<III", view, at)
+                at += 12
+                if csize > MAX_DECODE or at + csize > len(view):
+                    raise RuntimeError("truncated ZIP-factor recovery payload")
+                payload = bytes(view[at : at + csize])
+                at += csize
+                dynamics.append((crc, csize, usize, payload))
+            if member != rel:
+                continue
+            restored = V3.BASE._rebuild_zip(template, dynamics)
+            expected_size, expected_sha = manifest["regular"][rel]
+            if len(restored) != int(expected_size) or _sha(restored) != bytes(expected_sha):
+                raise RuntimeError("ZIP-factor recovery reconstructed identity mismatch")
+            amplification = context / max(1, len(restored))
+            if amplification > MAX_AMP:
+                raise RuntimeError("ZIP-factor recovery member locality ceiling")
+            return restored, context
+        raise RuntimeError("ZIP-factor recovery target disappeared from authenticated group")
+    raise RuntimeError("ZIP-factor recovery manifest/group membership mismatch")
+
+
+def read_member_with_stats(path: Path, rel: str) -> tuple[bytes, dict]:
+    raw = Path(path).read_bytes()
+    recovered_from, candidate, verified = _recover_candidate(raw)
+    rows = _entry_rows(verified)
+    if rel not in rows:
+        raise KeyError(rel)
+    row = rows[rel]
+    kind = row[1]
+    if kind == "d":
+        raise IsADirectoryError(rel)
+    if kind == "l":
+        member = row[7].encode("utf-8")
+        context = len(member)
+    else:
+        owner = row[7] if kind == "h" else rel
+        member, context = _read_regular_v3(candidate, owner)
+    amplification = int(context) / max(1, len(member))
+    if amplification > MAX_AMP or int(context) > MAX_DECODE:
+        raise RuntimeError("ZIP-factor recovery public read exceeded locality contract")
+    return member, {
+        "logical_bytes": len(member),
+        "decoded_context_bytes": int(context),
+        "decoded_context_amplification": amplification,
+        "format_revision": REVISION,
+        "format_profile": PROFILE,
+        "recovered_from": recovered_from,
+    }
+
+
+def read_member(path: Path, rel: str) -> bytes:
+    return read_member_with_stats(Path(path), rel)[0]
+
+
+PROMOTION_STATE = "canonical-random-access-candidate-only"
 SELECTOR_ENABLED = False
-PUBLIC_READER_COMPLETE = False
+PUBLIC_RANDOM_ACCESS_COMPLETE = True
+PUBLIC_EXTRACT_COMPLETE = False
 RELEASE_CREDIT = False
