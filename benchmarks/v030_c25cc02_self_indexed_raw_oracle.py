@@ -21,6 +21,7 @@ construction/verification boundary against ZIP and Zstd-19.
 import argparse
 import hashlib
 import json
+import os
 from pathlib import Path
 import shutil
 import struct
@@ -101,7 +102,6 @@ def _project_self_indexed_data(data: bytes) -> tuple[int, list[list[int]], int]:
 def _same_blob_semantics(source_blobs: list, projected_blobs: list) -> bool:
     if len(source_blobs) != len(projected_blobs):
         return False
-    # Offsets are the one field expected to move. Size, codec, metadata and blob ordinal must remain exact.
     return all(list(a[1:]) == list(b[1:]) for a, b in zip(source_blobs, projected_blobs, strict=True))
 
 
@@ -127,7 +127,6 @@ def _best_control(index: dict, projected_blobs: list[list[int]]) -> dict:
     expected["blobs"] = projected_blobs
     if expanded != expected:
         raise RuntimeError("self-indexed RAW semantic control failed exact projected-index reconstruction")
-    # File rows reference blob ordinals rather than byte offsets, so the entire logical file/tree mapping is exact.
     if expanded["files"] != index["files"] or expanded["recipes"] != index["recipes"] or expanded["fsmeta"] != index["fsmeta"]:
         raise RuntimeError("self-indexed RAW projection changed logical archive semantics")
     return {
@@ -170,10 +169,12 @@ def run(work_root: Path) -> dict:
     zstd = EXT._tar_zstd(source, work_root / "competitor.tar.zst", work_root / "zstd-out", zstd_work)
     zstd_bytes = int(zstd["archive_bytes"])
     strict_margin = zstd_bytes - projected_complete
+    candidate_head = os.environ.get("EVIDENCE_HEAD") or os.environ.get("GITHUB_SHA")
 
     locality = row["locality"]
-    result = {
+    return {
         "schema": "cmpct-v030-c25cc02-self-indexed-raw-oracle-v1",
+        "candidate_head": candidate_head,
         "target": target_name,
         "strategy": STRATEGY_NAME,
         "source": {
@@ -221,7 +222,6 @@ def run(work_root: Path) -> dict:
             "it does not authorize selector or release promotion."
         ),
     }
-    return result
 
 
 def main() -> None:
