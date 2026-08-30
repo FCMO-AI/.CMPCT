@@ -2,7 +2,8 @@
 name: CMPCT v0.30 EG08 lower-effort policy frontier
 
 on:
-  pull_request:
+  push:
+    branches: [agent/v030-authoritative-integration]
     paths:
       - 'benchmarks/v030_federated_compact_framing_v8_low_effort_policy.py'
       - 'benchmarks/v030_federated_compact_framing_v8_low_effort_policy_evidence_v2.py'
@@ -17,14 +18,14 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: v030-eg08-low-effort-${{ github.event.pull_request.number || github.ref }}
+  group: v030-eg08-low-effort-${{ github.ref }}
   cancel-in-progress: true
 
 permissions:
   contents: read
 
 env:
-  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+  EVIDENCE_HEAD: ${{ github.sha }}
 
 jobs:
   lower-effort-policy:
@@ -134,3 +135,6 @@ jobs:
             benchmark-artifacts/v030-eg08-low-effort-candidate.txt
           if-no-files-found: warn
           retention-days: 90
+
+# Exact generic-policy evidence remains reproducible when EG08 policy inputs change. Unrelated synchronization churn
+# no longer spends this one-hour lane re-proving a known ZIP-timing negative; no benchmark or release law changes.
