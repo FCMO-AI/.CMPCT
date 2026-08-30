@@ -1,4 +1,5 @@
 # ci-lane: deep
+# ci-cancel-policy: preserve-running-exact-receipt
 name: CMPCT v0.30 EG08 lazy ZIP plaintext prefilter
 
 on:
@@ -16,7 +17,7 @@ permissions:
 
 concurrency:
   group: cmpct-v030-eg08-zip-plain-lazy-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 env:
   PYTHONPATH: ${{ github.workspace }}
@@ -54,10 +55,11 @@ jobs:
       - name: Ratchet no-false-negative evidence boundary
         run: |
           python - <<'PY'
-          import json
+          import json, os
           from pathlib import Path
           d=json.loads(Path('benchmark-artifacts/v030-eg08-zip-plain-lazy.json').read_text())
           assert d['schema']=='cmpct-v030-eg08-zip-plain-lazy-prefilter-v1'
+          assert d['candidate_head']==os.environ['EVIDENCE_HEAD']
           c=d['contract']; g=d['gate']; w=d['work_removed']
           assert c['benchmark_identity_not_policy_input'] is True
           assert c['cheap_prefilter_inputs']==['zip_member_uncompressed_size','zip_member_crc32','top_level_size','top_level_crc32']
