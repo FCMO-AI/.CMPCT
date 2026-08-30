@@ -1,11 +1,16 @@
 from __future__ import annotations
 
-"""Exact-byte A/B for ZIP-factor framing-signature allocation removal.
+"""Exact-byte A/B for the ZIP-factor framing-signature comparison hot path.
 
-The shipping fused scanner used to materialize BASE._signature(parsed) for every source ZIP. The product now compares
-those exact static fields directly against the first parsed member. This oracle temporarily restores the old
-comparator inside the same process, then alternates old/new full source scans over the exact frozen deflate-family
-source. It proves scan-result identity and the final archive byte/SHA ratchet before reporting any timing signal.
+The fused scanner already removed the mature nested ``BASE._signature`` allocation, but exact-head profiling now
+shows the remaining direct Python field-by-field comparison consuming about 1 ms across the 13 non-reference ZIPs
+in the frozen deflate-family source.  This oracle tests a narrower byte-neutral hypothesis: perform the exact same
+static-field projection with ``operator.itemgetter`` so the repeated dictionary lookups happen in C while the outer
+row traversal and fail-closed equality law stay unchanged.
+
+The candidate is injected only through the scanner's existing differential-test seam.  The shipping comparator is
+not changed by this experiment.  Every arm must return the identical scan fingerprint and the final builder must
+retain the exact 14,033-byte archive/SHA before any timing signal is reported.
 
 This is performance evidence only. It cannot relax external ZIP/Zstd, recovery, native/Android or release gates.
 """
@@ -13,6 +18,7 @@ This is performance evidence only. It cannot relax external ZIP/Zstd, recovery, 
 import argparse
 import hashlib
 import json
+from operator import itemgetter
 from pathlib import Path
 import shutil
 import statistics
@@ -30,9 +36,30 @@ EXPECTED_SHA256 = "75bdc866b4b7b63c8f83f7d9a88c9ff3d712c51b93700033984433819b014
 MIN_ABSOLUTE_SAVING_S = 0.00005
 MIN_RELATIVE_SAVING = 0.01
 
+_LOCAL_GETTER = itemgetter(*FUSED._LOCAL_SIGNATURE_FIELDS)
+_CENTRAL_GETTER = itemgetter(*FUSED._CENTRAL_SIGNATURE_FIELDS)
+_EOCD_GETTER = itemgetter(*FUSED._EOCD_SIGNATURE_FIELDS)
 
-def _legacy_same_signature(reference: dict, candidate: dict) -> bool:
-    return FUSED.BASE._signature(reference) == FUSED.BASE._signature(candidate)
+
+def _itemgetter_same_signature(reference: dict, candidate: dict) -> bool:
+    """Exact ``FUSED._same_framing_signature`` law with C-level field projection."""
+    ref_locals = reference["locals"]
+    candidate_locals = candidate["locals"]
+    if len(ref_locals) != len(candidate_locals):
+        return False
+    if any(_LOCAL_GETTER(left) != _LOCAL_GETTER(right) for left, right in zip(ref_locals, candidate_locals, strict=True)):
+        return False
+
+    ref_centrals = reference["centrals"]
+    candidate_centrals = candidate["centrals"]
+    if len(ref_centrals) != len(candidate_centrals):
+        return False
+    if any(
+        _CENTRAL_GETTER(left) != _CENTRAL_GETTER(right)
+        for left, right in zip(ref_centrals, candidate_centrals, strict=True)
+    ):
+        return False
+    return _EOCD_GETTER(reference["eocd"]) == _EOCD_GETTER(candidate["eocd"])
 
 
 def _fingerprint(result) -> str:
@@ -66,33 +93,33 @@ def run(work_root: Path) -> dict:
 
     with tempfile.TemporaryDirectory(prefix="cmpct-zf-signature-abba-", dir=work_root) as td_raw:
         stage = EXT._normalized_stage(source, Path(td_raw))
-        candidate_fp = _fingerprint(FUSED._scan(stage))
-        legacy_times: list[float] = []
+        baseline_fp = _fingerprint(FUSED._scan(stage))
+        baseline_times: list[float] = []
         candidate_times: list[float] = []
-        observed_fps: set[str] = {candidate_fp}
+        observed_fps: set[str] = {baseline_fp}
         for round_index in range(ROUNDS):
-            order = (("legacy", _legacy_same_signature), ("candidate", FUSED._same_framing_signature))
+            order = (("baseline", FUSED._same_framing_signature), ("candidate", _itemgetter_same_signature))
             if round_index % 2:
                 order = tuple(reversed(order))
             for label, comparator in order:
                 elapsed, fp = _scan_with(stage, comparator)
                 observed_fps.add(fp)
-                (legacy_times if label == "legacy" else candidate_times).append(elapsed)
+                (baseline_times if label == "baseline" else candidate_times).append(elapsed)
 
         archive, _stats = BUILD.build_bytes(stage, level=3, group_size=7)
 
     archive_sha = hashlib.sha256(archive).hexdigest()
-    legacy_median = float(statistics.median(legacy_times))
+    baseline_median = float(statistics.median(baseline_times))
     candidate_median = float(statistics.median(candidate_times))
-    saving_s = legacy_median - candidate_median
-    saving_ratio = saving_s / legacy_median if legacy_median else 0.0
+    saving_s = baseline_median - candidate_median
+    saving_ratio = saving_s / baseline_median if baseline_median else 0.0
     exact_identity = len(observed_fps) == 1
     archive_identity = len(archive) == EXPECTED_BYTES and archive_sha == EXPECTED_SHA256
     experiment_valid = (
         exact_identity
         and archive_identity
-        and len(legacy_times) == len(candidate_times) == ROUNDS
-        and legacy_median > 0
+        and len(baseline_times) == len(candidate_times) == ROUNDS
+        and baseline_median > 0
         and candidate_median > 0
     )
     promotion_signal = bool(
@@ -109,19 +136,21 @@ def run(work_root: Path) -> dict:
             "exact_final_archive_identity_required": True,
             "minimum_absolute_saving_s": MIN_ABSOLUTE_SAVING_S,
             "minimum_relative_saving": MIN_RELATIVE_SAVING,
+            "baseline": "direct-python-static-field-comparison",
+            "candidate": "operator-itemgetter-static-field-comparison",
             "release_credit": False,
             "selector_change": False,
             "archive_semantics_changed": False,
         },
         "candidate": {"archive_bytes": len(archive), "archive_sha256": archive_sha},
-        "medians_s": {"legacy_tuple_signature_scan": legacy_median, "direct_signature_scan": candidate_median},
+        "medians_s": {"direct_signature_scan": baseline_median, "itemgetter_signature_scan": candidate_median},
         "delta": {"saving_s": saving_s, "saving_ratio": saving_ratio},
-        "samples_s": {"legacy": legacy_times, "candidate": candidate_times},
+        "samples_s": {"baseline": baseline_times, "candidate": candidate_times},
         "identity": {"scan_result_identity": exact_identity, "final_archive_identity": archive_identity},
         "experiment_valid": experiment_valid,
         "promotion_signal": promotion_signal,
         "release_credit": False,
-        "claim_boundary": "Exact-byte scan A/B only. A positive signal justifies retaining the allocation removal; it does not certify the complete four-way external contract.",
+        "claim_boundary": "Exact-byte scan A/B only. A positive signal justifies changing the comparator; it does not certify the complete four-way external contract.",
     }
 
 
