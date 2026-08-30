@@ -48,6 +48,7 @@ jobs:
           python -m pytest -q \
             tests/test_v030_release_reader.py \
             tests/test_v030_release_reader_policy.py \
+            tests/test_v030_g04_metadata_reuse.py \
             tests/test_v030_release_fuzz.py
 
       - name: Public-surface guard
@@ -56,4 +57,6 @@ jobs:
 
 # Footnote: deterministic mutations make failures reproducible and reviewable. This gate is independent from
 # compression evidence: malformed-input rejection cannot be traded for better bytes, and a compression win
-# cannot turn a parser failure green.
+# cannot turn a parser failure green. The promoted G04 fast path is explicitly ratcheted here because skipping
+# duplicate healthy metadata work is allowed only while primary-only, tail-only, and both-copy corruption keep
+# the same fail-closed recovery law.
