@@ -1,11 +1,12 @@
 """Exact A/B oracle for eliminating duplicate authenticated G0-G4 metadata decode work.
 
-A healthy CMPNXG4 archive stores the same compressed metadata at the primary header and recovery tail.  The
-shipping reader intentionally authenticates and bounded-decodes both copies.  That is conservative but makes the
-second zstd+MessagePack decode redundant when the compressed bytes, declared raw size and SHA-256 are identical to
-the already-authenticated primary copy.
+A healthy canonical CMP25G4 archive stores the same compressed metadata at the primary header and recovery tail.
+The shipping reader intentionally authenticates and bounded-decodes both copies. That is conservative but makes
+the second zstd+MessagePack decode redundant when the compressed bytes, declared raw size and SHA-256 are identical
+to the already-authenticated primary copy.
 
-This oracle does *not* change product bytes or shipping reader semantics.  It wraps the existing decoder for one
+This oracle does *not* change product bytes or shipping reader semantics. It executes against the isolated canonical
+r25 reader graph under the same operation-scoped profile context used by the product, then wraps its decoder for one
 ``_g04_open`` call at a time with a one-entry cache and proves:
 
 * healthy archives perform one expensive decode instead of two;
@@ -28,8 +29,10 @@ import statistics
 import time
 
 from benchmarks import v030_release_performance as PERF
-from experiments import entropygraph_v030_release_reader as R
+from experiments import entropygraph_v030_release_product as PRODUCT
 
+C = PRODUCT.C
+R = C.POLICY.R
 G04 = R.G04
 TARGET = ("neutral_hostile_v1", "09_ml_artifacts")
 REPETITIONS = 15
@@ -55,7 +58,8 @@ def _baseline_open_with_decode_count(archive: Path) -> tuple[tuple, int]:
 
     R._decode_g04_meta = counted
     try:
-        opened = R._g04_open(archive)
+        with C._revision25_profile_context():
+            opened = R._g04_open(archive)
     finally:
         R._decode_g04_meta = original_decode
     return _semantic_snapshot(opened), count
@@ -83,7 +87,8 @@ def _candidate_open_with_decode_count(archive: Path) -> tuple[tuple, int]:
 
     R._decode_g04_meta = cached_decode
     try:
-        opened = R._g04_open(archive)
+        with C._revision25_profile_context():
+            opened = R._g04_open(archive)
     finally:
         R._decode_g04_meta = original_decode
     return _semantic_snapshot(opened), actual_decodes
@@ -103,13 +108,13 @@ def _layout(archive: Path) -> dict[str, int]:
     if len(data) < G04.HDR.size + G04.FTR.size:
         raise RuntimeError("candidate archive too short for G0-G4")
     header = G04.HDR.unpack_from(data, 0)
-    if header[0] != G04.MAG:
-        raise RuntimeError(f"ML authority no longer emits G0-G4: magic={header[0]!r}")
+    if header[0] != C.G04_MAGIC:
+        raise RuntimeError(f"ML authority no longer emits canonical G0-G4: magic={header[0]!r}")
     primary_mcs = int(header[1])
     footer_offset = len(data) - G04.FTR.size
     footer = G04.FTR.unpack_from(data, footer_offset)
-    if footer[0] != G04.TAIL:
-        raise RuntimeError("G0-G4 recovery footer missing")
+    if footer[0] != C.G04_TAIL:
+        raise RuntimeError("canonical G0-G4 recovery footer missing")
     tail_mcs = int(footer[1])
     tail_meta_offset = footer_offset - tail_mcs
     return {
@@ -146,7 +151,7 @@ def run(work_root: Path) -> dict:
     if baseline_snapshot != candidate_snapshot:
         raise RuntimeError("healthy candidate changed G0-G4 opened semantics")
 
-    # Exercise both physical copies independently.  A damaged copy must never inherit trust from the other one.
+    # Exercise both physical copies independently. A damaged copy must never inherit trust from the other one.
     primary_bad = _copy_and_flip(
         archive,
         work_root / "primary-corrupt.cmpct",
@@ -157,7 +162,7 @@ def run(work_root: Path) -> dict:
         work_root / "tail-corrupt.cmpct",
         layout["tail_meta_offset"] + max(0, layout["tail_meta_bytes"] // 2),
     )
-    # Flip one byte of the footer metadata SHA field.  Struct prefix is magic + two uint64 declarations.
+    # Flip one byte of the footer metadata SHA field. Struct prefix is magic + two uint64 declarations.
     footer_sha_offset = layout["footer_offset"] + 8 + 8 + 8
     tail_auth_bad = _copy_and_flip(archive, work_root / "tail-auth-corrupt.cmpct", footer_sha_offset)
 
@@ -210,6 +215,7 @@ def run(work_root: Path) -> dict:
     return {
         "schema": "cmpct-v030-g04-duplicate-meta-decode-oracle-v1",
         "research_only": True,
+        "canonical_profile": "CMP25G4",
         "target": list(TARGET),
         "packed": packed,
         "archive_sha256": archive_sha,
