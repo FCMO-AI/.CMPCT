@@ -1,0 +1,88 @@
+# ci-lane: focused
+# ci-cancel-policy: preserve-running-exact-receipt
+name: CMPCT v0.30 ZIP-factor signature compare A/B
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'experiments/entropygraph_v030_zipfactor_fused.py'
+      - 'experiments/entropygraph_v030_zipfactor_eocd_parser.py'
+      - 'benchmarks/v030_zipfactor_signature_compare_abba.py'
+      - 'tests/test_v030_zipfactor_path_neutral.py'
+      - '.github/workflows/v030-zipfactor-signature-compare-abba.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-v030-zf-signature-abba-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: false
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+
+jobs:
+  abba:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - name: Bind checkout to exact evidence head
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install exact dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y zstd
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[test]'
+      - name: Compile and run semantic ratchet
+        run: |
+          python -m py_compile benchmarks/v030_zipfactor_signature_compare_abba.py
+          python -m pytest -q tests/test_v030_zipfactor_path_neutral.py
+      - name: Run exact alternating full-scan A/B
+        run: |
+          mkdir -p benchmark-artifacts
+          python -m benchmarks.v030_zipfactor_signature_compare_abba \
+            --work-root "$RUNNER_TEMP/v030-zf-signature-abba" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-zf-signature-abba.json"
+      - name: Ratchet evidence contract
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          e=json.loads(Path('benchmark-artifacts/v030-zf-signature-abba.json').read_text())
+          assert e['schema']=='cmpct-v030-zipfactor-signature-compare-abba-v1'
+          assert e['contract']['rounds']==41
+          assert e['contract']['same_runner_alternating'] is True
+          assert e['contract']['release_credit'] is False
+          assert e['identity']['scan_result_identity'] is True
+          assert e['identity']['final_archive_identity'] is True
+          assert e['candidate']['archive_bytes']==14033
+          assert e['candidate']['archive_sha256']=='75bdc866b4b7b63c8f83f7d9a88c9ff3d712c51b93700033984433819b014e31'
+          assert e['experiment_valid'] is True
+          assert e['release_credit'] is False
+          PY
+      - name: Record exact candidate fingerprint
+        run: printf '%s\n' "$EVIDENCE_HEAD" > benchmark-artifacts/v030-zf-signature-abba-candidate.txt
+      - name: CI topology self-check
+        if: always()
+        run: python tools/check_ci_topology.py .github/workflows/v030-zipfactor-signature-compare-abba.yml
+      - name: Upload exact-head evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: v030-zf-signature-abba-${{ env.EVIDENCE_HEAD }}
+          path: |
+            benchmark-artifacts/v030-zf-signature-abba.json
+            benchmark-artifacts/v030-zf-signature-abba-candidate.txt
+          if-no-files-found: error
+          retention-days: 90
