@@ -2,8 +2,8 @@
 name: CMPCT v0.30 G0-G4 ML native reader oracle
 
 on:
-  pull_request:
-    branches: [main]
+  push:
+    branches: [agent/v030-authoritative-integration]
     paths:
       - 'native/cmpct-portable/**'
       - 'experiments/entropygraph_v030_native_reader_bridge.py'
@@ -19,12 +19,15 @@ on:
 permissions:
   contents: read
 
+# This A/B can run for close to an hour. Keep one branch-scoped execution instead of repeatedly cancelling a useful
+# exact-fingerprint receipt whenever an unrelated commit advances the giant integration PR.
 concurrency:
-  group: cmpct-v030-g04-ml-native-reader-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
+  group: cmpct-v030-g04-ml-native-reader-${{ github.ref }}
+  cancel-in-progress: false
 
 env:
   PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.sha }}
 
 jobs:
   ml-native-reader:
@@ -32,6 +35,10 @@ jobs:
     timeout-minutes: 180
     steps:
       - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - name: Bind exact candidate head
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
       - uses: actions/setup-python@v6
         with:
           python-version: '3.11'
@@ -97,7 +104,6 @@ jobs:
           assert len(d['samples_s']['native_verify'])==5
           assert len(d['samples_s']['python_extract'])==5
           assert len(d['samples_s']['native_extract'])==5
-          # Promotion stays strict but a slower exact native path is valid negative evidence.
           expected=(
               float(d['verify_improvement_fraction'])>=float(c['minimum_verify_improvement_fraction'])
               and float(d['extract_improvement_fraction'])>=float(c['minimum_extract_improvement_fraction'])
@@ -111,7 +117,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v6
         with:
-          name: v030-g04-ml-native-reader-${{ github.sha }}
+          name: v030-g04-ml-native-reader-${{ env.EVIDENCE_HEAD }}
           path: benchmark-artifacts/v030-g04-ml-native-reader.json
           if-no-files-found: warn
           retention-days: 90
