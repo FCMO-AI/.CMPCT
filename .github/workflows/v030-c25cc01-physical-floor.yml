@@ -1,31 +1,27 @@
 # ci-lane: deep
+# ci-auto-policy: retired-manual-only
 name: CMPCT v0.30 C25CC01 physical byte-floor oracle
 
+# Accepted exact negative evidence is persisted in
+# benchmarks/history/2026-08-29-v030-encrypted-like-physical-family-disproof.json:
+# the locality-safe C25CC01 physical span + fixed framing is 117 bytes larger
+# than Zstd-19 even with zero control bytes. Re-running this 30-minute proof on
+# every accumulated-diff PR head cannot change a release decision. Keep manual
+# reproduction only; new automatic work belongs to replacement physical grammars.
 on:
-  pull_request:
-    paths:
-      - 'benchmarks/v030_c25cc01_physical_floor_oracle.py'
-      - 'benchmarks/v030_c25cc01_locality_pack_strategy_oracle.py'
-      - 'benchmarks/v030_c25cc01_locality_safe_pack_oracle.py'
-      - 'experiments/entropygraph_v030_r24_compact_control_profile.py'
-      - 'src/cmpct/codec.py'
-      - '.github/workflows/v030-c25cc01-physical-floor.yml'
   workflow_dispatch:
-
-concurrency:
-  group: v030-c25cc01-physical-floor-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
 
 permissions:
   contents: read
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.sha }}
 
 jobs:
   physical-floor:
     runs-on: ubuntu-24.04
     timeout-minutes: 30
-    env:
-      PYTHONPATH: ${{ github.workspace }}
-      EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
     steps:
       - uses: actions/checkout@v6
         with:
@@ -65,8 +61,6 @@ jobs:
           assert d['gate']['release_credit'] is False
           assert d['candidate']['current_total_control_bytes']==2*d['candidate']['compact_control_bytes_per_copy']
           assert d['zero_control_physical_floor_bytes']==d['candidate']['physical_data_bytes']+d['candidate']['fixed_header_footer_bytes']
-          # The hypothesis may succeed or fail. Either outcome is durable architectural evidence and must not be
-          # turned into a workflow failure merely because the current physical grammar proves impossible.
           assert isinstance(d['gate']['zero_control_physical_floor_beats_zstd19'], bool)
           PY
       - name: CI topology self-check
@@ -81,3 +75,5 @@ jobs:
           path: benchmark-artifacts/v030-c25cc01-physical-floor.json
           if-no-files-found: error
           retention-days: 90
+
+# Historical negative-evidence reproduction only. No automatic release credit.
