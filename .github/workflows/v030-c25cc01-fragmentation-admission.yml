@@ -2,8 +2,8 @@
 name: CMPCT v0.30 C25CC01 fragmentation admission
 
 on:
-  pull_request:
-    branches: [main]
+  push:
+    branches: [agent/v030-authoritative-integration]
     paths:
       - 'experiments/entropygraph_v030_r24_compact_control_profile.py'
       - 'benchmarks/v030_r24_compact_control_terminal_admission.py'
@@ -18,12 +18,12 @@ permissions:
   contents: read
 
 concurrency:
-  group: cmpct-v030-c25cc01-fragmentation-${{ github.event.pull_request.number || github.ref }}
+  group: cmpct-v030-c25cc01-fragmentation-${{ github.ref }}
   cancel-in-progress: true
 
 env:
   PYTHONPATH: ${{ github.workspace }}
-  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+  EVIDENCE_HEAD: ${{ github.sha }}
 
 jobs:
   fragmentation-admission:
@@ -92,5 +92,5 @@ jobs:
           if-no-files-found: error
           retention-days: 90
 
-# Research-only admission refinement. It cannot alter the shipping selector; a green result only earns evidence for
-# a later independent promotion/generalization step. Current strict ZIP/Zstd and release authorities stay decisive.
+# Research-only admission refinement for a shipping-retired family. Keep the negative evidence reproducible, but
+# do not re-run this 180-minute lane on unrelated PR synchronizations. No release threshold or authority is changed.
