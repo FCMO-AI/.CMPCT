@@ -1,4 +1,4 @@
-# ci-lane: focused
+# ci-lane: deep
 # ci-cancel-policy: preserve-running-exact-receipt
 name: CMPCT small mosaic envelope diagnostic
 
