@@ -1,4 +1,5 @@
 # ci-lane: deep
+# ci-cancel-policy: preserve-running-exact-receipt
 name: CMPCT v0.30 C25CC02 self-indexed RAW frontier
 
 on:
@@ -62,6 +63,7 @@ jobs:
           from pathlib import Path
           d=json.loads(Path('benchmark-artifacts/v030-c25cc02-self-indexed-raw.json').read_text())
           assert d['schema']=='cmpct-v030-c25cc02-self-indexed-raw-oracle-v1'
+          assert d['candidate_head']==os.environ['EVIDENCE_HEAD']
           g=d['gate']; c=d['candidate']
           assert g['source_blob_table_derived_exactly'] is True
           assert g['projected_blob_semantics_preserved'] is True
