@@ -144,12 +144,13 @@ def strong_verify(path: Path) -> dict:
 
 
 def read_member_with_stats(path: Path, rel: str) -> tuple[bytes, dict]:
-    """Read one user-visible member with exact cold-operation locality accounting.
+    """Read one byte-valued content member with exact cold-operation locality accounting.
 
-    Resolving a user-visible path requires the authenticated filesystem manifest, so its decoded context belongs
-    to the selective-read operation rather than being hidden outside the locality budget. Regular files and
-    hardlink aliases then read the authenticated graph owner through the v2 cold reader. Symlink bytes come from
-    the authenticated manifest itself. Directories are not byte-valued members.
+    Resolving a regular file or hardlink alias requires the authenticated filesystem manifest, so its decoded
+    context belongs to the selective-read operation rather than being hidden outside the locality budget. Symlink
+    targets are filesystem metadata rather than graph-owned content members; callers that need that metadata use
+    ``read_member`` below, while this measured content API deliberately fails closed if a metadata-only target
+    cannot satisfy the content-member amplification law. Directories are not byte-valued members.
     """
     path = Path(path)
     if not isinstance(rel, str):
@@ -207,6 +208,30 @@ def read_member_with_stats(path: Path, rel: str) -> tuple[bytes, dict]:
 
 
 def read_member(path: Path, rel: str) -> bytes:
+    """Read user-visible bytes while keeping content locality and filesystem metadata semantics distinct.
+
+    Regular files and hardlinks go through the measured selective-read path above. A symlink target is already
+    authenticated inside the bounded filesystem manifest and is not a graph-owned content member, so returning its
+    target text must not pretend that its few metadata bytes are a content payload for the <=8x content-member
+    amplification ratio. The manifest decode itself remains bounded by the same <=8 MiB reader policy.
+    """
+    path = Path(path)
+    if not isinstance(rel, str):
+        raise TypeError("logs member path must be text")
+    manifest_raw = _manifest_from_archive(path)
+    decoded = FS.decode_manifest(
+        manifest_raw,
+        max_path_bytes=MAX_PATH_BYTES,
+        max_entries=FS.DEFAULT_MAX_MANIFEST_ENTRIES,
+    )
+    rows = FS.entry_map(decoded)
+    if rel not in rows:
+        raise KeyError(rel)
+    row = rows[rel]
+    if row[1] == "d":
+        raise IsADirectoryError(rel)
+    if row[1] == "l":
+        return row[7].encode("utf-8")
     return read_member_with_stats(path, rel)[0]
 
 
