@@ -21,23 +21,18 @@ from experiments import entropygraph_v030_release_product_base as BASE
 
 
 def _restore_filesystem_metadata(staging: Path, decoded: dict, *, safe_symlinks: bool) -> None:
-    """Apply FS manifest structure/metadata after content identity was proven in the same Archive session."""
+    """Apply FS manifest structure/metadata after content identity was proven in the same Archive session.
+
+    Regular-file existence/size is not re-stat'ed here. ``extract`` writes every graph regular only after proving
+    that graph ``(size, SHA-256)`` identities exactly equal the authenticated filesystem manifest, and it checks
+    each write's returned byte count. Re-reading filesystem shape immediately afterwards therefore adds syscalls
+    without adding a new integrity fact. Metadata operations below still fail naturally if publication state is
+    unexpectedly missing.
+    """
     entries = decoded["manifest"]["entries"]
     internal = staging.joinpath(*PurePosixPath(FS.INTERNAL_ROOT).parts)
     if internal.exists() or internal.is_symlink():
         shutil.rmtree(internal, ignore_errors=True)
-
-    # Shape remains checked after write. Identity is not re-read: Archive._restore_session already checked the
-    # actual bytes against the authenticated graph SHA, and extract() below first proves those graph SHAs exactly
-    # equal the authenticated filesystem-manifest SHAs.
-    for row in entries:
-        rel, kind = row[0], row[1]
-        if kind != "f":
-            continue
-        target = staging.joinpath(*PurePosixPath(rel).parts)
-        size = int(row[7][0])
-        if not target.is_file() or target.is_symlink() or target.stat().st_size != size:
-            raise RuntimeError(f"r25 extracted regular-file shape mismatch: {rel}")
 
     for row in entries:
         rel, kind = row[0], row[1]
@@ -179,7 +174,9 @@ def extract(
                     pack_cache=pack_cache,
                     active=active,
                 )
-                target.write_bytes(value)
+                written = target.write_bytes(value)
+                if written != len(value):
+                    raise OSError(f"short logs extraction write for {rel!r}: {written} != {len(value)}")
 
         _restore_filesystem_metadata(stage, decoded, safe_symlinks=safe_symlinks)
         if dst.exists() or dst.is_symlink():
