@@ -28,6 +28,37 @@ def _ratio(new: float, old: float) -> float:
     return float(new) / max(float(old), 1e-9)
 
 
+def _worst_rows(rows: list[dict], key: str, *, limit: int = 5) -> list[dict]:
+    """Return the largest runtime offenders in a log-friendly stable shape."""
+    ranked = sorted(rows, key=lambda row: float(row[key]), reverse=True)[:limit]
+    return [
+        {
+            "suite": row["suite"],
+            "name": row["name"],
+            "ratio": float(row[key]),
+        }
+        for row in ranked
+    ]
+
+
+def _worst_rss_rows(rows: list[dict], *, limit: int = 5) -> list[dict]:
+    ranked = sorted(
+        rows,
+        key=lambda row: max(float(row["max_pack_rss_ratio"]), float(row["max_extract_rss_ratio"])),
+        reverse=True,
+    )[:limit]
+    return [
+        {
+            "suite": row["suite"],
+            "name": row["name"],
+            "pack_ratio": float(row["max_pack_rss_ratio"]),
+            "extract_ratio": float(row["max_extract_rss_ratio"]),
+            "max_ratio": max(float(row["max_pack_rss_ratio"]), float(row["max_extract_rss_ratio"])),
+        }
+        for row in ranked
+    ]
+
+
 def run(work_root: Path) -> dict:
     shutil.rmtree(work_root, ignore_errors=True)
     work_root.mkdir(parents=True)
@@ -185,7 +216,17 @@ def main() -> None:
     result = run(args.work_root)
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(result, indent=2, default=str) + "\n", encoding="utf-8")
-    print(json.dumps({"totals": result["totals"], "gate": result["gate"]}, indent=2), flush=True)
+    diagnostic = {
+        "totals": result["totals"],
+        "gate": result["gate"],
+        "worst_workloads": {
+            "create": _worst_rows(result["rows"], "median_create_ratio"),
+            "verify": _worst_rows(result["rows"], "median_verify_ratio"),
+            "extract": _worst_rows(result["rows"], "median_extract_ratio"),
+            "rss": _worst_rss_rows(result["rows"]),
+        },
+    }
+    print(json.dumps(diagnostic, indent=2), flush=True)
     if not result["gate"]["passed"]:
         raise SystemExit("v0.30 release-product runtime gate failed")
 
