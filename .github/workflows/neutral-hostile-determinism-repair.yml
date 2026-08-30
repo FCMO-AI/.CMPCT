@@ -1,15 +1,11 @@
 # ci-lane: deep
-name: CMPCT neutral-hostile determinism repair
+# ci-auto-policy: retired-manual-only
+name: CMPCT neutral-hostile determinism repair (superseded)
 
+# The original repair is preserved for forensic replay only. Repair-v6 is the accepted deterministic
+# benchmark identity consumed by current v0.30 authorities, so rerunning this older two-pass proof on the
+# cumulative integration PR can neither advance nor invalidate the current release candidate.
 on:
-  pull_request:
-    paths:
-      - ".github/workflows/neutral-hostile-determinism-repair.yml"
-      - "benchmarks/neutral_hostile_*"
-      - "benchmarks/history/2026-08-16-entropygraph-v028.json"
-      - "experiments/entropygraph_v028*.py"
-      - "native/preflate-bridge/**"
-      - "pyproject.toml"
   workflow_dispatch:
 
 permissions:
@@ -29,7 +25,7 @@ jobs:
       - name: Check out candidate
         uses: actions/checkout@v6
         with:
-          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          ref: ${{ github.sha }}
 
       - name: Set up Python
         uses: actions/setup-python@v6
@@ -156,8 +152,5 @@ jobs:
             benchmark-artifacts/CMPCT_Neutral_Hostile_Determinism_Repair/forensics/*.pdf
           if-no-files-found: warn
 
-# Footnote: cross-path byte identity is part of the acceptance contract. ReportLab resource names are
-# deliberately made content-derived so temporary CI directories cannot perturb the benchmark tree. The
-# developer-repository probe is additive evidence only: it must explain source drift before any frozen
-# benchmark identity can be changed, and therefore performs no normalization itself. Path scoping keeps this
-# deep forensic lane from competing with release CI when unrelated files change.
+# Footnote: cross-path byte identity remains preserved as forensic evidence, but the accepted repair-v6
+# identity is the active authority. This superseded workflow remains available through workflow_dispatch.
