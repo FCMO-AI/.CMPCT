@@ -3,8 +3,8 @@
 name: CMPCT v0.30 Office graph hotpath profile
 
 on:
-  pull_request:
-    branches: [main]
+  push:
+    branches: [agent/v030-authoritative-integration]
     paths:
       - 'benchmarks/v030_office_graph_hotpath_profile.py'
       - 'benchmarks/v030_federated_compact_framing_v8_policy_distill.py'
@@ -20,12 +20,12 @@ permissions:
   contents: read
 
 concurrency:
-  group: cmpct-v030-office-graph-hotpath-profile-${{ github.event.pull_request.number || github.ref }}
+  group: cmpct-v030-office-graph-hotpath-profile-${{ github.ref }}
   cancel-in-progress: false
 
 env:
   PYTHONPATH: ${{ github.workspace }}
-  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+  EVIDENCE_HEAD: ${{ github.sha }}
 
 jobs:
   profile:
