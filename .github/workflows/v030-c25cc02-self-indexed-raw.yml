@@ -1,0 +1,94 @@
+# ci-lane: deep
+name: CMPCT v0.30 C25CC02 self-indexed RAW frontier
+
+on:
+  push:
+    branches: [agent/v030-authoritative-integration]
+    paths:
+      - 'benchmarks/v030_c25cc02_self_indexed_raw_oracle.py'
+      - 'benchmarks/v030_c25cc01_locality_safe_pack_oracle.py'
+      - 'benchmarks/v030_c25cc01_locality_pack_strategy_oracle.py'
+      - 'benchmarks/v030_r24_compact_control_oracle.py'
+      - 'experiments/entropygraph_v030_r24_compact_control_profile.py'
+      - '.github/workflows/v030-c25cc02-self-indexed-raw.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-v030-c25cc02-self-indexed-raw-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.sha }}
+
+jobs:
+  self-indexed-raw:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - name: Bind exact candidate head
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install deterministic corpus/compressor dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y zstd gcc ffmpeg libsndfile1
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[audio,test]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
+      - name: Compile exact oracle surface
+        run: python -m py_compile benchmarks/v030_c25cc02_self_indexed_raw_oracle.py
+      - name: Measure self-indexed RAW physical/control composition
+        run: |
+          mkdir -p benchmark-artifacts
+          python benchmarks/v030_c25cc02_self_indexed_raw_oracle.py \
+            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-c25cc02-self-indexed-raw-work" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-c25cc02-self-indexed-raw.json"
+      - name: Enforce reconstruction, integrity, locality and honest claim boundary
+        if: always()
+        run: |
+          test -f benchmark-artifacts/v030-c25cc02-self-indexed-raw.json
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          d=json.loads(Path('benchmark-artifacts/v030-c25cc02-self-indexed-raw.json').read_text())
+          assert d['schema']=='cmpct-v030-c25cc02-self-indexed-raw-oracle-v1'
+          g=d['gate']; c=d['candidate']
+          assert g['source_blob_table_derived_exactly'] is True
+          assert g['semantic_index_roundtrip_exact'] is True
+          assert g['payload_bytes_unchanged'] is True
+          assert g['locality_within_8x'] is True
+          assert g['decode_unit_within_8mib'] is True
+          assert c['per_record_sha256_retained'] is True
+          assert c['record_magic_retained'] is True
+          assert c['record_length_retained'] is True
+          assert c['payload_bytes_changed'] is False
+          assert d['release_credit'] is False and g['release_credit'] is False
+          assert d['promotion_signal'] is g['projected_complete_beats_zstd19']
+          Path('benchmark-artifacts/v030-c25cc02-self-indexed-raw-candidate.txt').write_text(os.environ['EVIDENCE_HEAD']+'\n')
+          PY
+      - name: CI topology self-check
+        if: always()
+        run: python tools/check_ci_topology.py .github/workflows/v030-c25cc02-self-indexed-raw.yml
+      - name: Upload exact feasibility evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: v030-c25cc02-self-indexed-raw-${{ env.EVIDENCE_HEAD }}
+          path: |
+            benchmark-artifacts/v030-c25cc02-self-indexed-raw.json
+            benchmark-artifacts/v030-c25cc02-self-indexed-raw-candidate.txt
+          if-no-files-found: warn
+          retention-days: 90
+
+# Exact research feasibility only. A green workflow means the measurement/reconstruction contract executed, not
+# that the proposed format beat Zstd. `promotion_signal` inside the receipt is the only permission to implement it.
