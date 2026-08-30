@@ -22,7 +22,12 @@ def test_promoted_logs_prefilter_short_circuits_after_two_proven_pairs(tmp_path:
     result = PRODUCT.logs_source_prefilter(root)
 
     assert PRODUCT.PROMOTED_LOGS_STREAMING_PREFILTER is True
-    assert PRODUCT._LOGS_PROMOTED.logs_source_prefilter is PRODUCT._logs_streaming_source_prefilter
+    # The public release facade owns the promoted streaming prefilter.  The candidate module intentionally keeps
+    # its own implementation so importing the facade cannot mutate research/candidate module globals and make
+    # full-suite behavior depend on import order.
+    assert PRODUCT.logs_source_prefilter is PRODUCT._logs_streaming_source_prefilter
+    assert PRODUCT._LOGS_PROMOTED.logs_source_prefilter is not PRODUCT._logs_streaming_source_prefilter
+    assert PRODUCT._LOGS_PROMOTED.logs_source_prefilter.__module__ == PRODUCT._LOGS_PROMOTED.__name__
     assert result["eligible"] is True
     assert result["sidecar_pairs"] >= PRODUCT._LOGS_PROMOTED.MIN_SIDECAR_PAIRS
     assert result["short_circuited"] is True
