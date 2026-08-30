@@ -3,8 +3,8 @@
 name: CMPCT v0.30 G0-G4 ML operation record-cache A/B
 
 on:
-  pull_request:
-    branches: [main]
+  push:
+    branches: [agent/v030-authoritative-integration]
     paths:
       - 'benchmarks/patches/v030_g04_operation_record_cache.patch'
       - 'benchmarks/v030_g04_ml_operation_record_cache_ab_oracle.py'
@@ -18,12 +18,12 @@ permissions:
   contents: read
 
 concurrency:
-  group: cmpct-v030-g04-ml-operation-record-cache-ab-${{ github.event.pull_request.number || github.ref }}
+  group: cmpct-v030-g04-ml-operation-record-cache-ab-${{ github.ref }}
   cancel-in-progress: false
 
 env:
   PYTHONPATH: ${{ github.workspace }}
-  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+  EVIDENCE_HEAD: ${{ github.sha }}
 
 jobs:
   native-ab:
@@ -122,3 +122,4 @@ jobs:
           retention-days: 90
 
 # Research-only ephemeral native patch. Product source is unchanged until a positive exact A/B earns promotion.
+# Push-only triggering prevents the accumulated integration-PR diff from repeatedly relaunching this 90-minute lane.
