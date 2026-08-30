@@ -9,8 +9,9 @@ import pytest
 from experiments import entropygraph_v030_zipfactor_fused as ZF
 
 
-def _zip(path, payload: bytes) -> None:
+def _zip(path, payload: bytes, *, comment: bytes = b"") -> None:
     with zipfile.ZipFile(path, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+        archive.comment = comment
         archive.writestr("same/member.txt", payload)
 
 
@@ -81,3 +82,47 @@ def test_direct_signature_comparator_matches_mature_signature_law(tmp_path):
     changed_eocd["eocd"]["comment"] += b"x"
     assert ZF.BASE._signature(reference) != ZF.BASE._signature(changed_eocd)
     assert ZF._same_framing_signature(reference, changed_eocd) is False
+
+
+def test_default_scan_proves_framing_inline_without_second_parsed_row_comparator(tmp_path, monkeypatch):
+    source = tmp_path / "source"
+    source.mkdir()
+    _zip(source / "a", b"A" * 256)
+    _zip(source / "b", b"B" * 256)
+
+    def forbidden_second_walk(_reference, _candidate):
+        raise AssertionError("shipping scan reintroduced the second parsed-row framing traversal")
+
+    monkeypatch.setattr(ZF, "_same_framing_signature", forbidden_second_walk)
+    manifest, items, stats = ZF._scan(source)
+    assert manifest
+    assert len(items) == 2
+    assert stats["regular_graph_members"] == 2
+
+
+def test_default_inline_scan_preserves_valid_but_different_framing_rejection(tmp_path):
+    source = tmp_path / "source"
+    source.mkdir()
+    _zip(source / "a", b"A" * 256, comment=b"shared")
+    _zip(source / "b", b"B" * 256, comment=b"different")
+
+    with pytest.raises(ZF.ProfileNotEligible, match=r"framing layout drift"):
+        ZF._scan(source)
+
+
+def test_injected_parser_keeps_independent_differential_comparator(tmp_path, monkeypatch):
+    source = tmp_path / "source"
+    source.mkdir()
+    _zip(source / "a", b"A" * 256)
+    _zip(source / "b", b"B" * 256)
+    calls = 0
+    original = ZF._same_framing_signature
+
+    def counted(reference, candidate):
+        nonlocal calls
+        calls += 1
+        return original(reference, candidate)
+
+    monkeypatch.setattr(ZF, "_same_framing_signature", counted)
+    ZF._scan(source, parse_zip=ZF.ZIP_PARSER.parse_zip.__wrapped__ if hasattr(ZF.ZIP_PARSER.parse_zip, "__wrapped__") else lambda raw: ZF.ZIP_PARSER.parse_zip(raw))
+    assert calls == 1
