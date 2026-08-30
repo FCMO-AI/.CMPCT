@@ -2,8 +2,8 @@
 name: CMPCT v0.30 ZIP-factor recovery memory FFI frontier
 
 on:
-  pull_request:
-    branches: [main]
+  push:
+    branches: [agent/v030-authoritative-integration]
     paths:
       - 'benchmarks/v030_zipfactor_recovery_memory_ffi_frontier.py'
       - 'benchmarks/v030_zipfactor_recovery_native_ffi_frontier.py'
@@ -21,12 +21,12 @@ permissions:
   contents: read
 
 concurrency:
-  group: cmpct-v030-zipfactor-recovery-memory-ffi-${{ github.event.pull_request.number || github.ref }}
+  group: cmpct-v030-zipfactor-recovery-memory-ffi-${{ github.ref }}
   cancel-in-progress: true
 
 env:
   PYTHONPATH: ${{ github.workspace }}
-  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+  EVIDENCE_HEAD: ${{ github.sha }}
 
 jobs:
   recovery-memory-ffi-frontier:
@@ -122,5 +122,5 @@ jobs:
       - name: CI topology self-check
         run: python tools/check_ci_topology.py .github/workflows/v030-zipfactor-recovery-memory-ffi-frontier.yml
 
-# Research-only. A positive exact-head result advances exact recovered ZIP-factor bytes toward portable/native
-# productization. It cannot alter production dispatch, selector policy, archive bytes, or the v0.30 release lock.
+# Research-only but high-value: exact recovered ZIP-factor bytes can advance to portable/native productization. Run
+# when that path changes, not on unrelated accumulated PR history. No production dispatch or release credit changes.
