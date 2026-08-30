@@ -51,13 +51,14 @@ jobs:
           python -m benchmarks.v030_c25cc01_distributed_file_table_oracle \
             --work-root benchmark-artifacts/v030-c25cc01-distributed-file-table-work \
             --output benchmark-artifacts/v030-c25cc01-distributed-file-table.json
-      - name: Enforce diagnostic boundary
+      - name: Enforce diagnostic boundary and exact receipt custody
         run: |
           python - <<'PY'
-          import json
+          import json, os
           from pathlib import Path
           d=json.loads(Path('benchmark-artifacts/v030-c25cc01-distributed-file-table.json').read_text())
           assert d['schema']=='cmpct-v030-c25cc01-distributed-file-table-oracle-v1'
+          assert d['candidate_head']==os.environ['EVIDENCE_HEAD']
           assert d['gate']['exact_baseline_accounting'] is True
           assert d['gate']['exact_file_semantic_reconstruction'] is True
           assert d['gate']['current_locality_within_8x'] is True
