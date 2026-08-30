@@ -10,6 +10,7 @@ fresh-cache behavior.
 """
 
 import argparse
+import hashlib
 import json
 from pathlib import Path
 import shutil
@@ -25,6 +26,14 @@ from experiments import entropygraph_v030_release_reader as RR
 ROUNDS = 7
 MIN_VERIFY_IMPROVEMENT = 0.10
 MIN_EXTRACT_IMPROVEMENT = 0.10
+
+
+def _file_sha256(path: Path) -> str:
+    h = hashlib.sha256()
+    with path.open("rb") as fh:
+        for block in iter(lambda: fh.read(1024 * 1024), b""):
+            h.update(block)
+    return h.hexdigest()
 
 
 def _verify(cli: Path, archive: Path) -> float:
@@ -55,6 +64,13 @@ def run(work_root: Path, baseline_cli: Path, candidate_cli: Path) -> dict:
     for cli in (baseline_cli, candidate_cli):
         if not cli.is_file():
             raise RuntimeError(f"missing native CLI: {cli}")
+    binary_sha256 = {
+        "baseline": _file_sha256(baseline_cli),
+        "candidate": _file_sha256(candidate_cli),
+    }
+    if binary_sha256["baseline"] == binary_sha256["candidate"]:
+        raise RuntimeError("native A/B executables are byte-identical; candidate patch is not represented in the measured binary")
+
     shutil.rmtree(work_root, ignore_errors=True)
     work_root.mkdir(parents=True)
     roots = PERF._build_corpora(work_root / "corpus")
@@ -101,6 +117,7 @@ def run(work_root: Path, baseline_cli: Path, candidate_cli: Path) -> dict:
     verify_improvement = 1.0 - medians["candidate_verify"] / max(medians["baseline_verify"], 1e-12)
     extract_improvement = 1.0 - medians["candidate_extract"] / max(medians["baseline_extract"], 1e-12)
     gate = {
+        "distinct_measured_binaries": binary_sha256["baseline"] != binary_sha256["candidate"],
         "same_archive_bytes": True,
         "same_public_info": baseline_info == candidate_info,
         "same_extracted_tree": True,
@@ -110,8 +127,9 @@ def run(work_root: Path, baseline_cli: Path, candidate_cli: Path) -> dict:
         "candidate_extract_materially_faster": extract_improvement >= MIN_EXTRACT_IMPROVEMENT,
     }
     return {
-        "schema": "cmpct-v030-g04-ml-operation-record-cache-ab-v2",
+        "schema": "cmpct-v030-g04-ml-operation-record-cache-ab-v3",
         "target": "neutral_hostile_v1/09_ml_artifacts",
+        "binary_sha256": binary_sha256,
         "shipping_build": built,
         "tree_sha256": tree,
         "rounds": ROUNDS,
@@ -154,6 +172,7 @@ def main() -> None:
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8")
     print(json.dumps({
+        "binary_sha256": result["binary_sha256"],
         "medians_s": result["medians_s"],
         "verify_improvement_fraction": result["verify_improvement_fraction"],
         "extract_improvement_fraction": result["extract_improvement_fraction"],
