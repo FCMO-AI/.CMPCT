@@ -2,8 +2,8 @@
 name: CMPCT v0.30 C25CC01 fragmentation generalization
 
 on:
-  pull_request:
-    branches: [main]
+  push:
+    branches: [agent/v030-authoritative-integration]
     paths:
       - 'benchmarks/v030_c25cc01_fragmentation_admission_oracle.py'
       - 'benchmarks/v030_c25cc01_fragmentation_generalization.py'
@@ -17,11 +17,12 @@ permissions:
   contents: read
 
 concurrency:
-  group: cmpct-v030-c25cc01-fragmentation-generalization-${{ github.event.pull_request.number || github.ref }}
+  group: cmpct-v030-c25cc01-fragmentation-generalization-${{ github.ref }}
   cancel-in-progress: true
 
 env:
   PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.sha }}
 
 jobs:
   fragmentation-generalization:
@@ -29,6 +30,10 @@ jobs:
     timeout-minutes: 180
     steps:
       - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - name: Bind exact candidate head
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
       - uses: actions/setup-python@v6
         with:
           python-version: '3.11'
@@ -78,7 +83,6 @@ jobs:
           assert isinstance(g['hypothesis_supported'], bool)
           assert g['promotion_signal'] is g['hypothesis_supported']
           assert all(row['payload_unchanged'] and row['two_control_copies'] for row in rows)
-          # Counterexamples are durable negative evidence. They must never be hidden to manufacture promotion.
           if d['counterexamples']:
               assert g['hypothesis_supported'] is False
               assert g['promotion_signal'] is False
@@ -94,10 +98,10 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v6
         with:
-          name: v030-c25cc01-fragmentation-generalization-${{ github.sha }}
+          name: v030-c25cc01-fragmentation-generalization-${{ env.EVIDENCE_HEAD }}
           path: benchmark-artifacts/v030-c25cc01-fragmentation-generalization.json
           if-no-files-found: warn
           retention-days: 90
 
-# Research-only evidence lane. A green job means the experiment was valid, not that the fragmentation hypothesis won.
-# Promotion remains possible only when hypothesis_supported/promotion_signal is true; this lane never earns release credit.
+# Research-only generalization for a shipping-retired physical family. Preserve its counterexamples on relevant
+# changes, but do not spend three hours on unrelated accumulated PR history. This lane never earns release credit.
