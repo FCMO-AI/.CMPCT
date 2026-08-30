@@ -1,4 +1,5 @@
 # ci-lane: deep
+# ci-pr-scope: latest-head-commit-gate
 name: CMPCT v0.29 Zstd category frontier
 
 on:
@@ -21,21 +22,68 @@ permissions:
   contents: read
 
 concurrency:
-  group: cmpct-v029-category-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
+  group: cmpct-v029-category-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
+env:
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+
 jobs:
+  latest-head-scope:
+    runs-on: ubuntu-latest
+    outputs:
+      relevant: ${{ steps.scope.outputs.relevant }}
+    steps:
+      - name: Check out exact candidate
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 2
+          ref: ${{ env.EVIDENCE_HEAD }}
+
+      - name: Bind exact evidence head
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+
+      - id: scope
+        name: Classify only the newest exact HEAD commit
+        shell: bash
+        run: |
+          relevant=false
+          while IFS= read -r path; do
+            case "$path" in
+              src/*|\
+              experiments/entropygraph_v029_residual_strict.py|\
+              native/preflate-bridge/*|\
+              benchmarks/mosaic_v029_generalization_bench.py|\
+              benchmarks/entropygraph_v028_bench.py|\
+              benchmarks/neutral_hostile_determinism_repair_v5.py|\
+              benchmarks/history/2026-08-16-entropygraph-v028.json|\
+              benchmarks/history/2026-08-17-neutral-hostile-determinism-repair-v5.json|\
+              pyproject.toml|\
+              .github/workflows/mosaic-v029-category-frontier.yml)
+                relevant=true
+                break
+                ;;
+            esac
+          done < <(git diff-tree --no-commit-id --name-only -r HEAD)
+          echo "relevant=$relevant" >> "$GITHUB_OUTPUT"
+          echo "latest exact-head category substrate change: $relevant"
+
   category-frontier:
+    needs: latest-head-scope
+    if: github.event_name == 'workflow_dispatch' || needs.latest-head-scope.outputs.relevant == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 75
     env:
       CMPCT_PREFLATE_BRIDGE: ${{ github.workspace }}/native/preflate-bridge/target/release/cmpct-preflate-bridge
     steps:
-      - name: Check out candidate
+      - name: Check out exact candidate
         uses: actions/checkout@v6
         with:
           fetch-depth: 0
-          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          ref: ${{ env.EVIDENCE_HEAD }}
+
+      - name: Bind exact evidence head
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
 
       - name: Set up Python
         uses: actions/setup-python@v6
@@ -121,6 +169,6 @@ jobs:
           retention-days: 30
 
 # Footnote: this workflow generates evidence only; it does not alter accepted v0.29 archive bytes.
-# Category claims are current exact-tree size comparisons and retain every Zstd loss. The historical frontier
-# now tracks the exact benchmark/engine/history files it consumes instead of every file under benchmarks/**,
-# so new v0.30 release harnesses cannot wake a 75-minute v0.29 research measurement by accident.
+# Category claims are current exact-tree size comparisons and retain every Zstd loss. GitHub evaluates PR
+# paths against the accumulated integration diff, so the cheap exact-HEAD classifier prevents unrelated
+# v0.30 changes from spending a 75-minute research runner while retaining mandatory reruns on substrate edits.
