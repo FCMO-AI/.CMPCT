@@ -73,9 +73,6 @@ def build(root: Path, out: Path, *, level: int = 6, group_size: int = 7) -> dict
     template_raw = BASE._serialize_template(items[0][1])
     groups = [items[index:index + group_size] for index in range(0, len(items), group_size)]
     group_raws = [_pack_group(group) for group in groups]
-    # _scan() has already read and parsed every ZIP. Re-statting every path here was redundant I/O on the
-    # millisecond-scale creation frontier; the parser's raw_size is the exact source byte length from that same
-    # fused read and is already covered by the canonical manifest identity captured in _scan().
     regular_sizes = {rel: int(item["raw_size"]) for rel, item in items}
     max_decode = max(len(template_raw) + len(raw) for raw in group_raws)
     max_amp = max(
@@ -111,7 +108,6 @@ def build(root: Path, out: Path, *, level: int = 6, group_size: int = 7) -> dict
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_bytes(payload)
     return {
-        # The complete publication bytes are already resident; a second filesystem stat was bookkeeping-only.
         "archive_bytes": len(payload),
         "format_revision": REVISION,
         "format_profile": PROFILE,
@@ -128,11 +124,7 @@ def build(root: Path, out: Path, *, level: int = 6, group_size: int = 7) -> dict
 
 
 def _open(archive: Path | bytes | bytearray | memoryview) -> tuple[bytes, dict, bytes, list[tuple[int, bytes, list[str], bytes]]]:
-    """Open either an on-disk V3 archive or already-resident exact candidate bytes.
-
-    Accepting resident bytes lets recovery/selective readers preserve one semantic parser while avoiding a
-    temporary-file publication+reread round trip. The same bounded parser and authentication checks own both paths.
-    """
+    """Open either an on-disk V3 archive or already-resident exact candidate bytes."""
     if isinstance(archive, (bytes, bytearray, memoryview)):
         raw = memoryview(archive)
     else:
@@ -182,7 +174,8 @@ def _open(archive: Path | bytes | bytearray | memoryview) -> tuple[bytes, dict, 
     return manifest_raw, manifest, template_raw, groups
 
 
-def verify_and_identities(archive: Path) -> dict:
+def verify_and_identities(archive: Path | bytes | bytearray | memoryview) -> dict:
+    """Verify an on-disk archive or exact resident V3 bytes through the same bounded semantic owner."""
     manifest_raw, manifest, template_raw, groups = _open(archive)
     template = BASE._parse_template(template_raw)
     identities = {FS.FILESYSTEM_MANIFEST: (len(manifest_raw), _sha(manifest_raw))}
@@ -217,7 +210,7 @@ def verify_and_identities(archive: Path) -> dict:
                 at += 12
                 if csize > MAX_DECODE or at + csize > len(view):
                     raise RuntimeError("truncated binary-control ZIP-factor payload")
-                payload = bytes(view[at:at + csize])
+                payload = bytes(view[at:at +csize])
                 at += csize
                 dynamics.append((crc, csize, usize, payload))
             restored = BASE._rebuild_zip(template, dynamics)
