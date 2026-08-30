@@ -1,4 +1,5 @@
 # ci-lane: deep
+# ci-cancel-policy: preserve-running-exact-receipt
 name: CMPCT v0.30 G0-G4 ML cross-member reuse floor
 
 on:
@@ -15,9 +16,12 @@ on:
 permissions:
   contents: read
 
+# Preserve the running exact-head structural receipt. A newer matching push may
+# queue one successor, but must not destroy 8–40 minutes of already-paid ML
+# corpus construction/verification. Evidence identity stays bound to github.sha.
 concurrency:
   group: cmpct-v030-g04-ml-cross-member-reuse-floor-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 env:
   PYTHONPATH: ${{ github.workspace }}
