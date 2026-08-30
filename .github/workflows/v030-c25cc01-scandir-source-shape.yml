@@ -1,25 +1,24 @@
 # ci-lane: deep
+# ci-auto-policy: retired-manual-only
 name: CMPCT v0.30 C25CC01 scandir source-shape A/B
 
+# C25CC01 is shipping-retired and its locality-safe physical floor cannot beat
+# Zstd-19 even with zero control bytes. This A/B only optimizes source-shape
+# discovery for that dead selector path, so automatic PR execution cannot change
+# a release decision. Keep manual reproduction for historical evidence.
 on:
-  pull_request:
-    branches: [main]
-    paths:
-      - 'benchmarks/v030_c25cc01_scandir_source_shape_oracle.py'
-      - 'experiments/entropygraph_v030_release_product.py'
-      - 'tests/test_v030_r24_compact_control_shipping_selector.py'
-      - '.github/workflows/v030-c25cc01-scandir-source-shape.yml'
   workflow_dispatch:
 
 permissions:
   contents: read
 
 concurrency:
-  group: cmpct-v030-c25cc01-scandir-source-shape-${{ github.event.pull_request.number || github.ref }}
+  group: cmpct-v030-c25cc01-scandir-source-shape-${{ github.ref }}
   cancel-in-progress: true
 
 env:
   PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.sha }}
 
 jobs:
   source-shape-ab:
@@ -27,6 +26,10 @@ jobs:
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - name: Bind exact candidate head
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
       - uses: actions/setup-python@v6
         with:
           python-version: '3.11'
@@ -68,9 +71,6 @@ jobs:
           assert g['prefilter_exact'] is True
           assert g['shipping_uses_candidate'] is True
           assert g['experiment_valid'] is True
-          # The product change is admitted only on semantic identity; the A/B remains
-          # an honest causal measurement. It may close as negative evidence without
-          # inventing speed credit, while any material claim must satisfy both hurdles.
           if g['promotion_signal']:
               assert g['material_speedup'] is True
               assert e['absolute_speedup_s'] >= 0.003
@@ -87,5 +87,4 @@ jobs:
       - name: CI topology self-check
         run: python tools/check_ci_topology.py .github/workflows/v030-c25cc01-scandir-source-shape.yml
 
-# Source-shape implementation change only: selector thresholds and archive bytes remain unchanged.
-# Material-speed claims still require the frozen >=20% plus >=3 ms same-runner A/B hurdle.
+# Historical source-shape evidence only; replacement C25CC02 work remains active.
