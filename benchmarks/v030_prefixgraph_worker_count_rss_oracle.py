@@ -22,7 +22,7 @@ from benchmarks import v030_release_performance as PERF
 
 ROOT = Path(__file__).resolve().parents[1]
 WORKER = ROOT / "benchmarks" / "v030_prefixgraph_worker_count_rss_worker.py"
-WORKER_COUNTS = (1, 2, 4)
+WORKER_COUNTS = (1, 2, 3, 4)
 ROUNDS = 2
 TARGET = ("resemblance_hostile_v1", "01_shifted_versions")
 
