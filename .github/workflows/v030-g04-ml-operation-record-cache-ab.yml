@@ -75,7 +75,7 @@ jobs:
             --candidate-cli "$RUNNER_TEMP/cmpct-portable-candidate" \
             --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-g04-ml-operation-record-cache-work" \
             --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-g04-ml-operation-record-cache.json"
-      - name: Enforce identity, hostile rejection and honest promotion boundary
+      - name: Enforce binary binding, identity, hostile rejection and honest promotion boundary
         if: always()
         run: |
           test -f benchmark-artifacts/v030-g04-ml-operation-record-cache.json
@@ -83,10 +83,13 @@ jobs:
           import json
           from pathlib import Path
           d=json.loads(Path('benchmark-artifacts/v030-g04-ml-operation-record-cache.json').read_text())
-          assert d['schema']=='cmpct-v030-g04-ml-operation-record-cache-ab-v2'
+          assert d['schema']=='cmpct-v030-g04-ml-operation-record-cache-ab-v3'
           assert d['target']=='neutral_hostile_v1/09_ml_artifacts'
           assert int(d['rounds'])==7
-          c=d['contract']; g=d['gate']
+          b=d['binary_sha256']; c=d['contract']; g=d['gate']
+          assert len(b['baseline'])==64 and len(b['candidate'])==64
+          assert b['baseline'] != b['candidate']
+          assert g['distinct_measured_binaries'] is True
           assert c['record_cache_limit_bytes']==64*1024*1024
           assert c['node_cache_scope']=='fresh per member'
           assert c['member_locality_charged_on_shared_record_hit'] is True
