@@ -17,6 +17,9 @@ from experiments import entropygraph_v030_prefixgraph as BASE
 from experiments import entropygraph_v030_prefixgraph_parallel as PG
 
 
+WORKER_COUNTS = (1, 2, 3, 4)
+
+
 def _rss_kib() -> int:
     return int(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss)
 
@@ -25,7 +28,7 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--source", type=Path, required=True)
     parser.add_argument("--archive", type=Path, required=True)
-    parser.add_argument("--workers", type=int, choices=(1, 2, 4), required=True)
+    parser.add_argument("--workers", type=int, choices=WORKER_COUNTS, required=True)
     args = parser.parse_args()
 
     expected_tree = BASE.treehash(args.source)
