@@ -1,9 +1,10 @@
 # ci-lane: deep
+# ci-cancel-policy: preserve-running-exact-receipt
 name: CMPCT v0.30 r24 physical-overhead oracle
 
 on:
-  pull_request:
-    branches: [main]
+  push:
+    branches: [agent/v030-authoritative-integration]
     paths:
       - 'src/cmpct/codec.py'
       - 'src/cmpct/builder.py'
@@ -19,12 +20,12 @@ permissions:
   contents: read
 
 concurrency:
-  group: cmpct-v030-r24-physical-overhead-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
+  group: cmpct-v030-r24-physical-overhead-${{ github.ref }}
+  cancel-in-progress: false
 
 env:
   PYTHONPATH: ${{ github.workspace }}
-  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+  EVIDENCE_HEAD: ${{ github.sha }}
 
 jobs:
   oracle:
@@ -80,6 +81,9 @@ jobs:
       - name: Public-surface guard
         if: always()
         run: python tools/check_public_surface.py
+      - name: CI topology self-check
+        if: always()
+        run: python tools/check_ci_topology.py .github/workflows/v030-r24-physical-overhead.yml
       - uses: actions/upload-artifact@v6
         if: always()
         with:
@@ -90,5 +94,6 @@ jobs:
           if-no-files-found: error
           retention-days: 90
 
-# Diagnostic only. Hypothetical framing floors are not product candidates and cannot weaken salvage, recovery,
-# locality, external-competitor, v0.29, native, Android or final-release authority.
+# Diagnostic only. Relevant semantic changes re-run it; unrelated integration commits do not consume up to two
+# runner-hours. Exact receipts are preserved rather than canceled. Hypothetical framing floors are not product
+# candidates and cannot weaken salvage, recovery, locality, external-competitor, v0.29, native, Android or final-release authority.
