@@ -64,7 +64,10 @@ jobs:
           assert d['schema']=='cmpct-v030-c25cc02-self-indexed-raw-oracle-v1'
           g=d['gate']; c=d['candidate']
           assert g['source_blob_table_derived_exactly'] is True
+          assert g['projected_blob_semantics_preserved'] is True
           assert g['semantic_index_roundtrip_exact'] is True
+          assert c['control']['logical_file_rows_exact'] is True
+          assert c['control']['blob_offsets_derived_from_self_indexed_records'] is True
           assert g['payload_bytes_unchanged'] is True
           assert g['locality_within_8x'] is True
           assert g['decode_unit_within_8mib'] is True
