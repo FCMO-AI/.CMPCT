@@ -2,8 +2,8 @@
 name: CMPCT v0.30 G0-G4 ML deferred node digest oracle
 
 on:
-  pull_request:
-    branches: [main]
+  push:
+    branches: [agent/v030-authoritative-integration]
     paths:
       - 'experiments/entropygraph_v030_release_reader.py'
       - 'experiments/entropygraph_v030_release_product.py'
@@ -16,13 +16,14 @@ on:
 permissions:
   contents: read
 
+# Preserve expensive exact-SHA evidence instead of cancelling a nearly-finished ML A/B on unrelated PR churn.
 concurrency:
-  group: cmpct-v030-g04-ml-deferred-node-digest-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
+  group: cmpct-v030-g04-ml-deferred-node-digest-${{ github.ref }}
+  cancel-in-progress: false
 
 env:
   PYTHONPATH: ${{ github.workspace }}
-  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+  EVIDENCE_HEAD: ${{ github.sha }}
 
 jobs:
   ml-deferred-node-digest:
