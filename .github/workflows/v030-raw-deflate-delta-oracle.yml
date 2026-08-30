@@ -1,4 +1,5 @@
 # ci-lane: deep
+# ci-auto-policy: retired-manual-only
 name: CMPCT v0.30 raw DEFLATE delta oracle
 
 # Exact-head 2026-08-29 evidence falsified this family as an automatic frontier lane:
