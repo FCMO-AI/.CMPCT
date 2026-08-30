@@ -10,7 +10,6 @@ one target group. It delegates build/full verification/extraction to the canonic
 
 import hashlib
 from pathlib import Path
-import tempfile
 
 from experiments import entropygraph_v030_zipfactor_compact_v3 as V3
 from experiments import entropygraph_v030_zipfactor_recovery_product_candidate as PRODUCT
@@ -51,11 +50,9 @@ def _select_v3_candidate(raw: bytes) -> tuple[str, bytes]:
 
 
 def _open_v3(candidate: bytes):
-    # V3._open authenticates/decompresses only direct manifest/template metadata; group blobs stay compressed.
-    with tempfile.TemporaryDirectory(prefix="cmpct-zf-selective-") as td:
-        path = Path(td) / "candidate.cmpct"
-        path.write_bytes(candidate)
-        return V3._open(path)
+    # The recovery envelope already reconstructed the exact V3 bytes in memory. Reuse V3's one bounded parser
+    # directly instead of publishing those bytes to a temporary file and immediately reading them back.
+    return V3._open(candidate)
 
 
 def list_members(path: Path) -> list[dict]:
@@ -156,6 +153,7 @@ def read_member_with_stats(path: Path, rel: str) -> tuple[bytes, dict]:
         "full_archive_verify_before_read": False,
         "direct_metadata_decode_passes": 1,
         "payload_group_decode_passes": 1 if kind not in {"l"} else 0,
+        "candidate_tempfile_round_trips": 0,
         "format_revision": PRODUCT.REVISION,
         "format_profile": PRODUCT.PROFILE,
     }
