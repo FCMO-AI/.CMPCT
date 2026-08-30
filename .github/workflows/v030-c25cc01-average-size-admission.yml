@@ -1,16 +1,12 @@
 # ci-lane: deep
+# ci-auto-policy: retired-manual-only
 name: CMPCT v0.30 C25CC01 average-size admission oracle
 
+# The C25CC01 physical family is shipping-retired and its locality-safe zero-control
+# floor is already above Zstd-19. Keep this historical admission campaign available
+# for manual reproduction, but do not spend automatic runner capacity refining a
+# selector for a representation that cannot satisfy the frozen external size gate.
 on:
-  push:
-    branches: [agent/v030-authoritative-integration]
-    paths:
-      - 'benchmarks/v030_c25cc01_average_size_admission_oracle.py'
-      - 'benchmarks/v030_r24_compact_control_terminal_admission.py'
-      - 'benchmarks/v030_r24_compact_control_terminal_generalization.py'
-      - 'benchmarks/v030_external_competitors.py'
-      - 'experiments/entropygraph_v030_r24_compact_control_profile.py'
-      - '.github/workflows/v030-c25cc01-average-size-admission.yml'
   workflow_dispatch:
 
 permissions:
@@ -100,5 +96,4 @@ jobs:
       - name: CI topology self-check
         run: python tools/check_ci_topology.py .github/workflows/v030-c25cc01-average-size-admission.yml
 
-# Research-only for a shipping-retired physical family. Preserve reproducibility but do not spend CI on unrelated
-# PR synchronizations. No selector, release threshold, or final authority is changed.
+# Research-only for a shipping-retired physical family. No selector, release threshold, or final authority is changed.
