@@ -36,7 +36,7 @@ index 78b9a9a..0000000 100644
          }
          let got: [u8; 32] = tree.finalize().into();
          if got != self.tree_sha {
-@@ -426,19 +437,34 @@ impl Write for DigestWriter<'_> {
+@@ -426,19 +437,31 @@ impl Write for DigestWriter<'_> {
      }
  }
  
@@ -68,10 +68,7 @@ index 78b9a9a..0000000 100644
 -impl<'a> DecodeContext<'a> {
 -    fn new(archive: &'a G04Archive) -> Self {
 +impl<'a, 'c> DecodeContext<'a, 'c> {
-+    fn new(
-+        archive: &'a G04Archive,
-+        record_cache: &'c mut SharedRecordCache,
-+    ) -> Self {
++    fn new(archive: &'a G04Archive, record_cache: &'c mut SharedRecordCache) -> Self {
          Self {
              archive,
 -            record_cache: HashMap::new(),
@@ -80,7 +77,7 @@ index 78b9a9a..0000000 100644
              node_cache: HashMap::new(),
              node_cache_bytes: 0,
              touched_records: HashMap::new(),
-@@ -463,6 +489,9 @@ impl<'a> DecodeContext<'a> {
+@@ -463,6 +486,9 @@ impl<'a> DecodeContext<'a> {
      }
  
      fn record(&mut self, record_id: usize) -> Result<Arc<Vec<u8>>, PortableError> {
@@ -92,7 +89,7 @@ index 78b9a9a..0000000 100644
              return Ok(Arc::clone(value));
          }
          let record =
-@@ -541,9 +570,11 @@ impl<'a> DecodeContext<'a> {
+@@ -541,9 +567,11 @@ impl<'a> DecodeContext<'a> {
              .entry(record_id)
              .or_insert(original.len() as u64);
          let value = Arc::new(original);
