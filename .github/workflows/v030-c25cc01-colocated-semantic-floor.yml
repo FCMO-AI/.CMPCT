@@ -47,7 +47,7 @@ jobs:
           python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
       - name: Compile optimistic floor oracle
         run: python -m py_compile benchmarks/v030_c25cc01_colocated_semantic_floor_oracle.py
-      - name: Measure zero-framing zero-descriptor co-location floor
+      - name: Measure semantic and zero-blob-header floors
         run: |
           mkdir -p benchmark-artifacts
           python -m benchmarks.v030_c25cc01_colocated_semantic_floor_oracle \
@@ -59,7 +59,7 @@ jobs:
           import json, os
           from pathlib import Path
           d=json.loads(Path('benchmark-artifacts/v030-c25cc01-colocated-floor.json').read_text())
-          assert d['schema']=='cmpct-v030-c25cc01-colocated-semantic-floor-v1'
+          assert d['schema']=='cmpct-v030-c25cc01-colocated-semantic-floor-v2'
           assert d['candidate_head']==os.environ['EVIDENCE_HEAD']
           assert d['gate']['exact_baseline_accounting'] is True
           assert d['gate']['exact_file_semantic_reconstruction'] is True
@@ -70,7 +70,13 @@ jobs:
           assert f['moved_pack_rows'] > 0
           assert f['local_framing_bytes_charged'] == 0
           assert f['local_descriptor_bytes_charged'] == 0
+          h=d['impossible_zero_blob_header_floor']
+          assert d['baseline']['blob_header_bytes_each'] == 64
+          assert d['baseline']['blob_record_count'] > 0
+          assert h['blob_headers_charged_bytes'] == 0
+          assert h['blob_header_bytes_removed'] == d['baseline']['blob_record_count'] * 64
           assert d['minimum_additional_physical_shrink_for_strict_zstd_win_bytes'] >= 0
+          assert h['minimum_additional_payload_shrink_for_strict_zstd_win_bytes'] >= 0
           PY
       - name: CI topology self-check
         run: python tools/check_ci_topology.py .github/workflows/v030-c25cc01-colocated-semantic-floor.yml
@@ -85,4 +91,4 @@ jobs:
           if-no-files-found: error
           retention-days: 90
 
-# Research-only optimistic impossibility floor. No reader, selector, recovery or release credit.
+# Research-only optimistic impossibility floors. No reader, selector, recovery or release credit.
