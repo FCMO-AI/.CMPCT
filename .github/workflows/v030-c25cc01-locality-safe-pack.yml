@@ -2,7 +2,8 @@
 name: CMPCT v0.30 C25CC01 locality-safe pack oracle
 
 on:
-  pull_request:
+  push:
+    branches: [agent/v030-authoritative-integration]
     paths:
       - 'benchmarks/v030_c25cc01_locality_safe_pack_oracle.py'
       - 'benchmarks/v030_c25cc01_locality_pack_strategy_oracle.py'
@@ -18,30 +19,31 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: v030-c25cc01-locality-safe-pack-${{ github.event.pull_request.number || github.ref }}
+  group: v030-c25cc01-locality-safe-pack-${{ github.ref }}
   cancel-in-progress: true
 
 permissions:
   contents: read
 
+env:
+  PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.sha }}
+
 jobs:
   locality-safe-pack:
     runs-on: ubuntu-24.04
     timeout-minutes: 65
-    env:
-      PYTHONPATH: ${{ github.workspace }}
     steps:
       - uses: actions/checkout@v6
         with:
-          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          ref: ${{ env.EVIDENCE_HEAD }}
       - name: Bind exact candidate
         id: candidate
         shell: bash
         run: |
           set -euo pipefail
-          expected='${{ github.event.pull_request.head.sha || github.sha }}'
           actual="$(git rev-parse HEAD)"
-          test "$actual" = "$expected"
+          test "$actual" = "$EVIDENCE_HEAD"
           echo "sha=$actual" >> "$GITHUB_OUTPUT"
       - uses: actions/setup-python@v6
         with:
@@ -194,3 +196,6 @@ jobs:
             benchmark-artifacts/v030-c25cc01-candidate.txt
           if-no-files-found: warn
           retention-days: 90
+
+# This is preserved negative/research evidence for the shipping-retired C25CC01 physical family. Keep it runnable
+# when its own inputs change, but do not spend 65 minutes on unrelated synchronization churn. No release gate changes.
