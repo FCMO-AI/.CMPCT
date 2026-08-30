@@ -1,0 +1,124 @@
+# ci-lane: deep
+# ci-cancel-policy: preserve-running-exact-receipt
+name: CMPCT v0.30 G0-G4 ML operation record-cache A/B
+
+on:
+  push:
+    branches: [agent/v030-authoritative-integration]
+    paths:
+      - 'benchmarks/patches/v030_g04_operation_record_cache.patch'
+      - 'benchmarks/v030_g04_ml_operation_record_cache_ab_oracle.py'
+      - 'benchmarks/v030_g04_ml_native_reader_oracle.py'
+      - 'native/cmpct-portable/src/g04.rs'
+      - 'experiments/entropygraph_v030_native_reader_bridge.py'
+      - '.github/workflows/v030-g04-ml-operation-record-cache-ab.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-v030-g04-ml-operation-record-cache-ab-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.sha }}
+
+jobs:
+  native-ab:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - name: Bind exact candidate head
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Install deterministic ML-corpus dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y zstd gcc ffmpeg libsndfile1
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[audio,test]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
+      - name: Compile oracle and build exact baseline CLI
+        run: |
+          python -m py_compile benchmarks/v030_g04_ml_operation_record_cache_ab_oracle.py
+          CARGO_TARGET_DIR="$RUNNER_TEMP/baseline-target" \
+            cargo build --manifest-path native/cmpct-portable/Cargo.toml --release --bin cmpct-portable
+          cp "$RUNNER_TEMP/baseline-target/release/cmpct-portable" "$RUNNER_TEMP/cmpct-portable-baseline"
+      - name: Apply locality-neutral candidate and prove it compiles
+        run: |
+          git apply --check benchmarks/patches/v030_g04_operation_record_cache.patch
+          git apply benchmarks/patches/v030_g04_operation_record_cache.patch
+          cargo fmt --manifest-path native/cmpct-portable/Cargo.toml -- --check
+          CARGO_TARGET_DIR="$RUNNER_TEMP/candidate-target" \
+            cargo build --manifest-path native/cmpct-portable/Cargo.toml --release --bin cmpct-portable
+          cp "$RUNNER_TEMP/candidate-target/release/cmpct-portable" "$RUNNER_TEMP/cmpct-portable-candidate"
+      - name: Preserve native G0-G4 correctness after candidate patch
+        run: |
+          CARGO_TARGET_DIR="$RUNNER_TEMP/candidate-target" \
+            cargo test --manifest-path native/cmpct-portable/Cargo.toml g04 --release
+      - name: Run exact baseline-vs-candidate ML A/B
+        run: |
+          mkdir -p benchmark-artifacts
+          python benchmarks/v030_g04_ml_operation_record_cache_ab_oracle.py \
+            --baseline-cli "$RUNNER_TEMP/cmpct-portable-baseline" \
+            --candidate-cli "$RUNNER_TEMP/cmpct-portable-candidate" \
+            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-g04-ml-operation-record-cache-work" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-g04-ml-operation-record-cache.json"
+      - name: Enforce identity, hostile rejection and honest promotion boundary
+        if: always()
+        run: |
+          test -f benchmark-artifacts/v030-g04-ml-operation-record-cache.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          d=json.loads(Path('benchmark-artifacts/v030-g04-ml-operation-record-cache.json').read_text())
+          assert d['schema']=='cmpct-v030-g04-ml-operation-record-cache-ab-v1'
+          assert d['target']=='neutral_hostile_v1/09_ml_artifacts'
+          assert int(d['rounds'])==7
+          c=d['contract']; g=d['gate']
+          assert c['record_cache_limit_bytes']==64*1024*1024
+          assert c['node_cache_scope']=='fresh per member'
+          assert c['member_locality_charged_on_shared_record_hit'] is True
+          assert c['archive_bytes_changed'] is False
+          assert c['grammar_changed'] is False
+          assert g['same_archive_bytes'] is True
+          assert g['same_public_info'] is True
+          assert g['same_extracted_tree'] is True
+          assert g['baseline_corruption_rejected'] is True
+          assert g['candidate_corruption_rejected'] is True
+          assert d['release_credit'] is False
+          expected=(
+              float(d['verify_improvement_fraction'])>=float(c['minimum_verify_improvement_fraction'])
+              and float(d['extract_delta_fraction'])<=float(c['maximum_extract_regression_fraction'])
+          )
+          assert d['promotion_signal'] is expected
+          assert g['passed'] is expected
+          PY
+      - name: Restore exact repository tree before policy checks
+        if: always()
+        run: git reset --hard "$EVIDENCE_HEAD"
+      - name: CI topology self-check
+        if: always()
+        run: python tools/check_ci_topology.py .github/workflows/v030-g04-ml-operation-record-cache-ab.yml
+      - name: Public-surface guard
+        if: always()
+        run: python tools/check_public_surface.py
+      - name: Upload exact A/B evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: v030-g04-ml-operation-record-cache-ab-${{ env.EVIDENCE_HEAD }}
+          path: benchmark-artifacts/v030-g04-ml-operation-record-cache.json
+          if-no-files-found: error
+          retention-days: 90
+
+# Research-only ephemeral native patch. Product source is unchanged until a positive exact A/B earns promotion.
