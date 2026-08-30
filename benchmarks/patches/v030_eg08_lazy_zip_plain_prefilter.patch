@@ -13,10 +13,7 @@ diff --git a/experiments/entropygraph_v025.py b/experiments/entropygraph_v025.py
 +    infos=sorted([i for i in ar.infolist() if not i.is_dir()],key=lambda x:x.header_offset)
 +    plain_by_offset={i.header_offset:ar.read(i) for i in infos if i.compress_type in (zipfile.ZIP_DEFLATED,zipfile.ZIP_STORED) and (int(i.file_size),int(i.CRC)&0xffffffff) in top_plain_cheap}
     spans=[];sids=[];local={};members=[]
-@@ -51,4 +54,5 @@ def build():
-     # Footnote: record only a content hash and the cheap inverse transform.  The member bytes are not
-     # retained here, so inspection cannot accidentally turn into hidden duplicate payload.
-     if zi.compress_type in (zipfile.ZIP_DEFLATED,zipfile.ZIP_STORED):
+@@ -54 +57,2 @@ def build():
 -     pb=plain_by_offset[zi.header_offset];ph=H(pb);member_plain.setdefault(ph,[]).append((p,hh,zi.compress_type,len(pb),len(b)));members.append((ph,hh,zi.compress_type,len(pb),len(b)))
 +     pb=plain_by_offset.get(zi.header_offset)
 +     if pb is not None:ph=H(pb);member_plain.setdefault(ph,[]).append((p,hh,zi.compress_type,len(pb),len(b)));members.append((ph,hh,zi.compress_type,len(pb),len(b)))
