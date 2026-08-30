@@ -3,10 +3,10 @@ from __future__ import annotations
 """A/B a locality-neutral operation-scoped decoded-record cache in the native G0-G4 reader.
 
 Both CLIs consume the exact same canonical ML archive. The candidate changes only complete-operation
-verify ownership: decoded physical records may survive between logical members under the existing
-64 MiB insertion-only ceiling, while each member keeps a fresh node cache and still charges every
-required record to its own locality stats even on a shared-cache hit. Selective single-member reads
-retain the existing fresh-cache behavior.
+verify/extract ownership: decoded physical records may survive between logical members under the existing
+64 MiB insertion-only ceiling, while each member keeps a fresh node cache and still charges every required
+record to its own locality stats even on a shared-cache hit. Selective single-member reads retain the existing
+fresh-cache behavior.
 """
 
 import argparse
@@ -24,6 +24,7 @@ from experiments import entropygraph_v030_release_reader as RR
 
 ROUNDS = 7
 MIN_VERIFY_IMPROVEMENT = 0.10
+MIN_EXTRACT_IMPROVEMENT = 0.10
 
 
 def _verify(cli: Path, archive: Path) -> float:
@@ -98,7 +99,7 @@ def run(work_root: Path, baseline_cli: Path, candidate_cli: Path) -> dict:
 
     medians = {key: float(statistics.median(values)) for key, values in samples.items()}
     verify_improvement = 1.0 - medians["candidate_verify"] / max(medians["baseline_verify"], 1e-12)
-    extract_delta = medians["candidate_extract"] / max(medians["baseline_extract"], 1e-12) - 1.0
+    extract_improvement = 1.0 - medians["candidate_extract"] / max(medians["baseline_extract"], 1e-12)
     gate = {
         "same_archive_bytes": True,
         "same_public_info": baseline_info == candidate_info,
@@ -106,10 +107,10 @@ def run(work_root: Path, baseline_cli: Path, candidate_cli: Path) -> dict:
         "baseline_corruption_rejected": rejected["baseline"],
         "candidate_corruption_rejected": rejected["candidate"],
         "candidate_verify_materially_faster": verify_improvement >= MIN_VERIFY_IMPROVEMENT,
-        "selective_extract_not_materially_regressed": extract_delta <= 0.05,
+        "candidate_extract_materially_faster": extract_improvement >= MIN_EXTRACT_IMPROVEMENT,
     }
     return {
-        "schema": "cmpct-v030-g04-ml-operation-record-cache-ab-v1",
+        "schema": "cmpct-v030-g04-ml-operation-record-cache-ab-v2",
         "target": "neutral_hostile_v1/09_ml_artifacts",
         "shipping_build": built,
         "tree_sha256": tree,
@@ -117,24 +118,27 @@ def run(work_root: Path, baseline_cli: Path, candidate_cli: Path) -> dict:
         "samples_s": samples,
         "medians_s": medians,
         "verify_improvement_fraction": verify_improvement,
-        "extract_delta_fraction": extract_delta,
+        "extract_improvement_fraction": extract_improvement,
         "corruption_rejected": rejected,
         "contract": {
             "record_cache_limit_bytes": 64 * 1024 * 1024,
             "node_cache_scope": "fresh per member",
             "member_locality_charged_on_shared_record_hit": True,
+            "selective_member_cache_scope": "fresh per member",
+            "complete_verify_cache_scope": "one bounded cache per verify operation",
+            "complete_extract_cache_scope": "one bounded cache per extract operation",
             "archive_bytes_changed": False,
             "grammar_changed": False,
             "minimum_verify_improvement_fraction": MIN_VERIFY_IMPROVEMENT,
-            "maximum_extract_regression_fraction": 0.05,
+            "minimum_extract_improvement_fraction": MIN_EXTRACT_IMPROVEMENT,
         },
         "gate": {**gate, "passed": all(gate.values())},
         "promotion_signal": all(gate.values()),
         "release_credit": False,
         "claim_boundary": (
-            "Research-only native A/B. A pass authorizes productizing operation-scoped decoded-record ownership for "
-            "complete G0-G4 verification only. It does not authorize native dispatch or release credit until exact "
-            "locality/selective-read/fuzz/native/Android/runtime authority is re-earned."
+            "Research-only native A/B. A pass authorizes productizing bounded operation-scoped decoded-record "
+            "ownership for complete G0-G4 verify and extract. It does not authorize native dispatch or release "
+            "credit until exact selective locality, hostile/fuzz, native/Android and runtime authority is re-earned."
         ),
     }
 
@@ -152,7 +156,7 @@ def main() -> None:
     print(json.dumps({
         "medians_s": result["medians_s"],
         "verify_improvement_fraction": result["verify_improvement_fraction"],
-        "extract_delta_fraction": result["extract_delta_fraction"],
+        "extract_improvement_fraction": result["extract_improvement_fraction"],
         "gate": result["gate"],
     }, indent=2), flush=True)
 
