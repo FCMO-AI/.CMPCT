@@ -1,0 +1,79 @@
+# ci-lane: deep
+name: CMPCT v0.30 C25CC01 distributed file-table frontier
+
+on:
+  push:
+    branches: [agent/v030-authoritative-integration]
+    paths:
+      - 'benchmarks/v030_c25cc01_distributed_file_table_oracle.py'
+      - 'benchmarks/v030_c25cc01_locality_pack_strategy_oracle.py'
+      - 'benchmarks/v030_c25cc01_locality_safe_pack_oracle.py'
+      - 'benchmarks/v030_r24_compact_control_oracle.py'
+      - 'experiments/entropygraph_v030_r24_compact_control_profile.py'
+      - '.github/workflows/v030-c25cc01-distributed-file-table.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: v030-c25cc01-distributed-file-table-${{ github.ref }}
+  cancel-in-progress: true
+permissions:
+  contents: read
+
+jobs:
+  distributed-file-table:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    env:
+      PYTHONPATH: ${{ github.workspace }}
+      EVIDENCE_HEAD: ${{ github.sha }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - name: Bind exact candidate head
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install deterministic corpus dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y zstd gcc ffmpeg libsndfile1
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[audio,test]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
+      - name: Compile oracle
+        run: python -m py_compile benchmarks/v030_c25cc01_distributed_file_table_oracle.py
+      - name: Price distributed file-semantic ownership
+        run: |
+          mkdir -p benchmark-artifacts
+          python -m benchmarks.v030_c25cc01_distributed_file_table_oracle \
+            --work-root benchmark-artifacts/v030-c25cc01-distributed-file-table-work \
+            --output benchmark-artifacts/v030-c25cc01-distributed-file-table.json
+      - name: Enforce diagnostic boundary
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          d=json.loads(Path('benchmark-artifacts/v030-c25cc01-distributed-file-table.json').read_text())
+          assert d['schema']=='cmpct-v030-c25cc01-distributed-file-table-oracle-v1'
+          assert d['gate']['exact_baseline_accounting'] is True
+          assert d['gate']['exact_file_semantic_reconstruction'] is True
+          assert d['gate']['current_locality_within_8x'] is True
+          assert d['gate']['experiment_valid'] is True
+          assert d['gate']['release_credit'] is False
+          assert d['distributed']['moved_pack_rows'] > 0
+          PY
+      - name: CI topology self-check
+        run: python tools/check_ci_topology.py .github/workflows/v030-c25cc01-distributed-file-table.yml
+      - name: Public-surface guard
+        run: python tools/check_public_surface.py
+      - name: Upload exact-head receipt
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: v030-c25cc01-distributed-file-table-${{ env.EVIDENCE_HEAD }}
+          path: benchmark-artifacts/v030-c25cc01-distributed-file-table.json
+          if-no-files-found: error
+          retention-days: 90
