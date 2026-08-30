@@ -170,14 +170,13 @@ def _compact_control_source_shape(root: Path) -> dict:
 
 
 def _shared_frontdoor_preflight(root: Path) -> dict:
-    """One source walk for logs proof, media source facts, and the exact C25 source shape.
+    """One source walk for logs, media and exact base-terminal source facts.
 
-    The logs/C25 research A/B earned promotion with exact predicate/shape agreement, 45.8% lower median cost on a
-    C25-shaped negative-logs tree (~18 ms saved), and a faster early-positive logs path. Media admission previously
-    repeated a complete os.walk/lstat traversal immediately afterwards. While the shared walk remains complete we
-    now retain only the bounded set of regular path/size facts that media could use. Once the media policy's hard
-    128-file maximum is exceeded, that cache is discarded because media admission is then mathematically impossible.
-    Metadata errors still fall back to the historical independent preflights rather than changing admission.
+    Besides avoiding the historical logs/media duplicate scans, the complete negative-logs walk now retains the
+    exact source-only facts used by the preserved single-large and medium-binary terminal predicates. When those
+    facts prove both base terminals impossible, shipping enters canonical-final directly instead of walking the
+    same tree two more times only to reach that identical destination. Metadata errors continue through the mature
+    base front door, so error handling and admission stay fail closed.
     """
     root = Path(root)
     plain: set[str] = set()
@@ -185,6 +184,10 @@ def _shared_frontdoor_preflight(root: Path) -> dict:
     paired: set[str] = set()
     regular_files = 0
     logical_bytes = 0
+    min_regular_bytes: int | None = None
+    max_regular_bytes = 0
+    all_regular_bin = True
+    has_nonregular_entries = False
     scanned_regular_files = 0
     media_files: list[tuple[Path, int]] | None = []
     stack = [os.fspath(root)]
@@ -203,11 +206,13 @@ def _shared_frontdoor_preflight(root: Path) -> dict:
         for entry in batch:
             try:
                 if entry.is_symlink():
+                    has_nonregular_entries = True
                     continue
                 if entry.is_dir(follow_symlinks=False):
                     stack.append(entry.path)
                     continue
                 if not entry.is_file(follow_symlinks=False):
+                    has_nonregular_entries = True
                     continue
                 size = int(entry.stat(follow_symlinks=False).st_size)
             except OSError:
@@ -219,6 +224,9 @@ def _shared_frontdoor_preflight(root: Path) -> dict:
                 }
             regular_files += 1
             logical_bytes += size
+            min_regular_bytes = size if min_regular_bytes is None else min(min_regular_bytes, size)
+            max_regular_bytes = max(max_regular_bytes, size)
+            all_regular_bin = all_regular_bin and Path(entry.path).suffix.lower() == _BASE_IMPL.R24_RELEASE_MEDIUM_BINARY_EXT
             scanned_regular_files += 1
             if media_files is not None:
                 if regular_files <= _R24_MEDIA.MAX_REGULAR_FILES:
@@ -256,6 +264,10 @@ def _shared_frontdoor_preflight(root: Path) -> dict:
             "logical_bytes": logical_bytes,
             "regular_files": regular_files,
             "average_regular_bytes": logical_bytes / max(1, regular_files),
+            "min_regular_bytes": 0 if min_regular_bytes is None else min_regular_bytes,
+            "max_regular_bytes": max_regular_bytes,
+            "all_regular_bin": bool(regular_files) and all_regular_bin,
+            "has_nonregular_entries": has_nonregular_entries,
         },
         "media_files": media_files,
         "metadata_error": False,
@@ -390,10 +402,22 @@ def build(root, out):
             "terminal_r24_media_admission": media,
             "speculative_r25_search_skipped": True,
         }
-    # Exact-head frozen + unseen authority now proves zero valid C25CC01 terminal admissions under the release
-    # locality law. Do not pay a complete r24 build plus profile conversion merely to discover that fact again.
-    # The reader remains available for existing research artifacts; shipping dispatch stays fail-closed until a
-    # new physical representation earns fresh positive evidence.
+
+    # Exact-head frozen + unseen authority proves zero valid C25CC01 terminal admissions under the release locality
+    # law. The reader remains available for existing research artifacts, but shipping no longer pays a full r24
+    # build plus profile conversion merely to reject that already-falsified branch.
+    #
+    # The same complete preflight already established the exact source-only facts for both mature base terminals.
+    # If neither can possibly admit, call canonical-final directly and eliminate two more metadata-only tree walks.
+    shape = preflight.get("shape")
+    if not preflight.get("metadata_error") and shape is not None:
+        single_large = (
+            int(shape["regular_files"]) == 1
+            and int(shape["max_regular_bytes"]) >= _BASE_IMPL.R24_RELEASE_WIDE_CHUNK_BYTES
+        )
+        medium_binary = _BASE_IMPL._medium_binary_terminal_source_eligible(shape)
+        if not single_large and not medium_binary:
+            return _BASE_IMPL.C.build(root, out)
     return _BASE_IMPL.build(root, out)
 
 
@@ -469,7 +493,7 @@ PROMOTED_LOGS_EVIDENCE = "all-15 structural admission + external/v0.29 selector 
 PROMOTED_LOGS_STREAMING_PREFILTER = True
 PROMOTED_LOGS_STREAMING_PREFILTER_EVIDENCE = "exact adversarial eligibility + nine-round 12k-file A/B: ~99.9% prefilter speedup with early short-circuit"
 PROMOTED_SHARED_FRONTDOOR_PREFLIGHT = True
-PROMOTED_SHARED_FRONTDOOR_PREFLIGHT_EVIDENCE = "11-round exact A/B: 45.8% faster C25/no-logs preflight (~18 ms saved), logs early-positive also faster"
+PROMOTED_SHARED_FRONTDOOR_PREFLIGHT_EVIDENCE = "exact source-fact reuse: logs/media plus base terminal predicates share one complete walk; mature scans retained on metadata errors or possible admission"
 PROMOTED_R24_DEAD_DICTIONARY_ELISION = True
 PROMOTED_R24_DEAD_DICTIONARY_EVIDENCE = "all-15 post-selection proof: 0 byte regressions, live dictionaries byte-identical, dead dictionaries smaller"
 PROMOTED_R24_OPAQUE_MEDIA_TERMINAL = True
