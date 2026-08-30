@@ -20,17 +20,27 @@ def test_entropy_refinement_rejects_compressible_media_magic(tmp_path: Path) -> 
     assert shape["eligible"] is False
 
 
+def _complete_shared_shape(*, regular_files: int, logical_bytes: int, member_bytes: int) -> dict:
+    """Mirror the complete source-fact contract emitted by the promoted shared preflight."""
+    return {
+        "regular_files": regular_files,
+        "logical_bytes": logical_bytes,
+        "average_regular_bytes": logical_bytes / max(1, regular_files),
+        "min_regular_bytes": member_bytes,
+        "max_regular_bytes": member_bytes,
+        "all_regular_bin": False,
+        "has_nonregular_entries": False,
+    }
+
+
 def test_release_product_terminalizes_only_when_media_policy_admits(monkeypatch, tmp_path: Path) -> None:
     out = tmp_path / "out.cmpct"
     calls: list[str] = []
-    media_files = [(tmp_path / f"f{index}", 1024 * 1024) for index in range(8)]
+    member_bytes = 1024 * 1024
+    media_files = [(tmp_path / f"f{index}", member_bytes) for index in range(8)]
     preflight = {
         "logs_eligible": False,
-        "shape": {
-            "regular_files": 8,
-            "logical_bytes": 8 * 1024 * 1024,
-            "average_regular_bytes": 1024 * 1024,
-        },
+        "shape": _complete_shared_shape(regular_files=8, logical_bytes=8 * member_bytes, member_bytes=member_bytes),
         "media_files": media_files,
         "metadata_error": False,
         "scanned_regular_files": 8,
@@ -64,7 +74,7 @@ def test_release_product_terminalizes_only_when_media_policy_admits(monkeypatch,
     admitted = {
         "eligible": True,
         "regular_files": 8,
-        "logical_bytes": 8 * 1024 * 1024,
+        "logical_bytes": 8 * member_bytes,
         "opaque_encoded_media_share": 1.0,
         "sample_bytes": MEDIA.MIN_SAMPLE_BYTES,
         "sample_entropy_bits_per_byte": 7.99,
@@ -88,16 +98,19 @@ def test_media_shape_impossibility_skips_all_media_io(monkeypatch, tmp_path: Pat
     """Once the shared walk proves >128 files, neither another walk nor media header reads may run."""
     out = tmp_path / "out.cmpct"
     calls: list[str] = []
+    regular_files = MEDIA.MAX_REGULAR_FILES + 1
+    logical_bytes = 64 * 1024 * 1024
+    member_bytes = logical_bytes // regular_files
     preflight = {
         "logs_eligible": False,
-        "shape": {
-            "regular_files": MEDIA.MAX_REGULAR_FILES + 1,
-            "logical_bytes": 64 * 1024 * 1024,
-            "average_regular_bytes": 64 * 1024 * 1024 / (MEDIA.MAX_REGULAR_FILES + 1),
-        },
+        "shape": _complete_shared_shape(
+            regular_files=regular_files,
+            logical_bytes=logical_bytes,
+            member_bytes=member_bytes,
+        ),
         "media_files": None,
         "metadata_error": False,
-        "scanned_regular_files": MEDIA.MAX_REGULAR_FILES + 1,
+        "scanned_regular_files": regular_files,
         "short_circuited": False,
     }
     monkeypatch.setattr(PRODUCT, "_shared_frontdoor_preflight", lambda root: preflight)
