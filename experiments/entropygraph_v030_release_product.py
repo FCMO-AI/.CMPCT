@@ -123,8 +123,6 @@ def _logs_streaming_source_prefilter(root: Path) -> dict:
     }
 
 
-_LOGS_PROMOTED.logs_source_prefilter = _logs_streaming_source_prefilter
-
 _CC_MIN_LOGICAL_BYTES = 1 * 1024 * 1024
 _CC_MIN_REGULAR_FILES = 32
 _CC_MIN_R24_TO_LOGICAL = 0.98
