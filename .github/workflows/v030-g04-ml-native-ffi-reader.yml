@@ -2,8 +2,8 @@
 name: CMPCT v0.30 G0-G4 ML native in-process FFI reader oracle
 
 on:
-  pull_request:
-    branches: [main]
+  push:
+    branches: [agent/v030-authoritative-integration]
     paths:
       - 'native/cmpct-portable/**'
       - 'native/cmpct-g04-ffi/**'
@@ -18,13 +18,15 @@ on:
 permissions:
   contents: read
 
+# Long exact-fingerprint A/B: do not throw away an hour of valid negative/positive evidence because an unrelated
+# integration commit arrives. Branch-scoped push paths give each relevant change one durable measurement.
 concurrency:
-  group: cmpct-v030-g04-ml-native-ffi-reader-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
+  group: cmpct-v030-g04-ml-native-ffi-reader-${{ github.ref }}
+  cancel-in-progress: false
 
 env:
   PYTHONPATH: ${{ github.workspace }}
-  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+  EVIDENCE_HEAD: ${{ github.sha }}
 
 jobs:
   ml-native-ffi-reader:
