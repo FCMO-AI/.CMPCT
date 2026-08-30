@@ -49,7 +49,7 @@ jobs:
             benchmarks/v030_prefixgraph_worker_count_rss_oracle.py \
             experiments/entropygraph_v030_prefixgraph.py \
             experiments/entropygraph_v030_prefixgraph_parallel.py
-      - name: Measure 1/2/4-worker exact-byte frontier
+      - name: Measure 1/2/3/4-worker exact-byte frontier
         run: |
           mkdir -p benchmark-artifacts
           python benchmarks/v030_prefixgraph_worker_count_rss_oracle.py \
@@ -70,7 +70,7 @@ jobs:
           assert data['exact_archive_identity_all_arms'] is True
           assert data['promotion_signal'] is False
           assert data['release_credit'] is False
-          assert set(data['summary'])=={'1','2','4'}
+          assert set(data['summary'])=={'1','2','3','4'}
           contract=data['contract']
           assert contract['fresh_process_per_measurement'] is True
           assert contract['strong_verification_preserved'] is True
