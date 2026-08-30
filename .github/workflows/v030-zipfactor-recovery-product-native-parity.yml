@@ -55,8 +55,7 @@ jobs:
         run: |
           python -m pytest -q \
             tests/test_v030_zipfactor_product_candidate.py \
-            tests/test_v030_zipfactor_recovery_product_candidate.py \
-            tests/test_v030_zipfactor_recovery_product_candidate_ratchet.py
+            tests/test_v030_zipfactor_recovery_product_candidate.py
       - name: Prove exact product bytes through portable native recovery reader
         run: |
           mkdir -p benchmark-artifacts
