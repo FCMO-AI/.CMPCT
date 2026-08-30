@@ -1,9 +1,11 @@
 # ci-lane: deep
+# ci-cancel-policy: preserve-running-exact-receipt
 name: CMPCT v0.30 G0-G4 ML cache policy oracle
 
 on:
-  pull_request:
-    branches: [main]
+  push:
+    branches:
+      - agent/v030-authoritative-integration
     paths:
       - 'experiments/entropygraph_v030_release_reader.py'
       - 'experiments/entropygraph_v030_release_product.py'
@@ -19,12 +21,15 @@ permissions:
   contents: read
 
 concurrency:
-  group: cmpct-v030-g04-ml-cache-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
+  group: cmpct-v030-g04-ml-cache-${{ github.ref }}
+  # This campaign can consume hours. Branch-push path filtering prevents unrelated integration commits from
+  # enqueueing it because of the historical PR-wide diff. Preserve a running exact receipt; at most the newest
+  # relevant push remains pending. Research evidence never substitutes for final exact-candidate authority.
+  cancel-in-progress: false
 
 env:
   PYTHONPATH: ${{ github.workspace }}
-  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+  EVIDENCE_HEAD: ${{ github.sha }}
 
 jobs:
   ml-cache-policy:
