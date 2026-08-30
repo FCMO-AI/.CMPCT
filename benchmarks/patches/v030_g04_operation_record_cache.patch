@@ -2,7 +2,7 @@ diff --git a/native/cmpct-portable/src/g04.rs b/native/cmpct-portable/src/g04.rs
 index 78b9a9a..0000000 100644
 --- a/native/cmpct-portable/src/g04.rs
 +++ b/native/cmpct-portable/src/g04.rs
-@@ -327,7 +327,17 @@ impl G04Archive {
+@@ -327,9 +327,19 @@ impl G04Archive {
          &self,
          index: usize,
          mut output: W,
@@ -23,7 +23,7 @@ index 78b9a9a..0000000 100644
          let (expected_size, expected_sha) = match file {
              GFile::Preflate { size, sha, .. } | GFile::Nodes { size, sha, .. } => (*size, *sha),
          };
-@@ -399,10 +409,12 @@ impl G04Archive {
+@@ -399,9 +409,10 @@ impl G04Archive {
  
      pub(crate) fn verify(&self) -> Result<(), PortableError> {
          let mut tree = Sha256::new();
@@ -36,7 +36,7 @@ index 78b9a9a..0000000 100644
          }
          let got: [u8; 32] = tree.finalize().into();
          if got != self.tree_sha {
-@@ -426,25 +438,43 @@ impl Write for DigestWriter<'_> {
+@@ -426,19 +437,34 @@ impl Write for DigestWriter<'_> {
      }
  }
  
@@ -80,7 +80,7 @@ index 78b9a9a..0000000 100644
              node_cache: HashMap::new(),
              node_cache_bytes: 0,
              touched_records: HashMap::new(),
-@@ -463,7 +493,10 @@ impl<'a> DecodeContext<'a> {
+@@ -463,6 +489,9 @@ impl<'a> DecodeContext<'a> {
      }
  
      fn record(&mut self, record_id: usize) -> Result<Arc<Vec<u8>>, PortableError> {
@@ -92,7 +92,7 @@ index 78b9a9a..0000000 100644
              return Ok(Arc::clone(value));
          }
          let record =
-@@ -541,9 +574,11 @@ impl<'a> DecodeContext<'a> {
+@@ -541,9 +570,11 @@ impl<'a> DecodeContext<'a> {
              .entry(record_id)
              .or_insert(original.len() as u64);
          let value = Arc::new(original);
