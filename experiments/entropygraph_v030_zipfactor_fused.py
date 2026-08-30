@@ -41,6 +41,47 @@ class ProfileNotEligible(RuntimeError):
     pass
 
 
+_LOCAL_SIGNATURE_FIELDS = (
+    "version", "flags", "method", "mtime", "mdate", "name", "extra",
+)
+_CENTRAL_SIGNATURE_FIELDS = (
+    "made", "needed", "flags", "method", "mtime", "mdate", "name", "extra", "comment",
+    "disk", "internal_attr", "external_attr",
+)
+_EOCD_SIGNATURE_FIELDS = ("disk", "disk_cd", "comment")
+
+
+def _same_framing_signature(reference: dict, candidate: dict) -> bool:
+    """Exact BASE._signature equivalence without allocating nested signature tuples.
+
+    ZIP-factor admission cares only about the static framing fields owned by ``BASE._signature``. Dynamic CRC,
+    compressed/uncompressed sizes, payload bytes and physical local offsets intentionally do not participate. Direct
+    comparison against the first accepted parsed member preserves that law exactly while avoiding a complete nested
+    tuple allocation for every subsequent source ZIP in the source-scan hot path.
+    """
+    ref_locals = reference["locals"]
+    candidate_locals = candidate["locals"]
+    if len(ref_locals) != len(candidate_locals):
+        return False
+    for left, right in zip(ref_locals, candidate_locals, strict=True):
+        for field in _LOCAL_SIGNATURE_FIELDS:
+            if left[field] != right[field]:
+                return False
+
+    ref_centrals = reference["centrals"]
+    candidate_centrals = candidate["centrals"]
+    if len(ref_centrals) != len(candidate_centrals):
+        return False
+    for left, right in zip(ref_centrals, candidate_centrals, strict=True):
+        for field in _CENTRAL_SIGNATURE_FIELDS:
+            if left[field] != right[field]:
+                return False
+
+    ref_eocd = reference["eocd"]
+    candidate_eocd = candidate["eocd"]
+    return all(ref_eocd[field] == candidate_eocd[field] for field in _EOCD_SIGNATURE_FIELDS)
+
+
 def _scan(
     root: Path,
     *,
@@ -59,14 +100,14 @@ def _scan(
     items: list[tuple[str, dict]] = []
     inode_first: dict[tuple[int, int], str] = {}
     logical_bytes = 0
-    signature = None
+    signature_reference = None
 
     def reserve() -> None:
         if len(entries) >= FS.DEFAULT_MAX_MANIFEST_ENTRIES:
             raise ProfileNotEligible("ZIP-factor filesystem entry count exceeds policy")
 
     def walk(abs_dir: Path, prefix: str = "") -> None:
-        nonlocal logical_bytes, signature
+        nonlocal logical_bytes, signature_reference
         with os.scandir(abs_dir) as iterator:
             children = sorted(iterator, key=lambda item: item.name)
         for child in children:
@@ -106,10 +147,9 @@ def _scan(
                 raise ProfileNotEligible(
                     "ZIP-factor graph-owned regular files must all be ZIPs with a supported structural encoding"
                 )
-            sig = BASE._signature(parsed)
-            if signature is None:
-                signature = sig
-            elif sig != signature:
+            if signature_reference is None:
+                signature_reference = parsed
+            elif not _same_framing_signature(signature_reference, parsed):
                 raise ProfileNotEligible(
                     "ZIP-factor framing layout drift: requires one shared structural framing signature"
                 )
