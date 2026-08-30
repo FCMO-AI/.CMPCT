@@ -1,13 +1,16 @@
 from __future__ import annotations
 
-"""Optimistic byte floor for co-locating C25 S_PACK file semantics.
+"""Optimistic byte floors for the encrypted-like C25 locality-safe family.
 
-This deliberately gives the candidate every byte advantage that a real grammar cannot:
-local semantic payloads pay zero framing/authentication/descriptor bytes and their pack id is
-free through physical co-location. The mirrored global root retains only non-S_PACK file rows.
-If this optimistic floor still loses Zstd-19, the next viable grammar must shrink the existing
-locality-safe physical payload itself by at least the reported deficit; metadata relocation alone
-cannot close the frozen external size contract.
+The first floor gives semantic co-location every byte advantage a real grammar cannot: local
+semantic payloads pay zero framing/authentication/descriptor bytes and their pack id is free
+through physical co-location. The mirrored global root retains only non-S_PACK file rows.
+
+The second, even more optimistic floor also deletes every existing 64-byte r24 blob-record
+header while leaving payload bytes unchanged. This is intentionally impossible as a shipping
+format because those headers currently carry codec, sizes and SHA-256 salvage identity. Its
+purpose is disproof: if even zero-cost semantics plus zero blob headers still lose Zstd-19,
+header compaction cannot be the next architecture; compressed payload bytes themselves must fall.
 """
 
 import argparse
@@ -67,6 +70,15 @@ def run(work_root: Path) -> dict:
     local_semantic_bytes = sum(int(x["compressed_bytes"]) for x in local_payloads)
     optimistic_bytes = physical_data_bytes + fixed_header_footer_bytes + local_semantic_bytes + 2 * len(root_comp)
 
+    blobs = index.get("blobs")
+    if not isinstance(blobs, list) or not blobs:
+        raise RuntimeError("locality-safe source has no physical blob table")
+    blob_record_count = len(blobs)
+    blob_header_bytes = int(R24.BHDR.size) * blob_record_count
+    if blob_header_bytes > physical_data_bytes:
+        raise RuntimeError("blob-header accounting exceeds physical data span")
+    zero_blob_header_floor = optimistic_bytes - blob_header_bytes
+
     baseline_raw = msgpack.packb({"x": list(index["features"]), "c": compact}, use_bin_type=True)
     _baseline_level, baseline_comp = PROFILE._compress_control(baseline_raw)
     baseline_bytes = physical_data_bytes + fixed_header_footer_bytes + 2 * len(baseline_comp)
@@ -78,9 +90,10 @@ def run(work_root: Path) -> dict:
     zstd = EXT._tar_zstd(source, work_root / "competitor.tar.zst", work_root / "zstd-out", zstd_work)
     zstd_bytes = int(zstd["archive_bytes"])
     required_physical_shrink = max(0, optimistic_bytes - (zstd_bytes - 1))
+    required_payload_shrink_after_zero_headers = max(0, zero_blob_header_floor - (zstd_bytes - 1))
 
     return {
-        "schema": "cmpct-v030-c25cc01-colocated-semantic-floor-v1",
+        "schema": "cmpct-v030-c25cc01-colocated-semantic-floor-v2",
         "candidate_head": os.environ.get("EVIDENCE_HEAD") or os.environ.get("GITHUB_SHA"),
         "target": target_name,
         "strategy": STRATEGY_NAME,
@@ -92,6 +105,9 @@ def run(work_root: Path) -> dict:
             "physical_data_bytes": physical_data_bytes,
             "fixed_header_footer_bytes": fixed_header_footer_bytes,
             "control_bytes_per_copy": len(baseline_comp),
+            "blob_record_count": blob_record_count,
+            "blob_header_bytes_each": int(R24.BHDR.size),
+            "all_blob_header_bytes": blob_header_bytes,
         },
         "optimistic_colocated_floor": {
             "pack_tables": len(local_payloads),
@@ -105,6 +121,13 @@ def run(work_root: Path) -> dict:
             "mirrored_residual_root_level": root_level,
             "projected_total_bytes": optimistic_bytes,
         },
+        "impossible_zero_blob_header_floor": {
+            "blob_headers_charged_bytes": 0,
+            "blob_header_bytes_removed": blob_header_bytes,
+            "projected_total_bytes": zero_blob_header_floor,
+            "margin_below_zstd19_bytes": zstd_bytes - zero_blob_header_floor,
+            "minimum_additional_payload_shrink_for_strict_zstd_win_bytes": required_payload_shrink_after_zero_headers,
+        },
         "zstd19_bytes": zstd_bytes,
         "optimistic_margin_below_zstd19_bytes": zstd_bytes - optimistic_bytes,
         "minimum_additional_physical_shrink_for_strict_zstd_win_bytes": required_physical_shrink,
@@ -113,14 +136,16 @@ def run(work_root: Path) -> dict:
             "exact_file_semantic_reconstruction": True,
             "current_locality_within_8x": float(row["locality"]["max_member_read_amplification"]) <= 8.0,
             "optimistic_metadata_relocation_alone_can_beat_zstd19": optimistic_bytes < zstd_bytes,
+            "impossible_zero_blob_headers_can_beat_zstd19": zero_blob_header_floor < zstd_bytes,
             "experiment_valid": True,
             "release_credit": False,
         },
         "claim_boundary": (
-            "Research-only optimistic lower bound. Local semantic framing, authentication, discovery and descriptors "
-            "are priced at zero, so any real co-located grammar is at least this large unless it also changes the "
-            "physical payload. A positive minimum_additional_physical_shrink value proves metadata relocation alone "
-            "cannot satisfy the strict Zstd-19 size contract. No reader, recovery, selector or release credit."
+            "Research-only optimistic lower bounds. Local semantic framing/authentication/discovery/descriptors are "
+            "priced at zero. The second floor additionally prices every existing r24 blob header at zero even though "
+            "shipping recovery requires self-description and authentication. Positive shrink requirements therefore "
+            "prove what the next grammar must save beyond metadata/header relocation; no reader, recovery, selector "
+            "or release credit is implied."
         ),
     }
 
