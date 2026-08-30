@@ -116,3 +116,48 @@ def test_non_sidecar_tree_delegates_to_frozen_mature_product(monkeypatch, tmp_pa
     assert result["selected"] == "sentinel"
     assert result["logs_terminal"] is False
     assert result["logs_terminal_prefilter"]["eligible"] is False
+
+
+def test_logs_prefilter_stops_when_structural_floor_is_proven(monkeypatch, tmp_path: Path) -> None:
+    root = tmp_path / "source"
+    first = root / "a"
+    later = root / "z"
+    first.mkdir(parents=True)
+    later.mkdir()
+    for stem in ("one.log", "two.log"):
+        (first / stem).write_bytes(b"plain")
+        (first / f"{stem}.zst").write_bytes(b"sidecar")
+    (later / "must-not-be-scanned.txt").write_bytes(b"late")
+
+    real_scandir = CAND.os.scandir
+    scanned: list[Path] = []
+
+    def guarded_scandir(path):
+        path = Path(path)
+        scanned.append(path)
+        if path == later:
+            raise AssertionError("positive preflight kept scanning after admission floor")
+        return real_scandir(path)
+
+    monkeypatch.setattr(CAND.os, "scandir", guarded_scandir)
+    result = CAND.logs_source_prefilter(root)
+    assert result["eligible"] is True
+    assert result["sidecar_pairs"] == CAND.MIN_SIDECAR_PAIRS
+    assert result["sidecar_pairs_exact"] is False
+    assert result["scan_terminated_at_admission_floor"] is True
+    assert later not in scanned
+
+
+def test_logs_prefilter_negative_result_remains_exact(tmp_path: Path) -> None:
+    root = tmp_path / "source"
+    nested = root / "nested"
+    nested.mkdir(parents=True)
+    (root / "a.log").write_bytes(b"plain")
+    (root / "a.log.zst").write_bytes(b"sidecar")
+    (nested / "b.log.gz").write_bytes(b"orphan")
+
+    result = CAND.logs_source_prefilter(root)
+    assert result["eligible"] is False
+    assert result["sidecar_pairs"] == 1
+    assert result["sidecar_pairs_exact"] is True
+    assert result["scan_terminated_at_admission_floor"] is False
