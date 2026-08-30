@@ -1,4 +1,5 @@
 # ci-lane: deep
+# ci-pr-scope: latest-head-commit-gate
 name: CMPCT neutral-hostile determinism repair v6
 
 on:
@@ -18,22 +19,66 @@ permissions:
   contents: read
 
 concurrency:
-  group: cmpct-neutral-hostile-determinism-repair-v6-${{ github.ref }}
+  group: cmpct-neutral-hostile-determinism-repair-v6-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 env:
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
   PYTHONPATH: ${{ github.workspace }}
   CMPCT_PREFLATE_BRIDGE: ${{ github.workspace }}/native/preflate-bridge/target/release/cmpct-preflate-bridge
 
 jobs:
+  latest-head-scope:
+    runs-on: ubuntu-latest
+    outputs:
+      relevant: ${{ steps.scope.outputs.relevant }}
+    steps:
+      - name: Check out exact candidate
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 2
+          ref: ${{ env.EVIDENCE_HEAD }}
+
+      - name: Bind exact evidence head
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+
+      - id: scope
+        name: Classify only the newest exact HEAD commit
+        shell: bash
+        run: |
+          relevant=false
+          while IFS= read -r path; do
+            case "$path" in
+              .github/workflows/neutral-hostile-determinism-repair-v6.yml|\
+              benchmarks/neutral_hostile_*|\
+              benchmarks/history/2026-08-16-entropygraph-v028.json|\
+              benchmarks/history/2026-08-17-neutral-hostile-determinism-repair-v5.json|\
+              experiments/entropygraph_v028*.py|\
+              native/preflate-bridge/*|\
+              tests/test_neutral_hostile_repair_v6.py|\
+              pyproject.toml)
+                relevant=true
+                break
+                ;;
+            esac
+          done < <(git diff-tree --no-commit-id --name-only -r HEAD)
+          echo "relevant=$relevant" >> "$GITHUB_OUTPUT"
+          echo "latest exact-head repair-v6 substrate change: $relevant"
+
   prove:
+    needs: latest-head-scope
+    if: github.event_name == 'workflow_dispatch' || needs.latest-head-scope.outputs.relevant == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 120
     steps:
-      - name: Check out candidate
+      - name: Check out exact candidate
         uses: actions/checkout@v6
         with:
-          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+          ref: ${{ env.EVIDENCE_HEAD }}
+
+      - name: Bind exact evidence head
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
 
       - name: Set up Python
         uses: actions/setup-python@v6
@@ -135,8 +180,6 @@ jobs:
           if-no-files-found: warn
           retention-days: 90
 
-# Footnote: this gate proves a candidate benchmark identity; it does not overwrite the accepted v0.28/v0.29
-# ledger. A second independent GitHub runner attempt must reproduce the full per-file manifests and exact embedded
-# v0.28 bytes before repair-v6 can be promoted into durable history. The absolute v0.30 saving hurdle is inherited
-# separately and may never be lowered as a side effect of benchmark-substrate repair. Path scoping keeps this deep
-# proof off unrelated PR edits while still rerunning when its corpus, repair, v0.28 or native-bridge inputs change.
+# Footnote: repair-v6 remains the accepted deterministic substrate authority when its inputs change. GitHub PR
+# path filters are cumulative across this integration branch, so the exact-HEAD classifier avoids spending up to
+# 120 minutes on unrelated commits while preserving the same proof, thresholds, artifacts and manual replay.
