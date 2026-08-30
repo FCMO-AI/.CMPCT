@@ -2,8 +2,8 @@
 name: CMPCT v0.30 G0-G4 metadata-copy reuse oracle
 
 on:
-  pull_request:
-    branches: [main]
+  push:
+    branches: [agent/v030-authoritative-integration]
     paths:
       - 'experiments/entropygraph_v030_release_reader.py'
       - 'experiments/entropygraph_v030_release_product.py'
@@ -17,13 +17,16 @@ on:
 permissions:
   contents: read
 
+# This A/B can consume most of two hours. Trigger it only when one of its evidence-critical inputs changes, rather
+# than on the accumulated 1,600+ commit PR diff. A newer unrelated PR head must not erase an exact in-flight receipt.
+# If another evidence-critical input changes, cancelling the older same-branch measurement is correct.
 concurrency:
-  group: cmpct-v030-g04-metadata-copy-reuse-${{ github.event.pull_request.number || github.ref }}
+  group: cmpct-v030-g04-metadata-copy-reuse-${{ github.ref }}
   cancel-in-progress: true
 
 env:
   PYTHONPATH: ${{ github.workspace }}
-  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+  EVIDENCE_HEAD: ${{ github.sha }}
 
 jobs:
   oracle:
