@@ -1,18 +1,15 @@
 from __future__ import annotations
 
-"""Exact-byte A/B for fusing ZIP-factor framing admission into EOCD parsing.
+"""Exact-byte A/B for the productized ZIP-factor inline framing admission.
 
-The shipping scanner parses each source ZIP and then walks its materialized local/central dictionaries a second time
-to compare the static framing signature with the first accepted member. Exact profiling put that scan on the dominant
-ZIP-factor creation path. This research candidate compiles the first member's exact BASE._signature projection once
-and checks subsequent members while the EOCD-indexed parser already owns their scalar central/local fields.
+The production scanner now checks the exact static framing signature while the EOCD-indexed parser already owns the
+central/local scalar fields. The baseline arm deliberately injects a wrapper around the same parser; that exercises
+``_scan``'s independent mature parsed-row comparator and therefore reconstructs the predecessor parse-then-second-walk
+behavior without duplicating parser grammar. The candidate arm is the production default path.
 
-The experiment deliberately reuses the shipping scanner and changes only its research-process parser/comparator seams.
 Every arm must return an identical scan fingerprint and retain the exact 14,033-byte final archive/SHA. A positive
-signal requires >=200 us and >=5% full-scan improvement; smaller wins are preserved as negative evidence because they
-cannot plausibly close the remaining complete ZIP creation deficit.
-
-Research only: no selector, archive grammar, release threshold, recovery, native or Android behavior changes here.
+signal requires >=200 us and >=5% full-scan improvement. This remains performance evidence only: complete create plus
+mandatory verification, recovery, native/Android and external authority are separate promotion boundaries.
 """
 
 import argparse
@@ -37,28 +34,6 @@ MIN_ABSOLUTE_SAVING_S = 0.0002
 MIN_RELATIVE_SAVING = 0.05
 
 
-class _InlineParser:
-    def __init__(self) -> None:
-        self.reference: ZIP.FramingReference | None = None
-        self.last_match = True
-
-    def __call__(self, raw: bytes) -> dict | None:
-        if self.reference is None:
-            parsed = ZIP.parse_zip(raw)
-            if parsed is not None:
-                self.reference = ZIP.framing_reference(parsed)
-                self.last_match = True
-            return parsed
-        parsed, match = ZIP.parse_zip_with_framing(raw, self.reference)
-        self.last_match = match
-        return parsed
-
-    def compare(self, _reference: dict, _candidate: dict) -> bool:
-        # FUSED._scan calls the comparator immediately after the parser. The candidate parser has already proven the
-        # exact static law while those fields were scalar locals, so this O(1) handoff deletes only the second walk.
-        return self.last_match
-
-
 def _fingerprint(result) -> str:
     manifest, items, stats = result
     h = hashlib.sha256(manifest)
@@ -69,21 +44,15 @@ def _fingerprint(result) -> str:
     return h.hexdigest()
 
 
-def _candidate_scan(stage: Path) -> tuple[bytes, list[tuple[str, dict]], dict]:
-    parser = _InlineParser()
-    original = FUSED._same_framing_signature
-    try:
-        # Research-process-only seam: the scanner itself is reused verbatim so filesystem traversal, hashing,
-        # manifest construction and admission diagnostics remain on the shipping path.
-        FUSED._same_framing_signature = parser.compare
-        return FUSED._scan(stage, parse_zip=parser)
-    finally:
-        FUSED._same_framing_signature = original
+def _legacy_scan(stage: Path):
+    # The wrapper is intentionally not object-identical to ZIP.parse_zip. _scan therefore retains its independent
+    # mature _same_framing_signature traversal while parsing with the exact same EOCD parser implementation.
+    return FUSED._scan(stage, parse_zip=lambda raw: ZIP.parse_zip(raw))
 
 
 def _timed(stage: Path, candidate: bool) -> tuple[float, str]:
     t0 = time.perf_counter_ns()
-    result = _candidate_scan(stage) if candidate else FUSED._scan(stage)
+    result = FUSED._scan(stage) if candidate else _legacy_scan(stage)
     elapsed = (time.perf_counter_ns() - t0) / 1e9
     return elapsed, _fingerprint(result)
 
@@ -97,10 +66,11 @@ def run(work_root: Path) -> dict:
 
     with tempfile.TemporaryDirectory(prefix="cmpct-zf-inline-framing-", dir=work_root) as td_raw:
         stage = EXT._normalized_stage(source, Path(td_raw))
-        baseline_fp = _fingerprint(FUSED._scan(stage))
+        baseline_fp = _fingerprint(_legacy_scan(stage))
+        candidate_fp = _fingerprint(FUSED._scan(stage))
         baseline_times: list[float] = []
         candidate_times: list[float] = []
-        fingerprints = {baseline_fp}
+        fingerprints = {baseline_fp, candidate_fp}
         for round_index in range(ROUNDS):
             order = (False, True) if round_index % 2 == 0 else (True, False)
             for candidate in order:
@@ -129,7 +99,7 @@ def run(work_root: Path) -> dict:
         and saving_ratio >= MIN_RELATIVE_SAVING
     )
     return {
-        "schema": "cmpct-v030-zipfactor-inline-framing-abba-v1",
+        "schema": "cmpct-v030-zipfactor-inline-framing-abba-v2",
         "contract": {
             "rounds": ROUNDS,
             "same_runner_alternating": True,
@@ -137,21 +107,21 @@ def run(work_root: Path) -> dict:
             "exact_final_archive_identity_required": True,
             "minimum_absolute_saving_s": MIN_ABSOLUTE_SAVING_S,
             "minimum_relative_saving": MIN_RELATIVE_SAVING,
-            "baseline": "parse-then-second-static-framing-walk",
-            "candidate": "eocd-parse-plus-inline-static-framing-proof",
+            "baseline": "same-eocd-parser-plus-independent-second-static-framing-walk",
+            "candidate": "production-eocd-parse-plus-inline-static-framing-proof",
             "selector_change": False,
             "archive_semantics_changed": False,
             "release_credit": False,
         },
         "candidate": {"archive_bytes": len(archive), "archive_sha256": archive_sha},
-        "medians_s": {"baseline_scan": baseline_median, "inline_framing_scan": candidate_median},
+        "medians_s": {"legacy_scan": baseline_median, "product_inline_framing_scan": candidate_median},
         "delta": {"saving_s": saving_s, "saving_ratio": saving_ratio},
         "samples_s": {"baseline": baseline_times, "candidate": candidate_times},
         "identity": {"scan_result_identity": scan_identity, "final_archive_identity": archive_identity},
         "experiment_valid": experiment_valid,
         "promotion_signal": promotion_signal,
         "release_credit": False,
-        "claim_boundary": "Exact-byte full-scan A/B only. Promotion requires separate product/native/recovery/Android and complete external authority.",
+        "claim_boundary": "Exact-byte product-path full-scan A/B only. Complete create+verify and platform/external authority remain mandatory.",
     }
 
 
@@ -165,7 +135,7 @@ def main() -> None:
     args.output.write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8")
     print(json.dumps({k: result[k] for k in ("medians_s", "delta", "identity", "experiment_valid", "promotion_signal")}, indent=2), flush=True)
     if not result["experiment_valid"]:
-        raise SystemExit("ZIP-factor inline-framing A/B evidence invalid")
+        raise SystemExit("ZIP-factor product inline-framing A/B evidence invalid")
 
 
 if __name__ == "__main__":
