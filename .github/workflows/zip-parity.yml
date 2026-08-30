@@ -72,7 +72,21 @@ jobs:
 
       - name: Install benchmark dependencies
         run: |
-          sudo apt-get update
+          if ! sudo apt-get update; then
+            echo "Initial apt update failed; retrying without runner-provided Microsoft feeds" >&2
+            shopt -s nullglob
+            microsoft_lists=(
+              /etc/apt/sources.list.d/microsoft*.list
+              /etc/apt/sources.list.d/azure-cli*.list
+            )
+            if ((${#microsoft_lists[@]} == 0)); then
+              echo "apt update failed and no known irrelevant Microsoft feed was present" >&2
+              exit 1
+            fi
+            printf 'Disabling runner-provided feed: %s\n' "${microsoft_lists[@]}"
+            sudo rm -f "${microsoft_lists[@]}"
+            sudo apt-get update
+          fi
           sudo apt-get install -y zstd xz-utils libsndfile1
           python -m pip install --upgrade pip
           python -m pip install -e '.[audio,test]'
