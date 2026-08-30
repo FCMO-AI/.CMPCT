@@ -47,8 +47,8 @@ jobs:
       - name: Preserve exact baseline engine and validate patch
         run: |
           cp experiments/entropygraph_v025.py "$RUNNER_TEMP/entropygraph_v025_baseline.py"
-          git apply --check benchmarks/patches/v030_eg08_lazy_zip_plain_prefilter.patch
-          git apply benchmarks/patches/v030_eg08_lazy_zip_plain_prefilter.patch
+          git apply --check --recount benchmarks/patches/v030_eg08_lazy_zip_plain_prefilter.patch
+          git apply --recount benchmarks/patches/v030_eg08_lazy_zip_plain_prefilter.patch
           python -m py_compile experiments/entropygraph_v025.py benchmarks/v030_eg08_lazy_zip_product_ab_oracle.py
       - name: Run rotated full graph-build A/B
         run: |
