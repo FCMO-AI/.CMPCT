@@ -27,9 +27,26 @@ jobs:
     assert any("cancel-in-progress: true" in error for error in validate(path))
 
 
+def test_deep_pr_path_scope_alone_is_not_enough_on_long_integration_pr(tmp_path: Path) -> None:
+    path = _write(tmp_path, """# ci-lane: deep
+on:
+  pull_request:
+    paths:
+      - 'benchmarks/**'
+concurrency:
+  group: expensive-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+jobs:
+  proof:
+    runs-on: ubuntu-24.04
+""")
+    assert any("accumulated PR paths are not sufficient" in error for error in validate(path))
+
+
 def test_exact_head_deep_lane_may_preserve_running_receipt(tmp_path: Path) -> None:
     path = _write(tmp_path, """# ci-lane: deep
 # ci-cancel-policy: preserve-running-exact-receipt
+# ci-pr-scope: latest-head-commit-gate
 on:
   pull_request:
     paths:
@@ -40,6 +57,10 @@ concurrency:
 env:
   EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
 jobs:
+  classify:
+    runs-on: ubuntu-24.04
+    steps:
+      - run: git diff-tree --no-commit-id --name-only -r HEAD
   proof:
     runs-on: ubuntu-24.04
     steps:
@@ -210,6 +231,7 @@ jobs:
 
 def test_cancel_true_pr_group_keeps_exact_sha_as_evidence_only(tmp_path: Path) -> None:
     path = _write(tmp_path, """# ci-lane: deep
+# ci-pr-scope: latest-head-commit-gate
 on:
   pull_request:
     paths:
@@ -220,6 +242,10 @@ concurrency:
 env:
   EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
 jobs:
+  classify:
+    runs-on: ubuntu-24.04
+    steps:
+      - run: git diff-tree --no-commit-id --name-only -r HEAD
   proof:
     runs-on: ubuntu-24.04
 """)
