@@ -2,8 +2,8 @@
 name: CMPCT v0.30 C25CC01 average-size admission oracle
 
 on:
-  pull_request:
-    branches: [main]
+  push:
+    branches: [agent/v030-authoritative-integration]
     paths:
       - 'benchmarks/v030_c25cc01_average_size_admission_oracle.py'
       - 'benchmarks/v030_r24_compact_control_terminal_admission.py'
@@ -17,12 +17,12 @@ permissions:
   contents: read
 
 concurrency:
-  group: cmpct-v030-c25cc01-average-size-admission-${{ github.event.pull_request.number || github.ref }}
+  group: cmpct-v030-c25cc01-average-size-admission-${{ github.ref }}
   cancel-in-progress: true
 
 env:
   PYTHONPATH: ${{ github.workspace }}
-  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+  EVIDENCE_HEAD: ${{ github.sha }}
 
 jobs:
   c25-average-size-admission:
@@ -100,5 +100,5 @@ jobs:
       - name: CI topology self-check
         run: python tools/check_ci_topology.py .github/workflows/v030-c25cc01-average-size-admission.yml
 
-# Research-only. Even a positive signal cannot change the shipping selector without a separate promotion commit,
-# shipping regression coverage, and fresh exact external authority.
+# Research-only for a shipping-retired physical family. Preserve reproducibility but do not spend CI on unrelated
+# PR synchronizations. No selector, release threshold, or final authority is changed.
