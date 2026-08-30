@@ -1,9 +1,10 @@
 # ci-lane: deep
+# ci-cancel-policy: preserve-running-exact-receipt
 name: CMPCT v0.30 ZIP-factor recovery fused complete frontier
 
 on:
-  pull_request:
-    branches: [main]
+  push:
+    branches: [agent/v030-authoritative-integration]
     paths:
       - 'benchmarks/v030_zipfactor_recovery_fused_complete_frontier.py'
       - 'benchmarks/v030_zipfactor_v3_recovery_budget_oracle.py'
@@ -20,12 +21,12 @@ permissions:
   contents: read
 
 concurrency:
-  group: cmpct-v030-zipfactor-recovery-fused-complete-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
+  group: cmpct-v030-zipfactor-recovery-fused-complete-${{ github.ref }}
+  cancel-in-progress: false
 
 env:
   PYTHONPATH: ${{ github.workspace }}
-  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+  EVIDENCE_HEAD: ${{ github.sha }}
 
 jobs:
   recovery-fused-complete-frontier:
@@ -110,5 +111,6 @@ jobs:
       - name: CI topology self-check
         run: python tools/check_ci_topology.py .github/workflows/v030-zipfactor-recovery-fused-complete-frontier.yml
 
-# Research-only productization boundary. Recovery is fully charged inside CMPCT verified creation timing. A positive
-# result may advance to native/platform dispatch work, but this lane alone grants no selector or release credit.
+# Research-only productization boundary. Recovery is fully charged inside CMPCT verified creation timing. Relevant
+# semantic changes re-run it; unrelated integration commits do not. Exact receipts are preserved rather than canceled.
+# A positive result may advance to native/platform dispatch work, but this lane alone grants no selector/release credit.
