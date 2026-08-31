@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import json
 from pathlib import Path
+import subprocess
 
 from benchmarks import v030_logs_inverse_profile_productization as PROOF
 from experiments import entropygraph_v030_logs_inverse_profile_v3 as PROFILE
@@ -19,6 +20,7 @@ def run(work_root: Path) -> dict:
         PROOF.PROFILE = previous
     result = dict(result)
     result["schema"] = "cmpct-v030-logs-inverse-profile-productization-v3"
+    result["source_commit"] = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
     result["canonical_filesystem_manifest"] = True
     result["claim_boundary"] = (
         "recoverable bounded logs profile with canonical r25 filesystem manifest; selector/native/Android "
@@ -41,7 +43,7 @@ def main() -> None:
     result = run(args.work_root)
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8")
-    print(json.dumps({"candidate": result["candidate"], "gate": result["gate"]}, indent=2), flush=True)
+    print(json.dumps({"source_commit": result["source_commit"], "candidate": result["candidate"], "gate": result["gate"]}, indent=2), flush=True)
     if not result["gate"]["passed"]:
         raise SystemExit("canonical-filesystem logs inverse profile has not earned productization boundary")
 
