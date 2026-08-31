@@ -1,4 +1,6 @@
 # ci-lane: deep
+# ci-cancel-policy: preserve-running-exact-receipt
+# ci-pr-scope: latest-head-commit-gate
 name: CMPCT v0.30 broad compression landscape
 
 on:
@@ -18,42 +20,81 @@ on:
 permissions:
   contents: read
 
+# A completed landscape is reference evidence bound to the exact source SHA. A newer PR push cannot make an
+# already-running exact receipt stale; cancelling it merely burns the expensive 15-workload measurement and leaves
+# no result. Queue the newer run behind the existing receipt instead, then let its newest-head gate decide whether
+# another landscape is actually required.
 concurrency:
   group: cmpct-v030-compression-landscape-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: false
+
+env:
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
 
 jobs:
+  latest-head-impact:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      run_deep: ${{ steps.scope.outputs.run_deep }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 2
+      - name: Bind exact head and classify only its changed files
+        id: scope
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            echo 'run_deep=true' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          git diff-tree --no-commit-id --name-only -r HEAD > /tmp/latest-head-files.txt
+          cat /tmp/latest-head-files.txt
+          if grep -Eq '^(benchmarks/(v030_compression_landscape|v030_external_competitors|neutral_hostile_corpus_v1|resemblance_hostile_corpus_v1|v030_release_generalization)\.py|experiments/entropygraph_v030_release_product(_base)?\.py|\.github/workflows/v030-compression-landscape\.yml)$' /tmp/latest-head-files.txt; then
+            echo 'run_deep=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'run_deep=false' >> "$GITHUB_OUTPUT"
+            echo 'Accumulated PR paths matched, but the newest exact commit cannot affect the compression landscape; preserving the prior exact receipt instead of replaying it.'
+          fi
+
   landscape:
+    needs: latest-head-impact
+    if: needs.latest-head-impact.outputs.run_deep == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 90
     env:
       PYTHONUNBUFFERED: '1'
     steps:
       - name: Checkout exact PR head
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
-          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          ref: ${{ env.EVIDENCE_HEAD }}
 
       - name: Bind exact candidate
         id: candidate
         shell: bash
         run: |
           set -euo pipefail
-          expected='${{ github.event.pull_request.head.sha || github.sha }}'
           actual="$(git rev-parse HEAD)"
-          test "$actual" = "$expected"
+          test "$actual" = "$EVIDENCE_HEAD"
           echo "sha=$actual" >> "$GITHUB_OUTPUT"
 
-      - name: Install compression landscape tools
+      - name: Install compression landscape tools from canonical Ubuntu feed
         shell: bash
         run: |
           set -euo pipefail
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends \
+          test -f /etc/apt/sources.list.d/ubuntu.sources
+          sudo apt-get -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" -o Dir::Etc::sourceparts="-" update
+          sudo apt-get -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" -o Dir::Etc::sourceparts="-" install -y --no-install-recommends \
             zstd zip unzip p7zip-full zpaq brotli lz4 lzip ffmpeg gcc
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: '3.11'
           cache: pip
@@ -63,11 +104,7 @@ jobs:
         run: |
           set -euo pipefail
           python -m pip install --upgrade pip
-          # Install the checked-out project rather than duplicating its dependency list here.
-          # The previous hand-maintained list omitted msgpack, so the benchmark could not even
-          # import the canonical v0.29/v0.30 engines. Keeping CI dependency authority in
-          # pyproject.toml makes future benchmark imports fail only when the project itself is
-          # genuinely missing a declared requirement.
+          # Keep benchmark dependency authority in pyproject.toml instead of duplicating a hand-maintained list.
           python -m pip install -e '.[test]'
 
       - name: Record tool identities
@@ -119,8 +156,13 @@ jobs:
         env:
           EXPECTED_SHA: ${{ steps.candidate.outputs.sha }}
 
+      - name: CI topology self-check
+        if: always()
+        run: python tools/check_ci_topology.py .github/workflows/v030-compression-landscape.yml
+
       - name: Upload reference landscape
-        uses: actions/upload-artifact@v4
+        if: always()
+        uses: actions/upload-artifact@v6
         with:
           name: v030-compression-landscape-${{ steps.candidate.outputs.sha }}
           path: |
@@ -129,3 +171,6 @@ jobs:
             benchmark-artifacts/v030-compression-landscape-tools.txt
           if-no-files-found: error
           retention-days: 90
+
+# Reference landscape only. It may discover better competitors or falsify a representation family, but it grants
+# no release credit by itself and never weakens the exact external-competitor authority.
