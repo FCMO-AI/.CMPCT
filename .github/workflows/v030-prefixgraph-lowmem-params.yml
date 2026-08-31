@@ -1,0 +1,100 @@
+# ci-lane: deep
+name: CMPCT v0.30 PrefixGraph low-memory parameter frontier
+
+on:
+  push:
+    branches: [agent/v030-authoritative-integration]
+    paths:
+      - 'experiments/entropygraph_v030_prefixgraph.py'
+      - 'experiments/entropygraph_v030_prefixgraph_parallel.py'
+      - 'benchmarks/v030_release_performance.py'
+      - 'benchmarks/v030_prefixgraph_lowmem_params_worker.py'
+      - 'benchmarks/v030_prefixgraph_lowmem_params_oracle.py'
+      - '.github/workflows/v030-prefixgraph-lowmem-params.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-v030-prefixgraph-lowmem-params-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.sha }}
+
+jobs:
+  lowmem-frontier:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 75
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - name: Bind exact evidence head
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install frozen corpus dependencies from Ubuntu only
+        run: |
+          set -euo pipefail
+          test -f /etc/apt/sources.list.d/ubuntu.sources
+          sudo apt-get -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" -o Dir::Etc::sourceparts="-" update
+          sudo apt-get -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" -o Dir::Etc::sourceparts="-" install -y zstd gcc ffmpeg libsndfile1
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[audio,test]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
+      - name: Compile exact parameter frontier and preserve shipping PrefixGraph tests
+        run: |
+          python -m py_compile benchmarks/v030_prefixgraph_lowmem_params_worker.py benchmarks/v030_prefixgraph_lowmem_params_oracle.py
+          python -m pytest -q tests/test_v030_prefixgraph_parallel_release.py
+      - name: Run fresh-process Shifted parameter Pareto matrix
+        run: |
+          mkdir -p benchmark-artifacts
+          python benchmarks/v030_prefixgraph_lowmem_params_oracle.py \
+            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-prefixgraph-lowmem-params-work" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-prefixgraph-lowmem-params.json"
+      - name: Enforce research-only evidence boundary
+        if: always()
+        run: |
+          test -f benchmark-artifacts/v030-prefixgraph-lowmem-params.json
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          d=json.loads(Path('benchmark-artifacts/v030-prefixgraph-lowmem-params.json').read_text())
+          assert d['schema']=='cmpct-v030-prefixgraph-lowmem-params-v1'
+          assert d['source_commit']==os.environ['EVIDENCE_HEAD']
+          assert d['target']=='resemblance_hostile_v1/01_shifted_versions'
+          assert d['experiment_valid'] is True
+          assert d['selector_change'] is False and d['release_credit'] is False
+          assert d['rounds']==2 and len(d['repetitions'])==2
+          assert d['arms']==['baseline','chain-m1','chain-m2','hash-m1','chain-m1-hash-m1','chain-m2-hash-m1']
+          c=d['contract']
+          for key in ('fresh_process_per_arm','four_anchor_workers_unchanged','direct_zstd19_payload_floor_unchanged','anchor_nomination_unchanged','complete_archive_tournament_unchanged','reader_and_integrity_law_unchanged','candidate_prefix_bytes_may_change'):
+              assert c[key] is True
+          for key in ('production_bytes_changed','release_thresholds_changed','benchmark_identity_dispatch'):
+              assert c[key] is False
+          for row in d['repetitions']:
+              for arm in d['arms']:
+                  r=row['arms'][arm]
+                  assert r['strong_verify_ok'] is True
+                  assert r['tree_sha256']==d['tree_sha256']
+                  assert r['anchor_audition_workers']==4
+                  assert r['release_credit'] is False
+          PY
+      - name: CI topology self-check
+        if: always()
+        run: python tools/check_ci_topology.py .github/workflows/v030-prefixgraph-lowmem-params.yml
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: v030-prefixgraph-lowmem-params-${{ env.EVIDENCE_HEAD }}
+          path: benchmark-artifacts/v030-prefixgraph-lowmem-params.json
+          if-no-files-found: error
+          retention-days: 90
+
+# Research only. Candidate prefix frames may differ, but the job cannot modify product source or earn release credit.
+# A Pareto signal must still cross generic productization and every exact 15-workload/runtime/platform authority.
