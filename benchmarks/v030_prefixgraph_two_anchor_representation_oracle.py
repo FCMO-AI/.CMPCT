@@ -2,17 +2,17 @@ from __future__ import annotations
 
 """Exact structural-red oracle: can two depth-1 PrefixGraph anchors close Shifted's Zstd size gap?
 
-The shipping family tournaments one global raw-content anchor.  Its reader grammar already stores a base index
-per prefix record and enforces only that every referenced base is a direct record, so a depth-1 forest is a
-representation-level extension rather than deeper dependency recursion.  This oracle asks the decisive question
+The shipping family tournaments one global raw-content anchor. Its reader grammar already stores a base index per
+prefix record and enforces only that every referenced base is a direct record, so a depth-1 forest is a
+representation-level extension rather than deeper dependency recursion. This oracle asks the decisive question
 before any product or search optimization: does allowing exactly two direct anchors buy enough complete-artifact
 size to beat solid Zstd-19 at all?
 
-Every nominated single-anchor trial is compressed once and reduced to exact csize/hash metadata.  All anchor pairs
+Every nominated single-anchor trial is compressed once and reduced to exact csize/hash metadata. All anchor pairs
 are then priced with the real MessagePack + Zstd-12 metadata framing, so pair search does not approximate the
-complete archive.  Only the winning pair is recompressed for byte materialization and independently verified by
-the existing PrefixGraph reader.  Creation time of this exhaustive oracle is diagnostic only; a size win merely
-justifies inventing a bounded fast selector.  No shipping grammar, selector, benchmark identity policy or release
+complete archive. Only the winning pair is recompressed for byte materialization and independently verified by
+the existing PrefixGraph reader. Creation time of this exhaustive oracle is diagnostic only; a size win merely
+justifies inventing a bounded fast selector. No shipping grammar, selector, benchmark identity policy or release
 threshold changes here.
 """
 
@@ -38,11 +38,14 @@ def _meta_blob(rels: list[str], raws: list[bytes], records: list[list], expected
         "tree_sha256": expected_tree,
         "files": rels,
         "records": records,
-        "anchor": -1 if len(anchors) != 1 else anchors[0],
-        "anchor_set": list(anchors),
+        "anchor": anchors[0] if len(anchors) == 1 else -1,
         "max_dependency_depth": 1 if any(row[0] == "prefix" for row in records) else 0,
         "max_file_bytes": PG.MAX_FILE_BYTES,
     }
+    # Preserve exact historical metadata for the all-direct/single-anchor parity check. The extra field is added
+    # only for the genuinely new two-anchor representation; the existing bounded reader ignores unknown map keys.
+    if len(anchors) > 1:
+        meta["anchor_set"] = list(anchors)
     raw = PG.msgpack.packb(meta, use_bin_type=True)
     if len(raw) > PG.MAX_META_BYTES:
         raise RuntimeError("two-anchor metadata exceeds PrefixGraph decode-unit ceiling")
@@ -92,10 +95,7 @@ def _materialize(path: Path, rels: list[str], raws: list[bytes], direct: list[by
     materialized_records: list[list] = []
     for index, record in enumerate(records):
         kind, base, usize, expected_csize, expected_payload_sha, logical_sha = record
-        if kind == "direct":
-            payload = direct[index]
-        else:
-            payload = compressors[int(base)].compress(raws[index])
+        payload = direct[index] if kind == "direct" else compressors[int(base)].compress(raws[index])
         if len(payload) != int(expected_csize) or PG.H(payload) != bytes(expected_payload_sha):
             raise RuntimeError("two-anchor recompression differed from priced trial bytes")
         payloads.append(payload)
@@ -115,7 +115,7 @@ def run(work_root: Path) -> dict:
     source = roots[TARGET]
 
     staged = work_root / "r25-stage"
-    prepared = CANON._prepare_profile_tree(source, staged)
+    CANON._prepare_profile_tree(source, staged)
     files = sorted(path for path in staged.rglob("*") if path.is_file())
     rels = [path.relative_to(staged).as_posix() for path in files]
     raws = [path.read_bytes() for path in files]
@@ -138,12 +138,13 @@ def run(work_root: Path) -> dict:
         trials[anchor] = row
 
     shipping = work_root / "shipping-prefixgraph.cmpct"
-    shipping_stats = PG.build(staged, shipping)
+    PG.build(staged, shipping)
+    all_direct_price = _price(rels, raws, direct, expected_tree, (), trials)[0]
     single_prices = {anchor: _price(rels, raws, direct, expected_tree, (anchor,), trials)[0] for anchor in anchors}
-    projected_best_single = min(single_prices.values(), default=shipping.stat().st_size)
-    if projected_best_single != shipping.stat().st_size:
+    projected_shipping = min([all_direct_price, *single_prices.values()])
+    if projected_shipping != shipping.stat().st_size:
         raise RuntimeError(
-            f"pair oracle single-anchor pricing drift: projected={projected_best_single} shipping={shipping.stat().st_size}"
+            f"pair oracle single-anchor pricing drift: projected={projected_shipping} shipping={shipping.stat().st_size}"
         )
 
     pair_rows = []
@@ -174,11 +175,13 @@ def run(work_root: Path) -> dict:
     ext_parent.mkdir()
     normalized = EXT._normalized_stage(source, ext_parent)
     zip_row = EXT._zip(normalized, work_root / "shifted.zip", work_root / "zip-extracted")
+    zstd_work = work_root / "zstd-work"
+    zstd_work.mkdir()
     zstd_row = EXT._tar_zstd(
         normalized,
         work_root / "shifted.tar.zst",
         work_root / "zstd-extracted",
-        work_root / "zstd-work",
+        zstd_work,
     )
     source_tree = EXT._tree(normalized)
     EXT._verify_extracted(work_root / "zip-extracted", source_tree, "ZIP")
@@ -192,12 +195,13 @@ def run(work_root: Path) -> dict:
         and best_bytes < zstd_bytes
     )
     return {
-        "schema": "cmpct-v030-prefixgraph-two-anchor-representation-oracle-v1",
+        "schema": "cmpct-v030-prefixgraph-two-anchor-representation-oracle-v2",
         "target": f"{TARGET[0]}/{TARGET[1]}",
         "r25_manifest_encoding": "filesystem-v1",
         "files": len(raws),
         "nominated_anchors": len(anchors),
         "evaluated_pairs": len(pair_rows),
+        "single_anchor_pricing_exact": True,
         "shipping_prefixgraph_bytes": shipping.stat().st_size,
         "shipping_prefixgraph_sha256": hashlib.sha256(shipping.read_bytes()).hexdigest(),
         "two_anchor_bytes": best_bytes,
