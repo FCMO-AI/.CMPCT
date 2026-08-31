@@ -43,7 +43,91 @@ jobs:
     assert any("accumulated PR paths are not sufficient" in error for error in validate(path))
 
 
-def test_exact_head_deep_lane_may_preserve_running_receipt(tmp_path: Path) -> None:
+def test_exact_head_deep_lane_may_preserve_running_and_queued_receipt(tmp_path: Path) -> None:
+    path = _write(tmp_path, """# ci-lane: deep
+# ci-cancel-policy: preserve-running-exact-receipt
+# ci-pr-scope: latest-head-commit-gate
+on:
+  pull_request:
+    paths:
+      - 'benchmarks/**'
+concurrency:
+  group: long-ab-${{ github.event.pull_request.head.sha || github.sha }}
+  cancel-in-progress: false
+env:
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+jobs:
+  classify:
+    runs-on: ubuntu-24.04
+    steps:
+      - run: git diff-tree --no-commit-id --name-only -r HEAD
+  proof:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+""")
+    assert validate(path) == []
+
+
+def test_exact_head_release_lane_may_preserve_running_and_queued_receipt(tmp_path: Path) -> None:
+    path = _write(tmp_path, """# ci-lane: release
+# ci-cancel-policy: preserve-running-exact-receipt
+# ci-pr-scope: latest-head-commit-gate
+on:
+  pull_request:
+    paths:
+      - 'experiments/**'
+concurrency:
+  group: release-authority-${{ github.event.pull_request.head.sha || github.sha }}
+  cancel-in-progress: false
+env:
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+jobs:
+  classify:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - run: git diff-tree --no-commit-id --name-only -r HEAD
+  authority:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+""")
+    assert validate(path) == []
+
+
+def test_branch_push_deep_lane_may_preserve_running_and_queued_receipt(tmp_path: Path) -> None:
+    path = _write(tmp_path, """# ci-lane: deep
+# ci-cancel-policy: preserve-running-exact-receipt
+on:
+  push:
+    branches:
+      - agent/v030-authoritative-integration
+    paths:
+      - 'benchmarks/**'
+concurrency:
+  group: long-ab-${{ github.sha }}
+  cancel-in-progress: false
+env:
+  EVIDENCE_HEAD: ${{ github.sha }}
+jobs:
+  proof:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+""")
+    assert validate(path) == []
+
+
+def test_pr_preserved_receipt_rejects_pr_number_concurrency_key(tmp_path: Path) -> None:
     path = _write(tmp_path, """# ci-lane: deep
 # ci-cancel-policy: preserve-running-exact-receipt
 # ci-pr-scope: latest-head-commit-gate
@@ -68,41 +152,10 @@ jobs:
         with:
           ref: ${{ env.EVIDENCE_HEAD }}
 """)
-    assert validate(path) == []
+    assert any("pending-run custody" in error for error in validate(path))
 
 
-def test_exact_head_release_lane_may_preserve_running_receipt(tmp_path: Path) -> None:
-    path = _write(tmp_path, """# ci-lane: release
-# ci-cancel-policy: preserve-running-exact-receipt
-# ci-pr-scope: latest-head-commit-gate
-on:
-  pull_request:
-    paths:
-      - 'experiments/**'
-concurrency:
-  group: release-authority-${{ github.event.pull_request.number }}
-  cancel-in-progress: false
-env:
-  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
-jobs:
-  classify:
-    runs-on: ubuntu-24.04
-    steps:
-      - uses: actions/checkout@v6
-        with:
-          ref: ${{ env.EVIDENCE_HEAD }}
-      - run: git diff-tree --no-commit-id --name-only -r HEAD
-  authority:
-    runs-on: ubuntu-24.04
-    steps:
-      - uses: actions/checkout@v6
-        with:
-          ref: ${{ env.EVIDENCE_HEAD }}
-""")
-    assert validate(path) == []
-
-
-def test_branch_push_deep_lane_may_preserve_running_receipt(tmp_path: Path) -> None:
+def test_push_preserved_receipt_rejects_ref_concurrency_key(tmp_path: Path) -> None:
     path = _write(tmp_path, """# ci-lane: deep
 # ci-cancel-policy: preserve-running-exact-receipt
 on:
@@ -124,7 +177,7 @@ jobs:
         with:
           ref: ${{ env.EVIDENCE_HEAD }}
 """)
-    assert validate(path) == []
+    assert any("pending-run custody" in error for error in validate(path))
 
 
 def test_push_preserved_receipt_requires_branch_scope(tmp_path: Path) -> None:
@@ -135,7 +188,7 @@ on:
     paths:
       - 'benchmarks/**'
 concurrency:
-  group: long-ab-${{ github.ref }}
+  group: long-ab-${{ github.sha }}
   cancel-in-progress: false
 env:
   EVIDENCE_HEAD: ${{ github.sha }}
@@ -158,7 +211,7 @@ def test_preserved_receipt_policy_fails_without_path_scope(tmp_path: Path) -> No
 on:
   pull_request:
 concurrency:
-  group: long-ab-${{ github.event.pull_request.number }}
+  group: long-ab-${{ github.event.pull_request.head.sha || github.sha }}
   cancel-in-progress: false
 env:
   EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
@@ -183,7 +236,7 @@ on:
     paths:
       - 'benchmarks/**'
 concurrency:
-  group: long-ab-${{ github.event.pull_request.number }}
+  group: long-ab-${{ github.event.pull_request.head.sha || github.sha }}
   cancel-in-progress: false
 env:
   EVIDENCE_HEAD: ${{ github.sha }}
@@ -206,7 +259,7 @@ on:
     paths:
       - 'benchmarks/**'
 concurrency:
-  group: long-ab-${{ github.event.pull_request.number }}
+  group: long-ab-${{ github.event.pull_request.head.sha || github.sha }}
   cancel-in-progress: false
 env:
   EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
@@ -227,7 +280,7 @@ on:
     paths:
       - 'src/**'
 concurrency:
-  group: fast-${{ github.event.pull_request.number }}
+  group: fast-${{ github.event.pull_request.head.sha || github.sha }}
   cancel-in-progress: false
 env:
   EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
