@@ -11,6 +11,7 @@ on:
       - 'experiments/entropygraph_v030_*.py'
       - 'benchmarks/v030_external_competitors.py'
       - 'benchmarks/v030_external_competitors_canonical.py'
+      - 'tests/test_v030_external_competitor_scoreboard.py'
       - '.github/workflows/v030-external-competitors.yml'
   workflow_dispatch:
 
@@ -46,7 +47,7 @@ jobs:
           fi
           changed="$(git diff-tree --no-commit-id --name-only -r HEAD)"
           printf '%s\n' "$changed"
-          if printf '%s\n' "$changed" | grep -Eq '^(experiments/entropygraph_v030_[^/]*\.py|benchmarks/v030_external_competitors\.py|benchmarks/v030_external_competitors_canonical\.py|\.github/workflows/v030-external-competitors\.yml)$'; then
+          if printf '%s\n' "$changed" | grep -Eq '^(experiments/entropygraph_v030_[^/]*\.py|benchmarks/v030_external_competitors\.py|benchmarks/v030_external_competitors_canonical\.py|tests/test_v030_external_competitor_scoreboard\.py|\.github/workflows/v030-external-competitors\.yml)$'; then
             echo 'run_deep=true' >> "$GITHUB_OUTPUT"
           else
             echo 'run_deep=false' >> "$GITHUB_OUTPUT"
@@ -87,13 +88,15 @@ jobs:
           (7z i | head -n 4) || true
           zpaq 2>&1 | head -n 4 || true
 
-      - name: Compile release product and matrix
+      - name: Compile and preflight strict scoreboard
         run: |
           python -m py_compile \
             experiments/entropygraph_v030_release_product.py \
             experiments/entropygraph_v030_release_admission.py \
             benchmarks/v030_external_competitors.py \
-            benchmarks/v030_external_competitors_canonical.py
+            benchmarks/v030_external_competitors_canonical.py \
+            tests/test_v030_external_competitor_scoreboard.py
+          python -m pytest -q tests/test_v030_external_competitor_scoreboard.py
 
       - name: Run exact repaired 15-workload competitor matrix
         run: |
@@ -168,4 +171,5 @@ jobs:
 # ZIP and solid Zstd-19 are strict per-workload v0.30 release floors for both complete archive size and creation
 # wall-clock. Any tie or loss on any frozen workload fails v0.30 regardless of aggregate performance. Every
 # completed receipt now carries explicit strict-win counts, including the one hard joint score, so historical
-# status cannot be inferred from prose or mixed fingerprints.
+# status cannot be inferred from prose or mixed fingerprints. Cheap synthetic edge cases validate the counter
+# before the expensive 15-workload authority consumes runner hours.
