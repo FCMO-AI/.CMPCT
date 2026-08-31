@@ -1,10 +1,26 @@
 # ci-lane: deep
 # ci-cancel-policy: preserve-running-exact-receipt
+# ci-pr-scope: latest-head-commit-gate
 name: CMPCT v0.30 G0-G4 ML operation record-cache A/B
 
 on:
   push:
     branches: [agent/v030-authoritative-integration]
+    paths:
+      - 'benchmarks/patches/v030_g04_operation_record_cache.patch'
+      - 'benchmarks/v030_g04_ml_operation_record_cache_ab_oracle.py'
+      - 'benchmarks/v030_g04_ml_native_reader_oracle.py'
+      - 'benchmarks/v030_release_performance.py'
+      - 'native/cmpct-portable/src/**.rs'
+      - 'native/cmpct-portable/Cargo.toml'
+      - 'Cargo.lock'
+      - 'pyproject.toml'
+      - 'experiments/entropygraph_v030_native_reader_bridge.py'
+      - 'experiments/entropygraph_v030_release_product.py'
+      - 'experiments/entropygraph_v030_release_reader.py'
+      - '.github/workflows/v030-g04-ml-operation-record-cache-ab.yml'
+  pull_request:
+    branches: [main]
     paths:
       - 'benchmarks/patches/v030_g04_operation_record_cache.patch'
       - 'benchmarks/v030_g04_ml_operation_record_cache_ab_oracle.py'
@@ -24,15 +40,47 @@ permissions:
   contents: read
 
 concurrency:
-  group: cmpct-v030-g04-ml-operation-record-cache-ab-${{ github.ref }}
+  group: cmpct-v030-g04-ml-operation-record-cache-ab-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: false
 
 env:
   PYTHONPATH: ${{ github.workspace }}
-  EVIDENCE_HEAD: ${{ github.sha }}
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
 
 jobs:
+  latest-head-impact:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      run_deep: ${{ steps.scope.outputs.run_deep }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 2
+      - name: Bind exact head and classify only its changed files
+        id: scope
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            echo 'run_deep=true' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          git diff-tree --no-commit-id --name-only -r HEAD > /tmp/latest-head-files.txt
+          cat /tmp/latest-head-files.txt
+          if grep -Eq '^(benchmarks/patches/v030_g04_operation_record_cache\.patch|benchmarks/v030_g04_ml_(operation_record_cache_ab_oracle|native_reader_oracle)\.py|benchmarks/v030_release_performance\.py|native/cmpct-portable/(src/.*\.rs|Cargo\.toml)|Cargo\.lock|pyproject\.toml|experiments/entropygraph_v030_(native_reader_bridge|release_product|release_reader)\.py|\.github/workflows/v030-g04-ml-operation-record-cache-ab\.yml)$' /tmp/latest-head-files.txt; then
+            echo 'run_deep=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'run_deep=false' >> "$GITHUB_OUTPUT"
+            echo 'Accumulated PR paths matched, but newest exact commit cannot affect the ML operation-cache A/B.'
+          fi
+
   native-ab:
+    needs: latest-head-impact
+    if: needs.latest-head-impact.outputs.run_deep == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 150
     steps:
@@ -90,8 +138,7 @@ jobs:
           assert d['target']=='neutral_hostile_v1/09_ml_artifacts'
           assert int(d['rounds'])==7
           b=d['binary_sha256']; c=d['contract']; g=d['gate']
-          assert len(b['baseline'])==64 and len(b['candidate'])==64
-          assert b['baseline'] != b['candidate']
+          assert len(b['baseline'])==64 and len(b['candidate'])==64 and b['baseline'] != b['candidate']
           assert g['distinct_measured_binaries'] is True
           assert c['record_cache_limit_bytes']==64*1024*1024
           assert c['node_cache_scope']=='fresh per member'
@@ -104,8 +151,7 @@ jobs:
           assert g['baseline_corruption_rejected'] is True and g['candidate_corruption_rejected'] is True
           assert d['release_credit'] is False
           expected=(float(d['verify_improvement_fraction'])>=float(c['minimum_verify_improvement_fraction']) and float(d['extract_improvement_fraction'])>=float(c['minimum_extract_improvement_fraction']))
-          assert d['promotion_signal'] is expected
-          assert g['passed'] is expected
+          assert d['promotion_signal'] is expected and g['passed'] is expected
           PY
       - name: Restore exact repository tree before policy checks
         if: always()
