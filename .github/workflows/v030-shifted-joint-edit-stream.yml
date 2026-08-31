@@ -12,6 +12,7 @@ on:
       - 'benchmarks/v030_external_competitors.py'
       - 'benchmarks/v030_release_generalization.py'
       - 'experiments/entropygraph_v030_authoritative.py'
+      - 'tests/test_v030_shifted_joint_patch_stream_oracle.py'
       - '.github/workflows/v030-shifted-joint-edit-stream.yml'
   workflow_dispatch:
 
@@ -50,7 +51,7 @@ jobs:
           fi
           git diff-tree --no-commit-id --name-only -r HEAD > /tmp/latest-head-files.txt
           cat /tmp/latest-head-files.txt
-          if grep -Eq '^(benchmarks/v030_shifted_joint_patch_stream_oracle\.py|benchmarks/resemblance_hostile_corpus_v1\.py|benchmarks/v030_external_competitors\.py|benchmarks/v030_release_generalization\.py|experiments/entropygraph_v030_authoritative\.py|\.github/workflows/v030-shifted-joint-edit-stream\.yml)$' /tmp/latest-head-files.txt; then
+          if grep -Eq '^(benchmarks/v030_shifted_joint_patch_stream_oracle\.py|benchmarks/resemblance_hostile_corpus_v1\.py|benchmarks/v030_external_competitors\.py|benchmarks/v030_release_generalization\.py|experiments/entropygraph_v030_authoritative\.py|tests/test_v030_shifted_joint_patch_stream_oracle\.py|\.github/workflows/v030-shifted-joint-edit-stream\.yml)$' /tmp/latest-head-files.txt; then
             echo 'run_deep=true' >> "$GITHUB_OUTPUT"
           else
             echo 'run_deep=false' >> "$GITHUB_OUTPUT"
@@ -82,11 +83,11 @@ jobs:
           sudo apt-get -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" -o Dir::Etc::sourceparts="-" install -y zstd ffmpeg libsndfile1
           python -m pip install --upgrade pip
           python -m pip install -e '.[test,audio]'
-      - name: Static and corpus ratchet
+      - name: Static, hostile parser, and corpus ratchet
         run: |
           set -euo pipefail
-          python -m py_compile benchmarks/v030_shifted_joint_patch_stream_oracle.py
-          python -m pytest -q tests/test_resemblance_hostile_corpus_v1.py
+          python -m py_compile benchmarks/v030_shifted_joint_patch_stream_oracle.py tests/test_v030_shifted_joint_patch_stream_oracle.py
+          python -m pytest -q tests/test_v030_shifted_joint_patch_stream_oracle.py tests/test_resemblance_hostile_corpus_v1.py
       - name: Run exact joint edit-stream oracle
         run: |
           set -euo pipefail
