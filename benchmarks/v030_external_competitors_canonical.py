@@ -31,12 +31,7 @@ B._tree = lambda root: HISTORICAL_TREE.treehash(root)
 
 
 def _candidate_profile(stats: dict) -> dict:
-    """Retain internal time/byte ownership without changing the competitor measurement boundary.
-
-    The release problem is now often a *canonicalization gap*: G0-G4 may possess a much smaller accepted-v0.29
-    research floor but be unable to publish it as revision 25.  Preserve the exact competing byte counts so a red
-    row tells us whether engineering should target r24, G0-G4 framing, PrefixGraph, or candidate scheduling.
-    """
+    """Retain internal time/byte ownership without changing the competitor measurement boundary."""
     r24 = stats.get("r24") if isinstance(stats.get("r24"), dict) else {}
     r25 = stats.get("r25") if isinstance(stats.get("r25"), dict) else {}
     g04 = r25.get("g04") if isinstance(r25.get("g04"), dict) else {}
@@ -85,12 +80,7 @@ def _candidate_profile(stats: dict) -> dict:
 
 
 def _cmpct_with_stage_timings(stage: Path, archive: Path, extracted: Path) -> dict:
-    """Mirror the frozen CMPCT competitor measurement and expose only nested diagnostics.
-
-    The create timer starts immediately before and stops immediately after ``CANON.build`` exactly as the base
-    harness does. Strong verification and extraction remain outside that timer. The extra fields merely preserve
-    already-produced product stats so a red row identifies which internal stage owns latency and bytes.
-    """
+    """Mirror the frozen CMPCT competitor measurement and expose only nested diagnostics."""
     started = time.perf_counter()
     stats = CANON.build(stage, archive)
     create_s = time.perf_counter() - started
@@ -111,25 +101,19 @@ def _cmpct_with_stage_timings(stage: Path, archive: Path, extracted: Path) -> di
     }
 
 
-# Diagnostic enrichment only: the exact same public product build/verify/extract calls and timer boundary remain
-# authoritative. No comparator implementation, threshold, workload, ordering or archive bytes are changed.
 B._cmpct = _cmpct_with_stage_timings
 
 
 def _strict_row_dominance(result: dict) -> dict:
-    """Require strict per-workload size and create-time wins over ZIP and solid Zstd-19."""
+    """Compute the exact hard-contract scoreboard, preserving every losing row and tie."""
     rows = result["rows"]
     details = []
-    all_zip_size = True
-    all_zstd_size = True
-    all_zip_create = True
-    all_zstd_create = True
     for row in rows:
         formats = row["formats"]
         cmpct = formats["cmpct_v030"]
         zip_row = formats["zip_deflate9"]
         zstd_row = formats["tar_zstd19_solid"]
-        available = cmpct.get("available") and zip_row.get("available") and zstd_row.get("available")
+        available = bool(cmpct.get("available") and zip_row.get("available") and zstd_row.get("available"))
         if not available:
             zip_size_win = zstd_size_win = zip_create_win = zstd_create_win = False
         else:
@@ -143,12 +127,10 @@ def _strict_row_dominance(result: dict) -> dict:
             zstd_size_win = cmpct_bytes < zstd_bytes
             zip_create_win = cmpct_create < zip_create
             zstd_create_win = cmpct_create < zstd_create
-        all_zip_size = all_zip_size and zip_size_win
-        all_zstd_size = all_zstd_size and zstd_size_win
-        all_zip_create = all_zip_create and zip_create_win
-        all_zstd_create = all_zstd_create and zstd_create_win
+        joint = zip_size_win and zstd_size_win and zip_create_win and zstd_create_win
         details.append({
             "label": row["label"],
+            "comparators_complete": available,
             "cmpct_bytes": cmpct.get("archive_bytes"),
             "zip_deflate9_bytes": zip_row.get("archive_bytes"),
             "tar_zstd19_solid_bytes": zstd_row.get("archive_bytes"),
@@ -159,14 +141,32 @@ def _strict_row_dominance(result: dict) -> dict:
             "strictly_beats_zstd19_size": zstd_size_win,
             "strictly_beats_zip_create": zip_create_win,
             "strictly_beats_zstd19_create": zstd_create_win,
+            "strict_joint_win": joint,
         })
-    strict_all = all_zip_size and all_zstd_size and all_zip_create and all_zstd_create
+
+    def count(key: str) -> int:
+        return sum(bool(row[key]) for row in details)
+
+    complete = count("comparators_complete")
+    zip_size_wins = count("strictly_beats_zip_size")
+    zstd_size_wins = count("strictly_beats_zstd19_size")
+    zip_create_wins = count("strictly_beats_zip_create")
+    zstd_create_wins = count("strictly_beats_zstd19_create")
+    joint_wins = count("strict_joint_win")
     return {
-        "all_workloads_strictly_beat_zip_size": all_zip_size,
-        "all_workloads_strictly_beat_zstd19_size": all_zstd_size,
-        "all_workloads_strictly_beat_zip_create": all_zip_create,
-        "all_workloads_strictly_beat_zstd19_create": all_zstd_create,
-        "strict_no_ties_size_or_create": strict_all,
+        "workload_count": len(details),
+        "complete_comparator_rows": complete,
+        "strict_zip_size_wins": zip_size_wins,
+        "strict_zstd19_size_wins": zstd_size_wins,
+        "strict_zip_create_wins": zip_create_wins,
+        "strict_zstd19_create_wins": zstd_create_wins,
+        "strict_joint_wins": joint_wins,
+        "strict_joint_target": len(details),
+        "all_workloads_strictly_beat_zip_size": zip_size_wins == len(details),
+        "all_workloads_strictly_beat_zstd19_size": zstd_size_wins == len(details),
+        "all_workloads_strictly_beat_zip_create": zip_create_wins == len(details),
+        "all_workloads_strictly_beat_zstd19_create": zstd_create_wins == len(details),
+        "strict_no_ties_size_or_create": joint_wins == len(details),
         "rows": details,
     }
 
@@ -216,7 +216,7 @@ def main() -> None:
     result = run(args.work_root)
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8")
-    print(json.dumps({"aggregates": result["aggregates"], "gate": result["gate"]}, indent=2), flush=True)
+    print(json.dumps({"aggregates": result["aggregates"], "gate": result["gate"], "strict_scoreboard": {k: v for k, v in result["strict_per_workload_dominance"].items() if k != "rows"}}, indent=2), flush=True)
     if not result["gate"]["passed"]:
         raise SystemExit("canonical v0.30 external competitor gate failed")
 
