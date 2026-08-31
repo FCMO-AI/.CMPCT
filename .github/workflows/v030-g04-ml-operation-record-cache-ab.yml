@@ -34,10 +34,6 @@ env:
 jobs:
   native-ab:
     runs-on: ubuntu-24.04
-    # Exact run c175f56 reached the real seven-round baseline/candidate measurement only after both release binaries
-    # and native correctness had passed, then the runner killed that measurement at the old 90-minute job ceiling
-    # after ~87 minutes inside the oracle. Preserve the seven-round evidence law rather than weakening it to fit the
-    # harness: this deep, path-scoped, preserve-running lane gets enough wall-clock budget to finish one exact receipt.
     timeout-minutes: 150
     steps:
       - uses: actions/checkout@v6
@@ -53,9 +49,6 @@ jobs:
       - name: Install deterministic ML-corpus dependencies from Ubuntu only
         run: |
           set -euo pipefail
-          # Hosted runners may carry unrelated Microsoft/Azure feeds. They are not inputs to this oracle and have
-          # previously returned 403 during apt metadata refresh, invalidating an exact run before any benchmark work.
-          # Restrict apt to the canonical Ubuntu source rather than turning an external feed outage into CMPCT evidence.
           test -f /etc/apt/sources.list.d/ubuntu.sources
           sudo apt-get -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" -o Dir::Etc::sourceparts="-" update
           sudo apt-get -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" -o Dir::Etc::sourceparts="-" install -y zstd gcc ffmpeg libsndfile1
@@ -89,10 +82,11 @@ jobs:
         run: |
           test -f benchmark-artifacts/v030-g04-ml-operation-record-cache.json
           python - <<'PY'
-          import json
+          import json, os
           from pathlib import Path
           d=json.loads(Path('benchmark-artifacts/v030-g04-ml-operation-record-cache.json').read_text())
-          assert d['schema']=='cmpct-v030-g04-ml-operation-record-cache-ab-v3'
+          assert d['schema']=='cmpct-v030-g04-ml-operation-record-cache-ab-v4'
+          assert d['source_commit']==os.environ['EVIDENCE_HEAD']
           assert d['target']=='neutral_hostile_v1/09_ml_artifacts'
           assert int(d['rounds'])==7
           b=d['binary_sha256']; c=d['contract']; g=d['gate']
@@ -132,4 +126,5 @@ jobs:
           retention-days: 90
 
 # Research-only exact receipt. A pass can authorize productizing bounded operation-scoped decoded-record ownership;
-# it cannot itself earn release credit or alter selector/locality/grammar policy.
+# it cannot itself earn release credit or alter selector/locality/grammar policy. The receipt itself must name the
+# exact source commit that built both measured binaries; filename binding alone is insufficient evidence custody.
