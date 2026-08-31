@@ -1,4 +1,6 @@
 # ci-lane: release
+# ci-cancel-policy: preserve-running-exact-receipt
+# ci-pr-scope: latest-head-commit-gate
 name: CMPCT v0.30 canonical r25 authority
 
 on:
@@ -17,14 +19,46 @@ permissions:
 
 concurrency:
   group: cmpct-v030-canonical-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 env:
   PYTHONPATH: ${{ github.workspace }}
   EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
 
 jobs:
+  latest-head-impact:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      run_release: ${{ steps.scope.outputs.run_release }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 2
+      - name: Bind exact head and classify canonical release impact
+        id: scope
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            echo 'run_release=true' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          git diff-tree --no-commit-id --name-only -r HEAD > /tmp/latest-head-files.txt
+          cat /tmp/latest-head-files.txt
+          if grep -Eq '^(experiments/entropygraph_v030_.*\.py|tests/test_v030_.*\.py|benchmarks/v030_(release_generalization_canonical|release_performance_product|perf_worker_canonical|external_competitors_canonical)\.py|\.github/workflows/v030-canonical-authority\.yml)$' /tmp/latest-head-files.txt; then
+            echo 'run_release=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'run_release=false' >> "$GITHUB_OUTPUT"
+            echo 'Accumulated PR paths matched, but newest exact commit does not affect canonical r25 authority.'
+          fi
+
   canonical-fast:
+    needs: latest-head-impact
+    if: needs.latest-head-impact.outputs.run_release == 'true'
     name: canonical-fast
     runs-on: ubuntu-latest
     timeout-minutes: 90
@@ -38,10 +72,12 @@ jobs:
         with:
           python-version: '3.11'
           cache: pip
-      - name: Install dependencies
+      - name: Install dependencies from canonical Ubuntu feed
         run: |
-          sudo apt-get update
-          sudo apt-get install -y zstd gcc
+          set -euo pipefail
+          test -f /etc/apt/sources.list.d/ubuntu.sources
+          sudo apt-get -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" -o Dir::Etc::sourceparts="-" update
+          sudo apt-get -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" -o Dir::Etc::sourceparts="-" install -y zstd gcc
           python -m pip install --upgrade pip
           python -m pip install -e '.[test,audio]'
       - name: Compile canonical product authority
@@ -82,6 +118,8 @@ jobs:
         run: python tools/check_public_surface.py
 
   canonical-generalization:
+    needs: latest-head-impact
+    if: needs.latest-head-impact.outputs.run_release == 'true'
     name: canonical-generalization
     runs-on: ubuntu-latest
     timeout-minutes: 360
@@ -95,10 +133,12 @@ jobs:
         with:
           python-version: '3.11'
           cache: pip
-      - name: Install corpus dependencies
+      - name: Install corpus dependencies from canonical Ubuntu feed
         run: |
-          sudo apt-get update
-          sudo apt-get install -y zstd gcc ffmpeg
+          set -euo pipefail
+          test -f /etc/apt/sources.list.d/ubuntu.sources
+          sudo apt-get -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" -o Dir::Etc::sourceparts="-" update
+          sudo apt-get -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" -o Dir::Etc::sourceparts="-" install -y zstd gcc ffmpeg
           python -m pip install --upgrade pip
           python -m pip install -e '.[test,audio]'
           python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
@@ -148,6 +188,8 @@ jobs:
           retention-days: 90
 
   canonical-runtime:
+    needs: latest-head-impact
+    if: needs.latest-head-impact.outputs.run_release == 'true'
     name: canonical-runtime
     runs-on: ubuntu-latest
     timeout-minutes: 420
@@ -161,10 +203,12 @@ jobs:
         with:
           python-version: '3.11'
           cache: pip
-      - name: Install runtime dependencies
+      - name: Install runtime dependencies from canonical Ubuntu feed
         run: |
-          sudo apt-get update
-          sudo apt-get install -y zstd gcc ffmpeg
+          set -euo pipefail
+          test -f /etc/apt/sources.list.d/ubuntu.sources
+          sudo apt-get -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" -o Dir::Etc::sourceparts="-" update
+          sudo apt-get -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" -o Dir::Etc::sourceparts="-" install -y zstd gcc ffmpeg
           python -m pip install --upgrade pip
           python -m pip install -e '.[test,audio]'
           python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
@@ -210,6 +254,8 @@ jobs:
           retention-days: 90
 
   canonical-external-frontier:
+    needs: latest-head-impact
+    if: needs.latest-head-impact.outputs.run_release == 'true'
     name: canonical-external-frontier
     runs-on: ubuntu-latest
     timeout-minutes: 540
@@ -223,10 +269,12 @@ jobs:
         with:
           python-version: '3.11'
           cache: pip
-      - name: Install CMPCT, frozen-corpus media tools and external compressors
+      - name: Install CMPCT, frozen-corpus media tools and external compressors from canonical Ubuntu feed
         run: |
-          sudo apt-get update
-          sudo apt-get install -y zstd p7zip-full zpaq gcc ffmpeg
+          set -euo pipefail
+          test -f /etc/apt/sources.list.d/ubuntu.sources
+          sudo apt-get -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" -o Dir::Etc::sourceparts="-" update
+          sudo apt-get -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" -o Dir::Etc::sourceparts="-" install -y zstd p7zip-full zpaq gcc ffmpeg
           python -m pip install --upgrade pip
           python -m pip install -e '.[test,audio]'
           python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
@@ -281,10 +329,11 @@ jobs:
           if-no-files-found: error
           retention-days: 90
 
-# Footnote: this workflow now binds every canonical release measurement to the promoted
+# Footnote: this workflow binds every canonical release measurement to the promoted
 # `entropygraph_v030_release_product` front door. Historical mechanism-causality remains separate evidence; it is
 # not allowed to impersonate product runtime or external performance. The corpus jobs install ffmpeg/audio only to
 # construct the frozen workload. No compression, locality, runtime, RSS or competitor threshold is weakened.
 # External authority independently enforces the user's strict 15/15 ZIP/Zstd size+creation-speed law, including
 # the rule that equality is failure. Native/shared-reader and portability remain mandatory separate authority
-# before #56 can merge.
+# before #56 can merge. Exact canonical receipts are preserved once running, and unrelated newest commits exit
+# through the exact-head classifier instead of cancelling multi-hour evidence.
