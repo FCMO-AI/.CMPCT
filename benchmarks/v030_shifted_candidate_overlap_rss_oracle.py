@@ -114,10 +114,17 @@ def _run_worker(mode: str, source: Path, work_root: Path) -> dict:
         ],
         cwd=ROOT,
         env=env,
-        check=True,
+        check=False,
         capture_output=True,
         text=True,
     )
+    if proc.returncode != 0:
+        # CI must expose the child traceback. The first version used check=True, which hid the only actionable
+        # diagnostic behind CalledProcessError and turned a harness defect into an opaque red lane.
+        raise RuntimeError(
+            f"candidate-overlap worker failed for {mode} rc={proc.returncode}\n"
+            f"--- stdout ---\n{proc.stdout}\n--- stderr ---\n{proc.stderr}"
+        )
     lines = [line for line in proc.stdout.splitlines() if line.strip()]
     if not lines:
         raise RuntimeError(f"candidate-overlap worker emitted no JSON for {mode}: {proc.stderr!r}")
