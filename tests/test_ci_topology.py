@@ -71,6 +71,37 @@ jobs:
     assert validate(path) == []
 
 
+def test_exact_head_release_lane_may_preserve_running_receipt(tmp_path: Path) -> None:
+    path = _write(tmp_path, """# ci-lane: release
+# ci-cancel-policy: preserve-running-exact-receipt
+# ci-pr-scope: latest-head-commit-gate
+on:
+  pull_request:
+    paths:
+      - 'experiments/**'
+concurrency:
+  group: release-authority-${{ github.event.pull_request.number }}
+  cancel-in-progress: false
+env:
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+jobs:
+  classify:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - run: git diff-tree --no-commit-id --name-only -r HEAD
+  authority:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+""")
+    assert validate(path) == []
+
+
 def test_branch_push_deep_lane_may_preserve_running_receipt(tmp_path: Path) -> None:
     path = _write(tmp_path, """# ci-lane: deep
 # ci-cancel-policy: preserve-running-exact-receipt
