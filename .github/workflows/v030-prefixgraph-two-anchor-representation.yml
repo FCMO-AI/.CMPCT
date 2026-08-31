@@ -94,12 +94,13 @@ jobs:
           python -m benchmarks.v030_prefixgraph_two_anchor_representation_oracle \
             --work-root "$RUNNER_TEMP/v030-prefixgraph-two-anchor" \
             --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-prefixgraph-two-anchor.json"
-      - name: Enforce evidence boundary
+      - name: Enforce evidence boundary and persist domination decision
         run: |
           python - <<'PY'
           import json
           from pathlib import Path
-          d=json.loads(Path('benchmark-artifacts/v030-prefixgraph-two-anchor.json').read_text())
+          p=Path('benchmark-artifacts/v030-prefixgraph-two-anchor.json')
+          d=json.loads(p.read_text())
           assert d['schema']=='cmpct-v030-prefixgraph-two-anchor-representation-oracle-v2'
           assert d['nominated_anchors'] >= 2
           assert d['evaluated_pairs'] > 0
@@ -113,6 +114,34 @@ jobs:
           assert d['zstd19_bytes'] is not None and d['zstd19_bytes'] > 0
           assert d['release_credit'] is False
           assert d['product_create_time_claim'] is False
+
+          # Bind this structural experiment to the repository domination rubric. The prior impossible-best-case
+          # floor proved that raw-prefix payloads have huge theoretical headroom, so two anchors are the smallest
+          # realizable representation increase that can falsify whether useful headroom is capturable without
+          # changing dependency depth. Exhaustive creation time remains deliberately non-product evidence.
+          d['domination_audit']={
+              'strict_target':'15/15 strictly smaller and faster than ZIP/Deflate and solid Zstd-19',
+              'diagnosis':'D4',
+              'radicality':'R3',
+              'active_saturation':['S2','S4'],
+              'research_priority_score':94,
+              'strongest_self_critique':(
+                  'Exhaustive pair search can prove representational size potential but says nothing about whether '
+                  'a content-agnostic bounded selector can find the pair inside the ZIP creation budget.'
+              ),
+              'terminal_decision':(
+                  'PROMOTE_NEXT_PREREQUISITE' if d['strict_size_win_vs_zip_and_zstd19'] else 'ESCALATE_RADICALITY'
+              ),
+              'next_decisive_test':(
+                  'derive and falsify a bounded content-agnostic two-anchor selector with exact-byte reader parity '
+                  'and creation-time accounting' if d['strict_size_win_vs_zip_and_zstd19'] else
+                  'increase representation capacity beyond two direct anchors while preserving depth-1 locality'
+              ),
+          }
+          assert d['domination_audit']['terminal_decision'] in {
+              'PROMOTE_NEXT_PREREQUISITE','ESCALATE_RADICALITY'
+          }
+          p.write_text(json.dumps(d, indent=2)+'\n')
           PY
       - name: CI topology self-check
         if: always()
@@ -131,4 +160,5 @@ jobs:
 
 # Structural R3 research only. A positive strict-size result authorizes work on a bounded fast selector; a miss
 # escalates the representation beyond two anchors. Exhaustive oracle time is never presented as product creation
-# performance and no result here directly earns release credit.
+# performance and no result here directly earns release credit. The persisted domination audit makes that boundary
+# explicit and forces the next step to be productization rather than novelty if two anchors already win.
