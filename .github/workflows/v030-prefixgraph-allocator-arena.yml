@@ -1,25 +1,12 @@
 # ci-lane: deep
-# ci-cancel-policy: preserve-running-exact-receipt
+# ci-auto-policy: retired-manual-only
 name: CMPCT v0.30 PrefixGraph allocator-arena frontier
 
 on:
-  push:
-    branches: [agent/v030-authoritative-integration]
-    paths:
-      - 'experiments/entropygraph_v030_prefixgraph.py'
-      - 'experiments/entropygraph_v030_prefixgraph_parallel.py'
-      - 'benchmarks/v030_release_performance.py'
-      - 'benchmarks/v030_prefixgraph_lowmem_params_worker.py'
-      - 'benchmarks/v030_prefixgraph_allocator_arena_oracle.py'
-      - '.github/workflows/v030-prefixgraph-allocator-arena.yml'
   workflow_dispatch:
 
 permissions:
   contents: read
-
-concurrency:
-  group: cmpct-v030-prefixgraph-allocator-arena-${{ github.ref }}
-  cancel-in-progress: false
 
 env:
   PYTHONPATH: ${{ github.workspace }}
@@ -102,4 +89,6 @@ jobs:
           if-no-files-found: error
           retention-days: 90
 
-# Research only. The environment changes allocator retention, not archive semantics. No positive arm earns release credit directly.
+# Terminal negative retained for manual reproduction. Exact evidence found arena caps save at most about 8.2% RSS
+# while costing about 8.3% wall time, with tighter caps becoming worse. This does not explain Shifted's ~3x RSS;
+# automatic work has moved to direct live-CCtx attribution.
