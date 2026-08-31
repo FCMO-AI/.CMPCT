@@ -1,4 +1,5 @@
 # ci-lane: deep
+# ci-pr-scope: latest-head-commit-gate
 name: CMPCT v0.30 r24 dictionary skip correlated disproof
 
 on:
@@ -26,21 +27,60 @@ concurrency:
 
 env:
   PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
 
 jobs:
+  latest-head-impact:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      run_deep: ${{ steps.scope.outputs.run_deep }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 2
+      - name: Bind exact head and classify only its changed files
+        id: scope
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            echo 'run_deep=true' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          git diff-tree --no-commit-id --name-only -r HEAD > /tmp/latest-head-files.txt
+          cat /tmp/latest-head-files.txt
+          if grep -Eq '^(benchmarks/v030_r24_dictionary_(skip_correlated_adversarial_v3|skip_adversarial_v2|skip_adversarial_oracle|skip_admission_oracle|training_cost_oracle)\.py|experiments/entropygraph_v030_(r24_dead_dictionary|release_product|release_product_base)\.py|src/cmpct/builder\.py|\.github/workflows/v030-r24-dictionary-skip-correlated-v3\.yml)$' /tmp/latest-head-files.txt; then
+            echo 'run_deep=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'run_deep=false' >> "$GITHUB_OUTPUT"
+            echo 'Accumulated PR paths matched, but newest exact commit does not affect the correlated disproof.'
+          fi
+
   correlated-disproof:
+    needs: latest-head-impact
+    if: needs.latest-head-impact.outputs.run_deep == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 240
     steps:
       - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - name: Bind exact candidate
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
       - uses: actions/setup-python@v6
         with:
           python-version: '3.11'
           cache: pip
-      - name: Install exact corpus dependencies
+      - name: Install exact corpus dependencies from canonical Ubuntu feed
         run: |
-          sudo apt-get update
-          sudo apt-get install -y zstd gcc ffmpeg libsndfile1
+          set -euo pipefail
+          test -f /etc/apt/sources.list.d/ubuntu.sources
+          sudo apt-get -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" -o Dir::Etc::sourceparts="-" update
+          sudo apt-get -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" -o Dir::Etc::sourceparts="-" install -y zstd gcc ffmpeg libsndfile1
           python -m pip install --upgrade pip
           python -m pip install -e '.[audio,test]'
           python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
@@ -54,22 +94,11 @@ jobs:
           python - <<'PY'
           from experiments import entropygraph_v030_release_product as P
           from experiments import entropygraph_v030_r24_dead_dictionary as D
-
-          # Preserve the exact disproven envelope as evidence, but fail closed in shipping.
           assert D.DICTIONARY_SKIP_MIN_REGULAR_FILES == 5
           assert D.DICTIONARY_SKIP_MIN_SAMPLE_COUNT == 32
           assert D.DICTIONARY_SKIP_ENABLED is False
           assert D.DICTIONARY_SKIP_DISABLED_REASON == 'correlated-positive-sample-counterexamples'
-          assert D._dictionary_training_skip_admitted({
-              'regular_files': 5,
-              'dictionary_sample_count': 32,
-              'dictionary_sample_bytes': 1,
-          }) is False
-
-          # Import order remains intentional: dead_dictionary wraps the mature r24 builder first; the
-          # public product captures that release-only wrapper as _BASE_R24_BUILD, then installs its
-          # dead-dictionary post-pass as the base module's public r24 materializer. These remain distinct
-          # so post-selection dead-dictionary elision stays active while the disproven pre-training skip is off.
+          assert D._dictionary_training_skip_admitted({'regular_files': 5,'dictionary_sample_count': 32,'dictionary_sample_bytes': 1}) is False
           assert getattr(P._BASE_IMPL, '_cmpct_v030_dictionary_skip_boundary_installed', False) is True
           original = P._BASE_IMPL._cmpct_v030_dictionary_skip_original_r24_build
           assert P._BASE_R24_BUILD is not original
@@ -88,41 +117,34 @@ jobs:
           import json
           from pathlib import Path
           from experiments import entropygraph_v030_r24_dead_dictionary as D
-
           d = json.loads(Path('benchmark-artifacts/v030-r24-dictionary-skip-correlated-v3.json').read_text())
           assert d['schema'] == 'cmpct-v030-r24-dictionary-skip-correlated-adversarial-v3'
-          c = d['contract']
-          assert c['release_credit'] is False
-          assert c['production_change'] is False
+          c = d['contract']; s = d['summary']
+          assert c['release_credit'] is False and c['production_change'] is False
           assert c['additional_correlated_positive_sample_cases'] == 2
           assert c['correlated_nonexact_admission_blocks_broad_rule'] is True
-          assert c['broad_v2_rule_under_test'] == {
-              'regular_files_min': 5,
-              'dictionary_sample_count_min': 32,
-          }
-          s = d['summary']
-          assert s['frozen_complete'] is True
-          assert s['correlated_surface_complete'] is True
-          assert s['correlated_training_surface_exercised'] is True
-          assert s['broad_v2_rule_admissions'] >= 2
-
-          # Negative evidence is now the expected scientific outcome. It must remain visible and it must
-          # disable the broad shipping rule rather than being averaged away or hidden by threshold changes.
-          assert s['broad_v2_rule_counterexamples'] >= 1
-          assert s['broad_v2_rule_survives'] is False
+          assert c['broad_v2_rule_under_test'] == {'regular_files_min': 5,'dictionary_sample_count_min': 32}
+          assert s['frozen_complete'] is True and s['correlated_surface_complete'] is True
+          assert s['correlated_training_surface_exercised'] is True and s['broad_v2_rule_admissions'] >= 2
+          assert s['broad_v2_rule_counterexamples'] >= 1 and s['broad_v2_rule_survives'] is False
           assert len(s['broad_v2_rule_counterexample_labels']) == s['broad_v2_rule_counterexamples']
-          assert D.DICTIONARY_SKIP_ENABLED is False
-          assert d['release_credit'] is False
+          assert D.DICTIONARY_SKIP_ENABLED is False and d['release_credit'] is False
           PY
+      - name: Record exact candidate fingerprint
+        run: printf '%s\n' "$EVIDENCE_HEAD" > benchmark-artifacts/v030-r24-dictionary-skip-correlated-v3-candidate.txt
       - name: CI topology self-check
+        if: always()
         run: python tools/check_ci_topology.py .github/workflows/v030-r24-dictionary-skip-correlated-v3.yml
       - uses: actions/upload-artifact@v6
         if: always()
         with:
-          name: v030-r24-dictionary-skip-correlated-v3-${{ github.sha }}
-          path: benchmark-artifacts/v030-r24-dictionary-skip-correlated-v3.json
+          name: v030-r24-dictionary-skip-correlated-v3-${{ env.EVIDENCE_HEAD }}
+          path: |
+            benchmark-artifacts/v030-r24-dictionary-skip-correlated-v3.json
+            benchmark-artifacts/v030-r24-dictionary-skip-correlated-v3-candidate.txt
           if-no-files-found: warn
           retention-days: 90
 
-# The broad pre-training skip is disproven and disabled. This lane preserves the counterexamples and fails if
-# shipping silently re-enables the rule without a new independent promotion boundary.
+# The broad pre-training skip is disproven and disabled. Exact evidence found both 85%-shared-prefix cases are
+# nonexact under the broad rule while high-entropy positive cases remain exact and materially faster. This lane
+# preserves those counterexamples; exact-head scoping prevents unrelated integration commits from replaying it.
