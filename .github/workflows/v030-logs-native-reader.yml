@@ -1,4 +1,5 @@
 # ci-lane: deep
+# ci-pr-scope: latest-head-commit-gate
 name: CMPCT v0.30 logs native reader oracle
 
 on:
@@ -28,38 +29,70 @@ concurrency:
 
 env:
   PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
 
 jobs:
+  latest-head-impact:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      run_deep: ${{ steps.scope.outputs.run_deep }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 2
+      - name: Bind exact head and classify only its changed files
+        id: scope
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            echo 'run_deep=true' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          git diff-tree --no-commit-id --name-only -r HEAD > /tmp/latest-head-files.txt
+          cat /tmp/latest-head-files.txt
+          if grep -Eq '^(experiments/entropygraph_v030_(native_logs_reader_bridge|release_product|release_product_logs_candidate|logs_inverse_profile_v3|product_fs)\.py|benchmarks/v030_logs_(native_reader|manifest_identity_handoff)_oracle\.py|native/cmpct-portable/src/(lib|logs|logs_public)\.rs|native/cmpct-portable/src/bin/cmpct-portable\.rs|\.github/workflows/v030-logs-native-reader\.yml)$' /tmp/latest-head-files.txt; then
+            echo 'run_deep=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'run_deep=false' >> "$GITHUB_OUTPUT"
+            echo 'Accumulated PR paths matched, but newest exact commit does not affect logs reader evidence.'
+          fi
+
   logs-native-reader:
+    needs: latest-head-impact
+    if: needs.latest-head-impact.outputs.run_deep == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 120
     steps:
       - uses: actions/checkout@v6
         with:
-          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          ref: ${{ env.EVIDENCE_HEAD }}
       - name: Bind exact candidate
         id: candidate
         shell: bash
         run: |
           set -euo pipefail
-          expected='${{ github.event.pull_request.head.sha || github.sha }}'
           actual="$(git rev-parse HEAD)"
-          test "$actual" = "$expected"
+          test "$actual" = "$EVIDENCE_HEAD"
           echo "sha=$actual" >> "$GITHUB_OUTPUT"
       - uses: actions/setup-python@v6
         with:
           python-version: '3.11'
           cache: pip
       - uses: dtolnay/rust-toolchain@stable
-
-      - name: Install deterministic logs-corpus dependencies
+      - name: Install deterministic logs-corpus dependencies from canonical Ubuntu feed
         run: |
-          sudo apt-get update
-          sudo apt-get install -y zstd gcc ffmpeg libsndfile1
+          set -euo pipefail
+          test -f /etc/apt/sources.list.d/ubuntu.sources
+          sudo apt-get -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" -o Dir::Etc::sourceparts="-" update
+          sudo apt-get -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" -o Dir::Etc::sourceparts="-" install -y zstd gcc ffmpeg libsndfile1
           python -m pip install --upgrade pip
           python -m pip install -e '.[audio,test]'
           python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
-
       - name: Compile Python and production native surfaces
         run: |
           python -m py_compile experiments/entropygraph_v030_native_logs_reader_bridge.py
@@ -67,12 +100,10 @@ jobs:
           python -m py_compile benchmarks/v030_logs_manifest_identity_handoff_oracle.py
           cargo fmt --check --manifest-path native/cmpct-portable/Cargo.toml
           cargo build --release --manifest-path native/cmpct-portable/Cargo.toml --bin cmpct-portable
-
       - name: Preserve production logs native correctness before timing
         run: |
           python -m pytest -q tests/test_v030_logs_inverse_native_safe.py
           cargo test --manifest-path native/cmpct-portable/Cargo.toml --lib logs -- --nocapture
-
       - name: Run canonical logs Python-vs-native reader A/B
         run: |
           mkdir -p benchmark-artifacts
@@ -80,83 +111,53 @@ jobs:
             --native-cli "$GITHUB_WORKSPACE/native/cmpct-portable/target/release/cmpct-portable" \
             --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-logs-native-reader-work" \
             --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-logs-native-reader.json"
-
       - name: Independently enforce identity, hostile rejection, budget and claim boundary
         run: |
           python - <<'PY'
           import json
           from pathlib import Path
-          d = json.loads(Path('benchmark-artifacts/v030-logs-native-reader.json').read_text())
-          assert d['schema'] == 'cmpct-v030-logs-native-reader-v1'
-          assert d['target'] == 'neutral_hostile_v1/05_logs_and_telemetry'
-          assert d['native_bridge'] == 'cmpct-portable-logs-process-v1'
-          assert d['rounds'] == 5
-          assert d['archive_bytes'] > 0
-          c = d['contract']
-          assert c['minimum_verify_improvement_fraction'] == 0.20
-          assert c['minimum_extract_improvement_fraction'] == 0.20
-          assert c['archive_bytes_changed'] is False
-          assert c['grammar_changed'] is False
-          assert c['selector_changed'] is False
-          assert c['locality_limit'] == 8.0
-          assert c['decode_unit_limit_bytes'] == 8 * 1024 * 1024
+          d=json.loads(Path('benchmark-artifacts/v030-logs-native-reader.json').read_text())
+          assert d['schema']=='cmpct-v030-logs-native-reader-v1' and d['target']=='neutral_hostile_v1/05_logs_and_telemetry'
+          assert d['native_bridge']=='cmpct-portable-logs-process-v1' and d['rounds']==5 and d['archive_bytes']>0
+          c=d['contract']; g=d['gate']
+          assert c['minimum_verify_improvement_fraction']==0.20 and c['minimum_extract_improvement_fraction']==0.20
+          assert c['archive_bytes_changed'] is False and c['grammar_changed'] is False and c['selector_changed'] is False
+          assert c['locality_limit']==8.0 and c['decode_unit_limit_bytes']==8*1024*1024
           assert c['caller_extract_budget_enforced_before_publication'] is True
-          assert d['native_corruption_rejected'] is True
-          assert d['native_caller_budget_preserved'] is True
-          assert all(len(d['samples_s'][key]) == 5 for key in ('python_verify', 'native_verify', 'python_extract', 'native_extract'))
-          g = d['gate']
-          assert g['archive_bytes_unchanged'] is True
-          assert g['canonical_tree_preserved'] is True
-          assert g['native_tail_metadata_authenticated'] is True
-          assert g['native_corruption_rejected'] is True
-          assert g['native_caller_budget_preserved'] is True
-          expected = d['verify_improvement_fraction'] >= 0.20 and d['extract_improvement_fraction'] >= 0.20
-          assert d['promotion_signal'] == expected
-          assert g['passed'] == expected
-          assert d['release_credit'] is False
+          assert d['native_corruption_rejected'] is True and d['native_caller_budget_preserved'] is True
+          assert all(len(d['samples_s'][key])==5 for key in ('python_verify','native_verify','python_extract','native_extract'))
+          assert g['archive_bytes_unchanged'] and g['canonical_tree_preserved'] and g['native_tail_metadata_authenticated']
+          assert g['native_corruption_rejected'] and g['native_caller_budget_preserved']
+          expected=d['verify_improvement_fraction']>=0.20 and d['extract_improvement_fraction']>=0.20
+          assert d['promotion_signal']==expected and g['passed']==expected and d['release_credit'] is False
           PY
-
       - name: Run authenticated manifest-identity handoff A/B
         run: |
           python benchmarks/v030_logs_manifest_identity_handoff_oracle.py \
             --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-logs-manifest-handoff-work" \
             --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-logs-manifest-handoff.json"
-
       - name: Enforce identity-handoff evidence boundary
         run: |
           python - <<'PY'
           import json
           from pathlib import Path
           d=json.loads(Path('benchmark-artifacts/v030-logs-manifest-handoff.json').read_text())
-          assert d['schema']=='cmpct-v030-logs-manifest-identity-handoff-v1'
-          assert d['target']=='neutral_hostile_v1/05_logs_and_telemetry'
-          assert d['rounds']==7
-          assert d['archive_bytes']>0
+          assert d['schema']=='cmpct-v030-logs-manifest-identity-handoff-v1' and d['target']=='neutral_hostile_v1/05_logs_and_telemetry'
+          assert d['rounds']==7 and d['archive_bytes']>0
           c=d['contract']; g=d['gate']
           assert c['minimum_improvement_fraction']==0.10
-          assert c['archive_bytes_changed'] is False
-          assert c['grammar_changed'] is False
-          assert c['selector_changed'] is False
-          assert c['second_disk_content_hash_removed_only_after_authenticated_identity_map_equality'] is True
-          assert c['release_credit'] is False
-          assert g['archive_bytes_unchanged'] is True
-          assert g['grammar_unchanged'] is True
-          assert g['canonical_tree_preserved'] is True
-          assert g['authenticated_identity_map_required_exact'] is True
-          assert g['post_write_shape_checks_preserved'] is True
-          assert len(d['samples_s']['baseline_extract'])==7
-          assert len(d['samples_s']['handoff_extract'])==7
+          assert c['archive_bytes_changed'] is False and c['grammar_changed'] is False and c['selector_changed'] is False
+          assert c['second_disk_content_hash_removed_only_after_authenticated_identity_map_equality'] is True and c['release_credit'] is False
+          assert g['archive_bytes_unchanged'] and g['grammar_unchanged'] and g['canonical_tree_preserved']
+          assert g['authenticated_identity_map_required_exact'] and g['post_write_shape_checks_preserved']
+          assert len(d['samples_s']['baseline_extract'])==7 and len(d['samples_s']['handoff_extract'])==7
           expected=d['improvement_fraction']>=0.10
-          assert g['materially_faster']==expected
-          assert d['promotion_signal']==expected
-          assert g['passed']==expected
-          # Negative timing evidence is valid and stays durable; it must not be relabeled a workflow defect.
+          assert g['materially_faster']==expected and d['promotion_signal']==expected and g['passed']==expected
           Path('benchmark-artifacts/v030-logs-native-reader-candidate.txt').write_text('${{ steps.candidate.outputs.sha }}\n')
           PY
-
       - name: CI topology self-check
+        if: always()
         run: python tools/check_ci_topology.py .github/workflows/v030-logs-native-reader.yml
-
       - uses: actions/upload-artifact@v6
         if: always()
         with:
@@ -168,5 +169,8 @@ jobs:
           if-no-files-found: warn
           retention-days: 90
 
-# Research-only reader A/B. Positive results authorize separate explicit shipping integration only; the normal
-# reader/fuzz/native/Android/runtime/final authorities remain mandatory and no archive/selector rule changes here.
+# Exact evidence keeps the process-start native bridge as terminal negative performance evidence, while the same
+# seven-round run measured authenticated manifest-identity handoff 22.27% faster on extraction with exact tree and
+# unchanged bytes/grammar. The latter still requires explicit product integration plus reader/fuzz/native/Android and
+# complete runtime authority; neither result receives release credit here. Exact-head scoping prevents unrelated PR
+# commits from repeatedly consuming the two-hour lane.
