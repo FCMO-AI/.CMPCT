@@ -178,12 +178,26 @@ def decode_from_content_identities(
     if control_identity != expected_control_identity:
         raise RuntimeError("r25 filesystem control graph identity mismatch")
 
-    decoded, encoding = decode(
-        raw,
-        regular_identities=identities,
-        max_path_bytes=max_path_bytes,
-        max_entries=max_entries,
-    )
+    try:
+        decoded, encoding = decode(
+            raw,
+            regular_identities=identities,
+            max_path_bytes=max_path_bytes,
+            max_entries=max_entries,
+        )
+    except RuntimeError as exc:
+        # The low-level dual-grammar decoder intentionally presents malformed inputs through one generic
+        # fail-closed boundary. At this graph-bound seam, however, an otherwise valid implicit-v4 control whose
+        # authenticated identity set has the wrong cardinality is specifically a logical-member disagreement.
+        # Preserve that semantic diagnostic without weakening or bypassing either bounded grammar decoder.
+        cause = exc.__cause__
+        if (
+            str(exc) == "unsupported or malformed r25 filesystem control"
+            and isinstance(cause, RuntimeError)
+            and str(cause) == "implicit-v4 regular identity count does not match metadata vector"
+        ):
+            raise RuntimeError("r25 content profile and filesystem control disagree on logical members") from exc
+        raise
     if set(decoded["regular"]) != set(identities):
         raise RuntimeError("r25 content profile and filesystem control disagree on logical members")
     for rel, identity in decoded["regular"].items():
