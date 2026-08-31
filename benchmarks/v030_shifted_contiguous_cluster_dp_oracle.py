@@ -21,7 +21,6 @@ import hashlib
 import json
 from pathlib import Path
 import shutil
-import struct
 import subprocess
 import time
 
@@ -102,8 +101,8 @@ def _verify_artifact(artifact: bytes) -> tuple[list[str], list[bytes], dict]:
         for row in members:
             if int(row[1]) == cid:
                 expected_size = max(expected_size, int(row[2]) + int(row[3]))
-        if expected_size > CLUSTER.MAX_CLUSTER_RAW:
-            raise RuntimeError("DP cluster exceeds decode-unit ceiling")
+        if expected_size <= 0 or expected_size > CLUSTER.MAX_CLUSTER_RAW:
+            raise RuntimeError("DP cluster violates decoded-size envelope")
         decoded_clusters.append(zstd.ZstdDecompressor().decompress(payload, max_output_size=expected_size))
         if len(decoded_clusters[-1]) != expected_size:
             raise RuntimeError("DP cluster decoded-size mismatch")
@@ -230,7 +229,7 @@ def run(work_root: Path) -> dict:
     if verified_rels != rels:
         raise RuntimeError("DP artifact path table changed during parse")
     verified_tree = PG._treehash_parts(verified_rels, verified_raws)
-    if verified_tree != expected_tree or bytes(parsed_meta["tree_sha256"]) != expected_tree:
+    if verified_tree != expected_tree or str(parsed_meta["tree_sha256"]) != expected_tree:
         raise RuntimeError("DP cluster artifact changed logical tree")
 
     shipping = work_root / "shipping-prefixgraph.cmpct"
