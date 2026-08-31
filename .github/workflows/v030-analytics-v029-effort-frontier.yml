@@ -1,0 +1,133 @@
+# ci-lane: deep
+# ci-pr-scope: latest-head-commit-gate
+# ci-cancel-policy: preserve-running-exact-receipt
+name: CMPCT v0.30 Analytics v0.29 effort frontier
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'benchmarks/v030_analytics_v029_effort_frontier.py'
+      - 'benchmarks/v030_v025_canonical_fs_level1_oracle.py'
+      - 'benchmarks/v030_external_competitors.py'
+      - 'benchmarks/v030_release_generalization.py'
+      - 'benchmarks/neutral_hostile_corpus_v1.py'
+      - 'benchmarks/neutral_hostile_determinism_repair_v*.py'
+      - 'experiments/entropygraph_v025.py'
+      - 'experiments/entropygraph_v030_product_fs.py'
+      - 'experiments/entropygraph_v030_release_product.py'
+      - '.github/workflows/v030-analytics-v029-effort-frontier.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-v030-analytics-v029-effort-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: false
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+
+jobs:
+  latest-head-impact:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      run_deep: ${{ steps.scope.outputs.run_deep }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 2
+      - name: Bind exact head and classify only its changed files
+        id: scope
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            echo 'run_deep=true' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          git diff-tree --no-commit-id --name-only -r HEAD > /tmp/latest-head-files.txt
+          cat /tmp/latest-head-files.txt
+          if grep -Eq '^(benchmarks/v030_analytics_v029_effort_frontier\.py|benchmarks/v030_v025_canonical_fs_level1_oracle\.py|benchmarks/v030_external_competitors\.py|benchmarks/v030_release_generalization\.py|benchmarks/neutral_hostile_corpus_v1\.py|benchmarks/neutral_hostile_determinism_repair_v[^/]*\.py|experiments/entropygraph_v025\.py|experiments/entropygraph_v030_product_fs\.py|experiments/entropygraph_v030_release_product\.py|\.github/workflows/v030-analytics-v029-effort-frontier\.yml)$' /tmp/latest-head-files.txt; then
+            echo 'run_deep=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'run_deep=false' >> "$GITHUB_OUTPUT"
+          fi
+
+  analytics-effort-frontier:
+    needs: latest-head-impact
+    if: needs.latest-head-impact.outputs.run_deep == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - name: Bind exact candidate head
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install frozen-corpus and comparator dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y zstd gcc ffmpeg libsndfile1
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[audio,test]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
+      - name: Compile exact effort frontier
+        run: |
+          python -m py_compile \
+            benchmarks/v030_analytics_v029_effort_frontier.py \
+            benchmarks/v030_v025_canonical_fs_level1_oracle.py
+      - name: Measure Analytics levels 1-6 against v0.29, ZIP and Zstd-19
+        run: |
+          mkdir -p benchmark-artifacts
+          python benchmarks/v030_analytics_v029_effort_frontier.py \
+            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-analytics-v029-effort-work" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-analytics-v029-effort.json"
+      - name: Enforce exact research contract
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          d=json.loads(Path('benchmark-artifacts/v030-analytics-v029-effort.json').read_text())
+          assert d['schema']=='cmpct-v030-analytics-v029-effort-frontier-v1'
+          assert d['target']=='neutral_hostile_v1/04_analytics_and_database'
+          assert d['levels']==[1,2,3,4,5,6] and d['rounds']==3
+          assert d['accepted_v029_bytes']==6_135_172
+          assert len(d['rows'])==6 and d['experiment_valid'] is True and d['release_credit'] is False
+          c=d['contract']
+          assert c['canonical_filesystem_tax_inside_candidate_timing'] is True
+          assert c['mandatory_strong_verify_inside_candidate_timing'] is True
+          assert c['fresh_comparators_same_normalized_tree'] is True and c['ties_fail'] is True
+          assert c['production_selector_changed'] is False
+          assert c['benchmark_identity_in_production_policy'] is False
+          assert c['release_credit'] is False
+          for row in d['rows']:
+              assert len(row['raw_complete_verified_create_s'])==3
+              assert row['strict']['release_size_time_prerequisites'] is all((
+                  row['strict']['no_regression_vs_v029'], row['strict']['smaller_than_zip'],
+                  row['strict']['smaller_than_zstd19'], row['strict']['faster_than_zip'],
+                  row['strict']['faster_than_zstd19'],
+              ))
+          PY
+      - name: CI topology self-check
+        run: python tools/check_ci_topology.py .github/workflows/v030-analytics-v029-effort-frontier.yml
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: v030-analytics-v029-effort-${{ env.EVIDENCE_HEAD }}
+          path: benchmark-artifacts/v030-analytics-v029-effort.json
+          if-no-files-found: error
+          retention-days: 90
+
+# Research-only R4 boundary. If no level clears accepted v0.29 while staying faster than ZIP, compression effort is
+# saturated for this representation and Analytics must escalate representation rather than keep tuning levels.
