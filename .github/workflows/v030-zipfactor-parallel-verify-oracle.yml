@@ -1,26 +1,16 @@
 # ci-lane: deep
+# ci-auto-policy: retired-manual-only
 name: CMPCT v0.30 ZIP-factor parallel verification oracle
 
 on:
-  pull_request:
-    branches: [main]
-    paths:
-      - 'experiments/entropygraph_v030_zipfactor_compact_v3.py'
-      - 'experiments/entropygraph_v030_zipfactor_profile.py'
-      - 'experiments/entropygraph_v030_product_fs.py'
-      - 'benchmarks/v030_zipfactor_parallel_verify_oracle.py'
-      - '.github/workflows/v030-zipfactor-parallel-verify-oracle.yml'
   workflow_dispatch:
 
 permissions:
   contents: read
 
-concurrency:
-  group: cmpct-v030-zf-parallel-verify-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
-
 env:
   PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.sha }}
 
 jobs:
   parallel-verify:
@@ -28,6 +18,10 @@ jobs:
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - name: Bind exact candidate
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
       - uses: actions/setup-python@v6
         with:
           python-version: '3.11'
@@ -64,24 +58,27 @@ jobs:
           assert d['verification_snapshot']['max_decode_unit_bytes']<=8*1024*1024
           assert g['release_credit'] is False
           assert g['promotion_signal'] is (g['parallel_strictly_faster'] and g['parallel_median_s'] < g['serial_median_s'])
-          # A valid slower result is preserved negative evidence; it cannot silently become promotion credit.
           if not g['parallel_strictly_faster']:
               assert g['promotion_signal'] is False
               assert g['improvement_s'] <= 0.0
               assert g['improvement_pct'] <= 0.0
           PY
+      - name: Record exact candidate fingerprint
+        run: printf '%s\n' "$EVIDENCE_HEAD" > benchmark-artifacts/v030-zf-parallel-verify-candidate.txt
       - name: CI topology self-check
+        if: always()
         run: python tools/check_ci_topology.py .github/workflows/v030-zipfactor-parallel-verify-oracle.yml
       - name: Upload exact A/B evidence
         if: always()
         uses: actions/upload-artifact@v6
         with:
-          name: v030-zf-parallel-verify-${{ github.sha }}
-          path: benchmark-artifacts/v030-zf-parallel-verify.json
+          name: v030-zf-parallel-verify-${{ env.EVIDENCE_HEAD }}
+          path: |
+            benchmark-artifacts/v030-zf-parallel-verify.json
+            benchmark-artifacts/v030-zf-parallel-verify-candidate.txt
           if-no-files-found: warn
           retention-days: 90
 
-# This lane is deliberately non-authoritative. A green lane means the experiment itself is exact and bounded;
-# promotion_signal separately records whether bounded parallel verification is actually faster. A valid negative
-# result earns zero release/selector credit. Production dispatch, recovery, native/Android support and the strict
-# external competitor release gate remain separate mandatory blockers.
+# Exact 62-sample evidence at the v0.30 integration frontier preserved manifest/logical identities and locality
+# bounds but measured two-worker verification ~30.1% slower than serial (2.475 ms vs 1.902 ms median). This search
+# family is terminal negative evidence for v0.30; keep it manually reproducible without automatic PR churn.
