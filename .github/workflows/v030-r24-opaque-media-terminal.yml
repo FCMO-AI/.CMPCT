@@ -1,4 +1,5 @@
 # ci-lane: deep
+# ci-pr-scope: latest-head-commit-gate
 name: CMPCT v0.30 r24 opaque-media terminal admission
 
 on:
@@ -24,21 +25,60 @@ concurrency:
 
 env:
   PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
 
 jobs:
+  latest-head-impact:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      run_deep: ${{ steps.scope.outputs.run_deep }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 2
+      - name: Bind exact head and classify only its changed files
+        id: scope
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            echo 'run_deep=true' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          git diff-tree --no-commit-id --name-only -r HEAD > /tmp/latest-head-files.txt
+          cat /tmp/latest-head-files.txt
+          if grep -Eq '^(experiments/entropygraph_v030_release_product(_base)?\.py|benchmarks/v030_r24_opaque_media_terminal_oracle\.py|benchmarks/v030_external_competitors\.py|benchmarks/v030_release_generalization\.py|benchmarks/(neutral_hostile_corpus_v1|resemblance_hostile_corpus_v1)\.py|\.github/workflows/v030-r24-opaque-media-terminal\.yml)$' /tmp/latest-head-files.txt; then
+            echo 'run_deep=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'run_deep=false' >> "$GITHUB_OUTPUT"
+            echo 'Accumulated PR paths matched, but newest exact commit cannot affect opaque-media terminal admission.'
+          fi
+
   opaque-media-terminal:
+    needs: latest-head-impact
+    if: needs.latest-head-impact.outputs.run_deep == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 120
     steps:
       - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - name: Bind exact candidate
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
       - uses: actions/setup-python@v6
         with:
           python-version: '3.11'
           cache: pip
-      - name: Install exact corpus and comparator dependencies
+      - name: Install exact corpus and comparator dependencies from canonical Ubuntu feed
         run: |
-          sudo apt-get update
-          sudo apt-get install -y zstd gcc ffmpeg libsndfile1
+          set -euo pipefail
+          test -f /etc/apt/sources.list.d/ubuntu.sources
+          sudo apt-get -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" -o Dir::Etc::sourceparts="-" update
+          sudo apt-get -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" -o Dir::Etc::sourceparts="-" install -y zstd gcc ffmpeg libsndfile1
           python -m pip install --upgrade pip
           python -m pip install -e '.[audio,test]'
           python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
@@ -57,26 +97,28 @@ jobs:
           from pathlib import Path
           d=json.loads(Path('benchmark-artifacts/v030-opaque-media-terminal.json').read_text())
           assert d['schema']=='cmpct-v030-r24-opaque-media-terminal-v1'
-          assert len(d['rows']) == 15
-          assert d['summary']['workloads'] == 15
+          assert len(d['rows']) == 15 and d['summary']['workloads'] == 15
           assert all('eligible' in row for row in d['rows'])
-          assert d['admission']['forbidden_inputs'] == [
-              'workload-name','path','filename','extension','content-hash','archive-hash','pack-hash'
-          ]
-          # A counterexample is valid negative evidence, not a fake green promotion. Promotion remains a separate
-          # adversarial/generalization + selector change after this frozen-suite experiment.
+          assert d['admission']['forbidden_inputs'] == ['workload-name','path','filename','extension','content-hash','archive-hash','pack-hash']
           for row in d['rows']:
               if row['eligible']:
                   assert row['gate']['strong_verify_green'] is True
                   assert row['gate']['product_tree_match'] is True
           PY
+      - name: CI topology self-check
+        if: always()
+        run: python tools/check_ci_topology.py .github/workflows/v030-r24-opaque-media-terminal.yml
       - name: Public-surface guard
         if: always()
         run: python tools/check_public_surface.py
       - uses: actions/upload-artifact@v6
         if: always()
         with:
-          name: v030-r24-opaque-media-terminal-${{ github.sha }}
+          name: v030-r24-opaque-media-terminal-${{ env.EVIDENCE_HEAD }}
           path: benchmark-artifacts/v030-opaque-media-terminal.json
           if-no-files-found: error
           retention-days: 90
+
+# Structural terminal admission remains fail-closed and benchmark-identity-free. Exact-head scoping keeps the
+# two-hour all-15 proof mandatory when its semantic owners change while preventing historical PR paths from replaying
+# it on unrelated research/workflow commits. Ordinary external/generalization/final release authorities remain law.
