@@ -1,4 +1,5 @@
 # ci-lane: deep
+# ci-pr-scope: latest-head-commit-gate
 name: CMPCT v0.30 ZIP-factor native FFI complete frontier
 
 on:
@@ -26,7 +27,39 @@ env:
   EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
 
 jobs:
+  latest-head-impact:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      run_deep: ${{ steps.scope.outputs.run_deep }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 2
+      - name: Bind exact head and classify only its changed files
+        id: scope
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            echo 'run_deep=true' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          git diff-tree --no-commit-id --name-only -r HEAD > /tmp/latest-head-files.txt
+          cat /tmp/latest-head-files.txt
+          if grep -Eq '^(benchmarks/v030_zipfactor_native_ffi_complete_frontier\.py|benchmarks/v030_zipfactor_native_complete_frontier\.py|benchmarks/v030_external_competitors\.py|experiments/entropygraph_v030_zipfactor_compact_v3\.py|native/cmpct-zipfactor-v3-ffi/|native/cmpct-portable/src/bin/cmpct-zipfactor-v3-preparity\.rs|\.github/workflows/v030-zipfactor-native-ffi-complete-frontier\.yml)' /tmp/latest-head-files.txt; then
+            echo 'run_deep=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'run_deep=false' >> "$GITHUB_OUTPUT"
+            echo 'Accumulated PR paths matched, but newest exact commit does not affect this proof; skipping deep replay.'
+          fi
+
   ffi-complete-frontier:
+    needs: latest-head-impact
+    if: needs.latest-head-impact.outputs.run_deep == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     steps:
@@ -40,10 +73,12 @@ jobs:
           python-version: '3.11'
           cache: pip
       - uses: dtolnay/rust-toolchain@stable
-      - name: Install exact comparator dependencies
+      - name: Install exact comparator dependencies from canonical Ubuntu feed
         run: |
-          sudo apt-get update
-          sudo apt-get install -y zstd gcc
+          set -euo pipefail
+          test -f /etc/apt/sources.list.d/ubuntu.sources
+          sudo apt-get -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" -o Dir::Etc::sourceparts="-" update
+          sudo apt-get -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" -o Dir::Etc::sourceparts="-" install -y zstd gcc
           python -m pip install --upgrade pip
           python -m pip install -e '.[test]'
       - name: Compile exact in-process verifier and oracle
@@ -84,7 +119,6 @@ jobs:
           assert len(e['cmpct_phase_samples_s']['verify'])==9
           assert e['cmpct_phase_medians_s']['build'] > 0
           assert e['cmpct_phase_medians_s']['verify'] > 0
-          # Phase measurements are diagnostic only and must remain bounded by the complete measured operation.
           assert e['cmpct_phase_medians_s']['build'] < e['medians_s']['cmpct']
           assert e['cmpct_phase_medians_s']['verify'] < e['medians_s']['cmpct']
           assert e['candidate']['tree_sha256']==e['source_identity']['canonical_tree_sha256']
@@ -112,7 +146,9 @@ jobs:
           if-no-files-found: warn
           retention-days: 90
       - name: CI topology self-check
+        if: always()
         run: python tools/check_ci_topology.py .github/workflows/v030-zipfactor-native-ffi-complete-frontier.yml
 
 # Research-only: a positive result isolates process startup as the remaining Deflate-family cost and advances
 # recovery/platform productization. It cannot itself alter dispatch, selector policy, archive bytes, or release lock.
+# The exact latest-head classifier prevents historical PR paths from repeatedly consuming a one-hour deep-run slot.
