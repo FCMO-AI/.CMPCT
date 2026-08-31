@@ -39,8 +39,12 @@ on:
 permissions:
   contents: read
 
+# GitHub keeps at most one pending run per concurrency group even when cancel-in-progress
+# is false. Key by exact evidence SHA so a newer unrelated PR update cannot evict a queued
+# multi-hour receipt before it acquires a runner. Push/PR duplicates for the same SHA may
+# coalesce, which is safe because they bind identical source bytes.
 concurrency:
-  group: cmpct-v030-g04-ml-operation-record-cache-ab-${{ github.event.pull_request.number || github.ref }}
+  group: cmpct-v030-g04-ml-operation-record-cache-ab-${{ github.event.pull_request.head.sha || github.sha }}
   cancel-in-progress: false
 
 env:
@@ -82,9 +86,6 @@ jobs:
     needs: latest-head-impact
     if: needs.latest-head-impact.outputs.run_deep == 'true'
     runs-on: ubuntu-24.04
-    # The previous exact execution reached the seven-round A/B and was killed by the old
-    # 150-minute job ceiling at 2h30m.  Five hours is a bounded evidence window, not a relaxed
-    # performance gate; the same seven rounds and >=10% verify+extract thresholds remain mandatory.
     timeout-minutes: 300
     steps:
       - uses: actions/checkout@v6
