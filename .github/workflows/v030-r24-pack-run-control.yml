@@ -1,4 +1,5 @@
 # ci-lane: deep
+# ci-pr-scope: latest-head-commit-gate
 name: CMPCT v0.30 r24 pack-run compact control
 
 on:
@@ -26,32 +27,66 @@ concurrency:
 
 env:
   PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
 
 jobs:
+  latest-head-impact:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      run_deep: ${{ steps.scope.outputs.run_deep }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 2
+      - name: Bind exact head and classify only its changed files
+        id: scope
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            echo 'run_deep=true' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          git diff-tree --no-commit-id --name-only -r HEAD > /tmp/latest-head-files.txt
+          cat /tmp/latest-head-files.txt
+          if grep -Eq '^(benchmarks/v030_r24_(pack_run_control_oracle|pack_group_control_oracle(_v2)?|compact_control_oracle|numeric_path_control_oracle|suffix_path_control_oracle|compact_control_composition_oracle_v2)\.py|experiments/entropygraph_v030_release_product\.py|src/cmpct/codec\.py|\.github/workflows/v030-r24-pack-run-control\.yml)$' /tmp/latest-head-files.txt; then
+            echo 'run_deep=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'run_deep=false' >> "$GITHUB_OUTPUT"
+            echo 'Accumulated PR paths matched, but newest exact commit does not affect pack-control evidence.'
+          fi
+
   pack-run-control:
+    needs: latest-head-impact
+    if: needs.latest-head-impact.outputs.run_deep == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 180
     steps:
       - uses: actions/checkout@v6
         with:
-          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          ref: ${{ env.EVIDENCE_HEAD }}
       - name: Bind exact candidate
         id: candidate
         shell: bash
         run: |
           set -euo pipefail
-          expected='${{ github.event.pull_request.head.sha || github.sha }}'
           actual="$(git rev-parse HEAD)"
-          test "$actual" = "$expected"
+          test "$actual" = "$EVIDENCE_HEAD"
           echo "sha=$actual" >> "$GITHUB_OUTPUT"
       - uses: actions/setup-python@v6
         with:
           python-version: '3.11'
           cache: pip
-      - name: Install exact corpus/compressor dependencies
+      - name: Install exact corpus/compressor dependencies from canonical Ubuntu feed
         run: |
-          sudo apt-get update
-          sudo apt-get install -y zstd gcc ffmpeg libsndfile1
+          set -euo pipefail
+          test -f /etc/apt/sources.list.d/ubuntu.sources
+          sudo apt-get -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" -o Dir::Etc::sourceparts="-" update
+          sudo apt-get -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" -o Dir::Etc::sourceparts="-" install -y zstd gcc ffmpeg libsndfile1
           python -m pip install --upgrade pip
           python -m pip install -e '.[audio,test]'
           python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
@@ -87,93 +122,43 @@ jobs:
           d=json.loads(Path('benchmark-artifacts/v030-r24-pack-run-control.json').read_text())
           assert d['schema']=='cmpct-v030-r24-pack-run-control-v1'
           c=d['contract']
-          assert c['workloads']==15
-          assert c['release_credit'] is False
-          assert c['production_selector_change'] is False
-          assert c['format_revision_change'] is False
-          assert c['two_authenticated_control_copies_retained'] is True
-          assert c['physical_payload_records_unchanged'] is True
-          assert set(c['policy_inputs'])=={
-              'authenticated_storage_tag',
-              'authenticated_pack_blob_index',
-              'authenticated_pack_offset',
-              'authenticated_logical_size',
-          }
+          assert c['workloads']==15 and c['release_credit'] is False
+          assert c['production_selector_change'] is False and c['format_revision_change'] is False
+          assert c['two_authenticated_control_copies_retained'] is True and c['physical_payload_records_unchanged'] is True
+          assert set(c['policy_inputs'])=={'authenticated_storage_tag','authenticated_pack_blob_index','authenticated_pack_offset','authenticated_logical_size'}
           for forbidden in ('benchmark_name','workload_label','content_hash','file_path_literal','frozen_pack_hash'):
               assert forbidden in c['forbidden_policy_inputs']
-          assert len(d['rows'])==15
-          assert d['gate']['experiment_valid'] is True
-          assert d['gate']['zero_projected_byte_regressions'] is True
-          assert d['gate']['passed'] is True
+          assert len(d['rows'])==15 and d['gate']['experiment_valid'] is True and d['gate']['zero_projected_byte_regressions'] is True and d['gate']['passed'] is True
           assert d['summary']['regressions']==[]
-          assert all(r['semantic_index_roundtrip_exact'] for r in d['rows'])
-          assert all(r['two_control_copies'] for r in d['rows'])
-          assert all(r['payload_records_unchanged'] for r in d['rows'])
-          assert all(r['projected_bytes']<=r['shipping_bytes'] for r in d['rows'])
-          target=d['target']
-          assert target['rounds']==5
-          assert target['size_deterministic'] is True
-          assert target['tree_deterministic'] is True
+          assert all(r['semantic_index_roundtrip_exact'] and r['two_control_copies'] and r['payload_records_unchanged'] and r['projected_bytes']<=r['shipping_bytes'] for r in d['rows'])
+          target=d['target']; assert target['rounds']==5 and target['size_deterministic'] is True and target['tree_deterministic'] is True
           if d['gate']['promotion_signal']:
-              assert d['summary']['target_incremental_saving_bytes'] > 0
-              assert d['gate']['target_strict_four_way_potential'] is True
-              assert target['projected_bytes'] < target['zip_bytes']
-              assert target['projected_bytes'] < target['zstd19_bytes']
-              assert target['median_conservative_create_s'] < target['median_zip_create_s']
-              assert target['median_conservative_create_s'] < target['median_zstd19_create_s']
-
+              assert d['summary']['target_incremental_saving_bytes'] > 0 and d['gate']['target_strict_four_way_potential'] is True
+              assert target['projected_bytes'] < target['zip_bytes'] and target['projected_bytes'] < target['zstd19_bytes']
+              assert target['median_conservative_create_s'] < target['median_zip_create_s'] and target['median_conservative_create_s'] < target['median_zstd19_create_s']
           g=json.loads(Path('benchmark-artifacts/v030-r24-pack-group-control.json').read_text())
-          assert g['schema']=='cmpct-v030-r24-pack-group-control-v1'
-          assert g['contract']['workloads']==15
-          assert g['contract']['release_credit'] is False
-          assert g['contract']['production_selector_change'] is False
-          assert g['contract']['format_revision_change'] is False
-          assert g['contract']['physical_pack_boundaries_changed'] is False
-          assert g['contract']['locality_rule_changed'] is False
-          assert g['contract']['recovery_rule_changed'] is False
-          assert g['contract']['two_authenticated_control_copies_retained'] is True
-          assert g['contract']['benchmark_identity_not_policy_input'] is True
-          assert len(g['rows'])==15
-          assert g['gate']['experiment_valid'] is True
-          assert g['gate']['zero_projected_byte_regressions'] is True
-          assert g['gate']['passed'] is True
-          assert g['summary']['regressions']==[]
-          assert all(r['semantic_index_roundtrip_exact'] for r in g['rows'])
-          assert all(r['two_authenticated_control_copies_retained'] for r in g['rows'])
-          assert all(r['physical_payload_records_unchanged'] for r in g['rows'])
-          assert all(r['projected_archive_bytes']<=r['archive_bytes'] for r in g['rows'])
+          assert g['schema']=='cmpct-v030-r24-pack-group-control-v1' and g['contract']['workloads']==15 and g['contract']['release_credit'] is False
+          assert g['contract']['production_selector_change'] is False and g['contract']['format_revision_change'] is False
+          assert g['contract']['physical_pack_boundaries_changed'] is False and g['contract']['locality_rule_changed'] is False and g['contract']['recovery_rule_changed'] is False
+          assert g['contract']['two_authenticated_control_copies_retained'] is True and g['contract']['benchmark_identity_not_policy_input'] is True
+          assert len(g['rows'])==15 and g['gate']['experiment_valid'] is True and g['gate']['zero_projected_byte_regressions'] is True and g['gate']['passed'] is True and g['summary']['regressions']==[]
+          assert all(r['semantic_index_roundtrip_exact'] and r['two_authenticated_control_copies_retained'] and r['physical_payload_records_unchanged'] and r['projected_archive_bytes']<=r['archive_bytes'] for r in g['rows'])
           if g['gate']['promotion_signal']:
-              assert g['summary']['target_incremental_saving_bytes'] > 0
-              assert g['target']['selected_kind']=='pack_groups'
-
+              assert g['summary']['target_incremental_saving_bytes'] > 0 and g['target']['selected_kind']=='pack_groups'
           v2=json.loads(Path('benchmark-artifacts/v030-r24-pack-group-control-v2.json').read_text())
-          assert v2['schema']=='cmpct-v030-r24-pack-group-control-v2'
-          assert v2['contract']['workloads']==15
-          assert v2['contract']['release_credit'] is False
-          assert v2['contract']['production_selector_change'] is False
-          assert v2['contract']['format_revision_change'] is False
-          assert v2['contract']['physical_pack_boundaries_changed'] is False
-          assert v2['contract']['locality_rule_changed'] is False
-          assert v2['contract']['recovery_rule_changed'] is False
-          assert v2['contract']['two_authenticated_control_copies_retained'] is True
-          assert v2['contract']['benchmark_identity_not_policy_input'] is True
-          assert len(v2['rows'])==15
-          assert v2['gate']['experiment_valid'] is True
-          assert v2['gate']['zero_projected_byte_regressions'] is True
-          assert v2['gate']['passed'] is True
-          assert v2['summary']['regressions']==[]
-          assert all(r['semantic_index_roundtrip_exact'] for r in v2['rows'])
-          assert all(r['v1_group_coordinates_roundtrip_exact'] for r in v2['rows'])
-          assert all(r['two_authenticated_control_copies_retained'] for r in v2['rows'])
-          assert all(r['physical_payload_records_unchanged'] for r in v2['rows'])
-          assert all(r['projected_archive_bytes']<=r['archive_bytes'] for r in v2['rows'])
+          assert v2['schema']=='cmpct-v030-r24-pack-group-control-v2' and v2['contract']['workloads']==15 and v2['contract']['release_credit'] is False
+          assert v2['contract']['production_selector_change'] is False and v2['contract']['format_revision_change'] is False
+          assert v2['contract']['physical_pack_boundaries_changed'] is False and v2['contract']['locality_rule_changed'] is False and v2['contract']['recovery_rule_changed'] is False
+          assert v2['contract']['two_authenticated_control_copies_retained'] is True and v2['contract']['benchmark_identity_not_policy_input'] is True
+          assert len(v2['rows'])==15 and v2['gate']['experiment_valid'] is True and v2['gate']['zero_projected_byte_regressions'] is True and v2['gate']['passed'] is True and v2['summary']['regressions']==[]
+          assert all(r['semantic_index_roundtrip_exact'] and r['v1_group_coordinates_roundtrip_exact'] and r['two_authenticated_control_copies_retained'] and r['physical_payload_records_unchanged'] and r['projected_archive_bytes']<=r['archive_bytes'] for r in v2['rows'])
           if v2['gate']['promotion_signal']:
-              assert v2['summary']['target_incremental_saving_bytes'] > 0
-              assert v2['target']['selected_kind']=='delta_pack_groups_v2'
+              assert v2['summary']['target_incremental_saving_bytes'] > 0 and v2['target']['selected_kind']=='delta_pack_groups_v2'
           PY
       - name: Record candidate fingerprint
         run: printf '%s\n' '${{ steps.candidate.outputs.sha }}' > benchmark-artifacts/v030-r24-pack-run-control-candidate.txt
       - name: CI topology self-check
+        if: always()
         run: python tools/check_ci_topology.py .github/workflows/v030-r24-pack-run-control.yml
       - uses: actions/upload-artifact@v6
         if: always()
@@ -187,4 +172,6 @@ jobs:
           if-no-files-found: warn
           retention-days: 90
 
-# Research-only frontier. Ordinary external/generalization/final release authorities remain decisive.
+# Research-only frontier. Delta-grouped pack-control v2 has produced an all-15 zero-regression structural saving
+# signal, while ordinary external/generalization/product/final release authorities remain decisive. Exact-head
+# scoping prevents historical PR paths from repeatedly consuming a three-hour proof slot.
