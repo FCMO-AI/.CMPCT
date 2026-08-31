@@ -1,24 +1,12 @@
 # ci-lane: deep
+# ci-auto-policy: retired-manual-only
 name: CMPCT v0.30 PrefixGraph direct-floor RSS ownership
 
 on:
-  push:
-    branches: [agent/v030-authoritative-integration]
-    paths:
-      - 'experiments/entropygraph_v030_prefixgraph.py'
-      - 'experiments/entropygraph_v030_prefixgraph_parallel.py'
-      - 'benchmarks/v030_release_performance.py'
-      - 'benchmarks/v030_prefixgraph_direct_floor_rss_worker.py'
-      - 'benchmarks/v030_prefixgraph_direct_floor_rss_oracle.py'
-      - '.github/workflows/v030-prefixgraph-direct-floor-rss.yml'
   workflow_dispatch:
 
 permissions:
   contents: read
-
-concurrency:
-  group: cmpct-v030-prefixgraph-direct-floor-rss-${{ github.ref }}
-  cancel-in-progress: true
 
 env:
   PYTHONPATH: ${{ github.workspace }}
@@ -100,5 +88,6 @@ jobs:
           if-no-files-found: error
           retention-days: 90
 
-# Diagnostic only: the result locates the RSS owner. Verification remains mandatory but cannot contaminate the
-# build high-water mark. No result can remove candidates, change bytes, alter the winner, or earn release credit.
+# Terminal ownership diagnostic retained for manual reproduction. Exact evidence measured only ~18,818 KiB of
+# incremental direct-floor build RSS versus ~298 MiB for complete PrefixGraph (~6.3%), ruling raw/direct payload
+# storage out as the dominant Shifted owner. Automatic capacity has moved to live compressor-context attribution.
