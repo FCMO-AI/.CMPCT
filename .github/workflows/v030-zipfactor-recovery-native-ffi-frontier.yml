@@ -1,4 +1,5 @@
 # ci-lane: deep
+# ci-pr-scope: latest-head-commit-gate
 name: CMPCT v0.30 ZIP-factor recovery native FFI frontier
 
 on:
@@ -33,7 +34,39 @@ env:
   EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
 
 jobs:
+  latest-head-impact:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      run_deep: ${{ steps.scope.outputs.run_deep }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 2
+      - name: Bind exact head and classify only its changed files
+        id: scope
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            echo 'run_deep=true' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          git diff-tree --no-commit-id --name-only -r HEAD > /tmp/latest-head-files.txt
+          cat /tmp/latest-head-files.txt
+          if grep -Eq '^(benchmarks/v030_zipfactor_recovery_native_ffi_frontier\.py|benchmarks/v030_zipfactor_recovery_memory_ffi_frontier\.py|benchmarks/v030_zipfactor_recovery_envelope_ffi_frontier\.py|benchmarks/v030_zipfactor_recovery_oracle\.py|benchmarks/v030_zipfactor_native_ffi_complete_frontier\.py|benchmarks/v030_external_competitors\.py|experiments/entropygraph_v030_zipfactor_eocd_parser\.py|experiments/entropygraph_v030_zipfactor_fused\.py|experiments/entropygraph_v030_zipfactor_compact_v3\.py|experiments/entropygraph_v030_zipfactor_compact_v3_fused_finalize\.py|native/cmpct-zipfactor-v3-ffi/|native/cmpct-portable/src/bin/cmpct-zipfactor-v3-preparity\.rs|native/cmpct-portable/src/bin/cmpct-zipfactor-v4-recovery-preparity\.rs|\.github/workflows/v030-zipfactor-recovery-native-ffi-frontier\.yml)' /tmp/latest-head-files.txt; then
+            echo 'run_deep=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'run_deep=false' >> "$GITHUB_OUTPUT"
+            echo 'Accumulated PR paths matched, but newest exact commit does not affect this proof; skipping 60-minute replay.'
+          fi
+
   recovery-native-ffi-frontier:
+    needs: latest-head-impact
+    if: needs.latest-head-impact.outputs.run_deep == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     steps:
