@@ -1,4 +1,5 @@
 # ci-lane: deep
+# ci-pr-scope: latest-head-commit-gate
 name: CMPCT v0.30 logs semantic-owner runtime oracle
 
 on:
@@ -28,7 +29,39 @@ env:
   EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
 
 jobs:
+  latest-head-impact:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      run_deep: ${{ steps.scope.outputs.run_deep }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 2
+      - name: Bind exact head and classify only its changed files
+        id: scope
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            echo 'run_deep=true' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          git diff-tree --no-commit-id --name-only -r HEAD > /tmp/latest-head-files.txt
+          cat /tmp/latest-head-files.txt
+          if grep -Eq '^(benchmarks/v030_(logs_semantic_owner_verify_oracle|logs_fused_extract_oracle|logs_terminal_admission_oracle)\.py|experiments/entropygraph_v030_(logs_inverse_profile_v3|logs_fused_extract|release_product|release_product_logs_candidate)\.py|tests/test_v030_logs_fused_extract\.py|\.github/workflows/v030-logs-semantic-owner-verify\.yml)$' /tmp/latest-head-files.txt; then
+            echo 'run_deep=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'run_deep=false' >> "$GITHUB_OUTPUT"
+            echo 'Accumulated PR paths matched, but newest exact commit cannot affect logs runtime oracles.'
+          fi
+
   logs-semantic-owner-runtime:
+    needs: latest-head-impact
+    if: needs.latest-head-impact.outputs.run_deep == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 90
     steps:
@@ -45,10 +78,12 @@ jobs:
         with:
           python-version: '3.11'
           cache: pip
-      - name: Install frozen-corpus dependencies
+      - name: Install frozen-corpus dependencies from canonical Ubuntu feed
         run: |
-          sudo apt-get update
-          sudo apt-get install -y zstd gcc ffmpeg libsndfile1
+          set -euo pipefail
+          test -f /etc/apt/sources.list.d/ubuntu.sources
+          sudo apt-get -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" -o Dir::Etc::sourceparts="-" update
+          sudo apt-get -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" -o Dir::Etc::sourceparts="-" install -y zstd gcc ffmpeg libsndfile1
           python -m pip install --upgrade pip
           python -m pip install -e '.[audio,test]'
           python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
@@ -112,7 +147,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v6
         with:
-          name: v030-logs-semantic-owner-runtime-${{ steps.candidate.outputs.sha || github.sha }}
+          name: v030-logs-semantic-owner-runtime-${{ steps.candidate.outputs.sha || env.EVIDENCE_HEAD }}
           path: |
             benchmark-artifacts/v030-logs-semantic-owner.json
             benchmark-artifacts/v030-logs-fused-extract.json
@@ -122,3 +157,5 @@ jobs:
 
 # Research-only. Positive extraction evidence must still re-earn ordinary logs/external/runtime/native/Android/final
 # authority before product promotion. Negative verifier evidence remains durable and earns zero release credit.
+# Exact-newest-head admission prevents these already-falsified sub-1% runtime variants from consuming 90-minute
+# lanes on unrelated integration commits.
