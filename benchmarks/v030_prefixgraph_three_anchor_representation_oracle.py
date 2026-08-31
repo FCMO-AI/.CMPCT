@@ -15,6 +15,7 @@ import hashlib
 import json
 from pathlib import Path
 import shutil
+import subprocess
 import time
 
 from benchmarks import v030_external_competitors as EXT
@@ -25,6 +26,10 @@ from experiments import entropygraph_v030_prefixgraph as PG
 
 TARGET = BASE.TARGET
 ANCHOR_COUNT = 3
+
+
+def _source_commit() -> str:
+    return subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
 
 
 def run(work_root: Path) -> dict:
@@ -121,6 +126,7 @@ def run(work_root: Path) -> dict:
     )
     return {
         "schema": "cmpct-v030-prefixgraph-three-anchor-representation-oracle-v1",
+        "source_commit": _source_commit(),
         "target": f"{TARGET[0]}/{TARGET[1]}",
         "r25_manifest_encoding": "filesystem-v1",
         "files": len(raws),
