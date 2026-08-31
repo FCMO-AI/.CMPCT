@@ -99,9 +99,11 @@ jobs:
           import json, os
           from pathlib import Path
           d=json.loads(Path('benchmark-artifacts/v030-shifted-contiguous-cluster-dp.json').read_text())
-          assert d['schema']=='cmpct-v030-shifted-contiguous-cluster-dp-oracle-v1'
+          assert d['schema']=='cmpct-v030-shifted-contiguous-cluster-dp-oracle-v2'
           assert d['source_commit']==os.environ['EVIDENCE_HEAD']
           assert d['files'] > 2 and d['cluster_count'] >= 1
+          assert d['artifact_reparsed_from_bytes'] is True
+          assert d['payload_boundaries_authenticated'] is True
           assert d['intervals_compressed'] >= d['files']
           assert d['trial_raw_bytes'] >= d['source_bytes']
           assert d['search_work_amplification_vs_source'] >= 1.0
@@ -131,5 +133,6 @@ jobs:
           retention-days: 90
 
 # R4 research only. This computes the exact minimum compressed payload among every admissible lexical contiguous
-# cluster partition under the frozen locality/decode-unit laws. A size failure is terminal for that scope; a size
-# win advances to bounded construction/admission timing and still earns zero release credit here.
+# cluster partition under the frozen locality/decode-unit laws. The complete artifact is reparsed from authenticated
+# bytes before comparison. A size failure is terminal for that scope; a size win advances to bounded construction
+# timing and still earns zero release credit here.
