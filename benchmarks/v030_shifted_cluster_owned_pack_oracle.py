@@ -14,7 +14,8 @@ largest exact compressed-payload saving. A merge is admissible only when the dec
 cluster is <=8 MiB and its decoded-context amplification is <=8x for every member.
 The tournament stops when no merge saves payload bytes. This is an R4 capacity oracle,
 not a production selector; construction cost is diagnostic and grants no release
-credit.
+credit. The oracle explicitly accounts every unique Zstd-19 trial so a size win cannot
+hide an unproductizable search-cost explosion.
 """
 
 import argparse
@@ -71,10 +72,29 @@ def run(work_root: Path) -> dict:
         raise RuntimeError("Shifted stage is outside cluster-pack decode-unit envelope")
     expected_tree = PG._treehash_parts(rels, raws)
 
+    compression_calls = 0
+    trial_raw_bytes = 0
+    trial_compressed_bytes = 0
+    compression_seconds = 0.0
+
+    def compress_counted(indices: tuple[int, ...]) -> bytes:
+        nonlocal compression_calls, trial_raw_bytes, trial_compressed_bytes, compression_seconds
+        raw = _cluster_raw(indices, raws)
+        t0 = time.perf_counter()
+        payload = zstd.ZstdCompressor(level=19).compress(raw)
+        compression_seconds += time.perf_counter() - t0
+        compression_calls += 1
+        trial_raw_bytes += len(raw)
+        trial_compressed_bytes += len(payload)
+        return payload
+
     clusters: list[tuple[int, ...]] = [(i,) for i in range(len(raws))]
-    payloads: dict[tuple[int, ...], bytes] = {c: _compress(c, raws) for c in clusters}
+    payloads: dict[tuple[int, ...], bytes] = {c: compress_counted(c) for c in clusters}
+    initial_compression_calls = compression_calls
     evaluated_merges = 0
+    admissible_pair_visits = 0
     committed_merges = []
+    search_started = time.perf_counter()
     while True:
         best = None
         for li, left in enumerate(clusters):
@@ -82,9 +102,10 @@ def run(work_root: Path) -> dict:
                 merged = tuple(sorted(left + right))
                 if not _admissible(merged, raws):
                     continue
+                admissible_pair_visits += 1
                 payload = payloads.get(merged)
                 if payload is None:
-                    payload = _compress(merged, raws)
+                    payload = compress_counted(merged)
                     payloads[merged] = payload
                 evaluated_merges += 1
                 saving = len(payloads[left]) + len(payloads[right]) - len(payload)
@@ -94,9 +115,20 @@ def run(work_root: Path) -> dict:
         if best is None:
             break
         _key, left, right, merged, payload = best
-        clusters.remove(left); clusters.remove(right); clusters.append(merged); clusters.sort()
+        clusters.remove(left)
+        clusters.remove(right)
+        clusters.append(merged)
+        clusters.sort()
         payloads[merged] = payload
-        committed_merges.append({"left": list(left), "right": list(right), "merged": list(merged), "payload_saving_bytes": int(_key[0])})
+        committed_merges.append({
+            "left": list(left),
+            "right": list(right),
+            "merged": list(merged),
+            "payload_saving_bytes": int(_key[0]),
+            "merged_raw_bytes": sum(len(raws[i]) for i in merged),
+            "merged_payload_bytes": len(payload),
+        })
+    merge_search_seconds = time.perf_counter() - search_started
 
     cluster_payloads = [payloads[c] for c in clusters]
     member_rows = []
@@ -144,10 +176,12 @@ def run(work_root: Path) -> dict:
 
     shipping = work_root / "shipping-prefixgraph.cmpct"
     PG.build(staged, shipping)
-    ext_parent = work_root / "external"; ext_parent.mkdir()
+    ext_parent = work_root / "external"
+    ext_parent.mkdir()
     normalized = EXT._normalized_stage(source, ext_parent)
     zip_row = EXT._zip(normalized, work_root / "shifted.zip", work_root / "zip-extracted")
-    zstd_work = work_root / "zstd-work"; zstd_work.mkdir()
+    zstd_work = work_root / "zstd-work"
+    zstd_work.mkdir()
     zstd_row = EXT._tar_zstd(normalized, work_root / "shifted.tar.zst", work_root / "zstd-extracted", zstd_work)
     source_tree = EXT._tree(normalized)
     EXT._verify_extracted(work_root / "zip-extracted", source_tree, "ZIP")
@@ -160,15 +194,26 @@ def run(work_root: Path) -> dict:
     gap_after = len(blob) - zstd_bytes
     gap_closure = (gap_before - max(gap_after, 0)) / max(gap_before, 1)
     decision = "PROMOTE_NEXT_PREREQUISITE" if strict_size_win else ("ITERATE_SAME_FAMILY" if gap_closure >= 0.25 else "ESCALATE_RADICALITY")
+    source_bytes = sum(map(len, raws))
+    search_work_amplification = trial_raw_bytes / max(source_bytes, 1)
 
     return {
-        "schema": "cmpct-v030-shifted-cluster-owned-pack-oracle-v1",
+        "schema": "cmpct-v030-shifted-cluster-owned-pack-oracle-v2",
         "target": f"{TARGET[0]}/{TARGET[1]}",
         "files": len(raws),
+        "source_bytes": source_bytes,
         "cluster_count": len(clusters),
         "clusters": [list(c) for c in clusters],
         "committed_merges": committed_merges,
         "evaluated_merges": evaluated_merges,
+        "admissible_pair_visits": admissible_pair_visits,
+        "unique_compression_calls": compression_calls,
+        "initial_singleton_compression_calls": initial_compression_calls,
+        "trial_raw_bytes": trial_raw_bytes,
+        "trial_compressed_bytes": trial_compressed_bytes,
+        "search_work_amplification_vs_source": search_work_amplification,
+        "zstd19_compression_seconds": compression_seconds,
+        "merge_search_elapsed_s": merge_search_seconds,
         "max_cluster_raw_bytes": max(sum(len(raws[i]) for i in c) for c in clusters),
         "max_decoded_context_amplification": max_amp,
         "within_decode_unit": all(sum(len(raws[i]) for i in c) <= MAX_CLUSTER_RAW for c in clusters),
@@ -198,12 +243,12 @@ def run(work_root: Path) -> dict:
             "active_saturation": ["S2", "S3", "S4"],
             "research_priority_score": 95,
             "measured_gap_change_bytes": shipping.stat().st_size - len(blob),
-            "strongest_self_critique": "Solid cluster ownership may recover cyclic resemblance but can export creation cost and selective-read decode work; the <=8 MiB/<=8x bounds must survive a fast generic selector before promotion.",
+            "strongest_self_critique": "Solid cluster ownership may recover cyclic resemblance but can export creation cost and selective-read decode work; exact trial-work amplification is now reported so a size win cannot conceal an impractical search.",
             "terminal_decision": decision,
-            "next_decisive_test": ("build a bounded single-pass structural cluster admission and measure full creation time" if strict_size_win else "change the physical owner again if bounded cluster packs fail to close a material fraction of the Zstd gap"),
+            "next_decisive_test": ("replace the diagnostic greedy tournament with bounded single-pass structural admission and measure complete creation time" if strict_size_win else "change the physical owner again if bounded cluster packs fail to close a material fraction of the Zstd gap"),
         },
         "decision": decision,
-        "claim_boundary": "R4 representation-capacity oracle only; greedy merge search is diagnostic and grants zero release credit.",
+        "claim_boundary": "R4 representation-capacity oracle only; every unique Zstd-19 trial is accounted, but greedy search timing is diagnostic and grants zero release credit.",
     }
 
 
