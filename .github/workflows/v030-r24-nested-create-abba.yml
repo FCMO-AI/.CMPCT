@@ -78,6 +78,30 @@ jobs:
         run: |
           rm -rf "$RUNNER_TEMP/cmpct-nested-base"
           git worktree add --detach "$RUNNER_TEMP/cmpct-nested-base" '${{ github.event.pull_request.base.sha || github.event.before }}'
+      - name: Prove direct builder dependency identity
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import hashlib, json, os
+          from pathlib import Path
+          base=Path(os.environ['RUNNER_TEMP'])/'cmpct-nested-base'/'src'/'cmpct'
+          cand=Path(os.environ['GITHUB_WORKSPACE'])/'src'/'cmpct'
+          # Builder imports codec directly. __init__ is included because package import can install hooks before
+          # cmpct.builder is resolved. A changed initializer is therefore evidence, not silently treated as drift.
+          paths=('builder.py','codec.py','__init__.py')
+          def digest(root, rel):
+              p=root/rel
+              return hashlib.sha256(p.read_bytes()).hexdigest() if p.exists() else None
+          rows={rel:{'base_sha256':digest(base,rel),'candidate_sha256':digest(cand,rel)} for rel in paths}
+          rows['builder_codec_identical']=all(rows[r]['base_sha256']==rows[r]['candidate_sha256'] for r in ('builder.py','codec.py'))
+          rows['package_initializer_identical']=rows['__init__.py']['base_sha256']==rows['__init__.py']['candidate_sha256']
+          out=Path(os.environ['RUNNER_TEMP'])/'cmpct-nested-abba'
+          out.mkdir(parents=True, exist_ok=True)
+          (out/'dependency-identity.json').write_text(json.dumps(rows,indent=2)+'\n')
+          print(json.dumps(rows,indent=2))
+          if not rows['builder_codec_identical']:
+              raise SystemExit('focused causal premise invalid: builder/codec differ from direct main')
+          PY
       - name: Build one immutable nested corpus
         run: |
           python - <<'PY'
@@ -101,7 +125,7 @@ jobs:
                   if not p.is_symlink(): raise
           os.utime(root, ns=(fixed_ns,fixed_ns))
           PY
-      - name: Run A-B-B-A focused workers
+      - name: Run balanced ABBA plus BAAB focused workers
         run: |
           set -euo pipefail
           SRC="$RUNNER_TEMP/cmpct-nested-corpus/nested"
@@ -109,45 +133,77 @@ jobs:
           mkdir -p "$OUT"
           BASE="$RUNNER_TEMP/cmpct-nested-base/src"
           CAND="$GITHUB_WORKSPACE/src"
-          PYTHONPATH="$BASE" python benchmarks/v030_r24_nested_create_abba_oracle.py --src "$SRC" --archive "$OUT/base-a.cmpct" --output "$OUT/base-a.json" --reps 9
-          PYTHONPATH="$CAND" python benchmarks/v030_r24_nested_create_abba_oracle.py --src "$SRC" --archive "$OUT/candidate-a.cmpct" --output "$OUT/candidate-a.json" --reps 9
-          PYTHONPATH="$CAND" python benchmarks/v030_r24_nested_create_abba_oracle.py --src "$SRC" --archive "$OUT/candidate-b.cmpct" --output "$OUT/candidate-b.json" --reps 9
-          PYTHONPATH="$BASE" python benchmarks/v030_r24_nested_create_abba_oracle.py --src "$SRC" --archive "$OUT/base-b.cmpct" --output "$OUT/base-b.json" --reps 9
+          run_arm() {
+            local envroot="$1" name="$2"
+            PYTHONPATH="$envroot" python benchmarks/v030_r24_nested_create_abba_oracle.py \
+              --src "$SRC" --archive "$OUT/$name.cmpct" --output "$OUT/$name.json" --reps 9
+          }
+          # Cycle 1: A-B-B-A. Cycle 2 reverses the temporal placement: B-A-A-B. Every arm is a fresh process.
+          run_arm "$BASE" base-a1
+          run_arm "$CAND" candidate-a1
+          run_arm "$CAND" candidate-b1
+          run_arm "$BASE" base-b1
+          run_arm "$CAND" candidate-a2
+          run_arm "$BASE" base-a2
+          run_arm "$BASE" base-b2
+          run_arm "$CAND" candidate-b2
       - name: Aggregate causal diagnostic
         run: |
           python - <<'PY'
           import json, os, statistics, subprocess
           from pathlib import Path
           out=Path(os.environ['RUNNER_TEMP'])/'cmpct-nested-abba'
-          rows={n:json.loads((out/f'{n}.json').read_text()) for n in ('base-a','candidate-a','candidate-b','base-b')}
-          base=statistics.median([rows['base-a']['median_s'], rows['base-b']['median_s']])
-          cand=statistics.median([rows['candidate-a']['median_s'], rows['candidate-b']['median_s']])
+          names=('base-a1','candidate-a1','candidate-b1','base-b1','candidate-a2','base-a2','base-b2','candidate-b2')
+          rows={n:json.loads((out/f'{n}.json').read_text()) for n in names}
+          base_names=tuple(n for n in names if n.startswith('base-'))
+          cand_names=tuple(n for n in names if n.startswith('candidate-'))
+          base=statistics.median([rows[n]['median_s'] for n in base_names])
+          cand=statistics.median([rows[n]['median_s'] for n in cand_names])
           delta=cand-base
           ratio=cand/base if base else float('inf')
-          base_ids={(rows[n]['archive_bytes'],rows[n]['archive_sha256']) for n in ('base-a','base-b')}
-          cand_ids={(rows[n]['archive_bytes'],rows[n]['archive_sha256']) for n in ('candidate-a','candidate-b')}
-          base_modules={rows[n]['builder_module'] for n in ('base-a','base-b')}
-          cand_modules={rows[n]['builder_module'] for n in ('candidate-a','candidate-b')}
+          base_ids={(rows[n]['archive_bytes'],rows[n]['archive_sha256']) for n in base_names}
+          cand_ids={(rows[n]['archive_bytes'],rows[n]['archive_sha256']) for n in cand_names}
+          base_modules={rows[n]['builder_module'] for n in base_names}
+          cand_modules={rows[n]['builder_module'] for n in cand_names}
+          base_scan={(rows[n]['builder_scan_owner']['module'],rows[n]['builder_scan_owner']['name']) for n in base_names}
+          cand_scan={(rows[n]['builder_scan_owner']['module'],rows[n]['builder_scan_owner']['name']) for n in cand_names}
+          dep=json.loads((out/'dependency-identity.json').read_text())
+          cycle1_base=statistics.median([rows['base-a1']['median_s'],rows['base-b1']['median_s']])
+          cycle1_cand=statistics.median([rows['candidate-a1']['median_s'],rows['candidate-b1']['median_s']])
+          cycle2_base=statistics.median([rows['base-a2']['median_s'],rows['base-b2']['median_s']])
+          cycle2_cand=statistics.median([rows['candidate-a2']['median_s'],rows['candidate-b2']['median_s']])
+          def red(b,c): return bool(c/b>1.10 and c-b>0.003)
           evidence={
-            'schema':'cmpct-v030-r24-nested-create-abba-v1',
+            'schema':'cmpct-v030-r24-nested-create-causal-abba-v2',
             'candidate_commit':subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip(),
             'base_commit':'${{ github.event.pull_request.base.sha || github.event.before }}',
             'base_median_s':base,
             'candidate_median_s':cand,
             'ratio':ratio,
             'delta_s':delta,
-            'reproducible_release_regression': bool(ratio>1.10 and delta>0.003),
+            'cycle1':{'base_median_s':cycle1_base,'candidate_median_s':cycle1_cand,'red':red(cycle1_base,cycle1_cand)},
+            'cycle2':{'base_median_s':cycle2_base,'candidate_median_s':cycle2_cand,'red':red(cycle2_base,cycle2_cand)},
+            'reproducible_release_regression': bool(red(base,cand) and red(cycle1_base,cycle1_cand) and red(cycle2_base,cycle2_cand)),
             'archive_identity_equal': base_ids==cand_ids and len(base_ids)==1,
+            'builder_codec_identical': bool(dep['builder_codec_identical']),
+            'package_initializer_identical': bool(dep['package_initializer_identical']),
+            'scan_owner_differs': base_scan != cand_scan,
+            'base_scan_owner': sorted(base_scan),
+            'candidate_scan_owner': sorted(cand_scan),
             'base_module_is_worktree': all('/cmpct-nested-base/src/cmpct/' in p for p in base_modules),
             'candidate_module_is_checkout': all('/.CMPCT/src/cmpct/' in p for p in cand_modules),
             'arms':rows,
             'release_credit':False,
           }
-          evidence['experiment_valid']=evidence['archive_identity_equal'] and evidence['base_module_is_worktree'] and evidence['candidate_module_is_checkout']
+          evidence['experiment_valid']=evidence['archive_identity_equal'] and evidence['builder_codec_identical'] and evidence['base_module_is_worktree'] and evidence['candidate_module_is_checkout']
+          if evidence['reproducible_release_regression']:
+              evidence['decision']='REHABILITATE_DEBT' if evidence['scan_owner_differs'] else 'ITERATE_SAME_FAMILY'
+          else:
+              evidence['decision']='D0_NONREPRODUCIBLE_CORE_RED'
           (out/'evidence.json').write_text(json.dumps(evidence,indent=2)+'\n')
           print(json.dumps(evidence,indent=2))
           if not evidence['experiment_valid']:
-              raise SystemExit('nested ABBA identity/engine binding invalid')
+              raise SystemExit('nested causal ABBA identity/engine binding invalid')
           PY
       - name: Upload focused evidence
         if: always()
@@ -160,5 +216,6 @@ jobs:
       - name: CI topology self-check
         run: python tools/check_ci_topology.py .github/workflows/v030-r24-nested-create-abba.yml
 
-# Diagnostic only. The mature r24/ZIP gate remains authoritative and unchanged; this lane only tests whether the
-# recently observed nested/library/create miss reproduces under a higher-sample direct-base ABBA measurement.
+# Diagnostic only. The mature r24/ZIP gate remains authoritative and unchanged. This lane asks whether the
+# isolated nested/library/create miss survives two opposite temporal orderings while direct builder/codec bytes
+# remain identical. It may diagnose debt or runner noise; it can never convert a red authority into release credit.
