@@ -4,6 +4,18 @@
 name: CMPCT v0.30 r25 manifest implicit reader productization
 
 on:
+  push:
+    branches: [agent/v030-authoritative-integration]
+    paths:
+      - 'benchmarks/v030_r25_manifest_derived_identity_oracle.py'
+      - 'benchmarks/v030_r25_manifest_implicit_reader_productization.py'
+      - 'benchmarks/v030_release_generalization.py'
+      - 'experiments/entropygraph_v030_product_fs.py'
+      - 'experiments/entropygraph_v030_fs_implicit_v4.py'
+      - 'experiments/entropygraph_v030_canonical_final_impl.py'
+      - 'experiments/entropygraph_v030_release_candidate.py'
+      - 'tests/test_v030_fs_implicit_v4.py'
+      - '.github/workflows/v030-r25-manifest-implicit-reader-productization.yml'
   pull_request:
     branches: [main]
     paths:
@@ -104,7 +116,7 @@ jobs:
           import json, os
           from pathlib import Path
           d=json.loads(Path('benchmark-artifacts/v030-r25-manifest-implicit-reader.json').read_text())
-          assert d['schema']=='cmpct-v030-r25-manifest-implicit-reader-productization-v2'
+          assert d['schema']=='cmpct-v030-r25-manifest-implicit-reader-productization-v3'
           assert d['source_commit']==os.environ['EVIDENCE_HEAD']
           assert d['archive_bytes'] > 0
           assert d['regular_members_verified'] > 0
@@ -116,6 +128,8 @@ jobs:
           assert d['user_tree_exact'] is True
           assert d['within_release_locality_bounds'] is True
           assert d['max_member_read_amplification'] <= 8.0
+          assert d['research_profile_context_only'] is True
+          assert d['shipping_profile_fail_closed_unchanged'] is True
           assert d['release_credit'] is False
           assert d['selector_change'] is False
           assert d['canonical_grammar_change'] is False
@@ -135,6 +149,6 @@ jobs:
           if-no-files-found: error
           retention-days: 90
 
-# Research-only. A pass proves archive-resident implicit-v4 can be joined with authenticated content-graph
-# identities and read through canonical r25 member semantics without breaking the <=8x locality law. Shipping
-# grammar, recovery, native, Android, all-15 authority and release credit remain separate fail-closed gates.
+# Research-only projection reader. The proof may enable the existing bounded revision-25 research context but
+# shipping profile classification remains fail closed. Recovery, native, Android, all-15 authority and final
+# release credit remain separate gates.
