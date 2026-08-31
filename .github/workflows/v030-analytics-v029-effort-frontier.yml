@@ -87,7 +87,7 @@ jobs:
           python -m py_compile \
             benchmarks/v030_analytics_v029_effort_frontier.py \
             benchmarks/v030_v025_canonical_fs_level1_oracle.py
-      - name: Measure Analytics levels 1-6 against v0.29, ZIP and Zstd-19
+      - name: Measure Analytics level 1 control and levels 15-19 crossing bracket
         run: |
           mkdir -p benchmark-artifacts
           python benchmarks/v030_analytics_v029_effort_frontier.py \
@@ -101,8 +101,11 @@ jobs:
           d=json.loads(Path('benchmark-artifacts/v030-analytics-v029-effort.json').read_text())
           assert d['schema']=='cmpct-v030-analytics-v029-effort-frontier-v1'
           assert d['target']=='neutral_hostile_v1/04_analytics_and_database'
-          assert d['levels']==[1,2,3,4,5,6] and d['rounds']==3
+          assert d['levels']==[1,15,16,17,18,19] and d['rounds']==3
           assert d['accepted_v029_bytes']==6_135_172
+          h=d['historical_raw_bracket']
+          assert h['level15_bytes']==6_568_522 and h['level19_bytes']==6_135_172
+          assert h['level19_median_verified_create_s'] > h['historical_zip_median_create_s']
           assert len(d['rows'])==6 and d['experiment_valid'] is True and d['release_credit'] is False
           c=d['contract']
           assert c['canonical_filesystem_tax_inside_candidate_timing'] is True
