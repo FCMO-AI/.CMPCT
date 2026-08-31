@@ -24,7 +24,7 @@ diff --git a/experiments/entropygraph_v030_canonical_final_impl.py b/experiments
      )
      if int(prepared["entries"]) > MAX_MANIFEST_ENTRIES:
          raise ProfileNotEligible("r25 filesystem manifest entry count exceeds reader policy")
-@@ -394,16 +396,13 @@ def _profile_content_identities(archive: Path) -> dict[str, tuple[int, bytes]]:
+@@ -394,14 +396,11 @@ def _profile_content_identities(archive: Path) -> dict[str, tuple[int, bytes]]:
  
  def _validated_manifest(archive: Path) -> dict:
      raw, _stats = _read_profile_member(archive, FS.FILESYSTEM_MANIFEST)
