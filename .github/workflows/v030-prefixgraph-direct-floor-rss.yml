@@ -65,7 +65,7 @@ jobs:
           import json, os
           from pathlib import Path
           d=json.loads(Path('benchmark-artifacts/v030-prefixgraph-direct-floor-rss.json').read_text())
-          assert d['schema']=='cmpct-v030-prefixgraph-direct-floor-rss-v1'
+          assert d['schema']=='cmpct-v030-prefixgraph-direct-floor-rss-v2'
           assert d['source_commit']==os.environ['EVIDENCE_HEAD']
           assert d['target']=='resemblance_hostile_v1/01_shifted_versions'
           assert d['rounds']==2 and len(d['repetitions'])==2
@@ -73,6 +73,9 @@ jobs:
           c=d['contract']
           assert c['fresh_process_per_measurement'] is True
           assert c['same_source_tree'] is True
+          assert c['rss_sample_captured_before_strong_verify'] is True
+          assert c['strong_verify_after_measurement_is_mandatory'] is True
+          assert c['verification_rss_excluded_from_build_peak'] is True
           assert c['direct_floor_uses_shipping_raws_and_direct_payload_floor'] is True
           assert c['direct_floor_uses_historical_all_direct_serializer'] is True
           assert c['full_uses_shipping_prefixgraph_builder'] is True
@@ -80,6 +83,11 @@ jobs:
               assert c[key] is False
           for rep in d['repetitions']:
               assert rep['direct-floor']['tree_sha256']==rep['full']['tree_sha256']==d['tree_sha256']
+              for mode in ('direct-floor','full'):
+                  assert rep[mode]['strong_verify_ok'] is True
+                  assert rep[mode]['rss_measurement_boundary']=='build-before-strong-verify-v2'
+                  assert rep[mode]['incremental_build_peak_rss_kib']==rep[mode]['incremental_peak_rss_kib']
+                  assert rep[mode]['build_wall_s']==rep[mode]['wall_s']
           PY
       - name: CI topology self-check
         if: always()
@@ -92,5 +100,5 @@ jobs:
           if-no-files-found: error
           retention-days: 90
 
-# Diagnostic only: the result locates the RSS owner. It cannot remove candidates, change bytes, alter the winner,
-# or earn release credit. A positive ownership signal only chooses the next exact-byte memory architecture to test.
+# Diagnostic only: the result locates the RSS owner. Verification remains mandatory but cannot contaminate the
+# build high-water mark. No result can remove candidates, change bytes, alter the winner, or earn release credit.
