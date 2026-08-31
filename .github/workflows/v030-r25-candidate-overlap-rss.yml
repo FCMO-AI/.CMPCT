@@ -1,60 +1,19 @@
 # ci-lane: deep
-# ci-pr-scope: latest-head-commit-gate
+# ci-auto-policy: retired-manual-only
 name: CMPCT v0.30 r25 candidate-overlap RSS oracle
 
 on:
-  pull_request:
-    branches: [main]
-    paths:
-      - 'experiments/entropygraph_v030_release_candidate.py'
-      - 'experiments/entropygraph_v030_release_product*.py'
-      - 'experiments/entropygraph_v030_geometry_overlay_g04*.py'
-      - 'experiments/entropygraph_v030_prefixgraph*.py'
-      - 'benchmarks/v030_release_performance*.py'
-      - 'benchmarks/v030_r25_candidate_overlap_rss_worker.py'
-      - 'benchmarks/v030_r25_candidate_overlap_rss_oracle.py'
-      - '.github/workflows/v030-r25-candidate-overlap-rss.yml'
   workflow_dispatch:
 
 permissions:
   contents: read
 
-concurrency:
-  group: cmpct-v030-r25-candidate-overlap-rss-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
-
 env:
   PYTHONPATH: ${{ github.workspace }}
-  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+  EVIDENCE_HEAD: ${{ github.sha }}
 
 jobs:
-  latest-head-scope:
-    runs-on: ubuntu-latest
-    outputs:
-      should_run: ${{ steps.scope.outputs.should_run }}
-    steps:
-      - uses: actions/checkout@v6
-        with:
-          ref: ${{ env.EVIDENCE_HEAD }}
-          fetch-depth: 2
-      - id: scope
-        shell: bash
-        run: |
-          set -euo pipefail
-          if [ "${{ github.event_name }}" != "pull_request" ]; then
-            echo "should_run=true" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-          git diff-tree --no-commit-id --name-only -r HEAD > /tmp/latest-head-files.txt
-          if grep -Eq '^(experiments/entropygraph_v030_release_candidate\.py$|experiments/entropygraph_v030_release_product.*\.py$|experiments/entropygraph_v030_geometry_overlay_g04.*\.py$|experiments/entropygraph_v030_prefixgraph.*\.py$|benchmarks/v030_release_performance.*\.py$|benchmarks/v030_r25_candidate_overlap_rss_worker\.py$|benchmarks/v030_r25_candidate_overlap_rss_oracle\.py$|\.github/workflows/v030-r25-candidate-overlap-rss\.yml$)' /tmp/latest-head-files.txt; then
-            echo "should_run=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "should_run=false" >> "$GITHUB_OUTPUT"
-          fi
-
   r25-candidate-overlap-rss:
-    needs: latest-head-scope
-    if: needs.latest-head-scope.outputs.should_run == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 300
     steps:
@@ -67,10 +26,12 @@ jobs:
         with:
           python-version: '3.11'
           cache: pip
-      - name: Install deterministic corpus dependencies
+      - name: Install deterministic corpus dependencies from canonical Ubuntu feed
         run: |
-          sudo apt-get update
-          sudo apt-get install -y zstd gcc ffmpeg libsndfile1
+          set -euo pipefail
+          test -f /etc/apt/sources.list.d/ubuntu.sources
+          sudo apt-get -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" -o Dir::Etc::sourceparts="-" update
+          sudo apt-get -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" -o Dir::Etc::sourceparts="-" install -y zstd gcc ffmpeg libsndfile1
           python -m pip install --upgrade pip
           python -m pip install -e '.[test,audio]'
           python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
@@ -149,5 +110,6 @@ jobs:
           if-no-files-found: error
           retention-days: 90
 
-# Research-only scheduling oracle. Exact evidence has already shown serializing r25-vs-r24 candidate construction
-# changes Shifted RSS by only ~0.16%, so unrelated commits must not spend another five-hour slot reproving that loss.
+# Terminal negative retained for manual reproduction. Exact evidence showed serializing r25-vs-r24 candidate
+# construction changes Shifted RSS by only ~0.16% and worsens wall time, so automatic CI must not spend another
+# five-hour slot on this exhausted scheduling hypothesis. Current work targets live PrefixGraph CCtx ownership.
