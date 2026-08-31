@@ -12,13 +12,14 @@ on:
       - 'experiments/entropygraph_v030_geometry_overlay_g04*.py'
       - 'benchmarks/v030_release_performance*.py'
       - 'benchmarks/v030_g04_ml_native_ffi_reader_oracle.py'
+      - 'benchmarks/patches/v030_g04_shared_record_cache_candidate.patch'
       - '.github/workflows/v030-g04-ml-native-ffi-reader.yml'
   workflow_dispatch:
 
 permissions:
   contents: read
 
-# Long exact-fingerprint A/B: do not throw away an hour of valid negative/positive evidence because an unrelated
+# Long exact-fingerprint A/B: do not throw away valid negative/positive evidence because an unrelated
 # integration commit arrives. Branch-scoped push paths give each relevant change one durable measurement.
 concurrency:
   group: cmpct-v030-g04-ml-native-ffi-reader-${{ github.ref }}
@@ -50,7 +51,13 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -e '.[audio,test]'
           python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
-      - name: Compile exact Python and Rust FFI surfaces
+      - name: Apply research-only shared-record-cache candidate
+        run: |
+          git apply --check benchmarks/patches/v030_g04_shared_record_cache_candidate.patch
+          git apply benchmarks/patches/v030_g04_shared_record_cache_candidate.patch
+          git diff --check
+          git diff -- native/cmpct-portable/src/g04.rs native/cmpct-portable/src/canonical.rs
+      - name: Compile exact Python and patched Rust FFI surfaces
         run: |
           python -m py_compile \
             experiments/entropygraph_v030_release_reader.py \
@@ -66,7 +73,7 @@ jobs:
             tests/test_v030_member_reader.py \
             tests/test_v030_release_fuzz.py \
             tests/test_v030_g04_publish.py
-      - name: Run canonical ML Python-vs-Rust in-process FFI A/B
+      - name: Run canonical ML Python-vs-patched-Rust in-process FFI A/B
         run: |
           mkdir -p benchmark-artifacts
           python benchmarks/v030_g04_ml_native_ffi_reader_oracle.py \
@@ -110,6 +117,11 @@ jobs:
           assert d['promotion_signal'] is expected
           assert g['passed'] is expected
           PY
+      - name: Confirm product sources remain unmodified in evidence commit
+        if: always()
+        run: |
+          git checkout -- native/cmpct-portable/src/g04.rs native/cmpct-portable/src/canonical.rs
+          test -z "$(git status --porcelain -- native/cmpct-portable/src/g04.rs native/cmpct-portable/src/canonical.rs)"
       - name: CI topology self-check
         if: always()
         run: python tools/check_ci_topology.py .github/workflows/v030-g04-ml-native-ffi-reader.yml
@@ -122,6 +134,6 @@ jobs:
           if-no-files-found: error
           retention-days: 90
 
-# Research-only execution-path oracle. It cannot change archive bytes, grammar, selector, locality,
-# decode-unit, integrity, caller output budget or memory law. A positive result only authorizes an
-# explicit native ML hot-path integration followed by full reader/fuzz/native/Android/runtime authority.
+# Research-only execution-path oracle. The patch is applied only inside this job and cannot change committed
+# archive bytes, grammar, selector, locality, decode-unit, integrity, caller output budget or memory law. A
+# positive result only authorizes explicit product integration followed by full reader/fuzz/native/Android/runtime authority.
