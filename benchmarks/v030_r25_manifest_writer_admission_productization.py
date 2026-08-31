@@ -41,6 +41,19 @@ def _authenticated_projection(archive: Path) -> tuple[bytes, dict, dict[str, tup
     return raw, stats, identities
 
 
+def _shipping_reader_rejects_research_projection(archive: Path) -> bool:
+    """Prove the projected r25 artifact remains unavailable to shipping semantics.
+
+    This must be measured rather than emitted as a declarative receipt field: productization is allowed to
+    exercise the existing bounded research context, but it must not silently broaden the default reader profile.
+    """
+    try:
+        CANON._read_profile_member(archive, FS.FILESYSTEM_MANIFEST)
+    except CANON.UnsupportedArchiveProfile as exc:
+        return str(exc) == "research-only"
+    return False
+
+
 def run(work_root: Path) -> dict:
     shutil.rmtree(work_root, ignore_errors=True)
     work_root.mkdir(parents=True)
@@ -69,6 +82,10 @@ def run(work_root: Path) -> dict:
     current = SIZE._build(current_stage, current_archive)
     candidate = SIZE._build(admitted_stage, admitted_archive)
     archive_saving = int(current["archive_bytes"]) - int(candidate["archive_bytes"])
+
+    shipping_fail_closed = _shipping_reader_rejects_research_projection(admitted_archive)
+    if not shipping_fail_closed:
+        raise RuntimeError("research r25 projection leaked into shipping reader semantics")
 
     archive_control, control_stats, content_identities = _authenticated_projection(admitted_archive)
     if archive_control != admitted_raw:
@@ -123,7 +140,7 @@ def run(work_root: Path) -> dict:
         "within_release_locality_bounds": float(control_stats["decoded_context_amplification"]) <= 8.0,
         "shared_writer_reader_semantic_owner": True,
         "research_profile_context_only": True,
-        "shipping_profile_fail_closed_unchanged": True,
+        "shipping_profile_fail_closed_unchanged": shipping_fail_closed,
         "release_credit": False,
         "canonical_writer_change": False,
         "domination_audit": {
