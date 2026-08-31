@@ -22,7 +22,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: cmpct-v030-r25-manifest-canonical-candidate-${{ github.event.pull_request.number || github.ref }}
+  group: cmpct-v030-r25-manifest-canonical-candidate-${{ github.event.pull_request.head.sha || github.sha }}
   cancel-in-progress: false
 
 env:
@@ -144,6 +144,6 @@ jobs:
 
 # S6/D5 convergence lane. A green result proves the already-strict implicit-v4 mechanism
 # survives direct canonical writer/reader primitives without process-global mutation while
-# shipping semantics remain unchanged. It still earns zero release credit; promotion must
-# be followed by focused hostile/recovery, native, Android, all-15 no-regression and exact
-# external authority on the new fingerprint.
+# shipping semantics remain unchanged. Exact-SHA concurrency prevents later irrelevant PR
+# updates from evicting a queued receipt before it receives a runner. Promotion must still
+# pass hostile/recovery, native, Android, all-15 no-regression and exact external authority.
