@@ -1,0 +1,131 @@
+# ci-lane: deep
+# ci-pr-scope: latest-head-commit-gate
+# ci-cancel-policy: preserve-running-exact-receipt
+name: CMPCT v0.30 PrefixGraph two-anchor representation
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'benchmarks/v030_prefixgraph_two_anchor_representation_oracle.py'
+      - 'benchmarks/v030_external_competitors.py'
+      - 'benchmarks/v030_release_performance.py'
+      - 'experiments/entropygraph_v030_prefixgraph.py'
+      - 'experiments/entropygraph_v030_product_fs.py'
+      - 'experiments/entropygraph_v030_canonical_final_impl.py'
+      - '.github/workflows/v030-prefixgraph-two-anchor-representation.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-v030-prefixgraph-two-anchor-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: false
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+
+jobs:
+  latest-head-impact:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      run_deep: ${{ steps.scope.outputs.run_deep }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 2
+      - name: Bind exact head and classify only its changed files
+        id: scope
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            echo 'run_deep=true' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          git diff-tree --no-commit-id --name-only -r HEAD > /tmp/latest-head-files.txt
+          cat /tmp/latest-head-files.txt
+          if grep -Eq '^(benchmarks/v030_(prefixgraph_two_anchor_representation_oracle|external_competitors|release_performance)\.py|experiments/entropygraph_v030_(prefixgraph|product_fs|canonical_final_impl)\.py|\.github/workflows/v030-prefixgraph-two-anchor-representation\.yml)$' /tmp/latest-head-files.txt; then
+            echo 'run_deep=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'run_deep=false' >> "$GITHUB_OUTPUT"
+            echo 'Accumulated PR paths matched, but newest exact commit cannot affect the two-anchor representation oracle.'
+          fi
+
+  representation-oracle:
+    needs: latest-head-impact
+    if: needs.latest-head-impact.outputs.run_deep == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - name: Bind exact candidate head
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install exact corpus and Zstd dependencies
+        run: |
+          set -euo pipefail
+          test -f /etc/apt/sources.list.d/ubuntu.sources
+          sudo apt-get -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" -o Dir::Etc::sourceparts="-" update
+          sudo apt-get -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" -o Dir::Etc::sourceparts="-" install -y zstd ffmpeg libsndfile1
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[test,audio]'
+      - name: Compile structural oracle
+        run: python -m py_compile benchmarks/v030_prefixgraph_two_anchor_representation_oracle.py
+      - name: Run exact Shifted two-anchor representation oracle
+        run: |
+          mkdir -p benchmark-artifacts
+          python -m benchmarks.v030_prefixgraph_two_anchor_representation_oracle \
+            --work-root "$RUNNER_TEMP/v030-prefixgraph-two-anchor" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-prefixgraph-two-anchor.json"
+      - name: Enforce evidence boundary
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          d=json.loads(Path('benchmark-artifacts/v030-prefixgraph-two-anchor.json').read_text())
+          assert d['schema']=='cmpct-v030-prefixgraph-two-anchor-representation-oracle-v2'
+          assert d['nominated_anchors'] >= 2
+          assert d['evaluated_pairs'] > 0
+          assert d['single_anchor_pricing_exact'] is True
+          assert d['shipping_prefixgraph_bytes'] > 0
+          assert d['two_anchor_bytes'] > 0
+          assert d['tree_sha256']==d['verified_tree_sha256']
+          assert d['reader_reused_without_depth_change'] is True
+          assert d['max_dependency_depth']==1
+          assert d['zip_bytes'] > 0
+          assert d['zstd19_bytes'] is not None and d['zstd19_bytes'] > 0
+          assert d['release_credit'] is False
+          assert d['product_create_time_claim'] is False
+          PY
+      - name: CI topology self-check
+        if: always()
+        run: python tools/check_ci_topology.py .github/workflows/v030-prefixgraph-two-anchor-representation.yml
+      - name: Public-surface guard
+        if: always()
+        run: python tools/check_public_surface.py
+      - name: Upload exact structural evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: v030-prefixgraph-two-anchor-${{ env.EVIDENCE_HEAD }}
+          path: benchmark-artifacts/v030-prefixgraph-two-anchor.json
+          if-no-files-found: error
+          retention-days: 90
+
+# Structural R3 research only. A positive strict-size result authorizes work on a bounded fast selector; a miss
+# escalates the representation beyond two anchors. Exhaustive oracle time is never presented as product creation
+# performance and no result here directly earns release credit.
