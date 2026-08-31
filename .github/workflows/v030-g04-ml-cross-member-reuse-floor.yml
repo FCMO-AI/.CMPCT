@@ -41,10 +41,15 @@ jobs:
         with:
           python-version: '3.11'
           cache: pip
-      - name: Install deterministic ML-corpus dependencies
+      - name: Install deterministic ML-corpus dependencies from Ubuntu only
         run: |
-          sudo apt-get update
-          sudo apt-get install -y zstd gcc ffmpeg libsndfile1
+          set -euo pipefail
+          # The hosted image can contain unrelated Microsoft/Azure feeds. They are not evidence inputs for
+          # this structural oracle, so an outage there must not prevent the canonical Ubuntu dependencies from
+          # reaching the exact measurement. Unknown/missing Ubuntu sources and package failures remain fatal.
+          test -f /etc/apt/sources.list.d/ubuntu.sources
+          sudo apt-get -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" -o Dir::Etc::sourceparts="-" update
+          sudo apt-get -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" -o Dir::Etc::sourceparts="-" install -y zstd gcc ffmpeg libsndfile1
           python -m pip install --upgrade pip
           python -m pip install -e '.[audio,test]'
           python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
