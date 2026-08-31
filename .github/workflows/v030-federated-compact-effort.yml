@@ -1,7 +1,23 @@
 # ci-lane: deep
+# ci-pr-scope: latest-head-commit-gate
+# ci-cancel-policy: preserve-running-exact-receipt
 name: CMPCT v0.30 federated compact structural frontier
 
 on:
+  push:
+    branches: [agent/v030-authoritative-integration]
+    paths:
+      - 'experiments/entropygraph_v030_fs_compact.py'
+      - 'experiments/entropygraph_v030_federated_compact_candidate.py'
+      - 'experiments/entropygraph_v030_federated_candidate.py'
+      - 'experiments/entropygraph_v030_product_fs.py'
+      - 'experiments/entropygraph_v025.py'
+      - 'benchmarks/v030_federated_compact_effort_oracle.py'
+      - 'benchmarks/v030_federated_selective_effort_oracle*.py'
+      - 'benchmarks/neutral_hostile_corpus_v1.py'
+      - 'benchmarks/neutral_hostile_determinism_repair_v*.py'
+      - 'tests/test_v030_fs_compact.py'
+      - '.github/workflows/v030-federated-compact-effort.yml'
   pull_request:
     branches: [main]
     paths:
@@ -23,29 +39,65 @@ permissions:
 
 concurrency:
   group: cmpct-v030-federated-compact-effort-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 env:
   PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
 
 jobs:
+  latest-head-impact:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      run_deep: ${{ steps.scope.outputs.run_deep }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 2
+      - name: Bind exact head and classify newest commit only
+        id: scope
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            echo 'run_deep=true' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          git diff-tree --no-commit-id --name-only -r HEAD > /tmp/latest-head-files.txt
+          cat /tmp/latest-head-files.txt
+          if grep -Eq '^(experiments/entropygraph_(v030_fs_compact|v030_federated_compact_candidate|v030_federated_candidate|v030_product_fs|v025)\.py|benchmarks/(v030_federated_compact_effort_oracle\.py|v030_federated_selective_effort_oracle[^/]*\.py|neutral_hostile_corpus_v1\.py|neutral_hostile_determinism_repair_v[^/]*\.py)|tests/test_v030_fs_compact\.py|\.github/workflows/v030-federated-compact-effort\.yml)$' /tmp/latest-head-files.txt; then
+            echo 'run_deep=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'run_deep=false' >> "$GITHUB_OUTPUT"
+          fi
+
   compact-structural-frontier:
+    needs: latest-head-impact
+    if: needs.latest-head-impact.outputs.run_deep == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 180
     steps:
       - uses: actions/checkout@v6
         with:
-          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - name: Bind exact candidate head
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
 
       - uses: actions/setup-python@v6
         with:
           python-version: '3.11'
           cache: pip
 
-      - name: Install exact corpus and comparator dependencies
+      - name: Install exact corpus and comparator dependencies from canonical Ubuntu feed
         run: |
-          sudo apt-get update
-          sudo apt-get install -y zstd gcc ffmpeg libsndfile1
+          set -euo pipefail
+          test -f /etc/apt/sources.list.d/ubuntu.sources
+          sudo apt-get -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" -o Dir::Etc::sourceparts="-" update
+          sudo apt-get -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" -o Dir::Etc::sourceparts="-" install -y zstd gcc ffmpeg libsndfile1
           python -m pip install --upgrade pip
           python -m pip install -e '.[audio,test]'
           python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
@@ -105,13 +157,14 @@ jobs:
           PY
 
       - name: CI topology self-check
+        if: always()
         run: python tools/check_ci_topology.py .github/workflows/v030-federated-compact-effort.yml
 
       - name: Upload compact structural-frontier evidence
         if: always()
         uses: actions/upload-artifact@v6
         with:
-          name: v030-federated-compact-effort-${{ github.sha }}
+          name: v030-federated-compact-effort-${{ env.EVIDENCE_HEAD }}
           path: benchmark-artifacts/v030-eg02-compact-effort.json
           if-no-files-found: warn
           retention-days: 90
