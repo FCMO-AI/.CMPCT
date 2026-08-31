@@ -10,6 +10,8 @@ An hourly activation is a maximum-throughput engineering window, not a status ch
 
 The duration floor is not permission for churn. Work must continue only through the highest-value safe work available under repository truth.
 
+For material compression/performance/frontier work, `docs/RND_DOMINATION_RUBRIC.md` is also normative. The hour is not merely for closing whichever small ticket is easiest: it must allocate research effort according to the diagnosed strict gap, saturation state, radicality requirement, and research/productization queues defined there.
+
 ## Mandatory wall-clock protocol
 
 1. **Record `T0` immediately at activation start.** Use an actual system/time source available to the agent. `T0` is per activation and must not be inherited from a prior run.
@@ -20,19 +22,35 @@ The duration floor is not permission for churn. Work must continue only through 
 
 The normal permitted voluntary finish window is therefore **50–59 elapsed minutes**.
 
+## Mandatory R&D selection checkpoint
+
+Before material frontier work, recover the current strict ZIP/Zstd-19 matrix and applicable v0.29 runtime/RSS floors, then apply `docs/RND_DOMINATION_RUBRIC.md`:
+
+1. classify the active red(s) D0–D5;
+2. apply saturation triggers S1–S6;
+3. identify the minimum admissible radicality R0–R4;
+4. inspect recent/in-flight experiments so the same family is not repeated blindly;
+5. score the best unblocked hypotheses with the Research Priority Score;
+6. select from both the **frontier queue** (strict/structural gap) and **convergence queue** (proven-win productization/evidence) as repository truth warrants;
+7. preserve the rolling-three-activation STRUCTURAL_RED R&D floor when it applies.
+
+Near-boundary optimization remains correct when measured local cost can actually close the gap. Once a family meets a saturation trigger, continuing micro-optimization as the primary strategy is a contract violation unless new evidence changes the diagnosis.
+
 ## If primary work is done, blocked, or waiting
 
 Do not idle and do not end early. Move immediately to the highest-value dependency-safe work that can be advanced without weakening evidence. Prefer, in order as repository truth warrants:
 
+- finish the next honest D5/productization prerequisite for an already-proven strict win;
+- advance the highest-RPS unblocked STRUCTURAL_RED hypothesis required by the domination rubric;
 - inspect another release-critical red lane or exact failed log/artifact;
 - implement/test an orthogonal safe fix;
 - mine completed CI artifacts and reconcile stale evidence;
 - strengthen deterministic regression, adversarial, recovery, locality, integrity, native, Android, portability, or performance coverage;
-- reduce a known performance bottleneck without changing required semantics;
-- productize an already-proven research win through its next honest prerequisite;
+- reduce a known performance bottleneck when the rubric's micro-optimization admissibility test says that work can materially close the strict gap;
 - prepare or run the next exact falsification/benchmark whose prerequisites are satisfied;
+- derive an exact lower bound, impossibility proof, contribution oracle, or futility filter that can retire speculative losing work;
 - reconcile `CURRENT_STATE`, evidence fingerprints, active PR truth, and handoff state;
-- preserve a falsified result and pivot to the next highest-value hypothesis.
+- preserve a falsified result, apply S1–S6, and pivot to the next highest-value hypothesis rather than repeating the same family.
 
 Waiting on CI is not idle time when another dependency-safe lane exists.
 
@@ -43,6 +61,8 @@ The following do **not** count as useful continuation:
 - sleeping or deliberately waiting for the clock;
 - cosmetic edits, status prose, or commit splitting created only to consume time;
 - rerunning unchanged expensive work without a diagnostic reason;
+- repeating a saturated optimization family without new causal evidence merely because it is easy to edit;
+- pursuing novelty for spectacle when a proven strict win only needs productization;
 - weakening a benchmark, invariant, safety requirement, release gate, or evidence rule to manufacture progress;
 - benchmark-identity dispatch or workload-specific production tuning;
 - starting a large risky change near the landing boundary merely to remain busy.
@@ -76,8 +96,10 @@ If `elapsed < 50m` and `early_exit_exception` is `none`, the activation is not c
 
 The handoff must still prioritize engineering substance: exact head/branch/PR, work completed, measured evidence, blockers, exact-head CI truth, and next highest-leverage target.
 
+When material R&D occurred, also include the compact domination audit required by `docs/RND_DOMINATION_RUBRIC.md`: strict target, D0–D5 diagnosis, R0–R4 radicality, active S1–S6 trigger, RPS, measured gap change, strongest surviving self-critique, terminal decision, and next decisive test. This is decision telemetry, not permission for a long status narrative.
+
 ## Interaction with CMPCT engineering law
 
-Duration never outranks correctness. `AGENTS.md`, `docs/AGI_ENGINEERING_STANDARD.md`, release authority, evidence gates, hostile-input safety, portability, benchmark symmetry, zero-byte promotion regression, and all other canonical CMPCT laws remain fully binding.
+Duration never outranks correctness. `AGENTS.md`, `docs/AGI_ENGINEERING_STANDARD.md`, `docs/RND_DOMINATION_RUBRIC.md`, release authority, evidence gates, hostile-input safety, portability, benchmark symmetry, zero-byte promotion regression, and all other canonical CMPCT laws remain fully binding.
 
-The rule is simple: **use the available hour aggressively, but never buy utilization by lowering the standard of engineering.**
+The rule is simple: **use the available hour aggressively, but never buy utilization by lowering the standard of engineering—and never confuse activity with progress toward strict 15/15 domination.**
