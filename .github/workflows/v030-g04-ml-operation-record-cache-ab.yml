@@ -50,10 +50,15 @@ jobs:
           python-version: '3.11'
           cache: pip
       - uses: dtolnay/rust-toolchain@stable
-      - name: Install deterministic ML-corpus dependencies
+      - name: Install deterministic ML-corpus dependencies from Ubuntu only
         run: |
-          sudo apt-get update
-          sudo apt-get install -y zstd gcc ffmpeg libsndfile1
+          set -euo pipefail
+          # Hosted runners may carry unrelated Microsoft/Azure feeds. They are not inputs to this oracle and have
+          # previously returned 403 during apt metadata refresh, invalidating an exact run before any benchmark work.
+          # Restrict apt to the canonical Ubuntu source rather than turning an external feed outage into CMPCT evidence.
+          test -f /etc/apt/sources.list.d/ubuntu.sources
+          sudo apt-get -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" -o Dir::Etc::sourceparts="-" update
+          sudo apt-get -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" -o Dir::Etc::sourceparts="-" install -y zstd gcc ffmpeg libsndfile1
           python -m pip install --upgrade pip
           python -m pip install -e '.[audio,test]'
           python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
