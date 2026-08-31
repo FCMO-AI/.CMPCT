@@ -88,17 +88,29 @@ jobs:
           python benchmarks/v030_shifted_zstd_patch_oracle.py \
             --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-shifted-base-patch-work" \
             --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-shifted-base-patch.json"
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          p=Path('benchmark-artifacts/v030-shifted-base-patch.json')
+          d=json.loads(p.read_text())
+          # Evidence custody is separate from representation policy: bind the receipt to the exact checkout
+          # after the benchmark so source identity cannot influence compression or timing decisions.
+          d['evidence_source_sha']=os.environ['EVIDENCE_HEAD']
+          p.write_text(json.dumps(d, indent=2)+'\n')
+          PY
       - name: Enforce exact research boundary
         if: always()
         run: |
           python - <<'PY'
-          import json
+          import json, os
           from pathlib import Path
           p=Path('benchmark-artifacts/v030-shifted-base-patch.json')
           assert p.exists(), 'Shifted base-patch evidence missing'
           d=json.loads(p.read_text())
           assert d['schema']=='cmpct-v030-shifted-zstd-base-patch-oracle-v1'
           assert d['target']=='resemblance_hostile_v1/01_shifted_versions'
+          assert d['evidence_source_sha']==os.environ['EVIDENCE_HEAD']
+          assert len(d['evidence_source_sha'])==40
           assert d['contract']['benchmark_identity_used_in_representation'] is False
           assert d['contract']['single_complete_artifact'] is True
           assert d['contract']['creation_includes_source_scan_anchor_selection_patch_construction_framing_hashing_publication'] is True
