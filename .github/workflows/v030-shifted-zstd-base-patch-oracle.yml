@@ -18,7 +18,7 @@ permissions:
 
 concurrency:
   group: cmpct-v030-shifted-zstd-base-patch-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 env:
   PYTHONPATH: ${{ github.workspace }}
