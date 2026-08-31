@@ -132,10 +132,15 @@ def run(work_root: Path, baseline_cli: Path, candidate_cli: Path) -> dict:
         "candidate_verify_materially_faster": verify_improvement >= MIN_VERIFY_IMPROVEMENT,
         "candidate_extract_materially_faster": extract_improvement >= MIN_EXTRACT_IMPROVEMENT,
     }
+    promotion = all(gate.values())
+    terminal_decision = "PROMOTE_NEXT_PREREQUISITE" if promotion else "RETIRE_FAMILY"
     return {
-        "schema": "cmpct-v030-g04-ml-operation-record-cache-ab-v4",
+        "schema": "cmpct-v030-g04-ml-operation-record-cache-ab-v5",
         "source_commit": _source_commit(),
         "target": "neutral_hostile_v1/09_ml_artifacts",
+        "diagnosis": "D2",
+        "radicality": "R2",
+        "rps": 86,
         "binary_sha256": binary_sha256,
         "shipping_build": built,
         "tree_sha256": tree,
@@ -157,8 +162,11 @@ def run(work_root: Path, baseline_cli: Path, candidate_cli: Path) -> dict:
             "minimum_verify_improvement_fraction": MIN_VERIFY_IMPROVEMENT,
             "minimum_extract_improvement_fraction": MIN_EXTRACT_IMPROVEMENT,
         },
-        "gate": {**gate, "passed": all(gate.values())},
-        "promotion_signal": all(gate.values()),
+        "gate": {**gate, "passed": promotion},
+        "promotion_signal": promotion,
+        "terminal_decision": terminal_decision,
+        "next_if_promoted": "productize bounded operation-scoped record ownership, then re-earn selective locality/hostile/native/Android/runtime authority",
+        "next_if_retired": "attack G0-G4 reconstruction/audition ownership rather than another record-cache threshold",
         "release_credit": False,
         "claim_boundary": (
             "Research-only native A/B. A pass authorizes productizing bounded operation-scoped decoded-record "
@@ -185,6 +193,7 @@ def main() -> None:
         "verify_improvement_fraction": result["verify_improvement_fraction"],
         "extract_improvement_fraction": result["extract_improvement_fraction"],
         "gate": result["gate"],
+        "terminal_decision": result["terminal_decision"],
     }, indent=2), flush=True)
 
 
