@@ -1,0 +1,133 @@
+# ci-lane: deep
+# ci-pr-scope: latest-head-commit-gate
+name: CMPCT v0.30 Shifted candidate overlap RSS oracle
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'benchmarks/v030_shifted_candidate_overlap_rss_oracle.py'
+      - 'benchmarks/v030_release_performance.py'
+      - 'benchmarks/v030_release_generalization.py'
+      - 'benchmarks/resemblance_hostile_corpus_v1.py'
+      - 'experiments/entropygraph_v030_canonical_final.py'
+      - 'experiments/entropygraph_v030_canonical_final_impl.py'
+      - 'experiments/entropygraph_v030_release_candidate.py'
+      - 'experiments/entropygraph_v030_release_product.py'
+      - 'experiments/entropygraph_v030_release_product_base.py'
+      - '.github/workflows/v030-shifted-candidate-overlap-rss.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-v030-shifted-candidate-overlap-rss-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+
+jobs:
+  latest-head-impact:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      run_deep: ${{ steps.scope.outputs.run_deep }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 2
+      - name: Bind exact head and classify only its changed files
+        id: scope
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            echo 'run_deep=true' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          git diff-tree --no-commit-id --name-only -r HEAD > /tmp/latest-head-files.txt
+          cat /tmp/latest-head-files.txt
+          if grep -Eq '^(benchmarks/v030_shifted_candidate_overlap_rss_oracle\.py|benchmarks/v030_release_performance\.py|benchmarks/v030_release_generalization\.py|benchmarks/resemblance_hostile_corpus_v1\.py|experiments/entropygraph_v030_canonical_final\.py|experiments/entropygraph_v030_canonical_final_impl\.py|experiments/entropygraph_v030_release_candidate\.py|experiments/entropygraph_v030_release_product\.py|experiments/entropygraph_v030_release_product_base\.py|\.github/workflows/v030-shifted-candidate-overlap-rss\.yml)$' /tmp/latest-head-files.txt; then
+            echo 'run_deep=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'run_deep=false' >> "$GITHUB_OUTPUT"
+            echo 'Newest exact commit does not affect Shifted candidate-overlap attribution; skipping replay.'
+          fi
+
+  shifted-candidate-overlap-rss:
+    needs: latest-head-impact
+    if: needs.latest-head-impact.outputs.run_deep == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - name: Bind exact candidate head
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install frozen Shifted dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y zstd gcc
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[test]'
+      - name: Compile exact ownership oracle
+        run: python -m py_compile benchmarks/v030_shifted_candidate_overlap_rss_oracle.py
+      - name: Measure G0-G4, PrefixGraph and unchanged overlap in fresh processes
+        run: |
+          mkdir -p benchmark-artifacts
+          python benchmarks/v030_shifted_candidate_overlap_rss_oracle.py \
+            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-shifted-candidate-overlap-rss-work" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-shifted-candidate-overlap-rss.json"
+      - name: Enforce exact diagnostic contract
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          d=json.loads(Path('benchmark-artifacts/v030-shifted-candidate-overlap-rss.json').read_text())
+          assert d['schema']=='cmpct-v030-shifted-candidate-overlap-rss-v1'
+          assert d['target']=='resemblance_hostile_v1/01_shifted_versions'
+          assert d['rounds']==2 and d['experiment_valid'] is True
+          assert d['promotion_signal'] is False and d['release_credit'] is False
+          c=d['contract']
+          assert c['fresh_process_per_arm'] is True
+          assert c['operation_rss_snapshot_precedes_correctness_checks'] is True
+          assert c['overlap_uses_unchanged_canonical_scheduler'] is True
+          assert c['individual_arms_use_unchanged_canonical_component_builders'] is True
+          assert c['overlap_output_must_equal_exact_component_bytes'] is True
+          for key in ('archive_bytes_changed','selector_changed','scheduling_changed','grammar_changed','integrity_changed',
+                      'rss_release_threshold_changed','locality_limit_changed','decode_unit_limit_changed'):
+              assert c[key] is False
+          assert len(d['repetitions'])==2
+          expected=d['expected_historical_tree_sha256']
+          for mode in ('g04','prefixgraph','overlap'):
+              shas={rep[mode]['archive_sha256'] for rep in d['repetitions']}
+              sizes={rep[mode]['archive_bytes'] for rep in d['repetitions']}
+              trees={rep[mode]['verified_tree_sha256'] for rep in d['repetitions']}
+              assert len(shas)==1 and len(sizes)==1 and trees=={expected}
+          assert d['median']['overlap']['archive_sha256'] in {
+              d['median']['g04']['archive_sha256'], d['median']['prefixgraph']['archive_sha256']
+          }
+          PY
+      - name: CI topology self-check
+        run: python tools/check_ci_topology.py .github/workflows/v030-shifted-candidate-overlap-rss.yml
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: v030-shifted-candidate-overlap-rss-${{ env.EVIDENCE_HEAD }}
+          path: benchmark-artifacts/v030-shifted-candidate-overlap-rss.json
+          if-no-files-found: error
+          retention-days: 90
+
+# Diagnostic only. A result that attributes the peak to candidate-family overlap can justify a separately tested
+# scheduler/lifetime redesign, but this lane itself changes no shipping code and grants no release credit.
