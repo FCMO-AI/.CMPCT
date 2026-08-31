@@ -18,7 +18,7 @@ def test_exact_head_commit_gate_is_valid_deep_pr_scope(tmp_path: Path) -> None:
 on:
   pull_request:
 concurrency:
-  group: deep-${{ github.event.pull_request.number }}
+  group: deep-${{ github.event.pull_request.number }}-${{ github.event.pull_request.head.sha }}
   cancel-in-progress: false
 env:
   EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
