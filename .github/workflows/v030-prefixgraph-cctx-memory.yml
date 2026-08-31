@@ -1,0 +1,150 @@
+# ci-lane: deep
+# ci-pr-scope: latest-head-commit-gate
+name: CMPCT v0.30 PrefixGraph CCtx memory attribution
+
+on:
+  push:
+    branches: [agent/v030-authoritative-integration]
+    paths:
+      - 'benchmarks/.v030-research-trigger'
+      - 'benchmarks/v030_prefixgraph_cctx_memory_oracle.py'
+      - 'benchmarks/v030_prefixgraph_worker_count_rss_worker.py'
+      - 'benchmarks/v030_release_performance.py'
+      - 'experiments/entropygraph_v030_prefixgraph.py'
+      - 'experiments/entropygraph_v030_prefixgraph_parallel.py'
+      - '.github/workflows/v030-prefixgraph-cctx-memory.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'benchmarks/.v030-research-trigger'
+      - 'benchmarks/v030_prefixgraph_cctx_memory_oracle.py'
+      - 'benchmarks/v030_prefixgraph_worker_count_rss_worker.py'
+      - 'benchmarks/v030_release_performance.py'
+      - 'experiments/entropygraph_v030_prefixgraph.py'
+      - 'experiments/entropygraph_v030_prefixgraph_parallel.py'
+      - '.github/workflows/v030-prefixgraph-cctx-memory.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-v030-prefixgraph-cctx-memory-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+
+jobs:
+  latest-head-impact:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      run_deep: ${{ steps.scope.outputs.run_deep }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 2
+      - name: Bind exact head and classify only its changed files
+        id: scope
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            echo 'run_deep=true' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          git diff-tree --no-commit-id --name-only -r HEAD > /tmp/latest-head-files.txt
+          cat /tmp/latest-head-files.txt
+          if grep -Eq '^(benchmarks/\.v030-research-trigger|benchmarks/v030_prefixgraph_cctx_memory_oracle\.py|benchmarks/v030_prefixgraph_worker_count_rss_worker\.py|benchmarks/v030_release_performance\.py|experiments/entropygraph_v030_prefixgraph(_parallel)?\.py|\.github/workflows/v030-prefixgraph-cctx-memory\.yml)$' /tmp/latest-head-files.txt; then
+            echo 'run_deep=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'run_deep=false' >> "$GITHUB_OUTPUT"
+            echo 'Accumulated PR paths matched, but newest exact commit does not affect the CCtx attribution proof.'
+          fi
+
+  cctx-memory:
+    needs: latest-head-impact
+    if: needs.latest-head-impact.outputs.run_deep == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - name: Bind exact candidate
+        id: candidate
+        run: |
+          set -euo pipefail
+          actual="$(git rev-parse HEAD)"
+          test "$actual" = "$EVIDENCE_HEAD"
+          echo "sha=$actual" >> "$GITHUB_OUTPUT"
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install exact dependencies from Ubuntu only
+        run: |
+          set -euo pipefail
+          test -f /etc/apt/sources.list.d/ubuntu.sources
+          sudo apt-get -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" -o Dir::Etc::sourceparts="-" update
+          sudo apt-get -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" -o Dir::Etc::sourceparts="-" install -y zstd
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[test]'
+      - name: Compile CCtx attribution oracle
+        run: python -m py_compile benchmarks/v030_prefixgraph_cctx_memory_oracle.py benchmarks/v030_prefixgraph_worker_count_rss_worker.py
+      - name: Run fresh-process Shifted CCtx attribution
+        run: |
+          mkdir -p benchmark-artifacts
+          python -m benchmarks.v030_prefixgraph_cctx_memory_oracle \
+            --work-root "$RUNNER_TEMP/v030-prefixgraph-cctx-memory" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-prefixgraph-cctx-memory.json"
+      - name: Ratchet zero-product-change attribution boundary
+        run: |
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          p=Path('benchmark-artifacts/v030-prefixgraph-cctx-memory.json')
+          e=json.loads(p.read_text())
+          assert e['schema']=='cmpct-v030-prefixgraph-cctx-memory-attribution-v1'
+          assert e['source_commit']==os.environ['EVIDENCE_HEAD']
+          assert e['target']==['resemblance_hostile_v1','01_shifted_versions']
+          c=e['contract']; g=e['gate']; s=e['summary']
+          assert c['production_change'] is False
+          assert c['compressor_parameters_changed'] is False
+          assert c['candidate_set_changed'] is False
+          assert c['anchor_nomination_changed'] is False
+          assert c['serializer_changed'] is False and c['tie_law_changed'] is False
+          assert c['reader_changed'] is False and c['recovery_changed'] is False and c['locality_changed'] is False
+          assert c['shipping_archive_identity_required'] is True and c['release_credit'] is False
+          assert e['release_credit'] is False
+          assert g['exact_shipping_identity'] is True and g['passed'] is True
+          assert s['anchors'] >= 1
+          assert s['max_reported_single_cctx_bytes'] > 0
+          assert s['shipping_w1_incremental_peak_rss_kib'] > 0
+          assert s['shipping_w4_incremental_peak_rss_kib'] > 0
+          if g['causal_signal']:
+              assert s['max_cctx_share_of_w1_incremental_rss'] >= c['minimum_single_worker_cctx_share_for_signal']
+              assert s['w4_to_w1_rss_scaling'] >= c['minimum_worker_rss_scaling_for_signal']
+          PY
+      - name: Record exact candidate fingerprint
+        run: printf '%s\n' '${{ steps.candidate.outputs.sha }}' > benchmark-artifacts/v030-prefixgraph-cctx-memory-candidate.txt
+      - name: CI topology self-check
+        run: python tools/check_ci_topology.py .github/workflows/v030-prefixgraph-cctx-memory.yml
+      - name: Upload evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: v030-prefixgraph-cctx-memory-${{ steps.candidate.outputs.sha || github.sha }}
+          path: |
+            benchmark-artifacts/v030-prefixgraph-cctx-memory.json
+            benchmark-artifacts/v030-prefixgraph-cctx-memory-candidate.txt
+          if-no-files-found: warn
+          retention-days: 90
+
+# Research-only memory attribution. A positive causal signal nominates live CCtx/context architecture for the
+# next Shifted RSS experiment; it cannot alter production scheduling, archive bytes, thresholds, or release credit.
