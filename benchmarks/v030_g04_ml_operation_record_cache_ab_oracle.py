@@ -6,7 +6,7 @@ Both CLIs consume the exact same canonical ML archive. The candidate changes onl
 verify/extract ownership: decoded physical records may survive between logical members under the existing
 64 MiB insertion-only ceiling, while each member keeps a fresh node cache and still charges every required
 record to its own locality stats even on a shared-cache hit. Selective single-member reads retain the existing
-fresh-cache behavior.
+fresh-cache behavior. The receipt binds itself to the exact repository HEAD that built both measured binaries.
 """
 
 import argparse
@@ -15,6 +15,7 @@ import json
 from pathlib import Path
 import shutil
 import statistics
+import subprocess
 import time
 
 from benchmarks import v030_release_performance as PERF
@@ -23,9 +24,14 @@ from experiments import entropygraph_v030_native_reader_bridge as NATIVE
 from experiments import entropygraph_v030_release_product as PRODUCT
 from experiments import entropygraph_v030_release_reader as RR
 
+ROOT = Path(__file__).resolve().parents[1]
 ROUNDS = 7
 MIN_VERIFY_IMPROVEMENT = 0.10
 MIN_EXTRACT_IMPROVEMENT = 0.10
+
+
+def _source_commit() -> str:
+    return subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip()
 
 
 def _file_sha256(path: Path) -> str:
@@ -127,7 +133,8 @@ def run(work_root: Path, baseline_cli: Path, candidate_cli: Path) -> dict:
         "candidate_extract_materially_faster": extract_improvement >= MIN_EXTRACT_IMPROVEMENT,
     }
     return {
-        "schema": "cmpct-v030-g04-ml-operation-record-cache-ab-v3",
+        "schema": "cmpct-v030-g04-ml-operation-record-cache-ab-v4",
+        "source_commit": _source_commit(),
         "target": "neutral_hostile_v1/09_ml_artifacts",
         "binary_sha256": binary_sha256,
         "shipping_build": built,
@@ -172,6 +179,7 @@ def main() -> None:
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8")
     print(json.dumps({
+        "source_commit": result["source_commit"],
         "binary_sha256": result["binary_sha256"],
         "medians_s": result["medians_s"],
         "verify_improvement_fraction": result["verify_improvement_fraction"],
