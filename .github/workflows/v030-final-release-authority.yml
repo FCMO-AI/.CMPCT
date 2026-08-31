@@ -1,5 +1,7 @@
 name: CMPCT v0.30 final release authority
 # ci-lane: release
+# ci-cancel-policy: preserve-running-exact-receipt
+# ci-pr-scope: latest-head-commit-gate
 
 on:
   pull_request:
@@ -27,14 +29,46 @@ permissions:
 
 concurrency:
   group: cmpct-v030-final-release-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 env:
   PYTHONPATH: ${{ github.workspace }}
   EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
 
 jobs:
+  latest-head-impact:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      run_release: ${{ steps.scope.outputs.run_release }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 2
+      - name: Bind exact head and classify final-release impact
+        id: scope
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            echo 'run_release=true' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          git diff-tree --no-commit-id --name-only -r HEAD > /tmp/latest-head-files.txt
+          cat /tmp/latest-head-files.txt
+          if grep -Eq '^(experiments/entropygraph_v030_(release_product|canonical_final|canonical_final_impl|profile_isolation)\.py|benchmarks/v030_(release_ablation_(product|canonical)|release_performance_product|release_selective_read_(canonical|product)|perf_worker_canonical|external_competitors_canonical)\.py|tests/test_v030_(canonical_final|profile_isolation)\.py|\.github/workflows/v030-final-release-authority\.yml)$' /tmp/latest-head-files.txt; then
+            echo 'run_release=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'run_release=false' >> "$GITHUB_OUTPUT"
+            echo 'Accumulated PR paths matched, but newest exact commit cannot affect final-release authority.'
+          fi
+
   contracts:
+    needs: latest-head-impact
+    if: needs.latest-head-impact.outputs.run_release == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 25
     steps:
@@ -47,10 +81,12 @@ jobs:
         with:
           python-version: '3.11'
           cache: pip
-      - name: Install deterministic dependencies
+      - name: Install deterministic dependencies from canonical Ubuntu feed
         run: |
-          sudo apt-get update
-          sudo apt-get install -y zstd gcc
+          set -euo pipefail
+          test -f /etc/apt/sources.list.d/ubuntu.sources
+          sudo apt-get -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" -o Dir::Etc::sourceparts="-" update
+          sudo apt-get -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" -o Dir::Etc::sourceparts="-" install -y zstd gcc
           python -m pip install --upgrade pip
           python -m pip install -e '.[test]'
       - name: Compile the promoted product/evidence surface
@@ -93,10 +129,12 @@ jobs:
         with:
           python-version: '3.11'
           cache: pip
-      - name: Install corpus dependencies
+      - name: Install corpus dependencies from canonical Ubuntu feed
         run: |
-          sudo apt-get update
-          sudo apt-get install -y zstd gcc ffmpeg libsndfile1
+          set -euo pipefail
+          test -f /etc/apt/sources.list.d/ubuntu.sources
+          sudo apt-get -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" -o Dir::Etc::sourceparts="-" update
+          sudo apt-get -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" -o Dir::Etc::sourceparts="-" install -y zstd gcc ffmpeg libsndfile1
           python -m pip install --upgrade pip
           python -m pip install -e '.[audio,test]'
           python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
@@ -154,10 +192,12 @@ jobs:
         with:
           python-version: '3.11'
           cache: pip
-      - name: Install runtime dependencies
+      - name: Install runtime dependencies from canonical Ubuntu feed
         run: |
-          sudo apt-get update
-          sudo apt-get install -y zstd gcc ffmpeg libsndfile1
+          set -euo pipefail
+          test -f /etc/apt/sources.list.d/ubuntu.sources
+          sudo apt-get -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" -o Dir::Etc::sourceparts="-" update
+          sudo apt-get -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" -o Dir::Etc::sourceparts="-" install -y zstd gcc ffmpeg libsndfile1
           python -m pip install --upgrade pip
           python -m pip install -e '.[audio,test]'
           python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
@@ -224,10 +264,12 @@ jobs:
         with:
           python-version: '3.11'
           cache: pip
-      - name: Install CMPCT and external compressors
+      - name: Install CMPCT and external compressors from canonical Ubuntu feed
         run: |
-          sudo apt-get update
-          sudo apt-get install -y zstd p7zip-full zpaq gcc ffmpeg libsndfile1
+          set -euo pipefail
+          test -f /etc/apt/sources.list.d/ubuntu.sources
+          sudo apt-get -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" -o Dir::Etc::sourceparts="-" update
+          sudo apt-get -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" -o Dir::Etc::sourceparts="-" install -y zstd p7zip-full zpaq gcc ffmpeg libsndfile1
           python -m pip install --upgrade pip
           python -m pip install -e '.[audio,test]'
           python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
@@ -264,3 +306,5 @@ jobs:
 # framing never regresses the genuine r24 product. Conflating them would make product metadata appear free.
 # The isolated wrapper, preserved implementation body and isolation loader are all release-critical triggers;
 # changing any one can alter canonical profile dispatch even when the public wrapper filename itself is unchanged.
+# Exact final-release receipts are preserved once running; unrelated long-PR synchronizations cheaply exit through
+# the newest-commit gate rather than destroying hours of exact evidence.
