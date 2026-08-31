@@ -1,4 +1,6 @@
 # ci-lane: release
+# ci-cancel-policy: preserve-running-exact-receipt
+# ci-pr-scope: latest-head-commit-gate
 name: CMPCT v0.30 authoritative PR gates
 
 on:
@@ -21,14 +23,46 @@ permissions:
 
 concurrency:
   group: cmpct-v030-authoritative-pr-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 env:
   PYTHONPATH: ${{ github.workspace }}
   EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
 
 jobs:
+  latest-head-impact:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      run_release: ${{ steps.scope.outputs.run_release }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 2
+      - name: Bind exact head and classify authoritative PR impact
+        id: scope
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            echo 'run_release=true' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          git diff-tree --no-commit-id --name-only -r HEAD > /tmp/latest-head-files.txt
+          cat /tmp/latest-head-files.txt
+          if grep -Eq '^(experiments/entropygraph_v030_.*\.py|experiments/entropygraph_v029_parallel_portfolio\.py|tests/test_v030_.*\.py|tests/test_v029_parallel_portfolio\.py|benchmarks/v030_(shared_portfolio_rehab|release_generalization_authoritative|release_performance_v2)\.py|\.github/workflows/v030-authoritative-pr-gates\.yml)$' /tmp/latest-head-files.txt; then
+            echo 'run_release=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'run_release=false' >> "$GITHUB_OUTPUT"
+            echo 'Accumulated PR paths matched, but newest exact commit does not affect authoritative PR evidence.'
+          fi
+
   reader-fuzz:
+    needs: latest-head-impact
+    if: needs.latest-head-impact.outputs.run_release == 'true'
     name: reader-fuzz
     runs-on: ubuntu-latest
     timeout-minutes: 60
@@ -42,10 +76,12 @@ jobs:
         with:
           python-version: '3.11'
           cache: pip
-      - name: Install dependencies
+      - name: Install dependencies from canonical Ubuntu feed
         run: |
-          sudo apt-get update
-          sudo apt-get install -y zstd gcc
+          set -euo pipefail
+          test -f /etc/apt/sources.list.d/ubuntu.sources
+          sudo apt-get -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" -o Dir::Etc::sourceparts="-" update
+          sudo apt-get -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" -o Dir::Etc::sourceparts="-" install -y zstd gcc
           python -m pip install --upgrade pip
           python -m pip install -e '.[test]'
       - name: Compile promoted reader surface
@@ -71,6 +107,8 @@ jobs:
         run: python tools/check_public_surface.py
 
   shared-rehab:
+    needs: latest-head-impact
+    if: needs.latest-head-impact.outputs.run_release == 'true'
     name: shared-rehab
     runs-on: ubuntu-latest
     timeout-minutes: 210
@@ -84,10 +122,12 @@ jobs:
         with:
           python-version: '3.11'
           cache: pip
-      - name: Install workload dependencies
+      - name: Install workload dependencies from canonical Ubuntu feed
         run: |
-          sudo apt-get update
-          sudo apt-get install -y zstd gcc
+          set -euo pipefail
+          test -f /etc/apt/sources.list.d/ubuntu.sources
+          sudo apt-get -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" -o Dir::Etc::sourceparts="-" update
+          sudo apt-get -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" -o Dir::Etc::sourceparts="-" install -y zstd gcc
           python -m pip install --upgrade pip
           python -m pip install -e '.[test]'
           python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
@@ -132,6 +172,8 @@ jobs:
           retention-days: 90
 
   generalization:
+    needs: latest-head-impact
+    if: needs.latest-head-impact.outputs.run_release == 'true'
     name: generalization
     runs-on: ubuntu-latest
     timeout-minutes: 330
@@ -145,10 +187,12 @@ jobs:
         with:
           python-version: '3.11'
           cache: pip
-      - name: Install corpus dependencies
+      - name: Install corpus dependencies from canonical Ubuntu feed
         run: |
-          sudo apt-get update
-          sudo apt-get install -y zstd gcc ffmpeg
+          set -euo pipefail
+          test -f /etc/apt/sources.list.d/ubuntu.sources
+          sudo apt-get -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" -o Dir::Etc::sourceparts="-" update
+          sudo apt-get -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" -o Dir::Etc::sourceparts="-" install -y zstd gcc ffmpeg
           python -m pip install --upgrade pip
           python -m pip install -e '.[test,audio]'
           python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
@@ -195,6 +239,8 @@ jobs:
           retention-days: 90
 
   runtime:
+    needs: latest-head-impact
+    if: needs.latest-head-impact.outputs.run_release == 'true'
     name: runtime
     runs-on: ubuntu-latest
     timeout-minutes: 390
@@ -208,10 +254,12 @@ jobs:
         with:
           python-version: '3.11'
           cache: pip
-      - name: Install runtime benchmark dependencies
+      - name: Install runtime benchmark dependencies from canonical Ubuntu feed
         run: |
-          sudo apt-get update
-          sudo apt-get install -y zstd gcc ffmpeg
+          set -euo pipefail
+          test -f /etc/apt/sources.list.d/ubuntu.sources
+          sudo apt-get -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" -o Dir::Etc::sourceparts="-" update
+          sudo apt-get -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" -o Dir::Etc::sourceparts="-" install -y zstd gcc ffmpeg
           python -m pip install --upgrade pip
           python -m pip install -e '.[test,audio]'
           python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
@@ -269,4 +317,5 @@ jobs:
 # The generalization job remains historical mechanism-causality evidence. Runtime is bound to the promoted
 # canonical product and the exact same frozen ratio/RSS thresholds, with correctness tree scans outside the codec
 # operation timer. A red product runtime remains a release blocker, and the PR remains merge-locked until the full
-# evidence ledger closes.
+# evidence ledger closes. Exact receipts are preserved once running; unrelated workflow/docs/research-only newest
+# commits cheaply skip the release jobs instead of cancelling hours of exact evidence.
