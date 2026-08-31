@@ -107,10 +107,11 @@ jobs:
           import json, os
           from pathlib import Path
           d=json.loads(Path('benchmark-artifacts/v030-r25-manifest-canonical-candidate.json').read_text())
-          assert d['schema']=='cmpct-v030-r25-manifest-canonical-candidate-gate-v1'
+          assert d['schema']=='cmpct-v030-r25-manifest-canonical-candidate-gate-v2'
           assert d['source_commit']==os.environ['EVIDENCE_HEAD']
           assert d['release_credit'] is False
           assert d['shipping_module_changed'] is False
+          assert d['candidate_uses_process_global_mutation'] is False
           assert d['strictly_smaller_than_legacy_r25'] is True
           assert d['complete_artifact_saving_bytes'] > 0
           assert d['candidate_strong_verify']['ok'] is True
@@ -141,7 +142,8 @@ jobs:
           if-no-files-found: error
           retention-days: 90
 
-# S6/D5 convergence lane.  A green result proves the already-strict implicit-v4 mechanism
-# survives the real canonical writer/reader seam while shipping semantics remain unchanged.
-# It still earns zero release credit; promotion must be followed by focused hostile/recovery,
-# native, Android, all-15 no-regression and exact external authority on the new fingerprint.
+# S6/D5 convergence lane. A green result proves the already-strict implicit-v4 mechanism
+# survives direct canonical writer/reader primitives without process-global mutation while
+# shipping semantics remain unchanged. It still earns zero release credit; promotion must
+# be followed by focused hostile/recovery, native, Android, all-15 no-regression and exact
+# external authority on the new fingerprint.
