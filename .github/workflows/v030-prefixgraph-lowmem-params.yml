@@ -1,24 +1,12 @@
 # ci-lane: deep
+# ci-auto-policy: retired-manual-only
 name: CMPCT v0.30 PrefixGraph low-memory parameter frontier
 
 on:
-  push:
-    branches: [agent/v030-authoritative-integration]
-    paths:
-      - 'experiments/entropygraph_v030_prefixgraph.py'
-      - 'experiments/entropygraph_v030_prefixgraph_parallel.py'
-      - 'benchmarks/v030_release_performance.py'
-      - 'benchmarks/v030_prefixgraph_lowmem_params_worker.py'
-      - 'benchmarks/v030_prefixgraph_lowmem_params_oracle.py'
-      - '.github/workflows/v030-prefixgraph-lowmem-params.yml'
   workflow_dispatch:
 
 permissions:
   contents: read
-
-concurrency:
-  group: cmpct-v030-prefixgraph-lowmem-params-${{ github.ref }}
-  cancel-in-progress: true
 
 env:
   PYTHONPATH: ${{ github.workspace }}
@@ -96,5 +84,6 @@ jobs:
           if-no-files-found: error
           retention-days: 90
 
-# Research only. Candidate prefix frames may differ, but the job cannot modify product source or earn release credit.
-# A Pareto signal must still cross generic productization and every exact 15-workload/runtime/platform authority.
+# Terminal negative retained for manual reproduction. Exact two-round evidence found chain-log changes save <1% RSS
+# and hash-log reductions increase RSS roughly 42-45%, so this parameter family cannot close Shifted's release gap.
+# Automatic work has moved to direct CCtx attribution instead of re-running a falsified knob sweep.
