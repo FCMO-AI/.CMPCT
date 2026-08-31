@@ -1,8 +1,24 @@
 # ci-lane: deep
+# ci-cancel-policy: preserve-running-exact-receipt
 # ci-pr-scope: latest-head-commit-gate
 name: CMPCT v0.30 logs inverse profile productization
 
 on:
+  push:
+    branches: [agent/v030-authoritative-integration]
+    paths:
+      - 'experiments/entropygraph_v030_logs_inverse_profile.py'
+      - 'experiments/entropygraph_v030_logs_inverse_profile_v2.py'
+      - 'experiments/entropygraph_v030_logs_inverse_profile_v3.py'
+      - 'experiments/entropygraph_v030_product_fs.py'
+      - 'benchmarks/v030_logs_inverse_profile_productization.py'
+      - 'benchmarks/v030_logs_inverse_profile_productization_v2.py'
+      - 'benchmarks/v030_logs_inverse_profile_productization_v3.py'
+      - 'benchmarks/v030_logs_inverse_edge_oracle.py'
+      - 'benchmarks/v030_external_competitors.py'
+      - 'benchmarks/v030_release_generalization.py'
+      - 'tests/test_v030_logs_inverse_profile_v3.py'
+      - '.github/workflows/v030-logs-inverse-profile-productization.yml'
   pull_request:
     branches: [main]
     paths:
@@ -25,7 +41,7 @@ permissions:
 
 concurrency:
   group: cmpct-v030-logs-inverse-profile-product-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 env:
   PYTHONPATH: ${{ github.workspace }}
@@ -114,7 +130,7 @@ jobs:
         if: always()
         run: |
           python - <<'PY'
-          import json
+          import json, os
           from pathlib import Path
           p2=Path('benchmark-artifacts/v030-logs-profile-product-v2.json')
           p3=Path('benchmark-artifacts/v030-logs-profile-product-v3.json')
@@ -125,6 +141,7 @@ jobs:
           assert v2['schema']=='cmpct-v030-logs-inverse-profile-productization-v2'
           assert v2['gate']['passed'] is True
           assert d['schema']=='cmpct-v030-logs-inverse-profile-productization-v3'
+          assert d['source_commit']==os.environ['EVIDENCE_HEAD']
           assert d['canonical_filesystem_manifest'] is True
           assert d['accepted_v029_bytes']==3550609
           c=d['candidate']; g=d['gate']
