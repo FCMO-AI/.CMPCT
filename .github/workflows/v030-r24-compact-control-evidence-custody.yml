@@ -1,22 +1,16 @@
 # ci-lane: deep
+# ci-auto-policy: retired-manual-only
 name: CMPCT v0.30 compact-control evidence custody
 
 on:
-  pull_request:
-    paths:
-      - 'benchmarks/v030_r24_compact_control_terminal_admission.py'
-      - 'experiments/entropygraph_v030_release_product.py'
-      - 'experiments/entropygraph_v029_r24_compact_control.py'
-      - '.github/workflows/v030-r24-compact-control-evidence-custody.yml'
-      - '.github/workflows/v030-r24-compact-control-terminal-admission.yml'
   workflow_dispatch:
 
 permissions:
   contents: read
 
-concurrency:
-  group: cmpct-v030-cc-evidence-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
+env:
+  PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.sha }}
 
 jobs:
   all15-evidence:
@@ -25,44 +19,35 @@ jobs:
     steps:
       - uses: actions/checkout@v6
         with:
-          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          ref: ${{ env.EVIDENCE_HEAD }}
           clean: true
-
       - name: Bind exact candidate
         id: candidate
         shell: bash
         run: |
           set -euo pipefail
-          expected='${{ github.event.pull_request.head.sha || github.sha }}'
           actual="$(git rev-parse HEAD)"
-          test "$actual" = "$expected"
+          test "$actual" = "$EVIDENCE_HEAD"
           echo "sha=$actual" >> "$GITHUB_OUTPUT"
-
       - uses: actions/setup-python@v6
         with:
           python-version: '3.11'
           cache: pip
-
-      - name: Install benchmark dependencies
+      - name: Install benchmark dependencies from canonical Ubuntu feed
         run: |
-          sudo apt-get update
-          # Keep this custody lane on the same deterministic-corpus dependency
-          # boundary as the authoritative all-15 admission workflow. Media fixture
-          # generation needs ffmpeg/soundfile and native probes may compile helpers;
-          # none of those costs are hidden from the benchmark/release evidence.
-          sudo apt-get install -y zstd gcc ffmpeg
+          set -euo pipefail
+          test -f /etc/apt/sources.list.d/ubuntu.sources
+          sudo apt-get -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" -o Dir::Etc::sourceparts="-" update
+          sudo apt-get -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" -o Dir::Etc::sourceparts="-" install -y zstd gcc ffmpeg
           python -m pip install --upgrade pip
           python -m pip install -e '.[test]' soundfile
-
       - name: Compile exact all-15 admission owner
         run: python -m py_compile benchmarks/v030_r24_compact_control_terminal_admission.py
-
       - name: Run exact all-15 structural admission proof
         run: |
           python -m benchmarks.v030_r24_compact_control_terminal_admission \
             --work-root "$RUNNER_TEMP/v030-cc-terminal" \
             --output "$RUNNER_TEMP/v030-cc-terminal.json"
-
       - name: Bind receipt to exact candidate and preserve negative evidence
         env:
           CANDIDATE_SHA: ${{ steps.candidate.outputs.sha }}
@@ -72,8 +57,6 @@ jobs:
           from pathlib import Path
           src=Path(os.environ['RUNNER_TEMP'])/'v030-cc-terminal.json'
           data=json.loads(src.read_text())
-          # This lane deliberately does not assert product promotion. A legitimate
-          # locality/admission rejection must still leave the complete all-15 receipt.
           envelope={
               'schema':'cmpct-v030-compact-control-evidence-custody-v1',
               'candidate_sha':os.environ['CANDIDATE_SHA'],
@@ -84,19 +67,11 @@ jobs:
           out=Path('benchmark-artifacts/v030-compact-control-evidence-custody.json')
           out.parent.mkdir(parents=True, exist_ok=True)
           out.write_text(json.dumps(envelope, indent=2)+'\n')
-          print(json.dumps({
-              'candidate_sha':envelope['candidate_sha'],
-              'all15_schema':data.get('schema'),
-              'all15_gate':data.get('gate'),
-          }, indent=2))
           PY
-
       - name: Public-surface guard
         run: python tools/check_public_surface.py
-
       - name: CI topology self-check
         run: python tools/check_ci_topology.py .github/workflows/v030-r24-compact-control-evidence-custody.yml
-
       - name: Upload exact all-15 receipt
         uses: actions/upload-artifact@v6
         with:
@@ -104,3 +79,7 @@ jobs:
           path: benchmark-artifacts/v030-compact-control-evidence-custody.json
           if-no-files-found: error
           retention-days: 90
+
+# Historical custody lane retained for manual reproduction. It grants zero release credit and wraps the same
+# compact-control terminal evidence whose current shipping selector is explicitly retired. Automatic replay on the
+# accumulated integration PR cannot change release authority and is therefore removed from runner competition.
