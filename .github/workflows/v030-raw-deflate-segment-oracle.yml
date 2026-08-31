@@ -1,25 +1,16 @@
 # ci-lane: deep
+# ci-auto-policy: retired-manual-only
 name: CMPCT v0.30 raw DEFLATE segment oracle
 
 on:
-  pull_request:
-    branches: [main]
-    paths:
-      - 'benchmarks/v030_raw_deflate_segment_oracle.py'
-      - 'benchmarks/resemblance_hostile_corpus_v1.py'
-      - 'benchmarks/v030_external_competitors.py'
-      - '.github/workflows/v030-raw-deflate-segment-oracle.yml'
   workflow_dispatch:
 
 permissions:
   contents: read
 
-concurrency:
-  group: cmpct-v030-raw-deflate-segment-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
-
 env:
   PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.sha }}
 
 jobs:
   oracle:
@@ -28,24 +19,25 @@ jobs:
     steps:
       - uses: actions/checkout@v6
         with:
-          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          ref: ${{ env.EVIDENCE_HEAD }}
       - name: Bind exact candidate
         id: candidate
         shell: bash
         run: |
           set -euo pipefail
-          expected='${{ github.event.pull_request.head.sha || github.sha }}'
           actual="$(git rev-parse HEAD)"
-          test "$actual" = "$expected"
+          test "$actual" = "$EVIDENCE_HEAD"
           echo "sha=$actual" >> "$GITHUB_OUTPUT"
       - uses: actions/setup-python@v6
         with:
           python-version: '3.11'
           cache: pip
-      - name: Install deterministic dependencies
+      - name: Install deterministic dependencies from canonical Ubuntu feed
         run: |
-          sudo apt-get update
-          sudo apt-get install -y zstd
+          set -euo pipefail
+          test -f /etc/apt/sources.list.d/ubuntu.sources
+          sudo apt-get -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" -o Dir::Etc::sourceparts="-" update
+          sudo apt-get -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" -o Dir::Etc::sourceparts="-" install -y zstd
           python -m pip install --upgrade pip
           python -m pip install -e '.[test]'
       - name: Compile oracle
@@ -92,3 +84,8 @@ jobs:
             benchmark-artifacts/v030-raw-deflate-segment-candidate.txt
           if-no-files-found: error
           retention-days: 90
+
+# Exact evidence at head 3fbb37eec6bb15f4259d41f845b098b85d62d5df admitted the frozen Deflate-family
+# workload and proved all 12 segmented raw-DEFLATE candidates tree-exact and locality-green, but found no candidate
+# simultaneously smaller and faster than both ZIP/Deflate and solid Zstd-19. The research family is therefore
+# terminal negative evidence for v0.30 and remains manually reproducible without consuming automatic PR capacity.
