@@ -17,6 +17,7 @@ PUSH_RE = re.compile(r"(?m)^  push:(?:\s|$)")
 RUNNER_RE = re.compile(r"(?m)^\s+runs-on:")
 CONCURRENCY_RE = re.compile(r"(?m)^concurrency:\s*$")
 CONCURRENCY_HEAD_SHA_RE = re.compile(r"(?m)^\s+group:.*github\.event\.pull_request\.head\.sha")
+CONCURRENCY_GITHUB_SHA_RE = re.compile(r"(?m)^\s+group:.*github\.sha")
 CANCEL_RE = re.compile(r"(?m)^\s+cancel-in-progress:\s*true\s*$")
 PRESERVE_EXACT_RECEIPT_RE = re.compile(r"(?m)^# ci-cancel-policy: preserve-running-exact-receipt\s*$")
 HEAD_CHANGE_GATE_RE = re.compile(r"(?m)^# ci-pr-scope: latest-head-commit-gate\s*$")
@@ -38,18 +39,27 @@ def _has_exact_head_commit_scope(text: str) -> bool:
 
 
 def _preserved_receipt_is_exact(text: str, lane: str | None) -> bool:
-    # Deep research A/Bs and release authorities can both be multi-hour exact-head receipts.  The latter
-    # are especially expensive to destroy on an unrelated synchronization of a long-lived integration PR.
+    # Deep research A/Bs and release authorities can both be multi-hour exact-head receipts. GitHub concurrency
+    # permits only one pending run per group, so preserving a running receipt is not enough: the scheduling group
+    # must also contain the exact evidence SHA or a newer run can evict the queued receipt before it starts.
     if not PRESERVE_EXACT_RECEIPT_RE.search(text) or lane not in {"deep", "release"}:
         return False
     scoped = bool(PATH_SCOPE_RE.search(text) or _has_exact_head_commit_scope(text))
     if not scoped or not CONCURRENCY_RE.search(text) or not EXACT_HEAD_CHECKOUT_RE.search(text):
         return False
-    if PULL_REQUEST_RE.search(text) and PR_EXACT_HEAD_BINDING_RE.search(text):
-        return True
-    if PUSH_RE.search(text) and BRANCH_SCOPE_RE.search(text) and PUSH_EXACT_HEAD_BINDING_RE.search(text):
-        return True
-    return False
+    if PULL_REQUEST_RE.search(text):
+        if not PR_EXACT_HEAD_BINDING_RE.search(text) or not CONCURRENCY_HEAD_SHA_RE.search(text):
+            return False
+    if PUSH_RE.search(text):
+        if not BRANCH_SCOPE_RE.search(text):
+            return False
+        # A workflow supporting both PR and push may use `pull_request.head.sha || github.sha`; pure push lanes
+        # normally use github.sha directly. In either case the concurrency group must include github.sha.
+        if not CONCURRENCY_GITHUB_SHA_RE.search(text):
+            return False
+        if not (PUSH_EXACT_HEAD_BINDING_RE.search(text) or PR_EXACT_HEAD_BINDING_RE.search(text)):
+            return False
+    return bool(PULL_REQUEST_RE.search(text) or PUSH_RE.search(text))
 
 
 def validate(path: Path) -> list[str]:
@@ -87,8 +97,8 @@ def validate(path: Path) -> list[str]:
             )
         if not CANCEL_RE.search(text) and not _preserved_receipt_is_exact(text, lane):
             errors.append(
-                "automatic runner workflow lacks 'cancel-in-progress: true' or the narrow "
-                "deep/release exact-head preserved-receipt policy"
+                "automatic runner workflow lacks 'cancel-in-progress: true' or the narrow deep/release exact-head "
+                "preserved-receipt policy with exact-SHA pending-run custody"
             )
 
     if consumes_runner and PULL_REQUEST_RE.search(text):
@@ -106,17 +116,6 @@ def validate(path: Path) -> list[str]:
 
     if consumes_runner and PUSH_RE.search(text) and not BRANCH_SCOPE_RE.search(text):
         errors.append("automatic push workflow must scope branches; bare feature-branch push duplicates PR work")
-
-    # GitHub evaluates PR `paths:` against the whole accumulated PR diff. On a long-lived integration PR that can
-    # cause a deep lane introduced hundreds of commits ago to rerun on every unrelated synchronization. Deep lanes
-    # are expensive enough that path filtering alone is therefore not acceptable for newly touched workflows: they
-    # must cheaply classify only the newest exact HEAD commit with `git diff-tree ... HEAD`, and the expensive job
-    # must depend on that classifier output. Release/publisher lanes may still use path scope when every candidate
-    # touching that release surface genuinely requires the authority. Exact candidate SHA custody remains mandatory.
-    #
-    # Very long exact-head A/Bs and release authorities may preserve a running receipt with the explicit cancellation-
-    # policy directive. PR-triggered variants bind EVIDENCE_HEAD to pull_request.head.sha; branch-push variants bind
-    # it to github.sha. This exception never applies to fast/publisher/scheduled work.
 
     return errors
 
