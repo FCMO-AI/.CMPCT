@@ -1,5 +1,6 @@
 # ci-lane: deep
 # ci-pr-scope: latest-head-commit-gate
+# ci-cancel-policy: preserve-running-exact-receipt
 name: CMPCT v0.30 v0.25 canonical FS level-1 proof
 
 on:
@@ -20,7 +21,7 @@ permissions:
 
 concurrency:
   group: cmpct-v030-v025-canonical-fs-level1-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 env:
   PYTHONPATH: ${{ github.workspace }}
@@ -102,11 +103,10 @@ jobs:
           import json
           from pathlib import Path
           d=json.loads(Path('benchmark-artifacts/v030-v025-canonical-fs-level1.json').read_text())
-          assert d['schema']=='cmpct-v030-v025-canonical-fs-level1-v1'
+          assert d['schema']=='cmpct-v030-v025-canonical-fs-level1-v2'
           assert d['targets']==['02_office_workspace','04_analytics_and_database']
-          assert d['level_cap']==1
-          assert d['rounds']==3
-          assert len(d['rows'])==2
+          assert d['level_cap']==1 and d['rounds']==3 and len(d['rows'])==2
+          by_name={row['label'].split('/')[-1]: row for row in d['rows']}
           for row in d['rows']:
               assert len(row['candidate']['raw_complete_verified_create_s'])==3
               assert len(row['comparators']['zip']['raw_create_s'])==3
@@ -119,8 +119,20 @@ jobs:
               assert row['strict']['verified_create_faster_than_zip'] is True
               assert row['strict']['verified_create_faster_than_zstd19'] is True
               assert row['strict']['four_way'] is True
+          office=by_name['02_office_workspace']
+          analytics=by_name['04_analytics_and_database']
+          assert office['accepted_v029_bytes']==5_954_026
+          assert office['no_regression_vs_v029'] is True
+          assert office['productization_prerequisite_passed'] is True
+          assert analytics['accepted_v029_bytes']==6_135_172
+          # This is deliberate negative evidence: external domination is insufficient while accepted-v0.29 regresses.
+          assert analytics['no_regression_vs_v029'] is False
+          assert analytics['saving_vs_v029_bytes'] < 0
+          assert analytics['productization_prerequisite_passed'] is False
           assert d['gate']['all_rows_preserve_four_way_after_filesystem_tax'] is True
-          assert d['gate']['passed'] is True
+          assert d['gate']['all_rows_clear_accepted_v029_floor'] is False
+          assert d['gate']['all_rows_clear_productization_prerequisites'] is False
+          assert d['gate']['measurement_passed'] is True
           PY
 
       - name: CI topology self-check
@@ -134,6 +146,7 @@ jobs:
           if-no-files-found: warn
           retention-days: 90
 
-# This lane deliberately prices canonical filesystem semantics into the already-proven fast CMPNX5 mechanism.
-# It is a productization budget proof only: CMPNX5 remains research-only until the mechanism is re-expressed in a
-# bounded canonical r25 profile and earns native/Android/recovery/locality plus the ordinary 15-workload gates.
+# The low-effort canonical-filesystem budget is an exact external four-way win on Office and Analytics, but the
+# accepted-v0.29 floor is an independent mandatory boundary. Office clears it; Analytics currently does not. This
+# lane therefore preserves the useful strict competitor result while preventing it from being misreported as a
+# productization-ready Analytics mechanism. CMPNX5 stays research-only; no selector/release threshold is weakened.
