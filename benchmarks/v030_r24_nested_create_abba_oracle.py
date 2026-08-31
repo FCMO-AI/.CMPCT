@@ -1,11 +1,11 @@
 from __future__ import annotations
 
-"""Focused r24 nested/library/create worker for same-runner ABBA reproduction.
+"""Focused r24 nested/library/create worker for same-runner causal reproduction.
 
-The mature r24 core/ZIP gate recently isolated a nested/library/create timing red. This worker measures only
-that direct-base boundary on one immutable nested corpus so we can distinguish a reproducible indirect r24
-regression from shared-runner drift without weakening the authoritative gate. Archive bytes are hashed on every
-sample and base/candidate are expected to remain byte-identical.
+The mature r24 core/ZIP gate isolated a nested/library/create timing red even though the candidate and direct
+main base currently carry byte-identical ``builder.py`` and ``codec.py``.  This worker therefore records the
+active ``Builder.scan`` owner as well as archive identity.  That distinguishes a real builder change from the
+candidate package's release-locality wrapper or ordinary runner drift without weakening the authoritative gate.
 """
 
 import argparse
@@ -19,11 +19,20 @@ from cmpct.builder import Builder
 import cmpct.builder as builder_module
 
 
+def _callable_owner(fn) -> dict[str, str]:
+    return {
+        "module": str(getattr(fn, "__module__", "")),
+        "name": str(getattr(fn, "__name__", type(fn).__name__)),
+        "qualname": str(getattr(fn, "__qualname__", "")),
+    }
+
+
 def run(src: Path, archive: Path, *, reps: int) -> dict:
     if reps < 3:
         raise ValueError("at least three repetitions are required")
     samples: list[float] = []
     identities: list[tuple[int, str]] = []
+    scan_owner = _callable_owner(Builder.scan)
     for _ in range(reps):
         archive.unlink(missing_ok=True)
         t0 = time.perf_counter_ns()
@@ -34,13 +43,14 @@ def run(src: Path, archive: Path, *, reps: int) -> dict:
     if len(set(identities)) != 1:
         raise RuntimeError("r24 nested create was not byte-deterministic within one worker arm")
     return {
-        "schema": "cmpct-v030-r24-nested-create-worker-v1",
+        "schema": "cmpct-v030-r24-nested-create-worker-v2",
         "repetitions": reps,
         "samples_s": samples,
         "median_s": statistics.median(samples),
         "archive_bytes": identities[0][0],
         "archive_sha256": identities[0][1],
         "builder_module": str(Path(builder_module.__file__).resolve()),
+        "builder_scan_owner": scan_owner,
     }
 
 
