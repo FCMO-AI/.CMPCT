@@ -85,11 +85,14 @@ jobs:
       - name: Compile exact ownership oracle
         run: python -m py_compile benchmarks/v030_shifted_candidate_overlap_rss_oracle.py
       - name: Measure G0-G4, PrefixGraph and unchanged overlap in fresh processes
+        shell: bash
         run: |
+          set -euo pipefail
           mkdir -p benchmark-artifacts
           python benchmarks/v030_shifted_candidate_overlap_rss_oracle.py \
             --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-shifted-candidate-overlap-rss-work" \
-            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-shifted-candidate-overlap-rss.json"
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-shifted-candidate-overlap-rss.json" \
+            2>&1 | tee "$GITHUB_WORKSPACE/benchmark-artifacts/v030-shifted-candidate-overlap-console.txt"
       - name: Enforce exact diagnostic contract
         run: |
           python - <<'PY'
@@ -126,8 +129,10 @@ jobs:
         if: always()
         with:
           name: v030-shifted-candidate-overlap-rss-${{ env.EVIDENCE_HEAD }}
-          path: benchmark-artifacts/v030-shifted-candidate-overlap-rss.json
-          if-no-files-found: error
+          path: |
+            benchmark-artifacts/v030-shifted-candidate-overlap-rss.json
+            benchmark-artifacts/v030-shifted-candidate-overlap-console.txt
+          if-no-files-found: warn
           retention-days: 90
 
 # Diagnostic only. A result that attributes the peak to candidate-family overlap can justify a separately tested
