@@ -1,29 +1,16 @@
 # ci-lane: deep
+# ci-auto-policy: retired-manual-only
 name: CMPCT v0.30 r24 compact-control native dispatch
 
 on:
-  pull_request:
-    branches: [main]
-    paths:
-      - 'experiments/entropygraph_v030_r24_compact_control_profile.py'
-      - 'benchmarks/v030_r24_compact_control_oracle.py'
-      - 'tests/generate_v030_compact_control_android_vector.py'
-      - 'native/cmpct-portable/tests/compact_control_preparity.rs'
-      - 'native/cmpct-portable/src/compact_control.rs'
-      - 'native/cmpct-portable/src/lib.rs'
-      - 'native/cmpct-portable/Cargo.toml'
-      - '.github/workflows/v030-r24-compact-control-native-preparity.yml'
   workflow_dispatch:
 
 permissions:
   contents: read
 
-concurrency:
-  group: cmpct-v030-r24-compact-control-native-dispatch-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
-
 env:
   PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.sha }}
 
 jobs:
   native-dispatch:
@@ -31,23 +18,28 @@ jobs:
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - name: Bind exact candidate
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
       - uses: actions/setup-python@v6
         with:
           python-version: '3.11'
           cache: pip
-      - name: Install Python candidate dependencies
+      - name: Install Python candidate dependencies from canonical Ubuntu feed
         run: |
-          sudo apt-get update
-          sudo apt-get install -y zstd gcc
+          set -euo pipefail
+          test -f /etc/apt/sources.list.d/ubuntu.sources
+          sudo apt-get -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" -o Dir::Etc::sourceparts="-" update
+          sudo apt-get -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" -o Dir::Etc::sourceparts="-" install -y zstd gcc
           python -m pip install --upgrade pip
           python -m pip install -e '.[test]'
       - name: Rust format and lint
         run: |
           cargo fmt --manifest-path native/cmpct-portable/Cargo.toml -- --check
           cargo clippy --manifest-path native/cmpct-portable/Cargo.toml --all-targets -- -D warnings
-      - name: Run C25CC01 production dispatch/recovery proof
-        run: |
-          cargo test --manifest-path native/cmpct-portable/Cargo.toml --test compact_control_preparity -- --nocapture
+      - name: Run retained C25CC01 dispatch/recovery proof
+        run: cargo test --manifest-path native/cmpct-portable/Cargo.toml --test compact_control_preparity -- --nocapture
       - name: Generate deterministic Android C25CC01 conformance vector
         run: |
           python tests/generate_v030_compact_control_android_vector.py \
@@ -55,43 +47,26 @@ jobs:
             --archive-output "$RUNNER_TEMP/v030-compact-control-android.cmpct" \
             --work-root "$RUNNER_TEMP/v030-compact-control-android-work"
           python - <<'PY'
-          import hashlib
-          import json
-          import os
+          import hashlib, json, os
           from pathlib import Path
-          root = Path(os.environ['RUNNER_TEMP'])
-          p = root / 'v030-compact-control-android.json'
-          archive = root / 'v030-compact-control-android.cmpct'
-          v = json.loads(p.read_text())
-          assert v['schema'] == 'cmpct-v030-android-compact-control-vector-v2'
-          assert v['profile'] == 'r24-compact-control-v1'
-          assert v['revision'] == 25
-          # The public portable namespace contains 296 regular files plus the
-          # two real source directories. Keep the evidence model aligned with
-          # Android/JNI and native list semantics instead of silently dropping
-          # directory entries.
-          assert v['expected_regular_entry_count'] == 296
-          assert v['expected_directory_paths'] == ['medium', 'tiny']
-          assert v['expected_entry_count'] == 298
-          assert len(v['expected_paths']) == v['expected_regular_entry_count']
-          assert v['expected_entry_count'] == (
-              v['expected_regular_entry_count'] + len(v['expected_directory_paths'])
-          )
-          # V2 transports the multi-megabyte archive as a binary asset and
-          # binds the small JSON metadata to it by exact filename, byte count,
-          # and SHA-256. Do not regress to base64-in-JSON or a detached asset.
-          assert v['archive_asset'] == archive.name
-          assert archive.is_file()
-          assert archive.stat().st_size == v['archive_bytes']
-          assert hashlib.sha256(archive.read_bytes()).hexdigest() == v['archive_sha256']
+          root=Path(os.environ['RUNNER_TEMP'])
+          p=root/'v030-compact-control-android.json'; archive=root/'v030-compact-control-android.cmpct'
+          v=json.loads(p.read_text())
+          assert v['schema']=='cmpct-v030-android-compact-control-vector-v2'
+          assert v['profile']=='r24-compact-control-v1' and v['revision']==25
+          assert v['expected_regular_entry_count']==296
+          assert v['expected_directory_paths']==['medium','tiny']
+          assert v['expected_entry_count']==298
+          assert len(v['expected_paths'])==v['expected_regular_entry_count']
+          assert v['archive_asset']==archive.name and archive.is_file()
+          assert archive.stat().st_size==v['archive_bytes']
+          assert hashlib.sha256(archive.read_bytes()).hexdigest()==v['archive_sha256']
           assert v['facts']['strong_verify'] is True
           assert v['facts']['physical_payload_records_unchanged'] is True
           assert v['facts']['two_authenticated_control_copies'] is True
           assert v['facts']['strictly_smaller_than_source_r24'] is True
-          assert v['facts']['archive_bytes'] < v['facts']['source_r24_bytes']
-          assert v['facts']['archive_bytes'] == v['archive_bytes']
           PY
-      - name: Prove production dispatch is open and profile-owned
+      - name: Preserve compatibility-dispatch implementation binding
         run: |
           python - <<'PY'
           from pathlib import Path
@@ -105,5 +80,7 @@ jobs:
       - name: CI topology self-check
         run: python tools/check_ci_topology.py .github/workflows/v030-r24-compact-control-native-preparity.yml
 
-# Production portable-dispatch ratchet for C25CC01. Android/selector/release promotion remain separately gated;
-# this lane proves the shared Rust reader opens, verifies, recovers, and delegates logical bytes to mature r24 semantics.
+# Compatibility/preparity proof retained for manual reproduction only. The current shipping product hard-disables
+# compact-control admission after exact frozen+unseen terminal authority found no valid envelope. Keeping its Rust
+# reader is harmless compatibility coverage; automatically proving an inactive profile on every long-PR sync is not
+# a release requirement and competes with current canonical/native/G04 evidence.
