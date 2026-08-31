@@ -9,12 +9,26 @@ on:
     paths:
       - 'benchmarks/patches/v030_r25_manifest_canonical_integration.patch'
       - 'benchmarks/v030_r25_manifest_canonical_integration_oracle.py'
+      - 'experiments/entropygraph_v030_canonical_final_impl.py'
+      - 'experiments/entropygraph_v030_r25_manifest_admission.py'
+      - 'experiments/entropygraph_v030_fs_implicit_v4.py'
+      - 'experiments/entropygraph_v030_product_fs.py'
+      - 'tests/test_v030_r25_manifest_admission.py'
+      - 'tests/test_v030_fs_implicit_v4.py'
+      - 'tests/test_v030_canonical_final.py'
       - '.github/workflows/v030-r25-manifest-canonical-integration.yml'
   pull_request:
     branches: [main]
     paths:
       - 'benchmarks/patches/v030_r25_manifest_canonical_integration.patch'
       - 'benchmarks/v030_r25_manifest_canonical_integration_oracle.py'
+      - 'experiments/entropygraph_v030_canonical_final_impl.py'
+      - 'experiments/entropygraph_v030_r25_manifest_admission.py'
+      - 'experiments/entropygraph_v030_fs_implicit_v4.py'
+      - 'experiments/entropygraph_v030_product_fs.py'
+      - 'tests/test_v030_r25_manifest_admission.py'
+      - 'tests/test_v030_fs_implicit_v4.py'
+      - 'tests/test_v030_canonical_final.py'
       - '.github/workflows/v030-r25-manifest-canonical-integration.yml'
   workflow_dispatch:
 
@@ -53,7 +67,7 @@ jobs:
           fi
           git diff-tree --no-commit-id --name-only -r HEAD > /tmp/latest-head-files.txt
           cat /tmp/latest-head-files.txt
-          if grep -Eq '^(benchmarks/patches/v030_r25_manifest_canonical_integration\.patch|benchmarks/v030_r25_manifest_canonical_integration_oracle\.py|\.github/workflows/v030-r25-manifest-canonical-integration\.yml)$' /tmp/latest-head-files.txt; then
+          if grep -Eq '^(benchmarks/(patches/v030_r25_manifest_canonical_integration\.patch|v030_r25_manifest_canonical_integration_oracle\.py)|experiments/entropygraph_v030_(canonical_final_impl|r25_manifest_admission|fs_implicit_v4|product_fs)\.py|tests/test_v030_(r25_manifest_admission|fs_implicit_v4|canonical_final)\.py|\.github/workflows/v030-r25-manifest-canonical-integration\.yml)$' /tmp/latest-head-files.txt; then
             echo 'run_deep=true' >> "$GITHUB_OUTPUT"
           else
             echo 'run_deep=false' >> "$GITHUB_OUTPUT"
