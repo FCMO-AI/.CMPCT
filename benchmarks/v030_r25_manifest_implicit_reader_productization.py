@@ -3,14 +3,14 @@ from __future__ import annotations
 """Research-only reader/verification productization gate for r25 implicit-v4 filesystem control.
 
 The size oracle proves that replacing the duplicated filesystem-v1 graph member with the already-bounded
-implicit-v4 control can materially shrink the complete r25 candidate.  This gate advances the next prerequisite:
+implicit-v4 control can materially shrink the complete r25 candidate. This gate advances the reader prerequisite:
 build the projected archive, recover regular identities from the authenticated selected content graph, expand the
 archive-resident implicit control back to exact filesystem-v1 semantics, then re-read every regular user member
-through the canonical r25 member reader with the unchanged <=8x locality law.
+through the r25 member reader with the unchanged <=8x locality law.
 
-Nothing here changes shipping grammar, selector or release authority.  The emitted receipt is bound to the
-repository HEAD that actually constructed and verified the archive so a later workflow cannot inherit stale
-research evidence from a different product fingerprint.
+The projected artifact is intentionally research-only until canonical admission is landed. Reader access in this
+proof is therefore scoped to the existing revision-25 research context; shipping fail-closed profile classification
+is not weakened. The emitted receipt is bound to the exact repository HEAD that constructed and verified it.
 """
 
 import argparse
@@ -33,10 +33,21 @@ def _source_commit() -> str:
 
 
 def _read_archive_control(archive: Path) -> tuple[bytes, dict]:
-    raw, stats = CANON._read_profile_member(archive, FS.FILESYSTEM_MANIFEST)
+    with CANON._revision25_profile_context():
+        raw, stats = CANON._read_profile_member(archive, FS.FILESYSTEM_MANIFEST)
     if float(stats["decoded_context_amplification"]) > 8.0:
         raise RuntimeError("implicit-v4 control member exceeds canonical locality ceiling")
     return raw, stats
+
+
+def _content_identities(archive: Path) -> dict[str, tuple[int, bytes]]:
+    with CANON._revision25_profile_context():
+        return CANON._profile_content_identities(archive)
+
+
+def _read_member(archive: Path, rel: str) -> tuple[bytes, dict]:
+    with CANON._revision25_profile_context():
+        return CANON._read_profile_member(archive, rel)
 
 
 def run(work_root: Path) -> dict:
@@ -59,7 +70,7 @@ def run(work_root: Path) -> dict:
     if archive_control != implicit_raw:
         raise RuntimeError("archive-resident implicit-v4 control differs from staged control bytes")
 
-    graph_identities = CANON._profile_content_identities(archive)
+    graph_identities = _content_identities(archive)
     manifest_identity = graph_identities.pop(FS.FILESYSTEM_MANIFEST, None)
     expected_manifest_identity = (len(implicit_raw), hashlib.sha256(implicit_raw).digest())
     if manifest_identity != expected_manifest_identity:
@@ -86,7 +97,7 @@ def run(work_root: Path) -> dict:
     max_amp = float(control_stats["decoded_context_amplification"])
     checked = 0
     for rel, (size, digest) in expanded["regular"].items():
-        raw, stats = CANON._read_profile_member(archive, rel)
+        raw, stats = _read_member(archive, rel)
         if len(raw) != int(size) or hashlib.sha256(raw).digest() != bytes(digest):
             raise RuntimeError(f"implicit-v4 projected archive member integrity mismatch: {rel}")
         amp = float(stats["decoded_context_amplification"])
@@ -101,7 +112,7 @@ def run(work_root: Path) -> dict:
         raise RuntimeError("implicit-v4 projected archive changes canonical user-tree identity")
 
     return {
-        "schema": "cmpct-v030-r25-manifest-implicit-reader-productization-v2",
+        "schema": "cmpct-v030-r25-manifest-implicit-reader-productization-v3",
         "source_commit": _source_commit(),
         "target": SIZE.TARGET,
         "archive_bytes": archive.stat().st_size,
@@ -118,6 +129,8 @@ def run(work_root: Path) -> dict:
         "user_tree_exact": expanded_tree == source_tree,
         "max_member_read_amplification": max_amp,
         "within_release_locality_bounds": max_amp <= 8.0,
+        "research_profile_context_only": True,
+        "shipping_profile_fail_closed_unchanged": True,
         "release_credit": False,
         "selector_change": False,
         "canonical_grammar_change": False,
