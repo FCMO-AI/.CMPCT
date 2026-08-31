@@ -97,14 +97,59 @@ jobs:
           python benchmarks/v030_shifted_cdc_store_oracle.py \
             --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-shifted-cdc-work" \
             --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-shifted-cdc.json"
-      - name: Enforce research honesty and R4 decision boundary
+      - name: Derive payload-versus-framing representation floor
         if: always()
         run: |
           test -f benchmark-artifacts/v030-shifted-cdc.json
           python - <<'PY'
           import json, os
           from pathlib import Path
+          src=Path('benchmark-artifacts/v030-shifted-cdc.json')
+          d=json.loads(src.read_text())
+          assert d['source_commit']==os.environ['EVIDENCE_HEAD']
+          zstd=int(d['comparators']['tar_zstd19_solid']['archive_bytes'])
+          rows=[]
+          for arm in d['arms']:
+              payload=int(arm['unique_payload_bytes'])
+              archive=int(arm['archive_bytes'])
+              framing=archive-payload
+              assert framing >= 0
+              rows.append({
+                  'average_chunk_bytes': int(arm['average_chunk_bytes']),
+                  'level': int(arm['level']),
+                  'archive_bytes': archive,
+                  'unique_payload_bytes': payload,
+                  'framing_control_bytes': framing,
+                  'payload_gap_vs_zstd19_bytes': payload-zstd,
+                  'archive_gap_vs_zstd19_bytes': archive-zstd,
+                  'payload_alone_beats_zstd19': payload < zstd,
+                  'complete_archive_beats_zstd19': archive < zstd,
+              })
+          best=min(rows, key=lambda r:(r['unique_payload_bytes'],r['archive_bytes'],r['average_chunk_bytes'],r['level']))
+          out={
+              'schema':'cmpct-v030-shifted-cdc-payload-floor-v1',
+              'source_commit':os.environ['EVIDENCE_HEAD'],
+              'zstd19_bytes':zstd,
+              'rows':rows,
+              'best_payload':best,
+              'decision_if_payload_floor_above_zstd19':'RETIRE_FAMILY',
+              'decision_if_payload_below_but_complete_above':'ITERATE_SAME_FAMILY',
+              'decision_if_complete_strict_size_win':'evaluate creation-time gate before PROMOTE_NEXT_PREREQUISITE',
+              'release_credit':False,
+          }
+          Path('benchmark-artifacts/v030-shifted-cdc-floor.json').write_text(json.dumps(out,indent=2)+'\n')
+          print(json.dumps(out,indent=2))
+          PY
+      - name: Enforce research honesty and R4 decision boundary
+        if: always()
+        run: |
+          test -f benchmark-artifacts/v030-shifted-cdc.json
+          test -f benchmark-artifacts/v030-shifted-cdc-floor.json
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
           d=json.loads(Path('benchmark-artifacts/v030-shifted-cdc.json').read_text())
+          f=json.loads(Path('benchmark-artifacts/v030-shifted-cdc-floor.json').read_text())
           assert d['schema']=='cmpct-v030-shifted-cdc-store-oracle-v1'
           assert d['source_commit']==os.environ['EVIDENCE_HEAD']
           assert d['diagnosis']=='D4' and d['radicality']=='R4'
@@ -122,6 +167,11 @@ jobs:
               assert a['max_member_read_amplification'] <= 8.0
               assert a['total_chunk_refs'] >= a['unique_chunks']
               assert len(a['artifact_sha256'])==64
+          assert f['schema']=='cmpct-v030-shifted-cdc-payload-floor-v1'
+          assert f['source_commit']==os.environ['EVIDENCE_HEAD']
+          assert f['zstd19_bytes']==int(d['comparators']['tar_zstd19_solid']['archive_bytes'])
+          assert len(f['rows'])==len(d['arms'])
+          assert f['release_credit'] is False
           assert d['summary']['release_credit'] is False
           PY
       - name: Upload exact R4 evidence
@@ -129,7 +179,9 @@ jobs:
         uses: actions/upload-artifact@v6
         with:
           name: v030-shifted-cdc-store-${{ env.EVIDENCE_HEAD }}
-          path: benchmark-artifacts/v030-shifted-cdc.json
+          path: |
+            benchmark-artifacts/v030-shifted-cdc.json
+            benchmark-artifacts/v030-shifted-cdc-floor.json
           if-no-files-found: error
           retention-days: 90
 
