@@ -1,4 +1,5 @@
 # ci-lane: release
+# ci-pr-scope: latest-head-commit-gate
 name: CMPCT v0.30 hostile mutation gate
 
 on:
@@ -14,24 +15,60 @@ concurrency:
   group: cmpct-v030-release-fuzz-${{ github.ref }}
   cancel-in-progress: true
 
+env:
+  EVIDENCE_HEAD: ${{ github.sha }}
+
 jobs:
+  impact:
+    runs-on: ubuntu-latest
+    outputs:
+      should_run: ${{ steps.impact.outputs.should_run }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 2
+      - id: impact
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "should_run=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          git diff-tree --no-commit-id --name-only -r HEAD > /tmp/latest-head-files.txt
+          if grep -Eq '^(src/cmpct/|experiments/entropygraph_v030_(geometry_overlay_g04|geometry_overlay_g04_publish|release|release_reader|release_reader_policy|release_candidate|release_product|release_product_base)([^/]*)\.py$|tests/test_v030_(release_reader|release_reader_policy|g04_metadata_reuse|release_fuzz)\.py$|pyproject\.toml$|\.github/workflows/v030-release-fuzz\.yml$)' /tmp/latest-head-files.txt; then
+            echo "should_run=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "should_run=false" >> "$GITHUB_OUTPUT"
+          fi
+
   release-fuzz:
+    needs: impact
+    if: needs.impact.outputs.should_run == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 45
     env:
       PYTHONPATH: ${{ github.workspace }}
     steps:
       - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - name: Bind hostile-input proof to exact candidate
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
 
       - uses: actions/setup-python@v6
         with:
           python-version: "3.11"
           cache: pip
 
-      - name: Install fuzz/test dependencies
+      - name: Install fuzz/test dependencies from Ubuntu only
         run: |
-          sudo apt-get update
-          sudo apt-get install -y zstd gcc
+          set -euo pipefail
+          test -f /etc/apt/sources.list.d/ubuntu.sources
+          sudo apt-get -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" -o Dir::Etc::sourceparts="-" update
+          sudo apt-get -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" -o Dir::Etc::sourceparts="-" install -y zstd gcc
           python -m pip install --upgrade pip
           python -m pip install -e '.[test]'
 
@@ -54,9 +91,9 @@ jobs:
       - name: Public-surface guard
         if: always()
         run: python tools/check_public_surface.py
+      - name: CI topology self-check
+        if: always()
+        run: python tools/check_ci_topology.py .github/workflows/v030-release-fuzz.yml
 
-# Footnote: deterministic mutations make failures reproducible and reviewable. This gate is independent from
-# compression evidence: malformed-input rejection cannot be traded for better bytes, and a compression win
-# cannot turn a parser failure green. The promoted G04 fast path is explicitly ratcheted here because skipping
-# duplicate healthy metadata work is allowed only while primary-only, tail-only, and both-copy corruption keep
-# the same fail-closed recovery law.
+# Hostile-input rejection remains mandatory whenever the newest exact candidate can change its parser/recovery
+# surface. Orthogonal research-only commits now skip the 45-minute lane after a cheap exact-head classifier.
