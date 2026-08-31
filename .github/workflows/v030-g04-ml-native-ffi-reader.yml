@@ -47,8 +47,22 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - name: Install deterministic ML-corpus dependencies
         run: |
-          sudo apt-get update
-          sudo apt-get install -y zstd gcc ffmpeg libsndfile1
+          set -euo pipefail
+          # Hosted images may inject third-party package feeds that can fail independently of Ubuntu. This
+          # experiment only needs Ubuntu-native packages, so bind APT to the runner's canonical Ubuntu source.
+          test -f /etc/apt/sources.list.d/ubuntu.sources
+          sudo apt-get \
+            -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" \
+            -o Dir::Etc::sourceparts="-" \
+            update
+          sudo apt-get \
+            -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" \
+            -o Dir::Etc::sourceparts="-" \
+            install -y zstd gcc ffmpeg libsndfile1
+          command -v zstd >/dev/null
+          command -v gcc >/dev/null
+          command -v ffmpeg >/dev/null
+          ldconfig -p | grep -q 'libsndfile.so.1'
           python -m pip install --upgrade pip
           python -m pip install -e '.[audio,test]'
           python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
