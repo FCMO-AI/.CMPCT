@@ -229,6 +229,7 @@ def run(work_root: Path) -> dict:
     if not zstd_result.get("available"):
         raise RuntimeError("solid zstd-19 comparator unavailable")
 
+    accepted_v029_bytes = int(accepted["accepted_v029_bytes"])
     arms = []
     for level in LEVELS:
         arm_work = work_root / f"patch-l{level}"; arm_work.mkdir()
@@ -239,7 +240,7 @@ def run(work_root: Path) -> dict:
         extract(artifact, extracted, work=decode_work)
         tree = CMPCT.treehash(extracted)
         strict = {
-            "beats_v029_size": result["archive_bytes"] < int(accepted["archive_bytes"]),
+            "beats_v029_size": result["archive_bytes"] < accepted_v029_bytes,
             "beats_zip_size": result["archive_bytes"] < int(zip_result["archive_bytes"]),
             "beats_zstd19_size": result["archive_bytes"] < int(zstd_result["archive_bytes"]),
             "beats_zip_create": result["create_s"] < float(zip_result["create_s"]),
@@ -263,7 +264,7 @@ def run(work_root: Path) -> dict:
             "release_credit": False,
         },
         "tree_sha256": expected_tree,
-        "accepted_v029_bytes": int(accepted["archive_bytes"]),
+        "accepted_v029_bytes": accepted_v029_bytes,
         "comparators": {"zip_deflate9": zip_result, "tar_zstd19_solid": zstd_result},
         "arms": arms,
         "summary": {
