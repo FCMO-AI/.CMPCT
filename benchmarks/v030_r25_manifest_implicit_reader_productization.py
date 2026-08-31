@@ -8,7 +8,9 @@ build the projected archive, recover regular identities from the authenticated s
 archive-resident implicit control back to exact filesystem-v1 semantics, then re-read every regular user member
 through the canonical r25 member reader with the unchanged <=8x locality law.
 
-Nothing here changes shipping grammar, selector or release authority.
+Nothing here changes shipping grammar, selector or release authority.  The emitted receipt is bound to the
+repository HEAD that actually constructed and verified the archive so a later workflow cannot inherit stale
+research evidence from a different product fingerprint.
 """
 
 import argparse
@@ -16,11 +18,18 @@ import hashlib
 import json
 from pathlib import Path
 import shutil
+import subprocess
 
 from benchmarks import v030_r25_manifest_derived_identity_oracle as SIZE
 from experiments import entropygraph_v030_canonical_final_impl as CANON
 from experiments import entropygraph_v030_fs_implicit_v4 as IFS4
 from experiments import entropygraph_v030_product_fs as FS
+
+ROOT = Path(__file__).resolve().parents[1]
+
+
+def _source_commit() -> str:
+    return subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip()
 
 
 def _read_archive_control(archive: Path) -> tuple[bytes, dict]:
@@ -92,7 +101,8 @@ def run(work_root: Path) -> dict:
         raise RuntimeError("implicit-v4 projected archive changes canonical user-tree identity")
 
     return {
-        "schema": "cmpct-v030-r25-manifest-implicit-reader-productization-v1",
+        "schema": "cmpct-v030-r25-manifest-implicit-reader-productization-v2",
+        "source_commit": _source_commit(),
         "target": SIZE.TARGET,
         "archive_bytes": archive.stat().st_size,
         "archive_sha256": hashlib.sha256(archive.read_bytes()).hexdigest(),
