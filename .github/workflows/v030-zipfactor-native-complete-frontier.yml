@@ -1,4 +1,5 @@
 # ci-lane: deep
+# ci-pr-scope: latest-head-commit-gate
 name: CMPCT v0.30 ZIP-factor native complete frontier
 
 on:
@@ -24,7 +25,39 @@ env:
   EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
 
 jobs:
+  latest-head-impact:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      run_deep: ${{ steps.scope.outputs.run_deep }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 2
+      - name: Bind exact head and classify only its changed files
+        id: scope
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            echo 'run_deep=true' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          git diff-tree --no-commit-id --name-only -r HEAD > /tmp/latest-head-files.txt
+          cat /tmp/latest-head-files.txt
+          if grep -Eq '^(benchmarks/v030_(zipfactor_native_complete_frontier|external_competitors)\.py|experiments/entropygraph_v030_zipfactor_compact_v3\.py|native/cmpct-portable/|\.github/workflows/v030-zipfactor-native-complete-frontier\.yml)' /tmp/latest-head-files.txt; then
+            echo 'run_deep=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'run_deep=false' >> "$GITHUB_OUTPUT"
+            echo 'Accumulated PR paths matched, but newest exact commit cannot affect ZIP-factor native complete frontier.'
+          fi
+
   complete-frontier:
+    needs: latest-head-impact
+    if: needs.latest-head-impact.outputs.run_deep == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     steps:
@@ -38,10 +71,12 @@ jobs:
           python-version: '3.11'
           cache: pip
       - uses: dtolnay/rust-toolchain@stable
-      - name: Install exact comparator dependencies
+      - name: Install exact comparator dependencies from canonical Ubuntu feed
         run: |
-          sudo apt-get update
-          sudo apt-get install -y zstd gcc
+          set -euo pipefail
+          test -f /etc/apt/sources.list.d/ubuntu.sources
+          sudo apt-get -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" -o Dir::Etc::sourceparts="-" update
+          sudo apt-get -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" -o Dir::Etc::sourceparts="-" install -y zstd gcc
           python -m pip install --upgrade pip
           python -m pip install -e '.[test]'
       - name: Compile oracle and exact v3 preparity verifier
@@ -111,5 +146,8 @@ jobs:
       - name: CI topology self-check
         run: python tools/check_ci_topology.py .github/workflows/v030-zipfactor-native-complete-frontier.yml
 
-# Research-only complete frontier. A positive result advances ZIP-factor toward recovery/platform productization;
-# it cannot by itself enable production dispatch, alter the selector, or earn v0.30 release credit.
+# Research-only complete frontier. Exact evidence currently shows the representation already wins bytes against
+# both competitors while complete build+native-verify misses ZIP creation by a narrow execution gap. A positive
+# future result advances ZIP-factor toward recovery/platform productization; it cannot by itself enable production
+# dispatch, alter the selector, or earn v0.30 release credit. Exact-newest-head admission prevents unrelated PR
+# commits from replaying this native frontier.
