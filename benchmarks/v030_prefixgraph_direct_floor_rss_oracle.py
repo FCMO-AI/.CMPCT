@@ -58,27 +58,32 @@ def run(work_root: Path) -> dict:
             archive = work_root / 'archives' / f'r{round_index}-{mode}.cmpct'
             receipt = run_worker(mode, source, archive)
             row[mode] = receipt
-            if receipt.get('worker_failed') or receipt.get('tree_sha256') != expected_tree:
+            if (
+                receipt.get('worker_failed')
+                or receipt.get('tree_sha256') != expected_tree
+                or receipt.get('strong_verify_ok') is not True
+                or receipt.get('rss_measurement_boundary') != 'build-before-strong-verify-v2'
+            ):
                 valid = False
         reps.append(row)
 
-    floor_rss = statistics.median(float(r['direct-floor']['incremental_peak_rss_kib']) for r in reps if not r['direct-floor'].get('worker_failed')) if valid else None
-    full_rss = statistics.median(float(r['full']['incremental_peak_rss_kib']) for r in reps if not r['full'].get('worker_failed')) if valid else None
-    floor_wall = statistics.median(float(r['direct-floor']['wall_s']) for r in reps if not r['direct-floor'].get('worker_failed')) if valid else None
-    full_wall = statistics.median(float(r['full']['wall_s']) for r in reps if not r['full'].get('worker_failed')) if valid else None
+    floor_rss = statistics.median(float(r['direct-floor']['incremental_build_peak_rss_kib']) for r in reps if not r['direct-floor'].get('worker_failed')) if valid else None
+    full_rss = statistics.median(float(r['full']['incremental_build_peak_rss_kib']) for r in reps if not r['full'].get('worker_failed')) if valid else None
+    floor_wall = statistics.median(float(r['direct-floor']['build_wall_s']) for r in reps if not r['direct-floor'].get('worker_failed')) if valid else None
+    full_wall = statistics.median(float(r['full']['build_wall_s']) for r in reps if not r['full'].get('worker_failed')) if valid else None
     ratio = None if not full_rss else floor_rss / full_rss
     return {
-        'schema': 'cmpct-v030-prefixgraph-direct-floor-rss-v1',
+        'schema': 'cmpct-v030-prefixgraph-direct-floor-rss-v2',
         'source_commit': source_commit(),
         'target': '/'.join(TARGET),
         'tree_sha256': expected_tree,
         'rounds': len(ORDERS),
         'repetitions': reps,
-        'direct_floor_median_incremental_peak_rss_kib': floor_rss,
-        'full_median_incremental_peak_rss_kib': full_rss,
-        'direct_floor_to_full_rss_ratio': ratio,
-        'direct_floor_median_wall_s': floor_wall,
-        'full_median_wall_s': full_wall,
+        'direct_floor_median_incremental_build_peak_rss_kib': floor_rss,
+        'full_median_incremental_build_peak_rss_kib': full_rss,
+        'direct_floor_to_full_build_rss_ratio': ratio,
+        'direct_floor_median_build_wall_s': floor_wall,
+        'full_median_build_wall_s': full_wall,
         'anchor_audition_owned_rss_signal': bool(valid and ratio is not None and ratio <= 0.65),
         'experiment_valid': valid,
         'selector_change': False,
@@ -86,6 +91,9 @@ def run(work_root: Path) -> dict:
         'contract': {
             'fresh_process_per_measurement': True,
             'same_source_tree': True,
+            'rss_sample_captured_before_strong_verify': True,
+            'strong_verify_after_measurement_is_mandatory': True,
+            'verification_rss_excluded_from_build_peak': True,
             'direct_floor_uses_shipping_raws_and_direct_payload_floor': True,
             'direct_floor_uses_historical_all_direct_serializer': True,
             'full_uses_shipping_prefixgraph_builder': True,
@@ -112,9 +120,9 @@ def main() -> None:
     args.output.write_text(json.dumps(result, indent=2) + '\n', encoding='utf-8')
     print(json.dumps({
         'target': result['target'],
-        'floor_rss_kib': result['direct_floor_median_incremental_peak_rss_kib'],
-        'full_rss_kib': result['full_median_incremental_peak_rss_kib'],
-        'floor_to_full_rss_ratio': result['direct_floor_to_full_rss_ratio'],
+        'floor_build_rss_kib': result['direct_floor_median_incremental_build_peak_rss_kib'],
+        'full_build_rss_kib': result['full_median_incremental_build_peak_rss_kib'],
+        'floor_to_full_build_rss_ratio': result['direct_floor_to_full_build_rss_ratio'],
         'anchor_audition_owned_rss_signal': result['anchor_audition_owned_rss_signal'],
         'experiment_valid': result['experiment_valid'],
     }, indent=2), flush=True)
