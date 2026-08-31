@@ -1,11 +1,13 @@
 from __future__ import annotations
 
-"""Decisive Analytics effort frontier against both the strict competitors and accepted v0.29.
+"""Decisive Analytics effort frontier against both strict competitors and accepted v0.29.
 
-The level-1 canonical-filesystem CMPNX5 mechanism is already smaller and faster than ZIP and Zstd-19, but it is
-422,093 bytes larger than accepted v0.29. This research-only oracle asks whether modest additional compression
-effort can erase that representation deficit *inside the ZIP creation budget*. It deliberately does not add a
-shipping selector or workload identity policy.
+The complete level-1 canonical-filesystem candidate is already smaller/faster than ZIP and Zstd-19 but remains
+422,093 bytes above accepted v0.29. Historical raw-CMPNX5 evidence tightens the pre-mortem: level 15 is still
+6,568,522 B while level 19 reaches exactly the 6,135,172-B accepted floor only by slowing to 7.87 s versus ZIP's
+1.526 s. Therefore this research-only oracle brackets levels 15-19 (plus level 1 control) after charging canonical
+filesystem semantics and mandatory strong verification. If no interior point reaches the v0.29 floor inside the ZIP
+budget, compression-effort tuning is saturated and Analytics must escalate representation rather than tune levels.
 """
 
 import argparse
@@ -13,7 +15,6 @@ import json
 from pathlib import Path
 import shutil
 import statistics
-import time
 
 from benchmarks import v030_external_competitors as EXT
 from benchmarks import v030_release_generalization as GENERAL
@@ -21,7 +22,7 @@ from benchmarks import v030_v025_canonical_fs_level1_oracle as CANON
 from experiments import entropygraph_v030_release_product as PRODUCT
 
 TARGET = "04_analytics_and_database"
-LEVELS = (1, 2, 3, 4, 5, 6)
+LEVELS = (1, 15, 16, 17, 18, 19)
 ROUNDS = 3
 
 
@@ -80,7 +81,7 @@ def run(work_root: Path) -> dict:
         for level in LEVELS:
             samples = []
             sizes = set()
-            shas = set()
+            manifests = set()
             for rep in range(ROUNDS):
                 CANON.LEVEL_CAP = level
                 result = CANON._canonical_v25(stage, work_root / "candidate" / f"l{level}-r{rep}")
@@ -88,8 +89,8 @@ def run(work_root: Path) -> dict:
                     raise RuntimeError(f"level {level} user-tree drift")
                 samples.append(float(result["complete_verified_create_s"]))
                 sizes.add(int(result["archive_bytes"]))
-                shas.add(str(result["filesystem_manifest_sha256"]))
-            if len(sizes) != 1 or len(shas) != 1:
+                manifests.add(str(result["filesystem_manifest_sha256"]))
+            if len(sizes) != 1 or len(manifests) != 1:
                 raise RuntimeError(f"level {level} deterministic identity drift")
             archive_bytes = next(iter(sizes))
             median_s = statistics.median(samples)
@@ -121,6 +122,12 @@ def run(work_root: Path) -> dict:
         "levels": list(LEVELS),
         "rounds": ROUNDS,
         "accepted_v029_bytes": accepted,
+        "historical_raw_bracket": {
+            "level15_bytes": 6_568_522,
+            "level19_bytes": 6_135_172,
+            "level19_median_verified_create_s": 7.870632347999987,
+            "historical_zip_median_create_s": 1.525825019000024,
+        },
         "comparators": cmp,
         "rows": rows,
         "result": {
