@@ -21,6 +21,15 @@ def _capture(root: Path):
     )
 
 
+def _decode_v4(raw_v4: bytes, identities: dict[str, tuple[int, bytes]]):
+    return IFS4.decode_to_v1(
+        raw_v4,
+        regular_identities=identities,
+        max_path_bytes=4096,
+        max_entries=4096,
+    )
+
+
 def test_implicit_v4_preserves_semantics_and_compacts_repeated_metadata(tmp_path: Path):
     root = tmp_path / "source"
     root.mkdir()
@@ -65,12 +74,7 @@ def test_implicit_v4_preserves_semantics_and_compacts_repeated_metadata(tmp_path
         max_entries=4096,
         internal_path=internal_path,
     )
-    expanded = IFS4.decode_to_v1(
-        raw_v4,
-        regular_identities=identities,
-        max_path_bytes=4096,
-        max_entries=4096,
-    )
+    expanded = _decode_v4(raw_v4, identities)
     original = FS.decode_manifest(raw_v1, max_path_bytes=4096, max_entries=4096)
     assert expanded["manifest"] == original["manifest"]
 
@@ -88,12 +92,7 @@ def test_implicit_v4_preserves_hardlink_symlink_and_signed_mtime(tmp_path: Path)
     raw_v4 = IFS4.encode_v1(raw_v1, max_path_bytes=4096, max_entries=4096)
     original = FS.decode_manifest(raw_v1, max_path_bytes=4096, max_entries=4096)
     identities = {path: identity for path, identity in original["regular"].items()}
-    expanded = IFS4.decode_to_v1(
-        raw_v4,
-        regular_identities=identities,
-        max_path_bytes=4096,
-        max_entries=4096,
-    )
+    expanded = _decode_v4(raw_v4, identities)
     assert expanded["manifest"] == original["manifest"]
     assert expanded["hardlinks"]
 
@@ -111,20 +110,85 @@ def test_implicit_v4_rejects_malformed_override_and_hardlink_index(tmp_path: Pat
     broken_override = msgpack.unpackb(raw_v4, raw=False)
     broken_override[2][0] = [0x80]
     with pytest.raises(RuntimeError, match="override mask"):
-        IFS4.decode_to_v1(
-            msgpack.packb(broken_override, use_bin_type=True),
-            regular_identities={"a.bin": (4096, b"0" * 32)},
-            max_path_bytes=4096,
-            max_entries=4096,
-        )
+        _decode_v4(msgpack.packb(broken_override, use_bin_type=True), {"a.bin": (4096, b"0" * 32)})
 
     hardlinks = [row for row in payload[3] if row[2] == 3]
     assert len(hardlinks) == 1
     hardlinks[0][4] = len(payload[2])
     with pytest.raises(RuntimeError, match="hardlink target"):
-        IFS4.decode_to_v1(
-            msgpack.packb(payload, use_bin_type=True),
-            regular_identities={"a.bin": (4096, b"0" * 32)},
-            max_path_bytes=4096,
-            max_entries=4096,
-        )
+        _decode_v4(msgpack.packb(payload, use_bin_type=True), {"a.bin": (4096, b"0" * 32)})
+
+
+def test_implicit_v4_rejects_wrong_version_and_trailing_bytes(tmp_path: Path):
+    root = tmp_path / "source"
+    root.mkdir()
+    (root / "a.bin").write_bytes(b"A" * 256)
+    raw_v1, _, _ = _capture(root)
+    raw_v4 = IFS4.encode_v1(raw_v1, max_path_bytes=4096, max_entries=4096)
+    original = FS.decode_manifest(raw_v1, max_path_bytes=4096, max_entries=4096)
+    identities = dict(original["regular"])
+
+    wrong_version = msgpack.unpackb(raw_v4, raw=False)
+    wrong_version[0] = IFS4.IMPLICIT_V4_VERSION + 1
+    with pytest.raises(RuntimeError, match="unsupported implicit-v4"):
+        _decode_v4(msgpack.packb(wrong_version, use_bin_type=True), identities)
+
+    with pytest.raises(RuntimeError, match="invalid bounded implicit-v4"):
+        _decode_v4(raw_v4 + b"\x00", identities)
+
+
+def test_implicit_v4_rejects_identity_shape_count_and_unsafe_path(tmp_path: Path):
+    root = tmp_path / "source"
+    root.mkdir()
+    (root / "a.bin").write_bytes(b"A" * 256)
+    raw_v1, _, _ = _capture(root)
+    raw_v4 = IFS4.encode_v1(raw_v1, max_path_bytes=4096, max_entries=4096)
+    original = FS.decode_manifest(raw_v1, max_path_bytes=4096, max_entries=4096)
+    identities = dict(original["regular"])
+    size, digest = identities["a.bin"]
+
+    with pytest.raises(RuntimeError, match="identity count"):
+        _decode_v4(raw_v4, {})
+    with pytest.raises(RuntimeError, match="invalid authenticated"):
+        _decode_v4(raw_v4, {"a.bin": (size, digest[:-1])})
+    with pytest.raises(RuntimeError, match="unsafe authenticated"):
+        _decode_v4(raw_v4, {"../a.bin": (size, digest)})
+
+
+def test_implicit_v4_rejects_regular_explicit_path_overlap(tmp_path: Path):
+    root = tmp_path / "source"
+    root.mkdir()
+    (root / "a.bin").write_bytes(b"A" * 256)
+    (root / "dir").mkdir()
+    raw_v1, _, _ = _capture(root)
+    raw_v4 = IFS4.encode_v1(raw_v1, max_path_bytes=4096, max_entries=4096)
+    payload = msgpack.unpackb(raw_v4, raw=False)
+    original = FS.decode_manifest(raw_v1, max_path_bytes=4096, max_entries=4096)
+    identities = dict(original["regular"])
+
+    # Rebuild the explicit directory path as the authenticated regular path. The
+    # compact control plane must never be allowed to shadow a content-graph owner.
+    assert payload[3]
+    payload[3][0][0] = 0
+    payload[3][0][1] = "a.bin"
+    with pytest.raises(RuntimeError, match="path sets overlap"):
+        _decode_v4(msgpack.packb(payload, use_bin_type=True), identities)
+
+
+def test_implicit_v4_rejects_duplicate_or_unsorted_explicit_paths(tmp_path: Path):
+    root = tmp_path / "source"
+    root.mkdir()
+    (root / "a.bin").write_bytes(b"A" * 256)
+    (root / "d1").mkdir()
+    (root / "d2").mkdir()
+    raw_v1, _, _ = _capture(root)
+    raw_v4 = IFS4.encode_v1(raw_v1, max_path_bytes=4096, max_entries=4096)
+    payload = msgpack.unpackb(raw_v4, raw=False)
+    original = FS.decode_manifest(raw_v1, max_path_bytes=4096, max_entries=4096)
+    identities = dict(original["regular"])
+
+    assert len(payload[3]) >= 2
+    payload[3][1][0] = 0
+    payload[3][1][1] = payload[3][0][1]
+    with pytest.raises(RuntimeError, match="strictly sorted/unique"):
+        _decode_v4(msgpack.packb(payload, use_bin_type=True), identities)
