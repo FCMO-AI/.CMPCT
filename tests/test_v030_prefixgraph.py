@@ -43,6 +43,33 @@ def test_anchor_tournament_is_complete_costed(tmp_path: Path) -> None:
     assert archive.stat().st_size == stats["archive_bytes"]
 
 
+def test_winner_only_retention_preserves_legacy_full_tournament_bytes(tmp_path: Path) -> None:
+    source = tmp_path / "source"; _similar_family(source)
+    files = sorted(path for path in source.rglob("*") if path.is_file())
+    rels = [path.relative_to(source).as_posix() for path in files]
+    raws = [path.read_bytes() for path in files]
+    tree = pg._treehash_parts(rels, raws)
+    direct_payloads = [pg._compress(raw) for raw in raws]
+
+    # Reconstruct the historical materialized-list tournament independently.  The shipping builder may retain
+    # only one incumbent, but it must still construct every nominated anchor and choose the exact same complete
+    # bytes under the original `(archive_bytes, anchor)` tie law.
+    legacy_candidates = [pg._serialize_candidate(rels, raws, direct_payloads, tree, None)]
+    legacy_candidates.extend(
+        pg._serialize_candidate(rels, raws, direct_payloads, tree, anchor)
+        for anchor in pg._anchor_indices(len(raws))
+    )
+    legacy_blob, legacy_stats = min(legacy_candidates, key=lambda item: pg._candidate_key(*item))
+
+    archive = tmp_path / "winner-only.cmpct"
+    stats = pg.build(source, archive)
+    assert archive.read_bytes() == legacy_blob
+    assert stats["anchor"] == legacy_stats["anchor"]
+    assert stats["archive_bytes"] == legacy_stats["archive_bytes"]
+    assert stats["anchor_auditions"] == len(pg._anchor_indices(len(raws)))
+    assert pg.strong_verify(archive)["tree_sha256"] == tree
+
+
 def test_direct_zstd_floor_is_compressed_once_per_file(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     source = tmp_path / "source"; _similar_family(source)
     archive = tmp_path / "family.cmpct"
