@@ -1,4 +1,5 @@
 # ci-lane: release
+# ci-pr-scope: latest-head-commit-gate
 name: CMPCT v0.30 authoritative generalization
 
 on:
@@ -14,15 +15,55 @@ concurrency:
   group: cmpct-v030-authoritative-generalization-${{ github.ref }}
   cancel-in-progress: true
 
+env:
+  EVIDENCE_HEAD: ${{ github.sha }}
+
 jobs:
+  impact:
+    runs-on: ubuntu-latest
+    outputs:
+      should_run: ${{ steps.impact.outputs.should_run }}
+    steps:
+      - name: Check out exact candidate history
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 2
+      - id: impact
+        name: Admit only a latest-head change that can affect generalization authority
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "should_run=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          git diff-tree --no-commit-id --name-only -r HEAD > /tmp/latest-head-files.txt
+          # This is intentionally dependency-oriented, not benchmark-identity-oriented. Any shipping codec,
+          # v0.30 product/reader/selector surface, frozen corpus/generalization authority, shared packaging/test
+          # dependency, or this workflow itself must replay the full proof. Orthogonal research-only or docs/CI
+          # commits cannot change the measured artifact and therefore skip the five-hour lane.
+          if grep -Eq '^(src/cmpct/|experiments/entropygraph_v030_(geometry|hierarchical_geometry|geometry_overlay|geometry_overlay_g04|geometry_overlay_g04_publish|prefixgraph|prefixgraph_parallel|release|release_candidate|release_reader|release_reader_policy|release_product|release_product_base)([^/]*)\.py$|benchmarks/v030_release_(generalization|generalization_authoritative|performance).*\.py$|benchmarks/(neutral|resemblance)_hostile_corpus_v1\.py$|tests/test_v030_(geometry|hierarchical_geometry|geometry_overlay|geometry_overlay_prefallback|geometry_overlay_g04|g04_publish|prefixgraph|prefixgraph_parallel_release|release_reader|release_reader_policy|release_candidate|release_generalization_contract)\.py$|pyproject\.toml$|\.github/workflows/v030-release-generalization\.yml$)' /tmp/latest-head-files.txt; then
+            echo "should_run=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "should_run=false" >> "$GITHUB_OUTPUT"
+          fi
+
   release-generalization:
+    needs: impact
+    if: needs.impact.outputs.should_run == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 300
     env:
       PYTHONPATH: ${{ github.workspace }}
     steps:
-      - name: Check out authoritative integration branch
+      - name: Check out exact authoritative candidate
         uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - name: Bind evidence to exact head
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
 
       - name: Set up Python
         uses: actions/setup-python@v6
@@ -32,8 +73,10 @@ jobs:
 
       - name: Install exact corpus and test dependencies
         run: |
-          sudo apt-get update
-          sudo apt-get install -y zstd gcc ffmpeg
+          set -euo pipefail
+          test -f /etc/apt/sources.list.d/ubuntu.sources
+          sudo apt-get -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" -o Dir::Etc::sourceparts="-" update
+          sudo apt-get -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" -o Dir::Etc::sourceparts="-" install -y zstd gcc ffmpeg libsndfile1
           python -m pip install --upgrade pip
           python -m pip install -e '.[test,audio]'
           python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
@@ -106,18 +149,21 @@ jobs:
         if: always()
         run: python tools/check_public_surface.py
 
+      - name: CI topology self-check
+        if: always()
+        run: python tools/check_ci_topology.py .github/workflows/v030-release-generalization.yml
+
       - name: Upload authoritative v0.30 compression evidence
         if: always()
         uses: actions/upload-artifact@v6
         with:
-          name: cmpct-v030-release-generalization-${{ github.sha }}
+          name: cmpct-v030-release-generalization-${{ env.EVIDENCE_HEAD }}
           path: |
             benchmark-artifacts/v030-release-generalization.json
             benchmark-artifacts/v030-release-generalization.stdout.txt
           if-no-files-found: warn
           retention-days: 90
 
-# Footnote: `ffmpeg` and the package audio extra are frozen-corpus/runtime dependencies, not codec shortcuts.
-# Repair-v6 changes the accepted deterministic v0.29 identity to 137,499,525 B; it does not lower the inherited
-# 687,783-byte release hurdle. Timing/memory, direct promoted readers, recovery/fuzz, native/portability and
-# external-competitor gates remain independent mandatory evidence before v0.30 can release.
+# The five-hour authority remains mandatory whenever the newest exact head can affect its artifact or contract.
+# Orthogonal research/workflow/docs commits now pay only the cheap impact classifier; no benchmark threshold,
+# workload, locality rule, v0.29 floor, or release gate is changed by this scheduling optimization.
