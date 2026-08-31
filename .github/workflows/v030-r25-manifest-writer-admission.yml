@@ -4,6 +4,20 @@
 name: CMPCT v0.30 r25 manifest writer admission
 
 on:
+  push:
+    branches: [agent/v030-authoritative-integration]
+    paths:
+      - 'benchmarks/v030_r25_manifest_derived_identity_oracle.py'
+      - 'benchmarks/v030_r25_manifest_writer_admission_productization.py'
+      - 'benchmarks/v030_release_generalization.py'
+      - 'experiments/entropygraph_v030_product_fs.py'
+      - 'experiments/entropygraph_v030_fs_implicit_v4.py'
+      - 'experiments/entropygraph_v030_r25_manifest_admission.py'
+      - 'experiments/entropygraph_v030_canonical_final_impl.py'
+      - 'experiments/entropygraph_v030_release_candidate.py'
+      - 'tests/test_v030_fs_implicit_v4.py'
+      - 'tests/test_v030_r25_manifest_admission.py'
+      - '.github/workflows/v030-r25-manifest-writer-admission.yml'
   pull_request:
     branches: [main]
     paths:
@@ -107,7 +121,7 @@ jobs:
           import json, os
           from pathlib import Path
           d=json.loads(Path('benchmark-artifacts/v030-r25-manifest-writer.json').read_text())
-          assert d['schema']=='cmpct-v030-r25-manifest-writer-admission-productization-v1'
+          assert d['schema']=='cmpct-v030-r25-manifest-writer-admission-productization-v2'
           assert d['source_commit']==os.environ['EVIDENCE_HEAD']
           assert d['admission']['encoding']=='implicit-v4'
           assert d['admission']['strictly_smaller_control'] is True
@@ -121,8 +135,13 @@ jobs:
           assert d['user_tree_exact'] is True
           assert d['within_release_locality_bounds'] is True
           assert d['max_control_read_amplification'] <= 8.0
+          assert d['shared_writer_reader_semantic_owner'] is True
+          assert d['research_profile_context_only'] is True
+          assert d['shipping_profile_fail_closed_unchanged'] is True
           assert d['release_credit'] is False
           assert d['canonical_writer_change'] is False
+          assert d['domination_audit']['diagnosis']=='D5'
+          assert d['domination_audit']['terminal_decision']=='PROMOTE_NEXT_PREREQUISITE'
           PY
       - name: CI topology self-check
         if: always()
@@ -139,7 +158,6 @@ jobs:
           if-no-files-found: error
           retention-days: 90
 
-# Research/productization only. A pass proves that a content-agnostic strict-smaller writer policy can select
-# implicit-v4, bind it into a complete r25 graph, and reconstruct exact filesystem-v1 semantics from authenticated
-# graph identities. Canonical integration, recovery, native, Android, all-15 authority and release credit remain
-# separate fail-closed prerequisites.
+# Research/productization only. The projection is read under the existing bounded revision-25 research context;
+# shipping fail-closed behavior remains unchanged. A pass advances canonical integration only. Recovery, native,
+# Android, all-15 authority and final release credit remain separate fail-closed prerequisites.
