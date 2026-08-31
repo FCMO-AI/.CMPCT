@@ -20,7 +20,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: cmpct-v030-shifted-segmented-relation-${{ github.event.pull_request.number || github.ref }}
+  group: cmpct-v030-shifted-segmented-relation-${{ github.event.pull_request.head.sha || github.sha }}
   cancel-in-progress: false
 
 env:
@@ -145,5 +145,6 @@ jobs:
 
 # D4/R4 structural-red lane. One global joint edit unit and independent CDC ownership are
 # terminal negatives; this changes ownership to multiple lawful relation-aware units. A
-# payload-positive result only advances to an exact framed single-pass candidate. It cannot
-# earn release credit or hide framing/publication cost outside the later strict authority.
+# payload-positive result only advances to an exact framed single-pass candidate. Exact-SHA
+# concurrency prevents later unrelated PR updates from evicting the queued receipt before a
+# runner becomes available. It cannot earn release credit or hide framing/publication cost.
