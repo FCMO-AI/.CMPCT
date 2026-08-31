@@ -3,17 +3,17 @@ from __future__ import annotations
 """R4 Shifted capacity oracle: exact optimal contiguous locality-bounded solid clusters.
 
 The existing greedy cluster-owned oracle asks whether jointly owned physical roots can recover the
-cross-version redundancy that member-root PrefixGraph loses.  Greedy pair merging is not an exact
-optimizer, so a negative there cannot retire the representation family.  This instrument closes that
-loophole for the important content-agnostic case where members are kept in deterministic lexical order:
-it compresses every admissible contiguous interval once and uses dynamic programming to find the exact
-minimum total payload under the frozen <=8 MiB decode-unit and <=8x member-read amplification laws.
+cross-version redundancy that member-root PrefixGraph loses. Greedy pair merging is not an exact optimizer,
+so a negative there cannot retire the representation family. This instrument closes that loophole for the
+important content-agnostic case where members are kept in deterministic lexical order: it compresses every
+admissible contiguous interval once and uses dynamic programming to find the exact minimum total payload
+under the frozen <=8 MiB decode-unit and <=8x member-read amplification laws.
 
-The experiment is deliberately a size-capacity oracle.  It prices all interval compression work and emits
-an exact complete artifact/tree proof, but grants no creation-time or release credit.  If even this exact
-optimum is not below solid Zstd-19, metadata shaving and search tuning cannot rescue contiguous
-cluster-owned Zstd-19 roots; that scope is terminal negative evidence.  A size win advances only to a
-bounded construction/admission timing prerequisite.
+The experiment is deliberately a size-capacity oracle. It prices all interval compression work and emits a
+self-describing complete artifact whose authenticated metadata includes every payload boundary. Verification
+reparses only those artifact bytes and reconstructs the logical tree independently. It grants no creation-time
+or release credit. If even this exact optimum is not below solid Zstd-19, metadata shaving and search tuning
+cannot rescue contiguous cluster-owned Zstd-19 roots; that scope is terminal negative evidence.
 """
 
 import argparse
@@ -43,6 +43,91 @@ def _source_commit() -> str:
     return subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
 
 
+def _verify_artifact(artifact: bytes) -> tuple[list[str], list[bytes], dict]:
+    """Parse and reconstruct only from emitted bytes; no builder-side payload list is trusted."""
+    if len(artifact) < PG.HEADER.size + PG.FOOTER.size:
+        raise RuntimeError("truncated DP cluster artifact")
+    magic, meta_comp_len, meta_raw_len, meta_sha = PG.HEADER.unpack_from(artifact, 0)
+    if magic != MAGIC or meta_raw_len > PG.MAX_META_BYTES:
+        raise RuntimeError("invalid DP cluster header")
+    meta_start = PG.HEADER.size
+    meta_end = meta_start + meta_comp_len
+    if meta_end > len(artifact) - PG.FOOTER.size:
+        raise RuntimeError("truncated DP cluster metadata")
+    meta_comp = artifact[meta_start:meta_end]
+    meta_raw = zstd.ZstdDecompressor().decompress(meta_comp, max_output_size=meta_raw_len)
+    if len(meta_raw) != meta_raw_len or PG.H(meta_raw) != meta_sha:
+        raise RuntimeError("DP cluster metadata authentication failed")
+    meta = msgpack.unpackb(meta_raw, raw=False)
+    if meta.get("v") != 1 or meta.get("engine") != "contiguous-cluster-zstd19-dp-v1":
+        raise RuntimeError("unsupported DP cluster metadata")
+    rels = meta.get("files")
+    clusters = meta.get("clusters")
+    members = meta.get("members")
+    payload_sizes = meta.get("payload_sizes")
+    if not isinstance(rels, list) or not isinstance(clusters, list) or not isinstance(members, list):
+        raise RuntimeError("invalid DP cluster metadata tables")
+    if not isinstance(payload_sizes, list) or len(payload_sizes) != len(clusters):
+        raise RuntimeError("invalid DP cluster payload boundary table")
+
+    tail_meta_start = len(artifact) - PG.FOOTER.size - meta_comp_len
+    if tail_meta_start < meta_end:
+        raise RuntimeError("overlapping DP cluster payload/metadata regions")
+    tail_magic, tail_comp_len, tail_raw_len, tail_sha = PG.FOOTER.unpack_from(artifact, len(artifact) - PG.FOOTER.size)
+    if tail_magic != TAIL or tail_comp_len != meta_comp_len or tail_raw_len != meta_raw_len or tail_sha != meta_sha:
+        raise RuntimeError("DP cluster footer authentication mismatch")
+    if artifact[tail_meta_start:tail_meta_start + meta_comp_len] != meta_comp:
+        raise RuntimeError("DP cluster redundant metadata mismatch")
+
+    payload_region = memoryview(artifact)[meta_end:tail_meta_start]
+    payloads: list[bytes] = []
+    off = 0
+    for raw_size in payload_sizes:
+        size = int(raw_size)
+        if size <= 0 or off + size > len(payload_region):
+            raise RuntimeError("invalid DP cluster payload boundary")
+        payloads.append(bytes(payload_region[off:off + size]))
+        off += size
+    if off != len(payload_region):
+        raise RuntimeError("trailing DP cluster payload bytes")
+
+    decoded_clusters: list[bytes] = []
+    for cid, (bounds, payload) in enumerate(zip(clusters, payloads, strict=True)):
+        if not isinstance(bounds, list) or len(bounds) != 2:
+            raise RuntimeError("invalid DP cluster bounds")
+        begin, end = map(int, bounds)
+        if not (0 <= begin < end <= len(rels)):
+            raise RuntimeError("out-of-range DP cluster bounds")
+        expected_size = 0
+        for row in members:
+            if int(row[1]) == cid:
+                expected_size = max(expected_size, int(row[2]) + int(row[3]))
+        if expected_size > CLUSTER.MAX_CLUSTER_RAW:
+            raise RuntimeError("DP cluster exceeds decode-unit ceiling")
+        decoded_clusters.append(zstd.ZstdDecompressor().decompress(payload, max_output_size=expected_size))
+        if len(decoded_clusters[-1]) != expected_size:
+            raise RuntimeError("DP cluster decoded-size mismatch")
+
+    decoded: list[bytes | None] = [None] * len(rels)
+    for row in members:
+        if not isinstance(row, list) or len(row) != 5:
+            raise RuntimeError("invalid DP member row")
+        i, cid, offset, size = map(int, row[:4])
+        digest = bytes(row[4])
+        if not (0 <= i < len(rels) and 0 <= cid < len(decoded_clusters) and size >= 0 and offset >= 0):
+            raise RuntimeError("invalid DP member coordinates")
+        cluster_raw = decoded_clusters[cid]
+        raw = cluster_raw[offset:offset + size]
+        if len(raw) != size or PG.H(raw) != digest:
+            raise RuntimeError(f"DP cluster member integrity failed: {i}")
+        if decoded[i] is not None:
+            raise RuntimeError("duplicate DP member identity")
+        decoded[i] = raw
+    if any(raw is None for raw in decoded):
+        raise RuntimeError("missing DP cluster member")
+    return [str(rel) for rel in rels], [bytes(raw) for raw in decoded if raw is not None], meta
+
+
 def run(work_root: Path) -> dict:
     started = time.perf_counter()
     shutil.rmtree(work_root, ignore_errors=True)
@@ -61,9 +146,6 @@ def run(work_root: Path) -> dict:
         raise RuntimeError("member exceeds frozen decode-unit ceiling")
     expected_tree = PG._treehash_parts(rels, raws)
 
-    # Compress every admissible lexical interval exactly once.  dp[j] is the minimum compressed
-    # payload bytes for members [0:j].  Ties prefer fewer clusters, then the earlier predecessor,
-    # making the complete artifact deterministic without benchmark identity.
     interval_payloads: dict[tuple[int, int], bytes] = {}
     compression_calls = 0
     trial_raw_bytes = 0
@@ -84,9 +166,8 @@ def run(work_root: Path) -> dict:
             compression_calls += 1
             trial_raw_bytes += len(raw)
 
-    inf = 1 << 62
     dp: list[tuple[int, int, int] | None] = [None] * (n + 1)
-    dp[0] = (0, 0, -1)  # payload bytes, cluster count, predecessor
+    dp[0] = (0, 0, -1)
     for end in range(1, n + 1):
         best: tuple[int, int, int] | None = None
         for begin in range(end):
@@ -97,7 +178,7 @@ def run(work_root: Path) -> dict:
             candidate = (prev[0] + len(payload), prev[1] + 1, begin)
             if best is None or candidate < best:
                 best = candidate
-        if best is None or best[0] >= inf:
+        if best is None:
             raise RuntimeError(f"no admissible contiguous partition reaches member {end}")
         dp[end] = best
 
@@ -132,33 +213,24 @@ def run(work_root: Path) -> dict:
         "tree_sha256": expected_tree,
         "files": rels,
         "clusters": [[begin, end] for begin, end in clusters],
+        "payload_sizes": [len(payload) for payload in payloads],
         "members": member_rows,
         "max_cluster_raw_bytes": CLUSTER.MAX_CLUSTER_RAW,
         "max_read_amplification": CLUSTER.MAX_READ_AMPLIFICATION,
     }
     meta_raw = msgpack.packb(meta, use_bin_type=True)
+    if len(meta_raw) > PG.MAX_META_BYTES:
+        raise RuntimeError("DP cluster metadata exceeds decode-unit ceiling")
     meta_comp = zstd.ZstdCompressor(level=PG.META_LEVEL).compress(meta_raw)
     header = PG.HEADER.pack(MAGIC, len(meta_comp), len(meta_raw), PG.H(meta_raw))
     footer = PG.FOOTER.pack(TAIL, len(meta_comp), len(meta_raw), PG.H(meta_raw))
     artifact = header + meta_comp + b"".join(payloads) + meta_comp + footer
 
-    # Independent reconstruction from the selected DP partition.
-    decoded: list[bytes] = [b""] * n
-    for cid, ((begin, end), payload) in enumerate(zip(clusters, payloads, strict=True)):
-        expected_size = sum(len(raws[i]) for i in range(begin, end))
-        cluster_raw = zstd.ZstdDecompressor().decompress(payload, max_output_size=expected_size)
-        off = 0
-        for i in range(begin, end):
-            size = len(raws[i])
-            raw = cluster_raw[off:off + size]
-            if len(raw) != size or PG.H(raw) != PG.H(raws[i]):
-                raise RuntimeError(f"DP cluster reconstruction failed for member {i}")
-            decoded[i] = raw
-            off += size
-        if off != len(cluster_raw):
-            raise RuntimeError(f"DP cluster {cid} has trailing decoded bytes")
-    verified_tree = PG._treehash_parts(rels, decoded)
-    if verified_tree != expected_tree:
+    verified_rels, verified_raws, parsed_meta = _verify_artifact(artifact)
+    if verified_rels != rels:
+        raise RuntimeError("DP artifact path table changed during parse")
+    verified_tree = PG._treehash_parts(verified_rels, verified_raws)
+    if verified_tree != expected_tree or bytes(parsed_meta["tree_sha256"]) != expected_tree:
         raise RuntimeError("DP cluster artifact changed logical tree")
 
     shipping = work_root / "shipping-prefixgraph.cmpct"
@@ -183,18 +255,18 @@ def run(work_root: Path) -> dict:
     elif gap_after >= gap_before:
         decision = "RETIRE_FAMILY"
     else:
-        # Exact contiguous optimum improved shipping but still missed Zstd: contiguous cluster ownership
-        # is exhausted, while non-contiguous content-derived grouping remains a distinct R4 family.
         decision = "ESCALATE_RADICALITY"
 
     return {
-        "schema": "cmpct-v030-shifted-contiguous-cluster-dp-oracle-v1",
+        "schema": "cmpct-v030-shifted-contiguous-cluster-dp-oracle-v2",
         "source_commit": _source_commit(),
         "target": f"{TARGET[0]}/{TARGET[1]}",
         "files": n,
         "source_bytes": sum(map(len, raws)),
         "tree_sha256": expected_tree,
         "verified_tree_sha256": verified_tree,
+        "artifact_reparsed_from_bytes": True,
+        "payload_boundaries_authenticated": True,
         "intervals_compressed": compression_calls,
         "trial_raw_bytes": trial_raw_bytes,
         "search_work_amplification_vs_source": trial_raw_bytes / max(1, sum(map(len, raws))),
@@ -232,7 +304,7 @@ def run(work_root: Path) -> dict:
             "next_decisive_test": ("replace the exact DP capacity search with bounded structural admission and measure complete creation time" if strict_size_win else "if size still misses, use the exact gap to decide whether non-contiguous content-derived ownership has enough plausible headroom before another R4 build"),
         },
         "decision": decision,
-        "claim_boundary": "R4 exact contiguous-partition capacity oracle only; all admissible interval compression work is priced, but no creation-time or release credit is claimed.",
+        "claim_boundary": "R4 exact contiguous-partition capacity oracle only; every admissible interval is compressed and the emitted artifact is reparsed independently, but no creation-time or release credit is claimed.",
     }
 
 
