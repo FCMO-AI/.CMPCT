@@ -1,4 +1,5 @@
 # ci-lane: deep
+# ci-pr-scope: latest-head-commit-gate
 name: CMPCT v0.30 r24 tiny create ABBA diagnostic
 
 on:
@@ -19,14 +20,52 @@ concurrency:
   group: cmpct-v030-r24-tiny-create-abba-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
+env:
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+
 jobs:
+  latest-head-impact:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      run_deep: ${{ steps.scope.outputs.run_deep }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 2
+      - name: Bind exact head and classify only its changed files
+        id: scope
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            echo 'run_deep=true' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          git diff-tree --no-commit-id --name-only -r HEAD > /tmp/latest-head-files.txt
+          cat /tmp/latest-head-files.txt
+          if grep -Eq '^(src/cmpct/.*|benchmarks/v030_r24_tiny_create_abba_oracle\.py|benchmarks/universal_bench\.py|pyproject\.toml|\.github/workflows/v030-r24-tiny-create-abba\.yml)$' /tmp/latest-head-files.txt; then
+            echo 'run_deep=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'run_deep=false' >> "$GITHUB_OUTPUT"
+            echo 'Accumulated PR paths matched, but newest exact commit does not affect the tiny-create ABBA diagnostic; skipping replay.'
+          fi
+
   tiny-abba:
+    needs: latest-head-impact
+    if: needs.latest-head-impact.outputs.run_deep == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v6
         with:
           fetch-depth: 0
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - name: Bind exact candidate head
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
       - uses: actions/setup-python@v6
         with:
           python-version: '3.11'
@@ -77,7 +116,7 @@ jobs:
       - name: Aggregate causal diagnostic
         run: |
           python - <<'PY'
-          import json, os, statistics
+          import json, os, statistics, subprocess
           from pathlib import Path
           out=Path(os.environ['RUNNER_TEMP'])/'cmpct-tiny-abba'
           rows={n:json.loads((out/f'{n}.json').read_text()) for n in ('base-a','candidate-a','candidate-b','base-b')}
@@ -91,6 +130,8 @@ jobs:
           cand_modules={rows[n]['builder_module'] for n in ('candidate-a','candidate-b')}
           evidence={
             'schema':'cmpct-v030-r24-tiny-create-abba-v1',
+            'candidate_commit':subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip(),
+            'base_commit':'${{ github.event.pull_request.base.sha || github.event.before }}',
             'base_median_s':base,
             'candidate_median_s':cand,
             'ratio':ratio,
@@ -110,11 +151,12 @@ jobs:
           PY
       - name: Upload focused evidence
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
-          name: v030-r24-tiny-create-abba
+          name: v030-r24-tiny-create-abba-${{ env.EVIDENCE_HEAD }}
           path: ${{ runner.temp }}/cmpct-tiny-abba/
-          if-no-files-found: warn
+          if-no-files-found: error
+          retention-days: 90
       - name: CI topology self-check
         run: python tools/check_ci_topology.py .github/workflows/v030-r24-tiny-create-abba.yml
 
