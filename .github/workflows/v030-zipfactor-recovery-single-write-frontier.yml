@@ -1,29 +1,20 @@
 # ci-lane: deep
+# ci-auto-policy: retired-manual-only
 name: CMPCT v0.30 ZIP-factor recovery single-write frontier
 
 on:
-  pull_request:
-    branches: [main]
-    paths:
-      - 'benchmarks/v030_zipfactor_recovery_single_write_frontier.py'
-      - 'benchmarks/v030_zipfactor_recovery_inmemory_verify_frontier.py'
-      - 'benchmarks/v030_zipfactor_recovery_oracle.py'
-      - 'benchmarks/v030_external_competitors.py'
-      - 'experiments/entropygraph_v030_zipfactor_compact_v3.py'
-      - 'experiments/entropygraph_v030_zipfactor_fused.py'
-      - 'experiments/entropygraph_v030_zipfactor_eocd_parser.py'
-      - '.github/workflows/v030-zipfactor-recovery-single-write-frontier.yml'
   workflow_dispatch:
 
 permissions:
   contents: read
 
 concurrency:
-  group: cmpct-v030-zf-recovery-single-write-${{ github.event.pull_request.number || github.ref }}
+  group: cmpct-v030-zf-recovery-single-write-${{ github.ref }}
   cancel-in-progress: true
 
 env:
   PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.sha }}
 
 jobs:
   single-write-frontier:
@@ -32,13 +23,12 @@ jobs:
     steps:
       - uses: actions/checkout@v6
         with:
-          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          ref: ${{ env.EVIDENCE_HEAD }}
       - name: Bind exact candidate head
         shell: bash
         run: |
-          EXPECTED='${{ github.event.pull_request.head.sha || github.sha }}'
           ACTUAL="$(git rev-parse HEAD)"
-          test "$ACTUAL" = "$EXPECTED"
+          test "$ACTUAL" = "$EVIDENCE_HEAD"
           printf '%s\n' "$ACTUAL" > "$RUNNER_TEMP/v030-zf-single-write-candidate-sha.txt"
       - uses: actions/setup-python@v6
         with:
@@ -88,7 +78,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v6
         with:
-          name: v030-zipfactor-recovery-single-write-${{ github.event.pull_request.head.sha || github.sha }}
+          name: v030-zipfactor-recovery-single-write-${{ env.EVIDENCE_HEAD }}
           path: |
             ${{ runner.temp }}/v030-zf-recovery-single-write.json
             ${{ runner.temp }}/v030-zf-single-write-candidate-sha.txt
@@ -97,5 +87,8 @@ jobs:
       - name: CI topology self-check
         run: python tools/check_ci_topology.py .github/workflows/v030-zipfactor-recovery-single-write-frontier.yml
 
-# Research-only construction frontier. Exact byte identity against the legacy recovery builder is required every
-# round; no selector/release credit is granted until the complete strict comparator boundary is actually crossed.
+# RETIRED FAMILY: exact run 33378423051 preserved the 14,227-byte candidate (25 B below Zstd-19) but, with mandatory
+# in-memory verification correctly inside the create boundary, direct CMPCT median was 5.111 ms versus ZIP 4.048 ms.
+# Single-write construction improved the legacy path only ~1.4% and therefore cannot satisfy the strict contract.
+# Keep this lane for explicit negative-evidence replay only; the surviving ZIP-factor route is native FFI/recovery
+# productization. No selector, benchmark threshold, release credit, archive grammar or recovery law is changed here.
