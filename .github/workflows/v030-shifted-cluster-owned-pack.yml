@@ -4,6 +4,11 @@
 name: CMPCT v0.30 Shifted cluster-owned pack
 
 on:
+  push:
+    branches: [agent/v030-authoritative-integration]
+    paths:
+      - 'benchmarks/v030_shifted_cluster_owned_pack_oracle.py'
+      - '.github/workflows/v030-shifted-cluster-owned-pack.yml'
   pull_request:
     branches: [main]
     paths:
@@ -81,20 +86,32 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -e '.[test,audio]'
       - name: Static ratchet
-        run: python -m py_compile benchmarks/v030_shifted_cluster_owned_pack_oracle.py
+        run: |
+          python -m py_compile benchmarks/v030_shifted_cluster_owned_pack_oracle.py
+          python tools/check_ci_topology.py .github/workflows/v030-shifted-cluster-owned-pack.yml
+          python tools/check_public_surface.py
       - name: Run exact Shifted cluster-owned pack oracle
         run: |
           mkdir -p benchmark-artifacts
           python -m benchmarks.v030_shifted_cluster_owned_pack_oracle \
             --work-root "$RUNNER_TEMP/v030-shifted-cluster-owned-pack" \
             --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-shifted-cluster-owned-pack.json"
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          p=Path('benchmark-artifacts/v030-shifted-cluster-owned-pack.json')
+          d=json.loads(p.read_text())
+          d['source_commit']=os.environ['EVIDENCE_HEAD']
+          p.write_text(json.dumps(d, indent=2)+'\n')
+          PY
       - name: Enforce evidence boundary and complete search-cost accounting
         run: |
           python - <<'PY'
-          import json
+          import json, os
           from pathlib import Path
           d=json.loads(Path('benchmark-artifacts/v030-shifted-cluster-owned-pack.json').read_text())
           assert d['schema']=='cmpct-v030-shifted-cluster-owned-pack-oracle-v2'
+          assert d['source_commit']==os.environ['EVIDENCE_HEAD']
           assert d['files'] > 2 and d['cluster_count'] >= 1
           assert d['source_bytes'] > 0
           assert d['evaluated_merges'] > 0 and d['admissible_pair_visits'] >= d['evaluated_merges']
@@ -103,26 +120,21 @@ jobs:
           assert d['trial_compressed_bytes'] > 0
           assert d['search_work_amplification_vs_source'] >= 1.0
           assert d['zstd19_compression_seconds'] > 0.0 and d['merge_search_elapsed_s'] > 0.0
-          assert d['within_decode_unit'] is True
-          assert d['within_locality_amplification'] is True
-          assert d['max_cluster_raw_bytes'] <= 8*1024*1024
-          assert d['max_decoded_context_amplification'] <= 8.0
+          assert d['within_decode_unit'] is True and d['max_cluster_raw_bytes'] <= 8*1024*1024
+          assert d['within_locality_amplification'] is True and d['max_decoded_context_amplification'] <= 8.0
           assert d['tree_sha256'] == d['verified_tree_sha256']
+          assert d['cluster_pack_bytes'] > 0 and len(d['cluster_pack_sha256'])==64
           assert d['zip_bytes'] > 0 and d['zstd19_bytes'] > 0
           assert d['release_credit'] is False and d['product_create_time_claim'] is False
           a=d['domination_audit']
           assert a['diagnosis']=='D4' and a['radicality']=='R4'
+          assert set(['S2','S3','S4']).issubset(a['active_saturation'])
           assert a['research_priority_score'] >= 80
+          assert a['measured_gap_change_bytes']==d['saving_vs_shipping_prefixgraph_bytes']
           assert a['terminal_decision'] in {'PROMOTE_NEXT_PREREQUISITE','ITERATE_SAME_FAMILY','ESCALATE_RADICALITY'}
           if d['strict_size_win_vs_zip_and_zstd19']:
               assert a['terminal_decision']=='PROMOTE_NEXT_PREREQUISITE'
           PY
-      - name: CI topology self-check
-        if: always()
-        run: python tools/check_ci_topology.py .github/workflows/v030-shifted-cluster-owned-pack.yml
-      - name: Public-surface guard
-        if: always()
-        run: python tools/check_public_surface.py
       - name: Upload exact structural evidence
         if: always()
         uses: actions/upload-artifact@v6
@@ -132,6 +144,7 @@ jobs:
           if-no-files-found: error
           retention-days: 90
 
-# R4 structural research only. This attacks the measured root-cost/cycle bottleneck by replacing member roots
-# with locality-bounded jointly compressed physical owners. Every unique level-19 trial is priced so a capacity
-# win cannot conceal exported search work. A win still requires bounded generic admission and full parity.
+# R4 structural research only. This tests non-contiguous, content-derived joint physical ownership after exact
+# lexical-contiguous partitioning was retired. Every level-19 trial is priced, the receipt is bound to its exact
+# source head, and locality/decode-unit/tree laws stay mandatory. A win still requires bounded generic admission
+# and full product/native/Android/release authority before receiving any release credit.
