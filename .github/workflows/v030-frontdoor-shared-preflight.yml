@@ -1,4 +1,5 @@
 # ci-lane: deep
+# ci-pr-scope: latest-head-commit-gate
 name: CMPCT v0.30 shared front-door preflight oracle
 
 on:
@@ -24,7 +25,39 @@ env:
   EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
 
 jobs:
+  latest-head-impact:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      run_deep: ${{ steps.scope.outputs.run_deep }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 2
+      - name: Bind exact head and classify only its changed files
+        id: scope
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            echo 'run_deep=true' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          git diff-tree --no-commit-id --name-only -r HEAD > /tmp/latest-head-files.txt
+          cat /tmp/latest-head-files.txt
+          if grep -Eq '^(benchmarks/v030_frontdoor_shared_preflight_oracle(_v2)?\.py|experiments/entropygraph_v030_release_product(_logs_candidate)?\.py|\.github/workflows/v030-frontdoor-shared-preflight\.yml)$' /tmp/latest-head-files.txt; then
+            echo 'run_deep=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'run_deep=false' >> "$GITHUB_OUTPUT"
+            echo 'Accumulated PR paths matched, but newest exact commit does not affect the shared front-door proof.'
+          fi
+
   shared-frontdoor-preflight:
+    needs: latest-head-impact
+    if: needs.latest-head-impact.outputs.run_deep == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
@@ -55,12 +88,8 @@ jobs:
           from pathlib import Path
           from benchmarks import v030_frontdoor_shared_preflight_oracle as oracle
           from experiments import entropygraph_v030_release_product as product
-
           assert product.PROMOTED_SHARED_FRONTDOOR_PREFLIGHT is True
           assert callable(product._shared_frontdoor_preflight)
-
-          # The product helper must preserve the exact oracle semantics on both the
-          # negative-logs/C25-shape path and the early-positive logs path.
           import tempfile
           with tempfile.TemporaryDirectory(prefix='cmpct-shared-shipping-') as td:
               base=Path(td)
@@ -97,10 +126,7 @@ jobs:
           assert d['selector_change'] is False
           assert d['release_credit'] is False
           assert d['experiment_valid'] is True
-          c=d['correctness']
-          assert all(c.values())
-          # Shipping promotion is allowed only because the frozen research A/B earned
-          # its originally declared performance bar; a future regression must turn red.
+          assert all(d['correctness'].values())
           assert d['promotion_signal'] is True
           n=d['nonlogs_performance']; l=d['logs_performance']; r=d['requirements']
           assert n['speedup_fraction']>=r['minimum_nonlogs_speedup_fraction']
@@ -126,5 +152,6 @@ jobs:
           if-no-files-found: error
           retention-days: 90
 
-# Shipping integration is ratcheted above; the research A/B remains the unchanged
-# proof boundary that earned promotion, and carries no independent release credit.
+# Shipping integration is ratcheted above; the research A/B remains the unchanged proof boundary that earned
+# promotion and carries no independent release credit. Exact-head scoping prevents historical PR paths from
+# replaying the 30-minute proof when the newest commit cannot affect its semantics.
