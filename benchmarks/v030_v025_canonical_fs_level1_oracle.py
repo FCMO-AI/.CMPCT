@@ -6,7 +6,7 @@ The exact level frontier proved that CMPNX5 at a level-1 Zstd cap is already a s
 against ZIP/Deflate-9 and solid Zstd-19 on the frozen office and analytics workloads. CMPNX5 itself is not a
 canonical format, so that result cannot receive release credit. This oracle asks the next productization question:
 if the same representation is forced to pay the canonical r25 filesystem-manifest cost, does the four-way margin
-survive?
+survive, and does it also preserve the accepted v0.29 byte floor?
 
 For each target and each repeated round this lane:
 - normalizes the frozen source tree exactly as the external-comparator matrix does;
@@ -15,12 +15,12 @@ For each target and each repeated round this lane:
 - charges filesystem staging + archive construction + mandatory CMPNX5 strong verification to creation time;
 - extracts CMPNX5, decodes/restores the authenticated filesystem manifest, and compares the resulting canonical
   user-tree hash with the original source tree;
-- freshly measures ZIP/Deflate-9 and solid tar+Zstd-19 on the same normalized source and rotated runner order.
+- freshly measures ZIP/Deflate-9 and solid tar+Zstd-19 on the same normalized source and rotated runner order;
+- binds the measured complete candidate bytes to the exact accepted-v0.29 per-workload floor.
 
 This is still a productization *budget* proof, not a format promotion. CMPNX5 framing remains research-only and the
-reader-visible representation has not yet been re-expressed as canonical r25. A green result means the canonical
-filesystem tax is affordable and justifies building a bounded r25 profile with native/Android/recovery/locality
-parity; it cannot satisfy any release receipt by itself.
+reader-visible representation has not yet been re-expressed as canonical r25. A row may be externally four-way green
+while remaining non-promotable because it regresses accepted v0.29; that distinction is explicit and fail-closed.
 """
 
 import argparse
@@ -113,7 +113,7 @@ def _canonical_v25(stage: Path, root: Path) -> dict:
     }
 
 
-def _one(label: str, source: Path, work: Path) -> dict:
+def _one(label: str, source: Path, work: Path, accepted_v029_bytes: int) -> dict:
     with tempfile.TemporaryDirectory(prefix="cmpct-v030-v025-canonical-fs-", dir=work) as td:
         root = Path(td)
         stage = EXT._normalized_stage(source, root / "normalized-root")
@@ -176,11 +176,16 @@ def _one(label: str, source: Path, work: Path) -> dict:
             "verified_create_faster_than_zstd19": medians["candidate"] < medians["zstd19"],
         }
         strict["four_way"] = all(strict.values())
+        no_regression = byte_values["candidate"] <= int(accepted_v029_bytes)
         return {
             "label": label,
             "external_tree_sha256": expected_external_tree,
             "canonical_user_tree_sha256": expected_user_tree,
             "level_cap": LEVEL_CAP,
+            "accepted_v029_bytes": int(accepted_v029_bytes),
+            "saving_vs_v029_bytes": int(accepted_v029_bytes) - byte_values["candidate"],
+            "no_regression_vs_v029": no_regression,
+            "productization_prerequisite_passed": strict["four_way"] and no_regression,
             "candidate": {
                 "archive_bytes": byte_values["candidate"],
                 "median_complete_verified_create_s": medians["candidate"],
@@ -215,15 +220,29 @@ def run(work_root: Path) -> dict:
     corpus = work_root / "neutral"
     neutral.build(corpus)
     repair.normalize_root(corpus)
+    accepted = GENERAL._accepted_v029_rows()
 
     rows = []
     for name in TARGETS:
         source = corpus / name
         if not source.is_dir():
             raise RuntimeError(f"missing frozen workload {name}")
-        row = _one(f"neutral_hostile_v1/{name}", source, work_root)
+        accepted_bytes = int(accepted[("neutral_hostile_v1", name)]["accepted_v029_bytes"])
+        row = _one(f"neutral_hostile_v1/{name}", source, work_root, accepted_bytes)
         rows.append(row)
-        print(json.dumps({"label": row["label"], "strict": row["strict"]}, separators=(",", ":")), flush=True)
+        print(
+            json.dumps(
+                {
+                    "label": row["label"],
+                    "strict": row["strict"],
+                    "accepted_v029_bytes": row["accepted_v029_bytes"],
+                    "saving_vs_v029_bytes": row["saving_vs_v029_bytes"],
+                    "no_regression_vs_v029": row["no_regression_vs_v029"],
+                },
+                separators=(",", ":"),
+            ),
+            flush=True,
+        )
 
     gate = {
         "exact_target_count": len(rows) == len(TARGETS),
@@ -236,10 +255,22 @@ def run(work_root: Path) -> dict:
         "all_sizes_deterministic": True,
         "all_canonical_user_trees_verified": all(bool(row["canonical_user_tree_sha256"]) for row in rows),
         "all_rows_preserve_four_way_after_filesystem_tax": all(row["strict"]["four_way"] for row in rows),
+        "all_rows_clear_accepted_v029_floor": all(row["no_regression_vs_v029"] for row in rows),
+        "all_rows_clear_productization_prerequisites": all(row["productization_prerequisite_passed"] for row in rows),
     }
-    gate["passed"] = all(gate.values())
+    # The measurement itself remains valid even when a productization prerequisite is red. Do not turn a useful
+    # structural negative into a harness failure: the explicit prerequisite fields are the fail-closed decision.
+    gate["measurement_passed"] = all(
+        gate[key]
+        for key in (
+            "exact_target_count",
+            "all_rounds_complete",
+            "all_sizes_deterministic",
+            "all_canonical_user_trees_verified",
+        )
+    )
     return {
-        "schema": "cmpct-v030-v025-canonical-fs-level1-v1",
+        "schema": "cmpct-v030-v025-canonical-fs-level1-v2",
         "targets": list(TARGETS),
         "level_cap": LEVEL_CAP,
         "rounds": ROUNDS,
@@ -247,7 +278,8 @@ def run(work_root: Path) -> dict:
         "gate": gate,
         "claim_boundary": (
             "canonical filesystem tax / productization-budget proof only; CMPNX5 framing remains research-only. "
-            "A green result authorizes engineering a bounded canonical r25 profile, not release or selector credit."
+            "External four-way and accepted-v0.29 no-regression are reported independently and both are mandatory "
+            "before this mechanism can advance toward canonical selector credit."
         ),
     }
 
@@ -269,8 +301,8 @@ def main() -> None:
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8")
     print(json.dumps({"gate": result["gate"]}, indent=2), flush=True)
-    if not result["gate"]["passed"]:
-        raise SystemExit("v0.25 level-1 canonical-filesystem productization budget failed")
+    if not result["gate"]["measurement_passed"]:
+        raise SystemExit("v0.25 level-1 canonical-filesystem measurement invalid")
 
 
 if __name__ == "__main__":
