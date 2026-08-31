@@ -1,4 +1,6 @@
 # ci-lane: release
+# ci-pr-scope: latest-head-commit-gate
+# ci-cancel-policy: preserve-running-exact-receipt
 name: CMPCT v0.30 external competitor frontier
 
 on:
@@ -17,15 +19,43 @@ permissions:
 
 concurrency:
   group: cmpct-v030-external-frontier-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 env:
   PYTHONPATH: ${{ github.workspace }}
   EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
 
 jobs:
+  latest-head-impact:
+    runs-on: ubuntu-24.04
+    outputs:
+      run_deep: ${{ steps.scope.outputs.run_deep }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 2
+      - name: Bind exact head and classify only its changed files
+        id: scope
+        shell: bash
+        run: |
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            echo 'run_deep=true' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          changed="$(git diff-tree --no-commit-id --name-only -r HEAD)"
+          printf '%s\n' "$changed"
+          if printf '%s\n' "$changed" | grep -Eq '^(experiments/entropygraph_v030_[^/]*\.py|benchmarks/v030_external_competitors\.py|benchmarks/v030_external_competitors_canonical\.py|\.github/workflows/v030-external-competitors\.yml)$'; then
+            echo 'run_deep=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'run_deep=false' >> "$GITHUB_OUTPUT"
+          fi
+
   external-frontier:
-    runs-on: ubuntu-latest
+    needs: latest-head-impact
+    if: needs.latest-head-impact.outputs.run_deep == 'true'
+    runs-on: ubuntu-24.04
     timeout-minutes: 480
     steps:
       - uses: actions/checkout@v6
@@ -41,8 +71,14 @@ jobs:
 
       - name: Install CMPCT, frozen-corpus media tools and external compressors
         run: |
-          sudo apt-get update
-          sudo apt-get install -y zstd p7zip-full zpaq gcc ffmpeg
+          sudo apt-get update \
+            -o Dir::Etc::sourcelist='sources.list.d/ubuntu.sources' \
+            -o Dir::Etc::sourceparts='-' \
+            -o APT::Get::List-Cleanup='0'
+          sudo apt-get install -y \
+            -o Dir::Etc::sourcelist='sources.list.d/ubuntu.sources' \
+            -o Dir::Etc::sourceparts='-' \
+            zstd p7zip-full zpaq gcc ffmpeg
           python -m pip install --upgrade pip
           python -m pip install -e '.[test,audio]'
           python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
