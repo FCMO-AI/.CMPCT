@@ -18,8 +18,11 @@ on:
 permissions:
   contents: read
 
+# Preserve queued exact-source receipts as well as running receipts. GitHub concurrency
+# permits only one pending run per group, so a PR-number key lets a newer unrelated update
+# evict an eight-hour authority before it starts. Exact-SHA grouping prevents that custody loss.
 concurrency:
-  group: cmpct-v030-external-frontier-${{ github.event.pull_request.number || github.ref }}
+  group: cmpct-v030-external-frontier-${{ github.event.pull_request.head.sha || github.sha }}
   cancel-in-progress: false
 
 env:
@@ -140,8 +143,6 @@ jobs:
           assert strict['strict_joint_target']==15
           assert len(strict['rows'])==15
           assert all(row['comparators_complete'] for row in strict['rows'])
-          # Release remains fail-closed at 15/15. The explicit counts are retained even on
-          # a red receipt so progress cannot drift through handoff prose again.
           assert strict['strict_joint_wins']==15
           assert all(row['strict_joint_win'] for row in strict['rows'])
           for key in (
