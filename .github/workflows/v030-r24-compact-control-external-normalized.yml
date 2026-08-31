@@ -1,29 +1,16 @@
 # ci-lane: deep
+# ci-auto-policy: retired-manual-only
 name: CMPCT v0.30 r24 compact control external-normalized
 
 on:
-  pull_request:
-    branches: [main]
-    paths:
-      - 'benchmarks/v030_r24_compact_control_external_normalized.py'
-      - 'benchmarks/v030_r24_compact_control_oracle.py'
-      - 'benchmarks/v030_r24_compact_control_composition_oracle_v2.py'
-      - 'benchmarks/v030_external_competitors.py'
-      - 'tests/test_v030_compact_control_external_normalized.py'
-      - 'experiments/entropygraph_v030_release_product.py'
-      - 'src/cmpct/codec.py'
-      - '.github/workflows/v030-r24-compact-control-external-normalized.yml'
   workflow_dispatch:
 
 permissions:
   contents: read
 
-concurrency:
-  group: cmpct-v030-r24-compact-control-extnorm-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
-
 env:
   PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.sha }}
 
 jobs:
   external-normalized-control:
@@ -31,14 +18,20 @@ jobs:
     timeout-minutes: 180
     steps:
       - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - name: Bind exact candidate
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
       - uses: actions/setup-python@v6
         with:
           python-version: '3.11'
           cache: pip
-      - name: Install exact corpus/compressor dependencies
+      - name: Install exact corpus/compressor dependencies from canonical Ubuntu feed
         run: |
-          sudo apt-get update
-          sudo apt-get install -y zstd gcc ffmpeg libsndfile1
+          set -euo pipefail
+          test -f /etc/apt/sources.list.d/ubuntu.sources
+          sudo apt-get -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" -o Dir::Etc::sourceparts="-" update
+          sudo apt-get -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" -o Dir::Etc::sourceparts="-" install -y zstd gcc ffmpeg libsndfile1
           python -m pip install --upgrade pip
           python -m pip install -e '.[audio,test]'
           python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
@@ -91,7 +84,6 @@ jobs:
           assert t['semantic_index_roundtrip_exact'] is True
           assert t['two_authenticated_control_copies_retained'] is True
           assert t['physical_payload_records_unchanged'] is True
-          # This lane may preserve valid negative evidence. Promotion requires the unchanged strict four-way bar.
           if d['gate']['promotion_signal']:
               assert t['projected_bytes'] < t['shipping_r24_bytes']
               assert t['projected_bytes'] < t['zip_bytes']
@@ -104,9 +96,11 @@ jobs:
       - uses: actions/upload-artifact@v6
         if: always()
         with:
-          name: v030-r24-compact-control-extnorm-${{ github.sha }}
+          name: v030-r24-compact-control-extnorm-${{ env.EVIDENCE_HEAD }}
           path: benchmark-artifacts/v030-r24-compact-control-extnorm.json
           if-no-files-found: warn
           retention-days: 90
 
-# Research-only exact-domain shadow. Ordinary external/generalization/final release authorities remain decisive.
+# Historical zero-credit exact-domain shadow retained for manual reproduction. The compact-control shipping terminal
+# is now explicitly retired; ordinary current external/generalization/final authorities are decisive and should
+# receive the runner capacity previously consumed by this three-hour automatic shadow.
