@@ -4,6 +4,11 @@
 name: CMPCT v0.30 Shifted contiguous cluster DP
 
 on:
+  push:
+    branches: [agent/v030-authoritative-integration]
+    paths:
+      - 'benchmarks/v030_shifted_contiguous_cluster_dp_oracle.py'
+      - '.github/workflows/v030-shifted-contiguous-cluster-dp.yml'
   pull_request:
     branches: [main]
     paths:
