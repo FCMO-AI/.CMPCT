@@ -1,4 +1,5 @@
 # ci-lane: deep
+# ci-pr-scope: latest-head-commit-gate
 name: CMPCT v0.30 ZIP-factor V3 recovery budget
 
 on:
@@ -24,7 +25,39 @@ env:
   EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
 
 jobs:
+  latest-head-impact:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      run_deep: ${{ steps.scope.outputs.run_deep }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 2
+      - name: Bind exact head and classify only its changed files
+        id: scope
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            echo 'run_deep=true' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          git diff-tree --no-commit-id --name-only -r HEAD > /tmp/latest-head-files.txt
+          cat /tmp/latest-head-files.txt
+          if grep -Eq '^(benchmarks/v030_zipfactor_v3_recovery_budget_oracle\.py|benchmarks/v030_zipfactor_recovery_oracle\.py|benchmarks/v030_external_competitors\.py|experiments/entropygraph_v030_zipfactor_compact_v3\.py|\.github/workflows/v030-zipfactor-v3-recovery-budget\.yml)$' /tmp/latest-head-files.txt; then
+            echo 'run_deep=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'run_deep=false' >> "$GITHUB_OUTPUT"
+            echo 'Accumulated PR paths matched, but newest exact commit does not affect the frozen recovery-budget proof.'
+          fi
+
   recovery-budget:
+    needs: latest-head-impact
+    if: needs.latest-head-impact.outputs.run_deep == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
@@ -42,10 +75,12 @@ jobs:
         with:
           python-version: '3.11'
           cache: pip
-      - name: Install exact comparator dependencies
+      - name: Install exact comparator dependencies from Ubuntu only
         run: |
-          sudo apt-get update
-          sudo apt-get install -y zstd
+          set -euo pipefail
+          test -f /etc/apt/sources.list.d/ubuntu.sources
+          sudo apt-get -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" -o Dir::Etc::sourceparts="-" update
+          sudo apt-get -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" -o Dir::Etc::sourceparts="-" install -y zstd
           python -m pip install --upgrade pip
           python -m pip install -e '.[test]'
       - name: Compile exact recovery-budget oracle
@@ -89,7 +124,7 @@ jobs:
           PY
       - name: Upload evidence
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: v030-zipfactor-v3-recovery-budget-${{ steps.candidate.outputs.sha || github.sha }}
           path: |
