@@ -1,4 +1,5 @@
 # ci-lane: deep
+# ci-cancel-policy: preserve-running-exact-receipt
 # ci-pr-scope: latest-head-commit-gate
 name: CMPCT v0.30 PrefixGraph CCtx memory attribution
 
@@ -30,7 +31,7 @@ permissions:
 
 concurrency:
   group: cmpct-v030-prefixgraph-cctx-memory-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 env:
   PYTHONPATH: ${{ github.workspace }}
@@ -148,3 +149,5 @@ jobs:
 
 # Research-only memory attribution. A positive causal signal nominates live CCtx/context architecture for the
 # next Shifted RSS experiment; it cannot alter production scheduling, archive bytes, thresholds, or release credit.
+# Once an exact attribution receipt starts, unrelated integration-PR synchronizations may enqueue cheap no-op gates
+# but cannot cancel the running measurement before it publishes its fingerprint-bound evidence.
