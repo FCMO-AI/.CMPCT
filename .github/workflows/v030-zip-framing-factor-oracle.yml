@@ -1,4 +1,5 @@
 # ci-lane: deep
+# ci-pr-scope: latest-head-commit-gate
 name: CMPCT v0.30 ZIP framing-factor oracle
 
 on:
@@ -32,21 +33,60 @@ concurrency:
 
 env:
   PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
 
 jobs:
+  latest-head-impact:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      run_deep: ${{ steps.scope.outputs.run_deep }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 2
+      - name: Bind exact head and classify only its changed files
+        id: scope
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            echo 'run_deep=true' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          git diff-tree --no-commit-id --name-only -r HEAD > /tmp/latest-head-files.txt
+          cat /tmp/latest-head-files.txt
+          if grep -Eq '^(benchmarks/(resemblance_hostile_corpus_v1|v030_external_competitors|v030_zip_framing_factor_oracle|v030_zipfactor_canonical_productization|v030_zipfactor_canonical_productization_evidence_v2)\.py|experiments/entropygraph_v030_zipfactor_(profile|session|compact|compact_v3|fused)\.py|tests/test_v030_zip(_framing_factor_admission|factor_(profile|session|fused|compact_v3))\.py|\.github/workflows/v030-zip-framing-factor-oracle\.yml)$' /tmp/latest-head-files.txt; then
+            echo 'run_deep=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'run_deep=false' >> "$GITHUB_OUTPUT"
+            echo 'Accumulated PR paths matched, but newest exact commit does not affect the ZIP-factor proof.'
+          fi
+
   oracle:
+    needs: latest-head-impact
+    if: needs.latest-head-impact.outputs.run_deep == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - name: Bind exact candidate
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
       - uses: actions/setup-python@v6
         with:
           python-version: '3.11'
           cache: pip
-      - name: Install deterministic dependencies and competitors
+      - name: Install deterministic dependencies and competitors from canonical Ubuntu feed
         run: |
-          sudo apt-get update
-          sudo apt-get install -y zstd
+          set -euo pipefail
+          test -f /etc/apt/sources.list.d/ubuntu.sources
+          sudo apt-get -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" -o Dir::Etc::sourceparts="-" update
+          sudo apt-get -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" -o Dir::Etc::sourceparts="-" install -y zstd
           python -m pip install --upgrade pip
           python -m pip install -e '.[test]'
       - name: Compile oracle and product-side profile engines
@@ -89,67 +129,47 @@ jobs:
           assert d['claim_boundary'].startswith('research-only')
           assert d['workload']=='resemblance_hostile_v1/04_deflate_family'
           g=d['gate']
-          assert g['source_admitted'] is True
-          assert g['all_candidates_exact_tree'] is True
-          assert g['all_candidates_exact_zip_bytes'] is True
-          assert g['all_candidates_locality_green'] is True
-          assert g['passed'] is True
+          assert g['source_admitted'] is True and g['all_candidates_exact_tree'] is True and g['all_candidates_exact_zip_bytes'] is True and g['all_candidates_locality_green'] is True and g['passed'] is True
           rows=d['candidates']
           assert rows and all(r['max_member_read_amplification'] <= 8.0 for r in rows)
           assert all(r['max_decode_unit_bytes'] <= 8*1024*1024 for r in rows)
           if d['viable_candidate'] is not None:
               c=d['viable_candidate']
               assert c['tree_verified'] and c['all_zip_bytes_exact'] and c['locality_green']
-              assert c['archive_bytes'] < d['zip']['archive_bytes']
-              assert c['archive_bytes'] < d['tar_zstd19']['archive_bytes']
-              assert c['create_s'] < d['zip']['create_s']
-              assert c['create_s'] < d['tar_zstd19']['create_s']
-
+              assert c['archive_bytes'] < d['zip']['archive_bytes'] and c['archive_bytes'] < d['tar_zstd19']['archive_bytes']
+              assert c['create_s'] < d['zip']['create_s'] and c['create_s'] < d['tar_zstd19']['create_s']
           p=json.loads(Path('benchmark-artifacts/v030-zipfactor-product.json').read_text())
           assert p['schema']=='cmpct-v030-zipfactor-canonical-productization-v5'
-          assert 'native/Android parity' in p['claim_boundary']
-          assert 'two-way recovery' in p['claim_boundary']
+          assert 'native/Android parity' in p['claim_boundary'] and 'two-way recovery' in p['claim_boundary']
           assert p['workload']=='resemblance_hostile_v1/04_deflate_family'
           assert p['candidate']['format_profile']=='zip-framing-factor-binary-control-v3'
-          assert p['candidate']['fused_manifest_and_zip_parse'] is True
-          assert p['candidate']['binary_control'] is True
-          assert p['candidate']['profile_prepare_s'] == 0.0
-          assert p['candidate']['manifest_content_identity_exact'] is True
-          assert p['candidate']['strong_verify']['ok'] is True
-          assert p['candidate']['mandatory_verify_s'] >= 0.0
+          assert p['candidate']['fused_manifest_and_zip_parse'] is True and p['candidate']['binary_control'] is True
+          assert p['candidate']['profile_prepare_s'] == 0.0 and p['candidate']['manifest_content_identity_exact'] is True
+          assert p['candidate']['strong_verify']['ok'] is True and p['candidate']['mandatory_verify_s'] >= 0.0
           assert p['candidate']['create_s'] == p['candidate']['profile_build_s'] + p['candidate']['mandatory_verify_s']
-          assert p['candidate']['measured_default_level'] == 3
-          assert p['candidate']['level'] == 3
+          assert p['candidate']['measured_default_level'] == 3 and p['candidate']['level'] == 3
           gate=p['gate']; ev=p['evidence_v2']
-          assert gate['independent_source_truth'] is True
-          assert gate['binary_control_v3_selected'] is True
-          assert gate['locality_green'] is True
-          assert ev['experiment_valid'] is True
-          expected_promotion = all(gate[k] is True for k in (
-              'strictly_beats_zip_size',
-              'strictly_beats_zstd19_size',
-              'strictly_beats_zip_create',
-              'strictly_beats_zstd19_create',
-          ))
-          assert ev['promotion_signal'] is expected_promotion
-          assert ev['negative_result_valid'] is (not expected_promotion)
-          assert ev['release_credit'] is False
-          if ev['promotion_signal']:
-              assert gate['passed'] is True
-          else:
-              assert gate['passed'] is False
+          assert gate['independent_source_truth'] is True and gate['binary_control_v3_selected'] is True and gate['locality_green'] is True and ev['experiment_valid'] is True
+          expected_promotion = all(gate[k] is True for k in ('strictly_beats_zip_size','strictly_beats_zstd19_size','strictly_beats_zip_create','strictly_beats_zstd19_create'))
+          assert ev['promotion_signal'] is expected_promotion and ev['negative_result_valid'] is (not expected_promotion) and ev['release_credit'] is False
+          assert gate['passed'] is expected_promotion
           PY
+      - name: Record exact candidate fingerprint
+        run: printf '%s\n' "$EVIDENCE_HEAD" > benchmark-artifacts/v030-zip-framing-factor-candidate.txt
       - name: CI topology self-check
+        if: always()
         run: python tools/check_ci_topology.py .github/workflows/v030-zip-framing-factor-oracle.yml
       - uses: actions/upload-artifact@v6
         if: always()
         with:
-          name: v030-zip-framing-factor-${{ github.sha }}
+          name: v030-zip-framing-factor-${{ env.EVIDENCE_HEAD }}
           path: |
             benchmark-artifacts/v030-zip-framing-factor.json
             benchmark-artifacts/v030-zipfactor-product.json
+            benchmark-artifacts/v030-zip-framing-factor-candidate.txt
           if-no-files-found: error
           retention-days: 90
 
-# This remains pre-promotion evidence. A green fused binary-control product-boundary proof must survive mandatory
-# verification and independent source truth. Native/Android parity and two-way recovery remain hard prerequisites.
+# Pre-promotion evidence. The native in-process complete frontier has since demonstrated a strict candidate-level
+# four-way win, so this Python product-boundary lane remains useful for semantic regression only. Native/Android
+# parity, two-way recovery, selector integration and ordinary full release authority remain hard prerequisites.
