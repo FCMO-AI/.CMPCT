@@ -88,15 +88,21 @@ jobs:
           python -m benchmarks.v030_shifted_cluster_owned_pack_oracle \
             --work-root "$RUNNER_TEMP/v030-shifted-cluster-owned-pack" \
             --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-shifted-cluster-owned-pack.json"
-      - name: Enforce evidence boundary
+      - name: Enforce evidence boundary and complete search-cost accounting
         run: |
           python - <<'PY'
           import json
           from pathlib import Path
           d=json.loads(Path('benchmark-artifacts/v030-shifted-cluster-owned-pack.json').read_text())
-          assert d['schema']=='cmpct-v030-shifted-cluster-owned-pack-oracle-v1'
+          assert d['schema']=='cmpct-v030-shifted-cluster-owned-pack-oracle-v2'
           assert d['files'] > 2 and d['cluster_count'] >= 1
-          assert d['evaluated_merges'] > 0
+          assert d['source_bytes'] > 0
+          assert d['evaluated_merges'] > 0 and d['admissible_pair_visits'] >= d['evaluated_merges']
+          assert d['unique_compression_calls'] >= d['initial_singleton_compression_calls'] == d['files']
+          assert d['trial_raw_bytes'] >= d['source_bytes']
+          assert d['trial_compressed_bytes'] > 0
+          assert d['search_work_amplification_vs_source'] >= 1.0
+          assert d['zstd19_compression_seconds'] > 0.0 and d['merge_search_elapsed_s'] > 0.0
           assert d['within_decode_unit'] is True
           assert d['within_locality_amplification'] is True
           assert d['max_cluster_raw_bytes'] <= 8*1024*1024
@@ -127,4 +133,5 @@ jobs:
           retention-days: 90
 
 # R4 structural research only. This attacks the measured root-cost/cycle bottleneck by replacing member roots
-# with locality-bounded jointly compressed physical owners. A win still requires a fast generic selector and full parity.
+# with locality-bounded jointly compressed physical owners. Every unique level-19 trial is priced so a capacity
+# win cannot conceal exported search work. A win still requires bounded generic admission and full parity.
