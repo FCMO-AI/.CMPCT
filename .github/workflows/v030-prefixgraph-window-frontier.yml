@@ -1,25 +1,12 @@
 # ci-lane: deep
-# ci-cancel-policy: preserve-running-exact-receipt
+# ci-auto-policy: retired-manual-only
 name: CMPCT v0.30 PrefixGraph Zstd window-memory frontier
 
 on:
-  push:
-    branches: [agent/v030-authoritative-integration]
-    paths:
-      - 'experiments/entropygraph_v030_prefixgraph.py'
-      - 'experiments/entropygraph_v030_prefixgraph_parallel.py'
-      - 'benchmarks/v030_release_performance.py'
-      - 'benchmarks/v030_prefixgraph_window_frontier_worker.py'
-      - 'benchmarks/v030_prefixgraph_window_frontier_oracle.py'
-      - '.github/workflows/v030-prefixgraph-window-frontier.yml'
   workflow_dispatch:
 
 permissions:
   contents: read
-
-concurrency:
-  group: cmpct-v030-prefixgraph-window-frontier-${{ github.ref }}
-  cancel-in-progress: false
 
 env:
   PYTHONPATH: ${{ github.workspace }}
@@ -100,4 +87,6 @@ jobs:
           if-no-files-found: error
           retention-days: 90
 
-# Research-only Pareto evidence. A positive window arm is not a release promotion.
+# Terminal negative retained for manual reproduction. Exact evidence found window-log 23->22/21 saves only about
+# 0.6-0.9% RSS, while 20 crosses a catastrophic compression cliff (~8.33x bytes, ~1.60x wall, ~2.08x RSS).
+# Automatic capacity is therefore reserved for live CCtx/context-lifetime architecture instead of this knob family.
