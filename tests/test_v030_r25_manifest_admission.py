@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+from pathlib import PurePosixPath
 
 import msgpack
 import pytest
@@ -96,6 +97,70 @@ def test_malformed_control_fails_closed() -> None:
         ADMIT.decode(
             b"not-a-manifest",
             regular_identities={},
+            max_path_bytes=MAX_PATH,
+            max_entries=MAX_ENTRIES,
+        )
+
+
+def test_prepare_profile_tree_uses_same_strict_smaller_admission_seam(tmp_path) -> None:
+    source = tmp_path / "source"
+    for index in range(80):
+        path = source / "src" / "pkg" / f"very_repetitive_component_{index:03d}.py"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(bytes([index % 251]) * 64)
+
+    staged = tmp_path / "staged"
+    prepared = ADMIT.prepare_profile_tree(
+        source,
+        staged,
+        max_path_bytes=MAX_PATH,
+        max_profile_files=200,
+        max_profile_logical_bytes=1024 * 1024,
+        max_entries=MAX_ENTRIES,
+    )
+    assert prepared["selected_manifest_encoding"] == "implicit-v4"
+    assert prepared["selected_manifest_bytes"] < len(prepared["source_manifest_raw"])
+    assert prepared["manifest_control_saving_bytes"] > 0
+    control_path = staged.joinpath(*PurePosixPath(FS.FILESYSTEM_MANIFEST).parts)
+    assert control_path.read_bytes() == prepared["selected_manifest_raw"]
+    assert hashlib.sha256(prepared["selected_manifest_raw"]).hexdigest() == prepared["selected_manifest_sha256"]
+
+
+def test_graph_bound_decoder_authenticates_control_and_rejects_extra_members() -> None:
+    entries = [_regular(f"tree/member_{index:03d}.bin", b"q" * (index + 1)) for index in range(32)]
+    raw = _manifest(entries)
+    selected = ADMIT.admit(raw, max_path_bytes=MAX_PATH, max_entries=MAX_ENTRIES)
+    assert selected.encoding == "implicit-v4"
+    identities = {row[0]: (int(row[7][0]), bytes(row[7][1])) for row in entries}
+    content = {
+        FS.FILESYSTEM_MANIFEST: (len(selected.raw), hashlib.sha256(selected.raw).digest()),
+        **identities,
+    }
+    decoded, encoding = ADMIT.decode_from_content_identities(
+        selected.raw,
+        content_identities=content,
+        max_path_bytes=MAX_PATH,
+        max_entries=MAX_ENTRIES,
+    )
+    assert encoding == "implicit-v4"
+    assert set(decoded["regular"]) == set(identities)
+
+    hostile_control = dict(content)
+    hostile_control[FS.FILESYSTEM_MANIFEST] = (len(selected.raw), b"x" * 32)
+    with pytest.raises(RuntimeError, match="graph identity mismatch"):
+        ADMIT.decode_from_content_identities(
+            selected.raw,
+            content_identities=hostile_control,
+            max_path_bytes=MAX_PATH,
+            max_entries=MAX_ENTRIES,
+        )
+
+    hostile_extra = dict(content)
+    hostile_extra["unexpected.bin"] = (1, b"y" * 32)
+    with pytest.raises(RuntimeError, match="disagree on logical members"):
+        ADMIT.decode_from_content_identities(
+            selected.raw,
+            content_identities=hostile_extra,
             max_path_bytes=MAX_PATH,
             max_entries=MAX_ENTRIES,
         )
