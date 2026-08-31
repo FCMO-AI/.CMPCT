@@ -82,7 +82,10 @@ jobs:
     needs: latest-head-impact
     if: needs.latest-head-impact.outputs.run_deep == 'true'
     runs-on: ubuntu-24.04
-    timeout-minutes: 150
+    # The previous exact execution reached the seven-round A/B and was killed by the old
+    # 150-minute job ceiling at 2h30m.  Five hours is a bounded evidence window, not a relaxed
+    # performance gate; the same seven rounds and >=10% verify+extract thresholds remain mandatory.
+    timeout-minutes: 300
     steps:
       - uses: actions/checkout@v6
         with:
@@ -117,13 +120,14 @@ jobs:
           cp "$RUNNER_TEMP/candidate-target/release/cmpct-portable" "$RUNNER_TEMP/cmpct-portable-candidate"
       - name: Preserve native G0-G4 correctness after candidate patch
         run: CARGO_TARGET_DIR="$RUNNER_TEMP/candidate-target" cargo test --manifest-path native/cmpct-portable/Cargo.toml g04 --release
-      - name: Run exact baseline-vs-candidate ML A/B
+      - name: Run exact baseline-vs-candidate ML A/B with interruption-safe checkpoints
         run: |
           mkdir -p benchmark-artifacts
           python benchmarks/v030_g04_ml_operation_record_cache_ab_oracle.py \
             --baseline-cli "$RUNNER_TEMP/cmpct-portable-baseline" \
             --candidate-cli "$RUNNER_TEMP/cmpct-portable-candidate" \
             --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-g04-ml-operation-record-cache-work" \
+            --checkpoint "$GITHUB_WORKSPACE/benchmark-artifacts/v030-g04-ml-operation-record-cache-checkpoint.json" \
             --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-g04-ml-operation-record-cache.json"
       - name: Enforce binary binding, identity, hostile rejection and honest terminal decision
         if: always()
@@ -148,6 +152,7 @@ jobs:
           assert c['complete_verify_cache_scope']=='one bounded cache per verify operation'
           assert c['complete_extract_cache_scope']=='one bounded cache per extract operation'
           assert c['archive_bytes_changed'] is False and c['grammar_changed'] is False
+          assert c['terminal_decision_requires_all_rounds'] is True
           assert g['same_archive_bytes'] is True and g['same_public_info'] is True and g['same_extracted_tree'] is True
           assert g['baseline_corruption_rejected'] is True and g['candidate_corruption_rejected'] is True
           assert d['release_credit'] is False
@@ -155,6 +160,22 @@ jobs:
           assert d['promotion_signal'] is expected and g['passed'] is expected
           assert d['terminal_decision']==('PROMOTE_NEXT_PREREQUISITE' if expected else 'RETIRE_FAMILY')
           PY
+      - name: Validate any interruption-safe checkpoint without granting it terminal authority
+        if: always()
+        run: |
+          if [ -f benchmark-artifacts/v030-g04-ml-operation-record-cache-checkpoint.json ]; then
+            python - <<'PY'
+          import json, os
+          from pathlib import Path
+          d=json.loads(Path('benchmark-artifacts/v030-g04-ml-operation-record-cache-checkpoint.json').read_text())
+          assert d['schema']=='cmpct-v030-g04-ml-operation-record-cache-checkpoint-v1'
+          assert d['source_commit']==os.environ['EVIDENCE_HEAD']
+          assert 0 <= int(d['completed_rounds']) <= int(d['planned_rounds']) == 7
+          assert d['terminal_decision'] is None
+          assert d['promotion_signal'] is False
+          assert d['release_credit'] is False
+          PY
+          fi
       - name: Restore exact repository tree before policy checks
         if: always()
         run: git reset --hard "$EVIDENCE_HEAD"
@@ -164,15 +185,17 @@ jobs:
       - name: Public-surface guard
         if: always()
         run: python tools/check_public_surface.py
-      - name: Upload exact A/B evidence
+      - name: Upload exact A/B and diagnostic checkpoint evidence
         if: always()
         uses: actions/upload-artifact@v6
         with:
           name: v030-g04-ml-operation-record-cache-ab-${{ env.EVIDENCE_HEAD }}
-          path: benchmark-artifacts/v030-g04-ml-operation-record-cache.json
+          path: |
+            benchmark-artifacts/v030-g04-ml-operation-record-cache.json
+            benchmark-artifacts/v030-g04-ml-operation-record-cache-checkpoint.json
           if-no-files-found: error
           retention-days: 90
 
 # Research-only exact receipt. A pass can authorize productizing bounded operation-scoped decoded-record ownership;
-# it cannot itself earn release credit or alter selector/locality/grammar policy. The receipt itself must name the
-# exact source commit that built both measured binaries; filename binding alone is insufficient evidence custody.
+# it cannot itself earn release credit or alter selector/locality/grammar policy. Seven complete rounds still own the
+# terminal decision. Per-round checkpoints are diagnostic custody only and explicitly cannot promote the candidate.
