@@ -10,6 +10,8 @@ on:
       - 'benchmarks/v030_zipfactor_native_verify_oracle.py'
       - 'experiments/entropygraph_v030_zipfactor_compact_v3.py'
       - 'native/cmpct-portable/**'
+      - 'native/cmpct-core/**'
+      - 'native/cmpct-zipfactor-v3-ffi/**'
       - '.github/workflows/v030-zipfactor-native-verify.yml'
   workflow_dispatch:
 
@@ -48,7 +50,7 @@ jobs:
           fi
           git diff-tree --no-commit-id --name-only -r HEAD > /tmp/latest-head-files.txt
           cat /tmp/latest-head-files.txt
-          if grep -Eq '^(benchmarks/v030_zipfactor_native_verify_oracle\.py|experiments/entropygraph_v030_zipfactor_compact_v3\.py|native/cmpct-portable/|\.github/workflows/v030-zipfactor-native-verify\.yml)' /tmp/latest-head-files.txt; then
+          if grep -Eq '^(benchmarks/v030_zipfactor_native_verify_oracle\.py|experiments/entropygraph_v030_zipfactor_compact_v3\.py|native/(cmpct-portable|cmpct-core|cmpct-zipfactor-v3-ffi)/|\.github/workflows/v030-zipfactor-native-verify\.yml)' /tmp/latest-head-files.txt; then
             echo 'run_deep=true' >> "$GITHUB_OUTPUT"
           else
             echo 'run_deep=false' >> "$GITHUB_OUTPUT"
