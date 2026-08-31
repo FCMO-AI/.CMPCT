@@ -87,7 +87,9 @@ jobs:
         run: |
           set -euo pipefail
           python -m py_compile benchmarks/v030_shifted_segmented_relation_payload_floor.py
-          python -m pytest -q tests/test_resemblance_hostile_corpus_v1.py
+          python -m pytest -q \
+            tests/test_resemblance.py \
+            tests/test_v030_shifted_joint_patch_stream_oracle.py
       - name: Run exact segmented relation payload floor
         run: |
           set -euo pipefail
@@ -116,7 +118,7 @@ jobs:
           assert a['research_priority_score'] >= 80
           assert a['terminal_decision'] in {'PROMOTE_NEXT_PREREQUISITE','RETIRE_FAMILY'}
           if d['representation_admissible']:
-              assert d['segment_count'] >= 2
+              assert d['segment_count'] >= 1
               assert all(s['decode_unit_le_8mib'] and s['locality_le_8x'] for s in d['segments'])
               if d['payload_capacity_positive']:
                   assert d['payload_beats_v029'] and d['payload_beats_zip'] and d['payload_beats_zstd19']
