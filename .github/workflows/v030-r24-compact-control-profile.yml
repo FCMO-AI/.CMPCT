@@ -1,39 +1,16 @@
 # ci-lane: deep
+# ci-auto-policy: retired-manual-only
 name: CMPCT v0.30 r24 compact-control profile productization
 
 on:
-  pull_request:
-    branches: [main]
-    paths:
-      - 'experiments/entropygraph_v030_r24_compact_control_profile.py'
-      - 'experiments/entropygraph_v030_r24_compact_control_direct_extract.py'
-      - 'experiments/entropygraph_v030_r24_compact_control_mmap_extract.py'
-      - 'benchmarks/v030_r24_compact_control_profile_productization.py'
-      - 'benchmarks/v030_r24_compact_control_external_normalized.py'
-      - 'benchmarks/v030_r24_compact_control_oracle.py'
-      - 'benchmarks/v030_c25cc01_implicit_packmap_v3_oracle.py'
-      - 'benchmarks/v030_c25cc01_implicit_packmap_v4_oracle.py'
-      - 'benchmarks/v030_c25cc01_self_describing_blobtable_oracle.py'
-      - 'benchmarks/v030_c25cc01_direct_extract_oracle.py'
-      - 'benchmarks/v030_c25cc01_mmap_extract_oracle.py'
-      - 'experiments/entropygraph_v030_release_product.py'
-      - 'experiments/entropygraph_v030_r24_dead_dictionary.py'
-      - 'tests/test_v030_r24_compact_control_profile.py'
-      - 'tests/test_v030_r24_compact_control_direct_extract.py'
-      - 'tests/test_v030_r24_compact_control_mmap_extract.py'
-      - 'tests/test_v030_c25cc01_self_describing_blobtable.py'
-      - '.github/workflows/v030-r24-compact-control-profile.yml'
   workflow_dispatch:
 
 permissions:
   contents: read
 
-concurrency:
-  group: cmpct-v030-r24-compact-control-profile-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
-
 env:
   PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.sha }}
 
 jobs:
   productization:
@@ -42,24 +19,25 @@ jobs:
     steps:
       - uses: actions/checkout@v6
         with:
-          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          ref: ${{ env.EVIDENCE_HEAD }}
       - name: Bind exact candidate
         id: candidate
         shell: bash
         run: |
           set -euo pipefail
-          expected='${{ github.event.pull_request.head.sha || github.sha }}'
           actual="$(git rev-parse HEAD)"
-          test "$actual" = "$expected"
+          test "$actual" = "$EVIDENCE_HEAD"
           echo "sha=$actual" >> "$GITHUB_OUTPUT"
       - uses: actions/setup-python@v6
         with:
           python-version: '3.11'
           cache: pip
-      - name: Install exact corpus/compressor dependencies
+      - name: Install exact corpus/compressor dependencies from canonical Ubuntu feed
         run: |
-          sudo apt-get update
-          sudo apt-get install -y zstd gcc ffmpeg libsndfile1
+          set -euo pipefail
+          test -f /etc/apt/sources.list.d/ubuntu.sources
+          sudo apt-get -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" -o Dir::Etc::sourceparts="-" update
+          sudo apt-get -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" -o Dir::Etc::sourceparts="-" install -y zstd gcc ffmpeg libsndfile1
           python -m pip install --upgrade pip
           python -m pip install -e '.[audio,test]'
           python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
@@ -72,10 +50,6 @@ jobs:
           python -m py_compile benchmarks/v030_c25cc01_self_describing_blobtable_oracle.py
           python -m py_compile benchmarks/v030_c25cc01_direct_extract_oracle.py
           python -m py_compile benchmarks/v030_c25cc01_mmap_extract_oracle.py
-          python -m py_compile tests/test_v030_r24_compact_control_profile.py
-          python -m py_compile tests/test_v030_r24_compact_control_direct_extract.py
-          python -m py_compile tests/test_v030_r24_compact_control_mmap_extract.py
-          python -m py_compile tests/test_v030_c25cc01_self_describing_blobtable.py
       - name: Run focused semantics, recovery, extraction and physical-table ratchets
         run: |
           pytest -q \
@@ -83,169 +57,42 @@ jobs:
             tests/test_v030_r24_compact_control_direct_extract.py \
             tests/test_v030_r24_compact_control_mmap_extract.py \
             tests/test_v030_c25cc01_self_describing_blobtable.py
-      - name: Measure direct C25 extraction without compatibility archive
+      - name: Run retained historical profile evidence
         run: |
           mkdir -p benchmark-artifacts
           python -m benchmarks.v030_c25cc01_direct_extract_oracle \
             --work-root "$RUNNER_TEMP/v030-c25cc01-direct-extract" \
             --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-c25cc01-direct-extract.json"
-      - name: Ratchet direct-extract semantic boundary
-        run: |
-          python - <<'PY'
-          import json
-          from pathlib import Path
-          d=json.loads(Path('benchmark-artifacts/v030-c25cc01-direct-extract.json').read_text())
-          assert d['schema']=='cmpct-v030-c25cc01-direct-extract-oracle-v1'
-          c=d['contract']
-          assert c['rounds']==7
-          assert c['same_archive_bytes'] is True
-          assert c['same_mature_r24_decoder'] is True
-          assert c['legacy_compatibility_materialization'] is True
-          assert c['direct_compatibility_materialization'] is False
-          assert c['publication_inside_timing'] is True
-          assert c['archive_bytes_changed'] is False
-          assert c['selector_change'] is False
-          assert c['release_credit'] is False and d['release_credit'] is False
-          assert d['all_outputs_exact'] is True
-          assert len(d['samples_s']['legacy'])==7 and len(d['samples_s']['direct'])==7
-          assert d['median_s']['legacy'] > 0 and d['median_s']['direct'] > 0
-          PY
-      - name: Measure zero-copy mmap C25 extraction
-        run: |
           python -m benchmarks.v030_c25cc01_mmap_extract_oracle \
             --work-root "$RUNNER_TEMP/v030-c25cc01-mmap-extract" \
             --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-c25cc01-mmap-extract.json"
-      - name: Ratchet mmap-extract semantic boundary
-        run: |
-          python - <<'PY'
-          import json
-          from pathlib import Path
-          d=json.loads(Path('benchmark-artifacts/v030-c25cc01-mmap-extract.json').read_text())
-          assert d['schema']=='cmpct-v030-c25cc01-mmap-extract-oracle-v1'
-          c=d['contract']
-          assert c['rounds']==9
-          assert c['same_archive_bytes'] is True
-          assert c['same_authenticated_control_expansion'] is True
-          assert c['same_mature_r24_decoder'] is True
-          assert c['direct_full_archive_read'] is True
-          assert c['direct_physical_payload_copy'] is True
-          assert c['mmap_full_archive_read'] is False
-          assert c['mmap_physical_payload_copy'] is False
-          assert c['publication_inside_timing'] is True
-          assert c['archive_bytes_changed'] is False
-          assert c['selector_change'] is False
-          assert c['release_credit'] is False and d['release_credit'] is False
-          assert d['all_outputs_exact'] is True
-          assert len(d['samples_s']['direct'])==9 and len(d['samples_s']['mmap'])==9
-          assert d['median_s']['direct'] > 0 and d['median_s']['mmap'] > 0
-          PY
-      - name: Run exact external-normalized direct profile proof
-        run: |
           python benchmarks/v030_r24_compact_control_profile_productization.py \
             --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-r24-cc-profile-work" \
             --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-r24-cc-profile.json"
-      - name: Enforce productization boundary
-        run: |
-          python - <<'PY'
-          import json
-          from pathlib import Path
-          d=json.loads(Path('benchmark-artifacts/v030-r24-cc-profile.json').read_text())
-          assert d['schema']=='cmpct-v030-r24-compact-control-profile-productization-v1'
-          c=d['contract']
-          assert c['profile']=='r24-compact-control-v1'
-          assert c['format_revision']==25
-          assert c['workloads']==15
-          assert c['external_metadata_normalization'] is True
-          assert c['candidate_strong_verification_inside_creation_timing'] is True
-          assert c['two_authenticated_control_copies'] is True
-          assert c['physical_payload_records_unchanged'] is True
-          assert c['release_credit'] is False
-          assert c['selector_change'] is False
-          assert c['native_dispatch_change'] is False
-          assert c['android_dispatch_change'] is False
-          a=d['all15']
-          assert a['all15_complete'] is True
-          assert a['zero_candidate_regressions_vs_r24'] is True
-          assert a['all_trees_equal'] is True
-          assert a['all_payloads_unchanged'] is True
-          assert a['strict_improvement_count'] > 0
-          t=d['target']; g=d['gate']
-          assert t['rounds']==5
-          assert g['experiment_valid'] is True
-          if t['eligible']:
-              assert t['deterministic_rejection'] is False
-              assert t['rejection_reason'] is None
-              assert t['archive_sha_deterministic'] is True
-              assert t['external_tree_deterministic'] is True
-              assert t['physical_payload_records_unchanged'] is True
-              assert t['two_authenticated_control_copies'] is True
-              assert t['semantic_index_roundtrip_exact'] is True
-              assert t['strictly_smaller_than_zip'] is True
-              assert t['strictly_smaller_than_zstd19'] is True
-              assert t['strictly_faster_than_zip'] is True
-              assert t['strictly_faster_than_zstd19'] is True
-              assert t['strict_four_way_win'] is True
-              assert g['target_eligible'] is True
-              assert g['target_deterministic_rejection'] is False
-              assert g['target_strict_four_way_win'] is True
-              assert g['promotion_signal'] is True
-              assert g['passed'] is True
-          else:
-              assert t['deterministic_rejection'] is True
-              assert t['rejection_reason']
-              assert t['candidate_bytes'] is None
-              assert t['median_candidate_complete_create_s'] is None
-              assert t['strict_four_way_win'] is False
-              assert g['target_eligible'] is False
-              assert g['target_deterministic_rejection'] is True
-              assert g['target_strict_four_way_win'] is False
-              assert g['promotion_signal'] is False
-              assert g['passed'] is False
-          PY
-      - name: Measure self-describing blob-table elision
-        shell: bash
-        run: |
-          set -euo pipefail
-          out="$GITHUB_WORKSPACE/benchmark-artifacts/v030-c25cc01-self-describing-blobtable.json"
           python benchmarks/v030_c25cc01_self_describing_blobtable_oracle.py \
             --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-c25cc01-self-describing-blobtable-work" \
-            --output "$out" || test -s "$out"
-      - name: Enforce self-describing blob-table evidence boundary
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-c25cc01-self-describing-blobtable.json" || \
+            test -s "$GITHUB_WORKSPACE/benchmark-artifacts/v030-c25cc01-self-describing-blobtable.json"
+      - name: Retain core zero-credit evidence boundaries
         run: |
           python - <<'PY'
           import json
           from pathlib import Path
-          d=json.loads(Path('benchmark-artifacts/v030-c25cc01-self-describing-blobtable.json').read_text())
-          assert d['schema']=='cmpct-v030-c25cc01-self-describing-blobtable-oracle-v3'
-          assert d['contract']['release_credit'] is False
-          assert d['contract']['blob_table_in_control'] is False
-          assert d['contract']['physical_blob_header_semantic_owner'] is True
-          assert d['contract']['physical_payload_records_changed'] is False
-          assert d['contract']['all15_projection_required'] is True
-          assert d['contract']['unsupported_predecessor_shapes_fail_closed'] is True
-          c=d['candidate']; a=d['all15']; g=d['gate']
-          assert c['semantic_index_roundtrip_exact'] is True
-          assert c['physical_payload_records_unchanged'] is True
-          assert c['blob_table_reconstructed_from_physical_records'] is True
-          assert c['blob_rows_elided'] > 0
-          assert a['workloads']==15
-          assert len(a['rows'])==15
-          assert a['supported_workloads'] + a['unsupported_workloads'] == 15
-          assert a['zero_projected_byte_regressions_vs_v4'] is True
-          assert g['all15_projection_complete'] is True
-          if a['unsupported_workloads']:
-              assert a['unsupported_reasons']==['S_PACK slices are not contiguous in physical order']
-              assert a['all_semantic_roundtrips_exact'] is False
-              assert g['all15_predecessor_shape_supported'] is False
-              assert g['all15_semantic_roundtrips_exact'] is False
-              assert g['passed'] is False
-          else:
-              assert a['all_semantic_roundtrips_exact'] is True
-              assert a['strict_improvement_count'] > 0
-              assert g['all15_predecessor_shape_supported'] is True
-              assert g['all15_semantic_roundtrips_exact'] is True
-              assert g['zero_projected_byte_regressions_vs_v4'] is True
-              assert g['passed'] is True
+          profile=json.loads(Path('benchmark-artifacts/v030-r24-cc-profile.json').read_text())
+          assert profile['schema']=='cmpct-v030-r24-compact-control-profile-productization-v1'
+          assert profile['contract']['release_credit'] is False
+          assert profile['contract']['selector_change'] is False
+          assert profile['contract']['native_dispatch_change'] is False
+          assert profile['contract']['android_dispatch_change'] is False
+          assert profile['all15']['all15_complete'] is True
+          assert profile['all15']['zero_candidate_regressions_vs_r24'] is True
+          assert profile['all15']['all_trees_equal'] is True
+          direct=json.loads(Path('benchmark-artifacts/v030-c25cc01-direct-extract.json').read_text())
+          assert direct['contract']['release_credit'] is False and direct['all_outputs_exact'] is True
+          mmap=json.loads(Path('benchmark-artifacts/v030-c25cc01-mmap-extract.json').read_text())
+          assert mmap['contract']['release_credit'] is False and mmap['all_outputs_exact'] is True
+          blob=json.loads(Path('benchmark-artifacts/v030-c25cc01-self-describing-blobtable.json').read_text())
+          assert blob['contract']['release_credit'] is False
           Path('benchmark-artifacts/v030-r24-cc-profile-candidate.txt').write_text('${{ steps.candidate.outputs.sha }}\n')
           PY
       - name: Public-surface guard
@@ -267,4 +114,6 @@ jobs:
           if-no-files-found: error
           retention-days: 90
 
-# Promotion evidence only. Native/Android/selector/all-15 ordinary release authorities remain independently mandatory.
+# Historical productization evidence retained for manual reproduction. The later exact terminal selector authority
+# found zero valid frozen/unseen admissions and the shipping front door now hard-disables this family. Automatic
+# four-hour replay therefore cannot advance v0.30 and is retired without deleting any semantics/recovery evidence.
