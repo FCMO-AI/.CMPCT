@@ -87,7 +87,7 @@ def run(work_root: Path) -> dict:
         raise RuntimeError("generic writer seam failed the preregistered complete-artifact materiality floor")
 
     return {
-        "schema": "cmpct-v030-r25-manifest-writer-admission-productization-v2",
+        "schema": "cmpct-v030-r25-manifest-writer-admission-productization-v1",
         "source_commit": _source_commit(),
         "target": SIZE.TARGET,
         "admission": {
