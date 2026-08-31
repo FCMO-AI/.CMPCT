@@ -20,7 +20,7 @@ from __future__ import annotations
 
 import hashlib
 import os
-from pathlib import Path, PurePosixPath
+from pathlib import Path, PurePosixPath, PureWindowsPath
 import shutil
 import stat
 
@@ -342,6 +342,19 @@ def _apply_xattrs(path: Path, items: list[list], *, follow_symlinks: bool) -> No
             pass
 
 
+def _unsafe_symlink_target(target: str) -> bool:
+    """Reject any target that can escape/root under either POSIX or Windows lexical semantics."""
+    posix = PurePosixPath(target)
+    windows = PureWindowsPath(target)
+    return (
+        posix.is_absolute()
+        or windows.is_absolute()
+        or bool(windows.drive)
+        or ".." in posix.parts
+        or ".." in windows.parts
+    )
+
+
 def restore_manifest_tree(staging: Path, decoded: dict, *, safe_symlinks: bool = True) -> None:
     """Turn graph-owned regular files into the authenticated user-visible filesystem tree."""
     entries = decoded["manifest"]["entries"]
@@ -375,8 +388,7 @@ def restore_manifest_tree(staging: Path, decoded: dict, *, safe_symlinks: bool =
         elif kind == "l":
             target.parent.mkdir(parents=True, exist_ok=True)
             link_target = row[7]
-            parsed = PurePosixPath(link_target)
-            if safe_symlinks and (parsed.is_absolute() or ".." in parsed.parts):
+            if safe_symlinks and _unsafe_symlink_target(link_target):
                 raise RuntimeError(f"unsafe r25 symlink target in {rel!r}")
             target.unlink(missing_ok=True)
             os.symlink(link_target, target)
