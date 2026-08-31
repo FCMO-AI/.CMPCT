@@ -28,6 +28,19 @@ def _source_commit() -> str:
     return subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip()
 
 
+def _authenticated_projection(archive: Path) -> tuple[bytes, dict, dict[str, tuple[int, bytes]]]:
+    """Read a research-built r25 projection under the same bounded revision context that constructed it.
+
+    The projected artifact is deliberately not shipping-selected yet, so outside this context the canonical
+    profile classifier correctly labels it research-only. The productization proof must not weaken that fail-closed
+    shipping behavior; it should temporarily enable the existing r25 research reader only for this exact proof.
+    """
+    with CANON._revision25_profile_context():
+        raw, stats = CANON._read_profile_member(archive, FS.FILESYSTEM_MANIFEST)
+        identities = CANON._profile_content_identities(archive)
+    return raw, stats, identities
+
+
 def run(work_root: Path) -> dict:
     shutil.rmtree(work_root, ignore_errors=True)
     work_root.mkdir(parents=True)
@@ -57,10 +70,9 @@ def run(work_root: Path) -> dict:
     candidate = SIZE._build(admitted_stage, admitted_archive)
     archive_saving = int(current["archive_bytes"]) - int(candidate["archive_bytes"])
 
-    archive_control, control_stats = CANON._read_profile_member(admitted_archive, FS.FILESYSTEM_MANIFEST)
+    archive_control, control_stats, content_identities = _authenticated_projection(admitted_archive)
     if archive_control != admitted_raw:
         raise RuntimeError("published graph member differs from generically admitted writer bytes")
-    content_identities = CANON._profile_content_identities(admitted_archive)
     manifest_identity = content_identities.get(FS.FILESYSTEM_MANIFEST)
     expected_manifest_identity = (len(admitted_raw), hashlib.sha256(admitted_raw).digest())
 
@@ -87,7 +99,7 @@ def run(work_root: Path) -> dict:
         raise RuntimeError("generic writer seam failed the preregistered complete-artifact materiality floor")
 
     return {
-        "schema": "cmpct-v030-r25-manifest-writer-admission-productization-v1",
+        "schema": "cmpct-v030-r25-manifest-writer-admission-productization-v2",
         "source_commit": _source_commit(),
         "target": SIZE.TARGET,
         "admission": {
@@ -110,6 +122,8 @@ def run(work_root: Path) -> dict:
         "max_control_read_amplification": float(control_stats["decoded_context_amplification"]),
         "within_release_locality_bounds": float(control_stats["decoded_context_amplification"]) <= 8.0,
         "shared_writer_reader_semantic_owner": True,
+        "research_profile_context_only": True,
+        "shipping_profile_fail_closed_unchanged": True,
         "release_credit": False,
         "canonical_writer_change": False,
         "domination_audit": {
