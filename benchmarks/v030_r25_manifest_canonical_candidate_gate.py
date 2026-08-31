@@ -3,11 +3,11 @@ from __future__ import annotations
 """Exact D5 gate for the implicit-v4 canonical integration candidate.
 
 The already-proven generic writer/reader seam is exercised through the real canonical
-release facade, not a second archive grammar.  Baseline and candidate build the same r25
-combined ablation from the same source tree.  The candidate must be strictly smaller,
-strongly verify and extract through the candidate facade, reconstruct the exact user tree,
-and remain rejected by the unmodified shipping facade after the operation-scoped patch is
-restored.  Passing this gate authorizes only the next productization prerequisite.
+release primitives, not a second archive grammar. Baseline and candidate build the same
+r25 combined ablation from the same source tree. The candidate must be strictly smaller,
+strongly verify and extract through its direct seam, reconstruct the exact user tree, and
+remain rejected by the unmodified shipping facade. Passing authorizes only the next
+productization prerequisite.
 """
 
 import argparse
@@ -33,8 +33,8 @@ def run(work_root: Path) -> dict:
 
     baseline_archive = work_root / "baseline-r25.cmpct"
     candidate_archive = work_root / "candidate-r25.cmpct"
-    baseline = BASE.build_ablation(source, baseline_archive, "combined")
-    candidate = CAND.build_ablation(source, candidate_archive, "combined")
+    BASE.build_ablation(source, baseline_archive, "combined")
+    CAND.build_ablation(source, candidate_archive, "combined")
 
     baseline_bytes = baseline_archive.stat().st_size
     candidate_bytes = candidate_archive.stat().st_size
@@ -54,10 +54,9 @@ def run(work_root: Path) -> dict:
     if extracted_tree != expected_tree:
         raise RuntimeError("candidate canonical facade extraction changed user-tree identity")
 
-    # Candidate operations are required to restore the shipping canonical namespace.
-    # The current shipping decoder understands filesystem-v1 only.  Either a structured
-    # verification failure or an exception caused by rejecting the unsupported control is
-    # valid fail-closed behavior; neither may be converted into candidate success.
+    # The current shipping decoder understands filesystem-v1 only. Either a structured
+    # failure or an exception caused by rejecting unsupported compact control is valid
+    # fail-closed behavior. Candidate failure itself is never converted into success.
     try:
         shipping_verify = BASE.strong_verify(candidate_archive)
     except Exception as exc:
@@ -73,8 +72,7 @@ def run(work_root: Path) -> dict:
     manifest_raw, manifest_stats = CAND.read_member_with_stats(
         candidate_archive, BASE.FS.FILESYSTEM_MANIFEST
     )
-    with CAND._candidate_context():
-        content = BASE._profile_content_identities(candidate_archive)
+    content = BASE._profile_content_identities(candidate_archive)
     decoded, encoding = CAND.ADMIT.decode_from_content_identities(
         manifest_raw,
         content_identities=content,
@@ -90,11 +88,12 @@ def run(work_root: Path) -> dict:
         raise RuntimeError("canonical candidate control read exceeded release locality ceiling")
 
     return {
-        "schema": "cmpct-v030-r25-manifest-canonical-candidate-gate-v1",
+        "schema": "cmpct-v030-r25-manifest-canonical-candidate-gate-v2",
         "source_commit": _source_commit(),
         "target": SIZE.TARGET,
         "release_credit": False,
         "shipping_module_changed": False,
+        "candidate_uses_process_global_mutation": False,
         "baseline_archive_bytes": baseline_bytes,
         "candidate_archive_bytes": candidate_bytes,
         "complete_artifact_saving_bytes": saving,
@@ -115,21 +114,21 @@ def run(work_root: Path) -> dict:
             "saturation_triggers": ["S6"],
             "research_priority_score": 94,
             "pre_mortem": (
-                "The compact control can save bytes in an isolated writer yet fail when threaded through the canonical "
-                "facade because semantic tree identity, authenticated graph ownership or locality no longer match."
+                "The compact control can save bytes in an isolated writer yet fail through canonical primitives because "
+                "semantic tree identity, authenticated graph ownership or locality no longer match."
             ),
             "builder": (
-                "Run legacy and implicit-v4 staging through the real canonical r25 combined ablation and exercise "
-                "candidate strong-verify/extract with operation-scoped semantic seams."
+                "Run legacy and implicit-v4 staging through the real canonical r25 combined substrate and exercise a "
+                "direct candidate verify/read/extract seam without process-global mutation."
             ),
             "hostile_review": (
-                "A green candidate is not shipping proof: the release-facing source is intentionally unchanged, and "
-                "recovery, native, Android, all-15 no-regression and exact external authority must be rerun after promotion."
+                "A green candidate is not shipping proof: release-facing source is unchanged, and recovery, native, "
+                "Android, all-15 no-regression and exact external authority must be rerun after promotion."
             ),
             "measured_gap_change_bytes": saving,
             "terminal_decision": "PROMOTE_NEXT_PREREQUISITE",
             "next_decisive_test": (
-                "Promote the same admission/validated-manifest seams into the canonical implementation, then run focused "
+                "Promote the same admission/validated-manifest semantics into canonical implementation, then run focused "
                 "fallback/hostile/recovery tests before native, Android and all-15 exact authority."
             ),
         },
@@ -150,6 +149,7 @@ def main() -> None:
         "complete_artifact_saving_bytes": result["complete_artifact_saving_bytes"],
         "manifest_encoding": result["manifest_encoding"],
         "shipping_facade_fail_closed_unchanged": result["shipping_facade_fail_closed_unchanged"],
+        "candidate_uses_process_global_mutation": result["candidate_uses_process_global_mutation"],
     }, indent=2), flush=True)
 
 
