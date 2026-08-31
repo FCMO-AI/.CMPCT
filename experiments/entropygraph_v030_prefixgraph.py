@@ -145,6 +145,12 @@ def _serialize_candidate(
     }
 
 
+def _candidate_key(blob: bytes, stats: dict) -> tuple[int, int]:
+    """Return the exact historical PrefixGraph complete-artifact tournament key."""
+    anchor = stats["anchor"]
+    return len(blob), -1 if anchor is None else int(anchor)
+
+
 def build(root: Path, out: Path) -> dict:
     started = time.perf_counter()
     files = sorted(p for p in root.rglob("*") if p.is_file())
@@ -160,22 +166,31 @@ def build(root: Path, out: Path) -> dict:
     # immutable payload bytes across the anchor tournament; recomputing it for every anchor changes no
     # candidate bytes but multiplies encoder CPU by roughly the audition count.
     direct_payloads = [_compress(raw) for raw in raws]
-    candidates: list[tuple[bytes, dict]] = []
     all_direct, direct_stats = _serialize_candidate(rels, raws, direct_payloads, expected_tree, None)
-    candidates.append((all_direct, direct_stats))
-    for anchor in _anchor_indices(len(raws)):
-        candidates.append(_serialize_candidate(rels, raws, direct_payloads, expected_tree, anchor))
 
-    # Footnote: anchor nomination is allowed to be approximate for large families, but admission is not.
-    # The complete duplicated-metadata archive length is the objective; payload-only estimates never win.
-    blob, stats = min(candidates, key=lambda item: (len(item[0]), -1 if item[1]["anchor"] is None else item[1]["anchor"]))
+    # The historical implementation retained every complete candidate blob until the tournament ended.  Only
+    # the current exact minimum can possibly matter to the final result, so keep one incumbent and release each
+    # losing candidate immediately.  This preserves the complete candidate set, complete-artifact pricing and
+    # exact `(archive_bytes, anchor)` tie law while removing O(auditions * archive_bytes) retained candidate
+    # ownership.  It is intentionally not an early terminal: every nominated anchor is still fully constructed.
+    blob, stats = all_direct, direct_stats
+    incumbent_key = _candidate_key(blob, stats)
+    for anchor in _anchor_indices(len(raws)):
+        candidate_blob, candidate_stats = _serialize_candidate(
+            rels, raws, direct_payloads, expected_tree, anchor
+        )
+        candidate_key = _candidate_key(candidate_blob, candidate_stats)
+        if candidate_key < incumbent_key:
+            blob, stats = candidate_blob, candidate_stats
+            incumbent_key = candidate_key
+
     out.parent.mkdir(parents=True, exist_ok=True); out.write_bytes(blob)
     stats = dict(stats)
     stats.update({
         "archive_bytes": len(blob),
         "all_direct_bytes": len(all_direct),
         "saving_vs_all_direct_bytes": len(all_direct) - len(blob),
-        "anchor_auditions": len(candidates) - 1,
+        "anchor_auditions": len(_anchor_indices(len(raws))),
         "files": len(files),
         "logical_bytes": sum(map(len, raws)),
         "tree_sha256": expected_tree,
