@@ -1,8 +1,7 @@
 diff --git a/experiments/entropygraph_v030_canonical_final_impl.py b/experiments/entropygraph_v030_canonical_final_impl.py
-index 5c2ff6a..0000000 100644
 --- a/experiments/entropygraph_v030_canonical_final_impl.py
 +++ b/experiments/entropygraph_v030_canonical_final_impl.py
-@@ -38,6 +38,7 @@ from cmpct.reader import CMPCT
+@@ -2,18 +2,20 @@
  from experiments import entropygraph_v030_geometry_overlay_g04 as G04_RESEARCH
  from experiments import entropygraph_v030_prefixgraph as PG
  from experiments import entropygraph_v030_product_fs as FS
@@ -10,7 +9,6 @@ index 5c2ff6a..0000000 100644
  from experiments import entropygraph_v030_release_admission as ADMISSION
  from experiments import entropygraph_v030_release_candidate as RC
  from experiments import entropygraph_v030_release_reader_policy as POLICY
-@@ -174,12 +175,13 @@ def _profile_for_archive(archive: Path) -> tuple[int | None, str]:
  
  
  def _prepare_profile_tree(root: Path, staging_root: Path) -> dict:
@@ -25,8 +23,7 @@ index 5c2ff6a..0000000 100644
      )
      if int(prepared["entries"]) > MAX_MANIFEST_ENTRIES:
          raise ProfileNotEligible("r25 filesystem manifest entry count exceeds reader policy")
-@@ -409,15 +411,13 @@ def _profile_content_identities(archive: Path) -> dict[str, tuple[int, bytes]]:
- 
+@@ -22,14 +24,11 @@
  
  def _validated_manifest(archive: Path) -> dict:
      raw, _stats = _read_profile_member(archive, FS.FILESYSTEM_MANIFEST)
