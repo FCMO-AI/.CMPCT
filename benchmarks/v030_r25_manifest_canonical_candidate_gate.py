@@ -55,9 +55,17 @@ def run(work_root: Path) -> dict:
         raise RuntimeError("candidate canonical facade extraction changed user-tree identity")
 
     # Candidate operations are required to restore the shipping canonical namespace.
-    # The current shipping decoder understands filesystem-v1 only, so a compact-control
-    # candidate must fail closed here until the product patch is intentionally promoted.
-    shipping_verify = BASE.strong_verify(candidate_archive)
+    # The current shipping decoder understands filesystem-v1 only.  Either a structured
+    # verification failure or an exception caused by rejecting the unsupported control is
+    # valid fail-closed behavior; neither may be converted into candidate success.
+    try:
+        shipping_verify = BASE.strong_verify(candidate_archive)
+    except Exception as exc:
+        shipping_verify = {
+            "ok": False,
+            "exception_type": type(exc).__name__,
+            "exception_message": str(exc),
+        }
     shipping_fail_closed = not bool(shipping_verify.get("ok"))
     if not shipping_fail_closed:
         raise RuntimeError("implicit-v4 candidate leaked into unmodified shipping canonical semantics")
