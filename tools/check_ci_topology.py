@@ -34,13 +34,13 @@ BRANCH_SCOPE_RE = re.compile(r"(?m)^\s+branches(?:-ignore)?:\s*")
 
 
 def _has_exact_head_commit_scope(text: str) -> bool:
-    # The executable classifier is the authority. The optional marker exists for readability and lets us
-    # fail closed when somebody claims to have a gate but removes the classifier itself.
     return bool(HEAD_CHANGE_DIFF_RE.search(text))
 
 
 def _preserved_receipt_is_exact(text: str, lane: str | None) -> bool:
-    if not PRESERVE_EXACT_RECEIPT_RE.search(text) or lane != "deep":
+    # Deep research A/Bs and release authorities can both be multi-hour exact-head receipts.  The latter
+    # are especially expensive to destroy on an unrelated synchronization of a long-lived integration PR.
+    if not PRESERVE_EXACT_RECEIPT_RE.search(text) or lane not in {"deep", "release"}:
         return False
     scoped = bool(PATH_SCOPE_RE.search(text) or _has_exact_head_commit_scope(text))
     if not scoped or not CONCURRENCY_RE.search(text) or not EXACT_HEAD_CHECKOUT_RE.search(text):
@@ -88,7 +88,7 @@ def validate(path: Path) -> list[str]:
         if not CANCEL_RE.search(text) and not _preserved_receipt_is_exact(text, lane):
             errors.append(
                 "automatic runner workflow lacks 'cancel-in-progress: true' or the narrow "
-                "deep/exact-head preserved-receipt policy"
+                "deep/release exact-head preserved-receipt policy"
             )
 
     if consumes_runner and PULL_REQUEST_RE.search(text):
@@ -114,8 +114,9 @@ def validate(path: Path) -> list[str]:
     # must depend on that classifier output. Release/publisher lanes may still use path scope when every candidate
     # touching that release surface genuinely requires the authority. Exact candidate SHA custody remains mandatory.
     #
-    # Very long exact-head A/Bs may preserve a running receipt with the explicit cancellation-policy directive.
-    # PR-triggered variants bind EVIDENCE_HEAD to pull_request.head.sha; branch-push variants bind it to github.sha.
+    # Very long exact-head A/Bs and release authorities may preserve a running receipt with the explicit cancellation-
+    # policy directive. PR-triggered variants bind EVIDENCE_HEAD to pull_request.head.sha; branch-push variants bind
+    # it to github.sha. This exception never applies to fast/publisher/scheduled work.
 
     return errors
 
