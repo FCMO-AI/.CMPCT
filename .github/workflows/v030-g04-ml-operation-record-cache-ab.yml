@@ -125,7 +125,7 @@ jobs:
             --candidate-cli "$RUNNER_TEMP/cmpct-portable-candidate" \
             --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-g04-ml-operation-record-cache-work" \
             --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-g04-ml-operation-record-cache.json"
-      - name: Enforce binary binding, identity, hostile rejection and honest promotion boundary
+      - name: Enforce binary binding, identity, hostile rejection and honest terminal decision
         if: always()
         run: |
           test -f benchmark-artifacts/v030-g04-ml-operation-record-cache.json
@@ -133,9 +133,10 @@ jobs:
           import json, os
           from pathlib import Path
           d=json.loads(Path('benchmark-artifacts/v030-g04-ml-operation-record-cache.json').read_text())
-          assert d['schema']=='cmpct-v030-g04-ml-operation-record-cache-ab-v4'
+          assert d['schema']=='cmpct-v030-g04-ml-operation-record-cache-ab-v5'
           assert d['source_commit']==os.environ['EVIDENCE_HEAD']
           assert d['target']=='neutral_hostile_v1/09_ml_artifacts'
+          assert d['diagnosis']=='D2' and d['radicality']=='R2' and int(d['rps'])>=80
           assert int(d['rounds'])==7
           b=d['binary_sha256']; c=d['contract']; g=d['gate']
           assert len(b['baseline'])==64 and len(b['candidate'])==64 and b['baseline'] != b['candidate']
@@ -152,6 +153,7 @@ jobs:
           assert d['release_credit'] is False
           expected=(float(d['verify_improvement_fraction'])>=float(c['minimum_verify_improvement_fraction']) and float(d['extract_improvement_fraction'])>=float(c['minimum_extract_improvement_fraction']))
           assert d['promotion_signal'] is expected and g['passed'] is expected
+          assert d['terminal_decision']==('PROMOTE_NEXT_PREREQUISITE' if expected else 'RETIRE_FAMILY')
           PY
       - name: Restore exact repository tree before policy checks
         if: always()
