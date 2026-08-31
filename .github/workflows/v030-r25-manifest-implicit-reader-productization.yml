@@ -101,10 +101,11 @@ jobs:
       - name: Enforce productization boundary without release credit
         run: |
           python - <<'PY'
-          import json
+          import json, os
           from pathlib import Path
           d=json.loads(Path('benchmark-artifacts/v030-r25-manifest-implicit-reader.json').read_text())
-          assert d['schema']=='cmpct-v030-r25-manifest-implicit-reader-productization-v1'
+          assert d['schema']=='cmpct-v030-r25-manifest-implicit-reader-productization-v2'
+          assert d['source_commit']==os.environ['EVIDENCE_HEAD']
           assert d['archive_bytes'] > 0
           assert d['regular_members_verified'] > 0
           assert d['control_member_exact'] is True
