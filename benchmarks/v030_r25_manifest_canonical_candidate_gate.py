@@ -11,6 +11,7 @@ productization prerequisite.
 """
 
 import argparse
+import hashlib
 import json
 from pathlib import Path
 import shutil
@@ -23,6 +24,14 @@ from experiments import entropygraph_v030_canonical_manifest_candidate as CAND
 
 def _source_commit() -> str:
     return subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
+
+
+def _sha256(path: Path) -> str:
+    h = hashlib.sha256()
+    with path.open("rb") as f:
+        for chunk in iter(lambda: f.read(1024 * 1024), b""):
+            h.update(chunk)
+    return h.hexdigest()
 
 
 def run(work_root: Path) -> dict:
@@ -38,9 +47,17 @@ def run(work_root: Path) -> dict:
 
     baseline_bytes = baseline_archive.stat().st_size
     candidate_bytes = candidate_archive.stat().st_size
+    baseline_sha256 = _sha256(baseline_archive)
+    candidate_sha256 = _sha256(candidate_archive)
     saving = baseline_bytes - candidate_bytes
     if saving <= 0:
         raise RuntimeError("canonical implicit-manifest candidate did not strictly reduce complete r25 bytes")
+    if saving < SIZE.MIN_USEFUL_ARCHIVE_SAVING:
+        raise RuntimeError(
+            "canonical implicit-manifest candidate missed the pre-existing minimum useful complete-artifact saving"
+        )
+    if baseline_sha256 == candidate_sha256:
+        raise RuntimeError("canonical implicit-manifest candidate unexpectedly matched baseline physical bytes")
 
     candidate_verify = CAND.strong_verify(candidate_archive)
     if not candidate_verify.get("ok"):
@@ -88,15 +105,19 @@ def run(work_root: Path) -> dict:
         raise RuntimeError("canonical candidate control read exceeded release locality ceiling")
 
     return {
-        "schema": "cmpct-v030-r25-manifest-canonical-candidate-gate-v2",
+        "schema": "cmpct-v030-r25-manifest-canonical-candidate-gate-v3",
         "source_commit": _source_commit(),
         "target": SIZE.TARGET,
         "release_credit": False,
         "shipping_module_changed": False,
         "candidate_uses_process_global_mutation": False,
         "baseline_archive_bytes": baseline_bytes,
+        "baseline_archive_sha256": baseline_sha256,
         "candidate_archive_bytes": candidate_bytes,
+        "candidate_archive_sha256": candidate_sha256,
         "complete_artifact_saving_bytes": saving,
+        "minimum_useful_archive_saving_bytes": SIZE.MIN_USEFUL_ARCHIVE_SAVING,
+        "promotion_signal": saving >= SIZE.MIN_USEFUL_ARCHIVE_SAVING,
         "strictly_smaller_than_legacy_r25": candidate_bytes < baseline_bytes,
         "candidate_strong_verify": candidate_verify,
         "candidate_extract_tree_sha256": extracted_tree,
@@ -145,8 +166,12 @@ def main() -> None:
     args.output.write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8")
     print(json.dumps({
         "baseline_archive_bytes": result["baseline_archive_bytes"],
+        "baseline_archive_sha256": result["baseline_archive_sha256"],
         "candidate_archive_bytes": result["candidate_archive_bytes"],
+        "candidate_archive_sha256": result["candidate_archive_sha256"],
         "complete_artifact_saving_bytes": result["complete_artifact_saving_bytes"],
+        "minimum_useful_archive_saving_bytes": result["minimum_useful_archive_saving_bytes"],
+        "promotion_signal": result["promotion_signal"],
         "manifest_encoding": result["manifest_encoding"],
         "shipping_facade_fail_closed_unchanged": result["shipping_facade_fail_closed_unchanged"],
         "candidate_uses_process_global_mutation": result["candidate_uses_process_global_mutation"],
