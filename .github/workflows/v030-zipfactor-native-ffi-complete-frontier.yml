@@ -1,5 +1,6 @@
 # ci-lane: deep
 # ci-pr-scope: latest-head-commit-gate
+# ci-cancel-policy: preserve-running-exact-receipt
 name: CMPCT v0.30 ZIP-factor native FFI complete frontier
 
 on:
@@ -20,7 +21,7 @@ permissions:
 
 concurrency:
   group: cmpct-v030-zipfactor-native-ffi-complete-frontier-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 env:
   PYTHONPATH: ${{ github.workspace }}
