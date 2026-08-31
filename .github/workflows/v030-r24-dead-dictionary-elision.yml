@@ -1,4 +1,5 @@
 # ci-lane: deep
+# ci-pr-scope: latest-head-commit-gate
 name: CMPCT v0.30 r24 dead dictionary elision
 
 on:
@@ -28,21 +29,60 @@ concurrency:
 
 env:
   PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
 
 jobs:
+  latest-head-impact:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      run_deep: ${{ steps.scope.outputs.run_deep }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 2
+      - name: Bind exact head and classify only its changed files
+        id: scope
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            echo 'run_deep=true' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          git diff-tree --no-commit-id --name-only -r HEAD > /tmp/latest-head-files.txt
+          cat /tmp/latest-head-files.txt
+          if grep -Eq '^(src/cmpct/builder\.py|experiments/entropygraph_v030_(release_product|release_product_base|r24_dead_dictionary)\.py|benchmarks/v030_r24_(dead_dictionary_elision_oracle(_v[23])?|binary_dictionary_isolation_oracle|compact_control_oracle)\.py|benchmarks/(neutral_hostile_corpus_v1|resemblance_hostile_corpus_v1)\.py|\.github/workflows/v030-r24-dead-dictionary-elision\.yml)$' /tmp/latest-head-files.txt; then
+            echo 'run_deep=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'run_deep=false' >> "$GITHUB_OUTPUT"
+            echo 'Accumulated PR paths matched, but newest exact commit cannot affect dead-dictionary shipping semantics.'
+          fi
+
   dead-dictionary-elision:
+    needs: latest-head-impact
+    if: needs.latest-head-impact.outputs.run_deep == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 180
     steps:
       - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - name: Bind exact candidate
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
       - uses: actions/setup-python@v6
         with:
           python-version: '3.11'
           cache: pip
-      - name: Install exact corpus/compressor dependencies
+      - name: Install exact corpus/compressor dependencies from canonical Ubuntu feed
         run: |
-          sudo apt-get update
-          sudo apt-get install -y zstd gcc ffmpeg libsndfile1
+          set -euo pipefail
+          test -f /etc/apt/sources.list.d/ubuntu.sources
+          sudo apt-get -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" -o Dir::Etc::sourceparts="-" update
+          sudo apt-get -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" -o Dir::Etc::sourceparts="-" install -y zstd gcc ffmpeg libsndfile1
           python -m pip install --upgrade pip
           python -m pip install -e '.[audio,test]'
           python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
@@ -84,11 +124,8 @@ jobs:
           assert c['logical_semantics_changed'] is False
           assert c['live_dictionary_archives_must_remain_byte_identical'] is True
           t=d['target']
-          assert t['rounds']==5
-          assert t['deterministic'] is True
-          assert t['same_verified_tree'] is True
-          assert t['shipping_dead_dictionary_elided'] is True
-          assert t['saving_bytes_vs_pre_elision'] > 0
+          assert t['rounds']==5 and t['deterministic'] is True and t['same_verified_tree'] is True
+          assert t['shipping_dead_dictionary_elided'] is True and t['saving_bytes_vs_pre_elision'] > 0
           a=d['all15']
           assert len(a['rows'])==15
           assert a['gate']['exact_workload_count'] is True
@@ -99,44 +136,34 @@ jobs:
           assert a['gate']['live_dictionaries_unchanged'] is True
           assert a['gate']['shipping_regression_green'] is True
           assert a['shipping_total_bytes'] < a['pre_elision_total_bytes']
-
-          # Causal ratchet: surrounding deterministic framing can shift the exact compressed-index byte count by a
-          # handful of bytes even when this optimization is unchanged.  Freezing those incidental totals created
-          # repeated false reds.  Instead require the exact causal owners on every run: the same three workloads,
-          # each transformed only because its trained dictionary is dead, with row-level and aggregate byte deltas
-          # internally exact.  The ordinary v0.29/external/final authorities retain all absolute release thresholds.
           improved=[row for row in a['rows'] if row['saving_bytes_vs_pre_elision'] > 0]
           assert len(improved) == 3
-          expected_labels={
-              'neutral_hostile_v1/06_incremental_backups',
-              'neutral_hostile_v1/07_incompressible_and_encrypted_like',
-              'resemblance_hostile_v1/01_shifted_versions',
-          }
+          expected_labels={'neutral_hostile_v1/06_incremental_backups','neutral_hostile_v1/07_incompressible_and_encrypted_like','resemblance_hostile_v1/01_shifted_versions'}
           assert {row['label'] for row in improved} == expected_labels
           for row in improved:
-              saving=row['saving_bytes_vs_pre_elision']
-              transform=row['transform']
-              assert saving > 0
-              assert transform['changed'] is True
-              assert transform['reason'] == 'dictionary-dead'
-              assert transform['saving_bytes'] == saving
-              assert row['pre_elision_bytes'] - row['shipping_bytes'] == saving
+              saving=row['saving_bytes_vs_pre_elision']; transform=row['transform']
+              assert saving > 0 and transform['changed'] is True and transform['reason'] == 'dictionary-dead'
+              assert transform['saving_bytes'] == saving and row['pre_elision_bytes'] - row['shipping_bytes'] == saving
               assert row['same_verified_tree'] is True
           total_saving=sum(row['saving_bytes_vs_pre_elision'] for row in improved)
-          assert total_saving > 0
-          assert a['pre_elision_total_bytes'] - a['shipping_total_bytes'] == total_saving
+          assert total_saving > 0 and a['pre_elision_total_bytes'] - a['shipping_total_bytes'] == total_saving
           live=[row for row in a['rows'] if row['transform']['reason']=='dictionary-live']
           assert all(row['shipping_bytes']==row['pre_elision_bytes'] for row in live)
           PY
+      - name: CI topology self-check
+        if: always()
+        run: python tools/check_ci_topology.py .github/workflows/v030-r24-dead-dictionary-elision.yml
       - name: Public-surface guard
         if: always()
         run: python tools/check_public_surface.py
       - uses: actions/upload-artifact@v6
         if: always()
         with:
-          name: v030-r24-dead-dict-${{ github.sha }}
+          name: v030-r24-dead-dict-${{ env.EVIDENCE_HEAD }}
           path: benchmark-artifacts/v030-r24-dead-dict.json
           if-no-files-found: error
           retention-days: 90
 
-# Shipping regression ratchet. Ordinary exact-head external/generalization/final authorities remain decisive.
+# Shipping regression ratchet. Ordinary exact-head external/generalization/final authorities remain decisive. The
+# latest-head classifier keeps the three-hour all-15 proof mandatory for actual semantic changes while preventing
+# historical PR paths from replaying it on unrelated research/workflow commits.
