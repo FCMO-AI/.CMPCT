@@ -23,8 +23,11 @@ on:
 permissions:
   contents: read
 
+# Preserve the exact R4 receipt while it waits for scarce deep-runner capacity. GitHub may
+# replace a pending run even with cancel-in-progress=false when multiple heads share one
+# concurrency key; keying by evidence SHA makes that scheduling loss impossible.
 concurrency:
-  group: cmpct-v030-shifted-cluster-owned-pack-${{ github.event.pull_request.number || github.ref }}
+  group: cmpct-v030-shifted-cluster-owned-pack-${{ github.event.pull_request.head.sha || github.sha }}
   cancel-in-progress: false
 
 env:
