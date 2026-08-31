@@ -5,6 +5,9 @@ from __future__ import annotations
 Research-only: compare the immutable direct-payload floor with the complete shipping PrefixGraph builder. The floor
 uses the same sorted files, raw bytes, direct Zstd payloads, tree identity and historical all-direct serializer as
 the product. It changes no selector or production path and exists only to identify which phase owns Shifted RSS.
+
+RSS is sampled immediately after construction and before strong verification. Verification remains mandatory, but
+its allocations are reported separately so reader/materialization cost cannot be mistaken for builder peak RSS.
 """
 
 import argparse
@@ -39,9 +42,6 @@ def direct_floor(root: Path, out: Path) -> dict:
     blob, stats = BASE._serialize_candidate(rels, raws, direct_payloads, expected_tree, None)
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_bytes(blob)
-    verify = BASE.strong_verify(out)
-    if not verify.get('ok') or verify.get('tree_sha256') != expected_tree:
-        raise RuntimeError(f'direct floor failed exact verification: {verify!r}')
     return {
         'tree_sha256': expected_tree,
         'archive_bytes': len(blob),
@@ -53,11 +53,8 @@ def direct_floor(root: Path, out: Path) -> dict:
 
 
 def full(root: Path, out: Path) -> dict:
-    stats = PG.build(root, out)
-    verify = BASE.strong_verify(out)
     expected_tree = PG.treehash(root)
-    if not verify.get('ok') or verify.get('tree_sha256') != expected_tree:
-        raise RuntimeError(f'full PrefixGraph failed exact verification: {verify!r}')
+    stats = PG.build(root, out)
     return {
         'tree_sha256': expected_tree,
         'archive_bytes': out.stat().st_size,
@@ -76,18 +73,36 @@ def main() -> None:
     p.add_argument('--source', type=Path, required=True)
     p.add_argument('--archive', type=Path, required=True)
     args = p.parse_args()
-    before = rss_kib()
-    started = time.perf_counter()
+
+    baseline_peak = rss_kib()
+    build_started = time.perf_counter()
     result = direct_floor(args.source, args.archive) if args.mode == 'direct-floor' else full(args.source, args.archive)
-    wall = time.perf_counter() - started
-    after = rss_kib()
+    build_wall = time.perf_counter() - build_started
+    build_peak = rss_kib()
+
+    verify_started = time.perf_counter()
+    verify = BASE.strong_verify(args.archive)
+    verify_wall = time.perf_counter() - verify_started
+    if not verify.get('ok') or verify.get('tree_sha256') != result['tree_sha256']:
+        raise RuntimeError(f'{args.mode} failed exact post-measurement verification: {verify!r}')
+    post_verify_peak = rss_kib()
+    incremental_build_peak = max(0, build_peak - baseline_peak)
+
     print(json.dumps({
         'mode': args.mode,
         **result,
-        'baseline_peak_rss_kib': before,
-        'peak_rss_kib': after,
-        'incremental_peak_rss_kib': max(0, after - before),
-        'wall_s': wall,
+        'baseline_peak_rss_kib': baseline_peak,
+        'build_peak_rss_kib': build_peak,
+        'incremental_build_peak_rss_kib': incremental_build_peak,
+        'build_wall_s': build_wall,
+        'post_verify_peak_rss_kib': post_verify_peak,
+        'verify_wall_s': verify_wall,
+        'strong_verify_ok': True,
+        'rss_measurement_boundary': 'build-before-strong-verify-v2',
+        # Compatibility aliases for the first oracle revision. These intentionally mean build-only metrics now.
+        'peak_rss_kib': build_peak,
+        'incremental_peak_rss_kib': incremental_build_peak,
+        'wall_s': build_wall,
     }, sort_keys=True), flush=True)
 
 
