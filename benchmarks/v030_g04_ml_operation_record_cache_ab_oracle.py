@@ -7,6 +7,10 @@ verify/extract ownership: decoded physical records may survive between logical m
 64 MiB insertion-only ceiling, while each member keeps a fresh node cache and still charges every required
 record to its own locality stats even on a shared-cache hit. Selective single-member reads retain the existing
 fresh-cache behavior. The receipt binds itself to the exact repository HEAD that built both measured binaries.
+
+The full terminal decision still requires all seven rounds. A separate checkpoint is persisted after every
+completed round so a runner interruption preserves exact non-release diagnostic evidence instead of erasing
+hours of work. Checkpoints can never authorize promotion or release credit.
 """
 
 import argparse
@@ -66,7 +70,59 @@ def _extract(cli: Path, archive: Path, destination: Path) -> float:
     return elapsed
 
 
-def run(work_root: Path, baseline_cli: Path, candidate_cli: Path) -> dict:
+def _write_checkpoint(
+    checkpoint: Path | None,
+    *,
+    source_commit: str,
+    binary_sha256: dict[str, str],
+    tree: str,
+    built: dict,
+    baseline_info: dict,
+    candidate_info: dict,
+    samples: dict[str, list[float]],
+    completed_rounds: int,
+) -> None:
+    if checkpoint is None:
+        return
+    checkpoint.parent.mkdir(parents=True, exist_ok=True)
+    medians = {
+        key: (float(statistics.median(values)) if values else None)
+        for key, values in samples.items()
+    }
+    verify_improvement = None
+    extract_improvement = None
+    if medians["baseline_verify"] is not None and medians["candidate_verify"] is not None:
+        verify_improvement = 1.0 - medians["candidate_verify"] / max(medians["baseline_verify"], 1e-12)
+    if medians["baseline_extract"] is not None and medians["candidate_extract"] is not None:
+        extract_improvement = 1.0 - medians["candidate_extract"] / max(medians["baseline_extract"], 1e-12)
+    payload = {
+        "schema": "cmpct-v030-g04-ml-operation-record-cache-checkpoint-v1",
+        "source_commit": source_commit,
+        "target": "neutral_hostile_v1/09_ml_artifacts",
+        "diagnosis": "D2",
+        "radicality": "R2",
+        "rps": 86,
+        "binary_sha256": binary_sha256,
+        "shipping_build": built,
+        "tree_sha256": tree,
+        "same_public_info": baseline_info == candidate_info,
+        "planned_rounds": ROUNDS,
+        "completed_rounds": completed_rounds,
+        "samples_s": samples,
+        "provisional_medians_s": medians,
+        "provisional_verify_improvement_fraction": verify_improvement,
+        "provisional_extract_improvement_fraction": extract_improvement,
+        "terminal_decision": None,
+        "promotion_signal": False,
+        "release_credit": False,
+        "claim_boundary": "Interruption-safe diagnostic only. All seven rounds plus corruption rejection remain mandatory before any terminal decision.",
+    }
+    tmp = checkpoint.with_suffix(checkpoint.suffix + ".tmp")
+    tmp.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+    tmp.replace(checkpoint)
+
+
+def run(work_root: Path, baseline_cli: Path, candidate_cli: Path, checkpoint: Path | None = None) -> dict:
     for cli in (baseline_cli, candidate_cli):
         if not cli.is_file():
             raise RuntimeError(f"missing native CLI: {cli}")
@@ -77,6 +133,7 @@ def run(work_root: Path, baseline_cli: Path, candidate_cli: Path) -> dict:
     if binary_sha256["baseline"] == binary_sha256["candidate"]:
         raise RuntimeError("native A/B executables are byte-identical; candidate patch is not represented in the measured binary")
 
+    source_commit = _source_commit()
     shutil.rmtree(work_root, ignore_errors=True)
     work_root.mkdir(parents=True)
     roots = PERF._build_corpora(work_root / "corpus")
@@ -97,6 +154,17 @@ def run(work_root: Path, baseline_cli: Path, candidate_cli: Path) -> dict:
         raise RuntimeError("candidate changed native public archive info")
 
     samples = {"baseline_verify": [], "candidate_verify": [], "baseline_extract": [], "candidate_extract": []}
+    _write_checkpoint(
+        checkpoint,
+        source_commit=source_commit,
+        binary_sha256=binary_sha256,
+        tree=tree,
+        built=built,
+        baseline_info=baseline_info,
+        candidate_info=candidate_info,
+        samples=samples,
+        completed_rounds=0,
+    )
     for round_index in range(ROUNDS):
         candidate_first = bool(round_index % 2)
         order = (("candidate", candidate_cli), ("baseline", baseline_cli)) if candidate_first else (("baseline", baseline_cli), ("candidate", candidate_cli))
@@ -107,6 +175,17 @@ def run(work_root: Path, baseline_cli: Path, candidate_cli: Path) -> dict:
             if PRODUCT.treehash(dest) != tree:
                 raise RuntimeError(f"{label} extraction tree identity drift")
             shutil.rmtree(dest, ignore_errors=True)
+        _write_checkpoint(
+            checkpoint,
+            source_commit=source_commit,
+            binary_sha256=binary_sha256,
+            tree=tree,
+            built=built,
+            baseline_info=baseline_info,
+            candidate_info=candidate_info,
+            samples=samples,
+            completed_rounds=round_index + 1,
+        )
 
     corrupt = work_root / "ml-corrupt.cmpct"
     _corrupt_first_physical_payload(archive, corrupt)
@@ -136,7 +215,7 @@ def run(work_root: Path, baseline_cli: Path, candidate_cli: Path) -> dict:
     terminal_decision = "PROMOTE_NEXT_PREREQUISITE" if promotion else "RETIRE_FAMILY"
     return {
         "schema": "cmpct-v030-g04-ml-operation-record-cache-ab-v5",
-        "source_commit": _source_commit(),
+        "source_commit": source_commit,
         "target": "neutral_hostile_v1/09_ml_artifacts",
         "diagnosis": "D2",
         "radicality": "R2",
@@ -161,6 +240,7 @@ def run(work_root: Path, baseline_cli: Path, candidate_cli: Path) -> dict:
             "grammar_changed": False,
             "minimum_verify_improvement_fraction": MIN_VERIFY_IMPROVEMENT,
             "minimum_extract_improvement_fraction": MIN_EXTRACT_IMPROVEMENT,
+            "terminal_decision_requires_all_rounds": True,
         },
         "gate": {**gate, "passed": promotion},
         "promotion_signal": promotion,
@@ -182,8 +262,9 @@ def main() -> None:
     p.add_argument("--candidate-cli", type=Path, required=True)
     p.add_argument("--work-root", type=Path, default=Path("benchmark-artifacts/v030-g04-ml-operation-record-cache-work"))
     p.add_argument("--output", type=Path, default=Path("benchmark-artifacts/v030-g04-ml-operation-record-cache.json"))
+    p.add_argument("--checkpoint", type=Path, default=None)
     args = p.parse_args()
-    result = run(args.work_root, args.baseline_cli, args.candidate_cli)
+    result = run(args.work_root, args.baseline_cli, args.candidate_cli, args.checkpoint)
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8")
     print(json.dumps({
