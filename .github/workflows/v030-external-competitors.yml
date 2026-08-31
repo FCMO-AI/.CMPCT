@@ -123,6 +123,24 @@ jobs:
           assert gate['neutral_beats_solid_zstd19'] is True
           assert gate['hostile_closes_solid_zstd19_frontier'] is True
           assert gate['hostile_closes_zpaq5_frontier_when_available'] is True
+          strict=data['strict_per_workload_dominance']
+          assert strict['workload_count']==15
+          assert strict['complete_comparator_rows']==15
+          for count_key in (
+              'strict_zip_size_wins',
+              'strict_zstd19_size_wins',
+              'strict_zip_create_wins',
+              'strict_zstd19_create_wins',
+              'strict_joint_wins',
+          ):
+              assert isinstance(strict[count_key], int) and 0 <= strict[count_key] <= 15
+          assert strict['strict_joint_target']==15
+          assert len(strict['rows'])==15
+          assert all(row['comparators_complete'] for row in strict['rows'])
+          # Release remains fail-closed at 15/15. The explicit counts are retained even on
+          # a red receipt so progress cannot drift through handoff prose again.
+          assert strict['strict_joint_wins']==15
+          assert all(row['strict_joint_win'] for row in strict['rows'])
           for key in (
               'all_workloads_strictly_beat_zip_size',
               'all_workloads_strictly_beat_zstd19_size',
@@ -131,12 +149,6 @@ jobs:
               'strict_no_ties_size_or_create',
           ):
               assert gate[key] is True
-          strict=data['strict_per_workload_dominance']['rows']
-          assert len(strict)==15
-          assert all(row['strictly_beats_zip_size'] for row in strict)
-          assert all(row['strictly_beats_zstd19_size'] for row in strict)
-          assert all(row['strictly_beats_zip_create'] for row in strict)
-          assert all(row['strictly_beats_zstd19_create'] for row in strict)
           assert gate['passed'] is True
           PY
 
@@ -154,5 +166,6 @@ jobs:
           retention-days: 90
 
 # ZIP and solid Zstd-19 are strict per-workload v0.30 release floors for both complete archive size and creation
-# wall-clock. Any tie or loss on any frozen workload fails v0.30 regardless of aggregate performance. The exact
-# source/extraction identity checks remain mandatory before a comparator row receives credit.
+# wall-clock. Any tie or loss on any frozen workload fails v0.30 regardless of aggregate performance. Every
+# completed receipt now carries explicit strict-win counts, including the one hard joint score, so historical
+# status cannot be inferred from prose or mixed fingerprints.
