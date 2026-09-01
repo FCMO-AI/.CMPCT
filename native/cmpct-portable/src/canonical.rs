@@ -1,7 +1,7 @@
 use crate::format::{safe_relpath, sha256};
 use crate::g04::G04Archive;
 use crate::identity::R25Identity;
-use crate::manifest::{FILESYSTEM_MANIFEST, FsEntry, FsKind, FsManifest, FsMetadata};
+use crate::manifest::{ContentIdentities, FILESYSTEM_MANIFEST, FsEntry, FsKind, FsManifest, FsMetadata};
 use crate::prefix::PrefixArchive;
 use crate::{MemberReadStats, PortableEntry, PortableError, Profile};
 use sha2::{Digest, Sha256};
@@ -96,6 +96,18 @@ impl Canonical25Archive {
             ));
         }
         let content = ContentArchive::open(path, identity)?;
+        let mut content_identities = ContentIdentities::with_capacity(content.entries().len());
+        for (index, entry) in content.entries().iter().enumerate() {
+            let graph_identity = content.entry_identity(index)?;
+            if content_identities
+                .insert(entry.path.clone(), graph_identity)
+                .is_some()
+            {
+                return Err(PortableError::Format(
+                    "canonical r25 content graph contains a duplicate logical path".into(),
+                ));
+            }
+        }
         let manifest_index = content
             .entries()
             .iter()
@@ -106,7 +118,6 @@ impl Canonical25Archive {
                 )
             })?;
         let (manifest_raw, _) = content.read_member(manifest_index)?;
-        let manifest = FsManifest::parse(&manifest_raw, content.entries())?;
 
         let (manifest_size, manifest_sha) = content.entry_identity(manifest_index)?;
         if manifest_size != manifest_raw.len() as u64 || manifest_sha != sha256(&manifest_raw) {
@@ -114,6 +125,11 @@ impl Canonical25Archive {
                 "canonical r25 manifest graph identity mismatch".into(),
             ));
         }
+        let manifest = FsManifest::parse_with_identities(
+            &manifest_raw,
+            content.entries(),
+            &content_identities,
+        )?;
         for entry in manifest.entries() {
             let FsKind::File { size, sha256 } = &entry.kind else {
                 continue;
