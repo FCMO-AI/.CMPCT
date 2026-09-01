@@ -32,6 +32,8 @@ PUSH_EXACT_HEAD_BINDING_RE = re.compile(
 EXACT_HEAD_CHECKOUT_RE = re.compile(r"(?m)^\s+ref:\s*\$\{\{\s*env\.EVIDENCE_HEAD\s*\}\}\s*$")
 PATH_SCOPE_RE = re.compile(r"(?m)^\s+(paths|paths-ignore):\s*$")
 BRANCH_SCOPE_RE = re.compile(r"(?m)^\s+branches(?:-ignore)?:\s*")
+LEGACY_PYTHON_SOURCE_TRIGGER_RE = re.compile(r"(?m)^\s+-\s*['\"]cmpct/\*\*['\"]\s*$")
+LEGACY_PYTHON_SOURCE_CLASSIFIER_RE = re.compile(r"(?:^|[|('])cmpct/\.\*")
 
 
 def _has_exact_head_commit_scope(text: str) -> bool:
@@ -77,6 +79,13 @@ def validate(path: Path) -> list[str]:
 
     consumes_runner = bool(RUNNER_RE.search(text))
     auto_events = AUTO_EVENT_RE.findall(text)
+
+    # The installed package is rooted at src/cmpct/. A historical bare cmpct/** trigger/classifier silently watches
+    # a non-existent tree, allowing shipping Python changes to bypass evidence lanes. Keep this as a text-level typo
+    # ratchet rather than forcing every workflow to watch src/cmpct: only workflows that claim the package dependency
+    # must spell the canonical source root correctly.
+    if LEGACY_PYTHON_SOURCE_TRIGGER_RE.search(text) or LEGACY_PYTHON_SOURCE_CLASSIFIER_RE.search(text):
+        errors.append("workflow scopes non-existent 'cmpct/' source root; canonical Python package is 'src/cmpct/'")
 
     if HEAD_CHANGE_GATE_RE.search(text) and not HEAD_CHANGE_DIFF_RE.search(text):
         errors.append("latest-head-commit gate directive requires an exact HEAD diff-tree classifier")
