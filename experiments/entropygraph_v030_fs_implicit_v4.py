@@ -130,8 +130,13 @@ def _apply_override(default: list, encoded: list) -> list:
     return out
 
 
-def encode_v1(raw_v1: bytes, *, max_path_bytes: int, max_entries: int) -> bytes:
-    decoded = FS.decode_manifest(raw_v1, max_path_bytes=max_path_bytes, max_entries=max_entries)
+def encode_decoded_v1(decoded: dict) -> bytes:
+    """Encode one already-validated filesystem-v1 decode without reparsing its wire bytes.
+
+    The promoted admission seam validates filesystem-v1 before considering a compact control. Reusing that exact
+    semantic object removes a full bounded MessagePack decode from creation without gifting away validation or
+    changing the implicit-v4 byte grammar. Callers that only have wire bytes should continue to use ``encode_v1``.
+    """
     entries = decoded["manifest"]["entries"]
     default = _choose_default(entries)
     _validate_metadata(default)
@@ -167,6 +172,11 @@ def encode_v1(raw_v1: bytes, *, max_path_bytes: int, max_entries: int) -> bytes:
     if len(raw) > MAX_IMPLICIT_BYTES:
         raise RuntimeError("implicit-v4 filesystem manifest exceeds bounded decode unit")
     return raw
+
+
+def encode_v1(raw_v1: bytes, *, max_path_bytes: int, max_entries: int) -> bytes:
+    decoded = FS.decode_manifest(raw_v1, max_path_bytes=max_path_bytes, max_entries=max_entries)
+    return encode_decoded_v1(decoded)
 
 
 def _unpack(raw: bytes, *, max_path_bytes: int, max_entries: int):
@@ -337,8 +347,14 @@ def decode_to_v1(
     return {"raw": raw, "manifest": manifest, "regular": regular, "hardlinks": hardlinks}
 
 
-def semantics_equal(v1_raw: bytes, implicit_raw: bytes, *, max_path_bytes: int, max_entries: int) -> bool:
-    original = FS.decode_manifest(v1_raw, max_path_bytes=max_path_bytes, max_entries=max_entries)
+def semantics_equal_decoded(
+    original: dict,
+    implicit_raw: bytes,
+    *,
+    max_path_bytes: int,
+    max_entries: int,
+) -> bool:
+    """Prove implicit-v4 semantics against an already-validated filesystem-v1 decode."""
     identities = {path: (size, digest) for path, (size, digest) in original["regular"].items()}
     expanded = decode_to_v1(
         implicit_raw,
@@ -347,3 +363,13 @@ def semantics_equal(v1_raw: bytes, implicit_raw: bytes, *, max_path_bytes: int, 
         max_entries=max_entries,
     )
     return expanded["manifest"] == original["manifest"]
+
+
+def semantics_equal(v1_raw: bytes, implicit_raw: bytes, *, max_path_bytes: int, max_entries: int) -> bool:
+    original = FS.decode_manifest(v1_raw, max_path_bytes=max_path_bytes, max_entries=max_entries)
+    return semantics_equal_decoded(
+        original,
+        implicit_raw,
+        max_path_bytes=max_path_bytes,
+        max_entries=max_entries,
+    )
