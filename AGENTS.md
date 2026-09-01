@@ -8,22 +8,23 @@ Before changing format behavior, encoder policy, performance, portability or the
 
 1. `docs/AGI_ENGINEERING_STANDARD.md` — mandatory quality ratchet, invention protocol, evidence hierarchy and completion standard;
 2. `docs/FUNDAMENTAL_RESEARCH_DOCTRINE.md` — normative Foundry law for breakthrough-first, thesis-driven research and the separation between invention and convergence;
-3. `docs/ASSUMPTION_LEDGER.md` — living map of current information-model assumptions, inversion questions and active fundamental research opportunities;
-4. `docs/RND_DOMINATION_RUBRIC.md` — normative Forge/convergence law for diagnosing and closing strict product/benchmark reds without micro-optimization drift;
-5. `README.md`;
-6. `docs/CURRENT_STATE.md`;
-7. the newest applicable note under `docs/releases/`;
-8. `docs/PERFORMANCE_RELEASE_GATE.md`;
-9. `docs/BREAKTHROUGH_REHABILITATION.md` — how to preserve a miracle-grade research gain while paying any regression debt before promotion;
-10. `docs/HARDENING.md`;
-11. `docs/PORTABILITY.md`;
-12. `docs/NATIVE_CORE.md` when native/portability work is in scope;
-13. `docs/FORMAT.md`;
-14. `docs/HISTORY.md`;
-15. `docs/RESEARCH_LOG.md` and `docs/ENTROPYGRAPH.md`;
-16. `docs/BENCHMARKS.md`;
-17. `docs/PUBLIC_SURFACE.md`;
-18. `docs/ROADMAP.md`.
+3. `docs/ASSUMPTION_LEDGER.md` — living map of current information-model assumptions, inversion questions and fundamental research opportunities;
+4. `docs/ACTIVE_RESEARCH_THESIS.md` — current persistent Foundry thesis, exact state, oracle ladder and next decisive question;
+5. `docs/RND_DOMINATION_RUBRIC.md` — normative Forge/convergence law for diagnosing and closing strict product/benchmark reds without micro-optimization drift;
+6. `README.md`;
+7. `docs/CURRENT_STATE.md`;
+8. the newest applicable note under `docs/releases/`;
+9. `docs/PERFORMANCE_RELEASE_GATE.md`;
+10. `docs/BREAKTHROUGH_REHABILITATION.md` — how to preserve a miracle-grade research gain while paying any regression debt before promotion;
+11. `docs/HARDENING.md`;
+12. `docs/PORTABILITY.md`;
+13. `docs/NATIVE_CORE.md` when native/portability work is in scope;
+14. `docs/FORMAT.md`;
+15. `docs/HISTORY.md`;
+16. `docs/RESEARCH_LOG.md` and `docs/ENTROPYGRAPH.md`;
+17. `docs/BENCHMARKS.md`;
+18. `docs/PUBLIC_SURFACE.md`;
+19. `docs/ROADMAP.md`.
 
 Do not depend on inaccessible chat history, private corpora, unrelated internal projects, or private
 artifact provenance for project-critical context. If a conclusion matters to future CMPCT work, put
@@ -50,9 +51,9 @@ mechanism that already has a reproducible strict win and honest D5 debt. `docs/F
 defines the three-frontier model (Oracle -> Research -> Product), R5 information-model invention, persistent
 Fundamental Theses, structural transfer and the Assumption Ledger.
 
-Hourly scheduling is a continuity mechanism, not the natural unit of thought. Recover and continue the
-active thesis across activations instead of restarting strategy every hour. One decisive oracle,
-impossibility proof or structural-transfer result can be more valuable than several unrelated commits.
+Hourly scheduling is a continuity mechanism, not the natural unit of thought. Recover and continue
+`docs/ACTIVE_RESEARCH_THESIS.md` across activations instead of restarting strategy every hour. One decisive
+oracle, impossibility proof or structural-transfer result can be more valuable than several unrelated commits.
 
 ## AGI-grade engineering is the default, not a special mode
 
