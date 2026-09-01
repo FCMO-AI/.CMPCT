@@ -7,6 +7,7 @@ on:
   push:
     branches: [agent/v030-authoritative-integration]
     paths:
+      - 'src/cmpct/**'
       - 'benchmarks/v030_r25_manifest_canonical_integration_oracle.py'
       - 'benchmarks/v030_r25_manifest_derived_identity_oracle.py'
       - 'benchmarks/v030_release_generalization.py'
@@ -28,6 +29,7 @@ on:
   pull_request:
     branches: [main]
     paths:
+      - 'src/cmpct/**'
       - 'benchmarks/v030_r25_manifest_canonical_integration_oracle.py'
       - 'benchmarks/v030_r25_manifest_derived_identity_oracle.py'
       - 'benchmarks/v030_release_generalization.py'
@@ -86,7 +88,7 @@ jobs:
           # This list is intentionally the transitive evidence-critical closure of the oracle, not only the
           # files edited by the original landing patch. A corpus/baseline/candidate dependency change must not
           # inherit an older green receipt merely because the top-level oracle source stayed untouched.
-          if grep -Eq '^(benchmarks/(v030_r25_manifest_(canonical_integration|derived_identity)_oracle|v030_release_generalization|mosaic_v029_generalization_bench|neutral_hostile_corpus_v1|neutral_hostile_determinism_repair_v6)\.py|experiments/entropygraph_v030_(canonical_final_impl|canonical_manifest_candidate|r25_manifest_admission|fs_implicit_v4|product_fs|release_candidate)\.py|docs/FORMAT\.md|tests/test_(v030_r25_manifest_admission|v030_fs_implicit_v4|v030_canonical_final|rnd_domination_contract)\.py|\.github/workflows/v030-r25-manifest-canonical-integration\.yml)$' /tmp/latest-head-files.txt; then
+          if grep -Eq '^(src/cmpct/.*|benchmarks/(v030_r25_manifest_(canonical_integration|derived_identity)_oracle|v030_release_generalization|mosaic_v029_generalization_bench|neutral_hostile_corpus_v1|neutral_hostile_determinism_repair_v6)\.py|experiments/entropygraph_v030_(canonical_final_impl|canonical_manifest_candidate|r25_manifest_admission|fs_implicit_v4|product_fs|release_candidate)\.py|docs/FORMAT\.md|tests/test_(v030_r25_manifest_admission|v030_fs_implicit_v4|v030_canonical_final|rnd_domination_contract)\.py|\.github/workflows/v030-r25-manifest-canonical-integration\.yml)$' /tmp/latest-head-files.txt; then
             echo 'run_deep=true' >> "$GITHUB_OUTPUT"
           else
             echo 'run_deep=false' >> "$GITHUB_OUTPUT"
@@ -191,4 +193,5 @@ jobs:
           retention-days: 90
 
 # Read-only S6 authority after the canonical Python seam landed. Recovery/native/Android/all-15 authority remain
-# separate mandatory prerequisites and no result from this lane alone can grant release credit.
+# separate mandatory prerequisites and no result from this lane alone can grant release credit. The installed core
+# package is part of the exact product behavior and therefore belongs to this lane's transitive evidence closure.
