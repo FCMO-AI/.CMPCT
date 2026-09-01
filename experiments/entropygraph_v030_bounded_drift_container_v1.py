@@ -37,6 +37,14 @@ class ParsedContainer:
     entries: tuple[MemberEntry, ...]
 
 
+@dataclass(frozen=True)
+class MemberResourceFacts:
+    logical_size: int
+    decoded_context_bytes: int
+    max_decode_unit_bytes: int
+    member_read_amplification: float
+
+
 def _put(out: bytearray, value: int) -> None:
     BD.put_varint(out, value)
 
@@ -47,6 +55,14 @@ def _get(buf: bytes, pos: int) -> tuple[int, int]:
 
 def _compress(data: bytes) -> bytes:
     return zstd.ZstdCompressor(level=LEVEL, threads=0, write_checksum=True).compress(data)
+
+
+def _checked_index(parsed: ParsedContainer, index: int) -> MemberEntry:
+    if not isinstance(index, int) or isinstance(index, bool):
+        raise TypeError("bounded-drift member index must be int")
+    if index < 0 or index >= len(parsed.entries):
+        raise IndexError("bounded-drift member index out of range")
+    return parsed.entries[index]
 
 
 def encode_container(members: list[bytes]) -> bytes:
@@ -163,13 +179,27 @@ def parse_container(blob: bytes) -> ParsedContainer:
     return ParsedContainer(base, patch_raw, tuple(entries))
 
 
+def member_resource_facts(blob: bytes, index: int) -> MemberResourceFacts:
+    """Return release-law locality/decode facts for one selected member.
+
+    Selected-member reconstruction decodes the complete shared base and patch context before
+    producing the logical member. This intentionally matches the strict R4 floor's accounting;
+    no compressed or shared context is treated as free just because another member may reuse it.
+    """
+    parsed = parse_container(blob)
+    entry = _checked_index(parsed, index)
+    decoded_context = len(parsed.base) + len(parsed.patch_raw) + entry.logical_size
+    return MemberResourceFacts(
+        logical_size=entry.logical_size,
+        decoded_context_bytes=decoded_context,
+        max_decode_unit_bytes=max(len(parsed.base), len(parsed.patch_raw), entry.logical_size),
+        member_read_amplification=decoded_context / max(1, entry.logical_size),
+    )
+
+
 def decode_member(blob: bytes, index: int) -> bytes:
     parsed = parse_container(blob)
-    if not isinstance(index, int) or isinstance(index, bool):
-        raise TypeError("bounded-drift member index must be int")
-    if index < 0 or index >= len(parsed.entries):
-        raise IndexError("bounded-drift member index out of range")
-    entry = parsed.entries[index]
+    entry = _checked_index(parsed, index)
     raw = parsed.patch_raw[entry.program_offset:entry.program_offset + entry.program_length]
     count, _ = BD.get_varint(raw, 0)
     program = BD.EditProgram(raw, entry.logical_size, entry.sha256, count, 0, 0, 0)
