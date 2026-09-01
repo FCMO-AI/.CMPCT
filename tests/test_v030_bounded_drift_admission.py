@@ -65,6 +65,24 @@ def test_invalid_measurements_fail_closed() -> None:
     assert A.decide(bounded_drift=_obs(max_member_read_amplification=-1.0), fallback=fallback).selected == "fallback"
 
 
+def test_non_finite_locality_measurements_fail_closed_for_both_observations() -> None:
+    fallback = _obs(physical_bytes=1000, create_ns=1000)
+    for value in (float("nan"), float("inf"), float("-inf")):
+        candidate_decision = A.decide(
+            bounded_drift=_obs(physical_bytes=800, create_ns=800, max_member_read_amplification=value),
+            fallback=fallback,
+        )
+        assert candidate_decision.selected == "fallback"
+        assert candidate_decision.reason == "invalid_bounded_drift_locality"
+
+        fallback_decision = A.decide(
+            bounded_drift=_obs(physical_bytes=800, create_ns=800),
+            fallback=_obs(physical_bytes=1000, create_ns=1000, max_member_read_amplification=value),
+        )
+        assert fallback_decision.selected == "fallback"
+        assert fallback_decision.reason == "invalid_fallback_locality"
+
+
 def test_admission_does_not_claim_hidden_construction_or_external_authority() -> None:
     d = A.decide(bounded_drift=_obs(physical_bytes=800, create_ns=800), fallback=_obs(physical_bytes=900, create_ns=900))
     assert d.release_credit is False
