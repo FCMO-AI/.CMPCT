@@ -7,7 +7,6 @@ on:
   push:
     branches: [agent/v030-authoritative-integration]
     paths:
-      - 'benchmarks/patches/v030_r25_manifest_canonical_integration.patch'
       - 'benchmarks/v030_r25_manifest_canonical_integration_oracle.py'
       - 'experiments/entropygraph_v030_canonical_final_impl.py'
       - 'experiments/entropygraph_v030_r25_manifest_admission.py'
@@ -16,11 +15,11 @@ on:
       - 'tests/test_v030_r25_manifest_admission.py'
       - 'tests/test_v030_fs_implicit_v4.py'
       - 'tests/test_v030_canonical_final.py'
+      - 'tests/test_rnd_domination_contract.py'
       - '.github/workflows/v030-r25-manifest-canonical-integration.yml'
   pull_request:
     branches: [main]
     paths:
-      - 'benchmarks/patches/v030_r25_manifest_canonical_integration.patch'
       - 'benchmarks/v030_r25_manifest_canonical_integration_oracle.py'
       - 'experiments/entropygraph_v030_canonical_final_impl.py'
       - 'experiments/entropygraph_v030_r25_manifest_admission.py'
@@ -29,12 +28,12 @@ on:
       - 'tests/test_v030_r25_manifest_admission.py'
       - 'tests/test_v030_fs_implicit_v4.py'
       - 'tests/test_v030_canonical_final.py'
+      - 'tests/test_rnd_domination_contract.py'
       - '.github/workflows/v030-r25-manifest-canonical-integration.yml'
   workflow_dispatch:
 
-# TEMPORARY D5 LANDING AUTHORITY. Restore to contents:read immediately after the guarded seam commit lands.
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: cmpct-v030-r25-manifest-canonical-integration-${{ github.event.pull_request.head.sha || github.sha }}
@@ -68,7 +67,7 @@ jobs:
           fi
           git diff-tree --no-commit-id --name-only -r HEAD > /tmp/latest-head-files.txt
           cat /tmp/latest-head-files.txt
-          if grep -Eq '^(benchmarks/(patches/v030_r25_manifest_canonical_integration\.patch|v030_r25_manifest_canonical_integration_oracle\.py)|experiments/entropygraph_v030_(canonical_final_impl|r25_manifest_admission|fs_implicit_v4|product_fs)\.py|tests/test_v030_(r25_manifest_admission|fs_implicit_v4|canonical_final)\.py|\.github/workflows/v030-r25-manifest-canonical-integration\.yml)$' /tmp/latest-head-files.txt; then
+          if grep -Eq '^(benchmarks/v030_r25_manifest_canonical_integration_oracle\.py|experiments/entropygraph_v030_(canonical_final_impl|r25_manifest_admission|fs_implicit_v4|product_fs)\.py|tests/test_(v030_r25_manifest_admission|v030_fs_implicit_v4|v030_canonical_final|rnd_domination_contract)\.py|\.github/workflows/v030-r25-manifest-canonical-integration\.yml)$' /tmp/latest-head-files.txt; then
             echo 'run_deep=true' >> "$GITHUB_OUTPUT"
           else
             echo 'run_deep=false' >> "$GITHUB_OUTPUT"
@@ -83,8 +82,7 @@ jobs:
       - uses: actions/checkout@v6
         with:
           ref: ${{ env.EVIDENCE_HEAD }}
-          fetch-depth: 0
-      - name: Bind exact candidate head
+      - name: Bind exact landed candidate
         run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
       - uses: actions/setup-python@v6
         with:
@@ -98,30 +96,37 @@ jobs:
           sudo apt-get -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" -o Dir::Etc::sourceparts="-" install -y zstd ffmpeg libsndfile1
           python -m pip install --upgrade pip
           python -m pip install -e '.[test,audio]'
-      - name: Apply exact minimal canonical seam patch
+      - name: Prove canonical source contains the landed admission seam
         run: |
           set -euo pipefail
-          git apply --check benchmarks/patches/v030_r25_manifest_canonical_integration.patch
-          git apply benchmarks/patches/v030_r25_manifest_canonical_integration.patch
+          python - <<'PY'
+          from pathlib import Path
+          source=Path('experiments/entropygraph_v030_canonical_final_impl.py').read_text(encoding='utf-8')
+          assert 'entropygraph_v030_r25_manifest_admission as MANIFEST_ADMISSION' in source
+          assert 'MANIFEST_ADMISSION.prepare_profile_tree(' in source
+          assert 'MANIFEST_ADMISSION.decode_from_content_identities(' in source
+          fmt=Path('docs/FORMAT.md').read_text(encoding='utf-8')
+          assert '### 15.1 Admitted compact filesystem control (implicit-v4)' in fmt
+          PY
           python -m py_compile \
             experiments/entropygraph_v030_canonical_final_impl.py \
             experiments/entropygraph_v030_r25_manifest_admission.py \
             experiments/entropygraph_v030_canonical_manifest_candidate.py \
             benchmarks/v030_r25_manifest_canonical_integration_oracle.py
-      - name: Preserve canonical and manifest admission regression contracts
+      - name: Preserve canonical, hostile-control, product-floor and Forge contracts
         run: |
           python -m pytest -q \
             tests/test_v030_r25_manifest_admission.py \
             tests/test_v030_fs_implicit_v4.py \
             tests/test_v030_canonical_final.py \
             tests/test_rnd_domination_contract.py
-      - name: Run exact canonical r25-only integration A/B
+      - name: Re-run exact complete-r25 explicit-v1 versus landed implicit-v4 A/B
         run: |
           mkdir -p benchmark-artifacts
           python benchmarks/v030_r25_manifest_canonical_integration_oracle.py \
             --work-root "$RUNNER_TEMP/v030-r25-manifest-canonical" \
             --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-r25-manifest-canonical.json"
-      - name: Enforce D5 promotion boundary
+      - name: Enforce landed D5 authority without release credit
         run: |
           test -f benchmark-artifacts/v030-r25-manifest-canonical.json
           python - <<'PY'
@@ -148,48 +153,16 @@ jobs:
           assert d['strong_verify_ok'] is True and d['strong_verify_tree_exact'] is True
           assert d['within_locality_8x'] is True and d['control_read_amplification'] <= 8.0
           assert d['release_credit'] is False
-          assert d['canonical_source_patch_candidate_only'] is True
           assert d['domination_audit']['diagnosis']=='D5'
           assert d['domination_audit']['terminal_decision']=='PROMOTE_NEXT_PREREQUISITE'
           PY
-      - name: Synchronize provisional format/state and persist the proven seam
-        run: |
-          set -euo pipefail
-          python - <<'PY'
-          from pathlib import Path
-
-          fmt = Path('docs/FORMAT.md')
-          text = fmt.read_text(encoding='utf-8')
-          marker = '## 16. Content/manifest consistency and tree identities\n'
-          assert marker in text
-          addition = '''### 15.1 Admitted compact filesystem control (implicit-v4)\n\nThe canonical r25 encoder may replace the explicit filesystem-v1 MessagePack map above with the bounded\n**implicit-v4** control only when the source filesystem-v1 control is valid, implicit-v4 expands back to exactly\nthe same filesystem-v1 semantics, and its encoded bytes are strictly smaller. Ties and any failed semantic proof\nretain filesystem-v1. Admission is structural/content-agnostic and may not depend on workload names, benchmark\nhashes, source paths or equivalent identity.\n\nThe implicit-v4 wire value is one four-element MessagePack array: `[4, default_metadata,\nregular_metadata_overrides, explicit_rows]`. `default_metadata` is `[mode, mtime_ns, uid, gid, xattrs]`; each\nregular-file metadata row is a bounded bitmask plus numeric deltas and/or xattr replacement relative to that\ndefault. Regular paths, sizes and SHA-256 identities are omitted because the selected authenticated content graph\nalready owns them. `explicit_rows` contains only directories, symlinks and hardlinks using prefix-delta paths, a\ncompact kind code, metadata override and kind-specific payload. Hardlinks address an authenticated regular owner\nby its canonical sorted regular-entry index.\n\nA reader must authenticate the compact control as an ordinary graph member, obtain regular path/size/SHA-256\nidentities from that same authenticated graph, reconstruct the full filesystem-v1 semantic entry set, and then\napply every ordinary path, metadata, hardlink, symlink, resource and content/manifest consistency rule. A count,\npath, identity or grammar mismatch fails closed; it never falls back to a different interpretation. The compact\ncontrol retains the existing 8 MiB bounded decode-unit ceiling.\n\nThe admission changes only filesystem-control encoding inside provisional revision 25. It does not alter the two\n`CMP25*` profile magics, user-tree semantics, genuine-r24 fallback rule, <=8x locality requirement or release\nlock. Native/Android/recovery implementations must consume this same dual-control grammar before r25 can ship.\n\n'''
-          fmt.write_text(text.replace(marker, addition + marker, 1), encoding='utf-8')
-
-          state = Path('docs/CURRENT_STATE.md')
-          text = state.read_text(encoding='utf-8')
-          marker = '## Design invariants\n'
-          assert marker in text
-          addition = '''## Provisional v0.30 r25 filesystem-control integration\n\nOn `agent/v030-authoritative-integration`, the canonical r25 writer/reader admits the compact implicit-v4\nfilesystem control through the shared content-agnostic admission seam. The decisive exact-head A/B that\nauthorized landing reduced the developer-repository complete r25 artifact from **909,369 B to 844,116 B**\n(**65,253 B saved**) while preserving exact user-tree semantics, strong verification and **1.0x** control-read\namplification. The explicit filesystem-v1 encoding remains the mandatory fallback on ties or any failed semantic\nproof.\n\nThis is a D5 productization step, not release authority. Recovery/malformed-control parity, shared native parsing,\nAndroid/platform parity, genuine r24 product-floor selection, exact all-workload competitor authority and the\nstrict release lock still must pass on one exact candidate before v0.30 can ship.\n\n'''
-          state.write_text(text.replace(marker, addition + marker, 1), encoding='utf-8')
-          PY
-          git diff --check
-          git fetch origin agent/v030-authoritative-integration
-          test "$(git rev-parse origin/agent/v030-authoritative-integration)" = "$EVIDENCE_HEAD"
-          git config user.name 'CMPCT v0.30 integration bot'
-          git config user.email 'actions@users.noreply.github.com'
-          git add experiments/entropygraph_v030_canonical_final_impl.py docs/FORMAT.md docs/CURRENT_STATE.md
-          git commit -m 'feat(v0.30): land implicit r25 filesystem control seam'
-          git push origin HEAD:agent/v030-authoritative-integration
-      - name: Restore triggering source before policy checks
-        if: always()
-        run: git reset --hard "$EVIDENCE_HEAD"
       - name: CI topology self-check
         if: always()
         run: python tools/check_ci_topology.py .github/workflows/v030-r25-manifest-canonical-integration.yml
       - name: Public-surface guard
         if: always()
         run: python tools/check_public_surface.py
-      - name: Upload exact productization evidence
+      - name: Upload exact landed-seam evidence
         if: always()
         uses: actions/upload-artifact@v6
         with:
@@ -198,6 +171,5 @@ jobs:
           if-no-files-found: error
           retention-days: 90
 
-# Temporary S6 landing mode: the exact A/B must go green again before this workflow may persist the already-reviewed
-# seam. Immediately after that commit lands, restore read-only workflow permissions and convert this lane to validate
-# the landed source directly; recovery/native/Android/all-15 authority remain separate mandatory prerequisites.
+# Read-only S6 authority after the canonical Python seam landed. Recovery/native/Android/all-15 authority remain
+# separate mandatory prerequisites and no result from this lane alone can grant release credit.
