@@ -1,6 +1,7 @@
 #include <jni.h>
 #include <stdint.h>
 
+#include <limits>
 #include <string>
 #include <vector>
 
@@ -48,8 +49,14 @@ bool java_string_to_standard_utf8(JNIEnv *env, jstring value, std::string *out) 
     const jchar *chars = env->GetStringChars(value, nullptr);
     if (chars == nullptr) return false;
 
+    const size_t units = static_cast<size_t>(len);
+    if (units > std::numeric_limits<size_t>::max() / 3) {
+        env->ReleaseStringChars(value, chars);
+        throw_io(env, CMPCT_PORTABLE_LIMIT);
+        return false;
+    }
     out->clear();
-    out->reserve(static_cast<size_t>(len) * 3);
+    out->reserve(units * 3);
     bool ok = true;
     for (jsize i = 0; i < len && ok; ++i) {
         uint32_t cp = chars[i];
