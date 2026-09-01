@@ -44,17 +44,15 @@ def admit(
     max_entries: int,
 ) -> ManifestAdmission:
     """Return the strictly smaller exact control, otherwise the original filesystem-v1 bytes."""
-    # Decode first so malformed source control can never be normalized into a different grammar.
-    FS.decode_manifest(
+    # Decode exactly once up front so malformed source control can never be normalized into a different grammar.
+    # The validated semantic object is then reused for compact encoding and the independent expansion proof. This
+    # removes two redundant full filesystem-v1 parses from the promoted creation path without changing bytes or law.
+    original = FS.decode_manifest(
         filesystem_v1_raw,
         max_path_bytes=max_path_bytes,
         max_entries=max_entries,
     )
-    candidate = IFS4.encode_v1(
-        filesystem_v1_raw,
-        max_path_bytes=max_path_bytes,
-        max_entries=max_entries,
-    )
+    candidate = IFS4.encode_decoded_v1(original)
     if len(candidate) >= len(filesystem_v1_raw):
         return ManifestAdmission(
             raw=filesystem_v1_raw,
@@ -63,8 +61,8 @@ def admit(
             selected_bytes=len(filesystem_v1_raw),
             saving_bytes=0,
         )
-    if not IFS4.semantics_equal(
-        filesystem_v1_raw,
+    if not IFS4.semantics_equal_decoded(
+        original,
         candidate,
         max_path_bytes=max_path_bytes,
         max_entries=max_entries,
