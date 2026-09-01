@@ -64,6 +64,7 @@ The policy may not:
 
 The ratcheted authorities are:
 
+- `android.yml`;
 - `v030-native-authority.yml`;
 - `v030-final-release-authority.yml`;
 - `v030-canonical-authority.yml`;
@@ -86,6 +87,8 @@ The federated candidate productization lane uses the same policy for its up-to-t
 The Logs D5 lanes use the same custody rule for the strict path-invariant sidecar content-policy oracle and the recoverable canonical-filesystem inverse-profile productization proof. Both receipts are useful for their exact source once admitted; neither justifies preserving obsolete accumulated-PR routing work. Their four-way ZIP/Zstd, recovery, locality, strong-verification and no-release-credit laws are unchanged by the scheduling split.
 
 The implicit-v4 D5 chain now uses the same split custody from its derived-identity oracle through reader productization, writer admission, and the up-to-three-hour canonical-candidate gate. These jobs already carry exact reconstruction, semantic-identity, locality and fail-closed product boundaries; the migration removes only obsolete classifier queue ownership. Once any substantive job is admitted, its exact-SHA receipt remains non-cancellable and cannot be inherited by a later candidate.
+
+Hosted Android follows the same law because its newest-head classifier is cheap routing but its emulator/JNI/conformance run is a release-critical, fingerprint-bearing platform receipt that can occupy a runner for up to one hour. Obsolete Android classifiers may now be superseded, while an admitted hosted-emulator proof remains non-cancellable for its exact source SHA. The separate physical-ARM64 workflow is deliberately not converted: it has no classifier split and intentionally grants the scarce physical device to the newest explicitly requested candidate.
 
 Other deep/release workflows should migrate when touched if they combine exact-receipt preservation with a newest-head classifier. Retired or genuinely one-shot workflows should instead become manual-only when repository doctrine permits it.
 
