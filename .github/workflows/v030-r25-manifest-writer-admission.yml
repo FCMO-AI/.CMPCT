@@ -1,6 +1,6 @@
 # ci-lane: deep
 # ci-pr-scope: latest-head-commit-gate
-# ci-cancel-policy: preserve-running-exact-receipt
+# ci-cancel-policy: split-classifier-preserve-receipts
 name: CMPCT v0.30 r25 manifest writer admission
 
 on:
@@ -39,10 +39,6 @@ on:
 permissions:
   contents: read
 
-concurrency:
-  group: cmpct-v030-r25-manifest-writer-${{ github.event.pull_request.head.sha || github.sha }}
-  cancel-in-progress: false
-
 env:
   PYTHONPATH: ${{ github.workspace }}
   EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
@@ -51,6 +47,9 @@ jobs:
   latest-head-impact:
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    concurrency:
+      group: cmpct-v030-r25-manifest-writer-classifier-${{ github.event.pull_request.number || github.ref }}
+      cancel-in-progress: true
     outputs:
       run_deep: ${{ steps.scope.outputs.run_deep }}
     steps:
@@ -83,6 +82,9 @@ jobs:
     if: needs.latest-head-impact.outputs.run_deep == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 75
+    concurrency:
+      group: cmpct-v030-r25-manifest-writer-receipt-${{ github.event.pull_request.head.sha || github.sha }}
+      cancel-in-progress: false
     steps:
       - uses: actions/checkout@v6
         with:
@@ -163,4 +165,5 @@ jobs:
 # Research/productization only. The projection is read under the existing bounded revision-25 research context;
 # shipping fail-closed behavior remains unchanged. A pass advances canonical integration only. Recovery, native,
 # Android, all-15 authority and final release credit remain separate fail-closed prerequisites. The installed core
-# package is part of the writer/decoder behavior, and exact-SHA concurrency preserves the receipt it actually proves.
+# package is part of the writer/decoder behavior, and split classifier/exact-receipt custody cancels obsolete
+# routing while preserving every admitted exact-SHA proof.
