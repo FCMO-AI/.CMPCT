@@ -83,6 +83,7 @@ def test_hostile_program_metadata_and_parser_work_are_bounded(monkeypatch: pytes
         (b"", BD.EditProgram(b"\x00", -1, digest, 0, 0, 0, 0)),
         (b"", BD.EditProgram(b"\x00", 0, b"short", 0, 0, 0, 0)),
         (b"", BD.EditProgram(b"\x00", 0, digest, -1, 0, 0, 0)),
+        (b"", BD.EditProgram(b"\x00", 0, digest, BD.MAX_RECORDS + 1, 0, 0, 0)),
         # Encoded zero records but metadata claims one.
         (b"", BD.EditProgram(b"\x00", 0, digest, 1, 0, 0, 0)),
         # Encoded four records cannot fit into this two-byte program; reject before looping.
@@ -91,6 +92,14 @@ def test_hostile_program_metadata_and_parser_work_are_bounded(monkeypatch: pytes
     for base, program in cases:
         with pytest.raises(ValueError):
             BD.decode_program(base, program)
+
+
+def test_encoder_record_ceiling_fails_closed(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(BD, "MAX_RECORDS", 1)
+    base = b"A" * 2000
+    target = b"B" * 256 + b"A" * 744 + b"C" * 256 + b"A" * 744
+    with pytest.raises(ValueError):
+        BD.encode_program(base, target)
 
 
 def test_non_bytes_inputs_fail_closed() -> None:
