@@ -87,9 +87,6 @@ def run(work_root: Path) -> dict:
     if extracted_tree != expected_tree:
         raise RuntimeError("candidate canonical facade extraction changed user-tree identity")
 
-    # The current shipping decoder understands filesystem-v1 only. Either a structured
-    # failure or an exception caused by rejecting unsupported compact control is valid
-    # fail-closed behavior. Candidate failure itself is never converted into success.
     try:
         shipping_verify = BASE.strong_verify(candidate_archive)
     except Exception as exc:
@@ -183,8 +180,23 @@ def main() -> None:
     p.add_argument("--work-root", type=Path, default=Path("benchmark-artifacts/v030-r25-canonical-manifest-candidate-work"))
     p.add_argument("--output", type=Path, default=Path("benchmark-artifacts/v030-r25-canonical-manifest-candidate.json"))
     args = p.parse_args()
-    result = run(args.work_root)
     args.output.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        result = run(args.work_root)
+    except Exception as exc:
+        failure = {
+            "schema": "cmpct-v030-r25-manifest-canonical-candidate-failure-v1",
+            "source_commit": _source_commit(),
+            "target": SIZE.TARGET,
+            "release_credit": False,
+            "promotion_signal": False,
+            "error_type": type(exc).__name__,
+            "error": repr(exc),
+            "terminal_decision": "REHABILITATE_DEBT",
+        }
+        args.output.write_text(json.dumps(failure, indent=2) + "\n", encoding="utf-8")
+        print(json.dumps(failure, indent=2), flush=True)
+        raise
     args.output.write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8")
     print(json.dumps({
         "baseline_archive_bytes": result["baseline_archive_bytes"],
