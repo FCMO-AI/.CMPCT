@@ -4,14 +4,16 @@ from __future__ import annotations
 
 This instrument does not grant release credit and does not alter admission. It decomposes the complete-product
 byte gap for Office and Analytics into accepted-v0.29, genuine canonical-r24, exact staged r25 control, direct
-r25 candidate, and promoted release-product outcomes. The purpose is to identify which physical layer owns the
-multi-megabyte regression before any codec or framing change is attempted.
+r25 candidate, and promoted release-product outcomes. It also prices one deliberately non-product counterfactual
+with the filesystem-control member removed after otherwise identical staging. That gifted-control floor is only a
+causal attribution instrument: it cannot reconstruct canonical filesystem semantics and therefore can never be
+selected, promoted, or interpreted as release evidence.
 """
 
 import argparse
 import hashlib
 import json
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 import tempfile
 
 from benchmarks import neutral_hostile_corpus_v1 as N
@@ -50,6 +52,24 @@ def _candidate_stats(source: Path, work: Path) -> dict:
     r25_revision, r25_profile = C._profile_for_archive(r25)
     r25_bytes = r25.stat().st_size
 
+    # Causal byte-attribution oracle. Stage the same regular graph members through the exact canonical seam, then
+    # gift away only the authenticated filesystem-control member before building the graph. The resulting archive
+    # is intentionally non-canonical because it cannot reconstruct mode/time/link/xattr semantics. Its only job is
+    # to answer whether the remaining v0.29 byte miss is physically owned by filesystem control or by some deeper
+    # content-graph/staging effect. Representation bytes are *not* being hidden from a product claim: there is no
+    # product claim for this counterfactual at all.
+    control_free_staged = work / "r25-control-free-staged"
+    control_free_prepared = C._prepare_profile_tree(source, control_free_staged)
+    control_path = control_free_staged.joinpath(*PurePosixPath(C.FS.FILESYSTEM_MANIFEST).parts)
+    if control_path.read_bytes() != control_free_prepared["selected_manifest_raw"]:
+        raise RuntimeError("counterfactual control member differs from canonical selected control")
+    control_path.unlink()
+    control_free = work / "r25-control-free-counterfactual.cmpct"
+    control_free_stats = dict(C._r25_build(control_free_staged, control_free))
+    control_free_bytes = control_free.stat().st_size
+    effective_control_cost = r25_bytes - control_free_bytes
+    strict_control_budget = accepted_bytes - control_free_bytes - 1
+
     product = work / "promoted-product.cmpct"
     product_stats = dict(PRODUCT.build(source, product))
     product_revision, product_profile = PRODUCT._revision_for_archive(product)
@@ -70,6 +90,19 @@ def _candidate_stats(source: Path, work: Path) -> dict:
         "manifest_control_saving_bytes": int(prepared["manifest_control_saving_bytes"]),
         "manifest_entries": int(prepared["entries"]),
         "regular_graph_members": int(prepared["regular_graph_members"]),
+        "control_free_counterfactual_bytes": control_free_bytes,
+        "control_free_minus_v029_bytes": control_free_bytes - accepted_bytes,
+        "control_free_selected": control_free_stats.get("selected"),
+        "control_free_g04_bytes": control_free_stats.get("g04_bytes"),
+        "control_free_prefixgraph_bytes": control_free_stats.get("prefixgraph_bytes"),
+        "effective_control_member_cost_bytes": effective_control_cost,
+        "effective_control_minus_raw_selected_bytes": effective_control_cost - int(prepared["selected_manifest_bytes"]),
+        "strict_control_budget_bytes": strict_control_budget,
+        "control_cost_over_strict_budget_bytes": effective_control_cost - strict_control_budget,
+        "control_free_claim_boundary": (
+            "causal attribution only: filesystem control is gifted away, exact filesystem reconstruction is lost, "
+            "and these bytes are never product/release evidence"
+        ),
         "direct_r25_bytes": r25_bytes,
         "direct_r25_minus_v029_bytes": r25_bytes - accepted_bytes,
         "direct_r25_minus_r24_bytes": r25_bytes - r24.stat().st_size,
@@ -95,6 +128,7 @@ def _candidate_stats(source: Path, work: Path) -> dict:
         "strong_verify": verified,
         "r24_create_s": float(r24_stats.get("create_s", 0.0)),
         "r25_create_s": float(r25_stats.get("create_s", 0.0)),
+        "control_free_create_s": float(control_free_stats.get("create_s", 0.0)),
         "promoted_portfolio_create_s": float(product_stats.get("portfolio_create_s", 0.0)),
     }
 
