@@ -51,7 +51,7 @@ def test_strictly_smaller_exact_implicit_control_is_admitted() -> None:
 
 def test_tie_or_larger_candidate_keeps_filesystem_v1(monkeypatch: pytest.MonkeyPatch) -> None:
     raw = _manifest([_regular("a", b"x")])
-    monkeypatch.setattr(ADMIT.IFS4, "encode_v1", lambda *_args, **_kwargs: raw)
+    monkeypatch.setattr(ADMIT.IFS4, "encode_decoded_v1", lambda *_args, **_kwargs: raw)
     selected = ADMIT.admit(raw, max_path_bytes=MAX_PATH, max_entries=MAX_ENTRIES)
     assert selected.encoding == "filesystem-v1"
     assert selected.raw == raw
@@ -60,11 +60,31 @@ def test_tie_or_larger_candidate_keeps_filesystem_v1(monkeypatch: pytest.MonkeyP
 
 def test_semantic_mismatch_fails_safe_to_filesystem_v1(monkeypatch: pytest.MonkeyPatch) -> None:
     raw = _manifest([_regular("a-long-path.txt", b"payload")])
-    monkeypatch.setattr(ADMIT.IFS4, "encode_v1", lambda *_args, **_kwargs: b"x")
-    monkeypatch.setattr(ADMIT.IFS4, "semantics_equal", lambda *_args, **_kwargs: False)
+    monkeypatch.setattr(ADMIT.IFS4, "encode_decoded_v1", lambda *_args, **_kwargs: b"x")
+    monkeypatch.setattr(ADMIT.IFS4, "semantics_equal_decoded", lambda *_args, **_kwargs: False)
     selected = ADMIT.admit(raw, max_path_bytes=MAX_PATH, max_entries=MAX_ENTRIES)
     assert selected.encoding == "filesystem-v1"
     assert selected.raw == raw
+
+
+def test_admission_reuses_one_validated_filesystem_v1_decode(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Admission must not repay full filesystem-v1 parsing for encoding and semantic comparison."""
+    raw = _manifest([
+        _regular(f"tree/member_{index:03d}.bin", bytes([index % 251]) * 96)
+        for index in range(48)
+    ])
+    real_decode = FS.decode_manifest
+    calls = 0
+
+    def counted_decode(*args, **kwargs):
+        nonlocal calls
+        calls += 1
+        return real_decode(*args, **kwargs)
+
+    monkeypatch.setattr(ADMIT.FS, "decode_manifest", counted_decode)
+    selected = ADMIT.admit(raw, max_path_bytes=MAX_PATH, max_entries=MAX_ENTRIES)
+    assert selected.encoding == "implicit-v4"
+    assert calls == 1
 
 
 def test_filesystem_v1_decode_does_not_depend_on_graph_identity_argument() -> None:
