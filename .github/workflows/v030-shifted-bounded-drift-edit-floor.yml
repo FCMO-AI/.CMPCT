@@ -103,7 +103,7 @@ jobs:
           import json, os
           from pathlib import Path
           d=json.loads(Path('benchmark-artifacts/v030-shifted-bounded-drift.json').read_text())
-          assert d['schema']=='cmpct-v030-shifted-bounded-drift-edit-floor-v1'
+          assert d['schema']=='cmpct-v030-shifted-bounded-drift-edit-floor-v2'
           assert d['source_commit']==os.environ['EVIDENCE_HEAD']
           assert d['diagnosis']=='D4' and d['radicality']=='R4' and int(d['rps'])>=80
           assert set(['S1','S3','S4']).issubset(d['saturation_inherited'])
@@ -112,7 +112,9 @@ jobs:
           assert c['base_selection']=='minimum logical-content SHA-256'
           assert c['sequential_copy_edit_grammar'] is True
           assert c['single_shared_edit_context'] is True
-          assert c['max_chain_depth']==1 and c['release_credit'] is False
+          assert c['max_chain_depth']==1
+          assert c['publication_and_sha256_inside_candidate_timing'] is True
+          assert c['release_credit'] is False
           x=d['candidate']
           assert x['tree_verified'] is True
           assert int(x['max_decode_unit_bytes'])<=8*1024*1024
@@ -123,6 +125,7 @@ jobs:
           h=d['hostile_reviewer']
           assert h['all_edit_construction_is_inside_candidate_timing'] is True
           assert h['base_and_edit_compression_are_inside_candidate_timing'] is True
+          assert h['publication_and_sha256_are_inside_candidate_timing'] is True
           assert h['bounded_fallback_is_counted'] is True
           z=int(d['comparators']['tar_zstd19_solid']['bytes'])
           assert d['decision']['payload_floor_zstd_gap_bytes']==int(x['payload_floor_bytes'])-z
@@ -150,4 +153,5 @@ jobs:
 # STRUCTURAL_RED R4 research only. The family survives only if its actual base+edit
 # payload changes the measured Zstd floor; a speed/size crossing still receives zero
 # release credit until generic admission, canonical semantics, recovery, native, Android,
-# selector and exact common-fingerprint authority are complete.
+# selector and exact common-fingerprint authority are complete. Candidate creation prices
+# edit search, compression, durable publication and SHA-256 binding before comparison.
