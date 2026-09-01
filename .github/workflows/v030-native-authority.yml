@@ -14,6 +14,7 @@ on:
       - 'experiments/entropygraph_v030_canonical_final_impl.py'
       - 'experiments/entropygraph_v030_profile_isolation.py'
       - 'experiments/entropygraph_v030_release_product.py'
+      - 'experiments/entropygraph_v030_product_fs.py'
       - 'experiments/entropygraph_v030_r25_manifest_admission.py'
       - 'experiments/entropygraph_v030_fs_implicit_v4.py'
       - 'tests/test_v030_canonical_final.py'
@@ -68,7 +69,7 @@ jobs:
           fi
           git diff-tree --no-commit-id --name-only -r HEAD > /tmp/latest-head-files.txt
           cat /tmp/latest-head-files.txt
-          if grep -Eq '^(native/cmpct-(portable|core)/|experiments/entropygraph_v030_(canonical_final|canonical_final_impl|profile_isolation|release_product|r25_manifest_admission|fs_implicit_v4)\.py|tests/(test_v030_(canonical_final|profile_isolation|r25_manifest_admission|fs_implicit_v4)\.py|generate_v030_(canonical|implicit)_goldens\.py|conformance/v030-r25-(canonical|implicit-v4)\.json|native_v030_(canonical|implicit_manifest|r24_verify_authority)\.py)|docs/(FORMAT|HARDENING|NATIVE_CORE|PORTABILITY)\.md|\.github/workflows/v030-native-authority\.yml)' /tmp/latest-head-files.txt; then
+          if grep -Eq '^(native/cmpct-(portable|core)/|experiments/entropygraph_v030_(canonical_final|canonical_final_impl|profile_isolation|release_product|product_fs|r25_manifest_admission|fs_implicit_v4)\.py|tests/(test_v030_(canonical_final|profile_isolation|r25_manifest_admission|fs_implicit_v4)\.py|generate_v030_(canonical|implicit)_goldens\.py|conformance/v030-r25-(canonical|implicit-v4)\.json|native_v030_(canonical|implicit_manifest|r24_verify_authority)\.py)|docs/(FORMAT|HARDENING|NATIVE_CORE|PORTABILITY)\.md|\.github/workflows/v030-native-authority\.yml)' /tmp/latest-head-files.txt; then
             echo 'run_native=true' >> "$GITHUB_OUTPUT"
           else
             echo 'run_native=false' >> "$GITHUB_OUTPUT"
@@ -137,5 +138,6 @@ jobs:
 # commit was unrelated. Exact-head concurrency plus newest-commit classification preserves already-running evidence
 # while cheaply declining irrelevant heads. Builder-independent filesystem-v1 and implicit-v4 bytes independently
 # pin both admitted filesystem-control dialects; writer parity separately proves the current canonical admission seam.
-# The r25 format/hardening/native/portability contracts are trigger inputs too: changing a reader-visible or platform
-# requirement without rerunning the native acceptance matrix would create green-looking documentation over stale proof.
+# The r25 format/hardening/native/portability contracts and filesystem semantic owner are trigger inputs too: changing
+# a reader-visible or platform requirement without rerunning the native acceptance matrix would create green-looking
+# repository state over stale proof.
