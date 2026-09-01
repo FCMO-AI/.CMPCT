@@ -14,9 +14,17 @@ on:
       - 'experiments/entropygraph_v030_canonical_final.py'
       - 'experiments/entropygraph_v030_canonical_final_impl.py'
       - 'experiments/entropygraph_v030_profile_isolation.py'
+      - 'experiments/entropygraph_v030_geometry_overlay_g04.py'
+      - 'experiments/entropygraph_v030_prefixgraph.py'
+      - 'experiments/entropygraph_v030_release_reader.py'
+      - 'experiments/entropygraph_v030_release_reader_policy.py'
+      - 'experiments/entropygraph_v030_release_admission.py'
+      - 'experiments/entropygraph_v030_release_candidate.py'
+      - 'experiments/entropygraph_v030_shared_portfolio.py'
       - 'tests/test_v030_r25_manifest_admission.py'
       - 'tests/test_v030_fs_implicit_v4.py'
       - 'tests/test_v030_canonical_final.py'
+      - 'tests/test_v030_manifest_admission_custody.py'
       - '.github/workflows/v030-manifest-admission-custody.yml'
   workflow_dispatch:
 
@@ -55,7 +63,7 @@ jobs:
           fi
           git diff-tree --no-commit-id --name-only -r HEAD > /tmp/latest-head-files.txt
           cat /tmp/latest-head-files.txt
-          if grep -Eq '^(src/cmpct/.*|experiments/entropygraph_v030_(r25_manifest_admission|fs_implicit_v4|product_fs|canonical_final|canonical_final_impl|profile_isolation)\.py|tests/test_v030_(r25_manifest_admission|fs_implicit_v4|canonical_final)\.py|\.github/workflows/v030-manifest-admission-custody\.yml)$' /tmp/latest-head-files.txt; then
+          if grep -Eq '^(src/cmpct/.*|experiments/entropygraph_v030_(r25_manifest_admission|fs_implicit_v4|product_fs|canonical_final|canonical_final_impl|profile_isolation|geometry_overlay_g04|prefixgraph|release_reader|release_reader_policy|release_admission|release_candidate|shared_portfolio)\.py|tests/test_v030_(r25_manifest_admission|fs_implicit_v4|canonical_final|manifest_admission_custody)\.py|\.github/workflows/v030-manifest-admission-custody\.yml)$' /tmp/latest-head-files.txt; then
             echo 'run_custody=true' >> "$GITHUB_OUTPUT"
           else
             echo 'run_custody=false' >> "$GITHUB_OUTPUT"
@@ -86,6 +94,13 @@ jobs:
             experiments/entropygraph_v030_canonical_final.py \
             experiments/entropygraph_v030_canonical_final_impl.py \
             experiments/entropygraph_v030_profile_isolation.py \
+            experiments/entropygraph_v030_geometry_overlay_g04.py \
+            experiments/entropygraph_v030_prefixgraph.py \
+            experiments/entropygraph_v030_release_reader.py \
+            experiments/entropygraph_v030_release_reader_policy.py \
+            experiments/entropygraph_v030_release_admission.py \
+            experiments/entropygraph_v030_release_candidate.py \
+            experiments/entropygraph_v030_shared_portfolio.py \
             experiments/entropygraph_v030_r25_manifest_admission.py \
             experiments/entropygraph_v030_fs_implicit_v4.py
       - name: Prove final-product floor, generic admission and canonical-writer wiring
@@ -93,7 +108,8 @@ jobs:
           python -m pytest -q \
             tests/test_v030_canonical_final.py \
             tests/test_v030_r25_manifest_admission.py \
-            tests/test_v030_fs_implicit_v4.py
+            tests/test_v030_fs_implicit_v4.py \
+            tests/test_v030_manifest_admission_custody.py
       - name: CI topology self-check
         run: python tools/check_ci_topology.py .github/workflows/v030-manifest-admission-custody.yml
 
@@ -102,7 +118,9 @@ jobs:
 # must remain conservative, and malformed/mismatched controls fail closed. The direct implicit-v4 grammar tests are
 # part of this boundary so a malformed-control/resource-safety regression cannot hide behind only writer-level tests.
 # Canonical wrapper/profile-isolation changes are also semantic dependencies because the admission seam is consumed
-# through that isolated public dispatch surface, not only through the preserved implementation body.
+# through that isolated public dispatch surface, not only through the preserved implementation body. Profile
+# isolation executes the Geometry/PrefixGraph/reader/admission/shared semantic owners inside a private module graph,
+# so every source in that graph participates in the same custody closure rather than inheriting stale wrapper proof.
 # Core Python package changes are part of this proof surface too because the installed package participates in the
 # final writer/reader behavior. Long-lived PR accumulated paths are filtered by the newest exact commit before the
 # full job.
