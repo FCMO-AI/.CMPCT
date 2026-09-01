@@ -78,6 +78,24 @@ def test_implicit_v4_preserves_semantics_and_compacts_repeated_metadata(tmp_path
     assert expanded["manifest"] == original["manifest"]
 
 
+def test_implicit_v4_validated_encode_is_wire_identical(tmp_path: Path):
+    """The single-parse admission fast path must not create a second implicit-v4 wire grammar."""
+    root = tmp_path / "source"
+    root.mkdir()
+    (root / "assets").mkdir()
+    for index in range(32):
+        path = root / "assets" / f"member-{index:03d}.bin"
+        path.write_bytes(bytes([index % 251]) * (128 + index))
+        os.chmod(path, 0o644)
+    raw_v1, _, _ = _capture(root)
+    decoded = FS.decode_manifest(raw_v1, max_path_bytes=4096, max_entries=4096)
+    assert IFS4.encode_decoded_v1(decoded) == IFS4.encode_v1(
+        raw_v1,
+        max_path_bytes=4096,
+        max_entries=4096,
+    )
+
+
 def test_implicit_v4_preserves_hardlink_symlink_and_signed_mtime(tmp_path: Path):
     root = tmp_path / "source"
     root.mkdir()
