@@ -39,6 +39,64 @@ void throw_io(JNIEnv *env, int32_t status) {
     }
 }
 
+bool java_string_to_standard_utf8(JNIEnv *env, jstring value, std::string *out) {
+    if (value == nullptr || out == nullptr) {
+        throw_io(env, CMPCT_PORTABLE_NULL);
+        return false;
+    }
+    const jsize len = env->GetStringLength(value);
+    const jchar *chars = env->GetStringChars(value, nullptr);
+    if (chars == nullptr) return false;
+
+    out->clear();
+    out->reserve(static_cast<size_t>(len) * 3);
+    bool ok = true;
+    for (jsize i = 0; i < len && ok; ++i) {
+        uint32_t cp = chars[i];
+        if (cp == 0) {
+            ok = false;  // Native path APIs are NUL-terminated; never permit Java embedded-NUL truncation.
+            break;
+        }
+        if (cp >= 0xD800 && cp <= 0xDBFF) {
+            if (i + 1 >= len) {
+                ok = false;
+                break;
+            }
+            const uint32_t low = chars[++i];
+            if (low < 0xDC00 || low > 0xDFFF) {
+                ok = false;
+                break;
+            }
+            cp = 0x10000 + ((cp - 0xD800) << 10) + (low - 0xDC00);
+        } else if (cp >= 0xDC00 && cp <= 0xDFFF) {
+            ok = false;
+            break;
+        }
+
+        if (cp <= 0x7F) {
+            out->push_back(static_cast<char>(cp));
+        } else if (cp <= 0x7FF) {
+            out->push_back(static_cast<char>(0xC0 | (cp >> 6)));
+            out->push_back(static_cast<char>(0x80 | (cp & 0x3F)));
+        } else if (cp <= 0xFFFF) {
+            out->push_back(static_cast<char>(0xE0 | (cp >> 12)));
+            out->push_back(static_cast<char>(0x80 | ((cp >> 6) & 0x3F)));
+            out->push_back(static_cast<char>(0x80 | (cp & 0x3F)));
+        } else {
+            out->push_back(static_cast<char>(0xF0 | (cp >> 18)));
+            out->push_back(static_cast<char>(0x80 | ((cp >> 12) & 0x3F)));
+            out->push_back(static_cast<char>(0x80 | ((cp >> 6) & 0x3F)));
+            out->push_back(static_cast<char>(0x80 | (cp & 0x3F)));
+        }
+    }
+    env->ReleaseStringChars(value, chars);
+    if (!ok) {
+        out->clear();
+        throw_io(env, CMPCT_PORTABLE_UTF8);
+    }
+    return ok;
+}
+
 jstring new_standard_utf8_string(JNIEnv *env, const uint8_t *bytes, size_t len) {
     // JNI NewStringUTF consumes Modified UTF-8, not ordinary UTF-8. CMPCT paths are authenticated
     // standard UTF-8 and may contain supplementary code points encoded as four bytes, so routing
@@ -102,11 +160,10 @@ Java_ai_fcmo_cmpct_CmpctNative_nativeOpen(JNIEnv *env, jclass, jstring path) {
         throw_io(env, CMPCT_PORTABLE_NULL);
         return 0;
     }
-    const char *utf = env->GetStringUTFChars(path, nullptr);
-    if (utf == nullptr) return 0;
+    std::string utf8_path;
+    if (!java_string_to_standard_utf8(env, path, &utf8_path)) return 0;
     PortableArchive *archive = nullptr;
-    const int32_t status = cmpct_portable_open(utf, &archive);
-    env->ReleaseStringUTFChars(path, utf);
+    const int32_t status = cmpct_portable_open(utf8_path.c_str(), &archive);
     if (status != CMPCT_PORTABLE_OK) {
         throw_io(env, status);
         return 0;
