@@ -103,7 +103,7 @@ jobs:
           import json, os
           from pathlib import Path
           d=json.loads(Path('benchmark-artifacts/v030-shifted-latent-patchpack.json').read_text())
-          assert d['schema']=='cmpct-v030-shifted-latent-patchpack-floor-v1'
+          assert d['schema']=='cmpct-v030-shifted-latent-patchpack-floor-v2'
           assert d['source_commit']==os.environ['EVIDENCE_HEAD']
           assert d['diagnosis']=='D4' and d['radicality']=='R4' and int(d['rps'])>=80
           assert set(['S1','S3','S4']).issubset(d['saturation_inherited'])
@@ -117,10 +117,15 @@ jobs:
           assert int(x['max_decode_unit_bytes'])<=8*1024*1024
           assert float(x['max_member_read_amplification'])<=8.0
           assert int(x['payload_floor_bytes'])<=int(x['archive_bytes'])
+          assert int(x['independent_patch_stored_bytes'])>=int(x['patch_stored_bytes'])
+          assert int(x['patch_context_saved_bytes'])==int(x['independent_patch_stored_bytes'])-int(x['patch_stored_bytes'])
+          assert 0.0 <= float(x['patch_context_saved_fraction']) <= 1.0
           assert len(x['artifact_sha256'])==64
           z=int(d['comparators']['tar_zstd19_solid']['bytes'])
           assert d['decision']['payload_floor_zstd_gap_bytes']==int(x['payload_floor_bytes'])-z
           assert d['decision']['archive_zstd_gap_bytes']==int(x['archive_bytes'])-z
+          assert d['decision']['context_gain_bytes_vs_identical_independent_frames']==int(x['patch_context_saved_bytes'])
+          assert d['hostile_reviewer']['context_gain_is_exactly_attributed'] is True
           assert d['decision']['terminal'] in ('PROMOTE_NEXT_PREREQUISITE','RETIRE_FAMILY')
           assert d['decision']['release_credit'] is False
           PY
@@ -133,6 +138,6 @@ jobs:
           if-no-files-found: error
           retention-days: 90
 
-# R4 research only. A size crossing means the representation survives its optimistic
-# capacity test; the inherited creation-time deficit must still be retired without
-# changing bytes before any productization or release authority can be claimed.
+# R4 research only. The identical-frame control makes the size result causal: if the
+# shared context recovers the Zstd margin, runtime becomes the next prerequisite; if it
+# does not, latent edit-program ownership is retired. Neither outcome is release credit.
