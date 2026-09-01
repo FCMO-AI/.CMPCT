@@ -2,8 +2,9 @@
 """Reproduce builder-independent canonical r25 implicit-v4 conformance bytes.
 
 The generator intentionally imports no CMPCT writer/reader code. It constructs the compact filesystem-control
-MessagePack value and both canonical content-profile framings from primitive struct/MessagePack/Zstandard-RAW
-operations, so implementation bugs cannot regenerate their own acceptance target.
+MessagePack value and both canonical content-profile framings from primitive struct/MessagePack/Zstandard operations,
+so implementation bugs cannot regenerate their own acceptance target. G04 raw frames are assembled by hand;
+PrefixGraph uses the independently invoked standard Zstandard codec at its frozen canonical payload/meta levels.
 """
 from __future__ import annotations
 
@@ -16,6 +17,7 @@ import struct
 import zlib
 
 import msgpack
+import zstandard as zstd
 
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_OUT = ROOT / "tests" / "conformance" / "v030-r25-implicit-v4.json"
@@ -31,6 +33,8 @@ PREFIX_HEADER = struct.Struct("<8sQQ32s")
 PREFIX_FOOTER = struct.Struct("<8sQQ32s")
 ZSTD_MAGIC = bytes.fromhex("28b52ffd")
 ZSTD_MAX_RAW_BLOCK = (1 << 17) - 1
+PREFIX_PAYLOAD_LEVEL = 19
+PREFIX_META_LEVEL = 12
 
 
 def sha(data: bytes) -> bytes:
@@ -42,6 +46,7 @@ def pack(value) -> bytes:
 
 
 def zpack(data: bytes) -> bytes:
+    """Construct the fixed raw-block Zstandard framing used by the G04 independent oracle."""
     size = len(data)
     out = bytearray(ZSTD_MAGIC)
     if size < 256:
@@ -65,6 +70,11 @@ def zpack(data: bytes) -> bytes:
         out += ((len(block) << 3) | int(cursor == size)).to_bytes(3, "little")
         out += block
     return bytes(out)
+
+
+def zcompress(data: bytes, level: int) -> bytes:
+    """Invoke Zstandard independently of CMPCT at a frozen canonical PrefixGraph level."""
+    return zstd.ZstdCompressor(level=level).compress(data)
 
 
 def tree_sha(files: dict[str, bytes]) -> bytes:
@@ -194,7 +204,7 @@ def prefix_archive(manifest: bytes, user_raw: bytes) -> bytes:
     paths = sorted(logical)
     for rel in paths:
         raw = logical[rel]
-        payload = zpack(raw)
+        payload = zcompress(raw, PREFIX_PAYLOAD_LEVEL)
         payloads.append(payload)
         records.append(["direct", -1, len(raw), len(payload), sha(payload), sha(raw)])
     metadata = {
@@ -208,7 +218,7 @@ def prefix_archive(manifest: bytes, user_raw: bytes) -> bytes:
         "max_member_read_amplification": 8.0,
     }
     meta_raw = pack(metadata)
-    meta_z = zpack(meta_raw)
+    meta_z = zcompress(meta_raw, PREFIX_META_LEVEL)
     meta_digest = sha(meta_raw)
     header = PREFIX_HEADER.pack(PREFIX_MAGIC, len(meta_z), len(meta_raw), meta_digest)
     footer = PREFIX_FOOTER.pack(PREFIX_TAIL, len(meta_z), len(meta_raw), meta_digest)
