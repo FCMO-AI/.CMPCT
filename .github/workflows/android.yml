@@ -1,5 +1,7 @@
 name: CMPCT Android
 # ci-lane: release
+# ci-cancel-policy: preserve-running-exact-receipt
+# ci-pr-scope: latest-head-commit-gate
 
 on:
   pull_request:
@@ -31,17 +33,56 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: cmpct-android-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
+  group: cmpct-android-${{ github.event.pull_request.head.sha || github.sha }}
+  cancel-in-progress: false
+
+env:
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
 
 jobs:
+  latest-head-impact:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      run_android: ${{ steps.scope.outputs.run_android }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 2
+      - name: Bind exact head and classify newest commit only
+        id: scope
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            echo 'run_android=true' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          git diff-tree --no-commit-id --name-only -r HEAD > /tmp/latest-head-files.txt
+          cat /tmp/latest-head-files.txt
+          if grep -Eq '^(integrations/android/|native/cmpct-(core|portable)/|tests/conformance/|tests/generate_v030_(logs|compact_control)_android_vector\.py|experiments/entropygraph_v030_(logs_inverse_profile.*|r24_compact_control_profile)\.py|\.github/workflows/android(-physical-arm64)?\.yml)' /tmp/latest-head-files.txt; then
+            echo 'run_android=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'run_android=false' >> "$GITHUB_OUTPUT"
+          fi
+
   build-and-device-smoke:
+    needs: latest-head-impact
+    if: needs.latest-head-impact.outputs.run_android == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@v6
         with:
-          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          ref: ${{ env.EVIDENCE_HEAD }}
+
+      - name: Bind exact candidate head
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
 
       - uses: actions/setup-python@v6
         with:
@@ -209,6 +250,8 @@ jobs:
                   'emulator_api': 29,
                   'all_declared_abis_built': True,
                   'portable_jni_dependency_verified': True,
+                  'canonical_r25_portable_dispatch_green': True,
+                  'implicit_v4_portable_dispatch_green': True,
                   'logs_inverse_portable_dispatch_green': True,
                   'compact_control_portable_dispatch_green': True,
               },
@@ -223,7 +266,7 @@ jobs:
       - uses: actions/upload-artifact@v6
         if: always()
         with:
-          name: cmpct-android-debug-${{ github.sha }}
+          name: cmpct-android-debug-${{ env.EVIDENCE_HEAD }}
           path: |
             integrations/android/app/build/outputs/apk/debug/app-debug.apk
             integrations/android/app/build/reports/androidTests/connected/**
@@ -236,5 +279,7 @@ jobs:
           if-no-files-found: warn
           retention-days: 30
 
-# Android consumes libcmpct_portable through a parser-free JNI shim. Canonical r25, logs inverse, compact-control,
-# and inherited r24 therefore share one Rust admission/recovery implementation. Physical ARM64 remains separate.
+# Android consumes libcmpct_portable through a parser-free JNI shim. Canonical r25, implicit-v4 filesystem control,
+# logs inverse, compact-control, and inherited r24 therefore share one Rust admission/recovery implementation.
+# Exact-head concurrency preserves useful long-running emulator receipts on the integration PR; unrelated newest
+# commits classify out cheaply instead of cancelling a platform run. Physical ARM64 remains separate.
