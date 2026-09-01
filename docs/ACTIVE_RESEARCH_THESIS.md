@@ -1,14 +1,16 @@
 # CMPCT Active Fundamental Research Thesis
 
-Status: **Foundry primary thesis — F-01 / CAUSAL_SEED; structural transfer + AOM next**
+Status: **F-01 / `TRANSFER_FAIL` — hostile thesis review required; no live continuation freeze yet**
 
 Constitutional authority: `docs/FUNDAMENTAL_RESEARCH_DOCTRINE.md`. Frozen experiment authority lives under `docs/v030-rnd/`.
 
-## Thesis
+## Thesis under review
 
 **F-01 — General Reversible Structure Compiler**
 
 > Lossless representation can sometimes be discovered as a bounded exact reconstruction program synthesized from a small typed set of reversible primitives, with search performed only by the encoder/research process and the resolved program stored for deterministic bounded decode.
+
+The thesis has real causal headroom evidence, but its first frozen structural-transfer/AOM challenge fired a preregistered hostile falsifier. F-01 therefore no longer has authority to continue by operator/grid expansion or by productization under the old causal claim.
 
 ## Accepted evidence
 
@@ -44,68 +46,107 @@ Causal facts within the frozen grammar:
 - removing SPLIT restores the exact one-stage manual control on all three composition winners, erasing 552 B, 561 B and 427 B respectively;
 - removing LANE costs **13,587 B**, **27,317 B** and **15,125 B** on the three accepted winners;
 - removing DELIM costs a small but strictly positive **13 B** and **16 B** on the two LANE+DELIM winners;
-- LANE widths **2 and 4** change neither exact optimum bytes nor motif on any accepted O0.1 case and are therefore scoped search liabilities for this frozen regime;
-- LANE widths 8 and 16 remain causally active.
+- LANE widths **2 and 4** were inactive on every accepted O0.1 case;
+- LANE widths 8 and 16 remained causally active.
 
 Durable interpretation: `docs/v030-rnd/F01_CAUSAL_RESULT.md`.
 
+### Frozen structural transfer + AOM
+
+Accepted transfer receipt:
+
+- source: `0f1acdd91a11169c87c41bc2a384046c785b5dcb`;
+- run: `33471421991`;
+- job: `99741875994`;
+- artifact ZIP SHA-256: `1475579970f850826bd26fc4a1b54b33bb9c4eda8e250b67bf2326e9edd8f929`;
+- corpus fingerprint: `0e56cccb5068f9bb17958a9bc5f52203333e97062d83ad411b7066773a31c5dd`;
+- decision: **`TRANSFER_FAIL`**.
+
+Positive evidence survived strongly:
+
+- 6 material winners across both `lane+record` and `lane+lane`;
+- winning scales 32/64/96/128 KiB;
+- 11,378 B material saving on the synthetic winner set;
+- synthetic conditional saving ~23.05%.
+
+But the frozen falsifier fired:
+
+- hostile material false-win count: **1**;
+- hostile false-win bytes: **65,536 B**;
+- the off-grid hostile structure received a material composition win of **3,900 B / 55.79%** versus its manual control.
+
+The preregistered seed-derived `{8,16}` pruning also failed transfer: it reduced generated/costed states from 2,064 to 1,311 but **did not preserve every exact optimum**. LANE[4], inactive on the causal seed, became useful on transfer cases.
+
+Full result and scoped negative: `docs/v030-rnd/F01_TRANSFER_AOM_RESULT.md`.
+
 ## Current worldview
 
-The narrow one-stage assumption is falsified for the tested bounded vocabulary, and the headroom is causally attributable to composition rather than accounting noise. The strongest simpler explanation remains viable: the valuable capability may be **one compact mixed-structure segmentation primitive**, not a production-worthy general compiler/DSL.
+The one-stage assumption remains falsified and exact composition remains a real representation capability. What failed is the stronger thesis that the current grammar plus our current human structural predicate already identifies a trustworthy, general opportunity class.
 
-That distinction now matters more than additional operator invention.
+The hostile off-grid win is especially informative: the compiler can exploit useful heterogeneity outside the intended label boundary. That may mean the underlying primitive is broader than our labels, or that the search is merely opportunistic. Until a new causal account distinguishes those possibilities before seeing new results, F-01 cannot advance.
+
+The seed-derived attempt at concept compression also failed to transfer safely: widths 2/4 could not be globally pruned without losing exact optima. This is a direct anti-overfit constraint on future simplification.
 
 ## Oracle Gift Ledger
 
 Gifted so far:
 
 - O0 discovery/search wall time;
-- causal-ablation search wall time.
+- causal-ablation search wall time;
+- structural-transfer/AOM search wall time.
 
 Never gifted:
 
 - representation/program/control bytes;
 - literals/terminal streams;
 - required bases;
-- exact reconstruction.
+- exact reconstruction;
+- structural AOM labels.
 
-Deferred debt:
+Unsupported/deferred under the failed thesis:
 
-- broad structural transfer;
-- Addressable Opportunity Mass;
+- independent/public real-data AOM;
 - generic admission/discovery economics;
-- global audition/search carrying cost;
 - canonical framing/index;
 - locality/recovery/integrity;
 - hostile parser/fuzz;
 - native/Android/platform;
 - product runtime and complete release authority.
 
+Those debts are not automatically scheduled because F-01 failed before handoff.
+
 ## Current Foundry state
 
-F-01 is now **CAUSAL_SEED**. No O0.2 vocabulary expansion is justified.
+F-01 is **`TRANSFER_FAIL / HOSTILE_REVIEW_REQUIRED`**.
 
-The next frozen question is structural transfer plus an initial AOM/carrying-cost estimate under the unchanged grammar, with lane widths 2/4 treated only as a preregistered scoped-pruning A/B rather than silently removed.
+There is currently **no live superseding Foundry freeze**. Do not manufacture one merely to maintain activity. Apply the Thesis Initiation Gate and Assumption Ledger before any new primary thesis.
 
-Contract: `docs/v030-rnd/F01_TRANSFER_AOM_PREREG.md`.
+Forbidden continuations under the old freeze:
+
+- add operators to rescue breadth;
+- move/expand the split grid after seeing the off-grid result;
+- relabel the hostile case so the failure disappears;
+- silently prune widths 2/4;
+- proceed to public-data AOM or product handoff as though `TRANSFER_ADVANCE` occurred.
+
+A valid reopening requires a new causal claim that explains, before result-bearing execution, what observable structural property distinguishes the intended opportunity from the hostile/off-grid winner without benchmark identity or gifted decoder/search semantics.
 
 ## Thesis lease / disproof
 
-The next result must materially change at least one of:
+The transfer freeze satisfied the lease by changing the thesis state and exposing two causal constraints:
 
-- transfer scope;
-- AOM estimate;
-- false-positive/admission behavior;
-- search carrying cost;
-- concept-compression case for pruning/distillation;
-- thesis state.
+1. the current structural labels are not a reliable admission boundary;
+2. seed-local operator redundancy did not transfer as safe grammar pruning.
 
-If structurally varied transfer collapses, F-01 must narrow or stop rather than compensate by adding operators. If transfer survives but AOM is tiny and global search tax is large, the compiler thesis should be distilled into a smaller primitive or retired from product consideration.
+No further F-01 experiment is justified until hostile review produces a genuinely different, preregistrable causal claim. If no such claim clears the Thesis Initiation Gate, retire F-01 and let the negative constrain future Foundry search.
 
 ## Forge separation
 
-F-01 grants no v0.30 release credit. Proven product mechanisms remain Forge work. In particular the r25 implicit-v4 manifest mechanism is a D5 convergence candidate and must not be delayed by Foundry novelty.
+F-01 grants no v0.30 release credit and its failure does not revoke independently proven product mechanisms.
+
+The r25 implicit-v4 manifest mechanism has now crossed its canonical Python D5 landing boundary and must continue through Forge: recovery/malformed-control parity, shared native semantics, Android/platform parity, genuine-r24 product-floor selection, exact all-workload competitor authority and strict release authority.
 
 ## Immediate next action
 
-> Freeze/execute the structural-transfer + AOM/carrying-cost instrument under the unchanged grammar, then obey its decision. In parallel, complete the exact canonical r25 implicit-manifest A/B and land that seam only if its complete-artifact receipt is green.
+> **Foundry:** perform the doctrine-required hostile thesis review; do not run a new F-01 oracle until a superseding causal claim clears the Thesis Initiation Gate.  
+> **Forge:** continue implicit-v4 productization through native/recovery/Android parity and finish the exact r24/current-fingerprint performance and release authorities already in flight.
