@@ -1,6 +1,6 @@
 # ci-lane: deep
 # ci-pr-scope: latest-head-commit-gate
-# ci-cancel-policy: preserve-running-exact-receipt
+# ci-cancel-policy: split-classifier-preserve-receipts
 name: CMPCT v0.30 r25 manifest implicit reader productization
 
 on:
@@ -35,10 +35,6 @@ on:
 permissions:
   contents: read
 
-concurrency:
-  group: cmpct-v030-r25-manifest-implicit-reader-${{ github.event.pull_request.head.sha || github.sha }}
-  cancel-in-progress: false
-
 env:
   PYTHONPATH: ${{ github.workspace }}
   EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
@@ -47,6 +43,9 @@ jobs:
   latest-head-impact:
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    concurrency:
+      group: cmpct-v030-r25-manifest-implicit-reader-classifier-${{ github.event.pull_request.number || github.ref }}
+      cancel-in-progress: true
     outputs:
       run_deep: ${{ steps.scope.outputs.run_deep }}
     steps:
@@ -79,6 +78,9 @@ jobs:
     if: needs.latest-head-impact.outputs.run_deep == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 60
+    concurrency:
+      group: cmpct-v030-r25-manifest-implicit-reader-receipt-${{ github.event.pull_request.head.sha || github.sha }}
+      cancel-in-progress: false
     steps:
       - uses: actions/checkout@v6
         with:
@@ -153,5 +155,5 @@ jobs:
 
 # Research-only projection reader. The proof may enable the existing bounded revision-25 research context but
 # shipping profile classification remains fail closed. Recovery, native, Android, all-15 authority and final
-# release credit remain separate gates. The installed core package is part of the reader behavior, and exact-SHA
-# concurrency preserves both queued and running evidence for the source fingerprint it actually proves.
+# release credit remain separate gates. The installed core package is part of the reader behavior, and split
+# classifier/exact-receipt custody cancels obsolete routing while preserving every admitted exact-SHA proof.
