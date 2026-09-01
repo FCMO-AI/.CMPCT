@@ -1,68 +1,19 @@
 # ci-lane: deep
-# ci-pr-scope: latest-head-commit-gate
-# ci-cancel-policy: preserve-running-exact-receipt
+# ci-auto-policy: retired-manual-only
 name: CMPCT v0.30 Shifted CDC dedup capacity
 
 on:
-  push:
-    branches: [agent/v030-authoritative-integration]
-    paths:
-      - 'benchmarks/v030_shifted_cdc_dedup_oracle.py'
-      - '.github/workflows/v030-shifted-cdc-dedup.yml'
-  pull_request:
-    branches: [main]
-    paths:
-      - 'benchmarks/v030_shifted_cdc_dedup_oracle.py'
-      - 'benchmarks/v030_external_competitors.py'
-      - 'benchmarks/v030_release_performance.py'
-      - 'experiments/entropygraph_v030_prefixgraph.py'
-      - 'experiments/entropygraph_v030_canonical_final_impl.py'
-      - '.github/workflows/v030-shifted-cdc-dedup.yml'
   workflow_dispatch:
 
 permissions:
   contents: read
 
-concurrency:
-  group: cmpct-v030-shifted-cdc-dedup-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: false
-
 env:
   PYTHONPATH: ${{ github.workspace }}
-  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+  EVIDENCE_HEAD: ${{ github.sha }}
 
 jobs:
-  latest-head-impact:
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    outputs:
-      run_deep: ${{ steps.scope.outputs.run_deep }}
-    steps:
-      - uses: actions/checkout@v6
-        with:
-          ref: ${{ env.EVIDENCE_HEAD }}
-          fetch-depth: 2
-      - name: Bind exact head and classify only its changed files
-        id: scope
-        env:
-          EVENT_NAME: ${{ github.event_name }}
-        run: |
-          set -euo pipefail
-          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
-          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
-            echo 'run_deep=true' >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-          git diff-tree --no-commit-id --name-only -r HEAD > /tmp/latest-head-files.txt
-          if grep -Eq '^(benchmarks/v030_shifted_cdc_dedup_oracle\.py|benchmarks/v030_(external_competitors|release_performance)\.py|experiments/entropygraph_v030_(prefixgraph|canonical_final_impl)\.py|\.github/workflows/v030-shifted-cdc-dedup\.yml)$' /tmp/latest-head-files.txt; then
-            echo 'run_deep=true' >> "$GITHUB_OUTPUT"
-          else
-            echo 'run_deep=false' >> "$GITHUB_OUTPUT"
-          fi
-
   cdc-capacity:
-    needs: latest-head-impact
-    if: needs.latest-head-impact.outputs.run_deep == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 120
     steps:
@@ -128,9 +79,6 @@ jobs:
           assert set(['S2','S3','S4']).issubset(a['active_saturation'])
           assert a['research_priority_score'] >= 90
           assert a['measured_gap_change_bytes']==d['saving_vs_shipping_prefixgraph_bytes']
-          assert a['terminal_decision'] in {'PROMOTE_NEXT_PREREQUISITE','ITERATE_SAME_FAMILY','ESCALATE_RADICALITY'}
-          if d['strict_size_win_vs_zip_and_zstd19']:
-              assert a['terminal_decision']=='PROMOTE_NEXT_PREREQUISITE'
           PY
       - name: Upload exact structural evidence
         if: always()
@@ -141,6 +89,6 @@ jobs:
           if-no-files-found: error
           retention-days: 90
 
-# R4 structural research only. Rolling content-defined boundaries attack shifted-copy reuse
-# without benchmark identity or all-pairs recompression. The four-arm sweep is capacity
-# evidence only; any win must freeze a generic policy and survive complete product authority.
+# Terminal negative is preserved in docs/V030_SHIFTED_CDC_DEDUP_NEGATIVE.md.
+# The oracle remains manually replayable for audit/reopening evidence, but the retired
+# global exact-CDC ownership family no longer consumes automatic PR/push runner capacity.
