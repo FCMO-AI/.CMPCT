@@ -71,11 +71,15 @@ The ratcheted authorities are:
 - `v030-authoritative-v2-pr.yml`;
 - `v030-r25-manifest-canonical-integration.yml`;
 - `v030-federated-generalization-admission.yml`;
-- `v030-federated-candidate-productization.yml`.
+- `v030-federated-candidate-productization.yml`;
+- `v030-logs-sidecar-content-policy.yml`;
+- `v030-logs-inverse-profile-productization.yml`.
 
 The all-15 admission lane is included because its result-bearing proof may run for up to six hours and remains useful for its exact source, while classifier-only invocations on the long-lived integration PR are pure routing work. PR-wide non-cancelling workflow concurrency serialized those obsolete classifiers behind older receipts; split custody preserves the exact all-15 receipt without granting unrelated commits a durable queue slot.
 
 The federated candidate productization lane uses the same policy for its up-to-three-hour Office/Analytics productization and portability receipt. The productization result is useful for its exact source once admitted; accumulated-PR classifier invocations are not. Separating them prevents unrelated integration commits from waiting behind or preserving obsolete routing work while keeping the exact result-bearing receipt non-cancellable.
+
+The Logs D5 lanes use the same custody rule for the strict path-invariant sidecar content-policy oracle and the recoverable canonical-filesystem inverse-profile productization proof. Both receipts are useful for their exact source once admitted; neither justifies preserving obsolete accumulated-PR routing work. Their four-way ZIP/Zstd, recovery, locality, strong-verification and no-release-credit laws are unchanged by the scheduling split.
 
 Other deep/release workflows should migrate when touched if they combine exact-receipt preservation with a newest-head classifier. Retired or genuinely one-shot workflows should instead become manual-only when repository doctrine permits it.
 
