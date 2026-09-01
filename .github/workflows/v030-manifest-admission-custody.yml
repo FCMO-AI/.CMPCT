@@ -1,0 +1,85 @@
+# ci-lane: fast
+# ci-pr-scope: latest-head-commit-gate
+name: CMPCT v0.30 manifest admission custody
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'experiments/entropygraph_v030_r25_manifest_admission.py'
+      - 'experiments/entropygraph_v030_fs_implicit_v4.py'
+      - 'experiments/entropygraph_v030_product_fs.py'
+      - 'experiments/entropygraph_v030_canonical_final_impl.py'
+      - 'tests/test_v030_r25_manifest_admission.py'
+      - '.github/workflows/v030-manifest-admission-custody.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-v030-manifest-admission-custody-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+
+jobs:
+  latest-head-impact:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      run_custody: ${{ steps.scope.outputs.run_custody }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 2
+      - name: Bind exact head and classify newest commit only
+        id: scope
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            echo 'run_custody=true' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          git diff-tree --no-commit-id --name-only -r HEAD > /tmp/latest-head-files.txt
+          cat /tmp/latest-head-files.txt
+          if grep -Eq '^(experiments/entropygraph_v030_(r25_manifest_admission|fs_implicit_v4|product_fs|canonical_final_impl)\.py|tests/test_v030_r25_manifest_admission\.py|\.github/workflows/v030-manifest-admission-custody\.yml)$' /tmp/latest-head-files.txt; then
+            echo 'run_custody=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'run_custody=false' >> "$GITHUB_OUTPUT"
+          fi
+
+  manifest-admission-custody:
+    needs: latest-head-impact
+    if: needs.latest-head-impact.outputs.run_custody == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - name: Bind exact candidate
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install repository test contract
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[test]'
+      - name: Prove generic admission and canonical-writer wiring
+        run: python -m pytest -q tests/test_v030_r25_manifest_admission.py
+      - name: CI topology self-check
+        run: python tools/check_ci_topology.py .github/workflows/v030-manifest-admission-custody.yml
+
+# This lane grants no compression/performance/release credit. It is a D5 custody boundary: the canonical writer
+# must continue to stage through content-agnostic strict-smaller implicit-v4 admission, while malformed/mismatched
+# controls fail closed. Long-lived PR accumulated paths are filtered by the newest exact commit before the full job.
