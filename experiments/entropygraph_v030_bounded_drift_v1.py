@@ -13,6 +13,7 @@ import hashlib
 SYNC_BYTES = 48
 MAX_RESYNC_BYTES = 1024
 MAX_DECODE_UNIT = 8 * 1024 * 1024
+MAX_RECORDS = 262_144
 _COMMON_CHUNK = 4096
 
 
@@ -112,6 +113,8 @@ def encode_program(base: bytes, target: bytes) -> EditProgram:
         dn, ins = _find_resync(base, target, i, j)
         lit = target[j:j+ins]
         rows.append((common, dn, lit)); i += dn; j += ins; deleted += dn; inserted += ins
+        if len(rows) > MAX_RECORDS:
+            raise ValueError("bounded-drift record count exceeds limit")
     out = bytearray(); put_varint(out, len(rows))
     for copy_n, delete_n, lit in rows:
         put_varint(out, copy_n); put_varint(out, delete_n); put_varint(out, len(lit)); out.extend(lit)
@@ -129,14 +132,15 @@ def decode_program(base: bytes, program: EditProgram) -> bytes:
         raise ValueError("bounded-drift logical size exceeds limit")
     if len(program.sha256) != hashlib.sha256().digest_size:
         raise ValueError("bounded-drift digest length mismatch")
-    if program.records < 0:
-        raise ValueError("bounded-drift record count is negative")
+    if program.records < 0 or program.records > MAX_RECORDS:
+        raise ValueError("bounded-drift record count out of range")
 
     pos = cursor = 0
     count, pos = get_varint(program.raw, pos)
-    # Each record needs at least three one-byte varints. This cap rejects malicious counts
-    # before they can turn a tiny program into a long parser loop.
-    if count != program.records or count > len(program.raw) // 3:
+    # Each record needs at least three one-byte varints. The independent MAX_RECORDS ceiling
+    # also prevents a checksummed hostile program from turning the 8 MiB byte budget into
+    # millions of tiny parser iterations.
+    if count != program.records or count > MAX_RECORDS or count > len(program.raw) // 3:
         raise ValueError("bounded-drift record count mismatch")
 
     out = bytearray()
