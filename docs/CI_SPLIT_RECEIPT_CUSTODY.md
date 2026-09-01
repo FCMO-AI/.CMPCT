@@ -22,8 +22,8 @@ It does **not** use workflow-level concurrency. Instead:
 1. `latest-head-impact` (or the equivalent cheap routing job) uses a PR/ref scheduling group and `cancel-in-progress: true`;
 2. each expensive result-bearing job uses an exact-SHA job group and `cancel-in-progress: false`;
 3. checkout and evidence remain bound to `EVIDENCE_HEAD`;
-4. the classifier still inspects `git diff-tree --no-commit-id --name-only -r HEAD` only;
-5. the expensive job still depends on the classifier and runs only when the newest exact commit can affect its evidence surface.
+4. the classifier inspects `git diff-tree --no-commit-id --name-only -r HEAD`;
+5. the expensive job depends on the classifier and runs only when current authority says the candidate requires that evidence.
 
 Example:
 
@@ -33,7 +33,7 @@ jobs:
     concurrency:
       group: cmpct-example-classifier-${{ github.event.pull_request.number || github.ref }}
       cancel-in-progress: true
-    # exact checkout + HEAD-only classifier
+    # exact checkout + HEAD classifier
 
   exact-receipt:
     needs: latest-head-impact
@@ -44,7 +44,11 @@ jobs:
     # exact checkout + result-bearing evidence
 ```
 
-A newer synchronization may cancel an obsolete classifier. It cannot cancel an already-started exact receipt because that job occupies a different concurrency group. If an older classifier has not yet admitted its expensive job, cancelling it is correct: no result-bearing work has begun and the newer exact head owns routing priority.
+A newer synchronization may cancel an obsolete classifier. It cannot cancel an already-started exact receipt because that job occupies a different concurrency group. However, cancellation **before admission is safe only if the newer classifier cannot erase an unmet evidence obligation**. A measured v0.30 incident exposed the corner case: commit A changed the release fingerprint, its queued classifier had not yet admitted the expensive authority, then a non-fingerprint commit B superseded that classifier and classified only B's diff. The candidate still needed new evidence, but neither run had admitted it.
+
+For final generalization/runtime authority, `v030-authoritative-v2-pr.yml` therefore derives impact from the same `docs/V030_RELEASE_LOCK.json` fingerprint globs that define receipt identity, rather than a narrower hand-written release surface. The regression ratchet lives in `tests/test_v030_ci_topology_split_receipts.py`, which is itself fingerprinted. This is deliberately fail-closed: an uncertain release-fingerprint mutation may spend compute, but it may not inherit stale compression/runtime authority.
+
+Subsystem classifiers may remain narrower where they are used only for incremental feedback. **Final release acceptance is different:** every normative receipt still has to match the frozen candidate fingerprint, so a classifier-only skip never grants release credit. If a subsystem did not rerun automatically on that frozen fingerprint, its final acceptance lane must be run explicitly before its task/receipt can close.
 
 ## Evidence law is unchanged
 
@@ -60,7 +64,7 @@ The policy may not:
 
 ## Ratchet
 
-`tools/check_ci_topology.py` validates `split-classifier-preserve-receipts`. `tests/test_ci_topology_split_receipts.py` additionally pins the migrated high-cost authorities so they cannot silently return to workflow-level exact-SHA concurrency.
+`tools/check_ci_topology.py` validates `split-classifier-preserve-receipts`. `tests/test_v030_ci_topology_split_receipts.py` additionally pins the migrated high-cost authorities so they cannot silently return to workflow-level exact-SHA concurrency, and pins authoritative-v2 admission to the release-fingerprint manifest.
 
 The ratcheted authorities are:
 
@@ -94,4 +98,4 @@ Other deep/release workflows should migrate when touched if they combine exact-r
 
 ## Reopening predicate
 
-Revisit this model only if GitHub changes concurrency/path semantics, CMPCT stops using a long-lived integration PR, or measured queue behavior shows that split custody does not reduce obsolete classifier backlog while preserving result-bearing receipts. Any replacement must satisfy both properties simultaneously: **newest relevant work gets runner capacity, and exact result-bearing evidence is not destroyed.**
+Revisit this model if GitHub changes concurrency/path semantics, CMPCT stops using a long-lived integration PR, or measured queue behavior shows that split custody does not reduce obsolete classifier backlog while preserving result-bearing receipts. Any replacement must satisfy all three properties simultaneously: **obsolete routing does not starve runners, admitted result-bearing evidence is not destroyed, and classifier supersession cannot erase an unmet exact-fingerprint evidence obligation.**
