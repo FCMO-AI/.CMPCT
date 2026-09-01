@@ -1,4 +1,6 @@
 # ci-lane: release
+# ci-cancel-policy: preserve-running-exact-receipt
+# ci-pr-scope: latest-head-commit-gate
 # This lane is the mature canonical-r24 core/ZIP regression benchmark. It is intentionally NOT the v0.30 product
 # selector performance authority: v0.30 creation/extraction timing is owned by the v030 release-product workflows.
 # Keeping the distinction visible prevents a green r24 core result from being misread as evidence that the r25
@@ -33,11 +35,45 @@ permissions:
   contents: read
 
 concurrency:
-  group: cmpct-performance-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
+  group: cmpct-performance-${{ github.event.pull_request.head.sha || github.sha }}
+  cancel-in-progress: false
+
+env:
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
 
 jobs:
+  latest-head-impact:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      run_performance: ${{ steps.scope.outputs.run_performance }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 2
+      - name: Bind exact head and classify newest commit only
+        id: scope
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            echo 'run_performance=true' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          git diff-tree --no-commit-id --name-only -r HEAD > /tmp/latest-head-files.txt
+          cat /tmp/latest-head-files.txt
+          if grep -Eq '^(src/|native/|benchmarks/|tests/|tools/(check_performance_regression|aggregate_parity_runs)\.py|pyproject\.toml|\.github/workflows/zip-parity\.yml)' /tmp/latest-head-files.txt; then
+            echo 'run_performance=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'run_performance=false' >> "$GITHUB_OUTPUT"
+          fi
+
   performance:
+    needs: latest-head-impact
+    if: needs.latest-head-impact.outputs.run_performance == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 45
     env:
@@ -48,7 +84,6 @@ jobs:
       # Thresholds are unchanged; only the evidence resolution is increased.
       CMPCT_PARITY_REPS: "7"
       CMPCT_RELEASE_CORPUS: /tmp/cmpct-release-corpus
-      EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
     steps:
       - name: Check out candidate repository history
         uses: actions/checkout@v6
@@ -300,6 +335,9 @@ jobs:
           if summary: Path(summary).write_text(text)
           PY
 
+      - name: CI topology self-check
+        run: python tools/check_ci_topology.py .github/workflows/zip-parity.yml
+
       - name: Upload release benchmark evidence
         if: always()
         uses: actions/upload-artifact@v6
@@ -308,3 +346,8 @@ jobs:
           path: benchmark-artifacts/
           if-no-files-found: error
           retention-days: 90
+
+# Footnote: the long-lived v0.30 integration PR previously cancelled this 45-minute ABBA receipt whenever any
+# newer PR commit arrived, even when that commit did not change r24 performance inputs. Exact-head concurrency now
+# preserves a started/queued receipt, while the newest-commit classifier cheaply declines unrelated heads. This
+# changes only CI custody: corpus, ABBA design, thresholds and direct-base comparison semantics are unchanged.
