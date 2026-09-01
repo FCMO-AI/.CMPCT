@@ -32,7 +32,7 @@ Footnote: a build-time declaration is corroboration, not a substitute for observ
 
 Earlier review found a historical-vs-product semantic mismatch in the causal ablation harness. The repaired design must remain separated into two ledgers:
 
-1. **Frozen research-frontier causality:** preserve the repaired 15-workload historical source trees and exact accepted-v0.29 identity `137,501,815 B`; run v0.29 / Geometry / PrefixGraph / combined under those historical content-tree semantics so the immutable threshold remains comparable.
+1. **Frozen research-frontier causality:** preserve the accepted repair-v6 15-workload source trees and exact accepted-v0.29 identity `137,499,525 B`; run v0.29 / Geometry / PrefixGraph / combined under those historical content-tree semantics so the immutable threshold remains comparable. The superseded pre-repair aggregate `137,501,815 B` remains historical provenance only and is not an accepted current baseline.
 2. **Canonical product parity:** compare genuine canonical v0.29/r24 product bytes against canonical v0.30 product bytes on the same original filesystem trees, including r25 filesystem-manifest semantics and genuine r24 fallback.
 
 A manifest-charged causal ablation is allowed only if every variant uses the same prepared tree and identical metadata charge. It must be labeled as a new causal substrate and may not claim reproduction of the historical baseline unless it actually does.
