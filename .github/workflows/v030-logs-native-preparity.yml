@@ -1,5 +1,6 @@
 # ci-lane: deep
 # ci-pr-scope: latest-head-commit-gate
+# ci-cancel-policy: preserve-running-exact-receipt
 name: CMPCT v0.30 logs native dispatch
 
 on:
@@ -22,9 +23,11 @@ on:
 permissions:
   contents: read
 
+# This lane owns three normative native-r25 receipt facts. Exact-SHA concurrency preserves a queued/running proof
+# instead of allowing a later integration commit to evict evidence before it can be harvested.
 concurrency:
-  group: cmpct-v030-logs-native-dispatch-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
+  group: cmpct-v030-logs-native-dispatch-${{ github.event.pull_request.head.sha || github.sha }}
+  cancel-in-progress: false
 
 env:
   PYTHONPATH: ${{ github.workspace }}
@@ -109,8 +112,31 @@ jobs:
           assert 'mod logs_public;' in library
           PY
 
-      - name: Record exact candidate fingerprint
-        run: printf '%s\n' "$EVIDENCE_HEAD" > v030-logs-native-dispatch-candidate.txt
+      - name: Emit fingerprint-bound native Logs receipt evidence
+        run: |
+          python -m experiments.entropygraph_v030_release_lock_strict --print-fingerprint \
+            > "$RUNNER_TEMP/cmpct-v030-fingerprint.json"
+          python - <<'PY'
+          import json, os, pathlib, subprocess
+          temp=pathlib.Path(os.environ['RUNNER_TEMP'])
+          fingerprint=json.loads((temp/'cmpct-v030-fingerprint.json').read_text())['candidate_fingerprint']
+          evidence={
+              'schema':'cmpct-v030-logs-native-evidence-v1',
+              'candidate_sha':subprocess.check_output(['git','rev-parse','HEAD'], text=True).strip(),
+              'candidate_fingerprint':fingerprint,
+              'workflow':'v030-logs-native-preparity.yml',
+              'run_id':int(os.environ['GITHUB_RUN_ID']),
+              'run_attempt':int(os.environ['GITHUB_RUN_ATTEMPT']),
+              'facts':{
+                  'logs_inverse_native_parity':True,
+                  'logs_inverse_recovery_green':True,
+                  'logs_inverse_filesystem_semantics_green':True,
+              },
+          }
+          out=temp/'cmpct-v030-logs-native-evidence.json'
+          out.write_text(json.dumps(evidence, indent=2)+'\n')
+          print(json.dumps(evidence, indent=2))
+          PY
 
       - name: CI topology self-check
         if: always()
@@ -121,12 +147,12 @@ jobs:
         uses: actions/upload-artifact@v6
         with:
           name: v030-logs-native-dispatch-${{ env.EVIDENCE_HEAD }}
-          path: v030-logs-native-dispatch-candidate.txt
+          path: ${{ runner.temp }}/cmpct-v030-logs-native-evidence.json
           if-no-files-found: warn
           retention-days: 90
 
-# Native logs is a production portable-dispatch profile, not a shadow parser. This lane exercises the real
+# Native Logs is a production portable-dispatch profile, not a shadow parser. This lane exercises the real
 # PortableArchive path and the same C-ABI surface consumed by Android/JNI while retaining exact SHA-256, <=8x
 # member-read amplification, <=8 MiB decode context, filesystem semantics, primary/tail recovery, gzip+zstd inverse
-# codecs and fail-closed corruption behavior. Exact-head scoping prevents unrelated integration commits from
-# repeatedly consuming this native parity proof; canonical selector/full external authority remain release blockers.
+# codecs and fail-closed corruption behavior. The structured artifact claims only the three native-r25 facts directly
+# established here; generic G04/PrefixGraph/shared-core facts remain owned by v030-native-authority.
