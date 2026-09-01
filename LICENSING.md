@@ -18,6 +18,17 @@ and a well-understood SPDX identifier while allowing commercial and proprietary 
 
 This is a project-design rationale, not legal advice.
 
+## FCMO AI copyright fallback
+
+Independently of whether Apache-2.0 is eventually adopted, original FCMO AI work in this repository
+uses the canonical fallback copyright notice when no more specific valid notice applies:
+
+`Copyright (c) 2026 Matías Peña Szőke and contributors`
+
+See `COPYRIGHT.md` for scope and precedence. This attribution rule does **not** itself grant
+Apache-2.0 or any other license, does not override third-party rights, and does not turn FCMO Group
+branding or founder status into authorship.
+
 ## Adoption checklist
 
 Before this proposal becomes the canonical project license:
