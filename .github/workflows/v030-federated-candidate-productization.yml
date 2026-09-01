@@ -1,6 +1,6 @@
 # ci-lane: deep
 # ci-pr-scope: latest-head-commit-gate
-# ci-cancel-policy: preserve-running-exact-receipt
+# ci-cancel-policy: split-classifier-preserve-receipts
 name: CMPCT v0.30 federated candidate productization
 
 on:
@@ -23,10 +23,6 @@ on:
 permissions:
   contents: read
 
-concurrency:
-  group: cmpct-v030-federated-productization-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: false
-
 env:
   PYTHONPATH: ${{ github.workspace }}
   EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
@@ -35,6 +31,9 @@ jobs:
   latest-head-impact:
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    concurrency:
+      group: cmpct-v030-federated-productization-classifier-${{ github.event.pull_request.number || github.ref }}
+      cancel-in-progress: true
     outputs:
       run_deep: ${{ steps.scope.outputs.run_deep }}
     steps:
@@ -67,6 +66,9 @@ jobs:
     if: needs.latest-head-impact.outputs.run_deep == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 180
+    concurrency:
+      group: cmpct-v030-federated-productization-receipt-${{ github.event.pull_request.head.sha || github.sha }}
+      cancel-in-progress: false
     steps:
       - uses: actions/checkout@v6
         with:
@@ -160,4 +162,6 @@ jobs:
 # level-1 EntropyGraph strength survives a distinct reader-visible identity, canonical filesystem semantics,
 # authenticated public selective reads, strong verification, two-way recovery and frozen <=8x / <=8 MiB bounds,
 # then emits the exact recipe/codec inventory a native reader must reproduce. Native/Android dispatch and all-15
-# selector authority remain separate mandatory gates.
+# selector authority remain separate mandatory gates. Classifier routing is PR/ref-cancellable while the exact
+# result-bearing productization receipt is preserved once admitted, preventing unrelated integration commits from
+# serializing behind an older three-hour proof.
