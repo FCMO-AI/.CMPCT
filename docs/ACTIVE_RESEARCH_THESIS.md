@@ -1,8 +1,8 @@
 # CMPCT Active Fundamental Research Thesis
 
-Status: **Foundry primary thesis — F-01 / CAUSAL_SEED pending exact ablation receipt**
+Status: **Foundry primary thesis — F-01 / CAUSAL_SEED; structural transfer + AOM next**
 
-This file is mutable current state. Constitutional authority remains `docs/FUNDAMENTAL_RESEARCH_DOCTRINE.md`; frozen experiment authority remains in `docs/v030-rnd/`.
+Constitutional authority: `docs/FUNDAMENTAL_RESEARCH_DOCTRINE.md`. Frozen experiment authority lives under `docs/v030-rnd/`.
 
 ## Thesis
 
@@ -10,83 +10,102 @@ This file is mutable current state. Constitutional authority remains `docs/FUNDA
 
 > Lossless representation can sometimes be discovered as a bounded exact reconstruction program synthesized from a small typed set of reversible primitives, with search performed only by the encoder/research process and the resolved program stored for deterministic bounded decode.
 
-Worldview delta: CMPCT need not rely only on a hand-enumerated one-stage representation tournament. A bounded compiler may expose profitable exact compositions and may also act as an invention oracle for smaller future primitives.
+## Accepted evidence
 
-## Current evidence state
+### O0.1 headroom
 
-The first admissible O0.1 decisive receipt is complete and accepted under the frozen contract:
+Accepted decisive receipt:
 
-- frozen grammar seed: `9cbbed9b264e84cebcc0352f7f7878f5cad90f65`;
-- decisive wrapper/source receipt: `c3ef298bcc3fb7f95a65245c9341f112581aa175`;
-- workflow run: `33465582063`;
+- source: `c3ef298bcc3fb7f95a65245c9341f112581aa175`;
+- run: `33465582063`;
 - artifact digest: `sha256:3c4a5ed2195e8f9e0d3937a4f12863645e8f8bd152a49dc615dcac056f881323`;
-- schema: `cmpct-v030-foundry-f01-o01-v2`;
 - decision: **`ADVANCE_COMPOSITION`**.
 
-Measured O0.1 facts:
+Material exact wins after full program-byte charging:
 
-- two causally distinct discovery signatures survived complete program-byte charging:
-  - `SPLIT(LANE[*]+DELIM[*])`;
-  - `SPLIT(LANE[*]+LANE[*])`;
-- discovery gains were 552 B / 26.41% and 561 B / 18.18% versus the exact one-stage manual control;
-- one post-freeze transfer case retained a 427 B / 23.17% material composition win;
-- hostile false wins: **0**;
-- exact reconstruction: **all cases**;
-- search optimality: proven within the frozen 4 KiB-grid grammar;
-- gifted search wall time only; program/control/terminal bytes and reconstruction were fully charged.
+- `SPLIT(LANE[8]+DELIM[10])`: 2090 -> 1538 B, **-552 B / -26.41%**;
+- `SPLIT(LANE[8]+LANE[16])`: 3086 -> 2525 B, **-561 B / -18.18%**;
+- post-freeze transfer `SPLIT(LANE[8]+DELIM[103])`: 1843 -> 1416 B, **-427 B / -23.17%**.
 
-This is real compositional headroom, not product-speed or release evidence. The strongest surviving objection is unchanged: the frozen 4 KiB split grid proves bounded compositional opportunity, not arbitrary-boundary universal synthesis.
+Hostile false wins: **0**. Exact reconstruction: all cases.
 
-Durable result interpretation: `docs/v030-rnd/F01_O01_RESULT.md`.
+### Causal ablation
 
-## Current Foundry state
+Accepted causal receipt:
 
-The O0.1 oracle question is answered positively. F-01 now enters the **causal-seed transition**: determine which operators are actually necessary for the observed headroom, prune search-space liabilities, and resist vocabulary expansion until causality is known.
+- source: `2876698d311b13f296a6f11f23d89eaab51cd09c`;
+- run: `33468986162`;
+- artifact digest: `sha256:e910165ad51b2501f44a8531dab39ccbd697a1a1b150f9d958fb03290d33f2b6`;
+- schema: `cmpct-v030-foundry-f01-causal-v1`;
+- decision: **`CAUSAL_SEED`**.
 
-The next experiment is frozen in `docs/v030-rnd/F01_CAUSAL_ABLATION_PREREG.md` and executed by `.github/workflows/v030-foundry-f01-causal-ablation.yml`.
+Causal facts within the frozen grammar:
 
-No O0.2 operator expansion is permitted before that causal result. An unfavorable causal result may not edit the O0.1 grammar or its evidence.
+- removing SPLIT restores the exact one-stage manual control on all three composition winners, erasing 552 B, 561 B and 427 B respectively;
+- removing LANE costs **13,587 B**, **27,317 B** and **15,125 B** on the three accepted winners;
+- removing DELIM costs a small but strictly positive **13 B** and **16 B** on the two LANE+DELIM winners;
+- LANE widths **2 and 4** change neither exact optimum bytes nor motif on any accepted O0.1 case and are therefore scoped search liabilities for this frozen regime;
+- LANE widths 8 and 16 remain causally active.
+
+Durable interpretation: `docs/v030-rnd/F01_CAUSAL_RESULT.md`.
+
+## Current worldview
+
+The narrow one-stage assumption is falsified for the tested bounded vocabulary, and the headroom is causally attributable to composition rather than accounting noise. The strongest simpler explanation remains viable: the valuable capability may be **one compact mixed-structure segmentation primitive**, not a production-worthy general compiler/DSL.
+
+That distinction now matters more than additional operator invention.
 
 ## Oracle Gift Ledger
 
-O0 may gift only discovery/search cost as declared by the frozen contract.
+Gifted so far:
 
-Fully charged in the accepted O0.1 result:
+- O0 discovery/search wall time;
+- causal-ablation search wall time.
 
-- opcode/program/control bytes;
-- transform parameters and lengths;
-- terminal streams/literals;
+Never gifted:
+
+- representation/program/control bytes;
+- literals/terminal streams;
+- required bases;
 - exact reconstruction.
 
-Deferred debt remains explicit:
+Deferred debt:
 
-- generic discovery/admission economics;
-- full canonical framing/tree/index;
-- whole-archive locality/selective read;
-- recovery/integrity integration;
-- native/Android/platform implementation;
-- product create-time economics;
+- broad structural transfer;
 - Addressable Opportunity Mass;
-- global mechanism carrying cost.
+- generic admission/discovery economics;
+- global audition/search carrying cost;
+- canonical framing/index;
+- locality/recovery/integrity;
+- hostile parser/fuzz;
+- native/Android/platform;
+- product runtime and complete release authority.
 
-## Success/failure interpretation after causal ablation
+## Current Foundry state
 
-If the observed split compositions have real unique operator contribution and the result identifies removable search liabilities, advance F-01 to an explicit `CAUSAL_SEED` state and design structural transfer/AOM work without enlarging the vocabulary gratuitously.
+F-01 is now **CAUSAL_SEED**. No O0.2 vocabulary expansion is justified.
 
-If the apparent composition gains collapse under causal removal or are explainable by a simpler already-existing one-stage mechanism, preserve that constraint and reformulate or retire the thesis according to the frozen decision.
+The next frozen question is structural transfer plus an initial AOM/carrying-cost estimate under the unchanged grammar, with lane widths 2/4 treated only as a preregistered scoped-pruning A/B rather than silently removed.
 
-A preferred successful outcome remains **concept compression**: if recurring compositions imply one compact reusable primitive, distill it rather than canonicalizing a large research DSL.
+Contract: `docs/v030-rnd/F01_TRANSFER_AOM_PREREG.md`.
 
-## Thesis lease
+## Thesis lease / disproof
 
-Information gain, not code volume, buys runway. The accepted O0.1 receipt counts as a thesis state-changing result. The next substantive Foundry work must now produce causal evidence, operator retirement, transfer evidence, AOM/carrying-cost evidence, or another state transition; implementation growth alone does not count.
+The next result must materially change at least one of:
+
+- transfer scope;
+- AOM estimate;
+- false-positive/admission behavior;
+- search carrying cost;
+- concept-compression case for pruning/distillation;
+- thesis state.
+
+If structurally varied transfer collapses, F-01 must narrow or stop rather than compensate by adding operators. If transfer survives but AOM is tiny and global search tax is large, the compiler thesis should be distilled into a smaller primitive or retired from product consideration.
 
 ## Forge separation
 
-F-01 grants no v0.30 release credit. Proven product mechanisms and strict-red convergence remain Forge work under `docs/RND_DOMINATION_RUBRIC.md`. Foundry work must not destabilize or strand a D5 candidate.
+F-01 grants no v0.30 release credit. Proven product mechanisms remain Forge work. In particular the r25 implicit-v4 manifest mechanism is a D5 convergence candidate and must not be delayed by Foundry novelty.
 
 ## Immediate next action
 
-> **Execute and inspect the exact preregistered F-01 causal-ablation receipt. Do not add operators first.**
-
-If causal evidence survives, proceed to structurally varied transfer plus Addressable Opportunity Mass and global carrying-cost measurement. If it does not, preserve the scoped negative and obey the preregistered thesis decision.
+> Freeze/execute the structural-transfer + AOM/carrying-cost instrument under the unchanged grammar, then obey its decision. In parallel, complete the exact canonical r25 implicit-manifest A/B and land that seam only if its complete-artifact receipt is green.
