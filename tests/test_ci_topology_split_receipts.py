@@ -17,6 +17,7 @@ SPLIT_AUTHORITIES = (
     ".github/workflows/v030-external-competitors.yml",
     ".github/workflows/v030-authoritative-v2-pr.yml",
     ".github/workflows/v030-r25-manifest-canonical-integration.yml",
+    ".github/workflows/v030-r25-manifest-derived-identity.yml",
     ".github/workflows/v030-r25-manifest-canonical-candidate.yml",
     ".github/workflows/v030-r25-manifest-implicit-reader-productization.yml",
     ".github/workflows/v030-r25-manifest-writer-admission.yml",
