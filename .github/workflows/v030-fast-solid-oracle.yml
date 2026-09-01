@@ -92,12 +92,18 @@ jobs:
           python -m py_compile \
             benchmarks/v030_fast_solid_oracle.py \
             benchmarks/v030_fast_solid_oracle_canonical_identity.py
-      - name: Run exact-tree fast-solid sweep
+      - name: Run exact-tree fast-solid sweep with cancellation-safe research log
         run: |
+          set -euo pipefail
           mkdir -p benchmark-artifacts
+          # Each completed workload is emitted as one JSON line before the next workload begins.
+          # Preserve that stream independently of the final 15-row authority JSON so an external
+          # cancellation retains useful research observations without ever masquerading as a
+          # complete receipt.
           python benchmarks/v030_fast_solid_oracle_canonical_identity.py \
             --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-fast-solid-work" \
-            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-fast-solid.json"
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-fast-solid.json" \
+            | tee "$GITHUB_WORKSPACE/benchmark-artifacts/v030-fast-solid-progress.jsonl"
       - name: Enforce evidence honesty
         run: |
           python - <<'PY'
@@ -122,14 +128,18 @@ jobs:
       - name: CI topology self-check
         if: always()
         run: python tools/check_ci_topology.py .github/workflows/v030-fast-solid-oracle.yml
-      - name: Upload oracle evidence
+      - name: Upload oracle evidence and partial research stream
         if: always()
         uses: actions/upload-artifact@v6
         with:
           name: v030-fast-solid-${{ env.EVIDENCE_HEAD }}
-          path: benchmark-artifacts/v030-fast-solid.json
+          path: |
+            benchmark-artifacts/v030-fast-solid.json
+            benchmark-artifacts/v030-fast-solid-progress.jsonl
           if-no-files-found: warn
           retention-days: 90
 
-# Deep research only. This workflow may discover a promising encoder architecture, but it cannot satisfy or weaken
-# any v0.30 release receipt. Promotion requires a canonical r25 implementation plus the unchanged full release gates.
+# Deep research only. The JSONL stream is cancellation-safe partial research evidence, never a
+# substitute for the complete 15-row JSON authority. This workflow may discover a promising
+# encoder architecture, but it cannot satisfy or weaken any v0.30 release receipt. Promotion
+# requires a canonical r25 implementation plus the unchanged full release gates.
