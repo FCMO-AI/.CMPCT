@@ -24,7 +24,7 @@ REQUIRED_DEPENDENCIES = (
 
 
 def _classifier_pattern(text: str) -> re.Pattern[str]:
-    matches = re.findall(r"grep -Eq '([^']+)' /tmp/latest-head-files\\.txt", text)
+    matches = re.findall(r"grep -Eq '([^']+)' /tmp/latest-head-files\.txt", text)
     assert len(matches) == 1, "final-release authority must expose one auditable newest-head classifier"
     return re.compile(matches[0])
 
