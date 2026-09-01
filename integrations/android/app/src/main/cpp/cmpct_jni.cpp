@@ -39,6 +39,54 @@ void throw_io(JNIEnv *env, int32_t status) {
     }
 }
 
+jstring new_standard_utf8_string(JNIEnv *env, const uint8_t *bytes, size_t len) {
+    // JNI NewStringUTF consumes Modified UTF-8, not ordinary UTF-8. CMPCT paths are authenticated
+    // standard UTF-8 and may contain supplementary code points encoded as four bytes, so routing
+    // archive bytes through NewStringUTF can corrupt an otherwise valid cross-platform pathname.
+    if (len > static_cast<size_t>(INT32_MAX)) {
+        throw_io(env, CMPCT_PORTABLE_LIMIT);
+        return nullptr;
+    }
+
+    jbyteArray raw = env->NewByteArray(static_cast<jsize>(len));
+    if (raw == nullptr) return nullptr;
+    if (len > 0) {
+        env->SetByteArrayRegion(
+            raw,
+            0,
+            static_cast<jsize>(len),
+            reinterpret_cast<const jbyte *>(bytes));
+        if (env->ExceptionCheck()) {
+            env->DeleteLocalRef(raw);
+            return nullptr;
+        }
+    }
+
+    jclass string_class = env->FindClass("java/lang/String");
+    if (string_class == nullptr) {
+        env->DeleteLocalRef(raw);
+        return nullptr;
+    }
+    jmethodID constructor = env->GetMethodID(string_class, "<init>", "([BLjava/lang/String;)V");
+    if (constructor == nullptr) {
+        env->DeleteLocalRef(string_class);
+        env->DeleteLocalRef(raw);
+        return nullptr;
+    }
+    // This literal is ASCII, so NewStringUTF is correct here; it is never populated with archive bytes.
+    jstring charset_name = env->NewStringUTF("UTF-8");
+    if (charset_name == nullptr) {
+        env->DeleteLocalRef(string_class);
+        env->DeleteLocalRef(raw);
+        return nullptr;
+    }
+    jobject value = env->NewObject(string_class, constructor, raw, charset_name);
+    env->DeleteLocalRef(charset_name);
+    env->DeleteLocalRef(string_class);
+    env->DeleteLocalRef(raw);
+    return static_cast<jstring>(value);
+}
+
 bool require_archive(JNIEnv *env, jlong handle, PortableArchive **out) {
     *out = from_handle(handle);
     if (*out != nullptr) return true;
@@ -124,13 +172,18 @@ Java_ai_fcmo_cmpct_CmpctNative_nativeEntryPath(JNIEnv *env, jclass, jlong handle
         throw_io(env, status);
         return nullptr;
     }
-    std::vector<uint8_t> path(len + 1, 0);
-    status = cmpct_portable_entry_path(archive, static_cast<size_t>(index), path.data(), path.size(), &len);
+    std::vector<uint8_t> path(len);
+    status = cmpct_portable_entry_path(
+        archive,
+        static_cast<size_t>(index),
+        path.empty() ? nullptr : path.data(),
+        path.size(),
+        &len);
     if (status != CMPCT_PORTABLE_OK) {
         throw_io(env, status);
         return nullptr;
     }
-    return env->NewStringUTF(reinterpret_cast<const char *>(path.data()));
+    return new_standard_utf8_string(env, path.data(), len);
 }
 
 extern "C" JNIEXPORT jlongArray JNICALL
@@ -197,3 +250,5 @@ Java_ai_fcmo_cmpct_CmpctNative_nativeReadRange(
 
 // Footnote: JNI owns no archive grammar. Every operation, including complete verification, crosses the same
 // libcmpct_portable ABI used by desktop/native tests so Android cannot accidentally become a weaker parser.
+// Public entry paths are decoded as standard UTF-8 rather than JNI Modified UTF-8, preserving supplementary
+// Unicode code points exactly across the native/Java boundary.
