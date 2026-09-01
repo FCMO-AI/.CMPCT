@@ -41,9 +41,9 @@ def test_migrated_release_authorities_satisfy_split_receipt_policy() -> None:
 def test_authoritative_v2_classifier_is_release_fingerprint_driven() -> None:
     """A fingerprint mutation must never inherit stale compression/runtime authority.
 
-    This caught a real custody hole: public-surface and disclosure-guard changes were release-fingerprinted but
-    absent from the old hand-written authoritative-v2 classifier, so the exact candidate could change while the
-    expensive result-bearing jobs were skipped. Keep one source of truth: V030_RELEASE_LOCK.json.
+    This caught real custody holes: public-surface/disclosure changes could alter the release candidate while the
+    old hand-written classifier skipped authority, and canonical legal metadata from current main could alter the
+    eventual merge tree without invalidating receipt identity. Keep one source of truth: V030_RELEASE_LOCK.json.
     """
 
     workflow = (ROOT / ".github/workflows/v030-authoritative-v2-pr.yml").read_text(encoding="utf-8")
@@ -55,10 +55,13 @@ def test_authoritative_v2_classifier_is_release_fingerprint_driven() -> None:
     assert "manifest['fingerprint_globs']" in workflow
     assert "fnmatch.fnmatchcase" in workflow
     assert "grep -Eq" not in workflow
-    # Concrete regression witnesses from the incident that exposed the drift.
+    # Concrete regression witnesses from incidents that exposed drift.
     assert "docs/PUBLIC_SURFACE.md" in globs
     assert "tools/check_public_surface.py" in globs
     assert ".github/workflows/v030-*.yml" in globs
+    assert "COPYRIGHT.md" in globs
+    assert "LICENSING.md" in globs
+    assert "LICENSE-APACHE-2.0-PROPOSED.txt" in globs
     # The durable zero-history law must keep the cancellation-before-admission failure mode explicit.
     assert "cancellation **before admission is safe only" in doctrine
     assert "tests/test_v030_ci_topology_split_receipts.py" in doctrine
@@ -123,7 +126,7 @@ jobs:
   scope:
     runs-on: ubuntu-latest
     concurrency:
-      group: scope-${{ github.event.pull_request.head.sha || github.ref }}
+      group: scope-${{ github.event.pull_request.number || github.ref }}
       cancel-in-progress: true
     steps:
       - uses: actions/checkout@v6
