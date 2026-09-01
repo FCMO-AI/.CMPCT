@@ -1,0 +1,120 @@
+# ci-lane: deep
+# ci-pr-scope: latest-head-commit-gate
+# ci-cancel-policy: preserve-running-exact-receipt
+name: CMPCT v0.30 Foundry F-01 O0.1 compiler oracle
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'experiments/entropygraph_v030_reversible_structure_compiler_o01.py'
+      - 'docs/v030-rnd/REVERSIBLE_STRUCTURE_COMPILER_O01_PREREG.md'
+      - 'docs/ACTIVE_RESEARCH_THESIS.md'
+      - '.github/workflows/v030-foundry-f01-o01.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-v030-foundry-f01-o01-${{ github.event.pull_request.head.sha || github.sha }}
+  cancel-in-progress: false
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+
+jobs:
+  classify:
+    runs-on: ubuntu-24.04
+    outputs:
+      run_deep: ${{ steps.scope.outputs.run_deep }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 2
+      - name: Bind exact candidate head
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+      - name: Classify exact newest-head change
+        id: scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "run_deep=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          changed="$(git diff-tree --no-commit-id --name-only -r HEAD)"
+          printf '%s\n' "$changed"
+          if printf '%s\n' "$changed" | grep -Eq '^(experiments/entropygraph_v030_reversible_structure_compiler_o01\.py|docs/v030-rnd/REVERSIBLE_STRUCTURE_COMPILER_O01_PREREG\.md|docs/ACTIVE_RESEARCH_THESIS\.md|\.github/workflows/v030-foundry-f01-o01\.yml)$'; then
+            echo "run_deep=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "run_deep=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  oracle:
+    needs: classify
+    if: needs.classify.outputs.run_deep == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - name: Bind exact post-freeze candidate head
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install exact research dependencies
+        run: |
+          set -euo pipefail
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[test]'
+      - name: Compile frozen F-01 oracle
+        run: python -m py_compile experiments/entropygraph_v030_reversible_structure_compiler_o01.py
+      - name: Verify frozen preregistration is present
+        run: |
+          grep -F 'F-01 / O0.1' docs/v030-rnd/REVERSIBLE_STRUCTURE_COMPILER_O01_PREREG.md
+          grep -F 'General Reversible Structure Compiler' docs/ACTIVE_RESEARCH_THESIS.md
+      - name: Execute composition oracle with post-freeze head seed
+        run: |
+          mkdir -p benchmark-artifacts
+          python -m experiments.entropygraph_v030_reversible_structure_compiler_o01 \
+            --seed "$EVIDENCE_HEAD" \
+            --output benchmark-artifacts/v030-foundry-f01-o01.json
+      - name: Independently enforce O0 evidence honesty
+        run: |
+          python - <<'PY'
+          import json, os, subprocess
+          from pathlib import Path
+          assert subprocess.check_output(['git','rev-parse','HEAD'], text=True).strip() == os.environ['EVIDENCE_HEAD']
+          d=json.loads(Path('benchmark-artifacts/v030-foundry-f01-o01.json').read_text())
+          assert d['schema']=='cmpct-v030-foundry-f01-o01-v1'
+          assert d['oracle']=='O0.1 composition-only'
+          assert d['source_commit']==os.environ['EVIDENCE_HEAD']
+          assert d['search_optimality']=='proven-within-frozen-grid-grammar'
+          assert d['search_states']['heuristic_pruned']==0
+          assert d['oracle_gift_ledger']['never_gifted']
+          assert d['oracle_gift_ledger']['deferred_debt']
+          assert all(c['exact_reconstruction'] for c in d['cases'])
+          assert all(c['synthesized_bytes']==c['control_bytes']+c['terminal_payload_bytes'] for c in d['cases'])
+          assert d['decision'] in {'ADVANCE_COMPOSITION','DISCOVER_PRIMITIVE','MANUAL_FRONTIER_CONFIRMED','SEARCH_INCONCLUSIVE','RETIRE_F01'}
+          assert any(c['role']=='transfer' and c['case']=='transfer_generator_distinct_matrix' for c in d['cases'])
+          PY
+      - name: CI topology self-check
+        if: always()
+        run: python tools/check_ci_topology.py .github/workflows/v030-foundry-f01-o01.yml
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: v030-foundry-f01-o01-${{ env.EVIDENCE_HEAD }}
+          path: benchmark-artifacts/v030-foundry-f01-o01.json
+          if-no-files-found: error
+          retention-days: 90
+
+# Research-only Foundry oracle. Search time is gifted at O0.1; representation bytes and
+# exact reconstruction are not. A green job records headroom/negative evidence only and cannot
+# unlock canonical grammar, release performance, native/platform, recovery or v0.30 publication.
