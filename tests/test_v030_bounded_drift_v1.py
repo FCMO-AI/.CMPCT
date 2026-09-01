@@ -70,3 +70,32 @@ def test_resource_and_malformed_inputs_fail_closed(monkeypatch: pytest.MonkeyPat
             b"abc",
             BD.EditProgram(b"\x01\x04\x00\x00", 4, hashlib.sha256(b"abcd").digest(), 1, 0, 0, 0),
         )
+
+
+def test_hostile_program_metadata_and_parser_work_are_bounded(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(BD, "MAX_DECODE_UNIT", 64)
+    digest = hashlib.sha256(b"").digest()
+
+    cases = [
+        (b"x" * 65, BD.EditProgram(b"\x00", 0, digest, 0, 0, 0, 0)),
+        (b"", BD.EditProgram(b"\x00" * 65, 0, digest, 0, 0, 0, 0)),
+        (b"", BD.EditProgram(b"\x00", 65, digest, 0, 0, 0, 0)),
+        (b"", BD.EditProgram(b"\x00", -1, digest, 0, 0, 0, 0)),
+        (b"", BD.EditProgram(b"\x00", 0, b"short", 0, 0, 0, 0)),
+        (b"", BD.EditProgram(b"\x00", 0, digest, -1, 0, 0, 0)),
+        # Encoded zero records but metadata claims one.
+        (b"", BD.EditProgram(b"\x00", 0, digest, 1, 0, 0, 0)),
+        # Encoded four records cannot fit into this two-byte program; reject before looping.
+        (b"", BD.EditProgram(b"\x04\x00", 0, digest, 4, 0, 0, 0)),
+    ]
+    for base, program in cases:
+        with pytest.raises(ValueError):
+            BD.decode_program(base, program)
+
+
+def test_non_bytes_inputs_fail_closed() -> None:
+    with pytest.raises(TypeError):
+        BD.encode_program(bytearray(b"abc"), b"abc")  # type: ignore[arg-type]
+    program = BD.encode_program(b"abc", b"abc")
+    with pytest.raises(TypeError):
+        BD.decode_program(bytearray(b"abc"), program)  # type: ignore[arg-type]
