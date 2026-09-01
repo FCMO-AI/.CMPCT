@@ -94,6 +94,8 @@ def _find_resync(base: bytes, target: bytes, i: int, j: int) -> tuple[int, int]:
 
 
 def encode_program(base: bytes, target: bytes) -> EditProgram:
+    if not isinstance(base, bytes) or not isinstance(target, bytes):
+        raise TypeError("bounded-drift inputs must be bytes")
     if len(base) > MAX_DECODE_UNIT or len(target) > MAX_DECODE_UNIT:
         raise ValueError("bounded-drift member exceeds decode-unit limit")
     i = j = copied = deleted = inserted = 0
@@ -119,8 +121,24 @@ def encode_program(base: bytes, target: bytes) -> EditProgram:
 
 
 def decode_program(base: bytes, program: EditProgram) -> bytes:
+    if not isinstance(base, bytes) or not isinstance(program.raw, bytes):
+        raise TypeError("bounded-drift inputs must be bytes")
+    if len(base) > MAX_DECODE_UNIT or len(program.raw) > MAX_DECODE_UNIT:
+        raise ValueError("bounded-drift input exceeds decode-unit limit")
+    if program.logical_size < 0 or program.logical_size > MAX_DECODE_UNIT:
+        raise ValueError("bounded-drift logical size exceeds limit")
+    if len(program.sha256) != hashlib.sha256().digest_size:
+        raise ValueError("bounded-drift digest length mismatch")
+    if program.records < 0:
+        raise ValueError("bounded-drift record count is negative")
+
     pos = cursor = 0
     count, pos = get_varint(program.raw, pos)
+    # Each record needs at least three one-byte varints. This cap rejects malicious counts
+    # before they can turn a tiny program into a long parser loop.
+    if count != program.records or count > len(program.raw) // 3:
+        raise ValueError("bounded-drift record count mismatch")
+
     out = bytearray()
     for _ in range(count):
         copy_n, pos = get_varint(program.raw, pos)
