@@ -9,6 +9,10 @@ Size is not relaxed or ignored: historical no-regression/revision-sized compress
 ``v030_release_ablation_product``'s historical ledger, and canonical product bytes are separately required to be
 <= genuine r24 product bytes on the same filesystem tree. Duplicating those incomparable byte domains inside the
 runtime gate would reintroduce the measurement defect T02 explicitly removed.
+
+As a release evidence adapter, the returned JSON embeds the exact release-critical content fingerprint. That
+field does not alter timing or grant release credit; it lets a green strict-JSON artifact prove it belongs to the
+same frozen candidate as the eventual release receipt.
 """
 from __future__ import annotations
 
@@ -20,6 +24,7 @@ import statistics
 
 from benchmarks import v030_release_performance as B
 from benchmarks import v030_release_generalization as GENERAL
+from experiments import entropygraph_v030_release_lock_strict as RELEASE_LOCK
 
 B.WORKER = B.ROOT / "benchmarks" / "v030_perf_worker_canonical.py"
 
@@ -180,8 +185,11 @@ def run(work_root: Path) -> dict:
         "peak_rss_ratio": max_rss <= B.MAX_PEAK_RSS_RATIO,
     }
     gate["passed"] = all(gate.values())
+    manifest = RELEASE_LOCK.load_manifest_strict()
+    fingerprint, _paths = RELEASE_LOCK.CORE.fingerprint(manifest)
     return {
         "schema": "cmpct-v030-release-performance-product-v1",
+        "candidate_fingerprint": fingerprint,
         "engine": "experiments/entropygraph_v030_release_product.py",
         "release_facade": "cmpct-v030-release-product-v1",
         "contract": {
@@ -217,6 +225,7 @@ def main() -> None:
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(result, indent=2, default=str) + "\n", encoding="utf-8")
     diagnostic = {
+        "candidate_fingerprint": result["candidate_fingerprint"],
         "totals": result["totals"],
         "gate": result["gate"],
         "worst_workloads": {
