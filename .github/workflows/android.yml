@@ -1,6 +1,6 @@
 name: CMPCT Android
 # ci-lane: release
-# ci-cancel-policy: preserve-running-exact-receipt
+# ci-cancel-policy: split-classifier-preserve-receipts
 # ci-pr-scope: latest-head-commit-gate
 
 on:
@@ -32,10 +32,6 @@ on:
       - '.github/workflows/android-physical-arm64.yml'
   workflow_dispatch:
 
-concurrency:
-  group: cmpct-android-${{ github.event.pull_request.head.sha || github.sha }}
-  cancel-in-progress: false
-
 env:
   EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
 
@@ -43,6 +39,9 @@ jobs:
   latest-head-impact:
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    concurrency:
+      group: cmpct-android-classifier-${{ github.event.pull_request.number || github.ref }}
+      cancel-in-progress: true
     outputs:
       run_android: ${{ steps.scope.outputs.run_android }}
     steps:
@@ -74,6 +73,9 @@ jobs:
     if: needs.latest-head-impact.outputs.run_android == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 60
+    concurrency:
+      group: cmpct-android-receipt-${{ github.event.pull_request.head.sha || github.sha }}
+      cancel-in-progress: false
     steps:
       - uses: actions/checkout@v6
         with:
@@ -281,5 +283,5 @@ jobs:
 
 # Android consumes libcmpct_portable through a parser-free JNI shim. Canonical r25, implicit-v4 filesystem control,
 # logs inverse, compact-control, and inherited r24 therefore share one Rust admission/recovery implementation.
-# Exact-head concurrency preserves useful long-running emulator receipts on the integration PR; unrelated newest
-# commits classify out cheaply instead of cancelling a platform run. Physical ARM64 remains separate.
+# Split classifier/exact-receipt custody cancels obsolete routing on the long-lived integration PR while preserving
+# every admitted hosted-emulator receipt for its exact source SHA. Physical ARM64 remains separate.
