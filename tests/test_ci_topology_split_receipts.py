@@ -7,10 +7,25 @@ from tools import check_ci_topology as C
 
 ROOT = Path(__file__).resolve().parents[1]
 
+# These are the highest-cost normative product/release authorities on the long-lived v0.30 integration PR. They
+# must not regress to workflow-level exact-SHA concurrency: doing so preserves every otherwise-useless classifier
+# invocation and recreates the runner starvation that blocks current release receipts.
+SPLIT_AUTHORITIES = (
+    ".github/workflows/v030-native-authority.yml",
+    ".github/workflows/v030-final-release-authority.yml",
+    ".github/workflows/v030-canonical-authority.yml",
+    ".github/workflows/v030-external-competitors.yml",
+    ".github/workflows/v030-authoritative-v2-pr.yml",
+    ".github/workflows/v030-r25-manifest-canonical-integration.yml",
+)
 
-def test_migrated_native_authority_satisfies_split_receipt_policy() -> None:
-    path = ROOT / ".github/workflows/v030-native-authority.yml"
-    assert C.validate(path) == []
+
+def test_migrated_release_authorities_satisfy_split_receipt_policy() -> None:
+    for relative in SPLIT_AUTHORITIES:
+        path = ROOT / relative
+        text = path.read_text(encoding="utf-8")
+        assert "# ci-cancel-policy: split-classifier-preserve-receipts" in text
+        assert C.validate(path) == [], relative
 
 
 def test_split_receipt_policy_rejects_workflow_level_concurrency(tmp_path: Path) -> None:
