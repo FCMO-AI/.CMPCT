@@ -1,62 +1,19 @@
 # ci-lane: deep
-# ci-pr-scope: latest-head-commit-gate
-# ci-cancel-policy: preserve-running-exact-receipt
+# ci-auto-policy: retired-manual-only
 name: CMPCT v0.30 Foundry F-01 O0.1 compiler oracle
 
 on:
-  pull_request:
-    branches: [main]
-    paths:
-      - 'experiments/entropygraph_v030_reversible_structure_compiler_o01.py'
-      - 'experiments/entropygraph_v030_reversible_structure_compiler_o01_decisive.py'
-      - 'docs/v030-rnd/REVERSIBLE_STRUCTURE_COMPILER_O01_PREREG.md'
-      - 'docs/ACTIVE_RESEARCH_THESIS.md'
-      - '.github/workflows/v030-foundry-f01-o01.yml'
   workflow_dispatch:
 
 permissions:
   contents: read
 
-concurrency:
-  group: cmpct-v030-foundry-f01-o01-${{ github.event.pull_request.head.sha || github.sha }}
-  cancel-in-progress: false
-
 env:
   PYTHONPATH: ${{ github.workspace }}
-  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+  EVIDENCE_HEAD: ${{ github.sha }}
 
 jobs:
-  classify:
-    runs-on: ubuntu-24.04
-    outputs:
-      run_deep: ${{ steps.scope.outputs.run_deep }}
-    steps:
-      - uses: actions/checkout@v6
-        with:
-          ref: ${{ env.EVIDENCE_HEAD }}
-          fetch-depth: 2
-      - name: Bind exact candidate head
-        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
-      - name: Classify exact newest-head change
-        id: scope
-        shell: bash
-        run: |
-          set -euo pipefail
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            echo "run_deep=true" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-          changed="$(git diff-tree --no-commit-id --name-only -r HEAD)"
-          printf '%s\n' "$changed"
-          if printf '%s\n' "$changed" | grep -Eq '^(experiments/entropygraph_v030_reversible_structure_compiler_o01(_decisive)?\.py|docs/v030-rnd/REVERSIBLE_STRUCTURE_COMPILER_O01_PREREG\.md|docs/ACTIVE_RESEARCH_THESIS\.md|\.github/workflows/v030-foundry-f01-o01\.yml)$'; then
-            echo "run_deep=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "run_deep=false" >> "$GITHUB_OUTPUT"
-          fi
-
   oracle:
-    needs: classify
-    if: needs.classify.outputs.run_deep == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 120
     steps:
@@ -81,8 +38,8 @@ jobs:
       - name: Verify frozen preregistration is present
         run: |
           grep -F 'F-01 / O0.1' docs/v030-rnd/REVERSIBLE_STRUCTURE_COMPILER_O01_PREREG.md
-          grep -F 'General Reversible Structure Compiler' docs/ACTIVE_RESEARCH_THESIS.md
-      - name: Execute decisive composition oracle with post-freeze head seed
+          grep -F 'F-01' docs/ACTIVE_RESEARCH_THESIS.md
+      - name: Execute decisive composition oracle with exact replay head seed
         run: |
           mkdir -p benchmark-artifacts
           python -m experiments.entropygraph_v030_reversible_structure_compiler_o01_decisive \
@@ -124,6 +81,6 @@ jobs:
           if-no-files-found: error
           retention-days: 90
 
-# Research-only Foundry oracle. Search time is gifted at O0.1; representation bytes and
-# exact reconstruction are not. A green job records headroom/negative evidence only and cannot
-# unlock canonical grammar, release performance, native/platform, recovery or v0.30 publication.
+# F-01 is retired in docs/ACTIVE_RESEARCH_THESIS.md. The frozen O0.1 instrument
+# remains manually replayable for custody/reopening evidence, but it no longer consumes
+# automatic convergence-PR runner capacity or grants canonical/release credit.
