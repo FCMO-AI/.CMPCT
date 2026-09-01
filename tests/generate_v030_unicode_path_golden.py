@@ -3,7 +3,8 @@
 
 This fixture exists to prove that platform bindings preserve canonical UTF-8 paths exactly.
 The archive grammar and deterministic Zstandard framing come from the primary canonical
-golden generator; only the filesystem manifest differs.
+golden generator; only the filesystem manifest differs. One canonical G04 archive is enough
+because the defect under test lives in the shared post-dispatch JNI path conversion.
 """
 from __future__ import annotations
 
@@ -12,14 +13,7 @@ import base64
 import json
 from pathlib import Path
 
-from generate_v030_canonical_goldens import (
-    INTERNAL,
-    MANIFEST_PROFILE,
-    g04_archive,
-    pack,
-    prefix_archive,
-    sha,
-)
+from generate_v030_canonical_goldens import INTERNAL, MANIFEST_PROFILE, g04_archive, pack, sha
 
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_OUT = ROOT / "tests" / "conformance" / "v030-r25-unicode-path.json"
@@ -49,7 +43,8 @@ def document() -> dict:
             "entries": entries,
         }
     )
-    result = {
+    archive, tree = g04_archive(manifest, raw)
+    return {
         "schema": "cmpct-v030-native-unicode-path-golden-v1",
         "provenance": (
             "Generated from the frozen canonical r25 byte grammar by "
@@ -60,21 +55,15 @@ def document() -> dict:
         "owner_sha256": digest.hex(),
         "owner_size": len(raw),
         "manifest_sha256": sha(manifest).hex(),
-    }
-    for key, maker, profile in (
-        ("g04", g04_archive, "g04-r25"),
-        ("prefixgraph", prefix_archive, "prefixgraph-r25"),
-    ):
-        archive, tree = maker(manifest, raw)
-        result[key] = {
-            "profile": profile,
+        "g04": {
+            "profile": "g04-r25",
             "revision": 25,
             "archive_base64": base64.b64encode(archive).decode("ascii"),
             "archive_sha256": sha(archive).hex(),
             "tree_sha256": tree.hex(),
             "archive_size": len(archive),
-        }
-    return result
+        },
+    }
 
 
 def render() -> str:
