@@ -52,7 +52,6 @@ def _validated_manifest(archive: Path) -> dict:
 
 
 def treehash(root: Path) -> str:
-    # User-tree identity remains the canonical filesystem-v1 semantic identity.
     return BASE.treehash(root)
 
 
@@ -211,14 +210,7 @@ def _verify_graph_candidate(path: Path, expected_graph_tree: str, label: str) ->
 
 
 def _build_canonical_r25_only(staged: Path, out: Path) -> dict:
-    """Price only actual canonical r25 representations; accepted-v0.29 CMPNX fallback is not a reader candidate.
-
-    The shipping RC tournament may correctly return accepted v0.29 bytes when every r25 representation loses.
-    That is useful product-floor behavior but unusable for a canonical-r25 grammar gate: the shipping r25 facade
-    must reject CMPNX by design. This research seam therefore builds the same canonical G04 overlay and
-    PrefixGraph contenders directly, applies their existing locality laws, verifies every contender that can win,
-    and selects the strictly smaller canonical r25 artifact. No archive grammar or selector policy is duplicated.
-    """
+    """Price only actual canonical r25 representations; accepted-v0.29 CMPNX fallback is not a reader candidate."""
     out.parent.mkdir(parents=True, exist_ok=True)
     expected_graph_tree = BASE.PG.treehash(staged)
     with tempfile.TemporaryDirectory(prefix=".cmpct-v030-manifest-r25-only-", dir=out.parent) as td:
@@ -227,26 +219,34 @@ def _build_canonical_r25_only(staged: Path, out: Path) -> dict:
         pg_path = temp / "prefixgraph.cmpct"
         candidates: list[tuple[int, str, Path, dict, dict | None]] = []
 
+        # SHARED's worker builder assumes the supplied workspace already exists. Make that contract explicit here
+        # so the research-only tournament cannot fail before any codec work merely because its sibling workspace
+        # was never materialized.
+        shared_workspace = temp / "shared"
+        shared_workspace.mkdir()
         with BASE._revision25_profile_context():
-            shared = BASE.SHARED._build_shared_candidates(staged, temp / "shared")
+            shared = BASE.SHARED._build_shared_candidates(staged, shared_workspace)
             overlay = BASE.SHARED._overlay_retained_graph(shared["graph_path"], overlay_path)
         overlay_amp = float(BASE.SHARED._overlay_locality(overlay["auditions"]))
         overlay_locality = overlay_amp <= BASE.SHARED.MAX_MEMBER_READ_AMP
         overlay_verify = None
+        overlay_bytes = overlay_path.stat().st_size
         if overlay_locality:
             overlay_verify = _verify_graph_candidate(overlay_path, expected_graph_tree, "G04 overlay")
-            candidates.append((overlay_path.stat().st_size, "geometry-g04", overlay_path, overlay_verify, None))
+            candidates.append((overlay_bytes, "geometry-g04", overlay_path, overlay_verify, None))
 
         pg_eligible, pg_reason = BASE.ADMISSION.prefixgraph_eligibility(staged, expected_graph_tree)
         pg_locality = None
         pg_verify = None
+        pg_bytes = None
         if pg_eligible:
             with BASE._revision25_profile_context():
                 pg_stats = dict(BASE.PG.build(staged, pg_path))
+            pg_bytes = pg_path.stat().st_size
             pg_locality = BASE.ADMISSION.prefixgraph_locality(pg_path)
             if pg_locality.get("passed"):
                 pg_verify = _verify_graph_candidate(pg_path, expected_graph_tree, "PrefixGraph")
-                candidates.append((pg_path.stat().st_size, "prefixgraph", pg_path, pg_verify, pg_locality))
+                candidates.append((pg_bytes, "prefixgraph", pg_path, pg_verify, pg_locality))
         else:
             pg_stats = None
 
@@ -254,8 +254,6 @@ def _build_canonical_r25_only(staged: Path, out: Path) -> dict:
             raise BASE.ProfileNotEligible(
                 f"no canonical r25 contender survived locality: overlay_amp={overlay_amp!r}, pg_reason={pg_reason!r}"
             )
-        # Deterministic tie law: geometry precedes PrefixGraph because tuple insertion order is stable and we sort
-        # only by complete bytes. Exact ties therefore do not silently change representation ownership.
         winner = min(candidates, key=lambda item: item[0])
         winner_bytes, selected, selected_path, selected_verify, selected_locality = winner
         physical_sha = hashlib.sha256(selected_path.read_bytes()).hexdigest()
@@ -273,10 +271,10 @@ def _build_canonical_r25_only(staged: Path, out: Path) -> dict:
             "physical_sha256": physical_sha,
             "graph_tree_sha256": expected_graph_tree,
             "selected_graph_verify": selected_verify,
-            "overlay_bytes": overlay_path.stat().st_size if overlay_path.exists() else None,
+            "overlay_bytes": overlay_bytes,
             "overlay_max_member_read_amplification": overlay_amp,
             "overlay_locality_passed": overlay_locality,
-            "prefixgraph_bytes": pg_path.stat().st_size if pg_path.exists() else None,
+            "prefixgraph_bytes": pg_bytes,
             "prefixgraph_contract_eligible": pg_eligible,
             "prefixgraph_reject_reason": pg_reason,
             "prefixgraph_locality": pg_locality,
