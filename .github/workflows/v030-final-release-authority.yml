@@ -51,7 +51,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: cmpct-v030-final-release-${{ github.event.pull_request.number || github.ref }}
+  group: cmpct-v030-final-release-${{ github.event.pull_request.head.sha || github.sha }}
   cancel-in-progress: false
 
 env:
@@ -332,5 +332,5 @@ jobs:
 # Conflating these domains would either make product metadata appear free or let corpus repair weaken the release bar.
 # The isolated wrapper, preserved implementation body and isolation loader are all release-critical triggers;
 # changing any one can alter canonical profile dispatch even when the public wrapper filename itself is unchanged.
-# Exact final-release receipts are preserved once running; unrelated long-PR synchronizations cheaply exit through
-# the newest-commit gate rather than destroying hours of exact evidence.
+# Exact final-release receipts are preserved once running; exact-SHA concurrency also protects a pending receipt from
+# eviction by a newer head, while the newest-commit gate cheaply declines unrelated long-PR synchronizations.
