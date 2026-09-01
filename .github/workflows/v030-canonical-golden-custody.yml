@@ -1,0 +1,57 @@
+# ci-lane: fast
+name: CMPCT v0.30 canonical golden custody
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'tests/generate_v030_canonical_goldens.py'
+      - 'tests/generate_v030_implicit_goldens.py'
+      - 'tests/conformance/v030-r25-canonical.json'
+      - 'tests/conformance/v030-r25-implicit-v4.json'
+      - 'tests/test_v030_canonical_golden_custody.py'
+      - '.github/workflows/v030-canonical-golden-custody.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-v030-canonical-golden-custody-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+
+jobs:
+  independent-golden-custody:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - name: Bind exact candidate
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install minimal conformance dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install msgpack pytest
+      - name: Reproduce explicit-filesystem canonical goldens independently
+        run: python tests/generate_v030_canonical_goldens.py --check
+      - name: Reproduce implicit-v4 canonical goldens independently
+        run: python tests/generate_v030_implicit_goldens.py --check
+      - name: Run canonical golden custody regression
+        run: python -m pytest -q tests/test_v030_canonical_golden_custody.py
+      - name: CI topology self-check
+        run: python tools/check_ci_topology.py .github/workflows/v030-canonical-golden-custody.yml
+
+# This lane grants no compression/performance/release credit. It protects the builder-independent acceptance bytes
+# for every canonical r25 filesystem-control shape currently publishable by the release-facing selector, so fixture
+# or generator drift fails before a side/native lane can silently become the only custody boundary.
