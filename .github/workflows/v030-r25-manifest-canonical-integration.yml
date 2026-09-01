@@ -125,11 +125,19 @@ jobs:
           import json, os
           from pathlib import Path
           d=json.loads(Path('benchmark-artifacts/v030-r25-manifest-canonical.json').read_text())
-          assert d['schema']=='cmpct-v030-r25-manifest-canonical-integration-oracle-v1'
+          assert d['schema']=='cmpct-v030-r25-manifest-canonical-integration-oracle-v2'
           assert d['source_commit']==os.environ['EVIDENCE_HEAD']
-          assert d['format_revision']==25
+          assert d['format_revision']==25 and d['baseline_format_revision']==25
+          assert d['format_profile']==d['baseline_format_profile']
           assert d['selected_manifest_encoding']=='implicit-v4'
           assert d['control_saving_bytes'] >= 64*1024
+          assert d['baseline_archive_bytes'] > d['candidate_archive_bytes']
+          assert d['complete_artifact_saving_bytes']==d['baseline_archive_bytes']-d['candidate_archive_bytes']
+          assert d['complete_artifact_saving_bytes'] >= d['minimum_useful_archive_saving_bytes'] >= 16*1024
+          assert d['complete_artifact_promotion_signal'] is True
+          assert len(d['baseline_archive_sha256'])==64 and len(d['candidate_archive_sha256'])==64
+          assert d['baseline_archive_sha256'] != d['candidate_archive_sha256']
+          assert d['baseline_strong_verify_ok'] is True and d['baseline_strong_verify_tree_exact'] is True
           assert d['graph_control_identity_exact'] is True
           assert d['filesystem_v1_semantics_exact'] is True
           assert d['source_tree_sha256']==d['validated_tree_sha256']
@@ -158,5 +166,6 @@ jobs:
           if-no-files-found: error
           retention-days: 90
 
-# The patch is a candidate integration only. A green receipt advances the proven implicit-v4 mechanism to
-# recovery/native/Android/all-15 prerequisites; it does not modify shipping source or grant release credit.
+# The patch is a candidate integration only. A green v2 receipt proves the complete canonical-r25 A/B,
+# not merely the control-member delta. It advances the mechanism to landing/recovery/native/Android/all-15
+# prerequisites; it does not modify shipping source or grant release credit.
