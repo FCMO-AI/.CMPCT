@@ -57,6 +57,20 @@ impl FsManifest {
     pub(crate) fn parse(
         raw: &[u8],
         content_entries: &[PortableEntry],
+    ) -> Result<Self, PortableError> {
+        // Compatibility boundary for filesystem-v1 callers. The v1 control carries its own file identities,
+        // so only the authenticated graph path set is needed here. Canonical implicit-v4 uses
+        // parse_with_identities() and therefore never accepts these placeholder digest values.
+        let content_identities: ContentIdentities = content_entries
+            .iter()
+            .map(|entry| (entry.path.clone(), (entry.size, [0u8; 32])))
+            .collect();
+        Self::parse_with_identities(raw, content_entries, &content_identities)
+    }
+
+    pub(crate) fn parse_with_identities(
+        raw: &[u8],
+        content_entries: &[PortableEntry],
         content_identities: &ContentIdentities,
     ) -> Result<Self, PortableError> {
         if raw.len() as u64 > MAX_META_BYTES {
@@ -747,7 +761,7 @@ mod tests {
     #[test]
     fn implicit_v4_reconstructs_regular_identity_from_authenticated_graph() {
         let (raw, entries, identities) = implicit_fixture();
-        let manifest = FsManifest::parse(&raw, &entries, &identities).unwrap();
+        let manifest = FsManifest::parse_with_identities(&raw, &entries, &identities).unwrap();
         assert_eq!(manifest.entries().len(), 1);
         let entry = &manifest.entries()[0];
         assert_eq!(entry.path, "src/member.bin");
@@ -773,7 +787,7 @@ mod tests {
         });
         identities.insert("extra.bin".into(), (1, [1u8; 32]));
         assert!(matches!(
-            FsManifest::parse(&raw, &entries, &identities),
+            FsManifest::parse_with_identities(&raw, &entries, &identities),
             Err(PortableError::Integrity(_))
         ));
     }
@@ -789,7 +803,7 @@ mod tests {
         let mut malformed = Vec::new();
         rmpv::encode::write_value(&mut malformed, &root).unwrap();
         assert!(matches!(
-            FsManifest::parse(&malformed, &entries, &identities),
+            FsManifest::parse_with_identities(&malformed, &entries, &identities),
             Err(PortableError::Integrity(_))
         ));
     }
