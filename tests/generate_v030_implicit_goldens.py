@@ -3,8 +3,9 @@
 
 The generator intentionally imports no CMPCT writer/reader code. It constructs the compact filesystem-control
 MessagePack value and both canonical content-profile framings from primitive struct/MessagePack/Zstandard operations,
-so implementation bugs cannot regenerate their own acceptance target. G04 raw frames are assembled by hand;
-PrefixGraph uses the independently invoked standard Zstandard codec at its frozen canonical payload/meta levels.
+so implementation bugs cannot regenerate their own acceptance target. Both profiles deliberately use fixed raw-block
+Zstandard frames here: the conformance vector tests parser/semantic bytes independently of encoder heuristics, while
+separate writer-parity tests prove that the production encoder's compressed framing is accepted by the same reader.
 """
 from __future__ import annotations
 
@@ -17,7 +18,6 @@ import struct
 import zlib
 
 import msgpack
-import zstandard as zstd
 
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_OUT = ROOT / "tests" / "conformance" / "v030-r25-implicit-v4.json"
@@ -33,8 +33,6 @@ PREFIX_HEADER = struct.Struct("<8sQQ32s")
 PREFIX_FOOTER = struct.Struct("<8sQQ32s")
 ZSTD_MAGIC = bytes.fromhex("28b52ffd")
 ZSTD_MAX_RAW_BLOCK = (1 << 17) - 1
-PREFIX_PAYLOAD_LEVEL = 19
-PREFIX_META_LEVEL = 12
 
 
 def sha(data: bytes) -> bytes:
@@ -46,7 +44,7 @@ def pack(value) -> bytes:
 
 
 def zpack(data: bytes) -> bytes:
-    """Construct the fixed raw-block Zstandard framing used by the G04 independent oracle."""
+    """Construct a fixed raw-block Zstandard frame without invoking a compressor implementation."""
     size = len(data)
     out = bytearray(ZSTD_MAGIC)
     if size < 256:
@@ -70,11 +68,6 @@ def zpack(data: bytes) -> bytes:
         out += ((len(block) << 3) | int(cursor == size)).to_bytes(3, "little")
         out += block
     return bytes(out)
-
-
-def zcompress(data: bytes, level: int) -> bytes:
-    """Invoke Zstandard independently of CMPCT at a frozen canonical PrefixGraph level."""
-    return zstd.ZstdCompressor(level=level).compress(data)
 
 
 def tree_sha(files: dict[str, bytes]) -> bytes:
@@ -204,7 +197,7 @@ def prefix_archive(manifest: bytes, user_raw: bytes) -> bytes:
     paths = sorted(logical)
     for rel in paths:
         raw = logical[rel]
-        payload = zcompress(raw, PREFIX_PAYLOAD_LEVEL)
+        payload = zpack(raw)
         payloads.append(payload)
         records.append(["direct", -1, len(raw), len(payload), sha(payload), sha(raw)])
     metadata = {
@@ -218,7 +211,7 @@ def prefix_archive(manifest: bytes, user_raw: bytes) -> bytes:
         "max_member_read_amplification": 8.0,
     }
     meta_raw = pack(metadata)
-    meta_z = zcompress(meta_raw, PREFIX_META_LEVEL)
+    meta_z = zpack(meta_raw)
     meta_digest = sha(meta_raw)
     header = PREFIX_HEADER.pack(PREFIX_MAGIC, len(meta_z), len(meta_raw), meta_digest)
     footer = PREFIX_FOOTER.pack(PREFIX_TAIL, len(meta_z), len(meta_raw), meta_digest)
@@ -249,6 +242,38 @@ def document() -> dict:
     }
 
 
+def _drift_report(existing: dict, generated: dict) -> str:
+    rows: list[str] = []
+    existing_fs = existing.get("filesystem", {})
+    generated_fs = generated.get("filesystem", {})
+    if existing_fs != generated_fs:
+        rows.append(
+            "filesystem "
+            f"expected_manifest={existing_fs.get('manifest_sha256')} "
+            f"generated_manifest={generated_fs.get('manifest_sha256')}"
+        )
+    for profile in ("g04", "prefixgraph"):
+        expected = existing.get(profile, {})
+        actual = generated.get(profile, {})
+        if expected == actual:
+            continue
+        expected_b64 = expected.get("archive_base64", "")
+        actual_b64 = actual.get("archive_base64", "")
+        try:
+            expected_bytes = base64.b64decode(expected_b64, validate=True)
+        except Exception:
+            expected_bytes = b""
+        try:
+            actual_bytes = base64.b64decode(actual_b64, validate=True)
+        except Exception:
+            actual_bytes = b""
+        rows.append(
+            f"{profile} expected_sha={expected.get('archive_sha256')} generated_sha={actual.get('archive_sha256')} "
+            f"expected_bytes={len(expected_bytes)} generated_bytes={len(actual_bytes)}"
+        )
+    return "; ".join(rows) or "document differs outside diagnosed sections"
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--check", action="store_true")
@@ -258,7 +283,10 @@ def main() -> None:
     if args.check:
         existing = json.loads(args.output.read_text(encoding="utf-8"))
         if existing != generated:
-            raise SystemExit(f"implicit-v4 fixed conformance vector drifted: {args.output}")
+            raise SystemExit(
+                f"implicit-v4 fixed conformance vector drifted: {args.output}: "
+                f"{_drift_report(existing, generated)}; msgpack={getattr(msgpack, '__version__', 'unknown')}"
+            )
         print(f"implicit-v4 fixed conformance vector reproduced: {args.output}")
         return
     args.output.write_text(json.dumps(generated, indent=2) + "\n", encoding="utf-8")
