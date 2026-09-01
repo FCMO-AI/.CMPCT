@@ -1,0 +1,32 @@
+{
+  "schema": "cmpct-v030-r25-implicit-v4-native-vector-v1",
+  "filesystem_manifest_internal_path": ".__cmpct_r25_internal__/filesystem-v1.msgpack",
+  "filesystem_v1_base64": "hKF2Aadwcm9maWxl2SBjbXBjdC1yMjUtZmlsZXN5c3RlbS1tYW5pZmVzdC12Ma1pbnRlcm5hbF9wYXRo2S0uX19jbXBjdF9yMjVfaW50ZXJuYWxfXy9maWxlc3lzdGVtLXYxLm1zZ3BhY2unZW50cmllc5WYo2RpcqFkzQHo0sRlNgDNA+jNA+iQwJitZGlyL2FscGhhLmJpbqFmzQGg0sRlNgDNA+jNA+iQkmTEIBTEfi8uwT5onp90S70f8pfaPfsjofnn1JtaC/97FuwEmKxkaXIvYmV0YS5iaW6hZs0BpM53NZQAzQPpzQPokZKpdXNlci5kZW1vxAF2kkTEIDKAiQcnXBOfnoSFPKBTv5j1vj18+Rs3AfFoLyL1DaZLmLVkaXIvenotYWxwaGEtaGFyZC5iaW6haM0BoNLEZTYAzQPozQPokK1kaXIvYWxwaGEuYmlumKhsaW5rLmJpbqFszQH/AM0D6M0D6JCsZGlyL2JldGEuYmlu",
+  "filesystem_v1_bytes": 378,
+  "implicit_v4_base64": "lASVzQGg0sRlNgDNA+jNA+iQkpEAlRcEzrLQXgABkZKpdXNlci5kZW1vxAF2k5UAo2RpcgGSAUjAlQOyL3p6LWFscGhhLWhhcmQuYmluA5EAAJUAqGxpbmsuYmluApMDX847msoArGRpci9iZXRhLmJpbg==",
+  "implicit_v4_bytes": 115,
+  "implicit_v4_sha256": "d85943621b94d4cf5e5c0860aaff2de25958a9d1993b218e80a8aad0901326b8",
+  "regular_identities": [
+    {
+      "path": "dir/alpha.bin",
+      "size": 100,
+      "sha256": "14c47e2f2ec13e689e9f744bbd1ff297da3dfb23a1f9e7d49b5a0bff7b16ec04"
+    },
+    {
+      "path": "dir/beta.bin",
+      "size": 68,
+      "sha256": "32808907275c139f9e84853ca053bf98f5be3d7cf91b3701f1682f22f50da64b"
+    }
+  ],
+  "expected_entries": [
+    {"path":"dir","kind":"d","mode":488,"mtime_ns":-1000000000,"uid":1000,"gid":1000,"xattrs":[],"extra":null},
+    {"path":"dir/alpha.bin","kind":"f","mode":416,"mtime_ns":-1000000000,"uid":1000,"gid":1000,"xattrs":[],"extra":{"size":100,"sha256":"14c47e2f2ec13e689e9f744bbd1ff297da3dfb23a1f9e7d49b5a0bff7b16ec04"}},
+    {"path":"dir/beta.bin","kind":"f","mode":420,"mtime_ns":2000000000,"uid":1001,"gid":1000,"xattrs":[["user.demo","dg=="]],"extra":{"size":68,"sha256":"32808907275c139f9e84853ca053bf98f5be3d7cf91b3701f1682f22f50da64b"}},
+    {"path":"dir/zz-alpha-hard.bin","kind":"h","mode":416,"mtime_ns":-1000000000,"uid":1000,"gid":1000,"xattrs":[],"extra":"dir/alpha.bin"},
+    {"path":"link.bin","kind":"l","mode":511,"mtime_ns":0,"uid":1000,"gid":1000,"xattrs":[],"extra":"dir/beta.bin"}
+  ],
+  "notes": [
+    "Control bytes include every required metadata/program byte; regular path/size/SHA identities are supplied by the authenticated content graph.",
+    "Vector exercises signed pre-epoch mtime, numeric metadata deltas, xattr replacement, directory, symlink, and hardlink-by-regular-index."
+  ]
+}
