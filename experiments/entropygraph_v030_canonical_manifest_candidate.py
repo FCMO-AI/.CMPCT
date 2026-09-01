@@ -14,6 +14,7 @@ shipping source is changed.
 """
 
 import hashlib
+import os
 from pathlib import Path
 import shutil
 import tempfile
@@ -21,7 +22,7 @@ import tempfile
 from experiments import entropygraph_v030_canonical_final as BASE
 from experiments import entropygraph_v030_r25_manifest_admission as ADMIT
 
-CANDIDATE_ID = "implicit-v4-direct-seam-v2"
+CANDIDATE_ID = "implicit-v4-direct-seam-v3"
 
 
 def _prepare_profile_tree(root: Path, staging_root: Path) -> dict:
@@ -201,38 +202,112 @@ def extract(
             shutil.rmtree(wrapper, ignore_errors=True)
 
 
+def _verify_graph_candidate(path: Path, expected_graph_tree: str, label: str) -> dict:
+    with BASE._revision25_profile_context():
+        result = dict(BASE.POLICY.strong_verify(path))
+    if not result.get("ok") or result.get("tree_sha256") != expected_graph_tree:
+        raise RuntimeError(f"{label} failed canonical r25 graph verification: {result!r}")
+    return result
+
+
+def _build_canonical_r25_only(staged: Path, out: Path) -> dict:
+    """Price only actual canonical r25 representations; accepted-v0.29 CMPNX fallback is not a reader candidate.
+
+    The shipping RC tournament may correctly return accepted v0.29 bytes when every r25 representation loses.
+    That is useful product-floor behavior but unusable for a canonical-r25 grammar gate: the shipping r25 facade
+    must reject CMPNX by design. This research seam therefore builds the same canonical G04 overlay and
+    PrefixGraph contenders directly, applies their existing locality laws, verifies every contender that can win,
+    and selects the strictly smaller canonical r25 artifact. No archive grammar or selector policy is duplicated.
+    """
+    out.parent.mkdir(parents=True, exist_ok=True)
+    expected_graph_tree = BASE.PG.treehash(staged)
+    with tempfile.TemporaryDirectory(prefix=".cmpct-v030-manifest-r25-only-", dir=out.parent) as td:
+        temp = Path(td)
+        overlay_path = temp / "geometry-g04.cmpct"
+        pg_path = temp / "prefixgraph.cmpct"
+        candidates: list[tuple[int, str, Path, dict, dict | None]] = []
+
+        with BASE._revision25_profile_context():
+            shared = BASE.SHARED._build_shared_candidates(staged, temp / "shared")
+            overlay = BASE.SHARED._overlay_retained_graph(shared["graph_path"], overlay_path)
+        overlay_amp = float(BASE.SHARED._overlay_locality(overlay["auditions"]))
+        overlay_locality = overlay_amp <= BASE.SHARED.MAX_MEMBER_READ_AMP
+        overlay_verify = None
+        if overlay_locality:
+            overlay_verify = _verify_graph_candidate(overlay_path, expected_graph_tree, "G04 overlay")
+            candidates.append((overlay_path.stat().st_size, "geometry-g04", overlay_path, overlay_verify, None))
+
+        pg_eligible, pg_reason = BASE.ADMISSION.prefixgraph_eligibility(staged, expected_graph_tree)
+        pg_locality = None
+        pg_verify = None
+        if pg_eligible:
+            with BASE._revision25_profile_context():
+                pg_stats = dict(BASE.PG.build(staged, pg_path))
+            pg_locality = BASE.ADMISSION.prefixgraph_locality(pg_path)
+            if pg_locality.get("passed"):
+                pg_verify = _verify_graph_candidate(pg_path, expected_graph_tree, "PrefixGraph")
+                candidates.append((pg_path.stat().st_size, "prefixgraph", pg_path, pg_verify, pg_locality))
+        else:
+            pg_stats = None
+
+        if not candidates:
+            raise BASE.ProfileNotEligible(
+                f"no canonical r25 contender survived locality: overlay_amp={overlay_amp!r}, pg_reason={pg_reason!r}"
+            )
+        # Deterministic tie law: geometry precedes PrefixGraph because tuple insertion order is stable and we sort
+        # only by complete bytes. Exact ties therefore do not silently change representation ownership.
+        winner = min(candidates, key=lambda item: item[0])
+        winner_bytes, selected, selected_path, selected_verify, selected_locality = winner
+        physical_sha = hashlib.sha256(selected_path.read_bytes()).hexdigest()
+        os.replace(selected_path, out)
+        if out.stat().st_size != winner_bytes or hashlib.sha256(out.read_bytes()).hexdigest() != physical_sha:
+            raise RuntimeError("canonical r25-only publication changed physical bytes")
+        revision, profile = BASE._profile_for_archive(out)
+        if revision != BASE.REVISION:
+            raise RuntimeError(f"canonical r25-only tournament published non-r25 profile: {profile}")
+        return {
+            "selected": selected,
+            "archive_bytes": winner_bytes,
+            "format_revision": revision,
+            "format_profile": profile,
+            "physical_sha256": physical_sha,
+            "graph_tree_sha256": expected_graph_tree,
+            "selected_graph_verify": selected_verify,
+            "overlay_bytes": overlay_path.stat().st_size if overlay_path.exists() else None,
+            "overlay_max_member_read_amplification": overlay_amp,
+            "overlay_locality_passed": overlay_locality,
+            "prefixgraph_bytes": pg_path.stat().st_size if pg_path.exists() else None,
+            "prefixgraph_contract_eligible": pg_eligible,
+            "prefixgraph_reject_reason": pg_reason,
+            "prefixgraph_locality": pg_locality,
+            "prefixgraph": pg_stats,
+            "candidate_set": "canonical-r25-only-g04-prefixgraph-v1",
+            "release_credit": False,
+        }
+
+
 def build_ablation(root: Path, out: Path, mode: str) -> dict:
-    """Build the same canonical r25 ablation substrate with only manifest admission changed."""
+    """Build a manifest A/B on one canonical-r25-only substrate; shipping selector remains untouched."""
     root = Path(root)
     out = Path(out)
     out.parent.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix=".cmpct-v030-manifest-candidate-", dir=out.parent) as td:
         staged = Path(td) / "tree"
-        prepared = _prepare_profile_tree(root, staged)
-        with BASE._revision25_profile_context():
-            if mode == "v029":
-                stats = dict(BASE.G04_RESEARCH.BASE.build(staged, out))
-            elif mode == "geometry":
-                stats = dict(BASE.SHARED.build(staged, out))
-            elif mode == "prefixgraph":
-                expected = BASE.PG.treehash(staged)
-                eligible, reason = BASE.ADMISSION.prefixgraph_eligibility(staged, expected)
-                if not eligible:
-                    raise BASE.ProfileNotEligible(f"PrefixGraph ablation rejected: {reason}")
-                stats = dict(BASE.PG.build(staged, out))
-                locality = BASE.ADMISSION.prefixgraph_locality(out)
-                if not locality.get("passed"):
-                    raise BASE.ProfileNotEligible("PrefixGraph ablation exceeded locality ceiling")
-                stats["prefixgraph_locality"] = locality
-            elif mode == "combined":
-                stats = dict(BASE.RC.build(staged, out))
-            else:
-                raise ValueError(f"unknown v0.30 ablation mode: {mode}")
+        if mode == "combined-explicit":
+            prepared = BASE._prepare_profile_tree(root, staged)
+            manifest_encoding = "filesystem-v1"
+        elif mode == "combined":
+            prepared = _prepare_profile_tree(root, staged)
+            manifest_encoding = str(prepared.get("selected_manifest_encoding", "unknown"))
+        else:
+            raise ValueError(f"unknown manifest productization ablation mode: {mode}")
+        stats = _build_canonical_r25_only(staged, out)
     return {
         **stats,
         "ablation": mode,
-        "filesystem_manifest_sha256": prepared["manifest_sha256"],
-        "filesystem_manifest_bytes": prepared["manifest_bytes"],
+        "filesystem_manifest_sha256": prepared.get("selected_manifest_sha256", prepared.get("manifest_sha256")),
+        "filesystem_manifest_bytes": int(prepared.get("selected_manifest_bytes", prepared.get("manifest_bytes", 0))),
+        "manifest_encoding": manifest_encoding,
         "canonical_publication": False,
         "manifest_productization_candidate": CANDIDATE_ID,
         "release_credit": False,
