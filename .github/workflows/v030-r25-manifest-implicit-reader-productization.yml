@@ -7,6 +7,7 @@ on:
   push:
     branches: [agent/v030-authoritative-integration]
     paths:
+      - 'src/cmpct/**'
       - 'benchmarks/v030_r25_manifest_derived_identity_oracle.py'
       - 'benchmarks/v030_r25_manifest_implicit_reader_productization.py'
       - 'benchmarks/v030_release_generalization.py'
@@ -19,6 +20,7 @@ on:
   pull_request:
     branches: [main]
     paths:
+      - 'src/cmpct/**'
       - 'benchmarks/v030_r25_manifest_derived_identity_oracle.py'
       - 'benchmarks/v030_r25_manifest_implicit_reader_productization.py'
       - 'benchmarks/v030_release_generalization.py'
@@ -34,7 +36,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: cmpct-v030-r25-manifest-implicit-reader-${{ github.event.pull_request.number || github.ref }}
+  group: cmpct-v030-r25-manifest-implicit-reader-${{ github.event.pull_request.head.sha || github.sha }}
   cancel-in-progress: false
 
 env:
@@ -65,7 +67,7 @@ jobs:
           fi
           git diff-tree --no-commit-id --name-only -r HEAD > /tmp/latest-head-files.txt
           cat /tmp/latest-head-files.txt
-          if grep -Eq '^(benchmarks/v030_r25_manifest_(derived_identity_oracle|implicit_reader_productization)\.py|benchmarks/v030_release_generalization\.py|experiments/entropygraph_v030_(product_fs|fs_implicit_v4|canonical_final_impl|release_candidate)\.py|tests/test_v030_fs_implicit_v4\.py|\.github/workflows/v030-r25-manifest-implicit-reader-productization\.yml)$' /tmp/latest-head-files.txt; then
+          if grep -Eq '^(src/cmpct/.*|benchmarks/v030_r25_manifest_(derived_identity_oracle|implicit_reader_productization)\.py|benchmarks/v030_release_generalization\.py|experiments/entropygraph_v030_(product_fs|fs_implicit_v4|canonical_final_impl|release_candidate)\.py|tests/test_v030_fs_implicit_v4\.py|\.github/workflows/v030-r25-manifest-implicit-reader-productization\.yml)$' /tmp/latest-head-files.txt; then
             echo 'run_deep=true' >> "$GITHUB_OUTPUT"
           else
             echo 'run_deep=false' >> "$GITHUB_OUTPUT"
@@ -151,4 +153,5 @@ jobs:
 
 # Research-only projection reader. The proof may enable the existing bounded revision-25 research context but
 # shipping profile classification remains fail closed. Recovery, native, Android, all-15 authority and final
-# release credit remain separate gates.
+# release credit remain separate gates. The installed core package is part of the reader behavior, and exact-SHA
+# concurrency preserves both queued and running evidence for the source fingerprint it actually proves.
