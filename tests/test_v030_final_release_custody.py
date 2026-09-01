@@ -16,6 +16,7 @@ REQUIRED_DEPENDENCIES = (
     "experiments/entropygraph_v030_r25_manifest_admission.py",
     "experiments/entropygraph_v030_fs_implicit_v4.py",
     "experiments/entropygraph_v030_release_product_base.py",
+    "experiments/entropygraph_v030_verified_restore.py",
     "experiments/entropygraph_v030_release_product_logs_candidate.py",
     "experiments/entropygraph_v030_r24_dead_dictionary.py",
     "experiments/entropygraph_v030_r24_media_terminal.py",
