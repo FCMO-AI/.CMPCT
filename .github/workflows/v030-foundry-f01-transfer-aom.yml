@@ -132,3 +132,4 @@ jobs:
           retention-days: 90
 
 # Foundry-only transfer/AOM evidence. It may advance or narrow F-01, but cannot grant canonical or release credit.
+# Execution trigger 2026-09-01: run the already-frozen transfer/AOM contract; no grammar/preregistration semantics changed.
