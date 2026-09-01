@@ -3,10 +3,12 @@ from __future__ import annotations
 """R4 Shifted capacity test: one latent basis plus one bounded patch context.
 
 The prior latent-consensus oracle showed the shared basis itself is smaller than solid
-Zstd-19, while 18 independently compressed patch programs erase that advantage.  This
+Zstd-19, while 18 independently compressed patch programs erase that advantage. This
 instrument keeps the same content-only latent derivation and exact depth-1 deltas, but
-packs every tiny patch program into one <=8 MiB decoded context.  Research only: a size
-win advances construction/runtime work and grants no release credit.
+packs every tiny patch program into one <=8 MiB decoded context. It also prices an
+identical independent-frame control so the experiment can distinguish "patch relation
+entropy is too high" from "tiny frame/context fragmentation consumed the margin".
+Research only: a size win advances construction/runtime work and grants no release credit.
 """
 
 import argparse
@@ -66,11 +68,23 @@ def run(work_root: Path) -> dict:
     patch_raw = b"".join(payload for _, _, payload, _ in raw_patches)
     if len(patch_raw) > LAT.MAX_DECODE:
         raise AssertionError("shared patch context exceeds decode-unit bound")
+
+    # Strongest simple control: the same exact raw delta programs, same level/checksum,
+    # but each receives an independent Zstd frame/context. This isolates ownership/frame
+    # fragmentation from latent derivation and delta quality without changing semantics.
+    individual_patch_stored = [
+        zstd.ZstdCompressor(level=PATCH_LEVEL, threads=0, write_checksum=True).compress(payload)
+        for _, _, payload, _ in raw_patches
+    ]
+    individual_patch_stored_bytes = sum(map(len, individual_patch_stored))
     patch_stored = zstd.ZstdCompressor(level=PATCH_LEVEL, threads=0, write_checksum=True).compress(patch_raw)
+    patch_context_saved_bytes = individual_patch_stored_bytes - len(patch_stored)
+    if patch_context_saved_bytes < 0:
+        raise AssertionError("shared patch context unexpectedly larger than identical independent-frame control")
     create_s = time.perf_counter() - started
 
     # Complete research framing: names, logical sizes, raw patch boundaries and hashes are
-    # priced.  Only final release/recovery framing is omitted from the optimistic payload
+    # priced. Only final release/recovery framing is omitted from the optimistic payload
     # floor; if complete research framing crosses Zstd, the representation deserves a real
     # productization/runtime prerequisite rather than release credit.
     artifact = bytearray(b"CMPNXLCP1")
@@ -108,6 +122,7 @@ def run(work_root: Path) -> dict:
         raise RuntimeError("required external comparator unavailable")
 
     payload_floor = len(latent_stored) + len(patch_stored)
+    independent_payload_floor = len(latent_stored) + individual_patch_stored_bytes
     max_logical = max(len(data) for _, data in rows)
     max_amp = max((len(latent) + len(patch_raw) + len(data)) / max(1, len(data)) for _, data in rows)
     size_crosses_zstd = len(artifact) < int(zstd_row["bytes"])
@@ -120,15 +135,16 @@ def run(work_root: Path) -> dict:
     terminal = "PROMOTE_NEXT_PREREQUISITE" if size_crosses_zstd else "RETIRE_FAMILY"
 
     return {
-        "schema": "cmpct-v030-shifted-latent-patchpack-floor-v1",
+        "schema": "cmpct-v030-shifted-latent-patchpack-floor-v2",
         "source_commit": os.environ.get("EVIDENCE_HEAD") or os.environ.get("GITHUB_SHA") or "local",
         "strict_target": "15/15: each workload strictly smaller and faster than ZIP/Deflate and solid Zstd-19; ties fail",
         "diagnosis": "D4",
         "radicality": "R4",
         "saturation_inherited": ["S1", "S3", "S4"],
-        "rps": 98,
+        "rps": 99,
         "referee": {
             "causal_hypothesis": "the latent basis already beats Zstd; independent tiny patch frames, not relation entropy, consume the remaining size margin",
+            "strongest_control": "same latent basis and exact delta programs compressed as eighteen independent level-19 checksum frames",
             "disproof": "one legal shared patch context plus complete research framing remains >= exact solid Zstd-19 bytes",
             "strongest_failure": "even a size crossing does not solve the inherited ~12 s latent derivation cost",
         },
@@ -138,7 +154,7 @@ def run(work_root: Path) -> dict:
             "max_chain_depth": 1,
             "single_shared_patch_context": True,
             "patch_context_level": PATCH_LEVEL,
-            "creation_prices_latent_derivation_delta_construction_and_patch_compression": True,
+            "creation_prices_latent_derivation_delta_construction_patch_control_and_patch_compression": True,
             "release_credit": False,
         },
         "workload": {"files": len(rows), "logical_bytes": sum(len(d) for _, d in rows), "tree_sha256": expected_tree},
@@ -148,6 +164,10 @@ def run(work_root: Path) -> dict:
             "latent_stored_bytes": len(latent_stored),
             "patch_raw_bytes": len(patch_raw),
             "patch_stored_bytes": len(patch_stored),
+            "independent_patch_stored_bytes": individual_patch_stored_bytes,
+            "patch_context_saved_bytes": patch_context_saved_bytes,
+            "patch_context_saved_fraction": patch_context_saved_bytes / max(1, individual_patch_stored_bytes),
+            "independent_payload_floor_bytes": independent_payload_floor,
             "payload_floor_bytes": payload_floor,
             "archive_bytes": len(artifact),
             "artifact_sha256": hashlib.sha256(artifact).hexdigest(),
@@ -160,9 +180,15 @@ def run(work_root: Path) -> dict:
             "max_member_read_amplification": max_amp,
         },
         "comparators": {"zip_deflate9": zip_row, "tar_zstd19_solid": zstd_row},
+        "hostile_reviewer": {
+            "context_gain_is_exactly_attributed": True,
+            "shared_context_exports_decode_work": "every member may require the bounded shared patch context; this is charged in max_member_read_amplification",
+            "remaining_unpriced_debt": "final canonical/recovery/platform framing and implementation do not receive release credit from this capacity test",
+        },
         "decision": {
             "payload_floor_zstd_gap_bytes": payload_floor - int(zstd_row["bytes"]),
             "archive_zstd_gap_bytes": len(artifact) - int(zstd_row["bytes"]),
+            "context_gain_bytes_vs_identical_independent_frames": patch_context_saved_bytes,
             "size_crosses_zstd": size_crosses_zstd,
             "strict_four_way_win": strict,
             "terminal": terminal,
