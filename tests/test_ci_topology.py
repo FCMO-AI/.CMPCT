@@ -364,3 +364,9 @@ jobs:
     runs-on: ubuntu-24.04
 """)
     assert any("retired-manual-only workflow" in error for error in validate(path))
+
+
+def test_canonical_r25_authority_keeps_independent_golden_in_trigger_and_exact_head_gate() -> None:
+    workflow = Path('.github/workflows/v030-canonical-authority.yml').read_text(encoding='utf-8')
+    assert "- 'tests/conformance/v030-r25-canonical.json'" in workflow
+    assert 'tests/conformance/v030-r25-canonical\\.json' in workflow
