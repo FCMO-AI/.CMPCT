@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
-"""Independent + writer parity for canonical r25 implicit-v4 filesystem control."""
+"""Independent, hostile, and writer parity for canonical r25 implicit-v4 filesystem control."""
 from __future__ import annotations
 
 import base64
+import copy
 import hashlib
 import json
 from pathlib import Path
@@ -10,11 +11,14 @@ import subprocess
 import sys
 import tempfile
 
+import msgpack
+
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from experiments import entropygraph_v030_canonical_final as canonical
+import generate_v030_implicit_goldens as independent
 
 CLI = ROOT / "native" / "cmpct-portable" / "target" / "release" / "cmpct-portable"
 FIXTURE = ROOT / "tests" / "conformance" / "v030-r25-implicit-v4.json"
@@ -52,6 +56,56 @@ def assert_independent_goldens(tmp: Path) -> None:
         path = tmp / f"independent-implicit-{profile}.cmpct"
         path.write_bytes(raw)
         assert_native_archive(path, expected)
+
+
+def assert_hostile_authenticated_controls(tmp: Path) -> None:
+    """Reject malformed filesystem controls even when the enclosing graph is fully authenticated."""
+    manifest, user_raw, _expected = independent.implicit_filesystem()
+    root = msgpack.unpackb(manifest, raw=False)
+
+    cases: dict[str, list] = {}
+
+    bad_version = copy.deepcopy(root)
+    bad_version[0] = 5
+    cases["bad-version"] = bad_version
+
+    bad_regular_count = copy.deepcopy(root)
+    bad_regular_count[2] = []
+    cases["regular-count-mismatch"] = bad_regular_count
+
+    bad_mask = copy.deepcopy(root)
+    bad_mask[2][0] = [32]
+    cases["unknown-metadata-mask"] = bad_mask
+
+    colliding_path = copy.deepcopy(root)
+    colliding_path[3] = [[0, "dir/hello.bin", 1, [0], None]]
+    cases["explicit-regular-collision"] = colliding_path
+
+    bad_hardlink = copy.deepcopy(root)
+    for row in bad_hardlink[3]:
+        if row[2] == 3:
+            row[4] = 99
+            break
+    cases["hardlink-owner-out-of-range"] = bad_hardlink
+
+    unsafe_symlink = copy.deepcopy(root)
+    for row in unsafe_symlink[3]:
+        if row[2] == 2:
+            row[4] = "../escape"
+            break
+    cases["unsafe-symlink-target"] = unsafe_symlink
+
+    builders = {
+        "g04": independent.g04_archive,
+        "prefixgraph": independent.prefix_archive,
+    }
+    for label, malformed in cases.items():
+        control = independent.pack(malformed)
+        for profile, build in builders.items():
+            archive = tmp / f"hostile-{label}-{profile}.cmpct"
+            archive.write_bytes(build(control, user_raw))
+            result = run("verify", str(archive), check=False, text=True)
+            assert result.returncode != 0, (label, profile, result.stdout, result.stderr)
 
 
 def tree_payload(index: int) -> bytes:
@@ -95,10 +149,13 @@ def main() -> None:
         tmp = Path(td)
         # Independent bytes come first. A shared writer/reader bug therefore cannot hide a format mismatch.
         assert_independent_goldens(tmp)
+        # Malformed controls are rebuilt into otherwise authenticated canonical archives. This proves the shared
+        # native wrapper rejects semantic/parser defects rather than merely rejecting a corrupt outer container.
+        assert_hostile_authenticated_controls(tmp)
         # The real canonical writer remains a separate parity boundary because fixed bytes alone cannot prove its
         # current admission seam publishes a dialect understood by native/platform readers.
         assert_writer_parity(tmp)
-    print("v0.30 native implicit-v4 independent + writer parity: ok")
+    print("v0.30 native implicit-v4 independent + hostile + writer parity: ok")
 
 
 if __name__ == "__main__":
