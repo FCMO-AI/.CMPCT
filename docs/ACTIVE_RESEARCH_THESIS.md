@@ -1,331 +1,284 @@
 # CMPCT Active Fundamental Research Thesis
 
-Status: **Foundry primary thesis — F-01 / ORACLE DESIGN**  
-Canonical product/release state: unchanged.  
-Forge work on proven v0.30 mechanisms continues independently.
+Status: **Foundry primary thesis — F-01 / ORACLE**
 
-Read first: `FUNDAMENTAL_RESEARCH_DOCTRINE.md`, `ASSUMPTION_LEDGER.md`, `RND_DOMINATION_RUBRIC.md`, current exact branch/CI/evidence.
+This file is **mutable current state**, not constitutional law and not an experiment preregistration.
+
+Read authority first:
+
+1. `docs/FUNDAMENTAL_RESEARCH_DOCTRINE.md` — finalized research operating system;
+2. `docs/ASSUMPTION_LEDGER.md` — opportunity/constraint map;
+3. `docs/v030-rnd/REVERSIBLE_STRUCTURE_COMPILER_O01_PREREG.md` — scientific preregistration;
+4. `docs/v030-rnd/F01_O01_FROZEN_INSTRUMENT.md` — immutable O0.1 instrument supplement;
+5. `docs/v030-rnd/F01_O01_EXECUTION_STATE.md` — current evidence custody;
+6. exact live workflow/branch state.
+
+Forge productization continues independently under `docs/RND_DOMINATION_RUBRIC.md`.
 
 ---
 
 # F-01 — General Reversible Structure Compiler
 
-## Thesis state
+## Foundry state
 
-`QUESTION -> ORACLE` **(current)**
+`ORACLE`
 
-No canonical reader/format claim. No release credit. No benchmark-row green credit.
+No canonical reader/format claim. No release credit. No frozen-matrix green-row credit.
 
----
-
-## 1. Worldview delta
-
-### Inherited assumption
-
-CMPCT's representation vocabulary is primarily hand-designed. The encoder auditions a growing set of specific exact mechanisms — direct coding, packing, resemblance graphs, Mosaic relationships, Geometry transforms, bounded-drift edit programs, exact views, etc. A human/research campaign invents the next primitive, then writes an admission rule for it.
-
-This worked spectacularly during the project's strongest periods, but it has an eventual failure mode: each successful idea becomes another fixed branch in a manually expanding transform tournament. Geometry can become G5/G6/G7 forever; graph work can become another series of edge types; good local research can converge toward an elaborate but finite vocabulary.
-
-### Proposed model
-
-> **Lossless representation can be treated as bounded synthesis/compilation of a short exact reconstruction program.**
-
-The archive need not choose only among a fixed set of monolithic representations. A research compiler can compose a small typed set of reversible primitives, rank complete candidates by the exact serialized bytes required to reconstruct the target, and store only the resolved program + irreducible literals/streams. Decode executes the resolved program; it does not repeat synthesis.
-
-### New representational capability if true
-
-CMPCT gains a way to discover useful *compositions* and recurring reconstruction motifs that were not individually hand-authored as one new codec path. The research compiler can also act as an **invention oracle**: repeated winning programs reveal new general primitives worth distilling into the production encoder.
-
-This would shift part of future development from:
-
-`human invents transform -> encoder auditions transform`
-
-toward:
-
-`bounded reversible language -> research compiler discovers compact program -> exact evidence reveals reusable mechanism -> production distills mechanism`.
+The first decisive O0.1 result is controlled by the already-frozen preregistration/instrument. The finalized research doctrine **does not modify that experiment**.
 
 ---
 
-## 2. Why this is a fundamental thesis rather than another Geometry optimization
+# 1. Thesis charter
 
-The thesis is not:
+## Inherited assumption
 
-> Add more Geometry transforms.
+CMPCT's representation vocabulary is primarily hand-designed. Research invents a transform/reconstruction mechanism; the encoder then auditions that fixed mechanism. This produced major advances, but successful ideas can accumulate into an ever-growing manual tournament.
 
-It is:
+## Proposed model
 
-> Challenge the assumption that the transform ladder itself must be manually enumerated.
+> **Lossless representation can sometimes be discovered as a bounded exact reconstruction program synthesized from a small typed set of reversible primitives.**
 
-Geometry is useful evidence because it proves that reversible layout programs can expose huge hidden regularity. Bounded drift is useful evidence because an exact edit program can outperform chunk-store representations. EntropyGraph/Mosaic are useful evidence because reconstruction relationships already behave like executable descriptions.
+The research compiler searches; the stored resolved program reconstructs exactly; decode does not repeat synthesis.
 
-The compiler thesis asks whether these ideas belong to a more general reconstruction language.
+## Capability delta
 
----
+If true, CMPCT gains two capabilities that the current manual tournament does not provide generally:
 
-## 3. External prior-art boundary
+1. discover profitable **compositions** of exact primitives that were not individually authored as one codec path;
+2. use recurring oracle programs as an **invention instrument** that reveals a smaller reusable primitive worth distilling into the product.
 
-### Brevis — arXiv:2608.02162 (2026)
-
-Recent independent work demonstrates **bit-exact tensor compression as program synthesis**. Brevis uses a typed reversible DSL, target-directed bounded A* search, a learned production prior for search order, complete serialized-size selection, and self-contained programs that decode without search or the learned prior.
-
-This materially strengthens the plausibility of F-01 but does **not** solve CMPCT's problem. Brevis is tensor/checkpoint-specific; CMPCT targets arbitrary computer data, cross-object relationships, archive semantics, locality, recovery, integrity and generic content-inferred admission.
-
-### OpenZL — arXiv:2510.03203 / arXiv:2605.09928
-
-OpenZL demonstrates compression as a graph of modular reversible codecs with resolved encode-time graphs and a universal decoder. It strongly validates the operational value of a reusable execution vocabulary.
-
-CMPCT must not become a schema-specific clone. The distinctive Foundry question is whether useful structure/relationships can be inferred from arbitrary bytes/objects and compiled into a bounded archive-aware program.
-
-### Prior-art rule
-
-Do not claim program synthesis, reversible transform graphs, byte transposition, front compression or similar primitives as individually novel. Novel CMPCT value, if any, must be in the **general arbitrary-data/cross-object/archive-aware composition, inference, exact-cost selection, bounded semantics and integration model**.
+The thesis is therefore not “add more Geometry transforms.” It challenges the assumption that the transform ladder must always be manually enumerated.
 
 ---
 
-## 4. Strongest reasons F-01 may fail
+# 2. Thesis Initiation Gate — current assessment
 
-1. **Composition headroom may be mostly fake.** Existing hand-authored transforms may already capture nearly all useful bounded structure; synthesis may merely rediscover them.
-2. **Program overhead may eat the gain.** Tags, parameters, substream lengths, literal tables and integrity framing can erase detached-transform improvements.
-3. **Search may explode.** A sufficiently expressive DSL creates a combinatorial representation space whose discovery cost is indefensible even as an oracle.
-4. **Operators may interact badly.** Individually safe transforms can create pathological intermediate sizes/work or resource bounds when nested.
-5. **Generality may be illusory.** A synthesizer can overfit a generator/frozen workload even without explicit benchmark identity if its grammar/priors implicitly encode the fixture.
-6. **Decoder complexity may become a new tax.** A universal execution IR that contains every attractive idea can become harder to audit/port/fuzz than bespoke representations.
-7. **Current Geometry may already be the right abstraction level.** A small fixed ladder plus exact audition may be more robust and nearly as effective as synthesis.
+F-01 remains admissible under the finalized gate.
 
-A useful negative result is therefore completely acceptable.
+### Worldview delta
 
----
+PASS — handcrafted representation selection versus bounded programmatic composition.
 
-# 5. Oracle ladder
+### Capability delta
 
-Do **not** begin by designing the final canonical DSL or integrating it into `src/cmpct`.
+PASS — composition discovery/invention oracle not presently available as a general CMPCT mechanism.
 
-The first job is to measure whether compositional/program-synthesis headroom actually exists.
+### Non-triviality
 
-## O0.1 — Composition-only oracle using trusted existing primitives
+PASS — not a workload-specific threshold or known D1–D3 Forge repair.
 
-### Question
+### Prior-art boundary
 
-Can compositions of **already-existing exact CMPCT ideas** beat the best current one-transform/manual tournament on bounded nodes, after full program-description charge?
+PASS WITH IMPORTANT LIMITATION — program-synthesis compression and graph-composed reversible transforms are not novel in themselves. Brevis and OpenZL provide strong adjacent evidence. Any CMPCT contribution must be in arbitrary-data/content-inferred/archive-aware composition, transfer, exact-cost selection, locality/recovery semantics or mechanism distillation.
 
-### Deliberate simplification
+### Plausible headroom
 
-Start with a tiny research grammar. Prefer wrappers around mechanisms already implemented/tested rather than new algorithms.
+UNMEASURED — this is exactly what O0.1 must answer. Geometry and bounded reconstruction programs make the hypothesis plausible but do not prove compositional headroom.
 
-Candidate conceptual operators may include only a safe subset such as:
+### Addressable Opportunity Mass hypothesis
 
-- `LITERAL/DIRECT`;
-- `CONCAT/SPLIT` into bounded subranges;
-- existing fixed-width lane transforms;
-- existing delimiter/hierarchical Geometry views;
-- existing prefix-plane/front structure;
-- one simple exact scan/map operator only if an existing trusted implementation is available;
-- existing backend compression as terminal leaves.
+UNMEASURED/ROUGH — structured arbitrary data frequently exposes mixed field/lane/record/repetition relationships, but the fraction for which **composition beyond the best existing single transform** is material is unknown. No broad AOM claim is allowed until O0/transfer evidence exists.
 
-Do **not** add cross-object references yet. O0.1 isolates intra-object program composition.
+### Cheap decisive oracle
 
-### Search
+PASS — the frozen O0.1 instrument exists and is bounded.
 
-Research-only bounded search. Exhaustive/DP/A*/branch-and-bound are all admissible. Search time is reported explicitly and receives **zero product-speed credit**.
+### Disproof/retirement rule
 
-Use exact target-directed validity where possible: generated subprograms must reconstruct their assigned target bytes by construction or immediate exact inverse check.
+PASS — the frozen experiment admits non-positive decisions including `MANUAL_FRONTIER_CONFIRMED`, `SEARCH_INCONCLUSIVE` and `RETIRE_F01`. An unfavorable result may not be rescued by silently enlarging the grammar.
 
-### Cost objective
+### Product survival sketch
 
-`total_program_bytes = opcode/control + parameters + lengths/tables + literal/substream payloads + terminal compressed streams + any required padding/framing assumed by the oracle`
+PLAUSIBLE, NOT PROVEN — resolved programs, no decode search, explicit output lengths, bounded node sizes, direct fallback and operator-level validation provide a credible research path. Canonical reader complexity, carrying cost, locality/recovery and native/platform implications remain debt.
 
-Do not rank by transform payload while ignoring the program.
+### Complexity/carrying-cost hypothesis
 
-### Baselines
-
-For every node:
-
-1. direct/current incumbent;
-2. best existing manually nominated one-stage/known transform under equivalent payload accounting;
-3. synthesized composition;
-4. literal fallback.
-
-### O0.1 positive signal
-
-Any of the following is enough to advance to O0.2, provided exactness and hostile bounds survive:
-
-- a synthesized composition materially beats the best manual candidate on **at least two structurally distinct cases** and the gain is not equivalent to simply selecting an already-existing single transform;
-- a recurring multi-operator motif appears across generator-distinct cases and creates enough aggregate saving to justify distillation as a new primitive;
-- the search exposes a previously unseen decomposition whose optimistic complete cost has large enough headroom to warrant a focused causal campaign.
-
-No arbitrary percentage is sacred at O0.1. Report absolute bytes, relative bytes and gap closure. A microscopic one-off improvement is not sufficient to create a campaign identity.
-
-### O0.1 negative signal
-
-If a reasonably broad bounded corpus produces only equivalent rediscoveries of current transforms and no material composition headroom, record that exact result. Do **not** keep enlarging the grammar automatically. Determine whether the failure is:
-
-- genuine lack of compositional opportunity;
-- grammar too weak;
-- search unable to reach plausible programs;
-- control overhead too high;
-- current manual transforms already near the useful frontier.
-
-Only the latter three justify O0.2 changes.
+HIGH-RISK — a universal DSL can become permanent portfolio/parser/search bloat. A preferred successful outcome may be **DISCOVER_PRIMITIVE** rather than canonicalizing a large compiler.
 
 ---
 
-## O0.2 — Minimal novel-operator probe
+# 3. Oracle Gift Ledger
 
-Run only if O0.1 evidence says composition/search is plausible but the current vocabulary is the limiter.
+O0.1 may gift:
 
-Add **at most one or two** generic reversible operator families motivated by observed residual structure, not by a favorite paper.
+- discovery/search wall time;
+- broad bounded enumeration;
+- identity-independent candidate ordering.
 
-Candidate examples:
+O0.1 may not gift:
 
-- generic width-preserving reversible `MAP` family (e.g. XOR/add/rotation/zigzag where well-typed);
-- exact adjacent `SCAN`/difference family;
-- bounded `REPEAT`/period structure;
-- bit/field `MERGE/SPLIT` where width can be inferred/encoded generically.
+- program/opcode/control bytes;
+- parameters/lengths/tables;
+- transformed terminal streams;
+- literals/residual bytes;
+- required reconstruction inputs;
+- exact reconstruction.
 
-Every added operator must answer:
+Deferred O1/O2 debt includes:
 
-- what residual regularity demanded it?
-- can it be described content-agnostically?
-- what decoder/parser/resource surface does it add?
-- does it transfer?
+- full canonical framing/index/tree cost;
+- product create-time economics;
+- whole-archive selective-read/locality;
+- recovery/integrity integration beyond the research program proof;
+- native/Android/platform implementation;
+- global portfolio audition/carrying cost;
+- broad AOM evidence.
 
-If new operators fail, remove/retire them rather than preserving DSL bloat.
-
----
-
-## O0.3 — Search-pruning / proof-directed compiler
-
-Only after a meaningful synthesis space exists.
-
-Attach cheap lower bounds/necessary conditions to partial programs so large subtrees can be proven unable to beat the incumbent before expensive child construction.
-
-This is the bridge between F-01 and the existing exact-futility research direction.
-
-A rich compiler that must enumerate everything is not a viable long-term Foundry tool.
+Do not convert gifted O0 search speed into a product claim.
 
 ---
 
-# 6. Structural-transfer contract
+# 4. Frozen active experiment
 
-A synthesis win on `tokenizer.json`, Shifted or any other famous fixture is insufficient.
+The exact first decisive pass is defined by:
 
-Before `CAUSAL_SEED -> TRANSFER`:
+- `docs/v030-rnd/REVERSIBLE_STRUCTURE_COMPILER_O01_PREREG.md`;
+- `docs/v030-rnd/F01_O01_FROZEN_INSTRUMENT.md`;
+- `docs/v030-rnd/F01_O01_EXECUTION_STATE.md`;
+- workflow `.github/workflows/v030-foundry-f01-o01.yml`.
 
-1. freeze the grammar/operator semantics and search/admission rule;
-2. test hostile negative cases that superficially expose the same separators/strides/repetition but should not profit after control charge;
-3. test held-out structural variations created after the rule is fixed where practical;
-4. include generator-distinct or real public cases with similar *structure* but unrelated semantic identity;
-5. report which program motifs recur and whether their gain survives.
+The frozen O0.1 grammar currently isolates intra-object composition of trusted existing primitives and charges the actual serialized research program.
 
-Priors/search ordering may use observable content features. They may never use benchmark names, paths, fixed corpus hashes or equivalent identity.
-
----
-
-# 7. Decoder / IR constraint
-
-F-01 is strongest if future encoder intelligence can grow without proportional reader growth.
-
-Therefore distinguish:
-
-- **research DSL** — may be richer and unstable;
-- **candidate reconstruction IR** — only operators that repeatedly earn transfer evidence;
-- **canonical reader IR** — smallest audited set that survives productization.
-
-Never canonicalize an operator merely because the research compiler can use it.
-
-A long-term success would be a compact reconstruction IR capable of absorbing several previously bespoke representations. A long-term failure would be an ever-growing bytecode VM whose only advantage is that it can express every experiment.
+**Immutability rule:** do not change the frozen grammar, thresholds, comparator, corpus contract or interpretation after result-bearing execution. Any material scientific change requires a new superseding freeze and preservation of the old result.
 
 ---
 
-# 8. Interaction with current Forge work
+# 5. Strongest reasons F-01 may fail
 
-F-01 does **not** supersede or pause productization of proven mechanisms.
+1. Existing manual transforms already span most useful bounded composition.
+2. Program/control overhead consumes detached transform gains.
+3. Search complexity grows faster than useful representational headroom.
+4. Apparent composition is fixture/generator overfit.
+5. A rich research DSL creates more reader/product complexity than value.
+6. The best product outcome is simply a small fixed transform ladder with exact audition.
+7. A compiler oracle discovers useful motifs but full synthesis itself has negligible product value.
 
-### Bounded drift
-
-The current strict Shifted bounded-drift win is a Forge asset. Continue generic admission, recovery/locality, canonical semantics, native/platform and full-matrix prerequisites. It may later inform an EDIT operator in the research language, but do not delay its convergence merely to wait for F-01.
-
-### Analytics
-
-Current evidence says major debt is D2/D3 execution/search economics. Continue exact work-elimination/native/proof-directed work there. Do not turn Analytics into the F-01 discovery fixture by identity.
-
-### Geometry
-
-Geometry is the nearest existing mechanism family to F-01. Preserve its current evidence. Use its primitives as trusted controls. The purpose of F-01 is to test whether Geometry should evolve into a more general compiler abstraction rather than grow a manual transform ladder forever.
+All seven are acceptable outcomes if measured honestly.
 
 ---
 
-# 9. Product survival sketch
+# 6. Required post-O0 evidence if the thesis advances
 
-Even at ORACLE state, preserve these intended boundaries:
+An O0 positive result is not enough for Foundry handoff.
 
-- exact byte reconstruction;
-- bounded logical node sizes for synthesis/inversion experiments;
-- deterministic stored resolved program;
-- no search at decode;
-- explicit output lengths and overflow checks;
-- per-operator resource validation before allocation/work;
-- authenticated physical program/payload representation if advanced to archive form;
-- shallow/bounded cross-object dependencies if later introduced;
-- locality and decode-unit accounting before O2;
-- literal/direct universal fallback;
-- optional research intelligence never required to read an archive.
+Before `HANDOFF_READY`, F-01 must acquire:
 
----
+## Causal evidence
 
-# 10. Decision law
+- identify which composition/motif actually creates the gain;
+- show it is not equivalent to an already-existing single transform;
+- ablate unnecessary operators.
 
-At the end of each substantive F-01 experiment record:
+## Structural transfer
 
-```text
-thesis: F-01 General Reversible Structure Compiler
-state_before: <QUESTION|ORACLE|CAUSAL_SEED|TRANSFER|...>
-worldview_tested: <one sentence>
-search_space: <operators/bounds>
-incumbent: <exact comparator>
-headroom_result: <bytes/relative/gap closure>
-program_overhead: <bytes>
-search_cost: <time/RSS; explicitly O0 debt>
-transfer_scope: <cases>
-strongest_simpler_explanation: <one sentence>
-strongest_surviving_objection: <one sentence>
-decision: <ADVANCE_RESEARCH|REFORMULATE|HAND_TO_FORGE|REHABILITATE|RETIRE>
-state_after: <...>
-next_decisive_test: <one sentence>
-```
+- hostile false-structure negatives;
+- post-freeze held-out structural variants;
+- generator-distinct or independent real public examples;
+- variation across causal dimensions rather than seed-only changes.
 
-Do not end a run with merely “promising.”
+## Addressable Opportunity Mass
 
----
+Estimate:
 
-# 11. Secondary questions — do not deep-implement yet
+- structural predicate;
+- prevalence of addressable bytes/objects;
+- conditional saving within addressable data;
+- false-positive/admission rate;
+- uncertainty and corpus bias.
 
-While F-01 is the primary thesis, keep only cheap headroom probes for:
+## Global carrying cost
 
-- **F-02 Synthetic Basis / FactorGraph:** can a charged latent basis beat best real-base/Mosaic controls for an entire family?
-- **F-03 Residual Graph:** do exact edit/delta residual families contain enough second-order shared structure to merit factoring?
-- **F-04 Self-indexed reconstruction structures:** can some compressed structure eliminate part of the separate index/control tax while retaining practical member/range access?
+Measure/bound:
 
-Do not let secondary questions fragment the primary thesis unless an oracle reveals dramatically larger headroom.
+- nomination/prefilter cost on non-winning data;
+- rejected auditions;
+- serialized control tax;
+- reader-visible primitive/IR expansion;
+- parser/fuzz/recovery/native/platform burden;
+- interaction with the existing portfolio.
+
+A successful compiler that only wins by adding permanent expensive auditions everywhere is not handoff-ready.
 
 ---
 
-# 12. Immediate next action
+# 7. Preferred success shapes
 
-**Build O0.1 as the smallest research-only composition oracle.**
+F-01 can succeed in more than one way.
 
-Before implementation:
+### ADVANCE_COMPOSITION
 
-1. inventory the safest reusable current Geometry/direct transform functions and their exact cost model;
-2. define the tiny grammar and canonical research serialization charge;
-3. select bounded discovery + hostile + held-out structural cases without giving the compiler workload identity;
-4. preregister what result advances, reformulates or retires O0.1;
-5. only then implement/search.
+Compositions repeatedly create material transfer headroom beyond the manual one-stage frontier and justify deeper causal work.
 
-The objective of the first run is not to produce v0.30 bytes.
+### DISCOVER_PRIMITIVE
 
-It is to answer one scientific question cleanly:
+The compiler repeatedly discovers one compact general motif. Distill that motif into a simpler primitive and avoid canonicalizing unnecessary DSL richness.
 
-> **Is there material compression headroom in composing exact representations that the current hand-authored tournament cannot see?**
+### MANUAL_FRONTIER_CONFIRMED
 
-If yes, CMPCT has evidence for a new research architecture. If no, we have prevented a seductive meta-compressor project from consuming months without proof.
+Existing hand-designed transforms already cover the useful bounded space tested. Preserve this as positive negative evidence and do not enlarge the DSL without a new causal reason.
+
+### SEARCH_INCONCLUSIVE
+
+The instrument failed to answer the scientific question because search/custody was inadequate. Fix only the demonstrated instrument defect under the preregistered rules; do not enlarge the scientific hypothesis after seeing an unfavorable result.
+
+### RETIRE_F01 / NO_ACTIONABLE_HEADROOM
+
+No material honest headroom survives program charge and transfer. Preserve the result and return to the Assumption Ledger.
+
+---
+
+# 8. Thesis lease
+
+F-01 does not receive unlimited runway because it is ambitious.
+
+The frozen O0.1 decisive pass is the immediate information-bearing event. After the result:
+
+- positive evidence must change thesis state or identify a precise next causal test;
+- non-positive evidence must trigger the preregistered interpretation;
+- do not spend repeated activations adding operators merely to keep the thesis alive;
+- if three substantive Foundry activations after the decisive result produce no new headroom, causal constraint, transfer evidence, operator retirement or state transition, run a hostile thesis review;
+- if six produce no decision-changing knowledge and no exact external experiment is pending, reformulate or retire.
+
+Progress means information gained, not code written.
+
+---
+
+# 9. Relationship to Forge
+
+F-01 does not own productization of already-proven mechanisms.
+
+- Existing bounded-drift strict-win work remains a Forge convergence asset.
+- Known D1–D3 runtime/search problems remain Forge work unless new evidence shows a missing information model.
+- Geometry is evidence/input for F-01 but is not automatically replaced by it.
+- If F-01 reaches `HANDOFF_READY`, the resulting mechanism transfers to Forge; the Foundry is then free to activate the next qualified thesis.
+
+---
+
+# 10. Secondary opportunity queue
+
+Do not deep-implement while F-01 remains the primary thesis unless a cheap oracle produces clearly superior evidence.
+
+- **F-02 Synthetic Basis / FactorGraph:** may a charged latent basis outperform best-real-base/Mosaic controls for a family?
+- **F-03 Residual Graph:** do edit/delta residual families contain second-order reusable structure?
+- **F-04 Self-indexed reconstruction:** can a compressed representation remove duplicated index/control state while retaining practical member/range access?
+
+These are questions in the Assumption Ledger, not concurrent major campaigns.
+
+---
+
+# 11. Immediate next action
+
+Do **not** redesign F-01 again before its frozen evidence arrives.
+
+The next action is:
+
+> **Obtain and inspect the exact admissible O0.1 receipt defined by `F01_O01_EXECUTION_STATE.md`, then apply its frozen decision law without enlarging the grammar after the fact.**
+
+If positive, move to causal/transfer/AOM/carrying-cost evidence.
+
+If negative, preserve the constraint and follow the preregistered non-positive branch.
+
+The question remains:
+
+> **Is there material exact representation headroom in composing trusted reversible primitives that the current manual one-stage tournament cannot see?**
