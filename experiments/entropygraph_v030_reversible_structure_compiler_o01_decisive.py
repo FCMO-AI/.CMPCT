@@ -99,8 +99,10 @@ def run(seed: str) -> dict:
         for family in present:
             winning_participation[family] = winning_participation.get(family, 0) + 1
             structural_families.setdefault(family, []).append(case["case"])
+        # Search evaluates exactly one additive SPLIT candidate per frozen-grid offset after
+        # independently minimizing each child.  Count every such nomination, not only winners.
+        nominations["SPLIT"] += int(case["search"]["split_points"])
         if motif.startswith("SPLIT"):
-            nominations["SPLIT"] += int(case["search"]["split_points"])
             split_ablation_saving += max(0, case["manual_bytes"] - case["synthesized_bytes"])
         if case["role"] == "discovery" and case["material_composed_win"]:
             material_discovery_signatures.add(_signature(motif))
