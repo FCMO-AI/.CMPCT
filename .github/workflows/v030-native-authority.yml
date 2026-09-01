@@ -22,6 +22,7 @@ on:
       - 'tests/test_v030_fs_implicit_v4.py'
       - 'tests/generate_v030_canonical_goldens.py'
       - 'tests/conformance/v030-r25-canonical.json'
+      - 'tests/conformance/v030-r25-implicit-v4.json'
       - 'tests/native_v030_canonical.py'
       - 'tests/native_v030_implicit_manifest.py'
       - 'tests/native_v030_r24_verify_authority.py'
@@ -62,7 +63,7 @@ jobs:
           fi
           git diff-tree --no-commit-id --name-only -r HEAD > /tmp/latest-head-files.txt
           cat /tmp/latest-head-files.txt
-          if grep -Eq '^(native/cmpct-(portable|core)/|experiments/entropygraph_v030_(canonical_final|canonical_final_impl|profile_isolation|release_product|r25_manifest_admission|fs_implicit_v4)\.py|tests/(test_v030_(canonical_final|profile_isolation|r25_manifest_admission|fs_implicit_v4)\.py|generate_v030_canonical_goldens\.py|conformance/v030-r25-canonical\.json|native_v030_(canonical|implicit_manifest|r24_verify_authority)\.py)|\.github/workflows/v030-native-authority\.yml)' /tmp/latest-head-files.txt; then
+          if grep -Eq '^(native/cmpct-(portable|core)/|experiments/entropygraph_v030_(canonical_final|canonical_final_impl|profile_isolation|release_product|r25_manifest_admission|fs_implicit_v4)\.py|tests/(test_v030_(canonical_final|profile_isolation|r25_manifest_admission|fs_implicit_v4)\.py|generate_v030_canonical_goldens\.py|conformance/v030-r25-(canonical|implicit-v4)\.json|native_v030_(canonical|implicit_manifest|r24_verify_authority)\.py)|\.github/workflows/v030-native-authority\.yml)' /tmp/latest-head-files.txt; then
             echo 'run_native=true' >> "$GITHUB_OUTPUT"
           else
             echo 'run_native=false' >> "$GITHUB_OUTPUT"
@@ -99,7 +100,7 @@ jobs:
             tests/test_v030_r25_manifest_admission.py \
             tests/test_v030_fs_implicit_v4.py \
             tests/test_v030_profile_isolation.py
-      - name: Reproduce independent canonical r25 golden bytes
+      - name: Reproduce independent canonical r25 filesystem-v1 golden bytes
         run: python tests/generate_v030_canonical_goldens.py --check
       - name: Rust format
         working-directory: native/cmpct-portable
@@ -115,7 +116,7 @@ jobs:
         run: cargo build --release
       - name: Canonical CMP25 CLI ABI recovery and filesystem-v1 acceptance
         run: python tests/native_v030_canonical.py
-      - name: Canonical admitted implicit-v4 writer to shared-native parity
+      - name: Canonical implicit-v4 independent golden and writer parity
         run: python tests/native_v030_implicit_manifest.py
       - name: Prove complete r24 RAW verification and truthful locality surface
         run: |
@@ -127,5 +128,5 @@ jobs:
 # Footnote: this release lane used to share one PR-wide cancellation group. On the long-lived v0.30 integration PR,
 # any later commit could therefore destroy an otherwise useful 45-minute exact native receipt even when the later
 # commit was unrelated. Exact-head concurrency plus newest-commit classification preserves already-running evidence
-# while cheaply declining irrelevant heads. Builder-independent filesystem-v1 goldens still pin the original grammar,
-# and writer->native implicit-v4 parity separately proves the compact control the canonical Python writer may publish.
+# while cheaply declining irrelevant heads. Builder-independent filesystem-v1 and implicit-v4 bytes independently
+# pin both admitted filesystem-control dialects; writer parity separately proves the current canonical admission seam.
