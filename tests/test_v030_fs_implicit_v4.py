@@ -54,7 +54,6 @@ def test_implicit_v4_preserves_semantics_and_compacts_repeated_metadata(tmp_path
     regular_overrides = payload[2]
     assert len(default) == 5
     assert len(regular_overrides) == len(regular_sources)
-    # Numeric metadata that differs from the default is represented as a delta, not a repeated absolute stat tuple.
     assert all(isinstance(row, list) and row and isinstance(row[0], int) for row in regular_overrides)
 
     profile = tmp_path / "profile"
@@ -119,6 +118,30 @@ def test_implicit_v4_rejects_malformed_override_and_hardlink_index(tmp_path: Pat
         _decode_v4(msgpack.packb(payload, use_bin_type=True), {"a.bin": (4096, b"0" * 32)})
 
 
+def test_r25_controls_reject_hardlink_metadata_divergence(tmp_path: Path):
+    root = tmp_path / "source"
+    root.mkdir()
+    owner = root / "a.bin"
+    owner.write_bytes(b"A" * 4096)
+    os.link(owner, root / "b.bin")
+    raw_v1, _, _ = _capture(root)
+    original = FS.decode_manifest(raw_v1, max_path_bytes=4096, max_entries=4096)
+    identities = dict(original["regular"])
+
+    malformed_v1 = msgpack.unpackb(raw_v1, raw=False)
+    hardlink_v1 = next(row for row in malformed_v1["entries"] if row[1] == "h")
+    hardlink_v1[3] += 1
+    with pytest.raises(RuntimeError, match="hardlink metadata"):
+        FS.decode_manifest(msgpack.packb(malformed_v1, use_bin_type=True), max_path_bytes=4096, max_entries=4096)
+
+    raw_v4 = IFS4.encode_v1(raw_v1, max_path_bytes=4096, max_entries=4096)
+    malformed_v4 = msgpack.unpackb(raw_v4, raw=False)
+    hardlink_v4 = next(row for row in malformed_v4[3] if row[2] == 3)
+    hardlink_v4[3] = [2, 1]
+    with pytest.raises(RuntimeError, match="hardlink metadata"):
+        _decode_v4(msgpack.packb(malformed_v4, use_bin_type=True), identities)
+
+
 def test_implicit_v4_rejects_wrong_version_and_trailing_bytes(tmp_path: Path):
     root = tmp_path / "source"
     root.mkdir()
@@ -166,8 +189,6 @@ def test_implicit_v4_rejects_regular_explicit_path_overlap(tmp_path: Path):
     original = FS.decode_manifest(raw_v1, max_path_bytes=4096, max_entries=4096)
     identities = dict(original["regular"])
 
-    # Rebuild the explicit directory path as the authenticated regular path. The
-    # compact control plane must never be allowed to shadow a content-graph owner.
     assert payload[3]
     payload[3][0][0] = 0
     payload[3][0][1] = "a.bin"
