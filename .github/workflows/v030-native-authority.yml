@@ -124,20 +124,60 @@ jobs:
         run: cargo build --release
       - name: Canonical CMP25 CLI ABI recovery and filesystem-v1 acceptance
         run: python tests/native_v030_canonical.py
-      - name: Canonical implicit-v4 independent golden and writer parity
+      - name: Canonical implicit-v4 independent golden, recovery and writer parity
         run: python tests/native_v030_implicit_manifest.py
       - name: Prove complete r24 RAW verification and truthful locality surface
         run: |
           python tests/native_v030_r24_verify_authority.py \
             --binary native/cmpct-portable/target/release/cmpct-portable
+      - name: Record exact-candidate native authority evidence
+        run: |
+          python -m experiments.entropygraph_v030_release_lock_strict --print-fingerprint \
+            > "$RUNNER_TEMP/cmpct-v030-fingerprint.json"
+          python - <<'PY'
+          import json, os, pathlib, subprocess
+          temp = pathlib.Path(os.environ['RUNNER_TEMP'])
+          fingerprint = json.loads((temp / 'cmpct-v030-fingerprint.json').read_text())['candidate_fingerprint']
+          candidate_sha = subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip()
+          evidence = {
+              'schema': 'cmpct-v030-native-authority-evidence-v1',
+              'candidate_sha': candidate_sha,
+              'candidate_fingerprint': fingerprint,
+              'workflow': 'v030-native-authority.yml',
+              'run_id': int(os.environ['GITHUB_RUN_ID']),
+              'run_attempt': int(os.environ['GITHUB_RUN_ATTEMPT']),
+              'facts': {
+                  'g04_native_parity': True,
+                  'prefixgraph_native_parity': True,
+                  'builder_independent_goldens': True,
+                  'native_recovery_green': True,
+                  'implicit_v4_native_parity': True,
+                  'implicit_v4_recovery_green': True,
+                  'r24_fallback_native_verify_green': True,
+                  'shared_core_used': True,
+              },
+          }
+          out = temp / 'cmpct-v030-native-authority-evidence.json'
+          out.write_text(json.dumps(evidence, indent=2) + '\n')
+          print(json.dumps(evidence, indent=2))
+          PY
       - name: CI topology self-check
         run: python tools/check_ci_topology.py .github/workflows/v030-native-authority.yml
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: cmpct-v030-native-authority-${{ env.EVIDENCE_HEAD }}
+          path: ${{ runner.temp }}/cmpct-v030-native-authority-evidence.json
+          if-no-files-found: warn
+          retention-days: 30
 
 # Footnote: this release lane used to share one PR-wide cancellation group. On the long-lived v0.30 integration PR,
 # any later commit could therefore destroy an otherwise useful 45-minute exact native receipt even when the later
 # commit was unrelated. Exact-head concurrency plus newest-commit classification preserves already-running evidence
 # while cheaply declining irrelevant heads. Builder-independent filesystem-v1 and implicit-v4 bytes independently
-# pin both admitted filesystem-control dialects; writer parity separately proves the current canonical admission seam.
-# The r25 format/hardening/native/portability contracts and filesystem semantic owner are trigger inputs too: changing
-# a reader-visible or platform requirement without rerunning the native acceptance matrix would create green-looking
-# repository state over stale proof.
+# pin both admitted filesystem-control dialects; writer parity and the explicit recovery matrix separately prove the
+# current canonical admission seam publishes recoverable bytes consumed by the shared native implementation. The
+# structured artifact records only facts actually established by this lane; Logs-specific facts remain owned by their
+# separate native/recovery evidence rather than being inferred here. The r25 format/hardening/native/portability
+# contracts and filesystem semantic owner are trigger inputs too: changing a reader-visible or platform requirement
+# without rerunning the native acceptance matrix would create green-looking repository state over stale proof.
