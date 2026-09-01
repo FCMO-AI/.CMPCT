@@ -19,6 +19,7 @@ SPLIT_AUTHORITIES = (
     ".github/workflows/v030-r25-manifest-canonical-integration.yml",
     ".github/workflows/v030-federated-generalization-admission.yml",
     ".github/workflows/v030-federated-candidate-productization.yml",
+    ".github/workflows/v030-logs-sidecar-content-policy.yml",
 )
 
 
