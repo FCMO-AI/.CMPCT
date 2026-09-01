@@ -25,6 +25,7 @@ on:
       - 'experiments/entropygraph_v030_geometry_overlay_g04.py'
       - 'experiments/entropygraph_v030_prefixgraph.py'
       - 'experiments/entropygraph_v030_prefixgraph_parallel.py'
+      - 'experiments/entropygraph_v030_release_reader.py'
       - 'experiments/entropygraph_v030_product_fs.py'
       - 'experiments/entropygraph_v030_r25_manifest_admission.py'
       - 'experiments/entropygraph_v030_fs_implicit_v4.py'
@@ -103,7 +104,7 @@ jobs:
           # This is the transitive evidence-critical closure of the final authority, not merely its top-level
           # entry points. Changes to corpus identity, historical floors, canonical dependencies, core r24 I/O,
           # release-lock law, contract tests, or evidence tooling must not inherit an older green receipt.
-          if grep -Eq '^(src/cmpct/.*|experiments/entropygraph_v029_release\.py|experiments/entropygraph_v030_(release|release_product|release_product_base|verified_restore|release_product_logs_candidate|r24_dead_dictionary|r24_media_terminal|r24_compact_control_profile|release_lock_strict|canonical_final|canonical_final_impl|profile_isolation|geometry_overlay_g04|prefixgraph|prefixgraph_parallel|product_fs|r25_manifest_admission|fs_implicit_v4|release_admission|release_candidate|release_reader_policy|shared_portfolio)\.py|benchmarks/(v030_release_ablation_(product|canonical)|v030_release_generalization|v030_release_performance|v030_release_performance_product|v030_release_selective_read_(canonical|product)|v030_perf_worker_canonical|v030_external_competitors|v030_external_competitors_canonical|mosaic_v029_generalization_bench|neutral_hostile_corpus_v1|resemblance_hostile_corpus_v1|neutral_hostile_determinism_repair_v6)\.py|docs/(FORMAT\.md|V030_RELEASE_LOCK\.json)|tests/test_v030_(canonical_final|profile_isolation|r25_manifest_admission|fs_implicit_v4|release_ablation_contract|release_selective_read_contract|release_generalization_contract|release_lock|release_lock_strict|final_release_custody)\.py|tools/(check_v030_release_lock|check_public_surface|check_ci_topology)\.py|pyproject\.toml|\.github/workflows/v030-final-release-authority\.yml)$' /tmp/latest-head-files.txt; then
+          if grep -Eq '^(src/cmpct/.*|experiments/entropygraph_v029_release\.py|experiments/entropygraph_v030_(release|release_product|release_product_base|verified_restore|release_product_logs_candidate|r24_dead_dictionary|r24_media_terminal|r24_compact_control_profile|release_lock_strict|canonical_final|canonical_final_impl|profile_isolation|geometry_overlay_g04|prefixgraph|prefixgraph_parallel|release_reader|product_fs|r25_manifest_admission|fs_implicit_v4|release_admission|release_candidate|release_reader_policy|shared_portfolio)\.py|benchmarks/(v030_release_ablation_(product|canonical)|v030_release_generalization|v030_release_performance|v030_release_performance_product|v030_release_selective_read_(canonical|product)|v030_perf_worker_canonical|v030_external_competitors|v030_external_competitors_canonical|mosaic_v029_generalization_bench|neutral_hostile_corpus_v1|resemblance_hostile_corpus_v1|neutral_hostile_determinism_repair_v6)\.py|docs/(FORMAT\.md|V030_RELEASE_LOCK\.json)|tests/test_v030_(canonical_final|profile_isolation|r25_manifest_admission|fs_implicit_v4|release_ablation_contract|release_selective_read_contract|release_generalization_contract|release_lock|release_lock_strict|final_release_custody)\.py|tools/(check_v030_release_lock|check_public_surface|check_ci_topology)\.py|pyproject\.toml|\.github/workflows/v030-final-release-authority\.yml)$' /tmp/latest-head-files.txt; then
             echo 'run_release=true' >> "$GITHUB_OUTPUT"
           else
             echo 'run_release=false' >> "$GITHUB_OUTPUT"
@@ -137,6 +138,8 @@ jobs:
         run: |
           python -m py_compile \
             experiments/entropygraph_v030_profile_isolation.py \
+            experiments/entropygraph_v030_release_reader.py \
+            experiments/entropygraph_v030_release_reader_policy.py \
             experiments/entropygraph_v030_canonical_final.py \
             experiments/entropygraph_v030_canonical_final_impl.py \
             experiments/entropygraph_v030_r25_manifest_admission.py \
@@ -372,6 +375,8 @@ jobs:
 # change cannot inherit an older final receipt merely because the wrapper itself stayed untouched.
 # Verified staging restoration is part of the promoted extraction semantics and runtime path. It is therefore a
 # release-critical trigger/compile dependency rather than an invisible helper imported through release_product_base.
+# Profile isolation clones the bounded streaming reader into the canonical graph. Reader-source changes therefore
+# invalidate final authority even when the policy/wrapper files stay untouched; both sources are compiled explicitly.
 # The paired runtime adapter delegates the timing engine to v030_release_performance.py; that underlying harness is
 # therefore a first-class trigger/compile input rather than an invisible source of timing and RSS semantics.
 # Exact final-release receipts are preserved once running; exact-SHA concurrency also protects a pending receipt from
