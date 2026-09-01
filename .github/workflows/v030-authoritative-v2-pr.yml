@@ -36,7 +36,7 @@ jobs:
         with:
           ref: ${{ env.EVIDENCE_HEAD }}
           fetch-depth: 2
-      - name: Bind exact head and classify release-surface impact
+      - name: Bind exact head and classify release-fingerprint impact
         id: scope
         env:
           EVENT_NAME: ${{ github.event_name }}
@@ -49,15 +49,30 @@ jobs:
           fi
           git diff-tree --no-commit-id --name-only -r HEAD > /tmp/latest-head-files.txt
           cat /tmp/latest-head-files.txt
-          # Product/release implementation changes still require the complete authority. Research-only benchmark
-          # or workflow churn does not. The authority workflow itself is included so topology/contract edits prove
-          # their exact candidate once.
-          if grep -Eq '^(src/cmpct/.*|experiments/entropygraph_v030_.*\.py|tests/test_v030_.*\.py|benchmarks/v030_(release_generalization_v2|release_performance_v2|perf_worker_v2)\.py|\.github/workflows/v030-authoritative-v2-pr\.yml)$' /tmp/latest-head-files.txt; then
-            echo 'run_release=true' >> "$GITHUB_OUTPUT"
-          else
-            echo 'run_release=false' >> "$GITHUB_OUTPUT"
-            echo 'Accumulated PR paths matched, but newest exact commit does not affect the authoritative-v2 release surface.'
-          fi
+          # Release evidence is bound to docs/V030_RELEASE_LOCK.json's exact candidate fingerprint. Any newest-commit
+          # mutation of that fingerprint invalidates prior generalization/runtime receipts even when the change is
+          # docs, public-surface, native, platform, or workflow-only. Derive admission from the same manifest instead
+          # of maintaining a narrower second hand-written release surface that can silently drift.
+          python - <<'PY'
+          import fnmatch
+          import json
+          import os
+          from pathlib import Path
+
+          manifest = json.loads(Path('docs/V030_RELEASE_LOCK.json').read_text(encoding='utf-8'))
+          globs = manifest['fingerprint_globs']
+          changed = [p.strip() for p in Path('/tmp/latest-head-files.txt').read_text().splitlines() if p.strip()]
+          impacted = [p for p in changed if any(fnmatch.fnmatchcase(p, pattern) for pattern in globs)]
+          output = Path(os.environ['GITHUB_OUTPUT'])
+          with output.open('a', encoding='utf-8') as fh:
+              fh.write(f"run_release={'true' if impacted else 'false'}\n")
+          if impacted:
+              print('Release-fingerprint paths changed; exact-candidate authority required:')
+              for path in impacted:
+                  print(f'  - {path}')
+          else:
+              print('Newest exact commit does not alter any release-fingerprint path; substantive authority may be skipped.')
+          PY
 
   authority-fast:
     needs: latest-head-impact
