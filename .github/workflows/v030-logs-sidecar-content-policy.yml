@@ -1,6 +1,6 @@
 # ci-lane: deep
 # ci-pr-scope: latest-head-commit-gate
-# ci-cancel-policy: preserve-running-exact-receipt
+# ci-cancel-policy: split-classifier-preserve-receipts
 name: CMPCT v0.30 Logs sidecar content-policy productization
 
 on:
@@ -23,10 +23,6 @@ on:
 permissions:
   contents: read
 
-concurrency:
-  group: cmpct-v030-logs-sidecar-content-policy-${{ github.event.pull_request.head.sha || github.sha }}
-  cancel-in-progress: false
-
 env:
   PYTHONPATH: ${{ github.workspace }}
   EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
@@ -35,6 +31,9 @@ jobs:
   latest-head-impact:
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    concurrency:
+      group: cmpct-v030-logs-sidecar-content-policy-classifier-${{ github.event.pull_request.number || github.ref }}
+      cancel-in-progress: true
     outputs:
       run_deep: ${{ steps.scope.outputs.run_deep }}
     steps:
@@ -64,6 +63,9 @@ jobs:
     if: needs.latest-head-impact.outputs.run_deep == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 45
+    concurrency:
+      group: cmpct-v030-logs-sidecar-content-policy-receipt-${{ github.event.pull_request.head.sha || github.sha }}
+      cancel-in-progress: false
     steps:
       - uses: actions/checkout@v6
         with:
@@ -130,4 +132,6 @@ jobs:
         run: python tools/check_ci_topology.py .github/workflows/v030-logs-sidecar-content-policy.yml
 
 # D5/S6 boundary: only a path-invariant strict four-way win may advance toward canonical grammar.
-# This workflow itself grants no release credit.
+# This workflow itself grants no release credit. Classifier routing is cancellable by PR/ref while an admitted
+# exact-source content-policy receipt is preserved independently, so unrelated integration commits do not consume
+# durable classifier queue slots.
