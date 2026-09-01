@@ -315,7 +315,13 @@ def decode_to_v1(
         elif kind == "l":
             semantic_extra = extra
         else:
-            semantic_extra = regular_paths[int(extra)]
+            owner_index = int(extra)
+            semantic_extra = regular_paths[owner_index]
+            if meta != regular_meta[owner_index]:
+                # A hardlink is another name for the same inode; its inode-owned metadata cannot physically
+                # diverge from the regular owner. Fail before expanding a control plane whose claimed filesystem
+                # semantics no conforming materializer could preserve exactly.
+                raise RuntimeError("implicit-v4 hardlink metadata must match its regular-file owner")
             hardlinks[rel] = semantic_extra
         entries.append([rel, kind, mode, mtime_ns, uid, gid, xattrs, semantic_extra])
 
