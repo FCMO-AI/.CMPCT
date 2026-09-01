@@ -36,7 +36,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: cmpct-v030-federated-selective-effort-${{ github.event.pull_request.number || github.ref }}
+  group: cmpct-v030-federated-selective-effort-${{ github.event.pull_request.head.sha || github.sha }}
   cancel-in-progress: false
 
 env:
@@ -84,12 +84,10 @@ jobs:
           ref: ${{ env.EVIDENCE_HEAD }}
       - name: Bind exact candidate head
         run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
-
       - uses: actions/setup-python@v6
         with:
           python-version: '3.11'
           cache: pip
-
       - name: Install exact corpus and comparator dependencies from canonical Ubuntu feed
         run: |
           set -euo pipefail
@@ -99,7 +97,6 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -e '.[audio,test]'
           python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
-
       - name: Compile schema-correct extended selective-effort oracle
         run: |
           python -m py_compile \
@@ -109,19 +106,18 @@ jobs:
             benchmarks/v030_federated_selective_effort_oracle_v4.py \
             experiments/entropygraph_v030_federated_candidate.py \
             experiments/entropygraph_v025.py
-
       - name: Measure per-pack compression-effort frontier
         run: |
           mkdir -p benchmark-artifacts
           python benchmarks/v030_federated_selective_effort_oracle_v4.py \
             --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-eg01-selective-work" \
             --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-eg01-selective.json"
-
       - name: Independently enforce evidence integrity
         run: |
           python - <<'PY'
-          import json
+          import json, os, subprocess
           from pathlib import Path
+          assert subprocess.check_output(['git','rev-parse','HEAD'], text=True).strip()==os.environ['EVIDENCE_HEAD']
           d=json.loads(Path('benchmark-artifacts/v030-eg01-selective.json').read_text())
           assert d['schema']=='cmpct-v030-federated-selective-effort-v4'
           assert d['targets']==['02_office_workspace','04_analytics_and_database']
@@ -149,14 +145,10 @@ jobs:
               assert len(measured['raw_verified_create_s'])==3
               assert measured['locality']['max_member_read_amplification'] <= 8.0
               assert measured['locality']['max_decode_unit_bytes'] <= 8*1024*1024
-              # A modeled or measured miss remains evidence. This lane never requires a green performance
-              # conclusion, so it cannot pressure future work to weaken the immutable release thresholds.
           PY
-
       - name: CI topology self-check
         if: always()
         run: python tools/check_ci_topology.py .github/workflows/v030-federated-selective-effort.yml
-
       - name: Upload selective-effort evidence
         if: always()
         uses: actions/upload-artifact@v6
@@ -165,3 +157,6 @@ jobs:
           path: benchmark-artifacts/v030-eg01-selective.json
           if-no-files-found: warn
           retention-days: 90
+
+# R4 measurement lane. Exact-SHA concurrency lets a valid multi-hour receipt finish even
+# while unrelated branch heads move; newer heads classify cheaply rather than destroying it.
