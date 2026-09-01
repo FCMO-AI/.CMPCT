@@ -267,9 +267,20 @@ def _drift_report(existing: dict, generated: dict) -> str:
             actual_bytes = base64.b64decode(actual_b64, validate=True)
         except Exception:
             actual_bytes = b""
+        prefix = 0
+        for left, right in zip(expected_bytes, actual_bytes):
+            if left != right:
+                break
+            prefix += 1
+        suffix = 0
+        limit = min(len(expected_bytes), len(actual_bytes)) - prefix
+        while suffix < limit and expected_bytes[-1 - suffix] == actual_bytes[-1 - suffix]:
+            suffix += 1
         rows.append(
-            f"{profile} expected_sha={expected.get('archive_sha256')} generated_sha={actual.get('archive_sha256')} "
-            f"expected_bytes={len(expected_bytes)} generated_bytes={len(actual_bytes)}"
+            f"{profile} declared_expected_sha={expected.get('archive_sha256')} "
+            f"stored_expected_sha={sha(expected_bytes).hex() if expected_bytes else 'decode-error'} "
+            f"generated_sha={actual.get('archive_sha256')} expected_bytes={len(expected_bytes)} "
+            f"generated_bytes={len(actual_bytes)} common_prefix={prefix} common_suffix={suffix}"
         )
     return "; ".join(rows) or "document differs outside diagnosed sections"
 
