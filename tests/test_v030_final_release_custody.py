@@ -21,6 +21,8 @@ REQUIRED_DEPENDENCIES = (
     "experiments/entropygraph_v030_r24_dead_dictionary.py",
     "experiments/entropygraph_v030_r24_media_terminal.py",
     "experiments/entropygraph_v030_r24_compact_control_profile.py",
+    "experiments/entropygraph_v030_release_reader.py",
+    "experiments/entropygraph_v030_release_reader_policy.py",
     "experiments/entropygraph_v030_release.py",
     "benchmarks/v030_release_performance.py",
     "benchmarks/v030_external_competitors.py",
