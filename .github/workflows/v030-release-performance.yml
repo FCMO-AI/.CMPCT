@@ -43,7 +43,7 @@ jobs:
           fi
           git diff --name-only HEAD^ HEAD > /tmp/latest-head-files.txt
           cat /tmp/latest-head-files.txt
-          if grep -Eq '^(cmpct/|experiments/|benchmarks/v030_(perf_worker|release_performance)|tests/test_v030_(perf_worker|release_reader|member_reader|release_candidate|shared_portfolio)|pyproject\.toml$|\.github/workflows/v030-release-performance\.yml$)' /tmp/latest-head-files.txt; then
+          if grep -Eq '^(src/cmpct/|experiments/|benchmarks/v030_(perf_worker|release_performance)|tests/test_v030_(perf_worker|release_reader|member_reader|release_candidate|shared_portfolio)|pyproject\.toml$|\.github/workflows/v030-release-performance\.yml$)' /tmp/latest-head-files.txt; then
             echo 'run_authority=true' >> "$GITHUB_OUTPUT"
           else
             echo 'run_authority=false' >> "$GITHUB_OUTPUT"
