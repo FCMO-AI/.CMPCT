@@ -67,7 +67,9 @@ def document() -> dict:
 
 
 def render() -> str:
-    return json.dumps(document(), indent=2, sort_keys=True) + "\n"
+    # Compact JSON makes the long immutable archive payload less vulnerable to accidental whitespace
+    # corruption while preserving a deterministic text representation for --check.
+    return json.dumps(document(), sort_keys=True, separators=(",", ":"), ensure_ascii=True) + "\n"
 
 
 def main() -> None:
