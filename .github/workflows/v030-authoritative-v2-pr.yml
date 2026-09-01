@@ -8,6 +8,7 @@ on:
     branches:
       - main
     paths:
+      - 'src/cmpct/**'
       - 'experiments/entropygraph_v030_*.py'
       - 'tests/test_v030_*.py'
       - 'benchmarks/v030_*.py'
@@ -18,7 +19,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: cmpct-v030-authority-v2-${{ github.event.pull_request.number || github.ref }}
+  group: cmpct-v030-authority-v2-${{ github.event.pull_request.head.sha || github.sha }}
   cancel-in-progress: false
 
 env:
@@ -52,7 +53,7 @@ jobs:
           # Product/release implementation changes still require the complete authority. Research-only benchmark
           # or workflow churn does not. The authority workflow itself is included so topology/contract edits prove
           # their exact candidate once.
-          if grep -Eq '^(experiments/entropygraph_v030_.*\.py|tests/test_v030_.*\.py|benchmarks/v030_(release_generalization_v2|release_performance_v2|perf_worker_v2)\.py|\.github/workflows/v030-authoritative-v2-pr\.yml)$' /tmp/latest-head-files.txt; then
+          if grep -Eq '^(src/cmpct/.*|experiments/entropygraph_v030_.*\.py|tests/test_v030_.*\.py|benchmarks/v030_(release_generalization_v2|release_performance_v2|perf_worker_v2)\.py|\.github/workflows/v030-authoritative-v2-pr\.yml)$' /tmp/latest-head-files.txt; then
             echo 'run_release=true' >> "$GITHUB_OUTPUT"
           else
             echo 'run_release=false' >> "$GITHUB_OUTPUT"
