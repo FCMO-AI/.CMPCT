@@ -33,19 +33,22 @@ RESTRICTED = {
     "container scratch/private upload path": "/mnt/" + "data/",
 }
 
-# Canonical legal attribution is public repository metadata, not private operational provenance.  Keep
+# Canonical legal attribution is public repository metadata, not private operational provenance. Keep
 # this exception deliberately narrower than a file/path allowlist: only the exact lines ratified on
-# ``main`` are exempt.  The same person markers anywhere else -- including another line in either file --
-# still fail closed.  This reconciles concurrent legal-attribution authority without weakening the
-# repository-wide provenance guard.
+# ``main`` are exempt. The same person markers anywhere else -- including another line in either file --
+# still fail closed. Markdown formatting is part of the exact public source line, so both the canonical
+# literal and its one-backtick presentation are enumerated rather than normalizing arbitrary markup.
 _CANONICAL_COPYRIGHT = "Copyright (c) 2026 " + "Mat" + "ías Peña Szőke and contributors"
+_CANONICAL_COPYRIGHT_CODE = f"`{_CANONICAL_COPYRIGHT}`"
 _CANONICAL_FOUNDER_SCOPE = (
     "- Listing " + "Jav" + "ier Castellanos Peña as Founder of FCMO Group does not by itself make him "
     "an author or copyright holder of FCMO AI work."
 )
 LEGAL_ATTRIBUTION_LINES = {
-    Path("COPYRIGHT.md"): frozenset({_CANONICAL_COPYRIGHT, _CANONICAL_FOUNDER_SCOPE}),
-    Path("LICENSING.md"): frozenset({f"`{_CANONICAL_COPYRIGHT}`"}),
+    Path("COPYRIGHT.md"): frozenset(
+        {_CANONICAL_COPYRIGHT, _CANONICAL_COPYRIGHT_CODE, _CANONICAL_FOUNDER_SCOPE}
+    ),
+    Path("LICENSING.md"): frozenset({_CANONICAL_COPYRIGHT_CODE}),
 }
 
 TEXT_SUFFIXES = {
