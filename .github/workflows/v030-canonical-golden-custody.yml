@@ -39,10 +39,10 @@ jobs:
         with:
           python-version: '3.11'
           cache: pip
-      - name: Install minimal conformance dependencies
+      - name: Install repository test contract
         run: |
           python -m pip install --upgrade pip
-          python -m pip install msgpack pytest
+          python -m pip install -e '.[test]'
       - name: Reproduce explicit-filesystem canonical goldens independently
         run: python tests/generate_v030_canonical_goldens.py --check
       - name: Reproduce implicit-v4 canonical goldens independently
