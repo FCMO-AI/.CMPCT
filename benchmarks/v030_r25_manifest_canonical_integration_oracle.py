@@ -2,18 +2,12 @@ from __future__ import annotations
 
 """Research/productization proof for wiring implicit-v4 into canonical r25.
 
-The accompanying patch changes only the canonical writer/validated-manifest seams: staging delegates to the
-already-tested strict-smaller admission owner and reader validation delegates to the authenticated identity-aware
-decoder. This oracle must run only after that patch is applied. It proves the patched canonical seam publishes
-implicit-v4 on the known positive developer structure and that canonical validation expands it back to the exact
-filesystem-v1 semantics and user-tree identity.
-
-Unlike the earlier control-only proof, this version also prices a complete canonical-r25 explicit-v1 baseline and
-the patched implicit-v4 candidate through the same canonical builder. The integration is promotable only if the
-complete candidate artifact preserves the pre-existing >=16 KiB useful-saving floor; control-member savings alone
-cannot stand in for whole-product bytes.
-
-This is D5/S6 convergence. It grants no release credit and does not change external-selector thresholds.
+The accompanying patch changes only canonical manifest staging/validation. This oracle prices explicit-v1 and
+patched implicit-v4 through the same *canonical-r25-only* G04/PrefixGraph builder already used by the accepted
+candidate gate. That avoids conflating the product selector's legitimate r24/v0.29 fallback with the narrower
+question being tested here: does the exact canonical-r25 grammar become strictly smaller when the manifest seam is
+wired in? Complete archive bytes, not only control-member bytes, must clear the existing >=16 KiB useful-saving
+floor. Passing advances only the next D5 prerequisite; it is not release credit.
 """
 
 import argparse
@@ -25,6 +19,7 @@ import subprocess
 
 from benchmarks import v030_r25_manifest_derived_identity_oracle as SIZE
 from experiments import entropygraph_v030_canonical_final_impl as CANON
+from experiments import entropygraph_v030_canonical_manifest_candidate as CAND
 from experiments import entropygraph_v030_product_fs as FS
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -66,16 +61,16 @@ def run(work_root: Path) -> dict:
     )
     source_tree = CANON._semantic_tree_sha(original)
 
-    # Whole-product baseline: exact canonical r25 builder, identical source, explicit filesystem-v1 control.
+    # Exact complete r25 baseline on the same representation substrate used by the accepted candidate gate.
     baseline_stage = work_root / "canonical-stage-explicit"
     baseline_prepared = _explicit_stage(source, baseline_stage)
     if baseline_prepared["manifest_raw"] != original_raw:
         raise RuntimeError("explicit canonical baseline changed source filesystem-v1 semantics")
     baseline_archive = work_root / "canonical-r25-manifest-explicit.cmpct"
-    CANON._r25_build(baseline_stage, baseline_archive)
+    baseline_stats = CAND._build_canonical_r25_only(baseline_stage, baseline_archive)
     baseline_revision, baseline_profile = CANON._profile_for_archive(baseline_archive)
     if baseline_revision != CANON.REVISION:
-        raise RuntimeError("explicit canonical baseline did not emit canonical r25")
+        raise RuntimeError("explicit canonical-r25-only baseline did not emit canonical r25")
     baseline_validated = CANON._validated_manifest(baseline_archive)
     if CANON._semantic_tree_sha(baseline_validated) != source_tree:
         raise RuntimeError("explicit canonical baseline changed user-tree identity")
@@ -83,7 +78,7 @@ def run(work_root: Path) -> dict:
     if not baseline_verify.get("ok") or baseline_verify.get("tree_sha256") != source_tree:
         raise RuntimeError(f"explicit canonical baseline failed strong verification: {baseline_verify!r}")
 
-    # Patched candidate: same canonical builder, only the manifest staging/validated-manifest seams differ.
+    # Patched candidate: same r25-only builder, with only the canonical staging/reader seam changed.
     stage = work_root / "canonical-stage-implicit"
     prepared = CANON._prepare_profile_tree(source, stage)
     if prepared.get("selected_manifest_encoding") != "implicit-v4":
@@ -98,13 +93,15 @@ def run(work_root: Path) -> dict:
         raise RuntimeError("canonical staged graph member is not the admitted control")
 
     archive = work_root / "canonical-r25-manifest-implicit.cmpct"
-    CANON._r25_build(stage, archive)
+    candidate_stats = CAND._build_canonical_r25_only(stage, archive)
     revision, profile = CANON._profile_for_archive(archive)
     if revision != CANON.REVISION:
-        raise RuntimeError(f"r25 candidate builder did not emit canonical r25 profile: {revision!r}/{profile!r}")
+        raise RuntimeError(f"r25-only candidate did not emit canonical r25: {revision!r}/{profile!r}")
+    if candidate_stats.get("candidate_set") != baseline_stats.get("candidate_set"):
+        raise RuntimeError("manifest integration changed the canonical r25 candidate set")
     if profile != baseline_profile:
         raise RuntimeError(
-            f"manifest integration changed the selected canonical representation family: {baseline_profile!r} -> {profile!r}"
+            f"manifest integration changed selected canonical representation family: {baseline_profile!r} -> {profile!r}"
         )
 
     baseline_bytes = baseline_archive.stat().st_size
@@ -142,13 +139,16 @@ def run(work_root: Path) -> dict:
         raise RuntimeError("patched canonical graph does not authenticate selected manifest control exactly")
 
     return {
-        "schema": "cmpct-v030-r25-manifest-canonical-integration-oracle-v2",
+        "schema": "cmpct-v030-r25-manifest-canonical-integration-oracle-v3",
         "source_commit": _source_commit(),
         "target": SIZE.TARGET,
         "format_revision": revision,
         "format_profile": profile,
         "baseline_format_revision": baseline_revision,
         "baseline_format_profile": baseline_profile,
+        "canonical_candidate_set": candidate_stats.get("candidate_set"),
+        "baseline_selected": baseline_stats.get("selected"),
+        "candidate_selected": candidate_stats.get("selected"),
         "filesystem_v1_bytes": len(original_raw),
         "selected_manifest_bytes": len(selected),
         "control_saving_bytes": len(original_raw) - len(selected),
@@ -180,11 +180,14 @@ def run(work_root: Path) -> dict:
             "research_priority_score": 96,
             "measured_gap_change_bytes": complete_saving,
             "strongest_self_critique": (
-                "This prices the complete canonical Python A/B and proves the patched writer/reader seam, but recovery, "
-                "native, Android and all-15 no-regression authority still have to consume the same grammar before release."
+                "This isolates the complete canonical-r25 representation A/B and patched writer/reader seam, but the "
+                "shipping product selector and recovery/native/Android/all-15 authority still must consume the landed grammar."
             ),
             "terminal_decision": "PROMOTE_NEXT_PREREQUISITE",
-            "next_decisive_test": "land the exact seam, then recovery/malformed-control parity followed by native/Android and all-15 authority",
+            "next_decisive_test": (
+                "land the exact seam, then prove shipping product-floor selection plus recovery/malformed-control parity "
+                "before native/Android and all-15 exact authority"
+            ),
         },
     }
 

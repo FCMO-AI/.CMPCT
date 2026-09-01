@@ -36,7 +36,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: cmpct-v030-r25-manifest-canonical-integration-${{ github.event.pull_request.number || github.ref }}
+  group: cmpct-v030-r25-manifest-canonical-integration-${{ github.event.pull_request.head.sha || github.sha }}
   cancel-in-progress: false
 
 env:
@@ -104,6 +104,7 @@ jobs:
           python -m py_compile \
             experiments/entropygraph_v030_canonical_final_impl.py \
             experiments/entropygraph_v030_r25_manifest_admission.py \
+            experiments/entropygraph_v030_canonical_manifest_candidate.py \
             benchmarks/v030_r25_manifest_canonical_integration_oracle.py
       - name: Preserve canonical and manifest admission regression contracts
         run: |
@@ -111,7 +112,7 @@ jobs:
             tests/test_v030_r25_manifest_admission.py \
             tests/test_v030_fs_implicit_v4.py \
             tests/test_v030_canonical_final.py
-      - name: Run exact canonical integration proof
+      - name: Run exact canonical r25-only integration A/B
         run: |
           mkdir -p benchmark-artifacts
           python benchmarks/v030_r25_manifest_canonical_integration_oracle.py \
@@ -125,9 +126,10 @@ jobs:
           import json, os
           from pathlib import Path
           d=json.loads(Path('benchmark-artifacts/v030-r25-manifest-canonical.json').read_text())
-          assert d['schema']=='cmpct-v030-r25-manifest-canonical-integration-oracle-v2'
+          assert d['schema']=='cmpct-v030-r25-manifest-canonical-integration-oracle-v3'
           assert d['source_commit']==os.environ['EVIDENCE_HEAD']
           assert d['format_revision']==25 and d['baseline_format_revision']==25
+          assert d['canonical_candidate_set']=='canonical-r25-only-g04-prefixgraph-v1'
           assert d['format_profile']==d['baseline_format_profile']
           assert d['selected_manifest_encoding']=='implicit-v4'
           assert d['control_saving_bytes'] >= 64*1024
@@ -166,6 +168,6 @@ jobs:
           if-no-files-found: error
           retention-days: 90
 
-# The patch is a candidate integration only. A green v2 receipt proves the complete canonical-r25 A/B,
-# not merely the control-member delta. It advances the mechanism to landing/recovery/native/Android/all-15
-# prerequisites; it does not modify shipping source or grant release credit.
+# D5/S6 only. The oracle prices a pure canonical-r25 explicit-v1 vs patched implicit-v4 A/B through the
+# same G04/PrefixGraph tournament. Shipping product-floor selection plus recovery/native/Android/all-15 authority
+# remain separate mandatory prerequisites after a green result.
