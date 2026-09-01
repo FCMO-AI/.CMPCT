@@ -106,26 +106,25 @@ def merkle_root(leaves: list[bytes]) -> bytes:
 def filesystem_payload() -> tuple[bytes, dict]:
     raw = (b"canonical-r25-portability\n" * 11) + bytes(range(32))
     digest = sha(raw)
+    owner_metadata = [
+        0o640,
+        1_700_000_000_000_000_002,
+        1000,
+        1000,
+        [["user.cmpct.golden", b"canonical-v1"]],
+    ]
     entries = [
         ["dir", "d", 0o755, 1_700_000_000_000_000_001, 1000, 1000, [], None],
         [
             "dir/hello.bin",
             "f",
-            0o640,
-            1_700_000_000_000_000_002,
-            1000,
-            1000,
-            [["user.cmpct.golden", b"canonical-v1"]],
+            *owner_metadata,
             [len(raw), digest],
         ],
         [
             "dir/hello-hard.bin",
             "h",
-            0o640,
-            1_700_000_000_000_000_003,
-            1000,
-            1000,
-            [],
+            *owner_metadata,
             "dir/hello.bin",
         ],
         [
