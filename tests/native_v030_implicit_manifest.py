@@ -7,11 +7,15 @@ import hashlib
 import json
 from pathlib import Path
 import subprocess
+import sys
 import tempfile
+
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
 
 from experiments import entropygraph_v030_canonical_final as canonical
 
-ROOT = Path(__file__).resolve().parents[1]
 CLI = ROOT / "native" / "cmpct-portable" / "target" / "release" / "cmpct-portable"
 FIXTURE = ROOT / "tests" / "conformance" / "v030-r25-implicit-v4.json"
 
