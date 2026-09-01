@@ -1,6 +1,6 @@
 # ci-lane: release
 # ci-pr-scope: latest-head-commit-gate
-# ci-cancel-policy: preserve-running-exact-receipt
+# ci-cancel-policy: split-classifier-preserve-receipts
 name: CMPCT v0.30 external competitor frontier
 
 on:
@@ -19,13 +19,6 @@ on:
 permissions:
   contents: read
 
-# Preserve queued exact-source receipts as well as running receipts. GitHub concurrency
-# permits only one pending run per group, so a PR-number key lets a newer unrelated update
-# evict an eight-hour authority before it starts. Exact-SHA grouping prevents that custody loss.
-concurrency:
-  group: cmpct-v030-external-frontier-${{ github.event.pull_request.head.sha || github.sha }}
-  cancel-in-progress: false
-
 env:
   PYTHONPATH: ${{ github.workspace }}
   EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
@@ -33,6 +26,9 @@ env:
 jobs:
   latest-head-impact:
     runs-on: ubuntu-24.04
+    concurrency:
+      group: cmpct-v030-external-classifier-${{ github.event.pull_request.number || github.ref }}
+      cancel-in-progress: true
     outputs:
       run_deep: ${{ steps.scope.outputs.run_deep }}
     steps:
@@ -62,6 +58,9 @@ jobs:
     if: needs.latest-head-impact.outputs.run_deep == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 480
+    concurrency:
+      group: cmpct-v030-external-receipt-${{ github.event.pull_request.head.sha || github.sha }}
+      cancel-in-progress: false
     steps:
       - uses: actions/checkout@v6
         with:
@@ -157,6 +156,10 @@ jobs:
           assert gate['passed'] is True
           PY
 
+      - name: CI topology self-check
+        if: always()
+        run: python tools/check_ci_topology.py .github/workflows/v030-external-competitors.yml
+
       - name: Public-surface guard
         if: always()
         run: python tools/check_public_surface.py
@@ -170,8 +173,7 @@ jobs:
           if-no-files-found: error
           retention-days: 90
 
-# ZIP and solid Zstd-19 are strict per-workload v0.30 release floors for both complete archive size and creation
-# wall-clock. Any tie or loss on any frozen workload fails v0.30 regardless of aggregate performance. Every
-# completed receipt now carries explicit strict-win counts, including the one hard joint score, so historical
-# status cannot be inferred from prose or mixed fingerprints. Cheap synthetic edge cases validate the counter
-# before the expensive 15-workload authority consumes runner hours.
+# ZIP and solid Zstd-19 remain strict per-workload v0.30 release floors for both complete archive size and creation
+# wall-clock. Any tie or loss on any frozen workload fails v0.30 regardless of aggregate performance. Classifier jobs
+# are superseded by PR/ref; the eight-hour result-bearing matrix is preserved separately under exact-SHA job custody,
+# avoiding an exact-SHA classifier backlog without sacrificing any historical or release-useful receipt.
