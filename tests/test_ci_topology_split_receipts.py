@@ -11,6 +11,7 @@ ROOT = Path(__file__).resolve().parents[1]
 # must not regress to workflow-level exact-SHA concurrency: doing so preserves every otherwise-useless classifier
 # invocation and recreates the runner starvation that blocks current release receipts.
 SPLIT_AUTHORITIES = (
+    ".github/workflows/android.yml",
     ".github/workflows/v030-native-authority.yml",
     ".github/workflows/v030-final-release-authority.yml",
     ".github/workflows/v030-canonical-authority.yml",
