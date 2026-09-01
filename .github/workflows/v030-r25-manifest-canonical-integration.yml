@@ -1,5 +1,5 @@
 # ci-lane: deep
-# ci-cancel-policy: preserve-running-exact-receipt
+# ci-cancel-policy: split-classifier-preserve-receipts
 # ci-pr-scope: latest-head-commit-gate
 name: CMPCT v0.30 r25 manifest canonical integration
 
@@ -57,10 +57,6 @@ on:
 permissions:
   contents: read
 
-concurrency:
-  group: cmpct-v030-r25-manifest-canonical-integration-${{ github.event.pull_request.head.sha || github.sha }}
-  cancel-in-progress: false
-
 env:
   PYTHONPATH: ${{ github.workspace }}
   EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
@@ -69,6 +65,9 @@ jobs:
   latest-head-impact:
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    concurrency:
+      group: cmpct-v030-r25-manifest-classifier-${{ github.event.pull_request.number || github.ref }}
+      cancel-in-progress: true
     outputs:
       run_deep: ${{ steps.scope.outputs.run_deep }}
     steps:
@@ -103,6 +102,9 @@ jobs:
     if: needs.latest-head-impact.outputs.run_deep == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 90
+    concurrency:
+      group: cmpct-v030-r25-manifest-receipt-${{ github.event.pull_request.head.sha || github.sha }}
+      cancel-in-progress: false
     steps:
       - uses: actions/checkout@v6
         with:
@@ -199,7 +201,6 @@ jobs:
           retention-days: 90
 
 # Read-only S6 authority after the canonical Python seam landed. Recovery/native/Android/all-15 authority remain
-# separate mandatory prerequisites and no result from this lane alone can grant release credit. The installed core
-# package is part of the exact product behavior and therefore belongs to this lane's transitive evidence closure.
-# The research comparison candidate imports the public canonical wrapper, which in turn owns profile-isolation
-# dispatch; both are therefore evidence-critical dependencies rather than invisible implementation details.
+# separate mandatory prerequisites and no result from this lane alone can grant release credit. Classifier routing is
+# cancellable by PR/ref while the 90-minute exact receipt is kept in a distinct exact-SHA non-cancelling job group;
+# this preserves useful result-bearing work without accumulating one queued classifier per long-lived-PR commit.
