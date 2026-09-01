@@ -7,6 +7,7 @@ on:
     branches:
       - main
     paths:
+      - 'src/cmpct/**'
       - 'experiments/entropygraph_v030_r25_manifest_admission.py'
       - 'experiments/entropygraph_v030_fs_implicit_v4.py'
       - 'experiments/entropygraph_v030_product_fs.py'
@@ -52,7 +53,7 @@ jobs:
           fi
           git diff-tree --no-commit-id --name-only -r HEAD > /tmp/latest-head-files.txt
           cat /tmp/latest-head-files.txt
-          if grep -Eq '^(experiments/entropygraph_v030_(r25_manifest_admission|fs_implicit_v4|product_fs|canonical_final|canonical_final_impl)\.py|tests/test_v030_(r25_manifest_admission|canonical_final)\.py|\.github/workflows/v030-manifest-admission-custody\.yml)$' /tmp/latest-head-files.txt; then
+          if grep -Eq '^(src/cmpct/.*|experiments/entropygraph_v030_(r25_manifest_admission|fs_implicit_v4|product_fs|canonical_final|canonical_final_impl)\.py|tests/test_v030_(r25_manifest_admission|canonical_final)\.py|\.github/workflows/v030-manifest-admission-custody\.yml)$' /tmp/latest-head-files.txt; then
             echo 'run_custody=true' >> "$GITHUB_OUTPUT"
           else
             echo 'run_custody=false' >> "$GITHUB_OUTPUT"
@@ -87,5 +88,6 @@ jobs:
 
 # This lane grants no compression/performance/release credit. It is a D5 custody boundary: the canonical writer
 # must continue to stage through content-agnostic strict-smaller implicit-v4 admission, product-floor/tie behavior
-# must remain conservative, and malformed/mismatched controls fail closed. Long-lived PR accumulated paths are
-# filtered by the newest exact commit before the full job.
+# must remain conservative, and malformed/mismatched controls fail closed. Core Python package changes are part of
+# this proof surface too because the installed package participates in the final writer/reader behavior. Long-lived
+# PR accumulated paths are filtered by the newest exact commit before the full job.
