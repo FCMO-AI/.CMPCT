@@ -92,9 +92,16 @@ def assert_product_view(name: str, path: Path, fixture: dict, tmp: Path) -> None
         assert os.readlink(destination / "link.bin") == "dir/hello.bin"
 
     # Canonical fixture deliberately contains a symlink. Ordinary ZIP has no one portable symlink semantic;
-    # refusing export is safer than silently changing the logical tree to make the gate green.
+    # refusing export is safer than silently changing the logical tree to make the gate green. The refusal must
+    # also be transactional: a late unsupported entry cannot overwrite an existing public path with partial ZIP.
     exported = tmp / f"canonical-{name}.zip"
+    sentinel = f"keep-existing-{name}".encode()
+    exported.write_bytes(sentinel)
+    before = {child.name for child in tmp.iterdir()}
     assert run("export-zip", str(path), str(exported), check=False).returncode != 0
+    assert exported.read_bytes() == sentinel
+    after = {child.name for child in tmp.iterdir()}
+    assert after == before, (name, sorted(after - before))
 
 
 def recovery_variants(name: str, original: bytes) -> dict[str, tuple[bytes, bool]]:
@@ -175,5 +182,5 @@ if __name__ == "__main__":
     main()
 
 # Footnote: golden v2 replaces an external compressor with deterministic raw-block Zstandard framing. Recovery,
-# user/internal view separation, <=8x locality, extraction and C ABI checks now rest on byte fixtures that are
-# independent of both CMPCT implementation code and compressor-version optimizer decisions.
+# user/internal view separation, <=8x locality, extraction, transactional ZIP refusal and C ABI checks now rest on
+# byte fixtures that are independent of both CMPCT implementation code and compressor-version optimizer decisions.
