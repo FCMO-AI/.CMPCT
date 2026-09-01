@@ -33,23 +33,24 @@ public final class CmpctAndroidUnicodePathTest {
         String unicodePath = fixture.getString("unicode_hardlink_path");
         String ownerPath = fixture.getString("regular_path");
         // U+1F680 is encoded as four bytes in standard UTF-8 and as a surrogate pair in JNI Modified UTF-8.
-        // The old NewStringUTF(path_bytes) bridge therefore could not preserve this authenticated path exactly.
+        // The old JNI conversions therefore could not preserve either an archive filename or member path exactly.
         assertTrue(unicodePath.contains("\uD83D\uDE80"));
 
         byte[] archiveBytes = Base64.decode(fixture.getString("archive_base64"), Base64.DEFAULT);
         assertEquals(fixture.getString("archive_sha256"), sha256(archiveBytes));
-        File source = new File(target.getCacheDir(), "android-r25-unicode-logs.cmpct");
+        File source = new File(target.getCacheDir(), "android-\uD83D\uDE80-r25-unicode-logs.cmpct");
         try (FileOutputStream out = new FileOutputStream(source)) {
             out.write(archiveBytes);
             out.getFD().sync();
         }
+        assertTrue("supplementary Unicode archive filename must exist before JNI open", source.isFile());
 
         try (CmpctNative.Archive archive = new CmpctNative.Archive(source.getAbsolutePath())) {
             assertEquals(25, archive.revision());
             archive.verify();
             int unicode = archive.findEntry(unicodePath);
             int owner = archive.findEntry(ownerPath);
-            assertTrue("supplementary Unicode path must survive JNI exactly", unicode >= 0);
+            assertTrue("supplementary Unicode member path must survive JNI exactly", unicode >= 0);
             assertTrue(owner >= 0);
             assertEquals(unicodePath, archive.entry(unicode).path);
             assertEquals(CmpctNative.KIND_HARDLINK, archive.entry(unicode).kind);
@@ -81,7 +82,7 @@ public final class CmpctAndroidUnicodePathTest {
     }
 }
 
-// Footnote: the normal logs-inverse Android vector now carries a supplementary-plane hardlink path, so this
-// regression gate exercises the real r25 product generator, shared portable dispatcher, JNI shim, and member read.
-// JNI NewStringUTF is reserved for JNI Modified UTF-8 strings; archive-owned standard UTF-8 requires explicit
-// byte-to-Java decoding to preserve supplementary code points exactly.
+// Footnote: the normal logs-inverse Android vector carries a supplementary-plane hardlink path, and this test
+// also stores that archive under a supplementary-plane filesystem name. Together they exercise both directions
+// of the JNI boundary without adding archive grammar: Java UTF-16 -> standard UTF-8 native source path, and
+// authenticated standard UTF-8 member path -> Java UTF-16.
