@@ -20,6 +20,7 @@ SPLIT_AUTHORITIES = (
     ".github/workflows/v030-federated-generalization-admission.yml",
     ".github/workflows/v030-federated-candidate-productization.yml",
     ".github/workflows/v030-logs-sidecar-content-policy.yml",
+    ".github/workflows/v030-logs-inverse-profile-productization.yml",
 )
 
 
