@@ -119,7 +119,7 @@ def implicit_filesystem() -> tuple[bytes, bytes, dict[str, dict]]:
 
     rows = [
         ("dir", 1, [0o755, 1_700_000_000_000_000_001, 1000, 1000, []], None),
-        ("dir/hello-hard.bin", 3, [0o640, 1_700_000_000_000_000_003, 1000, 1000, []], 0),
+        ("dir/hello-hard.bin", 3, default, 0),
         ("link.bin", 2, [0o777, 1_700_000_000_000_000_004, 1000, 1000, []], "dir/hello.bin"),
     ]
     explicit = []
