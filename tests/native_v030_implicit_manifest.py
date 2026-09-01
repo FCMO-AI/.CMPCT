@@ -90,17 +90,23 @@ def recovery_variants(profile: str, original: bytes) -> dict[str, tuple[bytes, b
     }
 
 
-def assert_recovery(profile: str, original: bytes, tmp: Path) -> None:
+def assert_recovery(
+    profile: str,
+    original: bytes,
+    expected: dict[str, dict],
+    tmp: Path,
+    *,
+    prefix: str,
+) -> None:
     for label, (raw, should_verify) in recovery_variants(profile, original).items():
-        candidate = tmp / f"implicit-{profile}-{label}.cmpct"
+        candidate = tmp / f"{prefix}-{profile}-{label}.cmpct"
         candidate.write_bytes(raw)
+        if should_verify:
+            # A green verifier alone is insufficient: failover metadata must still reconstruct the same public tree.
+            assert_native_archive(candidate, expected)
+            continue
         result = run("verify", str(candidate), check=False, text=True)
-        assert (result.returncode == 0) is should_verify, (
-            profile,
-            label,
-            result.stdout,
-            result.stderr,
-        )
+        assert result.returncode != 0, (profile, label, result.stdout, result.stderr)
 
 
 def assert_independent_goldens(tmp: Path) -> None:
@@ -117,7 +123,7 @@ def assert_independent_goldens(tmp: Path) -> None:
         # Recovery is a property of the canonical outer r25 profile, but implicit-v4 must prove that its compact
         # authenticated control survives the same primary/tail failover boundary rather than inheriting credit
         # from filesystem-v1 fixtures. Both metadata copies or payload corruption must still fail closed.
-        assert_recovery(profile, raw, tmp)
+        assert_recovery(profile, raw, expected, tmp, prefix="independent-implicit")
 
 
 def assert_hostile_authenticated_controls(tmp: Path) -> None:
@@ -202,6 +208,17 @@ def assert_writer_parity(tmp: Path) -> None:
     payload = (source / probe).read_bytes()
     assert hashlib.sha256(payload).digest() == decoded["regular"][probe][1]
     assert_native_archive(archive, expected, probe=probe, payload=payload)
+
+    profile_key = "g04" if profile == "geometry-g04" else "prefixgraph"
+    # Fixed goldens prove independent grammar; this second matrix proves the live canonical writer publishes the
+    # same recoverable outer-profile semantics after implicit-v4 admission rather than only matching on clean bytes.
+    assert_recovery(
+        profile_key,
+        archive.read_bytes(),
+        expected,
+        tmp,
+        prefix="writer-implicit",
+    )
 
 
 def main() -> None:
