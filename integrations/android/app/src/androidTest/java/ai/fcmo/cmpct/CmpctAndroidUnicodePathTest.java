@@ -28,18 +28,17 @@ public final class CmpctAndroidUnicodePathTest {
     public void supplementaryUnicodePathRoundTripsThroughPortableJni() throws Exception {
         Context target = InstrumentationRegistry.getInstrumentation().getTargetContext();
         Context tests = InstrumentationRegistry.getInstrumentation().getContext();
-        JSONObject fixture = new JSONObject(readAsset(tests, "v030-r25-unicode-path.json"));
-        assertEquals("cmpct-v030-native-unicode-path-golden-v1", fixture.getString("schema"));
-        String unicodePath = fixture.getString("unicode_path");
-        String ownerPath = fixture.getString("owner_path");
+        JSONObject fixture = new JSONObject(readAsset(tests, "v030-logs-android.json"));
+        assertEquals("cmpct-v030-android-logs-vector-v1", fixture.getString("schema"));
+        String unicodePath = fixture.getString("unicode_hardlink_path");
+        String ownerPath = fixture.getString("regular_path");
         // U+1F680 is encoded as four bytes in standard UTF-8 and as a surrogate pair in JNI Modified UTF-8.
         // The old NewStringUTF(path_bytes) bridge therefore could not preserve this authenticated path exactly.
         assertTrue(unicodePath.contains("\uD83D\uDE80"));
 
-        JSONObject vector = fixture.getJSONObject("g04");
-        byte[] archiveBytes = Base64.decode(vector.getString("archive_base64"), Base64.DEFAULT);
-        assertEquals(vector.getString("archive_sha256"), sha256(archiveBytes));
-        File source = new File(target.getCacheDir(), "android-r25-unicode-g04.cmpct");
+        byte[] archiveBytes = Base64.decode(fixture.getString("archive_base64"), Base64.DEFAULT);
+        assertEquals(fixture.getString("archive_sha256"), sha256(archiveBytes));
+        File source = new File(target.getCacheDir(), "android-r25-unicode-logs.cmpct");
         try (FileOutputStream out = new FileOutputStream(source)) {
             out.write(archiveBytes);
             out.getFD().sync();
@@ -54,8 +53,8 @@ public final class CmpctAndroidUnicodePathTest {
             assertTrue(owner >= 0);
             assertEquals(unicodePath, archive.entry(unicode).path);
             assertEquals(CmpctNative.KIND_HARDLINK, archive.entry(unicode).kind);
-            byte[] unicodeHead = archive.readRange(unicode, 0, 32);
-            byte[] ownerHead = archive.readRange(owner, 0, 32);
+            byte[] unicodeHead = archive.readRange(unicode, 0, 64);
+            byte[] ownerHead = archive.readRange(owner, 0, 64);
             assertEquals(hex(ownerHead), hex(unicodeHead));
         }
     }
@@ -82,7 +81,7 @@ public final class CmpctAndroidUnicodePathTest {
     }
 }
 
-// Footnote: CMPCT's native ABI exposes authenticated entry names as standard UTF-8 bytes. Android must convert
-// those bytes to UTF-16 explicitly; JNI NewStringUTF accepts Modified UTF-8 and is not a standards-compatible
-// decoder for supplementary Unicode code points. This fixed builder-independent vector keeps that distinction
-// release-gated at the shared post-dispatch JNI boundary without adding another archive parser.
+// Footnote: the normal logs-inverse Android vector now carries a supplementary-plane hardlink path, so this
+// regression gate exercises the real r25 product generator, shared portable dispatcher, JNI shim, and member read.
+// JNI NewStringUTF is reserved for JNI Modified UTF-8 strings; archive-owned standard UTF-8 requires explicit
+// byte-to-Java decoding to preserve supplementary code points exactly.
