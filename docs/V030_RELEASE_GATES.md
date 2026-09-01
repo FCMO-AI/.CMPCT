@@ -35,7 +35,10 @@ This checklist is normative for the authoritative integration branch. Research s
 
 ## Portability
 - [ ] Python reader/writer vectors
-- [ ] native/shared-reader parity for every new promoted transform/reference
+- [ ] native/shared-reader parity for every new promoted transform/reference and filesystem-control dialect
+- [ ] canonical implicit-v4 filesystem control has builder-independent G04/PrefixGraph goldens, live-writer parity, exact public-tree reconstruction, <=8x selective-read observability, primary/tail two-way recovery and fail-closed both-metadata/payload corruption through the shared native reader
+- [ ] hosted Android/JNI opens and verifies builder-independent canonical implicit-v4 G04/PrefixGraph archives through the shared portable C ABI, and its exact-fingerprint evidence records implicit-v4 dispatch explicitly
+- [ ] any required physical ARM64 Android receipt is derived only from matching hosted evidence that proves canonical r25 + implicit-v4 + promoted dispatch surfaces on the same SHA/fingerprint
 - [ ] logs inverse profile is admitted through production `cmpct-portable` dispatch, not a shadow parser
 - [ ] logs inverse native parity preserves gzip+Zstd inverse reconstruction, SHA-256 identity, <=8x locality, <=8 MiB decode units and primary/tail recovery
 - [ ] logs inverse public filesystem view preserves regular files, directories, symlinks and hardlinks without exposing internal manifest members
