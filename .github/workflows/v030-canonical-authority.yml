@@ -10,6 +10,7 @@ on:
     paths:
       - 'experiments/entropygraph_v030_*.py'
       - 'tests/test_v030_*.py'
+      - 'tests/conformance/v030-r25-canonical.json'
       - 'benchmarks/v030_*.py'
       - '.github/workflows/v030-canonical-authority.yml'
   workflow_dispatch:
@@ -49,7 +50,7 @@ jobs:
           fi
           git diff-tree --no-commit-id --name-only -r HEAD > /tmp/latest-head-files.txt
           cat /tmp/latest-head-files.txt
-          if grep -Eq '^(experiments/entropygraph_v030_.*\.py|tests/test_v030_.*\.py|benchmarks/v030_(release_generalization_canonical|release_performance_product|perf_worker_canonical|external_competitors_canonical)\.py|\.github/workflows/v030-canonical-authority\.yml)$' /tmp/latest-head-files.txt; then
+          if grep -Eq '^(experiments/entropygraph_v030_.*\.py|tests/test_v030_.*\.py|tests/conformance/v030-r25-canonical\.json|benchmarks/v030_(release_generalization_canonical|release_performance_product|perf_worker_canonical|external_competitors_canonical)\.py|\.github/workflows/v030-canonical-authority\.yml)$' /tmp/latest-head-files.txt; then
             echo 'run_release=true' >> "$GITHUB_OUTPUT"
           else
             echo 'run_release=false' >> "$GITHUB_OUTPUT"
