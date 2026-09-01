@@ -8,19 +8,42 @@ on:
     branches:
       - main
     paths:
+      - 'cmpct/**'
+      - 'experiments/entropygraph_v029_release.py'
       - 'experiments/entropygraph_v030_release_product.py'
       - 'experiments/entropygraph_v030_canonical_final.py'
       - 'experiments/entropygraph_v030_canonical_final_impl.py'
       - 'experiments/entropygraph_v030_profile_isolation.py'
+      - 'experiments/entropygraph_v030_geometry_overlay_g04.py'
+      - 'experiments/entropygraph_v030_prefixgraph.py'
+      - 'experiments/entropygraph_v030_prefixgraph_parallel.py'
+      - 'experiments/entropygraph_v030_product_fs.py'
+      - 'experiments/entropygraph_v030_r25_manifest_admission.py'
+      - 'experiments/entropygraph_v030_release_admission.py'
+      - 'experiments/entropygraph_v030_release_candidate.py'
+      - 'experiments/entropygraph_v030_release_reader_policy.py'
+      - 'experiments/entropygraph_v030_shared_portfolio.py'
       - 'benchmarks/v030_release_ablation_product.py'
       - 'benchmarks/v030_release_ablation_canonical.py'
+      - 'benchmarks/v030_release_generalization.py'
       - 'benchmarks/v030_release_performance_product.py'
       - 'benchmarks/v030_release_selective_read_canonical.py'
       - 'benchmarks/v030_release_selective_read_product.py'
       - 'benchmarks/v030_perf_worker_canonical.py'
       - 'benchmarks/v030_external_competitors_canonical.py'
+      - 'benchmarks/mosaic_v029_generalization_bench.py'
+      - 'benchmarks/neutral_hostile_corpus_v1.py'
+      - 'benchmarks/resemblance_hostile_corpus_v1.py'
+      - 'benchmarks/neutral_hostile_determinism_repair_v6.py'
+      - 'docs/FORMAT.md'
       - 'tests/test_v030_canonical_final.py'
       - 'tests/test_v030_profile_isolation.py'
+      - 'tests/test_v030_release_ablation_contract.py'
+      - 'tests/test_v030_release_selective_read_contract.py'
+      - 'tests/test_v030_release_generalization_contract.py'
+      - 'tools/check_public_surface.py'
+      - 'tools/check_ci_topology.py'
+      - 'pyproject.toml'
       - '.github/workflows/v030-final-release-authority.yml'
   workflow_dispatch:
 
@@ -59,7 +82,10 @@ jobs:
           fi
           git diff-tree --no-commit-id --name-only -r HEAD > /tmp/latest-head-files.txt
           cat /tmp/latest-head-files.txt
-          if grep -Eq '^(experiments/entropygraph_v030_(release_product|canonical_final|canonical_final_impl|profile_isolation)\.py|benchmarks/v030_(release_ablation_(product|canonical)|release_performance_product|release_selective_read_(canonical|product)|perf_worker_canonical|external_competitors_canonical)\.py|tests/test_v030_(canonical_final|profile_isolation)\.py|\.github/workflows/v030-final-release-authority\.yml)$' /tmp/latest-head-files.txt; then
+          # This is the transitive evidence-critical closure of the final authority, not merely its top-level
+          # entry points. Changes to corpus identity, historical floors, canonical dependencies, core r24 I/O,
+          # contract tests, or evidence tooling must not inherit an older green receipt.
+          if grep -Eq '^(cmpct/.*|experiments/entropygraph_v029_release\.py|experiments/entropygraph_v030_(release_product|canonical_final|canonical_final_impl|profile_isolation|geometry_overlay_g04|prefixgraph|prefixgraph_parallel|product_fs|r25_manifest_admission|release_admission|release_candidate|release_reader_policy|shared_portfolio)\.py|benchmarks/(v030_release_ablation_(product|canonical)|v030_release_generalization|v030_release_performance_product|v030_release_selective_read_(canonical|product)|v030_perf_worker_canonical|v030_external_competitors_canonical|mosaic_v029_generalization_bench|neutral_hostile_corpus_v1|resemblance_hostile_corpus_v1|neutral_hostile_determinism_repair_v6)\.py|docs/FORMAT\.md|tests/test_v030_(canonical_final|profile_isolation|release_ablation_contract|release_selective_read_contract|release_generalization_contract)\.py|tools/(check_public_surface|check_ci_topology)\.py|pyproject\.toml|\.github/workflows/v030-final-release-authority\.yml)$' /tmp/latest-head-files.txt; then
             echo 'run_release=true' >> "$GITHUB_OUTPUT"
           else
             echo 'run_release=false' >> "$GITHUB_OUTPUT"
