@@ -67,7 +67,8 @@ bool java_string_to_standard_utf8(JNIEnv *env, jstring value, std::string *out) 
         return false;
     }
     out->clear();
-    out->reserve((units * 3).min(MAX_JNI_PATH_BYTES));
+    const size_t worst_case_bytes = units * 3;
+    out->reserve(worst_case_bytes < MAX_JNI_PATH_BYTES ? worst_case_bytes : MAX_JNI_PATH_BYTES);
     bool ok = true;
     for (jsize i = 0; i < len && ok; ++i) {
         uint32_t cp = chars[i];
