@@ -1,5 +1,5 @@
 # ci-lane: deep
-# ci-cancel-policy: preserve-running-exact-receipt
+# ci-cancel-policy: split-classifier-preserve-receipts
 # ci-pr-scope: latest-head-commit-gate
 name: CMPCT v0.30 logs inverse profile productization
 
@@ -39,10 +39,6 @@ on:
 permissions:
   contents: read
 
-concurrency:
-  group: cmpct-v030-logs-inverse-profile-product-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: false
-
 env:
   PYTHONPATH: ${{ github.workspace }}
   EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
@@ -51,6 +47,9 @@ jobs:
   latest-head-impact:
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    concurrency:
+      group: cmpct-v030-logs-inverse-profile-product-classifier-${{ github.event.pull_request.number || github.ref }}
+      cancel-in-progress: true
     outputs:
       run_deep: ${{ steps.scope.outputs.run_deep }}
     steps:
@@ -83,6 +82,9 @@ jobs:
     if: needs.latest-head-impact.outputs.run_deep == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 60
+    concurrency:
+      group: cmpct-v030-logs-inverse-profile-product-receipt-${{ github.event.pull_request.head.sha || github.sha }}
+      cancel-in-progress: false
     steps:
       - uses: actions/checkout@v6
         with:
@@ -192,4 +194,5 @@ jobs:
 
 # This gate may establish a productizable Python profile with canonical filesystem semantics, but it cannot
 # authorize selector/native/Android dispatch. Those remain separate release obligations and the strict global
-# release lock remains authoritative.
+# release lock remains authoritative. Classifier routing is cancellable by PR/ref while an admitted exact-source
+# productization receipt is preserved independently.
