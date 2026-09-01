@@ -8,6 +8,11 @@ decoder. This oracle must run only after that patch is applied. It proves the pa
 implicit-v4 on the known positive developer structure and that canonical validation expands it back to the exact
 filesystem-v1 semantics and user-tree identity.
 
+Unlike the earlier control-only proof, this version also prices a complete canonical-r25 explicit-v1 baseline and
+the patched implicit-v4 candidate through the same canonical builder. The integration is promotable only if the
+complete candidate artifact preserves the pre-existing >=16 KiB useful-saving floor; control-member savings alone
+cannot stand in for whole-product bytes.
+
 This is D5/S6 convergence. It grants no release credit and does not change external-selector thresholds.
 """
 
@@ -30,6 +35,25 @@ def _source_commit() -> str:
     return subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip()
 
 
+def _sha256(path: Path) -> str:
+    h = hashlib.sha256()
+    with path.open("rb") as f:
+        for chunk in iter(lambda: f.read(1024 * 1024), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+
+def _explicit_stage(source: Path, stage: Path) -> dict:
+    return FS.prepare_profile_tree(
+        source,
+        stage,
+        max_path_bytes=CANON.POLICY.R.MAX_PATH_BYTES,
+        max_profile_files=CANON.MAX_PROFILE_FILES,
+        max_profile_logical_bytes=CANON.MAX_PROFILE_LOGICAL_BYTES,
+        max_entries=CANON.MAX_MANIFEST_ENTRIES,
+    )
+
+
 def run(work_root: Path) -> dict:
     shutil.rmtree(work_root, ignore_errors=True)
     work_root.mkdir(parents=True)
@@ -42,7 +66,25 @@ def run(work_root: Path) -> dict:
     )
     source_tree = CANON._semantic_tree_sha(original)
 
-    stage = work_root / "canonical-stage"
+    # Whole-product baseline: exact canonical r25 builder, identical source, explicit filesystem-v1 control.
+    baseline_stage = work_root / "canonical-stage-explicit"
+    baseline_prepared = _explicit_stage(source, baseline_stage)
+    if baseline_prepared["manifest_raw"] != original_raw:
+        raise RuntimeError("explicit canonical baseline changed source filesystem-v1 semantics")
+    baseline_archive = work_root / "canonical-r25-manifest-explicit.cmpct"
+    CANON._r25_build(baseline_stage, baseline_archive)
+    baseline_revision, baseline_profile = CANON._profile_for_archive(baseline_archive)
+    if baseline_revision != CANON.REVISION:
+        raise RuntimeError("explicit canonical baseline did not emit canonical r25")
+    baseline_validated = CANON._validated_manifest(baseline_archive)
+    if CANON._semantic_tree_sha(baseline_validated) != source_tree:
+        raise RuntimeError("explicit canonical baseline changed user-tree identity")
+    baseline_verify = CANON.strong_verify(baseline_archive)
+    if not baseline_verify.get("ok") or baseline_verify.get("tree_sha256") != source_tree:
+        raise RuntimeError(f"explicit canonical baseline failed strong verification: {baseline_verify!r}")
+
+    # Patched candidate: same canonical builder, only the manifest staging/validated-manifest seams differ.
+    stage = work_root / "canonical-stage-implicit"
     prepared = CANON._prepare_profile_tree(source, stage)
     if prepared.get("selected_manifest_encoding") != "implicit-v4":
         raise RuntimeError("patched canonical staging did not select implicit-v4 on the proven positive structure")
@@ -55,11 +97,27 @@ def run(work_root: Path) -> dict:
     if manifest_path.read_bytes() != selected:
         raise RuntimeError("canonical staged graph member is not the admitted control")
 
-    archive = work_root / "canonical-r25-manifest-candidate.cmpct"
-    built = CANON._r25_build(stage, archive)
+    archive = work_root / "canonical-r25-manifest-implicit.cmpct"
+    CANON._r25_build(stage, archive)
     revision, profile = CANON._profile_for_archive(archive)
     if revision != CANON.REVISION:
         raise RuntimeError(f"r25 candidate builder did not emit canonical r25 profile: {revision!r}/{profile!r}")
+    if profile != baseline_profile:
+        raise RuntimeError(
+            f"manifest integration changed the selected canonical representation family: {baseline_profile!r} -> {profile!r}"
+        )
+
+    baseline_bytes = baseline_archive.stat().st_size
+    candidate_bytes = archive.stat().st_size
+    complete_saving = baseline_bytes - candidate_bytes
+    if complete_saving <= 0:
+        raise RuntimeError("patched canonical implicit-v4 integration did not strictly reduce complete r25 bytes")
+    if complete_saving < SIZE.MIN_USEFUL_ARCHIVE_SAVING:
+        raise RuntimeError("patched canonical integration missed the existing useful complete-artifact saving floor")
+    baseline_sha256 = _sha256(baseline_archive)
+    candidate_sha256 = _sha256(archive)
+    if baseline_sha256 == candidate_sha256:
+        raise RuntimeError("patched canonical integration unexpectedly matched explicit baseline physical bytes")
 
     archive_raw, control_stats = CANON._read_profile_member(archive, FS.FILESYSTEM_MANIFEST)
     if archive_raw != selected:
@@ -84,17 +142,26 @@ def run(work_root: Path) -> dict:
         raise RuntimeError("patched canonical graph does not authenticate selected manifest control exactly")
 
     return {
-        "schema": "cmpct-v030-r25-manifest-canonical-integration-oracle-v1",
+        "schema": "cmpct-v030-r25-manifest-canonical-integration-oracle-v2",
         "source_commit": _source_commit(),
         "target": SIZE.TARGET,
         "format_revision": revision,
         "format_profile": profile,
+        "baseline_format_revision": baseline_revision,
+        "baseline_format_profile": baseline_profile,
         "filesystem_v1_bytes": len(original_raw),
         "selected_manifest_bytes": len(selected),
         "control_saving_bytes": len(original_raw) - len(selected),
         "selected_manifest_encoding": prepared["selected_manifest_encoding"],
-        "archive_bytes": archive.stat().st_size,
-        "archive_sha256": hashlib.sha256(archive.read_bytes()).hexdigest(),
+        "baseline_archive_bytes": baseline_bytes,
+        "baseline_archive_sha256": baseline_sha256,
+        "candidate_archive_bytes": candidate_bytes,
+        "candidate_archive_sha256": candidate_sha256,
+        "complete_artifact_saving_bytes": complete_saving,
+        "minimum_useful_archive_saving_bytes": SIZE.MIN_USEFUL_ARCHIVE_SAVING,
+        "complete_artifact_promotion_signal": complete_saving >= SIZE.MIN_USEFUL_ARCHIVE_SAVING,
+        "baseline_strong_verify_ok": bool(baseline_verify.get("ok")),
+        "baseline_strong_verify_tree_exact": baseline_verify.get("tree_sha256") == source_tree,
         "graph_control_identity_exact": control_identity == expected_control_identity,
         "filesystem_v1_semantics_exact": validated["manifest"] == original["manifest"],
         "source_tree_sha256": source_tree,
@@ -110,13 +177,14 @@ def run(work_root: Path) -> dict:
             "diagnosis": "D5",
             "radicality": "R2",
             "active_saturation": ["S6"],
-            "research_priority_score": 94,
+            "research_priority_score": 96,
+            "measured_gap_change_bytes": complete_saving,
             "strongest_self_critique": (
-                "This proves the canonical Python writer/reader seam on a positive exact structure, but recovery, "
-                "native, Android and all-15 no-regression authority still have to consume the same grammar before promotion."
+                "This prices the complete canonical Python A/B and proves the patched writer/reader seam, but recovery, "
+                "native, Android and all-15 no-regression authority still have to consume the same grammar before release."
             ),
             "terminal_decision": "PROMOTE_NEXT_PREREQUISITE",
-            "next_decisive_test": "recovery and malformed-control parity, then native/Android and all-15 exact authority",
+            "next_decisive_test": "land the exact seam, then recovery/malformed-control parity followed by native/Android and all-15 authority",
         },
     }
 
