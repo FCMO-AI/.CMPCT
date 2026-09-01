@@ -12,6 +12,9 @@ CMPCT must be strictly smaller and strictly faster to create than both determini
 tar+Zstd-19 on every one of the 15 frozen workloads. Aggregate wins, suite-level wins and exact ties cannot
 compensate for a losing row on either dimension.
 
+The final JSON embeds the exact release-critical content fingerprint so a genuinely green result can be bound by
+the strict release receipt. This changes no comparator, timing boundary, archive byte, or acceptance threshold.
+
 Footnote: comparing ZIP/7z/tar/ZPAQ with the r25 metadata hash would be false equivalence because those formats do
 not all preserve the same metadata semantics. The size frontier is credited only after exact regular-file content
 round-trip, while CMPCT's richer filesystem fidelity is separately covered by canonical product parity tests.
@@ -25,6 +28,7 @@ import time
 from benchmarks import v030_external_competitors as B
 from experiments import entropygraph_v030_release_product as CANON
 from experiments import entropygraph_v030_release as HISTORICAL_TREE
+from experiments import entropygraph_v030_release_lock_strict as RELEASE_LOCK
 
 B.CMPCT = CANON
 B._tree = lambda root: HISTORICAL_TREE.treehash(root)
@@ -190,8 +194,11 @@ def run(work_root: Path) -> dict:
         "all_workloads_strictly_beat_zstd19_create",
         "strict_no_ties_size_or_create",
     ))
+    manifest = RELEASE_LOCK.load_manifest_strict()
+    fingerprint, _paths = RELEASE_LOCK.CORE.fingerprint(manifest)
     result["gate"] = gate
     result["strict_per_workload_dominance"] = strict
+    result["candidate_fingerprint"] = fingerprint
     result["engine"] = "experiments/entropygraph_v030_release_product.py"
     result["release_facade"] = "cmpct-v030-release-product-v1"
     result["source_tree_identity"] = "historical-regular-file-content-v0.29-frozen"
@@ -216,7 +223,7 @@ def main() -> None:
     result = run(args.work_root)
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8")
-    print(json.dumps({"aggregates": result["aggregates"], "gate": result["gate"], "strict_scoreboard": {k: v for k, v in result["strict_per_workload_dominance"].items() if k != "rows"}}, indent=2), flush=True)
+    print(json.dumps({"candidate_fingerprint": result["candidate_fingerprint"], "aggregates": result["aggregates"], "gate": result["gate"], "strict_scoreboard": {k: v for k, v in result["strict_per_workload_dominance"].items() if k != "rows"}}, indent=2), flush=True)
     if not result["gate"]["passed"]:
         raise SystemExit("canonical v0.30 external competitor gate failed")
 
