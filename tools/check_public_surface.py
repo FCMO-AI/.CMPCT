@@ -33,6 +33,21 @@ RESTRICTED = {
     "container scratch/private upload path": "/mnt/" + "data/",
 }
 
+# Canonical legal attribution is public repository metadata, not private operational provenance.  Keep
+# this exception deliberately narrower than a file/path allowlist: only the exact lines ratified on
+# ``main`` are exempt.  The same person markers anywhere else -- including another line in either file --
+# still fail closed.  This reconciles concurrent legal-attribution authority without weakening the
+# repository-wide provenance guard.
+_CANONICAL_COPYRIGHT = "Copyright (c) 2026 " + "Mat" + "ías Peña Szőke and contributors"
+_CANONICAL_FOUNDER_SCOPE = (
+    "- Listing " + "Jav" + "ier Castellanos Peña as Founder of FCMO Group does not by itself make him "
+    "an author or copyright holder of FCMO AI work."
+)
+LEGAL_ATTRIBUTION_LINES = {
+    Path("COPYRIGHT.md"): frozenset({_CANONICAL_COPYRIGHT, _CANONICAL_FOUNDER_SCOPE}),
+    Path("LICENSING.md"): frozenset({f"`{_CANONICAL_COPYRIGHT}`"}),
+}
+
 TEXT_SUFFIXES = {
     "",
     ".md",
@@ -68,6 +83,11 @@ def tracked_files():
             yield path
 
 
+def _is_canonical_legal_attribution(rel: Path, line: str) -> bool:
+    """Return true only for exact, explicitly public legal-attribution lines."""
+    return line.strip() in LEGAL_ATTRIBUTION_LINES.get(rel, ())
+
+
 def main() -> int:
     findings: list[str] = []
     checked = 0
@@ -78,13 +98,16 @@ def main() -> int:
             continue
         checked += 1
         folded = text.casefold()
+        rel = path.relative_to(ROOT)
         for label, token in RESTRICTED.items():
             if token.casefold() not in folded:
                 continue
-            rel = path.relative_to(ROOT)
             for lineno, line in enumerate(text.splitlines(), 1):
-                if token.casefold() in line.casefold():
-                    findings.append(f"{rel}:{lineno}: {label}: {line.strip()}")
+                if token.casefold() not in line.casefold():
+                    continue
+                if _is_canonical_legal_attribution(rel, line):
+                    continue
+                findings.append(f"{rel}:{lineno}: {label}: {line.strip()}")
 
     if findings:
         print("CMPCT disclosure guard rejected private operational provenance:", file=sys.stderr)
