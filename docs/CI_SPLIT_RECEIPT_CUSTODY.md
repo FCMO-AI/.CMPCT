@@ -62,14 +62,17 @@ The policy may not:
 
 `tools/check_ci_topology.py` validates `split-classifier-preserve-receipts`. `tests/test_ci_topology_split_receipts.py` additionally pins the migrated high-cost authorities so they cannot silently return to workflow-level exact-SHA concurrency.
 
-As of the first migration, the ratcheted authorities are:
+The ratcheted authorities are:
 
 - `v030-native-authority.yml`;
 - `v030-final-release-authority.yml`;
 - `v030-canonical-authority.yml`;
 - `v030-external-competitors.yml`;
 - `v030-authoritative-v2-pr.yml`;
-- `v030-r25-manifest-canonical-integration.yml`.
+- `v030-r25-manifest-canonical-integration.yml`;
+- `v030-federated-generalization-admission.yml`.
+
+The all-15 admission lane is included because its result-bearing proof may run for up to six hours and remains useful for its exact source, while classifier-only invocations on the long-lived integration PR are pure routing work. PR-wide non-cancelling workflow concurrency serialized those obsolete classifiers behind older receipts; split custody preserves the exact all-15 receipt without granting unrelated commits a durable queue slot.
 
 Other deep/release workflows should migrate when touched if they combine exact-receipt preservation with a newest-head classifier. Retired or genuinely one-shot workflows should instead become manual-only when repository doctrine permits it.
 
