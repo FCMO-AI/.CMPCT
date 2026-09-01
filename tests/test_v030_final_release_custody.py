@@ -9,7 +9,9 @@ WORKFLOW = ROOT / ".github/workflows/v030-final-release-authority.yml"
 
 # These are semantic dependencies of the final authority that have previously been easy to omit because the
 # release jobs execute through wrapper modules. If one disappears from either scheduling layer, an implementation
-# change could inherit an older exact-head receipt until some unrelated tracked file happens to move.
+# change could inherit an older exact-head receipt until some unrelated tracked file happens to move. The custody
+# test itself is part of release law: changing this ratchet must also invalidate final-authority evidence rather
+# than silently inheriting a receipt produced under an older dependency closure.
 REQUIRED_DEPENDENCIES = (
     "experiments/entropygraph_v030_r25_manifest_admission.py",
     "experiments/entropygraph_v030_fs_implicit_v4.py",
@@ -21,6 +23,7 @@ REQUIRED_DEPENDENCIES = (
     "experiments/entropygraph_v030_release.py",
     "benchmarks/v030_release_performance.py",
     "benchmarks/v030_external_competitors.py",
+    "tests/test_v030_final_release_custody.py",
 )
 
 
