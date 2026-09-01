@@ -8,6 +8,7 @@ on:
     branches:
       - main
     paths:
+      - 'src/cmpct/**'
       - 'experiments/entropygraph_v030_*.py'
       - 'benchmarks/v030_external_competitors.py'
       - 'benchmarks/v030_external_competitors_canonical.py'
@@ -50,7 +51,7 @@ jobs:
           fi
           changed="$(git diff-tree --no-commit-id --name-only -r HEAD)"
           printf '%s\n' "$changed"
-          if printf '%s\n' "$changed" | grep -Eq '^(experiments/entropygraph_v030_[^/]*\.py|benchmarks/v030_external_competitors\.py|benchmarks/v030_external_competitors_canonical\.py|tests/test_v030_external_competitor_scoreboard\.py|\.github/workflows/v030-external-competitors\.yml)$'; then
+          if printf '%s\n' "$changed" | grep -Eq '^(src/cmpct/.*|experiments/entropygraph_v030_[^/]*\.py|benchmarks/v030_external_competitors\.py|benchmarks/v030_external_competitors_canonical\.py|tests/test_v030_external_competitor_scoreboard\.py|\.github/workflows/v030-external-competitors\.yml)$'; then
             echo 'run_deep=true' >> "$GITHUB_OUTPUT"
           else
             echo 'run_deep=false' >> "$GITHUB_OUTPUT"
