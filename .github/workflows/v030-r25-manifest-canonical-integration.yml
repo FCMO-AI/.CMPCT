@@ -8,10 +8,18 @@ on:
     branches: [agent/v030-authoritative-integration]
     paths:
       - 'benchmarks/v030_r25_manifest_canonical_integration_oracle.py'
+      - 'benchmarks/v030_r25_manifest_derived_identity_oracle.py'
+      - 'benchmarks/v030_release_generalization.py'
+      - 'benchmarks/mosaic_v029_generalization_bench.py'
+      - 'benchmarks/neutral_hostile_corpus_v1.py'
+      - 'benchmarks/neutral_hostile_determinism_repair_v6.py'
       - 'experiments/entropygraph_v030_canonical_final_impl.py'
+      - 'experiments/entropygraph_v030_canonical_manifest_candidate.py'
       - 'experiments/entropygraph_v030_r25_manifest_admission.py'
       - 'experiments/entropygraph_v030_fs_implicit_v4.py'
       - 'experiments/entropygraph_v030_product_fs.py'
+      - 'experiments/entropygraph_v030_release_candidate.py'
+      - 'docs/FORMAT.md'
       - 'tests/test_v030_r25_manifest_admission.py'
       - 'tests/test_v030_fs_implicit_v4.py'
       - 'tests/test_v030_canonical_final.py'
@@ -21,10 +29,18 @@ on:
     branches: [main]
     paths:
       - 'benchmarks/v030_r25_manifest_canonical_integration_oracle.py'
+      - 'benchmarks/v030_r25_manifest_derived_identity_oracle.py'
+      - 'benchmarks/v030_release_generalization.py'
+      - 'benchmarks/mosaic_v029_generalization_bench.py'
+      - 'benchmarks/neutral_hostile_corpus_v1.py'
+      - 'benchmarks/neutral_hostile_determinism_repair_v6.py'
       - 'experiments/entropygraph_v030_canonical_final_impl.py'
+      - 'experiments/entropygraph_v030_canonical_manifest_candidate.py'
       - 'experiments/entropygraph_v030_r25_manifest_admission.py'
       - 'experiments/entropygraph_v030_fs_implicit_v4.py'
       - 'experiments/entropygraph_v030_product_fs.py'
+      - 'experiments/entropygraph_v030_release_candidate.py'
+      - 'docs/FORMAT.md'
       - 'tests/test_v030_r25_manifest_admission.py'
       - 'tests/test_v030_fs_implicit_v4.py'
       - 'tests/test_v030_canonical_final.py'
@@ -67,7 +83,10 @@ jobs:
           fi
           git diff-tree --no-commit-id --name-only -r HEAD > /tmp/latest-head-files.txt
           cat /tmp/latest-head-files.txt
-          if grep -Eq '^(benchmarks/v030_r25_manifest_canonical_integration_oracle\.py|experiments/entropygraph_v030_(canonical_final_impl|r25_manifest_admission|fs_implicit_v4|product_fs)\.py|tests/test_(v030_r25_manifest_admission|v030_fs_implicit_v4|v030_canonical_final|rnd_domination_contract)\.py|\.github/workflows/v030-r25-manifest-canonical-integration\.yml)$' /tmp/latest-head-files.txt; then
+          # This list is intentionally the transitive evidence-critical closure of the oracle, not only the
+          # files edited by the original landing patch. A corpus/baseline/candidate dependency change must not
+          # inherit an older green receipt merely because the top-level oracle source stayed untouched.
+          if grep -Eq '^(benchmarks/(v030_r25_manifest_(canonical_integration|derived_identity)_oracle|v030_release_generalization|mosaic_v029_generalization_bench|neutral_hostile_corpus_v1|neutral_hostile_determinism_repair_v6)\.py|experiments/entropygraph_v030_(canonical_final_impl|canonical_manifest_candidate|r25_manifest_admission|fs_implicit_v4|product_fs|release_candidate)\.py|docs/FORMAT\.md|tests/test_(v030_r25_manifest_admission|v030_fs_implicit_v4|v030_canonical_final|rnd_domination_contract)\.py|\.github/workflows/v030-r25-manifest-canonical-integration\.yml)$' /tmp/latest-head-files.txt; then
             echo 'run_deep=true' >> "$GITHUB_OUTPUT"
           else
             echo 'run_deep=false' >> "$GITHUB_OUTPUT"
