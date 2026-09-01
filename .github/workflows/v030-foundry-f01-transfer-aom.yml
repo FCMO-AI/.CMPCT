@@ -1,64 +1,19 @@
 # ci-lane: deep
-# ci-pr-scope: latest-head-commit-gate
-# ci-cancel-policy: preserve-running-exact-receipt
+# ci-auto-policy: retired-manual-only
 name: CMPCT v0.30 Foundry F-01 structural transfer AOM
 
 on:
-  pull_request:
-    branches: [main]
-    paths:
-      - 'experiments/entropygraph_v030_reversible_structure_compiler_transfer_aom.py'
-      - 'experiments/entropygraph_v030_reversible_structure_compiler_o01.py'
-      - 'docs/v030-rnd/F01_TRANSFER_AOM_PREREG.md'
-      - 'docs/v030-rnd/F01_CAUSAL_RESULT.md'
-      - 'docs/ACTIVE_RESEARCH_THESIS.md'
-      - '.github/workflows/v030-foundry-f01-transfer-aom.yml'
   workflow_dispatch:
 
 permissions:
   contents: read
 
-concurrency:
-  group: cmpct-v030-foundry-f01-transfer-aom-${{ github.event.pull_request.head.sha || github.sha }}
-  cancel-in-progress: false
-
 env:
   PYTHONPATH: ${{ github.workspace }}
-  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+  EVIDENCE_HEAD: ${{ github.sha }}
 
 jobs:
-  classify:
-    runs-on: ubuntu-24.04
-    outputs:
-      run_deep: ${{ steps.scope.outputs.run_deep }}
-    steps:
-      - uses: actions/checkout@v6
-        with:
-          ref: ${{ env.EVIDENCE_HEAD }}
-          fetch-depth: 2
-      - name: Bind exact candidate and classify newest commit
-        id: scope
-        env:
-          EVENT_NAME: ${{ github.event_name }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
-          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
-            echo 'run_deep=true' >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-          git diff-tree --no-commit-id --name-only -r HEAD > /tmp/latest-head-files.txt
-          cat /tmp/latest-head-files.txt
-          if grep -Eq '^(experiments/entropygraph_v030_reversible_structure_compiler_(transfer_aom|o01)\.py|docs/v030-rnd/F01_(TRANSFER_AOM_PREREG|CAUSAL_RESULT)\.md|docs/ACTIVE_RESEARCH_THESIS\.md|\.github/workflows/v030-foundry-f01-transfer-aom\.yml)$' /tmp/latest-head-files.txt; then
-            echo 'run_deep=true' >> "$GITHUB_OUTPUT"
-          else
-            echo 'run_deep=false' >> "$GITHUB_OUTPUT"
-          fi
-
   transfer-aom:
-    needs: classify
-    if: needs.classify.outputs.run_deep == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 150
     steps:
@@ -131,5 +86,6 @@ jobs:
           if-no-files-found: error
           retention-days: 90
 
-# Foundry-only transfer/AOM evidence. It may advance or narrow F-01, but cannot grant canonical or release credit.
-# Execution trigger 2026-09-01: run the already-frozen transfer/AOM contract; no grammar/preregistration semantics changed.
+# F-01 is retired in docs/ACTIVE_RESEARCH_THESIS.md after its frozen hostile review.
+# The historical transfer/AOM instrument remains replayable manually for custody/audit,
+# but it no longer consumes automatic PR runner capacity or grants canonical/release credit.
