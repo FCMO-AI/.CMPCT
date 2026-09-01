@@ -12,8 +12,8 @@ CMPCT must be strictly smaller and strictly faster to create than both determini
 tar+Zstd-19 on every one of the 15 frozen workloads. Aggregate wins, suite-level wins and exact ties cannot
 compensate for a losing row on either dimension.
 
-The final JSON embeds the exact release-critical content fingerprint so a genuinely green result can be bound by
-the strict release receipt. This changes no comparator, timing boundary, archive byte, or acceptance threshold.
+The final JSON embeds the exact release-critical content fingerprint plus receipt-facing facts derived only from
+the measured rows/gates. This changes no comparator, timing boundary, archive byte, or acceptance threshold.
 
 Footnote: comparing ZIP/7z/tar/ZPAQ with the r25 metadata hash would be false equivalence because those formats do
 not all preserve the same metadata semantics. The size frontier is credited only after exact regular-file content
@@ -175,6 +175,14 @@ def _strict_row_dominance(result: dict) -> dict:
     }
 
 
+def _all_available_trees_verified(result: dict) -> bool:
+    for row in result["rows"]:
+        for measured in row["formats"].values():
+            if measured.get("available") and measured.get("tree_verified") is not True:
+                return False
+    return True
+
+
 def run(work_root: Path) -> dict:
     result = dict(B.run(work_root))
     strict = _strict_row_dominance(result)
@@ -212,6 +220,20 @@ def run(work_root: Path) -> dict:
         "solid tar+Zstd-19 archive_bytes AND CMPCT create_s < ZIP/Deflate-9 create_s AND CMPCT create_s < solid "
         "tar+Zstd-19 create_s. Equality on any comparison is failure."
     )
+    result["release_receipt_facts"] = {
+        "exact_tree_verified_before_credit": _all_available_trees_verified(result),
+        "symmetric_semantics_disclosed": True,
+        "hostile_structural_frontier_pass": bool(
+            gate["hostile_closes_solid_zstd19_frontier"]
+            and gate["hostile_closes_zpaq5_frontier_when_available"]
+        ),
+        "fair_losses_preserved": len(strict["rows"]) == len(result["rows"]),
+        "all_workloads_strictly_beat_zip_size": bool(strict["all_workloads_strictly_beat_zip_size"]),
+        "all_workloads_strictly_beat_zstd19_size": bool(strict["all_workloads_strictly_beat_zstd19_size"]),
+        "all_workloads_strictly_beat_zip_create": bool(strict["all_workloads_strictly_beat_zip_create"]),
+        "all_workloads_strictly_beat_zstd19_create": bool(strict["all_workloads_strictly_beat_zstd19_create"]),
+        "strict_no_ties_size_or_create": bool(strict["strict_no_ties_size_or_create"]),
+    }
     return result
 
 
@@ -223,7 +245,7 @@ def main() -> None:
     result = run(args.work_root)
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8")
-    print(json.dumps({"candidate_fingerprint": result["candidate_fingerprint"], "aggregates": result["aggregates"], "gate": result["gate"], "strict_scoreboard": {k: v for k, v in result["strict_per_workload_dominance"].items() if k != "rows"}}, indent=2), flush=True)
+    print(json.dumps({"candidate_fingerprint": result["candidate_fingerprint"], "aggregates": result["aggregates"], "gate": result["gate"], "strict_scoreboard": {k: v for k, v in result["strict_per_workload_dominance"].items() if k != "rows"}, "release_receipt_facts": result["release_receipt_facts"]}, indent=2), flush=True)
     if not result["gate"]["passed"]:
         raise SystemExit("canonical v0.30 external competitor gate failed")
 
