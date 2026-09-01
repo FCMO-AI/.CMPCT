@@ -260,6 +260,7 @@ def decode_manifest(raw: bytes, *, max_path_bytes: int, max_entries: int) -> dic
 
     seen: set[str] = set()
     regular: dict[str, tuple[int, bytes]] = {}
+    regular_metadata: dict[str, tuple] = {}
     hardlinks: dict[str, str] = {}
     for row in entries:
         if not isinstance(row, list) or len(row) != 8:
@@ -299,6 +300,7 @@ def decode_manifest(raw: bytes, *, max_path_bytes: int, max_entries: int) -> dic
             ):
                 raise RuntimeError("r25 filesystem xattr item")
 
+        metadata = (mode, mtime_ns, uid, gid, xattrs)
         if kind == "f":
             if (
                 not isinstance(extra, list)
@@ -311,6 +313,7 @@ def decode_manifest(raw: bytes, *, max_path_bytes: int, max_entries: int) -> dic
             ):
                 raise RuntimeError("r25 regular-file identity declaration")
             regular[rel] = (int(extra[0]), bytes(extra[1]))
+            regular_metadata[rel] = metadata
         elif kind == "d":
             if extra is not None:
                 raise RuntimeError("r25 directory carries unexpected payload")
@@ -322,6 +325,12 @@ def decode_manifest(raw: bytes, *, max_path_bytes: int, max_entries: int) -> dic
                 # The target must be an already-declared *regular owner*, not merely any earlier path. This
                 # removes hardlink chains/cycles and keeps read_member dependency depth bounded at one.
                 raise RuntimeError("r25 hardlink target must be an earlier regular-file owner")
+            if metadata != regular_metadata[extra]:
+                # Hardlinks are two names for one inode. Mode/ownership/mtime/xattrs therefore cannot diverge
+                # between alias and owner without making exact extraction physically impossible. Reject such an
+                # authenticated declaration before publication instead of silently letting the last metadata write
+                # mutate both names to one of two contradictory states.
+                raise RuntimeError("r25 hardlink metadata must match its regular-file owner")
             hardlinks[rel] = extra
         seen.add(rel)
 
