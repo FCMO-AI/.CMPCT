@@ -2,12 +2,13 @@ from __future__ import annotations
 
 """Exact D5 gate for the implicit-v4 canonical integration candidate.
 
-The already-proven generic writer/reader seam is exercised through the real canonical
-release primitives, not a second archive grammar. Baseline and candidate build the same
-r25 combined ablation from the same source tree. The candidate must be strictly smaller,
-strongly verify and extract through its direct seam, reconstruct the exact user tree, and
-remain rejected by the unmodified shipping facade. Passing authorizes only the next
-productization prerequisite.
+The already-proven generic writer/reader seam is exercised through real canonical-r25
+representation primitives, not a second archive grammar. Baseline and candidate build the
+same canonical-r25-only G04/PrefixGraph tournament from the same source tree; the only
+staged-tree difference is filesystem-v1 versus content-agnostic implicit-v4 control.
+The candidate must be strictly smaller, strongly verify and extract through its direct
+seam, reconstruct the exact user tree, and remain rejected by the unmodified shipping
+facade. Passing authorizes only the next productization prerequisite.
 """
 
 import argparse
@@ -42,8 +43,19 @@ def run(work_root: Path) -> dict:
 
     baseline_archive = work_root / "baseline-r25.cmpct"
     candidate_archive = work_root / "candidate-r25.cmpct"
-    BASE.build_ablation(source, baseline_archive, "combined")
-    CAND.build_ablation(source, candidate_archive, "combined")
+    baseline_stats = CAND.build_ablation(source, baseline_archive, "combined-explicit")
+    candidate_stats = CAND.build_ablation(source, candidate_archive, "combined")
+
+    if int(baseline_stats.get("format_revision", -1)) != BASE.REVISION:
+        raise RuntimeError("baseline manifest A/B did not materialize canonical r25 bytes")
+    if int(candidate_stats.get("format_revision", -1)) != BASE.REVISION:
+        raise RuntimeError("implicit manifest A/B did not materialize canonical r25 bytes")
+    if baseline_stats.get("candidate_set") != candidate_stats.get("candidate_set"):
+        raise RuntimeError("manifest A/B changed canonical representation candidate set")
+    if baseline_stats.get("manifest_encoding") != "filesystem-v1":
+        raise RuntimeError("baseline manifest A/B did not retain filesystem-v1")
+    if candidate_stats.get("manifest_encoding") != "implicit-v4":
+        raise RuntimeError("candidate manifest A/B did not admit implicit-v4")
 
     baseline_bytes = baseline_archive.stat().st_size
     candidate_bytes = candidate_archive.stat().st_size
@@ -58,6 +70,10 @@ def run(work_root: Path) -> dict:
         )
     if baseline_sha256 == candidate_sha256:
         raise RuntimeError("canonical implicit-manifest candidate unexpectedly matched baseline physical bytes")
+
+    baseline_verify = BASE.strong_verify(baseline_archive)
+    if not baseline_verify.get("ok") or baseline_verify.get("tree_sha256") != expected_tree:
+        raise RuntimeError(f"explicit-manifest canonical r25 baseline failed shipping verification: {baseline_verify!r}")
 
     candidate_verify = CAND.strong_verify(candidate_archive)
     if not candidate_verify.get("ok"):
@@ -105,12 +121,17 @@ def run(work_root: Path) -> dict:
         raise RuntimeError("canonical candidate control read exceeded release locality ceiling")
 
     return {
-        "schema": "cmpct-v030-r25-manifest-canonical-candidate-gate-v3",
+        "schema": "cmpct-v030-r25-manifest-canonical-candidate-gate-v4",
         "source_commit": _source_commit(),
         "target": SIZE.TARGET,
         "release_credit": False,
         "shipping_module_changed": False,
         "candidate_uses_process_global_mutation": False,
+        "canonical_candidate_set": candidate_stats.get("candidate_set"),
+        "baseline_selected_profile": baseline_stats.get("format_profile"),
+        "candidate_selected_profile": candidate_stats.get("format_profile"),
+        "baseline_selected": baseline_stats.get("selected"),
+        "candidate_selected": candidate_stats.get("selected"),
         "baseline_archive_bytes": baseline_bytes,
         "baseline_archive_sha256": baseline_sha256,
         "candidate_archive_bytes": candidate_bytes,
@@ -119,6 +140,7 @@ def run(work_root: Path) -> dict:
         "minimum_useful_archive_saving_bytes": SIZE.MIN_USEFUL_ARCHIVE_SAVING,
         "promotion_signal": saving >= SIZE.MIN_USEFUL_ARCHIVE_SAVING,
         "strictly_smaller_than_legacy_r25": candidate_bytes < baseline_bytes,
+        "baseline_shipping_strong_verify": baseline_verify,
         "candidate_strong_verify": candidate_verify,
         "candidate_extract_tree_sha256": extracted_tree,
         "expected_tree_sha256": expected_tree,
@@ -135,12 +157,12 @@ def run(work_root: Path) -> dict:
             "saturation_triggers": ["S6"],
             "research_priority_score": 94,
             "pre_mortem": (
-                "The compact control can save bytes in an isolated writer yet fail through canonical primitives because "
-                "semantic tree identity, authenticated graph ownership or locality no longer match."
+                "The compact control can save bytes in a research tournament yet fail through actual canonical r25 "
+                "bytes because the inner product selector is allowed to return noncanonical accepted-v0.29 fallback."
             ),
             "builder": (
-                "Run legacy and implicit-v4 staging through the real canonical r25 combined substrate and exercise a "
-                "direct candidate verify/read/extract seam without process-global mutation."
+                "Price explicit-v1 and implicit-v4 staging through the same canonical-r25-only G04/PrefixGraph "
+                "candidate set and exercise direct candidate verify/read/extract without process-global mutation."
             ),
             "hostile_review": (
                 "A green candidate is not shipping proof: release-facing source is unchanged, and recovery, native, "
@@ -175,6 +197,7 @@ def main() -> None:
         "manifest_encoding": result["manifest_encoding"],
         "shipping_facade_fail_closed_unchanged": result["shipping_facade_fail_closed_unchanged"],
         "candidate_uses_process_global_mutation": result["candidate_uses_process_global_mutation"],
+        "canonical_candidate_set": result["canonical_candidate_set"],
     }, indent=2), flush=True)
 
 
