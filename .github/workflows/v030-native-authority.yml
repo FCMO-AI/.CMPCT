@@ -10,6 +10,7 @@ on:
     paths:
       - 'native/cmpct-portable/**'
       - 'native/cmpct-core/**'
+      - 'cmpct/**'
       - 'experiments/entropygraph_v030_canonical_final.py'
       - 'experiments/entropygraph_v030_canonical_final_impl.py'
       - 'experiments/entropygraph_v030_profile_isolation.py'
@@ -17,6 +18,14 @@ on:
       - 'experiments/entropygraph_v030_product_fs.py'
       - 'experiments/entropygraph_v030_r25_manifest_admission.py'
       - 'experiments/entropygraph_v030_fs_implicit_v4.py'
+      - 'experiments/entropygraph_v030_geometry_overlay_g04.py'
+      - 'experiments/entropygraph_v030_prefixgraph.py'
+      - 'experiments/entropygraph_v030_prefixgraph_parallel.py'
+      - 'experiments/entropygraph_v030_release_admission.py'
+      - 'experiments/entropygraph_v030_release_candidate.py'
+      - 'experiments/entropygraph_v030_release_reader_policy.py'
+      - 'experiments/entropygraph_v030_shared_portfolio.py'
+      - 'experiments/entropygraph_v030_release_lock_strict.py'
       - 'tests/test_v030_canonical_final.py'
       - 'tests/test_v030_profile_isolation.py'
       - 'tests/test_v030_r25_manifest_admission.py'
@@ -32,6 +41,8 @@ on:
       - 'docs/HARDENING.md'
       - 'docs/NATIVE_CORE.md'
       - 'docs/PORTABILITY.md'
+      - 'tools/check_ci_topology.py'
+      - 'pyproject.toml'
       - '.github/workflows/v030-native-authority.yml'
   workflow_dispatch:
 
@@ -69,7 +80,10 @@ jobs:
           fi
           git diff-tree --no-commit-id --name-only -r HEAD > /tmp/latest-head-files.txt
           cat /tmp/latest-head-files.txt
-          if grep -Eq '^(native/cmpct-(portable|core)/|experiments/entropygraph_v030_(canonical_final|canonical_final_impl|profile_isolation|release_product|product_fs|r25_manifest_admission|fs_implicit_v4)\.py|tests/(test_v030_(canonical_final|profile_isolation|r25_manifest_admission|fs_implicit_v4)\.py|generate_v030_(canonical|implicit)_goldens\.py|conformance/v030-r25-(canonical|implicit-v4)\.json|native_v030_(canonical|implicit_manifest|r24_verify_authority)\.py)|docs/(FORMAT|HARDENING|NATIVE_CORE|PORTABILITY)\.md|\.github/workflows/v030-native-authority\.yml)' /tmp/latest-head-files.txt; then
+          # Keep the newest-head classifier aligned with the full evidence-critical dependency closure. Native
+          # authority executes canonical Python semantics and emits a strict release fingerprint, so changes to
+          # those transitive inputs must not inherit an older green native receipt.
+          if grep -Eq '^(native/cmpct-(portable|core)/|cmpct/.*|experiments/entropygraph_v030_(canonical_final|canonical_final_impl|profile_isolation|release_product|product_fs|r25_manifest_admission|fs_implicit_v4|geometry_overlay_g04|prefixgraph|prefixgraph_parallel|release_admission|release_candidate|release_reader_policy|shared_portfolio|release_lock_strict)\.py|tests/(test_v030_(canonical_final|profile_isolation|r25_manifest_admission|fs_implicit_v4)\.py|generate_v030_(canonical|implicit)_goldens\.py|conformance/v030-r25-(canonical|implicit-v4)\.json|native_v030_(canonical|implicit_manifest|r24_verify_authority)\.py)|docs/(FORMAT|HARDENING|NATIVE_CORE|PORTABILITY)\.md|tools/check_ci_topology\.py|pyproject\.toml|\.github/workflows/v030-native-authority\.yml)' /tmp/latest-head-files.txt; then
             echo 'run_native=true' >> "$GITHUB_OUTPUT"
           else
             echo 'run_native=false' >> "$GITHUB_OUTPUT"
