@@ -9,6 +9,7 @@ on:
       - "docs/CI_ARCHITECTURE.md"
       - "tools/check_ci_topology.py"
       - "tests/test_ci_topology.py"
+      - "tests/test_ci_topology_split_receipts.py"
   push:
     branches: [main]
     paths:
@@ -17,6 +18,7 @@ on:
       - "docs/CI_ARCHITECTURE.md"
       - "tools/check_ci_topology.py"
       - "tests/test_ci_topology.py"
+      - "tests/test_ci_topology_split_receipts.py"
   workflow_dispatch:
 
 permissions:
@@ -55,7 +57,7 @@ jobs:
           BEFORE: ${{ github.event.before }}
         run: |
           set -euo pipefail
-          # Pull-request synchronize payloads expose the previous head as `before`; prefer that so a 1,600-commit
+          # Pull-request synchronize payloads expose the previous head as `before`; prefer that so a long-lived
           # integration PR does not re-ratchet every historical workflow edit on each new commit. Initial/opened
           # events may not have a usable before SHA, in which case the PR base is the correct first-diff boundary.
           if [ -n "${BEFORE:-}" ] && [ "$BEFORE" != "0000000000000000000000000000000000000000" ]; then
@@ -75,7 +77,12 @@ jobs:
           python tools/check_ci_topology.py "${files[@]}"
 
       - name: Ratchet topology checker policy
-        run: python -m pytest -q tests/test_ci_topology.py
+        run: |
+          python -m pytest -q \
+            tests/test_ci_topology.py \
+            tests/test_ci_topology_split_receipts.py
 
 # This ratchet deliberately checks the latest synchronization/push delta. Existing workflow debt is not precedent,
 # but it is also not reintroduced work: touching a workflow makes the current topology contract apply immediately.
+# Split classifier/receipt custody is itself executable policy: its focused tests must run whenever either the checker
+# or split-policy test changes so queue-pressure fixes cannot silently weaken exact-source evidence custody.
