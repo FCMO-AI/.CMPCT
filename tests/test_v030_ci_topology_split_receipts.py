@@ -47,6 +47,7 @@ def test_authoritative_v2_classifier_is_release_fingerprint_driven() -> None:
     """
 
     workflow = (ROOT / ".github/workflows/v030-authoritative-v2-pr.yml").read_text(encoding="utf-8")
+    doctrine = (ROOT / "docs/CI_SPLIT_RECEIPT_CUSTODY.md").read_text(encoding="utf-8")
     manifest = json.loads((ROOT / "docs/V030_RELEASE_LOCK.json").read_text(encoding="utf-8"))
     globs = manifest["fingerprint_globs"]
 
@@ -58,6 +59,10 @@ def test_authoritative_v2_classifier_is_release_fingerprint_driven() -> None:
     assert "docs/PUBLIC_SURFACE.md" in globs
     assert "tools/check_public_surface.py" in globs
     assert ".github/workflows/v030-*.yml" in globs
+    # The durable zero-history law must keep the cancellation-before-admission failure mode explicit.
+    assert "cancellation **before admission is safe only" in doctrine
+    assert "tests/test_v030_ci_topology_split_receipts.py" in doctrine
+    assert "classifier supersession cannot erase an unmet exact-fingerprint evidence obligation" in doctrine
 
 
 def test_split_receipt_policy_rejects_workflow_level_concurrency(tmp_path: Path) -> None:
