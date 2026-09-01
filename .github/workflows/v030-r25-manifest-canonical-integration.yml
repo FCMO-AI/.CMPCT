@@ -14,7 +14,9 @@ on:
       - 'benchmarks/mosaic_v029_generalization_bench.py'
       - 'benchmarks/neutral_hostile_corpus_v1.py'
       - 'benchmarks/neutral_hostile_determinism_repair_v6.py'
+      - 'experiments/entropygraph_v030_canonical_final.py'
       - 'experiments/entropygraph_v030_canonical_final_impl.py'
+      - 'experiments/entropygraph_v030_profile_isolation.py'
       - 'experiments/entropygraph_v030_canonical_manifest_candidate.py'
       - 'experiments/entropygraph_v030_r25_manifest_admission.py'
       - 'experiments/entropygraph_v030_fs_implicit_v4.py'
@@ -36,7 +38,9 @@ on:
       - 'benchmarks/mosaic_v029_generalization_bench.py'
       - 'benchmarks/neutral_hostile_corpus_v1.py'
       - 'benchmarks/neutral_hostile_determinism_repair_v6.py'
+      - 'experiments/entropygraph_v030_canonical_final.py'
       - 'experiments/entropygraph_v030_canonical_final_impl.py'
+      - 'experiments/entropygraph_v030_profile_isolation.py'
       - 'experiments/entropygraph_v030_canonical_manifest_candidate.py'
       - 'experiments/entropygraph_v030_r25_manifest_admission.py'
       - 'experiments/entropygraph_v030_fs_implicit_v4.py'
@@ -88,7 +92,7 @@ jobs:
           # This list is intentionally the transitive evidence-critical closure of the oracle, not only the
           # files edited by the original landing patch. A corpus/baseline/candidate dependency change must not
           # inherit an older green receipt merely because the top-level oracle source stayed untouched.
-          if grep -Eq '^(src/cmpct/.*|benchmarks/(v030_r25_manifest_(canonical_integration|derived_identity)_oracle|v030_release_generalization|mosaic_v029_generalization_bench|neutral_hostile_corpus_v1|neutral_hostile_determinism_repair_v6)\.py|experiments/entropygraph_v030_(canonical_final_impl|canonical_manifest_candidate|r25_manifest_admission|fs_implicit_v4|product_fs|release_candidate)\.py|docs/FORMAT\.md|tests/test_(v030_r25_manifest_admission|v030_fs_implicit_v4|v030_canonical_final|rnd_domination_contract)\.py|\.github/workflows/v030-r25-manifest-canonical-integration\.yml)$' /tmp/latest-head-files.txt; then
+          if grep -Eq '^(src/cmpct/.*|benchmarks/(v030_r25_manifest_(canonical_integration|derived_identity)_oracle|v030_release_generalization|mosaic_v029_generalization_bench|neutral_hostile_corpus_v1|neutral_hostile_determinism_repair_v6)\.py|experiments/entropygraph_v030_(canonical_final|canonical_final_impl|profile_isolation|canonical_manifest_candidate|r25_manifest_admission|fs_implicit_v4|product_fs|release_candidate)\.py|docs/FORMAT\.md|tests/test_(v030_r25_manifest_admission|v030_fs_implicit_v4|v030_canonical_final|rnd_domination_contract)\.py|\.github/workflows/v030-r25-manifest-canonical-integration\.yml)$' /tmp/latest-head-files.txt; then
             echo 'run_deep=true' >> "$GITHUB_OUTPUT"
           else
             echo 'run_deep=false' >> "$GITHUB_OUTPUT"
@@ -130,7 +134,9 @@ jobs:
           assert '### 15.1 Admitted compact filesystem control (implicit-v4)' in fmt
           PY
           python -m py_compile \
+            experiments/entropygraph_v030_canonical_final.py \
             experiments/entropygraph_v030_canonical_final_impl.py \
+            experiments/entropygraph_v030_profile_isolation.py \
             experiments/entropygraph_v030_r25_manifest_admission.py \
             experiments/entropygraph_v030_canonical_manifest_candidate.py \
             benchmarks/v030_r25_manifest_canonical_integration_oracle.py
@@ -195,3 +201,5 @@ jobs:
 # Read-only S6 authority after the canonical Python seam landed. Recovery/native/Android/all-15 authority remain
 # separate mandatory prerequisites and no result from this lane alone can grant release credit. The installed core
 # package is part of the exact product behavior and therefore belongs to this lane's transitive evidence closure.
+# The research comparison candidate imports the public canonical wrapper, which in turn owns profile-isolation
+# dispatch; both are therefore evidence-critical dependencies rather than invisible implementation details.
