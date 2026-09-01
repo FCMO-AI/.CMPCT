@@ -1,6 +1,6 @@
 name: CMPCT v0.30 final release authority
 # ci-lane: release
-# ci-cancel-policy: preserve-running-exact-receipt
+# ci-cancel-policy: split-classifier-preserve-receipts
 # ci-pr-scope: latest-head-commit-gate
 
 on:
@@ -69,10 +69,6 @@ on:
 permissions:
   contents: read
 
-concurrency:
-  group: cmpct-v030-final-release-${{ github.event.pull_request.head.sha || github.sha }}
-  cancel-in-progress: false
-
 env:
   PYTHONPATH: ${{ github.workspace }}
   EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
@@ -81,6 +77,9 @@ jobs:
   latest-head-impact:
     runs-on: ubuntu-24.04
     timeout-minutes: 5
+    concurrency:
+      group: cmpct-v030-final-classifier-${{ github.event.pull_request.number || github.ref }}
+      cancel-in-progress: true
     outputs:
       run_release: ${{ steps.scope.outputs.run_release }}
     steps:
@@ -116,6 +115,9 @@ jobs:
     if: needs.latest-head-impact.outputs.run_release == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 25
+    concurrency:
+      group: cmpct-v030-final-contracts-${{ github.event.pull_request.head.sha || github.sha }}
+      cancel-in-progress: false
     steps:
       - uses: actions/checkout@v6
         with:
@@ -183,6 +185,9 @@ jobs:
     needs: contracts
     runs-on: ubuntu-24.04
     timeout-minutes: 420
+    concurrency:
+      group: cmpct-v030-final-compression-${{ github.event.pull_request.head.sha || github.sha }}
+      cancel-in-progress: false
     steps:
       - uses: actions/checkout@v6
         with:
@@ -221,8 +226,6 @@ jobs:
           assert a['product_engine']=='experiments/entropygraph_v030_release_product.py'
           assert a['release_facade']=='cmpct-v030-release-product-v1'
           h=a['historical_causality']; p=a['canonical_product_parity']
-          # repair-v6 changed the accepted deterministic substrate from 137,501,815 B to 137,499,525 B. The
-          # inherited absolute v0.30 revision hurdle remains 687,783 B; substrate repair may never lower it.
           assert h['accepted_v029_bytes']==137499525
           assert h['workloads_regressed']==0
           assert h['workloads_improved']>=3
@@ -245,6 +248,9 @@ jobs:
     needs: contracts
     runs-on: ubuntu-24.04
     timeout-minutes: 480
+    concurrency:
+      group: cmpct-v030-final-runtime-${{ github.event.pull_request.head.sha || github.sha }}
+      cancel-in-progress: false
     steps:
       - uses: actions/checkout@v6
         with:
@@ -317,6 +323,9 @@ jobs:
     needs: contracts
     runs-on: ubuntu-24.04
     timeout-minutes: 540
+    concurrency:
+      group: cmpct-v030-final-external-${{ github.event.pull_request.head.sha || github.sha }}
+      cancel-in-progress: false
     steps:
       - uses: actions/checkout@v6
         with:
@@ -364,20 +373,11 @@ jobs:
           if-no-files-found: error
           retention-days: 90
 
-# Footnote: historical mechanism causality and canonical product parity intentionally remain different byte/tree
-# domains. The repair-v6 substrate owns the accepted 137,499,525 B baseline while the inherited 687,783 B revision
-# hurdle remains unchanged; canonical product parity separately proves r25 never regresses genuine r24 bytes.
-# Conflating these domains would either make product metadata appear free or let corpus repair weaken the release bar.
-# The isolated wrapper, preserved implementation body and isolation loader are all release-critical triggers;
-# changing any one can alter canonical profile dispatch even when the public wrapper filename itself is unchanged.
-# The promoted product front door and canonical external comparator are dependency roots, not self-contained leaves:
-# their direct implementation/terminal/comparator dependencies are explicit trigger and compile inputs so a semantic
-# change cannot inherit an older final receipt merely because the wrapper itself stayed untouched.
-# Verified staging restoration is part of the promoted extraction semantics and runtime path. It is therefore a
-# release-critical trigger/compile dependency rather than an invisible helper imported through release_product_base.
-# Profile isolation clones the bounded streaming reader into the canonical graph. Reader-source changes therefore
-# invalidate final authority even when the policy/wrapper files stay untouched; both sources are compiled explicitly.
-# The paired runtime adapter delegates the timing engine to v030_release_performance.py; that underlying harness is
-# therefore a first-class trigger/compile input rather than an invisible source of timing and RSS semantics.
-# Exact final-release receipts are preserved once running; exact-SHA concurrency also protects a pending receipt from
-# eviction by a newer head, while the newest-commit gate cheaply declines unrelated long-PR synchronizations.
+# Footnote: the classifier is intentionally cancellable by PR/ref while each expensive evidence job uses its own
+# exact-SHA non-cancelling job group. A newer commit can discard obsolete routing work without killing a useful
+# already-started compression/runtime/external receipt. This removes the long-lived-PR classifier backlog created by
+# workflow-level exact-SHA concurrency while preserving exact-source scientific custody. Historical mechanism
+# causality and canonical product parity remain different byte/tree domains; the repair-v6 substrate owns the
+# accepted 137,499,525 B baseline while the inherited 687,783 B revision hurdle remains unchanged. The isolated
+# wrapper, preserved implementation, profile graph, verified staging restorer and bounded streaming reader are all
+# release-critical dependencies. Classifier-only green still grants no substantive release credit.
