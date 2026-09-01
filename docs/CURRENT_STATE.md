@@ -284,6 +284,19 @@ Revision 24 supports or prototypes:
 Treat these as **reference behavior**, not yet as a frozen 1.0 interoperability standard.
 EntropyGraph-II CMPNX8 semantics are intentionally **not** included in this r24 capability list.
 
+## Provisional v0.30 r25 filesystem-control integration
+
+On `agent/v030-authoritative-integration`, the canonical r25 writer/reader admits the compact implicit-v4
+filesystem control through the shared content-agnostic admission seam. The decisive exact-head A/B that
+authorized landing reduced the developer-repository complete r25 artifact from **909,369 B to 844,116 B**
+(**65,253 B saved**) while preserving exact user-tree semantics, strong verification and **1.0x** control-read
+amplification. The explicit filesystem-v1 encoding remains the mandatory fallback on ties or any failed semantic
+proof.
+
+This is a D5 productization step, not release authority. Recovery/malformed-control parity, shared native parsing,
+Android/platform parity, genuine r24 product-floor selection, exact all-workload competitor authority and the
+strict release lock still must pass on one exact candidate before v0.30 can ship.
+
 ## Design invariants
 
 1. **Byte-exact losslessness.** Extraction reproduces file bytes exactly unless a caller explicitly requests different semantics.

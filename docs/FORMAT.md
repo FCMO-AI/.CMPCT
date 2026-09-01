@@ -223,6 +223,32 @@ Symlink target admission is host-independent: the same target must be safe under
 
 Footnote: an archive admitted on one operating system must not become traversal-capable merely because the same authenticated link bytes are materialized by another platform later.
 
+### 15.1 Admitted compact filesystem control (implicit-v4)
+
+The canonical r25 encoder may replace the explicit filesystem-v1 MessagePack map above with the bounded
+**implicit-v4** control only when the source filesystem-v1 control is valid, implicit-v4 expands back to exactly
+the same filesystem-v1 semantics, and its encoded bytes are strictly smaller. Ties and any failed semantic proof
+retain filesystem-v1. Admission is structural/content-agnostic and may not depend on workload names, benchmark
+hashes, source paths or equivalent identity.
+
+The implicit-v4 wire value is one four-element MessagePack array: `[4, default_metadata,
+regular_metadata_overrides, explicit_rows]`. `default_metadata` is `[mode, mtime_ns, uid, gid, xattrs]`; each
+regular-file metadata row is a bounded bitmask plus numeric deltas and/or xattr replacement relative to that
+default. Regular paths, sizes and SHA-256 identities are omitted because the selected authenticated content graph
+already owns them. `explicit_rows` contains only directories, symlinks and hardlinks using prefix-delta paths, a
+compact kind code, metadata override and kind-specific payload. Hardlinks address an authenticated regular owner
+by its canonical sorted regular-entry index.
+
+A reader must authenticate the compact control as an ordinary graph member, obtain regular path/size/SHA-256
+identities from that same authenticated graph, reconstruct the full filesystem-v1 semantic entry set, and then
+apply every ordinary path, metadata, hardlink, symlink, resource and content/manifest consistency rule. A count,
+path, identity or grammar mismatch fails closed; it never falls back to a different interpretation. The compact
+control retains the existing 8 MiB bounded decode-unit ceiling.
+
+The admission changes only filesystem-control encoding inside provisional revision 25. It does not alter the two
+`CMP25*` profile magics, user-tree semantics, genuine-r24 fallback rule, <=8x locality requirement or release
+lock. Native/Android/recovery implementations must consume this same dual-control grammar before r25 can ship.
+
 ## 16. Content/manifest consistency and tree identities
 
 For a valid revision-25 archive, the selected content profile's authenticated logical-member set must be
