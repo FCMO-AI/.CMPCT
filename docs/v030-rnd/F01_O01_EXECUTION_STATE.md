@@ -1,57 +1,87 @@
 # F-01 / O0.1 execution state
 
-This record is operational custody for the active Foundry thesis. It grants **no canonical or release credit**.
+This record is operational Custody for the active Foundry thesis. It grants **no canonical or release credit**.
 
-## First admissible decisive pass
+## Accepted decisive receipt
 
-The first F-01/O0.1 result that may change thesis state is the exact research instrument frozen at:
+The first admissible F-01/O0.1 decisive result is complete and accepted under the frozen preregistration/instrument:
 
 - grammar/search/program implementation seed: `9cbbed9b264e84cebcc0352f7f7878f5cad90f65`;
-- decisive evidence wrapper: `c3ef298bcc3fb7f95a65245c9341f112581aa175`;
+- decisive evidence wrapper/source commit: `c3ef298bcc3fb7f95a65245c9341f112581aa175`;
 - workflow: `.github/workflows/v030-foundry-f01-o01.yml`;
-- expected workflow run for the decisive wrapper head: `33465582063`.
+- workflow run: `33465582063`;
+- artifact: `v030-foundry-f01-o01-c3ef298bcc3fb7f95a65245c9341f112581aa175`;
+- artifact digest: `sha256:3c4a5ed2195e8f9e0d3937a4f12863645e8f8bd152a49dc615dcac056f881323`;
+- schema: `cmpct-v030-foundry-f01-o01-v2`;
+- source commit inside receipt: `c3ef298bcc3fb7f95a65245c9341f112581aa175`;
+- corpus fingerprint: `6b6438aff98e7a9e69ee834fe3f2135cc03acde0babac42100c544519e56c574`;
+- decision: **`ADVANCE_COMPOSITION`**.
 
-The workflow must bind `source_commit` to the exact checked-out head and must produce schema
-`cmpct-v030-foundry-f01-o01-v2`. A classifier-only green, a skipped oracle job, or an artifact from an
-earlier SHA is not thesis evidence.
+Earlier run `33465380583` and all pre-`c3ef298b...` artifacts remain superseded for thesis decision purposes.
 
-## Pre-result instrument corrections
+## Decision-changing measurements
 
-These corrections were made **before any F-01 oracle result was accepted or inspected**:
+Material discovery composition signatures:
 
-1. the initial implementation did not emit the preregistered discovery/hostile corpus fingerprint;
-2. the first discovery corpus did not contain enough causally distinct composition structure to support
-   the preregistered "at least two structurally distinct cases" positive witness;
-3. operator-space nomination accounting initially undercounted `SPLIT` by counting only winning programs.
+- `SPLIT(LANE[*]+DELIM[*])`: 2090 B manual -> 1538 B synthesized, **-552 B / -26.41%**;
+- `SPLIT(LANE[*]+LANE[*])`: 3086 B manual -> 2525 B synthesized, **-561 B / -18.18%**.
 
-The corrections do not add an operator, change program serialization/byte charging, alter the 4 KiB split
-grid, alter the material-saving threshold, or change search semantics. They harden evidence custody only:
+Post-freeze transfer:
 
-- discovery + hostile cases are manifest-hashed;
-- one additional discovery case composes two different fixed-width lane geometries;
-- post-freeze transfer remains derived from the exact public source commit;
-- every frozen-grid split point counts as a `SPLIT` nomination;
-- an advance/discovery decision is fail-closed unless at least two normalized material composition
-  signatures survive, transfer has at least one material win, and hostile false wins remain zero.
+- `transfer_postfreeze_mixed_shifted`: 1843 B manual -> 1416 B synthesized, **-427 B / -23.17%**.
 
-Earlier run `33465380583` and all artifacts from pre-`c3ef298b...` heads are explicitly superseded for thesis
-decision purposes.
+Controls:
+
+- hostile false wins: **0**;
+- exact reconstruction: **all cases**;
+- heuristic prunes: **0**;
+- search optimality: proven within the frozen grid grammar;
+- total generated/costed search states: 1930 / 1930;
+- exact-bound prunes: 164;
+- aggregate search wall time: 24.0431 s;
+- measured peak RSS: 34,036 KiB.
+
+Representation bytes were fully charged. Search wall time was gifted exactly as allowed by O0.1.
 
 ## Oracle Gift Ledger
 
-O0.1 may gift discovery/search wall time, broad bounded enumeration, and identity-independent candidate
-ordering. It may **not** gift program/control bytes, terminal streams, required basis bytes, exact
-reconstruction, or the actual serialized-size comparator. Canonical framing/recovery, full archive
-index/tree cost, native/Android/platform, product create time, whole-archive locality/selective read, and
-hostile parser/fuzz remain explicit downstream debt even if O0.1 finds headroom.
+Gifted:
 
-## Required decision after the receipt
+- discovery/search wall time;
+- broad bounded enumeration;
+- identity-independent candidate ordering.
 
-The receipt must end in one of the preregistered oracle decisions:
+Never gifted:
 
-`ADVANCE_COMPOSITION`, `DISCOVER_PRIMITIVE`, `MANUAL_FRONTIER_CONFIRMED`, `SEARCH_INCONCLUSIVE`, or
-`RETIRE_F01`.
+- program/control bytes;
+- terminal streams/literals;
+- required reconstruction inputs;
+- exact reconstruction;
+- serialized-size comparator.
 
-If the decisive job fails, inspect its exact log first. A deterministic implementation/harness defect may be
-repaired under the preregistration's instrument-defect exception, but any repair creates a new freeze SHA and
-the failed run earns no thesis credit. Do not enlarge the grammar after seeing an unfavorable result.
+Deferred O1/O2 debt:
+
+- canonical framing/recovery;
+- full archive tree/index;
+- native/Android/platform;
+- product create time;
+- whole-archive locality/selective read;
+- hostile parser/fuzz;
+- Addressable Opportunity Mass;
+- global mechanism carrying cost.
+
+## Frozen interpretation
+
+The accepted result establishes bounded exact **composition headroom beyond the one-stage manual frontier**. It does not establish universal synthesis, product viability, product speed, release dominance, or superiority to every historical CMPCT research representation.
+
+The strongest surviving objection is that the 4 KiB split grid is intentionally narrow and may overstate how much of arbitrary-data structure is reachable by the same mechanism.
+
+## Required next experiment
+
+The next decisive Foundry action is the frozen causal/operator-liability experiment in:
+
+- `docs/v030-rnd/F01_CAUSAL_ABLATION_PREREG.md`;
+- `experiments/entropygraph_v030_reversible_structure_compiler_causal_ablation.py`;
+- `.github/workflows/v030-foundry-f01-causal-ablation.yml`.
+
+Do not add new operators before that result. The experiment must determine whether SPLIT and the participating LANE/DELIM operators have unique causal contribution on the accepted witnesses and whether any existing lane-width candidates are search liabilities on the tested regime.

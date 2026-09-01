@@ -1,0 +1,128 @@
+# ci-lane: deep
+# ci-pr-scope: latest-head-commit-gate
+# ci-cancel-policy: preserve-running-exact-receipt
+name: CMPCT v0.30 Foundry F-01 causal ablation
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'experiments/entropygraph_v030_reversible_structure_compiler_causal_ablation.py'
+      - 'docs/v030-rnd/F01_CAUSAL_ABLATION_PREREG.md'
+      - 'docs/v030-rnd/F01_O01_RESULT.md'
+      - 'docs/v030-rnd/F01_O01_EXECUTION_STATE.md'
+      - 'docs/ACTIVE_RESEARCH_THESIS.md'
+      - '.github/workflows/v030-foundry-f01-causal-ablation.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-v030-foundry-f01-causal-${{ github.event.pull_request.head.sha || github.sha }}
+  cancel-in-progress: false
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+
+jobs:
+  classify:
+    runs-on: ubuntu-24.04
+    outputs:
+      run_deep: ${{ steps.scope.outputs.run_deep }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 2
+      - name: Bind exact candidate head
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+      - name: Classify exact newest-head change
+        id: scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "run_deep=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          changed="$(git diff-tree --no-commit-id --name-only -r HEAD)"
+          printf '%s\n' "$changed"
+          if printf '%s\n' "$changed" | grep -Eq '^(experiments/entropygraph_v030_reversible_structure_compiler_causal_ablation\.py|docs/v030-rnd/F01_CAUSAL_ABLATION_PREREG\.md|docs/v030-rnd/F01_O01_(RESULT|EXECUTION_STATE)\.md|docs/ACTIVE_RESEARCH_THESIS\.md|\.github/workflows/v030-foundry-f01-causal-ablation\.yml)$'; then
+            echo "run_deep=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "run_deep=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  causal:
+    needs: classify
+    if: needs.classify.outputs.run_deep == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - name: Bind exact frozen causal head
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install exact research dependencies
+        run: |
+          set -euo pipefail
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[test]'
+      - name: Compile accepted O0.1 and causal instruments
+        run: |
+          python -m py_compile experiments/entropygraph_v030_reversible_structure_compiler_o01.py
+          python -m py_compile experiments/entropygraph_v030_reversible_structure_compiler_o01_decisive.py
+          python -m py_compile experiments/entropygraph_v030_reversible_structure_compiler_causal_ablation.py
+      - name: Verify frozen causal preregistration
+        run: |
+          grep -F 'F-01 causal ablation preregistration' docs/v030-rnd/F01_CAUSAL_ABLATION_PREREG.md
+          grep -F 'ADVANCE_COMPOSITION' docs/v030-rnd/F01_O01_RESULT.md
+      - name: Execute exact causal ablation
+        run: |
+          mkdir -p benchmark-artifacts
+          python -m experiments.entropygraph_v030_reversible_structure_compiler_causal_ablation \
+            --source-commit "$EVIDENCE_HEAD" \
+            --output benchmark-artifacts/v030-foundry-f01-causal-ablation.json
+      - name: Independently enforce causal evidence contract
+        run: |
+          python - <<'PY'
+          import json, os, subprocess
+          from pathlib import Path
+          assert subprocess.check_output(['git','rev-parse','HEAD'], text=True).strip() == os.environ['EVIDENCE_HEAD']
+          d=json.loads(Path('benchmark-artifacts/v030-foundry-f01-causal-ablation.json').read_text())
+          assert d['schema']=='cmpct-v030-foundry-f01-causal-v1'
+          assert d['source_commit']==os.environ['EVIDENCE_HEAD']
+          assert d['o01_witness_seed']=='c3ef298bcc3fb7f95a65245c9341f112581aa175'
+          assert d['o01_corpus_fingerprint']=='6b6438aff98e7a9e69ee834fe3f2135cc03acde0babac42100c544519e56c574'
+          assert d['decision'] in {'CAUSAL_SEED','SIMPLER_PRIMITIVE_SIGNAL','CAUSAL_RESULT_CONFLICT'}
+          assert set(d['causal_winners']) == {
+              'discovery_mixed_lane_records','discovery_mixed_lane_widths','transfer_postfreeze_mixed_shifted'
+          }
+          for row in d['causal_winners'].values():
+              assert row['ablations']['SPLIT']['exact_reconstruction']
+              assert row['ablations']['SPLIT']['restores_manual_control']
+              for a in row['ablations'].values():
+                  assert a['exact_reconstruction']
+          assert set(d['lane_width_liability']) == {'2','4','8','16'}
+          assert d['oracle_gift_ledger']['never_gifted']
+          assert d['oracle_gift_ledger']['deferred_debt']
+          PY
+      - name: CI topology self-check
+        if: always()
+        run: python tools/check_ci_topology.py .github/workflows/v030-foundry-f01-causal-ablation.yml
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: v030-foundry-f01-causal-${{ env.EVIDENCE_HEAD }}
+          path: benchmark-artifacts/v030-foundry-f01-causal-ablation.json
+          if-no-files-found: error
+          retention-days: 90
+
+# Foundry-only causal evidence. A green result changes thesis evidence, not canonical grammar or release authority.
