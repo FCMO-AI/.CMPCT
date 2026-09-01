@@ -1,6 +1,6 @@
 # ci-lane: deep
 # ci-pr-scope: latest-head-commit-gate
-# ci-cancel-policy: preserve-running-exact-receipt
+# ci-cancel-policy: split-classifier-preserve-receipts
 name: CMPCT v0.30 federated all-15 admission
 
 on:
@@ -24,10 +24,6 @@ on:
 permissions:
   contents: read
 
-concurrency:
-  group: cmpct-v030-federated-all15-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: false
-
 env:
   PYTHONPATH: ${{ github.workspace }}
   EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
@@ -36,6 +32,9 @@ jobs:
   latest-head-impact:
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    concurrency:
+      group: cmpct-v030-federated-all15-classifier-${{ github.event.pull_request.number || github.ref }}
+      cancel-in-progress: true
     outputs:
       run_deep: ${{ steps.scope.outputs.run_deep }}
     steps:
@@ -68,6 +67,9 @@ jobs:
     if: needs.latest-head-impact.outputs.run_deep == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 360
+    concurrency:
+      group: cmpct-v030-federated-all15-receipt-${{ github.event.pull_request.head.sha || github.sha }}
+      cancel-in-progress: false
     steps:
       - uses: actions/checkout@v6
         with:
@@ -164,4 +166,6 @@ jobs:
 # must complete; locality/decode violations are fail-closed non-admissions; every admitted row is still measured
 # against the unchanged accepted-v0.29/ZIP/Zstd size and ZIP/Zstd creation contract. A measured rejection remains
 # durable negative selector evidence and cannot authorize selector/native/Android/release promotion. Ordinary
-# release authority remains the only release decision surface.
+# release authority remains the only release decision surface. Classifier routing is PR/ref-cancellable while the
+# exact result-bearing all-15 receipt is preserved once admitted, so unrelated long-PR commits cannot recreate a
+# multi-hour backlog without sacrificing exact-source custody.
