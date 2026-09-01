@@ -33,7 +33,7 @@ EXACT_HEAD_CHECKOUT_RE = re.compile(r"(?m)^\s+ref:\s*\$\{\{\s*env\.EVIDENCE_HEAD
 PATH_SCOPE_RE = re.compile(r"(?m)^\s+(paths|paths-ignore):\s*$")
 BRANCH_SCOPE_RE = re.compile(r"(?m)^\s+branches(?:-ignore)?:\s*")
 LEGACY_PYTHON_SOURCE_TRIGGER_RE = re.compile(r"(?m)^\s+-\s*['\"]cmpct/\*\*['\"]\s*$")
-LEGACY_PYTHON_SOURCE_CLASSIFIER_RE = re.compile(r"(?:^|[|('])cmpct/\.\*")
+LEGACY_PYTHON_SOURCE_CLASSIFIER_RE = re.compile(r"(?:\^|[|(])cmpct/(?:\.\*)?")
 
 
 def _has_exact_head_commit_scope(text: str) -> bool:
