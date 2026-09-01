@@ -1,0 +1,125 @@
+# ci-lane: deep
+# ci-cancel-policy: preserve-running-exact-receipt
+# ci-pr-scope: latest-head-commit-gate
+name: CMPCT v0.30 canonical product-gap diagnostic
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'benchmarks/v030_canonical_product_gap_diagnostic.py'
+      - '.github/workflows/v030-canonical-product-gap-diagnostic.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-v030-canonical-product-gap-${{ github.event.pull_request.head.sha || github.sha }}
+  cancel-in-progress: false
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+
+jobs:
+  latest-head-impact:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      run_diagnostic: ${{ steps.scope.outputs.run_diagnostic }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 2
+      - name: Bind exact head and classify diagnostic impact
+        id: scope
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            echo 'run_diagnostic=true' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          git diff-tree --no-commit-id --name-only -r HEAD > /tmp/latest-head-files.txt
+          cat /tmp/latest-head-files.txt
+          if grep -Eq '^(benchmarks/v030_canonical_product_gap_diagnostic\.py|\.github/workflows/v030-canonical-product-gap-diagnostic\.yml)$' /tmp/latest-head-files.txt; then
+            echo 'run_diagnostic=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'run_diagnostic=false' >> "$GITHUB_OUTPUT"
+            echo 'Newest exact commit does not affect the canonical product-gap diagnostic.'
+          fi
+
+  canonical-product-gap:
+    needs: latest-head-impact
+    if: needs.latest-head-impact.outputs.run_diagnostic == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - name: Bind evidence to exact candidate head
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install exact corpus and product dependencies
+        run: |
+          set -euo pipefail
+          test -f /etc/apt/sources.list.d/ubuntu.sources
+          sudo apt-get -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" -o Dir::Etc::sourceparts="-" update
+          sudo apt-get -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" -o Dir::Etc::sourceparts="-" install -y zstd gcc ffmpeg
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[test,audio]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
+      - name: Compile product-gap instrument
+        run: python -m py_compile benchmarks/v030_canonical_product_gap_diagnostic.py
+      - name: Run exact Office and Analytics product-gap decomposition
+        run: |
+          mkdir -p benchmark-artifacts
+          python benchmarks/v030_canonical_product_gap_diagnostic.py \
+            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/canonical-product-gap-work" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/canonical-product-gap.json"
+      - name: Validate diagnostic custody
+        run: |
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          path = Path('benchmark-artifacts/canonical-product-gap.json')
+          assert path.is_file(), 'product-gap diagnostic did not publish evidence'
+          d = json.loads(path.read_text())
+          assert d['schema'] == 'cmpct-v030-canonical-product-gap-v1'
+          assert [row['workload'] for row in d['rows']] == ['02_office_workspace', '04_analytics_and_database']
+          for row in d['rows']:
+              assert row['accepted_v029_bytes'] > 0
+              assert row['genuine_r24_bytes'] > 0
+              assert row['direct_r25_bytes'] > 0
+              assert row['promoted_product_bytes'] > 0
+              assert row['selected_manifest_bytes'] <= row['filesystem_v1_manifest_bytes']
+              assert row['manifest_control_saving_bytes'] == row['filesystem_v1_manifest_bytes'] - row['selected_manifest_bytes']
+              assert len(row['accepted_v029_sha256']) == 64
+              assert len(row['genuine_r24_sha256']) == 64
+              assert len(row['direct_r25_sha256']) == 64
+              assert len(row['promoted_product_sha256']) == 64
+              assert row['strong_verify']['ok'] is True
+          Path('benchmark-artifacts/canonical-product-gap-head.txt').write_text(os.environ['EVIDENCE_HEAD'] + '\n')
+          PY
+      - name: Upload exact diagnostic evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: v030-canonical-product-gap-${{ env.EVIDENCE_HEAD }}
+          path: |
+            benchmark-artifacts/canonical-product-gap.json
+            benchmark-artifacts/canonical-product-gap-head.txt
+          if-no-files-found: error
+          retention-days: 90
+
+# Diagnostic-only evidence. This workflow does not grant release credit and changes no admission,
+# benchmark threshold, locality/decode-unit bound, integrity rule, competitor setting or publication policy.
