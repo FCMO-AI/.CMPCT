@@ -14,6 +14,7 @@ are included in product creation timing.
 """
 
 from dataclasses import dataclass
+from math import isfinite
 
 MAX_DECODE_UNIT_BYTES = 8 * 1024 * 1024
 MAX_MEMBER_READ_AMPLIFICATION = 8.0
@@ -50,7 +51,9 @@ def decide(
     for label, obs in (("bounded_drift", bounded_drift), ("fallback", fallback)):
         if obs.physical_bytes < 0 or obs.create_ns < 0 or obs.max_decode_unit_bytes < 0:
             return AdmissionDecision("fallback", f"invalid_{label}_measurement")
-        if obs.max_member_read_amplification < 0:
+        # Comparisons with NaN are false in both directions. Without an explicit finite check,
+        # NaN could bypass both the negative and >8x locality gates and reach selection.
+        if not isfinite(obs.max_member_read_amplification) or obs.max_member_read_amplification < 0:
             return AdmissionDecision("fallback", f"invalid_{label}_locality")
 
     if not bounded_drift.exact_tree_verified:
