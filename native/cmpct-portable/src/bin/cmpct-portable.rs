@@ -1,7 +1,9 @@
 use cmpct_portable::{PortableArchive, PortableError};
 use std::env;
+use std::fs;
 use std::io::{self, Write};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
+use std::time::{SystemTime, UNIX_EPOCH};
 
 fn usage() -> ! {
     eprintln!(
@@ -12,6 +14,60 @@ fn usage() -> ! {
 
 fn open(path: &str) -> Result<PortableArchive, PortableError> {
     PortableArchive::open(&PathBuf::from(path))
+}
+
+fn unique_sibling(destination: &Path, role: &str) -> Result<PathBuf, PortableError> {
+    let parent = destination.parent().unwrap_or(Path::new("."));
+    let name = destination
+        .file_name()
+        .and_then(|value| value.to_str())
+        .ok_or_else(|| PortableError::Path(destination.display().to_string()))?;
+    let nanos = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_nanos();
+    Ok(parent.join(format!(
+        ".{name}.{role}.{}.{}",
+        std::process::id(),
+        nanos
+    )))
+}
+
+fn export_zip_transactional(
+    archive: &PortableArchive,
+    destination: &Path,
+) -> Result<(), PortableError> {
+    let stage = unique_sibling(destination, "cmpct-zip-stage")?;
+    let backup = unique_sibling(destination, "cmpct-zip-backup")?;
+
+    // The inner exporter may discover an unsupported filesystem semantic (for example a symlink) only after
+    // earlier ZIP entries have already been serialized. Keep those partial bytes private until the complete ZIP
+    // exists, so an error can never turn the requested public path into a misleading/truncated archive.
+    if let Err(error) = archive.export_zip(&stage) {
+        let _ = fs::remove_file(&stage);
+        return Err(error);
+    }
+
+    let had_destination = destination.exists();
+    if had_destination {
+        if let Err(error) = fs::rename(destination, &backup) {
+            let _ = fs::remove_file(&stage);
+            return Err(PortableError::Io(error));
+        }
+    }
+
+    if let Err(error) = fs::rename(&stage, destination) {
+        if had_destination {
+            let _ = fs::rename(&backup, destination);
+        }
+        let _ = fs::remove_file(&stage);
+        return Err(PortableError::Io(error));
+    }
+
+    if had_destination {
+        let _ = fs::remove_file(&backup);
+    }
+    Ok(())
 }
 
 fn run() -> Result<(), PortableError> {
@@ -105,7 +161,7 @@ fn run() -> Result<(), PortableError> {
             if args.next().is_some() {
                 usage();
             }
-            archive.export_zip(&PathBuf::from(destination))?;
+            export_zip_transactional(&archive, &PathBuf::from(destination))?;
         }
         _ => usage(),
     }
@@ -123,4 +179,6 @@ fn main() {
 // Footnote: `revision` is intentionally emitted beside `profile`. Canonical r25 acceptance and Android can
 // assert both the exact representation profile and the release grammar revision without re-parsing archive bytes.
 // `logical_regular_bytes` is the same public-entry sum used to enforce caller extraction budgets without requiring
-// a second full namespace serialization through `list`.
+// a second full namespace serialization through `list`. `export-zip` stages beside the destination and only
+// publishes after a complete successful archive exists, so unsupported late filesystem semantics cannot leave a
+// partial public ZIP behind.
