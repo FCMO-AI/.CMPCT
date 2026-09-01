@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Independent, hostile, recovery, and writer parity for canonical r25 implicit-v4 filesystem control."""
+"""Independent, hostile, recovery, ZIP-publication, and writer parity for canonical r25 implicit-v4 control."""
 from __future__ import annotations
 
 import base64
@@ -109,6 +109,19 @@ def assert_recovery(
         assert result.returncode != 0, (profile, label, result.stdout, result.stderr)
 
 
+def assert_zip_failure_atomic(archive: Path, tmp: Path, profile: str) -> None:
+    """A late unsupported filesystem semantic may fail export, but may never replace the requested path."""
+    destination = tmp / f"implicit-{profile}.zip"
+    sentinel = f"keep-existing-{profile}".encode()
+    destination.write_bytes(sentinel)
+    before = {path.name for path in tmp.iterdir()}
+    result = run("export-zip", str(archive), str(destination), check=False, text=True)
+    assert result.returncode != 0, (profile, result.stdout, result.stderr)
+    assert destination.read_bytes() == sentinel, profile
+    after = {path.name for path in tmp.iterdir()}
+    assert after == before, (profile, sorted(after - before))
+
+
 def assert_independent_goldens(tmp: Path) -> None:
     fixture = json.loads(FIXTURE.read_text(encoding="utf-8"))
     assert fixture["schema"] == "cmpct-v030-native-implicit-v4-golden-v1"
@@ -124,6 +137,9 @@ def assert_independent_goldens(tmp: Path) -> None:
         # authenticated control survives the same primary/tail failover boundary rather than inheriting credit
         # from filesystem-v1 fixtures. Both metadata copies or payload corruption must still fail closed.
         assert_recovery(profile, raw, expected, tmp, prefix="independent-implicit")
+        # The frozen filesystem fixture intentionally contains a symlink. ZIP export must therefore reject it
+        # rather than silently changing semantics, and the CLI must keep any pre-existing public destination intact.
+        assert_zip_failure_atomic(path, tmp, profile)
 
 
 def assert_hostile_authenticated_controls(tmp: Path) -> None:
@@ -234,7 +250,7 @@ def main() -> None:
         # The real canonical writer remains a separate parity boundary because fixed bytes alone cannot prove its
         # current admission seam publishes a dialect understood by native/platform readers.
         assert_writer_parity(tmp)
-    print("v0.30 native implicit-v4 independent + hostile + recovery + writer parity: ok")
+    print("v0.30 native implicit-v4 independent + hostile + recovery + atomic ZIP + writer parity: ok")
 
 
 if __name__ == "__main__":
