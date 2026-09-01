@@ -28,7 +28,37 @@ env:
   EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
 
 jobs:
+  classify:
+    runs-on: ubuntu-24.04
+    outputs:
+      run_deep: ${{ steps.scope.outputs.run_deep }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 2
+      - name: Bind exact candidate head
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+      - name: Classify exact newest-head change
+        id: scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "run_deep=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          changed="$(git diff-tree --no-commit-id --name-only -r HEAD)"
+          printf '%s\n' "$changed"
+          if printf '%s\n' "$changed" | grep -Eq '^(src/cmpct/builder\.py|experiments/entropygraph_v030_release_product\.py|benchmarks/v030_r24_medium_binary_pack_oracle\.py|benchmarks/neutral_hostile_corpus_v1\.py|benchmarks/resemblance_hostile_corpus_v1\.py|benchmarks/neutral_hostile_determinism_repair_v6\.py|\.github/workflows/v030-r24-medium-binary-pack-oracle\.yml)$'; then
+            echo "run_deep=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "run_deep=false" >> "$GITHUB_OUTPUT"
+          fi
+
   oracle:
+    needs: classify
+    if: needs.classify.outputs.run_deep == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 90
     steps:
@@ -108,6 +138,8 @@ jobs:
 
 # Focused shipping regression proof for canonical r24-v4. The exact candidate head is checked
 # out explicitly; GitHub's synthetic PR merge ref is not accepted as the evidence fingerprint.
-# The separate all-15 medium-pack generalization lane owns the historical v3->v4 zero-byte-
+# The exact-newest-head classifier prevents accumulated paths on the long-lived convergence PR
+# from replaying this deep lane after unrelated commits while preserving already-running exact-SHA
+# receipts. The separate all-15 medium-pack generalization lane owns the historical v3->v4 zero-byte-
 # regression delta. Neither lane can relax the external ZIP/Zstd frontier, locality, integrity,
 # portability, or release lock.
