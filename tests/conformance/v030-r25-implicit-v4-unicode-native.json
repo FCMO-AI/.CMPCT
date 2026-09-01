@@ -1,9 +1,13 @@
 {
   "schema": "cmpct-v030-r25-implicit-v4-unicode-native-vector-v1",
-  "filesystem_v1_base64": "hKF2Aadwcm9maWxl2SBjbXBjdC1yMjUtZmlsZXN5c3RlbS1tYW5pZmVzdC12Ma1pbnRlcm5hbF9wYXRo2S0uX19jbXBjdF9yMjVfaW50ZXJuYWxfXy9maWxlc3lzdGVtLXYxLm1zZ3BhY2unZW50cmllc5OYpM6xzrKhZM0B7QAAAJCAmKzOsc6yL860LmJpbqFmzQGkAAAAkJLEIDeW6sAyIAURLeR+JYgKtfMyqHPmkB1lChnSIxMAUsISmK/Osc6yL866LWxpbmuhbM0B/wAAAJCs zrHOsi/OtC5iaW4=",
+  "filesystem_v1_base64": "hKF2Aadwcm9maWxl2SBjbXBjdC1yMjUtZmlsZXN5c3RlbS1tYW5pZmVzdC12Ma1pbnRlcm5hbF9wYXRo2S0uX19jbXBjdF9yMjVfaW50ZXJuYWxfXy9maWxlc3lzdGVtLXYxLm1zZ3BhY2unZW50cmllc5OYpM6xzrKhZM0B7QAAAJDAmKvOsc6yL860LmJpbqFmzQGkAAAAkJItxCCSpRwr2SbiEkuoAP00kzqAk5bYHHkec6B2qb2XHOEyiJiszrHOsi/Oti1saW5roWzNAf8AAACQq86xzrIvzrQuYmlu",
+  "filesystem_v1_bytes": 225,
   "implicit_v4_base64": "lASVzQHtAAAAkJGSAdC3kpUApM6xzrIBkQDAlQKoL862LWxpbmsCkgESq86xzrIvzrQuYmlu",
   "implicit_v4_bytes": 54,
   "implicit_v4_sha256": "bd31ec0cd2bc1acf7c7f5f00f2c2deaede953a802460ca6ec42ac29ad6d7e6b0",
+  "regular_identities": [
+    {"path":"αβ/δ.bin","size":45,"sha256":"92a51c2bd926e2124ba800fd34933a809396d81c791e73a076a9bd971ce13289"}
+  ],
   "critical_prefix": {
     "previous_explicit_path": "αβ",
     "prefix_len_python_codepoints": 2,
