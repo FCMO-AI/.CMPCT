@@ -13,6 +13,7 @@ on:
       - 'experiments/entropygraph_v030_product_fs.py'
       - 'experiments/entropygraph_v030_canonical_final.py'
       - 'experiments/entropygraph_v030_canonical_final_impl.py'
+      - 'experiments/entropygraph_v030_profile_isolation.py'
       - 'tests/test_v030_r25_manifest_admission.py'
       - 'tests/test_v030_fs_implicit_v4.py'
       - 'tests/test_v030_canonical_final.py'
@@ -54,7 +55,7 @@ jobs:
           fi
           git diff-tree --no-commit-id --name-only -r HEAD > /tmp/latest-head-files.txt
           cat /tmp/latest-head-files.txt
-          if grep -Eq '^(src/cmpct/.*|experiments/entropygraph_v030_(r25_manifest_admission|fs_implicit_v4|product_fs|canonical_final|canonical_final_impl)\.py|tests/test_v030_(r25_manifest_admission|fs_implicit_v4|canonical_final)\.py|\.github/workflows/v030-manifest-admission-custody\.yml)$' /tmp/latest-head-files.txt; then
+          if grep -Eq '^(src/cmpct/.*|experiments/entropygraph_v030_(r25_manifest_admission|fs_implicit_v4|product_fs|canonical_final|canonical_final_impl|profile_isolation)\.py|tests/test_v030_(r25_manifest_admission|fs_implicit_v4|canonical_final)\.py|\.github/workflows/v030-manifest-admission-custody\.yml)$' /tmp/latest-head-files.txt; then
             echo 'run_custody=true' >> "$GITHUB_OUTPUT"
           else
             echo 'run_custody=false' >> "$GITHUB_OUTPUT"
@@ -79,6 +80,14 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           python -m pip install -e '.[test]'
+      - name: Compile canonical dispatch and admitted-control surface
+        run: |
+          python -m py_compile \
+            experiments/entropygraph_v030_canonical_final.py \
+            experiments/entropygraph_v030_canonical_final_impl.py \
+            experiments/entropygraph_v030_profile_isolation.py \
+            experiments/entropygraph_v030_r25_manifest_admission.py \
+            experiments/entropygraph_v030_fs_implicit_v4.py
       - name: Prove final-product floor, generic admission and canonical-writer wiring
         run: |
           python -m pytest -q \
@@ -92,6 +101,8 @@ jobs:
 # must continue to stage through content-agnostic strict-smaller implicit-v4 admission, product-floor/tie behavior
 # must remain conservative, and malformed/mismatched controls fail closed. The direct implicit-v4 grammar tests are
 # part of this boundary so a malformed-control/resource-safety regression cannot hide behind only writer-level tests.
+# Canonical wrapper/profile-isolation changes are also semantic dependencies because the admission seam is consumed
+# through that isolated public dispatch surface, not only through the preserved implementation body.
 # Core Python package changes are part of this proof surface too because the installed package participates in the
 # final writer/reader behavior. Long-lived PR accumulated paths are filtered by the newest exact commit before the
 # full job.
