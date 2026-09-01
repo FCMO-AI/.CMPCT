@@ -9,6 +9,8 @@
 
 namespace {
 
+constexpr size_t MAX_JNI_PATH_BYTES = 1024 * 1024;
+
 PortableArchive *from_handle(jlong handle) {
     return reinterpret_cast<PortableArchive *>(static_cast<intptr_t>(handle));
 }
@@ -40,6 +42,15 @@ void throw_io(JNIEnv *env, int32_t status) {
     }
 }
 
+bool append_utf8_byte(JNIEnv *env, std::string *out, char byte) {
+    if (out->size() >= MAX_JNI_PATH_BYTES) {
+        throw_io(env, CMPCT_PORTABLE_LIMIT);
+        return false;
+    }
+    out->push_back(byte);
+    return true;
+}
+
 bool java_string_to_standard_utf8(JNIEnv *env, jstring value, std::string *out) {
     if (value == nullptr || out == nullptr) {
         throw_io(env, CMPCT_PORTABLE_NULL);
@@ -50,13 +61,13 @@ bool java_string_to_standard_utf8(JNIEnv *env, jstring value, std::string *out) 
     if (chars == nullptr) return false;
 
     const size_t units = static_cast<size_t>(len);
-    if (units > std::numeric_limits<size_t>::max() / 3) {
+    if (units > MAX_JNI_PATH_BYTES || units > std::numeric_limits<size_t>::max() / 3) {
         env->ReleaseStringChars(value, chars);
         throw_io(env, CMPCT_PORTABLE_LIMIT);
         return false;
     }
     out->clear();
-    out->reserve(units * 3);
+    out->reserve((units * 3).min(MAX_JNI_PATH_BYTES));
     bool ok = true;
     for (jsize i = 0; i < len && ok; ++i) {
         uint32_t cp = chars[i];
@@ -81,25 +92,25 @@ bool java_string_to_standard_utf8(JNIEnv *env, jstring value, std::string *out) 
         }
 
         if (cp <= 0x7F) {
-            out->push_back(static_cast<char>(cp));
+            ok = append_utf8_byte(env, out, static_cast<char>(cp));
         } else if (cp <= 0x7FF) {
-            out->push_back(static_cast<char>(0xC0 | (cp >> 6)));
-            out->push_back(static_cast<char>(0x80 | (cp & 0x3F)));
+            ok = append_utf8_byte(env, out, static_cast<char>(0xC0 | (cp >> 6)))
+                && append_utf8_byte(env, out, static_cast<char>(0x80 | (cp & 0x3F)));
         } else if (cp <= 0xFFFF) {
-            out->push_back(static_cast<char>(0xE0 | (cp >> 12)));
-            out->push_back(static_cast<char>(0x80 | ((cp >> 6) & 0x3F)));
-            out->push_back(static_cast<char>(0x80 | (cp & 0x3F)));
+            ok = append_utf8_byte(env, out, static_cast<char>(0xE0 | (cp >> 12)))
+                && append_utf8_byte(env, out, static_cast<char>(0x80 | ((cp >> 6) & 0x3F)))
+                && append_utf8_byte(env, out, static_cast<char>(0x80 | (cp & 0x3F)));
         } else {
-            out->push_back(static_cast<char>(0xF0 | (cp >> 18)));
-            out->push_back(static_cast<char>(0x80 | ((cp >> 12) & 0x3F)));
-            out->push_back(static_cast<char>(0x80 | ((cp >> 6) & 0x3F)));
-            out->push_back(static_cast<char>(0x80 | (cp & 0x3F)));
+            ok = append_utf8_byte(env, out, static_cast<char>(0xF0 | (cp >> 18)))
+                && append_utf8_byte(env, out, static_cast<char>(0x80 | ((cp >> 12) & 0x3F)))
+                && append_utf8_byte(env, out, static_cast<char>(0x80 | ((cp >> 6) & 0x3F)))
+                && append_utf8_byte(env, out, static_cast<char>(0x80 | (cp & 0x3F)));
         }
     }
     env->ReleaseStringChars(value, chars);
     if (!ok) {
         out->clear();
-        throw_io(env, CMPCT_PORTABLE_UTF8);
+        if (!env->ExceptionCheck()) throw_io(env, CMPCT_PORTABLE_UTF8);
     }
     return ok;
 }
@@ -108,7 +119,7 @@ jstring new_standard_utf8_string(JNIEnv *env, const uint8_t *bytes, size_t len) 
     // JNI NewStringUTF consumes Modified UTF-8, not ordinary UTF-8. CMPCT paths are authenticated
     // standard UTF-8 and may contain supplementary code points encoded as four bytes, so routing
     // archive bytes through NewStringUTF can corrupt an otherwise valid cross-platform pathname.
-    if (len > static_cast<size_t>(INT32_MAX)) {
+    if (len > MAX_JNI_PATH_BYTES || len > static_cast<size_t>(INT32_MAX)) {
         throw_io(env, CMPCT_PORTABLE_LIMIT);
         return nullptr;
     }
@@ -236,6 +247,10 @@ Java_ai_fcmo_cmpct_CmpctNative_nativeEntryPath(JNIEnv *env, jclass, jlong handle
         throw_io(env, status);
         return nullptr;
     }
+    if (len > MAX_JNI_PATH_BYTES) {
+        throw_io(env, CMPCT_PORTABLE_LIMIT);
+        return nullptr;
+    }
     std::vector<uint8_t> path(len);
     status = cmpct_portable_entry_path(
         archive,
@@ -315,4 +330,5 @@ Java_ai_fcmo_cmpct_CmpctNative_nativeReadRange(
 // Footnote: JNI owns no archive grammar. Every operation, including complete verification, crosses the same
 // libcmpct_portable ABI used by desktop/native tests so Android cannot accidentally become a weaker parser.
 // Public entry paths are decoded as standard UTF-8 rather than JNI Modified UTF-8, preserving supplementary
-// Unicode code points exactly across the native/Java boundary.
+// Unicode code points exactly across the native/Java boundary. The bridge carries the shared 1 MiB path floor
+// rather than allowing platform glue to allocate unbounded transient path buffers.
