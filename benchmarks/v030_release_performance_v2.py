@@ -15,8 +15,16 @@ from pathlib import Path
 
 from benchmarks import v030_release_performance as B
 from experiments import entropygraph_v030_release_product as PRODUCT
+from tools import check_v030_release_lock as RELEASE_LOCK
 
 B.WORKER = B.ROOT / "benchmarks" / "v030_perf_worker_v2.py"
+
+
+def _candidate_fingerprint() -> str:
+    """Bind durable benchmark evidence to the exact release-critical source surface."""
+    manifest = RELEASE_LOCK.load_manifest()
+    fingerprint, _ = RELEASE_LOCK.fingerprint(manifest)
+    return fingerprint
 
 
 def _expected_tree_for_runtime_v2(engine: str, source: Path, historical_expected: str) -> str:
@@ -31,11 +39,14 @@ B._expected_tree_for_engine = _expected_tree_for_runtime_v2
 
 
 def run(work_root: Path) -> dict:
+    # Compute before timing orchestration so the evidence identity is fixed at invocation start.
+    candidate_fingerprint = _candidate_fingerprint()
     result = dict(B.run(work_root))
     result["engine"] = "experiments/entropygraph_v030_release_product.py"
     result["release_facade"] = "cmpct-v030-release-product-v1"
     result["worker"] = "benchmarks/v030_perf_worker_v2.py"
     result["identity_binding"] = "v029-historical-content-tree + v030-canonical-user-tree"
+    result["candidate_fingerprint"] = candidate_fingerprint
     return result
 
 
@@ -47,7 +58,17 @@ def main() -> None:
     result = run(args.work_root)
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8")
-    print(json.dumps({"totals": result["totals"], "gate": result["gate"]}, indent=2), flush=True)
+    print(
+        json.dumps(
+            {
+                "candidate_fingerprint": result["candidate_fingerprint"],
+                "totals": result["totals"],
+                "gate": result["gate"],
+            },
+            indent=2,
+        ),
+        flush=True,
+    )
     if not result["gate"]["passed"]:
         raise SystemExit("v0.30 release-product runtime promotion gate failed")
 
