@@ -370,3 +370,42 @@ def test_canonical_r25_authority_keeps_independent_golden_in_trigger_and_exact_h
     workflow = Path('.github/workflows/v030-canonical-authority.yml').read_text(encoding='utf-8')
     assert "- 'tests/conformance/v030-r25-canonical.json'" in workflow
     assert 'tests/conformance/v030-r25-canonical\\.json' in workflow
+
+
+def test_release_workflow_rejects_nonexistent_bare_cmpct_trigger(tmp_path: Path) -> None:
+    path = _write(tmp_path, """# ci-lane: release
+on:
+  pull_request:
+    paths:
+      - 'cmpct/**'
+concurrency:
+  group: release-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+jobs:
+  proof:
+    runs-on: ubuntu-24.04
+""")
+    assert any("canonical Python package is 'src/cmpct/'" in error for error in validate(path))
+
+
+def test_release_workflow_rejects_nonexistent_bare_cmpct_classifier(tmp_path: Path) -> None:
+    path = _write(tmp_path, """# ci-lane: release
+# ci-pr-scope: latest-head-commit-gate
+on:
+  pull_request:
+    paths:
+      - 'src/cmpct/**'
+concurrency:
+  group: release-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+env:
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+jobs:
+  classify:
+    runs-on: ubuntu-24.04
+    steps:
+      - run: |
+          git diff-tree --no-commit-id --name-only -r HEAD
+          grep -Eq '^(cmpct/.*|tests/.*)' changed.txt
+""")
+    assert any("canonical Python package is 'src/cmpct/'" in error for error in validate(path))
