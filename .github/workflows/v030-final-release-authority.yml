@@ -166,7 +166,8 @@ jobs:
             tests/test_v030_release_selective_read_contract.py \
             tests/test_v030_release_generalization_contract.py \
             tests/test_v030_release_lock.py \
-            tests/test_v030_release_lock_strict.py
+            tests/test_v030_release_lock_strict.py \
+            tests/test_v030_final_release_custody.py
       - name: Public-surface guard
         run: python tools/check_public_surface.py
       - name: CI topology self-check
