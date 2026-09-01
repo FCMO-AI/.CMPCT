@@ -70,6 +70,7 @@ The ratcheted authorities are:
 - `v030-external-competitors.yml`;
 - `v030-authoritative-v2-pr.yml`;
 - `v030-r25-manifest-canonical-integration.yml`;
+- `v030-r25-manifest-derived-identity.yml`;
 - `v030-r25-manifest-canonical-candidate.yml`;
 - `v030-r25-manifest-implicit-reader-productization.yml`;
 - `v030-r25-manifest-writer-admission.yml`;
@@ -84,7 +85,7 @@ The federated candidate productization lane uses the same policy for its up-to-t
 
 The Logs D5 lanes use the same custody rule for the strict path-invariant sidecar content-policy oracle and the recoverable canonical-filesystem inverse-profile productization proof. Both receipts are useful for their exact source once admitted; neither justifies preserving obsolete accumulated-PR routing work. Their four-way ZIP/Zstd, recovery, locality, strong-verification and no-release-credit laws are unchanged by the scheduling split.
 
-The implicit-v4 D5 chain now uses the same split custody at all three prerelease transitions that were still vulnerable: reader productization, writer admission, and the up-to-three-hour canonical-candidate gate. These jobs already carry exact reconstruction, semantic-identity, locality and fail-closed product boundaries; the migration removes only obsolete classifier queue ownership. Once any substantive job is admitted, its exact-SHA receipt remains non-cancellable and cannot be inherited by a later candidate.
+The implicit-v4 D5 chain now uses the same split custody from its derived-identity oracle through reader productization, writer admission, and the up-to-three-hour canonical-candidate gate. These jobs already carry exact reconstruction, semantic-identity, locality and fail-closed product boundaries; the migration removes only obsolete classifier queue ownership. Once any substantive job is admitted, its exact-SHA receipt remains non-cancellable and cannot be inherited by a later candidate.
 
 Other deep/release workflows should migrate when touched if they combine exact-receipt preservation with a newest-head classifier. Retired or genuinely one-shot workflows should instead become manual-only when repository doctrine permits it.
 
