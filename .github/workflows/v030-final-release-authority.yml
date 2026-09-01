@@ -179,21 +179,20 @@ jobs:
           path=Path('benchmark-artifacts/final-ablation.json')
           assert path.is_file(), 'final ablation did not publish evidence'
           a=json.loads(path.read_text())
-          h=a['historical_causality']; p=a['canonical_product_parity']
-          c=h['totals']['combined']
+          assert a['schema']=='cmpct-v030-release-ablation-canonical-v3'
           assert a['product_engine']=='experiments/entropygraph_v030_release_product.py'
           assert a['release_facade']=='cmpct-v030-release-product-v1'
-          assert a['contract']['expected_v029_historical_aggregate_bytes']==137501815
-          assert a['contract']['minimum_historical_release_saving_bytes']==687783
-          assert h['totals']['v029']['archive_bytes']==137501815
-          assert c['regressed_rows']==0
-          assert c['improved_rows']>=3
-          assert c['saving_vs_v029_bytes']>=687783
-          assert h['gate']['passed'] is True
-          assert p['gate']['zero_product_byte_regressions'] is True
-          assert p['gate']['aggregate_product_no_regression'] is True
-          assert p['gate']['passed'] is True
-          assert a['gate']['passed'] is True
+          h=a['historical_causality']; p=a['canonical_product_parity']
+          # repair-v6 changed the accepted deterministic substrate from 137,501,815 B to 137,499,525 B. The
+          # inherited absolute v0.30 revision hurdle remains 687,783 B; substrate repair may never lower it.
+          assert h['accepted_v029_bytes']==137499525
+          assert h['workloads_regressed']==0
+          assert h['workloads_improved']>=3
+          assert h['saving_vs_v029_bytes']>=687783
+          assert h['max_selected_member_read_amplification']<=8.0
+          assert p['product_regressions']==[]
+          assert len(h['rows'])==15
+          assert len(p['rows'])==15
           PY
       - name: Upload release compression evidence
         if: always()
@@ -328,8 +327,9 @@ jobs:
           retention-days: 90
 
 # Footnote: historical mechanism causality and canonical product parity intentionally remain different byte/tree
-# domains. The former owns the immutable 137,501,815 B / 687,783 B threshold; the latter proves the new r25
-# framing never regresses the genuine r24 product. Conflating them would make product metadata appear free.
+# domains. The repair-v6 substrate owns the accepted 137,499,525 B baseline while the inherited 687,783 B revision
+# hurdle remains unchanged; canonical product parity separately proves r25 never regresses genuine r24 bytes.
+# Conflating these domains would either make product metadata appear free or let corpus repair weaken the release bar.
 # The isolated wrapper, preserved implementation body and isolation loader are all release-critical triggers;
 # changing any one can alter canonical profile dispatch even when the public wrapper filename itself is unchanged.
 # Exact final-release receipts are preserved once running; unrelated long-PR synchronizations cheaply exit through
