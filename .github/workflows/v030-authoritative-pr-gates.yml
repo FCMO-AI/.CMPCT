@@ -8,6 +8,7 @@ on:
     branches:
       - main
     paths:
+      - 'src/cmpct/**'
       - 'experiments/entropygraph_v030_*.py'
       - 'experiments/entropygraph_v029_parallel_portfolio.py'
       - 'tests/test_v030_*.py'
@@ -22,7 +23,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: cmpct-v030-authoritative-pr-${{ github.event.pull_request.number || github.ref }}
+  group: cmpct-v030-authoritative-pr-${{ github.event.pull_request.head.sha || github.sha }}
   cancel-in-progress: false
 
 env:
@@ -53,7 +54,7 @@ jobs:
           fi
           git diff-tree --no-commit-id --name-only -r HEAD > /tmp/latest-head-files.txt
           cat /tmp/latest-head-files.txt
-          if grep -Eq '^(experiments/entropygraph_v030_.*\.py|experiments/entropygraph_v029_parallel_portfolio\.py|tests/test_v030_.*\.py|tests/test_v029_parallel_portfolio\.py|benchmarks/v030_(shared_portfolio_rehab|release_generalization_authoritative|release_performance_v2)\.py|\.github/workflows/v030-authoritative-pr-gates\.yml)$' /tmp/latest-head-files.txt; then
+          if grep -Eq '^(src/cmpct/.*|experiments/entropygraph_v030_.*\.py|experiments/entropygraph_v029_parallel_portfolio\.py|tests/test_v030_.*\.py|tests/test_v029_parallel_portfolio\.py|benchmarks/v030_(shared_portfolio_rehab|release_generalization_authoritative|release_performance_v2)\.py|\.github/workflows/v030-authoritative-pr-gates\.yml)$' /tmp/latest-head-files.txt; then
             echo 'run_release=true' >> "$GITHUB_OUTPUT"
           else
             echo 'run_release=false' >> "$GITHUB_OUTPUT"
