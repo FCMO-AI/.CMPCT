@@ -12,6 +12,7 @@ on:
       - 'experiments/entropygraph_v030_fs_implicit_v4.py'
       - 'experiments/entropygraph_v030_canonical_final.py'
       - 'experiments/entropygraph_v030_canonical_final_impl.py'
+      - 'experiments/entropygraph_v030_shared_portfolio.py'
       - 'experiments/entropygraph_v030_product_fs.py'
       - 'benchmarks/v030_r25_manifest_canonical_candidate_gate.py'
       - 'benchmarks/v030_r25_manifest_derived_identity_oracle.py'
@@ -53,7 +54,7 @@ jobs:
           fi
           git diff-tree --no-commit-id --name-only -r HEAD > /tmp/latest-head-files.txt
           cat /tmp/latest-head-files.txt
-          if grep -Eq '^(experiments/entropygraph_v030_canonical_manifest_candidate\.py|experiments/entropygraph_v030_r25_manifest_admission\.py|experiments/entropygraph_v030_fs_implicit_v4\.py|experiments/entropygraph_v030_canonical_final(_impl)?\.py|experiments/entropygraph_v030_product_fs\.py|benchmarks/v030_r25_manifest_canonical_candidate_gate\.py|benchmarks/v030_r25_manifest_derived_identity_oracle\.py|\.github/workflows/v030-r25-manifest-canonical-candidate\.yml)$' /tmp/latest-head-files.txt; then
+          if grep -Eq '^(experiments/entropygraph_v030_canonical_manifest_candidate\.py|experiments/entropygraph_v030_r25_manifest_admission\.py|experiments/entropygraph_v030_fs_implicit_v4\.py|experiments/entropygraph_v030_canonical_final(_impl)?\.py|experiments/entropygraph_v030_shared_portfolio\.py|experiments/entropygraph_v030_product_fs\.py|benchmarks/v030_r25_manifest_canonical_candidate_gate\.py|benchmarks/v030_r25_manifest_derived_identity_oracle\.py|\.github/workflows/v030-r25-manifest-canonical-candidate\.yml)$' /tmp/latest-head-files.txt; then
             echo 'run_deep=true' >> "$GITHUB_OUTPUT"
           else
             echo 'run_deep=false' >> "$GITHUB_OUTPUT"
@@ -90,6 +91,7 @@ jobs:
           set -euo pipefail
           python -m py_compile \
             experiments/entropygraph_v030_canonical_manifest_candidate.py \
+            experiments/entropygraph_v030_shared_portfolio.py \
             benchmarks/v030_r25_manifest_canonical_candidate_gate.py
           python -m pytest -q \
             tests/test_v030_r25_manifest_admission.py \
@@ -154,7 +156,10 @@ jobs:
 # S6/D5 convergence lane. The gate compares filesystem-v1 and implicit-v4 on the same
 # canonical-r25-only G04/PrefixGraph candidate set; accepted-v0.29 CMPNX fallback is
 # intentionally excluded because it is product-floor evidence, not a canonical-r25 reader
-# representation. A green result proves the already-strict implicit-v4 mechanism survives
-# direct canonical writer/reader primitives without process-global mutation while shipping
-# semantics remain unchanged. It is still not release credit: recovery, native, Android,
-# all-15 no-regression and exact external authority remain mandatory after promotion.
+# representation. The shared-portfolio substrate is an evidence-critical dependency because
+# it constructs the G04 contender consumed by this tournament; changes there must invalidate
+# and regenerate this receipt rather than inheriting stale trust. A green result proves the
+# already-strict implicit-v4 mechanism survives direct canonical writer/reader primitives
+# without process-global mutation while shipping semantics remain unchanged. It is still not
+# release credit: recovery, native, Android, all-15 no-regression and exact external authority
+# remain mandatory after promotion.
