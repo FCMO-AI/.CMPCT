@@ -1,67 +1,19 @@
 # ci-lane: deep
-# ci-pr-scope: latest-head-commit-gate
-# ci-cancel-policy: preserve-running-exact-receipt
+# ci-auto-policy: retired-manual-only
 name: CMPCT v0.30 Shifted segmented relation payload floor
 
 on:
-  pull_request:
-    branches: [main]
-    paths:
-      - 'benchmarks/v030_shifted_segmented_relation_payload_floor.py'
-      - 'benchmarks/v030_shifted_joint_patch_stream_oracle.py'
-      - 'benchmarks/resemblance_hostile_corpus_v1.py'
-      - 'benchmarks/v030_external_competitors.py'
-      - 'benchmarks/v030_release_generalization.py'
-      - 'experiments/entropygraph_v030_authoritative.py'
-      - 'tests/test_v030_shifted_segmented_relation_payload_floor.py'
-      - '.github/workflows/v030-shifted-segmented-relation-payload-floor.yml'
   workflow_dispatch:
 
 permissions:
   contents: read
 
-concurrency:
-  group: cmpct-v030-shifted-segmented-relation-${{ github.event.pull_request.head.sha || github.sha }}
-  cancel-in-progress: false
-
 env:
   PYTHONPATH: ${{ github.workspace }}
-  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+  EVIDENCE_HEAD: ${{ github.sha }}
 
 jobs:
-  latest-head-impact:
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    outputs:
-      run_deep: ${{ steps.scope.outputs.run_deep }}
-    steps:
-      - uses: actions/checkout@v6
-        with:
-          ref: ${{ env.EVIDENCE_HEAD }}
-          fetch-depth: 2
-      - name: Bind exact head and classify only its changed files
-        id: scope
-        env:
-          EVENT_NAME: ${{ github.event_name }}
-        run: |
-          set -euo pipefail
-          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
-          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
-            echo 'run_deep=true' >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-          git diff-tree --no-commit-id --name-only -r HEAD > /tmp/latest-head-files.txt
-          cat /tmp/latest-head-files.txt
-          if grep -Eq '^(benchmarks/v030_shifted_segmented_relation_payload_floor\.py|benchmarks/v030_shifted_joint_patch_stream_oracle\.py|benchmarks/resemblance_hostile_corpus_v1\.py|benchmarks/v030_external_competitors\.py|benchmarks/v030_release_generalization\.py|experiments/entropygraph_v030_authoritative\.py|tests/test_v030_shifted_segmented_relation_payload_floor\.py|\.github/workflows/v030-shifted-segmented-relation-payload-floor\.yml)$' /tmp/latest-head-files.txt; then
-            echo 'run_deep=true' >> "$GITHUB_OUTPUT"
-          else
-            echo 'run_deep=false' >> "$GITHUB_OUTPUT"
-            echo 'Accumulated PR paths matched, but newest exact commit cannot affect the segmented relation floor.'
-          fi
-
   segmented-relation-floor:
-    needs: latest-head-impact
-    if: needs.latest-head-impact.outputs.run_deep == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 120
     steps:
@@ -145,8 +97,6 @@ jobs:
           if-no-files-found: error
           retention-days: 90
 
-# D4/R4 structural-red lane. One global joint edit unit and independent CDC ownership are
-# terminal negatives; this changes ownership to multiple lawful relation-aware units. A
-# payload-positive result only advances to an exact framed single-pass candidate. Exact-SHA
-# concurrency prevents later unrelated PR updates from evicting the queued receipt before a
-# runner becomes available. It cannot earn release credit or hide framing/publication cost.
+# Terminal negative is preserved in docs/V030_SHIFTED_SEGMENTED_RELATION_NEGATIVE.md.
+# Manual replay remains available for custody/reopening evidence. The retired segmented
+# relation-owned edit-stream family no longer wakes automatically on convergence PR changes.
