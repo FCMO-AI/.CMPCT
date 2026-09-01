@@ -6,6 +6,7 @@ from pathlib import PurePosixPath
 import msgpack
 import pytest
 
+from experiments import entropygraph_v030_canonical_final_impl as FINAL
 from experiments import entropygraph_v030_product_fs as FS
 from experiments import entropygraph_v030_r25_manifest_admission as ADMIT
 
@@ -124,6 +125,23 @@ def test_prepare_profile_tree_uses_same_strict_smaller_admission_seam(tmp_path) 
     control_path = staged.joinpath(*PurePosixPath(FS.FILESYSTEM_MANIFEST).parts)
     assert control_path.read_bytes() == prepared["selected_manifest_raw"]
     assert hashlib.sha256(prepared["selected_manifest_raw"]).hexdigest() == prepared["selected_manifest_sha256"]
+
+
+def test_canonical_product_staging_uses_manifest_admission_seam(tmp_path) -> None:
+    """Prove the release-facing canonical writer cannot bypass generic implicit-v4 admission."""
+    source = tmp_path / "source"
+    for index in range(80):
+        path = source / "src" / "pkg" / f"very_repetitive_component_{index:03d}.py"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(bytes([index % 251]) * 64)
+
+    staged = tmp_path / "canonical-staged"
+    prepared = FINAL._prepare_profile_tree(source, staged)
+    assert prepared["selected_manifest_encoding"] == "implicit-v4"
+    assert prepared["manifest_control_saving_bytes"] > 0
+    control_path = staged.joinpath(*PurePosixPath(FS.FILESYSTEM_MANIFEST).parts)
+    assert control_path.read_bytes() == prepared["selected_manifest_raw"]
+    assert prepared["source_manifest_raw"] != prepared["selected_manifest_raw"]
 
 
 def test_graph_bound_decoder_authenticates_control_and_rejects_extra_members() -> None:
