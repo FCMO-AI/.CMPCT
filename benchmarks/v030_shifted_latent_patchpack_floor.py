@@ -8,7 +8,11 @@ instrument keeps the same content-only latent derivation and exact depth-1 delta
 packs every tiny patch program into one <=8 MiB decoded context. It also prices an
 identical independent-frame control so the experiment can distinguish "patch relation
 entropy is too high" from "tiny frame/context fragmentation consumed the margin".
-Research only: a size win advances construction/runtime work and grants no release credit.
+
+The control compression is timed separately from candidate construction. Causal evidence
+must not make the candidate appear slower merely because the experiment also builds its
+counterfactual. Research only: a size win advances construction/runtime work and grants
+no release credit.
 """
 
 import argparse
@@ -48,14 +52,19 @@ def run(work_root: Path) -> dict:
     pivot_name, pivot = min(rows, key=lambda x: hashlib.sha256(x[1]).digest())
     others = [data for name, data in rows if name != pivot_name]
 
-    started = time.perf_counter()
+    candidate_started = time.perf_counter()
+    phase_started = candidate_started
     latent, derivation = LAT._derive_latent(pivot, others)
+    latent_derivation_s = time.perf_counter() - phase_started
     if not latent or len(latent) > LAT.MAX_DECODE:
         raise AssertionError("latent basis violates decode-unit bound")
 
+    phase_started = time.perf_counter()
     base_cctx = zstd.ZstdCompressor(level=19, threads=0, write_checksum=True)
     latent_stored = base_cctx.compress(latent)
+    latent_compress_s = time.perf_counter() - phase_started
 
+    phase_started = time.perf_counter()
     raw_patches: list[tuple[str, int, bytes, bytes]] = []
     total_copy = 0
     total_literal = 0
@@ -64,29 +73,19 @@ def run(work_root: Path) -> dict:
         raw_patches.append((name, len(target), d.payload, hashlib.sha256(target).digest()))
         total_copy += int(d.stats.copied_bytes)
         total_literal += int(d.stats.literal_bytes)
+    delta_construction_s = time.perf_counter() - phase_started
 
     patch_raw = b"".join(payload for _, _, payload, _ in raw_patches)
     if len(patch_raw) > LAT.MAX_DECODE:
         raise AssertionError("shared patch context exceeds decode-unit bound")
 
-    # Strongest simple control: the same exact raw delta programs, same level/checksum,
-    # but each receives an independent Zstd frame/context. This isolates ownership/frame
-    # fragmentation from latent derivation and delta quality without changing semantics.
-    individual_patch_stored = [
-        zstd.ZstdCompressor(level=PATCH_LEVEL, threads=0, write_checksum=True).compress(payload)
-        for _, _, payload, _ in raw_patches
-    ]
-    individual_patch_stored_bytes = sum(map(len, individual_patch_stored))
+    # Candidate path: one shared frame/context. Stop its construction clock only after
+    # complete research framing below; verification and comparator construction are not
+    # part of create time, matching the external comparator boundary.
+    phase_started = time.perf_counter()
     patch_stored = zstd.ZstdCompressor(level=PATCH_LEVEL, threads=0, write_checksum=True).compress(patch_raw)
-    patch_context_saved_bytes = individual_patch_stored_bytes - len(patch_stored)
-    if patch_context_saved_bytes < 0:
-        raise AssertionError("shared patch context unexpectedly larger than identical independent-frame control")
-    create_s = time.perf_counter() - started
+    shared_patch_compress_s = time.perf_counter() - phase_started
 
-    # Complete research framing: names, logical sizes, raw patch boundaries and hashes are
-    # priced. Only final release/recovery framing is omitted from the optimistic payload
-    # floor; if complete research framing crosses Zstd, the representation deserves a real
-    # productization/runtime prerequisite rather than release credit.
     artifact = bytearray(b"CMPNXLCP1")
     artifact.extend(hashlib.sha256(latent).digest())
     _put_varint(artifact, len(latent_stored)); artifact.extend(latent_stored)
@@ -99,6 +98,21 @@ def run(work_root: Path) -> dict:
         _put_varint(artifact, len(payload))
         artifact.extend(digest)
     artifact.extend(bytes.fromhex(expected_tree))
+    candidate_create_s = time.perf_counter() - candidate_started
+
+    # Strongest simple control: the same exact raw delta programs, same level/checksum,
+    # but each receives an independent Zstd frame/context. Build it *after* the candidate
+    # timer stops so counterfactual instrumentation cannot contaminate candidate speed.
+    control_started = time.perf_counter()
+    individual_patch_stored = [
+        zstd.ZstdCompressor(level=PATCH_LEVEL, threads=0, write_checksum=True).compress(payload)
+        for _, _, payload, _ in raw_patches
+    ]
+    control_compress_s = time.perf_counter() - control_started
+    individual_patch_stored_bytes = sum(map(len, individual_patch_stored))
+    patch_context_saved_bytes = individual_patch_stored_bytes - len(patch_stored)
+    if patch_context_saved_bytes < 0:
+        raise AssertionError("shared patch context unexpectedly larger than identical independent-frame control")
 
     unpacked = zstd.ZstdDecompressor().decompress(patch_stored, max_output_size=LAT.MAX_DECODE)
     if unpacked != patch_raw:
@@ -129,13 +143,13 @@ def run(work_root: Path) -> dict:
     strict = (
         len(artifact) < int(zip_row["bytes"])
         and size_crosses_zstd
-        and create_s < float(zip_row["create_s"])
-        and create_s < float(zstd_row["create_s"])
+        and candidate_create_s < float(zip_row["create_s"])
+        and candidate_create_s < float(zstd_row["create_s"])
     )
     terminal = "PROMOTE_NEXT_PREREQUISITE" if size_crosses_zstd else "RETIRE_FAMILY"
 
     return {
-        "schema": "cmpct-v030-shifted-latent-patchpack-floor-v2",
+        "schema": "cmpct-v030-shifted-latent-patchpack-floor-v3",
         "source_commit": os.environ.get("EVIDENCE_HEAD") or os.environ.get("GITHUB_SHA") or "local",
         "strict_target": "15/15: each workload strictly smaller and faster than ZIP/Deflate and solid Zstd-19; ties fail",
         "diagnosis": "D4",
@@ -154,11 +168,19 @@ def run(work_root: Path) -> dict:
             "max_chain_depth": 1,
             "single_shared_patch_context": True,
             "patch_context_level": PATCH_LEVEL,
-            "creation_prices_latent_derivation_delta_construction_patch_control_and_patch_compression": True,
+            "candidate_create_excludes_counterfactual_control": True,
             "release_credit": False,
         },
         "workload": {"files": len(rows), "logical_bytes": sum(len(d) for _, d in rows), "tree_sha256": expected_tree},
         "derivation": derivation,
+        "timing": {
+            "latent_derivation_s": latent_derivation_s,
+            "latent_compress_s": latent_compress_s,
+            "delta_construction_s": delta_construction_s,
+            "shared_patch_compress_s": shared_patch_compress_s,
+            "candidate_create_s": candidate_create_s,
+            "independent_frame_control_compress_s": control_compress_s,
+        },
         "candidate": {
             "latent_logical_bytes": len(latent),
             "latent_stored_bytes": len(latent_stored),
@@ -171,7 +193,7 @@ def run(work_root: Path) -> dict:
             "payload_floor_bytes": payload_floor,
             "archive_bytes": len(artifact),
             "artifact_sha256": hashlib.sha256(artifact).hexdigest(),
-            "create_seconds": create_s,
+            "create_seconds": candidate_create_s,
             "copied_bytes": total_copy,
             "literal_bytes": total_literal,
             "tree_verified": True,
@@ -182,6 +204,7 @@ def run(work_root: Path) -> dict:
         "comparators": {"zip_deflate9": zip_row, "tar_zstd19_solid": zstd_row},
         "hostile_reviewer": {
             "context_gain_is_exactly_attributed": True,
+            "counterfactual_control_excluded_from_candidate_timing": True,
             "shared_context_exports_decode_work": "every member may require the bounded shared patch context; this is charged in max_member_read_amplification",
             "remaining_unpriced_debt": "final canonical/recovery/platform framing and implementation do not receive release credit from this capacity test",
         },
