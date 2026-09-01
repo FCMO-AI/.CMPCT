@@ -1,5 +1,5 @@
 # ci-lane: release
-# ci-cancel-policy: preserve-running-exact-receipt
+# ci-cancel-policy: split-classifier-preserve-receipts
 # ci-pr-scope: latest-head-commit-gate
 name: CMPCT v0.30 canonical r25 authority
 
@@ -19,10 +19,6 @@ on:
 permissions:
   contents: read
 
-concurrency:
-  group: cmpct-v030-canonical-${{ github.event.pull_request.head.sha || github.sha }}
-  cancel-in-progress: false
-
 env:
   PYTHONPATH: ${{ github.workspace }}
   EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
@@ -31,6 +27,9 @@ jobs:
   latest-head-impact:
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    concurrency:
+      group: cmpct-v030-canonical-classifier-${{ github.event.pull_request.number || github.ref }}
+      cancel-in-progress: true
     outputs:
       run_release: ${{ steps.scope.outputs.run_release }}
     steps:
@@ -64,6 +63,9 @@ jobs:
     name: canonical-fast
     runs-on: ubuntu-latest
     timeout-minutes: 90
+    concurrency:
+      group: cmpct-v030-canonical-fast-${{ github.event.pull_request.head.sha || github.sha }}
+      cancel-in-progress: false
     steps:
       - uses: actions/checkout@v6
         with:
@@ -125,6 +127,9 @@ jobs:
     name: canonical-generalization
     runs-on: ubuntu-latest
     timeout-minutes: 360
+    concurrency:
+      group: cmpct-v030-canonical-generalization-${{ github.event.pull_request.head.sha || github.sha }}
+      cancel-in-progress: false
     steps:
       - uses: actions/checkout@v6
         with:
@@ -195,6 +200,9 @@ jobs:
     name: canonical-runtime
     runs-on: ubuntu-latest
     timeout-minutes: 420
+    concurrency:
+      group: cmpct-v030-canonical-runtime-${{ github.event.pull_request.head.sha || github.sha }}
+      cancel-in-progress: false
     steps:
       - uses: actions/checkout@v6
         with:
@@ -261,6 +269,9 @@ jobs:
     name: canonical-external-frontier
     runs-on: ubuntu-latest
     timeout-minutes: 540
+    concurrency:
+      group: cmpct-v030-canonical-external-${{ github.event.pull_request.head.sha || github.sha }}
+      cancel-in-progress: false
     steps:
       - uses: actions/checkout@v6
         with:
@@ -331,11 +342,9 @@ jobs:
           if-no-files-found: error
           retention-days: 90
 
-# Footnote: this workflow binds every canonical release measurement to the promoted
-# `entropygraph_v030_release_product` front door. Historical mechanism-causality remains separate evidence; it is
-# not allowed to impersonate product runtime or external performance. The corpus jobs install ffmpeg/audio only to
-# construct the frozen workload. No compression, locality, runtime, RSS or competitor threshold is weakened.
-# External authority independently enforces the user's strict 15/15 ZIP/Zstd size+creation-speed law, including
-# the rule that equality is failure. Native/shared-reader and portability remain mandatory separate authority
-# before #56 can merge. Exact canonical receipts are preserved once running, and unrelated newest commits exit
-# through the exact-head classifier instead of cancelling multi-hour evidence.
+# Footnote: classifier routing is cancellable by PR/ref while every substantive canonical receipt has its own
+# exact-SHA non-cancelling job group. This preserves already-started scientific/release evidence but prevents the
+# accumulated long-lived PR diff from retaining one queued classifier workflow per commit. Every canonical release
+# measurement remains bound to the promoted `entropygraph_v030_release_product` front door. Historical mechanism-
+# causality remains separate evidence and cannot impersonate product runtime or external performance. No compression,
+# locality, runtime, RSS or competitor threshold is weakened; strict 15/15 ZIP/Zstd size+create equality still fails.
