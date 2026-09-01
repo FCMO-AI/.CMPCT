@@ -99,7 +99,10 @@ def run(work_root: Path) -> dict:
     if not shipping_fail_closed:
         raise RuntimeError("implicit-v4 candidate leaked into unmodified shipping canonical semantics")
 
-    manifest_raw, manifest_stats = CAND.read_member_with_stats(
+    # This is an internal control member, intentionally absent from the user-facing candidate
+    # manifest. Read it at the physical profile layer, then authenticate/decode it through the
+    # candidate admission seam. Asking the user-facing reader for this path is a layer error.
+    manifest_raw, manifest_stats = BASE._read_profile_member(
         candidate_archive, BASE.FS.FILESYSTEM_MANIFEST
     )
     content = BASE._profile_content_identities(candidate_archive)
