@@ -38,6 +38,30 @@ def test_duplicate_members_preserve_multiplicity_deterministically() -> None:
     assert C.decode_all(blob) == _canonical(members)
 
 
+def test_selected_member_resource_facts_charge_all_decoded_context() -> None:
+    members = _family()
+    blob = C.encode_container(members)
+    parsed = C.parse_container(blob)
+    expected = _canonical(members)
+    for index, member in enumerate(expected):
+        facts = C.member_resource_facts(blob, index)
+        assert facts.logical_size == len(member)
+        assert facts.decoded_context_bytes == len(parsed.base) + len(parsed.patch_raw) + len(member)
+        assert facts.max_decode_unit_bytes == max(len(parsed.base), len(parsed.patch_raw), len(member))
+        assert facts.member_read_amplification == facts.decoded_context_bytes / max(1, len(member))
+        # The resource API and the actual selected-member reader must refer to the same entry.
+        assert C.decode_member(blob, index) == member
+
+
+def test_zero_length_member_resource_facts_are_finite_and_fully_charged() -> None:
+    blob = C.encode_container([b"", b"abc"])
+    parsed = C.parse_container(blob)
+    empty_index = next(i for i, entry in enumerate(parsed.entries) if entry.logical_size == 0)
+    facts = C.member_resource_facts(blob, empty_index)
+    assert facts.member_read_amplification == float(facts.decoded_context_bytes)
+    assert facts.max_decode_unit_bytes == max(len(parsed.base), len(parsed.patch_raw))
+
+
 def test_container_corruption_and_truncation_fail_closed() -> None:
     blob = C.encode_container(_family())
     corrupt = bytearray(blob)
@@ -50,16 +74,17 @@ def test_container_corruption_and_truncation_fail_closed() -> None:
         C.parse_container(b"WRONGBD2" + blob[8:])
 
 
-def test_member_index_contract_fails_closed() -> None:
+def test_member_index_contract_fails_closed_for_decode_and_resource_facts() -> None:
     blob = C.encode_container(_family())
-    with pytest.raises(IndexError):
-        C.decode_member(blob, -1)
-    with pytest.raises(IndexError):
-        C.decode_member(blob, len(_family()))
-    with pytest.raises(TypeError):
-        C.decode_member(blob, True)
-    with pytest.raises(TypeError):
-        C.decode_member(blob, 1.0)  # type: ignore[arg-type]
+    for fn in (C.decode_member, C.member_resource_facts):
+        with pytest.raises(IndexError):
+            fn(blob, -1)
+        with pytest.raises(IndexError):
+            fn(blob, len(_family()))
+        with pytest.raises(TypeError):
+            fn(blob, True)
+        with pytest.raises(TypeError):
+            fn(blob, 1.0)  # type: ignore[arg-type]
 
 
 def test_member_count_and_resource_caps_are_enforced(monkeypatch: pytest.MonkeyPatch) -> None:
