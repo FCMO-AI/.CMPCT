@@ -1,6 +1,6 @@
 name: CMPCT v0.30 native authority
 # ci-lane: release
-# ci-cancel-policy: preserve-running-exact-receipt
+# ci-cancel-policy: split-classifier-preserve-receipts
 # ci-pr-scope: latest-head-commit-gate
 
 on:
@@ -51,10 +51,6 @@ on:
 permissions:
   contents: read
 
-concurrency:
-  group: cmpct-v030-native-authority-${{ github.event.pull_request.head.sha || github.sha }}
-  cancel-in-progress: false
-
 env:
   EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
 
@@ -62,6 +58,9 @@ jobs:
   latest-head-impact:
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    concurrency:
+      group: cmpct-v030-native-classifier-${{ github.event.pull_request.number || github.ref }}
+      cancel-in-progress: true
     outputs:
       run_native: ${{ steps.scope.outputs.run_native }}
     steps:
@@ -96,6 +95,9 @@ jobs:
     if: needs.latest-head-impact.outputs.run_native == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 45
+    concurrency:
+      group: cmpct-v030-native-receipt-${{ github.event.pull_request.head.sha || github.sha }}
+      cancel-in-progress: false
     steps:
       - uses: actions/checkout@v6
         with:
@@ -188,16 +190,13 @@ jobs:
           if-no-files-found: warn
           retention-days: 30
 
-# Footnote: this release lane used to share one PR-wide cancellation group. On the long-lived v0.30 integration PR,
-# any later commit could therefore destroy an otherwise useful 45-minute exact native receipt even when the later
-# commit was unrelated. Exact-head concurrency plus newest-commit classification preserves already-running evidence
-# while cheaply declining irrelevant heads. Builder-independent filesystem-v1 and implicit-v4 bytes independently
-# pin both admitted filesystem-control dialects; writer parity and the explicit recovery matrix separately prove the
-# current canonical admission seam publishes recoverable bytes consumed by the shared native implementation. The
-# structured artifact records only facts actually established by this lane; Logs-specific facts remain owned by their
-# separate native/recovery evidence rather than being inferred here. The r25 format/hardening/native/portability
-# contracts and filesystem semantic owner are trigger inputs too: changing a reader-visible or platform requirement
-# without rerunning the native acceptance matrix would create green-looking repository state over stale proof.
-# Profile isolation clones the canonical streaming reader as a semantic owner. Changes to that source therefore
-# invalidate native authority even when the wrapper/policy modules are unchanged; the custody test ratchets this
-# transitive dependency so future refactors cannot silently reopen the stale-receipt gap.
+# Footnote: the classifier and expensive receipt deliberately use different job-level concurrency domains. New PR
+# commits cancel obsolete classifier jobs by PR/ref, while an already-started exact-SHA native receipt remains in its
+# own non-cancelling group and can finish. This avoids the old failure mode where exact-SHA workflow concurrency kept
+# one otherwise useless queued classifier per long-lived PR commit. Builder-independent filesystem-v1 and implicit-v4
+# bytes independently pin both admitted filesystem-control dialects; writer parity and the explicit recovery matrix
+# separately prove the current canonical admission seam publishes recoverable bytes consumed by the shared native
+# implementation. The r25 format/hardening/native/portability contracts and filesystem semantic owner are trigger
+# inputs too: changing a reader-visible or platform requirement without rerunning the native acceptance matrix would
+# create green-looking repository state over stale proof. Profile isolation clones the canonical streaming reader as
+# a semantic owner, so its source is explicitly part of the dependency closure and ratcheted by custody tests.
