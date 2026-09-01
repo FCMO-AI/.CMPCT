@@ -148,7 +148,7 @@ if getattr(POLICY.R.G04, "O", None) is not None:
 
 
 def _parallel_overlay_retained_graph(graph_path: Path, overlay_path: Path) -> dict:
-    """Apply the owning G0-G4 auditions concurrently while preserving exact record order and bytes."""
+    """Apply G0-G4 auditions concurrently while preserving the owner's deferred-verification contract."""
     source_format, _source, graph_meta, graph_records = SHARED.strict._read_source_records(graph_path)
     users = SHARED.O._record_member_lengths(graph_meta, len(graph_records))
 
@@ -170,14 +170,17 @@ def _parallel_overlay_retained_graph(graph_path: Path, overlay_path: Path) -> di
     annotated_meta = dict(graph_meta)
     annotated_meta["overlay_source_format"] = source_format
     write_stats = SHARED.G._write_overlay(annotated_meta, records, transforms, overlay_path)
-    verified = SHARED.G.strong_verify(overlay_path)
+    # Match SHARED._overlay_retained_graph exactly: the owning portfolio first prices complete bytes and locality.
+    # Full logical verification is paid only if the overlay wins both gates. Eager verification here both broke the
+    # return-shape contract and reintroduced the losing-candidate decode work that canonical scheduling removes.
     return {
         "source_format": source_format,
         "records": records,
         "transforms": transforms,
         "auditions": auditions,
         "write_stats": write_stats,
-        "verified": verified,
+        "verified": None,
+        "verification_state": "deferred-until-byte-and-locality-win",
         "audition_workers": worker_count,
         "audition_scheduler": "bounded-ordered-thread-pool-v1",
         "delimiter_transpose": "bulk-rectangular-prefix-v1",
