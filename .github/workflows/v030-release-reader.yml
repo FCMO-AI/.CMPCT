@@ -1,5 +1,6 @@
 # ci-lane: release
 # ci-pr-scope: latest-head-commit-gate
+# ci-cancel-policy: preserve-running-exact-receipt
 name: CMPCT v0.30 release reader
 
 on:
@@ -11,9 +12,11 @@ on:
 permissions:
   contents: read
 
+# This lane now produces release-receipt evidence. Preserve both queued and running proof for one exact source
+# fingerprint instead of letting a later branch commit evict it before its JSON can be harvested.
 concurrency:
-  group: cmpct-v030-release-reader-${{ github.ref }}
-  cancel-in-progress: true
+  group: cmpct-v030-release-reader-${{ github.sha }}
+  cancel-in-progress: false
 
 env:
   EVIDENCE_HEAD: ${{ github.sha }}
@@ -100,11 +103,50 @@ jobs:
             tests/test_v029_parallel_portfolio.py
 
       - name: Public-surface guard
-        if: always()
         run: python tools/check_public_surface.py
+
+      - name: Emit fingerprint-bound reader/recovery evidence
+        run: |
+          python -m experiments.entropygraph_v030_release_lock_strict --print-fingerprint \
+            > "$RUNNER_TEMP/cmpct-v030-fingerprint.json"
+          python - <<'PY'
+          import json, os, pathlib, subprocess
+          temp=pathlib.Path(os.environ['RUNNER_TEMP'])
+          fingerprint=json.loads((temp/'cmpct-v030-fingerprint.json').read_text())['candidate_fingerprint']
+          evidence={
+              'schema':'cmpct-v030-reader-recovery-evidence-v1',
+              'candidate_sha':subprocess.check_output(['git','rev-parse','HEAD'], text=True).strip(),
+              'candidate_fingerprint':fingerprint,
+              'workflow':'v030-release-reader.yml',
+              'run_id':int(os.environ['GITHUB_RUN_ID']),
+              'run_attempt':int(os.environ['GITHUB_RUN_ATTEMPT']),
+              'facts':{
+                  # The required test matrix above directly exercises both promoted streamed grammars,
+                  # independently corrupts primary/tail metadata, injects publication failure and proves
+                  # destination rollback, and verifies the configured output-budget refusal before publish.
+                  'streamed_strong_verify':True,
+                  'primary_tail_two_way_recovery':True,
+                  'transactional_extract_rollback':True,
+                  'resource_budget_refusal_before_publication':True,
+              },
+          }
+          out=temp/'cmpct-v030-reader-recovery-evidence.json'
+          out.write_text(json.dumps(evidence, indent=2)+'\n')
+          print(json.dumps(evidence, indent=2))
+          PY
+
       - name: CI topology self-check
-        if: always()
         run: python tools/check_ci_topology.py .github/workflows/v030-release-reader.yml
 
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: cmpct-v030-reader-recovery-${{ env.EVIDENCE_HEAD }}
+          path: ${{ runner.temp }}/cmpct-v030-reader-recovery-evidence.json
+          if-no-files-found: warn
+          retention-days: 90
+
 # Direct Python reader/recovery/locality proof remains mandatory for any exact head that can affect its semantics.
-# Orthogonal research-only commits now pay only the cheap impact classifier; all reader tests and gates are unchanged.
+# Orthogonal research-only commits still pay only the cheap impact classifier. The evidence JSON intentionally
+# claims only facts established by this lane; malformed fuzz/resource-campaign credit remains owned by the separate
+# fuzz authority and must be combined through the strict receipt rather than inferred here.
