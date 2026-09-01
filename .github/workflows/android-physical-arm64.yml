@@ -84,8 +84,8 @@ jobs:
           # Footnote: physical-device success is only one half of the release matrix. Rather than trusting a
           # typed run id, inspect successful hosted Android artifacts and accept only one whose *embedded* source
           # SHA and release fingerprint match this checkout exactly. Synthetic PR merge SHAs cannot satisfy it.
-          # Logs dispatch is part of the Android release contract, so an otherwise-green hosted run that did not
-          # prove the shared portable logs vector is not eligible to seed physical-device evidence.
+          # The hosted receipt must prove canonical r25 including implicit-v4 plus the other promoted dispatch
+          # surfaces before scarce hardware may turn that same candidate into physical-device evidence.
           python - <<'PY'
           import io, json, os, pathlib, urllib.request, zipfile
           token=os.environ['GH_TOKEN']
@@ -116,13 +116,16 @@ jobs:
                       evidence.get('candidate_sha') == candidate
                       and evidence.get('candidate_fingerprint') == fingerprint
                       and facts.get('hosted_android_emulator_green') is True
+                      and facts.get('canonical_r25_portable_dispatch_green') is True
+                      and facts.get('implicit_v4_portable_dispatch_green') is True
                       and facts.get('logs_inverse_portable_dispatch_green') is True
+                      and facts.get('compact_control_portable_dispatch_green') is True
                   ):
                       found={'run_id':run['id'],'run_attempt':run['run_attempt'],'artifact_id':artifact['id'],'evidence':evidence}
                       break
               if found: break
           if not found:
-              raise SystemExit('no successful hosted Android artifact with logs dispatch proof matches this exact candidate SHA/fingerprint')
+              raise SystemExit('no successful hosted Android artifact with canonical r25/implicit-v4/promoted dispatch proof matches this exact candidate SHA/fingerprint')
           out=pathlib.Path(os.environ['RUNNER_TEMP'])/'cmpct-hosted-android-evidence.json'
           out.write_text(json.dumps(found, indent=2)+'\n')
           print(json.dumps(found, indent=2))
@@ -200,8 +203,15 @@ jobs:
               return subprocess.check_output(['adb','-s',os.environ['ANDROID_SERIAL'],*args], text=True).replace('\r','').strip()
           hosted=json.loads((pathlib.Path(os.environ['RUNNER_TEMP'])/'cmpct-hosted-android-evidence.json').read_text())
           hosted_facts=hosted['evidence']['facts']
-          if hosted_facts.get('logs_inverse_portable_dispatch_green') is not True:
-              raise SystemExit('matching hosted Android evidence did not prove logs portable dispatch')
+          required_hosted = (
+              'canonical_r25_portable_dispatch_green',
+              'implicit_v4_portable_dispatch_green',
+              'logs_inverse_portable_dispatch_green',
+              'compact_control_portable_dispatch_green',
+          )
+          missing=[key for key in required_hosted if hosted_facts.get(key) is not True]
+          if missing:
+              raise SystemExit(f'matching hosted Android evidence omitted required portable dispatch proof: {missing}')
           serial_digest=hashlib.sha256(os.environ['ANDROID_SERIAL'].encode()).hexdigest()
           evidence={
               'schema':'cmpct-v030-platform-android-evidence-v1',
@@ -224,7 +234,10 @@ jobs:
                   'hosted_android_emulator_green':True,
                   'physical_arm64_android_green':True,
                   'required_platform_matrix_green':True,
+                  'canonical_r25_android_dispatch_green':True,
+                  'implicit_v4_android_dispatch_green':True,
                   'logs_inverse_android_dispatch_green':True,
+                  'compact_control_android_dispatch_green':True,
                   'all_declared_abis_built':True,
                   'portable_arm64_jni_dependency_verified':True,
                   'physical_instrumentation_green':True,
@@ -260,5 +273,5 @@ jobs:
 # Footnote: owning an ARM64 build is not physical-device acceptance. This workflow requires a self-hosted
 # Linux/ARM64 runner with the dedicated physical-device label, rejects QEMU explicitly, reuses the exact same APK
 # build path as hosted CI, and refuses to combine its device result with hosted evidence from another candidate.
-# The final receipt also carries the exact hosted logs-dispatch proof required by the release lock; the physical
-# lane can verify that fact but cannot manufacture it when the matching hosted emulator evidence is absent.
+# The final receipt carries canonical r25/implicit-v4 plus promoted-dispatch proof from the exact hosted candidate;
+# the physical lane can verify those facts but cannot manufacture them when matching emulator evidence is absent.
