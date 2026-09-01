@@ -1,67 +1,19 @@
 # ci-lane: deep
-# ci-cancel-policy: preserve-running-exact-receipt
-# ci-pr-scope: latest-head-commit-gate
+# ci-auto-policy: retired-manual-only
 name: CMPCT v0.30 Shifted packed CDC shared store
 
 on:
-  push:
-    branches: [agent/v030-authoritative-integration]
-    paths:
-      - 'benchmarks/native/v030_cdc_boundaries.c'
-      - 'benchmarks/v030_shifted_cdc_packed_store_oracle.py'
-      - '.github/workflows/v030-shifted-cdc-packed-store-oracle.yml'
-  pull_request:
-    branches: [main]
-    paths:
-      - 'benchmarks/native/v030_cdc_boundaries.c'
-      - 'benchmarks/v030_shifted_cdc_packed_store_oracle.py'
-      - '.github/workflows/v030-shifted-cdc-packed-store-oracle.yml'
   workflow_dispatch:
 
 permissions:
   contents: read
 
-concurrency:
-  group: cmpct-v030-shifted-cdc-packed-store-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: false
-
 env:
   PYTHONPATH: ${{ github.workspace }}
-  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+  EVIDENCE_HEAD: ${{ github.sha }}
 
 jobs:
-  latest-head-impact:
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    outputs:
-      run_deep: ${{ steps.scope.outputs.run_deep }}
-    steps:
-      - uses: actions/checkout@v6
-        with:
-          ref: ${{ env.EVIDENCE_HEAD }}
-          fetch-depth: 2
-      - name: Bind exact head and classify newest commit only
-        id: scope
-        env:
-          EVENT_NAME: ${{ github.event_name }}
-        run: |
-          set -euo pipefail
-          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
-          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
-            echo 'run_deep=true' >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-          git diff-tree --no-commit-id --name-only -r HEAD > /tmp/latest-head-files.txt
-          cat /tmp/latest-head-files.txt
-          if grep -Eq '^(benchmarks/native/v030_cdc_boundaries\.c|benchmarks/v030_shifted_cdc_packed_store_oracle\.py|\.github/workflows/v030-shifted-cdc-packed-store-oracle\.yml)$' /tmp/latest-head-files.txt; then
-            echo 'run_deep=true' >> "$GITHUB_OUTPUT"
-          else
-            echo 'run_deep=false' >> "$GITHUB_OUTPUT"
-          fi
-
   packed-cdc-frontier:
-    needs: latest-head-impact
-    if: needs.latest-head-impact.outputs.run_deep == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 90
     steps:
@@ -137,4 +89,6 @@ jobs:
           if-no-files-found: error
           retention-days: 90
 
-# Research-only R4 frontier. A strict win authorizes productization work only; it never changes release authority.
+# Terminal negative is preserved in docs/V030_SHIFTED_CDC_STORE_FAMILY_TERMINAL.md.
+# The retired packed-CDC descendant remains manually replayable for audit or genuine reopening evidence, but no
+# longer consumes automatic push/PR runner capacity after its optimistic payload floor failed the strict frontier.
