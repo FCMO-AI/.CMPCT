@@ -12,8 +12,12 @@ on:
       - 'experiments/entropygraph_v030_canonical_final_impl.py'
       - 'experiments/entropygraph_v030_profile_isolation.py'
       - 'experiments/entropygraph_v030_release_product.py'
+      - 'experiments/entropygraph_v030_r25_manifest_admission.py'
+      - 'experiments/entropygraph_v030_fs_implicit_v4.py'
       - 'tests/test_v030_canonical_final.py'
       - 'tests/test_v030_profile_isolation.py'
+      - 'tests/test_v030_r25_manifest_admission.py'
+      - 'tests/test_v030_fs_implicit_v4.py'
       - 'tests/generate_v030_canonical_goldens.py'
       - 'tests/conformance/v030-r25-canonical.json'
       - 'tests/native_v030_canonical.py'
@@ -54,10 +58,12 @@ jobs:
           sudo apt-get install -y zstd
           python -m pip install --upgrade pip
           python -m pip install -e '.[test]'
-      - name: Python canonical boundary and profile-isolation tests
+      - name: Python canonical boundary, admitted-manifest and profile-isolation tests
         run: |
           python -m pytest -q \
             tests/test_v030_canonical_final.py \
+            tests/test_v030_r25_manifest_admission.py \
+            tests/test_v030_fs_implicit_v4.py \
             tests/test_v030_profile_isolation.py
       - name: Reproduce independent canonical r25 golden bytes
         run: python tests/generate_v030_canonical_goldens.py --check
@@ -85,5 +91,7 @@ jobs:
 # Footnote: this lane is release-scoped because it validates the shared native reader that can open every
 # representation the v0.30 selector may publish. Builder-independent CMP25 bytes are regenerated from primitive
 # framing, then consumed by both the CLI and C ABI; self-generated writer/reader agreement is not sufficient.
-# The wrapper, preserved implementation body and namespace-isolation loader are all trigger paths because any of
-# them can change the exact canonical bytes/dispatch contract native code is required to match.
+# The canonical wrapper, preserved implementation body, admitted filesystem-control grammar and namespace-isolation
+# loader are all trigger paths because any of them can change exact canonical bytes/dispatch semantics native code
+# is required to match. The manifest admission/implicit-v4 Python tests are included here so native authority cannot
+# remain green merely because its fixed goldens still exercise an older filesystem-control encoding.
