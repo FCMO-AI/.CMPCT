@@ -67,12 +67,7 @@ def _common_prefix_len(a: bytes, b: bytes, ai: int, bi: int) -> int:
 
 
 def _find_resync(base: bytes, target: bytes, i: int, j: int) -> tuple[int, int]:
-    """Return (delete_from_base, insert_from_target) for the smallest bounded exact resync.
-
-    Three generic edit shapes are considered: same-width replacement, insertion into the
-    target, and deletion from the base. The search is content-only and bounded; failure
-    falls back to a bounded same-width replacement so construction always makes progress.
-    """
+    """Return (delete_from_base, insert_from_target) for the smallest bounded exact resync."""
     rem_b = len(base) - i
     rem_t = len(target) - j
     diag_limit = min(MAX_RESYNC, rem_b, rem_t)
@@ -178,6 +173,14 @@ def _decode_edit(base: bytes, program: bytes, expected_size: int) -> bytes:
     return bytes(out)
 
 
+def _sha256_file(path: Path) -> str:
+    h = hashlib.sha256()
+    with path.open("rb") as f:
+        for chunk in iter(lambda: f.read(1024 * 1024), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+
 def run(work_root: Path) -> dict:
     shutil.rmtree(work_root, ignore_errors=True)
     work_root.mkdir(parents=True)
@@ -229,6 +232,14 @@ def run(work_root: Path) -> dict:
         _put_varint(artifact, len(program))
         artifact.extend(digest)
     artifact.extend(bytes.fromhex(expected_tree))
+
+    # Publication and identity binding belong to candidate creation. Keeping them outside
+    # the timer would make a strict speed claim asymmetric with file-producing ZIP/Zstd.
+    phase_started = time.perf_counter()
+    candidate_path = work_root / "candidate.cmpnxbde1"
+    candidate_path.write_bytes(artifact)
+    artifact_sha256 = _sha256_file(candidate_path)
+    publication_and_hash_s = time.perf_counter() - phase_started
     candidate_create_s = time.perf_counter() - candidate_started
 
     unpacked = zstd.ZstdDecompressor().decompress(patch_stored, max_output_size=MAX_DECODE)
@@ -249,6 +260,8 @@ def run(work_root: Path) -> dict:
         (verify / name).write_bytes(rebuilt)
     if pos != len(unpacked) or tree_hash(verify) != expected_tree:
         raise AssertionError("exact tree mismatch")
+    if candidate_path.stat().st_size != len(artifact) or _sha256_file(candidate_path) != artifact_sha256:
+        raise AssertionError("published candidate identity changed after timed creation")
 
     zip_row = LAT.COMP._zip_deflate(source, work_root / "competitor.zip")
     zstd_row = LAT.COMP._solid_tar_zstd(source, work_root / "competitor.tar.zst")
@@ -283,7 +296,7 @@ def run(work_root: Path) -> dict:
         for key in ("records", "copied_bytes", "deleted_bytes", "inserted_bytes", "fallback_like_records")
     }
     return {
-        "schema": "cmpct-v030-shifted-bounded-drift-edit-floor-v1",
+        "schema": "cmpct-v030-shifted-bounded-drift-edit-floor-v2",
         "source_commit": os.environ.get("EVIDENCE_HEAD") or os.environ.get("GITHUB_SHA") or "local",
         "strict_target": "15/15: each workload strictly smaller and faster than ZIP/Deflate and solid Zstd-19; ties fail",
         "diagnosis": "D4",
@@ -294,7 +307,7 @@ def run(work_root: Path) -> dict:
             "causal_hypothesis": "rolling-block delta instruction entropy, not the shared base itself, is the remaining Shifted size tax",
             "strongest_control": "retired latent + one shared delta context, whose complete artifact remained 12,303 B above exact Zstd-19",
             "disproof": "the optimistic base+shared-edit payload floor remains >= exact solid Zstd-19 bytes",
-            "strongest_failure": "a size win can still lose the strict contract if bounded Python edit construction exceeds ZIP/Zstd creation time",
+            "strongest_failure": "a size win can still lose the strict contract if bounded edit construction plus publication exceeds ZIP/Zstd creation time",
         },
         "contract": {
             "benchmark_identity_used_in_representation": False,
@@ -304,6 +317,7 @@ def run(work_root: Path) -> dict:
             "max_resync_bytes": MAX_RESYNC,
             "single_shared_edit_context": True,
             "max_chain_depth": 1,
+            "publication_and_sha256_inside_candidate_timing": True,
             "release_credit": False,
         },
         "workload": {"files": len(rows), "logical_bytes": sum(len(d) for _, d in rows), "tree_sha256": expected_tree},
@@ -311,6 +325,7 @@ def run(work_root: Path) -> dict:
             "edit_construction_s": edit_construction_s,
             "base_compress_s": base_compress_s,
             "patch_compress_s": patch_compress_s,
+            "publication_and_hash_s": publication_and_hash_s,
             "candidate_create_s": candidate_create_s,
         },
         "candidate": {
@@ -321,7 +336,7 @@ def run(work_root: Path) -> dict:
             "edit_stored_bytes": len(patch_stored),
             "payload_floor_bytes": payload_floor,
             "archive_bytes": len(artifact),
-            "artifact_sha256": hashlib.sha256(artifact).hexdigest(),
+            "artifact_sha256": artifact_sha256,
             "create_seconds": candidate_create_s,
             "tree_verified": True,
             "max_chain_depth": 1,
@@ -333,6 +348,7 @@ def run(work_root: Path) -> dict:
         "hostile_reviewer": {
             "all_edit_construction_is_inside_candidate_timing": True,
             "base_and_edit_compression_are_inside_candidate_timing": True,
+            "publication_and_sha256_are_inside_candidate_timing": True,
             "verification_and_comparators_are_outside_candidate_timing_symmetrically": True,
             "bounded_fallback_is_counted": True,
             "shared_context_decode_work_is_charged_in_member_amplification": True,
