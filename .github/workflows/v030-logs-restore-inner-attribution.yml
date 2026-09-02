@@ -10,6 +10,8 @@ on:
       - 'benchmarks/v030_logs_restore_inner_attribution.py'
       - 'docs/v030-rnd/R25_LOGS_PACK_MATERIALIZATION_COMPONENT_ATTRIBUTION_PREREG.md'
       - 'benchmarks/v030_logs_pack_materialization_component_attribution.py'
+      - 'docs/v030-rnd/R25_LOGS_ZSTD_SESSION_REUSE_AB_PREREG.md'
+      - 'benchmarks/v030_logs_zstd_session_reuse_ab.py'
       - 'experiments/entropygraph_v030_logs_inverse_profile.py'
       - 'experiments/entropygraph_v030_logs_inverse_profile_v2.py'
       - 'experiments/entropygraph_v030_logs_inverse_profile_v3.py'
@@ -26,8 +28,7 @@ env:
   PYTHONPATH: ${{ github.workspace }}
   EVIDENCE_HEAD: ${{ github.sha }}
 
-# This deep evidence lane is keyed to the exact source fingerprint and deliberately preserves an already-running
-# receipt. A later branch head gets its own group rather than cancelling the older scientific measurement.
+# Exact-SHA receipt groups preserve already-running science. Later branch movement cannot cancel an older receipt.
 concurrency:
   group: cmpct-v030-logs-restore-attribution-${{ github.sha }}
   cancel-in-progress: false
@@ -178,5 +179,80 @@ jobs:
           if-no-files-found: warn
           retention-days: 90
 
-# D2 attribution only. No tracked cost is borrowable; pack decompression, CRC32, SHA-256, logical identity,
-# recovery and locality remain mandatory, and neither job grants release credit.
+  zstd-session-reuse:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install deterministic dependencies
+        run: |
+          set -euo pipefail
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[test]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
+      - name: Compile frozen Zstd reuse instrument
+        run: python -m py_compile benchmarks/v030_logs_zstd_session_reuse_ab.py
+      - name: Run exact session-reuse A/B
+        run: |
+          mkdir -p benchmark-artifacts
+          python -m benchmarks.v030_logs_zstd_session_reuse_ab \
+            --work-root "$RUNNER_TEMP/v030-logs-zstd-session-reuse" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-logs-zstd-session-reuse.json"
+      - name: Ratchet frozen reuse contract
+        run: |
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          d=json.loads(Path('benchmark-artifacts/v030-logs-zstd-session-reuse.json').read_text())
+          assert d['schema']=='cmpct-v030-logs-zstd-session-reuse-ab-v1'
+          assert d['target']=='neutral_hostile_v1/05_logs_and_telemetry'
+          assert d['selected']=='logs-inverse'
+          assert d['rounds']==21
+          assert d['experiment_valid'] is True and d['candidate_lifecycle_ok'] is True
+          assert d['support_reduction_floor']==0.04
+          assert d['retire_reduction_ceiling']==0.01
+          assert d['release_credit'] is False and d['production_source_changed'] is False
+          assert d['crc32_preserved'] is True and d['sha256_preserved'] is True
+          assert d['cold_selective_semantics_changed'] is False
+          assert d['strong_verify']['ok'] is True
+          decision=d['decision']
+          assert decision in {
+              'LOGS_ZSTD_SESSION_REUSE_SUPPORTED',
+              'LOGS_ZSTD_SESSION_REUSE_RETIRED',
+              'LOGS_ZSTD_SESSION_REUSE_AMBIGUOUS',
+          }
+          reduction=float(d['candidate_total_reduction_fraction'])
+          ratio=float(d['candidate_wall_ratio'])
+          if decision=='LOGS_ZSTD_SESSION_REUSE_SUPPORTED':
+              assert reduction>=0.04 and ratio<=0.96
+          elif decision=='LOGS_ZSTD_SESSION_REUSE_RETIRED':
+              assert reduction<0.01
+          else:
+              assert 0.01<=reduction<0.04
+          Path('benchmark-artifacts/v030-logs-zstd-session-reuse-candidate.txt').write_text(os.environ['EVIDENCE_HEAD']+'\n')
+          PY
+      - name: CI topology self-check
+        if: always()
+        run: python tools/check_ci_topology.py .github/workflows/v030-logs-restore-inner-attribution.yml
+      - name: Public-surface guard
+        if: always()
+        run: python tools/check_public_surface.py
+      - name: Upload exact reuse evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: v030-logs-zstd-session-reuse-${{ github.sha }}
+          path: |
+            benchmark-artifacts/v030-logs-zstd-session-reuse.json
+            benchmark-artifacts/v030-logs-zstd-session-reuse-candidate.txt
+          if-no-files-found: warn
+          retention-days: 90
+
+# Attribution and R1 rehabilitation only. No tracked cost is borrowable; pack decompression, CRC32, SHA-256,
+# logical identity, recovery and locality remain mandatory, and none of these jobs grants release credit.
