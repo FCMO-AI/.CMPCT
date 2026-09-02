@@ -4,6 +4,17 @@
 name: CMPCT v0.30 product phase RSS oracle
 
 on:
+  push:
+    branches: [agent/v030-authoritative-integration]
+    paths:
+      - 'experiments/entropygraph_v030_release_product.py'
+      - 'experiments/entropygraph_v030_release_product_base.py'
+      - 'experiments/entropygraph_v030_canonical_final.py'
+      - 'benchmarks/v030_release_performance.py'
+      - 'benchmarks/v030_product_phase_rss_oracle.py'
+      - 'benchmarks/neutral_hostile_corpus_v1.py'
+      - 'benchmarks/resemblance_hostile_corpus_v1.py'
+      - '.github/workflows/v030-product-phase-rss.yml'
   pull_request:
     branches: [main]
     paths:
