@@ -45,7 +45,6 @@ def test_authoritative_v2_classifier_is_release_fingerprint_driven() -> None:
     old hand-written classifier skipped authority, and canonical legal metadata from current main could alter the
     eventual merge tree without invalidating receipt identity. Keep one source of truth: V030_RELEASE_LOCK.json.
     """
-
     workflow = (ROOT / ".github/workflows/v030-authoritative-v2-pr.yml").read_text(encoding="utf-8")
     doctrine = (ROOT / "docs/CI_SPLIT_RECEIPT_CUSTODY.md").read_text(encoding="utf-8")
     manifest = json.loads((ROOT / "docs/V030_RELEASE_LOCK.json").read_text(encoding="utf-8"))
@@ -126,7 +125,7 @@ jobs:
   scope:
     runs-on: ubuntu-latest
     concurrency:
-      group: scope-${{ github.event.pull_request.number || github.ref }}
+      group: scope-${{ github.event.pull_request.head.sha || github.sha }}
       cancel-in-progress: true
     steps:
       - uses: actions/checkout@v6
