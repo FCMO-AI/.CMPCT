@@ -3,8 +3,11 @@ from __future__ import annotations
 """Attribute release-product r25 RSS to G0-G4 versus PrefixGraph complete-candidate construction.
 
 The preceding shipping-vs-serial A/B falsified inter-candidate overlap as the owner of the peak. This oracle
-therefore measures each exact complete candidate in a fresh process and compares its incremental RSS with the
-promoted full product. It is diagnostic only: it cannot change admission, scheduling, selection or release state.
+therefore measures each exact complete candidate in a fresh process and compares its RSS with the promoted full
+product. Total fresh-process peak RSS is the decisive ownership boundary because that is what the release gate
+charges. Baseline-subtracted ru_maxrss remains visible only as a diagnostic: ru_maxrss is a high-water mark, not
+an additive allocation counter. This oracle is diagnostic only and cannot change admission, scheduling, selection
+or release state.
 
 Worker failures are evidence too. A failed child process is retained verbatim in the durable JSON instead of being
 lost behind CalledProcessError; the oracle then fails closed with experiment_valid=false.
@@ -42,79 +45,33 @@ def _run_worker(mode: str, source: Path, archive: Path) -> dict:
     env = os.environ.copy()
     env["PYTHONPATH"] = str(ROOT) + (os.pathsep + env["PYTHONPATH"] if env.get("PYTHONPATH") else "")
     command = [sys.executable, str(WORKER), "--mode", mode, "--source", str(source), "--archive", str(archive)]
-    completed = subprocess.run(
-        command,
-        cwd=ROOT,
-        env=env,
-        check=False,
-        capture_output=True,
-        text=True,
-    )
+    completed = subprocess.run(command, cwd=ROOT, env=env, check=False, capture_output=True, text=True)
     lines = [line for line in completed.stdout.splitlines() if line.strip()]
     if completed.returncode != 0:
-        return {
-            "mode": mode,
-            "eligible": False,
-            "worker_failed": True,
-            "returncode": int(completed.returncode),
-            "command": command,
-            "stdout": completed.stdout,
-            "stderr": completed.stderr,
-            "archive_exists": archive.is_file(),
-        }
+        return {"mode": mode, "eligible": False, "worker_failed": True, "returncode": int(completed.returncode),
+                "command": command, "stdout": completed.stdout, "stderr": completed.stderr,
+                "archive_exists": archive.is_file()}
     if not lines:
-        return {
-            "mode": mode,
-            "eligible": False,
-            "worker_failed": True,
-            "returncode": 0,
-            "command": command,
-            "stdout": completed.stdout,
-            "stderr": completed.stderr,
-            "archive_exists": archive.is_file(),
-            "failure": "worker completed without a JSON receipt",
-        }
+        return {"mode": mode, "eligible": False, "worker_failed": True, "returncode": 0, "command": command,
+                "stdout": completed.stdout, "stderr": completed.stderr, "archive_exists": archive.is_file(),
+                "failure": "worker completed without a JSON receipt"}
     try:
         receipt = json.loads(lines[-1])
     except json.JSONDecodeError as exc:
-        return {
-            "mode": mode,
-            "eligible": False,
-            "worker_failed": True,
-            "returncode": 0,
-            "command": command,
-            "stdout": completed.stdout,
-            "stderr": completed.stderr,
-            "archive_exists": archive.is_file(),
-            "failure": f"invalid final JSON receipt: {exc}",
-        }
+        return {"mode": mode, "eligible": False, "worker_failed": True, "returncode": 0, "command": command,
+                "stdout": completed.stdout, "stderr": completed.stderr, "archive_exists": archive.is_file(),
+                "failure": f"invalid final JSON receipt: {exc}"}
     receipt["worker_failed"] = False
     receipt["returncode"] = 0
     return receipt
 
 
 def _receipt_identity_valid(mode: str, receipt: dict, source_tree: str, archive: Path) -> bool:
-    """Validate the worker receipt without conflating research and canonical identity domains.
-
-    Every mode must bind back to the same historical research content tree. Eligible modes must additionally prove
-    that the semantic owner's verified tree equals the worker's explicitly declared verification identity. Shipping
-    therefore remains canonical-filesystem exact, while G0-G4/PrefixGraph remain research-content exact. A
-    structurally ineligible PrefixGraph result is valid diagnostic evidence only when it explains the rejection and
-    did not publish an archive; shipping and G0-G4 are never allowed to become silently ineligible.
-    """
-    if receipt.get("worker_failed") is True:
+    if receipt.get("worker_failed") is True or str(receipt.get("research_tree_sha256") or "") != source_tree:
         return False
-    if str(receipt.get("research_tree_sha256") or "") != source_tree:
-        return False
-
     eligible = receipt.get("eligible") is True
     if not eligible:
-        return (
-            mode == "prefixgraph"
-            and bool(receipt.get("reject_reason"))
-            and not archive.is_file()
-        )
-
+        return mode == "prefixgraph" and bool(receipt.get("reject_reason")) and not archive.is_file()
     if not archive.is_file():
         return False
     expected = str(receipt.get("expected_verification_tree_sha256") or "")
@@ -154,63 +111,53 @@ def run(work_root: Path) -> dict:
                     experiment_valid = False
             repetitions.append({"round": round_index, "execution_order": list(order), **measured})
 
-        ship_rss = _median(repetitions, "shipping", "incremental_peak_rss_kib")
-        g04_rss = _median(repetitions, "g04", "incremental_peak_rss_kib")
-        pg_rss = _median(repetitions, "prefixgraph", "incremental_peak_rss_kib")
+        ship_peak = _median(repetitions, "shipping", "peak_rss_kib")
+        g04_peak = _median(repetitions, "g04", "peak_rss_kib")
+        pg_peak = _median(repetitions, "prefixgraph", "peak_rss_kib")
+        ship_inc = _median(repetitions, "shipping", "incremental_peak_rss_kib")
+        g04_inc = _median(repetitions, "g04", "incremental_peak_rss_kib")
+        pg_inc = _median(repetitions, "prefixgraph", "incremental_peak_rss_kib")
         ship_wall = _median(repetitions, "shipping", "wall_s")
         g04_wall = _median(repetitions, "g04", "wall_s")
         pg_wall = _median(repetitions, "prefixgraph", "wall_s")
-        if ship_rss is None or g04_rss is None:
+        if ship_peak is None or g04_peak is None:
             experiment_valid = False
 
         output_rows.append({
-            "suite": suite,
-            "name": name,
-            "tree_sha256": source_tree,
-            "repetitions": repetitions,
-            "shipping_median_incremental_peak_rss_kib": None if ship_rss is None else int(ship_rss),
-            "g04_median_incremental_peak_rss_kib": None if g04_rss is None else int(g04_rss),
-            "prefixgraph_median_incremental_peak_rss_kib": None if pg_rss is None else int(pg_rss),
-            "g04_to_shipping_rss_ratio": None if ship_rss in (None, 0) or g04_rss is None else g04_rss / ship_rss,
-            "prefixgraph_to_shipping_rss_ratio": None if ship_rss in (None, 0) or pg_rss is None else pg_rss / ship_rss,
-            "shipping_median_wall_s": ship_wall,
-            "g04_median_wall_s": g04_wall,
-            "prefixgraph_median_wall_s": pg_wall,
+            "suite": suite, "name": name, "tree_sha256": source_tree, "repetitions": repetitions,
+            "shipping_median_peak_rss_kib": None if ship_peak is None else int(ship_peak),
+            "g04_median_peak_rss_kib": None if g04_peak is None else int(g04_peak),
+            "prefixgraph_median_peak_rss_kib": None if pg_peak is None else int(pg_peak),
+            "g04_to_shipping_peak_rss_ratio": None if ship_peak in (None, 0) or g04_peak is None else g04_peak / ship_peak,
+            "prefixgraph_to_shipping_peak_rss_ratio": None if ship_peak in (None, 0) or pg_peak is None else pg_peak / ship_peak,
+            "shipping_median_incremental_peak_rss_kib": None if ship_inc is None else int(ship_inc),
+            "g04_median_incremental_peak_rss_kib": None if g04_inc is None else int(g04_inc),
+            "prefixgraph_median_incremental_peak_rss_kib": None if pg_inc is None else int(pg_inc),
+            "g04_to_shipping_rss_ratio": None if ship_inc in (None, 0) or g04_inc is None else g04_inc / ship_inc,
+            "prefixgraph_to_shipping_rss_ratio": None if ship_inc in (None, 0) or pg_inc is None else pg_inc / ship_inc,
+            "shipping_median_wall_s": ship_wall, "g04_median_wall_s": g04_wall, "prefixgraph_median_wall_s": pg_wall,
             "g04_to_shipping_wall_ratio": None if ship_wall in (None, 0) or g04_wall is None else g04_wall / ship_wall,
             "prefixgraph_to_shipping_wall_ratio": None if ship_wall in (None, 0) or pg_wall is None else pg_wall / ship_wall,
         })
 
     return {
-        "schema": "cmpct-v030-r25-candidate-phase-rss-v1",
-        "source_commit": _source_commit(),
-        "targets": [list(item) for item in TARGETS],
-        "orders": [list(item) for item in ORDERS],
-        "rows": output_rows,
+        "schema": "cmpct-v030-r25-candidate-phase-rss-v1", "source_commit": _source_commit(),
+        "targets": [list(item) for item in TARGETS], "orders": [list(item) for item in ORDERS], "rows": output_rows,
         "worker_failures": worker_failures,
         "contract": {
-            "fresh_process_per_measurement": True,
-            "worker_failure_output_is_durable": True,
-            "strong_verification_outside_pack_timer": True,
-            "mode_specific_identity_domains_preserved": True,
+            "fresh_process_per_measurement": True, "worker_failure_output_is_durable": True,
+            "strong_verification_outside_pack_timer": True, "mode_specific_identity_domains_preserved": True,
             "structural_ineligibility_is_not_reclassified_as_failure": True,
             "candidate_bytes_are_not_combined_or_credited": True,
-            "selector_changed": False,
-            "admission_changed": False,
-            "scheduling_changed": False,
-            "grammar_changed": False,
-            "integrity_changed": False,
-            "locality_limit_changed": False,
-            "decode_unit_limit_changed": False,
-            "recovery_changed": False,
+            "release_boundary_attribution_uses_total_fresh_process_peak_rss": True,
+            "baseline_subtracted_ru_maxrss_is_diagnostic_only": True,
+            "selector_changed": False, "admission_changed": False, "scheduling_changed": False,
+            "grammar_changed": False, "integrity_changed": False, "locality_limit_changed": False,
+            "decode_unit_limit_changed": False, "recovery_changed": False,
         },
-        "experiment_valid": bool(experiment_valid),
-        "promotion_signal": False,
-        "selector_change": False,
+        "experiment_valid": bool(experiment_valid), "promotion_signal": False, "selector_change": False,
         "release_credit": False,
-        "claim_boundary": (
-            "Diagnostic ownership evidence only. Candidate RSS or wall-time ratios cannot authorize cancellation, "
-            "selection, promotion or release; any subsequent optimization must preserve exact normal authorities."
-        ),
+        "claim_boundary": "Diagnostic ownership evidence only. Total fresh-process peak RSS is the release-boundary ownership signal; baseline-subtracted ru_maxrss is diagnostic only. Candidate ratios cannot authorize cancellation, selection, promotion or release.",
     }
 
 
@@ -226,23 +173,18 @@ def main() -> None:
         "source_commit": result["source_commit"],
         "rows": [{
             "target": f"{row['suite']}/{row['name']}",
-            "g04_rss_ratio": row["g04_to_shipping_rss_ratio"],
-            "prefixgraph_rss_ratio": row["prefixgraph_to_shipping_rss_ratio"],
+            "g04_peak_rss_ratio": row["g04_to_shipping_peak_rss_ratio"],
+            "prefixgraph_peak_rss_ratio": row["prefixgraph_to_shipping_peak_rss_ratio"],
+            "g04_incremental_rss_ratio_diagnostic": row["g04_to_shipping_rss_ratio"],
+            "prefixgraph_incremental_rss_ratio_diagnostic": row["prefixgraph_to_shipping_rss_ratio"],
             "g04_wall_ratio": row["g04_to_shipping_wall_ratio"],
             "prefixgraph_wall_ratio": row["prefixgraph_to_shipping_wall_ratio"],
         } for row in result["rows"]],
-        "worker_failures": len(result["worker_failures"]),
-        "experiment_valid": result["experiment_valid"],
+        "worker_failures": len(result["worker_failures"]), "experiment_valid": result["experiment_valid"],
     }, indent=2), flush=True)
     if not result["experiment_valid"]:
         for failure in result["worker_failures"]:
-            print(
-                f"worker failure {failure['suite']}/{failure['name']} round={failure['round']} "
-                f"mode={failure['mode']} rc={failure.get('returncode')}\n"
-                f"stdout:\n{failure.get('stdout', '')}\nstderr:\n{failure.get('stderr', '')}",
-                file=sys.stderr,
-                flush=True,
-            )
+            print(f"worker failure {failure['suite']}/{failure['name']} round={failure['round']} mode={failure['mode']} rc={failure.get('returncode')}\nstdout:\n{failure.get('stdout', '')}\nstderr:\n{failure.get('stderr', '')}", file=sys.stderr, flush=True)
         raise SystemExit("r25 candidate-phase RSS ownership evidence is invalid")
 
 
