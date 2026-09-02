@@ -55,7 +55,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 210
     concurrency:
-      group: cmpct-v030-r25-candidate-phase-rss-receipt-${{ env.EVIDENCE_HEAD }}
+      group: cmpct-v030-r25-candidate-phase-rss-receipt-${{ github.event.pull_request.head.sha || github.sha }}
       cancel-in-progress: false
     steps:
       - uses: actions/checkout@v6
