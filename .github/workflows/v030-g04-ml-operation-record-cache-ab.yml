@@ -204,3 +204,4 @@ jobs:
 # Re-admission after the prior classifier was superseded before job admission; preserve this exact receipt before any later branch write.
 # 2026-09-02 exact-head admission: run the unchanged seven-round ML record-cache A/B while the independent Shifted RSS receipt executes.
 # Instrument repair: formatting gates are intentionally outside this frozen performance experiment; build/tests own candidate validity.
+# Turn-9 custody admission: execute the unchanged seven-round receipt on this exact fingerprint; no experiment grammar, patch, threshold, or terminal rule changed.
