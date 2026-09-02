@@ -23,11 +23,30 @@ import json
 import os
 from pathlib import Path
 import shutil
+import subprocess
 
 from cmpct.builder import Builder
 from cmpct.reader import CMPCT
 
 import mosaic_v029_generalization_bench as general
+
+
+def _checked_out_commit() -> str | None:
+    """Return the commit whose files are actually being benchmarked.
+
+    On pull_request workflows GITHUB_SHA names GitHub's synthetic merge commit even when checkout is
+    explicitly pinned to the PR head. Recording git HEAD avoids claiming a source revision that was not
+    actually executed. The environment value is only a fallback for non-git packaging environments.
+    """
+    try:
+        return subprocess.check_output(
+            ["git", "rev-parse", "HEAD"],
+            cwd=Path(__file__).resolve().parents[1],
+            text=True,
+            stderr=subprocess.DEVNULL,
+        ).strip()
+    except (OSError, subprocess.CalledProcessError):
+        return os.environ.get("GITHUB_SHA")
 
 
 def _source_for(work_root: Path, suite: str, name: str) -> Path:
@@ -137,7 +156,7 @@ def run(work_root: Path) -> dict:
     return {
         "schema": "cmpct-v029-shipping-vs-frontier-v1",
         "date": datetime.now(timezone.utc).date().isoformat(),
-        "source_commit": os.environ.get("GITHUB_SHA"),
+        "source_commit": _checked_out_commit(),
         "project_version": "0.29.0",
         "shipping": {
             "authority": "canonical reader/writer",
