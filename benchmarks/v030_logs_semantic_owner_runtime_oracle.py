@@ -3,10 +3,16 @@ from __future__ import annotations
 """Exact-product A/B for the promoted one-session logs extractor.
 
 The canonical logs representation already wins the external creation/size contract. This oracle changes no archive
-bytes and grants no release credit. It measures only the extraction ownership boundary: the mature promoted logs
-extractor versus the productized one-session extractor on the frozen neutral-hostile logs workload. Every timed
-round must reproduce the exact source tree. The candidate must improve median extraction by at least 10% across
-11 order-rotated rounds before it emits a promotion signal.
+bytes and grants no release credit. It measures only the extraction ownership boundary: the pre-promotion mature
+logs extraction semantics versus the productized one-session extractor on the frozen neutral-hostile logs workload.
+Every timed round must reproduce the exact source tree. The candidate must improve median extraction by at least
+10% across 11 order-rotated rounds before it emits a promotion signal.
+
+Custody note: the production Logs candidate now delegates its public ``extract`` to the fused implementation. Using
+that rebound symbol as the baseline would time fused-vs-fused and silently erase the comparator. The baseline below
+therefore reconstructs the exact pre-promotion extraction path preserved by commit 9f761a13's parent: bounded
+manifest/budget/symlink checks followed by the mature LOGS extractor. It uses today's canonical cross-platform
+symlink predicate; this changes safety custody, not the performance hypothesis or +10% threshold.
 """
 
 import argparse
@@ -32,6 +38,28 @@ def _archive_sha256(path: Path) -> str:
         for chunk in iter(lambda: handle.read(1024 * 1024), b""):
             digest.update(chunk)
     return digest.hexdigest()
+
+
+def _mature_pre_promotion_extract(
+    archive: Path,
+    dst: Path,
+    *,
+    max_output_bytes: int = BASELINE.POLICY.DEFAULT_MAX_EXTRACT_BYTES,
+    safe_symlinks: bool = True,
+) -> None:
+    """Frozen comparator: exact pre-fused Logs extraction with current canonical safety policy."""
+    archive = Path(archive)
+    if not isinstance(max_output_bytes, int) or isinstance(max_output_bytes, bool) or max_output_bytes < 1:
+        raise ValueError("max_output_bytes must be a positive integer")
+    decoded = BASELINE._logs_manifest(archive)
+    user_bytes = sum(int(identity[0]) for identity in decoded["regular"].values())
+    if user_bytes > max_output_bytes:
+        raise RuntimeError("logs extraction exceeds caller output budget")
+    if safe_symlinks:
+        for row in decoded["manifest"]["entries"]:
+            if row[1] == "l" and BASELINE.FS._unsafe_symlink_target(row[7]):
+                raise RuntimeError(f"unsafe r25 symlink target in {row[0]!r}")
+    BASELINE.LOGS.extract(archive, dst)
 
 
 def _extract_once(fn, archive: Path, dst: Path, expected_tree: str) -> float:
@@ -70,7 +98,7 @@ def run(work_root: Path) -> dict:
         raise RuntimeError("frozen logs workload did not select the promoted logs representation")
 
     # Untimed warm-up removes import/page-cache asymmetry without hiding any per-operation extraction work.
-    _extract_once(BASELINE.extract, archive, work_root / "warm-baseline", expected_tree)
+    _extract_once(_mature_pre_promotion_extract, archive, work_root / "warm-baseline", expected_tree)
     _extract_once(FUSED.extract, archive, work_root / "warm-fused", expected_tree)
 
     baseline_s: list[float] = []
@@ -79,9 +107,9 @@ def run(work_root: Path) -> dict:
     order: list[str] = []
     for round_index in range(ROUNDS):
         if round_index % 2 == 0:
-            pair = (("baseline", BASELINE.extract, baseline_s), ("fused", FUSED.extract, fused_s))
+            pair = (("baseline", _mature_pre_promotion_extract, baseline_s), ("fused", FUSED.extract, fused_s))
         else:
-            pair = (("fused", FUSED.extract, fused_s), ("baseline", BASELINE.extract, baseline_s))
+            pair = (("fused", FUSED.extract, fused_s), ("baseline", _mature_pre_promotion_extract, baseline_s))
         order.extend(label for label, _fn, _samples in pair)
         for label, fn, samples in pair:
             dst = work_root / f"round-{round_index:02d}-{label}"
@@ -100,6 +128,8 @@ def run(work_root: Path) -> dict:
             "archive-byte-neutral exact-product extraction A/B for the promoted logs profile; "
             "research/productization evidence only; final release authority remains separate"
         ),
+        "comparator": "pre-promotion mature Logs extraction reconstructed from 9f761a13 parent with current canonical symlink safety",
+        "candidate": "one-session fused Logs extraction",
         "archive_bytes": archive.stat().st_size,
         "archive_sha256": _archive_sha256(archive),
         "selected": build_stats.get("selected"),
