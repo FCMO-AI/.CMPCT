@@ -2,9 +2,11 @@ from __future__ import annotations
 
 """Fresh-process worker for the frozen PrefixGraph Builder-isolation S6 transfer review.
 
-This is evidence code only.  Candidate uses the canonical shipping Builder seam; control swaps only the private
-``_r25_build`` callable to the preserved threaded control.  Whole-process-tree RSS charges the parent and every
-live descendant, so the PrefixGraph child is never gifted away.
+This is evidence code only. Candidate uses the promoted release-product front door and therefore inherits the
+same operation-scoped r24 policy, terminal preflight and canonical Builder seam as the shipping runtime gate.
+Control swaps only the private canonical ``_r25_build`` callable to the preserved threaded control after importing
+that front door. Whole-process-tree RSS charges the parent and every live descendant, so the PrefixGraph child is
+never gifted away.
 """
 
 import argparse
@@ -13,11 +15,8 @@ import json
 import os
 from pathlib import Path
 import resource
-import sys
 import threading
 import time
-
-ROOT = Path(__file__).resolve().parents[1]
 
 
 def _sha(path: Path) -> str:
@@ -142,9 +141,8 @@ class _AuditedExecutor:
         future = self.delegate.submit(fn, *args, **kwargs)
         self.last_receipt = dict(self.delegate.last_receipt or {})
         type(self).receipts.append(dict(self.last_receipt))
-        # The real executor is synchronous.  At this exact seam, submit may return only after communicate/run has
-        # reaped the child.  No direct child here is therefore the executable proof that G0-G4 can start afterward
-        # without overlapping the PrefixGraph process lifetime.
+        # The real executor is synchronous. At this exact seam, submit returns only after the helper has been
+        # reaped. No direct child here therefore proves G0-G4 cannot overlap that PrefixGraph child lifetime.
         type(self).child_dead_on_submit_return.append(len(_children(os.getpid())) == 0)
         return future
 
@@ -158,10 +156,14 @@ def _reset_audit(real_cls) -> None:
 
 
 def _run_build(mode: str, source: Path, archive: Path) -> dict:
+    # Importing the promoted product first is release-critical. It installs the exact operation-scoped r24 policy
+    # and canonical-final bindings used by the normal runtime authority. Calling canonical.build directly would
+    # silently measure the historical dictionary-dead r24 path and violate the frozen 29,883,732-byte S6 floor.
+    from experiments import entropygraph_v030_release_product as product
     from experiments import entropygraph_v030_canonical_final as canonical
     from experiments import entropygraph_v030_prefixgraph_process_executor as process_executor
 
-    expected_tree = str(canonical.treehash(source))
+    expected_tree = str(product.treehash(source))
     original_r25_build = canonical._r25_build
     original_executor = process_executor.PrefixGraphProcessExecutor
     _reset_audit(original_executor)
@@ -177,7 +179,7 @@ def _run_build(mode: str, source: Path, archive: Path) -> dict:
     sampler.start()
     started = time.perf_counter()
     try:
-        stats = dict(canonical.build(source, archive))
+        stats = dict(product.build(source, archive))
         wall_s = time.perf_counter() - started
         peak_ru = int(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss)
     finally:
@@ -185,7 +187,7 @@ def _run_build(mode: str, source: Path, archive: Path) -> dict:
         canonical._r25_build = original_r25_build
         process_executor.PrefixGraphProcessExecutor = original_executor
 
-    verify = dict(canonical.strong_verify(archive))
+    verify = dict(product.strong_verify(archive))
     tree = str(verify.get("tree_sha256") or "")
     if not verify.get("ok") or tree != expected_tree:
         raise RuntimeError(f"strong verification mismatch expected={expected_tree} actual={tree}")
@@ -204,6 +206,7 @@ def _run_build(mode: str, source: Path, archive: Path) -> dict:
 
     return {
         "mode": mode,
+        "product_front_door": "experiments.entropygraph_v030_release_product",
         "archive_bytes": archive.stat().st_size,
         "archive_sha256": _sha(archive),
         "selected": stats.get("selected"),
