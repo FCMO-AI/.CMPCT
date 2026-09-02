@@ -200,3 +200,4 @@ jobs:
 # terminal decision. Per-round checkpoints are diagnostic custody only and explicitly cannot promote the candidate.
 # Exact-head admission touch: execute the frozen seven-round A/B on this production-equivalent fingerprint; no experiment contract or threshold changes.
 # Re-admission after the prior classifier was superseded before job admission; preserve this exact receipt before any later branch write.
+# 2026-09-02 exact-head admission: run the unchanged seven-round ML record-cache A/B while the independent Shifted RSS receipt executes.
