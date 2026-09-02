@@ -1,5 +1,6 @@
 # ci-lane: deep
 # ci-pr-scope: latest-head-commit-gate
+# ci-cancel-policy: split-classifier-preserve-receipts
 name: CMPCT v0.30 product phase RSS oracle
 
 on:
@@ -19,10 +20,6 @@ on:
 permissions:
   contents: read
 
-concurrency:
-  group: cmpct-v030-product-phase-rss-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
-
 env:
   PYTHONPATH: ${{ github.workspace }}
   EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
@@ -31,6 +28,9 @@ jobs:
   latest-head-impact:
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    concurrency:
+      group: cmpct-v030-product-phase-rss-classifier-${{ github.event.pull_request.number || github.ref }}
+      cancel-in-progress: true
     outputs:
       run_deep: ${{ steps.scope.outputs.run_deep }}
     steps:
@@ -63,6 +63,9 @@ jobs:
     if: needs.latest-head-impact.outputs.run_deep == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 120
+    concurrency:
+      group: cmpct-v030-product-phase-rss-receipt-${{ env.EVIDENCE_HEAD }}
+      cancel-in-progress: false
     steps:
       - uses: actions/checkout@v6
         with:
@@ -103,34 +106,24 @@ jobs:
               raise SystemExit('phase-RSS evidence missing')
           d=json.loads(p.read_text())
           assert d['schema']=='cmpct-v030-product-phase-rss-v1'
-          assert d['rounds']==2
-          assert d['experiment_valid'] is True
-          assert d['promotion_signal'] is False
-          assert d['selector_change'] is False
-          assert d['release_credit'] is False
+          assert d['rounds']==2 and d['experiment_valid'] is True
+          assert d['promotion_signal'] is False and d['selector_change'] is False and d['release_credit'] is False
           c=d['contract']
           assert c['fresh_process_per_arm'] is True
           assert c['operation_rss_snapshot_precedes_correctness_checks'] is True
-          for key in (
-              'archive_bytes_changed','selector_changed','scheduling_changed','grammar_changed','integrity_changed',
-              'rss_release_threshold_changed','locality_limit_changed','decode_unit_limit_changed',
-          ):
+          assert c['release_boundary_attribution_uses_total_fresh_process_peak_rss'] is True
+          assert c['baseline_subtracted_ru_maxrss_is_diagnostic_only'] is True
+          for key in ('archive_bytes_changed','selector_changed','scheduling_changed','grammar_changed','integrity_changed','rss_release_threshold_changed','locality_limit_changed','decode_unit_limit_changed'):
               assert c[key] is False
-          assert len(d['rows'])==3
-          expected={
-              'resemblance_hostile_v1/01_shifted_versions',
-              'neutral_hostile_v1/05_logs_and_telemetry',
-              'neutral_hostile_v1/09_ml_artifacts',
-          }
-          assert {row['target'] for row in d['rows']}==expected
+          expected={'resemblance_hostile_v1/01_shifted_versions','neutral_hostile_v1/05_logs_and_telemetry','neutral_hostile_v1/09_ml_artifacts'}
+          assert len(d['rows'])==3 and {row['target'] for row in d['rows']}==expected
           for row in d['rows']:
               assert len(row['repetitions'])==2
+              assert row['full_to_max_isolated_peak_rss_ratio'] is not None
               for mode in ('r24','profile','full'):
                   m=row['median'][mode]
-                  assert m['wall_s'] > 0
-                  assert m['baseline_rss_kib'] > 0
-                  assert m['operation_peak_rss_kib'] >= m['baseline_rss_kib']
-                  assert m['incremental_peak_rss_kib'] >= 0
+                  assert m['wall_s'] > 0 and m['baseline_rss_kib'] > 0
+                  assert m['operation_peak_rss_kib'] >= m['baseline_rss_kib'] and m['incremental_peak_rss_kib'] >= 0
               for mode in ('r24','full'):
                   shas={rep[mode]['archive_sha256'] for rep in row['repetitions']}
                   sizes={int(rep[mode]['archive_bytes']) for rep in row['repetitions']}
