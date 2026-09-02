@@ -1,0 +1,155 @@
+# ci-lane: deep
+# ci-cancel-policy: split-classifier-preserve-receipts
+# ci-pr-scope: latest-head-commit-gate
+name: CMPCT v0.30 PrefixGraph bounded level RSS rehabilitation
+
+on:
+  push:
+    branches: [agent/v030-authoritative-integration]
+    paths:
+      - 'docs/v030-rnd/R25_PREFIXGRAPH_LEVEL_RSS_REHAB_PREREG.md'
+      - 'benchmarks/v030_prefixgraph_level_rss_rehab.py'
+      - 'benchmarks/v030_release_performance.py'
+      - 'experiments/entropygraph_v030_profile_isolation.py'
+      - 'experiments/entropygraph_v030_prefixgraph.py'
+      - '.github/workflows/v030-prefixgraph-level-rss-rehab.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'docs/v030-rnd/R25_PREFIXGRAPH_LEVEL_RSS_REHAB_PREREG.md'
+      - 'benchmarks/v030_prefixgraph_level_rss_rehab.py'
+      - 'benchmarks/v030_release_performance.py'
+      - 'experiments/entropygraph_v030_profile_isolation.py'
+      - 'experiments/entropygraph_v030_prefixgraph.py'
+      - '.github/workflows/v030-prefixgraph-level-rss-rehab.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+
+jobs:
+  latest-head-impact:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    concurrency:
+      group: cmpct-v030-prefixgraph-level-rehab-classifier-${{ github.event.pull_request.number || github.ref }}
+      cancel-in-progress: true
+    outputs:
+      run_deep: ${{ steps.scope.outputs.run_deep }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 2
+      - name: Bind exact head and classify only its changed files
+        id: scope
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            echo 'run_deep=true' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          git diff-tree --no-commit-id --name-only -r HEAD > /tmp/latest-head-files.txt
+          cat /tmp/latest-head-files.txt
+          if grep -Eq '^(docs/v030-rnd/R25_PREFIXGRAPH_LEVEL_RSS_REHAB_PREREG\.md|benchmarks/v030_prefixgraph_level_rss_rehab\.py|benchmarks/v030_release_performance\.py|experiments/entropygraph_v030_profile_isolation\.py|experiments/entropygraph_v030_prefixgraph\.py|\.github/workflows/v030-prefixgraph-level-rss-rehab\.yml)$' /tmp/latest-head-files.txt; then
+            echo 'run_deep=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'run_deep=false' >> "$GITHUB_OUTPUT"
+          fi
+
+  level-rss-rehab:
+    needs: latest-head-impact
+    if: needs.latest-head-impact.outputs.run_deep == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    concurrency:
+      group: cmpct-v030-prefixgraph-level-rehab-receipt-${{ github.event.pull_request.head.sha || github.sha }}
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - name: Bind exact candidate
+        id: candidate
+        run: |
+          set -euo pipefail
+          actual="$(git rev-parse HEAD)"
+          test "$actual" = "$EVIDENCE_HEAD"
+          echo "sha=$actual" >> "$GITHUB_OUTPUT"
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install deterministic dependencies
+        run: |
+          set -euo pipefail
+          test -f /etc/apt/sources.list.d/ubuntu.sources
+          sudo apt-get -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" -o Dir::Etc::sourceparts="-" update
+          sudo apt-get -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" -o Dir::Etc::sourceparts="-" install -y zstd
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[test]'
+      - name: Compile frozen level sweep
+        run: python -m py_compile benchmarks/v030_prefixgraph_level_rss_rehab.py
+      - name: Run exact-owner bounded level sweep
+        run: |
+          mkdir -p benchmark-artifacts
+          python -m benchmarks.v030_prefixgraph_level_rss_rehab \
+            --work-root "$RUNNER_TEMP/v030-prefixgraph-level-rss-rehab" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-prefixgraph-level-rss-rehab.json"
+      - name: Ratchet frozen levels, budgets and terminal decision
+        run: |
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          d=json.loads(Path('benchmark-artifacts/v030-prefixgraph-level-rss-rehab.json').read_text())
+          assert d['schema']=='cmpct-v030-prefixgraph-level-rss-rehab-v1'
+          assert d['source_commit']==os.environ['EVIDENCE_HEAD']
+          assert d['target']==['resemblance_hostile_v1','01_shifted_versions']
+          assert d['levels']==[19,18,17,16,15] and d['rounds']==3
+          assert d['gate']['experiment_valid'] is True and d['gate']['tree_identity'] is True and d['gate']['owner_exact'] is True
+          c=d['contract']
+          assert c['minimum_total_peak_rss_reduction']==0.15
+          assert c['maximum_size_penalty_bytes']==8192 and c['maximum_size_penalty_ratio']==0.005
+          assert c['maximum_wall_ratio']==1.10
+          assert c['direct_payload_level_changed'] is False and c['dictionary_bytes_changed'] is False
+          assert c['grammar_changed'] is False and c['production_change'] is False and c['release_credit'] is False
+          qualified=[int(level) for level,m in d['metrics'].items() if m['qualified']]
+          material=any(int(level)!=19 and float(m['rss_reduction_vs_19'])>=0.15 for level,m in d['metrics'].items())
+          if qualified:
+              assert d['decision']=='PREFIXGRAPH_LEVEL_REHAB_SUPPORTED'
+              assert d['selected_rehab_level']==max(qualified)
+          elif material:
+              assert d['decision']=='PREFIXGRAPH_LEVEL_REHAB_TOO_EXPENSIVE' and d['selected_rehab_level'] is None
+          else:
+              assert d['decision']=='PREFIXGRAPH_LEVEL_REHAB_INSUFFICIENT' and d['selected_rehab_level'] is None
+          assert d['release_credit'] is False
+          PY
+      - name: CI topology self-check
+        if: always()
+        run: python tools/check_ci_topology.py .github/workflows/v030-prefixgraph-level-rss-rehab.yml
+      - name: Public-surface guard
+        if: always()
+        run: python tools/check_public_surface.py
+      - name: Record exact candidate fingerprint
+        if: always()
+        run: printf '%s\n' '${{ steps.candidate.outputs.sha }}' > benchmark-artifacts/v030-prefixgraph-level-rss-rehab-candidate.txt
+      - name: Upload exact diagnostic evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: v030-prefixgraph-level-rss-rehab-${{ steps.candidate.outputs.sha || github.sha }}
+          path: |
+            benchmark-artifacts/v030-prefixgraph-level-rss-rehab.json
+            benchmark-artifacts/v030-prefixgraph-level-rss-rehab-candidate.txt
+          if-no-files-found: warn
+          retention-days: 90
+
+# Diagnostic R3 rehabilitation only. A lower level may advance only if it crosses the frozen RSS/size/wall budget;
+# no result weakens final product, release, locality, recovery, integrity, native or platform authority.
