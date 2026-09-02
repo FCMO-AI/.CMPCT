@@ -66,9 +66,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 90
     concurrency:
-      # Once admitted, this result is useful evidence for its exact source and must not be
-      # cancelled merely because the long-lived integration PR receives another commit.
-      group: cmpct-v030-shifted-candidate-overlap-rss-receipt-${{ env.EVIDENCE_HEAD }}
+      group: cmpct-v030-shifted-candidate-overlap-rss-receipt-${{ github.event.pull_request.head.sha || github.sha }}
       cancel-in-progress: false
     steps:
       - uses: actions/checkout@v6
@@ -105,10 +103,6 @@ jobs:
           p=Path('benchmark-artifacts/v030-shifted-candidate-overlap-rss.json')
           d=json.loads(p.read_text())
           med=d['median']
-          # ru_maxrss is a process high-water mark. Subtracting a post-import high-water
-          # does not yield an additive allocation measurement. Preserve the historical
-          # incremental diagnostics, but make the fresh-process total peak—the same
-          # boundary used by release RSS authority—the decisive overlap attribution.
           isolated_max=max(med['g04']['operation_peak_rss_kib'], med['prefixgraph']['operation_peak_rss_kib'])
           overlap=med['overlap']['operation_peak_rss_kib']
           d['derived']['release_boundary_overlap_to_max_isolated_rss_ratio']=(overlap/isolated_max if isolated_max else None)
@@ -137,8 +131,7 @@ jobs:
           assert c['overlap_output_must_equal_exact_component_bytes'] is True
           assert c['release_boundary_attribution_uses_total_fresh_process_peak_rss'] is True
           assert c['baseline_subtracted_ru_maxrss_is_diagnostic_only'] is True
-          for key in ('archive_bytes_changed','selector_changed','scheduling_changed','grammar_changed','integrity_changed',
-                      'rss_release_threshold_changed','locality_limit_changed','decode_unit_limit_changed'):
+          for key in ('archive_bytes_changed','selector_changed','scheduling_changed','grammar_changed','integrity_changed','rss_release_threshold_changed','locality_limit_changed','decode_unit_limit_changed'):
               assert c[key] is False
           assert len(d['repetitions'])==2
           expected=d['expected_historical_tree_sha256']
@@ -147,9 +140,7 @@ jobs:
               sizes={rep[mode]['archive_bytes'] for rep in d['repetitions']}
               trees={rep[mode]['verified_tree_sha256'] for rep in d['repetitions']}
               assert len(shas)==1 and len(sizes)==1 and trees=={expected}
-          assert d['median']['overlap']['archive_sha256'] in {
-              d['median']['g04']['archive_sha256'], d['median']['prefixgraph']['archive_sha256']
-          }
+          assert d['median']['overlap']['archive_sha256'] in {d['median']['g04']['archive_sha256'], d['median']['prefixgraph']['archive_sha256']}
           rb=d['derived']
           isolated=max(d['median']['g04']['operation_peak_rss_kib'], d['median']['prefixgraph']['operation_peak_rss_kib'])
           assert rb['release_boundary_max_isolated_peak_rss_kib']==isolated
