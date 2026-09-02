@@ -1,6 +1,6 @@
 # ci-lane: deep
 # ci-cancel-policy: preserve-running-exact-receipt
-name: CMPCT v0.30 Logs restore inner attribution
+name: CMPCT v0.30 Logs restore attribution
 
 on:
   push:
@@ -8,6 +8,14 @@ on:
     paths:
       - 'docs/v030-rnd/R25_LOGS_RESTORE_INNER_ATTRIBUTION_PREREG.md'
       - 'benchmarks/v030_logs_restore_inner_attribution.py'
+      - 'docs/v030-rnd/R25_LOGS_PACK_MATERIALIZATION_COMPONENT_ATTRIBUTION_PREREG.md'
+      - 'benchmarks/v030_logs_pack_materialization_component_attribution.py'
+      - 'experiments/entropygraph_v030_logs_inverse_profile.py'
+      - 'experiments/entropygraph_v030_logs_inverse_profile_v2.py'
+      - 'experiments/entropygraph_v030_logs_inverse_profile_v3.py'
+      - 'experiments/entropygraph_v030_logs_fused_extract.py'
+      - 'experiments/entropygraph_v030_release_product_logs_candidate.py'
+      - 'experiments/entropygraph_v030_release_product_logs_runtime.py'
       - '.github/workflows/v030-logs-restore-inner-attribution.yml'
   workflow_dispatch:
 
@@ -21,7 +29,7 @@ env:
 # This deep evidence lane is keyed to the exact source fingerprint and deliberately preserves an already-running
 # receipt. A later branch head gets its own group rather than cancelling the older scientific measurement.
 concurrency:
-  group: cmpct-v030-logs-restore-inner-${{ github.sha }}
+  group: cmpct-v030-logs-restore-attribution-${{ github.sha }}
   cancel-in-progress: false
 
 jobs:
@@ -94,4 +102,81 @@ jobs:
           if-no-files-found: warn
           retention-days: 90
 
-# D2 attribution only. No tracked cost is borrowable and no result grants release credit.
+  pack-components:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install deterministic dependencies
+        run: |
+          set -euo pipefail
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[test]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
+      - name: Compile frozen component instrument
+        run: python -m py_compile benchmarks/v030_logs_pack_materialization_component_attribution.py
+      - name: Run exact pack-materialization component attribution
+        run: |
+          mkdir -p benchmark-artifacts
+          python -m benchmarks.v030_logs_pack_materialization_component_attribution \
+            --work-root "$RUNNER_TEMP/v030-logs-pack-components" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-logs-pack-components.json"
+      - name: Ratchet frozen component contract
+        run: |
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          d=json.loads(Path('benchmark-artifacts/v030-logs-pack-components.json').read_text())
+          assert d['schema']=='cmpct-v030-logs-pack-materialization-component-attribution-v1'
+          assert d['target']=='neutral_hostile_v1/05_logs_and_telemetry'
+          assert d['selected']=='logs-inverse'
+          assert d['rounds']==11
+          assert d['experiment_valid'] is True and d['call_counts_stable'] is True
+          assert d['instrumentation_wall_ratio']<=1.10
+          assert d['material_absolute_floor_s']==0.002
+          assert d['material_share_floor']==0.05
+          assert d['release_credit'] is False and d['production_source_changed'] is False
+          assert d['authentication_work_disabled'] is False
+          assert d['strong_verify']['ok'] is True
+          allowed={
+              'TRACKED_PACK_COMPONENTS_INSUFFICIENT',
+              'PACK_IO_HEADROOM','PACK_ZSTD_HEADROOM','PACK_CRC32_HEADROOM','PACK_SHA256_HEADROOM',
+          }
+          parts=d['decision'].split('+')
+          assert parts and all(part in allowed for part in parts)
+          if d['decision']!='TRACKED_PACK_COMPONENTS_INSUFFICIENT':
+              key_for={
+                  'PACK_IO_HEADROOM':'io_seek_read_s',
+                  'PACK_ZSTD_HEADROOM':'zstd_materialization_s',
+                  'PACK_CRC32_HEADROOM':'crc32_s',
+                  'PACK_SHA256_HEADROOM':'sha256_s',
+              }
+              for part in parts:
+                  assert d['pack_component_material'][key_for[part]] is True
+          Path('benchmark-artifacts/v030-logs-pack-components-candidate.txt').write_text(os.environ['EVIDENCE_HEAD']+'\n')
+          PY
+      - name: CI topology self-check
+        if: always()
+        run: python tools/check_ci_topology.py .github/workflows/v030-logs-restore-inner-attribution.yml
+      - name: Public-surface guard
+        if: always()
+        run: python tools/check_public_surface.py
+      - name: Upload exact component evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: v030-logs-pack-components-${{ github.sha }}
+          path: |
+            benchmark-artifacts/v030-logs-pack-components.json
+            benchmark-artifacts/v030-logs-pack-components-candidate.txt
+          if-no-files-found: warn
+          retention-days: 90
+
+# D2 attribution only. No tracked cost is borrowable; pack decompression, CRC32, SHA-256, logical identity,
+# recovery and locality remain mandatory, and neither job grants release credit.
