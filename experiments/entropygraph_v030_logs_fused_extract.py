@@ -42,8 +42,7 @@ def _restore_filesystem_metadata(staging: Path, decoded: dict, *, safe_symlinks:
         elif kind == "l":
             target.parent.mkdir(parents=True, exist_ok=True)
             link_target = row[7]
-            parsed = PurePosixPath(link_target)
-            if safe_symlinks and (parsed.is_absolute() or ".." in parsed.parts):
+            if safe_symlinks and FS._unsafe_symlink_target(link_target):
                 raise RuntimeError(f"unsafe r25 symlink target in {rel!r}")
             target.unlink(missing_ok=True)
             os.symlink(link_target, target)
@@ -153,8 +152,7 @@ def extract(
                 for row in decoded["manifest"]["entries"]:
                     if row[1] != "l":
                         continue
-                    parsed = PurePosixPath(row[7])
-                    if parsed.is_absolute() or ".." in parsed.parts:
+                    if FS._unsafe_symlink_target(row[7]):
                         raise RuntimeError(f"unsafe r25 symlink target in {row[0]!r}")
 
             stage.mkdir(parents=True, exist_ok=True)
