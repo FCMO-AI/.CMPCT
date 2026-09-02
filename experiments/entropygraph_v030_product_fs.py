@@ -359,6 +359,7 @@ def _unsafe_symlink_target(target: str) -> bool:
         posix.is_absolute()
         or windows.is_absolute()
         or bool(windows.drive)
+        or bool(windows.root)
         or ".." in posix.parts
         or ".." in windows.parts
     )
