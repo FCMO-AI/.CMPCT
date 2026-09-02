@@ -30,7 +30,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: cmpct-v030-prefixgraph-exact-owner-cctx-v2-${{ github.event.pull_request.number || github.ref }}
+  group: cmpct-v030-prefixgraph-exact-owner-cctx-v2-${{ github.event.pull_request.head.sha || github.sha }}-${{ github.sha }}
   cancel-in-progress: false
 
 env:
