@@ -164,5 +164,7 @@ jobs:
 # shipping code, experiments, runtime benchmark/worker inputs, relevant tests, dependencies, or this workflow runs
 # the full exact-head gate. workflow_dispatch always runs it. Product-neutral pushes preserve the last receipt only
 # through the separate product/evidence fingerprint authority; commit SHA alone is not treated as performance proof.
+# The operation-scoped r24 worker-policy transport is shipping runtime state through src/cmpct/; after that transport
+# changes canonical r24 bytes or resource behavior, this exact paired product gate must be regenerated before credit.
 # Hosted timing remains same-run paired promotion evidence; absolute public throughput claims still require controlled
 # benchmark hardware. A miss is implementation debt, not a policy edit.
