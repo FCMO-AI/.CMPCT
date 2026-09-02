@@ -1,0 +1,86 @@
+# ci-lane: deep
+# ci-cancel-policy: preserve-running-exact-receipt
+name: CMPCT v0.30 canonical product-gap v2 repair-v6
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'benchmarks/v030_canonical_product_gap_v2.py'
+      - 'docs/v030-rnd/V030_CANONICAL_PRODUCT_GAP_V2_PREREG.md'
+      - '.github/workflows/v030-canonical-product-gap-v2.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-v030-canonical-product-gap-v2-${{ github.event.pull_request.head.sha || github.sha }}
+  cancel-in-progress: false
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+
+jobs:
+  canonical-product-gap-v2:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - name: Bind exact evidence head
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install accepted corpus/product dependencies
+        run: |
+          set -euo pipefail
+          test -f /etc/apt/sources.list.d/ubuntu.sources
+          sudo apt-get -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" -o Dir::Etc::sourceparts="-" update
+          sudo apt-get -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" -o Dir::Etc::sourceparts="-" install -y zstd gcc ffmpeg libsndfile1
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[test,audio]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
+      - name: Compile superseding diagnostic
+        run: python -m py_compile benchmarks/v030_canonical_product_gap_v2.py
+      - name: Run exact repair-v6 Office/Analytics decomposition
+        run: |
+          mkdir -p benchmark-artifacts
+          python benchmarks/v030_canonical_product_gap_v2.py \
+            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/canonical-product-gap-v2-work" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/canonical-product-gap-v2.json"
+      - name: Enforce source custody and claim boundary
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          d=json.loads(Path('benchmark-artifacts/canonical-product-gap-v2.json').read_text())
+          assert d['schema']=='cmpct-v030-canonical-product-gap-v2'
+          assert d['preregistration']=='docs/v030-rnd/V030_CANONICAL_PRODUCT_GAP_V2_PREREG.md'
+          assert d['release_credit'] is False
+          assert d['v1_office_status'].startswith('INVALID_AS_EXACT_ACCEPTED_V029_GAP')
+          assert [r['workload'] for r in d['rows']]==['02_office_workspace','04_analytics_and_database']
+          for r in d['rows']:
+            assert r['source_identity_match'] is True
+            assert r['measured_historical_tree_sha256']==r['accepted_repair_v6_tree_sha256']
+            assert r['accepted_v029_bytes']==r['accepted_v029_floor_bytes']
+            assert r['strong_verify']['ok'] is True
+            assert r['control_free_claim_boundary'].startswith('causal attribution only')
+          PY
+      - name: CI topology self-check
+        if: always()
+        run: python tools/check_ci_topology.py .github/workflows/v030-canonical-product-gap-v2.yml
+      - name: Upload exact v2 diagnostic evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: v030-canonical-product-gap-v2-${{ env.EVIDENCE_HEAD }}
+          path: benchmark-artifacts/canonical-product-gap-v2.json
+          if-no-files-found: error
+          retention-days: 90
+
+# Superseding diagnostic only. V1 evidence remains preserved; v2 repairs exact repair-v6 source custody and grants no release credit.
