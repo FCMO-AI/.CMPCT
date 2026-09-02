@@ -18,13 +18,16 @@ env:
   PYTHONPATH: ${{ github.workspace }}
   EVIDENCE_HEAD: ${{ github.sha }}
 
+# This deep evidence lane is keyed to the exact source fingerprint and deliberately preserves an already-running
+# receipt. A later branch head gets its own group rather than cancelling the older scientific measurement.
+concurrency:
+  group: cmpct-v030-logs-restore-inner-${{ github.sha }}
+  cancel-in-progress: false
+
 jobs:
   restore-inner:
     runs-on: ubuntu-24.04
     timeout-minutes: 20
-    concurrency:
-      group: cmpct-v030-logs-restore-inner-${{ github.sha }}
-      cancel-in-progress: false
     steps:
       - uses: actions/checkout@v6
         with:
