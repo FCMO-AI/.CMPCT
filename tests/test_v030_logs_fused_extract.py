@@ -75,3 +75,31 @@ def test_promoted_extract_corruption_fails_closed(tmp_path: Path) -> None:
     with pytest.raises(Exception):
         PRODUCT.extract(bad, dst)
     assert not dst.exists()
+
+
+@pytest.mark.parametrize(
+    "link_target",
+    [
+        "../escape",
+        r"..\escape",
+        "/escape",
+        r"\rooted",
+        r"C:\escape",
+        "C:/escape",
+        r"\\server\share\escape",
+    ],
+)
+def test_fused_metadata_restore_rejects_cross_platform_symlink_escapes(
+    tmp_path: Path,
+    link_target: str,
+) -> None:
+    decoded = {
+        "manifest": {
+            "entries": [
+                ["link", "l", 0o777, 0, 0, 0, [], link_target],
+            ]
+        }
+    }
+    with pytest.raises(RuntimeError, match="unsafe r25 symlink target"):
+        FUSED._restore_filesystem_metadata(tmp_path, decoded, safe_symlinks=True)
+    assert not (tmp_path / "link").exists()
