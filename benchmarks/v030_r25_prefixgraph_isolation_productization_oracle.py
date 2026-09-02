@@ -171,7 +171,7 @@ def run(work_root: Path) -> dict:
     )
 
     derived: dict[str, float | int | bool] = {}
-    decision = "INVALID_EXPERIMENT"
+    decision = "INVALID_PRODUCTIZATION_RECEIPT"
     if valid:
         control = summaries["control"]
         candidate = summaries["candidate"]
@@ -192,10 +192,12 @@ def run(work_root: Path) -> dict:
             "byte_budget_ok": byte_budget_ok,
             "hostile_fail_closed": all(row.get("failed_closed") is True for row in hostile_rows),
         }
-        if rss_reduction >= 0.20 and wall_ratio <= 1.10 and byte_budget_ok:
-            decision = "PREFIXGRAPH_ISOLATION_BUILDER_SUPPORTED"
+        if rss_reduction < 0.20:
+            decision = "PREFIXGRAPH_ISOLATION_PRODUCTIZATION_DID_NOT_TRANSFER"
+        elif wall_ratio > 1.10 or not byte_budget_ok:
+            decision = "PREFIXGRAPH_ISOLATION_EXPORTED_DEBT_REMAINS"
         else:
-            decision = "PREFIXGRAPH_ISOLATION_BUILDER_REJECTED"
+            decision = "PREFIXGRAPH_ISOLATION_BUILDER_SUPPORTED"
 
     return {
         "schema": "cmpct-v030-prefixgraph-isolation-productization-v1",
