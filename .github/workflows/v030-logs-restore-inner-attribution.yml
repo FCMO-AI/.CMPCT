@@ -1,5 +1,5 @@
 # ci-lane: deep
-# ci-cancel-policy: preserve-receipts
+# ci-cancel-policy: preserve-running-exact-receipt
 name: CMPCT v0.30 Logs restore inner attribution
 
 on:
