@@ -38,7 +38,7 @@ jobs:
             exit 0
           fi
           changed="$(git diff-tree --no-commit-id --name-only -r HEAD)"
-          if grep -Eq '^(src/cmpct/(builder|__init__|v030_worker_policy_capture)\.py|experiments/entropygraph_v030_r24_streaming_finalize(_v3)?\.py|experiments/entropygraph_v030_release_product(_base)?\.py|benchmarks/v030_r24_streaming_finalize_rss(_v3)?_oracle\.py|benchmarks/v030_release_(performance|generalization)\.py|benchmarks/(neutral|resemblance)_hostile_corpus_v1\.py|docs/v030-rnd/R25_R24_STREAMING_FINALIZE_RSS_V3_PREREG\.md|\.github/workflows/v030-r24-streaming-finalize-rss-v3\.yml)$' <<<"$changed"; then
+          if grep -Eq '^(src/cmpct/(builder|__init__|v030_worker_policy_capture)\.py|experiments/entropygraph_v030_r24_streaming_finalize(_v3)?\.py|experiments/entropygraph_v030_release_product(_base)?\.py|benchmarks/v030_r24_streaming_finalize_rss(_v3)?_oracle\.py|benchmarks/v030_release_(performance|generalization)\.py|benchmarks/(neutral|resemblance)_hostile_corpus_v1\.py|tests/test_v030_r24_streaming_finalize(_v3)?\.py|docs/v030-rnd/R25_R24_STREAMING_FINALIZE_RSS_V3_PREREG\.md|\.github/workflows/v030-r24-streaming-finalize-rss-v3\.yml)$' <<<"$changed"; then
             echo 'run_receipt=true' >> "$GITHUB_OUTPUT"
           else
             echo 'run_receipt=false' >> "$GITHUB_OUTPUT"
@@ -72,7 +72,9 @@ jobs:
             benchmarks/v030_r24_streaming_finalize_rss_v3_oracle.py \
             experiments/entropygraph_v030_r24_streaming_finalize.py \
             experiments/entropygraph_v030_r24_streaming_finalize_v3.py
-          python -m pytest -q tests/test_v030_r24_streaming_finalize.py
+          python -m pytest -q \
+            tests/test_v030_r24_streaming_finalize.py \
+            tests/test_v030_r24_streaming_finalize_v3.py
           python - <<'PY'
           from experiments import entropygraph_v030_r24_streaming_finalize as v2
           from experiments import entropygraph_v030_r24_streaming_finalize_v3 as v3
