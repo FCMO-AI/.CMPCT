@@ -4,6 +4,12 @@
 name: CMPCT v0.30 r25 candidate phase RSS oracle
 
 on:
+  push:
+    branches: [agent/v030-authoritative-integration]
+    paths:
+      - 'experiments/entropygraph_v030_*.py'
+      - 'benchmarks/v030_r25_candidate_phase_rss_*.py'
+      - '.github/workflows/v030-r25-candidate-phase-rss.yml'
   pull_request:
     branches: [main]
     paths:
