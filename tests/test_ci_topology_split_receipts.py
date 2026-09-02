@@ -24,6 +24,7 @@ SPLIT_AUTHORITIES = (
     ".github/workflows/v030-logs-inverse-profile-productization.yml",
     ".github/workflows/v030-shifted-candidate-overlap-rss.yml",
     ".github/workflows/v030-g04-ml-operation-record-cache-ab.yml",
+    ".github/workflows/v030-r25-candidate-phase-rss.yml",
 )
 
 
