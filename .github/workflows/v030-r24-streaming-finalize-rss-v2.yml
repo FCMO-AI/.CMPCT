@@ -1,5 +1,6 @@
 # ci-lane: deep
 # ci-cancel-policy: preserve-running-exact-receipt
+# ci-pr-scope: latest-head-commit-gate
 name: CMPCT v0.30 r24 streaming-finalize RSS v2
 
 on:
@@ -11,7 +12,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: cmpct-v030-r24-streaming-finalize-rss-v2-${{ github.event.pull_request.number || github.ref }}
+  group: cmpct-v030-r24-streaming-finalize-rss-v2-${{ github.event.pull_request.head.sha || github.sha }}
   cancel-in-progress: false
 
 env:
