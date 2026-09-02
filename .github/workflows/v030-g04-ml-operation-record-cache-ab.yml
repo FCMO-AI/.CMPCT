@@ -205,3 +205,4 @@ jobs:
 # 2026-09-02 exact-head admission: run the unchanged seven-round ML record-cache A/B while the independent Shifted RSS receipt executes.
 # Instrument repair: formatting gates are intentionally outside this frozen performance experiment; build/tests own candidate validity.
 # Turn-9 custody admission: execute the unchanged seven-round receipt on this exact fingerprint; no experiment grammar, patch, threshold, or terminal rule changed.
+# Exact-head custody admission after a classifier-only current-head green: run the unchanged seven-round A/B; no patch, corpus, locality charge, threshold, or terminal rule changed.
