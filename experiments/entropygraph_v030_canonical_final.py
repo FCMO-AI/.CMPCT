@@ -198,13 +198,16 @@ def _overlapped_release_candidate_build(
     *,
     post_publish_verify: bool = True,
     defer_preselection_verify: bool = False,
+    prefixgraph_process_isolation: bool = False,
 ) -> dict:
-    """Build PrefixGraph beside G0-G4 without changing exact candidate bytes or winner selection.
+    """Build the exact PrefixGraph/G0-G4 tournament with an optional bounded PrefixGraph process lifetime.
 
-    PrefixGraph reads the immutable staged tree and writes a separate temporary artifact. It has no dependency on
-    G0-G4's retained graph, so paying the two complete candidate builds serially is pure wall-time duplication.
-    G0-G4 deliberately stays on the calling thread because its shared portfolio owns spawned v0.29 workers;
-    PrefixGraph alone uses one bounded background worker.
+    The historical control overlaps PrefixGraph with G0-G4 using one thread.  The productization arm changes only
+    that exact PrefixGraph executor seam: the exact private PrefixGraph owner runs in the reviewed one-shot child at
+    raw-prefix level 15, the child exits before G0-G4 begins, and every candidate/tie/locality/publication law below
+    remains unchanged.  Standalone candidate callers keep the historical threaded control by default; canonical
+    product `_r25_build` opts into the bounded process arm explicitly so the change is operation-scoped rather than
+    a process-global semantic mutation.
 
     The canonical parent may additionally set ``defer_preselection_verify=True``. In that composition only,
     temporary r25 candidates are priced by exact complete bytes and PrefixGraph locality, while their full logical
@@ -223,14 +226,24 @@ def _overlapped_release_candidate_build(
         pg_path = temp / "prefixgraph.cmpct"
         pg_contract_eligible, pg_reject_reason = RC._prefixgraph_eligibility(root, expected_tree)
         pg_stats = None
+        pg_process_receipt = None
 
         if pg_contract_eligible:
-            with ThreadPoolExecutor(max_workers=1, thread_name_prefix="cmpct-v030-prefixgraph") as pool:
-                pg_future = pool.submit(RC.PG.build, root, pg_path)
-                # Keep G0-G4 on this thread: its internal multiprocessing/spawn boundary remains exactly where
-                # it was before this scheduling optimization, while independent PrefixGraph CPU overlaps it.
+            if prefixgraph_process_isolation:
+                from experiments.entropygraph_v030_prefixgraph_process_executor import PrefixGraphProcessExecutor
+
+                with PrefixGraphProcessExecutor() as executor:
+                    pg_stats = executor.submit(RC.PG.build, root, pg_path).result()
+                    pg_process_receipt = dict(executor.last_receipt or {})
+                # The child has exited here.  Do not overlap G0-G4 with it: the lifetime barrier is the evidenced
+                # memory mechanism and the frozen productization gate requires the child to be gone first.
                 g04_stats = RC.G04.build(root, g04_path)
-                pg_stats = pg_future.result()
+            else:
+                with ThreadPoolExecutor(max_workers=1, thread_name_prefix="cmpct-v030-prefixgraph") as pool:
+                    pg_future = pool.submit(RC.PG.build, root, pg_path)
+                    # Historical control: keep G0-G4 on this thread while independent PrefixGraph CPU overlaps it.
+                    g04_stats = RC.G04.build(root, g04_path)
+                    pg_stats = pg_future.result()
         else:
             g04_stats = RC.G04.build(root, g04_path)
 
@@ -308,7 +321,12 @@ def _overlapped_release_candidate_build(
             "saving_vs_g04_bytes": g04_bytes - selected_bytes,
             "tree_sha256": expected_tree,
             "portfolio_create_s": time.perf_counter() - started,
-            "candidate_scheduler": "g04-main-plus-one-prefixgraph-worker-v2",
+            "candidate_scheduler": (
+                "prefixgraph-process-level15-then-g04-main-v1"
+                if prefixgraph_process_isolation and pg_contract_eligible
+                else "g04-main-plus-one-prefixgraph-worker-v2"
+            ),
+            "prefixgraph_process_receipt": pg_process_receipt,
             "preselection_logical_verification": (
                 "deferred-to-canonical-parent" if defer_preselection_verify else "performed"
             ),
@@ -330,8 +348,8 @@ def _overlapped_release_candidate_build(
             "final_strong_verify": final_verify,
             "reader_authority": "v030-release-streaming-policy-v1",
             "claim_boundary": (
-                "complete-artifact system tournament; independent candidate construction may overlap, while "
-                "PrefixGraph and G0-G4 savings are never added or claimed simultaneously"
+                "complete-artifact system tournament; PrefixGraph process isolation changes only candidate "
+                "construction lifetime, while PrefixGraph and G0-G4 savings are never added or claimed simultaneously"
             ),
         }
 
@@ -343,8 +361,8 @@ RC.build = _overlapped_release_candidate_build
 _PRESERVED_STRONG_VERIFY = strong_verify
 
 
-def _r25_build(staged_root: Path, out: Path) -> dict:
-    """Build exact r25 bytes; the outer canonical parent verifies only the final r24/r25 product winner."""
+def _r25_build_threaded_control(staged_root: Path, out: Path) -> dict:
+    """Preserved exact threaded control for the frozen PrefixGraph process-isolation hostile review."""
     started = time.perf_counter()
     with _revision25_profile_context():
         stats = dict(
@@ -353,6 +371,23 @@ def _r25_build(staged_root: Path, out: Path) -> dict:
                 out,
                 post_publish_verify=False,
                 defer_preselection_verify=True,
+                prefixgraph_process_isolation=False,
+            )
+        )
+    return {**stats, "create_s": time.perf_counter() - started}
+
+
+def _r25_build(staged_root: Path, out: Path) -> dict:
+    """Build exact r25 bytes with the evidenced one-shot PrefixGraph lifetime boundary."""
+    started = time.perf_counter()
+    with _revision25_profile_context():
+        stats = dict(
+            RC.build(
+                staged_root,
+                out,
+                post_publish_verify=False,
+                defer_preselection_verify=True,
+                prefixgraph_process_isolation=True,
             )
         )
     return {**stats, "create_s": time.perf_counter() - started}
