@@ -4,6 +4,19 @@
 name: CMPCT v0.30 Shifted candidate overlap RSS oracle
 
 on:
+  push:
+    branches: [agent/v030-authoritative-integration]
+    paths:
+      - 'benchmarks/v030_shifted_candidate_overlap_rss_oracle.py'
+      - 'benchmarks/v030_release_performance.py'
+      - 'benchmarks/v030_release_generalization.py'
+      - 'benchmarks/resemblance_hostile_corpus_v1.py'
+      - 'experiments/entropygraph_v030_canonical_final.py'
+      - 'experiments/entropygraph_v030_canonical_final_impl.py'
+      - 'experiments/entropygraph_v030_release_candidate.py'
+      - 'experiments/entropygraph_v030_release_product.py'
+      - 'experiments/entropygraph_v030_release_product_base.py'
+      - '.github/workflows/v030-shifted-candidate-overlap-rss.yml'
   pull_request:
     branches: [main]
     paths:
