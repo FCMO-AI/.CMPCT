@@ -123,3 +123,4 @@ jobs:
 
 # Diagnostic-only evidence. This workflow does not grant release credit and changes no admission,
 # benchmark threshold, locality/decode-unit bound, integrity rule, competitor setting or publication policy.
+# Exact-head admission touch: run the existing Office/Analytics causal decomposition after federated-candidate retirement; no product or threshold change.
