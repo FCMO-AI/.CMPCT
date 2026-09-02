@@ -2,12 +2,14 @@ from __future__ import annotations
 
 """Attribute release-product r25 RSS to G0-G4 versus PrefixGraph complete-candidate construction.
 
-The preceding shipping-vs-serial A/B falsified inter-candidate overlap as the owner of the peak. This oracle
-therefore measures each exact complete candidate in a fresh process and compares its RSS with the promoted full
-product. Total fresh-process peak RSS is the decisive ownership boundary because that is what the release gate
-charges. Baseline-subtracted ru_maxrss remains visible only as a diagnostic: ru_maxrss is a high-water mark, not
-an additive allocation counter. This oracle is diagnostic only and cannot change admission, scheduling, selection
-or release state.
+The preceding shipping-vs-serial A/B falsified inter-candidate overlap as the owner of the peak. The exact-head
+product-phase oracle then falsified canonical profile/manifest capture alone as the dominant RSS owner on shifted,
+logs, and ML: profile capture did not rise above the matched fresh-process import baseline while the complete product
+did. This oracle therefore measures each exact complete candidate in a fresh process and compares its RSS with the
+promoted full product. Total fresh-process peak RSS is the decisive ownership boundary because that is what the
+release gate charges. Baseline-subtracted ru_maxrss remains visible only as a diagnostic: ru_maxrss is a high-water
+mark, not an additive allocation counter. This oracle is diagnostic only and cannot change admission, scheduling,
+selection or release state.
 
 Worker failures are evidence too. A failed child process is retained verbatim in the durable JSON instead of being
 lost behind CalledProcessError; the oracle then fails closed with experiment_valid=false.
@@ -35,6 +37,16 @@ TARGETS = (
     ("resemblance_hostile_v1", "01_shifted_versions"),
     ("neutral_hostile_v1", "09_ml_artifacts"),
 )
+CAUSAL_PREDECESSOR = {
+    "record": "docs/v030-rnd/R25_PRODUCT_PHASE_RSS_RESULT.md",
+    "source_head": "86d6407816a71eb35df288b9b0bb91ce10f73f08",
+    "workflow_run": 33587322779,
+    "artifact_id": 9830647880,
+    "scoped_negative_constraint": (
+        "canonical profile/manifest capture alone did not raise total fresh-process peak RSS above the matched "
+        "import baseline on shifted, logs, or ML; candidate construction is the next unresolved ownership layer"
+    ),
+}
 
 
 def _source_commit() -> str:
@@ -142,6 +154,7 @@ def run(work_root: Path) -> dict:
 
     return {
         "schema": "cmpct-v030-r25-candidate-phase-rss-v1", "source_commit": _source_commit(),
+        "causal_predecessor": CAUSAL_PREDECESSOR,
         "targets": [list(item) for item in TARGETS], "orders": [list(item) for item in ORDERS], "rows": output_rows,
         "worker_failures": worker_failures,
         "contract": {
