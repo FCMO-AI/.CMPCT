@@ -164,3 +164,4 @@ jobs:
           retention-days: 90
 
 # Attribution only: all pack decompression, CRC32, SHA-256, logical identity, recovery and locality work remains mandatory.
+# Exact-head admission after freezing the D2 component split and repairing predecessor receipt custody.
