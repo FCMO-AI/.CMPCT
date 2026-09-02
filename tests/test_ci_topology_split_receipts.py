@@ -9,7 +9,8 @@ ROOT = Path(__file__).resolve().parents[1]
 
 # These are the highest-cost normative product/release authorities on the long-lived v0.30 integration PR. They
 # must not regress to workflow-level exact-SHA concurrency: doing so preserves every otherwise-useless classifier
-# invocation and recreates the runner starvation that blocks current release receipts.
+# invocation and recreates the runner starvation that blocks current release receipts. Causal diagnostics join
+# this ratchet when their result is needed to choose a release-debt repair and may run long enough to be starved.
 SPLIT_AUTHORITIES = (
     ".github/workflows/v030-native-authority.yml",
     ".github/workflows/v030-final-release-authority.yml",
@@ -21,6 +22,7 @@ SPLIT_AUTHORITIES = (
     ".github/workflows/v030-federated-candidate-productization.yml",
     ".github/workflows/v030-logs-sidecar-content-policy.yml",
     ".github/workflows/v030-logs-inverse-profile-productization.yml",
+    ".github/workflows/v030-shifted-candidate-overlap-rss.yml",
 )
 
 
