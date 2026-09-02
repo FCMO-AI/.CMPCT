@@ -1,5 +1,6 @@
 # ci-lane: deep
 # ci-pr-scope: latest-head-commit-gate
+# ci-cancel-policy: split-classifier-preserve-receipts
 name: CMPCT v0.30 r25 candidate phase RSS oracle
 
 on:
@@ -14,10 +15,6 @@ on:
 permissions:
   contents: read
 
-concurrency:
-  group: cmpct-v030-r25-candidate-phase-rss-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
-
 env:
   PYTHONPATH: ${{ github.workspace }}
   EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
@@ -25,6 +22,10 @@ env:
 jobs:
   latest-head-scope:
     runs-on: ubuntu-latest
+    timeout-minutes: 5
+    concurrency:
+      group: cmpct-v030-r25-candidate-phase-rss-classifier-${{ github.event.pull_request.number || github.ref }}
+      cancel-in-progress: true
     outputs:
       should_run: ${{ steps.scope.outputs.should_run }}
     steps:
@@ -36,6 +37,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
           if [ "${{ github.event_name }}" != "pull_request" ]; then
             echo "should_run=true" >> "$GITHUB_OUTPUT"
             exit 0
@@ -52,6 +54,9 @@ jobs:
     if: needs.latest-head-scope.outputs.should_run == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 210
+    concurrency:
+      group: cmpct-v030-r25-candidate-phase-rss-receipt-${{ env.EVIDENCE_HEAD }}
+      cancel-in-progress: false
     steps:
       - uses: actions/checkout@v6
         with:
@@ -103,11 +108,15 @@ jobs:
           assert contract['worker_failure_output_is_durable'] is True
           assert contract['strong_verification_outside_pack_timer'] is True
           assert contract['candidate_bytes_are_not_combined_or_credited'] is True
+          assert contract['release_boundary_attribution_uses_total_fresh_process_peak_rss'] is True
+          assert contract['baseline_subtracted_ru_maxrss_is_diagnostic_only'] is True
           for key in ('selector_changed','admission_changed','scheduling_changed','grammar_changed','integrity_changed','locality_limit_changed','decode_unit_limit_changed','recovery_changed'):
               assert contract[key] is False
           if data['experiment_valid'] is True:
               assert data['worker_failures']==[]
               for row in data['rows']:
+                  assert row['shipping_median_peak_rss_kib'] is not None
+                  assert row['g04_median_peak_rss_kib'] is not None
                   assert row['shipping_median_incremental_peak_rss_kib'] is not None
                   assert row['g04_median_incremental_peak_rss_kib'] is not None
                   assert len(row['repetitions'])==2
@@ -128,4 +137,5 @@ jobs:
           retention-days: 90
 
 # Ownership diagnostic only. Exact latest-head scope prevents a long-lived PR's historical experiment edits from
-# repeatedly consuming 210-minute slots after the ownership question has already been measured.
+# repeatedly consuming 210-minute slots. Once admitted, an exact-source receipt is preserved independently of
+# later routing commits because its result can decide which release-RSS repair is justified.
