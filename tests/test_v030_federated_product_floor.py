@@ -9,6 +9,7 @@ from benchmarks import v030_federated_candidate_productization as P
 
 LABEL = "02_office_workspace"
 KEY = ("neutral_hostile_v1", LABEL)
+ROOT = Path(__file__).resolve().parents[1]
 
 
 def _install_fake_builders(monkeypatch: pytest.MonkeyPatch, *, candidate_bytes: int, r24_bytes: int) -> None:
@@ -104,3 +105,19 @@ def test_product_floor_rejects_wrong_repaired_source_before_building(
         P._product_floor(LABEL, source, tmp_path, accepted)
 
     assert called is False
+
+
+def test_product_floor_evidence_changes_are_routed_to_the_deep_authority() -> None:
+    workflow = (ROOT / ".github/workflows/v030-federated-candidate-productization.yml").read_text(encoding="utf-8")
+
+    # The test itself is evidence-critical: changing the product-floor invariant must wake the substantive proof,
+    # not merely a successful classifier. Keep both the PR path filter and exact-head classifier pinned here.
+    assert "- 'tests/test_v030_federated_product_floor.py'" in workflow
+    assert "public_reader|product_floor" in workflow
+
+    # The deep job must consume the same regression and independently fail closed on every newly introduced floor.
+    assert "tests/test_v030_federated_product_floor.py" in workflow
+    assert "cmpct-v030-federated-eg01-productization-v2" in workflow
+    assert "d['gate']['all_accepted_v029_floor'] is True" in workflow
+    assert "d['gate']['all_genuine_r24_floor'] is True" in workflow
+    assert "d['gate']['all_historical_identities_exact'] is True" in workflow
