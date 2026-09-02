@@ -1,0 +1,90 @@
+name: CMPCT v0.30 candidate process-isolation RSS A/B
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - agent/v030-authoritative-integration
+    paths:
+      - 'docs/v030-rnd/R25_CANDIDATE_PROCESS_ISOLATION_RSS_PREREG.md'
+      - 'benchmarks/v030_r25_candidate_process_isolation_rss_worker.py'
+      - 'benchmarks/v030_r25_candidate_process_isolation_rss_oracle.py'
+      - '.github/workflows/v030-r25-candidate-process-isolation-rss.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  candidate-process-isolation-rss:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      PYTHONPATH: ${{ github.workspace }}
+      EVIDENCE_HEAD: ${{ github.sha }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.sha }}
+      - name: Bind exact experiment head
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install canonical diagnostic dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[test,audio]'
+      - name: Compile frozen process-isolation instrument
+        run: |
+          python -m py_compile \
+            benchmarks/v030_r25_candidate_process_isolation_rss_worker.py \
+            benchmarks/v030_r25_candidate_process_isolation_rss_oracle.py
+      - name: Run whole-process-tree process-isolation A/B
+        run: |
+          mkdir -p benchmark-artifacts
+          python benchmarks/v030_r25_candidate_process_isolation_rss_oracle.py \
+            --work-root benchmark-artifacts/v030-r25-candidate-process-isolation-rss-work \
+            --output benchmark-artifacts/v030-r25-candidate-process-isolation-rss.json
+      - name: Ratchet frozen identity, charging and decision surface
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          data=json.loads(Path('benchmark-artifacts/v030-r25-candidate-process-isolation-rss.json').read_text())
+          assert data['source_commit'] == '${{ github.sha }}'
+          assert data['schema'] == 'cmpct-v030-r25-candidate-process-isolation-rss-v1'
+          assert data['experiment_valid'] is True
+          assert data['release_credit'] is False
+          assert data['worker_failures'] == []
+          assert data['contract']['whole_process_tree_rss_decisive'] is True
+          assert data['contract']['parent_ru_maxrss_diagnostic_only'] is True
+          assert data['contract']['exact_product_identity_required'] is True
+          assert data['contract']['prefixgraph_process_exit_before_g04'] is True
+          assert data['contract']['production_source_changed'] is False
+          assert data['contract']['candidate_semantics_changed'] is False
+          assert data['contract']['release_thresholds_changed'] is False
+          assert data['arm_counts'] == {'shipping-control': 2, 'isolated-serialized-pg': 2}
+          assert data['decision'] in {
+              'PROCESS_LIFETIME_BOUNDARY_SUPPORTED',
+              'PROCESS_LIFETIME_BOUNDARY_SUPPORTED_WITH_MAJOR_CREATE_DEBT',
+              'PROCESS_ISOLATION_RETIRED_AS_PRIMARY',
+              'PROCESS_ISOLATION_AMBIGUOUS',
+          }
+          for row in data['rows']:
+              assert row['tree_samples'] >= 100
+              assert row['tree_sampler_errors'] == []
+              assert row['tree_sampler_interval_s'] <= 0.01
+              assert row['semantic_owners']['identity_exact'] is True
+              assert row['executor_restored'] is True
+          PY
+      - name: CI topology self-check
+        run: python tools/check_ci_topology.py
+      - uses: actions/upload-artifact@v6
+        with:
+          name: v030-r25-candidate-process-isolation-rss-${{ github.sha }}
+          path: benchmark-artifacts/v030-r25-candidate-process-isolation-rss.json
+          if-no-files-found: error
+          retention-days: 90
+
+# Diagnostic only. This workflow changes no production scheduling, release fingerprint or release threshold.
