@@ -140,3 +140,5 @@ jobs:
             benchmark-artifacts/v030-prefixgraph-precomputed-cdict-rss-ab-candidate.txt
           if-no-files-found: warn
           retention-days: 90
+
+# Exact-head admission touch after the workflow exists on the branch; scientific contract unchanged.
