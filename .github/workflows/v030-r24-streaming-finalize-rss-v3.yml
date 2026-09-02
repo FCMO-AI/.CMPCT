@@ -141,3 +141,5 @@ jobs:
           path: benchmark-artifacts/v030-r24-streaming-rss-v3.json
           if-no-files-found: error
           retention-days: 90
+
+# Exact-head custody admission: this workflow-only change exists solely to run the already-frozen v3 receipt on the authoritative head; it changes no arm, corpus, semantic owner, or decision threshold.
