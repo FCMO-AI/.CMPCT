@@ -13,6 +13,8 @@ on:
       - 'experiments/entropygraph_v030_release_product.py'
       - 'experiments/entropygraph_v030_release_product_base.py'
       - 'src/cmpct/builder.py'
+      - 'src/cmpct/v030_worker_policy_capture.py'
+      - 'src/cmpct/__init__.py'
       - '.github/workflows/v030-r24-worker-count-rss-ab.yml'
   pull_request:
     branches: [main]
@@ -23,6 +25,8 @@ on:
       - 'experiments/entropygraph_v030_release_product.py'
       - 'experiments/entropygraph_v030_release_product_base.py'
       - 'src/cmpct/builder.py'
+      - 'src/cmpct/v030_worker_policy_capture.py'
+      - 'src/cmpct/__init__.py'
       - '.github/workflows/v030-r24-worker-count-rss-ab.yml'
   workflow_dispatch:
 
@@ -57,7 +61,7 @@ jobs:
           if [ "$EVENT_NAME" = workflow_dispatch ]; then echo 'run_deep=true' >> "$GITHUB_OUTPUT"; exit 0; fi
           git diff-tree --no-commit-id --name-only -r HEAD > /tmp/latest-head-files.txt
           cat /tmp/latest-head-files.txt
-          if grep -Eq '^(docs/v030-rnd/R25_R24_WORKER_COUNT_RSS_AB_PREREG\.md|benchmarks/v030_r24_worker_count_rss_ab\.py|benchmarks/v030_release_performance\.py|experiments/entropygraph_v030_release_product(_base)?\.py|src/cmpct/builder\.py|\.github/workflows/v030-r24-worker-count-rss-ab\.yml)$' /tmp/latest-head-files.txt; then
+          if grep -Eq '^(docs/v030-rnd/R25_R24_WORKER_COUNT_RSS_AB_PREREG\.md|benchmarks/v030_r24_worker_count_rss_ab\.py|benchmarks/v030_release_performance\.py|experiments/entropygraph_v030_release_product(_base)?\.py|src/cmpct/builder\.py|src/cmpct/v030_worker_policy_capture\.py|src/cmpct/__init__\.py|\.github/workflows/v030-r24-worker-count-rss-ab\.yml)$' /tmp/latest-head-files.txt; then
             echo 'run_deep=true' >> "$GITHUB_OUTPUT"
           else
             echo 'run_deep=false' >> "$GITHUB_OUTPUT"
@@ -132,4 +136,4 @@ jobs:
           if-no-files-found: warn
           retention-days: 90
 
-# Exact-head admission touch after workflow creation; frozen scientific contract unchanged.
+# Exact-head admission includes the operation-scoped worker-policy transport that changes shipping r24 bytes.
