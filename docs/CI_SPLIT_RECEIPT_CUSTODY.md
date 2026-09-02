@@ -25,28 +25,9 @@ It does **not** use workflow-level concurrency. Instead:
 4. the classifier inspects `git diff-tree --no-commit-id --name-only -r HEAD`;
 5. the expensive job depends on the classifier and runs only when current authority says the candidate requires that evidence.
 
-Example:
+A newer synchronization may cancel an obsolete classifier. It cannot cancel an already-started exact receipt because that job occupies a different concurrency group. Cancellation **before admission is safe only if the newer classifier cannot erase an unmet evidence obligation**. A measured v0.30 incident exposed the corner case: commit A changed the release fingerprint, its queued classifier had not yet admitted the expensive authority, then a non-fingerprint commit B superseded that classifier and classified only B's diff. The candidate still needed new evidence, but neither run had admitted it.
 
-```yaml
-jobs:
-  latest-head-impact:
-    concurrency:
-      group: cmpct-example-classifier-${{ github.event.pull_request.number || github.ref }}
-      cancel-in-progress: true
-    # exact checkout + HEAD classifier
-
-  exact-receipt:
-    needs: latest-head-impact
-    if: needs.latest-head-impact.outputs.run_deep == 'true'
-    concurrency:
-      group: cmpct-example-receipt-${{ github.event.pull_request.head.sha || github.sha }}
-      cancel-in-progress: false
-    # exact checkout + result-bearing evidence
-```
-
-A newer synchronization may cancel an obsolete classifier. It cannot cancel an already-started exact receipt because that job occupies a different concurrency group. However, cancellation **before admission is safe only if the newer classifier cannot erase an unmet evidence obligation**. A measured v0.30 incident exposed the corner case: commit A changed the release fingerprint, its queued classifier had not yet admitted the expensive authority, then a non-fingerprint commit B superseded that classifier and classified only B's diff. The candidate still needed new evidence, but neither run had admitted it.
-
-For final generalization/runtime authority, `v030-authoritative-v2-pr.yml` therefore derives impact from the same `docs/V030_RELEASE_LOCK.json` fingerprint globs that define receipt identity, rather than a narrower hand-written release surface. The regression ratchet lives in `tests/test_v030_ci_topology_split_receipts.py`, which is itself fingerprinted. This is deliberately fail-closed: an uncertain release-fingerprint mutation may spend compute, but it may not inherit stale compression/runtime authority.
+For final generalization/runtime authority, `v030-authoritative-v2-pr.yml` therefore derives impact from the same `docs/V030_RELEASE_LOCK.json` fingerprint globs that define receipt identity, rather than a narrower hand-written release surface. The regression ratchet lives in `tests/test_ci_topology_split_receipts.py`, which is itself fingerprinted. This is deliberately fail-closed: an uncertain release-fingerprint mutation may spend compute, but it may not inherit stale compression/runtime authority.
 
 Subsystem classifiers may remain narrower where they are used only for incremental feedback. **Final release acceptance is different:** every normative receipt still has to match the frozen candidate fingerprint, so a classifier-only skip never grants release credit. If a subsystem did not rerun automatically on that frozen fingerprint, its final acceptance lane must be run explicitly before its task/receipt can close.
 
@@ -64,9 +45,9 @@ The policy may not:
 
 ## Ratchet
 
-`tools/check_ci_topology.py` validates `split-classifier-preserve-receipts`. `tests/test_v030_ci_topology_split_receipts.py` additionally pins the migrated high-cost authorities so they cannot silently return to workflow-level exact-SHA concurrency, and pins authoritative-v2 admission to the release-fingerprint manifest.
+`tools/check_ci_topology.py` validates `split-classifier-preserve-receipts`. `tests/test_ci_topology_split_receipts.py` additionally pins migrated high-cost authorities so they cannot silently return to workflow-level exact-SHA concurrency, and authoritative-v2 admission remains tied to the release-fingerprint manifest.
 
-The ratcheted authorities are:
+The ratcheted authorities include the release/product chain plus the currently decisive long-running causal receipts:
 
 - `android.yml`;
 - `v030-native-authority.yml`;
@@ -82,7 +63,11 @@ The ratcheted authorities are:
 - `v030-federated-generalization-admission.yml`;
 - `v030-federated-candidate-productization.yml`;
 - `v030-logs-sidecar-content-policy.yml`;
-- `v030-logs-inverse-profile-productization.yml`.
+- `v030-logs-inverse-profile-productization.yml`;
+- `v030-shifted-candidate-overlap-rss.yml`;
+- `v030-r25-candidate-phase-rss.yml`;
+- `v030-product-phase-rss.yml`;
+- `v030-g04-ml-operation-record-cache-ab.yml`.
 
 The all-15 admission lane is included because its result-bearing proof may run for up to six hours and remains useful for its exact source, while classifier-only invocations on the long-lived integration PR are pure routing work. PR-wide non-cancelling workflow concurrency serialized those obsolete classifiers behind older receipts; split custody preserves the exact all-15 receipt without granting unrelated commits a durable queue slot.
 
@@ -93,6 +78,19 @@ The Logs D5 lanes use the same custody rule for the strict path-invariant sideca
 The implicit-v4 D5 chain now uses the same split custody from its derived-identity oracle through reader productization, writer admission, and the up-to-three-hour canonical-candidate gate. These jobs already carry exact reconstruction, semantic-identity, locality and fail-closed product boundaries; the migration removes only obsolete classifier queue ownership. Once any substantive job is admitted, its exact-SHA receipt remains non-cancellable and cannot be inherited by a later candidate.
 
 Hosted Android follows the same law because its newest-head classifier is cheap routing but its emulator/JNI/conformance run is a release-critical, fingerprint-bearing platform receipt that can occupy a runner for up to one hour. Obsolete Android classifiers may now be superseded, while an admitted hosted-emulator proof remains non-cancellable for its exact source SHA. The separate physical-ARM64 workflow is deliberately not converted: it has no classifier split and intentionally grants the scarce physical device to the newest explicitly requested candidate.
+
+### Decisive RSS diagnostics
+
+The Shifted and ML runtime debts are now severe enough that their causal oracles determine whether production scheduling/cache work is justified. Those experiments are therefore protected as exact scientific receipts even though they grant **no release credit** themselves:
+
+- Shifted overlap RSS: up to 90 minutes;
+- r25 candidate-phase RSS: up to 210 minutes;
+- product-phase RSS: up to 120 minutes;
+- ML operation-record-cache A/B: seven rounds, up to 300 minutes.
+
+A classifier-only green is not evidence for any of them. Once admitted, an exact-source causal receipt survives later branch movement so its positive or negative result can close a hypothesis rather than being destroyed by unrelated integration commits.
+
+Their RSS attribution also follows one measurement law: **the decisive causal comparison uses total peak RSS from a fresh process, matching release authority.** Python `ru_maxrss` is a process high-water mark, so subtracting a post-import high-water mark from a later high-water mark is not an additive allocation measurement. Baseline-subtracted values may remain useful diagnostics, but they may not be the decisive ownership ratio. `tests/test_v030_rss_attribution_boundaries.py` ratchets that distinction for candidate-phase and product-phase decomposition.
 
 Other deep/release workflows should migrate when touched if they combine exact-receipt preservation with a newest-head classifier. Retired or genuinely one-shot workflows should instead become manual-only when repository doctrine permits it.
 
