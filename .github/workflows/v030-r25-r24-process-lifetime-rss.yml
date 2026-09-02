@@ -149,3 +149,4 @@ jobs:
           retention-days: 90
 
 # Diagnostic only: this freezes a process-lifetime ownership question; it changes no production scheduler or bytes.
+# Exact-head admission touch: ensure the newly introduced workflow is registered and receives a result-bearing push.
