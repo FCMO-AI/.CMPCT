@@ -49,7 +49,7 @@ jobs:
           import json
           from pathlib import Path
           import tempfile
-          from benchmarks import neutral_hostile_corpus_v1 as CORPUS
+          from benchmarks import resemblance_hostile_corpus_v1 as CORPUS
           from experiments import entropygraph_v030_canonical_final as C
           from experiments import entropygraph_v030_prefixgraph_process_executor as P
 
@@ -57,7 +57,7 @@ jobs:
           with tempfile.TemporaryDirectory(prefix='cmpct-v030-pg-executor-smoke-') as td:
               root=Path(td)
               corpus=root/'corpus'
-              CORPUS.corpus_resemblance(corpus)
+              CORPUS.shifted_versions(corpus)
               source=corpus/'01_shifted_versions'
               if not source.is_dir():
                   raise RuntimeError('Shifted source missing')
