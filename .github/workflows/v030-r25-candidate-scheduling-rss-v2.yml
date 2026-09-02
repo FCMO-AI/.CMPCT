@@ -175,3 +175,4 @@ jobs:
 
 # Superseding diagnostic only. V1 remains immutable invalid evidence. V2 repairs identity-domain proof and
 # custody topology without changing the A/B question, thresholds, production scheduling, or release state.
+# Exact-head admission touch: admit this frozen v2 receipt before any later unrelated integration commit can classify it out.
