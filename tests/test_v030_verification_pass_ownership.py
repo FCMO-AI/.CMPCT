@@ -61,11 +61,13 @@ def test_canonical_r25_builder_defers_only_inner_final_reopen(monkeypatch, tmp_p
         *,
         post_publish_verify: bool = True,
         defer_preselection_verify: bool = False,
+        prefixgraph_process_isolation: bool = False,
     ) -> dict:
         observed["root"] = Path(root)
         observed["archive"] = Path(archive)
         observed["post_publish_verify"] = post_publish_verify
         observed["defer_preselection_verify"] = defer_preselection_verify
+        observed["prefixgraph_process_isolation"] = prefixgraph_process_isolation
         archive.write_bytes(canonical.G04_MAGIC + b"candidate")
         return {"archive_bytes": archive.stat().st_size, "selected": "geometry-g04"}
 
@@ -77,10 +79,12 @@ def test_canonical_r25_builder_defers_only_inner_final_reopen(monkeypatch, tmp_p
         "archive": out,
         "post_publish_verify": False,
         "defer_preselection_verify": True,
+        "prefixgraph_process_isolation": True,
     }
     assert result["selected"] == "geometry-g04"
     assert result["create_s"] >= 0
 
-    # Footnote: both deferrals belong only to this canonical composition seam. ``RC.build`` itself keeps
-    # verification enabled by default for standalone tournament callers, while the canonical parent verifies the
-    # one artifact that can actually publish after the exact r24/r25 byte decision.
+    # Footnote: both verification deferrals and the bounded PrefixGraph lifetime belong only to this canonical
+    # composition seam. ``RC.build`` itself keeps verification enabled and process isolation disabled by default for
+    # standalone tournament callers, while the canonical parent verifies the one artifact that can actually publish
+    # after the exact r24/r25 byte decision.
