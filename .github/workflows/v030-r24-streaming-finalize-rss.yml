@@ -169,3 +169,4 @@ jobs:
 
 # The PR may synchronize on every integration commit, but the 120-minute jobs run only when the newest exact head
 # commit changes their lane. Unrelated later commits preserve any already-running exact receipt.
+# Exact repaired-r24 admission: rerun the frozen streaming-finalize A/B after operation-scoped worker-policy transport changed the canonical Shifted r24 semantics.
