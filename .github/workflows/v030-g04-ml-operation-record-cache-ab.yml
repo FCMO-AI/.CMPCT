@@ -114,7 +114,9 @@ jobs:
         run: |
           git apply --check --recount benchmarks/patches/v030_g04_operation_record_cache.patch
           git apply --recount benchmarks/patches/v030_g04_operation_record_cache.patch
-          cargo fmt --manifest-path native/cmpct-portable/Cargo.toml -- --check
+          # Validate only the frozen patch's two semantic owners. A crate-wide rustfmt check is not
+          # experiment evidence and can fail on unrelated pre-existing formatting outside this A/B.
+          rustfmt --edition 2024 --check native/cmpct-portable/src/g04.rs native/cmpct-portable/src/lib.rs
           CARGO_TARGET_DIR="$RUNNER_TEMP/candidate-target" cargo build --manifest-path native/cmpct-portable/Cargo.toml --release --bin cmpct-portable
           cp "$RUNNER_TEMP/candidate-target/release/cmpct-portable" "$RUNNER_TEMP/cmpct-portable-candidate"
       - name: Preserve native G0-G4 correctness after candidate patch
@@ -201,3 +203,4 @@ jobs:
 # Exact-head admission touch: execute the frozen seven-round A/B on this production-equivalent fingerprint; no experiment contract or threshold changes.
 # Re-admission after the prior classifier was superseded before job admission; preserve this exact receipt before any later branch write.
 # 2026-09-02 exact-head admission: run the unchanged seven-round ML record-cache A/B while the independent Shifted RSS receipt executes.
+# Instrument repair: formatting validation is scoped to the frozen patch owners so unrelated crate formatting cannot pre-empt the result-bearing A/B.
