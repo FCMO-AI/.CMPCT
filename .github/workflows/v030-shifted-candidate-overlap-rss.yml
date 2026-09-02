@@ -22,10 +22,6 @@ on:
 permissions:
   contents: read
 
-concurrency:
-  group: cmpct-v030-shifted-candidate-overlap-rss-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: false
-
 env:
   PYTHONPATH: ${{ github.workspace }}
   EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
@@ -34,6 +30,9 @@ jobs:
   latest-head-impact:
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    concurrency:
+      group: cmpct-v030-shifted-candidate-overlap-rss-classifier-${{ github.event.pull_request.number || github.ref }}
+      cancel-in-progress: true
     outputs:
       run_deep: ${{ steps.scope.outputs.run_deep }}
     steps:
@@ -66,6 +65,11 @@ jobs:
     if: needs.latest-head-impact.outputs.run_deep == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 90
+    concurrency:
+      # Once admitted, this result is useful evidence for its exact source and must not be
+      # cancelled merely because the long-lived integration PR receives another commit.
+      group: cmpct-v030-shifted-candidate-overlap-rss-receipt-${{ env.EVIDENCE_HEAD }}
+      cancel-in-progress: false
     steps:
       - uses: actions/checkout@v6
         with:
@@ -93,6 +97,28 @@ jobs:
             --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-shifted-candidate-overlap-rss-work" \
             --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-shifted-candidate-overlap-rss.json" \
             2>&1 | tee "$GITHUB_WORKSPACE/benchmark-artifacts/v030-shifted-candidate-overlap-console.txt"
+      - name: Add release-boundary RSS attribution
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          p=Path('benchmark-artifacts/v030-shifted-candidate-overlap-rss.json')
+          d=json.loads(p.read_text())
+          med=d['median']
+          # ru_maxrss is a process high-water mark. Subtracting a post-import high-water
+          # does not yield an additive allocation measurement. Preserve the historical
+          # incremental diagnostics, but make the fresh-process total peak—the same
+          # boundary used by release RSS authority—the decisive overlap attribution.
+          isolated_max=max(med['g04']['operation_peak_rss_kib'], med['prefixgraph']['operation_peak_rss_kib'])
+          overlap=med['overlap']['operation_peak_rss_kib']
+          d['derived']['release_boundary_overlap_to_max_isolated_rss_ratio']=(overlap/isolated_max if isolated_max else None)
+          d['derived']['release_boundary_overlap_excess_rss_kib']=overlap-isolated_max
+          d['derived']['release_boundary_overlap_peak_rss_kib']=overlap
+          d['derived']['release_boundary_max_isolated_peak_rss_kib']=isolated_max
+          d['contract']['release_boundary_attribution_uses_total_fresh_process_peak_rss']=True
+          d['contract']['baseline_subtracted_ru_maxrss_is_diagnostic_only']=True
+          p.write_text(json.dumps(d, indent=2)+'\n')
+          PY
       - name: Enforce exact diagnostic contract
         run: |
           python - <<'PY'
@@ -109,6 +135,8 @@ jobs:
           assert c['overlap_uses_unchanged_canonical_scheduler'] is True
           assert c['individual_arms_use_unchanged_canonical_component_builders'] is True
           assert c['overlap_output_must_equal_exact_component_bytes'] is True
+          assert c['release_boundary_attribution_uses_total_fresh_process_peak_rss'] is True
+          assert c['baseline_subtracted_ru_maxrss_is_diagnostic_only'] is True
           for key in ('archive_bytes_changed','selector_changed','scheduling_changed','grammar_changed','integrity_changed',
                       'rss_release_threshold_changed','locality_limit_changed','decode_unit_limit_changed'):
               assert c[key] is False
@@ -122,6 +150,11 @@ jobs:
           assert d['median']['overlap']['archive_sha256'] in {
               d['median']['g04']['archive_sha256'], d['median']['prefixgraph']['archive_sha256']
           }
+          rb=d['derived']
+          isolated=max(d['median']['g04']['operation_peak_rss_kib'], d['median']['prefixgraph']['operation_peak_rss_kib'])
+          assert rb['release_boundary_max_isolated_peak_rss_kib']==isolated
+          assert rb['release_boundary_overlap_peak_rss_kib']==d['median']['overlap']['operation_peak_rss_kib']
+          assert rb['release_boundary_overlap_excess_rss_kib']==rb['release_boundary_overlap_peak_rss_kib']-isolated
           PY
       - name: CI topology self-check
         run: python tools/check_ci_topology.py .github/workflows/v030-shifted-candidate-overlap-rss.yml
