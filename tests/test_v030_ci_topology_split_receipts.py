@@ -62,9 +62,10 @@ def test_authoritative_v2_classifier_is_release_fingerprint_driven() -> None:
     assert "COPYRIGHT.md" in globs
     assert "LICENSING.md" in globs
     assert "LICENSE-APACHE-2.0-PROPOSED.txt" in globs
-    # The durable zero-history law must keep the cancellation-before-admission failure mode explicit.
+    # The durable zero-history law must keep the cancellation-before-admission failure mode explicit and name the
+    # already-normative regression ratchet rather than requiring this supplemental test to cite itself.
     assert "Cancellation **before admission is safe only" in doctrine
-    assert "tests/test_v030_ci_topology_split_receipts.py" in doctrine
+    assert "tests/test_ci_topology_split_receipts.py" in doctrine
     assert "classifier supersession cannot erase an unmet exact-fingerprint evidence obligation" in doctrine
 
 
