@@ -171,3 +171,4 @@ jobs:
 # Frozen S6 Builder -> Hostile Reviewer transfer only.  This workflow cannot grant release credit or relax any
 # product/runtime/recovery/platform threshold; it only determines whether the integrated mechanism survives its
 # exact current complete-product boundary.
+# Exact-head custody admission after preserving the invalid v1 receipt: rerun the unchanged repaired S6 instrument at the promoted product front door.
