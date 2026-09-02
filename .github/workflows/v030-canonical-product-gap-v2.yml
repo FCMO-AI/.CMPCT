@@ -3,8 +3,8 @@
 name: CMPCT v0.30 canonical product-gap v2 repair-v6
 
 on:
-  pull_request:
-    branches: [main]
+  push:
+    branches: [agent/v030-authoritative-integration]
     paths:
       - 'benchmarks/v030_canonical_product_gap_v2.py'
       - 'docs/v030-rnd/V030_CANONICAL_PRODUCT_GAP_V2_PREREG.md'
@@ -15,12 +15,12 @@ permissions:
   contents: read
 
 concurrency:
-  group: cmpct-v030-canonical-product-gap-v2-${{ github.event.pull_request.head.sha || github.sha }}
+  group: cmpct-v030-canonical-product-gap-v2-${{ github.sha }}
   cancel-in-progress: false
 
 env:
   PYTHONPATH: ${{ github.workspace }}
-  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+  EVIDENCE_HEAD: ${{ github.sha }}
 
 jobs:
   canonical-product-gap-v2:
