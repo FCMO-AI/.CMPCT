@@ -108,6 +108,12 @@ jobs:
           assert data['promotion_signal'] is False
           assert data['selector_change'] is False
           assert data['release_credit'] is False
+          predecessor=data['causal_predecessor']
+          assert predecessor['record']=='docs/v030-rnd/R25_PRODUCT_PHASE_RSS_RESULT.md'
+          assert predecessor['source_head']=='86d6407816a71eb35df288b9b0bb91ce10f73f08'
+          assert predecessor['workflow_run']==33587322779
+          assert predecessor['artifact_id']==9830647880
+          assert 'candidate construction is the next unresolved ownership layer' in predecessor['scoped_negative_constraint']
           assert len(data['rows'])==2
           contract=data['contract']
           assert contract['fresh_process_per_measurement'] is True
