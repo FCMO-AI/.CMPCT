@@ -1,10 +1,10 @@
 """Frozen Builder receipt for the v0.30 position-independent discovery R3 neutralization.
 
 This instrument compares the exact canonical private shared-portfolio implementation twice on the same
-15 deterministic generalization trees.  The only A/B difference is which child worker provider the private
+15 deterministic generalization trees. The only A/B difference is which child worker provider the private
 shared module uses: historical accepted-v0.29 scheduling versus the transfer-proven v0.30 neutral worker.
 
-Stored-byte identity is required on every row.  Runtime evidence is deliberately restricted to the three
+Stored-byte identity is required on every row. Runtime evidence is deliberately restricted to the three
 frozen release-runtime targets and is repeated ABBA-style; non-exercising rows grant no speed claim.
 """
 from __future__ import annotations
@@ -35,6 +35,10 @@ RUNTIME_TARGETS = {
     ("resemblance_hostile_v1", "01_shifted_versions"),
 }
 ROUNDS = 2
+# The frozen Builder preregistration inherits the normative release timing-confidence rule:
+# a slowdown is material only when it clears both the relative and absolute thresholds.
+TIMING_REGRESSION_REL = 0.05
+TIMING_REGRESSION_ABS_S = 0.003
 
 
 def _sha(path: Path) -> str:
@@ -43,6 +47,13 @@ def _sha(path: Path) -> str:
         for block in iter(lambda: fh.read(1024 * 1024), b""):
             h.update(block)
     return h.hexdigest()
+
+
+def _material_runtime_regression(baseline_s: float, candidate_s: float) -> bool:
+    return (
+        candidate_s > baseline_s * (1.0 + TIMING_REGRESSION_REL)
+        and candidate_s - baseline_s > TIMING_REGRESSION_ABS_S
+    )
 
 
 def _one(workload: Path, out: Path, provider) -> dict:
@@ -153,10 +164,17 @@ def run(work_root: Path) -> dict:
                     cand_wall = [p["candidate_wall_s"] for p in timing_pairs]
                     base_child = [p["baseline_attempt5_child_s"] for p in timing_pairs]
                     cand_child = [p["candidate_attempt5_child_s"] for p in timing_pairs]
+                    baseline_wall_median = statistics.median(base_wall)
+                    candidate_wall_median = statistics.median(cand_wall)
+                    material_regression = _material_runtime_regression(
+                        baseline_wall_median, candidate_wall_median
+                    )
                     row["timing"] = {
-                        "baseline_wall_median_s": statistics.median(base_wall),
-                        "candidate_wall_median_s": statistics.median(cand_wall),
-                        "wall_ratio": statistics.median(cand_wall) / max(statistics.median(base_wall), 1e-12),
+                        "baseline_wall_median_s": baseline_wall_median,
+                        "candidate_wall_median_s": candidate_wall_median,
+                        "wall_delta_s": candidate_wall_median - baseline_wall_median,
+                        "wall_ratio": candidate_wall_median / max(baseline_wall_median, 1e-12),
+                        "material_runtime_regression": material_regression,
                         "baseline_attempt5_child_median_s": statistics.median(base_child),
                         "candidate_attempt5_child_median_s": statistics.median(cand_child),
                         "attempt5_child_ratio": statistics.median(cand_child) / max(statistics.median(base_child), 1e-12),
@@ -173,6 +191,17 @@ def run(work_root: Path) -> dict:
     if max(row["max_selected_member_read_amplification"] for row in rows) > isolation.SHARED.MAX_MEMBER_READ_AMP:
         raise RuntimeError("R3 product matrix violates locality ceiling")
 
+    runtime_regressions = [
+        f"{row['suite']}/{row['name']}"
+        for row in rows
+        if row.get("timing", {}).get("material_runtime_regression", False)
+    ]
+    decision = (
+        "REJECT_GLOBAL_NEUTRALIZATION"
+        if runtime_regressions
+        else "PROMOTE_R3_PRODUCT_NEUTRALIZATION"
+    )
+
     head = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip()
     return {
         "schema": "cmpct-v030-discovery-r3-product-ab-v1",
@@ -182,14 +211,22 @@ def run(work_root: Path) -> dict:
             "baseline": "canonical private shared portfolio + historical accepted-v0.29 worker",
             "candidate": "canonical private shared portfolio + v0.30 child-scoped discovery neutral worker",
         },
+        "timing_regression_rule": {
+            "relative": TIMING_REGRESSION_REL,
+            "absolute_s": TIMING_REGRESSION_ABS_S,
+            "material_only_if_both_exceeded": True,
+            "authority": "docs/PERFORMANCE_RELEASE_GATE.md",
+        },
         "rows": rows,
         "totals": {
             "workloads": len(rows),
             "byte_identical_rows": sum(row["byte_identical"] for row in rows),
             "runtime_targets": sum(bool(row["timing_pairs"]) for row in rows),
+            "material_runtime_regressions": len(runtime_regressions),
+            "runtime_regression_rows": runtime_regressions,
             "max_selected_member_read_amplification": max(row["max_selected_member_read_amplification"] for row in rows),
         },
-        "decision": "PROMOTE_R3_PRODUCT_NEUTRALIZATION",
+        "decision": decision,
     }
 
 
