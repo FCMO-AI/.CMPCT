@@ -11,7 +11,7 @@ on:
       - "benchmarks/neutral_hostile_corpus_v1.py"
       - "benchmarks/resemblance_hostile_corpus_v1.py"
       - "benchmarks/neutral_hostile_determinism_repair_v5.py"
-      - "benchmarks/history/**"
+      - "benchmarks/history/2026-08-17-mosaic-v029-public.json"
       - "native/preflate-bridge/**"
       - "pyproject.toml"
       - ".github/workflows/shipping-vs-frontier-v029.yml"
@@ -77,18 +77,28 @@ jobs:
           expected_sha = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
           totals = record["totals"]
           rows = record["rows"]
+          contract = record["benchmark_contract"]
 
           assert record["schema"] == "cmpct-v029-shipping-vs-frontier-v1"
           assert record["source_commit"] == expected_sha
           assert record["project_version"] == "0.29.0"
           assert record["shipping"]["format_revision"] == 24
+          assert record["frontier_source"]["record"] == "benchmarks/history/2026-08-17-mosaic-v029-public.json"
+          assert contract["same_lifetime_measurement"] is True
+          assert contract["same_tree_per_row"] is True
+          assert contract["source_mtime_ns"] == 0
+          assert contract["shipping_byte_identical_repeat_check"] == 2
+          assert contract["timing_claim"] is None
           assert len(rows) == totals["workloads"] == 15
           assert totals["shipping_bytes"] == sum(row["shipping_bytes"] for row in rows)
           assert totals["frontier_bytes"] == sum(row["frontier_bytes"] for row in rows)
+          assert totals["frontier_bytes"] == record["frontier_source"]["candidate_bytes"]
           assert totals["frontier_saving_bytes"] == totals["shipping_bytes"] - totals["frontier_bytes"]
           assert totals["frontier_wins"] + totals["shipping_wins"] + totals["ties"] == 15
           assert all(row["shipping_verified_members"] == row["files"] for row in rows)
+          assert all(row["source_mtime_ns"] == 0 for row in rows)
           assert all(len(row["tree_sha256"]) == 64 for row in rows)
+          assert all(len(row["shipping_sha256"]) == 64 for row in rows)
           PY
 
       - name: Upload benchmark evidence
