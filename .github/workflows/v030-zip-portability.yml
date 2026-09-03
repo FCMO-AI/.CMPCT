@@ -17,6 +17,7 @@ on:
       - 'docs/FORMAT.md'
       - 'docs/PORTABILITY.md'
       - 'docs/V030_RELEASE_LOCK.json'
+      - 'docs/v030-coordination/tasks/T01-native-portability.md'
       - 'tools/check_ci_topology.py'
       - 'pyproject.toml'
       - '.github/workflows/v030-zip-portability.yml'
@@ -33,6 +34,7 @@ on:
       - 'docs/FORMAT.md'
       - 'docs/PORTABILITY.md'
       - 'docs/V030_RELEASE_LOCK.json'
+      - 'docs/v030-coordination/tasks/T01-native-portability.md'
       - 'tools/check_ci_topology.py'
       - 'pyproject.toml'
       - '.github/workflows/v030-zip-portability.yml'
@@ -76,7 +78,7 @@ jobs:
           fi
           git diff-tree --no-commit-id --name-only -r HEAD > /tmp/latest-head-files.txt
           cat /tmp/latest-head-files.txt
-          if grep -Eq '^(native/cmpct-(portable|core)/|src/cmpct/|tests/(native_v030_zip_portability|generate_v030_canonical_goldens)\.py|experiments/entropygraph_v030_release_lock_strict\.py|docs/(FORMAT|PORTABILITY)\.md|docs/V030_RELEASE_LOCK\.json|tools/check_ci_topology\.py|pyproject\.toml|\.github/workflows/v030-zip-portability\.yml)' /tmp/latest-head-files.txt; then
+          if grep -Eq '^(native/cmpct-(portable|core)/|src/cmpct/|tests/(native_v030_zip_portability|generate_v030_canonical_goldens)\.py|experiments/entropygraph_v030_release_lock_strict\.py|docs/(FORMAT|PORTABILITY)\.md|docs/V030_RELEASE_LOCK\.json|docs/v030-coordination/tasks/T01-native-portability\.md|tools/check_ci_topology\.py|pyproject\.toml|\.github/workflows/v030-zip-portability\.yml)' /tmp/latest-head-files.txt; then
             echo 'run_portability=true' >> "$GITHUB_OUTPUT"
           else
             echo 'run_portability=false' >> "$GITHUB_OUTPUT"
@@ -158,4 +160,6 @@ jobs:
 # is tested independently for genuine r24 fallback, G0-G4 and PrefixGraph. A canonical link-bearing r25 archive must
 # fail closed without modifying an existing destination or leaking transaction files, so interoperability cannot be
 # manufactured by silently dropping filesystem semantics. The classifier is cheap/cancellable; every admitted
-# result-bearing receipt remains preserved and exact-SHA-bound.
+# result-bearing receipt remains preserved and exact-SHA-bound. T01 is deliberately outside the release fingerprint,
+# so its coordination-state updates provide a fingerprint-neutral request hook after the candidate is frozen; this
+# avoids changing product/evidence-critical bytes merely to regenerate a strict current-fingerprint ZIP receipt.
