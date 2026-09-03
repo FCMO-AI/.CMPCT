@@ -29,6 +29,7 @@ POLICY_SOURCE = "experiments.entropygraph_v030_release_reader_policy"
 ADMISSION_SOURCE = "experiments.entropygraph_v030_release_admission"
 SHARED_SOURCE = "experiments.entropygraph_v030_shared_portfolio"
 RC_SOURCE = "experiments.entropygraph_v030_release_candidate"
+DISCOVERY_WORKER_SOURCE = "experiments.entropygraph_v030_discovery_neutral_worker"
 
 G04_MAGIC = b"CMP25G4\0"
 G04_TAIL = b"C25G4TL\0"
@@ -124,6 +125,15 @@ SHARED = _clone(
     "experiments._v030_canonical_shared_portfolio",
     aliases={G04_SOURCE: G04},
 )
+
+# Transfer v3 proved that the historical position-independent discovery source contributes no selected bytes on
+# the complete frozen release-runtime matrix while exporting measurable attempt-5 search cost. Bind the accepted
+# R3 neutralization only inside this private canonical shared clone. The provider itself scopes the override to
+# the spawned attempt-5 child and restores it in ``finally``; ordinary v0.29/research imports keep their historical
+# worker and discovery source untouched, preserving them as independent byte/evidence oracles.
+DISCOVERY_WORKER = importlib.import_module(DISCOVERY_WORKER_SOURCE)
+SHARED.V029_SCHED = DISCOVERY_WORKER
+
 RC = _clone(
     RC_SOURCE,
     "experiments._v030_canonical_release_candidate",
