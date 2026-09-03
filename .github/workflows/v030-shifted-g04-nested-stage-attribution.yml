@@ -17,6 +17,8 @@ on:
       - 'experiments/entropygraph_v029_residual_pack.py'
       - 'experiments/entropygraph_v029_residual_fast.py'
       - 'docs/v030-rnd/R25_SHIFTED_G04_NESTED_STAGE_ATTRIBUTION_PREREG.md'
+      - 'docs/v030-rnd/R25_SHIFTED_ATTEMPT5_PHASE_OWNERSHIP_V1_PREREG.md'
+      - 'docs/v030-rnd/R25_SHIFTED_ATTEMPT5_PHASE_OWNERSHIP_V1_RESULT.md'
       - '.github/workflows/v030-shifted-g04-nested-stage-attribution.yml'
   workflow_dispatch:
 
@@ -58,7 +60,7 @@ jobs:
           fi
           git diff-tree --no-commit-id --name-only -r HEAD > /tmp/latest-head-files.txt
           cat /tmp/latest-head-files.txt
-          if grep -Eq '^(benchmarks/v030_shifted_g04_nested_stage_attribution\.py|benchmarks/v030_release_performance\.py|benchmarks/resemblance_hostile_corpus_v1\.py|benchmarks/neutral_hostile_determinism_repair_v6\.py|experiments/entropygraph_v028(_strict)?\.py|experiments/entropygraph_v029_(mosaic_strict|residual_pack|residual_fast)\.py|docs/v030-rnd/R25_SHIFTED_G04_NESTED_STAGE_ATTRIBUTION_PREREG\.md|\.github/workflows/v030-shifted-g04-nested-stage-attribution\.yml)$' /tmp/latest-head-files.txt; then
+          if grep -Eq '^(benchmarks/v030_shifted_g04_nested_stage_attribution\.py|benchmarks/v030_release_performance\.py|benchmarks/resemblance_hostile_corpus_v1\.py|benchmarks/neutral_hostile_determinism_repair_v6\.py|experiments/entropygraph_v028(_strict)?\.py|experiments/entropygraph_v029_(mosaic_strict|residual_pack|residual_fast)\.py|docs/v030-rnd/R25_SHIFTED_G04_NESTED_STAGE_ATTRIBUTION_PREREG\.md|docs/v030-rnd/R25_SHIFTED_ATTEMPT5_PHASE_OWNERSHIP_V1_(PREREG|RESULT)\.md|\.github/workflows/v030-shifted-g04-nested-stage-attribution\.yml)$' /tmp/latest-head-files.txt; then
             echo 'run_deep=true' >> "$GITHUB_OUTPUT"
           else
             echo 'run_deep=false' >> "$GITHUB_OUTPUT"
