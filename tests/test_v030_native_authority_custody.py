@@ -55,3 +55,9 @@ def test_native_authority_has_nonduplicating_authoritative_branch_push_route() -
     # exact-SHA native receipt is not launched twice.
     assert 'if [ "$EVENT_NAME" = "pull_request" ] && [ "$HEAD_REF" = "agent/v030-authoritative-integration" ]; then' in text
     assert "HEAD_REF: ${{ github.head_ref }}" in text
+
+
+def test_native_authority_has_no_transient_rustfmt_repair_workflow() -> None:
+    # A one-shot workflow was used only to apply canonical rustfmt output to inherited native drift because the
+    # connector cannot patch arbitrary long Rust files. It must not survive as a standing write-capable CI surface.
+    assert not (ROOT / ".github/workflows/v030-rustfmt-once.yml").exists()
