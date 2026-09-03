@@ -33,11 +33,16 @@ function render(record) {
 
   const evidenceNote = $("small", cards[2]);
   if (evidenceNote) {
-    // The i18n runtime already treats `.truth-line` as verbatim evidence. Mark this derived numeric
-    // receipt accordingly so every curated locale preserves the exact measured bytes rather than
-    // reporting them as untranslated authored prose.
-    evidenceNote.classList.add("truth-line");
-    evidenceNote.textContent = `${formatMiB(shipping)} → ${formatMiB(frontier)} · ${Math.trunc(frontierWins)}/${Math.trunc(workloads)}`;
+    // Keep the visible receipt compact while splitting it into data-only text nodes. The existing i18n
+    // classifier recognizes each measurement/ratio independently, so localized surfaces preserve the
+    // exact benchmark values without a special CSS class or a translation-specific exception.
+    evidenceNote.replaceChildren(
+      document.createTextNode(formatMiB(shipping)),
+      document.createTextNode(" → "),
+      document.createTextNode(formatMiB(frontier)),
+      document.createTextNode(" · "),
+      document.createTextNode(`${Math.trunc(frontierWins)}/${Math.trunc(workloads)}`),
+    );
   }
 
   cards[2].dataset.shippingBytes = String(Math.trunc(shipping));
