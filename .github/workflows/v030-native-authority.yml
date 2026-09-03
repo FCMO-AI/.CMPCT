@@ -43,6 +43,7 @@ on:
       - 'docs/HARDENING.md'
       - 'docs/NATIVE_CORE.md'
       - 'docs/PORTABILITY.md'
+      - 'docs/v030-coordination/tasks/T01-native-portability.md'
       - 'tools/check_ci_topology.py'
       - 'pyproject.toml'
       - '.github/workflows/v030-native-authority.yml'
@@ -85,6 +86,7 @@ on:
       - 'docs/HARDENING.md'
       - 'docs/NATIVE_CORE.md'
       - 'docs/PORTABILITY.md'
+      - 'docs/v030-coordination/tasks/T01-native-portability.md'
       - 'tools/check_ci_topology.py'
       - 'pyproject.toml'
       - '.github/workflows/v030-native-authority.yml'
@@ -133,8 +135,9 @@ jobs:
           cat /tmp/latest-head-files.txt
           # Keep the newest-head classifier aligned with the full evidence-critical dependency closure. Native
           # authority executes canonical Python semantics and emits a strict release fingerprint, so changes to
-          # those transitive inputs must not inherit an older green native receipt.
-          if grep -Eq '^(native/cmpct-(portable|core)/|src/cmpct/.*|experiments/entropygraph_v030_(canonical_final|canonical_final_impl|profile_isolation|release_product|product_fs|r25_manifest_admission|fs_implicit_v4|geometry_overlay_g04|prefixgraph|prefixgraph_parallel|release_reader|release_reader_policy|release_admission|release_candidate|shared_portfolio|release_lock_strict)\.py|tests/(test_v030_(canonical_final|profile_isolation|r25_manifest_admission|fs_implicit_v4|native_authority_custody)\.py|generate_v030_(canonical|implicit)_goldens\.py|conformance/v030-r25-(canonical|implicit-v4)\.json|native_v030_(canonical|implicit_manifest|r24_verify_authority)\.py)|docs/(FORMAT|HARDENING|NATIVE_CORE|PORTABILITY)\.md|tools/check_ci_topology\.py|pyproject\.toml|\.github/workflows/v030-native-authority\.yml)' /tmp/latest-head-files.txt; then
+          # those transitive inputs must not inherit an older green native receipt. T01 is deliberately excluded
+          # from the fingerprint and is also the fingerprint-neutral exact-candidate revalidation request hook.
+          if grep -Eq '^(native/cmpct-(portable|core)/|src/cmpct/.*|experiments/entropygraph_v030_(canonical_final|canonical_final_impl|profile_isolation|release_product|product_fs|r25_manifest_admission|fs_implicit_v4|geometry_overlay_g04|prefixgraph|prefixgraph_parallel|release_reader|release_reader_policy|release_admission|release_candidate|shared_portfolio|release_lock_strict)\.py|tests/(test_v030_(canonical_final|profile_isolation|r25_manifest_admission|fs_implicit_v4|native_authority_custody)\.py|generate_v030_(canonical|implicit)_goldens\.py|conformance/v030-r25-(canonical|implicit-v4)\.json|native_v030_(canonical|implicit_manifest|r24_verify_authority)\.py)|docs/(FORMAT|HARDENING|NATIVE_CORE|PORTABILITY)\.md|docs/v030-coordination/tasks/T01-native-portability\.md|tools/check_ci_topology\.py|pyproject\.toml|\.github/workflows/v030-native-authority\.yml)' /tmp/latest-head-files.txt; then
             echo 'run_native=true' >> "$GITHUB_OUTPUT"
           else
             echo 'run_native=false' >> "$GITHUB_OUTPUT"
@@ -247,12 +250,14 @@ jobs:
 # commits cancel obsolete classifier jobs by PR/ref, while an already-started exact-SHA native receipt remains in its
 # own non-cancelling group and can finish. The authoritative integration branch also has one path-scoped push route
 # because API/scheduled commits do not reliably emit pull_request synchronization; its PR copy classifies out to
-# prevent duplicate exact-SHA receipts. Builder-independent filesystem-v1 and implicit-v4 bytes independently pin
-# both admitted filesystem-control dialects; writer parity and the explicit recovery matrix separately prove the
-# current canonical admission seam publishes recoverable bytes consumed by the shared native implementation. The
-# Rust all-targets suite also proves Logs inverse gzip/zstd native parity and bounded reads, metadata-copy recovery,
-# fail-closed dual-copy damage, and authenticated filesystem semantics before those strict release facts are emitted.
-# The r25 format/hardening/native/portability contracts and filesystem semantic owner are trigger inputs too: changing
-# a reader-visible or platform requirement without rerunning the native acceptance matrix would create green-looking
-# repository state over stale proof. Profile isolation clones the canonical streaming reader as a semantic owner, so
-# its source is explicitly part of the dependency closure and ratcheted by custody tests.
+# prevent duplicate exact-SHA receipts. T01 is intentionally outside the release fingerprint and provides a shared
+# exact-candidate revalidation hook for native and ZIP authority after unrelated fingerprint-critical changes; this
+# avoids editing product/evidence-critical bytes merely to request fresh proof. Builder-independent filesystem-v1 and
+# implicit-v4 bytes independently pin both admitted filesystem-control dialects; writer parity and the explicit
+# recovery matrix separately prove the current canonical admission seam publishes recoverable bytes consumed by the
+# shared native implementation. The Rust all-targets suite also proves Logs inverse gzip/zstd native parity and bounded
+# reads, metadata-copy recovery, fail-closed dual-copy damage, and authenticated filesystem semantics before those
+# strict release facts are emitted. The r25 format/hardening/native/portability contracts and filesystem semantic owner
+# are trigger inputs too: changing a reader-visible or platform requirement without rerunning the native acceptance
+# matrix would create green-looking repository state over stale proof. Profile isolation clones the canonical streaming
+# reader as a semantic owner, so its source is explicitly part of the dependency closure and ratcheted by custody tests.
