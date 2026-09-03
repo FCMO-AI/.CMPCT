@@ -1,17 +1,18 @@
 # ci-lane: research
 name: CMPCT v0.30 whole-tree product RSS companion
 
+# Historical v1 only. This observer produced useful memory evidence, but its
+# in-worker /proc sampler perturbs timing and its frozen result is superseded by
+# the external-observer v2 authority. Keep it manually reproducible without
+# generating exact-head timing noise on every integration push.
 on:
-  push:
-    branches:
-      - agent/v030-authoritative-integration
   workflow_dispatch:
 
 permissions:
   contents: read
 
 concurrency:
-  group: cmpct-v030-release-performance-tree-rss-${{ github.ref }}
+  group: cmpct-v030-release-performance-tree-rss-${{ github.sha }}
   cancel-in-progress: false
 
 env:
@@ -111,9 +112,9 @@ jobs:
           if-no-files-found: warn
           retention-days: 90
 
-# This workflow does not supersede the frozen promoted-product release-performance receipt and grants zero release
-# credit. It executes the repository's pre-existing stronger RSS companion so process-isolated writers cannot gift
-# descendant memory. Its purpose is decision-changing D5 productization evidence: determine the real broad-product
-# memory gap before deciding whether the supported PrefixGraph lifetime mechanism is sufficient or owes another
-# independent RSS rehabilitation. Thresholds, target corpus, timing window, identities and product front door are
-# inherited unchanged from the frozen runtime authority.
+# This workflow is the immutable historical v1 reproduction surface. Its
+# process-tree memory receipts remain useful scoped evidence, but its in-worker
+# Python sampler is timing-confounded and grants zero timing or release credit.
+# The frozen external-observer v2 result is the current whole-tree RSS product
+# authority. Do not re-enable automatic push execution without new causal
+# evidence that removes the observer perturbation rather than changing a gate.
