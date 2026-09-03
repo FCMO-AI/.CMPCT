@@ -7,20 +7,28 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 WORKFLOW = ROOT / ".github/workflows/v030-native-authority.yml"
 
-# Canonical profile isolation executes these semantic-owner sources inside a private release module graph. A
-# wrapper-only trigger is insufficient: changing a cloned source can change the native authority's canonical
-# comparison semantics while an older receipt still looks green. Keep the release-reader source in both workflow
-# scheduling layers and keep this test itself in the same evidence closure.
+# Canonical profile isolation and implicit-v4 admission execute these semantic-owner sources inside the native
+# authority boundary. A wrapper-only trigger is insufficient: changing a cloned reader source, the manifest
+# admission grammar, an independent golden, or the recovery oracle can change what the native receipt proves while
+# an older classifier-only green still looks current. Keep every dependency below in both scheduling layers and keep
+# this test itself in the same evidence closure.
 REQUIRED_DEPENDENCIES = (
     "experiments/entropygraph_v030_profile_isolation.py",
     "experiments/entropygraph_v030_release_reader.py",
     "experiments/entropygraph_v030_release_reader_policy.py",
+    "experiments/entropygraph_v030_r25_manifest_admission.py",
+    "experiments/entropygraph_v030_fs_implicit_v4.py",
+    "tests/test_v030_r25_manifest_admission.py",
+    "tests/test_v030_fs_implicit_v4.py",
+    "tests/generate_v030_implicit_goldens.py",
+    "tests/conformance/v030-r25-implicit-v4.json",
+    "tests/native_v030_implicit_manifest.py",
     "tests/test_v030_native_authority_custody.py",
 )
 
 
 def _classifier_pattern(text: str) -> re.Pattern[str]:
-    matches = re.findall(r"grep -Eq '([^']+)' /tmp/latest-head-files\.txt", text)
+    matches = re.findall(r"grep -Eq '([^']+)' /tmp/latest-head-files\\.txt", text)
     assert len(matches) == 1, "native authority must expose one auditable newest-head classifier"
     return re.compile(matches[0])
 
