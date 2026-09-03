@@ -77,9 +77,16 @@ jobs:
           assert record["totals"]["workloads"] == 15
           assert record["totals"]["byte_identical_rows"] == 15
           assert record["totals"]["runtime_targets"] == 3
+          assert record["totals"]["material_runtime_regressions"] == 0
+          assert record["totals"]["runtime_regression_rows"] == []
           assert record["totals"]["max_selected_member_read_amplification"] <= 8.0
+          assert record["timing_regression_rule"] == {
+              "relative": 0.05,
+              "absolute_s": 0.003,
+              "material_only_if_both_exceeded": True,
+              "authority": "docs/PERFORMANCE_RELEASE_GATE.md",
+          }
           assert all(row["byte_identical"] for row in record["rows"])
-          assert all(row["bytes"] == row.get("bytes") for row in record["rows"])
           assert all(len(row["sha256"]) == 64 and len(row["tree_sha256"]) == 64 for row in record["rows"])
           assert record["decision"] == "PROMOTE_R3_PRODUCT_NEUTRALIZATION"
           PY
