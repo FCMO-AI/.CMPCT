@@ -113,3 +113,5 @@ jobs:
 # R1 proof reuse only: full pack CRC32+SHA256 authentication remains mandatory. The candidate may reuse that exact
 # SHA fact only when pack bytes and logical-member bytes are provably identical and their expected SHA declarations
 # are equal. No integrity, recovery, locality, archive-byte, selective-read, benchmark, or release fact is weakened.
+# Exact-head custody admission: execute the frozen whole-pack identity proof-reuse A/B; no grammar, integrity fact,
+# threshold, corpus, candidate rule, or interpretation changed.
