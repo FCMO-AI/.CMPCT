@@ -27,6 +27,15 @@ def _delta_state(item: dict) -> tuple[bool, str]:
     return (wall > 0.0), "delta_path_exercised"
 
 
+def _self_check_validity_model() -> None:
+    assert _delta_state({"delta_calls": 0, "delta_s": 0.0}) == (True, "delta_path_not_exercised")
+    assert _delta_state({"delta_calls": 1, "delta_s": 0.001}) == (True, "delta_path_exercised")
+    assert _delta_state({"delta_calls": 0, "delta_s": 0.001})[0] is False
+    assert _delta_state({"delta_calls": 1, "delta_s": 0.0})[0] is False
+    assert _delta_state({"delta_calls": -1, "delta_s": 0.0})[0] is False
+    assert _delta_state({"delta_calls": 1, "delta_s": float("nan")})[0] is False
+
+
 def run(work_root: Path) -> dict:
     raw = V2.run(work_root)
     invalid: list[str] = []
@@ -97,6 +106,7 @@ def run(work_root: Path) -> dict:
 
 
 def main() -> None:
+    _self_check_validity_model()
     parser = argparse.ArgumentParser()
     parser.add_argument("--work-root", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
