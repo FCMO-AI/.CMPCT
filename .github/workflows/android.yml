@@ -101,6 +101,22 @@ jobs:
           python-version: '3.11'
           cache: pip
 
+      - name: Capture clean exact-candidate release fingerprint
+        run: |
+          set -euo pipefail
+          # Fingerprint before generated conformance vectors touch tests/conformance/**, which is itself
+          # release-critical. Evidence must identify the clean checked-out candidate, not the mutated CI worktree.
+          python -m experiments.entropygraph_v030_release_lock_strict --print-fingerprint \
+            > "$RUNNER_TEMP/cmpct-v030-fingerprint.json"
+          python - <<'PY'
+          import json, os, pathlib
+          data = json.loads((pathlib.Path(os.environ['RUNNER_TEMP']) / 'cmpct-v030-fingerprint.json').read_text())
+          value = data.get('candidate_fingerprint')
+          if not isinstance(value, str) or len(value) != 64:
+              raise SystemExit('clean candidate fingerprint missing or malformed')
+          print(value)
+          PY
+
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -242,8 +258,6 @@ jobs:
 
       - name: Record exact-candidate hosted Android evidence
         run: |
-          python -m experiments.entropygraph_v030_release_lock_strict --print-fingerprint \
-            > "$RUNNER_TEMP/cmpct-v030-fingerprint.json"
           python - <<'PY'
           import json, os, pathlib, subprocess
           temp = pathlib.Path(os.environ['RUNNER_TEMP'])
