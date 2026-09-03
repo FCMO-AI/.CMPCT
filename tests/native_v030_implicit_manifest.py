@@ -200,6 +200,23 @@ def tree_payload(index: int) -> bytes:
     return hashlib.shake_256(f"cmpct-v030-native-implicit-{index:03d}".encode()).digest(8192)
 
 
+def expected_public_tree(decoded: dict) -> dict[str, dict]:
+    """Translate the authenticated canonical manifest into the portable CLI's public kind/size surface."""
+    expected: dict[str, dict] = {}
+    for rel, kind, _mode, _mtime, _uid, _gid, _xattrs, extra in decoded["manifest"]["entries"]:
+        if kind == "f":
+            expected[rel] = {"kind": 0, "size": int(extra[0])}
+        elif kind == "d":
+            expected[rel] = {"kind": 1, "size": 0}
+        elif kind == "l":
+            expected[rel] = {"kind": 2, "size": len(extra.encode("utf-8"))}
+        elif kind == "h":
+            expected[rel] = {"kind": 3, "size": int(decoded["regular"][extra][0])}
+        else:
+            raise AssertionError((rel, kind))
+    return expected
+
+
 def assert_writer_parity(tmp: Path) -> None:
     source = tmp / "source"
     for index in range(96):
@@ -227,7 +244,7 @@ def assert_writer_parity(tmp: Path) -> None:
     decoded = canonical._validated_manifest(archive)
     assert len(decoded["regular"]) == 96
 
-    expected = {rel: {"kind": 0, "size": size} for rel, (size, _digest) in decoded["regular"].items()}
+    expected = expected_public_tree(decoded)
     probe = "src/pkg/very_repetitive_component_047.bin"
     payload = (source / probe).read_bytes()
     assert hashlib.sha256(payload).digest() == decoded["regular"][probe][1]
