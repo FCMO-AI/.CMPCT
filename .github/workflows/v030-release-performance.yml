@@ -12,7 +12,7 @@ permissions:
 
 concurrency:
   group: cmpct-v030-release-performance-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 env:
   EVIDENCE_HEAD: ${{ github.sha }}
@@ -162,14 +162,15 @@ jobs:
           retention-days: 90
 
 # The latest-head impact gate prevents product-neutral research/docs commits on the long-lived integration branch
-# from repeatedly cancelling and restarting this expensive paired authority. It never infers a pass: any change to
-# shipping code, experiments, runtime benchmark/worker inputs, relevant tests, dependencies, or this workflow runs
-# the full exact-head gate. workflow_dispatch always runs it. Product-neutral pushes preserve the last receipt only
-# through the separate product/evidence fingerprint authority; commit SHA alone is not treated as performance proof.
+# from paying a new paired authority. Product-neutral pushes cannot cancel a result-bearing run already in progress:
+# concurrency is serialized instead, so the classifier gets to skip the queued neutral run only after the active
+# receipt finishes. This avoids the observed authority-starvation failure where cancellation happened before the
+# classifier could decide that the superseding commit changed no product fingerprint. A newer material run may wait
+# behind an older one, but it still executes against its own immutable EVIDENCE_HEAD and cannot inherit the older
+# result as exact-head truth. workflow_dispatch always runs the full gate.
 # The operation-scoped r24 worker-policy transport is shipping runtime state through src/cmpct/; after that transport
 # changes canonical r24 bytes or resource behavior, this exact paired product gate must be regenerated before credit.
 # Hosted timing remains same-run paired promotion evidence; absolute public throughput claims still require controlled
 # benchmark hardware. A miss is implementation debt, not a policy edit.
 # PrefixGraph process-boundary regressions are exact product-runtime inputs: their focused path test is both executed
-# as a prerequisite and classified as authority-bearing so a test-only follow-up cannot cancel the code run and replace
-# it with a classifier-only green.
+# as a prerequisite and classified as authority-bearing so a test-only follow-up cannot suppress the code authority.
