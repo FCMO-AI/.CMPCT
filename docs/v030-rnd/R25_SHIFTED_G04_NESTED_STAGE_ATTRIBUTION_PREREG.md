@@ -4,6 +4,10 @@ Status: **FROZEN BEFORE RESULT-BEARING EXECUTION / FORGE D1 CAUSAL ATTRIBUTION /
 
 Parent result: `R25_SHIFTED_G04_SHARED_CHILD_ATTRIBUTION_RESULT.md` established valid `SHIFTED_G04_SHARED_MIXED_OWNERSHIP`: attempt-5 occupied `0.996867442x` of shared wall and v0.28 occupied `0.795450203x`. The parent forbids treating overlay-only or one-child-only work as closure of the ~31 s nomination debt. This successor changes no product behavior. It locates the internal stage boundaries that own each inherited child so the next exact fail-open proof enters the correct layer.
 
+## Pre-result instrumentation erratum
+
+The first workflow attempt failed before producing a single measurement row: the instrument addressed the legacy stage as `V028.BASE.BASE.build`, but the accepted attempt-5 dependency exposes the exact inherited v0.28 module at `V028`, whose v0.25 engine is `V028.BASE`. The correct existing function boundary is therefore `V028.BASE.build`. Because the failure occurred before any result-bearing execution or evidence artifact, this mechanical symbol repair does not change the frozen scientific question, target, repetitions, byte identities, stage meaning, bands, decision grammar, or interpretation. The failed run remains auditable in Actions history and receives zero scientific credit.
+
 ## Question
 
 Inside the two exact inherited shared children on repaired Shifted, are their walls dominated by the existing graph-construction stages, or is material wall instead owned by the v0.28 legacy fallback build / attempt-5 residual compiler / wrapper overhead?
@@ -16,7 +20,7 @@ A positive nested-graph result does not prove that one shared lower bound exists
 - three repetitions;
 - every builder execution occurs in a fresh Python process;
 - per repetition the order alternates `v028 -> attempt5`, then `attempt5 -> v028`, then `v028 -> attempt5`;
-- v0.28 is the exact `entropygraph_v028_strict` builder reached through accepted attempt-5's `V028` dependency;
+- v0.28 is the exact inherited `entropygraph_v028` builder reached through accepted attempt-5's `V028` dependency;
 - attempt-5 is the exact accepted `entropygraph_v029_residual_fast.build_graph` raw graph builder;
 - instrumentation wraps only existing function boundaries and restores them after the call;
 - no encoder threshold, candidate grammar, codec setting, source bytes, ordering, fallback/tie law, locality law, or serializer changes.
@@ -27,8 +31,8 @@ A positive nested-graph result does not prove that one shared lower bound exists
 
 Record complete child wall and the exact existing stages:
 
-1. inherited legacy/v0.25 portfolio candidate: `V028.BASE.BASE.build`;
-2. strict EntropyGraph-II graph candidate: `V028._build_graph`;
+1. inherited legacy/v0.25 portfolio candidate: `V028.BASE.build`;
+2. EntropyGraph-II graph candidate: `V028._build_graph`;
 3. residual child overhead is descriptive as `child - legacy - graph` and receives no independent decision band.
 
 ### attempt-5 child
