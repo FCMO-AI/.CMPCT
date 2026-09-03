@@ -1,0 +1,185 @@
+name: CMPCT v0.29 formal corpora
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - bench/formal-corpora-v029
+    paths:
+      - benchmarks/formal_corpus_bench.py
+      - .github/workflows/formal-corpus-v029.yml
+
+permissions:
+  contents: read
+
+jobs:
+  benchmark:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    env:
+      PYTHONUNBUFFERED: "1"
+      CMPCT_FORMAL_TIMEOUT: "3600"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Install benchmark tools
+        run: |
+          set -euxo pipefail
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            bzip2 curl gzip p7zip-full time unzip xz-utils zip zstd
+          python -m pip install --upgrade pip
+          python -m pip install -e .
+
+      - name: Fetch and validate canonical corpora
+        shell: bash
+        run: |
+          set -euxo pipefail
+          ROOT="$RUNNER_TEMP/cmpct-formal-corpora"
+          rm -rf "$ROOT"
+          mkdir -p "$ROOT/canterbury/all" "$ROOT/silesia/all" "$ROOT/enwik8" "$ROOT/enwik9"
+
+          # Canterbury Corpus — the corpus site describes this 11-file set as its main benchmark for
+          # comparing lossless-compression methods.  Validate the canonical byte sizes individually so
+          # a mirror/cache error cannot silently become a new benchmark corpus.
+          curl --fail --location --retry 4 \
+            https://corpus.canterbury.ac.nz/resources/cantrbry.tar.gz \
+            -o "$ROOT/cantrbry.tar.gz"
+          tar -xzf "$ROOT/cantrbry.tar.gz" -C "$ROOT/canterbury/all"
+          python - "$ROOT/canterbury/all" <<'PY'
+          from pathlib import Path
+          import sys
+          root=Path(sys.argv[1])
+          expected={
+            'alice29.txt':152089,'asyoulik.txt':125179,'cp.html':24603,'fields.c':11150,
+            'grammar.lsp':3721,'kennedy.xls':1029744,'lcet10.txt':426754,'plrabn12.txt':481861,
+            'ptt5':513216,'sum':38240,'xargs.1':4227,
+          }
+          actual={p.name:p.stat().st_size for p in root.iterdir() if p.is_file()}
+          if actual != expected:
+              raise SystemExit(f'Canterbury validation failed: {actual!r}')
+          PY
+
+          # Silesia Corpus — fetch each canonical file from the author's corpus endpoint. The official
+          # page publishes both raw byte sizes and MD5s; checking both protects the benchmark against
+          # truncation, accidental recompression and mutable mirrors.
+          python - "$ROOT/silesia/all" <<'PY'
+          from pathlib import Path
+          import hashlib, subprocess, sys, urllib.request
+          root=Path(sys.argv[1]);root.mkdir(parents=True,exist_ok=True)
+          files={
+            'dickens':(10192446,'88334708559f6db57d79096bc0aca07e'),
+            'mozilla':(51220480,'c7789a2097f1ff944b0c737430a339b3'),
+            'mr':(9970564,'38e623e3093b7bf2003ca4b1bbc19927'),
+            'nci':(33553445,'31f85bc8706f3c921104e7c169e2e2e1'),
+            'ooffice':(6152192,'573c4ae915e36631d8f2dcffb9b9b66d'),
+            'osdb':(10085684,'e734b0c48e6a982adfb5802da3032ecd'),
+            'reymont':(6627202,'d8f54d78105079775f32d76dc55fc671'),
+            'samba':(21606400,'154eaea7ea70e89f6339ff0abf4112ca'),
+            'sao':(7251944,'79e95a22e18cd82b7e42bf91b380d30b'),
+            'webster':(41458703,'474931ad907ac27bf962c75ded46c069'),
+            'xml':(5345280,'9b09c0c80104adb8aae910b7d7db003e'),
+            'x-ray':(8474240,'9baec32ad14ec3eff487d254382cb91c'),
+          }
+          for name,(size,md5) in files.items():
+              bz=root/(name+'.bz2');raw=root/name
+              url=f'https://sun.aei.polsl.pl/~sdeor/corpus/{name}.bz2'
+              urllib.request.urlretrieve(url,bz)
+              with raw.open('wb') as out:
+                  subprocess.run(['bzip2','-d','-c',str(bz)],check=True,stdout=out)
+              bz.unlink()
+              got=raw.read_bytes()
+              if len(got)!=size or hashlib.md5(got).hexdigest()!=md5:
+                  raise SystemExit(f'Silesia validation failed for {name}')
+          if sum(p.stat().st_size for p in root.iterdir()) != 211_938_580:
+              raise SystemExit('Silesia aggregate byte count mismatch')
+          PY
+
+          # Large Text Compression Benchmark / Hutter data. Matt Mahoney publishes exact raw sizes and
+          # MD5/SHA-1 values; use the raw MD5s here because they are the canonical corpus identities.
+          curl --fail --location --retry 4 https://mattmahoney.net/dc/enwik8.zip -o "$ROOT/enwik8.zip"
+          unzip -q "$ROOT/enwik8.zip" -d "$ROOT/enwik8"
+          test "$(stat -c%s "$ROOT/enwik8/enwik8")" = 100000000
+          test "$(md5sum "$ROOT/enwik8/enwik8" | awk '{print $1}')" = a1fa5ffddb56f4953e226637dabbb36a
+
+          curl --fail --location --retry 4 https://mattmahoney.net/dc/enwik9.zip -o "$ROOT/enwik9.zip"
+          unzip -q "$ROOT/enwik9.zip" -d "$ROOT/enwik9"
+          test "$(stat -c%s "$ROOT/enwik9/enwik9")" = 1000000000
+          test "$(md5sum "$ROOT/enwik9/enwik9" | awk '{print $1}')" = e206c3450ac99950df65bf70ef61a12d
+
+          # Produce single-file views with hardlinks rather than copies. Each CMPCT build scans one
+          # view independently, so the hardlink is encoded as the canonical file bytes while the runner
+          # avoids wasting another ~300 MB duplicating established corpora.
+          mkdir -p "$ROOT/views"
+          for f in "$ROOT/canterbury/all"/*; do
+            name="canterbury-$(basename "$f")"
+            mkdir -p "$ROOT/views/$name"
+            ln "$f" "$ROOT/views/$name/$(basename "$f")"
+          done
+          for f in "$ROOT/silesia/all"/*; do
+            name="silesia-$(basename "$f")"
+            mkdir -p "$ROOT/views/$name"
+            ln "$f" "$ROOT/views/$name/$(basename "$f")"
+          done
+
+          python - "$ROOT" > "$ROOT/manifest.json" <<'PY'
+          from pathlib import Path
+          import json,sys
+          root=Path(sys.argv[1])
+          can_sizes={
+            'alice29.txt':152089,'asyoulik.txt':125179,'cp.html':24603,'fields.c':11150,
+            'grammar.lsp':3721,'kennedy.xls':1029744,'lcet10.txt':426754,'plrabn12.txt':481861,
+            'ptt5':513216,'sum':38240,'xargs.1':4227,
+          }
+          sil_sizes={
+            'dickens':10192446,'mozilla':51220480,'mr':9970564,'nci':33553445,'ooffice':6152192,
+            'osdb':10085684,'reymont':6627202,'samba':21606400,'sao':7251944,
+            'webster':41458703,'xml':5345280,'x-ray':8474240,
+          }
+          corpora=[]
+          for name,size in can_sizes.items():
+              corpora.append({'name':'canterbury-'+name,'path':str(root/'views'/('canterbury-'+name)),
+                  'expected_logical_bytes':size,'authority':'Canterbury Corpus','mode':'canonical-file'})
+          for name,size in sil_sizes.items():
+              corpora.append({'name':'silesia-'+name,'path':str(root/'views'/('silesia-'+name)),
+                  'expected_logical_bytes':size,'authority':'Silesia Compression Corpus','mode':'canonical-file'})
+          corpora += [
+            {'name':'silesia-archive','path':str(root/'silesia'/'all'),'expected_logical_bytes':211938580,
+             'authority':'Silesia Compression Corpus','mode':'archive-tree'},
+            {'name':'enwik8','path':str(root/'enwik8'),'expected_logical_bytes':100000000,
+             'authority':'Large Text Compression Benchmark / Hutter Prize','mode':'canonical-file'},
+            {'name':'enwik9','path':str(root/'enwik9'),'expected_logical_bytes':1000000000,
+             'authority':'Large Text Compression Benchmark','mode':'canonical-file'},
+          ]
+          print(json.dumps({'source_notes':[
+            'Canterbury canonical 11-file corpus from corpus.canterbury.ac.nz',
+            'Silesia canonical 12-file corpus from the author endpoint with official MD5 validation',
+            'enwik8/enwik9 from mattmahoney.net with published raw MD5 validation',
+          ],'corpora':corpora},indent=2))
+          PY
+          echo "CMPCT_FORMAL_MANIFEST=$ROOT/manifest.json" >> "$GITHUB_ENV"
+
+      - name: Run formal benchmark
+        run: |
+          set -euxo pipefail
+          mkdir -p formal-results
+          python benchmarks/formal_corpus_bench.py "$CMPCT_FORMAL_MANIFEST" --out formal-results
+
+      - name: Show result summary
+        if: always()
+        run: |
+          test ! -f formal-results/formal-corpus.md || cat formal-results/formal-corpus.md
+
+      - name: Upload evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cmpct-v029-formal-corpus-evidence
+          path: |
+            formal-results/formal-corpus.json
+            formal-results/formal-corpus.partial.json
+            formal-results/formal-corpus.md
+          if-no-files-found: warn
+          retention-days: 30
