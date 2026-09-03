@@ -43,7 +43,7 @@ jobs:
           fi
           git diff --name-only HEAD^ HEAD > /tmp/latest-head-files.txt
           cat /tmp/latest-head-files.txt
-          if grep -Eq '^(src/cmpct/|experiments/|benchmarks/v030_(perf_worker|release_performance)|tests/test_v030_(perf_worker|release_reader|member_reader|release_candidate|shared_portfolio)|pyproject\.toml$|\.github/workflows/v030-release-performance\.yml$)' /tmp/latest-head-files.txt; then
+          if grep -Eq '^(src/cmpct/|experiments/|benchmarks/v030_(perf_worker|release_performance)|tests/test_v030_(perf_worker|release_reader|member_reader|release_candidate|shared_portfolio|prefixgraph_process_executor_paths)|pyproject\.toml$|\.github/workflows/v030-release-performance\.yml$)' /tmp/latest-head-files.txt; then
             echo 'run_authority=true' >> "$GITHUB_OUTPUT"
           else
             echo 'run_authority=false' >> "$GITHUB_OUTPUT"
@@ -90,6 +90,7 @@ jobs:
             experiments/entropygraph_v030_release_candidate.py \
             experiments/entropygraph_v030_release.py \
             experiments/entropygraph_v030_release_product.py \
+            experiments/entropygraph_v030_prefixgraph_process_executor.py \
             benchmarks/v030_perf_worker.py \
             benchmarks/v030_perf_worker_canonical.py \
             benchmarks/v030_release_performance.py \
@@ -106,7 +107,8 @@ jobs:
             tests/test_v030_release_reader.py \
             tests/test_v030_release_reader_policy.py \
             tests/test_v030_member_reader.py \
-            tests/test_v030_release_candidate.py
+            tests/test_v030_release_candidate.py \
+            tests/test_v030_prefixgraph_process_executor_paths.py
 
       - name: Run fresh-process paired promoted-product runtime gate
         run: |
@@ -168,4 +170,6 @@ jobs:
 # changes canonical r24 bytes or resource behavior, this exact paired product gate must be regenerated before credit.
 # Hosted timing remains same-run paired promotion evidence; absolute public throughput claims still require controlled
 # benchmark hardware. A miss is implementation debt, not a policy edit.
-# Admission-only execution marker: the supported PrefixGraph Builder S6 v2 mechanism now owes this full promoted-product authority.
+# PrefixGraph process-boundary regressions are exact product-runtime inputs: their focused path test is both executed
+# as a prerequisite and classified as authority-bearing so a test-only follow-up cannot cancel the code run and replace
+# it with a classifier-only green.
