@@ -5,6 +5,7 @@ from pathlib import Path
 
 import pytest
 
+from experiments import entropygraph_v030_release_lock_strict as strict
 from tools import check_v030_release_lock as lock
 from tools import mint_v030_release_receipt as mint
 
@@ -66,6 +67,7 @@ def test_mint_copies_normative_facts_from_hashed_json_and_validates(
     mint.write_validated_receipt(receipt, output, manifest=manifest)
 
     written = json.loads(output.read_text(encoding="utf-8"))
+    evidence_document = json.loads(evidence.read_text(encoding="utf-8"))
     assert written["facts"] == {"median_create_ratio": 1.04, "selective_read_measured": True}
     assert written["fact_sources"]["facts.median_create_ratio"] == {
         "evidence_index": 0,
@@ -79,6 +81,12 @@ def test_mint_copies_normative_facts_from_hashed_json_and_validates(
     fingerprint, _ = lock.fingerprint(manifest)
     assert written["candidate_fingerprint"] == fingerprint
     assert lock.validate_receipt(output, spec, fingerprint, manifest["receipt_directory"]) == []
+    assert (
+        strict._validate_evidence_fingerprint_source(
+            "runtime-memory-selective", written, [evidence_document], fingerprint
+        )
+        is None
+    )
 
 
 def test_mint_refuses_missing_or_extra_fact_bindings(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
