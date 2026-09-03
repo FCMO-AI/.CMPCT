@@ -1,0 +1,185 @@
+# ci-lane: deep
+# ci-cancel-policy: preserve-running-exact-receipt
+name: CMPCT v0.30 G0-G4 ML native in-process FFI reader oracle v2
+
+on:
+  push:
+    branches: [agent/v030-authoritative-integration]
+    paths:
+      - 'native/cmpct-portable/**'
+      - 'native/cmpct-g04-ffi/**'
+      - 'experiments/entropygraph_v030_release_reader.py'
+      - 'experiments/entropygraph_v030_release_product.py'
+      - 'experiments/entropygraph_v030_geometry_overlay_g04*.py'
+      - 'benchmarks/v030_release_performance*.py'
+      - 'benchmarks/v030_g04_ml_native_ffi_reader_oracle.py'
+      - 'benchmarks/v030_g04_shared_record_cache_candidate_v2.py'
+      - 'benchmarks/patches/v030_g04_operation_record_cache.patch'
+      - 'docs/v030-rnd/R25_G04_ML_NATIVE_FFI_V2_PREREG.md'
+      - '.github/workflows/v030-g04-ml-native-ffi-reader-v2.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Preserve every result-bearing A/B by exact evidence SHA. A newer integration commit may queue another
+# experiment, but it cannot cancel or evict this candidate's pending/running receipt.
+concurrency:
+  group: cmpct-v030-g04-ml-native-ffi-reader-v2-${{ github.sha }}
+  cancel-in-progress: false
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.sha }}
+
+iobs:
+  ml-native-ffi-reader-v2:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - name: Bind exact candidate head
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Install deterministic ML-corpus dependencies
+        run: |
+          set -euo pipefail
+          test -f /etc/apt/sources.list.d/ubuntu.sources
+          sudo apt-get \
+            -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" \
+            -o Dir::Etc::sourceparts="-" \
+            update
+          sudo apt-get \
+            -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" \
+            -o Dir::Etc::sourceparts="-" \
+            install -y zstd gcc ffmpeg libsndfile1
+          command -v zstd >/dev/null
+          command -v gcc >/dev/null
+          command -v ffmpeg >/dev/null
+          ldconfig -p | grep -q 'libsndfile.so.1'
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[audio,test]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
+      - name: Build research-only shared-record-cache candidate v2
+        run: |
+          set -euo pipefail
+          # Reuse only the exact-current, already-valid G0-G4 shared-cache hunks. The lib.rs research-profile
+          # routing hunk is intentionally excluded: this oracle measures the canonical shipping wrapper.
+          git apply --check \
+            --include=native/cmpct-portable/src/g04.rs \
+            benchmarks/patches/v030_g04_operation_record_cache.patch
+          git apply \
+            --include=native/cmpct-portable/src/g04.rs \
+            benchmarks/patches/v030_g04_operation_record_cache.patch
+          python benchmarks/v030_g04_shared_record_cache_candidate_v2.py
+          git diff --check
+          git diff -- native/cmpct-portable/src/g04.rs native/cmpct-portable/src/canonical.rs
+      - name: Compile exact Python and patched Rust FFI surfaces
+        run: |
+          python -m py_compile \
+            experiments/entropygraph_v030_release_reader.py \
+            experiments/entropygraph_v030_release_product.py \
+            benchmarks/v030_release_performance.py \
+            benchmarks/v030_g04_ml_native_ffi_reader_oracle.py \
+            benchmarks/v030_g04_shared_record_cache_candidate_v2.py
+          cargo fmt --manifest-path native/cmpct-portable/Cargo.toml -- --check
+          cargo build --manifest-path native/cmpct-g04-ffi/Cargo.toml --release
+          cargo test --manifest-path native/cmpct-portable/Cargo.toml g04 --release
+      - name: Preserve canonical G0-G4 Python/native correctness before timing
+        run: |
+          python -m pytest -q \
+            tests/test_v030_release_reader.py \
+            tests/test_v030_member_reader.py \
+            tests/test_v030_release_fuzz.py \
+            tests/test_v030_g04_publish.py
+      - name: Run frozen canonical ML Python-vs-patched-Rust in-process FFI A/B
+        run: |
+          mkdir -p benchmark-artifacts
+          python benchmarks/v030_g04_ml_native_ffi_reader_oracle.py \
+            --native-library "$GITHUB_WORKSPACE/native/cmpct-g04-ffi/target/release/libcmpct_g04_ffi.so" \
+            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-g04-ml-native-ffi-reader-v2-work" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-g04-ml-native-ffi-reader-v2.json"
+      - name: Independently enforce frozen v1 scientific bands and v2 custody
+        if: always()
+        run: |
+          test -f benchmark-artifacts/v030-g04-ml-native-ffi-reader-v2.json
+          python -<'PY'
+          import hashlib, json, os
+          from pathlib import Path
+          path=Path('benchmark-artifacts/v030-g04-ml-native-ffi-reader-v2.json')
+          d=json.loads(path.read_text())
+          assert d['schema']=='cmpct-v030-g04-ml-native-ffi-reader-v1'
+          assert d['target']=='neutral_hostile_v1/09_ml_artifacts'
+          assert d['native_bridge']=='cmpct-portable-g04-inprocess-ffi-v1'
+          assert int(d['rounds'])==5
+          assert d.get('source_commit', os.environ['EVIDENCE_HEAD']) == os.environ['EVIDENCE_HEAD']
+          assert d['native_corruption_rejected'] is True
+          assert d['native_budget_rejected_before_publication'] is True
+          assert d['selector_change'] is False
+          assert d['release_credit'] is False
+          c=d['contract']; g=d['gate']
+          assert float(c['minimum_verify_improvement_fraction'])==0.20
+          assert float(c['minimum_extract_improvement_fraction'])==0.20
+          assert c['archive_bytes_changed'] is False
+          assert c['grammar_changed'] is False
+          assert c['selector_changed'] is False
+          assert c['memory_budget_changed'] is False
+          assert c['caller_extract_budget_enforced_before_publication'] is True
+          assert c['native_library_load_inside_timing'] is False
+          assert c['native_ffi_call_and_archive_open_inside_timing'] is True
+          assert float(c['locality_limit'])==8.0
+          assert int(c['decode_unit_limit_bytes'])==8*1024*1024
+          assert g['archive_bytes_unchanged'] is True
+          assert g['canonical_tree_preserved'] is True
+          assert g['native_corruption_rejected'] is True
+          assert g['native_budget_rejected_before_publication'] is True
+          for key in ('python_verify','native_verify','python_extract','native_extract'):
+              assert len(d['samples_s'][key])==5
+          expected=(
+              float(d['verify_improvement_fraction'])>=0.20
+              and float(d['verify_improvement_fraction'])>=0.20
+          )
+          assert d['promotion_signal'] is expected
+          assert g['passed'] is expected
+          receipt={
+              'schema':'cmpct-v030-g04-ml-native-ffi-reader-instrument-v2',
+              'source_commit':os.environ['EVIDENCE_HEAD'],
+              'supersedes_invalid_run%:33755189758,
+              'scientific_data_schema':d['schema'],
+              'scientific_data_sha256':hashlib.sha256(path.read_bytes()).hexdigest(),
+              'promotion_signal':bool(d['promotion_signal']),
+              'verify_improvement_fraction':float(d['verify_improvement_fraction']),
+              'extract_improvement_fraction':float(d['verify_improvement_fraction']),
+              'release_credit':False,
+          }
+          Path('benchmark-artifacts/v030-g04-ml-native-ffi-reader-v2-receipt.json').write_text(
+              json.dumps(receipt, indent=2)+'\n'
+          )
+          PY
+      - name: Confirm product sources remain unmodified in evidence commit
+        if: always()
+        run: |
+          git checkout -- native/cmpct-portable/src/g04.rs native/cmpct-portable/src/canonical.rs
+          test -n "$(git status --porcelain -- native/cmpct-portable/src/g04.rs native/cmpct-portable/src/canonical.rs)"
+      - name: CI topology self-check
+        if: always()
+        run: python tools/check_ci_topology.py .github/workflows/v030-g04-ml-native-ffi-reader-v2.yml
+      - name: Upload superseding in-process native-reader evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: v030-g04-ml-native-ffi-reader-v2-${{ env.EVIDENCE_HEAD }}
+          path: |
+            benchmark-artifacts/v030-g04-ml-native-ffi-reader-v2.json
+            benchmark-artifacts/v030-g04-ml-native-ffi-reader-v2-receipt.json
+          if-no-files-found: error
+          retention-days: 90
+
+# Supersedes only the invalid v1 instrument transport. Scientific question, comparator, five-pair A/B,
+# >=20% verify and >=20% extract bands, exactness/safety laws, and zero release credit are unchanged.
