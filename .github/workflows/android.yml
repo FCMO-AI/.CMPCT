@@ -18,7 +18,7 @@ on:
       - '.github/workflows/android.yml'
       - '.github/workflows/android-physical-arm64.yml'
   push:
-    branches: [main]
+    branches: [main, agent/v030-authoritative-integration]
     paths:
       - 'integrations/android/**'
       - 'native/cmpct-core/**'
@@ -285,3 +285,5 @@ jobs:
 # logs inverse, compact-control, and inherited r24 therefore share one Rust admission/recovery implementation.
 # Split classifier/exact-receipt custody cancels obsolete routing on the long-lived integration PR while preserving
 # every admitted hosted-emulator receipt for its exact source SHA. Physical ARM64 remains separate.
+# The authoritative integration branch has the same path-scoped push admission because scheduled/API commits do not
+# reliably emit pull_request synchronization; hosted evidence remains exact-SHA and physical ARM64 remains separate.
