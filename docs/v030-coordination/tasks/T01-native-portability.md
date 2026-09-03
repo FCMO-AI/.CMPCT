@@ -72,7 +72,9 @@ The first revalidation wave in this activation proved native and ZIP authority o
 
 T00 then discovered that canonical `main` had moved by 29 commits and reconciled it semantically at merge commit `0313258a25f1a87f78fdddfbb445d4a41e25f734`, reaching 0 commits behind main `dd0c12cd6ee2dbb859464ea5c6be221ad34b9fdf`. Because the imported 0.29.l public surface includes fingerprinted paths (`SURFACE_REVISION` and `site/src/**/*`), the earlier `e88b5de2...` receipts are now historical mechanism evidence rather than final exact-candidate release credit.
 
-This second coordination transition requests native-authority and ZIP-portability revalidation on the post-main-reconciliation fingerprint. T01 remains outside the release fingerprint, so the request does not manufacture a candidate change merely to make CI run.
+The post-main native and ZIP revalidation is now complete on release fingerprint `8abe67c6c9a93e72eeed61dba13cfc990c21652c43749dfa36d213b658c8358e`, exact result-bearing source `298a348647e783c672dbe2515dc1a6ac8bd144ee`. Native-authority run `33769742355` and ZIP-portability run `33769742403` both completed their substantive jobs green. Their strict JSON evidence is durably preserved under `docs/v030-release-evidence/` and the `native-r25` / `zip-portability` release receipts are rebound to the same current fingerprint with evidence SHA-256 checks. These two release facts therefore no longer need another rerun unless a release-fingerprint input changes.
+
+The deliberate physical-ARM64 request was re-fired only after that post-main native/ZIP convergence. Hosted Android run `33770937020` is the exact-fingerprint prerequisite; physical ARM64 run `33770937043` targets the same head but earns zero evidence credit while queued. Do not mark Android complete unless the hosted artifact proves all four portable-dispatch facts on the same SHA/fingerprint and the physical job actually executes on the dedicated non-QEMU `arm64-v8a` device and emits its strict platform receipt.
 
 ## Current continuation rule
 
