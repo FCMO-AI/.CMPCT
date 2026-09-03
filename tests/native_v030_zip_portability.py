@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Canonical revision-25 ZIP/export interoperability on a fidelity-compatible user tree."""
+"""Canonical v0.30 ZIP/export interoperability across every publishable revision/profile family."""
 from __future__ import annotations
 
 import argparse
@@ -9,6 +9,7 @@ import subprocess
 import tempfile
 import zipfile
 
+from cmpct.builder import Builder
 from tests import generate_v030_canonical_goldens as G
 
 
@@ -33,32 +34,89 @@ def _run(binary: Path, *args: str, check: bool = True):
     return subprocess.run([str(binary), *args], check=check, capture_output=True)
 
 
+def _assert_stock_zip(zip_path: Path, raw: bytes, *, label: str) -> None:
+    if not zip_path.is_file():
+        raise RuntimeError(f"{label} native ZIP export did not publish output")
+    extracted = zip_path.parent / f"{label}-zip-tree"
+    extracted.mkdir()
+    with zipfile.ZipFile(zip_path) as zf:
+        names = {item.filename for item in zf.infolist()}
+        zf.extractall(extracted)
+    restored = (extracted / "dir/payload.bin").read_bytes()
+    if restored != raw:
+        raise RuntimeError(f"{label} stock ZIP extraction changed logical regular-file bytes")
+    if "dir/" not in names or "dir/payload.bin" not in names:
+        raise RuntimeError(f"{label} ZIP export omitted canonical regular/directory entries: {sorted(names)!r}")
+    print(f"{label}-zip-export=PASS bytes={zip_path.stat().st_size}")
+
+
+def _exercise_r24(binary: Path, root: Path, raw: bytes) -> None:
+    source = root / "r24-source"
+    (source / "dir").mkdir(parents=True)
+    (source / "dir" / "payload.bin").write_bytes(raw)
+    archive = root / "r24.cmpct"
+    Builder(source).build(archive)
+
+    info = _run(binary, "info", str(archive)).stdout.decode("utf-8", errors="strict")
+    if "revision=24\n" not in info:
+        raise RuntimeError(f"fallback fixture is not genuine r24 according to native dispatcher: {info!r}")
+    _run(binary, "verify", str(archive))
+    zip_path = root / "r24.zip"
+    _run(binary, "export-zip", str(archive), str(zip_path))
+    _assert_stock_zip(zip_path, raw, label="r24")
+
+
+def _exercise_r25(binary: Path, root: Path, raw: bytes) -> None:
+    manifest, _ = _regular_manifest()
+    for name, maker in (("g04", G.g04_archive), ("prefixgraph", G.prefix_archive)):
+        archive_bytes, _tree = maker(manifest, raw)
+        archive = root / f"{name}.cmpct"
+        archive.write_bytes(archive_bytes)
+        _run(binary, "verify", str(archive))
+
+        zip_path = root / f"{name}.zip"
+        _run(binary, "export-zip", str(archive), str(zip_path))
+        _assert_stock_zip(zip_path, raw, label=name)
+
+
+def _exercise_atomic_failure(binary: Path, root: Path) -> None:
+    # The independent canonical fixture includes hardlink/symlink semantics that stock ZIP cannot represent under
+    # the selected honest export policy. The exporter is allowed to discover this only after serializing earlier
+    # entries, so it is a useful hostile test of public-path publication rather than merely an upfront rejection.
+    manifest, fs = G.filesystem_payload()
+    archive_bytes, _tree = G.g04_archive(manifest, fs["raw"])
+    archive = root / "unsupported-links.cmpct"
+    archive.write_bytes(archive_bytes)
+    _run(binary, "verify", str(archive))
+
+    destination = root / "existing.zip"
+    sentinel = b"CMPCT-ZIP-ATOMIC-SENTINEL\n"
+    destination.write_bytes(sentinel)
+    result = _run(binary, "export-zip", str(archive), str(destination), check=False)
+    if result.returncode == 0:
+        raise RuntimeError("ZIP export silently accepted filesystem semantics that the stock projection cannot preserve")
+    if destination.read_bytes() != sentinel:
+        raise RuntimeError("failed ZIP export changed or replaced the pre-existing public destination")
+    leftovers = sorted(
+        path.name
+        for path in root.iterdir()
+        if path.name.startswith(".existing.zip.cmpct-zip-")
+    )
+    if leftovers:
+        raise RuntimeError(f"failed ZIP export leaked transactional stage/backup files: {leftovers!r}")
+    print("zip-atomic-failure=PASS")
+
+
 def run(binary: Path) -> None:
     binary = Path(binary)
-    manifest, raw = _regular_manifest()
+    if not binary.is_file():
+        raise RuntimeError(f"native portable binary missing: {binary}")
+    _manifest, raw = _regular_manifest()
     with tempfile.TemporaryDirectory(prefix="cmpct-v030-zip-") as td:
         root = Path(td)
-        for name, maker in (("g04", G.g04_archive), ("prefixgraph", G.prefix_archive)):
-            archive_bytes, _tree = maker(manifest, raw)
-            archive = root / f"{name}.cmpct"
-            archive.write_bytes(archive_bytes)
-            _run(binary, "verify", str(archive))
-
-            zip_path = root / f"{name}.zip"
-            _run(binary, "export-zip", str(archive), str(zip_path))
-            if not zip_path.is_file():
-                raise RuntimeError(f"{name} native ZIP export did not publish output")
-            extracted = root / f"{name}-zip-tree"
-            extracted.mkdir()
-            with zipfile.ZipFile(zip_path) as zf:
-                zf.extractall(extracted)
-            restored = (extracted / "dir/payload.bin").read_bytes()
-            if restored != raw:
-                raise RuntimeError(f"{name} stock ZIP extraction changed logical regular-file bytes")
-            names = {item.filename for item in zipfile.ZipFile(zip_path).infolist()}
-            if "dir/" not in names or "dir/payload.bin" not in names:
-                raise RuntimeError(f"{name} ZIP export omitted canonical regular/directory entries: {sorted(names)!r}")
-            print(f"{name}-zip-export=PASS bytes={zip_path.stat().st_size}")
+        _exercise_r24(binary, root, raw)
+        _exercise_r25(binary, root, raw)
+        _exercise_atomic_failure(binary, root)
 
 
 if __name__ == "__main__":
@@ -67,7 +125,8 @@ if __name__ == "__main__":
     args = parser.parse_args()
     run(args.binary)
 
-# Footnote: ordinary ZIP cannot represent CMPCT's full symlink/xattr/recovery contract portably, so this receipt
-# uses a regular-file/directory tree where semantic parity is honest. The separate canonical golden test proves
-# richer r25 link metadata is preserved by CMPCT itself and that native ZIP export refuses rather than lies when
-# the selected tree contains unsupported link semantics.
+# Footnote: ordinary ZIP cannot represent CMPCT's full symlink/xattr/recovery contract portably, so successful
+# stock-ZIP parity uses a regular-file/directory tree. The independent canonical link fixture instead proves the
+# typed unsupported path is transactional: a late semantic rejection may never replace a valid pre-existing public
+# destination or leak staging files. Genuine r24 fallback plus both publishable r25 profile families are exercised
+# through the same shared native dispatcher; no profile receives inferred ZIP credit from another representation.
