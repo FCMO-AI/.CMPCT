@@ -66,6 +66,10 @@ Do not repeatedly spend scarce evidence windows re-requesting physical acceptanc
 
 These changes are **not yet completion evidence merely because they are committed**. Do not move T01 to `DONE` until the substantive current-fingerprint native authority, hosted Android, ZIP portability, recovery/fuzz/resource and required physical ARM64 receipts are genuinely complete and machine-checkable. Classifier-only greens, queued jobs, cancelled runs and historical fingerprints earn zero completion credit.
 
+### Exact-fingerprint revalidation request — 2026-09-03
+
+The release fingerprint moved after the ZIP parity fixture was corrected, which correctly invalidated older native proof even though the product-native implementation itself did not change. T01 is intentionally outside the fingerprint and now serves as the shared request hook for both native authority and ZIP portability. This state transition requests both result-bearing lanes on the same current fingerprint without editing product or benchmark semantics merely to make CI run. Once their strict JSON artifacts are preserved and bound, future T01 coordination updates can request another exact-fingerprint revalidation wave if a later frozen candidate needs it.
+
 ## Current continuation rule
 
 Work directly on the authoritative branch. Preserve useful earlier implementation/evidence provenance where it still applies, but rerun every normative native/platform receipt on the final reconciled fingerprint. Historical or pre-fingerprint greens prove mechanisms only.
