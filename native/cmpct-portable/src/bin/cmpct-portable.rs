@@ -46,9 +46,12 @@ fn export_zip_transactional(
 
     let had_destination = destination.exists();
     if had_destination {
-        if let Err(error) = fs::rename(destination, &backup) {
-            let _ = fs::remove_file(&stage);
-            return Err(PortableError::Io(error));
+        match fs::rename(destination, &backup) {
+            Ok(()) => {}
+            Err(error) => {
+                let _ = fs::remove_file(&stage);
+                return Err(PortableError::Io(error));
+            }
         }
     }
 
