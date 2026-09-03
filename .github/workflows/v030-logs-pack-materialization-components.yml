@@ -8,7 +8,9 @@ on:
     branches: [agent/v030-authoritative-integration]
     paths:
       - 'docs/v030-rnd/R25_LOGS_PACK_MATERIALIZATION_COMPONENT_ATTRIBUTION_PREREG.md'
+      - 'docs/v030-rnd/R25_LOGS_FULL_PACK_MEMBER_HASH_REUSE_AB_PREREG.md'
       - 'benchmarks/v030_logs_pack_materialization_component_attribution.py'
+      - 'benchmarks/v030_logs_full_pack_member_hash_reuse_ab.py'
       - 'experiments/entropygraph_v030_logs_inverse_profile.py'
       - 'experiments/entropygraph_v030_logs_inverse_profile_v2.py'
       - 'experiments/entropygraph_v030_logs_inverse_profile_v3.py'
@@ -20,7 +22,9 @@ on:
     branches: [main]
     paths:
       - 'docs/v030-rnd/R25_LOGS_PACK_MATERIALIZATION_COMPONENT_ATTRIBUTION_PREREG.md'
+      - 'docs/v030-rnd/R25_LOGS_FULL_PACK_MEMBER_HASH_REUSE_AB_PREREG.md'
       - 'benchmarks/v030_logs_pack_materialization_component_attribution.py'
+      - 'benchmarks/v030_logs_full_pack_member_hash_reuse_ab.py'
       - 'experiments/entropygraph_v030_logs_inverse_profile.py'
       - 'experiments/entropygraph_v030_logs_inverse_profile_v2.py'
       - 'experiments/entropygraph_v030_logs_inverse_profile_v3.py'
@@ -64,7 +68,7 @@ jobs:
           fi
           git diff-tree --no-commit-id --name-only -r HEAD > /tmp/latest-head-files.txt
           cat /tmp/latest-head-files.txt
-          if grep -Eq '^(docs/v030-rnd/R25_LOGS_PACK_MATERIALIZATION_COMPONENT_ATTRIBUTION_PREREG\.md|benchmarks/v030_logs_pack_materialization_component_attribution\.py|experiments/entropygraph_v030_logs_inverse_profile(_v[23])?\.py|experiments/entropygraph_v030_logs_fused_extract\.py|experiments/entropygraph_v030_release_product_logs_(candidate|runtime)\.py|\.github/workflows/v030-logs-pack-materialization-components\.yml)$' /tmp/latest-head-files.txt; then
+          if grep -Eq '^(docs/v030-rnd/R25_LOGS_(PACK_MATERIALIZATION_COMPONENT_ATTRIBUTION|FULL_PACK_MEMBER_HASH_REUSE_AB)_PREREG\.md|benchmarks/v030_logs_(pack_materialization_component_attribution|full_pack_member_hash_reuse_ab)\.py|experiments/entropygraph_v030_logs_inverse_profile(_v[23])?\.py|experiments/entropygraph_v030_logs_fused_extract\.py|experiments/entropygraph_v030_release_product_logs_(candidate|runtime)\.py|\.github/workflows/v030-logs-pack-materialization-components\.yml)$' /tmp/latest-head-files.txt; then
             echo 'run_deep=true' >> "$GITHUB_OUTPUT"
           else
             echo 'run_deep=false' >> "$GITHUB_OUTPUT"
@@ -163,5 +167,97 @@ jobs:
           if-no-files-found: warn
           retention-days: 90
 
+  full-pack-member-hash-reuse:
+    needs: latest-head-impact
+    if: needs.latest-head-impact.outputs.run_deep == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    concurrency:
+      group: cmpct-v030-logs-full-pack-member-hash-reuse-receipt-${{ github.event.pull_request.head.sha || github.sha }}
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - name: Bind exact candidate
+        id: candidate
+        run: |
+          set -euo pipefail
+          actual="$(git rev-parse HEAD)"
+          test "$actual" = "$EVIDENCE_HEAD"
+          echo "sha=$actual" >> "$GITHUB_OUTPUT"
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install deterministic dependencies
+        run: |
+          set -euo pipefail
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[test]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
+      - name: Compile frozen proof-reuse instrument
+        run: python -m py_compile benchmarks/v030_logs_full_pack_member_hash_reuse_ab.py
+      - name: Run exact full-pack member identity proof-reuse A/B
+        run: |
+          mkdir -p benchmark-artifacts
+          python -m benchmarks.v030_logs_full_pack_member_hash_reuse_ab \
+            --work-root "$RUNNER_TEMP/v030-logs-full-pack-member-hash-reuse" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-logs-full-pack-member-hash-reuse.json"
+      - name: Ratchet frozen proof-reuse contract and terminal decision
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          d=json.loads(Path('benchmark-artifacts/v030-logs-full-pack-member-hash-reuse.json').read_text())
+          assert d['schema']=='cmpct-v030-logs-full-pack-member-hash-reuse-ab-v1'
+          assert d['target']=='neutral_hostile_v1/05_logs_and_telemetry'
+          assert d['selected']=='logs-inverse'
+          assert d['rounds']==21
+          assert d['experiment_valid'] is True
+          assert d['candidate_lifecycle_ok'] is True
+          assert d['hostile_expected_sha_separation_ok'] is True
+          assert d['pack_crc32_preserved'] is True
+          assert d['pack_sha256_preserved'] is True
+          assert d['derived_member_sha256_preserved'] is True
+          assert d['partial_pack_member_sha256_preserved'] is True
+          assert d['cold_selective_semantics_changed'] is False
+          assert d['release_credit'] is False
+          assert d['production_source_changed'] is False
+          assert d['support_reduction_floor']==0.04
+          assert d['retire_reduction_ceiling']==0.01
+          assert d['candidate_proof_reuse_counts'] and min(d['candidate_proof_reuse_counts']) >= 1
+          assert d['candidate_pack_call_counts']==[7]
+          reduction=float(d['candidate_total_reduction_fraction'])
+          wall=float(d['candidate_wall_ratio'])
+          if reduction >= 0.04 and wall <= 0.96:
+              expected='LOGS_FULL_PACK_MEMBER_HASH_REUSE_SUPPORTED'
+          elif reduction < 0.01:
+              expected='LOGS_FULL_PACK_MEMBER_HASH_REUSE_RETIRED'
+          else:
+              expected='LOGS_FULL_PACK_MEMBER_HASH_REUSE_AMBIGUOUS'
+          assert d['decision']==expected
+          PY
+      - name: CI topology self-check
+        if: always()
+        run: python tools/check_ci_topology.py .github/workflows/v030-logs-pack-materialization-components.yml
+      - name: Public-surface guard
+        if: always()
+        run: python tools/check_public_surface.py
+      - name: Record exact candidate fingerprint
+        if: always()
+        run: printf '%s\n' '${{ steps.candidate.outputs.sha }}' > benchmark-artifacts/v030-logs-full-pack-member-hash-reuse-candidate.txt
+      - name: Upload exact proof-reuse evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: v030-logs-full-pack-member-hash-reuse-${{ steps.candidate.outputs.sha || github.sha }}
+          path: |
+            benchmark-artifacts/v030-logs-full-pack-member-hash-reuse.json
+            benchmark-artifacts/v030-logs-full-pack-member-hash-reuse-candidate.txt
+          if-no-files-found: error
+          retention-days: 90
+
 # Attribution only: all pack decompression, CRC32, SHA-256, logical identity, recovery and locality work remains mandatory.
 # Exact-head admission after freezing the D2 component split and repairing predecessor receipt custody.
+# The full-pack proof-reuse job executes the separately frozen R1 identity-proof experiment on this already registered lane; no integrity or decision band changes.
