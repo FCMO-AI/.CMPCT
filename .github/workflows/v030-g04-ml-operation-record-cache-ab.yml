@@ -206,3 +206,4 @@ jobs:
 # Instrument repair: formatting gates are intentionally outside this frozen performance experiment; build/tests own candidate validity.
 # Turn-9 custody admission: execute the unchanged seven-round receipt on this exact fingerprint; no experiment grammar, patch, threshold, or terminal rule changed.
 # Exact-head custody admission after a classifier-only current-head green: run the unchanged seven-round A/B; no patch, corpus, locality charge, threshold, or terminal rule changed.
+# Exact-head admission after the fcb05 promoted-product receipt isolated ML as the dominant decode red; frozen seven-round contract unchanged.
