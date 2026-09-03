@@ -24,6 +24,25 @@ function kpi(label, value, note) {
   return cell;
 }
 
+function matchesCurrentRelease(record, projectData) {
+  const project = projectData?.project || {};
+  const evidence = projectData?.public_evidence || {};
+  const recordVersion = String(record?.project_version || "");
+  const shippingRevision = number(record?.shipping?.format_revision);
+  const projectRevision = number(project?.format_revision);
+  const evidenceRevision = number(evidence?.canonical_format_revision);
+
+  return Boolean(
+    recordVersion &&
+    shippingRevision !== null &&
+    project?.project_version === recordVersion &&
+    projectRevision === shippingRevision &&
+    evidence?.schema === "cmpct-public-evidence-v1" &&
+    evidence?.project_version === recordVersion &&
+    evidenceRevision === shippingRevision
+  );
+}
+
 function ensureZipSectionPanel() {
   const parity = $(".parity-section");
   const anchor = parity ? $("#benchmark-headline", parity) : null;
@@ -141,9 +160,18 @@ function renderAfterProof(record, attempt = 0) {
 
 async function boot() {
   try {
-    const response = await fetch("assets/shipping-vs-frontier-v029.json", { cache: "no-store" });
-    if (!response.ok) return;
-    renderAfterProof(await response.json());
+    const [recordResponse, projectResponse] = await Promise.all([
+      fetch("assets/shipping-vs-frontier-v029.json", { cache: "no-store" }),
+      fetch("project-data.json", { cache: "no-store" }),
+    ]);
+    if (!recordResponse.ok || !projectResponse.ok) return;
+    const [record, projectData] = await Promise.all([recordResponse.json(), projectResponse.json()]);
+
+    // A release-specific evidence mirror is safe only on the release it actually measured. The stable
+    // project-data public_evidence contract is the release authority: future project/format revisions suppress
+    // this v0.29 panel instead of inheriting a stale headline above a newer canonical ZIP table.
+    if (!matchesCurrentRelease(record, projectData)) return;
+    renderAfterProof(record);
   } catch (_) {
     // Additive evidence layer: failure leaves the existing proof surface intact.
   }
