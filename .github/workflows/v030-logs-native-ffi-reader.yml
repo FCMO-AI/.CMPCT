@@ -4,6 +4,16 @@
 name: CMPCT v0.30 logs native in-process FFI reader oracle
 
 on:
+  push:
+    branches: [agent/v030-authoritative-integration]
+    paths:
+      - 'native/cmpct-portable/**'
+      - 'native/cmpct-logs-ffi/**'
+      - 'benchmarks/v030_logs_native_ffi_reader_oracle.py'
+      - 'benchmarks/v030_release_performance.py'
+      - 'experiments/entropygraph_v030_logs_inverse_profile_v3.py'
+      - 'experiments/entropygraph_v030_release_product.py'
+      - '.github/workflows/v030-logs-native-ffi-reader.yml'
   pull_request:
     branches: [main]
     paths:
