@@ -1,4 +1,5 @@
-# ci-lane: research
+# ci-lane: release
+# ci-auto-policy: retired-manual-only
 name: CMPCT v0.30 whole-tree product RSS companion
 
 # Historical v1 only. This observer produced useful memory evidence, but its
