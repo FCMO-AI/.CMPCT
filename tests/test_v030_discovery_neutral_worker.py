@@ -62,3 +62,17 @@ def test_attempt5_worker_restores_discovery_source_after_failure(monkeypatch, tm
     assert queue.rows[0]["ok"] is False
     assert "synthetic failure" in queue.rows[0]["error"]
     assert owner._position_independent_candidates is original
+
+
+def test_product_ab_runtime_regression_requires_both_frozen_thresholds():
+    from benchmarks.v030_discovery_r3_product_ab import _material_runtime_regression
+
+    # Relative threshold exceeded but absolute delta is too small: runner noise, not a blocker.
+    assert _material_runtime_regression(0.040, 0.043) is False
+    # Absolute threshold exceeded but relative slowdown is below 5%: still inside the frozen envelope.
+    assert _material_runtime_regression(10.0, 10.40) is False
+    # Both >5% and >3 ms: material product regression and therefore a Builder blocker.
+    assert _material_runtime_regression(1.0, 1.06) is True
+    # Improvements and exact ties can never be classified as regressions.
+    assert _material_runtime_regression(1.0, 1.0) is False
+    assert _material_runtime_regression(1.0, 0.9) is False
