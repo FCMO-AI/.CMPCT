@@ -68,7 +68,11 @@ These changes are **not yet completion evidence merely because they are committe
 
 ### Exact-fingerprint revalidation request — 2026-09-03
 
-The release fingerprint moved after the ZIP parity fixture was corrected, which correctly invalidated older native proof even though the product-native implementation itself did not change. T01 is intentionally outside the fingerprint and now serves as the shared request hook for both native authority and ZIP portability. This state transition requests both result-bearing lanes on the same current fingerprint without editing product or benchmark semantics merely to make CI run. Once their strict JSON artifacts are preserved and bound, future T01 coordination updates can request another exact-fingerprint revalidation wave if a later frozen candidate needs it.
+The first revalidation wave in this activation proved native and ZIP authority on candidate fingerprint `e88b5de2ce76acabdf7bc412c2a42c2931f870d9c43bdbdda9cfa445f441e548` at exact source `45b96580a7ffe80926a717973eb68019024f9555`; those result-bearing jobs completed green and their evidence/receipts were preserved.
+
+T00 then discovered that canonical `main` had moved by 29 commits and reconciled it semantically at merge commit `0313258a25f1a87f78fdddfbb445d4a41e25f734`, reaching 0 commits behind main `dd0c12cd6ee2dbb859464ea5c6be221ad34b9fdf`. Because the imported 0.29.l public surface includes fingerprinted paths (`SURFACE_REVISION` and `site/src/**/*`), the earlier `e88b5de2...` receipts are now historical mechanism evidence rather than final exact-candidate release credit.
+
+This second coordination transition requests native-authority and ZIP-portability revalidation on the post-main-reconciliation fingerprint. T01 remains outside the release fingerprint, so the request does not manufacture a candidate change merely to make CI run.
 
 ## Current continuation rule
 
