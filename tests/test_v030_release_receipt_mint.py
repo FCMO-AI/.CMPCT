@@ -35,13 +35,21 @@ def _fixture(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> tuple[dict, Pat
     (tmp_path / "engine" / "codec.py").write_text("REVISION = 25\n", encoding="utf-8")
     (tmp_path / "tests").mkdir()
     (tmp_path / "tests" / "test_v030_fixture.py").write_text("# fingerprint witness\n", encoding="utf-8")
+    manifest = _manifest()
+    fingerprint, _ = lock.fingerprint(manifest)
     evidence = tmp_path / "benchmark-artifacts" / "runtime.json"
     evidence.parent.mkdir()
     evidence.write_text(
-        json.dumps({"totals": {"median_create_ratio": 1.04}, "gate": {"selective_read_measured": True}}),
+        json.dumps(
+            {
+                "candidate_fingerprint": fingerprint,
+                "totals": {"median_create_ratio": 1.04},
+                "gate": {"selective_read_measured": True},
+            }
+        ),
         encoding="utf-8",
     )
-    return _manifest(), evidence
+    return manifest, evidence
 
 
 def test_mint_copies_normative_facts_from_hashed_json_and_validates(
@@ -63,8 +71,13 @@ def test_mint_copies_normative_facts_from_hashed_json_and_validates(
         "evidence_index": 0,
         "json_path": "totals.median_create_ratio",
     }
+    assert written["candidate_fingerprint_source"] == {
+        "evidence_index": 0,
+        "json_path": "candidate_fingerprint",
+    }
     spec = manifest["required_receipts"][0]
     fingerprint, _ = lock.fingerprint(manifest)
+    assert written["candidate_fingerprint"] == fingerprint
     assert lock.validate_receipt(output, spec, fingerprint, manifest["receipt_directory"]) == []
 
 
@@ -96,8 +109,15 @@ def test_mint_never_publishes_a_receipt_that_fails_canonical_thresholds(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     manifest, evidence = _fixture(tmp_path, monkeypatch)
+    fingerprint, _ = lock.fingerprint(manifest)
     evidence.write_text(
-        json.dumps({"totals": {"median_create_ratio": 1.50}, "gate": {"selective_read_measured": True}}),
+        json.dumps(
+            {
+                "candidate_fingerprint": fingerprint,
+                "totals": {"median_create_ratio": 1.50},
+                "gate": {"selective_read_measured": True},
+            }
+        ),
         encoding="utf-8",
     )
     receipt = mint.build_receipt(
@@ -118,10 +138,17 @@ def test_mint_never_publishes_a_receipt_that_fails_canonical_thresholds(
 
 def test_mint_refuses_receipt_directory_as_evidence(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     manifest, _evidence = _fixture(tmp_path, monkeypatch)
+    fingerprint, _ = lock.fingerprint(manifest)
     self_evidence = tmp_path / manifest["receipt_directory"] / "self.json"
     self_evidence.parent.mkdir(parents=True)
     self_evidence.write_text(
-        json.dumps({"totals": {"median_create_ratio": 1.0}, "gate": {"selective_read_measured": True}}),
+        json.dumps(
+            {
+                "candidate_fingerprint": fingerprint,
+                "totals": {"median_create_ratio": 1.0},
+                "gate": {"selective_read_measured": True},
+            }
+        ),
         encoding="utf-8",
     )
 
@@ -135,3 +162,26 @@ def test_mint_refuses_receipt_directory_as_evidence(tmp_path: Path, monkeypatch:
             },
             manifest=manifest,
         )
+
+
+def test_mint_refuses_missing_or_stale_strict_fingerprint_witness(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    manifest, evidence = _fixture(tmp_path, monkeypatch)
+    bindings = {
+        "facts.median_create_ratio": (0, "totals.median_create_ratio"),
+        "facts.selective_read_measured": (0, "gate.selective_read_measured"),
+    }
+    document = json.loads(evidence.read_text(encoding="utf-8"))
+
+    missing = dict(document)
+    missing.pop("candidate_fingerprint")
+    evidence.write_text(json.dumps(missing), encoding="utf-8")
+    with pytest.raises(ValueError, match="must record candidate_fingerprint"):
+        mint.build_receipt("runtime-memory-selective", [evidence], bindings, manifest=manifest)
+
+    stale = dict(document)
+    stale["candidate_fingerprint"] = "0" * 64
+    evidence.write_text(json.dumps(stale), encoding="utf-8")
+    with pytest.raises(ValueError, match="does not match the current release-critical fingerprint"):
+        mint.build_receipt("runtime-memory-selective", [evidence], bindings, manifest=manifest)
