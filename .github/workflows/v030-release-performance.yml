@@ -168,3 +168,4 @@ jobs:
 # changes canonical r24 bytes or resource behavior, this exact paired product gate must be regenerated before credit.
 # Hosted timing remains same-run paired promotion evidence; absolute public throughput claims still require controlled
 # benchmark hardware. A miss is implementation debt, not a policy edit.
+# Admission-only execution marker: the supported PrefixGraph Builder S6 v2 mechanism now owes this full promoted-product authority.
