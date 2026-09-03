@@ -1,5 +1,6 @@
 name: CMPCT v0.30 bounded-locality inline-solid oracle
 
+# Admission-only ratchet: the frozen scientific grammar lives in the v2 preregistration and instrument.
 on:
   workflow_dispatch:
   push:
