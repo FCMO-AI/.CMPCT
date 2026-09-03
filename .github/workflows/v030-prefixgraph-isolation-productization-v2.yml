@@ -190,3 +190,4 @@ jobs:
 
 # Superseding S6 only: the causally supported mtime normalization stabilizes the fixture. All original
 # memory/runtime/size/correctness/process/integrity decision bands remain unchanged. Zero release credit.
+# 2026-09-03 custody admission: execute the unchanged mtime-stable S6 v2 after preserving the invalid v1 robust-RSS receipt; no frozen mechanism, corpus, sampler, threshold or terminal rule changed.
