@@ -11,15 +11,23 @@ Reconcile every canonical-main commit that postdates the current integration mer
 
 ## Current status
 
-Canonical main reconciliation completed at integration commit `851b2ec3a4c1134c965302330fd0f908c57f481d` against main `72e7e6313ffa896b7ef7a14a2f48495754b494f2`.
+Canonical main reconciliation was refreshed at integration merge commit `0313258a25f1a87f78fdddfbb445d4a41e25f734` against main `dd0c12cd6ee2dbb859464ea5c6be221ad34b9fdf` through reconciliation PR #85.
 
-`compare main...agent/v030-authoritative-integration` reported **0 commits behind** at that checkpoint. The merge adopted exact then-current-main blobs for all 35 post-merge-base paths while preserving all non-overlapping v0.30 paths.
+`compare main...agent/v030-authoritative-integration` reports **0 commits behind** at this checkpoint; `dd0c12c...` is the merge base. The newly imported main delta comprised 29 commits / 11 effective paths and adds the canonical v0.29 Shipping-vs-Frontier public benchmark/surface at `SURFACE_REVISION` 0.29.l.
 
-Semantic overlap decisions:
+Semantic overlap decisions for this checkpoint:
 
-- `experiments/entropygraph_v029_parallel_portfolio.py`: current main wins because its fsync-backed durable atomic publication is a strict safety superset of the integration copy while retaining the same byte-selection contract.
-- `tests/test_v029_parallel_portfolio.py`: current main wins because it includes the integration assertions plus overwrite/durability regression coverage.
-- `benchmarks/history/2026-08-17-mosaic-v029-category.json`: current main wins because it is the same evidence/provenance in canonical compact JSON form.
+- `tools/check_public_surface.py`: the integration branch wins. Its exact-canonical-line legal attribution exception is a stricter safety implementation than main's broader label/path allowlist and therefore preserves main's public-attribution intent without widening the disclosure exemption.
+- `tests/test_public_attribution.py`: current main wins. Its only delta from the integration copy updates the asserted public surface revision from 0.29.k to the imported canonical 0.29.l state.
+- `site/src/assets/experience.js`: current main wins because the only imported semantic delta is the canonical `shipping-frontier-v029.js` assembly import.
+- `SURFACE_REVISION`: current main wins at 0.29.l.
+- the seven newly added Shipping-vs-Frontier workflow/benchmark/site/test files are imported byte-for-byte from current main.
+
+An earlier reconciliation checkpoint at `851b2ec3a4c1134c965302330fd0f908c57f481d` against main `72e7e6313ffa896b7ef7a14a2f48495754b494f2` remains historical provenance. Its overlap decisions were:
+
+- `experiments/entropygraph_v029_parallel_portfolio.py`: current main won because its fsync-backed durable atomic publication was a strict safety superset while retaining the same byte-selection contract.
+- `tests/test_v029_parallel_portfolio.py`: current main won because it included the integration assertions plus overwrite/durability regression coverage.
+- `benchmarks/history/2026-08-17-mosaic-v029-category.json`: current main won because it was the same evidence/provenance in canonical compact JSON form.
 
 Since `main` can continue moving during v0.30 completion, this checkpoint is not the final reconciliation receipt. The executor must compare and reconcile again immediately before the final exact-candidate evidence wave.
 
@@ -38,7 +46,7 @@ Repository-wide when conflict resolution/reconciliation is required. The same v0
 ## Completion evidence
 
 1. [x] A reconciliation checkpoint reached 0 commits behind current main.
-2. [x] All three overlapping paths at that checkpoint received explicit semantic resolution; no blind promoted-implementation choices were made.
+2. [x] Every overlapping path at the latest checkpoint received explicit semantic resolution; no blind promoted-implementation choices were made.
 3. [ ] Fast correctness/public-surface/version/CI-topology checks pass on the final reconciled head.
 4. [ ] The exact final reconciled SHA/fingerprint is recorded after fast CI is green.
 5. [ ] T01–T03 final evidence runs use that same reconciled candidate rather than a pre-reconciliation artifact.
