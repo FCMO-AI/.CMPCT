@@ -1,0 +1,117 @@
+# ci-lane: deep
+name: CMPCT v0.29 shipping vs frontier
+
+on:
+  pull_request:
+    paths:
+      - "src/**"
+      - "experiments/**"
+      - "benchmarks/shipping_vs_frontier_v029.py"
+      - "benchmarks/mosaic_v029_generalization_bench.py"
+      - "benchmarks/neutral_hostile_corpus_v1.py"
+      - "benchmarks/resemblance_hostile_corpus_v1.py"
+      - "benchmarks/neutral_hostile_determinism_repair_v5.py"
+      - "benchmarks/history/2026-08-17-mosaic-v029-public.json"
+      - "native/preflate-bridge/**"
+      - "pyproject.toml"
+      - ".github/workflows/shipping-vs-frontier-v029.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-v029-shipping-frontier-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  shipping-vs-frontier:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      CMPCT_PREFLATE_BRIDGE: ${{ github.workspace }}/native/preflate-bridge/target/release/cmpct-preflate-bridge
+    steps:
+      - name: Check out benchmark head
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install deterministic benchmark dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y zstd ffmpeg gcc libsndfile1
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[audio,test]'
+          python -m pip install pillow reportlab python-docx openpyxl python-pptx numpy
+
+      - name: Build pinned memory-safe Preflate bridge
+        run: |
+          rustup toolchain install 1.89.0 --profile minimal
+          cargo +1.89.0 build --release --manifest-path native/preflate-bridge/Cargo.toml
+
+      - name: Run exact-tree shipping-vs-frontier benchmark
+        run: |
+          mkdir -p benchmark-artifacts
+          set -o pipefail
+          python benchmarks/shipping_vs_frontier_v029.py \
+            --work-root benchmark-artifacts/work \
+            --output benchmark-artifacts/shipping-vs-frontier-v029.json \
+            2>&1 | tee benchmark-artifacts/shipping-vs-frontier-v029.stdout.txt
+
+      - name: Validate generated benchmark record
+        run: |
+          python - <<'PY'
+          import json
+          import subprocess
+          from pathlib import Path
+
+          path = Path("benchmark-artifacts/shipping-vs-frontier-v029.json")
+          record = json.loads(path.read_text(encoding="utf-8"))
+          expected_sha = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
+          totals = record["totals"]
+          rows = record["rows"]
+          contract = record["benchmark_contract"]
+
+          assert record["schema"] == "cmpct-v029-shipping-vs-frontier-v1"
+          assert record["source_commit"] == expected_sha
+          assert record["project_version"] == "0.29.0"
+          assert record["shipping"]["format_revision"] == 24
+          assert record["frontier_source"]["record"] == "benchmarks/history/2026-08-17-mosaic-v029-public.json"
+          assert contract["same_lifetime_measurement"] is True
+          assert contract["same_tree_per_row"] is True
+          assert contract["source_mtime_ns"] == 0
+          assert contract["shipping_byte_identical_repeat_check"] == 2
+          assert contract["timing_claim"] is None
+          assert len(rows) == totals["workloads"] == 15
+          assert totals["shipping_bytes"] == sum(row["shipping_bytes"] for row in rows)
+          assert totals["frontier_bytes"] == sum(row["frontier_bytes"] for row in rows)
+          assert totals["frontier_bytes"] == record["frontier_source"]["candidate_bytes"]
+          assert totals["frontier_saving_bytes"] == totals["shipping_bytes"] - totals["frontier_bytes"]
+          assert totals["frontier_wins"] + totals["shipping_wins"] + totals["ties"] == 15
+          assert all(row["shipping_verified_members"] == row["files"] for row in rows)
+          assert all(row["source_mtime_ns"] == 0 for row in rows)
+          assert all(len(row["tree_sha256"]) == 64 for row in rows)
+          assert all(len(row["shipping_sha256"]) == 64 for row in rows)
+          PY
+
+      - name: Upload benchmark evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cmpct-v029-shipping-vs-frontier-${{ github.event.pull_request.head.sha || github.sha }}
+          path: |
+            benchmark-artifacts/shipping-vs-frontier-v029.json
+            benchmark-artifacts/shipping-vs-frontier-v029.stdout.txt
+          if-no-files-found: warn
+
+# Footnote: this workflow measures deterministic stored bytes only. It does not promote CMPNX11 to the
+# canonical reader grammar and does not create a timing claim from one-shot hosted-runner measurements.
+# Public-surface disclosure is enforced by the repository's dedicated public-proof lane; duplicating that
+# repo-wide check here would make this benchmark fail for unrelated pre-existing legal/provenance text.
