@@ -1,0 +1,114 @@
+# ci-lane: deep
+# ci-cancel-policy: preserve-running-exact-receipt
+name: CMPCT v0.30 Logs gzip single-member fast-path A/B
+
+on:
+  push:
+    branches: [agent/v030-authoritative-integration]
+    paths:
+      - 'docs/v030-rnd/R25_LOGS_GZIP_SINGLE_MEMBER_FASTPATH_AB_PREREG.md'
+      - 'benchmarks/v030_logs_gzip_single_member_fastpath_ab.py'
+      - 'experiments/entropygraph_v030_logs_inverse_profile_v3.py'
+      - 'experiments/entropygraph_v030_logs_inverse_profile_v2.py'
+      - 'experiments/entropygraph_v030_logs_fused_extract.py'
+      - 'experiments/entropygraph_v030_release_product_logs_candidate.py'
+      - 'experiments/entropygraph_v030_release_product_logs_runtime.py'
+      - '.github/workflows/v030-logs-gzip-single-member-fastpath-ab.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.sha }}
+
+concurrency:
+  group: cmpct-v030-logs-gzip-fastpath-${{ github.sha }}
+  cancel-in-progress: false
+
+jobs:
+  gzip-fastpath-ab:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install deterministic dependencies
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y zstd gcc
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[test]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
+      - name: Compile frozen instrument
+        run: python -m py_compile benchmarks/v030_logs_gzip_single_member_fastpath_ab.py
+      - name: Run exact gzip fast-path A/B
+        run: |
+          mkdir -p benchmark-artifacts
+          python -m benchmarks.v030_logs_gzip_single_member_fastpath_ab \
+            --work-root "$RUNNER_TEMP/v030-logs-gzip-fastpath" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-logs-gzip-fastpath.json"
+      - name: Ratchet frozen contract
+        run: |
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          d=json.loads(Path('benchmark-artifacts/v030-logs-gzip-fastpath.json').read_text())
+          assert d['schema']=='cmpct-v030-logs-gzip-single-member-fastpath-ab-v1'
+          assert d['target']=='neutral_hostile_v1/05_logs_and_telemetry'
+          assert d['selected']=='logs-inverse'
+          assert d['rounds']==21
+          assert len(d['control_rows'])==21 and len(d['candidate_rows'])==21
+          assert d['experiment_valid'] is True
+          assert d['semantic_parity']['all_equal'] is True
+          assert d['semantic_parity']['fallback_shape_ok'] is True
+          assert d['candidate_geometry_ok'] is True
+          assert d['candidate_gzip_call_sets']==[2]
+          assert min(d['candidate_fast_hit_sets'])>=1
+          assert d['strong_verify']['ok'] is True
+          assert d['support_reduction_floor']==0.04
+          assert d['retire_reduction_ceiling']==0.01
+          assert d['release_credit'] is False and d['production_source_changed'] is False
+          assert d['archive_semantics_changed'] is False
+          assert d['multi_member_semantics_preserved_by_fallback'] is True
+          decision=d['decision']
+          assert decision in {
+              'LOGS_GZIP_SINGLE_MEMBER_FASTPATH_SUPPORTED',
+              'LOGS_GZIP_SINGLE_MEMBER_FASTPATH_RETIRED',
+              'LOGS_GZIP_SINGLE_MEMBER_FASTPATH_AMBIGUOUS',
+          }
+          reduction=float(d['candidate_total_reduction_fraction'])
+          ratio=float(d['candidate_wall_ratio'])
+          if decision=='LOGS_GZIP_SINGLE_MEMBER_FASTPATH_SUPPORTED':
+              assert reduction>=0.04 and ratio<=0.96
+          elif decision=='LOGS_GZIP_SINGLE_MEMBER_FASTPATH_RETIRED':
+              assert reduction<0.01
+          else:
+              assert 0.01<=reduction<0.04
+          Path('benchmark-artifacts/v030-logs-gzip-fastpath-candidate.txt').write_text(os.environ['EVIDENCE_HEAD']+'\n')
+          PY
+      - name: CI topology self-check
+        if: always()
+        run: python tools/check_ci_topology.py .github/workflows/v030-logs-gzip-single-member-fastpath-ab.yml
+      - name: Public-surface guard
+        if: always()
+        run: python tools/check_public_surface.py
+      - name: Upload exact evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: v030-logs-gzip-fastpath-${{ github.sha }}
+          path: |
+            benchmark-artifacts/v030-logs-gzip-fastpath.json
+            benchmark-artifacts/v030-logs-gzip-fastpath-candidate.txt
+          if-no-files-found: warn
+          retention-days: 90
+
+# R1 rehabilitation only. Multi-member/trailing gzip shapes must retain inherited semantics through fallback.
