@@ -6,6 +6,7 @@ name: CMPCT Android
 on:
   pull_request:
     branches: [main]
+    types: [opened, synchronize, reopened, labeled]
     paths:
       - 'integrations/android/**'
       - 'native/cmpct-core/**'
@@ -53,10 +54,19 @@ jobs:
         id: scope
         env:
           EVENT_NAME: ${{ github.event_name }}
+          EVENT_ACTION: ${{ github.event.action || '' }}
+          EVENT_LABEL: ${{ github.event.label.name || '' }}
         run: |
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
           if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            echo 'run_android=true' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          # The physical-device gate refuses hosted evidence from another SHA/fingerprint. Reusing its deliberate
+          # request label therefore also regenerates the hosted prerequisite on this exact source without requiring
+          # a no-op repository commit merely to wake a path-scoped workflow after another release-critical file moved.
+          if [ "$EVENT_NAME" = "pull_request" ] && [ "$EVENT_ACTION" = "labeled" ] && [ "$EVENT_LABEL" = "v030-physical-arm64" ]; then
             echo 'run_android=true' >> "$GITHUB_OUTPUT"
             exit 0
           fi
@@ -287,3 +297,6 @@ jobs:
 # every admitted hosted-emulator receipt for its exact source SHA. Physical ARM64 remains separate.
 # The authoritative integration branch has the same path-scoped push admission because scheduled/API commits do not
 # reliably emit pull_request synchronization; hosted evidence remains exact-SHA and physical ARM64 remains separate.
+# A deliberate `v030-physical-arm64` PR label also admits hosted Android for the same source. The physical workflow
+# independently requires that matching hosted artifact, so the request can regenerate stale exact-fingerprint hosted
+# evidence before physical acceptance without widening ordinary automatic Android execution to unrelated commits.
