@@ -32,6 +32,15 @@ def _ratio_or_none(numerator: float, denominator: float) -> float | None:
     return numerator / denominator
 
 
+def _self_check_ratio_serialization() -> None:
+    """Lock the exact infrastructure repair that supersedes the crashed v1 receipt."""
+    assert _ratio_or_none(1.0, 0.0) is None
+    assert _ratio_or_none(1.0, -1.0) is None
+    assert _ratio_or_none(1.0, float("nan")) is None
+    assert _ratio_or_none(float("inf"), 1.0) is None
+    assert _ratio_or_none(2.0, 4.0) == 0.5
+
+
 def run(work_root: Path) -> dict:
     shutil.rmtree(work_root, ignore_errors=True)
     work_root.mkdir(parents=True)
@@ -143,6 +152,7 @@ def run(work_root: Path) -> dict:
 
 
 def main() -> None:
+    _self_check_ratio_serialization()
     parser = argparse.ArgumentParser()
     parser.add_argument("--work-root", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
