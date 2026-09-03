@@ -10,7 +10,7 @@ import tempfile
 import zipfile
 
 from cmpct.builder import Builder
-from tests import generate_v030_canonical_goldens as G
+import generate_v030_canonical_goldens as G
 
 
 def _regular_manifest() -> tuple[bytes, bytes]:
