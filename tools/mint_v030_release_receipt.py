@@ -101,12 +101,28 @@ def build_receipt(
         fact_sources[asserted_path] = {"evidence_index": evidence_index, "json_path": json_path}
 
     fingerprint, _ = lock.fingerprint(manifest)
+    # The strict release front door requires the fingerprint to be sourced from hashed durable JSON, not merely
+    # copied into a receipt by the mint itself. Keep that source deterministic: evidence[0] is the custody witness.
+    try:
+        evidence_fingerprint = lock._lookup(documents[0], "candidate_fingerprint")
+    except KeyError as exc:
+        raise ValueError("evidence[0] must record candidate_fingerprint for strict release custody") from exc
+    if evidence_fingerprint != fingerprint:
+        raise ValueError(
+            "evidence[0] candidate_fingerprint does not match the current release-critical fingerprint: "
+            f"{evidence_fingerprint!r} != {fingerprint!r}"
+        )
+
     return {
         "schema": lock.RECEIPT_SCHEMA,
         "id": receipt_id,
         "status": "pass",
         "owner_task": spec["owner_task"],
         "candidate_fingerprint": fingerprint,
+        "candidate_fingerprint_source": {
+            "evidence_index": 0,
+            "json_path": "candidate_fingerprint",
+        },
         "evidence": evidence,
         "facts": facts,
         "fact_sources": fact_sources,
