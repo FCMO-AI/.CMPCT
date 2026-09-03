@@ -113,4 +113,20 @@ Earlier work repaired the three review blockers above:
 
 Earlier lineage included commit `2ff883ea41f2c70fb3cd7151de5be7639f4069b5` and integration ancestor `f6a273bbb1e49e21096a1cc875eff35a8e3c1110`. Those SHAs are mechanism provenance only. Final product parity, selective-read, runtime, competitor, and topology authority must be rerun on the exact frozen authoritative candidate.
 
+## Exact-fingerprint release gap ledger — 2026-09-03
+
+Canonical main was reconciled before the current release wave. The current release-critical fingerprint is `8abe67c6c9a93e72eeed61dba13cfc990c21652c43749dfa36d213b658c8358e`; subsequent T00/T01/T02 coordination and `docs/v030-release-{evidence,receipts}/` commits are intentionally outside the fingerprint and therefore do not change candidate bytes.
+
+At this checkpoint **no T02 release-lock receipt is yet durably accepted on `8abe67c6...`**. Workflow-level green is not evidence: the post-reconciliation runtime/generalization/external-frontier jobs observed so far either classified the latest delta and skipped the substantive authority or belong to a historical fingerprint. Preserve that distinction.
+
+The required T02 closure set remains exactly:
+
+- `compression-generalization`: accepted-v0.29 `137,499,525 B`, saving >=`687,783 B`, >=3 improved, 0 regressions, <=8x selected-member amplification, exact tree and v0.29-row identity;
+- `shared-build-rehab`: byte-identical, >=20% and >=5 s wall improvement, one attempt-5 graph build;
+- `runtime-memory-selective`: median create/extract <=1.10x, max workload create/extract <=1.25x, peak RSS <=1.25x, selective read actually measured;
+- `external-competitors`: exact-tree/symmetric-semantics/hostile-frontier/fair-loss facts plus strict no-tie wins over ZIP and Zstd-19 in size and create on every required workload;
+- `ci-topology`: all v0.30 workflows classified, topology checker green, thresholds unchanged.
+
+Do not rebind historical T02 JSON to the new fingerprint. A qualifying artifact must itself carry `8abe67c6...` and the frozen facts before its receipt can be minted. If an exact-fingerprint authority is skipped by latest-head classification, request a deliberate result-bearing rerun through an existing workflow-dispatch/control surface; do not change release-critical source or thresholds merely to wake CI.
+
 Move T02 to `DONE` only after the release-lock evidence obligations are durably closed on that candidate.
