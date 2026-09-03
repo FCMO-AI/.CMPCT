@@ -33,6 +33,21 @@ RESTRICTED = {
     "container scratch/private upload path": "/mnt/" + "data/",
 }
 
+# Public legal attribution is an intentional project-surface fact, not leaked operational provenance.
+# Keep this exception path-and-label specific: an unrelated private project/system marker in either legal
+# file must still fail the guard, and person markers remain forbidden everywhere else in the repository.
+PUBLIC_LEGAL_ATTRIBUTION_EXCEPTIONS = {
+    "COPYRIGHT.md": {
+        "private person marker",
+        "private person marker (ascii)",
+        "private person marker (accented)",
+    },
+    "LICENSING.md": {
+        "private person marker (ascii)",
+        "private person marker (accented)",
+    },
+}
+
 TEXT_SUFFIXES = {
     "",
     ".md",
@@ -78,10 +93,11 @@ def main() -> int:
             continue
         checked += 1
         folded = text.casefold()
+        rel = path.relative_to(ROOT)
+        allowed_labels = PUBLIC_LEGAL_ATTRIBUTION_EXCEPTIONS.get(rel.as_posix(), set())
         for label, token in RESTRICTED.items():
-            if token.casefold() not in folded:
+            if label in allowed_labels or token.casefold() not in folded:
                 continue
-            rel = path.relative_to(ROOT)
             for lineno, line in enumerate(text.splitlines(), 1):
                 if token.casefold() in line.casefold():
                     findings.append(f"{rel}:{lineno}: {label}: {line.strip()}")
