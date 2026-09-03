@@ -36,7 +36,7 @@ def _classifier_pattern(text: str) -> re.Pattern[str]:
 def test_native_authority_trigger_tracks_cloned_semantic_dependencies() -> None:
     text = WORKFLOW.read_text(encoding="utf-8")
     for dependency in REQUIRED_DEPENDENCIES:
-        assert f"      - '{dependency}'" in text, f"native-authority PR trigger omits {dependency}"
+        assert f"      - '{dependency}'" in text, f"native-authority trigger omits {dependency}"
 
 
 def test_native_authority_newest_head_classifier_tracks_same_dependencies() -> None:
@@ -44,3 +44,14 @@ def test_native_authority_newest_head_classifier_tracks_same_dependencies() -> N
     classifier = _classifier_pattern(text)
     for dependency in REQUIRED_DEPENDENCIES:
         assert classifier.fullmatch(dependency), f"native-authority newest-head classifier omits {dependency}"
+
+
+def test_native_authority_has_nonduplicating_authoritative_branch_push_route() -> None:
+    text = WORKFLOW.read_text(encoding="utf-8")
+    # Scheduled/API commits to the long-lived authoritative branch do not reliably produce a pull_request
+    # synchronize event. Native release evidence therefore needs one explicit integration-branch push route.
+    assert "  push:\n    branches:\n      - agent/v030-authoritative-integration" in text
+    # If GitHub also emits the PR event for an ordinary push, that event must classify out so the same expensive
+    # exact-SHA native receipt is not launched twice.
+    assert 'if [ "$EVENT_NAME" = "pull_request" ] && [ "$HEAD_REF" = "agent/v030-authoritative-integration" ]; then' in text
+    assert "HEAD_REF: ${{ github.head_ref }}" in text
