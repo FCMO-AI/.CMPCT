@@ -1,6 +1,6 @@
 /* Render the committed v0.29 shipping-versus-frontier stored-byte record.
-   Visible benchmark text is intentionally language-neutral: curated locale labels remain owned by the
-   site's i18n system while the measured percentage and byte totals come only from committed evidence. */
+   Visible benchmark text reuses the site's already-curated i18n vocabulary and translation patterns while
+   measured percentages and byte totals come only from committed evidence. */
 const $ = (selector, root = document) => root.querySelector(selector);
 
 function number(value) {
@@ -34,14 +34,23 @@ function ensureZipSectionPanel() {
     panel = document.createElement("article");
     panel.id = "shipping-frontier-zip-panel";
     panel.className = "shipping-frontier-zip-panel";
-    panel.setAttribute("aria-label", "Shipping versus frontier storage benchmark");
+    panel.setAttribute("aria-label", "PUBLIC EVIDENCE");
 
     const note = document.createElement("div");
     note.className = "benchmark-notes";
-    const heading = document.createElement("strong");
-    heading.textContent = "SHIPPING ↔ FRONTIER · SAME-TREE STORAGE";
+    const heading = document.createElement("div");
+    const shippingHeading = document.createElement("strong");
+    const frontierHeading = document.createElement("strong");
+    shippingHeading.textContent = "SHIPPING / CANONICAL";
+    frontierHeading.textContent = "RESEARCH FRONTIER";
+    heading.append(shippingHeading, document.createTextNode(" ↔ "), frontierHeading);
+
     const qualification = document.createElement("p");
-    qualification.textContent = "Accepted v0.29 research frontier versus shipping canonical r24. Storage only; not feature or interoperability parity.";
+    const shippingMeaning = document.createElement("span");
+    const frontierMeaning = document.createElement("span");
+    shippingMeaning.textContent = "reader / writer contract";
+    frontierMeaning.textContent = "benchmark candidate";
+    qualification.append(shippingMeaning, document.createTextNode(" ↔ "), frontierMeaning);
     note.append(heading, qualification);
 
     const grid = document.createElement("div");
@@ -53,7 +62,7 @@ function ensureZipSectionPanel() {
     raw.className = "benchmark-notes";
     const rawLink = document.createElement("a");
     rawLink.href = "assets/shipping-vs-frontier-v029.json";
-    rawLink.textContent = "RAW SHIPPING ↔ FRONTIER BENCHMARK ↗";
+    rawLink.textContent = "shipping-vs-frontier-v029.json";
     raw.append(rawLink);
 
     panel.append(note, grid, raw);
@@ -108,10 +117,10 @@ function render(record) {
   const zipGrid = ensureZipSectionPanel();
   if (zipGrid) {
     zipGrid.replaceChildren(
-      kpi("SHIPPING r24", formatMiB(shipping), "canonical reader / writer"),
-      kpi("FRONTIER v0.29", formatMiB(frontier), "research-only representation"),
-      kpi("FRONTIER Δ", `${lead >= 0 ? "−" : "+"}${Math.abs(lead).toFixed(2)}%`, `${formatMiB(Math.abs(saved))} fewer stored bytes`),
-      kpi("WORKLOAD WINS", `${Math.trunc(frontierWins)} / ${Math.trunc(workloads)}`, `${Math.trunc(workloads - frontierWins)} shipping wins · same trees`),
+      kpi("SHIPPING / CANONICAL", formatMiB(shipping), "reader / writer contract"),
+      kpi("RESEARCH FRONTIER", formatMiB(frontier), "benchmark candidate"),
+      kpi("PUBLIC EVIDENCE", `${lead >= 0 ? "−" : "+"}${Math.abs(lead).toFixed(2)}%`, `${formatMiB(Math.abs(saved))} smaller`),
+      kpi("RESEARCH FRONTIER", `${Math.trunc(frontierWins)}/${Math.trunc(workloads)}`, `${Math.trunc(frontierWins)}/${Math.trunc(workloads)} wins vs r24`),
     );
     zipGrid.dataset.shippingBytes = String(Math.trunc(shipping));
     zipGrid.dataset.frontierBytes = String(Math.trunc(frontier));
