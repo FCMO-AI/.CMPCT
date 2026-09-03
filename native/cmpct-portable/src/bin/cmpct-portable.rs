@@ -26,11 +26,7 @@ fn unique_sibling(destination: &Path, role: &str) -> Result<PathBuf, PortableErr
         .duration_since(UNIX_EPOCH)
         .unwrap_or_default()
         .as_nanos();
-    Ok(parent.join(format!(
-        ".{name}.{role}.{}.{}",
-        std::process::id(),
-        nanos
-    )))
+    Ok(parent.join(format!(".{name}.{role}.{}.{}", std::process::id(), nanos)))
 }
 
 fn export_zip_transactional(

@@ -102,12 +102,9 @@ impl FsManifest {
         let root = parse_msgpack(raw)?;
         let entries = match &root {
             Value::Map(_) => parse_v1(&root, &actual_content)?,
-            Value::Array(_) => parse_implicit_v4(
-                &root,
-                content_entries,
-                content_identities,
-                &actual_content,
-            )?,
+            Value::Array(_) => {
+                parse_implicit_v4(&root, content_entries, content_identities, &actual_content)?
+            }
             _ => {
                 return Err(PortableError::Format(
                     "unsupported r25 filesystem control shape".into(),
@@ -209,10 +206,7 @@ impl FsManifest {
     }
 }
 
-fn parse_v1(
-    root: &Value,
-    actual_content: &HashSet<String>,
-) -> Result<Vec<FsEntry>, PortableError> {
+fn parse_v1(root: &Value, actual_content: &HashSet<String>) -> Result<Vec<FsEntry>, PortableError> {
     let map = as_map(root, "r25 filesystem manifest")?;
     if uint(field(map, "v")?, "r25 filesystem manifest version", VERSION)? != VERSION
         || text(field(map, "profile")?, "r25 filesystem manifest profile")? != PROFILE
@@ -347,10 +341,7 @@ fn parse_implicit_v4(
     let explicit_rows = as_array(&payload[3], "r25 implicit-v4 explicit entries")?;
     if regular_overrides.len() > MAX_ENTRIES
         || explicit_rows.len() > MAX_ENTRIES
-        || regular_overrides
-            .len()
-            .saturating_add(explicit_rows.len())
-            > MAX_ENTRIES
+        || regular_overrides.len().saturating_add(explicit_rows.len()) > MAX_ENTRIES
     {
         return Err(PortableError::Limit(
             "r25 implicit-v4 entry count exceeds policy".into(),
@@ -418,10 +409,7 @@ fn parse_implicit_v4(
         let mut reconstructed: String = previous.chars().take(prefix).collect();
         reconstructed.push_str(suffix);
         let path = public_path(&reconstructed)?;
-        if previous_explicit
-            .as_ref()
-            .is_some_and(|last| path <= *last)
-        {
+        if previous_explicit.as_ref().is_some_and(|last| path <= *last) {
             return Err(PortableError::Format(
                 "r25 implicit-v4 explicit paths are not strictly sorted".into(),
             ));
@@ -517,10 +505,7 @@ fn integer_i128(value: &Value, label: &str) -> Result<i128, PortableError> {
         .ok_or_else(|| PortableError::Format(format!("{label} declaration")))
 }
 
-fn apply_override(
-    default: &FsMetadata,
-    value: &Value,
-) -> Result<FsMetadata, PortableError> {
+fn apply_override(default: &FsMetadata, value: &Value) -> Result<FsMetadata, PortableError> {
     let encoded = as_array(value, "r25 implicit-v4 metadata override")?;
     if encoded.is_empty() {
         return Err(PortableError::Format(

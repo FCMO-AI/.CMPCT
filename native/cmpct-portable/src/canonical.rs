@@ -1,7 +1,9 @@
 use crate::format::{safe_relpath, sha256};
 use crate::g04::G04Archive;
 use crate::identity::R25Identity;
-use crate::manifest::{ContentIdentities, FILESYSTEM_MANIFEST, FsEntry, FsKind, FsManifest, FsMetadata};
+use crate::manifest::{
+    ContentIdentities, FILESYSTEM_MANIFEST, FsEntry, FsKind, FsManifest, FsMetadata,
+};
 use crate::prefix::PrefixArchive;
 use crate::{MemberReadStats, PortableEntry, PortableError, Profile};
 use sha2::{Digest, Sha256};
