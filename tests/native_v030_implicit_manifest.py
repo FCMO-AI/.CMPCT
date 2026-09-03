@@ -193,9 +193,12 @@ def assert_hostile_authenticated_controls(tmp: Path) -> None:
 
 
 def tree_payload(index: int) -> bytes:
-    # Repetitive names/metadata make implicit-v4 decisively smaller while member bytes remain distinct enough to
-    # exercise graph-derived size/SHA ownership rather than accidental content deduplication.
-    return (f"member-{index:03d}-".encode() + bytes([index % 251]) * 128) * 4
+    # The writer-parity lane must actually exercise the shipping r25 admission seam. Highly repetitive tiny payloads
+    # made the truthful product tournament select v0.29 before native parity could be tested. Use deterministic
+    # high-entropy member bytes instead: metadata remains deliberately repetitive (so implicit-v4 is still the
+    # selected control), while payload compressibility cannot manufacture a legacy fallback win. The bytes remain
+    # deterministic and member-distinct, and no production selector/threshold is changed.
+    return hashlib.shake_256(f"cmpct-v030-native-implicit-{index:03d}".encode()).digest(8192)
 
 
 def assert_writer_parity(tmp: Path) -> None:
