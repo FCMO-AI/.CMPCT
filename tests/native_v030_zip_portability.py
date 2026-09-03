@@ -13,6 +13,9 @@ from cmpct.builder import Builder
 import generate_v030_canonical_goldens as G
 
 
+USER_PATH = "dir/hello.bin"
+
+
 def _regular_manifest() -> tuple[bytes, bytes]:
     raw = (b"cmpct-r25-zip-portability\n" * 19) + bytes(range(64))
     digest = hashlib.sha256(raw).digest()
@@ -23,7 +26,7 @@ def _regular_manifest() -> tuple[bytes, bytes]:
             "internal_path": G.INTERNAL,
             "entries": [
                 ["dir", "d", 0o755, 1_700_000_000_100_000_001, 1000, 1000, [], None],
-                ["dir/payload.bin", "f", 0o640, 1_700_000_000_100_000_002, 1000, 1000, [], [len(raw), digest]],
+                [USER_PATH, "f", 0o640, 1_700_000_000_100_000_002, 1000, 1000, [], [len(raw), digest]],
             ],
         }
     )
@@ -31,7 +34,15 @@ def _regular_manifest() -> tuple[bytes, bytes]:
 
 
 def _run(binary: Path, *args: str, check: bool = True):
-    return subprocess.run([str(binary), *args], check=check, capture_output=True)
+    result = subprocess.run([str(binary), *args], check=False, capture_output=True)
+    if check and result.returncode != 0:
+        stdout = result.stdout.decode("utf-8", errors="replace").strip()
+        stderr = result.stderr.decode("utf-8", errors="replace").strip()
+        raise RuntimeError(
+            f"native command failed rc={result.returncode}: {binary} {' '.join(args)}; "
+            f"stdout={stdout!r}; stderr={stderr!r}"
+        )
+    return result
 
 
 def _assert_stock_zip(zip_path: Path, raw: bytes, *, label: str) -> None:
@@ -42,10 +53,10 @@ def _assert_stock_zip(zip_path: Path, raw: bytes, *, label: str) -> None:
     with zipfile.ZipFile(zip_path) as zf:
         names = {item.filename for item in zf.infolist()}
         zf.extractall(extracted)
-    restored = (extracted / "dir/payload.bin").read_bytes()
+    restored = (extracted / USER_PATH).read_bytes()
     if restored != raw:
         raise RuntimeError(f"{label} stock ZIP extraction changed logical regular-file bytes")
-    if "dir/" not in names or "dir/payload.bin" not in names:
+    if "dir/" not in names or USER_PATH not in names:
         raise RuntimeError(f"{label} ZIP export omitted canonical regular/directory entries: {sorted(names)!r}")
     print(f"{label}-zip-export=PASS bytes={zip_path.stat().st_size}")
 
@@ -53,7 +64,7 @@ def _assert_stock_zip(zip_path: Path, raw: bytes, *, label: str) -> None:
 def _exercise_r24(binary: Path, root: Path, raw: bytes) -> None:
     source = root / "r24-source"
     (source / "dir").mkdir(parents=True)
-    (source / "dir" / "payload.bin").write_bytes(raw)
+    (source / USER_PATH).write_bytes(raw)
     archive = root / "r24.cmpct"
     Builder(source).build(archive)
 
