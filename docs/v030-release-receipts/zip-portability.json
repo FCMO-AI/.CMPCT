@@ -1,0 +1,46 @@
+{
+  "schema": "cmpct-v030-release-receipt-v1",
+  "id": "zip-portability",
+  "status": "pass",
+  "owner_task": "T01",
+  "candidate_fingerprint": "55060f25cc26786a444d362499e845277e7b7e42b75b86cbb35a2966209c3c4b",
+  "candidate_fingerprint_source": {
+    "evidence_index": 0,
+    "json_path": "candidate_fingerprint"
+  },
+  "evidence": [
+    {
+      "path": "docs/v030-release-evidence/zip-portability-a3c77cd951918aa14f9d9c82b62a08d457aec9fe.json",
+      "sha256": "f5f0dfda5db7cc6d260ee2b0f0cdbf21136cf5e2e28d552151c4e6ae61d39d14"
+    }
+  ],
+  "facts": {
+    "stock_zip_extract_tree_equal": true,
+    "r24_fallback_export": true,
+    "g04_export": true,
+    "prefixgraph_export": true,
+    "atomic_publication": true
+  },
+  "fact_sources": {
+    "facts.stock_zip_extract_tree_equal": {
+      "evidence_index": 0,
+      "json_path": "facts.stock_zip_extract_tree_equal"
+    },
+    "facts.r24_fallback_export": {
+      "evidence_index": 0,
+      "json_path": "facts.r24_fallback_export"
+    },
+    "facts.g04_export": {
+      "evidence_index": 0,
+      "json_path": "facts.g04_export"
+    },
+    "facts.prefixgraph_export": {
+      "evidence_index": 0,
+      "json_path": "facts.prefixgraph_export"
+    },
+    "facts.atomic_publication": {
+      "evidence_index": 0,
+      "json_path": "facts.atomic_publication"
+    }
+  }
+}
