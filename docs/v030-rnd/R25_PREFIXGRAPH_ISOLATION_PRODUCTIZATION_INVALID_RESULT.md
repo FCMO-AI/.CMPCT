@@ -2,7 +2,7 @@
 
 Status: **PRESERVED INVALID S6 RECEIPT / CUSTODY FAILURE / ZERO RELEASE CREDIT**
 
-This record preserves the first result-bearing execution of `R25_PREFIXGRAPH_ISOLATION_PRODUCTIZATION_PREREG.md` after exited-child-aware whole-process-tree RSS accounting was admitted. The frozen preregistration and v1 instrument remain immutable.
+This record preserves the first result-bearing execution of `R25_PREFIXGRAPH_ISOLATION_PRODUCTIZATION_PREREG.md` after exited-child-aware whole-process-tree RSS accounting was admitted. The frozen v1 preregistration and instrument remain immutable.
 
 ## Authority
 
@@ -17,7 +17,7 @@ This record preserves the first result-bearing execution of `R25_PREFIXGRAPH_ISO
 - experiment valid: **false**
 - release credit: **false**
 
-The substantive Builder-versus-threaded-control measurement completed and uploaded its exact evidence. The terminal ratchet correctly did not run because the v1 oracle declared the receipt invalid.
+The substantive Builder-versus-threaded-control measurement completed and uploaded exact evidence. The terminal ratchet correctly did not run because the v1 oracle declared the receipt invalid.
 
 ## Exact measured summaries
 
@@ -36,37 +36,35 @@ The v1 oracle hard-coded:
 
 `R24_BYTES = 29_883_732`
 
-Every result-bearing control and candidate build on the exact source instead emitted the same current genuine-r24 product size:
+Every result-bearing control and candidate build on this exact generated source instead emitted:
 
 `29_883_728 B`
 
-The frozen preregistration's product invariant is that r24 product bytes remain unchanged **between arms**. That invariant held in the measured receipt. The additional hard-coded four-byte historical fingerprint in the v1 instrument was stricter than the preregistration language and had become stale relative to the exact current source.
+The frozen v1 oracle therefore had to return **`INVALID_PRODUCTIZATION_RECEIPT`**. Because result-bearing execution had already begun, neither that literal nor the old result may be edited or reinterpreted after the fact.
 
-Because result-bearing execution had already begun, the old oracle may not be edited or reinterpreted after the fact. Its outcome remains exactly **`INVALID_PRODUCTIZATION_RECEIPT`**.
+## Stronger causal authority discovered before supersession
+
+The four-byte mismatch must not be simplified into a one-off stale constant. The already accepted `R25_SHIFTED_SERIALIZED_METADATA_CAUSAL_V2_RESULT.md` established the stronger causal fact: independent fresh generations of the same accepted Shifted content tree produced genuine-r24 sizes **29,883,722 / 29,883,726 / 29,883,728 B**, and nanosecond **mtime was the only observed varying Builder-consumed serialized filesystem fact**. Normalizing only atime/mtime to `1767225600000000000` ns collapsed three independent generations to one exact genuine-r24 identity:
+
+- **29,883,488 B**;
+- SHA-256 `a3192a1462e37282e5128e50c3b20a039ca26821d5ceb2508958d6e3918bbc22`.
+
+That accepted causal result outranks any weaker proposal to merely learn the current r24 size or compare arms opportunistically.
+
+The repository already froze the authorized superseding experiment in `R25_PREFIXGRAPH_ISOLATION_PRODUCTIZATION_V2_PREREG.md`. V2 changes only the causally justified fixture metadata normalization and resulting exact r24 identity while preserving the original mechanism, target, rounds, robust whole-process-tree RSS accounting, wall/size gates, helper lifecycle, hostile failure law and terminal vocabulary.
 
 ## Scoped interpretation
 
 This invalid receipt does **not** prove `PREFIXGRAPH_ISOLATION_BUILDER_SUPPORTED`, `PREFIXGRAPH_ISOLATION_EXPORTED_DEBT_REMAINS`, or `PREFIXGRAPH_ISOLATION_PRODUCTIZATION_DID_NOT_TRANSFER`.
 
-It does establish two useful custody facts for the superseding experiment:
+It does provide useful non-terminal observations for hostile review:
 
-1. exited-child-aware accounting still measured a large candidate/control RSS separation under this source; and
-2. the obsolete fixed r24 byte constant, rather than arm-to-arm r24 drift, prevented the frozen decision from being evaluated.
+1. exited-child-aware accounting still measured a large candidate/control RSS separation on this invalid fixture instance;
+2. candidate size debt was tiny;
+3. the observed wall ratio exceeded the unchanged **1.10x** promotion boundary.
 
-The observed wall ratio was above the unchanged 1.10 promotion boundary, so a valid superseding receipt must preserve that runtime debt if it reproduces; it may not widen the wall threshold.
+V2 may reproduce or falsify any of those observations. It may not widen the wall threshold or inherit decision credit from v1.
 
-## Reopening / supersession rule
+## Supersession law
 
-Do not rerun v1 unchanged. A superseding freeze may change only the stale custody predicate from the obsolete historical r24 byte literal to an exact-current, same-source arm-equality requirement while preserving:
-
-- target corpus and source-tree checks;
-- control/candidate mechanisms;
-- two alternating rounds;
-- exited-child-aware whole-process-tree RSS accounting;
-- `>=20%` RSS reduction gate;
-- `<=1.10x` wall gate;
-- `<=8,192 B` and `<=0.50%` size-debt gates;
-- PrefixGraph selection, deterministic bytes/tree, helper lifecycle and hostile fail-closed requirements;
-- zero release credit.
-
-Any broader change requires a different scientific freeze.
+**Do not rerun or edit v1. Do not create a same-source adaptive-r24 workaround.** Execute and interpret only the already-frozen v2 experiment for the next S6 decision. Its exact normalized r24 fingerprint, thresholds and fixture intervention are immutable once result-bearing v2 execution begins.
