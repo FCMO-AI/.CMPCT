@@ -11,6 +11,7 @@ on:
       - 'benchmarks/v030_r25_prefixgraph_isolation_productization_worker.py'
       - 'benchmarks/v030_r25_prefixgraph_isolation_productization_oracle.py'
       - 'benchmarks/v030_release_performance.py'
+      - 'benchmarks/v030_release_performance_tree_rss.py'
       - 'experiments/entropygraph_v030_canonical_final.py'
       - 'experiments/entropygraph_v030_canonical_final_impl.py'
       - 'experiments/entropygraph_v030_prefixgraph_process_executor.py'
@@ -22,6 +23,7 @@ on:
       - 'benchmarks/v030_r25_prefixgraph_isolation_productization_worker.py'
       - 'benchmarks/v030_r25_prefixgraph_isolation_productization_oracle.py'
       - 'benchmarks/v030_release_performance.py'
+      - 'benchmarks/v030_release_performance_tree_rss.py'
       - 'experiments/entropygraph_v030_canonical_final.py'
       - 'experiments/entropygraph_v030_canonical_final_impl.py'
       - 'experiments/entropygraph_v030_prefixgraph_process_executor.py'
@@ -62,7 +64,7 @@ jobs:
           fi
           git diff-tree --no-commit-id --name-only -r HEAD > /tmp/latest-head-files.txt
           cat /tmp/latest-head-files.txt
-          if grep -Eq '^(docs/v030-rnd/R25_PREFIXGRAPH_ISOLATION_PRODUCTIZATION_PREREG\.md|benchmarks/v030_r25_prefixgraph_isolation_productization_worker\.py|benchmarks/v030_r25_prefixgraph_isolation_productization_oracle\.py|benchmarks/v030_release_performance\.py|experiments/entropygraph_v030_canonical_final(_impl)?\.py|experiments/entropygraph_v030_prefixgraph_process_executor\.py|\.github/workflows/v030-prefixgraph-isolation-productization\.yml)$' /tmp/latest-head-files.txt; then
+          if grep -Eq '^(docs/v030-rnd/R25_PREFIXGRAPH_ISOLATION_PRODUCTIZATION_PREREG\.md|benchmarks/v030_r25_prefixgraph_isolation_productization_worker\.py|benchmarks/v030_r25_prefixgraph_isolation_productization_oracle\.py|benchmarks/v030_release_performance\.py|benchmarks/v030_release_performance_tree_rss\.py|experiments/entropygraph_v030_canonical_final(_impl)?\.py|experiments/entropygraph_v030_prefixgraph_process_executor\.py|\.github/workflows/v030-prefixgraph-isolation-productization\.yml)$' /tmp/latest-head-files.txt; then
             echo 'run_deep=true' >> "$GITHUB_OUTPUT"
           else
             echo 'run_deep=false' >> "$GITHUB_OUTPUT"
