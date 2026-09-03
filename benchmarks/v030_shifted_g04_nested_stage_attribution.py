@@ -42,7 +42,11 @@ def _measure_v028(source: Path, archive: Path) -> dict:
     from experiments import entropygraph_v029_residual_fast as accepted
 
     v028 = accepted.V028
-    legacy_original = v028.BASE.BASE.build
+    # Pre-result infrastructure repair: accepted.V028 is the v0.28 module itself, whose inherited
+    # v0.25 engine lives at BASE. The first workflow failed before any measured row because the
+    # instrument incorrectly dereferenced BASE.BASE. This hook observes the exact same frozen legacy
+    # stage reached by v028.build; no decision band, target, byte identity, or builder behavior changes.
+    legacy_original = v028.BASE.build
     graph_original = v028._build_graph
     stage = {"legacy_s": 0.0, "graph_s": 0.0, "legacy_calls": 0, "graph_calls": 0}
 
@@ -62,14 +66,14 @@ def _measure_v028(source: Path, archive: Path) -> dict:
             stage["graph_s"] += time.perf_counter() - started
             stage["graph_calls"] += 1
 
-    v028.BASE.BASE.build = timed_legacy
+    v028.BASE.build = timed_legacy
     v028._build_graph = timed_graph
     started = time.perf_counter()
     try:
         stats = dict(v028.build(source, archive))
     finally:
         child_s = time.perf_counter() - started
-        v028.BASE.BASE.build = legacy_original
+        v028.BASE.build = legacy_original
         v028._build_graph = graph_original
 
     verified = dict(v028.strong_verify(archive))
