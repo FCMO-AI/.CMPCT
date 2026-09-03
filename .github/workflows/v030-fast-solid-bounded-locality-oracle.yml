@@ -1,3 +1,5 @@
+# ci-lane: deep
+# ci-cancel-policy: preserve-running-exact-receipt
 name: CMPCT v0.30 bounded-locality inline-solid oracle
 
 # Admission-only ratchet: the frozen scientific grammar lives in the v2 preregistration and instrument.
@@ -14,6 +16,10 @@ on:
 permissions:
   contents: read
 
+env:
+  PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.sha }}
+
 concurrency:
   group: v030-fast-solid-bounded-locality-${{ github.sha }}
   cancel-in-progress: false
@@ -24,6 +30,10 @@ jobs:
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - name: Bind exact candidate head
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
       - uses: actions/setup-python@v6
         with:
           python-version: '3.11'
