@@ -193,11 +193,10 @@ def assert_hostile_authenticated_controls(tmp: Path) -> None:
 
 
 def tree_payload(index: int) -> bytes:
-    # The writer-parity lane must actually exercise the shipping r25 admission seam. Highly repetitive tiny payloads
-    # made the truthful product tournament select v0.29 before native parity could be tested. Use deterministic
-    # high-entropy member bytes instead: metadata remains deliberately repetitive (so implicit-v4 is still the
-    # selected control), while payload compressibility cannot manufacture a legacy fallback win. The bytes remain
-    # deterministic and member-distinct, and no production selector/threshold is changed.
+    # Keep writer-parity bytes deterministic, member-distinct and non-deduplicating. Product selection is deliberately
+    # not part of this native dialect test: the release tournament separately owns whether any r25 candidate earns
+    # publication. Here we need the live canonical PrefixGraph writer to encode the admitted implicit-v4 control so
+    # the independent native implementation can prove it understands the exact current writer dialect.
     return hashlib.shake_256(f"cmpct-v030-native-implicit-{index:03d}".encode()).digest(8192)
 
 
@@ -214,9 +213,15 @@ def assert_writer_parity(tmp: Path) -> None:
     assert prepared["manifest_control_saving_bytes"] > 0
 
     archive = tmp / "writer-implicit.cmpct"
-    stats = canonical._r25_build(staged, archive)
+    # Do not route a native grammar/parity assertion through the r25 candidate tournament. RC.build is allowed to
+    # emit the inherited research fallback when this synthetic tree offers no representation win; that is correct
+    # product-selection behavior but would leave this test with no canonical r25 bytes to hand to the native reader.
+    # PrefixGraph is one of the exact canonical r25 writers owned by the release facade. Build that dialect directly
+    # under the same operation-scoped profile binding, while leaving every release selector/floor untouched.
+    with canonical._revision25_profile_context():
+        stats = dict(canonical.PG.build(staged, archive))
     revision, profile = canonical._profile_for_archive(archive)
-    assert revision == 25 and profile in {"geometry-g04", "prefixgraph-depth1"}, (revision, profile, stats)
+    assert revision == 25 and profile == "prefixgraph-depth1", (revision, profile, stats)
     verified = canonical.strong_verify(archive)
     assert verified["ok"] is True
     decoded = canonical._validated_manifest(archive)
@@ -228,11 +233,10 @@ def assert_writer_parity(tmp: Path) -> None:
     assert hashlib.sha256(payload).digest() == decoded["regular"][probe][1]
     assert_native_archive(archive, expected, probe=probe, payload=payload)
 
-    profile_key = "g04" if profile == "geometry-g04" else "prefixgraph"
-    # Fixed goldens prove independent grammar; this second matrix proves the live canonical writer publishes the
-    # same recoverable outer-profile semantics after implicit-v4 admission rather than only matching on clean bytes.
+    # Fixed goldens prove both outer grammars independently; this live-writer lane proves the current canonical
+    # PrefixGraph writer embeds the admitted implicit-v4 control in the dialect consumed by the native reader.
     assert_recovery(
-        profile_key,
+        "prefixgraph",
         archive.read_bytes(),
         expected,
         tmp,
