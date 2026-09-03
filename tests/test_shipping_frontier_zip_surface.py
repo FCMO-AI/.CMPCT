@@ -27,6 +27,17 @@ def test_shipping_frontier_benchmark_is_published_inside_zip_chapter() -> None:
     assert "181503126" not in text
     assert "137501815" not in text
 
+    # A release-specific mirror may render only while the stable project-data/public-evidence authority says
+    # the built project version and canonical format still match the measured record. Future releases suppress
+    # this block instead of inheriting stale v0.29/r24 numbers above a newer ZIP table.
+    assert 'fetch("project-data.json"' in text
+    assert 'evidence?.schema === "cmpct-public-evidence-v1"' in text
+    assert 'project?.project_version === recordVersion' in text
+    assert 'projectRevision === shippingRevision' in text
+    assert 'evidence?.project_version === recordVersion' in text
+    assert 'evidenceRevision === shippingRevision' in text
+    assert 'if (!matchesCurrentRelease(record, projectData)) return;' in text
+
     # Dynamic authored labels reuse the existing curated vocabulary/patterns so the new block cannot become
     # an English-only island on localized surfaces.
     assert '"SHIPPING / CANONICAL"' in text
