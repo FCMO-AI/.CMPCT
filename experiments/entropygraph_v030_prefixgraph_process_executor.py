@@ -1,11 +1,10 @@
 from __future__ import annotations
 
-"""Reusable bounded process executor for the supported v0.30 PrefixGraph lifetime boundary.
+"""Bounded process executor for the supported v0.30 PrefixGraph lifetime boundary.
 
-This module is a productization *candidate*, not a shipping dispatch decision. It extracts the disposable-process
-mechanism that earned `ISOLATION_LEVEL15_DEBT_REHAB_SUPPORTED` out of benchmark-only monkeypatch code so the
-canonical builder can be reviewed against a small explicit boundary. Nothing imports or installs this executor into
-the release product yet.
+This module owns the operation-scoped process-lifetime mechanism that passed the frozen Builder S6 v2 gate. It is
+not release authority by itself: the integrated writer still owes the complete runtime, recovery and platform
+stack before v0.30 can be unlocked.
 
 The executor intentionally implements only the tiny context-manager/``submit`` surface used by canonical
 PrefixGraph scheduling. ``submit`` is synchronous: the child must finish and exit before the parent proceeds. That
@@ -35,6 +34,17 @@ def _sha256(path: Path) -> str:
     return h.hexdigest()
 
 
+def _caller_absolute(path: Path) -> Path:
+    """Freeze caller-relative filesystem meaning before the child switches to the repository cwd.
+
+    ``subprocess.run`` intentionally launches the module from the repository root so the exact canonical package is
+    importable. A relative user source/archive path must therefore be made absolute in the parent first; otherwise
+    the child would reinterpret it relative to the repository and could read or publish the wrong path. Use
+    ``abspath`` rather than ``resolve`` so this transport fix does not silently canonicalize user symlink components.
+    """
+    return Path(os.path.abspath(os.fspath(path)))
+
+
 class PrefixGraphProcessError(RuntimeError):
     pass
 
@@ -52,8 +62,8 @@ class PrefixGraphProcessExecutor:
     """One-shot executor matching the canonical PrefixGraph ``submit`` seam.
 
     Only the exact private canonical PrefixGraph ``build(source, archive)`` callable is accepted. The child is
-    launched with ``sys.executable`` and no shell, receives only explicit filesystem paths, is bounded by a wall
-    timeout, and must produce a self-authenticating JSON receipt matching the physical archive it wrote.
+    launched with ``sys.executable`` and no shell, receives caller-stable absolute filesystem paths, is bounded by a
+    wall timeout, and must produce a self-authenticating JSON receipt matching the physical archive it wrote.
     """
 
     def __init__(self, *, timeout_s: float = DEFAULT_CHILD_TIMEOUT_S):
@@ -88,6 +98,8 @@ class PrefixGraphProcessExecutor:
         if len(args) != 2 or kwargs:
             raise PrefixGraphProcessError("expected build(source, archive) call shape")
         source, archive = map(Path, args)
+        source = _caller_absolute(source)
+        archive = _caller_absolute(archive)
         if not source.is_dir():
             raise PrefixGraphProcessError(f"PrefixGraph source is not a directory: {source}")
         archive.parent.mkdir(parents=True, exist_ok=True)
@@ -166,7 +178,7 @@ def _level15_codec(pg):
 
 
 def _child(source: Path, archive: Path) -> None:
-    # Import only inside the child so importing this candidate module cannot initialize or mutate canonical state.
+    # Import only inside the child so importing this executor cannot initialize or mutate canonical state.
     from experiments import entropygraph_v030_canonical_final as canonical
 
     pg = canonical.RC.PG
