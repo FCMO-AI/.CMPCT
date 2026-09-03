@@ -22,7 +22,18 @@ def test_shipping_frontier_benchmark_is_published_inside_zip_chapter() -> None:
     # the percentage from byte totals instead of hard-coding the benchmark headline into presentation code.
     assert 'fetch("assets/shipping-vs-frontier-v029.json"' in text
     assert 'const lead = (shipping - frontier) / shipping * 100;' in text
-    assert 'RAW SHIPPING ↔ FRONTIER BENCHMARK ↗' in text
+    assert 'rawLink.textContent = "shipping-vs-frontier-v029.json"' in text
     assert "24.24%" not in text
     assert "181503126" not in text
     assert "137501815" not in text
+
+    # Dynamic authored labels reuse the existing curated vocabulary/patterns so the new block cannot become
+    # an English-only island on localized surfaces.
+    assert '"SHIPPING / CANONICAL"' in text
+    assert '"reader / writer contract"' in text
+    assert '"RESEARCH FRONTIER"' in text
+    assert '"benchmark candidate"' in text
+    assert '"PUBLIC EVIDENCE"' in text
+    assert 'wins vs r24`' in text
+    assert 'fewer stored bytes' not in text
+    assert 'same trees' not in text
