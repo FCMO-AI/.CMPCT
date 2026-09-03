@@ -1,0 +1,115 @@
+# ci-lane: deep
+# ci-cancel-policy: preserve-running-exact-receipt
+name: CMPCT v0.30 Logs whole-pack identity proof reuse
+
+on:
+  push:
+    branches: [agent/v030-authoritative-integration]
+    paths:
+      - 'docs/v030-rnd/R25_LOGS_FULL_PACK_MEMBER_HASH_REUSE_AB_PREREG.md'
+      - 'benchmarks/v030_logs_full_pack_member_hash_reuse_ab.py'
+      - 'experiments/entropygraph_v030_logs_inverse_profile.py'
+      - 'experiments/entropygraph_v030_logs_inverse_profile_v2.py'
+      - 'experiments/entropygraph_v030_logs_inverse_profile_v3.py'
+      - 'experiments/entropygraph_v030_logs_fused_extract.py'
+      - 'experiments/entropygraph_v030_release_product_logs_candidate.py'
+      - 'experiments/entropygraph_v030_release_product_logs_runtime.py'
+      - '.github/workflows/v030-logs-full-pack-member-hash-reuse.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.sha }}
+
+concurrency:
+  group: cmpct-v030-logs-full-pack-member-hash-reuse-${{ github.sha }}
+  cancel-in-progress: false
+
+jobs:
+  full-pack-member-hash-reuse:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install deterministic dependencies
+        run: |
+          set -euo pipefail
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[test]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
+      - name: Compile frozen proof-reuse instrument
+        run: python -m py_compile benchmarks/v030_logs_full_pack_member_hash_reuse_ab.py
+      - name: Run exact complete-extraction proof-reuse A/B
+        run: |
+          mkdir -p benchmark-artifacts
+          python -m benchmarks.v030_logs_full_pack_member_hash_reuse_ab \
+            --work-root "$RUNNER_TEMP/v030-logs-full-pack-member-hash-reuse" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-logs-full-pack-member-hash-reuse.json"
+      - name: Ratchet frozen proof-reuse contract
+        run: |
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          d=json.loads(Path('benchmark-artifacts/v030-logs-full-pack-member-hash-reuse.json').read_text())
+          assert d['schema']=='cmpct-v030-logs-full-pack-member-hash-reuse-ab-v1'
+          assert d['target']=='neutral_hostile_v1/05_logs_and_telemetry'
+          assert d['selected']=='logs-inverse'
+          assert d['rounds']==21
+          assert d['experiment_valid'] is True
+          assert d['candidate_lifecycle_ok'] is True
+          assert d['hostile_expected_sha_separation_ok'] is True
+          assert d['candidate_proof_reuse_counts'] and d['candidate_proof_reuse_counts'][0] >= 1
+          assert d['candidate_pack_call_counts']==[7]
+          assert d['support_reduction_floor']==0.04
+          assert d['retire_reduction_ceiling']==0.01
+          assert d['release_credit'] is False and d['production_source_changed'] is False
+          assert d['pack_crc32_preserved'] is True and d['pack_sha256_preserved'] is True
+          assert d['derived_member_sha256_preserved'] is True
+          assert d['partial_pack_member_sha256_preserved'] is True
+          assert d['cold_selective_semantics_changed'] is False
+          assert d['strong_verify']['ok'] is True
+          decision=d['decision']
+          assert decision in {
+              'LOGS_FULL_PACK_MEMBER_HASH_REUSE_SUPPORTED',
+              'LOGS_FULL_PACK_MEMBER_HASH_REUSE_RETIRED',
+              'LOGS_FULL_PACK_MEMBER_HASH_REUSE_AMBIGUOUS',
+          }
+          reduction=float(d['candidate_total_reduction_fraction'])
+          ratio=float(d['candidate_wall_ratio'])
+          if decision=='LOGS_FULL_PACK_MEMBER_HASH_REUSE_SUPPORTED':
+              assert reduction>=0.04 and ratio<=0.96
+          elif decision=='LOGS_FULL_PACK_MEMBER_HASH_REUSE_RETIRED':
+              assert reduction<0.01
+          else:
+              assert 0.01<=reduction<0.04
+          Path('benchmark-artifacts/v030-logs-full-pack-member-hash-reuse-candidate.txt').write_text(os.environ['EVIDENCE_HEAD']+'\n')
+          PY
+      - name: CI topology self-check
+        if: always()
+        run: python tools/check_ci_topology.py .github/workflows/v030-logs-full-pack-member-hash-reuse.yml
+      - name: Public-surface guard
+        if: always()
+        run: python tools/check_public_surface.py
+      - name: Upload exact evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: v030-logs-full-pack-member-hash-reuse-${{ github.sha }}
+          path: |
+            benchmark-artifacts/v030-logs-full-pack-member-hash-reuse.json
+            benchmark-artifacts/v030-logs-full-pack-member-hash-reuse-candidate.txt
+          if-no-files-found: warn
+          retention-days: 90
+
+# R1 proof reuse only: full pack CRC32+SHA256 authentication remains mandatory. The candidate may reuse that exact
+# SHA fact only when pack bytes and logical-member bytes are provably identical and their expected SHA declarations
+# are equal. No integrity, recovery, locality, archive-byte, selective-read, benchmark, or release fact is weakened.
