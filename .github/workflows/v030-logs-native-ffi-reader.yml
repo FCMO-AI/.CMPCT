@@ -20,7 +20,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: cmpct-v030-logs-native-ffi-reader-${{ github.event.pull_request.number || github.ref }}
+  group: cmpct-v030-logs-native-ffi-reader-${{ github.event.pull_request.head.sha || github.sha }}
   cancel-in-progress: false
 
 env:
