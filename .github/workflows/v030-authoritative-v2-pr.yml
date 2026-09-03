@@ -114,7 +114,8 @@ jobs:
             experiments/entropygraph_v030_release_product.py \
             benchmarks/v030_release_generalization_v2.py \
             benchmarks/v030_perf_worker_v2.py \
-            benchmarks/v030_release_performance_v2.py
+            benchmarks/v030_release_performance_v2.py \
+            benchmarks/v030_release_performance_tree_rss.py
       - name: Run final authority correctness and safety tests
         run: |
           python -m pytest -q \
@@ -278,17 +279,68 @@ jobs:
           assert t['max_peak_rss_ratio']<=1.25
           assert g['passed'] is True
           PY
+      - name: Run whole-process-tree RSS companion authority
+        if: always()
+        run: |
+          mkdir -p benchmark-artifacts
+          python benchmarks/v030_release_performance_tree_rss.py \
+            --work-root benchmark-artifacts/runtime-tree-rss-work \
+            --output benchmark-artifacts/runtime-tree-rss.json
+      - name: Enforce whole-tree RSS custody without weakening frozen runtime policy
+        if: always()
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          from tools import check_v030_release_lock as release_lock
+          path=Path('benchmark-artifacts/runtime-tree-rss.json')
+          assert path.is_file(), 'whole-tree RSS authority did not publish evidence'
+          data=json.loads(path.read_text())
+          expected_fingerprint, _ = release_lock.fingerprint(release_lock.load_manifest())
+          assert data['schema']=='cmpct-v030-release-performance-tree-rss-v1'
+          assert data['candidate_fingerprint']==expected_fingerprint
+          assert data['engine']=='experiments/entropygraph_v030_release_product.py'
+          assert data['release_facade']=='cmpct-v030-release-product-v1'
+          assert data['rss_accounting']=='whole-process-tree-vmrss-10ms-with-parent-rumaxrss-floor'
+          c=data['contract']; tc=data['tree_rss_contract']; t=data['totals']
+          assert c['maximum_median_create_ratio']==1.10
+          assert c['maximum_workload_create_ratio']==1.25
+          assert c['maximum_median_extract_ratio']==1.10
+          assert c['maximum_workload_extract_ratio']==1.25
+          assert c['maximum_peak_rss_ratio']==1.25
+          assert tc['child_memory_gifted'] is False
+          assert tc['timing_boundary_changed'] is False
+          assert tc['peak_rss_threshold_changed'] is False
+          assert tc['release_credit'] is False
+          assert len(data['tree_rss_receipts'])==18
+          for row in data['tree_rss_receipts']:
+              assert row['tree_rss_samples'] >= 1
+              assert row['decisive_peak_rss_kib'] >= row['parent_peak_rss_kib']
+              assert row['decisive_peak_rss_kib'] >= row['sampled_tree_peak_rss_kib']
+          # These assertions intentionally remain the unchanged release ceilings. A red receipt is preserved by
+          # the upload step below and keeps the release locked; whole-tree accounting can never manufacture green.
+          assert t['median_create_ratio']<=1.10
+          assert t['max_workload_create_ratio']<=1.25
+          assert t['median_extract_ratio']<=1.10
+          assert t['max_workload_extract_ratio']<=1.25
+          assert t['max_peak_rss_ratio']<=1.25
+          assert data['gate']['passed'] is True
+          PY
       - name: Upload authority-v2 runtime evidence
         if: always()
         uses: actions/upload-artifact@v6
         with:
           name: v030-authority-v2-runtime-${{ env.EVIDENCE_HEAD }}
-          path: benchmark-artifacts/runtime-v2.json
+          path: |
+            benchmark-artifacts/runtime-v2.json
+            benchmark-artifacts/runtime-tree-rss.json
           if-no-files-found: error
           retention-days: 90
 
 # `ffmpeg` and the package audio extra are frozen-corpus/runtime dependencies, not codec shortcuts for CMPCT. The
 # neutral-hostile media row and inherited r24 WAV-FLAC candidate cannot be exercised without them. Historical v2
 # generalization remains mechanism-causality evidence; runtime is bound to the promoted product and uses the same
-# frozen 1.10/1.25/RSS thresholds. Classifier routing is PR/ref-cancellable while each result-bearing exact-SHA job
-# is preserved separately, preventing long-lived-PR classifier backlog without weakening evidence custody.
+# frozen 1.10/1.25/RSS thresholds. Because the promoted product may now spawn a bounded PrefixGraph helper, the
+# release job also charges the worker's complete live process tree; parent-only ru_maxrss remains a diagnostic floor
+# and cannot hide exported child memory. Classifier routing is PR/ref-cancellable while each result-bearing exact-SHA
+# job is preserved separately, preventing long-lived-PR classifier backlog without weakening evidence custody.
