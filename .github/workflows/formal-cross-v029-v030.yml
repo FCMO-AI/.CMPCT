@@ -1,0 +1,142 @@
+name: CMPCT formal cross-version corpus
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - bench/formal-cross-v029-v030-run
+    paths:
+      - benchmarks/formal_cross_version_bench.py
+      - .github/workflows/formal-cross-v029-v030.yml
+
+permissions:
+  contents: read
+
+jobs:
+  benchmark:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    env:
+      PYTHONUNBUFFERED: "1"
+      CMPCT_CROSS_TIMEOUT: "3600"
+      CMPCT_V029_SHA: "dd0c12cd6ee2dbb859464ea5c6be221ad34b9fdf"
+      CMPCT_V030_SHA: "396751612e53688d10f0c9b38c978a6fec8b21e4"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Install benchmark tools and pinned engines
+        shell: bash
+        run: |
+          set -euxo pipefail
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends bzip2 curl git p7zip-full time unzip zip zstd
+          # Footnote: both engines are materialized as exact detached worktrees and separate virtualenvs.
+          # The benchmark branch itself therefore cannot accidentally alter either engine under test.
+          git fetch --no-tags origin "$CMPCT_V029_SHA" "$CMPCT_V030_SHA"
+          git worktree add --detach "$RUNNER_TEMP/cmpct-v029" "$CMPCT_V029_SHA"
+          git worktree add --detach "$RUNNER_TEMP/cmpct-v030" "$CMPCT_V030_SHA"
+          python -m venv "$RUNNER_TEMP/venv29"
+          python -m venv "$RUNNER_TEMP/venv30"
+          "$RUNNER_TEMP/venv29/bin/pip" install -q -e "$RUNNER_TEMP/cmpct-v029"
+          "$RUNNER_TEMP/venv30/bin/pip" install -q -e "$RUNNER_TEMP/cmpct-v030"
+          echo "CMPCT_V029_PYTHON=$RUNNER_TEMP/venv29/bin/python" >> "$GITHUB_ENV"
+          echo "CMPCT_V030_PYTHON=$RUNNER_TEMP/venv30/bin/python" >> "$GITHUB_ENV"
+
+      - name: Fetch and validate established corpora
+        shell: bash
+        run: |
+          set -euxo pipefail
+          ROOT="$RUNNER_TEMP/cmpct-cross-corpora"
+          rm -rf "$ROOT"
+          mkdir -p "$ROOT/canterbury" "$ROOT/silesia" "$ROOT/enwik8"
+
+          curl --fail --location --retry 4 https://corpus.canterbury.ac.nz/resources/cantrbry.tar.gz -o "$ROOT/cantrbry.tar.gz"
+          tar -xzf "$ROOT/cantrbry.tar.gz" -C "$ROOT/canterbury"
+          python - "$ROOT/canterbury" <<'PY'
+          from pathlib import Path
+          import sys
+          root=Path(sys.argv[1])
+          expected={'alice29.txt':152089,'asyoulik.txt':125179,'cp.html':24603,'fields.c':11150,
+          'grammar.lsp':3721,'kennedy.xls':1029744,'lcet10.txt':426754,'plrabn12.txt':481861,
+          'ptt5':513216,'sum':38240,'xargs.1':4227}
+          actual={p.name:p.stat().st_size for p in root.iterdir() if p.is_file()}
+          if actual != expected: raise SystemExit(f'Canterbury validation failed: {actual!r}')
+          PY
+
+          python - "$ROOT/silesia" <<'PY'
+          from pathlib import Path
+          import hashlib,subprocess,sys,urllib.request
+          root=Path(sys.argv[1])
+          files={
+          'dickens':(10192446,'88334708559f6db57d79096bc0aca07e'),
+          'mozilla':(51220480,'c7789a2097f1ff944b0c737430a339b3'),
+          'mr':(9970564,'38e623e3093b7bf2003ca4b1bbc19927'),
+          'nci':(33553445,'31f85bc8706f3c921104e7c169e2e2e1'),
+          'ooffice':(6152192,'573c4ae915e36631d8f2dcffb9b9b66d'),
+          'osdb':(10085684,'e734b0c48e6a982adfb5802da3032ecd'),
+          'reymont':(6627202,'d8f54d78105079775f32d76dc55fc671'),
+          'samba':(21606400,'154eaea7ea70e89f6339ff0abf4112ca'),
+          'sao':(7251944,'79e95a22e18cd82b7e42bf91b380d30b'),
+          'webster':(41458703,'474931ad907ac27bf962c75ded46c069'),
+          'xml':(5345280,'9b09c0c80104adb8aae910b7d7db003e'),
+          'x-ray':(8474240,'9baec32ad14ec3eff487d254382cb91c')}
+          for name,(size,md5) in files.items():
+              bz=root/(name+'.bz2'); raw=root/name
+              urllib.request.urlretrieve(f'https://sun.aei.polsl.pl/~sdeor/corpus/{name}.bz2',bz)
+              with raw.open('wb') as out: subprocess.run(['bzip2','-d','-c',str(bz)],check=True,stdout=out)
+              bz.unlink(); data=raw.read_bytes()
+              if len(data)!=size or hashlib.md5(data).hexdigest()!=md5: raise SystemExit(f'Silesia validation failed: {name}')
+          if sum(p.stat().st_size for p in root.iterdir()) != 211_938_580: raise SystemExit('Silesia aggregate mismatch')
+          PY
+
+          # Footnote: Matt Mahoney's canonical host currently requires the www endpoint; the non-www
+          # endpoint returned HTML during the first trial. Size and published MD5 prevent that failure
+          # mode from ever being accepted as benchmark data.
+          curl --fail --location --retry 4 https://www.mattmahoney.net/dc/enwik8.zip -o "$ROOT/enwik8.zip"
+          unzip -q "$ROOT/enwik8.zip" -d "$ROOT/enwik8"
+          test "$(stat -c%s "$ROOT/enwik8/enwik8")" = 100000000
+          test "$(md5sum "$ROOT/enwik8/enwik8" | awk '{print $1}')" = a1fa5ffddb56f4953e226637dabbb36a
+
+          python - "$ROOT" > "$ROOT/manifest.json" <<'PY'
+          from pathlib import Path
+          import json,sys
+          root=Path(sys.argv[1])
+          print(json.dumps({'corpora':[
+            {'name':'canterbury-archive','path':str(root/'canterbury'),'expected_logical_bytes':3141622},
+            {'name':'silesia-archive','path':str(root/'silesia'),'expected_logical_bytes':211938580},
+            {'name':'enwik8','path':str(root/'enwik8'),'expected_logical_bytes':100000000}
+          ]},indent=2))
+          PY
+          echo "CMPCT_CROSS_MANIFEST=$ROOT/manifest.json" >> "$GITHUB_ENV"
+
+      - name: Run cross-version benchmark
+        shell: bash
+        run: |
+          set -euxo pipefail
+          python benchmarks/formal_cross_version_bench.py "$CMPCT_CROSS_MANIFEST" --out formal-cross-results
+
+      - name: Show compact evidence
+        if: always()
+        run: |
+          test ! -f formal-cross-results/formal-cross.json || python - <<'PY'
+          import json
+          from pathlib import Path
+          d=json.loads(Path('formal-cross-results/formal-cross.json').read_text())
+          for corpus,c in d['corpora'].items():
+              print('\n'+corpus, 'logical=', c['logical_bytes'])
+              for name,r in c['results'].items():
+                  print(f"{name:24s} bytes={r['bytes']:12d} ratio={r['ratio']:.6f} create={r['create_s']:.3f}s extract={r['extract_s']:.3f}s")
+          PY
+
+      - name: Upload evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cmpct-formal-cross-v029-v030
+          path: |
+            formal-cross-results/formal-cross.json
+            formal-cross-results/formal-cross.partial.json
+          if-no-files-found: warn
+          retention-days: 30
