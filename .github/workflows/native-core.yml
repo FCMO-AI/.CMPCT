@@ -9,6 +9,7 @@ on:
       - "tests/**"
       - "benchmarks/native*.py"
       - "pyproject.toml"
+      - "docs/v030-coordination/tasks/T01-native-portability.md"
       - ".github/workflows/native-core.yml"
   push:
     branches: [main, agent/v030-authoritative-integration]
@@ -18,6 +19,7 @@ on:
       - "tests/**"
       - "benchmarks/native*.py"
       - "pyproject.toml"
+      - "docs/v030-coordination/tasks/T01-native-portability.md"
       - ".github/workflows/native-core.yml"
   workflow_dispatch:
 
@@ -235,3 +237,6 @@ jobs:
 # Native-core release evidence uses only the committed Cargo.lock. `--locked` plus a before/after byte comparison
 # makes dependency resolution part of the candidate rather than ambient runner state; changing the graph therefore
 # requires an explicit fingerprint-changing repository mutation before any new native-core receipt can become valid.
+# T01 is intentionally outside the v0.30 release fingerprint and is the shared fingerprint-neutral revalidation hook
+# for native portability lanes. Once the candidate is frozen, updating that coordination request can regenerate this
+# native-core matrix on the same fingerprint instead of manufacturing a no-op release-critical source change.
