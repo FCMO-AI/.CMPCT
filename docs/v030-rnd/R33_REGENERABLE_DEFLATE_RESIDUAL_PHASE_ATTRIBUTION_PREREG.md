@@ -27,7 +27,9 @@ Reuse the exact R32 instrument and semantic policy without edits:
 - full `neutral_hostile_v1/06_incremental_backups`;
 - exact isolated `snapshot_2.zip` projection;
 - arms: `release-all-exact` and `no-ordinary-zstd` only;
-- 3 fresh profiled builds per arm/target.
+- 3 fresh-process profiled builds per arm/target.
+
+Each repetition MUST execute in a new Python process. Module state, allocator state, codec contexts, candidate caches, and mutable release-profile state may not carry from one profiled repetition to another.
 
 The generated corpus tree and nested member identity must match R32. Every build must strongly verify and reproduce the exact R32 complete archive bytes and SHA-256:
 
@@ -36,31 +38,33 @@ The generated corpus tree and nested member identity must match R32. Every build
 - nested/release: `2,231,160 B`, `6d6973cb4931edcc2ed776b8fdb8500dc80da084f0b06681e87eff544646d6ef`;
 - nested/no-Zstd: `2,197,414 B`, `b2cb86d7c51eecec959989b3e592f344311c3da32af3d47ed1251284f2223bea`.
 
-Profiler overhead is diagnostic and must never be compared directly to unprofiled release thresholds. Only paired profiled-arm deltas and call/cumulative-time attribution are interpreted.
+Profiler overhead is diagnostic and must never be compared directly to unprofiled release thresholds. Only paired profiled-arm deltas and function-level attribution are interpreted.
 
 ## Frozen measurement
 
-Use Python `cProfile` around the existing R32 `_build_arm` call. For each repetition record:
+Use Python `cProfile` around the existing R32 `_build_arm` call. For each fresh-process repetition record:
 
 - profiled wall time;
 - exact archive bytes/SHA;
 - strong verification;
-- cumulative and internal time by function signature for all entries under `src/cmpct/`, the R32 instrument, and dead-dictionary product helpers;
-- top 40 cumulative-time functions.
+- cumulative and internal/exclusive time by function signature for project functions plus profiler-visible C/native call entries;
+- top 40 cumulative-time functions and top 40 positive internal-time deltas.
 
-For each target compute median per-function cumulative time in both arms and the signed `no-Zstd - release` delta. Rank positive deltas.
+For each target compute median per-function cumulative and internal time in both arms and the signed `no-Zstd - release` deltas.
 
-Because cumulative times overlap through call stacks, **do not sum them into a fake percentage of total time**. The experiment is for owner localization, not additive accounting.
+Cumulative times overlap through call stacks. A broad wrapper such as `Builder.build()` can inherit the full child cost and therefore **cannot by cumulative delta alone establish an owner**. Do not sum cumulative times into a fake percentage of total time, and do not permit an outer-wrapper cumulative delta to satisfy the localization gate.
+
+The localization gate uses **internal/exclusive time**, which charges time to the function or profiler-visible C/native call actually consuming it rather than every ancestor on the stack.
 
 ## Frozen terminal grammar
 
 `PHASE_OWNER_LOCALIZED`
 
-iff all six builds per target reproduce the frozen R32 bytes/SHA and verify, and at least one stable function signature has a positive median cumulative-time delta of >=10 ms on the nested target and the same sign on the full target.
+iff all six builds per target reproduce the frozen R32 bytes/SHA and verify, and at least one stable function/C-call signature has a positive median **internal/exclusive-time** delta of >=10 ms on the nested target and the same positive sign on the full target.
 
 `RESIDUAL_DISTRIBUTED_OR_BELOW_ATTRIBUTION_FLOOR`
 
-iff identity/verification pass but no function satisfies that cross-target >=10 ms localization rule.
+iff identity/verification pass but no signature satisfies that cross-target >=10 ms internal-time localization rule.
 
 `SUBSTRATE_OR_IDENTITY_FAILURE`
 
@@ -72,4 +76,8 @@ A localized owner authorizes only a new superseding Builder/preregistration aime
 
 ## Failure handoff
 
-If the residual is distributed, do not guess another codec. Escalate to an execution-architecture trace that measures non-overlapping build phases, or retire the current rehabilitation path if the remaining debt is below realistic closure headroom.
+If the residual is distributed, do not guess another codec. Escalate to an execution-architecture trace that measures explicitly non-overlapping build phases, or retire the current rehabilitation path if the remaining debt is below realistic closure headroom.
+
+## Pre-execution hostile-review note
+
+The first draft used cumulative-time deltas for the terminal gate. Before any result-bearing R33 receipt executed, hostile review showed that this would be structurally permissive: an outer build wrapper could inherit the entire residual delta and trigger `PHASE_OWNER_LOCALIZED` without identifying its child owner. The freeze was corrected before execution to use internal/exclusive time and to include profiler-visible C/native calls. No result, corpus, comparator, byte identity, repetition count, or measured product behavior was observed before this correction.
