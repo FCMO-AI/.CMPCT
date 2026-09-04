@@ -44,8 +44,14 @@ def sha256_file(path: Path) -> str:
 
 
 def interesting(filename: str) -> bool:
+    """Keep product Python frames plus profiler-visible C/native call entries."""
     s = filename.replace("\\", "/")
-    return "/src/cmpct/" in s or s.endswith("v030_r32_regenerable_deflate_output_dead_zstd_elision.py") or "entropygraph_v030_release_product" in s
+    return (
+        "/src/cmpct/" in s
+        or s.endswith("v030_r32_regenerable_deflate_output_dead_zstd_elision.py")
+        or "entropygraph_v030_release_product" in s
+        or filename == "~"
+    )
 
 
 def profile_build_worker(arm: str, source: Path, archive: Path) -> dict:
@@ -187,22 +193,34 @@ def run(work_root: Path) -> dict:
                 "internal_delta_s": c["internal_s"] - r["internal_s"],
                 "call_delta": c["calls"] - r["calls"],
             })
-        deltas.sort(key=lambda x: (-x["cumulative_delta_s"], x["signature"]))
-        target["positive_cumulative_deltas"] = [d for d in deltas if d["cumulative_delta_s"] > 0][:40]
+        target["positive_cumulative_deltas"] = sorted(
+            (d for d in deltas if d["cumulative_delta_s"] > 0),
+            key=lambda x: (-x["cumulative_delta_s"], x["signature"]),
+        )[:40]
+        target["positive_internal_deltas"] = sorted(
+            (d for d in deltas if d["internal_delta_s"] > 0),
+            key=lambda x: (-x["internal_delta_s"], x["signature"]),
+        )[:40]
         result["targets"][target_name] = target
 
     if not identity_ok:
         result["decision"] = "SUBSTRATE_OR_IDENTITY_FAILURE"
         return result
 
-    full_delta = {d["signature"]: d for d in result["targets"]["full-backups"]["positive_cumulative_deltas"]}
-    nested_delta = {d["signature"]: d for d in result["targets"]["nested-only"]["positive_cumulative_deltas"]}
+    full_delta = {d["signature"]: d for d in result["targets"]["full-backups"]["positive_internal_deltas"]}
+    nested_delta = {d["signature"]: d for d in result["targets"]["nested-only"]["positive_internal_deltas"]}
     localized = []
     for sig, n in nested_delta.items():
         f = full_delta.get(sig)
-        if f and n["cumulative_delta_s"] >= 0.010 and f["cumulative_delta_s"] > 0:
-            localized.append({"signature": sig, "nested_delta_s": n["cumulative_delta_s"], "full_delta_s": f["cumulative_delta_s"]})
-    localized.sort(key=lambda x: (-x["nested_delta_s"], x["signature"]))
+        if f and n["internal_delta_s"] >= 0.010 and f["internal_delta_s"] > 0:
+            localized.append({
+                "signature": sig,
+                "nested_internal_delta_s": n["internal_delta_s"],
+                "full_internal_delta_s": f["internal_delta_s"],
+                "nested_cumulative_delta_s": n["cumulative_delta_s"],
+                "full_cumulative_delta_s": f["cumulative_delta_s"],
+            })
+    localized.sort(key=lambda x: (-x["nested_internal_delta_s"], x["signature"]))
     result["localized_owners"] = localized
     result["decision"] = "PHASE_OWNER_LOCALIZED" if localized else "RESIDUAL_DISTRIBUTED_OR_BELOW_ATTRIBUTION_FLOOR"
     return result
