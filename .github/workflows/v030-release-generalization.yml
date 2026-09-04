@@ -56,7 +56,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 300
     concurrency:
-      group: cmpct-v030-authoritative-generalization-receipt-${{ env.EVIDENCE_HEAD }}
+      group: cmpct-v030-authoritative-generalization-receipt-${{ github.sha }}
       cancel-in-progress: false
     env:
       PYTHONPATH: ${{ github.workspace }}
