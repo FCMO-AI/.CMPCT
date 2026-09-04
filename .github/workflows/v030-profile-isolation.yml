@@ -11,6 +11,7 @@ on:
       - 'experiments/entropygraph_v030_release_product.py'
       - 'tests/test_v030_canonical_final.py'
       - 'tests/test_v030_profile_isolation.py'
+      - 'tools/check_public_surface.py'
       - '.github/workflows/v030-profile-isolation.yml'
   workflow_dispatch:
 
@@ -62,6 +63,8 @@ jobs:
       - name: CI topology self-check
         run: python tools/check_ci_topology.py .github/workflows/v030-profile-isolation.yml
 
-# Footnote: this gate is intentionally path-scoped around the canonical profile boundary.  It exists because
+# Footnote: this gate is intentionally path-scoped around the canonical profile boundary. It exists because
 # the release product now preserves its large reviewed implementation behind a small namespace-isolation wrapper;
-# edits to either half must trigger the same import-order/concurrency contract before promotion.
+# edits to either half must trigger the same import-order/concurrency contract before promotion. Because this lane
+# also consumes the public-surface guard, changes to that guard are part of the lane's evidence-critical substrate
+# and must regenerate this receipt rather than inheriting a stale green result.
