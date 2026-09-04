@@ -1,0 +1,103 @@
+name: CMPCT v0.30 R27 Incremental Backups floor diagnostic
+# ci-lane: forge-diagnostic
+# Diagnostic only. Cannot grant release credit.
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'benchmarks/v030_r27_incremental_backups_floor_diagnostic.py'
+      - 'docs/v030-rnd/R27_INCREMENTAL_BACKUPS_PRODUCT_FLOOR_DIAGNOSTIC_PREREG.md'
+      - '.github/workflows/v030-r27-incremental-backups-floor-diagnostic.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+
+jobs:
+  r27-diagnostic:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    concurrency:
+      group: cmpct-v030-r27-backups-${{ github.event.pull_request.number || github.ref }}
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 16
+
+      - name: Bind unchanged product substrate without circular release fingerprint
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          git merge-base --is-ancestor b0e7aeab92c994b4a25c5040fe3fb9f5e208b01a HEAD
+          git diff --name-only b0e7aeab92c994b4a25c5040fe3fb9f5e208b01a..HEAD > /tmp/r27-diff.txt
+          cat /tmp/r27-diff.txt
+          if grep -Ev '^(\.github/workflows/v030-canonical-product-gap-diagnostic\.yml|\.github/workflows/v030-r26-incremental-backups-floor-diagnostic\.yml|\.github/workflows/v030-r27-incremental-backups-floor-diagnostic\.yml|benchmarks/v030_r26_incremental_backups_floor_diagnostic\.py|benchmarks/v030_r27_incremental_backups_floor_diagnostic\.py|docs/v030-rnd/R26_INCREMENTAL_BACKUPS_PRODUCT_FLOOR_DIAGNOSTIC_PREREG\.md|docs/v030-rnd/R26_INCREMENTAL_BACKUPS_PRODUCT_FLOOR_DIAGNOSTIC_RESULT\.md|docs/v030-rnd/R27_INCREMENTAL_BACKUPS_PRODUCT_FLOOR_DIAGNOSTIC_PREREG\.md)$' /tmp/r27-diff.txt | grep -q .; then
+            echo 'Product/corpus/policy substrate drifted after b0e7aeab; R27 is invalid and requires a superseding freeze.' >&2
+            exit 1
+          fi
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+
+      - name: Install frozen diagnostic dependencies
+        run: |
+          set -euo pipefail
+          test -f /etc/apt/sources.list.d/ubuntu.sources
+          sudo apt-get -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" -o Dir::Etc::sourceparts="-" update
+          sudo apt-get -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" -o Dir::Etc::sourceparts="-" install -y zstd gcc ffmpeg libsndfile1
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[audio,test]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
+
+      - name: Compile frozen R27 custody wrapper and inherited R26 arm worker
+        run: |
+          python -m py_compile benchmarks/v030_r26_incremental_backups_floor_diagnostic.py
+          python -m py_compile benchmarks/v030_r27_incremental_backups_floor_diagnostic.py
+
+      - name: Run frozen R27 complete-artifact/locality diagnosis
+        run: |
+          mkdir -p benchmark-artifacts
+          python benchmarks/v030_r27_incremental_backups_floor_diagnostic.py \
+            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/r27-backups-work" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/r27-backups.json"
+
+      - name: Enforce diagnostic completeness only
+        if: always()
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          p=Path('benchmark-artifacts/r27-backups.json')
+          assert p.is_file(), 'R27 result was not published'
+          d=json.loads(p.read_text())
+          assert d['schema']=='cmpct-v030-r27-incremental-backups-floor-diagnostic-v1'
+          assert d['authority_product_substrate_head']=='b0e7aeab92c994b4a25c5040fe3fb9f5e208b01a'
+          assert isinstance(d['release_fingerprint_at_execution'], str) and len(d['release_fingerprint_at_execution'])==64
+          assert set(d['arms'])=={'genuine-r24','release-r24','current-product'}
+          assert all(row['strong_verify_ok'] for row in d['arms'].values())
+          assert len({row['tree_sha256'] for row in d['arms'].values()})==1
+          assert d['decision'] in {
+              'D1_REPRODUCTION_OR_SUBSTRATE_MISMATCH',
+              'D3_D4_GENUINE_R24_BYTE_FLOOR_EXPORTS_LOCALITY_DEBT',
+              'D2_LAWFUL_GENUINE_R24_FLOOR_EXISTS_REQUIRE_CARRYING_COST_BUILDER',
+          }
+          PY
+
+      - name: Upload immutable R27 evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: v030-r27-incremental-backups-floor-${{ env.EVIDENCE_HEAD }}
+          path: benchmark-artifacts/r27-backups.json
+          if-no-files-found: error
+          retention-days: 90
