@@ -6,12 +6,22 @@ import pytest
 
 from experiments.one.ir import Limits, Node, OneError, Program, Ref, Root
 from experiments.one.vm import evaluate
+from tests.one.oracle_g01 import evaluate as oracle_evaluate
 
 
 # Hand-derived oracle bytes/hashes. These constants do not use the ONE evaluator to
 # decide what the evaluator should produce.
 FINAL = b"abc\x00\x00\x00\x00bdf"
 FINAL_SHA256 = "3cd4e5daba35303ae4b0ae5a55318d8ea0946a4da129fded2c931564f7645be4"
+ORACLE_SPEC = (
+    ("surprise", b"abc"),
+    ("repeat", (0, 0, None), 3),
+    ("fill", 0, 4),
+    ("surprise", b"ABC"),
+    ("xor", ((0, 0, None), (3, 0, None)), b""),
+    ("add8", ((0, 0, None),), b"\x01\x02\x03"),
+    ("concat", ((1, 3, 3), (2, 0, None), (5, 0, None)), b""),
+)
 
 
 def root(ref: Ref, value: bytes) -> Root:
@@ -45,12 +55,22 @@ def conformance_program() -> Program:
 
 
 def test_independent_conformance_vector_covers_one_grammar() -> None:
+    oracle = oracle_evaluate(ORACLE_SPEC)
+    assert oracle == (
+        b"abc",
+        b"abcabcabc",
+        b"\x00" * 4,
+        b"ABC",
+        b"   ",
+        b"bdf",
+        FINAL,
+    )
     outputs, stats = evaluate(conformance_program())
     assert outputs == {
-        "literal": b"abc",
-        "repetition": b"abcabcabc",
-        "sparse": b"\x00" * 4,
-        "multi_parent": FINAL,
+        "literal": oracle[0],
+        "repetition": oracle[1],
+        "sparse": oracle[2],
+        "multi_parent": oracle[6],
     }
     assert outputs["multi_parent"] == FINAL
     assert sha256(outputs["multi_parent"]).hexdigest() == FINAL_SHA256
