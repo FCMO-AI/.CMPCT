@@ -113,11 +113,25 @@ Earlier work repaired the three review blockers above:
 
 Earlier lineage included commit `2ff883ea41f2c70fb3cd7151de5be7639f4069b5` and integration ancestor `f6a273bbb1e49e21096a1cc875eff35a8e3c1110`. Those SHAs are mechanism provenance only. Final product parity, selective-read, runtime, competitor, and topology authority must be rerun on the exact frozen authoritative candidate.
 
-## Exact-fingerprint release gap ledger — 2026-09-03
+## Superseded exact-fingerprint gap ledger — 2026-09-03
 
-Canonical main was reconciled before the current release wave. The current release-critical fingerprint is `8abe67c6c9a93e72eeed61dba13cfc990c21652c43749dfa36d213b658c8358e`; subsequent T00/T01/T02 coordination and `docs/v030-release-{evidence,receipts}/` commits are intentionally outside the fingerprint and therefore do not change candidate bytes.
+The prior release-critical fingerprint `8abe67c6c9a93e72eeed61dba13cfc990c21652c43749dfa36d213b658c8358e` remains historical provenance only. The authoritative generalization workflow itself later required a release-critical Custody correction, so receipts from this older fingerprint may not authorize the current candidate.
 
-At this checkpoint **no T02 release-lock receipt is yet durably accepted on `8abe67c6...`**. Workflow-level green is not evidence: the post-reconciliation runtime/generalization/external-frontier jobs observed so far either classified the latest delta and skipped the substantive authority or belong to a historical fingerprint. Preserve that distinction.
+## Current exact-fingerprint release gap ledger — 2026-09-04
+
+The authoritative generalization custody repair at commit `2b67c94c5277699fdfa42b2e09651fa640b0552c` changed a fingerprinted workflow without changing any benchmark, threshold, corpus, locality rule, timing envelope or product-selection law. The current release-critical fingerprint is now:
+
+`c119dbae83a8eae6d09dbf48e764a4bc9679452cef4381cb031dc3444ecfbc69`
+
+The coordination/evidence/receipt commits that followed are intentionally outside fingerprint scope; they do not mutate candidate bytes or this fingerprint.
+
+Current-fingerprint T01 evidence has been regenerated rather than rebound from history:
+
+- native authority run `33871978882`, exact source `631216979c01627a8a3bc2bc598327c4f065e6ca`, emitted `c119dbae...fbc69` and passed canonical Python/Rust boundaries, builder-independent goldens, native/implicit-v4 recovery, r24 fallback strong verification, Logs native parity/semantics and shared-core use;
+- ZIP portability run `33871978857`, the same exact source and fingerprint, passed stock ZIP tree parity, r24 fallback export, G04 export, PrefixGraph export and atomic publication;
+- both strict JSON artifacts are now persisted under `docs/v030-release-evidence/` and the `native-r25` / `zip-portability` receipts bind their exact evidence hashes to `c119dbae...fbc69`.
+
+Those wins do **not** close T02 and do not make T01 DONE; Android/physical-platform evidence is still separate.
 
 The required T02 closure set remains exactly:
 
@@ -127,6 +141,6 @@ The required T02 closure set remains exactly:
 - `external-competitors`: exact-tree/symmetric-semantics/hostile-frontier/fair-loss facts plus strict no-tie wins over ZIP and Zstd-19 in size and create on every required workload;
 - `ci-topology`: all v0.30 workflows classified, topology checker green, thresholds unchanged.
 
-Do not rebind historical T02 JSON to the new fingerprint. A qualifying artifact must itself carry `8abe67c6...` and the frozen facts before its receipt can be minted. If an exact-fingerprint authority is skipped by latest-head classification, request a deliberate result-bearing rerun through an existing workflow-dispatch/control surface; do not change release-critical source or thresholds merely to wake CI.
+On the T01 coordination-only source delta, the push-side authoritative-generalization run `33871978793` passed only its impact classifier and deliberately skipped the result-bearing `release-generalization` job. Runtime/RSS run `33871978831` likewise skipped both result-bearing jobs, and hostile mutation run `33871978866` skipped `release-fuzz`. These classifier greens are not receipts. Obtain deliberate result-bearing current-fingerprint runs through existing dispatch/control surfaces; do not change release-critical source or thresholds merely to wake CI.
 
-Move T02 to `DONE` only after the release-lock evidence obligations are durably closed on that candidate.
+Move T02 to `DONE` only after every release-lock evidence obligation above is durably closed on `c119dbae...fbc69`.
