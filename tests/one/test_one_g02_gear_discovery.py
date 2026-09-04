@@ -4,6 +4,7 @@ import random
 
 from benchmarks.one.one_g02_bounded_gear_ab import _bounded_observe
 from benchmarks.one.one_g02_gear_replacement_ab import _gear_observe
+from benchmarks.one.one_g02_minimizer_gear_ab import _minimizer_observe
 from benchmarks.one.one_g02_tiered_gear_ab import _tiered_observe
 from experiments.one.observe import observe
 
@@ -40,8 +41,6 @@ def test_tiered_same_signal_preserves_shifted_relation_sparse_value() -> None:
     fixed = _fixed(data)
     tiered = _tiered_observe(data)
 
-    # Fixed aligned chunks intentionally miss the one-byte-shifted second copy. The
-    # global Gear horizon must recover it as generic exact-reuse discovery knowledge.
     assert fixed.reuse_opportunity_bytes == 0
     assert tiered.reuse_opportunity_bytes >= len(basis)
 
@@ -65,7 +64,7 @@ def test_local_plus_sparse_tier_is_still_blind_after_local_eviction() -> None:
     assert tiered.reuse_opportunity_bytes == 0
 
 
-def test_bounded_gap_same_signal_repairs_long_anchor_starvation() -> None:
+def test_bounded_gap_same_signal_repairs_aligned_anchor_starvation() -> None:
     basis = random.Random(4876).randbytes(8 * 1024)
     data = basis * 2
     fixed = _fixed(data)
@@ -77,7 +76,26 @@ def test_bounded_gap_same_signal_repairs_long_anchor_starvation() -> None:
     assert bounded.retained_index_payload_bytes < fixed.retained_index_payload_bytes
 
 
-def test_bounded_gap_same_signal_keeps_random_negative_path_exact() -> None:
-    data = random.Random(11).randbytes(128 * 1024)
+def test_coordinate_gap_fallback_loses_insertion_shift_invariance() -> None:
+    basis = random.Random(4876).randbytes(8 * 1024)
+    data = basis + b"X" + basis
     bounded = _bounded_observe(data)
+
+    assert bounded.masked_anchors == 0
+    assert bounded.fallback_anchors > 0
     assert bounded.reuse_opportunity_bytes == 0
+
+
+def test_minimizer_same_signal_recovers_shifted_anchor_starvation() -> None:
+    basis = random.Random(4876).randbytes(8 * 1024)
+    data = basis + b"X" + basis
+    minimizer = _minimizer_observe(data)
+
+    assert minimizer.reuse_opportunity_bytes >= len(basis)
+    assert minimizer.global_entries > 0
+
+
+def test_minimizer_same_signal_keeps_random_negative_path_exact() -> None:
+    data = random.Random(11).randbytes(128 * 1024)
+    minimizer = _minimizer_observe(data)
+    assert minimizer.reuse_opportunity_bytes == 0
