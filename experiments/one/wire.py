@@ -95,6 +95,8 @@ def encode_program(program: Program) -> tuple[bytes, WireStats]:
     for node in program.nodes:
         out += _node(node)
     roots = sorted(program.roots.items())
+    if len(roots) > MAX_ROOTS:
+        raise OneError("root count exceeds experimental wire limit")
     out += _uvarint(len(roots))
     for name, root in roots:
         name_bytes = name.encode("utf-8")
@@ -216,7 +218,7 @@ def decode_program(data: bytes, *, caps: Limits = DEFAULT_DECODE_CAPS) -> Progra
         raise OneError("node table exceeds declared limit")
     nodes = tuple(_decode_node(reader, node_count, encoded_limits) for _ in range(node_count))
     root_count = reader.uvarint()
-    if root_count == 0 or root_count > min(MAX_ROOTS, encoded_limits.max_nodes):
+    if root_count == 0 or root_count > MAX_ROOTS:
         raise OneError("invalid root count")
     roots: dict[str, Root] = {}
     previous_name: str | None = None
