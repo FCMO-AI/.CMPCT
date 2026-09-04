@@ -1,16 +1,10 @@
 name: CMPCT v0.30 R39 selected-dictionary effort rehabilitation
 # ci-lane: deep
-# ci-cancel-policy: split-classifier-preserve-receipts
-# ci-pr-scope: latest-head-commit-gate
+# ci-auto-policy: retired-manual-only
+# Terminal Builder evidence exists; preserve this workflow for explicit frozen replay only.
 # Diagnostic only. R39 grants no product or release credit.
 
 on:
-  pull_request:
-    paths:
-      - 'benchmarks/v030_r39_selected_dictionary_effort_rehabilitation.py'
-      - 'docs/v030-rnd/R38_REGENERABLE_DEFLATE_ENCODE_CRITICAL_PATH_RESULT.md'
-      - 'docs/v030-rnd/R39_SELECTED_DICTIONARY_EFFORT_REHABILITATION_PREREG.md'
-      - '.github/workflows/v030-r39-selected-dictionary-effort-rehabilitation.yml'
   workflow_dispatch:
 
 permissions:
