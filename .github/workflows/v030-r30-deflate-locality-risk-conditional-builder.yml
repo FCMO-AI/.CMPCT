@@ -81,6 +81,7 @@ jobs:
           for suite, source, expected in A._build_corpora(root):
               if suite == 'neutral_hostile_v1' and source.name == '06_incremental_backups':
                   found = True
+                  assert expected.get('baseline_identity') == 'neutral-hostile-repair-v6', expected
                   observed = A.RC.treehash(source)
                   expected_tree = expected['tree_sha256']
                   assert observed == expected_tree, (
