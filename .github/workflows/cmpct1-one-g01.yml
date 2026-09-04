@@ -84,6 +84,12 @@ jobs:
       - name: A/B bounded-gap one-signal Gear retention
         run: python -m benchmarks.one.one_g02_bounded_gear_ab | tee one-artifacts/one-g02-bounded-gear-ab.json
 
+      - name: Prove coordinate fallback loses insertion-shift invariance
+        run: python -m benchmarks.one.one_g02_shifted_starvation | tee one-artifacts/one-g02-shifted-starvation.json
+
+      - name: A/B shift-invariant bounded Gear minimizers
+        run: python -m benchmarks.one.one_g02_minimizer_gear_ab | tee one-artifacts/one-g02-minimizer-gear-ab.json
+
       - name: Measure one-pass Gear signal fusion cost
         run: python -m benchmarks.one.one_g02_fused_gear_signal | tee one-artifacts/one-g02-fused-gear-signal.json
 
