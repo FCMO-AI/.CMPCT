@@ -11,9 +11,6 @@ on:
       - main
     paths:
       - '.github/workflows/v030-r26-incremental-backups-floor-diagnostic.yml'
-      - 'benchmarks/v030_r41_global_dictionary_effort_concept_compression.py'
-      - 'docs/v030-rnd/R41_GLOBAL_DICTIONARY_EFFORT_CONCEPT_COMPRESSION_PREREG.md'
-      - 'docs/v030-rnd/R41_GLOBAL_DICTIONARY_EFFORT_CONCEPT_COMPRESSION_SUPERSEDING_PREREG.md'
   workflow_dispatch:
 
 permissions:
@@ -48,7 +45,7 @@ jobs:
           fi
           changed="$(git diff-tree --no-commit-id --name-only -r HEAD)"
           printf '%s\n' "$changed"
-          if printf '%s\n' "$changed" | grep -Eq '^(\.github/workflows/v030-r26-incremental-backups-floor-diagnostic\.yml|benchmarks/v030_r41_global_dictionary_effort_concept_compression\.py|docs/v030-rnd/R41_GLOBAL_DICTIONARY_EFFORT_CONCEPT_COMPRESSION_PREREG\.md|docs/v030-rnd/R41_GLOBAL_DICTIONARY_EFFORT_CONCEPT_COMPRESSION_SUPERSEDING_PREREG\.md)$'; then
+          if printf '%s\n' "$changed" | grep -Fxq '.github/workflows/v030-r26-incremental-backups-floor-diagnostic.yml'; then
             echo 'run_receipt=true' >> "$GITHUB_OUTPUT"
           else
             echo 'run_receipt=false' >> "$GITHUB_OUTPUT"
