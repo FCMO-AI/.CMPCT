@@ -17,6 +17,14 @@ import argparse
 import copy
 import json
 from pathlib import Path
+import sys
+
+# Keep the custody wrapper importable both as a directly executed benchmark script and
+# through importlib-based regression tests. Python does not automatically add a module's
+# directory to sys.path when it is loaded from an explicit file spec.
+_BENCHMARKS_DIR = Path(__file__).resolve().parent
+if str(_BENCHMARKS_DIR) not in sys.path:
+    sys.path.insert(0, str(_BENCHMARKS_DIR))
 
 import shipping_vs_frontier_v029 as BASE
 
