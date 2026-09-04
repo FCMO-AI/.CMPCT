@@ -7,6 +7,10 @@ on:
       - "site/**"
       - "docs/SITE_PUBLIC_PROOF_STANDARD.md"
       - "docs/GH_PAGES_DEPLOYMENT.md"
+      - "docs/PUBLIC_SURFACE.md"
+      - "tools/check_public_surface.py"
+      - "COPYRIGHT.md"
+      - "LICENSING.md"
       - "benchmarks/history/**"
       - "SURFACE_REVISION"
       - "pyproject.toml"
@@ -17,6 +21,10 @@ on:
       - "site/**"
       - "docs/SITE_PUBLIC_PROOF_STANDARD.md"
       - "docs/GH_PAGES_DEPLOYMENT.md"
+      - "docs/PUBLIC_SURFACE.md"
+      - "tools/check_public_surface.py"
+      - "COPYRIGHT.md"
+      - "LICENSING.md"
       - "benchmarks/history/**"
       - "SURFACE_REVISION"
       - "pyproject.toml"
@@ -143,4 +151,6 @@ jobs:
           retention-days: 90
 
 # Footnote: public proof is release evidence, not merely presentation CI. PR validation therefore binds to the
-# exact candidate head; a synthetic merge commit cannot supply a receipt for v0.30 release authority.
+# exact candidate head; a synthetic merge commit cannot supply a receipt for v0.30 release authority. The guard,
+# its normative policy, and the exact canonical legal-attribution files are evidence-critical inputs: changes to
+# any of them must regenerate the public-proof receipt rather than inheriting a stale green result.
