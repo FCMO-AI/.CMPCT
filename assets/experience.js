@@ -5,6 +5,5 @@
    how to invent or reinterpret benchmark claims. */
 import "./i18n.js";
 import "./proof-renderer.js";
-import "./shipping-frontier-v029.js";
 import "./cinematic.js";
 import "./fcmo-attribution.js";

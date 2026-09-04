@@ -3,13 +3,19 @@
   "publishing_branch": "gh-pages",
   "publishing_path": "/",
   "source_branch": "main",
-  "source_commit": "dd0c12cd6ee2dbb859464ea5c6be221ad34b9fdf",
+  "source_commit": "13742e49d8a0f5da32a9bdae6b57dd2de82d6c5b",
   "project_version": "0.29.0",
-  "surface_revision": "0.29.l",
+  "surface_revision": "0.29.k",
   "canonical_format_revision": 24,
   "evidence_schema": "cmpct-public-evidence-v1",
   "jekyll": false,
   "static_only": true,
   "generated_from_committed_evidence": true,
+  "validation": {
+    "localization_cases": 57,
+    "localization_failures": 0,
+    "cjk_glyph_coverage": true,
+    "final_pr_head": "71370bd5340cdce824481ec6de7a73beccf09337"
+  },
   "policy": "main owns source and validation; gh-pages owns generated serving artifacts only"
 }
