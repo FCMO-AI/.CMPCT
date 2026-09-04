@@ -14,6 +14,7 @@ on:
       - 'tests/conformance/**'
       - 'tests/generate_v030_logs_android_vector.py'
       - 'tests/generate_v030_compact_control_android_vector.py'
+      - 'tests/test_v030_native_authority_custody.py'
       - 'experiments/entropygraph_v030_logs_inverse_profile*.py'
       - 'experiments/entropygraph_v030_r24_compact_control_profile.py'
       - '.github/workflows/android.yml'
@@ -27,6 +28,7 @@ on:
       - 'tests/conformance/**'
       - 'tests/generate_v030_logs_android_vector.py'
       - 'tests/generate_v030_compact_control_android_vector.py'
+      - 'tests/test_v030_native_authority_custody.py'
       - 'experiments/entropygraph_v030_logs_inverse_profile*.py'
       - 'experiments/entropygraph_v030_r24_compact_control_profile.py'
       - '.github/workflows/android.yml'
@@ -72,7 +74,7 @@ jobs:
           fi
           git diff-tree --no-commit-id --name-only -r HEAD > /tmp/latest-head-files.txt
           cat /tmp/latest-head-files.txt
-          if grep -Eq '^(integrations/android/|native/cmpct-(core|portable)/|tests/conformance/|tests/generate_v030_(logs|compact_control)_android_vector\.py|experiments/entropygraph_v030_(logs_inverse_profile.*|r24_compact_control_profile)\.py|\.github/workflows/android(-physical-arm64)?\.yml)' /tmp/latest-head-files.txt; then
+          if grep -Eq '^(integrations/android/|native/cmpct-(core|portable)/|tests/conformance/|tests/generate_v030_(logs|compact_control)_android_vector\.py|tests/test_v030_native_authority_custody\.py|experiments/entropygraph_v030_(logs_inverse_profile.*|r24_compact_control_profile)\.py|\.github/workflows/android(-physical-arm64)?\.yml)' /tmp/latest-head-files.txt; then
             echo 'run_android=true' >> "$GITHUB_OUTPUT"
           else
             echo 'run_android=false' >> "$GITHUB_OUTPUT"
@@ -101,11 +103,14 @@ jobs:
           python-version: '3.11'
           cache: pip
 
-      - name: Capture clean exact-candidate release fingerprint
+      - name: Capture clean exact-candidate release fingerprint and dependency lock
         run: |
           set -euo pipefail
           # Fingerprint before generated conformance vectors touch tests/conformance/**, which is itself
           # release-critical. Evidence must identify the clean checked-out candidate, not the mutated CI worktree.
+          git ls-files --error-unmatch native/cmpct-portable/Cargo.lock >/dev/null
+          cp native/cmpct-portable/Cargo.lock "$RUNNER_TEMP/Cargo.lock.clean"
+          sha256sum native/cmpct-portable/Cargo.lock | tee "$RUNNER_TEMP/Cargo.lock.clean.sha256"
           python -m experiments.entropygraph_v030_release_lock_strict --print-fingerprint \
             > "$RUNNER_TEMP/cmpct-v030-fingerprint.json"
           python - <<'PY'
@@ -116,6 +121,7 @@ jobs:
               raise SystemExit('clean candidate fingerprint missing or malformed')
           print(value)
           PY
+          test -z "$(git status --porcelain=v1)"
 
       - uses: actions/setup-java@v4
         with:
@@ -194,6 +200,12 @@ jobs:
           export ANDROID_NDK_ROOT="$ANDROID_NDK_HOME"
           gradle --no-daemon :app:assembleDebug
 
+      - name: Prove native dependency lock did not drift during Android build
+        run: |
+          set -euo pipefail
+          cmp native/cmpct-portable/Cargo.lock "$RUNNER_TEMP/Cargo.lock.clean"
+          git diff --exit-code -- native/cmpct-portable/Cargo.lock
+
       - name: Verify packaged JNI dependency is relocatable and portable
         working-directory: integrations/android
         run: |
@@ -259,14 +271,19 @@ jobs:
       - name: Record exact-candidate hosted Android evidence
         run: |
           python - <<'PY'
-          import json, os, pathlib, subprocess
+          import hashlib, json, os, pathlib, subprocess
           temp = pathlib.Path(os.environ['RUNNER_TEMP'])
           fingerprint = json.loads((temp / 'cmpct-v030-fingerprint.json').read_text())['candidate_fingerprint']
           candidate_sha = subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip()
+          lock = pathlib.Path('native/cmpct-portable/Cargo.lock')
           evidence = {
-              'schema': 'cmpct-v030-hosted-android-evidence-v1',
+              'schema': 'cmpct-v030-hosted-android-evidence-v2',
               'candidate_sha': candidate_sha,
               'candidate_fingerprint': fingerprint,
+              'native_dependency_lock_sha256': hashlib.sha256(lock.read_bytes()).hexdigest(),
+              'native_dependency_lock_tracked': True,
+              'cargo_resolution_locked': True,
+              'native_dependency_lock_stable_during_run': True,
               'workflow': 'android.yml',
               'run_id': int(os.environ['GITHUB_RUN_ID']),
               'run_attempt': int(os.environ['GITHUB_RUN_ATTEMPT']),
@@ -307,8 +324,10 @@ jobs:
 
 # Android consumes libcmpct_portable through a parser-free JNI shim. Canonical r25, implicit-v4 filesystem control,
 # logs inverse, compact-control, and inherited r24 therefore share one Rust admission/recovery implementation.
-# Split classifier/exact-receipt custody cancels obsolete routing on the long-lived integration PR while preserving
-# every admitted hosted-emulator receipt for its exact source SHA. Physical ARM64 remains separate.
+# Hosted authority now binds the clean exact-candidate fingerprint to the tracked native Cargo.lock, requires the
+# Android build itself to use --locked dependency resolution, proves the lock does not drift, and records its SHA-256
+# in the receipt. Split classifier/exact-receipt custody cancels obsolete routing on the long-lived integration PR
+# while preserving every admitted hosted-emulator receipt for its exact source SHA. Physical ARM64 remains separate.
 # The authoritative integration branch has the same path-scoped push admission because scheduled/API commits do not
 # reliably emit pull_request synchronization; hosted evidence remains exact-SHA and physical ARM64 remains separate.
 # A deliberate `v030-physical-arm64` PR label also admits hosted Android for the same source. The physical workflow
