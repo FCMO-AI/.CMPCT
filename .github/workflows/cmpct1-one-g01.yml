@@ -78,6 +78,12 @@ jobs:
       - name: A/B one-signal local and global Gear retention
         run: python -m benchmarks.one.one_g02_tiered_gear_ab | tee one-artifacts/one-g02-tiered-gear-ab.json
 
+      - name: Prove long-cycle sparse anchor starvation
+        run: python -m benchmarks.one.one_g02_anchor_starvation | tee one-artifacts/one-g02-anchor-starvation.json
+
+      - name: A/B bounded-gap one-signal Gear retention
+        run: python -m benchmarks.one.one_g02_bounded_gear_ab | tee one-artifacts/one-g02-bounded-gear-ab.json
+
       - name: Measure one-pass Gear signal fusion cost
         run: python -m benchmarks.one.one_g02_fused_gear_signal | tee one-artifacts/one-g02-fused-gear-signal.json
 
