@@ -41,6 +41,29 @@ def test_aligned_reuse_is_nominated_only_after_byte_verification() -> None:
     assert result.stats.total_source_read_bytes == len(data) + 128
 
 
+def test_adjacent_unique_reuse_is_coalesced_before_exact_proof() -> None:
+    source = random.Random(31).randbytes(4 * 64)
+    data = source + source
+    result = observe(data, min_run=8, chunk_size=64)
+    assert result.reuse == (type(result.reuse[0])(source=0, target=len(source), length=len(source)),)
+    assert result.stats.reuse_candidates == 1
+    assert result.stats.reuse_opportunity_bytes == len(source)
+    assert result.stats.collision_verifications == 1
+    assert result.stats.verification_read_bytes == 2 * len(source)
+
+
+def test_eligible_run_suppresses_redundant_reuse_search() -> None:
+    data = b"Q" * 4096
+    result = observe(data, min_run=8, chunk_size=64)
+    assert len(result.runs) == 1
+    assert result.stats.run_opportunity_bytes == len(data)
+    assert result.reuse == ()
+    assert result.stats.hash_lookups == 0
+    assert result.stats.collision_verifications == 0
+    assert result.stats.verification_read_bytes == 0
+    assert result.stats.total_source_read_bytes == len(data)
+
+
 def test_incompressible_random_input_has_sparse_false_pattern_surface() -> None:
     data = random.Random(7).randbytes(64 * 1024)
     result = observe(data, min_run=8, chunk_size=64)
