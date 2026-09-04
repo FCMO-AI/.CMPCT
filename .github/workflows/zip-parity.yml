@@ -308,7 +308,7 @@ jobs:
           python tools/check_performance_regression.py \
             --base benchmark-artifacts/base.json \
             --candidate benchmark-artifacts/candidate.json \
-            --max-time-regression 0.10 \
+            --max-time-regression 0.05 \
             --max-size-regression 0.01
 
       - name: Publish performance summary
