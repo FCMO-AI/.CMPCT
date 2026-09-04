@@ -56,3 +56,21 @@ def test_failures_reduce_coverage_instead_of_disappearing() -> None:
     assert s["successful_corpora"] == 1
     assert s["coverage_pct"] == 50.0
     assert s["timeout_corpora"] == 1
+
+
+def test_zero_duration_samples_are_censored_from_timing_indices() -> None:
+    corpora = {
+        "timer-floor": {
+            "logical_bytes": 1000,
+            "results": {
+                "cmpct-v0.29-shipping-r24": cell(bytes_=400, create=0.00, extract=0.01, rss=200),
+                "zip-deflate-9": cell(bytes_=500, create=0.01, extract=0.00, rss=100),
+            },
+        }
+    }
+    p = scorecard.pairwise(corpora, "cmpct-v0.29-shipping-r24", "zip-deflate-9")
+    assert p["size_index"] == 125.0
+    assert p["create_speed_index"] is None
+    assert p["create_speed_index_corpora"] == 0
+    assert p["extract_speed_index"] is None
+    assert p["extract_speed_index_corpora"] == 0
