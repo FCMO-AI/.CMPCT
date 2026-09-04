@@ -1,5 +1,5 @@
 name: CMPCT v0.30 registered diagnostic bridge / R35 lock-caller attribution
-# ci-lane: forge-diagnostic
+# ci-lane: deep
 # ci-cancel-policy: preserve-running-exact-receipt
 # ci-pr-scope: exact-head-bridge
 # The dedicated R35 workflow exists on the PR branch but GitHub has not routed a
@@ -17,6 +17,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: cmpct-v030-r35-bridge-${{ github.event.pull_request.head.sha || github.sha }}
+  cancel-in-progress: false
+
 env:
   PYTHONPATH: ${{ github.workspace }}
   EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
@@ -25,9 +29,6 @@ jobs:
   r35-bridge:
     runs-on: ubuntu-24.04
     timeout-minutes: 120
-    concurrency:
-      group: cmpct-v030-r35-bridge-${{ github.event.pull_request.head.sha || github.sha }}
-      cancel-in-progress: false
     steps:
       - uses: actions/checkout@v6
         with:
