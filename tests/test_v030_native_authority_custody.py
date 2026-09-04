@@ -6,6 +6,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 WORKFLOW = ROOT / ".github/workflows/v030-native-authority.yml"
+ANDROID_BUILD = ROOT / "integrations/android/build-native.sh"
 
 # Canonical profile isolation and implicit-v4 admission execute these semantic-owner sources inside the native
 # authority boundary. A wrapper-only trigger is insufficient: changing a cloned reader source, the manifest
@@ -55,6 +56,12 @@ def test_native_authority_has_nonduplicating_authoritative_branch_push_route() -
     # exact-SHA native receipt is not launched twice.
     assert 'if [ "$EVENT_NAME" = "pull_request" ] && [ "$HEAD_REF" = "agent/v030-authoritative-integration" ]; then' in text
     assert "HEAD_REF: ${{ github.head_ref }}" in text
+
+
+def test_android_native_build_uses_committed_locked_dependency_graph() -> None:
+    text = ANDROID_BUILD.read_text(encoding="utf-8")
+    assert 'test -f "$CRATE/Cargo.lock"' in text
+    assert "build --release --locked" in text
 
 
 def test_native_authority_has_no_transient_rustfmt_repair_workflow() -> None:
