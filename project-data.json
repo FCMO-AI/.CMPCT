@@ -6,7 +6,7 @@
     "status": "pre-1.0 / active development",
     "canonical_repository": "FCMO-AI/.CMPCT",
     "canonical_branch": "main",
-    "site_build_commit": "0c070b2c63e7118ceaf7a8ff3b48951aa1e536b1",
+    "site_build_commit": "dd0c12cd6ee2dbb859464ea5c6be221ad34b9fdf",
     "publication": {
       "mode": "public",
       "status": "public website"
@@ -43,7 +43,7 @@
       "No-regression is a core-release promotion boundary, not an exploration ban: preserve a verified breakthrough seed with explicit regression debt, then rehabilitate the debt while retaining the gain before promotion.",
       "The public site is a proof surface: headline numbers come from committed evidence, relevant losses remain visible, and research results never borrow canonical authority."
     ],
-    "surface_revision": "0.29.k"
+    "surface_revision": "0.29.l"
   },
   "frontier": {
     "file": "2026-08-17-mosaic-v029-public.json",

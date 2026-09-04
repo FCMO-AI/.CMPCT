@@ -1,6 +1,6 @@
 # .CMPCT
 
-> Project v0.29.0 · surface 0.29.k · canonical format r24.
+> Project v0.29.0 · surface 0.29.l · canonical format r24.
 
 CMPCT is an experimental general-purpose lossless archive/container. Performance is a core-release contract: breakthrough research may carry explicit regression debt, but promotion requires rehabilitation while retaining the breakthrough. Presentation-only work uses the alphabetic surface track.
 
