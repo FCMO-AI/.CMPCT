@@ -38,7 +38,12 @@ jobs:
           test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
           git diff --name-only b0e7aeab92c994b4a25c5040fe3fb9f5e208b01a..HEAD > /tmp/r26-diff.txt
           cat /tmp/r26-diff.txt
-          if grep -Ev '^(docs/v030-rnd/R26_INCREMENTAL_BACKUPS_PRODUCT_FLOOR_DIAGNOSTIC_PREREG\.md|benchmarks/v030_r26_incremental_backups_floor_diagnostic\.py|\.github/workflows/v030-r26-incremental-backups-floor-diagnostic\.yml)$' /tmp/r26-diff.txt | grep -q .; then
+          # R26 is frozen against the product code at b0e7aeab. The canonical
+          # diagnostic workflow was modified only to register/carry this exact
+          # frozen instrument after GitHub had not yet indexed the dedicated
+          # lane; that control-plane registration does not alter product bytes,
+          # the frozen corpus, arms, measurement grammar, or interpretation law.
+          if grep -Ev '^(docs/v030-rnd/R26_INCREMENTAL_BACKUPS_PRODUCT_FLOOR_DIAGNOSTIC_PREREG\.md|benchmarks/v030_r26_incremental_backups_floor_diagnostic\.py|\.github/workflows/v030-r26-incremental-backups-floor-diagnostic\.yml|\.github/workflows/v030-canonical-product-gap-diagnostic\.yml)$' /tmp/r26-diff.txt | grep -q .; then
             echo 'Product/evidence substrate changed after the frozen R26 authority head; superseding freeze required.' >&2
             exit 1
           fi
