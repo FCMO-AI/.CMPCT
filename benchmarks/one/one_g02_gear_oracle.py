@@ -10,6 +10,7 @@ All accepted reuse is byte-verified and all extra comparison reads are charged.
 """
 from __future__ import annotations
 
+from hashlib import blake2b
 import json
 import os
 import random
@@ -28,19 +29,13 @@ MAX_INDEX_ENTRIES = 1 << 13
 _U64_MASK = (1 << 64) - 1
 
 
-def _splitmix64_table() -> tuple[int, ...]:
-    x = 0x434D504354434443
-    values: list[int] = []
-    for _ in range(256):
-        x = (x + 0x9E3779B97F4A7C15) & _U64_MASK
-        z = x
-        z = ((z ^ (z >> 30)) * 0xBF58476D1CE4E5B9) & _U64_MASK
-        z = ((z ^ (z >> 27)) * 0x94D049BB133111EB) & _U64_MASK
-        values.append((z ^ (z >> 31)) & _U64_MASK)
-    return tuple(values)
+def _u64(data: bytes, *, person: bytes) -> int:
+    return int.from_bytes(blake2b(data, digest_size=8, person=person[:16]).digest(), "little")
 
 
-_GEAR = _splitmix64_table()
+# Exact historical CMPCT resemblance Gear table derivation. This is encoder-side
+# discovery knowledge only; no CDC chunk type or reader-visible mechanism is inherited.
+_GEAR = tuple(_u64(bytes([i]), person=b"cmpct-gear-v1") for i in range(256))
 
 
 @dataclass(frozen=True)
@@ -186,13 +181,14 @@ def run() -> dict[str, object]:
             "gear_reference_mib_s": (len(data) / (1024 * 1024)) / (elapsed / 1_000_000_000),
         })
     return {
-        "schema": "cmpct-one-g02-gear-oracle-v2",
+        "schema": "cmpct-one-g02-gear-oracle-v3",
         "experimental_version": "ONE-G0.2",
         "source_sha": os.environ.get("EVIDENCE_HEAD") or os.environ.get("GITHUB_SHA") or "local-unbound",
         "window": WINDOW,
         "anchor_bits": ANCHOR_BITS,
         "max_index_entries": MAX_INDEX_ENTRIES,
         "repetitions": REPETITIONS,
+        "signal_identity": "historical cmpct-gear-v1 BLAKE2 table derivation",
         "claim_boundary": "historical CDC signal translated into ONE reuse discovery; oracle only, no reader-visible CDC semantics or product-speed claim",
         "rows": rows,
     }
