@@ -1,8 +1,9 @@
 # CMPCT ONE — Current Research State
 
-**Status:** design formalized; implementation not yet started  
+**Status:** ONE-G0.1 implementation active; minimal Law IR/reference evaluator under exact-head CI  
 **Branch:** `research/cmpct1`  
 **Control branch:** `research/cmpct1-cleanroom`  
+**Research PR:** #88 (draft; base is the frozen v0.30 comparator branch to avoid inherited-CI fanout)  
 **Experimental version:** `ONE-G0.1`  
 **Date:** 2026-09-04
 
@@ -32,7 +33,7 @@ Do not rewrite or delete the v0.30 evidence/branch forest.
 
 ## Important inherited negative evidence
 
-The retired v0.30 F-01 reversible-structure thesis proved real composition headroom but failed its stronger general admission/generalization claim. CMPCT1 must preserve these scoped constraints:
+The retired v0.30 F-01 reversible-structure thesis proved real composition headroom but failed its stronger general admission/generalization claim. CMPCT1 preserves these scoped constraints:
 
 - human structural labels are not sufficient generic admission predicates;
 - seed-local operator inactivity does not justify global grammar pruning;
@@ -43,31 +44,43 @@ ONE therefore requires content-derived Opportunity Gates and explicit discovery 
 
 ## Current Engineering Grid position
 
-**Next:** `ONE-00` + `ONE-01`.
+`ONE-00` authority/comparator lock is established by `docs/CMPCT1_GENESIS.md` and this state file.
 
-### ONE-00
+`ONE-01` implementation has begun in `experiments/one/`:
 
-Lock exact benchmark/comparator authority, implementation handoff state and inherited invariants.
+- `ir.py`: six generic reader-visible relationships only — `surprise`, `concat`, `repeat`, `fill`, `xor`, `add8`;
+- `vm.py`: deterministic bounded reference evaluator with cycle, depth, output-byte, work-byte, range, declared-length and root-SHA checks;
+- `tests/one/test_one_g01_vm.py`: hand-derived conformance oracle plus hostile resource/error vectors;
+- `experiments/one/VERSION`: `ONE-G0.1`.
 
-### ONE-01
+No opaque `MOSAIC`, `ZSTD`, `PREFLATE`, `GRAMMAR` or other historical codec opcode is admitted.
 
-Build the smallest deterministic ONE IR/reference evaluator and independent conformance path for:
+### Active hypothesis
 
-- Surprise-backed literal information;
-- source/range reuse;
-- slice/concat;
-- repeat/fill/zeros;
-- generic bounded delta/arithmetic;
-- multi-source reconstruction;
-- output length/hash/resource checks.
+One small generic bulk algebra can represent the first required deterministic relationships without reader complexity approaching the old mechanism zoo.
 
-No opaque `MOSAIC`, `ZSTD`, `PREFLATE`, `GRAMMAR` or similar reader opcodes.
+### Disproof / reform condition
+
+Revise ONE-01 before deeper compression work if independent conformance requires historical mechanism opcodes, if representation/control overhead is already structurally excessive, or if bounded hostile execution cannot be enforced without adding general VM powers.
+
+### Evidence still required before ONE-01 closes
+
+- exact-head CI green on the current implementation fingerprint;
+- independent conformance agreement retained;
+- explicit serialized control-byte accounting for the tiny vector families;
+- hostile depth/work/output/range checks green;
+- a second small independent evaluator or equivalent stronger oracle if semantic ambiguity survives review.
+
+## Next decisive work
+
+1. consume exact-head CI for PR #88 and repair any semantic/test defect without weakening the bounds;
+2. add a deterministic compact experimental serialization/cost model so ONE-01 can measure Law/control/Surprise overhead rather than merely execute Python objects;
+3. compare literal/reuse/repetition/sparse/multi-parent vector costs against direct information cost and against the simplest historical encodings where equivalent;
+4. only then decide whether the six-operation vocabulary is small enough to freeze or must be reduced/reworked before ONE-02.
 
 ## First falsification question
 
 Can one small generic ONE grammar express literal, reuse, repetition, sparse and multi-source relationships with exact deterministic reconstruction **without** control overhead or reader complexity becoming comparable to the separate mechanisms it is meant to subsume?
-
-If no, revise the IR before optimizing compression or adding more operators.
 
 ## One-week decision boundary
 
