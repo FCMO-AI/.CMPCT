@@ -1,8 +1,10 @@
 # v0.30 exact-head r24 core / ZIP performance custody receipt — 2026-09-04
 
-Status: **ACCEPTED R24 CORE REGRESSION EVIDENCE ONLY — not v0.30 product-selector, external-frontier, or strict-release authority**
+Status: **DIAGNOSTIC / SUPERSEDED FOR PROMOTION — benchmark executability proven, normative 5% timing authority requires rerun**
 
-This receipt persists the first substantive exact-head `zip-parity.yml` performance result after restoration of the historical `benchmarks/shipping_vs_frontier_v029.py` substrate. It closes the benchmark-executability regression that previously caused full pytest collection and the ZIP performance lane to fail before measurement. It does not change any corpus, comparator, timing boundary, byte threshold, release hurdle, product-selection law, or accepted repair-v6 identity.
+This record persists the first substantive exact-head `zip-parity.yml` performance result after restoration of the historical `benchmarks/shipping_vs_frontier_v029.py` substrate. It proves that the prior import/executability regression was retired. Hostile review then found that the workflow invoked a deprecated compatibility option with a 10% relative timing envelope while `docs/PERFORMANCE_RELEASE_GATE.md` requires 5% plus 3 ms. The run is therefore preserved as evidence but is not promoted as release-performance authority.
+
+No corpus, comparator, byte threshold, release hurdle, product-selection law, or accepted repair-v6 identity was changed to resolve this custody defect.
 
 ## Exact source and run
 
@@ -26,43 +28,41 @@ This receipt persists the first substantive exact-head `zip-parity.yml` performa
 - artifact id: `9953340332`
 - artifact ZIP SHA-256: `9e848c09726d8667cd7a16b80d589a35bf88a2685816043676d4bbc66ad30450`
 
-## Performance result
+## Observed result and policy mismatch
 
-The unchanged promotion policy was applied:
+The executed command used:
 
 - deterministic archive-size regression tolerance: **0 bytes**;
-- timing failure boundary: slowdown must exceed both **10%** and **3 ms** on the same runner.
+- timing failure boundary: slowdown exceeding both **10%** and **3 ms**.
 
-Terminal gate result: **PASS**
+The normative repository policy is stricter: slowdown exceeding both **5%** and **3 ms** is a confirmed timing regression. Because the executed relative threshold was too weak, the workflow's terminal `PASS` is not itself release authority even though the raw observations do not reveal an obvious 5%+3 ms failure.
+
+Observed terminal result under the superseded invocation:
 
 - confirmed regressions: **0**;
 - measured timing improvements: **10**;
-- every apparent slowdown remained inside the documented timing-noise envelope;
-- the compatibility argument `--max-size-regression=0.01` was explicitly ignored by the checker for promotion semantics; the zero-byte rule remained authoritative.
+- representative improvements: media library create `29.477 -> 29.094 ms` (-1.30%), media CLI create `192.977 -> 191.457 ms` (-0.79%), source CLI create `110.803 -> 109.111 ms` (-1.53%), media library extract `4.498 -> 4.410 ms` (-1.94%).
 
-Representative measured improvements from the exact run:
+The largest apparent slowdown in absolute time was combined CLI create at `+20.508 ms / +3.04%`, below the normative 5% relative side. Apparent slowdowns above 5% were sub-3-ms cases (for example nested library create `+0.625 ms / +5.52%` and sparse library extract `+0.180 ms / +6.22%`). This suggests the same raw run would likely pass the normative conjunction, but repository law requires the corrected fail-closed gate itself to execute before promotion.
 
-- media library create: `29.477 -> 29.094 ms` (**-1.30%**);
-- media CLI create: `192.977 -> 191.457 ms` (**-0.79%**);
-- source CLI create: `110.803 -> 109.111 ms` (**-1.53%**);
-- media library extract: `4.498 -> 4.410 ms` (**-1.94%**).
+## Custody repair
 
-Largest notable apparent slowdown still inside the frozen noise envelope:
+The defect was repaired in two layers:
 
-- combined CLI create: `+20.508 ms / +3.04%` — below the 10% relative boundary, therefore not a confirmed regression.
+1. `.github/workflows/zip-parity.yml` now invokes `--max-time-regression 0.05` rather than `0.10`.
+2. `tools/check_performance_regression.py` now encodes policy maxima of 5% and 3 ms and rejects command-line options, including the deprecated compatibility alias, that attempt to loosen either envelope. Future stale callers therefore fail closed instead of silently diluting release policy.
 
 ## Causal interpretation
 
-Before `3dd19aa3`, the release path failed during import because `benchmarks/shipping_vs_frontier_v029_repair_v6.py` depended on a historical base module that had been deleted during an earlier broad revert. Restoring the exact pre-revert historical blob removed that substrate failure without changing benchmark semantics. The exact-head workflow then reached and completed the full correctness + ABBA performance path.
+Before `3dd19aa3`, the release path failed during import because `benchmarks/shipping_vs_frontier_v029_repair_v6.py` depended on a historical base module deleted during an earlier broad revert. Restoring the exact pre-revert historical blob removed that substrate failure without changing benchmark semantics. The exact-head workflow then reached and completed the full correctness + ABBA performance path.
 
-This is therefore evidence that the restoration repaired a broken measurement substrate rather than evidence of a new compression mechanism.
+The restoration therefore repaired a broken measurement substrate. The subsequent threshold finding was a separate D0 Custody defect in release admission, not a compression regression and not permission to change the policy.
 
 ## Authority boundary
 
-This receipt authorizes only canonical r24 core regression / ZIP-parity custody for the stated exact source and corpus. The workflow itself records the same boundary: it **does not measure the promoted v0.30 r24/r25 product selector and does not satisfy v0.30 external creation-speed dominance**.
+This record does not satisfy or substitute for:
 
-It does **not** satisfy or substitute for:
-
+- a corrected exact-head r24 core regression / ZIP performance receipt;
 - T02 `compression-generalization`;
 - canonical r24-vs-r25 product parity;
 - T02 `shared-build-rehab`;
@@ -75,7 +75,8 @@ On the same source, final-release workflow run `33915108939` completed only its 
 
 ## Decision
 
-- benchmark-executability blocker caused by the missing shipping-frontier substrate: **RETIRED**;
-- r24 core regression / ZIP performance gate on `3dd19aa3`: **GREEN**;
+- missing shipping-frontier benchmark executability blocker: **RETIRED**;
+- 10%-vs-5% timing-policy drift: **REPAIRED IN SOURCE; corrected exact-head rerun pending**;
+- run `33915108857`: **PRESERVED DIAGNOSTIC, NOT PROMOTION AUTHORITY**;
 - T02 remains **CLAIMED**;
 - v0.30 release authority remains **LOCKED**.
