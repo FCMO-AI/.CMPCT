@@ -1,0 +1,83 @@
+# ci-lane: deep
+name: CMPCT established external shipping baselines
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - bench/established-corpora-v2
+    paths:
+      - benchmarks/established_corpora_baselines.py
+      - .github/workflows/established-corpora-baselines.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-established-baselines-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  benchmark:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        suite: [aggregate, members, enwik9]
+    env:
+      PYTHONUNBUFFERED: "1"
+      CMPCT_EXTERNAL_TIMEOUT: "900"
+      CMPCT_V029_SHA: "291423c604642b21a4b84d2500a12eeaac7bd9e0"
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Check benchmark/CI topology
+        run: |
+          python -m py_compile benchmarks/established_corpora_baselines.py benchmarks/established_corpora_v2.py benchmarks/established_corpora_v3.py
+          python tools/check_ci_topology.py .github/workflows/established-corpora-baselines.yml
+
+      - name: Install mature comparison tools
+        run: |
+          set -euxo pipefail
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends bzip2 curl git gzip p7zip-full time unzip xz-utils zip zstd
+
+      - name: Materialize pinned shipping v0.29
+        shell: bash
+        run: |
+          set -euxo pipefail
+          git fetch --no-tags origin "$CMPCT_V029_SHA"
+          git worktree add --detach "$RUNNER_TEMP/cmpct-v029" "$CMPCT_V029_SHA"
+          python -m venv "$RUNNER_TEMP/venv29"
+          "$RUNNER_TEMP/venv29/bin/pip" install -q -e "$RUNNER_TEMP/cmpct-v029"
+          echo "CMPCT_V029_PYTHON=$RUNNER_TEMP/venv29/bin/python" >> "$GITHUB_ENV"
+
+      - name: Fetch, validate and normalize canonical corpus bytes
+        run: |
+          set -euxo pipefail
+          python benchmarks/fetch_established_corpora.py \
+            --root "$RUNNER_TEMP/cmpct-established-${{ matrix.suite }}" \
+            --suite "${{ matrix.suite }}" \
+            --out "$RUNNER_TEMP/manifest-${{ matrix.suite }}.json"
+
+      - name: Run shipping and mature baseline benchmark
+        run: |
+          set -euxo pipefail
+          python benchmarks/established_corpora_baselines.py \
+            "$RUNNER_TEMP/manifest-${{ matrix.suite }}.json" \
+            --out "$GITHUB_WORKSPACE/external-results-${{ matrix.suite }}"
+
+      - name: Upload raw evidence handoff
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cmpct-established-baselines-${{ matrix.suite }}
+          path: |
+            external-results-${{ matrix.suite }}/external-corpora.json
+            external-results-${{ matrix.suite }}/external-corpora.partial.json
+          if-no-files-found: warn
+          retention-days: 30
