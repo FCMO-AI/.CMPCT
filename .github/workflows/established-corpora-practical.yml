@@ -1,0 +1,104 @@
+# ci-lane: deep
+name: CMPCT established external corpora practical
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - bench/established-corpora-v2
+    paths:
+      - benchmarks/established_corpora_v2.py
+      - benchmarks/established_corpora_v3.py
+      - benchmarks/external_engine_adapter.py
+      - benchmarks/fetch_established_corpora.py
+      - .github/workflows/established-corpora-practical.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-established-practical-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  benchmark:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - suite: aggregate
+            cell_timeout: 1800
+          - suite: enwik9
+            cell_timeout: 1800
+          # Member-level timing is primarily a distribution/generalization audit. A 120 s ceiling per
+          # <=52 MiB canonical member prevents one provisional research-heavy v0.30 create from consuming
+          # hours while still recording the timeout as a negative coverage result rather than hiding it.
+          - suite: members
+            cell_timeout: 120
+    env:
+      PYTHONUNBUFFERED: "1"
+      CMPCT_V029_SHA: "291423c604642b21a4b84d2500a12eeaac7bd9e0"
+      CMPCT_V030_SHA: "cf36fc2bc079b96887eb8fb5639902de5c3d56ac"
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Check benchmark/CI topology
+        run: |
+          python -m py_compile benchmarks/established_corpora_v2.py benchmarks/established_corpora_v3.py benchmarks/external_engine_adapter.py benchmarks/fetch_established_corpora.py
+          python tools/check_ci_topology.py .github/workflows/established-corpora-practical.yml
+
+      - name: Install mature comparison tools
+        run: |
+          set -euxo pipefail
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends bzip2 curl git gzip p7zip-full time unzip xz-utils zip zstd
+
+      - name: Materialize pinned CMPCT engines
+        shell: bash
+        run: |
+          set -euxo pipefail
+          git fetch --no-tags origin "$CMPCT_V029_SHA" "$CMPCT_V030_SHA"
+          git worktree add --detach "$RUNNER_TEMP/cmpct-v029" "$CMPCT_V029_SHA"
+          git worktree add --detach "$RUNNER_TEMP/cmpct-v030" "$CMPCT_V030_SHA"
+          python -m venv "$RUNNER_TEMP/venv29"
+          python -m venv "$RUNNER_TEMP/venv30"
+          "$RUNNER_TEMP/venv29/bin/pip" install -q -e "$RUNNER_TEMP/cmpct-v029"
+          "$RUNNER_TEMP/venv30/bin/pip" install -q -e "$RUNNER_TEMP/cmpct-v030"
+          echo "CMPCT_V029_PYTHON=$RUNNER_TEMP/venv29/bin/python" >> "$GITHUB_ENV"
+          echo "CMPCT_V030_PYTHON=$RUNNER_TEMP/venv30/bin/python" >> "$GITHUB_ENV"
+          echo "CMPCT_V029_REPO=$RUNNER_TEMP/cmpct-v029" >> "$GITHUB_ENV"
+          echo "CMPCT_V030_REPO=$RUNNER_TEMP/cmpct-v030" >> "$GITHUB_ENV"
+
+      - name: Fetch, validate and normalize canonical corpus bytes
+        run: |
+          set -euxo pipefail
+          python benchmarks/fetch_established_corpora.py \
+            --root "$RUNNER_TEMP/cmpct-established-${{ matrix.suite }}" \
+            --suite "${{ matrix.suite }}" \
+            --out "$RUNNER_TEMP/manifest-${{ matrix.suite }}.json"
+
+      - name: Run practical fault-isolated benchmark
+        env:
+          CMPCT_EXTERNAL_TIMEOUT: ${{ matrix.cell_timeout }}
+        run: |
+          set -euxo pipefail
+          python benchmarks/established_corpora_v3.py \
+            "$RUNNER_TEMP/manifest-${{ matrix.suite }}.json" \
+            --out "$GITHUB_WORKSPACE/external-results-${{ matrix.suite }}" \
+            --profile practical
+
+      - name: Upload raw evidence handoff
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cmpct-established-practical-${{ matrix.suite }}
+          path: |
+            external-results-${{ matrix.suite }}/external-corpora.json
+            external-results-${{ matrix.suite }}/external-corpora.partial.json
+          if-no-files-found: warn
+          retention-days: 30
