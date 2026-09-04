@@ -56,6 +56,19 @@ def test_root_serialization_order_is_canonical() -> None:
     assert encode_program(a)[0] == encode_program(b)[0]
 
 
+def test_multiple_roots_can_share_one_node_under_a_one_node_budget() -> None:
+    value = b"shared"
+    p = Program(
+        nodes=(Node("surprise", surprise=value, declared_length=len(value)),),
+        roots={"a": _root(Ref(0), value), "b": _root(Ref(0), value)},
+        limits=Limits(max_nodes=1, max_output_bytes=32, max_work_bytes=128, max_depth=1),
+    )
+    wire = encode_program(p)[0]
+    decoded = decode_program(wire)
+    assert decoded.limits.max_nodes == 1
+    assert evaluate(decoded)[0] == {"a": value, "b": value}
+
+
 def test_trailing_bytes_are_rejected() -> None:
     wire = encode_program(_program())[0]
     with pytest.raises(OneError, match="trailing bytes"):
