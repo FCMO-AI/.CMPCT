@@ -17,7 +17,7 @@ def read(path: str) -> str:
 
 
 def test_surface_revision_records_attribution_campaign() -> None:
-    assert read("SURFACE_REVISION").strip() == "0.29.l"
+    assert read("SURFACE_REVISION").strip() == "0.29.k"
 
 
 def test_repository_facade_preserves_quiet_maker_credit() -> None:
