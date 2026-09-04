@@ -67,6 +67,7 @@ def _minimizer_observe(data: bytes) -> MinimizerResult:
     global_index: dict[int, int] = {}
     local_index: OrderedDict[int, int] = OrderedDict()
     minima: deque[tuple[int, int]] = deque()
+    minimizer_enabled = len(data) >= MINIMIZER_SPAN + WINDOW
     peak_queue = 0
     last_emitted_position = -1
     h = 0
@@ -119,6 +120,11 @@ def _minimizer_observe(data: bytes) -> MinimizerResult:
                 if len(local_index) > LOCAL_ENTRIES:
                     local_index.popitem(last=False)
 
+        # An input too short to fill one minimizer span cannot emit a global minimizer.
+        # Skipping the dead queue is a structural impossibility gate, not workload dispatch.
+        if not minimizer_enabled:
+            continue
+
         while minima and minima[-1][0] >= h:
             minima.pop()
         minima.append((h, position))
@@ -131,8 +137,6 @@ def _minimizer_observe(data: bytes) -> MinimizerResult:
             continue
         signal, anchor_position = minima[0]
         anchor_start = anchor_position + 1 - WINDOW
-        # If the minimizer's entire 64-byte proof window already lies inside the
-        # current qualifying constant run, reuse nomination adds no information.
         if run_dominated and anchor_start >= run_start:
             continue
         if anchor_position == last_emitted_position:
@@ -216,21 +220,21 @@ def run() -> dict[str, object]:
     shifted = next(row for row in rows if row["case"] == "starved_shifted_basis_8k_insert1")
     shifted_recovered = shifted["minimizer_reuse_opportunity_bytes"] >= 8 * 1024
     return {
-        "schema": "cmpct-one-g02-minimizer-gear-ab-v2",
+        "schema": "cmpct-one-g02-minimizer-gear-ab-v3",
         "experimental_version": "ONE-G0.2",
         "source_sha": os.environ.get("EVIDENCE_HEAD") or os.environ.get("GITHUB_SHA") or "local-unbound",
         "minimizer_span": MINIMIZER_SPAN,
         "local_entries": LOCAL_ENTRIES,
-        "hypothesis": "rolling minima over the one Gear stream provide bounded-spacing, shift-invariant global nominations while preserving fixed-signal opportunity mass at materially lower retained state",
+        "hypothesis": "rolling minima over the one Gear stream provide bounded-spacing, shift-invariant global nominations while preserving fixed-signal opportunity mass with lower retained state on the large regimes where global discovery is needed",
         "disproof": "fixed-opportunity loss, failure on the anchor-starved one-byte-shift relation, redundant run reuse, or excessive queue/proof/elapsed carrying cost rejects minimizer retention",
         "decision": (
-            "opportunity_semantics_survive_current_falsifiers"
+            "opportunity_semantics_survive_current_falsifiers_compute_review_required"
             if not losses and shifted_recovered
             else "reject_minimizer_gear_current_falsifiers"
         ),
         "opportunity_loss_cases": losses,
         "starved_shifted_relation_recovered": shifted_recovered,
-        "claim_boundary": "encoder discovery research only; no reader-visible CDC mechanism and Python timing is not product-speed authority",
+        "claim_boundary": "encoder discovery research only; state and Python elapsed are carrying-cost evidence, not product-speed authority",
         "rows": rows,
     }
 
