@@ -1,0 +1,43 @@
+# ci-lane: research
+name: CMPCT native-core lock repair once
+
+on:
+  push:
+    branches: [agent/v030-authoritative-integration]
+    paths: ['.github/workflows/v030-core-lock-repair-once.yml']
+
+permissions:
+  contents: write
+
+concurrency:
+  group: cmpct-native-core-lock-repair-once
+  cancel-in-progress: false
+
+jobs:
+  repair-lock:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: agent/v030-authoritative-integration
+      - name: Bind triggering head
+        run: test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+      - name: Regenerate native-core lock from committed manifest
+        working-directory: native/cmpct-core
+        run: |
+          set -euo pipefail
+          cargo generate-lockfile
+          cargo check --locked
+          grep -A4 '^name = "claxon"$' Cargo.lock
+      - name: Commit only the generated lock
+        run: |
+          set -euo pipefail
+          git status --short
+          test -n "$(git status --porcelain -- native/cmpct-core/Cargo.lock)"
+          test -z "$(git status --porcelain | grep -v '^ M native/cmpct-core/Cargo.lock$' || true)"
+          git config user.name 'cmpct-custody-bot'
+          git config user.email 'actions@users.noreply.github.com'
+          git add native/cmpct-core/Cargo.lock
+          git commit -m 'custody(v030): refresh native-core dependency lock'
+          git push origin HEAD:agent/v030-authoritative-integration
