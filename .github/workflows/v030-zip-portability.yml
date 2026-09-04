@@ -96,10 +96,16 @@ jobs:
       - uses: actions/checkout@v6
         with:
           ref: ${{ env.EVIDENCE_HEAD }}
-      - name: Bind exact candidate head
+      - name: Bind exact clean candidate and portable dependency graph
         run: |
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          git ls-files --error-unmatch native/cmpct-portable/Cargo.lock >/dev/null
+          cp native/cmpct-portable/Cargo.lock "$RUNNER_TEMP/Cargo.lock.clean"
+          sha256sum native/cmpct-portable/Cargo.lock | tee "$RUNNER_TEMP/Cargo.lock.clean.sha256"
+          python -m experiments.entropygraph_v030_release_lock_strict --print-fingerprint \
+            > "$RUNNER_TEMP/cmpct-v030-fingerprint.clean.json"
+          test -z "$(git status --porcelain=v1)"
       - uses: actions/setup-python@v6
         with:
           python-version: '3.11'
@@ -110,26 +116,44 @@ jobs:
           sudo apt-get install -y zstd
           python -m pip install --upgrade pip
           python -m pip install -e '.[test]'
-      - name: Build shared native portable CLI
+      - name: Build shared native portable CLI with frozen dependency graph
         working-directory: native/cmpct-portable
-        run: cargo build --release
+        run: cargo build --release --locked
       - name: Prove r24/G04/PrefixGraph stock-ZIP parity and transactional failure
         run: |
           python tests/native_v030_zip_portability.py \
             --binary native/cmpct-portable/target/release/cmpct-portable
+      - name: Prove release identity and Cargo resolution did not drift
+        run: |
+          set -euo pipefail
+          cmp native/cmpct-portable/Cargo.lock "$RUNNER_TEMP/Cargo.lock.clean"
+          git diff --exit-code -- native/cmpct-portable/Cargo.lock
+          python -m experiments.entropygraph_v030_release_lock_strict --print-fingerprint \
+            > "$RUNNER_TEMP/cmpct-v030-fingerprint.after.json"
+          python - <<'PY'
+          import json, os, pathlib
+          temp = pathlib.Path(os.environ['RUNNER_TEMP'])
+          before = json.loads((temp / 'cmpct-v030-fingerprint.clean.json').read_text())['candidate_fingerprint']
+          after = json.loads((temp / 'cmpct-v030-fingerprint.after.json').read_text())['candidate_fingerprint']
+          if before != after:
+              raise SystemExit(f'release fingerprint mutated during ZIP portability: {before} -> {after}')
+          print(before)
+          PY
       - name: Record exact-candidate ZIP portability evidence
         run: |
-          python -m experiments.entropygraph_v030_release_lock_strict --print-fingerprint \
-            > "$RUNNER_TEMP/cmpct-v030-fingerprint.json"
           python - <<'PY'
-          import json, os, pathlib, subprocess
+          import hashlib, json, os, pathlib, subprocess
           temp = pathlib.Path(os.environ['RUNNER_TEMP'])
-          fingerprint = json.loads((temp / 'cmpct-v030-fingerprint.json').read_text())['candidate_fingerprint']
+          lock = pathlib.Path('native/cmpct-portable/Cargo.lock')
+          fingerprint = json.loads((temp / 'cmpct-v030-fingerprint.clean.json').read_text())['candidate_fingerprint']
           candidate_sha = subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip()
           evidence = {
-              'schema': 'cmpct-v030-zip-portability-evidence-v1',
+              'schema': 'cmpct-v030-zip-portability-evidence-v2',
               'candidate_sha': candidate_sha,
               'candidate_fingerprint': fingerprint,
+              'native_dependency_lock_sha256': hashlib.sha256(lock.read_bytes()).hexdigest(),
+              'native_dependency_lock_bytes': lock.stat().st_size,
+              'native_dependency_lock_frozen': True,
               'workflow': 'v030-zip-portability.yml',
               'run_id': int(os.environ['GITHUB_RUN_ID']),
               'run_attempt': int(os.environ['GITHUB_RUN_ATTEMPT']),
@@ -151,7 +175,9 @@ jobs:
         if: always()
         with:
           name: cmpct-v030-zip-portability-${{ env.EVIDENCE_HEAD }}
-          path: ${{ runner.temp }}/cmpct-v030-zip-portability-evidence.json
+          path: |
+            ${{ runner.temp }}/cmpct-v030-zip-portability-evidence.json
+            ${{ runner.temp }}/Cargo.lock.clean.sha256
           if-no-files-found: warn
           retention-days: 30
 
@@ -160,6 +186,8 @@ jobs:
 # is tested independently for genuine r24 fallback, G0-G4 and PrefixGraph. A canonical link-bearing r25 archive must
 # fail closed without modifying an existing destination or leaking transaction files, so interoperability cannot be
 # manufactured by silently dropping filesystem semantics. The classifier is cheap/cancellable; every admitted
-# result-bearing receipt remains preserved and exact-SHA-bound. T01 is deliberately outside the release fingerprint,
-# so its coordination-state updates provide a fingerprint-neutral request hook after the candidate is frozen; this
-# avoids changing product/evidence-critical bytes merely to regenerate a strict current-fingerprint ZIP receipt.
+# result-bearing receipt remains preserved and exact-SHA-bound. The candidate fingerprint is captured before Cargo or
+# test tooling runs, the committed portable lock is mandatory, every Cargo build uses --locked, and the receipt proves
+# both lock bytes and the complete release fingerprint stayed unchanged. T01 is deliberately outside the release
+# fingerprint, so its coordination-state updates provide a fingerprint-neutral request hook after the candidate is
+# frozen; this avoids changing product/evidence-critical bytes merely to regenerate a strict current-fingerprint ZIP receipt.
