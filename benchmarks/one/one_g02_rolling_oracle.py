@@ -46,14 +46,31 @@ class RollingResult:
         return self.exact_verification_read_bytes + self.extension_compare_read_bytes
 
 
+def _direct_hash(chunk: bytes) -> int:
+    value = 0
+    for byte in chunk:
+        value = (value * _BASE + byte + 1) & _U64_MASK
+    return value
+
+
+def _assert_rolling_recurrence() -> None:
+    """Fail closed if the O(1) recurrence disagrees with direct window hashing."""
+    data = random.Random(99).randbytes(257)
+    rolling = _direct_hash(data[:WINDOW])
+    for start in range(0, len(data) - WINDOW + 1):
+        if start:
+            old = data[start - 1] + 1
+            new = data[start + WINDOW - 1] + 1
+            rolling = ((rolling - old * _OLD_FACTOR) * _BASE + new) & _U64_MASK
+        if start in {0, 1, 2, 31, 63, 64, 127, 128, 193}:
+            assert rolling == _direct_hash(data[start : start + WINDOW])
+
+
 def _rolling_oracle(data: bytes) -> RollingResult:
     if len(data) < WINDOW:
         return RollingResult(0, 0, 0, 0, 0, 0, 0, 0)
 
-    rolling = 0
-    for value in data[:WINDOW]:
-        rolling = (rolling * _BASE + value + 1) & _U64_MASK
-
+    rolling = _direct_hash(data[:WINDOW])
     index: dict[int, int] = {}
     anchors = 0
     lookups = 0
@@ -86,7 +103,6 @@ def _rolling_oracle(data: bytes) -> RollingResult:
         verifications += 1
         verification_reads += 2 * WINDOW
         if data[source : source + WINDOW] != data[start : start + WINDOW]:
-            # A rolling collision can only waste discovery work; it cannot authorize a Law.
             continue
 
         # Extend a proven anchor in both directions. Source bytes must remain strictly
@@ -151,6 +167,7 @@ def _median_ns(fn) -> tuple[int, RollingResult]:
 
 
 def run() -> dict[str, object]:
+    _assert_rolling_recurrence()
     rows: list[dict[str, object]] = []
     for name, data in _cases().items():
         fixed = observe(data, min_run=8, chunk_size=64, max_index_entries=1 << 14)
