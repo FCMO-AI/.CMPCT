@@ -6,6 +6,9 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 WORKFLOW = ROOT / ".github/workflows/v030-native-authority.yml"
+NATIVE_CORE_WORKFLOW = ROOT / ".github/workflows/native-core.yml"
+ANDROID_WORKFLOW = ROOT / ".github/workflows/android.yml"
+PHYSICAL_ANDROID_WORKFLOW = ROOT / ".github/workflows/android-physical-arm64.yml"
 ANDROID_BUILD = ROOT / "integrations/android/build-native.sh"
 
 # Canonical profile isolation and implicit-v4 admission execute these semantic-owner sources inside the native
@@ -64,6 +67,30 @@ def test_android_native_build_uses_committed_locked_dependency_graph() -> None:
     assert "build --release --locked" in text
     assert 'test "$LOCK_BEFORE" = "$LOCK_AFTER"' in text
     assert 'git -C "$ROOT" diff --exit-code -- native/cmpct-portable/Cargo.lock' in text
+
+
+def test_native_core_ci_uses_committed_locked_dependency_graph() -> None:
+    text = NATIVE_CORE_WORKFLOW.read_text(encoding="utf-8")
+    assert "branches: [main, agent/v030-authoritative-integration]" in text
+    assert "git ls-files --error-unmatch native/cmpct-core/Cargo.lock" in text
+    assert "cargo clippy --locked --all-targets" in text
+    assert "cargo test --locked" in text
+    assert "cargo build --release --locked" in text
+    assert 'cmp native/cmpct-core/Cargo.lock "$RUNNER_TEMP/cmpct-core-Cargo.lock.clean"' in text
+    assert "git diff --exit-code -- native/cmpct-core/Cargo.lock" in text
+
+
+def test_android_receipts_bind_same_locked_native_graph() -> None:
+    hosted = ANDROID_WORKFLOW.read_text(encoding="utf-8")
+    physical = PHYSICAL_ANDROID_WORKFLOW.read_text(encoding="utf-8")
+    assert "cmpct-v030-hosted-android-evidence-v2" in hosted
+    assert "native_dependency_lock_sha256" in hosted
+    assert "cargo_resolution_locked" in hosted
+    assert "native_dependency_lock_stable_during_run" in hosted
+    assert "cmpct-v030-platform-android-evidence-v2" in physical
+    assert "native_dependency_lock_sha256" in physical
+    assert "native_dependency_graph_matches_hosted" in physical
+    assert "hosted and physical Android native dependency graphs differ" in physical
 
 
 def test_native_authority_has_no_transient_rustfmt_repair_workflow() -> None:
