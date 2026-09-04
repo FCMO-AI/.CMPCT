@@ -16,7 +16,7 @@ import argparse
 import json
 import math
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any, Callable, Iterable
 
 CMPCT_ENGINES = (
     "cmpct-v0.29-shipping-r24",
@@ -62,29 +62,48 @@ def load(paths: list[Path]) -> dict[str, dict[str, Any]]:
     return corpora
 
 
+def axis_index(
+    rows: list[tuple[str, dict[str, Any], dict[str, Any]]],
+    value: Callable[[dict[str, Any]], float],
+) -> tuple[float | None, int]:
+    ratios: list[float] = []
+    for _, engine, baseline in rows:
+        e = float(value(engine))
+        b = float(value(baseline))
+        # GNU time has centisecond resolution here. A reported 0.00 s is below measurement resolution,
+        # not evidence of infinite speed, so exclude that corpus from this timing axis rather than inventing
+        # an epsilon or a giant score.
+        if not (e > 0 and b > 0 and math.isfinite(e) and math.isfinite(b)):
+            continue
+        ratios.append(b / e)
+    gm = gmean(ratios)
+    return ((100.0 * gm) if gm is not None else None, len(ratios))
+
+
 def pairwise(corpora: dict[str, dict[str, Any]], engine: str, baseline: str) -> dict[str, Any]:
-    rows = []
+    rows: list[tuple[str, dict[str, Any], dict[str, Any]]] = []
     for corpus, entry in corpora.items():
         e = entry.get("results", {}).get(engine)
         b = entry.get("results", {}).get(baseline)
-        if not (ok(e) and ok(b)):
-            continue
-        rows.append((corpus, e, b))
-    def idx(fn):
-        # 100 = parity. Because lower is better on every measured axis, baseline/engine is the score.
-        return None if not rows else 100.0 * gmean(fn(e, b) for _, e, b in rows)
-    size = idx(lambda e, b: b["bytes"] / e["bytes"])
-    create = idx(lambda e, b: b["create"]["median_s"] / e["create"]["median_s"])
-    extract = idx(lambda e, b: b["extract"]["median_s"] / e["extract"]["median_s"])
-    memory = idx(lambda e, b: rss(b, "create") / rss(e, "create") if rss(e, "create") > 0 and rss(b, "create") > 0 else math.nan)
+        if ok(e) and ok(b):
+            rows.append((corpus, e, b))
+
+    size, size_n = axis_index(rows, lambda c: float(c["bytes"]))
+    create, create_n = axis_index(rows, lambda c: float(c["create"]["median_s"]))
+    extract, extract_n = axis_index(rows, lambda c: float(c["extract"]["median_s"]))
+    memory, memory_n = axis_index(rows, lambda c: rss(c, "create"))
     wins = sum(1 for _, e, b in rows if e["bytes"] < b["bytes"])
     ties = sum(1 for _, e, b in rows if e["bytes"] == b["bytes"])
     return {
         "common_corpora": len(rows),
         "size_index": size,
+        "size_index_corpora": size_n,
         "create_speed_index": create,
+        "create_speed_index_corpora": create_n,
         "extract_speed_index": extract,
+        "extract_speed_index_corpora": extract_n,
         "create_memory_index": memory,
+        "create_memory_index_corpora": memory_n,
         "size_wins": wins,
         "size_ties": ties,
         "size_losses": len(rows) - wins - ties,
@@ -95,17 +114,18 @@ def pairwise(corpora: dict[str, dict[str, Any]], engine: str, baseline: str) -> 
 def dominates(a: dict[str, Any], b: dict[str, Any]) -> bool:
     av = (a["bytes"], a["create"]["median_s"], a["extract"]["median_s"], rss(a, "create"))
     bv = (b["bytes"], b["create"]["median_s"], b["extract"]["median_s"], rss(b, "create"))
-    if not all(math.isfinite(x) for x in av + bv):
+    # A zero timing is a censored measurement at timer resolution, so it cannot establish dominance.
+    if not all(math.isfinite(float(x)) and float(x) > 0 for x in av + bv):
         return False
     return all(x <= y for x, y in zip(av, bv)) and any(x < y for x, y in zip(av, bv))
 
 
 def engine_summary(corpora: dict[str, dict[str, Any]], engine: str) -> dict[str, Any]:
     attempted = success = timeout = error = 0
-    pareto = native_rank_rows = 0
+    pareto = 0
     native_ranks: list[float] = []
     weighted_logical = weighted_bytes = 0
-    for _, entry in corpora.items():
+    for entry in corpora.values():
         results = entry.get("results", {})
         cell = results.get(engine)
         if cell is None:
@@ -113,18 +133,25 @@ def engine_summary(corpora: dict[str, dict[str, Any]], engine: str) -> dict[str,
         attempted += 1
         status = cell.get("status", "ok")
         if status != "ok":
-            timeout += status == "timeout"
-            error += status != "timeout"
+            timeout += int(status == "timeout")
+            error += int(status != "timeout")
             continue
         success += 1
         weighted_logical += int(entry["logical_bytes"])
         weighted_bytes += int(cell["bytes"])
-        candidates = {k: v for k, v in results.items() if k in (*CMPCT_ENGINES, *MATURE) and ok(v)}
-        if candidates and not any(name != engine and dominates(other, cell) for name, other in candidates.items()):
+        candidates = {
+            k: v for k, v in results.items()
+            if k in (*CMPCT_ENGINES, *MATURE) and ok(v)
+        }
+        if candidates and not any(
+            name != engine and dominates(other, cell) for name, other in candidates.items()
+        ):
             pareto += 1
-        native = [(k, v) for k, v in results.items() if k in (*NATIVE_ARCHIVES, engine) and ok(v)]
+        native = [
+            (k, v) for k, v in results.items()
+            if k in (*NATIVE_ARCHIVES, engine) and ok(v)
+        ]
         if native:
-            native_rank_rows += 1
             ordered = sorted(native, key=lambda kv: kv[1]["bytes"])
             native_ranks.append(1 + next(i for i, (k, _) in enumerate(ordered) if k == engine))
     return {
@@ -133,11 +160,15 @@ def engine_summary(corpora: dict[str, dict[str, Any]], engine: str) -> dict[str,
         "coverage_pct": (100.0 * success / attempted) if attempted else 0.0,
         "timeout_corpora": timeout,
         "error_corpora": error,
-        "weighted_size_ratio_on_successful_corpora": (weighted_bytes / weighted_logical) if weighted_logical else None,
+        "weighted_size_ratio_on_successful_corpora": (
+            weighted_bytes / weighted_logical if weighted_logical else None
+        ),
         "pareto_front_corpora": pareto,
         "pareto_front_share_pct": (100.0 * pareto / success) if success else 0.0,
-        "native_archive_size_rank_mean": (sum(native_ranks) / len(native_ranks)) if native_ranks else None,
-        "native_archive_rank_corpora": native_rank_rows,
+        "native_archive_size_rank_mean": (
+            sum(native_ranks) / len(native_ranks) if native_ranks else None
+        ),
+        "native_archive_rank_corpora": len(native_ranks),
         "pairwise": {baseline: pairwise(corpora, engine, baseline) for baseline in MATURE},
     }
 
@@ -156,6 +187,7 @@ def markdown(score: dict[str, Any]) -> str:
         "",
         "Indices use **100 = parity with the named baseline**. Above 100 is better for CMPCT on that axis; below 100 is worse.",
         "No single weighted composite is published because the correct tradeoff between bytes, time, memory, and semantics is workload-dependent.",
+        "Zero-duration timer samples are excluded from timing indices instead of being treated as infinite speed.",
         "",
     ]
     for engine, s in score["engines"].items():
@@ -195,7 +227,7 @@ def main() -> None:
     corpora = load(args.inputs)
     score = {
         "schema": "cmpct-established-corpora-scorecard-v1",
-        "axis_definition": "100=baseline parity; >100 favors CMPCT; geometric mean across common successful corpora",
+        "axis_definition": "100=baseline parity; >100 favors CMPCT; geometric mean across common successful, measurable corpora",
         "corpus_count": len(corpora),
         "engines": {engine: engine_summary(corpora, engine) for engine in CMPCT_ENGINES},
     }
