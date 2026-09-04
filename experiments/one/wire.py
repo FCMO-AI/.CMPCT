@@ -22,6 +22,7 @@ DEFAULT_DECODE_CAPS = Limits(
 MAX_WIRE_BYTES = 128 * 1024 * 1024
 MAX_ROOTS = 65536
 MAX_NAME_BYTES = 4096
+MAX_U64 = (1 << 64) - 1
 
 
 @dataclass(frozen=True)
@@ -32,8 +33,8 @@ class WireStats:
 
 
 def _uvarint(value: int) -> bytes:
-    if not isinstance(value, int) or value < 0:
-        raise OneError("uvarint requires non-negative integer")
+    if not isinstance(value, int) or value < 0 or value > MAX_U64:
+        raise OneError("uvarint requires unsigned 64-bit integer")
     out = bytearray()
     while True:
         byte = value & 0x7F
@@ -133,8 +134,13 @@ class _Reader:
         start = self.pos
         value = 0
         shift = 0
-        for _ in range(10):
+        for index in range(10):
             byte = self.byte()
+            # A canonical unsigned-64 LEB128 value has at most one payload bit in
+            # byte ten. Rejecting larger payloads prevents Python's unbounded ints
+            # from becoming an accidental wire capability.
+            if index == 9 and (byte & 0x7E):
+                raise OneError("uvarint exceeds 64-bit envelope")
             value |= (byte & 0x7F) << shift
             if not byte & 0x80:
                 encoded = bytes(self.data[start : self.pos])
