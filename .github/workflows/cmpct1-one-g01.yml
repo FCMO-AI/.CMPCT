@@ -63,6 +63,9 @@ jobs:
       - name: A/B fused observation against equivalent separate rescans
         run: python -m benchmarks.one.one_g02_fusion_ab | tee one-artifacts/one-g02-fusion-ab.json
 
+      - name: A/B G0.2 pruning and coalesced exact proof
+        run: python -m benchmarks.one.one_g02_pruning_ab | tee one-artifacts/one-g02-pruning-ab.json
+
       - name: Retain exact-head ONE evidence
         if: always()
         uses: actions/upload-artifact@v4
