@@ -1,0 +1,162 @@
+name: CMPCT v0.30 R40 selected-dictionary effort hostile review
+# ci-lane: deep
+# ci-cancel-policy: split-classifier-preserve-receipts
+# ci-pr-scope: latest-head-commit-gate
+# Hostile-review only. R40 grants no product or release credit.
+
+on:
+  pull_request:
+    paths:
+      - 'benchmarks/v030_r40_selected_dictionary_effort_hostile_review.py'
+      - 'docs/v030-rnd/R39_SELECTED_DICTIONARY_EFFORT_REHABILITATION_RESULT.md'
+      - 'docs/v030-rnd/R40_SELECTED_DICTIONARY_EFFORT_HOSTILE_REVIEW_PREREG.md'
+      - '.github/workflows/v030-r40-selected-dictionary-effort-hostile-review.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+
+jobs:
+  classify-latest-head:
+    runs-on: ubuntu-24.04
+    concurrency:
+      group: cmpct-v030-r40-classifier-${{ github.event.pull_request.number || github.ref }}
+      cancel-in-progress: true
+    outputs:
+      run_receipt: ${{ steps.scope.outputs.run_receipt }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 2
+      - id: scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          if [ "$GITHUB_EVENT_NAME" = workflow_dispatch ]; then echo 'run_receipt=true' >> "$GITHUB_OUTPUT"; exit 0; fi
+          changed="$(git diff-tree --no-commit-id --name-only -r HEAD)"
+          printf '%s\n' "$changed"
+          if printf '%s\n' "$changed" | grep -Eq '^(benchmarks/v030_r40_selected_dictionary_effort_hostile_review\.py|docs/v030-rnd/R39_SELECTED_DICTIONARY_EFFORT_REHABILITATION_RESULT\.md|docs/v030-rnd/R40_SELECTED_DICTIONARY_EFFORT_HOSTILE_REVIEW_PREREG\.md|\.github/workflows/v030-r40-selected-dictionary-effort-hostile-review\.yml)$'; then
+            echo 'run_receipt=true' >> "$GITHUB_OUTPUT"
+          else echo 'run_receipt=false' >> "$GITHUB_OUTPUT"; fi
+
+  r40-hostile-review:
+    needs: classify-latest-head
+    if: needs.classify-latest-head.outputs.run_receipt == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 240
+    concurrency:
+      group: cmpct-v030-r40-hostile-review-${{ github.event.pull_request.head.sha || github.sha }}
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 128
+
+      - name: Bind frozen R40 substrate and grammar
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          git merge-base --is-ancestor 33a703e56ce73f6caa71f2581cbc7112e06558c8 HEAD
+          for path in \
+            src/cmpct/builder.py \
+            src/cmpct/codec.py \
+            experiments/entropygraph_v030_release_product.py \
+            experiments/entropygraph_v030_release_lock_strict.py \
+            benchmarks/v030_release_ablation_canonical.py \
+            benchmarks/v030_r39_selected_dictionary_effort_rehabilitation.py \
+            benchmarks/mosaic_v029_generalization_bench.py \
+            benchmarks/history/2026-08-19-neutral-hostile-determinism-repair-v6.json \
+            docs/NATIVE_CORE.md \
+            docs/v030-rnd/R39_SELECTED_DICTIONARY_EFFORT_REHABILITATION_RESULT.md \
+            docs/v030-rnd/R40_SELECTED_DICTIONARY_EFFORT_HOSTILE_REVIEW_PREREG.md; do
+            test -n "$(git rev-parse HEAD:$path)"
+          done
+          test "$(git rev-parse e6daf706a4f05713ff0ce7a1dcf3a5f45e99d3d6:benchmarks/v030_r40_selected_dictionary_effort_hostile_review.py)" = "$(git rev-parse HEAD:benchmarks/v030_r40_selected_dictionary_effort_hostile_review.py)"
+          test "$(git rev-parse c390e860605e7968b40d775c81b4209beab596b6:docs/v030-rnd/R40_SELECTED_DICTIONARY_EFFORT_HOSTILE_REVIEW_PREREG.md)" = "$(git rev-parse HEAD:docs/v030-rnd/R40_SELECTED_DICTIONARY_EFFORT_HOSTILE_REVIEW_PREREG.md)"
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+
+      - name: Install frozen dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y zstd gcc ffmpeg libsndfile1
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[audio,test]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
+
+      - name: Compile frozen R40 instrument
+        run: python -m py_compile benchmarks/v030_r40_selected_dictionary_effort_hostile_review.py
+
+      - name: Run frozen R40 Hostile Reviewer
+        env:
+          CMPCT_EVIDENCE_HEAD: ${{ env.EVIDENCE_HEAD }}
+        run: |
+          mkdir -p benchmark-artifacts
+          python benchmarks/v030_r40_selected_dictionary_effort_hostile_review.py \
+            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/r40-work" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/r40-selected-dictionary-effort-hostile-review.json"
+
+      - name: Enforce frozen R40 completeness and decision law
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          d=json.loads(Path('benchmark-artifacts/r40-selected-dictionary-effort-hostile-review.json').read_text())
+          assert d['schema']=='cmpct-v030-r40-selected-dictionary-effort-hostile-review-v1'
+          assert d['evidence_head']==os.environ['EVIDENCE_HEAD']
+          assert d['repetitions']==5
+          assert d['accepted_repaired_v029_bytes']==137499525
+          assert d['v030_absolute_hurdle_bytes']==687783
+          assert len(d['workloads'])==15
+          assert len({(r['suite'],r['name']) for r in d['workloads']})==15
+          allowed={'PROMOTE_DICT9_NEXT_PRODUCT_PREREQUISITE','REHABILITATE_GLOBAL_CARRYING_COST','ITERATE_SAME_FAMILY','RETIRE_DICT9_PRODUCT_FAMILY','RETURN_TO_FOUNDRY','SUBSTRATE_OR_CORRECTNESS_FAILURE'}
+          assert d['decision'] in allowed
+          assert d['carrying_cost']['new_reader_grammar_states']==0
+          assert d['carrying_cost']['new_native_reader_or_c_abi_states']==0
+          assert d['carrying_cost']['new_platform_parser_copies_allowed']==0
+          assert d['carrying_cost']['projected_python_encoder_policy_branches']==1
+          for row in d['workloads']:
+              assert set(row['arms'])=={'release-all-exact','dict12-control','family-dict9'}
+              for arm in row['arms'].values():
+                  assert len(arm['repetitions'])==5
+              if d['decision']!='SUBSTRATE_OR_CORRECTNESS_FAILURE':
+                  assert row['accepted_tree_match'] and row['valid']
+                  for arm in row['arms'].values():
+                      assert arm['median']['strong_verify_ok']
+                      assert arm['median']['locality_within_8x']
+          agg=d['aggregate']
+          assert agg['logical_input_bytes']>=agg['specialized_raw_bytes']>=0
+          assert agg['family_predicate_examinations']>=agg['specialized_candidate_count']>=0
+          if d['decision']=='PROMOTE_DICT9_NEXT_PRODUCT_PREREQUISITE':
+              assert agg['protected_incremental_backups_survives']
+              assert not agg['material_runtime_regression_vs_release_workloads']
+              assert not agg['rss_regression_over_10pct_vs_release_workloads']
+              assert not agg['lost_dict12_strict_win_workloads']
+              assert not agg['false_positive_admission_workloads']
+              assert agg['activation_workloads']>=2
+          PY
+
+      - name: CI topology self-check
+        run: python tools/check_ci_topology.py .github/workflows/v030-r40-selected-dictionary-effort-hostile-review.yml
+
+      - name: Upload immutable R40 hostile-review evidence
+        uses: actions/upload-artifact@v6
+        with:
+          name: v030-r40-selected-dictionary-effort-hostile-review-${{ env.EVIDENCE_HEAD }}
+          path: benchmark-artifacts/r40-selected-dictionary-effort-hostile-review.json
+          if-no-files-found: error
+          retention-days: 90
