@@ -12,9 +12,6 @@ on:
   workflow_dispatch:
 permissions:
   contents: read
-concurrency:
-  group: cmpct-v030-r33-top-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: false
 env:
   PYTHONPATH: ${{ github.workspace }}
   EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
