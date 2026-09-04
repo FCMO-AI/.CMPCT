@@ -1,6 +1,7 @@
 name: CMPCT v0.30 R27 Incremental Backups floor diagnostic
 # ci-lane: forge-diagnostic
 # Diagnostic only. Cannot grant release credit.
+# Registration trigger: execute the already-frozen R27 instrument after GitHub indexed this workflow.
 
 on:
   pull_request:
