@@ -125,6 +125,8 @@ def _gear_oracle(data: bytes) -> GearResult:
 
 def _cases() -> dict[str, bytes]:
     shifted_basis = random.Random(13).randbytes(512 * 1024)
+    basis512 = random.Random(20).randbytes(512)
+    basis4 = random.Random(21).randbytes(4 * 1024)
     basis16 = random.Random(22).randbytes(16 * 1024)
     basis64 = random.Random(12).randbytes(64 * 1024)
     basis256 = random.Random(24).randbytes(256 * 1024)
@@ -133,6 +135,8 @@ def _cases() -> dict[str, bytes]:
         "shifted_version_pair_1byte_insert": shifted_basis + b"X" + shifted_basis,
         "random_1mib": random.Random(11).randbytes(1024 * 1024),
         "zlib_random_payload": zlib.compress(random.Random(14).randbytes(1024 * 1024), level=9),
+        "repeat_basis_512b_4k": basis512 * 8,
+        "repeat_basis_4k_64k": basis4 * 16,
         "repeat_basis_16k": basis16 * 64,
         "repeat_basis_64k": basis64 * 16,
         "repeat_basis_256k": basis256 * 4,
