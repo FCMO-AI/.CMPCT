@@ -5,10 +5,12 @@ Status: **accepted Custody receipt for the current immutable candidate fingerpri
 ## Exact candidate binding
 
 - immutable evidence source: `631216979c01627a8a3bc2bc598327c4f065e6ca`
-- current candidate fingerprint: `c119cc2cf579997f01ba973bee416acfbe4751205cf5a541215501ab74abdb7aa`
+- current candidate fingerprint: `c119dbae83a8eae6d09dbf48e764a4bc9679452cef4381cb031dc3444ecfbc69`
 - authoritative integration PR: `#56` / `agent/v030-authoritative-integration`
 
 The current-fingerprint source map is the one recorded by `docs/CURRENT_STATE.md`: coordination-only descendants may move the branch head without changing this immutable candidate source/fingerprint pair. This receipt grants no authority to a different archive fingerprint.
+
+The fingerprint above is cross-checked against the machine-checkable `native-r25` and `zip-portability` receipts for the same immutable source. Those receipts independently bind their durable strict-JSON evidence to `c119dbae83a8eae6d09dbf48e764a4bc9679452cef4381cb031dc3444ecfbc69`. A prior prose-only typo at this path used `c119cc2...`; that value had no machine-checkable receipt authority and is superseded by this correction.
 
 ## Public proof surface
 
