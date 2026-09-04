@@ -1,0 +1,108 @@
+name: CMPCT v0.30 R33 residual runtime phase attribution
+# ci-lane: deep
+# ci-cancel-policy: split-classifier-preserve-receipts
+# ci-pr-scope: latest-head-commit-gate
+on:
+  pull_request:
+    paths:
+      - 'benchmarks/v030_r33_regenerable_deflate_residual_phase_attribution.py'
+      - 'docs/v030-rnd/R32_REGENERABLE_DEFLATE_OUTPUT_DEAD_ZSTD_ELISION_RESULT.md'
+      - 'docs/v030-rnd/R33_REGENERABLE_DEFLATE_RESIDUAL_PHASE_ATTRIBUTION_PREREG.md'
+      - '.github/workflows/v030-r33-regenerable-deflate-residual-phase-attribution.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: cmpct-v030-r33-top-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: false
+env:
+  PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+jobs:
+  classify-latest-head:
+    runs-on: ubuntu-24.04
+    concurrency:
+      group: cmpct-v030-r33-classifier-${{ github.event.pull_request.number || github.ref }}
+      cancel-in-progress: true
+    outputs:
+      run_receipt: ${{ steps.scope.outputs.run_receipt }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 2
+      - id: scope
+        name: Classify exact latest-head commit
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          if [ "$GITHUB_EVENT_NAME" = workflow_dispatch ]; then echo 'run_receipt=true' >> "$GITHUB_OUTPUT"; exit 0; fi
+          changed="$(git diff-tree --no-commit-id --name-only -r HEAD)"
+          printf '%s\n' "$changed"
+          if printf '%s\n' "$changed" | grep -Eq '^(benchmarks/v030_r33_regenerable_deflate_residual_phase_attribution\.py|docs/v030-rnd/R32_REGENERABLE_DEFLATE_OUTPUT_DEAD_ZSTD_ELISION_RESULT\.md|docs/v030-rnd/R33_REGENERABLE_DEFLATE_RESIDUAL_PHASE_ATTRIBUTION_PREREG\.md|\.github/workflows/v030-r33-regenerable-deflate-residual-phase-attribution\.yml)$'; then echo 'run_receipt=true' >> "$GITHUB_OUTPUT"; else echo 'run_receipt=false' >> "$GITHUB_OUTPUT"; fi
+  r33-attribution:
+    needs: classify-latest-head
+    if: needs.classify-latest-head.outputs.run_receipt == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    concurrency:
+      group: cmpct-v030-r33-attribution-${{ github.event.pull_request.head.sha || github.sha }}
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 96
+      - name: Bind frozen R32 substrate
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          git merge-base --is-ancestor 0b1f3cd653f0e2489964b93cdd19fa8324adda2e HEAD
+          for path in src/cmpct/builder.py src/cmpct/codec.py experiments/entropygraph_v030_release_product.py benchmarks/neutral_hostile_corpus_v1.py benchmarks/neutral_hostile_determinism_repair_v1.py benchmarks/v030_release_ablation_canonical.py benchmarks/v030_r32_regenerable_deflate_output_dead_zstd_elision.py; do
+            test "$(git rev-parse 0b1f3cd653f0e2489964b93cdd19fa8324adda2e:$path)" = "$(git rev-parse HEAD:$path)" || { echo "R33 substrate drift: $path" >&2; exit 1; }
+          done
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install frozen dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y zstd gcc ffmpeg libsndfile1
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[audio,test]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
+      - name: Compile frozen instrument
+        run: python -m py_compile benchmarks/v030_r33_regenerable_deflate_residual_phase_attribution.py
+      - name: Run frozen attribution
+        env:
+          CMPCT_EVIDENCE_HEAD: ${{ env.EVIDENCE_HEAD }}
+        run: |
+          mkdir -p benchmark-artifacts
+          python benchmarks/v030_r33_regenerable_deflate_residual_phase_attribution.py --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/r33-work" --output "$GITHUB_WORKSPACE/benchmark-artifacts/r33-phase-attribution.json"
+      - name: Enforce frozen result grammar
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json,os
+          from pathlib import Path
+          d=json.loads(Path('benchmark-artifacts/r33-phase-attribution.json').read_text())
+          assert d['schema']=='cmpct-v030-r33-regenerable-deflate-residual-phase-attribution-v1'
+          assert d['evidence_head']==os.environ['EVIDENCE_HEAD']
+          assert d['repetitions']==3
+          assert set(d['targets'])=={'full-backups','nested-only'}
+          assert d['decision'] in {'PHASE_OWNER_LOCALIZED','RESIDUAL_DISTRIBUTED_OR_BELOW_ATTRIBUTION_FLOOR','SUBSTRATE_OR_IDENTITY_FAILURE'}
+          if d['decision']=='PHASE_OWNER_LOCALIZED':
+              assert d['localized_owners'] and all(x['nested_delta_s']>=0.010 and x['full_delta_s']>0 for x in d['localized_owners'])
+          PY
+      - name: Upload immutable R33 evidence
+        uses: actions/upload-artifact@v6
+        with:
+          name: v030-r33-phase-attribution-${{ env.EVIDENCE_HEAD }}
+          path: benchmark-artifacts/r33-phase-attribution.json
+          if-no-files-found: error
+          retention-days: 90
