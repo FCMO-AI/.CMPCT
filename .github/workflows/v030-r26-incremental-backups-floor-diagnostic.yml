@@ -1,8 +1,8 @@
 name: CMPCT v0.30 registered diagnostic bridge / R35 lock-caller attribution
 # ci-lane: deep
-# ci-cancel-policy: preserve-running-exact-receipt
-# ci-pr-scope: exact-head-bridge
-# The dedicated R35 workflow exists on the PR branch but GitHub has not routed a
+# ci-cancel-policy: split-classifier-preserve-receipts
+# ci-pr-scope: latest-head-commit-gate
+# The dedicated R35 workflow exists on the PR branch but GitHub did not route a
 # result-bearing run for it. This already-registered control-plane lane executes
 # the frozen R35 instrument unchanged. Diagnostic only; no product/release credit.
 
@@ -17,18 +17,49 @@ on:
 permissions:
   contents: read
 
-concurrency:
-  group: cmpct-v030-r35-bridge-${{ github.event.pull_request.head.sha || github.sha }}
-  cancel-in-progress: false
-
 env:
   PYTHONPATH: ${{ github.workspace }}
   EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
 
 jobs:
+  classify-latest-head:
+    runs-on: ubuntu-24.04
+    concurrency:
+      group: cmpct-v030-r35-bridge-classifier-${{ github.event.pull_request.number || github.ref }}
+      cancel-in-progress: true
+    outputs:
+      run_receipt: ${{ steps.scope.outputs.run_receipt }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 2
+      - id: scope
+        name: Classify exact latest-head commit
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          if [ "$GITHUB_EVENT_NAME" = workflow_dispatch ]; then
+            echo 'run_receipt=true' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          changed="$(git diff-tree --no-commit-id --name-only -r HEAD)"
+          printf '%s\n' "$changed"
+          if printf '%s\n' "$changed" | grep -Fxq '.github/workflows/v030-r26-incremental-backups-floor-diagnostic.yml'; then
+            echo 'run_receipt=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'run_receipt=false' >> "$GITHUB_OUTPUT"
+          fi
+
   r35-bridge:
+    needs: classify-latest-head
+    if: needs.classify-latest-head.outputs.run_receipt == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 120
+    concurrency:
+      group: cmpct-v030-r35-bridge-${{ github.event.pull_request.head.sha || github.sha }}
+      cancel-in-progress: false
     steps:
       - uses: actions/checkout@v6
         with:
