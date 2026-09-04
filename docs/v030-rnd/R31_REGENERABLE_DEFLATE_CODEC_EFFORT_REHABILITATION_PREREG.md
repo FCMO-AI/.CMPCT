@@ -25,7 +25,7 @@ In inherited `Builder._encode_candidate`, a retained canonical Deflate stream ex
 - saturation signal: **S5** if redundant Zstd auditions dominate the rehabilitated path;
 - terminal parent decision: `REHABILITATE_DEBT`.
 
-This is not a threshold sweep. The 64KiB retention family is not reopened. R31 preserves R30's locality-risk retention rule exactly and changes only encoding effort for candidates that R30 already classified as safely regenerable.
+This is not a threshold sweep. The 64KiB retention family is not reopened. R31 preserves R30's locality-risk retention rule exactly for every byte-winning arm and changes only encoding effort for candidates that R30 already classified as safely regenerable.
 
 ## Frozen worldview
 
@@ -33,29 +33,36 @@ For a candidate carrying exact nested-Deflate provenance that is *not* retained 
 
 The strongest simple control is therefore **single-Zstd-12 audition** for this already-regenerable semantic class, while retaining every independently applicable non-Zstd candidate required by inherited semantics. A second arm, **single-Zstd-9**, tests whether a lower-effort/lower-level encoding can retain the byte opportunity even when exact byte identity is lost.
 
+A fourth arm remeasures **release-all-exact on the same runner**. This was added before any R31 result-bearing execution to avoid cross-runner timing inference from R30's historical medians. R30's historical medians remain provenance only; R31 promotion uses the direct same-runner release control.
+
 ## Frozen arms
 
-All arms use R30 `locality-risk-v1` exact-stream retention unchanged:
+1. `release-all-exact`
+   - retain every canonical exact Deflate stream exactly as the current release-r24 control does;
+   - inherited ordinary `_encode_candidate` for all other candidates;
+   - same-runner runtime/RSS/byte floor only.
+
+The remaining three arms use R30 `locality-risk-v1` exact-stream retention unchanged:
 
 `retain := stream_bytes >= 65_536 OR raw_bytes > 8 * exact_stream_bytes`.
 
-1. `full-search`
+2. `full-search`
    - inherited ordinary `_encode_candidate` after R30 retention;
    - for small ordinary candidates, Zstd `(12,9,5)` remains fully auditioned.
 
-2. `single-zstd12`
-   - only for a candidate with nonempty exact-Deflate provenance (`candidate.deflates`) that is not canonical-retained and not a retained secondary stream;
+3. `single-zstd12`
+   - only for a candidate with nonempty exact-Deflate provenance (`candidate.deflates`) that is not canonical-retained, not a retained secondary stream, and has raw length `<65_536 B` (the inherited branch whose ordinary Zstd set is exactly `(12,9,5)`);
    - preserve inherited RAW fallback;
    - preserve WAV/FLAC/Deflate competition if applicable;
    - preserve Zstd-dictionary competition when inherited conditions permit it;
    - replace ordinary Zstd `(12,9,5)` with exactly level `12`;
    - every other candidate uses inherited `_encode_candidate` unchanged.
 
-3. `single-zstd9`
+4. `single-zstd9`
    - same semantic boundary as `single-zstd12`, but ordinary Zstd audition is exactly level `9`;
    - this is a falsifier/effort tradeoff arm, not the preferred promotion arm.
 
-No workload name, path, extension-only dispatch, corpus identity, benchmark label or output-size oracle may choose an arm or special case. Admission is the already-existing exact-Deflate provenance plus R30's frozen content-derived retention decision.
+No workload name, path, extension-only dispatch, corpus identity, benchmark label or output-size oracle may choose an arm or special case. Admission is the already-existing exact-Deflate provenance plus R30's frozen content-derived retention decision and the inherited `<64KiB` codec-effort branch.
 
 ## Frozen targets and execution
 
@@ -82,10 +89,10 @@ The result schema must record an explicit `evidence_head` from `CMPCT_EVIDENCE_H
 ## Hard invariants
 
 - exact reconstruction and strong verification;
-- R30 locality-risk retention grammar unchanged;
+- R30 locality-risk retention grammar unchanged for all byte-winning arms;
 - locality `<=8x` for every measured virtual member;
-- no >10% peak-RSS regression versus `full-search`;
-- no byte regression versus R30 `full-search` for preferred-arm promotion;
+- no >10% peak-RSS regression versus same-runner `release-all-exact` for promotion;
+- preferred-arm bytes must equal R30 `full-search` bytes and SHA-256 on each target;
 - no product edit or release credit from this experiment;
 - frozen target/corpus/comparator/thresholds may not be edited after first result-bearing execution.
 
@@ -93,14 +100,9 @@ The result schema must record an explicit `evidence_head` from `CMPCT_EVIDENCE_H
 
 Use the existing R30 law unchanged: regression is material only when both `>5%` relative and `>3 ms` absolute.
 
-For rehabilitation success, the preferred arm must do more than avoid a regression against `full-search`: it must close enough of R30's exported debt that, against the R30 release-all-exact runtime floor, neither frozen target is materially slower under that same law.
+For rehabilitation success, `single-zstd12` must not be materially slower than the **same-runner `release-all-exact` median** on either frozen target under that law.
 
-Because R31's control itself is R30's byte-winning `full-search`, the instrument must carry the frozen R30 release-all-exact medians as reference constants solely for the rehabilitation decision:
-
-- full-backups `0.4692364889999965 s`;
-- nested-only `0.3054214809999962 s`.
-
-These constants are not re-estimated or widened after execution. A future product/global Builder must remeasure direct arms on one runner before promotion.
+R30's historical release medians (`0.4692364889999965 s` full-backups and `0.3054214809999962 s` nested-only) are recorded only as historical provenance and are not promotion thresholds for R31.
 
 ## Frozen terminal grammar
 
@@ -111,17 +113,17 @@ iff all are true:
 - `single-zstd12` complete archive bytes and archive SHA-256 equal `full-search` on both targets;
 - strong verification/tree identity pass everywhere;
 - locality remains `<=8x` everywhere;
-- RSS is within 10% of `full-search` on both targets;
-- `single-zstd12` is not materially slower than the frozen R30 release-all-exact runtime floor on either target;
+- `single-zstd12` RSS is within 10% of same-runner `release-all-exact` on both targets;
+- `single-zstd12` is not materially slower than same-runner `release-all-exact` on either target;
 - the specialized path actually executes on >0 candidates.
 
 `BYTE_IDENTITY_WIN_RUNTIME_DEBT_REMAINS`
 
-iff exact bytes/verification/locality/RSS are preserved but the preferred arm remains materially slower than the frozen R30 release runtime on either target.
+iff exact bytes/verification/locality/RSS are preserved but the preferred arm remains materially slower than same-runner release on either target.
 
 `PARTIAL_BYTE_RETENTION_RUNTIME_WIN`
 
-iff `single-zstd12` loses exact R30 byte identity but remains strictly smaller than the R30 release-all-exact complete bytes on both targets and closes the runtime debt on both. This is evidence only; it does **not** authorize promotion because R30's full byte gain was not retained.
+iff `single-zstd12` loses exact R30 byte identity but remains strictly smaller than same-runner `release-all-exact` complete bytes on both targets and closes the runtime debt on both. This is evidence only; it does **not** authorize promotion because R30's full byte gain was not retained.
 
 `SINGLE9_ONLY_TRADEOFF`
 
@@ -143,7 +145,7 @@ That superseding Builder must still cover all relevant protected workloads, exac
 
 ## Falsification / retirement
 
-If `single-zstd12` cannot preserve R30 bytes, or preserves them but leaves material runtime debt, the claim that redundant lower Zstd-level auditions are sufficient to rehabilitate R30 is falsified. Do not respond by sweeping arbitrary Zstd levels. Use the result to attribute the remaining cost and either:
+If `single-zstd12` cannot preserve R30 bytes, or preserves them but leaves material same-runner runtime debt, the claim that redundant lower Zstd-level auditions are sufficient to rehabilitate R30 is falsified. Do not respond by sweeping arbitrary Zstd levels. Use the result to attribute the remaining cost and either:
 
 - isolate another measured owner in the ordinary codec path;
 - move to a structurally different execution strategy;
