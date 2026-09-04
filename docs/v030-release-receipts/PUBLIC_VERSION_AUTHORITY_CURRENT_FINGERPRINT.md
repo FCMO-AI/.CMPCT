@@ -1,18 +1,20 @@
-# v0.30 current-fingerprint public/version authority receipt
+# v0.30 public/version authority receipt — historical fingerprint only
 
-Status: **accepted Custody receipt for the current immutable candidate fingerprint; this is not live-site publication authority and does not unlock release.**
+Status: **HISTORICAL / STALE FOR CURRENT RELEASE AUTHORITY.** This file preserves a valid exact-source public-proof/version-discipline result for an older candidate, but it grants **zero** authority to the current v0.30 fingerprint and does not unlock release.
 
-## Exact candidate binding
+## Historical candidate binding
 
 - immutable evidence source: `631216979c01627a8a3bc2bc598327c4f065e6ca`
-- current candidate fingerprint: `c119dbae83a8eae6d09dbf48e764a4bc9679452cef4381cb031dc3444ecfbc69`
+- historical candidate fingerprint: `c119dbae83a8eae6d09dbf48e764a4bc9679452cef4381cb031dc3444ecfbc69`
 - authoritative integration PR: `#56` / `agent/v030-authoritative-integration`
 
-The current-fingerprint source map is the one recorded by `docs/CURRENT_STATE.md`: coordination-only descendants may move the branch head without changing this immutable candidate source/fingerprint pair. This receipt grants no authority to a different archive fingerprint.
+The branch has since undergone release-critical native dependency/workflow custody corrections. The current release fingerprint is now independently reproduced by native-authority and ZIP-portability evidence as:
 
-The fingerprint above is cross-checked against the machine-checkable `native-r25` and `zip-portability` receipts for the same immutable source. Those receipts independently bind their durable strict-JSON evidence to `c119dbae83a8eae6d09dbf48e764a4bc9679452cef4381cb031dc3444ecfbc69`. A prior prose-only typo at this path used `c119cc2...`; that value had no machine-checkable receipt authority and is superseded by this correction.
+`67c5f6009d3fa34c56c6d1706597060f56196eca4019a64f97ca5735021a68fa`
 
-## Public proof surface
+Therefore the `c119...` public/version result below is mechanism/history evidence only. Fingerprint-neutral coordination descendants may move the branch SHA without invalidating `67c5...`, but no result from a different release fingerprint may be rebound to it.
+
+## Historical public proof surface
 
 Exact-source workflow:
 
@@ -21,24 +23,21 @@ Exact-source workflow:
 - job: `proof-surface` (`101019915807`)
 - conclusion: `success`
 
-The job checked out `631216979c01627a8a3bc2bc598327c4f065e6ca` directly and asserted `HEAD == EVIDENCE_HEAD` before executing the substantive contract.
+That historical job checked out `631216979c01627a8a3bc2bc598327c4f065e6ca` directly and asserted `HEAD == EVIDENCE_HEAD` before executing the substantive contract.
 
-Observed successful authority steps:
+Observed successful mechanism evidence included:
 
-- disclosure guard clean across **1,544 tracked text files**;
-- deterministic site build and enhancement completed;
-- public proof contract reported `cmpct-public-evidence-v1` coherent;
-- release-evidence contract reported coherent with shipping core version `0.29.0` and surface revision `0.29.l`;
-- browser JavaScript syntax checks passed;
-- browser-writer smoke archive was readable by canonical Python, with `19,823` input bytes -> `889` archive bytes, 3 logical files / 2 unique blobs, while retaining canonical v24 compatibility;
-- responsive render matrix passed **16/16 physical viewport classes**, from `320x568` through `2560x1440`;
-- responsive artifact `cmpct-responsive-matrix-631216979c01627a8a3bc2bc598327c4f065e6ca` uploaded as artifact ID `9936401188`, ZIP SHA-256 `f159e805a6bc43c6143f8a38bc7c342803bea46677099d1081d7ada9a7e6b1cd`.
+- disclosure guard clean across 1,544 tracked text files;
+- deterministic site build and enhancement;
+- coherent `cmpct-public-evidence-v1` / release-evidence contract for the then-current candidate;
+- browser JavaScript syntax checks;
+- browser-writer smoke readable by canonical Python while retaining canonical-v24 compatibility;
+- responsive render matrix green for 16/16 physical viewport classes;
+- responsive artifact ID `9936401188`, ZIP SHA-256 `f159e805a6bc43c6143f8a38bc7c342803bea46677099d1081d7ada9a7e6b1cd`.
 
-### Deliberate limit
+The workflow's main-publication receipt steps were skipped, so even on `c119...` this never established live-site publication authority.
 
-The workflow's `Stamp validated main publication receipt` and `Upload validated main publication receipt` steps were **skipped** on this PR evidence run. Therefore this receipt closes the exact-candidate public proof/build/browser/responsive evidence lane only. It does **not** claim that `main`, `gh-pages`, or any live deployment has been promoted to v0.30, and it must not be used as live-site publication authority.
-
-## Version discipline
+## Historical version discipline
 
 Exact-source workflow:
 
@@ -47,16 +46,19 @@ Exact-source workflow:
 - job: `version-discipline` (`101019862707`)
 - conclusion: `success`
 
-The job checked out the same immutable candidate source directly, asserted exact `HEAD == EVIDENCE_HEAD`, and compared against base `dd0c12cd6ee2dbb859464ea5c6be221ad34b9fdf`.
-
-Terminal contract output:
+Historical terminal output:
 
 `version discipline: core stays 0.29.0; surface=0.29.l; 311 presentation/repository path(s)`
 
-This is the intended pre-release state: v0.30 work remains unreleased, so the shipping core version is not bumped and no v0.30 public release claim is manufactured.
+That was the intended unreleased state for the older candidate. Because version/public-surface paths participate in the release fingerprint, the result must be regenerated before current-fingerprint release credit can be granted.
 
-## Custody interpretation
+## Current Custody decision
 
-This receipt materially retires the current-fingerprint **public proof/build/browser/responsive** and **version-discipline** evidence gaps for the immutable candidate above. It does not retire Python correctness/range recovery, integrity, Android/physical-platform requirements, external competitor/runtime frontier, shared-build, CI topology/manifest, live-site publication, or the final direct strict-release-lock receipt.
+- `c119...` public proof/version discipline: **preserved as historical mechanism evidence**.
+- `67c5...` native-r25 and ZIP portability: **current machine-checkable release receipts**.
+- current-fingerprint public proof/version discipline: **RED / missing until regenerated**.
+- live-site publication: **RED / never granted by this receipt**.
 
-**MERGE / TAG / VERSION-BUMP / PUBLISH remains LOCKED** until all remaining current-fingerprint authority is present and the direct strict release contract reports `UNLOCKED`.
+No benchmark, format, locality, recovery, integrity, platform, version or publication requirement is weakened by this correction.
+
+**MERGE / TAG / VERSION-BUMP / PUBLISH remains LOCKED.**
