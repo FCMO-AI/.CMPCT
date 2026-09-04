@@ -5,11 +5,12 @@ from __future__ import annotations
 
 This intentionally does not collapse compression, speed, memory and coverage into one opaque number.
 For each CMPCT engine it reports direct pairwise geometric-mean indices against mature baselines,
-coverage/failures, native-container size rank, and Pareto-front participation. Ratios are expressed with
-100 = parity to the named baseline; above 100 is better for the CMPCT engine on that axis.
+direct CMPCT-generation comparisons, coverage/failures, native-container size rank, mature density-frontier
+distance, and Pareto-front participation. Ratios use 100 = parity to the named baseline; above 100 is better
+for the CMPCT engine on that axis.
 
-The comparison remains structural research evidence, not a release gate: deterministic tar+stream
-compressors and native archive containers expose different random-access, metadata and recovery semantics.
+The comparison remains structural research evidence, not a release gate: deterministic tar+stream compressors
+and native archive containers expose different random-access, metadata and recovery semantics.
 """
 
 import argparse
@@ -111,6 +112,46 @@ def pairwise(corpora: dict[str, dict[str, Any]], engine: str, baseline: str) -> 
     }
 
 
+def mature_size_frontier(corpora: dict[str, dict[str, Any]], engine: str) -> dict[str, Any]:
+    ratios: list[float] = []
+    wins = ties = losses = 0
+    rows: list[dict[str, Any]] = []
+    for corpus, entry in corpora.items():
+        results = entry.get("results", {})
+        e = results.get(engine)
+        mature = [(name, results.get(name)) for name in MATURE]
+        mature = [(name, cell) for name, cell in mature if ok(cell)]
+        if not (ok(e) and mature):
+            continue
+        best_name, best = min(mature, key=lambda kv: int(kv[1]["bytes"]))
+        ebytes = int(e["bytes"])
+        bbytes = int(best["bytes"])
+        ratios.append(bbytes / ebytes)
+        if ebytes < bbytes:
+            wins += 1
+        elif ebytes == bbytes:
+            ties += 1
+        else:
+            losses += 1
+        rows.append({
+            "corpus": corpus,
+            "best_mature": best_name,
+            "best_mature_bytes": bbytes,
+            "engine_bytes": ebytes,
+            "index": 100.0 * bbytes / ebytes,
+        })
+    gm = gmean(ratios)
+    return {
+        "definition": "per-corpus smallest successful mature-compressor artifact; an oracle reference, not one deployable compressor",
+        "corpora": len(rows),
+        "size_index": (100.0 * gm) if gm is not None else None,
+        "size_wins": wins,
+        "size_ties": ties,
+        "size_losses": losses,
+        "rows": rows,
+    }
+
+
 def dominates(a: dict[str, Any], b: dict[str, Any]) -> bool:
     av = (a["bytes"], a["create"]["median_s"], a["extract"]["median_s"], rss(a, "create"))
     bv = (b["bytes"], b["create"]["median_s"], b["extract"]["median_s"], rss(b, "create"))
@@ -169,7 +210,12 @@ def engine_summary(corpora: dict[str, dict[str, Any]], engine: str) -> dict[str,
             sum(native_ranks) / len(native_ranks) if native_ranks else None
         ),
         "native_archive_rank_corpora": len(native_ranks),
+        "mature_size_frontier": mature_size_frontier(corpora, engine),
         "pairwise": {baseline: pairwise(corpora, engine, baseline) for baseline in MATURE},
+        "direct_cmpct": {
+            baseline: pairwise(corpora, engine, baseline)
+            for baseline in CMPCT_ENGINES if baseline != engine
+        },
     }
 
 
@@ -188,14 +234,19 @@ def markdown(score: dict[str, Any]) -> str:
         "Indices use **100 = parity with the named baseline**. Above 100 is better for CMPCT on that axis; below 100 is worse.",
         "No single weighted composite is published because the correct tradeoff between bytes, time, memory, and semantics is workload-dependent.",
         "Zero-duration timer samples are excluded from timing indices instead of being treated as infinite speed.",
+        "The mature size frontier is a per-corpus oracle (smallest successful mature result), not a single deployable compressor.",
         "",
     ]
     for engine, s in score["engines"].items():
+        f = s["mature_size_frontier"]
         lines += [
             f"## {engine}",
             "",
             f"Coverage: **{fmt(s['coverage_pct'])}%** ({s['successful_corpora']}/{s['attempted_corpora']} corpora); timeouts={s['timeout_corpora']}, errors={s['error_corpora']}.",
+            f"Mature density-frontier index: **{fmt(f['size_index'])}** across {f['corpora']} common corpora (W/T/L {f['size_wins']}/{f['size_ties']}/{f['size_losses']}).",
             f"Pareto-front participation: **{fmt(s['pareto_front_share_pct'])}%** of successful corpora. Mean native-archive size rank: **{fmt(s['native_archive_size_rank_mean'])}**.",
+            "",
+            "### Mature baselines",
             "",
             "| Baseline | Common | Size | Create speed | Extract speed | Create memory | Size W/T/L |",
             "|---|---:|---:|---:|---:|---:|---:|",
@@ -206,13 +257,28 @@ def markdown(score: dict[str, Any]) -> str:
                 f"{fmt(p['extract_speed_index'])} | {fmt(p['create_memory_index'])} | "
                 f"{p['size_wins']}/{p['size_ties']}/{p['size_losses']} |"
             )
+        direct = [(name, p) for name, p in s["direct_cmpct"].items() if p["common_corpora"]]
+        if direct:
+            lines += [
+                "",
+                "### Direct CMPCT lineage",
+                "",
+                "| Baseline | Common | Size | Create speed | Extract speed | Create memory | Size W/T/L |",
+                "|---|---:|---:|---:|---:|---:|---:|",
+            ]
+            for baseline, p in direct:
+                lines.append(
+                    f"| {baseline} | {p['common_corpora']} | {fmt(p['size_index'])} | {fmt(p['create_speed_index'])} | "
+                    f"{fmt(p['extract_speed_index'])} | {fmt(p['create_memory_index'])} | "
+                    f"{p['size_wins']}/{p['size_ties']}/{p['size_losses']} |"
+                )
         lines.append("")
     lines += [
         "## Interpretation boundary",
         "",
         "Native archive containers and deterministic tar+stream compressors are both shown because they answer different useful questions. "
         "Their size/time numbers are informative but not semantically identical: random-member access, metadata fidelity, authentication, recovery, and selective-read cost differ. "
-        "Treat pairwise rows as measured axes, not as a universal winner claim.",
+        "Treat pairwise rows and the mature oracle as measured reference axes, not as a universal winner claim.",
         "",
     ]
     return "\n".join(lines)
@@ -226,7 +292,7 @@ def main() -> None:
     args = ap.parse_args()
     corpora = load(args.inputs)
     score = {
-        "schema": "cmpct-established-corpora-scorecard-v1",
+        "schema": "cmpct-established-corpora-scorecard-v2",
         "axis_definition": "100=baseline parity; >100 favors CMPCT; geometric mean across common successful, measurable corpora",
         "corpus_count": len(corpora),
         "engines": {engine: engine_summary(corpora, engine) for engine in CMPCT_ENGINES},
