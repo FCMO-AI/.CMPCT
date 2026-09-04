@@ -198,6 +198,9 @@ def _gear_observe(data: bytes) -> _GearObservation:
 
 def _cases() -> dict[str, bytes]:
     shifted = random.Random(13).randbytes(512 * 1024)
+    basis64 = random.Random(18).randbytes(64)
+    basis128 = random.Random(19).randbytes(128)
+    basis256 = random.Random(23).randbytes(256)
     basis512 = random.Random(20).randbytes(512)
     basis4k = random.Random(21).randbytes(4 * 1024)
     basis16k = random.Random(22).randbytes(16 * 1024)
@@ -207,6 +210,12 @@ def _cases() -> dict[str, bytes]:
         "random_1mib": random.Random(11).randbytes(1024 * 1024),
         "zlib_random_payload": zlib.compress(random.Random(14).randbytes(1024 * 1024), level=9),
         "zeros_1mib": b"\0" * (1024 * 1024),
+        # These deliberately attack sparse-anchor phase blindness. A global 1/1024
+        # mask can see zero anchors forever when a short cycle contains none of the
+        # qualifying Gear states, despite a large exact-reuse opportunity.
+        "repeat_basis_64b_4k": basis64 * 64,
+        "repeat_basis_128b_4k": basis128 * 32,
+        "repeat_basis_256b_4k": basis256 * 16,
         "repeat_basis_512b_4k": basis512 * 8,
         "repeat_basis_4k_64k": basis4k * 16,
         "repeat_basis_16k_1mib": basis16k * 64,
@@ -229,6 +238,7 @@ def _median(fn):
 
 def run() -> dict[str, object]:
     rows: list[dict[str, object]] = []
+    blind_spots: list[str] = []
     for name, data in _cases().items():
         fixed_ns, fixed_obj = _median(
             lambda: observe(
@@ -246,6 +256,8 @@ def run() -> dict[str, object]:
         # Both arms share the run detector. A mismatch would make the reuse comparison
         # uninterpretable and must fail rather than be narrated away.
         assert gear.run_opportunity_bytes == fixed.run_opportunity_bytes
+        if fixed.reuse_opportunity_bytes and gear.reuse_opportunity_bytes < fixed.reuse_opportunity_bytes:
+            blind_spots.append(name)
 
         rows.append({
             "case": name,
@@ -284,7 +296,7 @@ def run() -> dict[str, object]:
         })
 
     return {
-        "schema": "cmpct-one-g02-gear-replacement-ab-v2",
+        "schema": "cmpct-one-g02-gear-replacement-ab-v3",
         "experimental_version": "ONE-G0.2",
         "source_sha": os.environ.get("EVIDENCE_HEAD") or os.environ.get("GITHUB_SHA") or "local-unbound",
         "repetitions": REPETITIONS,
@@ -294,6 +306,17 @@ def run() -> dict[str, object]:
         "signal_identity": "historical cmpct-gear-v1 BLAKE2 table derivation",
         "hypothesis": "one sparse Gear signal can replace the fixed reuse index while preserving useful exact-reuse opportunity mass and reducing retained discovery state",
         "disproof": "material opportunity loss on short/aligned relationships, hidden proof rereads, or materially worse negative-path work rejects replacement at this sparsity",
+        "decision": (
+            "reject_sparse_gear_as_complete_replacement"
+            if blind_spots
+            else "sparse_gear_replacement_survives_current_falsifiers"
+        ),
+        "blind_spot_cases": blind_spots,
+        "causal_interpretation": (
+            "a periodic source whose repeating Gear-state cycle contains no masked anchor remains invisible to a global sparse-only index"
+            if blind_spots
+            else "no sparse-anchor phase blind spot observed in the current corpus"
+        ),
         "claim_boundary": "ONE discovery A/B only; exact reuse is byte-proven; no reader-visible CDC semantics and no product-speed claim",
         "rows": rows,
     }
