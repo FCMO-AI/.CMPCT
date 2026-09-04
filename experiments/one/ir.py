@@ -90,14 +90,27 @@ class Program:
                 raise OneError(f"unknown operation {node.op!r}")
             if node.declared_length is not None and node.declared_length < 0:
                 raise OneError("negative declared length")
-            if node.op == "surprise" and node.refs:
-                raise OneError("surprise node cannot reference other nodes")
-            if node.op in {"concat", "xor", "add8"} and not node.refs and not node.surprise:
-                raise OneError(f"{node.op} requires input")
-            if node.op == "repeat" and (len(node.refs) != 1 or node.count < 0):
-                raise OneError("repeat requires one ref and non-negative count")
-            if node.op == "fill" and (node.refs or not 0 <= node.value <= 255 or node.count < 0):
-                raise OneError("fill requires byte value and non-negative count")
+            if node.op == "surprise":
+                if node.refs or node.count or node.value:
+                    raise OneError("surprise node has semantically dead fields")
+            elif node.op == "concat":
+                if node.count or node.value:
+                    raise OneError("concat node has semantically dead fields")
+                if not node.refs and not node.surprise:
+                    raise OneError("concat requires input")
+            elif node.op in {"xor", "add8"}:
+                if node.count or node.value:
+                    raise OneError(f"{node.op} node has semantically dead fields")
+                if not node.refs and not node.surprise:
+                    raise OneError(f"{node.op} requires input")
+            elif node.op == "repeat":
+                if len(node.refs) != 1 or node.count < 0:
+                    raise OneError("repeat requires one ref and non-negative count")
+                if node.surprise or node.value:
+                    raise OneError("repeat node has semantically dead fields")
+            elif node.op == "fill":
+                if node.refs or node.surprise or not 0 <= node.value <= 255 or node.count < 0:
+                    raise OneError("fill requires only a byte value and non-negative count")
             for ref in node.refs:
                 validate_ref(ref, len(self.nodes))
 
