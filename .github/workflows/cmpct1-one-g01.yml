@@ -72,6 +72,9 @@ jobs:
       - name: Probe inherited gear signal as ONE-native discovery knowledge
         run: python -m benchmarks.one.one_g02_gear_oracle | tee one-artifacts/one-g02-gear-oracle.json
 
+      - name: Sweep fixed-reuse index opportunity efficiency
+        run: python -m benchmarks.one.one_g02_index_budget | tee one-artifacts/one-g02-index-budget.json
+
       - name: Retain exact-head ONE evidence
         if: always()
         uses: actions/upload-artifact@v4
