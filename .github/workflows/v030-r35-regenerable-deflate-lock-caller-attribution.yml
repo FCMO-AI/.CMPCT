@@ -10,6 +10,7 @@ on:
       - 'benchmarks/v030_r35_regenerable_deflate_lock_caller_attribution.py'
       - 'docs/v030-rnd/R34_REGENERABLE_DEFLATE_SAME_RUN_PHASE_ATTRIBUTION_RESULT.md'
       - 'docs/v030-rnd/R35_REGENERABLE_DEFLATE_LOCK_CALLER_ATTRIBUTION_PREREG.md'
+      - 'docs/v030-rnd/R35_REGENERABLE_DEFLATE_LOCK_CALLER_ATTRIBUTION_EXECUTION_STATE.md'
       - '.github/workflows/v030-r35-regenerable-deflate-lock-caller-attribution.yml'
   workflow_dispatch:
 
@@ -45,7 +46,7 @@ jobs:
           fi
           changed="$(git diff-tree --no-commit-id --name-only -r HEAD)"
           printf '%s\n' "$changed"
-          if printf '%s\n' "$changed" | grep -Eq '^(benchmarks/v030_r35_regenerable_deflate_lock_caller_attribution\.py|docs/v030-rnd/R34_REGENERABLE_DEFLATE_SAME_RUN_PHASE_ATTRIBUTION_RESULT\.md|docs/v030-rnd/R35_REGENERABLE_DEFLATE_LOCK_CALLER_ATTRIBUTION_PREREG\.md|\.github/workflows/v030-r35-regenerable-deflate-lock-caller-attribution\.yml)$'; then
+          if printf '%s\n' "$changed" | grep -Eq '^(benchmarks/v030_r35_regenerable_deflate_lock_caller_attribution\.py|docs/v030-rnd/R34_REGENERABLE_DEFLATE_SAME_RUN_PHASE_ATTRIBUTION_RESULT\.md|docs/v030-rnd/R35_REGENERABLE_DEFLATE_LOCK_CALLER_ATTRIBUTION_PREREG\.md|docs/v030-rnd/R35_REGENERABLE_DEFLATE_LOCK_CALLER_ATTRIBUTION_EXECUTION_STATE\.md|\.github/workflows/v030-r35-regenerable-deflate-lock-caller-attribution\.yml)$'; then
             echo 'run_receipt=true' >> "$GITHUB_OUTPUT"
           else
             echo 'run_receipt=false' >> "$GITHUB_OUTPUT"
