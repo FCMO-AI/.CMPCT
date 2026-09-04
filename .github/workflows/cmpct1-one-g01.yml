@@ -66,6 +66,9 @@ jobs:
       - name: A/B G0.2 pruning and coalesced exact proof
         run: python -m benchmarks.one.one_g02_pruning_ab | tee one-artifacts/one-g02-pruning-ab.json
 
+      - name: Probe sparse rolling-anchor headroom
+        run: python -m benchmarks.one.one_g02_rolling_oracle | tee one-artifacts/one-g02-rolling-oracle.json
+
       - name: Retain exact-head ONE evidence
         if: always()
         uses: actions/upload-artifact@v4
