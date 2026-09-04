@@ -51,7 +51,7 @@ jobs:
           python -m pytest -q tests/one 2>&1 | tee one-artifacts/pytest-one-g01.txt
 
       - name: Measure complete wire and reference-resource costs
-        run: python benchmarks/one/one_g01_microbench.py | tee one-artifacts/one-g01-microbench.json
+        run: python -m benchmarks.one.one_g01_microbench | tee one-artifacts/one-g01-microbench.json
 
       - name: Retain exact-head ONE evidence
         if: always()
