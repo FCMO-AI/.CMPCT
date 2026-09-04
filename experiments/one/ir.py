@@ -13,6 +13,12 @@ class OneError(ValueError):
     """Invalid ONE program or resource declaration."""
 
 
+def _is_uint(value: object) -> bool:
+    # bool is intentionally not an integer in the ONE grammar even though Python makes
+    # it an int subclass; semantic inputs should have one unambiguous type.
+    return type(value) is int and value >= 0
+
+
 @dataclass(frozen=True)
 class Ref:
     node: int
@@ -57,7 +63,7 @@ class Limits:
 
     def validate(self) -> None:
         for name, value in vars(self).items():
-            if not isinstance(value, int) or value < 0:
+            if not _is_uint(value):
                 raise OneError(f"invalid limit {name}={value!r}")
 
 
@@ -68,28 +74,46 @@ class Program:
     limits: Limits = field(default_factory=Limits)
 
     def validate_shape(self) -> None:
+        if not isinstance(self.limits, Limits):
+            raise OneError("program limits must be Limits")
         self.limits.validate()
+        if not isinstance(self.nodes, tuple):
+            raise OneError("program nodes must be a tuple")
         if len(self.nodes) > self.limits.max_nodes:
             raise OneError("node count exceeds declared limit")
-        if not self.roots:
-            raise OneError("program has no roots")
+        if not isinstance(self.roots, Mapping) or not self.roots:
+            raise OneError("program roots must be a non-empty mapping")
         for name, root in self.roots.items():
             if not isinstance(name, str) or not name:
                 raise OneError("root names must be non-empty strings")
+            if not isinstance(root, Root):
+                raise OneError("root entries must be Root values")
             validate_ref(root.ref, len(self.nodes))
-            if not isinstance(root.length, int) or root.length < 0:
+            if not _is_uint(root.length):
                 raise OneError("root length must be non-negative integer")
-            if len(root.sha256) != 64:
-                raise OneError("root sha256 must be 64 hex characters")
+            if not isinstance(root.sha256, str) or len(root.sha256) != 64:
+                raise OneError("root sha256 must be exactly 64 hex characters")
             try:
-                bytes.fromhex(root.sha256)
+                digest = bytes.fromhex(root.sha256)
             except ValueError as exc:
                 raise OneError("root sha256 is not hexadecimal") from exc
+            if len(digest) != 32:
+                # bytes.fromhex ignores ASCII whitespace, so length-of-text alone is
+                # not a sufficient digest-shape check.
+                raise OneError("root sha256 must decode to exactly 32 bytes")
         for node in self.nodes:
-            if node.op not in {"surprise", "concat", "repeat", "fill", "xor", "add8"}:
+            if not isinstance(node, Node):
+                raise OneError("node table contains non-Node value")
+            if not isinstance(node.op, str) or node.op not in {"surprise", "concat", "repeat", "fill", "xor", "add8"}:
                 raise OneError(f"unknown operation {node.op!r}")
-            if node.declared_length is not None and node.declared_length < 0:
-                raise OneError("negative declared length")
+            if not isinstance(node.refs, tuple) or any(not isinstance(ref, Ref) for ref in node.refs):
+                raise OneError("node refs must be a tuple of Ref values")
+            if not isinstance(node.surprise, bytes):
+                raise OneError("node Surprise must be bytes")
+            if not _is_uint(node.count) or not _is_uint(node.value):
+                raise OneError("node count/value must be non-negative integers")
+            if node.declared_length is not None and not _is_uint(node.declared_length):
+                raise OneError("declared length must be non-negative integer or None")
             if node.op == "surprise":
                 if node.refs or node.count or node.value:
                     raise OneError("surprise node has semantically dead fields")
@@ -104,21 +128,23 @@ class Program:
                 if not node.refs and not node.surprise:
                     raise OneError(f"{node.op} requires input")
             elif node.op == "repeat":
-                if len(node.refs) != 1 or node.count < 0:
-                    raise OneError("repeat requires one ref and non-negative count")
+                if len(node.refs) != 1:
+                    raise OneError("repeat requires exactly one ref")
                 if node.surprise or node.value:
                     raise OneError("repeat node has semantically dead fields")
             elif node.op == "fill":
-                if node.refs or node.surprise or not 0 <= node.value <= 255 or node.count < 0:
+                if node.refs or node.surprise or node.value > 255:
                     raise OneError("fill requires only a byte value and non-negative count")
             for ref in node.refs:
                 validate_ref(ref, len(self.nodes))
 
 
 def validate_ref(ref: Ref, node_count: int) -> None:
-    if not isinstance(ref.node, int) or not 0 <= ref.node < node_count:
+    if not isinstance(ref, Ref):
+        raise OneError("reference must be Ref")
+    if not _is_uint(ref.node) or ref.node >= node_count:
         raise OneError(f"invalid node reference {ref.node!r}")
-    if not isinstance(ref.start, int) or ref.start < 0:
-        raise OneError("negative/non-integer range start")
-    if ref.length is not None and (not isinstance(ref.length, int) or ref.length < 0):
-        raise OneError("negative/non-integer range length")
+    if not _is_uint(ref.start):
+        raise OneError("range start must be non-negative integer")
+    if ref.length is not None and not _is_uint(ref.length):
+        raise OneError("range length must be non-negative integer or None")
