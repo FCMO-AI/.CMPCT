@@ -88,6 +88,14 @@ This T01 update is the repository-designed fingerprint-neutral request hook for 
 
 No product code, archive grammar, benchmark threshold, locality bound, recovery rule, or platform requirement is changed by this request.
 
+### Frozen-dependency revalidation request — 2026-09-04
+
+Native dependency resolution is now part of the candidate rather than ambient CI state. The portable lock and native-core lock are both committed, both are guarded by `cargo metadata --locked`, and both must remain byte-identical through their release-facing builds. The native-core lock is the exact Cargo-generated artifact recovered from run `33900084492`, with SHA-256 `007f963ed4e135c6dcacb09cd353064ddda87453af481990ca17f7a221402cc1`; manual reconstruction of generated lock bytes is explicitly disallowed by the failed `zmij` checksum attempt preserved in CI history.
+
+This coordination-only mutation is the fingerprint-neutral admission request for the current native-authority and ZIP-portability result-bearing jobs after the lock/custody corrections. Native-core has the same T01 hook and must also finish its full matrix. All three lanes must agree on the same release fingerprint before their receipts can advance T01. Hosted Android and physical ARM64 remain separate mandatory receipts; a physical request cannot substitute for matching hosted Android v2 evidence.
+
+No format byte, product code, benchmark corpus, threshold, locality ceiling, recovery rule, integrity rule, or platform requirement changes here.
+
 ## Current continuation rule
 
 Work directly on the authoritative branch. Preserve useful earlier implementation/evidence provenance where it still applies, but rerun every normative native/platform receipt on the final reconciled fingerprint. Historical or pre-fingerprint greens prove mechanisms only.
