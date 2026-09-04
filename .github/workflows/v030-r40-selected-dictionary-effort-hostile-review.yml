@@ -1,16 +1,10 @@
 name: CMPCT v0.30 R40 selected-dictionary effort hostile review
 # ci-lane: deep
-# ci-cancel-policy: split-classifier-preserve-receipts
-# ci-pr-scope: latest-head-commit-gate
+# ci-auto-policy: retired-manual-only
+# Terminal hostile-review evidence exists; preserve this workflow for explicit frozen replay only.
 # Hostile-review only. R40 grants no product or release credit.
 
 on:
-  pull_request:
-    paths:
-      - 'benchmarks/v030_r40_selected_dictionary_effort_hostile_review.py'
-      - 'docs/v030-rnd/R39_SELECTED_DICTIONARY_EFFORT_REHABILITATION_RESULT.md'
-      - 'docs/v030-rnd/R40_SELECTED_DICTIONARY_EFFORT_HOSTILE_REVIEW_PREREG.md'
-      - '.github/workflows/v030-r40-selected-dictionary-effort-hostile-review.yml'
   workflow_dispatch:
 
 permissions:
