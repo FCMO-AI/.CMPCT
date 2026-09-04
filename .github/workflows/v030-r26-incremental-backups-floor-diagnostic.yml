@@ -1,14 +1,14 @@
-name: CMPCT v0.30 R26 Incremental Backups floor diagnostic
+name: CMPCT v0.30 R26 lane / R27 superseding diagnostic bridge
 # ci-lane: forge-diagnostic
-# This workflow is diagnostic-only. It cannot grant release credit.
+# R26 is durably invalidated before result-bearing execution. This already-registered
+# control-plane lane executes the frozen R27 successor until GitHub indexes its dedicated workflow.
+# Diagnostic only. Cannot grant release credit.
 
 on:
   pull_request:
     branches:
       - main
     paths:
-      - 'benchmarks/v030_r26_incremental_backups_floor_diagnostic.py'
-      - 'docs/v030-rnd/R26_INCREMENTAL_BACKUPS_PRODUCT_FLOOR_DIAGNOSTIC_PREREG.md'
       - '.github/workflows/v030-r26-incremental-backups-floor-diagnostic.yml'
   workflow_dispatch:
 
@@ -20,31 +20,27 @@ env:
   EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
 
 jobs:
-  r26-diagnostic:
+  r27-bridge:
     runs-on: ubuntu-24.04
     timeout-minutes: 120
     concurrency:
-      group: cmpct-v030-r26-backups-${{ github.event.pull_request.number || github.ref }}
+      group: cmpct-v030-r27-backups-${{ github.event.pull_request.number || github.ref }}
       cancel-in-progress: false
     steps:
       - uses: actions/checkout@v6
         with:
           ref: ${{ env.EVIDENCE_HEAD }}
-          fetch-depth: 8
+          fetch-depth: 16
 
-      - name: Bind diagnostic to unchanged product substrate
+      - name: Bind unchanged product substrate without circular release fingerprint
         run: |
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
-          git diff --name-only b0e7aeab92c994b4a25c5040fe3fb9f5e208b01a..HEAD > /tmp/r26-diff.txt
-          cat /tmp/r26-diff.txt
-          # R26 is frozen against the product code at b0e7aeab. The canonical
-          # diagnostic workflow was modified only to register/carry this exact
-          # frozen instrument after GitHub had not yet indexed the dedicated
-          # lane; that control-plane registration does not alter product bytes,
-          # the frozen corpus, arms, measurement grammar, or interpretation law.
-          if grep -Ev '^(docs/v030-rnd/R26_INCREMENTAL_BACKUPS_PRODUCT_FLOOR_DIAGNOSTIC_PREREG\.md|benchmarks/v030_r26_incremental_backups_floor_diagnostic\.py|\.github/workflows/v030-r26-incremental-backups-floor-diagnostic\.yml|\.github/workflows/v030-canonical-product-gap-diagnostic\.yml)$' /tmp/r26-diff.txt | grep -q .; then
-            echo 'Product/evidence substrate changed after the frozen R26 authority head; superseding freeze required.' >&2
+          git merge-base --is-ancestor b0e7aeab92c994b4a25c5040fe3fb9f5e208b01a HEAD
+          git diff --name-only b0e7aeab92c994b4a25c5040fe3fb9f5e208b01a..HEAD > /tmp/r27-diff.txt
+          cat /tmp/r27-diff.txt
+          if grep -Ev '^(\.github/workflows/v030-canonical-product-gap-diagnostic\.yml|\.github/workflows/v030-r26-incremental-backups-floor-diagnostic\.yml|\.github/workflows/v030-r27-incremental-backups-floor-diagnostic\.yml|benchmarks/v030_r26_incremental_backups_floor_diagnostic\.py|benchmarks/v030_r27_incremental_backups_floor_diagnostic\.py|docs/v030-rnd/R26_INCREMENTAL_BACKUPS_PRODUCT_FLOOR_DIAGNOSTIC_PREREG\.md|docs/v030-rnd/R26_INCREMENTAL_BACKUPS_PRODUCT_FLOOR_DIAGNOSTIC_RESULT\.md|docs/v030-rnd/R27_INCREMENTAL_BACKUPS_PRODUCT_FLOOR_DIAGNOSTIC_PREREG\.md)$' /tmp/r27-diff.txt | grep -q .; then
+            echo 'Product/corpus/policy substrate drifted after b0e7aeab; R27 is invalid and requires a superseding freeze.' >&2
             exit 1
           fi
 
@@ -53,7 +49,7 @@ jobs:
           python-version: '3.11'
           cache: pip
 
-      - name: Install canonical diagnostic dependencies
+      - name: Install frozen diagnostic dependencies
         run: |
           set -euo pipefail
           test -f /etc/apt/sources.list.d/ubuntu.sources
@@ -63,15 +59,17 @@ jobs:
           python -m pip install -e '.[audio,test]'
           python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
 
-      - name: Compile frozen R26 instrument
-        run: python -m py_compile benchmarks/v030_r26_incremental_backups_floor_diagnostic.py
+      - name: Compile frozen R27 custody wrapper and inherited R26 arm worker
+        run: |
+          python -m py_compile benchmarks/v030_r26_incremental_backups_floor_diagnostic.py
+          python -m py_compile benchmarks/v030_r27_incremental_backups_floor_diagnostic.py
 
-      - name: Run frozen R26 complete-artifact/locality diagnosis
+      - name: Run frozen R27 complete-artifact/locality diagnosis
         run: |
           mkdir -p benchmark-artifacts
-          python benchmarks/v030_r26_incremental_backups_floor_diagnostic.py \
-            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/r26-backups-work" \
-            --output "$GITHUB_WORKSPACE/benchmark-artifacts/r26-backups.json"
+          python benchmarks/v030_r27_incremental_backups_floor_diagnostic.py \
+            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/r27-backups-work" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/r27-backups.json"
 
       - name: Enforce diagnostic completeness only
         if: always()
@@ -79,11 +77,12 @@ jobs:
           python - <<'PY'
           import json
           from pathlib import Path
-          p=Path('benchmark-artifacts/r26-backups.json')
-          assert p.is_file(), 'R26 result was not published'
+          p=Path('benchmark-artifacts/r27-backups.json')
+          assert p.is_file(), 'R27 result was not published'
           d=json.loads(p.read_text())
-          assert d['schema']=='cmpct-v030-r26-incremental-backups-floor-diagnostic-v1'
-          assert d['product_fingerprint']=='aa5693f6d5899e61753bf005b70f3460f82f477535d941807d14e35788e7c1ee'
+          assert d['schema']=='cmpct-v030-r27-incremental-backups-floor-diagnostic-v1'
+          assert d['authority_product_substrate_head']=='b0e7aeab92c994b4a25c5040fe3fb9f5e208b01a'
+          assert isinstance(d['release_fingerprint_at_execution'], str) and len(d['release_fingerprint_at_execution'])==64
           assert set(d['arms'])=={'genuine-r24','release-r24','current-product'}
           assert all(row['strong_verify_ok'] for row in d['arms'].values())
           assert len({row['tree_sha256'] for row in d['arms'].values()})==1
@@ -94,11 +93,11 @@ jobs:
           }
           PY
 
-      - name: Upload immutable R26 evidence
+      - name: Upload immutable R27 evidence
         if: always()
         uses: actions/upload-artifact@v6
         with:
-          name: v030-r26-incremental-backups-floor-${{ env.EVIDENCE_HEAD }}
-          path: benchmark-artifacts/r26-backups.json
+          name: v030-r27-incremental-backups-floor-${{ env.EVIDENCE_HEAD }}
+          path: benchmark-artifacts/r27-backups.json
           if-no-files-found: error
           retention-days: 90
