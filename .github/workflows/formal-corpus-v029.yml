@@ -99,12 +99,12 @@ jobs:
 
           # Large Text Compression Benchmark / Hutter data. Matt Mahoney publishes exact raw sizes and
           # MD5/SHA-1 values; use the raw MD5s here because they are the canonical corpus identities.
-          curl --fail --location --retry 4 https://mattmahoney.net/dc/enwik8.zip -o "$ROOT/enwik8.zip"
+          curl --fail --location --retry 4 https://www.mattmahoney.net/dc/enwik8.zip -o "$ROOT/enwik8.zip"
           unzip -q "$ROOT/enwik8.zip" -d "$ROOT/enwik8"
           test "$(stat -c%s "$ROOT/enwik8/enwik8")" = 100000000
           test "$(md5sum "$ROOT/enwik8/enwik8" | awk '{print $1}')" = a1fa5ffddb56f4953e226637dabbb36a
 
-          curl --fail --location --retry 4 https://mattmahoney.net/dc/enwik9.zip -o "$ROOT/enwik9.zip"
+          curl --fail --location --retry 4 https://www.mattmahoney.net/dc/enwik9.zip -o "$ROOT/enwik9.zip"
           unzip -q "$ROOT/enwik9.zip" -d "$ROOT/enwik9"
           test "$(stat -c%s "$ROOT/enwik9/enwik9")" = 1000000000
           test "$(md5sum "$ROOT/enwik9/enwik9" | awk '{print $1}')" = e206c3450ac99950df65bf70ef61a12d
@@ -156,7 +156,7 @@ jobs:
           print(json.dumps({'source_notes':[
             'Canterbury canonical 11-file corpus from corpus.canterbury.ac.nz',
             'Silesia canonical 12-file corpus from the author endpoint with official MD5 validation',
-            'enwik8/enwik9 from mattmahoney.net with published raw MD5 validation',
+            'enwik8/enwik9 from www.mattmahoney.net with published raw MD5 validation',
           ],'corpora':corpora},indent=2))
           PY
           echo "CMPCT_FORMAL_MANIFEST=$ROOT/manifest.json" >> "$GITHUB_ENV"
