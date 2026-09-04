@@ -1,17 +1,11 @@
 name: CMPCT v0.30 R29 Incremental Backups r24 same-run carrying-cost Builder
-# ci-lane: forge-diagnostic
-# ci-cancel-policy: split-classifier-preserve-receipts
-# ci-pr-scope: latest-head-commit-gate
-# Diagnostic only. This workflow cannot grant release credit or authorize a product-policy edit.
+# ci-lane: deep
+# Historical one-shot diagnostic. Durable terminal evidence is committed in
+# docs/v030-rnd/R29_INCREMENTAL_BACKUPS_R24_CARRYING_COST_SUPERSEDING_BUILDER_RESULT.md.
+# Manual replay remains available for archaeology; automatic PR execution is retired so a
+# deliberately frozen, substrate-invalidated R29 receipt cannot consume current frontier runners.
 
 on:
-  pull_request:
-    branches:
-      - main
-    paths:
-      - 'benchmarks/v030_r29_incremental_backups_r24_carrying_cost_superseding_builder.py'
-      - 'docs/v030-rnd/R29_INCREMENTAL_BACKUPS_R24_CARRYING_COST_SUPERSEDING_BUILDER_PREREG.md'
-      - '.github/workflows/v030-r29-incremental-backups-r24-carrying-cost-same-run.yml'
   workflow_dispatch:
 
 permissions:
@@ -19,46 +13,14 @@ permissions:
 
 env:
   PYTHONPATH: ${{ github.workspace }}
-  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+  EVIDENCE_HEAD: ${{ github.sha }}
 
 jobs:
-  classify-latest-head:
-    runs-on: ubuntu-24.04
-    concurrency:
-      group: cmpct-v030-r29-classifier-${{ github.event.pull_request.number || github.ref }}
-      cancel-in-progress: true
-    outputs:
-      run_receipt: ${{ steps.scope.outputs.run_receipt }}
-    steps:
-      - uses: actions/checkout@v6
-        with:
-          ref: ${{ env.EVIDENCE_HEAD }}
-          fetch-depth: 2
-      - id: scope
-        name: Classify exact latest-head commit
-        shell: bash
-        run: |
-          set -euo pipefail
-          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
-          if [ "$GITHUB_EVENT_NAME" = workflow_dispatch ]; then
-            echo 'run_receipt=true' >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-          changed="$(git diff-tree --no-commit-id --name-only -r HEAD)"
-          printf '%s\n' "$changed"
-          if printf '%s\n' "$changed" | grep -Eq '^(benchmarks/v030_r29_incremental_backups_r24_carrying_cost_superseding_builder\.py|docs/v030-rnd/R29_INCREMENTAL_BACKUPS_R24_CARRYING_COST_SUPERSEDING_BUILDER_PREREG\.md|\.github/workflows/v030-r29-incremental-backups-r24-carrying-cost-same-run\.yml)$'; then
-            echo 'run_receipt=true' >> "$GITHUB_OUTPUT"
-          else
-            echo 'run_receipt=false' >> "$GITHUB_OUTPUT"
-          fi
-
   r29-builder:
-    needs: classify-latest-head
-    if: needs.classify-latest-head.outputs.run_receipt == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 120
     concurrency:
-      group: cmpct-v030-r29-backups-${{ github.event.pull_request.head.sha || github.sha }}
+      group: cmpct-v030-r29-historical-${{ github.sha }}
       cancel-in-progress: false
     steps:
       - uses: actions/checkout@v6
@@ -66,15 +28,15 @@ jobs:
           ref: ${{ env.EVIDENCE_HEAD }}
           fetch-depth: 32
 
-      - name: Bind unchanged product substrate
+      - name: Bind unchanged historical product substrate
         run: |
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
           git merge-base --is-ancestor b0e7aeab92c994b4a25c5040fe3fb9f5e208b01a HEAD
           git diff --name-only b0e7aeab92c994b4a25c5040fe3fb9f5e208b01a..HEAD > /tmp/r29-diff.txt
           cat /tmp/r29-diff.txt
-          if grep -Ev '^(\.github/workflows/v030-canonical-product-gap-diagnostic\.yml|\.github/workflows/v030-r26-incremental-backups-floor-diagnostic\.yml|\.github/workflows/v030-r27-incremental-backups-floor-diagnostic\.yml|\.github/workflows/v030-r28-incremental-backups-r24-carrying-cost-builder\.yml|\.github/workflows/v030-r29-incremental-backups-r24-carrying-cost-same-run\.yml|benchmarks/v030_r26_incremental_backups_floor_diagnostic\.py|benchmarks/v030_r27_incremental_backups_floor_diagnostic\.py|benchmarks/v030_r28_incremental_backups_r24_carrying_cost_builder\.py|benchmarks/v030_r29_incremental_backups_r24_carrying_cost_superseding_builder\.py|docs/v030-rnd/R26_INCREMENTAL_BACKUPS_PRODUCT_FLOOR_DIAGNOSTIC_PREREG\.md|docs/v030-rnd/R26_INCREMENTAL_BACKUPS_PRODUCT_FLOOR_DIAGNOSTIC_RESULT\.md|docs/v030-rnd/R27_INCREMENTAL_BACKUPS_PRODUCT_FLOOR_DIAGNOSTIC_PREREG\.md|docs/v030-rnd/R28_INCREMENTAL_BACKUPS_R24_CARRYING_COST_BUILDER_PREREG\.md|docs/v030-rnd/R28_INCREMENTAL_BACKUPS_R24_CARRYING_COST_BUILDER_RESULT\.md|docs/v030-rnd/R29_INCREMENTAL_BACKUPS_R24_CARRYING_COST_SUPERSEDING_BUILDER_PREREG\.md)$' /tmp/r29-diff.txt | grep -q .; then
-            echo 'Product/corpus/policy substrate drifted after b0e7aeab; R29 is invalid and requires a superseding freeze.' >&2
+          if grep -Ev '^(\.github/workflows/v030-canonical-product-gap-diagnostic\.yml|\.github/workflows/v030-r26-incremental-backups-floor-diagnostic\.yml|\.github/workflows/v030-r27-incremental-backups-floor-diagnostic\.yml|\.github/workflows/v030-r28-incremental-backups-r24-carrying-cost-builder\.yml|\.github/workflows/v030-r29-incremental-backups-r24-carrying-cost-same-run\.yml|benchmarks/v030_r26_incremental_backups_floor_diagnostic\.py|benchmarks/v030_r27_incremental_backups_floor_diagnostic\.py|benchmarks/v030_r28_incremental_backups_r24_carrying_cost_builder\.py|benchmarks/v030_r29_incremental_backups_r24_carrying_cost_superseding_builder\.py|docs/v030-rnd/R26_INCREMENTAL_BACKUPS_PRODUCT_FLOOR_DIAGNOSTIC_PREREG\.md|docs/v030-rnd/R26_INCREMENTAL_BACKUPS_PRODUCT_FLOOR_DIAGNOSTIC_RESULT\.md|docs/v030-rnd/R27_INCREMENTAL_BACKUPS_PRODUCT_FLOOR_DIAGNOSTIC_PREREG\.md|docs/v030-rnd/R28_INCREMENTAL_BACKUPS_R24_CARRYING_COST_BUILDER_PREREG\.md|docs/v030-rnd/R28_INCREMENTAL_BACKUPS_R24_CARRYING_COST_BUILDER_RESULT\.md|docs/v030-rnd/R29_INCREMENTAL_BACKUPS_R24_CARRYING_COST_SUPERSEDING_BUILDER_PREREG\.md|docs/v030-rnd/R29_INCREMENTAL_BACKUPS_R24_CARRYING_COST_SUPERSEDING_BUILDER_RESULT\.md)$' /tmp/r29-diff.txt | grep -q .; then
+            echo 'Product/corpus/policy substrate drifted after b0e7aeab; historical R29 replay is intentionally invalid on this head.' >&2
             exit 1
           fi
 
@@ -133,7 +95,7 @@ jobs:
       - name: CI topology self-check
         run: python tools/check_ci_topology.py .github/workflows/v030-r29-incremental-backups-r24-carrying-cost-same-run.yml
 
-      - name: Upload immutable R29 evidence
+      - name: Upload immutable historical R29 evidence
         if: always()
         uses: actions/upload-artifact@v6
         with:
