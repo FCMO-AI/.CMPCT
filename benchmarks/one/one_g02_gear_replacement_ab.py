@@ -27,6 +27,7 @@ from experiments.one.observe import Observation, observe
 REPETITIONS = 7
 MIN_RUN = 8
 WINDOW = 64
+PROOF_BLOCK = 4096
 FIXED_MAX_INDEX_ENTRIES = 1 << 14
 GEAR_MAX_INDEX_ENTRIES = 1 << 13
 ANCHOR_BITS = 10
@@ -57,6 +58,54 @@ class _GearObservation:
     retained_index_payload_bytes: int
 
 
+def _extend_right(data: bytes, source: int, target: int) -> tuple[int, int]:
+    """Return exact non-overlapping prefix length and charged proof reads.
+
+    The 64-byte nomination window is already proven before entry. Larger proof blocks let
+    Python delegate equality to its bulk byte comparator rather than spending one Python
+    branch per byte. On the first unequal block we refine only that block. The second read
+    during refinement is charged too; elapsed-time improvement therefore cannot hide I/O.
+    """
+    max_length = min(target - source, len(data) - target)
+    matched = WINDOW
+    reads = 0
+    while matched < max_length:
+        step = min(PROOF_BLOCK, max_length - matched)
+        reads += 2 * step
+        if data[source + matched : source + matched + step] == data[
+            target + matched : target + matched + step
+        ]:
+            matched += step
+            continue
+        for offset in range(step):
+            reads += 2
+            if data[source + matched + offset] != data[target + matched + offset]:
+                return matched + offset, reads
+        matched += step
+    return matched, reads
+
+
+def _extend_left(data: bytes, source: int, target: int, covered_until: int) -> tuple[int, int]:
+    """Return exact backwards extension without crossing prior target coverage."""
+    max_length = min(source, target - covered_until)
+    matched = 0
+    reads = 0
+    while matched < max_length:
+        step = min(PROOF_BLOCK, max_length - matched)
+        source_start = source - matched - step
+        target_start = target - matched - step
+        reads += 2 * step
+        if data[source_start : source - matched] == data[target_start : target - matched]:
+            matched += step
+            continue
+        for offset in range(1, step + 1):
+            reads += 2
+            if data[source - matched - offset] != data[target - matched - offset]:
+                return matched + offset - 1, reads
+        matched += step
+    return matched, reads
+
+
 def _gear_observe(data: bytes) -> _GearObservation:
     """One forward pass for runs + sparse Gear reuse, with exact bulk extension proof."""
     if not data:
@@ -69,14 +118,12 @@ def _gear_observe(data: bytes) -> _GearObservation:
     reuse_regions = reuse_opportunity_bytes = 0
     covered_until = 0
 
-    run_start = 0
     run_value = data[0]
     run_length = 0
     run_opportunity_bytes = 0
 
     for position, value in enumerate(data):
         if run_length == 0:
-            run_start = position
             run_value = value
             run_length = 1
         elif value == run_value:
@@ -84,7 +131,6 @@ def _gear_observe(data: bytes) -> _GearObservation:
         else:
             if run_length >= MIN_RUN:
                 run_opportunity_bytes += run_length
-            run_start = position
             run_value = value
             run_length = 1
 
@@ -115,21 +161,12 @@ def _gear_observe(data: bytes) -> _GearObservation:
             # A 64-bit collision never becomes a Law.
             continue
 
-        # Expand the proven window into one contiguous exact-reuse region. These reads
-        # are charged separately so sparse nomination cannot hide proof cost.
-        left = 0
-        while source - left > 0 and start - left > covered_until:
-            extension_read_bytes += 2
-            if data[source - left - 1] != data[start - left - 1]:
-                break
-            left += 1
-
-        right = WINDOW
-        while source + right < start and start + right < len(data):
-            extension_read_bytes += 2
-            if data[source + right] != data[start + right]:
-                break
-            right += 1
+        # Expand one exact nomination into a contiguous generic reuse relation. Bulk
+        # proof makes the implementation reflect the intended SIMD/memcmp-friendly
+        # mechanism while every examined byte remains charged as discovery traffic.
+        left, left_reads = _extend_left(data, source, start, covered_until)
+        right, right_reads = _extend_right(data, source, start)
+        extension_read_bytes += left_reads + right_reads
 
         target_start = max(start - left, covered_until)
         target_end = start + right
@@ -247,11 +284,12 @@ def run() -> dict[str, object]:
         })
 
     return {
-        "schema": "cmpct-one-g02-gear-replacement-ab-v1",
+        "schema": "cmpct-one-g02-gear-replacement-ab-v2",
         "experimental_version": "ONE-G0.2",
         "source_sha": os.environ.get("EVIDENCE_HEAD") or os.environ.get("GITHUB_SHA") or "local-unbound",
         "repetitions": REPETITIONS,
         "window": WINDOW,
+        "proof_block": PROOF_BLOCK,
         "anchor_bits": ANCHOR_BITS,
         "signal_identity": "historical cmpct-gear-v1 BLAKE2 table derivation",
         "hypothesis": "one sparse Gear signal can replace the fixed reuse index while preserving useful exact-reuse opportunity mass and reducing retained discovery state",
