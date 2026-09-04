@@ -1,0 +1,145 @@
+# ci-lane: deep
+# ci-pr-scope: latest-head-commit-gate
+# ci-cancel-policy: preserve-running-exact-receipt
+name: CMPCT v0.30 fast solid candidate oracle
+
+on:
+  push:
+    branches: [agent/v030-authoritative-integration]
+    paths:
+      - 'benchmarks/v030_fast_solid_oracle.py'
+      - 'benchmarks/v030_fast_solid_oracle_canonical_identity.py'
+      - 'benchmarks/v030_external_competitors.py'
+      - 'benchmarks/v030_release_generalization.py'
+      - '.github/workflows/v030-fast-solid-oracle.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'benchmarks/v030_fast_solid_oracle.py'
+      - 'benchmarks/v030_fast_solid_oracle_canonical_identity.py'
+      - 'benchmarks/v030_external_competitors.py'
+      - 'benchmarks/v030_release_generalization.py'
+      - '.github/workflows/v030-fast-solid-oracle.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-v030-fast-solid-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: false
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+
+jobs:
+  latest-head-impact:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      run_deep: ${{ steps.scope.outputs.run_deep }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 2
+      - name: Bind exact head and classify newest commit only
+        id: scope
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            echo 'run_deep=true' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          git diff-tree --no-commit-id --name-only -r HEAD > /tmp/latest-head-files.txt
+          cat /tmp/latest-head-files.txt
+          if grep -Eq '^(benchmarks/(v030_fast_solid_oracle(_canonical_identity)?|v030_external_competitors|v030_release_generalization)\.py|\.github/workflows/v030-fast-solid-oracle\.yml)$' /tmp/latest-head-files.txt; then
+            echo 'run_deep=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'run_deep=false' >> "$GITHUB_OUTPUT"
+          fi
+
+  fast-solid-oracle:
+    needs: latest-head-impact
+    if: needs.latest-head-impact.outputs.run_deep == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - name: Bind exact candidate head
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install corpus and competitor dependencies from canonical Ubuntu feed
+        run: |
+          set -euo pipefail
+          test -f /etc/apt/sources.list.d/ubuntu.sources
+          sudo apt-get -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" -o Dir::Etc::sourceparts="-" update
+          sudo apt-get -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" -o Dir::Etc::sourceparts="-" install -y zstd gcc ffmpeg libsndfile1
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[audio,test]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
+      - name: Compile oracle and identity adapter
+        run: |
+          python -m py_compile \
+            benchmarks/v030_fast_solid_oracle.py \
+            benchmarks/v030_fast_solid_oracle_canonical_identity.py
+      - name: Run exact-tree fast-solid sweep with cancellation-safe research log
+        run: |
+          set -euo pipefail
+          mkdir -p benchmark-artifacts
+          # Each completed workload is emitted as one JSON line before the next workload begins.
+          # Preserve that stream independently of the final 15-row authority JSON so an external
+          # cancellation retains useful research observations without ever masquerading as a
+          # complete receipt.
+          python benchmarks/v030_fast_solid_oracle_canonical_identity.py \
+            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-fast-solid-work" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-fast-solid.json" \
+            | tee "$GITHUB_WORKSPACE/benchmark-artifacts/v030-fast-solid-progress.jsonl"
+      - name: Enforce evidence honesty
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          d=json.loads(Path('benchmark-artifacts/v030-fast-solid.json').read_text())
+          assert d['schema']=='cmpct-v030-fast-solid-oracle-v2'
+          assert d['claim_boundary'].startswith('research-only')
+          assert d['timing_policy']=='every candidate create_s includes its variant pack_source_s exactly once'
+          assert d['summary']['workloads']==15
+          assert len(d['rows'])==15
+          assert set(d['variants'])=={'sha32-path','compact-path','compact-ext'}
+          for row in d['rows']:
+              assert row['timing_boundary']=='source-scan+metadata-pack+integrity-hash+zstd-compress+archive-write'
+              assert len(row['candidates'])==len(d['levels'])*len(d['variants'])
+              assert all(c['tree_verified'] is True for c in row['candidates'])
+              for c in row['candidates']:
+                  assert abs(c['create_s']-(c['pack_source_s']+c['compression_and_write_s'])) < 1e-9
+                  expected = all(c[k] for k in ('beats_zip_size','beats_zstd19_size','beats_zip_create','beats_zstd19_create'))
+                  assert c['viable'] is expected
+          PY
+      - name: CI topology self-check
+        if: always()
+        run: python tools/check_ci_topology.py .github/workflows/v030-fast-solid-oracle.yml
+      - name: Upload oracle evidence and partial research stream
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: v030-fast-solid-${{ env.EVIDENCE_HEAD }}
+          path: |
+            benchmark-artifacts/v030-fast-solid.json
+            benchmark-artifacts/v030-fast-solid-progress.jsonl
+          if-no-files-found: warn
+          retention-days: 90
+
+# Deep research only. The JSONL stream is cancellation-safe partial research evidence, never a
+# substitute for the complete 15-row JSON authority. This workflow may discover a promising
+# encoder architecture, but it cannot satisfy or weaken any v0.30 release receipt. Promotion
+# requires a canonical r25 implementation plus the unchanged full release gates.

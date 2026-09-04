@@ -1,6 +1,6 @@
 # CMPCT portability and ZIP-parity integration contract
 
-Status: **active pre-1.0 release gate / revision 24 unchanged**.
+Status: **released portability floor r24; provisional v0.30 r25/shared-reader integration active and still release-gated**.
 
 CMPCT is not finished when its bytes are smaller than ZIP. A replacement archive format must also be
 boring to use: tap or double-click it, see a tree, open individual members without unpacking unrelated
@@ -8,8 +8,10 @@ content, extract one or all members, and hand files to other applications. ZIP's
 advantage is therefore an engineering requirement, not something the project may dismiss as
 "ecosystem".
 
-This document records the portability contract separately from `docs/FORMAT.md`. It adds no on-disk
-fields and does not change revision 24.
+This document records the portability contract separately from `docs/FORMAT.md`. Revision 24 remains
+the released interoperability floor; the v0.30 integration branch additionally exercises provisional
+revision-25 profiles through one shared native portability layer. No r25 portability claim is shipped
+until the exact frozen candidate closes T01 and the strict release lock accepts its platform receipts.
 
 ## Product requirement
 
@@ -39,17 +41,25 @@ Until a public media-type registration is completed, integrations should use:
 - canonical project MIME: `application/vnd.fcmo.cmpct`;
 - compatibility alias: `application/x-cmpct`;
 - filename extension: `.cmpct`;
-- revision-24 magic at offset zero: `CMPCT24\0`.
+- released revision-24 magic at offset zero: `CMPCT24\0`;
+- provisional v0.30 canonical r25 magics: `CMP25G4\0` and `CMP25PG\0`.
 
 Handlers must validate magic/version rather than trusting filename or MIME alone. A file manager may
 supply `application/octet-stream` for an extension it does not know; a CMPCT application may offer an
 explicit "Open CMPCT" picker for that case, but should not pretend every octet-stream is CMPCT.
+Research-only `CMPNX*` identities are not canonical product revisions and must not be accepted merely
+because the extension is `.cmpct`.
 
 ## Shared native archive-handler API
 
 Android, Windows shell extensions, Apple document/Quick Look extensions, Linux desktop helpers and a
 future libarchive integration should all sit on one memory-safe native core instead of implementing
 format semantics independently.
+
+Revision 24 continues to use the mature `native/cmpct-core/` foundation. The v0.30 integration branch
+adds `native/cmpct-portable/` as one shared dispatcher across genuine r24 fallback plus both fixed r25
+profiles. Platform integrations must consume that shared dispatcher rather than copy the r25
+MessagePack/Geometry/PrefixGraph grammar.
 
 The minimum read-only handler surface is:
 
@@ -82,6 +92,34 @@ only chunks intersecting the requested range. Revision-24 sparse maps are also r
 synthesized as zeroes while only stored chunks in intersecting extents are decoded, so browsing a
 sparse VM/disk image does not allocate or inflate its logical size.
 
+For provisional r25, selected member operations must expose observed decoded-context accounting and stay
+inside the <=8x release policy. Missing locality data is a hard evidence failure, not a numeric zero.
+The canonical product API exercises the same logical member-read operation for r25 and genuine r24
+fallback so platform claims cannot hide behind research-era “not applicable” labels.
+
+## Revision-25 filesystem portability contract
+
+The authenticated r25 filesystem manifest is part of complete archive bytes and must survive the same
+platform boundary as regular content. Shared readers/materializers therefore preserve the following
+cross-platform rules:
+
+- canonical user paths are safe relative paths and the reserved r25 internal namespace is unavailable
+  to user input;
+- `mtime_ns` is a bounded **signed i64** nanosecond value, including valid pre-1970 timestamps;
+- safe symlink admission/extraction rejects escape under **both POSIX and Windows lexical semantics**,
+  independent of the host currently reading the archive;
+- slash and backslash are both interpreted as separators for traversal checks;
+- POSIX absolute paths, Windows drive/root/UNC forms and any `..` component are rejected in safe mode;
+- hardlinks point directly to an earlier regular-file owner, keeping dependency depth one and avoiding
+  alias cycles;
+- metadata remains authenticated even when a destination filesystem/user cannot apply uid/gid/xattrs or
+  exact timestamps; host application of those attributes is best-effort and must never fabricate values.
+
+Footnote: validation and materialization are separate trust boundaries. The shared native materializer
+repeats the portable link-target rule immediately before `symlink()` and restores signed timestamps with
+checked add/sub around the Unix epoch, so an archive cannot become unsafe or semantically different merely
+because it moved between operating systems.
+
 ## Android
 
 Android is a first-class target, not a future compatibility note.
@@ -95,10 +133,10 @@ selection through the Storage Access Framework and validate by magic.
 
 ### Archive-as-directory behavior
 
-The preferred Android integration is a `DocumentsProvider` backed by the native CMPCT core:
+The preferred Android integration is a `DocumentsProvider` backed by the shared native CMPCT reader:
 
 - archive directories map to Android document directories;
-- `queryChildDocuments` enumerates direct logical children from the CMPCT index;
+- `queryChildDocuments` enumerates direct logical children from the authenticated archive tree;
 - `openDocument` streams a selected logical member through the native read/range API;
 - seek/range-capable members should not require whole-archive extraction;
 - sparse logical holes must stay cheap; callers requesting a small region must not materialize the whole sparse member;
@@ -120,12 +158,23 @@ has three layers:
 3. broader ecosystem recognition should be pursued upstream in commonly used file-manager/archive
    libraries once the native core and format specification are stable.
 
-The canonical Android preview now satisfies the repository's first emulator-level acceptance step: a
-real APK is built, installed on an Android 10 emulator, opens revision-24 conformance archives through
-JNI into the shared Rust core, exposes an imported archive as a read-only `DocumentsProvider` root,
-and streams a member byte-exactly. This is deliberately **not** yet the same as shipped Android
-support. Physical ARM64 validation and broader representation/device coverage in
-`integrations/android/README.md` remain release gates.
+### Current v0.30 Android boundary
+
+The Android integration now links its parser-free JNI shim against `libcmpct_portable` rather than the
+r24-only core directly. This is an architectural integration fact, **not yet a release-complete platform
+claim**. The repository carries r25 Android instrumentation under
+`integrations/android/app/src/androidTest/java/ai/fcmo/cmpct/CmpctAndroidR25Test.java`, and
+`.github/workflows/android.yml` requires the packaged JNI dependency to be relocatable and to resolve to
+the shared portable library rather than silently falling back to an independent/r24-only parser path.
+
+The earlier r24 Android 10 emulator acceptance remains useful evidence: a real APK was built/installed,
+revision-24 conformance archives opened through JNI into the Rust core, a read-only `DocumentsProvider`
+root was exposed, and a member streamed byte-exactly. v0.30 must now rerun the relevant Android/shared
+reader matrix on the exact frozen r25/r24 candidate.
+
+**Physical ARM64 Android evidence remains mandatory for v0.30 release.** An emulator-only green is not a
+substitute, and no document should describe physical-device acceptance as complete until the exact
+platform receipt exists.
 
 ## Linux / freedesktop desktops
 
@@ -149,7 +198,9 @@ archive browser. Later shell integration may add Explorer commands, icons/thumbn
 filesystem/mount surface, but the first acceptance gate is simpler: double-click, browse tree, open a
 member, extract one/all.
 
-File association must point to the native handler/browser, not to a Python source checkout.
+File association must point to the native handler/browser, not to a Python source checkout. The r25
+safe-symlink rule is intentionally host-independent so an archive validated elsewhere cannot become a
+Windows traversal vector when finally materialized here.
 
 ## Apple platforms
 
@@ -182,13 +233,18 @@ ZIP keeps a real advantage until all of the following are true for a supported p
 - **member UX:** one member can be opened/shared without extracting unrelated content;
 - **legacy escape hatch:** `export-zip` remains available and tested.
 
+For v0.30, ZIP/export evidence must cover every product outcome that can actually publish: genuine r24
+fallback, Geometry-r25 and PrefixGraph-r25. When semantics cannot be represented honestly in stock ZIP
+(for example safe symlink behavior under the selected export policy), the exporter must return a typed
+unsupported result rather than silently changing meaning.
+
 A benchmark where ZIP wins should become either a fixed regression, a documented irreducible platform
 constraint, or a deliberately rejected tradeoff backed by evidence. "ZIP is old and ubiquitous" is
 not a reason to stop engineering.
 
 ## Current implementation status
 
-Implemented today:
+Implemented on released/inherited r24 paths:
 
 - revision-24 random/member/range reads in the Python oracle;
 - extraction and ZIP export;
@@ -196,28 +252,46 @@ Implemented today:
 - Linux MIME registration source;
 - Windows `.cmpct` ProgID/OpenWith/Capabilities association contract and Apple exported UTType/document declarations;
 - explicit portability contract and release gates;
-- a canonical Android read-only preview under `integrations/android/` with `ACTION_VIEW`, Storage Access Framework import, a `DocumentsProvider`, JNI bindings to the shared Rust core, four declared Android ABIs, and an Android 10 emulator acceptance workflow;
-- Android emulator conformance proving MIME/extension routing, magic refusal, RAW/Zstd/Deflate revision-24 archive reads through Android → JNI → Rust, provider enumeration/member streaming, and relocatable packaged native-library dependencies;
-- a memory-safe Rust core under `native/cmpct-core/` that authenticates/decodes the revision-24 primary index, enumerates logical entries, rejects lexical path aliases, bounds the base blob table, cross-checks direct physical blob framing, and exposes a tested opaque C ABI;
-- native range reads for direct RAW members without decoding unrelated bytes;
-- native bounded range reads for ordinary direct Zstd, WAV/FLAC, raw Deflate and Zstd-with-dictionary members, with a 256 MiB per-direct-member decode/reconstruction ceiling, exact logical-length validation and SHA-256 verification before returning the requested slice; codec-3 additionally authenticates and bounds the archive-selected dictionary blob;
-- native fixed/CDC chunk-map validation and range-local reads across mixed supported blobs, with complete-member logical SHA-256 verification;
-- native sparse-map validation and range-local hole/data reads, including exact extent accounting, complete-member logical SHA-256 verification, and a conformance test proving corruption in an untouched extent does not force unrelated data to be decoded;
-- builder-independent direct-codec, chunk-map, sparse, Zstd-dictionary and WAV/FLAC golden archives, including WAV/FLAC archive reads through the public C ABI with fixed whole-file/range identity and physical-hash corruption refusal.
+- a canonical Android read-only preview under `integrations/android/` with `ACTION_VIEW`, Storage Access Framework import, a `DocumentsProvider`, JNI bindings, four declared Android ABIs, and an Android 10 emulator acceptance workflow;
+- Android emulator conformance for revision-24 MIME/extension routing, magic refusal, RAW/Zstd/Deflate archive reads, provider enumeration/member streaming, and relocatable packaged native-library dependencies;
+- the mature memory-safe Rust revision-24 core described in `docs/NATIVE_CORE.md`, including direct codecs, fixed/CDC, sparse, pack, selected virtual-ZIP semantics and fixed builder-independent conformance vectors.
 
-`docs/NATIVE_CORE.md` is the detailed handoff for the native capability and its safety boundary.
-`integrations/android/README.md` is the Android-specific acceptance handoff and must remain the source
-of truth for the distinction between emulator-proven preview functionality and release-complete device
-support.
+Implemented on the **provisional v0.30 integration branch**, pending exact-candidate release evidence:
 
-Not yet implemented and therefore **not to be claimed as shipped support**:
+- `native/cmpct-portable/`, one shared dispatcher for genuine r24 plus fixed canonical r25 G0–G4 and PrefixGraph profiles;
+- opaque C ABI and native CLI surfaces over that dispatcher;
+- builder-independent revision-25 golden/conformance material under `tests/conformance/v030-r25-canonical.json` with independent regeneration checks;
+- canonical r25 filesystem-manifest admission, user/content-graph identity cross-checking, recovery, member streaming and locality observability;
+- native materializer parity for host-independent safe symlinks and signed i64 timestamps;
+- parser-free Android JNI linkage to `libcmpct_portable` with explicit rejection of a packaged direct `libcmpct_core` dependency;
+- r25 Android instrumentation coverage in source;
+- release-path CI that binds canonical profile isolation, native parity and Android to the same shared product contract.
 
-- complete memory-safe native reader/writer ABI beyond primary-index/open/enumeration plus implemented direct codecs, fixed/CDC and sparse reads: full hostile structural validation, recovery, virtual/remaining storage descriptions, streams, extraction and mutation are still pending;
-- release-complete Android support: physical ARM64/device-provider validation and representation-complete native coverage remain required even though the canonical emulator-gated preview now exists;
+These are implementation facts, **not yet durable v0.30 release receipts**.
+
+## Still required before v0.30 portability can close
+
+- exact-fingerprint `native-r25` evidence proving G0–G4 and PrefixGraph parity, builder-independent goldens, recovery and shared-core use;
+- exact-fingerprint `zip-portability` evidence proving stock ZIP tree equality where supported for r24 fallback, G0–G4 and PrefixGraph plus atomic publication;
+- exact-fingerprint `platform-android` evidence for the required platform matrix, including **physical ARM64 Android**;
+- current-head hostile/fuzz/resource/path coverage across the shared r25 parser/materializer;
+- evidence that selective member operations report truthful observed locality and remain inside the <=8x law;
+- current docs/conformance agreement after all final source changes;
+- strict release-lock acceptance of those receipts on the exact frozen candidate.
+
+Longer-term 1.0 portability remains broader than v0.30 and still includes:
+
 - Windows shell/browser package;
 - Apple document/Quick Look package;
 - Linux browser/FUSE/GVfs integration;
 - upstream libarchive support;
 - WASM reader.
 
-These items are now part of the canonical path to 1.0 rather than optional post-1.0 polish.
+`docs/NATIVE_CORE.md` is the detailed handoff for the native capability and safety boundary.
+`integrations/android/README.md` remains the Android-specific acceptance handoff and must preserve the
+distinction between emulator-proven preview functionality, provisional r25 integration, and
+release-complete physical-device support.
+
+Footnote: v0.30 portability is intentionally a promotion gate, not polish. The encoder is not allowed to
+publish a representation that Python can read but the shared native/platform boundary cannot independently
+verify and materialize under the same semantics.

@@ -1,0 +1,143 @@
+# ci-lane: deep
+# ci-pr-scope: latest-head-commit-gate
+name: CMPCT v0.30 r24 dictionary training cost oracle
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'benchmarks/v030_r24_dictionary_training_cost_oracle.py'
+      - 'benchmarks/v030_r24_binary_dictionary_isolation_oracle.py'
+      - 'benchmarks/v030_r24_medium_binary_pack_generalization.py'
+      - 'experiments/entropygraph_v030_release_product.py'
+      - 'src/cmpct/builder.py'
+      - '.github/workflows/v030-r24-dictionary-training-cost.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-v030-r24-dict-training-cost-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+
+jobs:
+  latest-head-impact:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      run_deep: ${{ steps.scope.outputs.run_deep }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 2
+      - name: Bind exact head and classify only its changed files
+        id: scope
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            echo 'run_deep=true' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          git diff-tree --no-commit-id --name-only -r HEAD > /tmp/latest-head-files.txt
+          cat /tmp/latest-head-files.txt
+          if grep -Eq '^(benchmarks/v030_r24_(dictionary_training_cost_oracle|binary_dictionary_isolation_oracle|medium_binary_pack_generalization)\.py|experiments/entropygraph_v030_release_product\.py|src/cmpct/builder\.py|\.github/workflows/v030-r24-dictionary-training-cost\.yml)$' /tmp/latest-head-files.txt; then
+            echo 'run_deep=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'run_deep=false' >> "$GITHUB_OUTPUT"
+            echo 'Accumulated PR paths matched, but newest exact commit does not affect dictionary-training cost evidence.'
+          fi
+
+  dictionary-training-cost:
+    needs: latest-head-impact
+    if: needs.latest-head-impact.outputs.run_deep == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - name: Bind exact candidate
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install frozen-corpus dependencies from canonical Ubuntu feed
+        run: |
+          set -euo pipefail
+          test -f /etc/apt/sources.list.d/ubuntu.sources
+          sudo apt-get -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" -o Dir::Etc::sourceparts="-" update
+          sudo apt-get -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" -o Dir::Etc::sourceparts="-" install -y zstd gcc ffmpeg libsndfile1
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[audio,test]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
+      - name: Compile exact evidence surface
+        run: |
+          python -m py_compile benchmarks/v030_r24_dictionary_training_cost_oracle.py
+          python -m py_compile benchmarks/v030_r24_binary_dictionary_isolation_oracle.py
+          python -m py_compile experiments/entropygraph_v030_release_product.py
+      - name: Run all-15 exact-byte dictionary-training A/B
+        run: |
+          mkdir -p benchmark-artifacts
+          python benchmarks/v030_r24_dictionary_training_cost_oracle.py \
+            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-r24-dict-training-work" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-r24-dict-training.json"
+      - name: Enforce research-only exactness contract
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          d=json.loads(Path('benchmark-artifacts/v030-r24-dict-training.json').read_text())
+          assert d['schema']=='cmpct-v030-r24-dictionary-training-cost-v2'
+          c=d['contract']
+          assert c['workloads']==15
+          assert c['format_revision']==24
+          assert c['production_change'] is False
+          assert c['release_credit'] is False
+          assert c['dictionary_training_disabled_only_in_research_candidate'] is True
+          assert c['exact_archive_identity_required_for_opportunity'] is True
+          assert c['canonical_product_tree_equality_required_for_opportunity'] is True
+          assert c['accepted_source_hash_is_provenance_not_product_tree'] is True
+          assert c['future_skip_requires_separate_content_agnostic_admission_proof'] is True
+          assert len(d['rows'])==15
+          assert d['summary']['exact_workload_count'] is True
+          assert d['summary']['all_candidates_match_shipping_product_tree'] is True
+          for r in d['rows']:
+              assert r['deterministic'] is True
+              assert r['accepted_source_tree_sha256']
+              assert r['source_identity_domain']=='accepted-v0.29 frozen corpus provenance'
+              assert r['product_tree_domain']=='canonical r24 strong-verification semantic tree'
+              assert r['canonical_product_tree_equal'] is True
+              if r['material_exact_opportunity']:
+                  assert r['exact_archive_bytes_and_sha'] is True
+                  assert r['shipping_bytes']==r['no_dictionary_bytes']
+                  assert r['saved_s']>=c['minimum_material_saved_s']
+                  assert r['saved_ratio']>=c['minimum_material_saved_ratio']
+          PY
+      - name: Record exact candidate fingerprint
+        run: printf '%s\n' "$EVIDENCE_HEAD" > benchmark-artifacts/v030-r24-dict-training-candidate.txt
+      - name: CI topology self-check
+        if: always()
+        run: python tools/check_ci_topology.py .github/workflows/v030-r24-dictionary-training-cost.yml
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: v030-r24-dictionary-training-cost-${{ env.EVIDENCE_HEAD }}
+          path: |
+            benchmark-artifacts/v030-r24-dict-training.json
+            benchmark-artifacts/v030-r24-dict-training-candidate.txt
+          if-no-files-found: warn
+          retention-days: 90
+
+# Research-only timing decomposition. Exact evidence has found material byte-identical skip opportunities, but any
+# shipping skip still requires separate content-agnostic admission/generalization proof. Latest-head scoping keeps
+# that active research useful without replaying the all-15 corpus on unrelated integration commits.

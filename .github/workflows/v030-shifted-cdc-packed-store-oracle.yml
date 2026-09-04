@@ -1,0 +1,94 @@
+# ci-lane: deep
+# ci-auto-policy: retired-manual-only
+name: CMPCT v0.30 Shifted packed CDC shared store
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.sha }}
+
+jobs:
+  packed-cdc-frontier:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - name: Bind exact source head
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install deterministic dependencies from Ubuntu only
+        run: |
+          set -euo pipefail
+          test -f /etc/apt/sources.list.d/ubuntu.sources
+          sudo apt-get -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" -o Dir::Etc::sourceparts="-" update
+          sudo apt-get -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" -o Dir::Etc::sourceparts="-" install -y zstd gcc
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[test]'
+      - name: Compile bounded CDC helper and validate oracle
+        run: |
+          set -euo pipefail
+          gcc -O3 -std=c11 -Wall -Wextra -Werror benchmarks/native/v030_cdc_boundaries.c -o "$RUNNER_TEMP/cmpct-v030-cdc-boundaries"
+          python -m py_compile benchmarks/v030_shifted_cdc_packed_store_oracle.py
+          python tools/check_ci_topology.py .github/workflows/v030-shifted-cdc-packed-store-oracle.yml
+          python tools/check_public_surface.py
+      - name: Run exact packed CDC R4 frontier
+        env:
+          CMPCT_CDC_HELPER: ${{ runner.temp }}/cmpct-v030-cdc-boundaries
+        run: |
+          mkdir -p benchmark-artifacts
+          python benchmarks/v030_shifted_cdc_packed_store_oracle.py \
+            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-shifted-cdc-packed-work" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-shifted-cdc-packed.json"
+      - name: Enforce exact R4 decision boundary
+        if: always()
+        run: |
+          test -f benchmark-artifacts/v030-shifted-cdc-packed.json
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          d=json.loads(Path('benchmark-artifacts/v030-shifted-cdc-packed.json').read_text())
+          assert d['schema']=='cmpct-v030-shifted-cdc-packed-store-oracle-v1'
+          assert d['source_commit']==os.environ['EVIDENCE_HEAD']
+          assert d['diagnosis']=='D4' and d['radicality']=='R4' and d['rps']>=80
+          assert 'S1' in d['saturation_inherited']
+          c=d['contract']
+          assert c['benchmark_identity_used_in_representation'] is False
+          assert c['content_defined_exact_dedup'] is True
+          assert c['ordered_bounded_shared_pack_context'] is True
+          assert c['creation_prices_all_candidate_work'] is True
+          assert c['max_pack_bytes'] <= 8*1024*1024
+          assert c['release_credit'] is False
+          assert len(d['arms'])==4
+          zstd=int(d['comparators']['tar_zstd19_solid']['archive_bytes'])
+          for a in d['arms']:
+              assert a['tree_verified'] is True
+              assert a['max_decode_unit_bytes'] <= 8*1024*1024
+              assert a['max_member_read_amplification'] <= 8.0
+              assert a['pack_count'] > 0
+              assert a['packed_payload_bytes'] <= a['archive_bytes']
+              assert len(a['artifact_sha256'])==64
+          assert d['summary']['best_payload_zstd_gap_bytes']==min(a['packed_payload_bytes'] for a in d['arms'])-zstd
+          assert d['summary']['release_credit'] is False
+          PY
+      - name: Upload exact packed CDC evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: v030-shifted-cdc-packed-store-${{ env.EVIDENCE_HEAD }}
+          path: benchmark-artifacts/v030-shifted-cdc-packed.json
+          if-no-files-found: error
+          retention-days: 90
+
+# Terminal negative is preserved in docs/V030_SHIFTED_CDC_STORE_FAMILY_TERMINAL.md.
+# The retired packed-CDC descendant remains manually replayable for audit or genuine reopening evidence, but no
+# longer consumes automatic push/PR runner capacity after its optimistic payload floor failed the strict frontier.

@@ -1,0 +1,148 @@
+# ci-lane: deep
+# ci-pr-scope: latest-head-commit-gate
+name: CMPCT v0.30 EG08 feature-pruned executor
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'benchmarks/v030_federated_compact_framing_v8_policy_exec_v6.py'
+      - 'benchmarks/v030_federated_compact_framing_v8_policy_exec_v7.py'
+      - 'benchmarks/v030_federated_compact_framing_v8_policy_distill_v5.py'
+      - 'benchmarks/v030_federated_compact_framing_v8_policy_distill_v4.py'
+      - 'benchmarks/v030_federated_compact_framing_v8_policy_distill_v3.py'
+      - 'benchmarks/v030_eg08_reused_zstd_context_oracle.py'
+      - 'experiments/entropygraph_v030_federated_compact_framing_candidate_v8.py'
+      - 'experiments/entropygraph_v030_federated_embedded_fs_candidate_v7.py'
+      - '.github/workflows/v030-eg08-feature-pruned-exec.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: v030-eg08-feature-pruned-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+
+jobs:
+  latest-head-impact:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      run_deep: ${{ steps.scope.outputs.run_deep }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 2
+      - name: Bind exact head and classify only its changed files
+        id: scope
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            echo 'run_deep=true' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          git diff-tree --no-commit-id --name-only -r HEAD > /tmp/latest-head-files.txt
+          cat /tmp/latest-head-files.txt
+          if grep -Eq '^(benchmarks/v030_(federated_compact_framing_v8_policy_exec_v[67]|federated_compact_framing_v8_policy_distill_v[345]|eg08_reused_zstd_context_oracle)\.py|experiments/entropygraph_v030_federated_(compact_framing_candidate_v8|embedded_fs_candidate_v7)\.py|\.github/workflows/v030-eg08-feature-pruned-exec\.yml)$' /tmp/latest-head-files.txt; then
+            echo 'run_deep=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'run_deep=false' >> "$GITHUB_OUTPUT"
+            echo 'Accumulated PR paths matched, but newest exact commit does not affect EG08 feature-pruned execution.'
+          fi
+
+  feature-pruned-exec:
+    needs: latest-head-impact
+    if: needs.latest-head-impact.outputs.run_deep == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - name: Bind evidence to exact candidate head
+        run: |
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          echo "exact_head=$EVIDENCE_HEAD"
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install deterministic corpus dependencies from canonical Ubuntu feed
+        run: |
+          set -euo pipefail
+          test -f /etc/apt/sources.list.d/ubuntu.sources
+          sudo apt-get -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" -o Dir::Etc::sourceparts="-" update
+          sudo apt-get -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" -o Dir::Etc::sourceparts="-" install -y zstd gcc ffmpeg libsndfile1
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[audio,test]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
+      - name: Compile feature-pruned execution surface
+        run: |
+          python -m py_compile \
+            benchmarks/v030_federated_compact_framing_v8_policy_exec_v6.py \
+            benchmarks/v030_federated_compact_framing_v8_policy_exec_v7.py \
+            benchmarks/v030_federated_compact_framing_v8_policy_distill_v5.py \
+            benchmarks/v030_eg08_reused_zstd_context_oracle.py
+      - name: Run exact-byte feature-pruned office execution proof
+        run: |
+          mkdir -p benchmark-artifacts
+          python -m benchmarks.v030_federated_compact_framing_v8_policy_exec_v7 \
+            --work-root benchmark-artifacts/v030-eg08-policy-v7-work \
+            --output benchmark-artifacts/v030-eg08-policy-v7.json
+      - name: Test reusable per-worker Zstd contexts
+        run: |
+          python -m benchmarks.v030_eg08_reused_zstd_context_oracle \
+            --work-root benchmark-artifacts/v030-eg08-reused-zstd-context-work \
+            --output benchmark-artifacts/v030-eg08-reused-zstd-context.json
+      - name: Independently enforce execution and release invariants
+        if: always()
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          d=json.loads(Path('benchmark-artifacts/v030-eg08-policy-v7.json').read_text())
+          x=d['execution_change']; m=d['measured_candidate']; s=d['strict']
+          assert d['schema']=='cmpct-v030-eg08-policy-exec-v7' and d['experiment_valid'] is True
+          assert d['promotion_signal'] is s['passed']
+          assert x['unused_policy_features_not_evaluated'] is True and x['final_high_effort_pack_compressed_once'] is True
+          assert x['archive_identity_required'] is True and x['archive_strong_verification_still_timed'] is True
+          assert x['comparator_timing_changed'] is False and x['archive_bytes_changed'] is False and x['selected_levels_changed'] is False
+          assert m['exact_bytes_vs_serial_reference'] is True and s['content_identity_not_policy_input'] is True
+          assert s['exact_serial_archive_identity'] is True and s['same_selected_level_vector'] is True
+          assert s['beats_accepted_v029_size'] is True and s['beats_zip_size'] is True and s['beats_zstd19_size'] is True
+          assert s['within_release_locality_bounds'] is True
+          z=json.loads(Path('benchmark-artifacts/v030-eg08-reused-zstd-context.json').read_text())
+          assert z['schema']=='cmpct-v030-eg08-reused-zstd-context-oracle-v1'
+          assert z['contract']['release_credit'] is False and z['contract']['production_change'] is False
+          assert z['contract']['archive_bytes_changed'] is False and z['contract']['selected_levels_changed'] is False
+          assert z['contract']['timing_scope']=='final-pack-emission-only'
+          assert z['candidate']['archive_bytes']==m['archive_bytes'] and z['candidate']['archive_sha256']==m['archive_sha256']
+          assert z['candidate']['selected_levels']==m['selected_levels']
+          assert z['gate']['experiment_valid'] is True and z['gate']['passed'] is True
+          PY
+      - name: CI topology self-check
+        run: python tools/check_ci_topology.py .github/workflows/v030-eg08-feature-pruned-exec.yml
+      - name: Upload feature-pruned evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: v030-eg08-feature-pruned-${{ env.EVIDENCE_HEAD }}
+          path: |
+            benchmark-artifacts/v030-eg08-policy-v7.json
+            benchmark-artifacts/v030-eg08-reused-zstd-context.json
+          if-no-files-found: warn
+          retention-days: 90
+
+# Exact Office evidence at a9ec256c4dd62e974bfac44563f239cc989c62d2 preserved the 5,951,527-byte archive
+# and exact selected levels while reducing verified creation to ~0.505 s; ZIP remains ~0.390 s, so strict creation
+# is still red. Reusing Zstd contexts saved only ~2.39% of compression time, terminally excluding that micro-path as
+# the missing ~115 ms. The active target is now graph/execution architecture. Exact-head scoping prevents replay on
+# unrelated integration commits; no benchmark or release threshold is weakened.

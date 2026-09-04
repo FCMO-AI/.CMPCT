@@ -1,0 +1,105 @@
+name: CMPCT v0.30 R29 Incremental Backups r24 same-run carrying-cost Builder
+# ci-lane: deep
+# Historical one-shot diagnostic. Durable terminal evidence is committed in
+# docs/v030-rnd/R29_INCREMENTAL_BACKUPS_R24_CARRYING_COST_SUPERSEDING_BUILDER_RESULT.md.
+# Manual replay remains available for archaeology; automatic PR execution is retired so a
+# deliberately frozen, substrate-invalidated R29 receipt cannot consume current frontier runners.
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.sha }}
+
+jobs:
+  r29-builder:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    concurrency:
+      group: cmpct-v030-r29-historical-${{ github.sha }}
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 32
+
+      - name: Bind unchanged historical product substrate
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          git merge-base --is-ancestor b0e7aeab92c994b4a25c5040fe3fb9f5e208b01a HEAD
+          git diff --name-only b0e7aeab92c994b4a25c5040fe3fb9f5e208b01a..HEAD > /tmp/r29-diff.txt
+          cat /tmp/r29-diff.txt
+          if grep -Ev '^(\.github/workflows/v030-canonical-product-gap-diagnostic\.yml|\.github/workflows/v030-r26-incremental-backups-floor-diagnostic\.yml|\.github/workflows/v030-r27-incremental-backups-floor-diagnostic\.yml|\.github/workflows/v030-r28-incremental-backups-r24-carrying-cost-builder\.yml|\.github/workflows/v030-r29-incremental-backups-r24-carrying-cost-same-run\.yml|benchmarks/v030_r26_incremental_backups_floor_diagnostic\.py|benchmarks/v030_r27_incremental_backups_floor_diagnostic\.py|benchmarks/v030_r28_incremental_backups_r24_carrying_cost_builder\.py|benchmarks/v030_r29_incremental_backups_r24_carrying_cost_superseding_builder\.py|docs/v030-rnd/R26_INCREMENTAL_BACKUPS_PRODUCT_FLOOR_DIAGNOSTIC_PREREG\.md|docs/v030-rnd/R26_INCREMENTAL_BACKUPS_PRODUCT_FLOOR_DIAGNOSTIC_RESULT\.md|docs/v030-rnd/R27_INCREMENTAL_BACKUPS_PRODUCT_FLOOR_DIAGNOSTIC_PREREG\.md|docs/v030-rnd/R28_INCREMENTAL_BACKUPS_R24_CARRYING_COST_BUILDER_PREREG\.md|docs/v030-rnd/R28_INCREMENTAL_BACKUPS_R24_CARRYING_COST_BUILDER_RESULT\.md|docs/v030-rnd/R29_INCREMENTAL_BACKUPS_R24_CARRYING_COST_SUPERSEDING_BUILDER_PREREG\.md|docs/v030-rnd/R29_INCREMENTAL_BACKUPS_R24_CARRYING_COST_SUPERSEDING_BUILDER_RESULT\.md)$' /tmp/r29-diff.txt | grep -q .; then
+            echo 'Product/corpus/policy substrate drifted after b0e7aeab; historical R29 replay is intentionally invalid on this head.' >&2
+            exit 1
+          fi
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+
+      - name: Install frozen diagnostic dependencies
+        run: |
+          set -euo pipefail
+          test -f /etc/apt/sources.list.d/ubuntu.sources
+          sudo apt-get -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" -o Dir::Etc::sourceparts="-" update
+          sudo apt-get -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" -o Dir::Etc::sourceparts="-" install -y zstd gcc ffmpeg libsndfile1
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[audio,test]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
+
+      - name: Compile frozen R29 instrument
+        run: |
+          python -m py_compile benchmarks/v030_r28_incremental_backups_r24_carrying_cost_builder.py
+          python -m py_compile benchmarks/v030_r29_incremental_backups_r24_carrying_cost_superseding_builder.py
+
+      - name: Run frozen R29 same-run Builder
+        run: |
+          mkdir -p benchmark-artifacts
+          python benchmarks/v030_r29_incremental_backups_r24_carrying_cost_superseding_builder.py \
+            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/r29-backups-work" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/r29-backups.json"
+
+      - name: Enforce frozen R29 completeness
+        if: always()
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          p=Path('benchmark-artifacts/r29-backups.json')
+          assert p.is_file(), 'R29 result was not published'
+          d=json.loads(p.read_text())
+          assert d['schema']=='cmpct-v030-r29-incremental-backups-r24-carrying-cost-same-run-v1'
+          assert d['authority_product_substrate_head']=='b0e7aeab92c994b4a25c5040fe3fb9f5e208b01a'
+          assert isinstance(d['release_fingerprint_at_execution'], str) and len(d['release_fingerprint_at_execution'])==64
+          assert set(d['arms'])=={
+              'genuine-r24','release-r24','mature-deflate-threshold',
+              'mature-pack-target','mature-pack-max-file','no-medium-bin-pack'
+          }
+          assert all(row['strong_verify_ok'] for row in d['arms'].values())
+          assert len({row['tree_sha256'] for row in d['arms'].values()})==1
+          assert d['same_run_release_minus_genuine_bytes'] > 0
+          assert d['decision'] in {
+              'SINGLE_OWNER','MULTIPLE_SINGLE_OWNERS','PARTIAL_OWNER',
+              'NO_ONE_FACTOR_EXPLANATION','LOCALITY_DEBT','SUBSTRATE_OR_CORRECTNESS_FAILURE'
+          }
+          PY
+
+      - name: CI topology self-check
+        run: python tools/check_ci_topology.py .github/workflows/v030-r29-incremental-backups-r24-carrying-cost-same-run.yml
+
+      - name: Upload immutable historical R29 evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: v030-r29-incremental-backups-r24-carrying-cost-${{ env.EVIDENCE_HEAD }}
+          path: benchmark-artifacts/r29-backups.json
+          if-no-files-found: error
+          retention-days: 90

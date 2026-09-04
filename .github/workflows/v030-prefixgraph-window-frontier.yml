@@ -1,0 +1,92 @@
+# ci-lane: deep
+# ci-auto-policy: retired-manual-only
+name: CMPCT v0.30 PrefixGraph Zstd window-memory frontier
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.sha }}
+
+jobs:
+  window-frontier:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 75
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - name: Bind exact evidence head
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install frozen corpus dependencies from Ubuntu only
+        run: |
+          set -euo pipefail
+          test -f /etc/apt/sources.list.d/ubuntu.sources
+          sudo apt-get -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" -o Dir::Etc::sourceparts="-" update
+          sudo apt-get -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" -o Dir::Etc::sourceparts="-" install -y zstd gcc ffmpeg libsndfile1
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[audio,test]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
+      - name: Compile exact frontier and preserve PrefixGraph tests
+        run: |
+          python -m py_compile benchmarks/v030_prefixgraph_window_frontier_worker.py benchmarks/v030_prefixgraph_window_frontier_oracle.py
+          python -m pytest -q tests/test_v030_prefixgraph_parallel_release.py
+      - name: Run fresh-process Shifted window frontier
+        run: |
+          mkdir -p benchmark-artifacts
+          python benchmarks/v030_prefixgraph_window_frontier_oracle.py \
+            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-prefixgraph-window-frontier-work" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-prefixgraph-window-frontier.json"
+      - name: Enforce evidence and research-only boundary
+        if: always()
+        run: |
+          test -f benchmark-artifacts/v030-prefixgraph-window-frontier.json
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          d=json.loads(Path('benchmark-artifacts/v030-prefixgraph-window-frontier.json').read_text())
+          assert d['schema']=='cmpct-v030-prefixgraph-window-frontier-v1'
+          assert d['source_commit']==os.environ['EVIDENCE_HEAD']
+          assert d['target']=='resemblance_hostile_v1/01_shifted_versions'
+          assert d['experiment_valid'] is True and d['release_credit'] is False
+          assert d['rounds']==2 and d['arms']==['baseline','window-m1','window-m2','window-m3']
+          c=d['contract']
+          for key in ('fresh_process_per_arm','four_anchor_workers_unchanged','anchor_nomination_unchanged','complete_archive_tournament_unchanged','direct_zstd19_floor_unchanged','only_prefix_zstd_window_changes','strong_tree_verification_required'):
+              assert c[key] is True
+          assert c['release_thresholds_changed'] is False and c['benchmark_identity_dispatch'] is False
+          baseline=d['summaries']['baseline']
+          assert len(set(baseline['archive_bytes']))==1 and len(set(baseline['archive_sha256']))==1
+          for row in d['repetitions']:
+              for arm in d['arms']:
+                  r=row['arms'][arm]
+                  assert r['strong_verify_ok'] is True
+                  assert r['tree_sha256']==d['tree_sha256']
+                  assert r['anchor_audition_workers']==4
+                  assert r['release_credit'] is False
+          for arm in d['arms'][1:]:
+              s=d['summaries'][arm]
+              expected=(s['deterministic'] and s['byte_ratio_to_baseline']<=1.0 and s['wall_ratio_to_baseline']<=1.10 and s['rss_ratio_to_baseline']<=0.70)
+              assert s['material_window_signal'] is expected
+          PY
+      - name: CI topology self-check
+        if: always()
+        run: python tools/check_ci_topology.py .github/workflows/v030-prefixgraph-window-frontier.yml
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: v030-prefixgraph-window-frontier-${{ env.EVIDENCE_HEAD }}
+          path: benchmark-artifacts/v030-prefixgraph-window-frontier.json
+          if-no-files-found: error
+          retention-days: 90
+
+# Terminal negative retained for manual reproduction. Exact evidence found window-log 23->22/21 saves only about
+# 0.6-0.9% RSS, while 20 crosses a catastrophic compression cliff (~8.33x bytes, ~1.60x wall, ~2.08x RSS).
+# Automatic capacity is therefore reserved for live CCtx/context-lifetime architecture instead of this knob family.

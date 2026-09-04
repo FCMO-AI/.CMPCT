@@ -1,0 +1,93 @@
+# ci-lane: deep
+# ci-auto-policy: retired-manual-only
+name: CMPCT v0.30 logs entropy-split oracle
+
+# Logs already has a promoted inverse profile and active selector/runtime/native
+# convergence lanes. Preserve this alternative 90-minute architecture for manual
+# reproduction, but do not rerun it on every accumulated-diff PR synchronize.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.sha }}
+
+jobs:
+  logs-entropy-split:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - name: Bind exact candidate head
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install exact corpus and competitor dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y zstd gcc ffmpeg libsndfile1
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[audio,test]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
+      - name: Compile targeted oracle
+        run: python -m py_compile benchmarks/v030_logs_entropy_split_oracle.py
+      - name: Run exact-tree logs entropy-split sweep
+        run: |
+          mkdir -p benchmark-artifacts
+          python benchmarks/v030_logs_entropy_split_oracle.py \
+            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-logs-entropy-split-work" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-logs-entropy-split.json"
+      - name: Enforce evidence honesty, exact restoration and locality
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          d=json.loads(Path('benchmark-artifacts/v030-logs-entropy-split.json').read_text())
+          assert d['schema']=='cmpct-v030-logs-entropy-split-oracle-v1'
+          assert d['claim_boundary'].startswith('research-only')
+          assert d['target']=='neutral_hostile_v1/05_logs_and_telemetry'
+          assert d['classification']['raw_log_suffix']=='.log'
+          assert set(d['classification']['precompressed_suffixes'])=={'.gz','.xz','.zst'}
+          assert d['classification']['counts']=={'log':6,'precompressed':5,'other':0}
+          assert d['timing_boundary']=='source-scan+classification+segment-plan+integrity-hash+zstd-log-segments+direct-copy+metadata+archive-write'
+          assert d['max_member_read_amplification'] <= 8.0
+          assert d['max_decode_unit_bytes'] <= 8*1024*1024
+          s=d['summary']
+          assert s['all_tree_verified'] is True
+          assert s['all_locality_green'] is True
+          assert len(d['candidates'])==4
+          for c in d['candidates']:
+              assert c['tree_verified'] is True
+              assert c['locality_green'] is True
+              assert c['max_member_read_amplification'] <= 8.0
+              assert c['max_decode_unit_bytes'] <= 8*1024*1024
+              assert abs(c['create_s']-(c['source_plan_s']+c['candidate_encode_s'])) < 1e-9
+              strict=all(c[k] for k in ('beats_zip_size','beats_zstd19_size','beats_zip_create','beats_zstd19_create'))
+              assert c['viable'] is strict
+          if s['four_way_win']:
+              b=s['best']
+              assert b is not None and b['viable'] is True
+              assert b['archive_bytes'] < d['zip']['archive_bytes']
+              assert b['archive_bytes'] < d['tar_zstd19']['archive_bytes']
+              assert b['create_s'] < d['zip']['create_s']
+              assert b['create_s'] < d['tar_zstd19']['create_s']
+          PY
+      - name: Upload targeted evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: v030-logs-entropy-split-${{ env.EVIDENCE_HEAD }}
+          path: benchmark-artifacts/v030-logs-entropy-split.json
+          if-no-files-found: error
+          retention-days: 90
+      - name: CI topology self-check
+        run: python tools/check_ci_topology.py .github/workflows/v030-logs-entropy-split-oracle.yml
+
+# Historical research only. Promoted Logs convergence lanes remain automatic.

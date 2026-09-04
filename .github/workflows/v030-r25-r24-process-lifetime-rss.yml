@@ -1,0 +1,152 @@
+# ci-lane: deep
+# ci-cancel-policy: split-classifier-preserve-receipts
+# ci-pr-scope: latest-head-commit-gate
+name: CMPCT v0.30 r24 process-lifetime RSS attribution
+
+on:
+  push:
+    branches: [agent/v030-authoritative-integration]
+    paths:
+      - 'docs/v030-rnd/R25_R24_PROCESS_LIFETIME_RSS_PREREG.md'
+      - 'benchmarks/v030_r25_r24_process_lifetime_rss_worker.py'
+      - 'benchmarks/v030_r25_r24_process_lifetime_rss_oracle.py'
+      - 'benchmarks/v030_r25_parent_phase_rss_worker.py'
+      - 'benchmarks/v030_release_generalization.py'
+      - 'benchmarks/v030_release_performance.py'
+      - 'experiments/entropygraph_v030_canonical_final.py'
+      - 'experiments/entropygraph_v030_canonical_final_impl.py'
+      - 'experiments/entropygraph_v030_release_product.py'
+      - '.github/workflows/v030-r25-r24-process-lifetime-rss.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'docs/v030-rnd/R25_R24_PROCESS_LIFETIME_RSS_PREREG.md'
+      - 'benchmarks/v030_r25_r24_process_lifetime_rss_worker.py'
+      - 'benchmarks/v030_r25_r24_process_lifetime_rss_oracle.py'
+      - 'benchmarks/v030_r25_parent_phase_rss_worker.py'
+      - 'benchmarks/v030_release_generalization.py'
+      - 'benchmarks/v030_release_performance.py'
+      - 'experiments/entropygraph_v030_canonical_final.py'
+      - 'experiments/entropygraph_v030_canonical_final_impl.py'
+      - 'experiments/entropygraph_v030_release_product.py'
+      - '.github/workflows/v030-r25-r24-process-lifetime-rss.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+
+jobs:
+  latest-head-impact:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    concurrency:
+      group: cmpct-v030-r25-r24-process-lifetime-rss-classifier-${{ github.event.pull_request.number || github.ref }}
+      cancel-in-progress: true
+    outputs:
+      run_deep: ${{ steps.scope.outputs.run_deep }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 2
+      - name: Bind exact head and classify only its changed files
+        id: scope
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            echo 'run_deep=true' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          git diff-tree --no-commit-id --name-only -r HEAD > /tmp/latest-head-files.txt
+          cat /tmp/latest-head-files.txt
+          if grep -Eq '^(docs/v030-rnd/R25_R24_PROCESS_LIFETIME_RSS_PREREG\.md|benchmarks/v030_r25_r24_process_lifetime_rss_(worker|oracle)\.py|benchmarks/v030_r25_parent_phase_rss_worker\.py|benchmarks/v030_release_(generalization|performance)\.py|experiments/entropygraph_v030_(canonical_final|canonical_final_impl|release_product)\.py|\.github/workflows/v030-r25-r24-process-lifetime-rss\.yml)$' /tmp/latest-head-files.txt; then
+            echo 'run_deep=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'run_deep=false' >> "$GITHUB_OUTPUT"
+          fi
+
+  process-lifetime-rss:
+    needs: latest-head-impact
+    if: needs.latest-head-impact.outputs.run_deep == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    concurrency:
+      group: cmpct-v030-r25-r24-process-lifetime-rss-receipt-${{ github.event.pull_request.head.sha || github.sha }}
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - name: Bind exact experiment head
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install canonical diagnostic dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[test,audio]'
+      - name: Compile frozen ownership instrument
+        run: |
+          python -m py_compile \
+            benchmarks/v030_r25_r24_process_lifetime_rss_worker.py \
+            benchmarks/v030_r25_r24_process_lifetime_rss_oracle.py
+      - name: Run whole-tree r24 process-lifetime attribution
+        run: |
+          mkdir -p benchmark-artifacts
+          python benchmarks/v030_r25_r24_process_lifetime_rss_oracle.py \
+            --work-root benchmark-artifacts/v030-r25-r24-process-lifetime-rss-work \
+            --output benchmark-artifacts/v030-r25-r24-process-lifetime-rss.json
+      - name: Ratchet frozen contract and exact terminal decision
+        run: |
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          d=json.loads(Path('benchmark-artifacts/v030-r25-r24-process-lifetime-rss.json').read_text())
+          assert d['schema']=='cmpct-v030-r25-r24-process-lifetime-rss-v1'
+          assert d['source_commit']==os.environ['EVIDENCE_HEAD']
+          assert d['experiment_valid'] is True and d['release_credit'] is False
+          assert d['worker_failures']==[] and d['repetitions']==2 and len(d['rows'])==6
+          c=d['contract']
+          assert c['whole_process_tree_rss_decisive'] is True
+          assert c['same_parent_serial_is_causal_control'] is True
+          assert c['r24_child_must_exit_before_r25_starts'] is True
+          assert c['same_source_and_exact_product_identity_required'] is True
+          assert c['minimum_total_support_fraction']==0.20
+          assert c['minimum_process_lifetime_delta_fraction']==0.10
+          assert c['retire_total_below_fraction']==0.10
+          assert c['retire_process_delta_below_fraction']==0.05
+          assert c['production_source_changed'] is False
+          assert c['candidate_semantics_changed'] is False
+          assert c['release_thresholds_changed'] is False
+          assert d['decision'] in {
+              'R24_PROCESS_LIFETIME_SUPPORTED',
+              'R24_PROCESS_LIFETIME_RETIRED_AS_PRIMARY',
+              'R24_PROCESS_LIFETIME_AMBIGUOUS',
+          }
+          for row in d['rows']:
+              assert row['tree_samples'] >= 100
+              assert row['tree_sampler_errors'] == []
+              assert row['tree_sampler_interval_s'] <= 0.01
+              assert row['all_wrappers_restored'] is True
+              assert row['semantic_owners']['identity_exact'] is True
+          PY
+      - name: CI topology custody self-check
+        run: python tools/check_ci_topology.py .github/workflows/v030-r25-r24-process-lifetime-rss.yml
+      - uses: actions/upload-artifact@v6
+        with:
+          name: v030-r25-r24-process-lifetime-rss-${{ env.EVIDENCE_HEAD }}
+          path: benchmark-artifacts/v030-r25-r24-process-lifetime-rss.json
+          if-no-files-found: error
+          retention-days: 90
+
+# Diagnostic only: this freezes a process-lifetime ownership question; it changes no production scheduler or bytes.
+# Exact-head admission touch: ensure the newly introduced workflow is registered and receives a result-bearing push.

@@ -1,0 +1,130 @@
+# ci-lane: deep
+name: CMPCT v0.30 EG08 single-expansion verify locality
+
+on:
+  push:
+    branches: [agent/v030-authoritative-integration]
+    paths:
+      - 'benchmarks/.v030-research-trigger'
+      - 'experiments/entropygraph_v030_federated_embedded_fs_candidate_v7.py'
+      - 'experiments/entropygraph_v030_federated_compact_framing_candidate_v8.py'
+      - 'benchmarks/v030_federated_compact_framing_v8_policy_exec_v6.py'
+      - 'benchmarks/v030_federated_compact_framing_v8_policy_exec_v7.py'
+      - 'benchmarks/v030_federated_compact_framing_v8_policy_exec_v8.py'
+      - '.github/workflows/v030-eg08-single-expansion.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'benchmarks/.v030-research-trigger'
+      - 'experiments/entropygraph_v030_federated_embedded_fs_candidate_v7.py'
+      - 'experiments/entropygraph_v030_federated_compact_framing_candidate_v8.py'
+      - 'benchmarks/v030_federated_compact_framing_v8_policy_exec_v6.py'
+      - 'benchmarks/v030_federated_compact_framing_v8_policy_exec_v7.py'
+      - 'benchmarks/v030_federated_compact_framing_v8_policy_exec_v8.py'
+      - '.github/workflows/v030-eg08-single-expansion.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-v030-eg08-single-expansion-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+
+jobs:
+  exact-office-single-expansion:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: Bind exact candidate
+        id: candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          expected='${{ github.event.pull_request.head.sha || github.sha }}'
+          actual="$(git rev-parse HEAD)"
+          test "$actual" = "$expected"
+          echo "sha=$actual" >> "$GITHUB_OUTPUT"
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install exact benchmark dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y zstd gcc ffmpeg libsndfile1
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[audio,test]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
+      - name: Compile exact executor
+        run: |
+          python -m py_compile \
+            benchmarks/v030_federated_compact_framing_v8_policy_exec_v6.py \
+            benchmarks/v030_federated_compact_framing_v8_policy_exec_v7.py \
+            benchmarks/v030_federated_compact_framing_v8_policy_exec_v8.py
+      - name: Run exact byte-neutral single-expansion Office frontier
+        run: |
+          mkdir -p benchmark-artifacts
+          python benchmarks/v030_federated_compact_framing_v8_policy_exec_v8.py \
+            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-eg08-policy-v8-work" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-eg08-policy-v8.json"
+      - name: Enforce unchanged contract and exact candidate identity
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          d=json.loads(Path('benchmark-artifacts/v030-eg08-policy-v8.json').read_text())
+          assert d['schema']=='cmpct-v030-eg08-policy-exec-v8'
+          assert d['experiment_valid'] is True
+          assert d['release_credit'] is False
+          change=d['execution_change']
+          assert change['compact_expansion_passes_per_measured_round']==1
+          assert change['duplicate_compact_to_eg07_expansion_removed'] is True
+          assert change['proof_source_tree_precomputed_outside_timed_boundary'] is True
+          assert change['archive_strong_verification_still_timed'] is True
+          assert change['archive_locality_check_still_timed'] is True
+          assert change['comparator_timing_changed'] is False
+          assert change['archive_bytes_changed'] is False
+          assert change['selected_levels_changed'] is False
+          assert change['verification_semantics_changed'] is False
+          assert change['locality_semantics_changed'] is False
+          s=d['strict']; m=d['measured_candidate']; c=d['comparators']
+          assert s['beats_accepted_v029_size'] is True
+          assert s['beats_zip_size'] is True
+          assert s['beats_zstd19_size'] is True
+          assert s['within_release_locality_bounds'] is True
+          assert s['content_identity_not_policy_input'] is True
+          assert s['exact_serial_archive_identity'] is True
+          assert s['same_selected_level_vector'] is True
+          assert m['archive_bytes'] < d['accepted_v029_bytes']
+          assert m['archive_bytes'] < c['zip']['archive_bytes']
+          assert m['archive_bytes'] < c['zstd19']['archive_bytes']
+          expected=bool(s['verified_create_beats_zip'] and s['verified_create_beats_zstd19'] and s['passed'])
+          assert d['promotion_signal'] is expected
+          PY
+      - name: Record candidate fingerprint
+        run: |
+          printf '%s\n' '${{ steps.candidate.outputs.sha }}' > benchmark-artifacts/v030-eg08-policy-v8-candidate.txt
+      - name: Public-surface guard
+        if: always()
+        run: python tools/check_public_surface.py
+      - name: Upload exact evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: v030-eg08-single-expansion-${{ steps.candidate.outputs.sha }}
+          path: |
+            benchmark-artifacts/v030-eg08-policy-v8.json
+            benchmark-artifacts/v030-eg08-policy-v8-candidate.txt
+          if-no-files-found: warn
+          retention-days: 90
+
+# Research/productization evidence only. The lane removes one duplicate compact->EG07 conversion while preserving
+# the exact C25EG08 bytes, selected policy, strong verification, locality accounting and comparator boundaries.
+# It cannot grant selector/native/Android/all-15/final release credit by itself.

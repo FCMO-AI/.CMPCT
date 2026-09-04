@@ -1,0 +1,99 @@
+# ci-lane: deep
+# ci-cancel-policy: preserve-running-exact-receipt
+name: CMPCT v0.30 EG08 lazy ZIP full-build A/B
+
+on:
+  push:
+    branches: [agent/v030-authoritative-integration]
+    paths:
+      - 'benchmarks/patches/v030_eg08_lazy_zip_plain_prefilter.patch'
+      - 'benchmarks/v030_eg08_lazy_zip_product_ab_oracle.py'
+      - 'experiments/entropygraph_v025.py'
+      - '.github/workflows/v030-eg08-lazy-zip-product-ab.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-v030-eg08-lazy-zip-product-ab-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.sha }}
+
+jobs:
+  full-build-ab:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - name: Bind exact candidate head
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install exact Office corpus dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y zstd gcc ffmpeg libsndfile1
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[audio,test]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
+      - name: Preserve exact baseline engine and validate patch
+        run: |
+          cp experiments/entropygraph_v025.py "$RUNNER_TEMP/entropygraph_v025_baseline.py"
+          git apply --check --recount benchmarks/patches/v030_eg08_lazy_zip_plain_prefilter.patch
+          git apply --recount benchmarks/patches/v030_eg08_lazy_zip_plain_prefilter.patch
+          python -m py_compile experiments/entropygraph_v025.py benchmarks/v030_eg08_lazy_zip_product_ab_oracle.py
+      - name: Run rotated full graph-build A/B
+        run: |
+          mkdir -p benchmark-artifacts
+          python benchmarks/v030_eg08_lazy_zip_product_ab_oracle.py \
+            --baseline-module "$RUNNER_TEMP/entropygraph_v025_baseline.py" \
+            --candidate-module "$GITHUB_WORKSPACE/experiments/entropygraph_v025.py" \
+            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-eg08-lazy-zip-product-ab-work" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-eg08-lazy-zip-product-ab.json"
+      - name: Enforce byte identity and honest promotion boundary
+        if: always()
+        run: |
+          test -f benchmark-artifacts/v030-eg08-lazy-zip-product-ab.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          d=json.loads(Path('benchmark-artifacts/v030-eg08-lazy-zip-product-ab.json').read_text())
+          assert d['schema']=='cmpct-v030-eg08-lazy-zip-product-ab-v1'
+          assert d['target']=='neutral_hostile_v1/03_office_documents'
+          assert d['rounds']==7
+          g=d['gate']
+          assert g['exact_archive_byte_identity'] is True
+          assert g['deterministic_across_rounds'] is True
+          assert g['strong_verify_each_build'] is True
+          assert g['release_credit'] is False and d['release_credit'] is False
+          expected=(d['candidate_median_s'] < d['baseline_median_s'] and d['median_saving_s'] >= 0.020)
+          assert d['promotion_signal'] is expected
+          assert g['passed'] is expected
+          PY
+      - name: Restore exact repository tree before policy checks
+        if: always()
+        run: git reset --hard "$EVIDENCE_HEAD"
+      - name: CI topology self-check
+        if: always()
+        run: python tools/check_ci_topology.py .github/workflows/v030-eg08-lazy-zip-product-ab.yml
+      - name: Public-surface guard
+        if: always()
+        run: python tools/check_public_surface.py
+      - name: Upload exact A/B receipt
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: v030-eg08-lazy-zip-product-ab-${{ env.EVIDENCE_HEAD }}
+          path: benchmark-artifacts/v030-eg08-lazy-zip-product-ab.json
+          if-no-files-found: error
+          retention-days: 90
+
+# Ephemeral product-code A/B only. Production source is unchanged until the exact receipt earns promotion.

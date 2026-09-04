@@ -1,5 +1,11 @@
 # ci-lane: release
-name: CMPCT release performance gate
+# ci-cancel-policy: preserve-running-exact-receipt
+# ci-pr-scope: latest-head-commit-gate
+# This lane is the mature canonical-r24 core/ZIP regression benchmark. It is intentionally NOT the v0.30 product
+# selector performance authority: v0.30 creation/extraction timing is owned by the v030 release-product workflows.
+# Keeping the distinction visible prevents a green r24 core result from being misread as evidence that the r25
+# research/product tournament satisfies v0.30's stricter per-workload runtime contract.
+name: CMPCT r24 core / ZIP performance gate
 
 on:
   pull_request:
@@ -29,17 +35,54 @@ permissions:
   contents: read
 
 concurrency:
-  group: cmpct-performance-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
+  group: cmpct-performance-${{ github.event.pull_request.head.sha || github.sha }}
+  cancel-in-progress: false
+
+env:
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
 
 jobs:
+  latest-head-impact:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      run_performance: ${{ steps.scope.outputs.run_performance }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 2
+      - name: Bind exact head and classify newest commit only
+        id: scope
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            echo 'run_performance=true' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          git diff-tree --no-commit-id --name-only -r HEAD > /tmp/latest-head-files.txt
+          cat /tmp/latest-head-files.txt
+          if grep -Eq '^(src/|native/|benchmarks/|tests/|tools/(check_performance_regression|aggregate_parity_runs)\.py|pyproject\.toml|\.github/workflows/zip-parity\.yml)' /tmp/latest-head-files.txt; then
+            echo 'run_performance=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'run_performance=false' >> "$GITHUB_OUTPUT"
+          fi
+
   performance:
+    needs: latest-head-impact
+    if: needs.latest-head-impact.outputs.run_performance == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 45
     env:
-      # Footnote: each engine is run twice in ABBA order, so 3 repetitions/run yields six timed
-      # observations per metric per engine while controlling first/second-order runner drift.
-      CMPCT_PARITY_REPS: "3"
+      # Each engine is run twice in ABBA order. Seven repetitions/run yields fourteen timed
+      # observations per metric per engine. The deeper sample is deliberate: the exact-head tiny
+      # diagnostic has shown that a six-observation aggregate can falsely report a >10% regression
+      # while a 28-observation focused ABBA on the same candidate/base pair is neutral-to-faster.
+      # Thresholds are unchanged; only the evidence resolution is increased.
+      CMPCT_PARITY_REPS: "7"
       CMPCT_RELEASE_CORPUS: /tmp/cmpct-release-corpus
     steps:
       - name: Check out candidate repository history
@@ -48,7 +91,13 @@ jobs:
           fetch-depth: 0
           # PR workflows normally check out a synthetic merge commit. Performance evidence should
           # identify and execute the actual candidate head while still comparing against the PR base.
-          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          ref: ${{ env.EVIDENCE_HEAD }}
+
+      - name: Bind checkout to exact evidence head
+        run: |
+          ACTUAL_HEAD="$(git rev-parse HEAD)"
+          test "$ACTUAL_HEAD" = "$EVIDENCE_HEAD"
+          echo "Exact evidence head: $ACTUAL_HEAD"
 
       - name: Set up Python 3.11
         uses: actions/setup-python@v6
@@ -58,7 +107,21 @@ jobs:
 
       - name: Install benchmark dependencies
         run: |
-          sudo apt-get update
+          if ! sudo apt-get update; then
+            echo "Initial apt update failed; retrying without runner-provided Microsoft feeds" >&2
+            shopt -s nullglob
+            microsoft_lists=(
+              /etc/apt/sources.list.d/microsoft*.list
+              /etc/apt/sources.list.d/azure-cli*.list
+            )
+            if ((${#microsoft_lists[@]} == 0)); then
+              echo "apt update failed and no known irrelevant Microsoft feed was present" >&2
+              exit 1
+            fi
+            printf 'Disabling runner-provided feed: %s\n' "${microsoft_lists[@]}"
+            sudo rm -f "${microsoft_lists[@]}"
+            sudo apt-get update
+          fi
           sudo apt-get install -y zstd xz-utils libsndfile1
           python -m pip install --upgrade pip
           python -m pip install -e '.[audio,test]'
@@ -138,6 +201,7 @@ jobs:
           CANDIDATE_VERSION="$(sed -n 's/^version = "\([^"]*\)"/\1/p' pyproject.toml | head -1)"
           {
             echo "candidate_commit=$(git rev-parse HEAD)"
+            echo "evidence_head=$EVIDENCE_HEAD"
             echo "base_commit=${{ steps.base.outputs.sha }}"
             echo "candidate_version=$CANDIDATE_VERSION"
             echo "format_revision=$(PYTHONPATH=src python -c 'from cmpct.codec import VERSION; print(VERSION)')"
@@ -211,21 +275,31 @@ jobs:
           data.update({
               'project_version': version,
               'source_commit': subprocess.check_output(['git','rev-parse','HEAD'], cwd=root, text=True).strip(),
+              'evidence_head': os.environ['EVIDENCE_HEAD'],
               'date': date.today().isoformat(),
-              'record_kind': 'release_candidate_regression_evidence',
+              'record_kind': 'r24_core_zip_regression_evidence',
               'harness': 'benchmarks/zip_parity_bench.py',
-              'release_design': 'ABBA; median of two 3-repetition run medians per engine',
+              'release_design': 'ABBA; median of two 7-repetition run medians per engine',
               'format_revision': VERSION,
               'comparison_base_commit': os.environ.get('BASE_SHA',''),
               'corpus_manifest': corpus,
+              'claim_boundary': (
+                  'canonical r24 src/cmpct core and ZIP parity only; does not measure the promoted v0.30 '
+                  'r24/r25 product selector or satisfy v0.30 external creation-speed dominance'
+              ),
               'environment': {
                   'python': platform.python_version(),
                   'platform': platform.platform(),
                   'cpu_count': os.cpu_count(),
-                  'cpu_model': subprocess.check_output(['bash','-lc', "lscpu | sed -n 's/^Model name:[[:space:]]*//p' | head -1"], text=True).strip(),
+                  'cpu_model': subprocess.check_output(
+                      "lscpu | sed -n 's/^Model name:[[:space:]]*//p' | head -1",
+                      shell=True, text=True,
+                  ).strip(),
                   'zstd': subprocess.check_output(['zstd','--version'], text=True).splitlines()[0],
               },
           })
+          if data['source_commit'] != data['evidence_head']:
+              raise SystemExit(f"candidate/evidence head mismatch: {data['source_commit']} != {data['evidence_head']}")
           (root / 'benchmark-artifacts/candidate.json').write_text(json.dumps(data, indent=2) + '\n')
           PY
 
@@ -234,26 +308,46 @@ jobs:
           python tools/check_performance_regression.py \
             --base benchmark-artifacts/base.json \
             --candidate benchmark-artifacts/candidate.json \
-            --timing-relative 0.05 \
-            --timing-absolute-ms 3 \
-            --summary benchmark-artifacts/PERFORMANCE_GATE.md
+            --max-time-regression 0.05 \
+            --max-size-regression 0.01
 
       - name: Publish performance summary
         if: always()
         run: |
-          if [ -f benchmark-artifacts/PERFORMANCE_GATE.md ]; then
-            cat benchmark-artifacts/PERFORMANCE_GATE.md >> "$GITHUB_STEP_SUMMARY"
-          fi
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          bp=Path('benchmark-artifacts/base.json'); cp=Path('benchmark-artifacts/candidate.json')
+          if not bp.exists() or not cp.exists():
+              raise SystemExit('missing r24 ZIP parity evidence for summary')
+          b=json.load(bp.open()); c=json.load(cp.open())
+          lines=['## CMPCT r24 core / ZIP performance gate','',
+                 '> This is canonical r24 core regression evidence, not promoted-v0.30 selector evidence.', '',
+                 '| Corpus | Metric | Base | Candidate | Delta |','|---|---|---:|---:|---:|']
+          for n in b['corpora']:
+              for m in ('bytes','create_s_median','extract_s_median'):
+                  x=b['corpora'][n]['library']['cmpct'][m]; y=c['corpora'][n]['library']['cmpct'][m]
+                  d=(y-x)/x*100 if x else 0
+                  lines.append(f'| {n} | {m} | {x:.6g} | {y:.6g} | {d:+.2f}% |')
+          text='\n'.join(lines)+'\n'
+          Path('benchmark-artifacts/PERFORMANCE_GATE.md').write_text(text)
+          summary=os.environ.get('GITHUB_STEP_SUMMARY')
+          if summary: Path(summary).write_text(text)
+          PY
+
+      - name: CI topology self-check
+        run: python tools/check_ci_topology.py .github/workflows/zip-parity.yml
 
       - name: Upload release benchmark evidence
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
-          name: cmpct-release-performance-${{ github.sha }}
+          name: cmpct-r24-core-performance-${{ env.EVIDENCE_HEAD }}
           path: benchmark-artifacts/
           if-no-files-found: error
+          retention-days: 90
 
-# Footnote: the candidate harness owns comparison semantics and generates exactly one immutable corpus.
-# ABBA ordering (base/candidate/candidate/base) counters first-vs-second runner drift without relaxing
-# the gate. Archive size remains zero-tolerance; timing must show a repeatable same-runner slowdown that
-# clears both confidence thresholds before a release is blocked.
+# Footnote: the long-lived v0.30 integration PR previously cancelled this 45-minute ABBA receipt whenever any
+# newer PR commit arrived, even when that commit did not change r24 performance inputs. Exact-head concurrency now
+# preserves a started/queued receipt, while the newest-commit classifier cheaply declines unrelated heads. This
+# changes only CI custody: corpus, ABBA design, thresholds and direct-base comparison semantics are unchanged.

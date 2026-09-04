@@ -1,0 +1,37 @@
+{
+  "schema": "cmpct-v030-release-receipt-v1",
+  "id": "native-r25",
+  "status": "pass",
+  "owner_task": "T01",
+  "candidate_fingerprint": "67c5f6009d3fa34c56c6d1706597060f56196eca4019a64f97ca5735021a68fa",
+  "candidate_fingerprint_source": {
+    "evidence_index": 0,
+    "json_path": "candidate_fingerprint"
+  },
+  "evidence": [
+    {
+      "path": "docs/v030-release-evidence/native-r25-52ebabc63c7ea74a1665a5720359977e552ad5c2.json",
+      "sha256": "0a537409833c146f765696e0b9fbca86a75d9d952223b0d978896f06d1cddcf2"
+    }
+  ],
+  "facts": {
+    "g04_native_parity": true,
+    "prefixgraph_native_parity": true,
+    "logs_inverse_native_parity": true,
+    "logs_inverse_recovery_green": true,
+    "logs_inverse_filesystem_semantics_green": true,
+    "builder_independent_goldens": true,
+    "native_recovery_green": true,
+    "shared_core_used": true
+  },
+  "fact_sources": {
+    "facts.g04_native_parity": {"evidence_index": 0, "json_path": "facts.g04_native_parity"},
+    "facts.prefixgraph_native_parity": {"evidence_index": 0, "json_path": "facts.prefixgraph_native_parity"},
+    "facts.logs_inverse_native_parity": {"evidence_index": 0, "json_path": "facts.logs_inverse_native_parity"},
+    "facts.logs_inverse_recovery_green": {"evidence_index": 0, "json_path": "facts.logs_inverse_recovery_green"},
+    "facts.logs_inverse_filesystem_semantics_green": {"evidence_index": 0, "json_path": "facts.logs_inverse_filesystem_semantics_green"},
+    "facts.builder_independent_goldens": {"evidence_index": 0, "json_path": "facts.builder_independent_goldens"},
+    "facts.native_recovery_green": {"evidence_index": 0, "json_path": "facts.native_recovery_green"},
+    "facts.shared_core_used": {"evidence_index": 0, "json_path": "facts.shared_core_used"}
+  }
+}

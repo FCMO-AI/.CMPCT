@@ -1,0 +1,102 @@
+# ci-lane: deep
+# ci-auto-policy: retired-manual-only
+name: CMPCT v0.30 Shifted segmented relation payload floor
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.sha }}
+
+jobs:
+  segmented-relation-floor:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - name: Bind exact source
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install deterministic dependencies
+        run: |
+          set -euo pipefail
+          test -f /etc/apt/sources.list.d/ubuntu.sources
+          sudo apt-get -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" -o Dir::Etc::sourceparts="-" update
+          sudo apt-get -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" -o Dir::Etc::sourceparts="-" install -y zstd ffmpeg libsndfile1
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[test,audio]'
+      - name: Static and corpus ratchet
+        run: |
+          set -euo pipefail
+          python -m py_compile benchmarks/v030_shifted_segmented_relation_payload_floor.py tests/test_v030_shifted_segmented_relation_payload_floor.py
+          python -m pytest -q \
+            tests/test_resemblance.py \
+            tests/test_v030_shifted_joint_patch_stream_oracle.py \
+            tests/test_v030_shifted_segmented_relation_payload_floor.py
+      - name: Run exact segmented relation payload floor
+        run: |
+          set -euo pipefail
+          mkdir -p benchmark-artifacts
+          python -m benchmarks.v030_shifted_segmented_relation_payload_floor \
+            --work-root "$RUNNER_TEMP/v030-shifted-segmented-relation" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-shifted-segmented-relation.json"
+      - name: Enforce evidence and R4 decision
+        run: |
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          d=json.loads(Path('benchmark-artifacts/v030-shifted-segmented-relation.json').read_text())
+          assert d['schema']=='cmpct-v030-shifted-segmented-relation-payload-floor-v1'
+          assert d['source_commit']==os.environ['EVIDENCE_HEAD']
+          assert d['contract']['benchmark_identity_used_in_representation'] is False
+          assert d['contract']['research_only'] is True
+          assert d['contract']['release_credit'] is False
+          assert d['contract']['framing_not_claimed'] is True
+          assert d['contract']['relation_discovery_inside_create_time'] is True
+          a=d['domination_audit']
+          assert a['strict_target']=='15/15 strictly smaller and faster than ZIP/Deflate and solid Zstd-19'
+          assert a['diagnosis']=='D4'
+          assert a['radicality']=='R4'
+          assert set(a['saturation_triggers']) >= {'S1','S2','S3','S4'}
+          assert a['research_priority_score'] >= 80
+          assert a['terminal_decision'] in {'PROMOTE_NEXT_PREREQUISITE','RETIRE_FAMILY'}
+          if d['representation_admissible']:
+              assert d['segment_count'] >= 1
+              assert all(s['decode_unit_le_8mib'] and s['locality_le_8x'] for s in d['segments'])
+              if d['payload_capacity_positive']:
+                  assert d['payload_beats_v029'] and d['payload_beats_zip'] and d['payload_beats_zstd19']
+                  assert a['terminal_decision']=='PROMOTE_NEXT_PREREQUISITE'
+              else:
+                  assert a['terminal_decision']=='RETIRE_FAMILY'
+          else:
+              assert a['terminal_decision']=='RETIRE_FAMILY'
+          PY
+      - name: CI topology self-check
+        if: always()
+        run: python tools/check_ci_topology.py .github/workflows/v030-shifted-segmented-relation-payload-floor.yml
+      - name: Public-surface guard
+        if: always()
+        run: python tools/check_public_surface.py
+      - name: Upload exact R4 receipt
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: v030-shifted-segmented-relation-${{ env.EVIDENCE_HEAD }}
+          path: benchmark-artifacts/v030-shifted-segmented-relation.json
+          if-no-files-found: error
+          retention-days: 90
+
+# Terminal negative is preserved in docs/V030_SHIFTED_SEGMENTED_RELATION_NEGATIVE.md.
+# Manual replay remains available for custody/reopening evidence. The retired segmented
+# relation-owned edit-stream family no longer wakes automatically on convergence PR changes.

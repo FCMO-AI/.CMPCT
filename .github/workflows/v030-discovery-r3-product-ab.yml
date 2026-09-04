@@ -1,0 +1,108 @@
+# ci-lane: deep
+name: CMPCT v0.30 discovery R3 product A/B
+
+on:
+  pull_request:
+    paths:
+      - "experiments/entropygraph_v030_discovery_neutral_worker.py"
+      - "experiments/entropygraph_v030_profile_isolation.py"
+      - "experiments/entropygraph_v030_shared_portfolio.py"
+      - "benchmarks/v030_discovery_r3_product_ab.py"
+      - "benchmarks/mosaic_v029_generalization_bench.py"
+      - "benchmarks/neutral_hostile_corpus_v1.py"
+      - "benchmarks/resemblance_hostile_corpus_v1.py"
+      - "benchmarks/neutral_hostile_determinism_repair_v5.py"
+      - "benchmarks/neutral_hostile_determinism_repair_v6.py"
+      - "docs/v030-rnd/R25_DISCOVERY_SOURCE_GENERIC_R3_BUILDER_PREREG.md"
+      - ".github/workflows/v030-discovery-r3-product-ab.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-v030-discovery-r3-product-ab-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  product-ab:
+    runs-on: ubuntu-latest
+    timeout-minutes: 150
+    steps:
+      - name: Check out exact candidate head
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install deterministic benchmark dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y zstd ffmpeg gcc libsndfile1
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[audio,test]'
+          python -m pip install pillow reportlab python-docx openpyxl python-pptx numpy
+
+      - name: Run isolated worker unit guards
+        run: python -m pytest -q tests/test_v030_discovery_neutral_worker.py
+
+      - name: Execute frozen 15-row product A/B and repeated runtime targets
+        run: |
+          mkdir -p benchmark-artifacts
+          set -o pipefail
+          python benchmarks/v030_discovery_r3_product_ab.py \
+            --work-root benchmark-artifacts/work \
+            --output benchmark-artifacts/v030-discovery-r3-product-ab.json \
+            2>&1 | tee benchmark-artifacts/v030-discovery-r3-product-ab.stdout.txt
+
+      - name: Enforce frozen Builder decision law
+        run: |
+          python - <<'PY'
+          import json
+          import subprocess
+          from pathlib import Path
+
+          path = Path("benchmark-artifacts/v030-discovery-r3-product-ab.json")
+          record = json.loads(path.read_text(encoding="utf-8"))
+          head = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
+          assert record["schema"] == "cmpct-v030-discovery-r3-product-ab-v1"
+          assert record["source_commit"] == head
+          assert record["frozen_prereg"] == "docs/v030-rnd/R25_DISCOVERY_SOURCE_GENERIC_R3_BUILDER_PREREG.md"
+          assert record["totals"]["workloads"] == 15
+          assert record["totals"]["byte_identical_rows"] == 15
+          assert record["totals"]["runtime_targets"] == 3
+          assert record["totals"]["material_runtime_regressions"] == 0
+          assert record["totals"]["runtime_regression_rows"] == []
+          assert record["totals"]["max_selected_member_read_amplification"] <= 8.0
+          assert record["timing_regression_rule"] == {
+              "relative": 0.05,
+              "absolute_s": 0.003,
+              "material_only_if_both_exceeded": True,
+              "authority": "docs/PERFORMANCE_RELEASE_GATE.md",
+          }
+          assert all(row["byte_identical"] for row in record["rows"])
+          assert all(len(row["sha256"]) == 64 and len(row["tree_sha256"]) == 64 for row in record["rows"])
+          assert record["decision"] == "PROMOTE_R3_PRODUCT_NEUTRALIZATION"
+          PY
+
+      - name: CI topology self-check
+        run: python tools/ci_topology_selfcheck.py --workflow .github/workflows/v030-discovery-r3-product-ab.yml
+
+      - name: Public-surface guard
+        run: python tools/public_surface_guard.py
+
+      - name: Upload exact Builder receipt
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: v030-discovery-r3-product-ab-${{ github.event.pull_request.head.sha || github.sha }}
+          path: |
+            benchmark-artifacts/v030-discovery-r3-product-ab.json
+            benchmark-artifacts/v030-discovery-r3-product-ab.stdout.txt
+          if-no-files-found: warn

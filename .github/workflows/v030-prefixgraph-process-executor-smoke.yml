@@ -1,0 +1,138 @@
+# ci-lane: deep
+name: CMPCT v0.30 PrefixGraph process executor smoke
+
+on:
+  push:
+    branches: [agent/v030-authoritative-integration]
+    paths:
+      - 'experiments/entropygraph_v030_prefixgraph_process_executor.py'
+      - 'docs/v030-rnd/R25_PREFIXGRAPH_ISOLATION_PRODUCTIZATION_PREREG.md'
+      - '.github/workflows/v030-prefixgraph-process-executor-smoke.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.sha }}
+
+jobs:
+  smoke:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    concurrency:
+      group: cmpct-v030-prefixgraph-process-executor-${{ github.sha }}
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install deterministic dependencies
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y zstd gcc
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[test]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
+      - name: Compile candidate boundary
+        run: python -m py_compile experiments/entropygraph_v030_prefixgraph_process_executor.py
+      - name: Prove one-shot semantic owner, exact tree and fail-closed errors
+        run: |
+          mkdir -p benchmark-artifacts
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          import tempfile
+          from benchmarks import resemblance_hostile_corpus_v1 as CORPUS
+          from experiments import entropygraph_v030_canonical_final as C
+          from experiments import entropygraph_v030_prefixgraph_process_executor as P
+
+          C.PROFILE_ISOLATION.assert_research_modules_unchanged()
+          with tempfile.TemporaryDirectory(prefix='cmpct-v030-pg-executor-smoke-') as td:
+              root=Path(td)
+              corpus=root/'corpus'
+              CORPUS.shifted_versions(corpus)
+              source=corpus/'01_shifted_versions'
+              if not source.is_dir():
+                  raise RuntimeError('Shifted source missing')
+              expected=C.RC.treehash(source)
+              archive=root/'prefixgraph.cmpct'
+              with P.PrefixGraphProcessExecutor(timeout_s=180.0) as pool:
+                  future=pool.submit(C.RC.PG.build, source, archive)
+                  stats=dict(future.result())
+                  receipt=dict(pool.last_receipt or {})
+              verified=dict(C.RC.PG.strong_verify(archive))
+              if not verified.get('ok') or verified.get('tree_sha256') != expected:
+                  raise RuntimeError(f'process executor PrefixGraph verification drift: {verified!r}')
+              if receipt.get('semantic_owner') != P.EXPECTED_OWNER_MODULE or receipt.get('prefix_level') != 15:
+                  raise RuntimeError(f'child receipt drift: {receipt!r}')
+              if int(receipt.get('archive_bytes', -1)) != archive.stat().st_size:
+                  raise RuntimeError('child size receipt mismatch')
+
+              wrong_callable_rejected=False
+              try:
+                  P.PrefixGraphProcessExecutor().submit(lambda *_: None, source, root/'wrong.cmpct')
+              except P.PrefixGraphProcessError:
+                  wrong_callable_rejected=True
+              if not wrong_callable_rejected or (root/'wrong.cmpct').exists():
+                  raise RuntimeError('wrong callable did not fail closed')
+
+              missing_source_rejected=False
+              missing_out=root/'missing.cmpct'
+              try:
+                  P.PrefixGraphProcessExecutor().submit(C.RC.PG.build, root/'does-not-exist', missing_out)
+              except P.PrefixGraphProcessError:
+                  missing_source_rejected=True
+              if not missing_source_rejected or missing_out.exists():
+                  raise RuntimeError('missing-source path did not fail closed')
+
+              one_shot_rejected=False
+              with P.PrefixGraphProcessExecutor() as once:
+                  one=root/'one.cmpct'
+                  once.submit(C.RC.PG.build, source, one).result()
+                  try:
+                      once.submit(C.RC.PG.build, source, root/'two.cmpct')
+                  except P.PrefixGraphProcessError:
+                      one_shot_rejected=True
+              if not one_shot_rejected:
+                  raise RuntimeError('one-shot contract not enforced')
+
+              C.PROFILE_ISOLATION.assert_research_modules_unchanged()
+              result={
+                  'schema':'cmpct-v030-prefixgraph-process-executor-smoke-v1',
+                  'source_head':'${{ env.EVIDENCE_HEAD }}',
+                  'archive_bytes':archive.stat().st_size,
+                  'tree_sha256':expected,
+                  'verified':verified,
+                  'child_receipt':receipt,
+                  'stats':stats,
+                  'wrong_callable_rejected':wrong_callable_rejected,
+                  'missing_source_rejected':missing_source_rejected,
+                  'one_shot_rejected':one_shot_rejected,
+                  'research_modules_unchanged':True,
+                  'release_credit':False,
+              }
+              Path('benchmark-artifacts/v030-prefixgraph-process-executor-smoke.json').write_text(json.dumps(result,indent=2,default=str)+'\n')
+          PY
+      - name: CI topology self-check
+        if: always()
+        run: python tools/check_ci_topology.py .github/workflows/v030-prefixgraph-process-executor-smoke.yml
+      - name: Public-surface guard
+        if: always()
+        run: python tools/check_public_surface.py
+      - name: Upload exact smoke receipt
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: v030-prefixgraph-process-executor-smoke-${{ github.sha }}
+          path: benchmark-artifacts/v030-prefixgraph-process-executor-smoke.json
+          if-no-files-found: warn
+          retention-days: 90
+
+# Engineering prerequisite only. Passing this smoke does not prove whole-product RSS/runtime transfer and grants no release credit.

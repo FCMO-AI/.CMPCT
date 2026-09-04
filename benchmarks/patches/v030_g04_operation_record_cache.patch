@@ -1,0 +1,151 @@
+diff --git a/native/cmpct-portable/src/g04.rs b/native/cmpct-portable/src/g04.rs
+index 78b9a9a..0000000 100644
+--- a/native/cmpct-portable/src/g04.rs
++++ b/native/cmpct-portable/src/g04.rs
+@@ -10,7 +10,7 @@ use preflate_container::{PreflateContainerConfig, ProcessBuffer, RecreateContai
+ use rmpv::Value;
+ use sha2::{Digest, Sha256};
+ use std::collections::{BTreeMap, HashMap, HashSet};
+-use std::fs::File;
++use std::fs::{self, File};
+ use std::io::{Cursor, Read, Seek, SeekFrom, Write};
+ use std::path::Path;
+ use std::sync::{Arc, Mutex};
+@@ -327,9 +327,19 @@ impl G04Archive {
+         &self,
+         index: usize,
+         mut output: W,
+     ) -> Result<MemberReadStats, PortableError> {
++        let mut record_cache = SharedRecordCache::new();
++        self.stream_member_with_record_cache(index, &mut output, &mut record_cache)
++    }
++
++    fn stream_member_with_record_cache<W: Write>(
++        &self,
++        index: usize,
++        mut output: W,
++        record_cache: &mut SharedRecordCache,
++    ) -> Result<MemberReadStats, PortableError> {
+         let (_, file) = self.file_at(index)?;
+-        let mut context = DecodeContext::new(self);
++        let mut context = DecodeContext::new(self, record_cache);
+         let (expected_size, expected_sha) = match file {
+             GFile::Preflate { size, sha, .. } | GFile::Nodes { size, sha, .. } => (*size, *sha),
+         };
+@@ -399,9 +409,32 @@ impl G04Archive {
+ 
+     pub(crate) fn verify(&self) -> Result<(), PortableError> {
+         let mut tree = Sha256::new();
++        let mut record_cache = SharedRecordCache::new();
+         for (index, entry) in self.entries.iter().enumerate() {
+             tree_hasher_prefix(&mut tree, &entry.path, entry.size);
+             let mut sink = DigestWriter(&mut tree);
+-            self.stream_member(index, &mut sink)?;
++            self.stream_member_with_record_cache(index, &mut sink, &mut record_cache)?;
+         }
+         let got: [u8; 32] = tree.finalize().into();
+         if got != self.tree_sha {
+@@ -411,6 +444,25 @@ impl G04Archive {
+         }
+         Ok(())
+     }
++
++    pub(crate) fn extract_into(&self, root: &Path) -> Result<(), PortableError> {
++        let mut record_cache = SharedRecordCache::new();
++        for (index, entry) in self.entries.iter().enumerate() {
++            let rel = safe_relpath(&entry.path)?;
++            let target = root.join(rel);
++            if let Some(parent) = target.parent() {
++                fs::create_dir_all(parent)?;
++            }
++            let mut file = File::create(&target)?;
++            self.stream_member_with_record_cache(index, &mut file, &mut record_cache)?;
++            file.flush()?;
++        }
++        Ok(())
++    }
+ }
+ 
+ struct DigestWriter<'a>(&'a mut Sha256);
+@@ -426,19 +478,31 @@ impl Write for DigestWriter<'_> {
+     }
+ }
+ 
+-struct DecodeContext<'a> {
++struct SharedRecordCache {
++    values: HashMap<usize, Arc<Vec<u8>>>,
++    bytes: usize,
++}
++
++impl SharedRecordCache {
++    fn new() -> Self {
++        Self {
++            values: HashMap::new(),
++            bytes: 0,
++        }
++    }
++}
++
++struct DecodeContext<'a, 'c> {
+     archive: &'a G04Archive,
+-    record_cache: HashMap<usize, Arc<Vec<u8>>>,
+-    record_cache_bytes: usize,
++    record_cache: &'c mut SharedRecordCache,
+     node_cache: HashMap<usize, Arc<Vec<u8>>>,
+     node_cache_bytes: usize,
+     touched_records: HashMap<usize, u64>,
+ }
+ 
+-impl<'a> DecodeContext<'a> {
+-    fn new(archive: &'a G04Archive) -> Self {
++impl<'a, 'c> DecodeContext<'a, 'c> {
++    fn new(archive: &'a G04Archive, record_cache: &'c mut SharedRecordCache) -> Self {
+         Self {
+             archive,
+-            record_cache: HashMap::new(),
+-            record_cache_bytes: 0,
++            record_cache,
+             node_cache: HashMap::new(),
+             node_cache_bytes: 0,
+             touched_records: HashMap::new(),
+@@ -463,6 +527,9 @@ impl<'a> DecodeContext<'a> {
+     }
+ 
+     fn record(&mut self, record_id: usize) -> Result<Arc<Vec<u8>>, PortableError> {
+-        if let Some(value) = self.record_cache.get(&record_id) {
++        if let Some(value) = self.record_cache.values.get(&record_id) {
++            self.touched_records
++                .entry(record_id)
++                .or_insert(value.len() as u64);
+             return Ok(Arc::clone(value));
+         }
+         let record =
+@@ -541,9 +608,11 @@ impl<'a> DecodeContext<'a> {
+             .entry(record_id)
+             .or_insert(original.len() as u64);
+         let value = Arc::new(original);
+-        if self.record_cache_bytes.saturating_add(value.len()) <= MAX_RECORD_CACHE_BYTES {
+-            self.record_cache_bytes += value.len();
+-            self.record_cache.insert(record_id, Arc::clone(&value));
++        if self.record_cache.bytes.saturating_add(value.len()) <= MAX_RECORD_CACHE_BYTES {
++            self.record_cache.bytes += value.len();
++            self.record_cache
++                .values
++                .insert(record_id, Arc::clone(&value));
+         }
+         Ok(value)
+     }
+diff --git a/native/cmpct-portable/src/lib.rs b/native/cmpct-portable/src/lib.rs
+index c8e865b..0000000 100644
+--- a/native/cmpct-portable/src/lib.rs
++++ b/native/cmpct-portable/src/lib.rs
+@@ -417,6 +417,9 @@ impl PortableArchive {
+         if let Self::LogsInverse { archive, .. } = self {
+             return LogsPublicView::new(archive)?.extract_into(root);
+         }
++        if let Self::ResearchG04(archive) = self {
++            return archive.extract_into(root);
++        }
+         let entries = self.entries();
+         for (index, entry) in entries.iter().enumerate() {
+             let rel = safe_relpath(&entry.path)?;

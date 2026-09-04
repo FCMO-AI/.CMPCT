@@ -1,0 +1,115 @@
+# ci-lane: deep
+# ci-auto-policy: retired-manual-only
+name: CMPCT v0.30 r25 candidate-overlap RSS oracle
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.sha }}
+
+jobs:
+  r25-candidate-overlap-rss:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 300
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - name: Verify exact evidence head
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install deterministic corpus dependencies from canonical Ubuntu feed
+        run: |
+          set -euo pipefail
+          test -f /etc/apt/sources.list.d/ubuntu.sources
+          sudo apt-get -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" -o Dir::Etc::sourceparts="-" update
+          sudo apt-get -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" -o Dir::Etc::sourceparts="-" install -y zstd gcc ffmpeg libsndfile1
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[test,audio]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
+      - name: Compile exact scheduler and oracle surfaces
+        run: |
+          python -m py_compile \
+            experiments/entropygraph_v030_release_candidate.py \
+            experiments/entropygraph_v030_release_product.py \
+            benchmarks/v030_release_performance.py \
+            benchmarks/v030_r25_candidate_overlap_rss_worker.py \
+            benchmarks/v030_r25_candidate_overlap_rss_oracle.py
+      - name: Preserve candidate correctness and parallel identity before measurement
+        run: |
+          python -m pytest -q \
+            tests/test_v030_release_candidate.py \
+            tests/test_v030_release_candidate_parallel_build.py \
+            tests/test_v030_prefixgraph_parallel_release.py \
+            tests/test_v030_g04_publish.py
+      - name: Run fresh-process shipping-vs-serial r25 candidate overlap A/B
+        run: |
+          mkdir -p benchmark-artifacts
+          python benchmarks/v030_r25_candidate_overlap_rss_oracle.py \
+            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-r25-candidate-overlap-rss-work" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-r25-candidate-overlap-rss.json"
+      - name: Independently enforce identity resource and claim boundaries
+        if: always()
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          path=Path('benchmark-artifacts/v030-r25-candidate-overlap-rss.json')
+          assert path.is_file(), 'r25 candidate-overlap RSS oracle did not publish evidence'
+          d=json.loads(path.read_text())
+          assert d['schema']=='cmpct-v030-r25-candidate-overlap-rss-v1'
+          assert int(d['rounds'])==2
+          assert d['targets']==[
+              ['resemblance_hostile_v1','01_shifted_versions'],
+              ['neutral_hostile_v1','09_ml_artifacts'],
+          ]
+          assert d['experiment_valid'] is True
+          assert d['selector_change'] is False
+          assert d['release_credit'] is False
+          c=d['contract']
+          for key in (
+              'archive_bytes_changed','selector_changed','candidate_admission_changed',
+              'candidate_internal_parallelism_changed','grammar_changed','integrity_changed',
+              'locality_limit_changed','decode_unit_limit_changed','recovery_changed',
+          ):
+              assert c[key] is False
+          assert len(d['rows'])==2
+          for row in d['rows']:
+              assert len(row['archive_sha256'])==64
+              assert len(row['tree_sha256'])==64
+              assert len(row['repetitions'])==2
+              for rep in row['repetitions']:
+                  s=rep['shipping']; q=rep['serial_r25']
+                  assert s['archive_sha256']==q['archive_sha256']==row['archive_sha256']
+                  assert int(s['archive_bytes'])==int(q['archive_bytes'])==int(row['archive_bytes'])
+                  assert s['tree_sha256']==q['tree_sha256']==row['tree_sha256']
+          shifted=d['rows'][0]
+          expected=(
+              float(shifted['rss_reduction_fraction']) >= float(c['minimum_shifted_rss_reduction_for_promotion_signal'])
+              and float(shifted['wall_ratio_serial_to_shipping']) <= float(c['maximum_shifted_wall_regression_ratio_for_promotion_signal'])
+          )
+          assert d['promotion_signal'] is expected
+          PY
+      - name: CI topology self-check
+        if: always()
+        run: python tools/check_ci_topology.py .github/workflows/v030-r25-candidate-overlap-rss.yml
+      - name: Upload r25 candidate-overlap RSS evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: v030-r25-candidate-overlap-rss-${{ env.EVIDENCE_HEAD }}
+          path: benchmark-artifacts/v030-r25-candidate-overlap-rss.json
+          if-no-files-found: error
+          retention-days: 90
+
+# Terminal negative retained for manual reproduction. Exact evidence showed serializing r25-vs-r24 candidate
+# construction changes Shifted RSS by only ~0.16% and worsens wall time, so automatic CI must not spend another
+# five-hour slot on this exhausted scheduling hypothesis. Current work targets live PrefixGraph CCtx ownership.

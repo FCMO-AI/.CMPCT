@@ -7,6 +7,12 @@ Size is deterministic and therefore has zero tolerance. Timing is inherently noi
 so a timing regression must clear *both* a relative and an absolute envelope before it is considered
 real. This is deliberately stricter than comparing two unrelated historical CI machines: base and
 candidate are expected to have been benchmarked in the same workflow job.
+
+The two ``--max-*-regression`` options are retained only as compatibility aliases for older workflow callers.
+``--max-time-regression`` may preserve or tighten the normative relative timing envelope but may never loosen it.
+``--max-size-regression`` is accepted but can never relax the zero-byte size law; any non-negative supplied value
+is ignored for admission. This lets stale callers fail or pass on measured data rather than argparse drift without
+weakening current release policy.
 """
 
 import argparse
@@ -16,6 +22,8 @@ from typing import Any
 
 TIMING_FIELDS = ("create_s_median", "extract_s_median")
 LAYERS = ("library", "cli")
+POLICY_TIMING_RELATIVE = 0.05
+POLICY_TIMING_ABSOLUTE_MS = 3.0
 
 
 def load(path: Path) -> dict[str, Any]:
@@ -35,10 +43,36 @@ def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--base", type=Path, required=True)
     ap.add_argument("--candidate", type=Path, required=True)
-    ap.add_argument("--timing-relative", type=float, default=0.05)
-    ap.add_argument("--timing-absolute-ms", type=float, default=3.0)
+    ap.add_argument("--timing-relative", type=float, default=POLICY_TIMING_RELATIVE)
+    ap.add_argument("--timing-absolute-ms", type=float, default=POLICY_TIMING_ABSOLUTE_MS)
+    ap.add_argument("--max-time-regression", type=float, default=None, help=argparse.SUPPRESS)
+    ap.add_argument("--max-size-regression", type=float, default=None, help=argparse.SUPPRESS)
     ap.add_argument("--summary", type=Path)
     args = ap.parse_args()
+
+    if args.timing_relative < 0:
+        ap.error("--timing-relative must be non-negative")
+    if args.timing_relative > POLICY_TIMING_RELATIVE:
+        ap.error(
+            f"--timing-relative cannot weaken release policy above {POLICY_TIMING_RELATIVE:g}"
+        )
+    if args.timing_absolute_ms < 0:
+        ap.error("--timing-absolute-ms must be non-negative")
+    if args.timing_absolute_ms > POLICY_TIMING_ABSOLUTE_MS:
+        ap.error(
+            f"--timing-absolute-ms cannot weaken release policy above {POLICY_TIMING_ABSOLUTE_MS:g} ms"
+        )
+
+    if args.max_time_regression is not None:
+        if args.max_time_regression < 0:
+            ap.error("--max-time-regression must be non-negative")
+        if args.max_time_regression > POLICY_TIMING_RELATIVE:
+            ap.error(
+                f"deprecated --max-time-regression cannot weaken release policy above {POLICY_TIMING_RELATIVE:g}"
+            )
+        args.timing_relative = args.max_time_regression
+    if args.max_size_regression is not None and args.max_size_regression < 0:
+        ap.error("--max-size-regression must be non-negative")
 
     base = load(args.base)
     cand = load(args.candidate)
@@ -62,8 +96,6 @@ def main() -> int:
 
             b_bytes = int(b_cmpct["bytes"])
             c_bytes = int(c_cmpct["bytes"])
-            # Footnote: archive bytes are deterministic for this corpus/encoder pair. There is no
-            # statistical excuse for a larger candidate archive, so the allowed regression is 0 B.
             if c_bytes > b_bytes:
                 failures.append(f"{name}/{layer}: archive size {b_bytes:,} -> {c_bytes:,} B (+{c_bytes-b_bytes:,} B)")
             elif c_bytes < b_bytes:
@@ -92,7 +124,7 @@ def main() -> int:
     lines = [
         "# CMPCT release performance gate",
         "",
-        f"Size policy: **0 byte regression allowed**.",
+        "Size policy: **0 byte regression allowed**.",
         f"Timing policy: fail when slowdown exceeds both **{args.timing_relative*100:.1f}%** and **{args.timing_absolute_ms:.1f} ms** on the same runner.",
         "",
         f"Result: **{'FAIL' if failures else 'PASS'}**",
@@ -101,6 +133,11 @@ def main() -> int:
         f"Measured improvements: **{len(improvements)}**",
         "",
     ]
+    if args.max_size_regression is not None:
+        lines += [
+            f"Compatibility note: deprecated --max-size-regression={args.max_size_regression:g} was supplied; current zero-byte size policy remains authoritative.",
+            "",
+        ]
     if failures:
         lines += ["## Regressions", *[f"- {x}" for x in failures], ""]
     if improvements:

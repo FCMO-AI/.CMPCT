@@ -22,7 +22,6 @@ import java.util.Map;
 /** Durable registry of CMPCT archives imported into app-private storage. */
 final class ArchiveRegistry {
     private static final String PREFS = "cmpct_archives";
-    private static final byte[] MAGIC = new byte[] {'C','M','P','C','T','2','4',0};
 
     static final class Record {
         final String id;
@@ -48,9 +47,6 @@ final class ArchiveRegistry {
             throw new IOException("SHA-256 is unavailable", impossible);
         }
 
-        byte[] first = new byte[MAGIC.length];
-        int firstUsed = 0;
-        long total = 0;
         try (InputStream raw = context.getContentResolver().openInputStream(uri)) {
             if (raw == null) throw new IOException("Android provider did not expose readable archive bytes");
             try (BufferedInputStream in = new BufferedInputStream(raw);
@@ -58,14 +54,8 @@ final class ArchiveRegistry {
                 byte[] buffer = new byte[256 * 1024];
                 int n;
                 while ((n = in.read(buffer)) != -1) {
-                    if (firstUsed < first.length) {
-                        int take = Math.min(n, first.length - firstUsed);
-                        System.arraycopy(buffer, 0, first, firstUsed, take);
-                        firstUsed += take;
-                    }
                     digest.update(buffer, 0, n);
                     out.write(buffer, 0, n);
-                    total += n;
                 }
                 out.getFD().sync();
             }
@@ -74,40 +64,37 @@ final class ArchiveRegistry {
             throw e;
         }
 
-        if (total < MAGIC.length || !matchesMagic(first)) {
+        // The shared portable reader is the single authority for canonical release identities. Keeping a Java
+        // magic whitelist here previously rejected a newly promoted canonical r25 profile (C25LG12) before JNI
+        // could dispatch it, and would require Android to duplicate every future canonical grammar addition.
+        // Authenticate the staged bytes *before* publication instead: only revision-24/25 archives that the
+        // production portable reader can completely verify are eligible to enter app-private storage.
+        try (CmpctNative.Archive archive = new CmpctNative.Archive(staging.getAbsolutePath())) {
+            int revision = archive.revision();
+            if (revision != 24 && revision != 25) {
+                throw new IOException(
+                        "Not a canonical CMPCT release archive (native reader reported revision " + revision + ")");
+            }
+            archive.verify();
+        } catch (IOException e) {
             staging.delete();
-            throw new IOException("Not a CMPCT revision-24 archive (CMPCT24\\0 magic missing)");
+            throw e;
         }
 
         String id = hex(digest.digest());
         File destination = new File(directory, id + ".cmpct");
-        boolean created = false;
         if (!destination.exists()) {
             if (!staging.renameTo(destination)) {
                 staging.delete();
                 throw new IOException("Unable to commit imported CMPCT archive into app storage");
             }
-            created = true;
         } else {
             staging.delete();
-        }
-
-        try (CmpctNative.Archive archive = new CmpctNative.Archive(destination.getAbsolutePath())) {
-            if (archive.revision() != 24) throw new IOException("Unsupported CMPCT revision");
-        } catch (IOException e) {
-            // Footnote: never publish a root after magic-only validation. The shared native parser must
-            // authenticate/decode the index first; otherwise a corrupt file could survive as a broken
-            // DocumentsProvider root merely because its first eight bytes looked plausible.
-            if (created) destination.delete();
-            throw e;
         }
 
         String name = displayName(context, uri);
         if (name == null || name.trim().isEmpty()) name = id.substring(0, 12) + ".cmpct";
         prefs(context).edit().putString(id, name).apply();
-
-        // Footnote: DocumentsUI caches roots. Tell it immediately when a new archive becomes a root,
-        // otherwise a successful import can remain invisible until the picker is restarted or refreshed.
         context.getContentResolver().notifyChange(
                 DocumentsContract.buildRootsUri(context.getPackageName() + ".documents"), null);
         return new Record(id, name, destination);
@@ -144,12 +131,6 @@ final class ArchiveRegistry {
         return context.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
     }
 
-    private static boolean matchesMagic(byte[] actual) {
-        if (actual.length != MAGIC.length) return false;
-        for (int i = 0; i < MAGIC.length; i++) if (actual[i] != MAGIC[i]) return false;
-        return true;
-    }
-
     private static String displayName(Context context, Uri uri) {
         try (Cursor c = context.getContentResolver().query(
                 uri, new String[] {OpenableColumns.DISPLAY_NAME}, null, null, null)) {
@@ -171,3 +152,7 @@ final class ArchiveRegistry {
         return out.toString();
     }
 }
+
+// Footnote: archive identity parsing intentionally lives only in cmpct-portable. Android copies provider bytes to
+// a private staging file, asks the production native reader to identify + strongly verify them, and atomically
+// publishes only after that succeeds. This keeps future canonical profiles from requiring a second Java parser.

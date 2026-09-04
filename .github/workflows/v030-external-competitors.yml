@@ -1,0 +1,179 @@
+# ci-lane: release
+# ci-pr-scope: latest-head-commit-gate
+# ci-cancel-policy: split-classifier-preserve-receipts
+name: CMPCT v0.30 external competitor frontier
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'src/cmpct/**'
+      - 'experiments/entropygraph_v030_*.py'
+      - 'benchmarks/v030_external_competitors.py'
+      - 'benchmarks/v030_external_competitors_canonical.py'
+      - 'tests/test_v030_external_competitor_scoreboard.py'
+      - '.github/workflows/v030-external-competitors.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+
+jobs:
+  latest-head-impact:
+    runs-on: ubuntu-24.04
+    concurrency:
+      group: cmpct-v030-external-classifier-${{ github.event.pull_request.number || github.ref }}
+      cancel-in-progress: true
+    outputs:
+      run_deep: ${{ steps.scope.outputs.run_deep }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 2
+      - name: Bind exact head and classify only its changed files
+        id: scope
+        shell: bash
+        run: |
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            echo 'run_deep=true' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          changed="$(git diff-tree --no-commit-id --name-only -r HEAD)"
+          printf '%s\n' "$changed"
+          if printf '%s\n' "$changed" | grep -Eq '^(src/cmpct/.*|experiments/entropygraph_v030_[^/]*\.py|benchmarks/v030_external_competitors\.py|benchmarks/v030_external_competitors_canonical\.py|tests/test_v030_external_competitor_scoreboard\.py|\.github/workflows/v030-external-competitors\.yml)$'; then
+            echo 'run_deep=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'run_deep=false' >> "$GITHUB_OUTPUT"
+          fi
+
+  external-frontier:
+    needs: latest-head-impact
+    if: needs.latest-head-impact.outputs.run_deep == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 480
+    concurrency:
+      group: cmpct-v030-external-receipt-${{ github.event.pull_request.head.sha || github.sha }}
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+
+      - name: Bind runner to exact candidate head
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+
+      - name: Install CMPCT, frozen-corpus media tools and external compressors
+        run: |
+          sudo apt-get update \
+            -o Dir::Etc::sourcelist='sources.list.d/ubuntu.sources' \
+            -o Dir::Etc::sourceparts='-' \
+            -o APT::Get::List-Cleanup='0'
+          sudo apt-get install -y \
+            -o Dir::Etc::sourcelist='sources.list.d/ubuntu.sources' \
+            -o Dir::Etc::sourceparts='-' \
+            zstd p7zip-full zpaq gcc ffmpeg
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[test,audio]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
+          zstd --version
+          ffmpeg -version | head -n 1
+          (7z i | head -n 4) || true
+          zpaq 2>&1 | head -n 4 || true
+
+      - name: Compile and preflight strict scoreboard
+        run: |
+          python -m py_compile \
+            experiments/entropygraph_v030_release_product.py \
+            experiments/entropygraph_v030_release_admission.py \
+            benchmarks/v030_external_competitors.py \
+            benchmarks/v030_external_competitors_canonical.py \
+            tests/test_v030_external_competitor_scoreboard.py
+          python -m pytest -q tests/test_v030_external_competitor_scoreboard.py
+
+      - name: Run exact repaired 15-workload competitor matrix
+        run: |
+          mkdir -p benchmark-artifacts
+          python benchmarks/v030_external_competitors_canonical.py \
+            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-external-work" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-external-competitors.json"
+
+      - name: Independently enforce external frontier contract
+        if: always()
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          path=Path('benchmark-artifacts/v030-external-competitors.json')
+          assert path.is_file(), 'external frontier matrix did not publish evidence'
+          data=json.loads(path.read_text())
+          gate=data['gate']; agg=data['aggregates']
+          assert gate['exact_workload_count'] is True
+          assert gate['all_cmpct_trees_verified'] is True
+          assert gate['all_zip_trees_verified'] is True
+          assert agg['all']['7z_lzma2_max_solid']['complete_for_suite'] is True
+          assert agg['all']['tar_zstd19_solid']['complete_for_suite'] is True
+          assert agg['all']['zpaq_method5']['complete_for_suite'] is True
+          assert gate['aggregate_beats_zip'] is True
+          assert gate['aggregate_beats_7z_when_available'] is True
+          assert gate['neutral_beats_solid_zstd19'] is True
+          assert gate['hostile_closes_solid_zstd19_frontier'] is True
+          assert gate['hostile_closes_zpaq5_frontier_when_available'] is True
+          strict=data['strict_per_workload_dominance']
+          assert strict['workload_count']==15
+          assert strict['complete_comparator_rows']==15
+          for count_key in (
+              'strict_zip_size_wins',
+              'strict_zstd19_size_wins',
+              'strict_zip_create_wins',
+              'strict_zstd19_create_wins',
+              'strict_joint_wins',
+          ):
+              assert isinstance(strict[count_key], int) and 0 <= strict[count_key] <= 15
+          assert strict['strict_joint_target']==15
+          assert len(strict['rows'])==15
+          assert all(row['comparators_complete'] for row in strict['rows'])
+          assert strict['strict_joint_wins']==15
+          assert all(row['strict_joint_win'] for row in strict['rows'])
+          for key in (
+              'all_workloads_strictly_beat_zip_size',
+              'all_workloads_strictly_beat_zstd19_size',
+              'all_workloads_strictly_beat_zip_create',
+              'all_workloads_strictly_beat_zstd19_create',
+              'strict_no_ties_size_or_create',
+          ):
+              assert gate[key] is True
+          assert gate['passed'] is True
+          PY
+
+      - name: CI topology self-check
+        if: always()
+        run: python tools/check_ci_topology.py .github/workflows/v030-external-competitors.yml
+
+      - name: Public-surface guard
+        if: always()
+        run: python tools/check_public_surface.py
+
+      - name: Upload external frontier evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: v030-external-frontier-${{ env.EVIDENCE_HEAD }}
+          path: benchmark-artifacts/v030-external-competitors.json
+          if-no-files-found: error
+          retention-days: 90
+
+# ZIP and solid Zstd-19 remain strict per-workload v0.30 release floors for both complete archive size and creation
+# wall-clock. Any tie or loss on any frozen workload fails v0.30 regardless of aggregate performance. Classifier jobs
+# are superseded by PR/ref; the eight-hour result-bearing matrix is preserved separately under exact-SHA job custody,
+# avoiding an exact-SHA classifier backlog without sacrificing any historical or release-useful receipt.

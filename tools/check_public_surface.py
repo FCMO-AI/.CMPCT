@@ -1,7 +1,12 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
-"""Fail CI when any tracked CMPCT text file contains forbidden private provenance."""
+"""Fail CI when tracked CMPCT text contains forbidden private provenance.
+
+Intentional legal attribution in the repository's dedicated copyright/licensing files is handled as a
+narrow exact-line exception. This keeps the disclosure guard fail-closed for operational provenance
+without making it contradict the canonical legal record merged from ``main``.
+"""
 
 from pathlib import Path
 import subprocess
@@ -31,6 +36,23 @@ RESTRICTED = {
     "private artifact-style prefix": "FCMO" + "_",
     "private benchmark scratch marker": "fcmo" + "_bench",
     "container scratch/private upload path": "/mnt/" + "data/",
+}
+
+# Legal attribution is not operational provenance. Keep this deliberately exact: adding a new personal
+# reference anywhere, including elsewhere in these files, still fails the guard until reviewed.
+_LEGAL_HOLDER = "Mat" + "ías Peña Szőke"
+_LEGAL_FOUNDER = "Jav" + "ier Castellanos Peña"
+LEGAL_PUBLIC_LINES = {
+    Path("COPYRIGHT.md"): {
+        f"`Copyright (c) 2026 {_LEGAL_HOLDER} and contributors`",
+        (
+            f"- Listing {_LEGAL_FOUNDER} as Founder of FCMO Group does not by itself make him an author "
+            "or copyright holder of FCMO AI work."
+        ),
+    },
+    Path("LICENSING.md"): {
+        f"`Copyright (c) 2026 {_LEGAL_HOLDER} and contributors`",
+    },
 }
 
 TEXT_SUFFIXES = {
@@ -68,6 +90,11 @@ def tracked_files():
             yield path
 
 
+def _is_reviewed_legal_line(rel: Path, line: str) -> bool:
+    """Return true only for an exact, deliberately reviewed public legal-attribution line."""
+    return line.strip() in LEGAL_PUBLIC_LINES.get(rel, set())
+
+
 def main() -> int:
     findings: list[str] = []
     checked = 0
@@ -78,13 +105,16 @@ def main() -> int:
             continue
         checked += 1
         folded = text.casefold()
+        rel = path.relative_to(ROOT)
         for label, token in RESTRICTED.items():
             if token.casefold() not in folded:
                 continue
-            rel = path.relative_to(ROOT)
             for lineno, line in enumerate(text.splitlines(), 1):
-                if token.casefold() in line.casefold():
-                    findings.append(f"{rel}:{lineno}: {label}: {line.strip()}")
+                if token.casefold() not in line.casefold():
+                    continue
+                if _is_reviewed_legal_line(rel, line):
+                    continue
+                findings.append(f"{rel}:{lineno}: {label}: {line.strip()}")
 
     if findings:
         print("CMPCT disclosure guard rejected private operational provenance:", file=sys.stderr)

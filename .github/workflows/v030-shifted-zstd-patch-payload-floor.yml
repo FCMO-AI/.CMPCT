@@ -1,0 +1,134 @@
+# ci-lane: deep
+# ci-pr-scope: latest-head-commit-gate
+# ci-cancel-policy: preserve-running-exact-receipt
+name: CMPCT v0.30 Shifted base-patch payload floor
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'benchmarks/v030_shifted_zstd_patch_payload_floor.py'
+      - 'benchmarks/v030_shifted_zstd_patch_oracle.py'
+      - 'benchmarks/resemblance_hostile_corpus_v1.py'
+      - 'benchmarks/v030_external_competitors.py'
+      - 'benchmarks/v030_release_generalization.py'
+      - '.github/workflows/v030-shifted-zstd-patch-payload-floor.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-v030-shifted-patch-floor-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: false
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+
+jobs:
+  admission:
+    runs-on: ubuntu-24.04
+    outputs:
+      run_deep: ${{ steps.scope.outputs.run_deep }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 2
+      - name: Bind exact candidate head
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+      - name: Classify newest exact HEAD commit
+        id: scope
+        shell: bash
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            echo 'run_deep=true' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          changed="$(git diff-tree --no-commit-id --name-only -r HEAD)"
+          printf '%s\n' "$changed"
+          if printf '%s\n' "$changed" | grep -Eq '^(benchmarks/v030_shifted_zstd_patch_payload_floor\.py|benchmarks/v030_shifted_zstd_patch_oracle\.py|benchmarks/resemblance_hostile_corpus_v1\.py|benchmarks/v030_external_competitors\.py|benchmarks/v030_release_generalization\.py|\.github/workflows/v030-shifted-zstd-patch-payload-floor\.yml)$'; then
+            echo 'run_deep=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'run_deep=false' >> "$GITHUB_OUTPUT"
+          fi
+
+  payload-floor:
+    needs: admission
+    if: needs.admission.outputs.run_deep == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - name: Bind exact candidate head
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install deterministic dependencies
+        run: |
+          sudo apt-get update \
+            -o Dir::Etc::sourcelist='sources.list.d/ubuntu.sources' \
+            -o Dir::Etc::sourceparts='-' \
+            -o APT::Get::List-Cleanup='0'
+          sudo apt-get install -y \
+            -o Dir::Etc::sourcelist='sources.list.d/ubuntu.sources' \
+            -o Dir::Etc::sourceparts='-' \
+            zstd
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[test]'
+      - name: Compile decisive floor instrument
+        run: python -m py_compile benchmarks/v030_shifted_zstd_patch_payload_floor.py
+      - name: Run exact optimistic payload floor
+        run: |
+          mkdir -p benchmark-artifacts
+          python benchmarks/v030_shifted_zstd_patch_payload_floor.py \
+            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-shifted-patch-floor-work" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-shifted-patch-floor.json"
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          p=Path('benchmark-artifacts/v030-shifted-patch-floor.json')
+          d=json.loads(p.read_text())
+          d['evidence_source_sha']=os.environ['EVIDENCE_HEAD']
+          p.write_text(json.dumps(d, indent=2)+'\n')
+          PY
+      - name: Enforce fail-closed evidence contract
+        if: always()
+        run: |
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          p=Path('benchmark-artifacts/v030-shifted-patch-floor.json')
+          assert p.exists(), 'Shifted payload-floor evidence missing'
+          d=json.loads(p.read_text())
+          assert d['schema']=='cmpct-v030-shifted-zstd-patch-payload-floor-v1'
+          assert d['evidence_source_sha']==os.environ['EVIDENCE_HEAD']
+          assert d['contract']['research_only'] is True
+          assert d['contract']['release_credit'] is False
+          assert d['contract']['benchmark_identity_used_in_representation'] is False
+          assert d['contract']['optimistic_bound_excludes_all_path_integrity_and_framing_bytes'] is True
+          assert len(d['arms'])==4
+          assert all(a['tree_verified'] for a in d['arms'])
+          assert all(a['payload_bytes'] + a['framing_bytes'] == a['archive_bytes'] for a in d['arms'])
+          assert d['summary']['release_credit'] is False
+          PY
+      - name: CI topology self-check
+        if: always()
+        run: python tools/check_ci_topology.py .github/workflows/v030-shifted-zstd-patch-payload-floor.yml
+      - name: Upload exact-head floor evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: v030-shifted-zstd-patch-floor-${{ env.EVIDENCE_HEAD }}
+          path: benchmark-artifacts/v030-shifted-patch-floor.json
+          if-no-files-found: error
+          retention-days: 90
+
+# This workflow proves whether single-anchor native patch payloads can beat the
+# same-run solid Zstd-19 even under the impossible gift of zero framing cost.
+# It is research-only and grants no selector, grammar, or release credit.

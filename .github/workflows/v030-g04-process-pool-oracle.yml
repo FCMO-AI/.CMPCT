@@ -1,0 +1,105 @@
+# ci-lane: deep
+name: CMPCT v0.30 G0-G4 process-pool oracle
+
+on:
+  push:
+    branches: [agent/v030-authoritative-integration]
+    paths:
+      - 'experiments/entropygraph_v030_geometry_overlay_g04*.py'
+      - 'experiments/entropygraph_v030_release_product.py'
+      - 'experiments/entropygraph_v030_release_product_base.py'
+      - 'benchmarks/v030_g04_process_pool_oracle.py'
+      - '.github/workflows/v030-g04-process-pool-oracle.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-v030-g04-process-oracle-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.sha }}
+
+jobs:
+  exact-byte-process-scheduler:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - name: Bind exact candidate
+        id: candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          actual="$(git rev-parse HEAD)"
+          test "$actual" = "$EVIDENCE_HEAD"
+          echo "sha=$actual" >> "$GITHUB_OUTPUT"
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install deterministic corpus dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y zstd gcc ffmpeg libsndfile1
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[audio,test]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
+      - name: Compile scheduler oracle
+        run: python -m py_compile benchmarks/v030_g04_process_pool_oracle.py
+      - name: Measure exact-byte thread-vs-process scheduler
+        run: |
+          mkdir -p benchmark-artifacts
+          python benchmarks/v030_g04_process_pool_oracle.py \
+            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-g04-process-oracle-work" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-g04-process-oracle.json"
+      - name: Independently enforce oracle contract
+        if: always()
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          path=Path('benchmark-artifacts/v030-g04-process-oracle.json')
+          if not path.is_file():
+              raise SystemExit('oracle evidence missing')
+          d=json.loads(path.read_text())
+          assert d['schema']=='cmpct-v030-g04-process-pool-oracle-v2'
+          assert d['contract']['scheduling_only'] is True
+          assert d['contract']['exact_overlay_bytes_required'] is True
+          assert d['contract']['no_release_threshold_changed'] is True
+          assert d['measurement_boundary'].startswith('same retained pre-overlay graph')
+          assert d['gate']['exact_target_count'] is True
+          assert d['gate']['all_byte_identical'] is True
+          assert len(d['rows'])==2
+          for row in d['rows']:
+              assert row['all_byte_identical'] is True
+              assert len(row['repetitions'])==2
+              assert row['substrate_graph_bytes'] > 0
+          assert d['gate']['all_materially_faster'] is True
+          assert d['gate']['passed'] is True
+          Path('benchmark-artifacts/v030-g04-process-candidate.txt').write_text('${{ steps.candidate.outputs.sha }}\n')
+          PY
+      - name: Public-surface guard
+        if: always()
+        run: python tools/check_public_surface.py
+      - name: CI topology self-check
+        if: always()
+        run: python tools/check_ci_topology.py .github/workflows/v030-g04-process-pool-oracle.yml
+      - name: Upload scheduler evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: v030-g04-process-pool-oracle-${{ steps.candidate.outputs.sha || github.sha }}
+          path: |
+            benchmark-artifacts/v030-g04-process-oracle.json
+            benchmark-artifacts/v030-g04-process-candidate.txt
+          if-no-files-found: warn
+          retention-days: 90
+
+# Deep regression evidence for the already-promoted process scheduler. Push-only triggering prevents the huge
+# integration-PR diff from rerunning this 90-minute lane for unrelated experiment edits.

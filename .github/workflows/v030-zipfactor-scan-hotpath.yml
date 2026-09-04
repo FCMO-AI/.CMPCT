@@ -1,0 +1,164 @@
+# ci-lane: deep
+# ci-cancel-policy: preserve-running-exact-receipt
+name: CMPCT v0.30 ZIP-factor scan hotpath oracle
+
+on:
+  push:
+    branches: [agent/v030-authoritative-integration]
+    paths:
+      - 'benchmarks/v030_zipfactor_scan_hotpath_oracle.py'
+      - 'benchmarks/v030_zipfactor_struct_parser_oracle.py'
+      - 'benchmarks/v030_zipfactor_eocd_indexed_parser_oracle.py'
+      - 'benchmarks/v030_zipfactor_eocd_hostile_equivalence_oracle.py'
+      - 'benchmarks/v030_zipfactor_eocd_comment_signature_oracle.py'
+      - 'experiments/entropygraph_v030_zipfactor_eocd_parser.py'
+      - 'experiments/entropygraph_v030_zipfactor_fused.py'
+      - 'experiments/entropygraph_v030_zipfactor_profile.py'
+      - 'experiments/entropygraph_v030_zipfactor_compact_v3_fused_finalize.py'
+      - '.github/workflows/v030-zipfactor-scan-hotpath.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: v030-zf-scan-hotpath-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  EVIDENCE_HEAD: ${{ github.sha }}
+
+jobs:
+  profile:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      PYTHONPATH: ${{ github.workspace }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - name: Bind exact candidate
+        id: candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          actual="$(git rev-parse HEAD)"
+          test "$actual" = "$EVIDENCE_HEAD"
+          echo "sha=$actual" >> "$GITHUB_OUTPUT"
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y zstd
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[test]'
+      - name: Compile product parser and oracles
+        run: |
+          python -m py_compile experiments/entropygraph_v030_zipfactor_eocd_parser.py
+          python -m py_compile benchmarks/v030_zipfactor_scan_hotpath_oracle.py
+          python -m py_compile benchmarks/v030_zipfactor_struct_parser_oracle.py
+          python -m py_compile benchmarks/v030_zipfactor_eocd_indexed_parser_oracle.py
+          python -m py_compile benchmarks/v030_zipfactor_eocd_hostile_equivalence_oracle.py
+          python -m py_compile benchmarks/v030_zipfactor_eocd_comment_signature_oracle.py
+      - name: Profile exact source scan
+        run: |
+          mkdir -p benchmark-artifacts
+          python benchmarks/v030_zipfactor_scan_hotpath_oracle.py \
+            --work-root "$RUNNER_TEMP/v030-zf-scan-hotpath" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-zf-scan-hotpath.json"
+      - name: Measure byte-neutral parser hotpath A/B
+        run: |
+          python benchmarks/v030_zipfactor_struct_parser_oracle.py \
+            --work-root "$RUNNER_TEMP/v030-zf-struct-parser" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-zf-struct-parser.json"
+      - name: Measure product-side EOCD-indexed parser A/B
+        run: |
+          python benchmarks/v030_zipfactor_eocd_indexed_parser_oracle.py \
+            --work-root "$RUNNER_TEMP/v030-zf-eocd-parser" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-zf-eocd-parser.json"
+      - name: Differentially harden product EOCD parser on hostile and valid ZIPs
+        run: |
+          python benchmarks/v030_zipfactor_eocd_hostile_equivalence_oracle.py \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-zf-eocd-hostile-equivalence.json"
+      - name: Prove EOCD signatures inside valid comments remain exact
+        run: |
+          python benchmarks/v030_zipfactor_eocd_comment_signature_oracle.py \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-zf-eocd-comment-signature.json"
+      - name: Evidence-boundary check
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          d=json.loads(Path('benchmark-artifacts/v030-zf-scan-hotpath.json').read_text())
+          assert d['schema']=='cmpct-v030-zipfactor-scan-hotpath-oracle-v1'
+          assert d['contract']['release_credit'] is False
+          assert d['contract']['production_change'] is False
+          assert d['contract']['profiled_timing_receives_speed_credit'] is False
+          assert d['candidate']['archive_bytes']==14033
+          assert d['candidate']['archive_sha256']=='75bdc866b4b7b63c8f83f7d9a88c9ff3d712c51b93700033984433819b014e31'
+          assert d['profiled']['top_by_cumulative_cpu']
+          assert d['gate']['experiment_valid'] is True
+          p=json.loads(Path('benchmark-artifacts/v030-zf-struct-parser.json').read_text())
+          assert p['schema']=='cmpct-v030-zipfactor-struct-parser-oracle-v2'
+          assert p['contract']['release_credit'] is False
+          assert p['contract']['production_change'] is False
+          assert p['contract']['process_global_mutation'] is False
+          assert p['candidate']['archive_bytes']==14033
+          assert p['candidate']['archive_sha256']=='75bdc866b4b7b63c8f83f7d9a88c9ff3d712c51b93700033984433819b014e31'
+          assert p['gate']['experiment_valid'] is True
+          e=json.loads(Path('benchmark-artifacts/v030-zf-eocd-parser.json').read_text())
+          assert e['schema']=='cmpct-v030-zipfactor-eocd-indexed-parser-oracle-v3'
+          assert e['contract']['release_credit'] is False
+          assert e['contract']['production_parser_module']=='experiments.entropygraph_v030_zipfactor_eocd_parser'
+          assert e['contract']['production_selection_change'] is False
+          assert e['contract']['process_global_mutation'] is False
+          assert e['candidate']['archive_bytes']==14033
+          assert e['candidate']['archive_sha256']=='75bdc866b4b7b63c8f83f7d9a88c9ff3d712c51b93700033984433819b014e31'
+          assert e['gate']['experiment_valid'] is True
+          h=json.loads(Path('benchmark-artifacts/v030-zf-eocd-hostile-equivalence.json').read_text())
+          assert h['schema']=='cmpct-v030-zipfactor-eocd-hostile-equivalence-oracle-v2'
+          assert h['contract']['release_credit'] is False
+          assert h['contract']['production_change'] is False
+          assert h['contract']['timing_credit'] is False
+          assert h['contract']['independent_valid_generalization_required'] is True
+          assert h['coverage']['cases'] >= 150
+          assert h['coverage']['valid_cases'] >= 7
+          assert h['valid_generalization']['all_exact'] is True
+          assert h['gate']['candidate_not_more_permissive'] is True
+          assert h['gate']['exact_on_shared_acceptance'] is True
+          assert h['gate']['valid_generalization_exact'] is True
+          assert h['gate']['experiment_valid'] is True
+          assert h['gate']['passed'] is True
+          q=json.loads(Path('benchmark-artifacts/v030-zf-eocd-comment-signature.json').read_text())
+          assert q['schema']=='cmpct-v030-zipfactor-eocd-comment-signature-oracle-v1'
+          assert q['contract']['release_credit'] is False
+          assert q['contract']['production_change'] is False
+          assert q['contract']['frozen_workload_dependency'] is False
+          assert len(q['cases'])==4
+          assert all(row['mature_accept'] and row['candidate_accept'] and row['semantic_exact'] for row in q['cases'])
+          assert q['gate']['valid_generalization_exact'] is True
+          assert q['gate']['passed'] is True
+          Path('benchmark-artifacts/v030-zf-scan-candidate.txt').write_text('${{ steps.candidate.outputs.sha }}\n')
+          PY
+      - name: Public-surface guard
+        run: python tools/check_public_surface.py
+      - name: CI topology self-check
+        run: python tools/check_ci_topology.py .github/workflows/v030-zipfactor-scan-hotpath.yml
+      - name: Upload receipt
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: v030-zf-scan-hotpath-${{ steps.candidate.outputs.sha || env.EVIDENCE_HEAD }}
+          path: |
+            benchmark-artifacts/v030-zf-scan-hotpath.json
+            benchmark-artifacts/v030-zf-struct-parser.json
+            benchmark-artifacts/v030-zf-eocd-parser.json
+            benchmark-artifacts/v030-zf-eocd-hostile-equivalence.json
+            benchmark-artifacts/v030-zf-eocd-comment-signature.json
+            benchmark-artifacts/v030-zf-scan-candidate.txt
+          if-no-files-found: warn
+          retention-days: 90

@@ -1,0 +1,180 @@
+# ci-lane: deep
+# ci-cancel-policy: preserve-running-exact-receipt
+name: CMPCT v0.30 G0-G4 ML cache policy oracle
+
+on:
+  push:
+    branches:
+      - agent/v030-authoritative-integration
+    paths:
+      - 'experiments/entropygraph_v030_release_reader.py'
+      - 'experiments/entropygraph_v030_release_product.py'
+      - 'experiments/entropygraph_v030_geometry_overlay_g04*.py'
+      - 'benchmarks/v030_release_performance*.py'
+      - 'benchmarks/v030_g04_ml_cache_policy_oracle*.py'
+      - 'benchmarks/v030_g04_ml_reader_hotpath_oracle.py'
+      - 'benchmarks/v030_g04_ml_duplicate_hash_oracle.py'
+      - '.github/workflows/v030-g04-ml-cache-policy-oracle.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-v030-g04-ml-cache-${{ github.ref }}
+  # This campaign can consume hours. Branch-push path filtering prevents unrelated integration commits from
+  # enqueueing it because of the historical PR-wide diff. Preserve a running exact receipt; at most the newest
+  # relevant push remains pending. Research evidence never substitutes for final exact-candidate authority.
+  cancel-in-progress: false
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.sha }}
+
+jobs:
+  ml-cache-policy:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - name: Bind exact candidate head
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install deterministic ML-corpus dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y zstd gcc ffmpeg libsndfile1
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[audio,test]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
+      - name: Compile cache-policy surface
+        run: |
+          python -m py_compile \
+            experiments/entropygraph_v030_release_reader.py \
+            benchmarks/v030_release_performance.py \
+            benchmarks/v030_g04_ml_cache_policy_oracle.py \
+            benchmarks/v030_g04_ml_cache_policy_oracle_v2.py \
+            benchmarks/v030_g04_ml_reader_hotpath_oracle.py \
+            benchmarks/v030_g04_ml_duplicate_hash_oracle.py
+      - name: Preserve G0-G4 streaming-reader correctness
+        run: |
+          python -m pytest -q \
+            tests/test_v030_release_reader.py \
+            tests/test_v030_member_reader.py \
+            tests/test_v030_release_fuzz.py
+      - name: Profile canonical ML semantic-owner hot path
+        run: |
+          mkdir -p benchmark-artifacts
+          python benchmarks/v030_g04_ml_reader_hotpath_oracle.py \
+            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-g04-ml-reader-hotpath-work" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-g04-ml-reader-hotpath.json"
+      - name: Enforce profiler claim boundary
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          d=json.loads(Path('benchmark-artifacts/v030-g04-ml-reader-hotpath.json').read_text())
+          assert d['schema']=='cmpct-v030-g04-ml-reader-hotpath-oracle-v1'
+          assert d['target']=='neutral_hostile_v1/09_ml_artifacts'
+          assert d['contract']['release_credit'] is False
+          assert d['contract']['production_change'] is False
+          assert d['contract']['archive_byte_change'] is False
+          assert d['contract']['profiled_timing_receives_performance_credit'] is False
+          assert d['archive']['selected']=='g04-overlay'
+          assert d['verify']['top_by_cumulative_cpu']
+          assert d['extract']['top_by_cumulative_cpu']
+          assert d['gate']['archive_identity_preserved'] is True
+          assert d['gate']['logical_identity_preserved'] is True
+          assert d['gate']['passed'] is True
+          PY
+      - name: Measure duplicate identical-record SHA work
+        run: |
+          python benchmarks/v030_g04_ml_duplicate_hash_oracle.py \
+            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-g04-ml-duplicate-hash-work" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-g04-ml-duplicate-hash.json"
+      - name: Enforce duplicate-hash exactness and claim boundary
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          d=json.loads(Path('benchmark-artifacts/v030-g04-ml-duplicate-hash.json').read_text())
+          assert d['schema']=='cmpct-v030-g04-ml-duplicate-hash-oracle-v1'
+          assert d['target']=='neutral_hostile_v1/09_ml_artifacts'
+          c=d['contract']; g=d['gate']; r=d['results']
+          assert c['release_credit'] is False
+          assert c['production_change'] is False
+          assert c['archive_byte_change'] is False
+          assert c['cache_budget_change'] is False
+          assert c['physical_read_policy_change'] is False
+          assert c['hash_reuse_key']=='same immutable bytes object identity within one reader call'
+          assert d['archive']['selected']=='g04-overlay'
+          assert r['rounds']==9
+          assert len(r['samples'])==9
+          assert len(r['verify_hash_reuses'])==1 and r['verify_hash_reuses'][0]>0
+          assert len(r['extract_hash_reuses'])==1 and r['extract_hash_reuses'][0]>0
+          assert g['experiment_valid'] is True
+          assert g['reader_results_identical'] is True
+          assert g['archive_identity_preserved'] is True
+          assert g['logical_identity_preserved'] is True
+          assert g['passed'] is True
+          if g['promotion_signal']:
+              assert float(r['verify_improvement_fraction']) >= float(c['minimum_verify_improvement_fraction'])
+              assert float(r['extract_improvement_fraction']) >= float(c['minimum_extract_improvement_fraction'])
+          PY
+      - name: Run canonical same-memory ML cache-policy A/B
+        run: |
+          python benchmarks/v030_g04_ml_cache_policy_oracle_v2.py \
+            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-g04-ml-cache-v2-work" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-g04-ml-cache-v2.json"
+      - name: Independently enforce canonical binding, unchanged memory and material speedup
+        if: always()
+        run: |
+          test -f benchmark-artifacts/v030-g04-ml-cache-v2.json
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          d=json.loads(Path('benchmark-artifacts/v030-g04-ml-cache-v2.json').read_text())
+          assert d['schema']=='cmpct-v030-g04-ml-cache-policy-v2'
+          assert d['target']=='neutral_hostile_v1/09_ml_artifacts'
+          assert d.get('source_commit', os.environ['EVIDENCE_HEAD']) == os.environ['EVIDENCE_HEAD']
+          binding=d['canonical_profile_binding']
+          assert binding['format_revision']==25
+          assert bytes.fromhex(binding['magic'])==b'CMP25G4\x00'
+          assert bytes.fromhex(binding['tail_magic'])==b'C25G4TL\x00'
+          assert binding['operation_scoped'] is True
+          assert binding['research_globals_restored_after_run'] is True
+          assert d['cache_policy_inputs']==['authenticated_node_graph_reference_counts']
+          assert d['memory_budget_change_bytes']==0
+          b=d['results']['baseline']; o=d['results']['reuse_aware']; c=d['contract']; g=d['gate']
+          assert b['node_cache_limit_bytes']==o['node_cache_limit_bytes']==c['node_cache_limit_bytes']==32*1024*1024
+          assert b['record_cache_limit_bytes']==o['record_cache_limit_bytes']==c['record_cache_limit_bytes']==64*1024*1024
+          assert o['skipped_one_shot_cache_insertions']>0
+          assert float(d['verify_improvement_fraction'])>=float(c['minimum_verify_improvement_fraction'])
+          assert float(d['extract_improvement_fraction'])>=float(c['minimum_extract_improvement_fraction'])
+          assert float(o['median_extract_physical_record_reads'])<=float(b['median_extract_physical_record_reads'])
+          assert g['same_node_cache_limit'] is True
+          assert g['same_record_cache_limit'] is True
+          assert g['passed'] is True
+          PY
+      - name: CI topology self-check
+        if: always()
+        run: python tools/check_ci_topology.py .github/workflows/v030-g04-ml-cache-policy-oracle.yml
+      - name: Upload ML cache-policy evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: v030-g04-ml-cache-v2-${{ env.EVIDENCE_HEAD }}
+          path: |
+            benchmark-artifacts/v030-g04-ml-reader-hotpath.json
+            benchmark-artifacts/v030-g04-ml-duplicate-hash.json
+            benchmark-artifacts/v030-g04-ml-cache-v2.json
+          if-no-files-found: warn
+          retention-days: 90
+
+# Research-only. Both A/Bs must preserve canonical archive/tree identity and unchanged resource budgets. A valid
+# weak result remains durable negative evidence; only a material exact-output speedup can nominate production reader work.

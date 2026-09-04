@@ -1,0 +1,132 @@
+# ci-lane: deep
+# ci-pr-scope: latest-head-commit-gate
+name: CMPCT v0.30 logs profile shadow frontier
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'experiments/entropygraph_v030_logs_inverse_profile_v*.py'
+      - 'experiments/entropygraph_v030_product_fs.py'
+      - 'benchmarks/v030_logs_profile_frontier.py'
+      - 'benchmarks/v030_external_competitors.py'
+      - 'benchmarks/v030_release_generalization.py'
+      - 'benchmarks/neutral_hostile_corpus_v1.py'
+      - 'benchmarks/resemblance_hostile_corpus_v1.py'
+      - 'benchmarks/neutral_hostile_determinism_repair_v*.py'
+      - '.github/workflows/v030-logs-profile-frontier.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-v030-logs-profile-frontier-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+
+jobs:
+  admission:
+    runs-on: ubuntu-24.04
+    outputs:
+      run_deep: ${{ steps.scope.outputs.run_deep }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 2
+      - name: Bind exact candidate head
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+      - name: Classify newest exact HEAD commit
+        id: scope
+        shell: bash
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            echo 'run_deep=true' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          changed="$(git diff-tree --no-commit-id --name-only -r HEAD)"
+          printf '%s\n' "$changed"
+          if printf '%s\n' "$changed" | grep -Eq '^(experiments/entropygraph_v030_logs_inverse_profile_v[^/]*\.py|experiments/entropygraph_v030_product_fs\.py|benchmarks/v030_logs_profile_frontier\.py|benchmarks/v030_external_competitors\.py|benchmarks/v030_release_generalization\.py|benchmarks/neutral_hostile_corpus_v1\.py|benchmarks/resemblance_hostile_corpus_v1\.py|benchmarks/neutral_hostile_determinism_repair_v[^/]*\.py|\.github/workflows/v030-logs-profile-frontier\.yml)$'; then
+            echo 'run_deep=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'run_deep=false' >> "$GITHUB_OUTPUT"
+          fi
+
+  logs-profile-frontier:
+    needs: admission
+    if: needs.admission.outputs.run_deep == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - name: Bind exact candidate head
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install deterministic corpus and comparator dependencies
+        run: |
+          sudo apt-get update \
+            -o Dir::Etc::sourcelist='sources.list.d/ubuntu.sources' \
+            -o Dir::Etc::sourceparts='-' \
+            -o APT::Get::List-Cleanup='0'
+          sudo apt-get install -y \
+            -o Dir::Etc::sourcelist='sources.list.d/ubuntu.sources' \
+            -o Dir::Etc::sourceparts='-' \
+            zstd ffmpeg libsndfile1 gcc
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[audio,test]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
+      - name: Compile shadow frontier
+        run: |
+          python -m py_compile \
+            experiments/entropygraph_v030_logs_inverse_profile_v3.py \
+            benchmarks/v030_logs_profile_frontier.py
+      - name: Run all-15 repeated logs-profile shadow frontier
+        run: |
+          mkdir -p benchmark-artifacts
+          python benchmarks/v030_logs_profile_frontier.py \
+            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-logs-frontier-work" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-logs-frontier.json"
+      - name: Independently enforce safety and evidence boundary
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          d=json.loads(Path('benchmark-artifacts/v030-logs-frontier.json').read_text())
+          assert d['schema']=='cmpct-v030-logs-profile-frontier-v1'
+          assert d['contract']['workloads']==15
+          assert d['contract']['rounds']==3
+          assert d['gate']['exact_workload_count'] is True
+          assert d['gate']['all_available_rows_tree_verified'] is True
+          assert d['gate']['all_available_rows_locality_green'] is True
+          assert d['gate']['logs_workload_four_way'] is True
+          assert d['gate']['passed'] is True
+          for row in d['rows']:
+              if row['strict']['four_way_win']:
+                  assert row['strict']['beats_zip_size'] is True
+                  assert row['strict']['beats_zstd19_size'] is True
+                  assert row['strict']['beats_zip_create'] is True
+                  assert row['strict']['beats_zstd19_create'] is True
+          PY
+      - name: CI topology self-check
+        run: python tools/check_ci_topology.py .github/workflows/v030-logs-profile-frontier.yml
+      - name: Upload shadow frontier evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: v030-logs-profile-frontier-${{ env.EVIDENCE_HEAD }}
+          path: benchmark-artifacts/v030-logs-frontier.json
+          if-no-files-found: warn
+          retention-days: 90
+
+# This lane intentionally does not change canonical selector/native/Android dispatch. It characterizes the bounded
+# logs profile over the same frozen 15-workload substrate, preserves ineligible/error rows as negative evidence,
+# and requires exact restoration/locality before any strict size+creation win receives credit.

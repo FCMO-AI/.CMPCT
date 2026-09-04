@@ -14,7 +14,9 @@ context with it.
   needed to understand or reproduce the engineering conclusion;
 - project-specific branding, repository identifiers and technical MIME/type identifiers;
 - public issue/PR history that discusses CMPCT itself;
-- third-party attribution required by applicable licenses.
+- third-party attribution required by applicable licenses;
+- deliberately published project legal attribution recorded by the canonical `COPYRIGHT.md` / `LICENSING.md`
+  policy, limited to the exact ownership/scope statements those files intentionally expose.
 
 ## What must not be copied into the public surface
 
@@ -29,6 +31,8 @@ context with it.
 
 A technical lesson learned from private data may be retained in generalized form. The private identity
 or operational context that produced the lesson should not be retained merely for historical color.
+Deliberately public legal attribution is not a license to spread the same names into research, benchmark,
+workflow, site or operational prose: only the canonical legal-attribution statements are exempt.
 
 ## Benchmark rule
 
@@ -89,11 +93,18 @@ rewrite because branches, pull requests, tags and clones may need to be rebased 
 While `LICENSING.md` says the Apache-2.0 proposal is non-final, public pages and package metadata must
 say **proposed**, not **licensed under**. Final adoption requires the explicit checklist in that file.
 
+Canonical copyright attribution is a separate ownership/provenance statement, not evidence that the
+Apache-2.0 proposal has been adopted and not a grant of license by itself.
+
 ## Automated guard
 
 `tools/check_public_surface.py` checks release-facing documentation, site source and public benchmark
 history for known internal-provenance markers and private-path patterns. CI must run it before normal
 tests and before any site publication.
+
+The guard permits person markers only on the exact canonical legal-attribution lines in `COPYRIGHT.md`
+and `LICENSING.md`; the same markers anywhere else still fail closed. This is a narrow reconciliation
+with deliberately published legal metadata, not a path-wide or person-wide allowlist.
 
 The guard is a tripwire, not a substitute for review. A new sensitive term that is not in the pattern
 list is still prohibited by this policy, and the current-tree guard cannot substitute for the full

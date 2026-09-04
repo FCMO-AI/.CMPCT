@@ -1,0 +1,175 @@
+# ci-lane: deep
+# ci-pr-scope: latest-head-commit-gate
+# ci-cancel-policy: split-classifier-preserve-receipts
+name: CMPCT v0.30 federated candidate productization
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'experiments/entropygraph_v025.py'
+      - 'experiments/entropygraph_v030_federated_candidate.py'
+      - 'experiments/entropygraph_v030_federated_public.py'
+      - 'experiments/entropygraph_v030_product_fs.py'
+      - 'benchmarks/v030_federated_candidate_productization.py'
+      - 'benchmarks/v030_federated_portability_inventory.py'
+      - 'benchmarks/neutral_hostile_corpus_v1.py'
+      - 'benchmarks/neutral_hostile_determinism_repair_v6.py'
+      - 'tests/test_v030_federated_candidate.py'
+      - 'tests/test_v030_federated_public_reader.py'
+      - 'tests/test_v030_federated_product_floor.py'
+      - '.github/workflows/v030-federated-candidate-productization.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+
+jobs:
+  latest-head-impact:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    concurrency:
+      group: cmpct-v030-federated-productization-classifier-${{ github.event.pull_request.number || github.ref }}
+      cancel-in-progress: true
+    outputs:
+      run_deep: ${{ steps.scope.outputs.run_deep }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 2
+      - name: Bind exact head and classify only its changed files
+        id: scope
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            echo 'run_deep=true' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          git diff-tree --no-commit-id --name-only -r HEAD > /tmp/latest-head-files.txt
+          cat /tmp/latest-head-files.txt
+          if grep -Eq '^(experiments/entropygraph_v025\.py|experiments/entropygraph_v030_(federated_candidate|federated_public|product_fs)\.py|benchmarks/v030_federated_(candidate_productization|portability_inventory)\.py|benchmarks/(neutral_hostile_corpus_v1|neutral_hostile_determinism_repair_v6)\.py|tests/test_v030_federated_(candidate|public_reader|product_floor)\.py|\.github/workflows/v030-federated-candidate-productization\.yml)$' /tmp/latest-head-files.txt; then
+            echo 'run_deep=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'run_deep=false' >> "$GITHUB_OUTPUT"
+            echo 'Accumulated PR paths matched, but newest exact commit cannot affect federated productization semantics.'
+          fi
+
+  office-analytics-productization:
+    needs: latest-head-impact
+    if: needs.latest-head-impact.outputs.run_deep == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+    concurrency:
+      group: cmpct-v030-federated-productization-receipt-${{ github.event.pull_request.head.sha || github.sha }}
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - name: Bind evidence to exact candidate head
+        run: |
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          echo "exact_head=$EVIDENCE_HEAD"
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install exact corpus and comparator dependencies from canonical Ubuntu feed
+        run: |
+          set -euo pipefail
+          test -f /etc/apt/sources.list.d/ubuntu.sources
+          sudo apt-get -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" -o Dir::Etc::sourceparts="-" update
+          sudo apt-get -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" -o Dir::Etc::sourceparts="-" install -y zstd gcc ffmpeg libsndfile1
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[audio,test]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
+      - name: Compile candidate, public reader and evidence gates
+        run: |
+          python -m py_compile \
+            experiments/entropygraph_v030_federated_candidate.py \
+            experiments/entropygraph_v030_federated_public.py \
+            benchmarks/v030_federated_candidate_productization.py \
+            benchmarks/v030_federated_portability_inventory.py
+      - name: Run candidate identity/isolation and public-reader regressions
+        run: |
+          python -m pytest -q \
+            tests/test_v030_federated_candidate.py \
+            tests/test_v030_federated_public_reader.py \
+            tests/test_v030_federated_product_floor.py
+      - name: Run dedicated-identity office/analytics productization gate
+        run: |
+          mkdir -p benchmark-artifacts
+          python benchmarks/v030_federated_candidate_productization.py \
+            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-eg01-productization-work" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-eg01-productization.json"
+      - name: Freeze exact portability recipe inventory
+        run: |
+          python benchmarks/v030_federated_portability_inventory.py \
+            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-eg01-portability-work" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-eg01-portability.json"
+      - name: Independently enforce evidence boundary
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          d=json.loads(Path('benchmark-artifacts/v030-eg01-productization.json').read_text())
+          assert d['schema']=='cmpct-v030-federated-eg01-productization-v2'
+          assert len(d['rows'])==2
+          assert d['gate']['dedicated_candidate_identity'] is True
+          assert d['gate']['all_locality_bounded'] is True
+          assert d['gate']['all_decode_units_bounded'] is True
+          assert d['gate']['all_two_way_recovery'] is True
+          assert d['gate']['all_four_way'] is True
+          assert d['gate']['all_accepted_v029_floor'] is True
+          assert d['gate']['all_genuine_r24_floor'] is True
+          assert d['gate']['all_historical_identities_exact'] is True
+          assert all(row['strict']['four_way'] for row in d['rows'])
+          assert all(row['product_floor']['strictly_smaller_than_accepted_v029'] for row in d['rows'])
+          assert all(row['product_floor']['strictly_smaller_than_genuine_r24'] for row in d['rows'])
+          assert d['gate']['passed'] is True
+
+          p=json.loads(Path('benchmark-artifacts/v030-eg01-portability.json').read_text())
+          assert p['schema']=='cmpct-v030-federated-eg01-portability-inventory-v1'
+          assert len(p['rows'])==2
+          assert p['gate']['metadata_v4_only'] is True
+          assert p['gate']['known_recipe_subset'] is True
+          assert p['gate']['known_reference_subset'] is True
+          assert p['gate']['known_pack_codec_subset'] is True
+          assert p['gate']['all_public_reads_exact'] is True
+          assert p['gate']['all_public_reads_le_8x'] is True
+          assert p['gate']['all_physical_packs_le_8mib'] is True
+          assert p['gate']['passed'] is True
+          PY
+      - name: CI topology self-check
+        if: always()
+        run: python tools/check_ci_topology.py .github/workflows/v030-federated-candidate-productization.yml
+      - name: Public-surface guard
+        if: always()
+        run: python tools/check_public_surface.py
+      - name: Upload productization and portability evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: v030-federated-candidate-productization-${{ env.EVIDENCE_HEAD }}
+          path: |
+            benchmark-artifacts/v030-eg01-productization.json
+            benchmark-artifacts/v030-eg01-portability.json
+          if-no-files-found: error
+          retention-days: 90
+
+# This lane cannot authorize release or selector/native/Android promotion. It proves that the office/analytics
+# level-1 EntropyGraph strength survives a distinct reader-visible identity, canonical filesystem semantics,
+# authenticated public selective reads, strong verification, two-way recovery and frozen <=8x / <=8 MiB bounds,
+# and—on the exact repaired all-15 source identities—strictly beats both accepted v0.29 and freshly rebuilt
+# genuine canonical r24 complete artifacts before emitting the exact recipe/codec inventory a native reader must
+# reproduce. Native/Android dispatch and all-15 selector authority remain separate mandatory gates. Classifier
+# routing is PR/ref-cancellable while the exact result-bearing productization receipt is preserved once admitted,
+# preventing unrelated integration commits from serializing behind an older three-hour proof.

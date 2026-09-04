@@ -1,0 +1,90 @@
+# ci-lane: deep
+# Automatic execution retired: exact encrypted-like byte-floor authority proved
+# the locality-safe physical family loses Zstd-19 even with zero control bytes.
+# This historical header oracle remains manually reproducible, but header-only
+# work can no longer change the release decision and must not consume every PR wave.
+name: CMPCT v0.30 C25CC01 derived blob-header oracle
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  derived-header:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      PYTHONPATH: ${{ github.workspace }}
+      EVIDENCE_HEAD: ${{ github.sha }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - name: Bind exact candidate head
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install deterministic corpus/comparator dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y zstd gcc ffmpeg libsndfile1
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[audio,test]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
+      - name: Compile derived-header oracle
+        run: python -m py_compile benchmarks/v030_c25cc01_derived_blob_header_oracle.py
+      - name: Measure self-describing physical framing frontier
+        run: |
+          mkdir -p benchmark-artifacts
+          python -m benchmarks.v030_c25cc01_derived_blob_header_oracle \
+            --work-root benchmark-artifacts/v030-c25cc01-derived-header-work \
+            --output benchmark-artifacts/v030-c25cc01-derived-header.json
+      - name: Enforce evidence boundary
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          d=json.loads(Path('benchmark-artifacts/v030-c25cc01-derived-header.json').read_text())
+          assert d['schema']=='cmpct-v030-c25cc01-derived-blob-header-oracle-v3'
+          assert d['strategy']=='descending_greedy'
+          c=d['candidate']; g=d['gate']; p=d['projection']; s=p['salvage_varint']['header_accounting']
+          assert g['exact_current_wrapped_accounting'] is True
+          assert g['locality_within_8x'] is True
+          assert g['full_sha256_digest_cost_retained'] is True
+          assert g['crc32_cost_retained_in_salvage_projection'] is True
+          assert g['physical_self_description_retained_in_salvage_projection'] is True
+          assert g['reserved_state_proven_elidable'] is True
+          assert g['existing_control_cost_retained'] is True
+          assert g['experiment_valid'] is True
+          assert g['release_credit'] is False
+          assert c['current_blob_header_bytes_per_record']==64
+          assert c['retained_sha256_bytes_per_record']==32
+          assert c['retained_crc32_bytes_per_record']==4
+          assert s['record_count']==c['record_count']
+          assert s['nonzero_reserved_records']==0
+          assert 0 < s['minimum_header_bytes'] <= s['average_header_bytes'] <= s['maximum_header_bytes'] < 64
+          assert p['digest_only']['bytes_saved_vs_current_wrapped'] == 32*c['record_count']
+          assert p['digest_plus_crc']['bytes_saved_vs_current_wrapped'] == 28*c['record_count']
+          assert p['salvage_varint']['bytes_saved_vs_current_wrapped'] == c['current_blob_header_bytes']-s['header_bytes']
+          assert isinstance(g['salvage_header_large_enough_to_cross_zstd19'], bool)
+          assert isinstance(p['digest_only']['strictly_smaller_than_zstd19'], bool)
+          assert isinstance(p['digest_plus_crc']['strictly_smaller_than_zstd19'], bool)
+          PY
+      - name: CI topology self-check
+        run: python tools/check_ci_topology.py .github/workflows/v030-c25cc01-derived-blob-header.yml
+      - name: Public-surface guard
+        run: python tools/check_public_surface.py
+      - name: Upload exact-head receipt
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: v030-c25cc01-derived-header-${{ env.EVIDENCE_HEAD }}
+          path: benchmark-artifacts/v030-c25cc01-derived-header.json
+          if-no-files-found: error
+          retention-days: 90
+
+# Historical negative-evidence reproduction only. No automatic release credit.

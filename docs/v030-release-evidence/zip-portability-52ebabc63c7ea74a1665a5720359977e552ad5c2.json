@@ -1,0 +1,18 @@
+{
+  "schema": "cmpct-v030-zip-portability-evidence-v2",
+  "candidate_sha": "52ebabc63c7ea74a1665a5720359977e552ad5c2",
+  "candidate_fingerprint": "67c5f6009d3fa34c56c6d1706597060f56196eca4019a64f97ca5735021a68fa",
+  "native_dependency_lock_sha256": "3a4babc7a43ef0aadca37ac0a49695b185419dd8aa2cbebcb5653202ed6a71a2",
+  "native_dependency_lock_bytes": 20876,
+  "native_dependency_lock_frozen": true,
+  "workflow": "v030-zip-portability.yml",
+  "run_id": 33906151346,
+  "run_attempt": 1,
+  "facts": {
+    "stock_zip_extract_tree_equal": true,
+    "r24_fallback_export": true,
+    "g04_export": true,
+    "prefixgraph_export": true,
+    "atomic_publication": true
+  }
+}

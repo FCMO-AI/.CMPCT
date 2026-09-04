@@ -1,7 +1,12 @@
-name: CMPCT mosaic next-frontier research gate
+# ci-lane: deep
+# ci-auto-policy: retired-manual-only
+name: CMPCT mosaic next-frontier research gate (historical)
 
+# This workflow proves old v0.29 research-only Mosaic frontiers and explicitly does not authorize a
+# release. On the long-lived v0.30 integration PR its unscoped pull_request trigger reran three old
+# benchmark suites plus the complete pytest suite after every unrelated commit. Preserve the exact
+# executable experiment for manual archaeology without consuming current release capacity.
 on:
-  pull_request:
   workflow_dispatch:
 
 permissions:
@@ -20,7 +25,7 @@ jobs:
         uses: actions/checkout@v6
         with:
           fetch-depth: 0
-          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          ref: ${{ github.sha }}
 
       - name: Set up Python
         uses: actions/setup-python@v6
@@ -111,9 +116,6 @@ jobs:
           assert combined['mosaic_selected'] >= 5, combined
           assert combined['max_mosaic_read_amplification'] <= 8.0, combined
           assert combined['max_additional_recipe_read_amplification'] <= 2.0, combined
-          # Footnote: the complete-artifact size/coverage thresholds were frozen before attempt #1 and
-          # are unchanged. Attempt #5 only adds the separately preregistered <=2x residual-recipe
-          # over-read ceiling; a red result changes the mechanism, not any of these numbers.
           PY
 
       - name: Existing regression suite
@@ -121,6 +123,9 @@ jobs:
 
       - name: Public-surface guard
         run: python tools/check_public_surface.py
+
+      - name: CI topology self-check
+        run: python tools/check_ci_topology.py .github/workflows/mosaic-v029.yml
 
       - name: Summarize mosaic frontiers
         if: always()
@@ -170,5 +175,5 @@ jobs:
           if-no-files-found: warn
 
 # Footnote: green here still does not authorize a v0.29 release. It proves the mechanism at primitive
-# and complete-artifact levels only on the mosaic-specific suites. The existing v0.28 frontier and
-# structural competitors must be reconciled in a separate generalization tranche before versioning.
+# and complete-artifact levels only on the mosaic-specific suites. The executable is retained for manual
+# reproduction; current v0.30 release authority lives in the exact-fingerprint convergence lanes.

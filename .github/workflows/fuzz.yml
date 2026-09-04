@@ -21,6 +21,9 @@ concurrency:
   group: cmpct-fuzz-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
+env:
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+
 jobs:
   fuzz-smoke:
     runs-on: ubuntu-latest
@@ -28,6 +31,13 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - name: Bind exact candidate head
+        run: |
+          set -euo pipefail
+          actual="$(git rev-parse HEAD)"
+          test "$actual" = "$EVIDENCE_HEAD"
       - name: Set up Python
         uses: actions/setup-python@v6
         with:
@@ -54,7 +64,7 @@ jobs:
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: cmpct-fuzz-crashes-${{ github.sha }}
+          name: cmpct-fuzz-crashes-${{ env.EVIDENCE_HEAD }}
           path: |
             /tmp/delta-crash-*
             /tmp/preflight-crash-*

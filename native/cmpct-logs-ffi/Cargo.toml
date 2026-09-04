@@ -1,0 +1,13 @@
+[package]
+name = "cmpct-logs-ffi"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.89"
+publish = false
+description = "Research-only in-process FFI boundary for CMPCT canonical logs-inverse reader"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+cmpct-portable = { path = "../cmpct-portable" }

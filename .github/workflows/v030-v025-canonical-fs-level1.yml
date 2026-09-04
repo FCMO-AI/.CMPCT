@@ -1,0 +1,152 @@
+# ci-lane: deep
+# ci-pr-scope: latest-head-commit-gate
+# ci-cancel-policy: preserve-running-exact-receipt
+name: CMPCT v0.30 v0.25 canonical FS level-1 proof
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'benchmarks/v030_v025_canonical_fs_level1_oracle.py'
+      - 'benchmarks/neutral_hostile_corpus_v1.py'
+      - 'benchmarks/neutral_hostile_determinism_repair_v*.py'
+      - 'experiments/entropygraph_v025.py'
+      - 'experiments/entropygraph_v030_product_fs.py'
+      - 'experiments/entropygraph_v030_release_product.py'
+      - '.github/workflows/v030-v025-canonical-fs-level1.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-v030-v025-canonical-fs-level1-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: false
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+
+jobs:
+  latest-head-impact:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      run_deep: ${{ steps.scope.outputs.run_deep }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 2
+      - name: Bind exact head and classify only its changed files
+        id: scope
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            echo 'run_deep=true' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          git diff-tree --no-commit-id --name-only -r HEAD > /tmp/latest-head-files.txt
+          cat /tmp/latest-head-files.txt
+          if grep -Eq '^(benchmarks/v030_v025_canonical_fs_level1_oracle\.py|benchmarks/neutral_hostile_corpus_v1\.py|benchmarks/neutral_hostile_determinism_repair_v[^/]*\.py|experiments/entropygraph_v025\.py|experiments/entropygraph_v030_product_fs\.py|experiments/entropygraph_v030_release_product\.py|\.github/workflows/v030-v025-canonical-fs-level1\.yml)$' /tmp/latest-head-files.txt; then
+            echo 'run_deep=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'run_deep=false' >> "$GITHUB_OUTPUT"
+            echo 'Accumulated PR paths matched, but newest exact commit does not affect this proof; skipping 240-minute replay.'
+          fi
+
+  canonical-fs-budget:
+    needs: latest-head-impact
+    if: needs.latest-head-impact.outputs.run_deep == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 240
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - name: Bind exact candidate head
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+
+      - name: Install frozen-corpus and comparator dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y zstd gcc ffmpeg libsndfile1
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[audio,test]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
+
+      - name: Compile canonical-filesystem budget proof
+        run: |
+          python -m py_compile \
+            benchmarks/v030_v025_canonical_fs_level1_oracle.py \
+            experiments/entropygraph_v025.py \
+            experiments/entropygraph_v030_product_fs.py
+
+      - name: Measure complete canonical-filesystem tax at the proven level-1 point
+        run: |
+          mkdir -p benchmark-artifacts
+          python benchmarks/v030_v025_canonical_fs_level1_oracle.py \
+            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-v025-canonical-fs-level1-work" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-v025-canonical-fs-level1.json"
+
+      - name: Independently enforce productization-budget contract
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          d=json.loads(Path('benchmark-artifacts/v030-v025-canonical-fs-level1.json').read_text())
+          assert d['schema']=='cmpct-v030-v025-canonical-fs-level1-v2'
+          assert d['targets']==['02_office_workspace','04_analytics_and_database']
+          assert d['level_cap']==1 and d['rounds']==3 and len(d['rows'])==2
+          by_name={row['label'].split('/')[-1]: row for row in d['rows']}
+          for row in d['rows']:
+              assert len(row['candidate']['raw_complete_verified_create_s'])==3
+              assert len(row['comparators']['zip']['raw_create_s'])==3
+              assert len(row['comparators']['zstd19']['raw_create_s'])==3
+              assert all(part['filesystem_manifest_bytes'] > 0 for part in row['candidate']['parts'])
+              assert all(part['filesystem_manifest_entries'] > 0 for part in row['candidate']['parts'])
+              assert all(part['canonical_user_tree_sha256']==row['canonical_user_tree_sha256'] for part in row['candidate']['parts'])
+              assert row['strict']['smaller_than_zip'] is True
+              assert row['strict']['smaller_than_zstd19'] is True
+              assert row['strict']['verified_create_faster_than_zip'] is True
+              assert row['strict']['verified_create_faster_than_zstd19'] is True
+              assert row['strict']['four_way'] is True
+          office=by_name['02_office_workspace']
+          analytics=by_name['04_analytics_and_database']
+          assert office['accepted_v029_bytes']==5_954_026
+          assert office['no_regression_vs_v029'] is True
+          assert office['productization_prerequisite_passed'] is True
+          assert analytics['accepted_v029_bytes']==6_135_172
+          # This is deliberate negative evidence: external domination is insufficient while accepted-v0.29 regresses.
+          assert analytics['no_regression_vs_v029'] is False
+          assert analytics['saving_vs_v029_bytes'] < 0
+          assert analytics['productization_prerequisite_passed'] is False
+          assert d['gate']['all_rows_preserve_four_way_after_filesystem_tax'] is True
+          assert d['gate']['all_rows_clear_accepted_v029_floor'] is False
+          assert d['gate']['all_rows_clear_productization_prerequisites'] is False
+          assert d['gate']['measurement_passed'] is True
+          PY
+
+      - name: CI topology self-check
+        run: python tools/check_ci_topology.py .github/workflows/v030-v025-canonical-fs-level1.yml
+
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: v030-v025-canonical-fs-level1-${{ env.EVIDENCE_HEAD }}
+          path: benchmark-artifacts/v030-v025-canonical-fs-level1.json
+          if-no-files-found: warn
+          retention-days: 90
+
+# The low-effort canonical-filesystem budget is an exact external four-way win on Office and Analytics, but the
+# accepted-v0.29 floor is an independent mandatory boundary. Office clears it; Analytics currently does not. This
+# lane therefore preserves the useful strict competitor result while preventing it from being misreported as a
+# productization-ready Analytics mechanism. CMPNX5 stays research-only; no selector/release threshold is weakened.

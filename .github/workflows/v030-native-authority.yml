@@ -1,0 +1,275 @@
+name: CMPCT v0.30 native authority
+# ci-lane: release
+# ci-cancel-policy: split-classifier-preserve-receipts
+# ci-pr-scope: latest-head-commit-gate
+
+on:
+  push:
+    branches:
+      - agent/v030-authoritative-integration
+    paths:
+      - 'native/cmpct-portable/**'
+      - 'native/cmpct-core/**'
+      - 'src/cmpct/**'
+      - 'experiments/entropygraph_v030_canonical_final.py'
+      - 'experiments/entropygraph_v030_canonical_final_impl.py'
+      - 'experiments/entropygraph_v030_profile_isolation.py'
+      - 'experiments/entropygraph_v030_release_product.py'
+      - 'experiments/entropygraph_v030_product_fs.py'
+      - 'experiments/entropygraph_v030_r25_manifest_admission.py'
+      - 'experiments/entropygraph_v030_fs_implicit_v4.py'
+      - 'experiments/entropygraph_v030_geometry_overlay_g04.py'
+      - 'experiments/entropygraph_v030_prefixgraph.py'
+      - 'experiments/entropygraph_v030_prefixgraph_parallel.py'
+      - 'experiments/entropygraph_v030_release_reader.py'
+      - 'experiments/entropygraph_v030_release_reader_policy.py'
+      - 'experiments/entropygraph_v030_release_admission.py'
+      - 'experiments/entropygraph_v030_release_candidate.py'
+      - 'experiments/entropygraph_v030_shared_portfolio.py'
+      - 'experiments/entropygraph_v030_release_lock_strict.py'
+      - 'tests/test_v030_canonical_final.py'
+      - 'tests/test_v030_profile_isolation.py'
+      - 'tests/test_v030_r25_manifest_admission.py'
+      - 'tests/test_v030_fs_implicit_v4.py'
+      - 'tests/test_v030_native_authority_custody.py'
+      - 'tests/generate_v030_canonical_goldens.py'
+      - 'tests/generate_v030_implicit_goldens.py'
+      - 'tests/conformance/v030-r25-canonical.json'
+      - 'tests/conformance/v030-r25-implicit-v4.json'
+      - 'tests/native_v030_canonical.py'
+      - 'tests/native_v030_implicit_manifest.py'
+      - 'tests/native_v030_r24_verify_authority.py'
+      - 'docs/FORMAT.md'
+      - 'docs/HARDENING.md'
+      - 'docs/NATIVE_CORE.md'
+      - 'docs/PORTABILITY.md'
+      - 'docs/v030-coordination/tasks/T01-native-portability.md'
+      - 'tools/check_ci_topology.py'
+      - 'pyproject.toml'
+      - '.github/workflows/v030-native-authority.yml'
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'native/cmpct-portable/**'
+      - 'native/cmpct-core/**'
+      - 'src/cmpct/**'
+      - 'experiments/entropygraph_v030_canonical_final.py'
+      - 'experiments/entropygraph_v030_canonical_final_impl.py'
+      - 'experiments/entropygraph_v030_profile_isolation.py'
+      - 'experiments/entropygraph_v030_release_product.py'
+      - 'experiments/entropygraph_v030_product_fs.py'
+      - 'experiments/entropygraph_v030_r25_manifest_admission.py'
+      - 'experiments/entropygraph_v030_fs_implicit_v4.py'
+      - 'experiments/entropygraph_v030_geometry_overlay_g04.py'
+      - 'experiments/entropygraph_v030_prefixgraph.py'
+      - 'experiments/entropygraph_v030_prefixgraph_parallel.py'
+      - 'experiments/entropygraph_v030_release_reader.py'
+      - 'experiments/entropygraph_v030_release_reader_policy.py'
+      - 'experiments/entropygraph_v030_release_admission.py'
+      - 'experiments/entropygraph_v030_release_candidate.py'
+      - 'experiments/entropygraph_v030_shared_portfolio.py'
+      - 'experiments/entropygraph_v030_release_lock_strict.py'
+      - 'tests/test_v030_canonical_final.py'
+      - 'tests/test_v030_profile_isolation.py'
+      - 'tests/test_v030_r25_manifest_admission.py'
+      - 'tests/test_v030_fs_implicit_v4.py'
+      - 'tests/test_v030_native_authority_custody.py'
+      - 'tests/generate_v030_canonical_goldens.py'
+      - 'tests/generate_v030_implicit_goldens.py'
+      - 'tests/conformance/v030-r25-canonical.json'
+      - 'tests/conformance/v030-r25-implicit-v4.json'
+      - 'tests/native_v030_canonical.py'
+      - 'tests/native_v030_implicit_manifest.py'
+      - 'tests/native_v030_r24_verify_authority.py'
+      - 'docs/FORMAT.md'
+      - 'docs/HARDENING.md'
+      - 'docs/NATIVE_CORE.md'
+      - 'docs/PORTABILITY.md'
+      - 'docs/v030-coordination/tasks/T01-native-portability.md'
+      - 'tools/check_ci_topology.py'
+      - 'pyproject.toml'
+      - '.github/workflows/v030-native-authority.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+
+jobs:
+  latest-head-impact:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    concurrency:
+      group: cmpct-v030-native-classifier-${{ github.event.pull_request.number || github.ref }}
+      cancel-in-progress: true
+    outputs:
+      run_native: ${{ steps.scope.outputs.run_native }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 2
+      - name: Bind exact head and classify newest commit only
+        id: scope
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          HEAD_REF: ${{ github.head_ref }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            echo 'run_native=true' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if [ "$EVENT_NAME" = "pull_request" ] && [ "$HEAD_REF" = "agent/v030-authoritative-integration" ]; then
+            echo 'run_native=false' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          git diff-tree --no-commit-id --name-only -r HEAD > /tmp/latest-head-files.txt
+          cat /tmp/latest-head-files.txt
+          if grep -Eq '^(native/cmpct-(portable|core)/|src/cmpct/.*|experiments/entropygraph_v030_(canonical_final|canonical_final_impl|profile_isolation|release_product|product_fs|r25_manifest_admission|fs_implicit_v4|geometry_overlay_g04|prefixgraph|prefixgraph_parallel|release_reader|release_reader_policy|release_admission|release_candidate|shared_portfolio|release_lock_strict)\.py|tests/(test_v030_(canonical_final|profile_isolation|r25_manifest_admission|fs_implicit_v4|native_authority_custody)\.py|generate_v030_(canonical|implicit)_goldens\.py|conformance/v030-r25-(canonical|implicit-v4)\.json|native_v030_(canonical|implicit_manifest|r24_verify_authority)\.py)|docs/(FORMAT|HARDENING|NATIVE_CORE|PORTABILITY)\.md|docs/v030-coordination/tasks/T01-native-portability\.md|tools/check_ci_topology\.py|pyproject\.toml|\.github/workflows/v030-native-authority\.yml)' /tmp/latest-head-files.txt; then
+            echo 'run_native=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'run_native=false' >> "$GITHUB_OUTPUT"
+          fi
+
+  native-authority:
+    needs: latest-head-impact
+    if: needs.latest-head-impact.outputs.run_native == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    concurrency:
+      group: cmpct-v030-native-receipt-${{ github.event.pull_request.head.sha || github.sha }}
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - name: Bind exact clean candidate and dependency lock before tools mutate the worktree
+        run: |
+          set -euo pipefail
+          actual="$(git rev-parse HEAD)"
+          test "$actual" = "$EVIDENCE_HEAD"
+          git ls-files --error-unmatch native/cmpct-portable/Cargo.lock >/dev/null
+          python -m experiments.entropygraph_v030_release_lock_strict --print-fingerprint \
+            > "$RUNNER_TEMP/cmpct-v030-fingerprint.clean.json"
+          cp native/cmpct-portable/Cargo.lock "$RUNNER_TEMP/Cargo.lock.clean"
+          sha256sum native/cmpct-portable/Cargo.lock | tee "$RUNNER_TEMP/Cargo.lock.clean.sha256"
+          git status --porcelain=v1
+          test -z "$(git status --porcelain=v1)"
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install deterministic Python dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y zstd
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[test]'
+      - name: Python canonical boundary, admitted-manifest and profile-isolation tests
+        run: |
+          python -m pytest -q \
+            tests/test_v030_canonical_final.py \
+            tests/test_v030_r25_manifest_admission.py \
+            tests/test_v030_fs_implicit_v4.py \
+            tests/test_v030_profile_isolation.py \
+            tests/test_v030_native_authority_custody.py
+      - name: Reproduce independent canonical r25 filesystem-control goldens
+        run: |
+          python tests/generate_v030_canonical_goldens.py --check
+          python tests/generate_v030_implicit_goldens.py --check
+      - name: Rust format
+        working-directory: native/cmpct-portable
+        run: cargo fmt --check
+      - name: Rust lint with frozen dependency graph
+        working-directory: native/cmpct-portable
+        run: cargo clippy --locked --all-targets --message-format=short -- -D warnings
+      - name: Rust hostile/parser/native tests with frozen dependency graph
+        working-directory: native/cmpct-portable
+        run: cargo test --locked --all-targets
+      - name: Rust release build with frozen dependency graph
+        working-directory: native/cmpct-portable
+        run: cargo build --locked --release
+      - name: Canonical CMP25 CLI ABI recovery and filesystem-v1 acceptance
+        run: python tests/native_v030_canonical.py
+      - name: Canonical implicit-v4 independent golden, recovery and writer parity
+        run: python tests/native_v030_implicit_manifest.py
+      - name: Prove complete r24 RAW verification and truthful locality surface
+        run: |
+          python tests/native_v030_r24_verify_authority.py \
+            --binary native/cmpct-portable/target/release/cmpct-portable
+      - name: Prove release identity and Cargo resolution did not drift during authority work
+        run: |
+          set -euo pipefail
+          cmp native/cmpct-portable/Cargo.lock "$RUNNER_TEMP/Cargo.lock.clean"
+          git diff --exit-code -- native/cmpct-portable/Cargo.lock
+          python -m experiments.entropygraph_v030_release_lock_strict --print-fingerprint \
+            > "$RUNNER_TEMP/cmpct-v030-fingerprint.after.json"
+          python - <<'PY'
+          import json, os, pathlib
+          temp = pathlib.Path(os.environ['RUNNER_TEMP'])
+          before = json.loads((temp / 'cmpct-v030-fingerprint.clean.json').read_text())['candidate_fingerprint']
+          after = json.loads((temp / 'cmpct-v030-fingerprint.after.json').read_text())['candidate_fingerprint']
+          if before != after:
+              raise SystemExit(f'release fingerprint mutated during native authority: {before} -> {after}')
+          print(before)
+          PY
+      - name: Record exact-candidate native authority evidence
+        run: |
+          python - <<'PY'
+          import hashlib, json, os, pathlib, subprocess
+          temp = pathlib.Path(os.environ['RUNNER_TEMP'])
+          fingerprint = json.loads((temp / 'cmpct-v030-fingerprint.clean.json').read_text())['candidate_fingerprint']
+          candidate_sha = subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip()
+          lock = pathlib.Path('native/cmpct-portable/Cargo.lock')
+          evidence = {
+              'schema': 'cmpct-v030-native-authority-evidence-v2',
+              'candidate_sha': candidate_sha,
+              'candidate_fingerprint': fingerprint,
+              'native_dependency_lock_sha256': hashlib.sha256(lock.read_bytes()).hexdigest(),
+              'native_dependency_lock_tracked': True,
+              'cargo_resolution_locked': True,
+              'release_fingerprint_stable_during_run': True,
+              'workflow': 'v030-native-authority.yml',
+              'run_id': int(os.environ['GITHUB_RUN_ID']),
+              'run_attempt': int(os.environ['GITHUB_RUN_ATTEMPT']),
+              'facts': {
+                  'g04_native_parity': True,
+                  'prefixgraph_native_parity': True,
+                  'logs_inverse_native_parity': True,
+                  'logs_inverse_recovery_green': True,
+                  'logs_inverse_filesystem_semantics_green': True,
+                  'builder_independent_goldens': True,
+                  'native_recovery_green': True,
+                  'implicit_v4_native_parity': True,
+                  'implicit_v4_recovery_green': True,
+                  'r24_fallback_native_verify_green': True,
+                  'shared_core_used': True,
+              },
+          }
+          out = temp / 'cmpct-v030-native-authority-evidence.json'
+          out.write_text(json.dumps(evidence, indent=2) + '\n')
+          print(json.dumps(evidence, indent=2))
+          PY
+      - name: CI topology self-check
+        run: python tools/check_ci_topology.py .github/workflows/v030-native-authority.yml
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: cmpct-v030-native-authority-${{ env.EVIDENCE_HEAD }}
+          path: ${{ runner.temp }}/cmpct-v030-native-authority-evidence.json
+          if-no-files-found: warn
+          retention-days: 30
+
+# Footnote: native authority now fingerprints the clean checked-out candidate before any Cargo command can resolve
+# dependencies, requires the tracked Cargo.lock, runs every dependency-resolving command with --locked, and proves the
+# lock plus release fingerprint are unchanged after the full native authority matrix. This closes a custody defect in
+# the earlier v1 evidence path, where Cargo generated an untracked lock before the fingerprint was recorded; those old
+# c119... native/ZIP receipts remain historical diagnostics but cannot authorize release. The classifier and expensive
+# receipt deliberately retain separate job-level concurrency domains so newer commits cannot kill an already-running
+# exact-SHA receipt. T01 remains a fingerprint-neutral manual revalidation hook. Builder-independent filesystem-v1 and
+# implicit-v4 bytes, recovery, Logs inverse parity, and r24 fallback verification remain mandatory and unchanged.

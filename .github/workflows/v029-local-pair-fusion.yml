@@ -1,24 +1,81 @@
+# ci-lane: deep
+# ci-pr-scope: latest-head-commit-gate
 name: CMPCT v0.29 locality-bounded pair fusion
 
 on:
   pull_request:
+    branches: [main]
+    paths:
+      - 'experiments/entropygraph_v029_local_pair_fusion_oracle.py'
+      - 'experiments/entropygraph_v029_residual_program_packing.py'
+      - 'benchmarks/resemblance_hostile_corpus_v1.py'
+      - 'tests/test_v029_local_pair_fusion_oracle.py'
+      - 'native/preflate-bridge/**'
+      - '.github/workflows/v029-local-pair-fusion.yml'
   workflow_dispatch:
 
 permissions:
   contents: read
 
+concurrency:
+  group: cmpct-v029-local-pair-fusion-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+
 jobs:
+  latest-head-scope:
+    runs-on: ubuntu-latest
+    outputs:
+      relevant: ${{ steps.scope.outputs.relevant }}
+    steps:
+      - name: Check out exact candidate
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 2
+          ref: ${{ env.EVIDENCE_HEAD }}
+
+      - name: Bind exact evidence head
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+
+      - id: scope
+        name: Classify only the newest exact HEAD commit
+        shell: bash
+        run: |
+          relevant=false
+          while IFS= read -r path; do
+            case "$path" in
+              experiments/entropygraph_v029_local_pair_fusion_oracle.py|\
+              experiments/entropygraph_v029_residual_program_packing.py|\
+              benchmarks/resemblance_hostile_corpus_v1.py|\
+              tests/test_v029_local_pair_fusion_oracle.py|\
+              native/preflate-bridge/*|\
+              .github/workflows/v029-local-pair-fusion.yml)
+                relevant=true
+                break
+                ;;
+            esac
+          done < <(git diff-tree --no-commit-id --name-only -r HEAD)
+          echo "relevant=$relevant" >> "$GITHUB_OUTPUT"
+          echo "latest exact-head pair-fusion substrate change: $relevant"
+
   pair-fusion-oracle:
+    needs: latest-head-scope
+    if: github.event_name == 'workflow_dispatch' || needs.latest-head-scope.outputs.relevant == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 35
     env:
       CMPCT_PREFLATE_BRIDGE: ${{ github.workspace }}/native/preflate-bridge/target/release/cmpct-preflate-bridge
     steps:
-      - name: Check out candidate
+      - name: Check out exact candidate
         uses: actions/checkout@v6
         with:
           fetch-depth: 0
-          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          ref: ${{ env.EVIDENCE_HEAD }}
+
+      - name: Bind exact evidence head
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
 
       - name: Set up Python
         uses: actions/setup-python@v6
@@ -87,6 +144,9 @@ jobs:
       - name: Public-surface guard
         run: python tools/check_public_surface.py
 
+      - name: CI topology self-check
+        run: python tools/check_ci_topology.py .github/workflows/v029-local-pair-fusion.yml
+
       - name: Summarize pair-fusion ceiling
         run: |
           python - <<'PY' >> "$GITHUB_STEP_SUMMARY"
@@ -106,9 +166,15 @@ jobs:
           PY
 
       - name: Upload pair-fusion evidence
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: cmpct-v029-local-pair-fusion-${{ github.sha }}
           path: |
             benchmark-artifacts/mosaic-v029-local-pair-fusion.json
             benchmark-artifacts/mosaic-v029-local-pair-fusion.stdout.txt
+          if-no-files-found: warn
+          retention-days: 30
+
+# Footnote: this historical/deep mechanism remains mandatory when its implementation/corpus changes. GitHub's
+# PR paths are cumulative across the long-lived v0.30 integration diff, so a cheap exact-HEAD classifier now
+# prevents unrelated release work from spending the 35-minute evidence runner while preserving the frozen gate.

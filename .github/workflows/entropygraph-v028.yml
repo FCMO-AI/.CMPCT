@@ -1,7 +1,11 @@
-name: CMPCT EntropyGraph II research gate
+# ci-lane: deep
+name: CMPCT EntropyGraph II research gate (historical)
 
+# EntropyGraph v0.28 is preserved as a manually reproducible historical research oracle. Its
+# cumulative PR path match on the long-lived v0.30 integration branch cannot provide current
+# release credit, but repeatedly consumed a 75-minute runner on every unrelated exact-head push.
+# Keep the experiment, thresholds, and artifact semantics intact while removing automatic PR load.
 on:
-  pull_request:
   workflow_dispatch:
 
 permissions:
@@ -22,7 +26,7 @@ jobs:
         uses: actions/checkout@v6
         with:
           fetch-depth: 0
-          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          ref: ${{ github.sha }}
 
       - name: Set up Python
         uses: actions/setup-python@v6
@@ -75,6 +79,9 @@ jobs:
       - name: Public-surface guard
         run: python tools/check_public_surface.py
 
+      - name: CI topology self-check
+        run: python tools/check_ci_topology.py .github/workflows/entropygraph-v028.yml
+
       - name: Summarize research frontier
         if: always()
         run: |
@@ -98,11 +105,12 @@ jobs:
 
       - name: Upload research evidence
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: cmpct-entropygraph-v028-${{ github.sha }}
           path: benchmark-artifacts/
           if-no-files-found: warn
+          retention-days: 30
 
 # Footnote: this workflow does not promote CMPNX8 into canonical revision 24. It proves the research
 # mechanism first. Promotion still requires a reader-visible format revision, independent vectors,

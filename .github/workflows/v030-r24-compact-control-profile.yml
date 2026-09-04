@@ -1,0 +1,119 @@
+# ci-lane: deep
+# ci-auto-policy: retired-manual-only
+name: CMPCT v0.30 r24 compact-control profile productization
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.sha }}
+
+jobs:
+  productization:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 240
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - name: Bind exact candidate
+        id: candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          actual="$(git rev-parse HEAD)"
+          test "$actual" = "$EVIDENCE_HEAD"
+          echo "sha=$actual" >> "$GITHUB_OUTPUT"
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install exact corpus/compressor dependencies from canonical Ubuntu feed
+        run: |
+          set -euo pipefail
+          test -f /etc/apt/sources.list.d/ubuntu.sources
+          sudo apt-get -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" -o Dir::Etc::sourceparts="-" update
+          sudo apt-get -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" -o Dir::Etc::sourceparts="-" install -y zstd gcc ffmpeg libsndfile1
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[audio,test]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
+      - name: Compile candidate and direct proof
+        run: |
+          python -m py_compile experiments/entropygraph_v030_r24_compact_control_profile.py
+          python -m py_compile experiments/entropygraph_v030_r24_compact_control_direct_extract.py
+          python -m py_compile experiments/entropygraph_v030_r24_compact_control_mmap_extract.py
+          python -m py_compile benchmarks/v030_r24_compact_control_profile_productization.py
+          python -m py_compile benchmarks/v030_c25cc01_self_describing_blobtable_oracle.py
+          python -m py_compile benchmarks/v030_c25cc01_direct_extract_oracle.py
+          python -m py_compile benchmarks/v030_c25cc01_mmap_extract_oracle.py
+      - name: Run focused semantics, recovery, extraction and physical-table ratchets
+        run: |
+          pytest -q \
+            tests/test_v030_r24_compact_control_profile.py \
+            tests/test_v030_r24_compact_control_direct_extract.py \
+            tests/test_v030_r24_compact_control_mmap_extract.py \
+            tests/test_v030_c25cc01_self_describing_blobtable.py
+      - name: Run retained historical profile evidence
+        run: |
+          mkdir -p benchmark-artifacts
+          python -m benchmarks.v030_c25cc01_direct_extract_oracle \
+            --work-root "$RUNNER_TEMP/v030-c25cc01-direct-extract" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-c25cc01-direct-extract.json"
+          python -m benchmarks.v030_c25cc01_mmap_extract_oracle \
+            --work-root "$RUNNER_TEMP/v030-c25cc01-mmap-extract" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-c25cc01-mmap-extract.json"
+          python benchmarks/v030_r24_compact_control_profile_productization.py \
+            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-r24-cc-profile-work" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-r24-cc-profile.json"
+          python benchmarks/v030_c25cc01_self_describing_blobtable_oracle.py \
+            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-c25cc01-self-describing-blobtable-work" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-c25cc01-self-describing-blobtable.json" || \
+            test -s "$GITHUB_WORKSPACE/benchmark-artifacts/v030-c25cc01-self-describing-blobtable.json"
+      - name: Retain core zero-credit evidence boundaries
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          profile=json.loads(Path('benchmark-artifacts/v030-r24-cc-profile.json').read_text())
+          assert profile['schema']=='cmpct-v030-r24-compact-control-profile-productization-v1'
+          assert profile['contract']['release_credit'] is False
+          assert profile['contract']['selector_change'] is False
+          assert profile['contract']['native_dispatch_change'] is False
+          assert profile['contract']['android_dispatch_change'] is False
+          assert profile['all15']['all15_complete'] is True
+          assert profile['all15']['zero_candidate_regressions_vs_r24'] is True
+          assert profile['all15']['all_trees_equal'] is True
+          direct=json.loads(Path('benchmark-artifacts/v030-c25cc01-direct-extract.json').read_text())
+          assert direct['contract']['release_credit'] is False and direct['all_outputs_exact'] is True
+          mmap=json.loads(Path('benchmark-artifacts/v030-c25cc01-mmap-extract.json').read_text())
+          assert mmap['contract']['release_credit'] is False and mmap['all_outputs_exact'] is True
+          blob=json.loads(Path('benchmark-artifacts/v030-c25cc01-self-describing-blobtable.json').read_text())
+          assert blob['contract']['release_credit'] is False
+          Path('benchmark-artifacts/v030-r24-cc-profile-candidate.txt').write_text('${{ steps.candidate.outputs.sha }}\n')
+          PY
+      - name: Public-surface guard
+        if: always()
+        run: python tools/check_public_surface.py
+      - name: CI topology self-check
+        if: always()
+        run: python tools/check_ci_topology.py .github/workflows/v030-r24-compact-control-profile.yml
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: v030-r24-compact-control-profile-${{ steps.candidate.outputs.sha || github.sha }}
+          path: |
+            benchmark-artifacts/v030-r24-cc-profile.json
+            benchmark-artifacts/v030-c25cc01-self-describing-blobtable.json
+            benchmark-artifacts/v030-c25cc01-direct-extract.json
+            benchmark-artifacts/v030-c25cc01-mmap-extract.json
+            benchmark-artifacts/v030-r24-cc-profile-candidate.txt
+          if-no-files-found: error
+          retention-days: 90
+
+# Historical productization evidence retained for manual reproduction. The later exact terminal selector authority
+# found zero valid frozen/unseen admissions and the shipping front door now hard-disables this family. Automatic
+# four-hour replay therefore cannot advance v0.30 and is retired without deleting any semantics/recovery evidence.

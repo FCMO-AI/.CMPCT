@@ -1,0 +1,145 @@
+# ci-lane: deep
+# ci-pr-scope: latest-head-commit-gate
+# ci-cancel-policy: preserve-running-exact-receipt
+name: CMPCT v0.30 r24 medium binary pack oracle
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'src/cmpct/builder.py'
+      - 'experiments/entropygraph_v030_release_product.py'
+      - 'benchmarks/v030_r24_medium_binary_pack_oracle.py'
+      - 'benchmarks/neutral_hostile_corpus_v1.py'
+      - 'benchmarks/resemblance_hostile_corpus_v1.py'
+      - 'benchmarks/neutral_hostile_determinism_repair_v6.py'
+      - '.github/workflows/v030-r24-medium-binary-pack-oracle.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-v030-r24-medium-pack-${{ github.event.pull_request.head.sha || github.sha }}
+  cancel-in-progress: false
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+
+jobs:
+  classify:
+    runs-on: ubuntu-24.04
+    outputs:
+      run_deep: ${{ steps.scope.outputs.run_deep }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 2
+      - name: Bind exact candidate head
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+      - name: Classify exact newest-head change
+        id: scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "run_deep=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          changed="$(git diff-tree --no-commit-id --name-only -r HEAD)"
+          printf '%s\n' "$changed"
+          if printf '%s\n' "$changed" | grep -Eq '^(src/cmpct/builder\.py|experiments/entropygraph_v030_release_product\.py|benchmarks/v030_r24_medium_binary_pack_oracle\.py|benchmarks/neutral_hostile_corpus_v1\.py|benchmarks/resemblance_hostile_corpus_v1\.py|benchmarks/neutral_hostile_determinism_repair_v6\.py|\.github/workflows/v030-r24-medium-binary-pack-oracle\.yml)$'; then
+            echo "run_deep=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "run_deep=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  oracle:
+    needs: classify
+    if: needs.classify.outputs.run_deep == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - name: Bind exact candidate head
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install exact corpus and compressor dependencies from canonical Ubuntu feed
+        run: |
+          set -euo pipefail
+          test -f /etc/apt/sources.list.d/ubuntu.sources
+          sudo apt-get -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" -o Dir::Etc::sourceparts="-" update
+          sudo apt-get -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" -o Dir::Etc::sourceparts="-" install -y zstd gcc ffmpeg libsndfile1
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[audio,test]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
+      - name: Compile oracle
+        run: python -m py_compile benchmarks/v030_r24_medium_binary_pack_oracle.py
+      - name: Run exact r24 medium-binary pack regression proof
+        run: |
+          mkdir -p benchmark-artifacts
+          python benchmarks/v030_r24_medium_binary_pack_oracle.py \
+            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-r24-medium-pack-work" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-r24-medium-pack.json"
+      - name: Independently enforce shipping regression evidence
+        run: |
+          python - <<'PY'
+          import json, os, subprocess
+          from pathlib import Path
+          assert subprocess.check_output(['git','rev-parse','HEAD'], text=True).strip() == os.environ['EVIDENCE_HEAD']
+          d=json.loads(Path('benchmark-artifacts/v030-r24-medium-pack.json').read_text())
+          assert d['schema']=='cmpct-v030-r24-medium-binary-pack-regression-v3'
+          assert d['contract']['grammar']=='existing canonical r24 S_PACK only'
+          assert d['contract']['shipping_micro_pack_max_file_bytes']==256*1024
+          assert d['contract']['timing_policy'].startswith('5 rotated same-runner rounds; median;')
+          g=d['gate']
+          assert g['all_verified_tree_equal'] is True
+          assert g['all_archive_bytes_deterministic'] is True
+          assert g['all_comparator_archive_sizes_deterministic'] is True
+          assert g['positive_rows_strict_four_way'] is True
+          assert g['negative_controls_verified_and_deterministic'] is True
+          assert g['shipping_regression_passed'] is True
+          positives=[r for r in d['rows'] if r['positive_target']]
+          assert len(positives)==2
+          for r in positives:
+              assert r['rounds']==5
+              assert len(r['shipping_r24']['complete_create_samples_s'])==5
+              assert len(r['comparators']['zip_deflate9']['create_samples_s'])==5
+              assert len(r['comparators']['tar_zstd19_solid']['create_samples_s'])==5
+              assert r['deterministic_archive_bytes'] is True
+              assert r['comparator_archive_sizes_deterministic'] is True
+              assert r['shipping_r24']['release_byte_knobs']=='environment-independent-r24-v4'
+              assert r['strict_four_way_win'] is True
+          controls=[r for r in d['rows'] if not r['positive_target']]
+          assert len(controls)==1
+          assert controls[0]['same_verified_tree'] is True
+          assert controls[0]['deterministic_archive_bytes'] is True
+          PY
+      - name: Public-surface guard
+        if: always()
+        run: python tools/check_public_surface.py
+      - name: CI topology self-check
+        if: always()
+        run: python tools/check_ci_topology.py .github/workflows/v030-r24-medium-binary-pack-oracle.yml
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: v030-r24-medium-binary-pack-${{ env.EVIDENCE_HEAD }}
+          path: benchmark-artifacts/v030-r24-medium-pack.json
+          if-no-files-found: warn
+          retention-days: 90
+
+# Focused shipping regression proof for canonical r24-v4. The exact candidate head is checked
+# out explicitly; GitHub's synthetic PR merge ref is not accepted as the evidence fingerprint.
+# The exact-newest-head classifier prevents accumulated paths on the long-lived convergence PR
+# from replaying this deep lane after unrelated commits while preserving already-running exact-SHA
+# receipts. The separate all-15 medium-pack generalization lane owns the historical v3->v4 zero-byte-
+# regression delta. Neither lane can relax the external ZIP/Zstd frontier, locality, integrity,
+# portability, or release lock.

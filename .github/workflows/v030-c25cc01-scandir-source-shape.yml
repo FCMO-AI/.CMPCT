@@ -1,0 +1,90 @@
+# ci-lane: deep
+# ci-auto-policy: retired-manual-only
+name: CMPCT v0.30 C25CC01 scandir source-shape A/B
+
+# C25CC01 is shipping-retired and its locality-safe physical floor cannot beat
+# Zstd-19 even with zero control bytes. This A/B only optimizes source-shape
+# discovery for that dead selector path, so automatic PR execution cannot change
+# a release decision. Keep manual reproduction for historical evidence.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-v030-c25cc01-scandir-source-shape-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.sha }}
+
+jobs:
+  source-shape-ab:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - name: Bind exact candidate head
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install package
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[test]'
+      - name: Compile oracle and shipping source-shape path
+        run: |
+          python -m py_compile benchmarks/v030_c25cc01_scandir_source_shape_oracle.py
+          python -m py_compile experiments/entropygraph_v030_release_product.py
+      - name: Ratchet shipping source-shape semantics
+        run: pytest -q tests/test_v030_r24_compact_control_shipping_selector.py -k 'scandir_source_shape or prefilter'
+      - name: Run exact rotated source-shape A/B
+        run: |
+          python -m benchmarks.v030_c25cc01_scandir_source_shape_oracle \
+            --work-root "$RUNNER_TEMP/v030-c25-shape" \
+            --output "$RUNNER_TEMP/v030-c25-shape.json"
+      - name: Ratchet evidence boundary
+        run: |
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          p=Path(os.environ['RUNNER_TEMP'])/'v030-c25-shape.json'
+          e=json.loads(p.read_text())
+          assert e['schema']=='cmpct-v030-c25cc01-scandir-source-shape-v2'
+          c=e['contract']; g=e['gate']
+          assert c['rounds']==11
+          assert c['min_relative_speedup']==0.20
+          assert c['min_absolute_speedup_s']==0.003
+          assert c['archive_bytes_changed'] is False
+          assert c['selector_changed'] is False
+          assert c['release_credit'] is False
+          assert c['baseline']=='frozen-os-walk-path-lstat'
+          assert c['candidate']=='os-scandir-direntry'
+          assert len(e['samples'])==11
+          assert g['shape_exact'] is True
+          assert g['prefilter_exact'] is True
+          assert g['shipping_uses_candidate'] is True
+          assert g['experiment_valid'] is True
+          if g['promotion_signal']:
+              assert g['material_speedup'] is True
+              assert e['absolute_speedup_s'] >= 0.003
+              assert e['relative_speedup'] >= 0.20
+              assert e['median_candidate_s'] < e['median_baseline_s']
+          PY
+      - name: Upload exact A/B evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: v030-c25cc01-scandir-source-shape
+          path: ${{ runner.temp }}/v030-c25-shape.json
+          if-no-files-found: warn
+      - name: CI topology self-check
+        run: python tools/check_ci_topology.py .github/workflows/v030-c25cc01-scandir-source-shape.yml
+
+# Historical source-shape evidence only; replacement C25CC02 work remains active.
