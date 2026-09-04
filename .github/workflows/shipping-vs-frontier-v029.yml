@@ -7,11 +7,13 @@ on:
       - "src/**"
       - "experiments/**"
       - "benchmarks/shipping_vs_frontier_v029.py"
+      - "benchmarks/shipping_vs_frontier_v029_repair_v6.py"
       - "benchmarks/mosaic_v029_generalization_bench.py"
       - "benchmarks/neutral_hostile_corpus_v1.py"
       - "benchmarks/resemblance_hostile_corpus_v1.py"
-      - "benchmarks/neutral_hostile_determinism_repair_v5.py"
+      - "benchmarks/neutral_hostile_determinism_repair_v6.py"
       - "benchmarks/history/2026-08-17-mosaic-v029-public.json"
+      - "benchmarks/history/2026-08-19-neutral-hostile-determinism-repair-v6.json"
       - "native/preflate-bridge/**"
       - "pyproject.toml"
       - ".github/workflows/shipping-vs-frontier-v029.yml"
@@ -56,11 +58,11 @@ jobs:
           rustup toolchain install 1.89.0 --profile minimal
           cargo +1.89.0 build --release --manifest-path native/preflate-bridge/Cargo.toml
 
-      - name: Run exact-tree shipping-vs-frontier benchmark
+      - name: Run exact-tree shipping-vs-frontier benchmark on accepted repair-v6 identity
         run: |
           mkdir -p benchmark-artifacts
           set -o pipefail
-          python benchmarks/shipping_vs_frontier_v029.py \
+          python benchmarks/shipping_vs_frontier_v029_repair_v6.py \
             --work-root benchmark-artifacts/work \
             --output benchmark-artifacts/shipping-vs-frontier-v029.json \
             2>&1 | tee benchmark-artifacts/shipping-vs-frontier-v029.stdout.txt
@@ -78,16 +80,27 @@ jobs:
           totals = record["totals"]
           rows = record["rows"]
           contract = record["benchmark_contract"]
+          overlay = record["frontier_source"]["accepted_identity_overlay"]
 
           assert record["schema"] == "cmpct-v029-shipping-vs-frontier-v1"
           assert record["source_commit"] == expected_sha
           assert record["project_version"] == "0.29.0"
           assert record["shipping"]["format_revision"] == 24
           assert record["frontier_source"]["record"] == "benchmarks/history/2026-08-17-mosaic-v029-public.json"
+          assert record["frontier_source"]["candidate_bytes"] == 137499525
+          assert overlay["record"] == "benchmarks/history/2026-08-19-neutral-hostile-determinism-repair-v6.json"
+          assert overlay["accepted"] is True
+          assert overlay["historical_record_rewritten"] is False
+          assert overlay["historical_candidate_bytes"] == 137501815
+          assert overlay["candidate_bytes"] == 137499525
+          assert overlay["delta_vs_historical_bytes"] == -2290
+          assert overlay["absolute_v030_saving_hurdle_bytes"] == 687783
+          assert overlay["hurdle_lowered"] is False
           assert contract["same_lifetime_measurement"] is True
           assert contract["same_tree_per_row"] is True
           assert contract["source_mtime_ns"] == 0
           assert contract["shipping_byte_identical_repeat_check"] == 2
+          assert contract["accepted_identity_overlay"] == overlay["record"]
           assert contract["timing_claim"] is None
           assert len(rows) == totals["workloads"] == 15
           assert totals["shipping_bytes"] == sum(row["shipping_bytes"] for row in rows)
@@ -111,7 +124,8 @@ jobs:
             benchmark-artifacts/shipping-vs-frontier-v029.stdout.txt
           if-no-files-found: warn
 
-# Footnote: this workflow measures deterministic stored bytes only. It does not promote CMPNX11 to the
-# canonical reader grammar and does not create a timing claim from one-shot hosted-runner measurements.
-# Public-surface disclosure is enforced by the repository's dedicated public-proof lane; duplicating that
-# repo-wide check here would make this benchmark fail for unrelated pre-existing legal/provenance text.
+# Footnote: this workflow measures deterministic stored bytes only. The August 17 public frontier
+# remains immutable historical evidence; the independently accepted repair-v6 substrate is an explicit
+# additive identity overlay and changes the accepted v0.29 aggregate by exactly -2,290 B without lowering
+# the inherited 687,783 B v0.30 hurdle. This lane does not promote CMPNX11 to the canonical reader grammar
+# and does not create a timing claim from one-shot hosted-runner measurements.
