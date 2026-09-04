@@ -73,9 +73,7 @@ jobs:
           python - <<'PY'
           from pathlib import Path
           import shutil
-
           from benchmarks import v030_release_ablation_canonical as A
-          from experiments import entropygraph_v030_release_product as PRODUCT
 
           root = Path('benchmark-artifacts/r30-generator-binding')
           shutil.rmtree(root, ignore_errors=True)
@@ -83,9 +81,10 @@ jobs:
           for suite, source, expected in A._build_corpora(root):
               if suite == 'neutral_hostile_v1' and source.name == '06_incremental_backups':
                   found = True
-                  observed = PRODUCT.treehash(source)
-                  assert observed == expected, (
-                      f'R30 generator identity mismatch: {observed} != {expected}'
+                  observed = A.RC.treehash(source)
+                  expected_tree = expected['tree_sha256']
+                  assert observed == expected_tree, (
+                      f'R30 generator identity mismatch: {observed} != {expected_tree}'
                   )
                   assert (source / 'snapshot_2.zip').is_file(), 'R30 nested source member missing'
                   break
@@ -93,8 +92,7 @@ jobs:
           PY
 
       - name: Compile frozen R30 instrument
-        run: |
-          python -m py_compile benchmarks/v030_r30_deflate_locality_risk_conditional_builder.py
+        run: python -m py_compile benchmarks/v030_r30_deflate_locality_risk_conditional_builder.py
 
       - name: Run frozen R30 conditional Builder
         run: |
@@ -119,10 +117,9 @@ jobs:
           assert d['locality_ceiling'] == 8.0
           assert d['mature_deflate_reuse_min'] == 65536
           assert set(d['targets']) == {'full-backups', 'nested-only'}
-          assert (
-              d['targets']['full-backups']['source_tree_sha256']
-              == d['generator_expected_tree_sha256']
-          ), 'R30 result escaped the frozen generator-provided full-backups identity'
+          assert d['generator_observed_tree_sha256'] == d['generator_expected_tree_sha256'], (
+              'R30 result escaped the frozen repaired generator identity'
+          )
           for target in d['targets'].values():
               assert set(target['arms']) == {'release-all-exact', 'mature-64k', 'locality-risk-v1'}
               for arm in target['arms'].values():
@@ -140,8 +137,7 @@ jobs:
               'SUBSTRATE_OR_CORRECTNESS_FAILURE',
           }
           if d['decision'] == 'PROMOTE_CONDITIONAL_TO_GLOBAL_BUILDER':
-              i = d['decision_inputs']
-              assert i == {
+              assert d['decision_inputs'] == {
                   'conditional_saves_full_backups': True,
                   'byte_nonregression_both_targets': True,
                   'locality_within_8x_both_targets': True,
