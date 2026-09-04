@@ -74,3 +74,29 @@ def test_zero_duration_samples_are_censored_from_timing_indices() -> None:
     assert p["create_speed_index_corpora"] == 0
     assert p["extract_speed_index"] is None
     assert p["extract_speed_index_corpora"] == 0
+
+
+def test_mature_size_frontier_uses_best_successful_mature_result_per_corpus() -> None:
+    corpora = {
+        "a": {
+            "logical_bytes": 1000,
+            "results": {
+                "cmpct-v0.29-shipping-r24": cell(bytes_=400, create=1, extract=1, rss=100),
+                "zip-deflate-9": cell(bytes_=500, create=1, extract=1, rss=100),
+                "zstd-19": cell(bytes_=300, create=1, extract=1, rss=100),
+            },
+        },
+        "b": {
+            "logical_bytes": 1000,
+            "results": {
+                "cmpct-v0.29-shipping-r24": cell(bytes_=200, create=1, extract=1, rss=100),
+                "zip-deflate-9": cell(bytes_=250, create=1, extract=1, rss=100),
+                "zstd-19": {"status": "timeout"},
+            },
+        },
+    }
+    f = scorecard.mature_size_frontier(corpora, "cmpct-v0.29-shipping-r24")
+    assert f["corpora"] == 2
+    assert (f["size_wins"], f["size_ties"], f["size_losses"]) == (1, 0, 1)
+    # Per-corpus ratios are 300/400 and 250/200; geometric mean is sqrt(.9375).
+    assert round(f["size_index"], 6) == round(100 * (0.9375 ** 0.5), 6)
