@@ -93,8 +93,13 @@ jobs:
           assert d['repetitions']==3
           assert set(d['targets'])=={'full-backups','nested-only'}
           assert d['decision'] in {'PHASE_OWNER_LOCALIZED','RESIDUAL_DISTRIBUTED_OR_BELOW_ATTRIBUTION_FLOOR','SUBSTRATE_OR_IDENTITY_FAILURE'}
+          for target in d['targets'].values():
+              assert 'positive_internal_deltas' in target
           if d['decision']=='PHASE_OWNER_LOCALIZED':
-              assert d['localized_owners'] and all(x['nested_delta_s']>=0.010 and x['full_delta_s']>0 for x in d['localized_owners'])
+              assert d['localized_owners'] and all(
+                  x['nested_internal_delta_s']>=0.010 and x['full_internal_delta_s']>0
+                  for x in d['localized_owners']
+              )
           PY
       - name: Upload immutable R33 evidence
         uses: actions/upload-artifact@v6
