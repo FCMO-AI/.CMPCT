@@ -1,8 +1,8 @@
 """ONE-G0.2 fused-observation microbenchmark.
 
 Discovery-only evidence: no compression ratio or product-speed claim. The instrument
-measures bytes observed once, candidate sparsity, bounded index size and Python reference
-throughput on deterministic hostile/structured regimes.
+measures one forward source scan, exact-verification rereads, candidate sparsity, bounded
+index size and Python reference throughput on deterministic hostile/structured regimes.
 """
 from __future__ import annotations
 
@@ -40,13 +40,17 @@ def run() -> dict[str, object]:
             samples.append(time.perf_counter_ns() - start)
         assert result is not None
         median_ns = int(statistics.median(samples))
-        assert result.stats.bytes_observed == len(data)
+        assert result.stats.source_scan_bytes == len(data)
         rows.append(
             {
                 "case": name,
                 "input_bytes": len(data),
                 "median_ns": median_ns,
                 "reference_mib_s": (len(data) / (1024 * 1024)) / (median_ns / 1_000_000_000),
+                "source_scan_bytes": result.stats.source_scan_bytes,
+                "verification_read_bytes": result.stats.verification_read_bytes,
+                "total_source_read_bytes": result.stats.total_source_read_bytes,
+                "source_read_amplification": result.stats.total_source_read_bytes / len(data),
                 "chunk_fingerprints": result.stats.chunk_fingerprints,
                 "hash_lookups": result.stats.hash_lookups,
                 "collision_verifications": result.stats.collision_verifications,
