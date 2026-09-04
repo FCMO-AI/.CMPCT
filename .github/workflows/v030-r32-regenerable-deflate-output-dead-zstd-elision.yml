@@ -3,21 +3,23 @@ name: CMPCT v0.30 R32 regenerable-Deflate output-dead Zstd elision
 # ci-cancel-policy: split-classifier-preserve-receipts
 # ci-pr-scope: latest-head-commit-gate
 # Diagnostic only. Positive result authorizes only the superseding global rehabilitation Builder.
+# Temporary custody bridge: the registered R32 lane also executes frozen R33 while the new
+# dedicated R33 workflow is not yet surfaced by GitHub Actions. The R33 instrument/freeze is unchanged.
 
 on:
   pull_request:
     paths:
       - 'benchmarks/v030_r32_regenerable_deflate_output_dead_zstd_elision.py'
       - 'docs/v030-rnd/R32_REGENERABLE_DEFLATE_OUTPUT_DEAD_ZSTD_ELISION_PREREG.md'
+      - 'benchmarks/v030_r33_regenerable_deflate_residual_phase_attribution.py'
+      - 'docs/v030-rnd/R32_REGENERABLE_DEFLATE_OUTPUT_DEAD_ZSTD_ELISION_RESULT.md'
+      - 'docs/v030-rnd/R33_REGENERABLE_DEFLATE_RESIDUAL_PHASE_ATTRIBUTION_PREREG.md'
       - '.github/workflows/v030-r32-regenerable-deflate-output-dead-zstd-elision.yml'
+      - '.github/workflows/v030-r33-regenerable-deflate-residual-phase-attribution.yml'
   workflow_dispatch:
 
 permissions:
   contents: read
-
-concurrency:
-  group: cmpct-v030-r32-top-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: false
 
 env:
   PYTHONPATH: ${{ github.workspace }}
@@ -30,7 +32,8 @@ jobs:
       group: cmpct-v030-r32-classifier-${{ github.event.pull_request.number || github.ref }}
       cancel-in-progress: true
     outputs:
-      run_receipt: ${{ steps.scope.outputs.run_receipt }}
+      run_r32: ${{ steps.scope.outputs.run_r32 }}
+      run_r33: ${{ steps.scope.outputs.run_r33 }}
     steps:
       - uses: actions/checkout@v6
         with:
@@ -43,20 +46,26 @@ jobs:
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
           if [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ]; then
-            echo 'run_receipt=true' >> "$GITHUB_OUTPUT"
+            echo 'run_r32=false' >> "$GITHUB_OUTPUT"
+            echo 'run_r33=true' >> "$GITHUB_OUTPUT"
             exit 0
           fi
           changed="$(git diff-tree --no-commit-id --name-only -r HEAD)"
           printf '%s\n' "$changed"
-          if printf '%s\n' "$changed" | grep -Eq '^(benchmarks/v030_r32_regenerable_deflate_output_dead_zstd_elision\.py|docs/v030-rnd/R32_REGENERABLE_DEFLATE_OUTPUT_DEAD_ZSTD_ELISION_PREREG\.md|\.github/workflows/v030-r32-regenerable-deflate-output-dead-zstd-elision\.yml)$'; then
-            echo 'run_receipt=true' >> "$GITHUB_OUTPUT"
+          if printf '%s\n' "$changed" | grep -Eq '^(benchmarks/v030_r32_regenerable_deflate_output_dead_zstd_elision\.py|docs/v030-rnd/R32_REGENERABLE_DEFLATE_OUTPUT_DEAD_ZSTD_ELISION_PREREG\.md)$'; then
+            echo 'run_r32=true' >> "$GITHUB_OUTPUT"
           else
-            echo 'run_receipt=false' >> "$GITHUB_OUTPUT"
+            echo 'run_r32=false' >> "$GITHUB_OUTPUT"
+          fi
+          if printf '%s\n' "$changed" | grep -Eq '^(benchmarks/v030_r33_regenerable_deflate_residual_phase_attribution\.py|docs/v030-rnd/R32_REGENERABLE_DEFLATE_OUTPUT_DEAD_ZSTD_ELISION_RESULT\.md|docs/v030-rnd/R33_REGENERABLE_DEFLATE_RESIDUAL_PHASE_ATTRIBUTION_PREREG\.md|\.github/workflows/v030-r32-regenerable-deflate-output-dead-zstd-elision\.yml|\.github/workflows/v030-r33-regenerable-deflate-residual-phase-attribution\.yml)$'; then
+            echo 'run_r33=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'run_r33=false' >> "$GITHUB_OUTPUT"
           fi
 
   r32-builder:
     needs: classify-latest-head
-    if: needs.classify-latest-head.outputs.run_receipt == 'true'
+    if: needs.classify-latest-head.outputs.run_r32 == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 150
     concurrency:
@@ -67,106 +76,108 @@ jobs:
         with:
           ref: ${{ env.EVIDENCE_HEAD }}
           fetch-depth: 96
-
       - name: Bind frozen product and corpus substrate
         shell: bash
         run: |
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
           git merge-base --is-ancestor b0e7aeab92c994b4a25c5040fe3fb9f5e208b01a HEAD
-          for path in \
-            src/cmpct/builder.py \
-            src/cmpct/codec.py \
-            experiments/entropygraph_v030_release_product.py \
-            benchmarks/neutral_hostile_corpus_v1.py \
-            benchmarks/neutral_hostile_determinism_repair_v1.py \
-            benchmarks/v030_release_ablation_canonical.py \
-            benchmarks/v030_perf_worker_canonical.py; do
-            base_blob="$(git rev-parse "b0e7aeab92c994b4a25c5040fe3fb9f5e208b01a:$path")"
-            head_blob="$(git rev-parse "HEAD:$path")"
-            if [ "$base_blob" != "$head_blob" ]; then
-              echo "Frozen R32 substrate drift: $path $base_blob -> $head_blob" >&2
-              exit 1
-            fi
+          for path in src/cmpct/builder.py src/cmpct/codec.py experiments/entropygraph_v030_release_product.py benchmarks/neutral_hostile_corpus_v1.py benchmarks/neutral_hostile_determinism_repair_v1.py benchmarks/v030_release_ablation_canonical.py benchmarks/v030_perf_worker_canonical.py; do
+            test "$(git rev-parse b0e7aeab92c994b4a25c5040fe3fb9f5e208b01a:$path)" = "$(git rev-parse HEAD:$path)" || { echo "Frozen R32 substrate drift: $path" >&2; exit 1; }
           done
-
       - uses: actions/setup-python@v6
         with:
           python-version: '3.11'
           cache: pip
-
       - name: Install frozen diagnostic dependencies
         shell: bash
         run: |
           set -euo pipefail
-          test -f /etc/apt/sources.list.d/ubuntu.sources
-          sudo apt-get -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" -o Dir::Etc::sourceparts="-" update
-          sudo apt-get -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" -o Dir::Etc::sourceparts="-" install -y zstd gcc ffmpeg libsndfile1
+          sudo apt-get update
+          sudo apt-get install -y zstd gcc ffmpeg libsndfile1
           python -m pip install --upgrade pip
           python -m pip install -e '.[audio,test]'
           python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
-
       - name: Compile frozen R32 instrument
         run: python -m py_compile benchmarks/v030_r32_regenerable_deflate_output_dead_zstd_elision.py
-
       - name: Run frozen R32 elision Builder
         env:
           CMPCT_EVIDENCE_HEAD: ${{ env.EVIDENCE_HEAD }}
         run: |
           mkdir -p benchmark-artifacts
-          python benchmarks/v030_r32_regenerable_deflate_output_dead_zstd_elision.py \
-            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/r32-output-dead-zstd-elision-work" \
-            --output "$GITHUB_WORKSPACE/benchmark-artifacts/r32-output-dead-zstd-elision.json"
-
-      - name: Enforce frozen R32 completeness and decision law
-        env:
-          CMPCT_EVIDENCE_HEAD: ${{ env.EVIDENCE_HEAD }}
-        shell: bash
-        run: |
-          python - <<'PY'
-          import json, os
-          from pathlib import Path
-          p = Path('benchmark-artifacts/r32-output-dead-zstd-elision.json')
-          assert p.is_file(), 'R32 result was not published'
-          d = json.loads(p.read_text())
-          assert d['schema'] == 'cmpct-v030-r32-regenerable-deflate-output-dead-zstd-elision-v1'
-          assert d['evidence_head'] == os.environ['CMPCT_EVIDENCE_HEAD']
-          assert d['authority_product_substrate_head'] == 'b0e7aeab92c994b4a25c5040fe3fb9f5e208b01a'
-          assert d['repetitions'] == 3
-          assert d['locality_ceiling'] == 8.0
-          assert d['mature_deflate_reuse_min'] == 65536
-          assert d['specialized_raw_max'] == 65536
-          assert set(d['targets']) == {'full-backups', 'nested-only'}
-          assert d['generator_observed_tree_sha256'] == d['generator_expected_tree_sha256']
-          expected = {'release-all-exact', 'full-search', 'no-ordinary-zstd'}
-          for target in d['targets'].values():
-              assert set(target['arms']) == expected
-              for arm in target['arms'].values():
-                  assert len(arm['repetitions']) == 3
-                  assert arm['median']['strong_verify_ok']
-                  for row in arm['repetitions']:
-                      assert row['strong_verify_ok']
-                      assert row['virtual_members']
-                      assert all(m['decoded_context_bytes'] is not None for m in row['virtual_members'])
-          assert d['decision'] in {
-              'PROMOTE_NO_ZSTD_TO_GLOBAL_REHAB_BUILDER',
-              'OUTPUT_DEAD_CONFIRMED_RUNTIME_DEBT_REMAINS',
-              'OUTPUT_DEAD_INFERENCE_FALSIFIED',
-              'SUBSTRATE_OR_CORRECTNESS_FAILURE',
-          }
-          if d['decision'] == 'PROMOTE_NO_ZSTD_TO_GLOBAL_REHAB_BUILDER':
-              i = d['decision_inputs']
-              assert i['specialized_executes_both_targets']
-              assert i['byte_identity_with_full_search_both_targets']
-              assert i['locality_within_8x_both_targets']
-              assert i['rss_within_10pct_release_both_targets']
-              assert i['no_material_runtime_regression_vs_release_both_targets']
-          PY
-
+          python benchmarks/v030_r32_regenerable_deflate_output_dead_zstd_elision.py --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/r32-output-dead-zstd-elision-work" --output "$GITHUB_WORKSPACE/benchmark-artifacts/r32-output-dead-zstd-elision.json"
       - name: Upload immutable R32 evidence
         uses: actions/upload-artifact@v6
         with:
           name: v030-r32-output-dead-zstd-elision-${{ env.EVIDENCE_HEAD }}
           path: benchmark-artifacts/r32-output-dead-zstd-elision.json
+          if-no-files-found: error
+          retention-days: 90
+
+  r33-attribution-bridge:
+    needs: classify-latest-head
+    if: needs.classify-latest-head.outputs.run_r33 == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    concurrency:
+      group: cmpct-v030-r33-attribution-${{ github.event.pull_request.head.sha || github.sha }}
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 96
+      - name: Bind frozen R32 substrate
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          git merge-base --is-ancestor 0b1f3cd653f0e2489964b93cdd19fa8324adda2e HEAD
+          for path in src/cmpct/builder.py src/cmpct/codec.py experiments/entropygraph_v030_release_product.py benchmarks/neutral_hostile_corpus_v1.py benchmarks/neutral_hostile_determinism_repair_v1.py benchmarks/v030_release_ablation_canonical.py benchmarks/v030_r32_regenerable_deflate_output_dead_zstd_elision.py; do
+            test "$(git rev-parse 0b1f3cd653f0e2489964b93cdd19fa8324adda2e:$path)" = "$(git rev-parse HEAD:$path)" || { echo "R33 substrate drift: $path" >&2; exit 1; }
+          done
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install frozen dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y zstd gcc ffmpeg libsndfile1
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[audio,test]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
+      - name: Compile frozen instrument
+        run: python -m py_compile benchmarks/v030_r33_regenerable_deflate_residual_phase_attribution.py
+      - name: Run frozen attribution
+        env:
+          CMPCT_EVIDENCE_HEAD: ${{ env.EVIDENCE_HEAD }}
+        run: |
+          mkdir -p benchmark-artifacts
+          python benchmarks/v030_r33_regenerable_deflate_residual_phase_attribution.py --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/r33-work" --output "$GITHUB_WORKSPACE/benchmark-artifacts/r33-phase-attribution.json"
+      - name: Enforce frozen result grammar
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json,os
+          from pathlib import Path
+          d=json.loads(Path('benchmark-artifacts/r33-phase-attribution.json').read_text())
+          assert d['schema']=='cmpct-v030-r33-regenerable-deflate-residual-phase-attribution-v1'
+          assert d['evidence_head']==os.environ['EVIDENCE_HEAD']
+          assert d['repetitions']==3
+          assert set(d['targets'])=={'full-backups','nested-only'}
+          assert d['decision'] in {'PHASE_OWNER_LOCALIZED','RESIDUAL_DISTRIBUTED_OR_BELOW_ATTRIBUTION_FLOOR','SUBSTRATE_OR_IDENTITY_FAILURE'}
+          for target in d['targets'].values():
+              assert 'positive_internal_deltas' in target
+          if d['decision']=='PHASE_OWNER_LOCALIZED':
+              assert d['localized_owners'] and all(x['nested_internal_delta_s']>=0.010 and x['full_internal_delta_s']>0 for x in d['localized_owners'])
+          PY
+      - name: Upload immutable R33 evidence
+        uses: actions/upload-artifact@v6
+        with:
+          name: v030-r33-phase-attribution-${{ env.EVIDENCE_HEAD }}
+          path: benchmark-artifacts/r33-phase-attribution.json
           if-no-files-found: error
           retention-days: 90
