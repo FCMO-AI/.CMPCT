@@ -11,7 +11,6 @@ on:
       - 'experiments/entropygraph_v030_release_product.py'
       - 'tests/test_v030_canonical_final.py'
       - 'tests/test_v030_profile_isolation.py'
-      - 'tools/check_public_surface.py'
       - '.github/workflows/v030-profile-isolation.yml'
   workflow_dispatch:
 
@@ -57,14 +56,11 @@ jobs:
             tests/test_v030_profile_isolation.py \
             tests/test_v030_canonical_final.py
 
-      - name: Public-surface guard
-        run: python tools/check_public_surface.py
-
       - name: CI topology self-check
         run: python tools/check_ci_topology.py .github/workflows/v030-profile-isolation.yml
 
 # Footnote: this gate is intentionally path-scoped around the canonical profile boundary. It exists because
 # the release product now preserves its large reviewed implementation behind a small namespace-isolation wrapper;
-# edits to either half must trigger the same import-order/concurrency contract before promotion. Because this lane
-# also consumes the public-surface guard, changes to that guard are part of the lane's evidence-critical substrate
-# and must regenerate this receipt rather than inheriting a stale green result.
+# edits to either half must trigger the same import-order/concurrency contract before promotion. Public disclosure
+# policy is independently release-gated by the exact-head public-proof contract; coupling it here would make
+# publication-policy changes invalidate profile-isolation evidence and waste release-lane runner capacity.
