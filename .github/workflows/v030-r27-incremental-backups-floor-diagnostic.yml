@@ -1,7 +1,8 @@
 name: CMPCT v0.30 R27 Incremental Backups floor diagnostic
 # ci-lane: forge-diagnostic
+# ci-cancel-policy: split-classifier-preserve-receipts
+# ci-pr-scope: latest-head-commit-gate
 # Diagnostic only. Cannot grant release credit.
-# Registration trigger: execute the already-frozen R27 instrument after GitHub indexed this workflow.
 
 on:
   pull_request:
@@ -21,17 +22,49 @@ env:
   EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
 
 jobs:
+  classify-latest-head:
+    runs-on: ubuntu-24.04
+    concurrency:
+      group: cmpct-v030-r27-classifier-${{ github.event.pull_request.number || github.ref }}
+      cancel-in-progress: true
+    outputs:
+      run_receipt: ${{ steps.scope.outputs.run_receipt }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 2
+      - id: scope
+        name: Classify exact latest-head R27 impact
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          if [ "$GITHUB_EVENT_NAME" = workflow_dispatch ]; then
+            echo 'run_receipt=true' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          changed="$(git diff-tree --no-commit-id --name-only -r HEAD)"
+          printf '%s\n' "$changed"
+          if printf '%s\n' "$changed" | grep -Eq '^(benchmarks/v030_r27_incremental_backups_floor_diagnostic\.py|docs/v030-rnd/R27_INCREMENTAL_BACKUPS_PRODUCT_FLOOR_DIAGNOSTIC_PREREG\.md)$'; then
+            echo 'run_receipt=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'run_receipt=false' >> "$GITHUB_OUTPUT"
+          fi
+
   r27-diagnostic:
+    needs: classify-latest-head
+    if: needs.classify-latest-head.outputs.run_receipt == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 120
     concurrency:
-      group: cmpct-v030-r27-backups-${{ github.event.pull_request.number || github.ref }}
+      group: cmpct-v030-r27-backups-${{ github.event.pull_request.head.sha || github.sha }}
       cancel-in-progress: false
     steps:
       - uses: actions/checkout@v6
         with:
           ref: ${{ env.EVIDENCE_HEAD }}
-          fetch-depth: 16
+          fetch-depth: 256
 
       - name: Bind unchanged product substrate without circular release fingerprint
         run: |
