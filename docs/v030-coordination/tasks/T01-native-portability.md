@@ -80,6 +80,14 @@ Commit `6de1900d938ce4de12048f1bd5f0202943483ef2` corrects that ordering: hosted
 
 This coordination-state write is intentionally outside the fingerprint and is also the explicit admission request for fresh native and ZIP authorities, both of which path-scope `docs/v030-coordination/tasks/T01-native-portability.md`. A fresh physical ARM64 request must target the same post-fix source SHA as its hosted prerequisite; queued or stale pre-fix hardware runs earn zero credit.
 
+### Post-generalization-custody revalidation request — 2026-09-04
+
+The authoritative generalization workflow's CI custody model was corrected at release-critical commit `2b67c94c5277699fdfa42b2e09651fa640b0552c`. Because `.github/workflows/v030-release-generalization.yml` participates in the release fingerprint, the existing `8abe67c6...` native and ZIP receipts are intentionally stale even though their underlying mechanism evidence remains useful.
+
+This T01 update is the repository-designed fingerprint-neutral request hook for a new **result-bearing** native-authority and ZIP-portability revalidation wave on the post-custody fingerprint. Do not infer completion from classifier-only greens. Preserve the emitted candidate fingerprint and candidate SHA from each substantive job, and mint/refresh strict receipts only if the complete native/ZIP matrices finish green and match one another exactly.
+
+No product code, archive grammar, benchmark threshold, locality bound, recovery rule, or platform requirement is changed by this request.
+
 ## Current continuation rule
 
 Work directly on the authoritative branch. Preserve useful earlier implementation/evidence provenance where it still applies, but rerun every normative native/platform receipt on the final reconciled fingerprint. Historical or pre-fingerprint greens prove mechanisms only.
