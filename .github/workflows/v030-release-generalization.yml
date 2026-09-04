@@ -1,6 +1,6 @@
 # ci-lane: release
 # ci-pr-scope: latest-head-commit-gate
-# ci-cancel-policy: split-classifier-preserve-receipts
+# ci-cancel-policy: preserve-running-exact-receipt
 name: CMPCT v0.30 authoritative generalization
 
 on:
@@ -15,12 +15,13 @@ permissions:
 env:
   EVIDENCE_HEAD: ${{ github.sha }}
 
+concurrency:
+  group: cmpct-v030-authoritative-generalization-${{ github.sha }}
+  cancel-in-progress: false
+
 jobs:
   impact:
     runs-on: ubuntu-latest
-    concurrency:
-      group: cmpct-v030-authoritative-generalization-classifier-${{ github.ref }}
-      cancel-in-progress: true
     outputs:
       should_run: ${{ steps.impact.outputs.should_run }}
     steps:
@@ -55,9 +56,6 @@ jobs:
     if: needs.impact.outputs.should_run == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 300
-    concurrency:
-      group: cmpct-v030-authoritative-generalization-receipt-${{ github.sha }}
-      cancel-in-progress: false
     env:
       PYTHONPATH: ${{ github.workspace }}
     steps:
