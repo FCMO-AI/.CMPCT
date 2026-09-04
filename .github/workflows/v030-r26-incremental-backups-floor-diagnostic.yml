@@ -1,10 +1,9 @@
-name: CMPCT v0.30 registered diagnostic bridge / R35 lock-caller attribution
+name: CMPCT v0.30 registered diagnostic bridge / R36 project wait-owner attribution
 # ci-lane: deep
 # ci-cancel-policy: split-classifier-preserve-receipts
 # ci-pr-scope: latest-head-commit-gate
-# The dedicated R35 workflow exists on the PR branch but GitHub did not route a
-# result-bearing run for it. This already-registered control-plane lane executes
-# the frozen R35 instrument unchanged. Diagnostic only; no product/release credit.
+# Registered control-plane bridge for the already-frozen R36 diagnostic.
+# Diagnostic only; no product/release credit.
 
 on:
   pull_request:
@@ -25,7 +24,7 @@ jobs:
   classify-latest-head:
     runs-on: ubuntu-24.04
     concurrency:
-      group: cmpct-v030-r35-bridge-classifier-${{ github.event.pull_request.number || github.ref }}
+      group: cmpct-v030-r36-bridge-classifier-${{ github.event.pull_request.number || github.ref }}
       cancel-in-progress: true
     outputs:
       run_receipt: ${{ steps.scope.outputs.run_receipt }}
@@ -52,21 +51,21 @@ jobs:
             echo 'run_receipt=false' >> "$GITHUB_OUTPUT"
           fi
 
-  r35-bridge:
+  r36-bridge:
     needs: classify-latest-head
     if: needs.classify-latest-head.outputs.run_receipt == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 120
     concurrency:
-      group: cmpct-v030-r35-bridge-${{ github.event.pull_request.head.sha || github.sha }}
+      group: cmpct-v030-r36-bridge-${{ github.event.pull_request.head.sha || github.sha }}
       cancel-in-progress: false
     steps:
       - uses: actions/checkout@v6
         with:
           ref: ${{ env.EVIDENCE_HEAD }}
-          fetch-depth: 128
+          fetch-depth: 256
 
-      - name: Bind frozen R32 substrate and R35 grammar
+      - name: Bind frozen R32-R36 substrate and grammar
         shell: bash
         run: |
           set -euo pipefail
@@ -80,11 +79,12 @@ jobs:
             benchmarks/neutral_hostile_determinism_repair_v1.py \
             benchmarks/v030_release_ablation_canonical.py \
             benchmarks/v030_r32_regenerable_deflate_output_dead_zstd_elision.py; do
-            test "$(git rev-parse 0b1f3cd653f0e2489964b93cdd19fa8324adda2e:$path)" = "$(git rev-parse HEAD:$path)" || { echo "R35 R32-substrate drift: $path" >&2; exit 1; }
+            test "$(git rev-parse 0b1f3cd653f0e2489964b93cdd19fa8324adda2e:$path)" = "$(git rev-parse HEAD:$path)" || { echo "R36 R32-substrate drift: $path" >&2; exit 1; }
           done
           test "$(git rev-parse 7c1bbaf272ac286180c6876d996c18d3d04b9748:docs/v030-rnd/R34_REGENERABLE_DEFLATE_SAME_RUN_PHASE_ATTRIBUTION_RESULT.md)" = "$(git rev-parse HEAD:docs/v030-rnd/R34_REGENERABLE_DEFLATE_SAME_RUN_PHASE_ATTRIBUTION_RESULT.md)"
-          test "$(git rev-parse 0f3a03806ddebf9dbf40a108d2c5a8c9e1c5c06c:docs/v030-rnd/R35_REGENERABLE_DEFLATE_LOCK_CALLER_ATTRIBUTION_PREREG.md)" = "$(git rev-parse HEAD:docs/v030-rnd/R35_REGENERABLE_DEFLATE_LOCK_CALLER_ATTRIBUTION_PREREG.md)"
-          test "$(git rev-parse fb6d372634035d1d8b88d97bd0ac60a9948b9e0f:benchmarks/v030_r35_regenerable_deflate_lock_caller_attribution.py)" = "$(git rev-parse HEAD:benchmarks/v030_r35_regenerable_deflate_lock_caller_attribution.py)"
+          test "$(git rev-parse e0b7b2a5e9aaf2e7ecd92cf61e6e521d4c0cce1c:docs/v030-rnd/R35_REGENERABLE_DEFLATE_LOCK_CALLER_ATTRIBUTION_RESULT.md)" = "$(git rev-parse HEAD:docs/v030-rnd/R35_REGENERABLE_DEFLATE_LOCK_CALLER_ATTRIBUTION_RESULT.md)"
+          test "$(git rev-parse 37fa7fef88f12bd50589655de60dbf3350a89d69:docs/v030-rnd/R36_REGENERABLE_DEFLATE_PROJECT_WAIT_OWNER_PREREG.md)" = "$(git rev-parse HEAD:docs/v030-rnd/R36_REGENERABLE_DEFLATE_PROJECT_WAIT_OWNER_PREREG.md)"
+          test "$(git rev-parse a6619c0cca80e90e09d009961a89ef1a8cdecc88:benchmarks/v030_r36_regenerable_deflate_project_wait_owner.py)" = "$(git rev-parse HEAD:benchmarks/v030_r36_regenerable_deflate_project_wait_owner.py)"
 
       - uses: actions/setup-python@v6
         with:
@@ -101,56 +101,56 @@ jobs:
           python -m pip install -e '.[audio,test]'
           python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
 
-      - name: Compile frozen R35 instrument
-        run: python -m py_compile benchmarks/v030_r35_regenerable_deflate_lock_caller_attribution.py
+      - name: Compile frozen R36 instrument
+        run: python -m py_compile benchmarks/v030_r36_regenerable_deflate_project_wait_owner.py
 
-      - name: Run frozen R35 caller attribution
+      - name: Run frozen R36 project wait-owner attribution
         env:
           CMPCT_EVIDENCE_HEAD: ${{ env.EVIDENCE_HEAD }}
         run: |
           mkdir -p benchmark-artifacts
-          python benchmarks/v030_r35_regenerable_deflate_lock_caller_attribution.py \
-            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/r35-work" \
-            --output "$GITHUB_WORKSPACE/benchmark-artifacts/r35-lock-caller-attribution.json"
+          python benchmarks/v030_r36_regenerable_deflate_project_wait_owner.py \
+            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/r36-work" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/r36-project-wait-owner.json"
 
-      - name: Enforce frozen R35 completeness and decision law
+      - name: Enforce frozen R36 completeness and decision law
         shell: bash
         run: |
           python - <<'PY'
           import json, os
           from pathlib import Path
-          d=json.loads(Path('benchmark-artifacts/r35-lock-caller-attribution.json').read_text())
-          assert d['schema']=='cmpct-v030-r35-regenerable-deflate-lock-caller-attribution-v1'
+          d=json.loads(Path('benchmark-artifacts/r36-project-wait-owner.json').read_text())
+          assert d['schema']=='cmpct-v030-r36-regenerable-deflate-project-wait-owner-v1'
           assert d['evidence_head']==os.environ['EVIDENCE_HEAD']
           assert d['repetitions']==3
           assert set(d['targets'])=={'full-backups','nested-only'}
-          assert d['decision'] in {'LOCK_CALLER_LOCALIZED','LOCK_CALLER_DISTRIBUTED_OR_BELOW_FLOOR','LOCK_CALLER_UNRESOLVED','SUBSTRATE_OR_SAME_RUN_IDENTITY_FAILURE'}
+          assert d['decision'] in {
+              'PROJECT_WAIT_OWNER_LOCALIZED',
+              'PROJECT_WAIT_OWNER_DISTRIBUTED_OR_BELOW_FLOOR',
+              'PROJECT_WAIT_OWNER_UNRESOLVED',
+              'WAIT_INSTRUMENTATION_UNRESOLVED',
+              'SUBSTRATE_OR_SAME_RUN_IDENTITY_FAILURE',
+          }
           for target in d['targets'].values():
               assert set(target['arms'])=={'release-all-exact','full-search','no-ordinary-zstd'}
               for arm in target['arms'].values():
                   assert len(arm['repetitions'])==3
                   assert all(row['strong_verify_ok'] for row in arm['repetitions'])
-              if d['decision']!='SUBSTRATE_OR_SAME_RUN_IDENTITY_FAILURE':
-                  assert target['full_search_no_zstd_byte_identity']
-                  assert target['candidate_strictly_smaller_than_release']
-          if d['decision']=='LOCK_CALLER_LOCALIZED':
-              assert d['same_run_identity_ok'] and d['caller_data_usable'] and d['localized_callers']
-              assert all(x['nested_lock_time_delta_s']>=0.010 and x['full_lock_time_delta_s']>0 for x in d['localized_callers'])
-          elif d['decision']=='LOCK_CALLER_DISTRIBUTED_OR_BELOW_FLOOR':
-              assert d['same_run_identity_ok'] and d['caller_data_usable'] and not d['localized_callers']
-          elif d['decision']=='LOCK_CALLER_UNRESOLVED':
-              assert d['same_run_identity_ok'] and not d['caller_data_usable']
-          else:
-              assert not d['same_run_identity_ok']
+          if d['decision'] not in {'SUBSTRATE_OR_SAME_RUN_IDENTITY_FAILURE','WAIT_INSTRUMENTATION_UNRESOLVED'}:
+              assert d['same_run_identity_ok'] and d['wait_instrumentation_ok']
+              assert all(t['full_search_no_zstd_byte_identity'] and t['candidate_strictly_smaller_than_release'] for t in d['targets'].values())
+          if d['decision']=='PROJECT_WAIT_OWNER_LOCALIZED':
+              assert d['localized_project_owners']
+              assert all(x['nested_wait_time_delta_s']>=0.010 and x['full_wait_time_delta_s']>0 for x in d['localized_project_owners'])
           PY
 
       - name: CI topology self-check
         run: python tools/check_ci_topology.py .github/workflows/v030-r26-incremental-backups-floor-diagnostic.yml
 
-      - name: Upload immutable R35 evidence
+      - name: Upload immutable R36 evidence
         uses: actions/upload-artifact@v6
         with:
-          name: v030-r35-lock-caller-attribution-${{ env.EVIDENCE_HEAD }}
-          path: benchmark-artifacts/r35-lock-caller-attribution.json
+          name: v030-r36-project-wait-owner-${{ env.EVIDENCE_HEAD }}
+          path: benchmark-artifacts/r36-project-wait-owner.json
           if-no-files-found: error
           retention-days: 90
