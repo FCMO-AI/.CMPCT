@@ -17,41 +17,127 @@ class EvaluationStats:
     work_bytes: int
     max_depth: int
     nodes_evaluated: int
+    preflight_worst_work_bytes: int
 
 
-def _preflight_graph(program: Program) -> int:
-    """Return exact dependency depth while rejecting every cycle before execution.
+@dataclass(frozen=True)
+class _Preflight:
+    lengths: tuple[int, ...]
+    max_depth: int
+    worst_work_bytes: int
 
-    This intentionally walks even currently-unreachable nodes: the stored program itself
-    is a bounded object and validity must not depend on root order or cache warmness.
+
+def _preflight(program: Program) -> _Preflight:
+    """Prove graph/range/output/work bounds before materializing any reconstructed byte.
+
+    ONE-G0.1's six operations all have statically inferable output lengths. That lets the
+    reader reject cycles, deep graphs, range bombs, unequal vector operands, impossible
+    declared lengths and over-budget worst-case work before execution. Every stored node
+    is included even if no current root reaches it, so validity cannot depend on cache or
+    root order.
     """
-    depth_cache: dict[int, int] = {}
+    lengths: dict[int, int] = {}
+    depths: dict[int, int] = {}
+    local_work: dict[int, int] = {}
     active: set[int] = set()
 
-    def visit(node_id: int) -> int:
-        if node_id in depth_cache:
-            return depth_cache[node_id]
+    def visit(node_id: int) -> tuple[int, int]:
+        if node_id in lengths:
+            return lengths[node_id], depths[node_id]
         if node_id in active:
             raise OneError("cycle in reconstruction graph")
         active.add(node_id)
         try:
-            refs = program.nodes[node_id].refs
-            depth = 1 if not refs else 1 + max(visit(ref.node) for ref in refs)
+            node = program.nodes[node_id]
+            for ref in node.refs:
+                visit(ref.node)
+            depth = 1 if not node.refs else 1 + max(depths[ref.node] for ref in node.refs)
             if depth > program.limits.max_depth:
                 raise OneError("dependency depth exceeds declared limit")
-            depth_cache[node_id] = depth
-            return depth
+
+            def slice_len(ref: Ref) -> int:
+                source_len = lengths[ref.node]
+                if ref.start > source_len:
+                    raise OneError("range starts past referenced output")
+                end = source_len if ref.length is None else ref.start + ref.length
+                if end < ref.start or end > source_len:
+                    raise OneError("range exceeds referenced output")
+                return end - ref.start
+
+            if node.op == "surprise":
+                length = len(node.surprise)
+                work = length
+            elif node.op == "fill":
+                length = node.count
+                work = length
+            elif node.op == "repeat":
+                source = slice_len(node.refs[0])
+                length = source * node.count
+                work = source + length
+            elif node.op == "concat":
+                ref_bytes = sum(slice_len(ref) for ref in node.refs)
+                length = ref_bytes + len(node.surprise)
+                # Read every input byte once and write every output byte once.
+                work = ref_bytes + len(node.surprise) + length
+            elif node.op in {"xor", "add8"}:
+                part_lengths = [slice_len(ref) for ref in node.refs]
+                if node.surprise:
+                    part_lengths.append(len(node.surprise))
+                if not part_lengths or any(size != part_lengths[0] for size in part_lengths[1:]):
+                    raise OneError(f"{node.op} operands differ in length")
+                length = part_lengths[0]
+                # One read pass over each operand plus one byte-operation pass per
+                # operand. This is conservative for later fused native kernels.
+                work = sum(part_lengths) + length * len(part_lengths)
+            else:
+                raise OneError(f"unknown operation {node.op!r}")
+
+            if node.declared_length is not None and length != node.declared_length:
+                raise OneError("node declared length mismatch")
+            if length > program.limits.max_output_bytes:
+                raise OneError(f"{node.op} output exceeds declared limit")
+            lengths[node_id] = length
+            depths[node_id] = depth
+            local_work[node_id] = work
+            return length, depth
         finally:
             active.remove(node_id)
 
-    return max((visit(node_id) for node_id in range(len(program.nodes))), default=0)
+    for node_id in range(len(program.nodes)):
+        visit(node_id)
+
+    root_bytes = 0
+    for root in program.roots.values():
+        source_len = lengths[root.ref.node]
+        if root.ref.start > source_len:
+            raise OneError("range starts past referenced output")
+        end = source_len if root.ref.length is None else root.ref.start + root.ref.length
+        if end < root.ref.start or end > source_len:
+            raise OneError("range exceeds referenced output")
+        length = end - root.ref.start
+        if length != root.length:
+            raise OneError("root declared length mismatch")
+        root_bytes += length
+    if root_bytes > program.limits.max_output_bytes:
+        raise OneError("root outputs exceed declared limit")
+
+    # Worst case includes every stored node, every root-range read, and one complete
+    # SHA-256 scan per root. Runtime caching may do less work but may never exceed this.
+    worst_work = sum(local_work.values()) + 2 * root_bytes
+    if worst_work > program.limits.max_work_bytes:
+        raise OneError("preflight reconstruction work exceeds declared limit")
+    return _Preflight(
+        lengths=tuple(lengths[node_id] for node_id in range(len(program.nodes))),
+        max_depth=max(depths.values(), default=0),
+        worst_work_bytes=worst_work,
+    )
 
 
 class Evaluator:
     def __init__(self, program: Program):
         program.validate_shape()
         self.program = program
-        self._graph_max_depth = _preflight_graph(program)
+        self._preflight = _preflight(program)
         self._cache: dict[int, bytes] = {}
         self._active: set[int] = set()
         self._work = 0
@@ -74,17 +160,16 @@ class Evaluator:
         self._charge(len(out))
         return out
 
-    def _check_result(self, node: Node, result: bytes) -> bytes:
-        if node.declared_length is not None and len(result) != node.declared_length:
-            raise OneError("node declared length mismatch")
-        if len(result) > self.program.limits.max_output_bytes:
-            raise OneError("node output exceeds declared limit")
+    def _check_result(self, node_id: int, result: bytes) -> bytes:
+        if len(result) != self._preflight.lengths[node_id]:
+            raise OneError("runtime output disagrees with preflight length")
         return result
 
     def _equal_parts(self, node: Node, depth: int) -> list[bytes]:
         parts = [self._slice(ref, depth + 1) for ref in node.refs]
         if node.surprise:
             parts.append(node.surprise)
+            self._charge(len(node.surprise))
         if not parts:
             raise OneError(f"{node.op} has no operands")
         width = len(parts[0])
@@ -112,21 +197,13 @@ class Evaluator:
                 if node.surprise:
                     parts.append(node.surprise)
                     self._charge(len(node.surprise))
-                total = sum(len(part) for part in parts)
-                if total > self.program.limits.max_output_bytes:
-                    raise OneError("concat output exceeds declared limit")
                 result = b"".join(parts)
-                self._charge(total)
+                self._charge(len(result))
             elif node.op == "repeat":
                 part = self._slice(node.refs[0], depth + 1)
-                total = len(part) * node.count
-                if total > self.program.limits.max_output_bytes:
-                    raise OneError("repeat output exceeds declared limit")
                 result = part * node.count
-                self._charge(total)
+                self._charge(len(result))
             elif node.op == "fill":
-                if node.count > self.program.limits.max_output_bytes:
-                    raise OneError("fill output exceeds declared limit")
                 result = bytes([node.value]) * node.count
                 self._charge(node.count)
             elif node.op == "xor":
@@ -146,7 +223,7 @@ class Evaluator:
                 self._charge(width * len(parts))
             else:  # validate_shape should make this unreachable.
                 raise OneError(f"unknown operation {node.op!r}")
-            result = self._check_result(node, result)
+            result = self._check_result(node_id, result)
             self._cache[node_id] = result
             return result
         finally:
@@ -154,22 +231,24 @@ class Evaluator:
 
     def evaluate(self) -> tuple[dict[str, bytes], EvaluationStats]:
         outputs: dict[str, bytes] = {}
-        total_output = 0
         for name, root in self.program.roots.items():
             value = self._slice(root.ref, 1)
+            # Root length/range shape was proven before execution; retain a runtime
+            # assertion so future fused evaluators cannot silently diverge.
             if len(value) != root.length:
                 raise OneError(f"root {name!r} length mismatch")
+            self._charge(len(value))  # SHA-256 must scan the complete authenticated root.
             if sha256(value).hexdigest() != root.sha256:
                 raise OneError(f"root {name!r} sha256 mismatch")
-            total_output += len(value)
-            if total_output > self.program.limits.max_output_bytes:
-                raise OneError("root outputs exceed declared limit")
             outputs[name] = value
+        if self._work > self._preflight.worst_work_bytes:
+            raise OneError("runtime work exceeded preflight upper bound")
         return outputs, EvaluationStats(
             materialized_bytes=sum(len(v) for v in self._cache.values()),
             work_bytes=self._work,
-            max_depth=self._graph_max_depth,
+            max_depth=self._preflight.max_depth,
             nodes_evaluated=len(self._cache),
+            preflight_worst_work_bytes=self._preflight.worst_work_bytes,
         )
 
 
