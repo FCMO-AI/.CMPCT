@@ -1,0 +1,118 @@
+# ci-lane: deep
+name: CMPCT established external corpora v3
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - bench/established-corpora-v2
+    paths:
+      - benchmarks/established_corpora_v3.py
+      - benchmarks/established_corpora_v2.py
+      - benchmarks/external_engine_adapter.py
+      - benchmarks/fetch_established_corpora.py
+      - .github/workflows/established-corpora-v3.yml
+
+concurrency:
+  group: cmpct-established-v3-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  benchmark:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - suite: aggregate
+            profile: all
+            cell_timeout: "1800"
+          - suite: members
+            profile: practical
+            cell_timeout: "600"
+          - suite: enwik9
+            profile: all
+            cell_timeout: "1800"
+    env:
+      PYTHONUNBUFFERED: "1"
+      CMPCT_EXTERNAL_TIMEOUT: ${{ matrix.cell_timeout }}
+      CMPCT_V029_SHA: "291423c604642b21a4b84d2500a12eeaac7bd9e0"
+      # Frozen, read-only snapshot of independent v0.30 development. This workflow never writes there.
+      CMPCT_V030_SHA: "cf36fc2bc079b96887eb8fb5639902de5c3d56ac"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Check benchmark/CI topology
+        run: python tools/check_ci_topology.py .github/workflows/established-corpora-v3.yml
+
+      - name: Install mature comparison tools
+        run: |
+          set -euxo pipefail
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends bzip2 curl git gzip p7zip-full time unzip xz-utils zip zstd
+
+      - name: Materialize pinned CMPCT engines
+        shell: bash
+        run: |
+          set -euxo pipefail
+          git fetch --no-tags origin "$CMPCT_V029_SHA" "$CMPCT_V030_SHA"
+          git worktree add --detach "$RUNNER_TEMP/cmpct-v029" "$CMPCT_V029_SHA"
+          git worktree add --detach "$RUNNER_TEMP/cmpct-v030" "$CMPCT_V030_SHA"
+          python -m venv "$RUNNER_TEMP/venv29"
+          python -m venv "$RUNNER_TEMP/venv30"
+          "$RUNNER_TEMP/venv29/bin/pip" install -q -e "$RUNNER_TEMP/cmpct-v029"
+          "$RUNNER_TEMP/venv30/bin/pip" install -q -e "$RUNNER_TEMP/cmpct-v030"
+          echo "CMPCT_V029_PYTHON=$RUNNER_TEMP/venv29/bin/python" >> "$GITHUB_ENV"
+          echo "CMPCT_V030_PYTHON=$RUNNER_TEMP/venv30/bin/python" >> "$GITHUB_ENV"
+          echo "CMPCT_V029_REPO=$RUNNER_TEMP/cmpct-v029" >> "$GITHUB_ENV"
+          echo "CMPCT_V030_REPO=$RUNNER_TEMP/cmpct-v030" >> "$GITHUB_ENV"
+
+      - name: Fetch, validate and normalize canonical corpus bytes
+        run: |
+          set -euxo pipefail
+          python benchmarks/fetch_established_corpora.py \
+            --root "$RUNNER_TEMP/cmpct-established-${{ matrix.suite }}" \
+            --suite "${{ matrix.suite }}" \
+            --out "$RUNNER_TEMP/manifest-${{ matrix.suite }}.json"
+
+      - name: Run fault-isolated fresh-process benchmark
+        run: |
+          set -euxo pipefail
+          python benchmarks/established_corpora_v3.py \
+            "$RUNNER_TEMP/manifest-${{ matrix.suite }}.json" \
+            --profile "${{ matrix.profile }}" \
+            --out "$GITHUB_WORKSPACE/external-results-${{ matrix.suite }}"
+
+      - name: Show compact result table
+        if: always()
+        run: |
+          FILE="external-results-${{ matrix.suite }}/external-corpora.json"
+          test ! -f "$FILE" || python - "$FILE" <<'PY'
+          import json, sys
+          d=json.load(open(sys.argv[1]))
+          print('coverage=', d.get('coverage'))
+          for corpus,c in d['corpora'].items():
+              print('\n'+corpus, 'logical=', c['logical_bytes'])
+              for name,r in c['results'].items():
+                  if r.get('status') != 'ok':
+                      print(f"{name:31s} {r.get('status','?'):8s} elapsed={r.get('elapsed_until_failure_s',0):.1f}s {r.get('error_type','')}")
+                  else:
+                      print(f"{name:31s} bytes={r['bytes']:12d} ratio={r['ratio']:.6f} create={r['create']['median_s']:.3f}s extract={r['extract']['median_s']:.3f}s reps={r['repetitions']}")
+          PY
+
+      - name: Upload raw evidence handoff
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cmpct-established-corpora-v3-${{ matrix.suite }}
+          path: |
+            external-results-${{ matrix.suite }}/external-corpora.json
+            external-results-${{ matrix.suite }}/external-corpora.partial.json
+          if-no-files-found: warn
+          retention-days: 30
