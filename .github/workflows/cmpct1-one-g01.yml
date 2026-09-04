@@ -75,6 +75,9 @@ jobs:
       - name: A/B sparse Gear as replacement for fixed reuse signal
         run: python -m benchmarks.one.one_g02_gear_replacement_ab | tee one-artifacts/one-g02-gear-replacement-ab.json
 
+      - name: A/B one-signal local and global Gear retention
+        run: python -m benchmarks.one.one_g02_tiered_gear_ab | tee one-artifacts/one-g02-tiered-gear-ab.json
+
       - name: Measure one-pass Gear signal fusion cost
         run: python -m benchmarks.one.one_g02_fused_gear_signal | tee one-artifacts/one-g02-fused-gear-signal.json
 
