@@ -19,14 +19,42 @@ class EvaluationStats:
     nodes_evaluated: int
 
 
+def _preflight_graph(program: Program) -> int:
+    """Return exact dependency depth while rejecting every cycle before execution.
+
+    This intentionally walks even currently-unreachable nodes: the stored program itself
+    is a bounded object and validity must not depend on root order or cache warmness.
+    """
+    depth_cache: dict[int, int] = {}
+    active: set[int] = set()
+
+    def visit(node_id: int) -> int:
+        if node_id in depth_cache:
+            return depth_cache[node_id]
+        if node_id in active:
+            raise OneError("cycle in reconstruction graph")
+        active.add(node_id)
+        try:
+            refs = program.nodes[node_id].refs
+            depth = 1 if not refs else 1 + max(visit(ref.node) for ref in refs)
+            if depth > program.limits.max_depth:
+                raise OneError("dependency depth exceeds declared limit")
+            depth_cache[node_id] = depth
+            return depth
+        finally:
+            active.remove(node_id)
+
+    return max((visit(node_id) for node_id in range(len(program.nodes))), default=0)
+
+
 class Evaluator:
     def __init__(self, program: Program):
         program.validate_shape()
         self.program = program
+        self._graph_max_depth = _preflight_graph(program)
         self._cache: dict[int, bytes] = {}
         self._active: set[int] = set()
         self._work = 0
-        self._max_depth = 0
 
     def _charge(self, amount: int) -> None:
         if amount < 0:
@@ -65,11 +93,12 @@ class Evaluator:
         return parts
 
     def _eval_node(self, node_id: int, depth: int) -> bytes:
-        if node_id in self._cache:
-            return self._cache[node_id]
+        # Static preflight makes this check independent of cache order; retaining the
+        # runtime check is defense-in-depth for future evaluator changes.
         if depth > self.program.limits.max_depth:
             raise OneError("dependency depth exceeds declared limit")
-        self._max_depth = max(self._max_depth, depth)
+        if node_id in self._cache:
+            return self._cache[node_id]
         if node_id in self._active:
             raise OneError("cycle in reconstruction graph")
         self._active.add(node_id)
@@ -139,7 +168,7 @@ class Evaluator:
         return outputs, EvaluationStats(
             materialized_bytes=sum(len(v) for v in self._cache.values()),
             work_bytes=self._work,
-            max_depth=self._max_depth,
+            max_depth=self._graph_max_depth,
             nodes_evaluated=len(self._cache),
         )
 
