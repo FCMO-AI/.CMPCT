@@ -64,14 +64,21 @@ def observe(
 
     Fixed chunks are intentionally cheap G0.2 instrumentation, not a permanent dedup
     format. A streaming 64-bit fingerprint is updated while each source byte is already
-    in hand, avoiding a second chunk-hashing source pass. Fingerprints only nominate
-    candidates; exact byte equality verifies every reuse. Verification rereads are
-    separately charged as source memory traffic.
+    in hand, avoiding a second chunk-hashing source pass. Fingerprints nominate reuse,
+    but exact byte equality remains mandatory before an opportunity is emitted.
+
+    Adjacent uniquely nominated chunks are coalesced before exact verification. This
+    preserves exact proof while replacing thousands of tiny Python comparisons with one
+    bounded bulk comparison when the source and target ranges advance together. A chunk
+    already wholly explained by an eligible run is not sent through the reuse index:
+    emitting two competing cheap opportunities for the same constant region only spends
+    discovery work and verification traffic without adding useful information.
 
     The index is insertion-bounded. Once full it stops learning new source chunks but
     continues looking up existing ones, preserving deterministic O(n) base work and
-    bounded retained-source metadata. Adversarial fingerprint collisions can increase
-    exact verification work, which is visible in the returned counters.
+    bounded retained-source metadata. Ambiguous fingerprint buckets are verified
+    immediately; a failed coalesced proof is simply discarded as discovery evidence and
+    can never affect byte-exact reconstruction because no Law is emitted without proof.
     """
     if type(data) is not bytes:
         raise TypeError("ONE observation input must be bytes")
@@ -93,6 +100,40 @@ def observe(
     lookups = 0
     verifications = 0
     verification_read_bytes = 0
+
+    pending_source: int | None = None
+    pending_target: int | None = None
+    pending_length = 0
+
+    def flush_pending() -> None:
+        nonlocal pending_source, pending_target, pending_length
+        nonlocal verifications, verification_read_bytes
+        if pending_source is None or pending_target is None or pending_length == 0:
+            return
+        verifications += 1
+        verification_read_bytes += 2 * pending_length
+        if data[pending_source : pending_source + pending_length] == data[
+            pending_target : pending_target + pending_length
+        ]:
+            reuse.append(ReuseOpportunity(pending_source, pending_target, pending_length))
+        pending_source = None
+        pending_target = None
+        pending_length = 0
+
+    def start_or_extend_pending(source: int, target: int) -> None:
+        nonlocal pending_source, pending_target, pending_length
+        if (
+            pending_source is not None
+            and pending_target is not None
+            and pending_source + pending_length == source
+            and pending_target + pending_length == target
+        ):
+            pending_length += chunk_size
+            return
+        flush_pending()
+        pending_source = source
+        pending_target = target
+        pending_length = chunk_size
 
     run_start = 0
     run_value = data[0] if data else 0
@@ -121,23 +162,41 @@ def observe(
             fingerprint = chunk_hash
             chunk_hash = _FNV64_OFFSET
             fingerprints += 1
+
+            # If the whole aligned chunk is already inside a run that will qualify as
+            # a run opportunity, a reuse lookup is redundant. This is a content-derived
+            # opportunity gate, not a workload label.
+            if run_length >= max(min_run, chunk_size):
+                flush_pending()
+                continue
+
             lookups += 1
             sources = index.get(fingerprint)
             matched = False
-            if sources:
+            if sources and len(sources) == 1:
+                # Unique fingerprint nominations may be coalesced across adjacent
+                # source/target chunks, then proven exactly as one bulk region.
+                start_or_extend_pending(sources[0], start)
+                matched = True
+            elif sources:
+                # Ambiguous buckets require immediate exact proof before selecting a
+                # source; keeping this path explicit bounds adversarial collisions.
+                flush_pending()
                 for source in sources:
                     verifications += 1
-                    # Count both compared source ranges. Python slicing copies here;
-                    # future native code may vectorize the same exact-equality proof.
                     verification_read_bytes += 2 * chunk_size
                     if data[source : source + chunk_size] == data[start : start + chunk_size]:
                         reuse.append(ReuseOpportunity(source, start, chunk_size))
                         matched = True
                         break
+            else:
+                flush_pending()
+
             if not matched and index_entries < max_index_entries:
                 index.setdefault(fingerprint, []).append(start)
                 index_entries += 1
 
+    flush_pending()
     if run_length >= min_run:
         runs.append(RunOpportunity(run_start, run_length, run_value))
 
