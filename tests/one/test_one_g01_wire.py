@@ -14,7 +14,7 @@ def _root(ref: Ref, value: bytes) -> Root:
 
 
 def _program() -> Program:
-    final = b"prefix:" + b"abc" * 3 + b"\x00" * 8
+    final = b"abc" * 3 + b"\x00" * 8 + b"prefix:"
     nodes = (
         Node("surprise", surprise=b"abc", declared_length=3),
         Node("repeat", refs=(Ref(0),), count=3, declared_length=9),
@@ -39,7 +39,8 @@ def test_wire_round_trip_preserves_semantics_and_is_deterministic() -> None:
     decoded = decode_program(encoded_a)
     before = evaluate(program)[0]
     after = evaluate(decoded)[0]
-    assert before == after == {"out": b"prefix:" + b"abc" * 3 + b"\x00" * 8}
+    expected = b"abc" * 3 + b"\x00" * 8 + b"prefix:"
+    assert before == after == {"out": expected}
 
     # Surprise accounting includes only irreducible bytes carried by nodes. Everything
     # else is explicit Law/control/resource/integrity cost rather than gifted metadata.
