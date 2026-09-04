@@ -16,9 +16,11 @@ def test_fused_observer_finds_run_without_unseen_unaligned_reuse() -> None:
     assert result.stats.hash_lookups == result.stats.chunk_fingerprints
     assert result.runs[0].start == 0
     assert result.runs[0].length == 16
+    assert result.stats.run_opportunity_bytes == 16
     # Alignment after the 16-byte prefix means the two `chunk` values are not fixed-
     # chunk aligned. G0.2 must not invent a reuse candidate it did not actually see.
     assert result.reuse == ()
+    assert result.stats.reuse_opportunity_bytes == 0
     assert result.stats.total_source_read_bytes == len(data)
 
 
@@ -30,6 +32,7 @@ def test_aligned_reuse_is_nominated_only_after_byte_verification() -> None:
     reuse = result.reuse[0]
     assert (reuse.source, reuse.target, reuse.length) == (0, 128, 64)
     assert data[reuse.source : reuse.source + reuse.length] == data[reuse.target : reuse.target + reuse.length]
+    assert result.stats.reuse_opportunity_bytes == 64
     assert result.stats.collision_verifications == 1
     assert result.stats.verification_read_bytes == 128
     assert result.stats.total_source_read_bytes == len(data) + 128
@@ -41,7 +44,9 @@ def test_incompressible_random_input_has_sparse_false_pattern_surface() -> None:
     assert result.stats.source_scan_bytes == len(data)
     assert result.stats.chunk_fingerprints == 1024
     assert result.stats.reuse_candidates == 0
+    assert result.stats.reuse_opportunity_bytes == 0
     assert result.stats.run_candidates == 0
+    assert result.stats.run_opportunity_bytes == 0
     assert result.stats.collision_verifications == 0
     assert result.stats.total_source_read_bytes == len(data)
 
@@ -51,6 +56,7 @@ def test_index_cap_bounds_discovery_memory_without_stopping_scan() -> None:
     data = b"".join(chunks)
     result = observe(data, min_run=128, chunk_size=64, max_index_entries=3)
     assert result.stats.peak_index_entries == 3
+    assert result.stats.retained_index_payload_bytes == 48
     assert result.stats.chunk_fingerprints == 20
     assert result.stats.hash_lookups == 20
     assert result.stats.source_scan_bytes == len(data)
