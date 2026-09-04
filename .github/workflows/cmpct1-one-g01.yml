@@ -1,5 +1,5 @@
 # ci-lane: fast
-name: CMPCT1 ONE-G0.1 semantic evidence
+name: CMPCT1 ONE Genesis semantic evidence
 
 on:
   pull_request:
@@ -18,7 +18,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: cmpct1-one-g01-${{ github.event.pull_request.number || github.ref }}
+  group: cmpct1-one-genesis-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -48,24 +48,27 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -e '.[test,audio]'
 
-      - name: Run ONE conformance and hostile tests
+      - name: Run ONE conformance, hostile and observer tests
         run: |
           mkdir -p one-artifacts
           set -o pipefail
-          python -m pytest -q tests/one 2>&1 | tee one-artifacts/pytest-one-g01.txt
+          python -m pytest -q tests/one 2>&1 | tee one-artifacts/pytest-one-genesis.txt
 
-      - name: Measure complete wire and reference-resource costs
+      - name: Measure complete G0.1 wire and reference-resource costs
         run: python -m benchmarks.one.one_g01_microbench | tee one-artifacts/one-g01-microbench.json
+
+      - name: Measure G0.2 fused observation economics
+        run: python -m benchmarks.one.one_g02_observer | tee one-artifacts/one-g02-observer.json
 
       - name: Retain exact-head ONE evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: one-g01-${{ env.EVIDENCE_HEAD }}
+          name: one-genesis-${{ env.EVIDENCE_HEAD }}
           path: one-artifacts/
           if-no-files-found: error
 
-# Research-only evidence lane. ONE-G0.1 is not a canonical format revision and these
-# Python reference timings are not product-speed or v0.29/v0.30 release claims. The
-# dependency install deliberately matches tests.yml because repository conftest is part
-# of the test environment; a focused lane must not silently bypass inherited fixtures.
+# Research-only evidence lane. G0.x is not a canonical format revision. Python
+# reference timings are semantic/discovery evidence only, not product-speed or
+# v0.29/v0.30 release claims. The dependency install deliberately matches tests.yml
+# because repository conftest is part of the test environment.
