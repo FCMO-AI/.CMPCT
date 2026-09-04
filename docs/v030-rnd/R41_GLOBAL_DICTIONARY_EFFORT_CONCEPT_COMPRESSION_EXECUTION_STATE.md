@@ -1,64 +1,41 @@
 # R41 — Global Dictionary-Effort Concept Compression Execution State
 
-Status: **RESULT-BEARING EXECUTION ACTIVE; FROZEN R41 GRAMMAR IMMUTABLE**
+Status: **TERMINAL — `RETAIN_SPLIT_POLICY_R40_BOUNDARY`**
 
-This file records execution custody only. It does not amend either frozen R41 preregistration, the superseding measurement-law clarification, the instrument, any threshold, the accepted repair-v6 corpus identity, or the terminal decision grammar.
+This file records execution custody only. The frozen R41 preregistrations and instrument remain immutable. The scientific result is canonicalized in `docs/v030-rnd/R41_GLOBAL_DICTIONARY_EFFORT_CONCEPT_COMPRESSION_RESULT.md`.
 
 ## Frozen authority
 
-R41 is governed by:
+R41 was governed by:
 
 - `docs/v030-rnd/R41_GLOBAL_DICTIONARY_EFFORT_CONCEPT_COMPRESSION_PREREG.md`;
 - `docs/v030-rnd/R41_GLOBAL_DICTIONARY_EFFORT_CONCEPT_COMPRESSION_SUPERSEDING_PREREG.md`;
 - `benchmarks/v030_r41_global_dictionary_effort_concept_compression.py`.
 
-The execution bridge binds those frozen source identities to the preregistered historical blobs before running. The accepted v0.29 aggregate identity remains **137,499,525 B** through the additive repair-v6 substrate overlay, and the v0.30 absolute saving hurdle remains **687,783 B**. Historical evidence is not rewritten and no hurdle is lowered.
+Accepted v0.29 identity remained **137,499,525 B** and the inherited v0.30 absolute saving hurdle remained **687,783 B**. No historical evidence or threshold was changed.
 
-## Control-plane incident closed before scientific execution
+## Control-plane incident
 
-The first branch-local bridge attempt at commit `37ef07738d5d2cf3621e7d41879e2eee380813b3` did **not** execute R41. GitHub's pull-request control plane resolved the already-registered base-side workflow definition for `.github/workflows/v030-r26-incremental-backups-floor-diagnostic.yml`; run `33865449344` therefore executed the old R27 classifier and skipped `r27-diagnostic`.
+The branch-local bridge at `37ef07738d5d2cf3621e7d41879e2eee380813b3` did not execute R41: GitHub run `33865449344` resolved the pre-existing R27 pull-request workflow definition, ran only its classifier and skipped the R27 diagnostic. It is routing evidence only and carries no R41 scientific credit.
 
-That run is routing evidence only. It is not R41 evidence and may not be interpreted for or against the R41 worldview.
+## Exact result-bearing receipt
 
-## Active exact receipt
+The frozen R41 experiment executed successfully through the temporary one-shot branch-push receipt:
 
-A one-shot branch-push deep receipt was added at:
+- exact source: `9d60543e2a647cb7c8222982939721adca608d49`;
+- workflow run: `33866909210`;
+- result-bearing job: `101003738868`;
+- artifact id: `9934407555`;
+- artifact SHA-256: `ac79ba126ce76b8b3e58fcc0c90c82b7981bb54f60d089b5e7ac6a099fea264d`.
 
-- source commit: `9d60543e2a647cb7c8222982939721adca608d49`;
-- workflow: `.github/workflows/v030-r41-one-shot-exact-receipt.yml`;
-- GitHub Actions run: `33866909210`;
-- result-bearing job: `r41-exact-receipt`.
+Exact checkout, frozen-authority binding, dependency setup, instrument compilation, the complete 15-workload / 3-arm / 5-fresh-process experiment, frozen decision-law enforcement, topology self-check and artifact upload all passed.
 
-The one-shot workflow is path-scoped to its own file and restricted to `agent/v030-authoritative-integration`. It checks out `github.sha`, binds evidence to that same exact SHA, uses exact-SHA non-cancelling receipt custody, runs the frozen R41 instrument unchanged, mechanically enforces the frozen decision/completeness law, checks its CI topology, and uploads the result artifact under the exact evidence head.
+The terminal decision was **`RETAIN_SPLIT_POLICY_R40_BOUNDARY`**. The detailed byte/runtime/AOM evidence and anti-sunk-cost interpretation are recorded in the canonical result file.
 
-Observed before this state record was written:
+## Closed transition
 
-- exact checkout: **PASS**;
-- frozen R41 substrate/grammar binding: **PASS**;
-- Python/dependency setup: **PASS**;
-- frozen instrument compilation: **PASS**;
-- full R41 concept-compression experiment: **IN PROGRESS**;
-- terminal decision enforcement: pending experiment completion;
-- immutable artifact upload: pending experiment completion.
+R41 authorizes **no product-code change**. Do not sweep neighboring effort levels or introduce workload/path/extension/size subsets to rescue the hypothesis. Reopening requires genuinely new causal evidence under a new preregistered experiment.
 
-The receipt is intentionally bound to `9d60543e2a647cb7c8222982939721adca608d49`. Later branch movement cannot upgrade or downgrade that scientific evidence to a different source fingerprint.
+The temporary one-shot execution workflow is disposable after the durable result exists and should not become permanent CI surface.
 
-## Allowed next transition
-
-Do not rerun strategy, edit thresholds, change the corpus, alter the three arms, add an effort level, introduce a subset predicate, or reinterpret partial output while run `33866909210` remains result-bearing.
-
-When it terminates, consume the immutable result exactly once under one of the five frozen terminal decisions:
-
-- `PROMOTE_GLOBAL_DICT9_PRODUCT_PREREQUISITE`;
-- `RETAIN_SPLIT_POLICY_R40_BOUNDARY`;
-- `REHABILITATE_GLOBAL_DICT9`;
-- `RETIRE_DICTIONARY_EFFORT_UNIFICATION`;
-- `SUBSTRATE_OR_CORRECTNESS_FAILURE`.
-
-If promotion is emitted, it authorizes only the next explicit product prerequisite. It grants no release credit. If global effort is rejected, R40's anti-sunk-cost boundary forbids responding with levels 8/10/11, size thresholds, extension subsets, backup allowlists, or workload dispatch without genuinely new causal evidence.
-
-After the result is durably consumed into repository evidence, remove the one-shot execution bridge so it cannot become permanent CI surface.
-
-## Release boundary
-
-R41 is Forge diagnostic evidence. v0.30 remains **MERGE / TAG / VERSION-BUMP / PUBLISH LOCKED** until final exact-fingerprint release authority independently reports `UNLOCKED` with every required correctness, byte, runtime, RSS, locality, recovery, integrity, native/platform, competitor and public-surface receipt satisfied.
+v0.30 remains **MERGE / TAG / VERSION-BUMP / PUBLISH LOCKED** independently of R41 until final exact-fingerprint release authority reports `UNLOCKED`.
