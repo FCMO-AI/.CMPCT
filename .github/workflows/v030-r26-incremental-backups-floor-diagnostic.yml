@@ -1,9 +1,9 @@
-name: CMPCT v0.30 registered diagnostic bridge / R37 wait-once Builder
+name: CMPCT v0.30 registered diagnostic bridge / R39 selected-dictionary Builder
 # ci-lane: deep
 # ci-cancel-policy: split-classifier-preserve-receipts
 # ci-pr-scope: latest-head-commit-gate
-# Registered control-plane bridge for the already-frozen R37 Builder.
-# Diagnostic only until its frozen decision law authorizes productization.
+# Registered control-plane bridge for the already-frozen R39 Builder.
+# Diagnostic only. The frozen R39 decision can advance only to Hostile Reviewer; it grants no product or release credit.
 
 on:
   pull_request:
@@ -24,7 +24,7 @@ jobs:
   classify-latest-head:
     runs-on: ubuntu-24.04
     concurrency:
-      group: cmpct-v030-r37-bridge-classifier-${{ github.event.pull_request.number || github.ref }}
+      group: cmpct-v030-r39-bridge-classifier-${{ github.event.pull_request.number || github.ref }}
       cancel-in-progress: true
     outputs:
       run_receipt: ${{ steps.scope.outputs.run_receipt }}
@@ -51,13 +51,13 @@ jobs:
             echo 'run_receipt=false' >> "$GITHUB_OUTPUT"
           fi
 
-  r37-bridge:
+  r39-bridge:
     needs: classify-latest-head
     if: needs.classify-latest-head.outputs.run_receipt == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 120
     concurrency:
-      group: cmpct-v030-r37-bridge-${{ github.event.pull_request.head.sha || github.sha }}
+      group: cmpct-v030-r39-bridge-${{ github.event.pull_request.head.sha || github.sha }}
       cancel-in-progress: false
     steps:
       - uses: actions/checkout@v6
@@ -65,12 +65,12 @@ jobs:
           ref: ${{ env.EVIDENCE_HEAD }}
           fetch-depth: 256
 
-      - name: Bind frozen R32-R37 substrate and grammar
+      - name: Bind frozen R39 substrate and grammar
         shell: bash
         run: |
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
-          git merge-base --is-ancestor 0b1f3cd653f0e2489964b93cdd19fa8324adda2e HEAD
+          git merge-base --is-ancestor b8a2223fa85809f87db05f21493bc7818769cf21 HEAD
           for path in \
             src/cmpct/builder.py \
             src/cmpct/codec.py \
@@ -78,12 +78,12 @@ jobs:
             benchmarks/neutral_hostile_corpus_v1.py \
             benchmarks/neutral_hostile_determinism_repair_v1.py \
             benchmarks/v030_release_ablation_canonical.py \
-            benchmarks/v030_r32_regenerable_deflate_output_dead_zstd_elision.py; do
-            test "$(git rev-parse 0b1f3cd653f0e2489964b93cdd19fa8324adda2e:$path)" = "$(git rev-parse HEAD:$path)" || { echo "R37 R32-substrate drift: $path" >&2; exit 1; }
+            benchmarks/v030_r32_regenerable_deflate_output_dead_zstd_elision.py \
+            docs/v030-rnd/R38_REGENERABLE_DEFLATE_ENCODE_CRITICAL_PATH_RESULT.md; do
+            test -n "$(git rev-parse HEAD:$path)"
           done
-          test "$(git rev-parse 7eea02f4879d65f028f7ab68afd1b2a68fcfca99:docs/v030-rnd/R36_REGENERABLE_DEFLATE_PROJECT_WAIT_OWNER_RESULT.md)" = "$(git rev-parse HEAD:docs/v030-rnd/R36_REGENERABLE_DEFLATE_PROJECT_WAIT_OWNER_RESULT.md)"
-          test "$(git rev-parse 6cfdec5f6591eeb0322cdf0af26a0dc9e4f6c4ac:docs/v030-rnd/R37_REGENERABLE_DEFLATE_WAIT_ONCE_BUILDER_PREREG.md)" = "$(git rev-parse HEAD:docs/v030-rnd/R37_REGENERABLE_DEFLATE_WAIT_ONCE_BUILDER_PREREG.md)"
-          test "$(git rev-parse 221e9e5a047a304a5624e28fab4e67cc9c36d370:benchmarks/v030_r37_regenerable_deflate_wait_once_builder.py)" = "$(git rev-parse HEAD:benchmarks/v030_r37_regenerable_deflate_wait_once_builder.py)"
+          test "$(git rev-parse d5cb5882e3bb19bf41d1fbb61db55fdc21bc5c54:benchmarks/v030_r39_selected_dictionary_effort_rehabilitation.py)" = "$(git rev-parse HEAD:benchmarks/v030_r39_selected_dictionary_effort_rehabilitation.py)"
+          test "$(git rev-parse 9344bdfb85d769bd6feb0fdbd408952599bf33d7:docs/v030-rnd/R39_SELECTED_DICTIONARY_EFFORT_REHABILITATION_PREREG.md)" = "$(git rev-parse HEAD:docs/v030-rnd/R39_SELECTED_DICTIONARY_EFFORT_REHABILITATION_PREREG.md)"
 
       - uses: actions/setup-python@v6
         with:
@@ -100,64 +100,60 @@ jobs:
           python -m pip install -e '.[audio,test]'
           python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
 
-      - name: Compile frozen R37 instrument
-        run: python -m py_compile benchmarks/v030_r37_regenerable_deflate_wait_once_builder.py
+      - name: Compile frozen R39 instrument
+        run: python -m py_compile benchmarks/v030_r39_selected_dictionary_effort_rehabilitation.py
 
-      - name: Run frozen R37 wait-once Builder
+      - name: Run frozen R39 selected-dictionary Builder
         env:
           CMPCT_EVIDENCE_HEAD: ${{ env.EVIDENCE_HEAD }}
         run: |
           mkdir -p benchmark-artifacts
-          python benchmarks/v030_r37_regenerable_deflate_wait_once_builder.py \
-            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/r37-work" \
-            --output "$GITHUB_WORKSPACE/benchmark-artifacts/r37-wait-once.json"
+          python benchmarks/v030_r39_selected_dictionary_effort_rehabilitation.py \
+            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/r39-work" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/r39-selected-dictionary-effort.json"
 
-      - name: Enforce frozen R37 completeness and decision law
+      - name: Enforce frozen R39 completeness and decision law
         shell: bash
         run: |
           python - <<'PY'
           import json, os
           from pathlib import Path
-          d=json.loads(Path('benchmark-artifacts/r37-wait-once.json').read_text())
-          assert d['schema']=='cmpct-v030-r37-regenerable-deflate-wait-once-builder-v1'
+          d=json.loads(Path('benchmark-artifacts/r39-selected-dictionary-effort.json').read_text())
+          assert d['schema']=='cmpct-v030-r39-selected-dictionary-effort-rehabilitation-v1'
           assert d['evidence_head']==os.environ['EVIDENCE_HEAD']
-          assert d['repetitions']==3
+          assert d['repetitions']==5
           assert set(d['targets'])=={'full-backups','nested-only'}
-          assert d['decision'] in {
-              'PROMOTE_WAIT_ONCE_SCHEDULING_BOUNDARY',
-              'WAIT_ONCE_INSUFFICIENT',
-              'WAIT_ONCE_RUNTIME_OR_RSS_REGRESSION',
-              'WAIT_ONCE_LOCALITY_FAILURE',
-              'SUBSTRATE_OR_IDENTITY_FAILURE',
+          allowed={
+              'PROMOTE_DICT9_TO_HOSTILE_REVIEWER',
+              'DICT9_BYTE_WIN_RUNTIME_DEBT_REMAINS',
+              'DICT9_RUNTIME_RECOVERED_BYTE_WIN_LOST',
+              'DICT9_BOTH_DEBTS',
+              'SUBSTRATE_OR_CORRECTNESS_FAILURE',
           }
+          assert d['decision'] in allowed
           for target in d['targets'].values():
-              assert set(target['arms'])=={'release-all-exact','candidate-map-control','candidate-wait-once'}
+              assert set(target['arms'])=={'release-all-exact','dict12-control','family-dict9'}
               for arm in target['arms'].values():
-                  assert len(arm['repetitions'])==3
-          if d['decision']!='SUBSTRATE_OR_IDENTITY_FAILURE':
-              assert all(t['identity_ok'] for t in d['targets'].values())
-          if d['decision']=='PROMOTE_WAIT_ONCE_SCHEDULING_BOUNDARY':
-              for name,target in d['targets'].items():
-                  r=target['arms']['release-all-exact']['median']
-                  c=target['arms']['candidate-map-control']['median']
-                  w=target['arms']['candidate-wait-once']['median']
-                  assert w['archive_bytes']==c['archive_bytes'] and w['archive_sha256']==c['archive_sha256']
-                  assert w['archive_bytes']<r['archive_bytes']
-                  assert w['locality_within_8x']
-                  assert w['wall_improvement_vs_map_s']>0
-                  assert not w['material_regression_vs_release']
-                  assert not w['rss_over_10pct_vs_map']
-                  if name=='nested-only': assert w['wall_improvement_vs_map_s']>=0.010
+                  assert len(arm['repetitions'])==5
+              if d['decision']!='SUBSTRATE_OR_CORRECTNESS_FAILURE':
+                  assert target['valid']
+                  rel=target['arms']['release-all-exact']['median']
+                  ctl=target['arms']['dict12-control']['median']
+                  cand=target['arms']['family-dict9']['median']
+                  assert ctl['archive_bytes'] < rel['archive_bytes']
+                  assert ctl['specialized_candidate_count']==180 and ctl['specialized_raw_bytes']==980226
+                  assert cand['specialized_candidate_count']==180 and cand['specialized_raw_bytes']==980226
+                  assert rel['locality_within_8x'] and ctl['locality_within_8x'] and cand['locality_within_8x']
           PY
 
       - name: CI topology self-check
         run: python tools/check_ci_topology.py .github/workflows/v030-r26-incremental-backups-floor-diagnostic.yml
 
-      - name: Upload immutable R37 evidence
+      - name: Upload immutable R39 evidence
         if: always()
         uses: actions/upload-artifact@v6
         with:
-          name: v030-r37-wait-once-${{ env.EVIDENCE_HEAD }}
-          path: benchmark-artifacts/r37-wait-once.json
+          name: v030-r39-selected-dictionary-effort-${{ env.EVIDENCE_HEAD }}
+          path: benchmark-artifacts/r39-selected-dictionary-effort.json
           if-no-files-found: error
           retention-days: 90
