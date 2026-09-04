@@ -72,6 +72,14 @@ def test_noncanonical_varint_is_rejected_before_semantics() -> None:
         decode_program(bytes(wire))
 
 
+def test_uvarint_above_u64_is_rejected_before_resource_use() -> None:
+    wire = bytearray(encode_program(_program())[0])
+    # Replace max_nodes with 2**64: ten-byte LEB128 with payload 0x02 in byte ten.
+    wire[len(MAGIC) : len(MAGIC) + 1] = b"\x80\x80\x80\x80\x80\x80\x80\x80\x80\x02"
+    with pytest.raises(OneError, match="64-bit envelope"):
+        decode_program(bytes(wire))
+
+
 def test_encoded_resource_claim_cannot_raise_reader_caps() -> None:
     program = _program()
     wire = encode_program(program)[0]
@@ -82,8 +90,8 @@ def test_encoded_resource_claim_cannot_raise_reader_caps() -> None:
 
 def test_corrupt_opcode_is_rejected() -> None:
     wire = bytearray(encode_program(_program())[0])
-    # Parse the five fixed-header varints in this vector: each is one or two bytes, so
-    # use the real decoder invariant rather than depending on a hard-coded node offset.
+    # Parse the five fixed-header varints in this vector rather than depending on a
+    # hard-coded node offset.
     pos = len(MAGIC)
     for _ in range(5):
         while wire[pos] & 0x80:
