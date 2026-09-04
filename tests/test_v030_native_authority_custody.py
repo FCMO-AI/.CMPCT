@@ -60,8 +60,10 @@ def test_native_authority_has_nonduplicating_authoritative_branch_push_route() -
 
 def test_android_native_build_uses_committed_locked_dependency_graph() -> None:
     text = ANDROID_BUILD.read_text(encoding="utf-8")
-    assert 'test -f "$CRATE/Cargo.lock"' in text
+    assert 'git -C "$ROOT" ls-files --error-unmatch native/cmpct-portable/Cargo.lock' in text
     assert "build --release --locked" in text
+    assert 'test "$LOCK_BEFORE" = "$LOCK_AFTER"' in text
+    assert 'git -C "$ROOT" diff --exit-code -- native/cmpct-portable/Cargo.lock' in text
 
 
 def test_native_authority_has_no_transient_rustfmt_repair_workflow() -> None:
