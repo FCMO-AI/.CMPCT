@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import random
 
+from benchmarks.one.one_g02_bounded_gear_ab import _bounded_observe
 from benchmarks.one.one_g02_gear_replacement_ab import _gear_observe
 from benchmarks.one.one_g02_tiered_gear_ab import _tiered_observe
 from experiments.one.observe import observe
@@ -49,3 +50,34 @@ def test_tiered_same_signal_does_not_invent_random_reuse() -> None:
     data = random.Random(11).randbytes(128 * 1024)
     tiered = _tiered_observe(data)
     assert tiered.reuse_opportunity_bytes == 0
+
+
+def test_local_plus_sparse_tier_is_still_blind_after_local_eviction() -> None:
+    """A sparse expected density is not a worst-case nomination-spacing guarantee."""
+    basis = random.Random(4876).randbytes(8 * 1024)
+    data = basis * 2
+    fixed = _fixed(data)
+    sparse = _gear_observe(data)
+    tiered = _tiered_observe(data)
+
+    assert sparse.anchors == 0
+    assert fixed.reuse_opportunity_bytes == len(basis)
+    assert tiered.reuse_opportunity_bytes == 0
+
+
+def test_bounded_gap_same_signal_repairs_long_anchor_starvation() -> None:
+    basis = random.Random(4876).randbytes(8 * 1024)
+    data = basis * 2
+    fixed = _fixed(data)
+    bounded = _bounded_observe(data)
+
+    assert bounded.masked_anchors == 0
+    assert bounded.fallback_anchors > 0
+    assert bounded.reuse_opportunity_bytes == fixed.reuse_opportunity_bytes
+    assert bounded.retained_index_payload_bytes < fixed.retained_index_payload_bytes
+
+
+def test_bounded_gap_same_signal_keeps_random_negative_path_exact() -> None:
+    data = random.Random(11).randbytes(128 * 1024)
+    bounded = _bounded_observe(data)
+    assert bounded.reuse_opportunity_bytes == 0
