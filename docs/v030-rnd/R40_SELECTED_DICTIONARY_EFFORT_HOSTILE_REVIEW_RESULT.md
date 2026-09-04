@@ -129,3 +129,75 @@ A second measurement caveat is that the aggregate `runtime_vs_dict12` count incl
 R40 is diagnostic/Hostile-Reviewer evidence only. It grants **zero** release credit, does not change canonical product policy, does not alter the 687,783-byte hurdle, and does not satisfy final exact-head release authority.
 
 **v0.30 remains MERGE / TAG / VERSION / PUBLISH LOCKED.**
+
+---
+
+## R41 superseding continuation — terminal concept-compression result (2026-09-04)
+
+R40's concept-compression reopening predicate was exercised once under the separately frozen original and superseding R41 preregistrations. This subsection records only the result and does not mutate either frozen preregistration.
+
+### Authority
+
+- result-bearing workflow run: `33876597554`
+- result-bearing job: `101035161579`
+- exact evidence head: `09c8ca3d8d8f48bd45ec06865d034d33ae999118`
+- immutable artifact ID: `9938250042`
+- artifact ZIP SHA-256: `420e9629ca197f113819fefb75a5cdc37740550fd91a8d53fe97f9c314b1ffc4`
+- 15 accepted repair-v6 workloads; 3 arms; 5 fresh processes per arm/workload
+- frozen completeness/decision-law assertion: **PASS**
+- CI topology self-check: **PASS**
+
+The R41 result-bearing job was admitted through a temporary exact-SHA bridge change. Once the non-cancellable receipt was running, that workflow-only delta was reverted so this diagnostic run would not become a new release-critical candidate fingerprint. R41 grants no release credit.
+
+### Worldview tested
+
+R41 asked whether the existing full-build dictionary effort **12** and transaction/update effort **9** could collapse into one shared global effort **9**, deleting one policy state without adding any predicate, grammar, reader/native state, parser copy, or workload-specific authority.
+
+### Terminal decision
+
+**`RETAIN_SPLIT_POLICY_R40_BOUNDARY`**
+
+The simplification produced real creation-speed wins wherever dictionary effort actually changed bytes, but the speed came with unacceptable complete-artifact byte debt.
+
+| Workload | dict12 control | global dict9 | byte delta vs dict12 | dict12 build | dict9 build | build delta |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| Analytics and Database | 10,392,494 B | 10,451,641 B | **+59,147 B** | 0.456262 s | 0.419221 s | **-37.041 ms / -8.12%** |
+| Incremental Backups | 8,056,069 B | 8,063,146 B | **+7,077 B** | 0.547443 s | 0.511223 s | **-36.220 ms / -6.62%** |
+| ML Artifacts | 14,005,132 B | 14,004,963 B | **-169 B** | 0.240470 s | 0.221595 s | **-18.875 ms / -7.85%** |
+
+The other **12/15 workloads were byte-identical** between the level-12 control and global level 9.
+
+Frozen aggregate facts:
+
+- dictionary-activating workloads: **3/15**;
+- dictionary-eligible candidates: **218**;
+- dictionary-eligible raw bytes: **10,644,562 B**;
+- raw AOM proxy: **4.0021707%** of the 265,969,714 B logical corpus;
+- aggregate byte erosion of global level 9 versus level 12: **+66,055 B**;
+- positive level-12 saving represented in the instrument: **32,406 B**;
+- positive global-level-9 saving represented in the instrument: **25,498 B**;
+- material runtime improvements versus level 12: **Analytics, Incremental Backups, ML Artifacts**;
+- material runtime regressions versus release: **0**;
+- >10% RSS regressions versus release: **0**;
+- lost level-12 strict-win workloads: **0**;
+- false-positive admission workloads: **Analytics and Database**.
+
+Incremental Backups under global level 9 remained a strict byte win versus its release arm (`8,063,146 B` vs `8,088,475 B`) but gave back `7,077 B` versus the stronger level-12 result. That is insufficient for a portfolio-wide concept-compression promotion.
+
+### Causal interpretation and scoped negative
+
+Lowering effort from 12 to 9 genuinely reduces creation work, but it does **not** delete a policy state for free. Analytics is the decisive transfer counterexample: roughly **37 ms** less build time costs **59,147 B** in the complete archive and triggers the frozen false-positive admission rule.
+
+Within the exact R41 regime, **do not replace full-build level 12 with global level 9**. This is not a universal claim that level 9 is bad; R41 directly proves useful runtime gains and a small ML byte win. It is a scoped rejection of this particular global unification because its exported byte debt is material.
+
+The R41 anti-sunk-cost law now closes scalar tuning of this family: no levels 8/10/11 sweep, no post-result size/extension thresholds, and no new workload subsets. Reopening requires genuinely new causal evidence that supplies a lower-complexity semantic owner or removes the measured byte/runtime trade itself.
+
+### Forge decision
+
+- global dict9 product prerequisite: **retired**;
+- existing split effort policy: **retained**;
+- R40 family-specific dict9 branch: still **not productized** because its carrying cost remains unjustified;
+- new product complexity from R41: **zero**;
+- product/release credit from R41: **zero**.
+
+The correct continuation is back to the remaining exact-fingerprint Forge/Custody blockers, not another dictionary-effort scalar experiment.
