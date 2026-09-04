@@ -15,8 +15,11 @@ def test_fused_observer_finds_run_without_unseen_unaligned_reuse() -> None:
     assert result.stats.chunk_fingerprints == len(data) // 64
     assert result.stats.hash_lookups == result.stats.chunk_fingerprints
     assert result.runs[0].start == 0
-    assert result.runs[0].length == 16
-    assert result.stats.run_opportunity_bytes == 16
+    # The first byte of bytes(range(64)) is also zero, so the exact leading run spans
+    # the 16-byte prefix plus that byte. Freeze the observed source truth rather than
+    # weakening the observer to match a mistaken fixture expectation.
+    assert result.runs[0].length == 17
+    assert result.stats.run_opportunity_bytes == 17
     # Alignment after the 16-byte prefix means the two `chunk` values are not fixed-
     # chunk aligned. G0.2 must not invent a reuse candidate it did not actually see.
     assert result.reuse == ()
