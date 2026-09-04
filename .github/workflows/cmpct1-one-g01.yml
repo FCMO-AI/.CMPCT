@@ -72,6 +72,9 @@ jobs:
       - name: Probe inherited gear signal as ONE-native discovery knowledge
         run: python -m benchmarks.one.one_g02_gear_oracle | tee one-artifacts/one-g02-gear-oracle.json
 
+      - name: A/B sparse Gear as replacement for fixed reuse signal
+        run: python -m benchmarks.one.one_g02_gear_replacement_ab | tee one-artifacts/one-g02-gear-replacement-ab.json
+
       - name: Measure one-pass Gear signal fusion cost
         run: python -m benchmarks.one.one_g02_fused_gear_signal | tee one-artifacts/one-g02-fused-gear-signal.json
 
