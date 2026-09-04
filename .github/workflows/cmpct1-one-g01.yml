@@ -69,6 +69,9 @@ jobs:
       - name: Probe sparse rolling-anchor headroom
         run: python -m benchmarks.one.one_g02_rolling_oracle | tee one-artifacts/one-g02-rolling-oracle.json
 
+      - name: Probe inherited gear signal as ONE-native discovery knowledge
+        run: python -m benchmarks.one.one_g02_gear_oracle | tee one-artifacts/one-g02-gear-oracle.json
+
       - name: Retain exact-head ONE evidence
         if: always()
         uses: actions/upload-artifact@v4
