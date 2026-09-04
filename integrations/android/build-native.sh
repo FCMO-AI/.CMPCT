@@ -13,12 +13,14 @@ command -v cargo-ndk >/dev/null || {
 : "${ANDROID_NDK_HOME:?ANDROID_NDK_HOME must point at Android NDK r29 or a compatible installed NDK}"
 
 # Android is a release authority lane, so dependency resolution is part of the candidate rather than ambient CI
-# state. Refuse to build if the shared portable crate does not carry the repository-pinned Cargo.lock. This keeps
-# hosted/physical Android evidence on the same dependency graph as desktop/native authority.
-test -f "$CRATE/Cargo.lock" || {
-  echo "missing pinned native/cmpct-portable/Cargo.lock" >&2
+# state. Refuse to build unless the shared portable crate carries the repository-pinned Cargo.lock, and bind its
+# digest before invoking Cargo. This keeps hosted/physical Android evidence on the same dependency graph as
+# desktop/native authority instead of allowing the runner's registry state to define the release candidate.
+git -C "$ROOT" ls-files --error-unmatch native/cmpct-portable/Cargo.lock >/dev/null || {
+  echo "native/cmpct-portable/Cargo.lock is not tracked" >&2
   exit 1
 }
+LOCK_BEFORE="$(sha256sum "$CRATE/Cargo.lock" | awk '{print $1}')"
 
 rm -rf "$JNI"
 mkdir -p "$JNI"
@@ -41,6 +43,13 @@ mkdir -p "$JNI"
     build --release --locked
 )
 
+LOCK_AFTER="$(sha256sum "$CRATE/Cargo.lock" | awk '{print $1}')"
+test "$LOCK_BEFORE" = "$LOCK_AFTER" || {
+  echo "Cargo.lock changed during Android native build: $LOCK_BEFORE -> $LOCK_AFTER" >&2
+  exit 1
+}
+git -C "$ROOT" diff --exit-code -- native/cmpct-portable/Cargo.lock
+
 for abi in arm64-v8a armeabi-v7a x86_64 x86; do
   test -f "$JNI/$abi/libcmpct_portable.so" || {
     echo "missing portable CMPCT library for $abi" >&2
@@ -48,4 +57,4 @@ for abi in arm64-v8a armeabi-v7a x86_64 x86; do
   }
 done
 
-echo "CMPCT portable native Android libraries ready under $JNI"
+echo "CMPCT portable native Android libraries ready under $JNI (Cargo.lock $LOCK_AFTER)"
