@@ -57,8 +57,6 @@ class MinimizerResult:
 
     @property
     def retained_state_payload_bytes(self) -> int:
-        # Lower-bound algorithmic payload: u64 value + u64 offset for each retained
-        # global/local index entry and each live monotonic-queue entry.
         return 16 * (self.global_entries + self.local_entries + self.peak_minimizer_queue_entries)
 
 
@@ -68,7 +66,7 @@ def _minimizer_observe(data: bytes) -> MinimizerResult:
 
     global_index: dict[int, int] = {}
     local_index: OrderedDict[int, int] = OrderedDict()
-    minima: deque[tuple[int, int]] = deque()  # (Gear state, end position)
+    minima: deque[tuple[int, int]] = deque()
     peak_queue = 0
     last_emitted_position = -1
     h = 0
@@ -78,7 +76,7 @@ def _minimizer_observe(data: bytes) -> MinimizerResult:
     verify_reads = extension_reads = emitted = 0
     covered_until = 0
 
-    def audition(signal: int, start: int, source: int | None) -> None:
+    def audition(start: int, source: int | None) -> None:
         nonlocal reuse_opportunity, reuse_regions, verify_reads, extension_reads, covered_until
         if source is None or start < covered_until:
             return
@@ -110,20 +108,17 @@ def _minimizer_observe(data: bytes) -> MinimizerResult:
             continue
         start = position + 1 - WINDOW
         run_dominated = run_length >= max(MIN_RUN, WINDOW)
+        run_start = position - run_length + 1
 
-        # Short-range horizon: same Gear state, bounded aligned retention. This is a
-        # schedule for the one signal, not a second fingerprint family.
         if not run_dominated and (position + 1) % WINDOW == 0:
             source = local_index.get(h)
-            audition(h, start, source)
+            audition(start, source)
             if source is None:
                 local_index[h] = start
                 local_index.move_to_end(h)
                 if len(local_index) > LOCAL_ENTRIES:
                     local_index.popitem(last=False)
 
-        # Rightmost-minimum winnowing over the one Gear stream. Equal states evict the
-        # older position, making tie behavior deterministic and shift-stable.
         while minima and minima[-1][0] >= h:
             minima.pop()
         minima.append((h, position))
@@ -135,13 +130,17 @@ def _minimizer_observe(data: bytes) -> MinimizerResult:
         if first_valid < WINDOW - 1:
             continue
         signal, anchor_position = minima[0]
+        anchor_start = anchor_position + 1 - WINDOW
+        # If the minimizer's entire 64-byte proof window already lies inside the
+        # current qualifying constant run, reuse nomination adds no information.
+        if run_dominated and anchor_start >= run_start:
+            continue
         if anchor_position == last_emitted_position:
             continue
         last_emitted_position = anchor_position
         emitted += 1
-        anchor_start = anchor_position + 1 - WINDOW
         source = global_index.get(signal)
-        audition(signal, anchor_start, source)
+        audition(anchor_start, source)
         if source is None and len(global_index) < GEAR_MAX_INDEX_ENTRIES:
             global_index[signal] = anchor_start
 
@@ -217,13 +216,13 @@ def run() -> dict[str, object]:
     shifted = next(row for row in rows if row["case"] == "starved_shifted_basis_8k_insert1")
     shifted_recovered = shifted["minimizer_reuse_opportunity_bytes"] >= 8 * 1024
     return {
-        "schema": "cmpct-one-g02-minimizer-gear-ab-v1",
+        "schema": "cmpct-one-g02-minimizer-gear-ab-v2",
         "experimental_version": "ONE-G0.2",
         "source_sha": os.environ.get("EVIDENCE_HEAD") or os.environ.get("GITHUB_SHA") or "local-unbound",
         "minimizer_span": MINIMIZER_SPAN,
         "local_entries": LOCAL_ENTRIES,
         "hypothesis": "rolling minima over the one Gear stream provide bounded-spacing, shift-invariant global nominations while preserving fixed-signal opportunity mass at materially lower retained state",
-        "disproof": "fixed-opportunity loss, failure on the anchor-starved one-byte-shift relation, or excessive queue/proof/elapsed carrying cost rejects minimizer retention",
+        "disproof": "fixed-opportunity loss, failure on the anchor-starved one-byte-shift relation, redundant run reuse, or excessive queue/proof/elapsed carrying cost rejects minimizer retention",
         "decision": (
             "opportunity_semantics_survive_current_falsifiers"
             if not losses and shifted_recovered
