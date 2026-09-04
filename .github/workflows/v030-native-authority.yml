@@ -124,19 +124,12 @@ jobs:
             echo 'run_native=true' >> "$GITHUB_OUTPUT"
             exit 0
           fi
-          # The authoritative integration branch has an explicit push route because API/scheduled commits do not
-          # reliably emit a pull_request synchronize event. If an ordinary Git push emits both events, classify the
-          # PR copy out so one exact candidate cannot launch two expensive native receipts.
           if [ "$EVENT_NAME" = "pull_request" ] && [ "$HEAD_REF" = "agent/v030-authoritative-integration" ]; then
             echo 'run_native=false' >> "$GITHUB_OUTPUT"
             exit 0
           fi
           git diff-tree --no-commit-id --name-only -r HEAD > /tmp/latest-head-files.txt
           cat /tmp/latest-head-files.txt
-          # Keep the newest-head classifier aligned with the full evidence-critical dependency closure. Native
-          # authority executes canonical Python semantics and emits a strict release fingerprint, so changes to
-          # those transitive inputs must not inherit an older green native receipt. T01 is deliberately excluded
-          # from the fingerprint and is also the fingerprint-neutral exact-candidate revalidation request hook.
           if grep -Eq '^(native/cmpct-(portable|core)/|src/cmpct/.*|experiments/entropygraph_v030_(canonical_final|canonical_final_impl|profile_isolation|release_product|product_fs|r25_manifest_admission|fs_implicit_v4|geometry_overlay_g04|prefixgraph|prefixgraph_parallel|release_reader|release_reader_policy|release_admission|release_candidate|shared_portfolio|release_lock_strict)\.py|tests/(test_v030_(canonical_final|profile_isolation|r25_manifest_admission|fs_implicit_v4|native_authority_custody)\.py|generate_v030_(canonical|implicit)_goldens\.py|conformance/v030-r25-(canonical|implicit-v4)\.json|native_v030_(canonical|implicit_manifest|r24_verify_authority)\.py)|docs/(FORMAT|HARDENING|NATIVE_CORE|PORTABILITY)\.md|docs/v030-coordination/tasks/T01-native-portability\.md|tools/check_ci_topology\.py|pyproject\.toml|\.github/workflows/v030-native-authority\.yml)' /tmp/latest-head-files.txt; then
             echo 'run_native=true' >> "$GITHUB_OUTPUT"
           else
@@ -155,11 +148,18 @@ jobs:
       - uses: actions/checkout@v6
         with:
           ref: ${{ env.EVIDENCE_HEAD }}
-      - name: Bind exact candidate head
+      - name: Bind exact clean candidate and dependency lock before tools mutate the worktree
         run: |
           set -euo pipefail
           actual="$(git rev-parse HEAD)"
           test "$actual" = "$EVIDENCE_HEAD"
+          git ls-files --error-unmatch native/cmpct-portable/Cargo.lock >/dev/null
+          python -m experiments.entropygraph_v030_release_lock_strict --print-fingerprint \
+            > "$RUNNER_TEMP/cmpct-v030-fingerprint.clean.json"
+          cp native/cmpct-portable/Cargo.lock "$RUNNER_TEMP/Cargo.lock.clean"
+          sha256sum native/cmpct-portable/Cargo.lock | tee "$RUNNER_TEMP/Cargo.lock.clean.sha256"
+          git status --porcelain=v1
+          test -z "$(git status --porcelain=v1)"
       - uses: actions/setup-python@v6
         with:
           python-version: '3.11'
@@ -185,15 +185,15 @@ jobs:
       - name: Rust format
         working-directory: native/cmpct-portable
         run: cargo fmt --check
-      - name: Rust lint
+      - name: Rust lint with frozen dependency graph
         working-directory: native/cmpct-portable
-        run: cargo clippy --all-targets --message-format=short -- -D warnings
-      - name: Rust hostile/parser/native tests
+        run: cargo clippy --locked --all-targets --message-format=short -- -D warnings
+      - name: Rust hostile/parser/native tests with frozen dependency graph
         working-directory: native/cmpct-portable
-        run: cargo test --all-targets
-      - name: Rust release build
+        run: cargo test --locked --all-targets
+      - name: Rust release build with frozen dependency graph
         working-directory: native/cmpct-portable
-        run: cargo build --release
+        run: cargo build --locked --release
       - name: Canonical CMP25 CLI ABI recovery and filesystem-v1 acceptance
         run: python tests/native_v030_canonical.py
       - name: Canonical implicit-v4 independent golden, recovery and writer parity
@@ -202,19 +202,38 @@ jobs:
         run: |
           python tests/native_v030_r24_verify_authority.py \
             --binary native/cmpct-portable/target/release/cmpct-portable
+      - name: Prove release identity and Cargo resolution did not drift during authority work
+        run: |
+          set -euo pipefail
+          cmp native/cmpct-portable/Cargo.lock "$RUNNER_TEMP/Cargo.lock.clean"
+          git diff --exit-code -- native/cmpct-portable/Cargo.lock
+          python -m experiments.entropygraph_v030_release_lock_strict --print-fingerprint \
+            > "$RUNNER_TEMP/cmpct-v030-fingerprint.after.json"
+          python - <<'PY'
+          import json, os, pathlib
+          temp = pathlib.Path(os.environ['RUNNER_TEMP'])
+          before = json.loads((temp / 'cmpct-v030-fingerprint.clean.json').read_text())['candidate_fingerprint']
+          after = json.loads((temp / 'cmpct-v030-fingerprint.after.json').read_text())['candidate_fingerprint']
+          if before != after:
+              raise SystemExit(f'release fingerprint mutated during native authority: {before} -> {after}')
+          print(before)
+          PY
       - name: Record exact-candidate native authority evidence
         run: |
-          python -m experiments.entropygraph_v030_release_lock_strict --print-fingerprint \
-            > "$RUNNER_TEMP/cmpct-v030-fingerprint.json"
           python - <<'PY'
-          import json, os, pathlib, subprocess
+          import hashlib, json, os, pathlib, subprocess
           temp = pathlib.Path(os.environ['RUNNER_TEMP'])
-          fingerprint = json.loads((temp / 'cmpct-v030-fingerprint.json').read_text())['candidate_fingerprint']
+          fingerprint = json.loads((temp / 'cmpct-v030-fingerprint.clean.json').read_text())['candidate_fingerprint']
           candidate_sha = subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip()
+          lock = pathlib.Path('native/cmpct-portable/Cargo.lock')
           evidence = {
-              'schema': 'cmpct-v030-native-authority-evidence-v1',
+              'schema': 'cmpct-v030-native-authority-evidence-v2',
               'candidate_sha': candidate_sha,
               'candidate_fingerprint': fingerprint,
+              'native_dependency_lock_sha256': hashlib.sha256(lock.read_bytes()).hexdigest(),
+              'native_dependency_lock_tracked': True,
+              'cargo_resolution_locked': True,
+              'release_fingerprint_stable_during_run': True,
               'workflow': 'v030-native-authority.yml',
               'run_id': int(os.environ['GITHUB_RUN_ID']),
               'run_attempt': int(os.environ['GITHUB_RUN_ATTEMPT']),
@@ -246,18 +265,11 @@ jobs:
           if-no-files-found: warn
           retention-days: 30
 
-# Footnote: the classifier and expensive receipt deliberately use different job-level concurrency domains. New PR
-# commits cancel obsolete classifier jobs by PR/ref, while an already-started exact-SHA native receipt remains in its
-# own non-cancelling group and can finish. The authoritative integration branch also has one path-scoped push route
-# because API/scheduled commits do not reliably emit pull_request synchronization; its PR copy classifies out to
-# prevent duplicate exact-SHA receipts. T01 is intentionally outside the release fingerprint and provides a shared
-# exact-candidate revalidation hook for native and ZIP authority after unrelated fingerprint-critical changes; this
-# avoids editing product/evidence-critical bytes merely to request fresh proof. Builder-independent filesystem-v1 and
-# implicit-v4 bytes independently pin both admitted filesystem-control dialects; writer parity and the explicit
-# recovery matrix separately prove the current canonical admission seam publishes recoverable bytes consumed by the
-# shared native implementation. The Rust all-targets suite also proves Logs inverse gzip/zstd native parity and bounded
-# reads, metadata-copy recovery, fail-closed dual-copy damage, and authenticated filesystem semantics before those
-# strict release facts are emitted. The r25 format/hardening/native/portability contracts and filesystem semantic owner
-# are trigger inputs too: changing a reader-visible or platform requirement without rerunning the native acceptance
-# matrix would create green-looking repository state over stale proof. Profile isolation clones the canonical streaming
-# reader as a semantic owner, so its source is explicitly part of the dependency closure and ratcheted by custody tests.
+# Footnote: native authority now fingerprints the clean checked-out candidate before any Cargo command can resolve
+# dependencies, requires the tracked Cargo.lock, runs every dependency-resolving command with --locked, and proves the
+# lock plus release fingerprint are unchanged after the full native authority matrix. This closes a custody defect in
+# the earlier v1 evidence path, where Cargo generated an untracked lock before the fingerprint was recorded; those old
+# c119... native/ZIP receipts remain historical diagnostics but cannot authorize release. The classifier and expensive
+# receipt deliberately retain separate job-level concurrency domains so newer commits cannot kill an already-running
+# exact-SHA receipt. T01 remains a fingerprint-neutral manual revalidation hook. Builder-independent filesystem-v1 and
+# implicit-v4 bytes, recovery, Logs inverse parity, and r24 fallback verification remain mandatory and unchanged.
