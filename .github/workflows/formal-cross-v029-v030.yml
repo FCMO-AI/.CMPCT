@@ -104,7 +104,7 @@ jobs:
           import json,sys
           root=Path(sys.argv[1])
           print(json.dumps({'corpora':[
-            {'name':'canterbury-archive','path':str(root/'canterbury'),'expected_logical_bytes':3141622},
+            {'name':'canterbury-archive','path':str(root/'canterbury'),'expected_logical_bytes':2810784},
             {'name':'silesia-archive','path':str(root/'silesia'),'expected_logical_bytes':211938580},
             {'name':'enwik8','path':str(root/'enwik8'),'expected_logical_bytes':100000000}
           ]},indent=2))
