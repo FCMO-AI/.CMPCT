@@ -1,9 +1,9 @@
-name: CMPCT v0.30 registered diagnostic bridge / R36 project wait-owner attribution
+name: CMPCT v0.30 registered diagnostic bridge / R37 wait-once Builder
 # ci-lane: deep
 # ci-cancel-policy: split-classifier-preserve-receipts
 # ci-pr-scope: latest-head-commit-gate
-# Registered control-plane bridge for the already-frozen R36 diagnostic.
-# Diagnostic only; no product/release credit.
+# Registered control-plane bridge for the already-frozen R37 Builder.
+# Diagnostic only until its frozen decision law authorizes productization.
 
 on:
   pull_request:
@@ -24,7 +24,7 @@ jobs:
   classify-latest-head:
     runs-on: ubuntu-24.04
     concurrency:
-      group: cmpct-v030-r36-bridge-classifier-${{ github.event.pull_request.number || github.ref }}
+      group: cmpct-v030-r37-bridge-classifier-${{ github.event.pull_request.number || github.ref }}
       cancel-in-progress: true
     outputs:
       run_receipt: ${{ steps.scope.outputs.run_receipt }}
@@ -51,13 +51,13 @@ jobs:
             echo 'run_receipt=false' >> "$GITHUB_OUTPUT"
           fi
 
-  r36-bridge:
+  r37-bridge:
     needs: classify-latest-head
     if: needs.classify-latest-head.outputs.run_receipt == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 120
     concurrency:
-      group: cmpct-v030-r36-bridge-${{ github.event.pull_request.head.sha || github.sha }}
+      group: cmpct-v030-r37-bridge-${{ github.event.pull_request.head.sha || github.sha }}
       cancel-in-progress: false
     steps:
       - uses: actions/checkout@v6
@@ -65,7 +65,7 @@ jobs:
           ref: ${{ env.EVIDENCE_HEAD }}
           fetch-depth: 256
 
-      - name: Bind frozen R32-R36 substrate and grammar
+      - name: Bind frozen R32-R37 substrate and grammar
         shell: bash
         run: |
           set -euo pipefail
@@ -79,12 +79,11 @@ jobs:
             benchmarks/neutral_hostile_determinism_repair_v1.py \
             benchmarks/v030_release_ablation_canonical.py \
             benchmarks/v030_r32_regenerable_deflate_output_dead_zstd_elision.py; do
-            test "$(git rev-parse 0b1f3cd653f0e2489964b93cdd19fa8324adda2e:$path)" = "$(git rev-parse HEAD:$path)" || { echo "R36 R32-substrate drift: $path" >&2; exit 1; }
+            test "$(git rev-parse 0b1f3cd653f0e2489964b93cdd19fa8324adda2e:$path)" = "$(git rev-parse HEAD:$path)" || { echo "R37 R32-substrate drift: $path" >&2; exit 1; }
           done
-          test "$(git rev-parse 7c1bbaf272ac286180c6876d996c18d3d04b9748:docs/v030-rnd/R34_REGENERABLE_DEFLATE_SAME_RUN_PHASE_ATTRIBUTION_RESULT.md)" = "$(git rev-parse HEAD:docs/v030-rnd/R34_REGENERABLE_DEFLATE_SAME_RUN_PHASE_ATTRIBUTION_RESULT.md)"
-          test "$(git rev-parse e0b7b2a5e9aaf2e7ecd92cf61e6e521d4c0cce1c:docs/v030-rnd/R35_REGENERABLE_DEFLATE_LOCK_CALLER_ATTRIBUTION_RESULT.md)" = "$(git rev-parse HEAD:docs/v030-rnd/R35_REGENERABLE_DEFLATE_LOCK_CALLER_ATTRIBUTION_RESULT.md)"
-          test "$(git rev-parse 37fa7fef88f12bd50589655de60dbf3350a89d69:docs/v030-rnd/R36_REGENERABLE_DEFLATE_PROJECT_WAIT_OWNER_PREREG.md)" = "$(git rev-parse HEAD:docs/v030-rnd/R36_REGENERABLE_DEFLATE_PROJECT_WAIT_OWNER_PREREG.md)"
-          test "$(git rev-parse a6619c0cca80e90e09d009961a89ef1a8cdecc88:benchmarks/v030_r36_regenerable_deflate_project_wait_owner.py)" = "$(git rev-parse HEAD:benchmarks/v030_r36_regenerable_deflate_project_wait_owner.py)"
+          test "$(git rev-parse 7eea02f4879d65f028f7ab68afd1b2a68fcfca99:docs/v030-rnd/R36_REGENERABLE_DEFLATE_PROJECT_WAIT_OWNER_RESULT.md)" = "$(git rev-parse HEAD:docs/v030-rnd/R36_REGENERABLE_DEFLATE_PROJECT_WAIT_OWNER_RESULT.md)"
+          test "$(git rev-parse 6cfdec5f6591eeb0322cdf0af26a0dc9e4f6c4ac:docs/v030-rnd/R37_REGENERABLE_DEFLATE_WAIT_ONCE_BUILDER_PREREG.md)" = "$(git rev-parse HEAD:docs/v030-rnd/R37_REGENERABLE_DEFLATE_WAIT_ONCE_BUILDER_PREREG.md)"
+          test "$(git rev-parse 221e9e5a047a304a5624e28fab4e67cc9c36d370:benchmarks/v030_r37_regenerable_deflate_wait_once_builder.py)" = "$(git rev-parse HEAD:benchmarks/v030_r37_regenerable_deflate_wait_once_builder.py)"
 
       - uses: actions/setup-python@v6
         with:
@@ -101,56 +100,64 @@ jobs:
           python -m pip install -e '.[audio,test]'
           python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
 
-      - name: Compile frozen R36 instrument
-        run: python -m py_compile benchmarks/v030_r36_regenerable_deflate_project_wait_owner.py
+      - name: Compile frozen R37 instrument
+        run: python -m py_compile benchmarks/v030_r37_regenerable_deflate_wait_once_builder.py
 
-      - name: Run frozen R36 project wait-owner attribution
+      - name: Run frozen R37 wait-once Builder
         env:
           CMPCT_EVIDENCE_HEAD: ${{ env.EVIDENCE_HEAD }}
         run: |
           mkdir -p benchmark-artifacts
-          python benchmarks/v030_r36_regenerable_deflate_project_wait_owner.py \
-            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/r36-work" \
-            --output "$GITHUB_WORKSPACE/benchmark-artifacts/r36-project-wait-owner.json"
+          python benchmarks/v030_r37_regenerable_deflate_wait_once_builder.py \
+            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/r37-work" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/r37-wait-once.json"
 
-      - name: Enforce frozen R36 completeness and decision law
+      - name: Enforce frozen R37 completeness and decision law
         shell: bash
         run: |
           python - <<'PY'
           import json, os
           from pathlib import Path
-          d=json.loads(Path('benchmark-artifacts/r36-project-wait-owner.json').read_text())
-          assert d['schema']=='cmpct-v030-r36-regenerable-deflate-project-wait-owner-v1'
+          d=json.loads(Path('benchmark-artifacts/r37-wait-once.json').read_text())
+          assert d['schema']=='cmpct-v030-r37-regenerable-deflate-wait-once-builder-v1'
           assert d['evidence_head']==os.environ['EVIDENCE_HEAD']
           assert d['repetitions']==3
           assert set(d['targets'])=={'full-backups','nested-only'}
           assert d['decision'] in {
-              'PROJECT_WAIT_OWNER_LOCALIZED',
-              'PROJECT_WAIT_OWNER_DISTRIBUTED_OR_BELOW_FLOOR',
-              'PROJECT_WAIT_OWNER_UNRESOLVED',
-              'WAIT_INSTRUMENTATION_UNRESOLVED',
-              'SUBSTRATE_OR_SAME_RUN_IDENTITY_FAILURE',
+              'PROMOTE_WAIT_ONCE_SCHEDULING_BOUNDARY',
+              'WAIT_ONCE_INSUFFICIENT',
+              'WAIT_ONCE_RUNTIME_OR_RSS_REGRESSION',
+              'WAIT_ONCE_LOCALITY_FAILURE',
+              'SUBSTRATE_OR_IDENTITY_FAILURE',
           }
           for target in d['targets'].values():
-              assert set(target['arms'])=={'release-all-exact','full-search','no-ordinary-zstd'}
+              assert set(target['arms'])=={'release-all-exact','candidate-map-control','candidate-wait-once'}
               for arm in target['arms'].values():
                   assert len(arm['repetitions'])==3
-                  assert all(row['strong_verify_ok'] for row in arm['repetitions'])
-          if d['decision'] not in {'SUBSTRATE_OR_SAME_RUN_IDENTITY_FAILURE','WAIT_INSTRUMENTATION_UNRESOLVED'}:
-              assert d['same_run_identity_ok'] and d['wait_instrumentation_ok']
-              assert all(t['full_search_no_zstd_byte_identity'] and t['candidate_strictly_smaller_than_release'] for t in d['targets'].values())
-          if d['decision']=='PROJECT_WAIT_OWNER_LOCALIZED':
-              assert d['localized_project_owners']
-              assert all(x['nested_wait_time_delta_s']>=0.010 and x['full_wait_time_delta_s']>0 for x in d['localized_project_owners'])
+          if d['decision']!='SUBSTRATE_OR_IDENTITY_FAILURE':
+              assert all(t['identity_ok'] for t in d['targets'].values())
+          if d['decision']=='PROMOTE_WAIT_ONCE_SCHEDULING_BOUNDARY':
+              for name,target in d['targets'].items():
+                  r=target['arms']['release-all-exact']['median']
+                  c=target['arms']['candidate-map-control']['median']
+                  w=target['arms']['candidate-wait-once']['median']
+                  assert w['archive_bytes']==c['archive_bytes'] and w['archive_sha256']==c['archive_sha256']
+                  assert w['archive_bytes']<r['archive_bytes']
+                  assert w['locality_within_8x']
+                  assert w['wall_improvement_vs_map_s']>0
+                  assert not w['material_regression_vs_release']
+                  assert not w['rss_over_10pct_vs_map']
+                  if name=='nested-only': assert w['wall_improvement_vs_map_s']>=0.010
           PY
 
       - name: CI topology self-check
         run: python tools/check_ci_topology.py .github/workflows/v030-r26-incremental-backups-floor-diagnostic.yml
 
-      - name: Upload immutable R36 evidence
+      - name: Upload immutable R37 evidence
+        if: always()
         uses: actions/upload-artifact@v6
         with:
-          name: v030-r36-project-wait-owner-${{ env.EVIDENCE_HEAD }}
-          path: benchmark-artifacts/r36-project-wait-owner.json
+          name: v030-r37-wait-once-${{ env.EVIDENCE_HEAD }}
+          path: benchmark-artifacts/r37-wait-once.json
           if-no-files-found: error
           retention-days: 90
