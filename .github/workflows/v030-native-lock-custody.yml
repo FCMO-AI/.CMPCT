@@ -1,0 +1,92 @@
+name: CMPCT v0.30 native lock custody
+# ci-lane: release
+# ci-cancel-policy: preserve-exact-sha-receipt
+# ci-pr-scope: exact-head
+
+on:
+  push:
+    branches:
+      - agent/v030-authoritative-integration
+    paths:
+      - 'native/cmpct-portable/Cargo.toml'
+      - 'native/cmpct-core/Cargo.toml'
+      - 'native/cmpct-zipfactor-v3-ffi/Cargo.toml'
+      - '.github/workflows/v030-native-lock-custody.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  EVIDENCE_HEAD: ${{ github.sha }}
+
+jobs:
+  native-lock-custody:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    concurrency:
+      group: cmpct-v030-native-lock-${{ github.sha }}
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - name: Bind exact candidate and capture clean fingerprint
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          python -m experiments.entropygraph_v030_release_lock_strict --print-fingerprint \
+            > "$RUNNER_TEMP/cmpct-v030-clean-fingerprint.json"
+          python - <<'PY'
+          import json, os, pathlib
+          p = pathlib.Path(os.environ['RUNNER_TEMP']) / 'cmpct-v030-clean-fingerprint.json'
+          value = json.loads(p.read_text())['candidate_fingerprint']
+          if not isinstance(value, str) or len(value) != 64:
+              raise SystemExit('clean candidate fingerprint missing or malformed')
+          print(value)
+          PY
+      - name: Generate exact native dependency lock
+        working-directory: native/cmpct-portable
+        run: |
+          set -euo pipefail
+          cargo generate-lockfile
+          test -s Cargo.lock
+          cp Cargo.lock "$RUNNER_TEMP/Cargo.lock"
+          sha256sum Cargo.lock | tee "$RUNNER_TEMP/cmpct-v030-native-lock.sha256"
+      - name: Record bootstrap custody evidence
+        run: |
+          python - <<'PY'
+          import hashlib, json, os, pathlib, subprocess
+          temp = pathlib.Path(os.environ['RUNNER_TEMP'])
+          lock = temp / 'Cargo.lock'
+          clean = json.loads((temp / 'cmpct-v030-clean-fingerprint.json').read_text())
+          evidence = {
+              'schema': 'cmpct-v030-native-lock-bootstrap-v1',
+              'candidate_sha': subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip(),
+              'clean_candidate_fingerprint_before_lock': clean['candidate_fingerprint'],
+              'generated_lock_sha256': hashlib.sha256(lock.read_bytes()).hexdigest(),
+              'generated_lock_bytes': lock.stat().st_size,
+              'generated_lock_tracked_at_checkout': False,
+              'interpretation': 'bootstrap-only; commit this exact lock, then regenerate release receipts on the new clean fingerprint',
+          }
+          out = temp / 'cmpct-v030-native-lock-bootstrap.json'
+          out.write_text(json.dumps(evidence, indent=2) + '\n')
+          print(json.dumps(evidence, indent=2))
+          PY
+      - name: CI topology self-check
+        run: python tools/check_ci_topology.py .github/workflows/v030-native-lock-custody.yml
+      - uses: actions/upload-artifact@v6
+        with:
+          name: cmpct-v030-native-lock-bootstrap-${{ env.EVIDENCE_HEAD }}
+          path: |
+            ${{ runner.temp }}/Cargo.lock
+            ${{ runner.temp }}/cmpct-v030-native-lock-bootstrap.json
+            ${{ runner.temp }}/cmpct-v030-native-lock.sha256
+          if-no-files-found: error
+          retention-days: 30
+
+# Footnote: this workflow exists to close a release-custody gap discovered when a native authority receipt was
+# fingerprinted after Cargo created an untracked lockfile. The bootstrap receipt grants no release credit. Its only
+# valid transition is to commit the exact generated lock and then rerun native/ZIP/platform authority on the resulting
+# clean release fingerprint. Once the lock is tracked, this lane should be converted from bootstrap generation into a
+# fail-closed `--locked`/no-diff guard rather than left as a second dependency owner.
