@@ -115,7 +115,9 @@ jobs:
         shell: bash
         run: |
           set -euxo pipefail
-          python benchmarks/formal_cross_version_bench.py "$CMPCT_CROSS_MANIFEST" --out formal-cross-results
+          # Footnote: use an absolute output root because ZIP/7z change cwd to the source tree; a relative
+          # archive target would otherwise resolve inside the corpus and fail before compression begins.
+          python benchmarks/formal_cross_version_bench.py "$CMPCT_CROSS_MANIFEST" --out "$GITHUB_WORKSPACE/formal-cross-results"
 
       - name: Show compact evidence
         if: always()
