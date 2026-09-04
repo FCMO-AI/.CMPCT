@@ -3,7 +3,8 @@
 Historical CMPCT CDC used a cheap gear recurrence for content-defined boundaries. This
 instrument does not restore CDC as an archive mechanism. It asks whether the underlying
 content-derived signal can nominate the same generic ONE reuse Law more cheaply than the
-polynomial rolling-window oracle after insertion shifts.
+polynomial rolling-window oracle after insertion shifts, and whether one sparse signal
+could subsume the large fixed-chunk index rather than coexist with it.
 
 All accepted reuse is byte-verified and all extra comparison reads are charged.
 """
@@ -123,13 +124,19 @@ def _gear_oracle(data: bytes) -> GearResult:
 
 
 def _cases() -> dict[str, bytes]:
-    basis = random.Random(13).randbytes(512 * 1024)
-    repeat_basis = random.Random(12).randbytes(64 * 1024)
+    shifted_basis = random.Random(13).randbytes(512 * 1024)
+    basis16 = random.Random(22).randbytes(16 * 1024)
+    basis64 = random.Random(12).randbytes(64 * 1024)
+    basis256 = random.Random(24).randbytes(256 * 1024)
+    pair512 = random.Random(25).randbytes(512 * 1024)
     return {
-        "shifted_version_pair_1byte_insert": basis + b"X" + basis,
+        "shifted_version_pair_1byte_insert": shifted_basis + b"X" + shifted_basis,
         "random_1mib": random.Random(11).randbytes(1024 * 1024),
         "zlib_random_payload": zlib.compress(random.Random(14).randbytes(1024 * 1024), level=9),
-        "repeated_64k_1mib": repeat_basis * 16,
+        "repeat_basis_16k": basis16 * 64,
+        "repeat_basis_64k": basis64 * 16,
+        "repeat_basis_256k": basis256 * 4,
+        "exact_pair_512k": pair512 + pair512,
     }
 
 
@@ -149,11 +156,15 @@ def run() -> dict[str, object]:
     for name, data in _cases().items():
         fixed = observe(data, min_run=8, chunk_size=64, max_index_entries=1 << 14)
         elapsed, result = _median(lambda: _gear_oracle(data))
+        fixed_payload = fixed.stats.retained_index_payload_bytes
+        gear_payload = result.peak_index_entries * 16  # one u64 signal key + one u64 source offset
         rows.append({
             "case": name,
             "input_bytes": len(data),
             "fixed_reuse_opportunity_bytes": fixed.stats.reuse_opportunity_bytes,
+            "fixed_retained_index_payload_bytes": fixed_payload,
             "gear_opportunity_bytes": result.opportunity_bytes,
+            "gear_minus_fixed_opportunity_bytes": result.opportunity_bytes - fixed.stats.reuse_opportunity_bytes,
             "gear_opportunity_fraction": result.opportunity_bytes / len(data),
             "gear_regions": result.regions,
             "gear_anchors": result.anchors,
@@ -165,11 +176,13 @@ def run() -> dict[str, object]:
             "gear_extra_read_bytes": result.extra_read_bytes,
             "gear_extra_read_amplification": result.extra_read_bytes / len(data),
             "gear_peak_index_entries": result.peak_index_entries,
+            "gear_retained_index_payload_bytes": gear_payload,
+            "gear_payload_fraction_of_fixed": (gear_payload / fixed_payload if fixed_payload else None),
             "gear_median_ns": elapsed,
             "gear_reference_mib_s": (len(data) / (1024 * 1024)) / (elapsed / 1_000_000_000),
         })
     return {
-        "schema": "cmpct-one-g02-gear-oracle-v1",
+        "schema": "cmpct-one-g02-gear-oracle-v2",
         "experimental_version": "ONE-G0.2",
         "source_sha": os.environ.get("EVIDENCE_HEAD") or os.environ.get("GITHUB_SHA") or "local-unbound",
         "window": WINDOW,
