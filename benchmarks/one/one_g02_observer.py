@@ -1,8 +1,8 @@
 """ONE-G0.2 fused-observation microbenchmark.
 
 Discovery-only evidence: no compression ratio or product-speed claim. The instrument
-measures one forward source scan, exact-verification rereads, candidate sparsity, bounded
-index size and Python reference throughput on deterministic hostile/structured regimes.
+measures one forward source scan, exact-verification rereads, candidate opportunity mass,
+bounded index payload and Python reference throughput on deterministic regimes.
 """
 from __future__ import annotations
 
@@ -55,8 +55,13 @@ def run() -> dict[str, object]:
                 "hash_lookups": result.stats.hash_lookups,
                 "collision_verifications": result.stats.collision_verifications,
                 "run_candidates": result.stats.run_candidates,
+                "run_opportunity_bytes": result.stats.run_opportunity_bytes,
+                "run_opportunity_fraction": result.stats.run_opportunity_bytes / len(data),
                 "reuse_candidates": result.stats.reuse_candidates,
+                "reuse_opportunity_bytes": result.stats.reuse_opportunity_bytes,
+                "reuse_opportunity_fraction": result.stats.reuse_opportunity_bytes / len(data),
                 "peak_index_entries": result.stats.peak_index_entries,
+                "retained_index_payload_bytes": result.stats.retained_index_payload_bytes,
             }
         )
     return {
@@ -64,7 +69,7 @@ def run() -> dict[str, object]:
         "experimental_version": "ONE-G0.2",
         "source_sha": os.environ.get("EVIDENCE_HEAD") or os.environ.get("GITHUB_SHA") or "local-unbound",
         "repetitions": REPETITIONS,
-        "claim_boundary": "Python fused-observation discovery evidence only; not product-speed or compression-release evidence",
+        "claim_boundary": "Python fused-observation discovery evidence only; opportunity bytes are candidates, not saved bytes",
         "rows": rows,
     }
 
