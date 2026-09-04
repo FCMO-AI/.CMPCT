@@ -1,0 +1,65 @@
+name: CMPCT1 ONE-G0.1 semantic evidence
+
+on:
+  pull_request:
+    paths:
+      - "experiments/one/**"
+      - "tests/one/**"
+      - "benchmarks/one/**"
+      - "docs/one/**"
+      - "docs/CMPCT1_GENESIS.md"
+      - "docs/architecture/CMPCT_ONE_CANON_v0.1.md"
+      - "docs/roadmap/CMPCT_ONE_ENGINEERING_GRID_v0.1.md"
+      - ".github/workflows/cmpct1-one-g01.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct1-one-g01-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  semantic-evidence:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - name: Check out exact research head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          clean: true
+
+      - name: Bind evidence to exact head
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install focused test dependency
+        run: python -m pip install "pytest>=8"
+
+      - name: Run ONE conformance and hostile tests
+        run: |
+          mkdir -p one-artifacts
+          set -o pipefail
+          python -m pytest -q tests/one 2>&1 | tee one-artifacts/pytest-one-g01.txt
+
+      - name: Measure complete wire and reference-resource costs
+        run: python benchmarks/one/one_g01_microbench.py | tee one-artifacts/one-g01-microbench.json
+
+      - name: Retain exact-head ONE evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: one-g01-${{ env.EVIDENCE_HEAD }}
+          path: one-artifacts/
+          if-no-files-found: error
+
+# Research-only evidence lane. ONE-G0.1 is not a canonical format revision and these
+# Python reference timings are not product-speed or v0.29/v0.30 release claims.
