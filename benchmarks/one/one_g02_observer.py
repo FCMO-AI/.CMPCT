@@ -11,6 +11,7 @@ import os
 import random
 import statistics
 import time
+import zlib
 
 from experiments.one.observe import observe
 
@@ -22,10 +23,19 @@ def _cases() -> dict[str, bytes]:
     random_bytes = random.Random(11).randbytes(SIZE)
     source = random.Random(12).randbytes(64 * 1024)
     repeated = source * (SIZE // len(source))
+    version_basis = random.Random(13).randbytes(512 * 1024)
+    # A one-byte insertion between otherwise identical versions deliberately changes
+    # the alignment of the second copy. Fixed chunks should expose this as a negative
+    # result rather than being mistaken for a general resemblance detector.
+    shifted_version_pair = version_basis + b"X" + version_basis
+    already_compressed = zlib.compress(random.Random(14).randbytes(SIZE), level=9)
     return {
         "random_1mib": random_bytes,
         "zeros_1mib": b"\0" * SIZE,
         "repeated_64k_1mib": repeated,
+        "shifted_version_pair_1byte_insert": shifted_version_pair,
+        "zlib_random_payload": already_compressed,
+        "tiny_random_4k": random.Random(15).randbytes(4096),
     }
 
 
@@ -65,7 +75,7 @@ def run() -> dict[str, object]:
             }
         )
     return {
-        "schema": "cmpct-one-g02-observer-v1",
+        "schema": "cmpct-one-g02-observer-v2",
         "experimental_version": "ONE-G0.2",
         "source_sha": os.environ.get("EVIDENCE_HEAD") or os.environ.get("GITHUB_SHA") or "local-unbound",
         "repetitions": REPETITIONS,
