@@ -6,7 +6,7 @@ The reader executes precompiled bounded operations; discovery belongs to the enc
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Mapping, Sequence
+from typing import Mapping
 
 
 class OneError(ValueError):
@@ -21,17 +21,23 @@ class Ref:
 
 
 @dataclass(frozen=True)
+class Root:
+    ref: Ref
+    length: int
+    sha256: str
+
+
+@dataclass(frozen=True)
 class Node:
     """One generic reconstruction node.
 
-    Supported operations intentionally describe information relationships rather than
-    historical mechanisms:
+    Operations describe information relationships rather than historical codecs:
       surprise: emit explicit bytes
-      concat: concatenate referenced ranges
+      concat: concatenate referenced ranges and optional explicit Surprise
       repeat: repeat one referenced range count times
       fill: emit one byte value count times
-      xor: xor equally-sized referenced ranges and optional explicit Surprise bytes
-      add8: modular-u8 sum of equally-sized referenced ranges and optional Surprise
+      xor: xor equal-size referenced ranges and optional explicit Surprise bytes
+      add8: modular-u8 sum of equal-size referenced ranges and optional Surprise
     """
 
     op: str
@@ -58,7 +64,7 @@ class Limits:
 @dataclass(frozen=True)
 class Program:
     nodes: tuple[Node, ...]
-    roots: Mapping[str, Ref]
+    roots: Mapping[str, Root]
     limits: Limits = field(default_factory=Limits)
 
     def validate_shape(self) -> None:
@@ -67,10 +73,18 @@ class Program:
             raise OneError("node count exceeds declared limit")
         if not self.roots:
             raise OneError("program has no roots")
-        for name, ref in self.roots.items():
+        for name, root in self.roots.items():
             if not isinstance(name, str) or not name:
                 raise OneError("root names must be non-empty strings")
-            validate_ref(ref, len(self.nodes))
+            validate_ref(root.ref, len(self.nodes))
+            if not isinstance(root.length, int) or root.length < 0:
+                raise OneError("root length must be non-negative integer")
+            if len(root.sha256) != 64:
+                raise OneError("root sha256 must be 64 hex characters")
+            try:
+                bytes.fromhex(root.sha256)
+            except ValueError as exc:
+                raise OneError("root sha256 is not hexadecimal") from exc
         for node in self.nodes:
             if node.op not in {"surprise", "concat", "repeat", "fill", "xor", "add8"}:
                 raise OneError(f"unknown operation {node.op!r}")
