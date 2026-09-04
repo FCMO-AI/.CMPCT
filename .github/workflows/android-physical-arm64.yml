@@ -66,16 +66,21 @@ jobs:
         with:
           packages: ''
 
-      - name: Resolve exact v0.30 candidate identity
+      - name: Resolve exact v0.30 candidate identity and native dependency graph
         run: |
+          set -euo pipefail
+          git ls-files --error-unmatch native/cmpct-portable/Cargo.lock >/dev/null
           python -m experiments.entropygraph_v030_release_lock_strict --print-fingerprint \
             > "$RUNNER_TEMP/cmpct-v030-fingerprint.json"
           echo "CMPCT_CANDIDATE_SHA=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
+          echo "CMPCT_NATIVE_DEPENDENCY_LOCK_SHA256=$(sha256sum native/cmpct-portable/Cargo.lock | awk '{print $1}')" >> "$GITHUB_ENV"
+          cp native/cmpct-portable/Cargo.lock "$RUNNER_TEMP/Cargo.lock.clean"
           python - <<'PY' >> "$GITHUB_ENV"
           import json, os, pathlib
           data=json.loads((pathlib.Path(os.environ['RUNNER_TEMP'])/'cmpct-v030-fingerprint.json').read_text())
           print('CMPCT_CANDIDATE_FINGERPRINT='+data['candidate_fingerprint'])
           PY
+          test -z "$(git status --porcelain=v1)"
 
       - name: Find matching successful hosted Android evidence
         env:
@@ -83,9 +88,8 @@ jobs:
         run: |
           # Footnote: physical-device success is only one half of the release matrix. Rather than trusting a
           # typed run id, inspect successful hosted Android artifacts and accept only one whose *embedded* source
-          # SHA and release fingerprint match this checkout exactly. Synthetic PR merge SHAs cannot satisfy it.
-          # The hosted receipt must prove canonical r25 including implicit-v4 plus the other promoted dispatch
-          # surfaces before scarce hardware may turn that same candidate into physical-device evidence.
+          # SHA, release fingerprint, and pinned native dependency graph match this checkout exactly. Synthetic PR
+          # merge SHAs and hosted builds whose Cargo graph drifted cannot satisfy the physical release gate.
           python - <<'PY'
           import io, json, os, pathlib, urllib.request, zipfile
           token=os.environ['GH_TOKEN']
@@ -93,6 +97,7 @@ jobs:
           branch=os.environ.get('GITHUB_HEAD_REF') or os.environ.get('GITHUB_REF_NAME')
           candidate=os.environ['CMPCT_CANDIDATE_SHA']
           fingerprint=os.environ['CMPCT_CANDIDATE_FINGERPRINT']
+          lock_sha=os.environ['CMPCT_NATIVE_DEPENDENCY_LOCK_SHA256']
           headers={'Authorization':f'Bearer {token}','Accept':'application/vnd.github+json','X-GitHub-Api-Version':'2022-11-28'}
           def get_json(url):
               req=urllib.request.Request(url, headers=headers)
@@ -113,8 +118,13 @@ jobs:
                       evidence=json.loads(z.read(names[0]))
                   facts=evidence.get('facts',{})
                   if (
-                      evidence.get('candidate_sha') == candidate
+                      evidence.get('schema') == 'cmpct-v030-hosted-android-evidence-v2'
+                      and evidence.get('candidate_sha') == candidate
                       and evidence.get('candidate_fingerprint') == fingerprint
+                      and evidence.get('native_dependency_lock_sha256') == lock_sha
+                      and evidence.get('native_dependency_lock_tracked') is True
+                      and evidence.get('cargo_resolution_locked') is True
+                      and evidence.get('native_dependency_lock_stable_during_run') is True
                       and facts.get('hosted_android_emulator_green') is True
                       and facts.get('canonical_r25_portable_dispatch_green') is True
                       and facts.get('implicit_v4_portable_dispatch_green') is True
@@ -125,7 +135,7 @@ jobs:
                       break
               if found: break
           if not found:
-              raise SystemExit('no successful hosted Android artifact with canonical r25/implicit-v4/promoted dispatch proof matches this exact candidate SHA/fingerprint')
+              raise SystemExit('no successful hosted Android v2 artifact with exact SHA/fingerprint/native-lock proof matches this candidate')
           out=pathlib.Path(os.environ['RUNNER_TEMP'])/'cmpct-hosted-android-evidence.json'
           out.write_text(json.dumps(found, indent=2)+'\n')
           print(json.dumps(found, indent=2))
@@ -170,6 +180,13 @@ jobs:
           export ANDROID_NDK_ROOT="$ANDROID_NDK_HOME"
           gradle --no-daemon :app:assembleDebug :app:assembleDebugAndroidTest
 
+      - name: Prove physical build preserved the pinned native dependency graph
+        run: |
+          set -euo pipefail
+          cmp native/cmpct-portable/Cargo.lock "$RUNNER_TEMP/Cargo.lock.clean"
+          test "$(sha256sum native/cmpct-portable/Cargo.lock | awk '{print $1}')" = "$CMPCT_NATIVE_DEPENDENCY_LOCK_SHA256"
+          git diff --exit-code -- native/cmpct-portable/Cargo.lock
+
       - name: Verify packaged physical ABI uses portable dispatcher
         working-directory: integrations/android
         run: |
@@ -212,11 +229,15 @@ jobs:
           missing=[key for key in required_hosted if hosted_facts.get(key) is not True]
           if missing:
               raise SystemExit(f'matching hosted Android evidence omitted required portable dispatch proof: {missing}')
+          if hosted['evidence'].get('native_dependency_lock_sha256') != os.environ['CMPCT_NATIVE_DEPENDENCY_LOCK_SHA256']:
+              raise SystemExit('hosted and physical Android native dependency graphs differ')
           serial_digest=hashlib.sha256(os.environ['ANDROID_SERIAL'].encode()).hexdigest()
           evidence={
-              'schema':'cmpct-v030-platform-android-evidence-v1',
+              'schema':'cmpct-v030-platform-android-evidence-v2',
               'candidate_sha':os.environ['CMPCT_CANDIDATE_SHA'],
               'candidate_fingerprint':os.environ['CMPCT_CANDIDATE_FINGERPRINT'],
+              'native_dependency_lock_sha256':os.environ['CMPCT_NATIVE_DEPENDENCY_LOCK_SHA256'],
+              'cargo_resolution_locked':True,
               'physical_workflow_run_id':int(os.environ['GITHUB_RUN_ID']),
               'physical_workflow_run_attempt':int(os.environ['GITHUB_RUN_ATTEMPT']),
               'hosted_workflow_run_id':hosted['run_id'],
@@ -240,6 +261,7 @@ jobs:
                   'compact_control_android_dispatch_green':True,
                   'all_declared_abis_built':True,
                   'portable_arm64_jni_dependency_verified':True,
+                  'native_dependency_graph_matches_hosted':True,
                   'physical_instrumentation_green':True,
                   'physical_process_restart_green':True,
               },
@@ -272,6 +294,8 @@ jobs:
 
 # Footnote: owning an ARM64 build is not physical-device acceptance. This workflow requires a self-hosted
 # Linux/ARM64 runner with the dedicated physical-device label, rejects QEMU explicitly, reuses the exact same APK
-# build path as hosted CI, and refuses to combine its device result with hosted evidence from another candidate.
-# The final receipt carries canonical r25/implicit-v4 plus promoted-dispatch proof from the exact hosted candidate;
-# the physical lane can verify those facts but cannot manufacture them when matching emulator evidence is absent.
+# build path as hosted CI, and refuses to combine its device result with hosted evidence from another candidate or
+# native dependency graph. Hosted and physical receipts bind the same tracked Cargo.lock SHA-256 and locked Cargo
+# resolution. The final receipt carries canonical r25/implicit-v4 plus promoted-dispatch proof from the exact hosted
+# candidate; the physical lane can verify those facts but cannot manufacture them when matching emulator evidence
+# is absent.
