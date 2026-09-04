@@ -126,6 +126,7 @@ def run() -> dict[str, object]:
         decoded = decode_program(wire)
         outputs, eval_stats = evaluate(decoded)
         assert sum(len(value) for value in outputs.values()) == logical_bytes
+        assert eval_stats.work_bytes <= eval_stats.preflight_worst_work_bytes
 
         encode_ns = _median_ns(lambda: encode_program(program))
         decode_wire_ns = _median_ns(lambda: decode_program(wire))
@@ -144,6 +145,7 @@ def run() -> dict[str, object]:
                 "reference_evaluate_median_ns": evaluate_ns,
                 "reference_evaluate_mib_s": _throughput_mib_s(logical_bytes, evaluate_ns),
                 "charged_work_bytes": eval_stats.work_bytes,
+                "preflight_worst_work_bytes": eval_stats.preflight_worst_work_bytes,
                 "materialized_bytes": eval_stats.materialized_bytes,
                 "max_depth": eval_stats.max_depth,
                 "nodes_evaluated": eval_stats.nodes_evaluated,
