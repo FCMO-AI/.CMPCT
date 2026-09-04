@@ -11,6 +11,7 @@ on:
       - 'native/cmpct-portable/Cargo.toml'
       - 'native/cmpct-portable/Cargo.lock'
       - 'native/cmpct-core/Cargo.toml'
+      - 'native/cmpct-core/Cargo.lock'
       - 'native/cmpct-zipfactor-v3-ffi/Cargo.toml'
       - '.github/workflows/v030-native-lock-custody.yml'
   workflow_dispatch:
@@ -42,7 +43,7 @@ jobs:
           python -m experiments.entropygraph_v030_release_lock_strict --print-fingerprint \
             > "$RUNNER_TEMP/cmpct-v030-clean-fingerprint.json"
           cat "$RUNNER_TEMP/cmpct-v030-clean-fingerprint.json"
-      - name: Bootstrap the exact preregistered native lock once
+      - name: Bootstrap the exact preregistered portable native lock once
         id: bootstrap
         working-directory: native/cmpct-portable
         run: |
@@ -56,8 +57,8 @@ jobs:
           actual="$(sha256sum Cargo.lock | awk '{print $1}')"
           test "$actual" = "$BOOTSTRAP_LOCK_SHA256"
           echo "created=true" >> "$GITHUB_OUTPUT"
-          echo "$actual  Cargo.lock" | tee "$RUNNER_TEMP/cmpct-v030-native-lock.sha256"
-      - name: Commit exact bootstrap lock to the authoritative branch
+          echo "$actual  native/cmpct-portable/Cargo.lock" | tee "$RUNNER_TEMP/cmpct-v030-native-lock.sha256"
+      - name: Commit exact portable bootstrap lock to the authoritative branch
         if: steps.bootstrap.outputs.created == 'true'
         run: |
           set -euo pipefail
@@ -68,35 +69,47 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git commit -m "custody(v030): pin native dependency resolution"
           git push origin HEAD:agent/v030-authoritative-integration
-      - name: Verify committed native lock is exact and non-mutating
+      - name: Verify both committed native locks are exact and non-mutating
         if: steps.bootstrap.outputs.created != 'true'
-        working-directory: native/cmpct-portable
         run: |
           set -euo pipefail
-          git ls-files --error-unmatch Cargo.lock >/dev/null
-          before="$(sha256sum Cargo.lock | awk '{print $1}')"
-          cargo metadata --locked --format-version 1 >/dev/null
-          after="$(sha256sum Cargo.lock | awk '{print $1}')"
-          test "$before" = "$after"
-          git diff --exit-code -- Cargo.lock
-          git diff --cached --exit-code -- Cargo.lock
-          echo "$after  Cargo.lock" | tee "$RUNNER_TEMP/cmpct-v030-native-lock.sha256"
+          : > "$RUNNER_TEMP/cmpct-v030-native-lock.sha256"
+          for manifest in native/cmpct-portable/Cargo.toml native/cmpct-core/Cargo.toml; do
+            lock="$(dirname "$manifest")/Cargo.lock"
+            git ls-files --error-unmatch "$lock" >/dev/null
+            before="$(sha256sum "$lock" | awk '{print $1}')"
+            cargo metadata --locked --format-version 1 --manifest-path "$manifest" >/dev/null
+            after="$(sha256sum "$lock" | awk '{print $1}')"
+            test "$before" = "$after"
+            git diff --exit-code -- "$lock"
+            git diff --cached --exit-code -- "$lock"
+            echo "$after  $lock" | tee -a "$RUNNER_TEMP/cmpct-v030-native-lock.sha256"
+          done
       - name: Record custody evidence
         if: steps.bootstrap.outputs.created != 'true'
         run: |
           python - <<'PY'
           import hashlib, json, os, pathlib, subprocess
-          lock = pathlib.Path('native/cmpct-portable/Cargo.lock')
+          locks = {
+              'portable': pathlib.Path('native/cmpct-portable/Cargo.lock'),
+              'core': pathlib.Path('native/cmpct-core/Cargo.lock'),
+          }
           clean = json.loads((pathlib.Path(os.environ['RUNNER_TEMP']) / 'cmpct-v030-clean-fingerprint.json').read_text())
           evidence = {
-              'schema': 'cmpct-v030-native-lock-custody-v1',
+              'schema': 'cmpct-v030-native-lock-custody-v2',
               'candidate_sha': subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip(),
               'clean_candidate_fingerprint': clean['candidate_fingerprint'],
-              'lock_sha256': hashlib.sha256(lock.read_bytes()).hexdigest(),
-              'lock_bytes': lock.stat().st_size,
-              'lock_tracked_at_checkout': True,
-              'cargo_metadata_locked': True,
-              'lock_unchanged_after_resolution': True,
+              'locks': {
+                  name: {
+                      'path': lock.as_posix(),
+                      'sha256': hashlib.sha256(lock.read_bytes()).hexdigest(),
+                      'bytes': lock.stat().st_size,
+                      'tracked_at_checkout': True,
+                      'cargo_metadata_locked': True,
+                      'unchanged_after_resolution': True,
+                  }
+                  for name, lock in locks.items()
+              },
           }
           out = pathlib.Path(os.environ['RUNNER_TEMP']) / 'cmpct-v030-native-lock-custody.json'
           out.write_text(json.dumps(evidence, indent=2) + '\n')
@@ -110,13 +123,14 @@ jobs:
           name: cmpct-v030-native-lock-custody-${{ env.EVIDENCE_HEAD }}
           path: |
             native/cmpct-portable/Cargo.lock
+            native/cmpct-core/Cargo.lock
             ${{ runner.temp }}/cmpct-v030-native-lock-custody.json
             ${{ runner.temp }}/cmpct-v030-native-lock.sha256
           if-no-files-found: error
           retention-days: 30
 
-# Footnote: the one-time bootstrap is fail-closed to the exact lock SHA independently generated and downloaded from
-# run 33893992906 before this guard was installed. Once Cargo.lock is tracked, this workflow never rewrites dependency
-# resolution: it requires Cargo's --locked resolver to accept the committed graph and proves the lock remains unchanged.
-# Any future manifest/lock update must therefore be an explicit repository change whose new clean fingerprint forces
-# release-critical receipts to regenerate rather than inheriting authority from an ambient registry resolution.
+# Footnote: the portable one-time bootstrap is fail-closed to the exact lock SHA independently generated and downloaded
+# from run 33893992906 before this guard was installed. Once Cargo.lock is tracked, this workflow never rewrites either
+# native dependency graph: Cargo's --locked resolver must accept both committed locks and both must remain byte-identical.
+# Any future native manifest/lock update is therefore an explicit repository change whose new clean fingerprint forces
+# release-critical receipts to regenerate rather than inheriting authority from ambient registry resolution.
