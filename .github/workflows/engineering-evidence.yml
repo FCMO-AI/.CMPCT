@@ -34,6 +34,131 @@ jobs:
           path: evidence-artifacts/engineering-evidence.txt
           if-no-files-found: warn
 
+  r30-deflate-locality-risk-bridge:
+    # Temporary execution bridge only. The frozen scientific grammar lives in the R30 preregistration
+    # and instrument; this registered workflow supplies runner reachability while the new dedicated
+    # workflow is not yet a default-branch Actions surface.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 150
+    concurrency:
+      group: cmpct-v030-r30-bridge-${{ github.event.pull_request.number }}
+      cancel-in-progress: true
+    env:
+      PYTHONPATH: ${{ github.workspace }}
+      EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha }}
+    steps:
+      - name: Check out exact PR head
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 64
+
+      - name: Bind frozen product and corpus substrate
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          git merge-base --is-ancestor b0e7aeab92c994b4a25c5040fe3fb9f5e208b01a HEAD
+          for path in \
+            src/cmpct/builder.py \
+            src/cmpct/codec.py \
+            experiments/entropygraph_v030_release_product.py \
+            benchmarks/neutral_hostile_corpus_v1.py \
+            benchmarks/neutral_hostile_determinism_repair_v1.py \
+            benchmarks/v030_release_ablation_canonical.py \
+            benchmarks/v030_perf_worker_canonical.py; do
+            test "$(git rev-parse "b0e7aeab92c994b4a25c5040fe3fb9f5e208b01a:$path")" = "$(git rev-parse "HEAD:$path")"
+          done
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+
+      - name: Install frozen diagnostic dependencies
+        run: |
+          set -euo pipefail
+          test -f /etc/apt/sources.list.d/ubuntu.sources
+          sudo apt-get -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" -o Dir::Etc::sourceparts="-" update
+          sudo apt-get -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" -o Dir::Etc::sourceparts="-" install -y zstd gcc ffmpeg libsndfile1
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[audio,test]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
+
+      - name: Bind frozen generator-provided full-backups identity
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import shutil
+          from benchmarks import v030_release_ablation_canonical as A
+          from experiments import entropygraph_v030_release_product as PRODUCT
+
+          root = Path('benchmark-artifacts/r30-generator-binding')
+          shutil.rmtree(root, ignore_errors=True)
+          found = False
+          for suite, source, expected in A._build_corpora(root):
+              if suite == 'neutral_hostile_v1' and source.name == '06_incremental_backups':
+                  found = True
+                  observed = PRODUCT.treehash(source)
+                  assert observed == expected, f'R30 generator identity mismatch: {observed} != {expected}'
+                  assert (source / 'snapshot_2.zip').is_file(), 'R30 nested source member missing'
+                  break
+          assert found, 'R30 frozen Incremental Backups target was not generated'
+          PY
+
+      - name: Compile frozen R30 instrument
+        run: python -m py_compile benchmarks/v030_r30_deflate_locality_risk_conditional_builder.py
+
+      - name: Run frozen R30 conditional Builder
+        run: |
+          mkdir -p benchmark-artifacts
+          python benchmarks/v030_r30_deflate_locality_risk_conditional_builder.py \
+            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/r30-deflate-locality-risk-work" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/r30-deflate-locality-risk.json"
+
+      - name: Enforce frozen R30 completeness and decision law
+        if: always()
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          p = Path('benchmark-artifacts/r30-deflate-locality-risk.json')
+          assert p.is_file(), 'R30 result was not published'
+          d = json.loads(p.read_text())
+          assert d['schema'] == 'cmpct-v030-r30-deflate-locality-risk-conditional-builder-v1'
+          assert d['authority_product_substrate_head'] == 'b0e7aeab92c994b4a25c5040fe3fb9f5e208b01a'
+          assert d['repetitions'] == 3
+          assert d['locality_ceiling'] == 8.0
+          assert d['mature_deflate_reuse_min'] == 65536
+          assert set(d['targets']) == {'full-backups', 'nested-only'}
+          assert d['targets']['full-backups']['source_tree_sha256'] == d['generator_expected_tree_sha256']
+          for target in d['targets'].values():
+              assert set(target['arms']) == {'release-all-exact', 'mature-64k', 'locality-risk-v1'}
+              for arm in target['arms'].values():
+                  assert len(arm['repetitions']) == 3
+                  assert arm['median']['strong_verify_ok']
+                  for row in arm['repetitions']:
+                      assert row['strong_verify_ok']
+                      assert row['virtual_members']
+                      assert all(m['decoded_context_bytes'] is not None for m in row['virtual_members'])
+          assert d['decision'] in {
+              'PROMOTE_CONDITIONAL_TO_GLOBAL_BUILDER',
+              'BYTE_WIN_LOCALITY_FAIL',
+              'BYTE_WIN_RUNTIME_OR_RSS_DEBT',
+              'NO_MATERIAL_CONDITIONAL_WIN',
+              'SUBSTRATE_OR_CORRECTNESS_FAILURE',
+          }
+          PY
+
+      - name: Upload immutable R30 evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: v030-r30-deflate-locality-risk-${{ env.EVIDENCE_HEAD }}
+          path: benchmark-artifacts/r30-deflate-locality-risk.json
+          if-no-files-found: error
+          retention-days: 90
+
 # Footnote: this gate validates that material work exposes a falsifiable evidence surface. It does not
 # assign a numeric “genius” score; benchmark, conformance, safety and expert review remain the actual
 # arbiters of technical quality. The retained diagnostic makes a failed structural gate independently
