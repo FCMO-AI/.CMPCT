@@ -1,0 +1,51 @@
+from __future__ import annotations
+
+import random
+
+from benchmarks.one.one_g02_gear_replacement_ab import _gear_observe
+from benchmarks.one.one_g02_tiered_gear_ab import _tiered_observe
+from experiments.one.observe import observe
+
+
+def _fixed(data: bytes):
+    return observe(data, min_run=8, chunk_size=64, max_index_entries=1 << 14).stats
+
+
+def test_sparse_only_gear_has_a_short_period_phase_blind_spot() -> None:
+    """Negative evidence: a repeating cycle can contain no sparse masked Gear state."""
+    basis = random.Random(18).randbytes(64)
+    data = basis * 64
+    fixed = _fixed(data)
+    sparse = _gear_observe(data)
+
+    assert fixed.reuse_opportunity_bytes == len(data) - len(basis)
+    assert sparse.anchors == 0
+    assert sparse.reuse_opportunity_bytes == 0
+
+
+def test_tiered_same_signal_recovers_short_period_opportunity() -> None:
+    basis = random.Random(18).randbytes(64)
+    data = basis * 64
+    fixed = _fixed(data)
+    tiered = _tiered_observe(data)
+
+    assert tiered.reuse_opportunity_bytes == fixed.reuse_opportunity_bytes
+    assert tiered.retained_index_payload_bytes <= fixed.retained_index_payload_bytes
+
+
+def test_tiered_same_signal_preserves_shifted_relation_sparse_value() -> None:
+    basis = random.Random(13).randbytes(64 * 1024)
+    data = basis + b"X" + basis
+    fixed = _fixed(data)
+    tiered = _tiered_observe(data)
+
+    # Fixed aligned chunks intentionally miss the one-byte-shifted second copy. The
+    # global Gear horizon must recover it as generic exact-reuse discovery knowledge.
+    assert fixed.reuse_opportunity_bytes == 0
+    assert tiered.reuse_opportunity_bytes >= len(basis)
+
+
+def test_tiered_same_signal_does_not_invent_random_reuse() -> None:
+    data = random.Random(11).randbytes(128 * 1024)
+    tiered = _tiered_observe(data)
+    assert tiered.reuse_opportunity_bytes == 0
