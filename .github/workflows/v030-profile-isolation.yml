@@ -23,6 +23,7 @@ concurrency:
 
 env:
   PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
 
 jobs:
   profile-isolation:
@@ -30,6 +31,10 @@ jobs:
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - name: Bind exact candidate head
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
       - uses: actions/setup-python@v6
         with:
           python-version: '3.11'
@@ -61,6 +66,7 @@ jobs:
 
 # Footnote: this gate is intentionally path-scoped around the canonical profile boundary. It exists because
 # the release product now preserves its large reviewed implementation behind a small namespace-isolation wrapper;
-# edits to either half must trigger the same import-order/concurrency contract before promotion. Public disclosure
-# policy is independently release-gated by the exact-head public-proof contract; coupling it here would make
-# publication-policy changes invalidate profile-isolation evidence and waste release-lane runner capacity.
+# edits to either half must trigger the same import-order/concurrency contract before promotion. The release receipt
+# is bound to the immutable PR/source head rather than GitHub's synthetic merge commit. Public disclosure policy is
+# independently release-gated by the exact-head public-proof contract; coupling it here would make publication-policy
+# changes invalidate profile-isolation evidence and waste release-lane runner capacity.
