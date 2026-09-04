@@ -12,6 +12,14 @@ command -v cargo-ndk >/dev/null || {
 }
 : "${ANDROID_NDK_HOME:?ANDROID_NDK_HOME must point at Android NDK r29 or a compatible installed NDK}"
 
+# Android is a release authority lane, so dependency resolution is part of the candidate rather than ambient CI
+# state. Refuse to build if the shared portable crate does not carry the repository-pinned Cargo.lock. This keeps
+# hosted/physical Android evidence on the same dependency graph as desktop/native authority.
+test -f "$CRATE/Cargo.lock" || {
+  echo "missing pinned native/cmpct-portable/Cargo.lock" >&2
+  exit 1
+}
+
 rm -rf "$JNI"
 mkdir -p "$JNI"
 
@@ -19,7 +27,8 @@ mkdir -p "$JNI"
 # structure. The Rust target triples remain an internal mapping handled by cargo-ndk, so this script
 # does not duplicate target/ABI translation logic that could drift between Android toolchains.
 # Building cmpct-portable also compiles its cmpct-core dependency; there is one r24 parser and one
-# r25 dispatcher, not separate Android-specific archive implementations.
+# r25 dispatcher, not separate Android-specific archive implementations. --locked is release custody:
+# no Android build may silently resolve a dependency graph different from the committed candidate.
 (
   cd "$CRATE"
   cargo ndk \
@@ -29,7 +38,7 @@ mkdir -p "$JNI"
     -t x86_64 \
     -t x86 \
     -o "$JNI" \
-    build --release
+    build --release --locked
 )
 
 for abi in arm64-v8a armeabi-v7a x86_64 x86; do
