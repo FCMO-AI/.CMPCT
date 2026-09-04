@@ -14,7 +14,7 @@ def _root(ref: Ref, value: bytes) -> Root:
 
 def test_one_byte_literal_pays_complete_integrity_and_control_cost() -> None:
     # Independently derived from the G0.1 grammar:
-    # 4 magic + 8 limit/count bytes + 4 node bytes + 1 root-count byte
+    # 4 magic + 11 resource/node-count bytes + 4 node bytes + 1 root-count byte
     # + (1 name-len + 4 name + 3 ref + 1 logical-len + 32 SHA) = 61.
     p = Program(nodes=(Node("surprise", surprise=b"x", declared_length=1),), roots={"tiny": _root(Ref(0), b"x")}, limits=LIMITS)
     wire, stats = encode_program(p)
