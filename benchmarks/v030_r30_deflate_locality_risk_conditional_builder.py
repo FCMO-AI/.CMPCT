@@ -34,7 +34,6 @@ MATURE_DEFLATE_REUSE_MIN = 65_536
 MAX_LOCALITY = 8.0
 REPETITIONS = 3
 ARMS = ("release-all-exact", "mature-64k", "locality-risk-v1")
-TARGETS = ("full-backups", "nested-only")
 
 
 def _sha256_file(path: Path) -> str:
@@ -62,7 +61,6 @@ def _zip_members(root: Path) -> list[str]:
 
 def _build_arm(arm: str, source: Path, archive: Path) -> tuple[dict, dict, dict]:
     from cmpct.builder import Builder, Candidate
-    from cmpct.codec import sha
     from experiments import entropygraph_v030_release_product as PRODUCT
 
     class ConditionalDeflateBuilder(Builder):
@@ -194,10 +192,10 @@ def _worker(arm: str, source: Path, archive: Path) -> dict:
     verified = dict(PRODUCT.strong_verify(archive))
     if not verified.get("ok"):
         raise RuntimeError(f"{arm} strong verification failed: {verified!r}")
-    expected_tree = PRODUCT.treehash(source)
-    if verified.get("tree_sha256") != expected_tree:
+    expected_product_tree = PRODUCT.treehash(source)
+    if verified.get("tree_sha256") != expected_product_tree:
         raise RuntimeError(
-            f"{arm} product-tree mismatch: {verified.get('tree_sha256')} != {expected_tree}"
+            f"{arm} product-tree mismatch: {verified.get('tree_sha256')} != {expected_product_tree}"
         )
 
     member_rows: list[dict] = []
@@ -224,7 +222,7 @@ def _worker(arm: str, source: Path, archive: Path) -> dict:
         "arm": arm,
         "archive_bytes": archive.stat().st_size,
         "archive_sha256": _sha256_file(archive),
-        "tree_sha256": expected_tree,
+        "tree_sha256": expected_product_tree,
         "format_revision": verified.get("format_revision"),
         "format_profile": verified.get("format_profile"),
         "strong_verify_ok": True,
@@ -293,14 +291,21 @@ def run(work_root: Path) -> dict:
     fingerprint, _paths = RELEASE_LOCK.CORE.fingerprint(manifest)
 
     full_source: Path | None = None
-    expected_tree: str | None = None
+    generator_expected_tree: str | None = None
+    generator_observed_tree: str | None = None
     for suite, source, expected in A._build_corpora(work_root / "corpus"):
         if suite == TARGET_SUITE and source.name == TARGET_NAME:
             full_source = source
-            expected_tree = expected
+            generator_expected_tree = str(expected["tree_sha256"])
+            generator_observed_tree = A.RC.treehash(source)
             break
-    if full_source is None:
+    if full_source is None or generator_expected_tree is None or generator_observed_tree is None:
         raise RuntimeError("R30 frozen Incremental Backups corpus was not generated")
+    if generator_observed_tree != generator_expected_tree:
+        raise RuntimeError(
+            "R30 generator identity mismatch: "
+            f"{generator_observed_tree} != {generator_expected_tree}"
+        )
 
     nested_source_file = full_source / NESTED_MEMBER
     if not nested_source_file.is_file():
@@ -376,7 +381,7 @@ def run(work_root: Path) -> dict:
         mature["bytes_vs_release"] = mature["archive_bytes"] - base["archive_bytes"]
 
         targets[target_name] = {
-            "source_tree_sha256": next(iter(trees)) if len(trees) == 1 else None,
+            "source_product_tree_sha256": next(iter(trees)) if len(trees) == 1 else None,
             "arms": arms,
         }
 
@@ -418,7 +423,8 @@ def run(work_root: Path) -> dict:
         "authority_product_substrate_head": AUTHORITY_PRODUCT_SUBSTRATE,
         "release_fingerprint_at_execution": fingerprint,
         "target": {"suite": TARGET_SUITE, "name": TARGET_NAME},
-        "generator_expected_tree_sha256": expected_tree,
+        "generator_expected_tree_sha256": generator_expected_tree,
+        "generator_observed_tree_sha256": generator_observed_tree,
         "nested_member": NESTED_MEMBER,
         "nested_member_sha256": nested_source_sha256,
         "repetitions": REPETITIONS,
