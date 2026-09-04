@@ -6,6 +6,18 @@ Authoritative branch: `research/cmpct1`
 
 Experimental lineage: `CMPCT1-ONE` (independent research-version sequence; may advance freely without consuming scarce canonical CMPCT core versions or changing r24 semantics)
 
+## Canonical CMPCT1 design authority
+
+CMPCT1 now has a durable zero-chat design contract. Agents MUST NOT reconstruct the architecture from prior conversations or invent a parallel interpretation of ONE.
+
+Read these in order before material CMPCT1 work:
+
+1. `docs/architecture/CMPCT_ONE_CANON_v0.1.md` — **what CMPCT ONE is**: Law + Surprise + Crystallization, reader/encoder asymmetry, unified representation rules, speed constitution, Reconstruction Cones, Information Basis, security/recovery/access doctrine and canonical vocabulary.
+2. `docs/roadmap/CMPCT_ONE_ENGINEERING_GRID_v0.1.md` — **how CMPCT ONE is realized**: work packages ONE-00 through ONE-15, dependencies, tests, falsifiers, gates, metrics, ADR requirements, hostile campaigns, handoffs and canonicalization criteria.
+3. this file — active Genesis pivot, frozen comparator authorities and one-week decision boundary.
+
+Where a lower-level CMPCT1 note conflicts with the Canon or Engineering Grid, the Canon/Grid win unless a deliberate architecture revision supersedes them. Existing repository hard invariants and higher-level engineering/evidence law retain veto authority.
+
 ## Pivot
 
 As of 2026-09-04, CMPCT1 / ONE is the primary research direction. Existing v0.30 work is **deferred, not discarded**. No new v0.30 mechanism work should be pursued during the Genesis evaluation window unless it is required to preserve evidence, repair a broken comparator, or is directly absorbed into ONE.
@@ -68,16 +80,19 @@ These identifiers are research checkpoints, not canonical CMPCT releases and do 
 
 ## Immediate build order
 
-1. Define the minimal ONE IR / deterministic semantics / resource certificate.
-2. Build a tiny reference evaluator and an independent oracle path.
-3. Express literal data, exact reuse, repetition, sparse zeros, one-parent resemblance and multi-parent Mosaic-style reconstruction through the same grammar.
-4. Add Surprise semantics so literal/random information becomes the limiting case of the same model rather than a separate RAW mechanism.
-5. Establish a fast fused observation kernel and candidate-pruning instrumentation before deep synthesis.
-6. Compile inherited v0.29/v0.30 discovery outputs into ONE and compare complete representation overhead directly.
-7. Build native bulk kernels only after semantics are pinned by vectors.
-8. Add automatic Law discovery progressively, measuring bits saved per extra CPU-second and killing low-yield branches early.
-9. Replace fixed dependency-depth thinking with certified reconstruction-cone bounds only after the new accounting is independently proven.
-10. Maintain adversarial incompressible, tiny-file, media, structured, versioned and false-pattern controls throughout.
+The detailed execution order, gates and kill conditions are authoritative in `docs/roadmap/CMPCT_ONE_ENGINEERING_GRID_v0.1.md`. The compact Genesis sequence is:
+
+1. lock ONE-00 authority/baselines and create implementation handoff state;
+2. define the minimal ONE IR / deterministic semantics / resource certificate;
+3. build a tiny reference evaluator and an independent oracle path;
+4. express literal data, exact reuse, repetition, sparse zeros, one-parent resemblance and multi-parent reconstruction through the same grammar;
+5. add Surprise semantics so literal/random information becomes the limiting case of the same model rather than a separate RAW mechanism;
+6. establish a fast fused observation kernel and candidate-pruning instrumentation before deep synthesis;
+7. compile inherited v0.29/v0.30 discovery outputs into ONE and compare complete representation overhead directly;
+8. build native bulk kernels only after semantics are pinned by vectors;
+9. add automatic Law discovery progressively, measuring bits saved per extra CPU-second and killing low-yield branches early;
+10. replace fixed dependency-depth thinking with certified reconstruction-cone bounds only after the new accounting is independently proven;
+11. maintain adversarial incompressible, tiny-file, media, structured, versioned and false-pattern controls throughout.
 
 ## Evidence and promotion law
 
