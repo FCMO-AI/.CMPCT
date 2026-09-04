@@ -48,6 +48,7 @@ def conformance_program() -> Program:
             "literal": root(Ref(0), b"abc"),
             "repetition": root(Ref(1), b"abcabcabc"),
             "sparse": root(Ref(2), b"\x00" * 4),
+            "xor": root(Ref(4), b"   "),
             "multi_parent": Root(Ref(6), len(FINAL), FINAL_SHA256),
         },
         limits=Limits(max_nodes=16, max_output_bytes=256, max_work_bytes=2048, max_depth=16),
@@ -70,12 +71,13 @@ def test_independent_conformance_vector_covers_one_grammar() -> None:
         "literal": oracle[0],
         "repetition": oracle[1],
         "sparse": oracle[2],
+        "xor": oracle[4],
         "multi_parent": oracle[6],
     }
     assert outputs["multi_parent"] == FINAL
     assert sha256(outputs["multi_parent"]).hexdigest() == FINAL_SHA256
     assert stats.nodes_evaluated == 7
-    assert stats.work_bytes <= 2048
+    assert stats.work_bytes <= stats.preflight_worst_work_bytes <= 2048
     assert stats.max_depth <= 16
 
 
