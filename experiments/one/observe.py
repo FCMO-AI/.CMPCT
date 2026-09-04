@@ -34,8 +34,11 @@ class ObservationStats:
     verification_read_bytes: int
     total_source_read_bytes: int
     run_candidates: int
+    run_opportunity_bytes: int
     reuse_candidates: int
+    reuse_opportunity_bytes: int
     peak_index_entries: int
+    retained_index_payload_bytes: int
 
 
 @dataclass(frozen=True)
@@ -139,6 +142,12 @@ def observe(
         runs.append(RunOpportunity(run_start, run_length, run_value))
 
     source_scan_bytes = len(data)
+    run_opportunity_bytes = sum(item.length for item in runs)
+    reuse_opportunity_bytes = sum(item.length for item in reuse)
+    # Algorithmic retained payload lower bound: one u64 fingerprint key per occupied
+    # bucket plus one u64 source offset per retained entry. Python object overhead is
+    # intentionally excluded and benchmark RSS must be used for implementation memory.
+    retained_index_payload_bytes = 8 * len(index) + 8 * index_entries
     return Observation(
         runs=tuple(runs),
         reuse=tuple(reuse),
@@ -151,7 +160,10 @@ def observe(
             verification_read_bytes=verification_read_bytes,
             total_source_read_bytes=source_scan_bytes + verification_read_bytes,
             run_candidates=len(runs),
+            run_opportunity_bytes=run_opportunity_bytes,
             reuse_candidates=len(reuse),
+            reuse_opportunity_bytes=reuse_opportunity_bytes,
             peak_index_entries=index_entries,
+            retained_index_payload_bytes=retained_index_payload_bytes,
         ),
     )
