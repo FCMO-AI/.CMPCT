@@ -1,8 +1,10 @@
-name: CMPCT v0.30 R26 lane / R27 superseding diagnostic bridge
+name: CMPCT v0.30 registered diagnostic bridge / R35 lock-caller attribution
 # ci-lane: forge-diagnostic
-# R26 is durably invalidated before result-bearing execution. This already-registered
-# control-plane lane executes the frozen R27 successor until GitHub indexes its dedicated workflow.
-# Diagnostic only. Cannot grant release credit.
+# ci-cancel-policy: preserve-running-exact-receipt
+# ci-pr-scope: exact-head-bridge
+# The dedicated R35 workflow exists on the PR branch but GitHub has not routed a
+# result-bearing run for it. This already-registered control-plane lane executes
+# the frozen R35 instrument unchanged. Diagnostic only; no product/release credit.
 
 on:
   pull_request:
@@ -20,84 +22,103 @@ env:
   EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
 
 jobs:
-  r27-bridge:
+  r35-bridge:
     runs-on: ubuntu-24.04
     timeout-minutes: 120
     concurrency:
-      group: cmpct-v030-r27-backups-${{ github.event.pull_request.number || github.ref }}
+      group: cmpct-v030-r35-bridge-${{ github.event.pull_request.head.sha || github.sha }}
       cancel-in-progress: false
     steps:
       - uses: actions/checkout@v6
         with:
           ref: ${{ env.EVIDENCE_HEAD }}
-          fetch-depth: 16
+          fetch-depth: 128
 
-      - name: Bind unchanged product substrate without circular release fingerprint
+      - name: Bind frozen R32 substrate and R35 grammar
+        shell: bash
         run: |
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
-          git merge-base --is-ancestor b0e7aeab92c994b4a25c5040fe3fb9f5e208b01a HEAD
-          git diff --name-only b0e7aeab92c994b4a25c5040fe3fb9f5e208b01a..HEAD > /tmp/r27-diff.txt
-          cat /tmp/r27-diff.txt
-          if grep -Ev '^(\.github/workflows/v030-canonical-product-gap-diagnostic\.yml|\.github/workflows/v030-r26-incremental-backups-floor-diagnostic\.yml|\.github/workflows/v030-r27-incremental-backups-floor-diagnostic\.yml|benchmarks/v030_r26_incremental_backups_floor_diagnostic\.py|benchmarks/v030_r27_incremental_backups_floor_diagnostic\.py|docs/v030-rnd/R26_INCREMENTAL_BACKUPS_PRODUCT_FLOOR_DIAGNOSTIC_PREREG\.md|docs/v030-rnd/R26_INCREMENTAL_BACKUPS_PRODUCT_FLOOR_DIAGNOSTIC_RESULT\.md|docs/v030-rnd/R27_INCREMENTAL_BACKUPS_PRODUCT_FLOOR_DIAGNOSTIC_PREREG\.md)$' /tmp/r27-diff.txt | grep -q .; then
-            echo 'Product/corpus/policy substrate drifted after b0e7aeab; R27 is invalid and requires a superseding freeze.' >&2
-            exit 1
-          fi
+          git merge-base --is-ancestor 0b1f3cd653f0e2489964b93cdd19fa8324adda2e HEAD
+          for path in \
+            src/cmpct/builder.py \
+            src/cmpct/codec.py \
+            experiments/entropygraph_v030_release_product.py \
+            benchmarks/neutral_hostile_corpus_v1.py \
+            benchmarks/neutral_hostile_determinism_repair_v1.py \
+            benchmarks/v030_release_ablation_canonical.py \
+            benchmarks/v030_r32_regenerable_deflate_output_dead_zstd_elision.py; do
+            test "$(git rev-parse 0b1f3cd653f0e2489964b93cdd19fa8324adda2e:$path)" = "$(git rev-parse HEAD:$path)" || { echo "R35 R32-substrate drift: $path" >&2; exit 1; }
+          done
+          test "$(git rev-parse 7c1bbaf272ac286180c6876d996c18d3d04b9748:docs/v030-rnd/R34_REGENERABLE_DEFLATE_SAME_RUN_PHASE_ATTRIBUTION_RESULT.md)" = "$(git rev-parse HEAD:docs/v030-rnd/R34_REGENERABLE_DEFLATE_SAME_RUN_PHASE_ATTRIBUTION_RESULT.md)"
+          test "$(git rev-parse 0f3a03806ddebf9dbf40a108d2c5a8c9e1c5c06c:docs/v030-rnd/R35_REGENERABLE_DEFLATE_LOCK_CALLER_ATTRIBUTION_PREREG.md)" = "$(git rev-parse HEAD:docs/v030-rnd/R35_REGENERABLE_DEFLATE_LOCK_CALLER_ATTRIBUTION_PREREG.md)"
+          test "$(git rev-parse fb6d372634035d1d8b88d97bd0ac60a9948b9e0f:benchmarks/v030_r35_regenerable_deflate_lock_caller_attribution.py)" = "$(git rev-parse HEAD:benchmarks/v030_r35_regenerable_deflate_lock_caller_attribution.py)"
 
       - uses: actions/setup-python@v6
         with:
           python-version: '3.11'
           cache: pip
 
-      - name: Install frozen diagnostic dependencies
+      - name: Install frozen dependencies
+        shell: bash
         run: |
           set -euo pipefail
-          test -f /etc/apt/sources.list.d/ubuntu.sources
-          sudo apt-get -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" -o Dir::Etc::sourceparts="-" update
-          sudo apt-get -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" -o Dir::Etc::sourceparts="-" install -y zstd gcc ffmpeg libsndfile1
+          sudo apt-get update
+          sudo apt-get install -y zstd gcc ffmpeg libsndfile1
           python -m pip install --upgrade pip
           python -m pip install -e '.[audio,test]'
           python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
 
-      - name: Compile frozen R27 custody wrapper and inherited R26 arm worker
-        run: |
-          python -m py_compile benchmarks/v030_r26_incremental_backups_floor_diagnostic.py
-          python -m py_compile benchmarks/v030_r27_incremental_backups_floor_diagnostic.py
+      - name: Compile frozen R35 instrument
+        run: python -m py_compile benchmarks/v030_r35_regenerable_deflate_lock_caller_attribution.py
 
-      - name: Run frozen R27 complete-artifact/locality diagnosis
+      - name: Run frozen R35 caller attribution
+        env:
+          CMPCT_EVIDENCE_HEAD: ${{ env.EVIDENCE_HEAD }}
         run: |
           mkdir -p benchmark-artifacts
-          python benchmarks/v030_r27_incremental_backups_floor_diagnostic.py \
-            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/r27-backups-work" \
-            --output "$GITHUB_WORKSPACE/benchmark-artifacts/r27-backups.json"
+          python benchmarks/v030_r35_regenerable_deflate_lock_caller_attribution.py \
+            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/r35-work" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/r35-lock-caller-attribution.json"
 
-      - name: Enforce diagnostic completeness only
-        if: always()
+      - name: Enforce frozen R35 completeness and decision law
+        shell: bash
         run: |
           python - <<'PY'
-          import json
+          import json, os
           from pathlib import Path
-          p=Path('benchmark-artifacts/r27-backups.json')
-          assert p.is_file(), 'R27 result was not published'
-          d=json.loads(p.read_text())
-          assert d['schema']=='cmpct-v030-r27-incremental-backups-floor-diagnostic-v1'
-          assert d['authority_product_substrate_head']=='b0e7aeab92c994b4a25c5040fe3fb9f5e208b01a'
-          assert isinstance(d['release_fingerprint_at_execution'], str) and len(d['release_fingerprint_at_execution'])==64
-          assert set(d['arms'])=={'genuine-r24','release-r24','current-product'}
-          assert all(row['strong_verify_ok'] for row in d['arms'].values())
-          assert len({row['tree_sha256'] for row in d['arms'].values()})==1
-          assert d['decision'] in {
-              'D1_REPRODUCTION_OR_SUBSTRATE_MISMATCH',
-              'D3_D4_GENUINE_R24_BYTE_FLOOR_EXPORTS_LOCALITY_DEBT',
-              'D2_LAWFUL_GENUINE_R24_FLOOR_EXISTS_REQUIRE_CARRYING_COST_BUILDER',
-          }
+          d=json.loads(Path('benchmark-artifacts/r35-lock-caller-attribution.json').read_text())
+          assert d['schema']=='cmpct-v030-r35-regenerable-deflate-lock-caller-attribution-v1'
+          assert d['evidence_head']==os.environ['EVIDENCE_HEAD']
+          assert d['repetitions']==3
+          assert set(d['targets'])=={'full-backups','nested-only'}
+          assert d['decision'] in {'LOCK_CALLER_LOCALIZED','LOCK_CALLER_DISTRIBUTED_OR_BELOW_FLOOR','LOCK_CALLER_UNRESOLVED','SUBSTRATE_OR_SAME_RUN_IDENTITY_FAILURE'}
+          for target in d['targets'].values():
+              assert set(target['arms'])=={'release-all-exact','full-search','no-ordinary-zstd'}
+              for arm in target['arms'].values():
+                  assert len(arm['repetitions'])==3
+                  assert all(row['strong_verify_ok'] for row in arm['repetitions'])
+              if d['decision']!='SUBSTRATE_OR_SAME_RUN_IDENTITY_FAILURE':
+                  assert target['full_search_no_zstd_byte_identity']
+                  assert target['candidate_strictly_smaller_than_release']
+          if d['decision']=='LOCK_CALLER_LOCALIZED':
+              assert d['same_run_identity_ok'] and d['caller_data_usable'] and d['localized_callers']
+              assert all(x['nested_lock_time_delta_s']>=0.010 and x['full_lock_time_delta_s']>0 for x in d['localized_callers'])
+          elif d['decision']=='LOCK_CALLER_DISTRIBUTED_OR_BELOW_FLOOR':
+              assert d['same_run_identity_ok'] and d['caller_data_usable'] and not d['localized_callers']
+          elif d['decision']=='LOCK_CALLER_UNRESOLVED':
+              assert d['same_run_identity_ok'] and not d['caller_data_usable']
+          else:
+              assert not d['same_run_identity_ok']
           PY
 
-      - name: Upload immutable R27 evidence
-        if: always()
+      - name: CI topology self-check
+        run: python tools/check_ci_topology.py .github/workflows/v030-r26-incremental-backups-floor-diagnostic.yml
+
+      - name: Upload immutable R35 evidence
         uses: actions/upload-artifact@v6
         with:
-          name: v030-r27-incremental-backups-floor-${{ env.EVIDENCE_HEAD }}
-          path: benchmark-artifacts/r27-backups.json
+          name: v030-r35-lock-caller-attribution-${{ env.EVIDENCE_HEAD }}
+          path: benchmark-artifacts/r35-lock-caller-attribution.json
           if-no-files-found: error
           retention-days: 90
