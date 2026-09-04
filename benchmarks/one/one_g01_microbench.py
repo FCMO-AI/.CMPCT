@@ -30,6 +30,20 @@ def _random_bytes(size: int, seed: int) -> bytes:
     return random.Random(seed).randbytes(size)
 
 
+def tiny_literal_case() -> tuple[Program, int]:
+    value = b"x"
+    return Program(nodes=(Node("surprise", surprise=value, declared_length=1),), roots={"tiny": _root(Ref(0), value)}, limits=LIMITS), 1
+
+
+def tiny_repeat_case() -> tuple[Program, int]:
+    value = b"A" * 16
+    return Program(
+        nodes=(Node("surprise", surprise=b"A", declared_length=1), Node("repeat", refs=(Ref(0),), count=16, declared_length=16)),
+        roots={"tiny-repeat": _root(Ref(1), value)},
+        limits=LIMITS,
+    ), len(value)
+
+
 def literal_case() -> tuple[Program, int]:
     value = _random_bytes(65536, 1)
     p = Program(nodes=(Node("surprise", surprise=value, declared_length=len(value)),), roots={"literal": _root(Ref(0), value)}, limits=LIMITS)
@@ -81,6 +95,8 @@ def multi_parent_case() -> tuple[Program, int]:
 
 
 CASES = {
+    "tiny_literal": tiny_literal_case,
+    "tiny_repeat": tiny_repeat_case,
     "literal": literal_case,
     "repeat": repeat_case,
     "sparse": sparse_case,
