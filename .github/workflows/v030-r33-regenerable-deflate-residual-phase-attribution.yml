@@ -2,6 +2,8 @@ name: CMPCT v0.30 R33 residual runtime phase attribution
 # ci-lane: deep
 # ci-cancel-policy: split-classifier-preserve-receipts
 # ci-pr-scope: latest-head-commit-gate
+# Custody heartbeat: this workflow-only touch requests a fresh exact-head receipt; the frozen
+# R33 instrument, corpus, thresholds, comparator, repetitions and decision grammar are unchanged.
 on:
   pull_request:
     paths:
