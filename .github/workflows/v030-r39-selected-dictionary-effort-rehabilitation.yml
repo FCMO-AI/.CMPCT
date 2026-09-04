@@ -1,0 +1,145 @@
+name: CMPCT v0.30 R39 selected-dictionary effort rehabilitation
+# ci-lane: deep
+# ci-cancel-policy: split-classifier-preserve-receipts
+# ci-pr-scope: latest-head-commit-gate
+# Diagnostic only. R39 grants no product or release credit.
+
+on:
+  pull_request:
+    paths:
+      - 'benchmarks/v030_r39_selected_dictionary_effort_rehabilitation.py'
+      - 'docs/v030-rnd/R38_REGENERABLE_DEFLATE_ENCODE_CRITICAL_PATH_RESULT.md'
+      - 'docs/v030-rnd/R39_SELECTED_DICTIONARY_EFFORT_REHABILITATION_PREREG.md'
+      - '.github/workflows/v030-r39-selected-dictionary-effort-rehabilitation.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+
+jobs:
+  classify-latest-head:
+    runs-on: ubuntu-24.04
+    concurrency:
+      group: cmpct-v030-r39-classifier-${{ github.event.pull_request.number || github.ref }}
+      cancel-in-progress: true
+    outputs:
+      run_receipt: ${{ steps.scope.outputs.run_receipt }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 2
+      - id: scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          if [ "$GITHUB_EVENT_NAME" = workflow_dispatch ]; then echo 'run_receipt=true' >> "$GITHUB_OUTPUT"; exit 0; fi
+          changed="$(git diff-tree --no-commit-id --name-only -r HEAD)"
+          printf '%s\n' "$changed"
+          if printf '%s\n' "$changed" | grep -Eq '^(benchmarks/v030_r39_selected_dictionary_effort_rehabilitation\.py|docs/v030-rnd/R38_REGENERABLE_DEFLATE_ENCODE_CRITICAL_PATH_RESULT\.md|docs/v030-rnd/R39_SELECTED_DICTIONARY_EFFORT_REHABILITATION_PREREG\.md|\.github/workflows/v030-r39-selected-dictionary-effort-rehabilitation\.yml)$'; then
+            echo 'run_receipt=true' >> "$GITHUB_OUTPUT"
+          else echo 'run_receipt=false' >> "$GITHUB_OUTPUT"; fi
+
+  r39-builder:
+    needs: classify-latest-head
+    if: needs.classify-latest-head.outputs.run_receipt == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    concurrency:
+      group: cmpct-v030-r39-builder-${{ github.event.pull_request.head.sha || github.sha }}
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 128
+
+      - name: Bind frozen R39 substrate and grammar
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          git merge-base --is-ancestor b8a2223fa85809f87db05f21493bc7818769cf21 HEAD
+          for path in \
+            src/cmpct/builder.py \
+            src/cmpct/codec.py \
+            experiments/entropygraph_v030_release_product.py \
+            benchmarks/neutral_hostile_corpus_v1.py \
+            benchmarks/neutral_hostile_determinism_repair_v1.py \
+            benchmarks/v030_release_ablation_canonical.py \
+            benchmarks/v030_r32_regenerable_deflate_output_dead_zstd_elision.py \
+            docs/v030-rnd/R38_REGENERABLE_DEFLATE_ENCODE_CRITICAL_PATH_RESULT.md \
+            docs/v030-rnd/R39_SELECTED_DICTIONARY_EFFORT_REHABILITATION_PREREG.md; do
+            test -n "$(git rev-parse HEAD:$path)"
+          done
+          test "$(git rev-parse d5cb5882e3bb19bf41d1fbb61db55fdc21bc5c54:benchmarks/v030_r39_selected_dictionary_effort_rehabilitation.py)" = "$(git rev-parse HEAD:benchmarks/v030_r39_selected_dictionary_effort_rehabilitation.py)"
+          test "$(git rev-parse 9344bdfb85d769bd6feb0fdbd408952599bf33d7:docs/v030-rnd/R39_SELECTED_DICTIONARY_EFFORT_REHABILITATION_PREREG.md)" = "$(git rev-parse HEAD:docs/v030-rnd/R39_SELECTED_DICTIONARY_EFFORT_REHABILITATION_PREREG.md)"
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+
+      - name: Install frozen dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y zstd gcc ffmpeg libsndfile1
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[audio,test]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
+
+      - name: Compile frozen R39 instrument
+        run: python -m py_compile benchmarks/v030_r39_selected_dictionary_effort_rehabilitation.py
+
+      - name: Run frozen R39 Builder
+        env:
+          CMPCT_EVIDENCE_HEAD: ${{ env.EVIDENCE_HEAD }}
+        run: |
+          mkdir -p benchmark-artifacts
+          python benchmarks/v030_r39_selected_dictionary_effort_rehabilitation.py \
+            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/r39-work" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/r39-selected-dictionary-effort.json"
+
+      - name: Enforce frozen R39 completeness and decision law
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          d=json.loads(Path('benchmark-artifacts/r39-selected-dictionary-effort.json').read_text())
+          assert d['schema']=='cmpct-v030-r39-selected-dictionary-effort-rehabilitation-v1'
+          assert d['evidence_head']==os.environ['EVIDENCE_HEAD']
+          assert d['repetitions']==5
+          assert set(d['targets'])=={'full-backups','nested-only'}
+          allowed={'PROMOTE_DICT9_TO_HOSTILE_REVIEWER','DICT9_BYTE_WIN_RUNTIME_DEBT_REMAINS','DICT9_RUNTIME_RECOVERED_BYTE_WIN_LOST','DICT9_BOTH_DEBTS','SUBSTRATE_OR_CORRECTNESS_FAILURE'}
+          assert d['decision'] in allowed
+          for target in d['targets'].values():
+              assert set(target['arms'])=={'release-all-exact','dict12-control','family-dict9'}
+              for arm in target['arms'].values():
+                  assert len(arm['repetitions'])==5
+              if d['decision']!='SUBSTRATE_OR_CORRECTNESS_FAILURE':
+                  assert target['valid']
+                  rel=target['arms']['release-all-exact']['median']; ctl=target['arms']['dict12-control']['median']; cand=target['arms']['family-dict9']['median']
+                  assert ctl['archive_bytes'] < rel['archive_bytes']
+                  assert ctl['specialized_candidate_count']==180 and ctl['specialized_raw_bytes']==980226
+                  assert cand['specialized_candidate_count']==180 and cand['specialized_raw_bytes']==980226
+                  assert rel['locality_within_8x'] and ctl['locality_within_8x'] and cand['locality_within_8x']
+          PY
+
+      - name: CI topology self-check
+        run: python tools/check_ci_topology.py .github/workflows/v030-r39-selected-dictionary-effort-rehabilitation.yml
+
+      - name: Upload immutable R39 evidence
+        uses: actions/upload-artifact@v6
+        with:
+          name: v030-r39-selected-dictionary-effort-${{ env.EVIDENCE_HEAD }}
+          path: benchmark-artifacts/r39-selected-dictionary-effort.json
+          if-no-files-found: error
+          retention-days: 90
