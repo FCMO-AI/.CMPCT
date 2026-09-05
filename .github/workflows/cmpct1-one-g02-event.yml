@@ -12,6 +12,7 @@ on:
       - "benchmarks/one/one_g02_minimizer_buffer_attribution.py"
       - "benchmarks/one/one_g02_minimizer_segmented_counter_kernel.c"
       - "benchmarks/one/one_g02_minimizer_counter_ab.py"
+      - "benchmarks/one/one_g02_minimizer_counter_asm.py"
       - "benchmarks/one/one_g02_minimizer_offset_only_kernel.c"
       - "benchmarks/one/one_g02_minimizer_offset_only_ab.py"
       - ".github/workflows/cmpct1-one-g02-event.yml"
@@ -87,6 +88,18 @@ jobs:
       - name: Falsify per-state block division as remaining owner
         id: counter_ab
         run: python -m benchmarks.one.one_g02_minimizer_counter_ab | tee one-maintenance-artifacts/one-g02-minimizer-counter-ab.json
+
+      - name: Verify counter causal mechanism in generated code
+        id: counter_asm
+        run: python -m benchmarks.one.one_g02_minimizer_counter_asm | tee one-maintenance-artifacts/one-g02-minimizer-counter-asm.json
+
+      - name: Generated code supports division-removal explanation
+        if: steps.counter_asm.outputs.decision == 'division_removal_mechanism_supported'
+        run: echo "baseline contains integer division and counter Builder removes it"
+
+      - name: Generated code does not prove division-removal explanation
+        if: steps.counter_asm.outputs.decision == 'division_removal_mechanism_not_proven_by_static_codegen'
+        run: echo "elapsed win survives, but static codegen does not isolate integer division"
 
       - name: Counter bookkeeping promoted by frozen gate
         if: steps.counter_ab.outputs.decision == 'promote_counter_bookkeeping'
