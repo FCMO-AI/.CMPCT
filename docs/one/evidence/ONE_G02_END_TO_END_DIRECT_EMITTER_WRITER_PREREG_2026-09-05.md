@@ -8,7 +8,11 @@ Authoritative branch: `research/cmpct1`
 
 The post-segment cost-owner experiment identified canonical byte emission as the dominant post-segment Python cost. A growable one-pass direct emitter then reproduced a large broad speed signal while preserving byte-identical ONE0 output, but one 256 KiB exact-shift row showed benchmark-context/runtime-state instability and blocked promotion of that isolated Python microbenchmark.
 
-The next product-relevant question is not whether CPython's allocator can be tuned. It is whether the **direct-write principle still removes meaningful total writer work after the currently advanced relation-admission, one-pass segmentation, bounded generic graph construction and validation costs are charged together**.
+The next product-relevant question is not whether CPython's allocator can be tuned. It is whether the **direct-write principle still removes meaningful charged writer work after the currently advanced relation-admission, one-pass segmentation, bounded generic graph construction and validation costs are charged together**.
+
+## Accounting boundary
+
+This is an adjacent-version writer A/B **after root identities are already available**. Source/target SHA-256 construction and broader fused observation/authentication work are not timed here because they are identical context supplied to both arms and are not changed by the emitter hypothesis. They remain non-borrowable product cost for a later full ingest/writer benchmark. Therefore this experiment may establish survival of the emitter gain through the charged relation-to-wire path, but it may not be described as total product ingest cost.
 
 ## Baseline
 
@@ -85,6 +89,12 @@ Record outside the timing boundary but preserve as result dimensions:
 - exact classification/shift truth;
 - exact wire equality.
 
+Explicitly uncharged in this A/B but retained as later product debt:
+
+- initial source/target root hashing;
+- broader object-discovery / fused-observation work not changed by the candidate;
+- authenticated container/index placement and durability work.
+
 ## Independent evidence plan
 
 - The candidate wire must equal ordinary `encode_program()` byte-for-byte.
@@ -96,7 +106,7 @@ Record outside the timing boundary but preserve as result dimensions:
 
 This experiment is intentionally allowed to fail if the previous 256 KiB exact-shift instability survives the larger timed boundary. A broad aggregate gain does not erase that row.
 
-A pass would establish only that the direct-write **principle survives full research-writer charging on this temporal envelope**. It would not establish native/product writer throughput, arbitrary relation discovery, authenticated selective reads, recovery, portability or supremacy over v0.29/v0.30.
+A pass would establish only that the direct-write **principle survives charged relation-to-wire research-writer work on this temporal envelope**. It would not establish total ingest cost, native/product writer throughput, arbitrary relation discovery, authenticated selective reads, recovery, portability or supremacy over v0.29/v0.30.
 
 If the Python context instability remains the only red while the broad mechanism survives, do not tune a size/workload exception. Preserve the debt and transfer the direct-write idea to a native/shared ONE writer experiment when that boundary is justified.
 
