@@ -51,8 +51,11 @@ jobs:
           echo '```json' >> "$GITHUB_STEP_SUMMARY"
           if [ -f artifacts/one/cold_rescue_direct_sparse.json ]; then
             cat artifacts/one/cold_rescue_direct_sparse.json >> "$GITHUB_STEP_SUMMARY"
+            payload=$(python -c 'import json; print(json.dumps(json.load(open("artifacts/one/cold_rescue_direct_sparse.json")),separators=(",",":")))')
+            echo "::notice title=ONE-G0.2 direct sparse evidence::$payload"
           else
             echo '{"error":"result file missing"}' >> "$GITHUB_STEP_SUMMARY"
+            echo '::error title=ONE-G0.2 direct sparse evidence::result file missing'
           fi
           echo '```' >> "$GITHUB_STEP_SUMMARY"
       - name: Preserve result
