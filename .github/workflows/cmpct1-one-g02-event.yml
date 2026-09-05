@@ -1,0 +1,64 @@
+# ci-lane: fast
+name: CMPCT1 ONE-G0.2 event-driven minimizer evidence
+
+on:
+  pull_request:
+    paths:
+      - "benchmarks/one/one_g02_minimizer_event_kernel.c"
+      - "benchmarks/one/one_g02_minimizer_event_ab.py"
+      - ".github/workflows/cmpct1-one-g02-event.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct1-one-g02-event-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  event-minimizer-evidence:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    env:
+      EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - name: Check out exact research head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          clean: true
+
+      - name: Bind evidence to exact head
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install repository-authoritative test dependency surface
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[test,audio]'
+
+      - name: Re-run ONE semantic and hostile boundary before result
+        run: |
+          mkdir -p one-event-artifacts
+          set -o pipefail
+          python -m pytest -q tests/one 2>&1 | tee one-event-artifacts/pytest-one-event.txt
+
+      - name: Execute preregistered event-driven dense A/B
+        run: python -m benchmarks.one.one_g02_minimizer_event_ab | tee one-event-artifacts/one-g02-minimizer-event-ab.json
+
+      - name: Retain exact-head event evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: one-g02-event-${{ env.EVIDENCE_HEAD }}
+          path: one-event-artifacts/
+          if-no-files-found: error
+
+# Research-only evidence. The A/B changes encoder discovery maintenance only and
+# creates no format, reader, stored-byte, product-speed, v0.29 or v0.30 claim.
