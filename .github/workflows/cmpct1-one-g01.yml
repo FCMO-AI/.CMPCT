@@ -111,6 +111,9 @@ jobs:
       - name: Diagnose segmented-minimum startup amortization crossover
         run: python -m benchmarks.one.one_g02_minimizer_segmented_crossover | tee one-artifacts/one-g02-minimizer-segmented-crossover.json
 
+      - name: Probe two-segment exact minimizer simplification
+        run: python -m benchmarks.one.one_g02_minimizer_two_segment_probe | tee one-artifacts/one-g02-minimizer-two-segment-probe.json
+
       - name: Measure segmented residual against Gear-only floor
         run: python -m benchmarks.one.one_g02_minimizer_segmented_residual | tee one-artifacts/one-g02-minimizer-segmented-residual.json
 
