@@ -1,0 +1,47 @@
+name: ONE-G0.2 growable emitter boundary diagnostic
+
+on:
+  push:
+    branches:
+      - research/cmpct1
+  pull_request:
+    paths:
+      - 'experiments/one/**'
+      - 'benchmarks/one/one_g02_growable_emitter_boundary_diagnostic.py'
+      - 'tests/one/**'
+      - 'docs/one/evidence/ONE_G02_GROWABLE_EMITTER_BOUNDARY_DIAGNOSTIC_PREREG_2026-09-05.md'
+      - '.github/workflows/one-g02-growable-emitter-boundary-diagnostic.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  growable-emitter-boundary-diagnostic:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install project test environment
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[test]'
+      - name: ONE semantic and hostile tests
+        run: python -m pytest -q tests/one
+      - name: Frozen boundary diagnostic
+        env:
+          EVIDENCE_HEAD: ${{ github.sha }}
+        run: |
+          set -o pipefail
+          python -m benchmarks.one.one_g02_growable_emitter_boundary_diagnostic | tee one-g02-growable-emitter-boundary-diagnostic.json
+      - name: Preserve result
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: one-g02-growable-emitter-boundary-diagnostic-${{ github.sha }}
+          path: one-g02-growable-emitter-boundary-diagnostic.json
+          if-no-files-found: error
