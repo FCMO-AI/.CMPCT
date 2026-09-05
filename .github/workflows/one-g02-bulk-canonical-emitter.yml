@@ -1,0 +1,47 @@
+name: ONE-G0.2 bulk canonical emitter
+
+on:
+  push:
+    branches:
+      - research/cmpct1
+  pull_request:
+    paths:
+      - 'experiments/one/**'
+      - 'benchmarks/one/**'
+      - 'tests/one/**'
+      - 'docs/one/evidence/ONE_G02_BULK_CANONICAL_EMITTER_PREREG_2026-09-05.md'
+      - '.github/workflows/one-g02-bulk-canonical-emitter.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  bulk-canonical-emitter:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install project test environment
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[test]'
+      - name: ONE semantic and hostile tests
+        run: python -m pytest -q tests/one
+      - name: Frozen bulk canonical emitter falsifier
+        env:
+          EVIDENCE_HEAD: ${{ github.sha }}
+        run: |
+          set -o pipefail
+          python -m benchmarks.one.one_g02_bulk_canonical_emitter | tee one-g02-bulk-canonical-emitter.json
+      - name: Preserve result
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: one-g02-bulk-canonical-emitter-${{ github.sha }}
+          path: one-g02-bulk-canonical-emitter.json
+          if-no-files-found: error

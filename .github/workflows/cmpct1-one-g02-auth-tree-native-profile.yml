@@ -1,0 +1,38 @@
+# ci-lane: fast
+name: CMPCT1 ONE-G0.2 exact native auth tree profile
+on:
+  pull_request:
+    paths:
+      - "experiments/one/auth_tree.py"
+      - "benchmarks/one/native/one_g02_auth_tree_openssl.c"
+      - "benchmarks/one/one_g02_auth_tree_native_profile.py"
+      - ".github/workflows/cmpct1-one-g02-auth-tree-native-profile.yml"
+  workflow_dispatch:
+permissions: {contents: read}
+concurrency:
+  group: cmpct1-one-g02-auth-tree-native-profile-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+jobs:
+  native-profile:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with: {ref: "${{ env.EVIDENCE_HEAD }}", clean: true}
+      - name: Bind exact head
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.11"}
+      - name: Run exact-root native profile
+        run: |
+          mkdir -p one-auth-native-profile-artifacts
+          python -m benchmarks.one.one_g02_auth_tree_native_profile | tee one-auth-native-profile-artifacts/one-g02-auth-tree-native-profile.json
+      - name: Retain exact-head evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: one-g02-auth-tree-native-profile-${{ env.EVIDENCE_HEAD }}
+          path: one-auth-native-profile-artifacts/
+          if-no-files-found: error

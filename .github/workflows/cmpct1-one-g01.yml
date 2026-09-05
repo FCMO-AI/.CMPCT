@@ -1,0 +1,149 @@
+# ci-lane: fast
+name: CMPCT1 ONE Genesis semantic evidence
+
+on:
+  pull_request:
+    paths:
+      - "experiments/one/**"
+      - "tests/one/**"
+      - "benchmarks/one/**"
+      - "docs/one/**"
+      - "docs/CMPCT1_GENESIS.md"
+      - "docs/architecture/CMPCT_ONE_CANON_v0.1.md"
+      - "docs/roadmap/CMPCT_ONE_ENGINEERING_GRID_v0.1.md"
+      - ".github/workflows/cmpct1-one-g01.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct1-one-genesis-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  semantic-evidence:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - name: Check out exact research head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          clean: true
+
+      - name: Bind evidence to exact head
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install repository-authoritative test dependency surface
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[test,audio]'
+
+      - name: Run ONE conformance, hostile and observer tests
+        run: |
+          mkdir -p one-artifacts
+          set -o pipefail
+          python -m pytest -q tests/one 2>&1 | tee one-artifacts/pytest-one-genesis.txt
+
+      - name: Measure complete G0.1 wire and reference-resource costs
+        run: python -m benchmarks.one.one_g01_microbench | tee one-artifacts/one-g01-microbench.json
+
+      - name: Measure G0.2 fused observation economics
+        run: python -m benchmarks.one.one_g02_observer | tee one-artifacts/one-g02-observer.json
+
+      - name: A/B fused observation against equivalent separate rescans
+        run: python -m benchmarks.one.one_g02_fusion_ab | tee one-artifacts/one-g02-fusion-ab.json
+
+      - name: A/B G0.2 pruning and coalesced exact proof
+        run: python -m benchmarks.one.one_g02_pruning_ab | tee one-artifacts/one-g02-pruning-ab.json
+
+      - name: Probe sparse rolling-anchor headroom
+        run: python -m benchmarks.one.one_g02_rolling_oracle | tee one-artifacts/one-g02-rolling-oracle.json
+
+      - name: Probe inherited gear signal as ONE-native discovery knowledge
+        run: python -m benchmarks.one.one_g02_gear_oracle | tee one-artifacts/one-g02-gear-oracle.json
+
+      - name: A/B sparse Gear as replacement for fixed reuse signal
+        run: python -m benchmarks.one.one_g02_gear_replacement_ab | tee one-artifacts/one-g02-gear-replacement-ab.json
+
+      - name: A/B one-signal local and global Gear retention
+        run: python -m benchmarks.one.one_g02_tiered_gear_ab | tee one-artifacts/one-g02-tiered-gear-ab.json
+
+      - name: Prove long-cycle sparse anchor starvation
+        run: python -m benchmarks.one.one_g02_anchor_starvation | tee one-artifacts/one-g02-anchor-starvation.json
+
+      - name: A/B bounded-gap one-signal Gear retention
+        run: python -m benchmarks.one.one_g02_bounded_gear_ab | tee one-artifacts/one-g02-bounded-gear-ab.json
+
+      - name: Prove coordinate fallback loses insertion-shift invariance
+        run: python -m benchmarks.one.one_g02_shifted_starvation | tee one-artifacts/one-g02-shifted-starvation.json
+
+      - name: A/B shift-invariant bounded Gear minimizers
+        run: python -m benchmarks.one.one_g02_minimizer_gear_ab | tee one-artifacts/one-g02-minimizer-gear-ab.json
+
+      - name: Measure compiled Gear/minimizer recurrence carrying cost
+        run: python -m benchmarks.one.one_g02_minimizer_native_probe | tee one-artifacts/one-g02-minimizer-native-probe.json
+
+      - name: A/B modulo ring against bounded branch-wrap
+        run: python -m benchmarks.one.one_g02_minimizer_wrap_ab | tee one-artifacts/one-g02-minimizer-wrap-ab.json
+
+      - name: A/B branch-wrap against power-of-two masked ring
+        run: python -m benchmarks.one.one_g02_minimizer_mask_ab | tee one-artifacts/one-g02-minimizer-mask-ab.json
+
+      - name: A/B masked deque against block prefix-suffix minimum
+        run: python -m benchmarks.one.one_g02_minimizer_block_ab | tee one-artifacts/one-g02-minimizer-block-ab.json
+
+      - name: Diagnose block-minimum startup amortization crossover
+        run: python -m benchmarks.one.one_g02_minimizer_block_crossover | tee one-artifacts/one-g02-minimizer-block-crossover.json
+
+      - name: A/B masked deque against segmented block minimum
+        run: python -m benchmarks.one.one_g02_minimizer_segmented_ab | tee one-artifacts/one-g02-minimizer-segmented-ab.json
+
+      - name: A/B eager versus tail-aware segmented suffix work
+        run: python -m benchmarks.one.one_g02_minimizer_segmented_tail_ab | tee one-artifacts/one-g02-minimizer-segmented-tail-ab.json
+
+      - name: Apply original all-case gate to causally repaired tail-aware maintenance
+        run: python -m benchmarks.one.one_g02_minimizer_tail_promotion_ab | tee one-artifacts/one-g02-minimizer-tail-promotion-ab.json
+
+      - name: A/B dense suffix tables against record-minimum change points
+        run: python -m benchmarks.one.one_g02_minimizer_record_suffix_ab | tee one-artifacts/one-g02-minimizer-record-suffix-ab.json
+
+      - name: Diagnose segmented-minimum startup amortization crossover
+        run: python -m benchmarks.one.one_g02_minimizer_segmented_crossover | tee one-artifacts/one-g02-minimizer-segmented-crossover.json
+
+      - name: Probe two-segment exact minimizer simplification
+        run: python -m benchmarks.one.one_g02_minimizer_two_segment_probe | tee one-artifacts/one-g02-minimizer-two-segment-probe.json
+
+      - name: Measure segmented residual against Gear-only floor
+        run: python -m benchmarks.one.one_g02_minimizer_segmented_residual | tee one-artifacts/one-g02-minimizer-segmented-residual.json
+
+      - name: Hostile-test bounded sources under collision pressure
+        run: python -m benchmarks.one.one_g02_minimizer_collision_ab | tee one-artifacts/one-g02-minimizer-collision-ab.json
+
+      - name: Measure one-pass Gear signal fusion cost
+        run: python -m benchmarks.one.one_g02_fused_gear_signal | tee one-artifacts/one-g02-fused-gear-signal.json
+
+      - name: Sweep fixed-reuse index opportunity efficiency
+        run: python -m benchmarks.one.one_g02_index_budget | tee one-artifacts/one-g02-index-budget.json
+
+      - name: Retain exact-head ONE evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: one-genesis-${{ env.EVIDENCE_HEAD }}
+          path: one-artifacts/
+          if-no-files-found: error
+
+# Research-only evidence lane. G0.x is not a canonical format revision. Python
+# reference timings are semantic/discovery evidence only, not product-speed or
+# v0.29/v0.30 release claims. The dependency install deliberately matches tests.yml
+# because repository conftest is part of the test environment.

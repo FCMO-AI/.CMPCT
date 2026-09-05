@@ -1,0 +1,45 @@
+name: ONE-G0.2 relation nomination from shared observer
+
+on:
+  push:
+    branches: [research/cmpct1]
+    paths:
+      - 'benchmarks/one/one_g02_relation_shared_observer_validation.py'
+      - 'benchmarks/one/one_g02_gear_replacement_ab.py'
+      - 'benchmarks/one/one_g02_shift_relation_safe_dispatch_kernel.c'
+      - 'benchmarks/one/one_g02_shift_branch_bound_relation_direct_kernel.c'
+      - 'benchmarks/one/one_g02_shift_branch_bound_relation_restrict_kernel.c'
+      - '.github/workflows/one-g02-relation-shared-observer.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  shared-observer-relation-nomination:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install project test environment
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[test]'
+      - name: ONE semantic and hostile tests
+        run: python -m pytest -q tests/one
+      - name: Generator-distinct shared-observer validation
+        env:
+          EVIDENCE_HEAD: ${{ github.sha }}
+        run: |
+          python -m benchmarks.one.one_g02_relation_shared_observer_validation | tee one-g02-relation-shared-observer.json
+      - name: Preserve result
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: one-g02-relation-shared-observer-${{ github.sha }}
+          path: one-g02-relation-shared-observer.json
+          if-no-files-found: error
