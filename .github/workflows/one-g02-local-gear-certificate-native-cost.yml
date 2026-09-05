@@ -6,10 +6,11 @@ on:
     branches:
       - research/cmpct1
     paths:
-      - "benchmarks/one/one_g02_local_gear_certificate_native_cost.py"
+      - "benchmarks/one/one_g02_local_gear_certificate_native_cost_v2.py"
       - "benchmarks/one/one_g02_local_gear_certificate_validation.py"
       - "benchmarks/one/one_g02_gear_replacement_ab.py"
       - "docs/one/evidence/ONE_G02_LOCAL_GEAR_CERTIFICATE_NATIVE_COST_PREREG_2026-09-05.md"
+      - "docs/one/evidence/ONE_G02_LOCAL_GEAR_CERTIFICATE_NATIVE_COST_IMPLEMENTATION_NOTE_2026-09-05.md"
       - ".github/workflows/one-g02-local-gear-certificate-native-cost.yml"
 
 permissions:
@@ -37,7 +38,7 @@ jobs:
         run: |
           mkdir -p artifacts/one
           set +e
-          python -m benchmarks.one.one_g02_local_gear_certificate_native_cost | tee artifacts/one/local_gear_certificate_native_cost.json
+          python -m benchmarks.one.one_g02_local_gear_certificate_native_cost_v2 | tee artifacts/one/local_gear_certificate_native_cost.json
           rc=${PIPESTATUS[0]}
           echo "benchmark_exit_code=$rc" >> "$GITHUB_STEP_SUMMARY"
           cat artifacts/one/local_gear_certificate_native_cost.json >> "$GITHUB_STEP_SUMMARY"
