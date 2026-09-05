@@ -99,6 +99,9 @@ jobs:
       - name: A/B branch-wrap against power-of-two masked ring
         run: python -m benchmarks.one.one_g02_minimizer_mask_ab | tee one-artifacts/one-g02-minimizer-mask-ab.json
 
+      - name: A/B masked deque against block prefix-suffix minimum
+        run: python -m benchmarks.one.one_g02_minimizer_block_ab | tee one-artifacts/one-g02-minimizer-block-ab.json
+
       - name: Hostile-test bounded sources under collision pressure
         run: python -m benchmarks.one.one_g02_minimizer_collision_ab | tee one-artifacts/one-g02-minimizer-collision-ab.json
 
