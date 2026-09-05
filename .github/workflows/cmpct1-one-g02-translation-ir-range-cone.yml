@@ -1,0 +1,44 @@
+# ci-lane: fast
+name: CMPCT1 ONE-G0.2 generic translation range-cone A/B
+on:
+  pull_request:
+    paths:
+      - "experiments/one/range_vm.py"
+      - "tests/one/test_range_vm.py"
+      - "benchmarks/one/one_g02_translation_ir_range_cone_ab.py"
+      - ".github/workflows/cmpct1-one-g02-translation-ir-range-cone.yml"
+  workflow_dispatch:
+permissions: {contents: read}
+concurrency:
+  group: cmpct1-one-g02-range-cone-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+jobs:
+  range-cone:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with: {ref: "${{ env.EVIDENCE_HEAD }}", clean: true}
+      - name: Bind exact head
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.11"}
+      - name: Install repository test dependency surface
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[test,audio]'
+      - name: Run ONE semantic and range-oracle boundary
+        run: python -m pytest -q tests/one
+      - name: Run frozen generic range-cone A/B
+        run: |
+          mkdir -p one-range-cone-artifacts
+          python -m benchmarks.one.one_g02_translation_ir_range_cone_ab | tee one-range-cone-artifacts/one-g02-range-cone.json
+      - name: Retain exact-head evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: one-g02-range-cone-${{ env.EVIDENCE_HEAD }}
+          path: one-range-cone-artifacts/
+          if-no-files-found: error
