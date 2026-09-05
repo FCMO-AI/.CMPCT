@@ -90,6 +90,9 @@ jobs:
       - name: A/B shift-invariant bounded Gear minimizers
         run: python -m benchmarks.one.one_g02_minimizer_gear_ab | tee one-artifacts/one-g02-minimizer-gear-ab.json
 
+      - name: Measure compiled Gear/minimizer recurrence carrying cost
+        run: python -m benchmarks.one.one_g02_minimizer_native_probe | tee one-artifacts/one-g02-minimizer-native-probe.json
+
       - name: Measure one-pass Gear signal fusion cost
         run: python -m benchmarks.one.one_g02_fused_gear_signal | tee one-artifacts/one-g02-fused-gear-signal.json
 
