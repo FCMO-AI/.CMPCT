@@ -3,13 +3,13 @@
 #include <stdlib.h>
 
 /*
- * Research-only ONE-G0.2 selector microkernel.
+ * Research-only ONE-G0.2 selector microkernels.
  *
- * This is encoder discovery instrumentation, not reader/runtime surface. It isolates the
- * sequential Gear recurrence plus rightmost rolling-minimum maintenance so the Python
- * reference's interpreter overhead can be separated from the algorithm's actual carrying
- * cost. Successful nominations still require the ordinary exact-proof path in Python;
- * this kernel intentionally does not claim stored-byte, proof-read, or product-speed wins.
+ * These are encoder discovery instrumentation, not reader/runtime surface. The Gear-only
+ * arm establishes the unavoidable sequential signal cost; the minimizer arm adds the
+ * rightmost rolling-minimum maintenance. Successful nominations still require the ordinary
+ * exact-proof path in Python, so neither arm claims stored-byte, proof-read, or product-speed
+ * wins.
  */
 
 typedef struct {
@@ -24,6 +24,38 @@ typedef struct {
     uint64_t position;
 } queue_entry;
 
+int one_g02_gear_only_kernel(
+    const uint8_t *data,
+    size_t length,
+    const uint64_t gear[256],
+    size_t window,
+    one_g02_min_result *out
+) {
+    if (out == NULL || gear == NULL || window == 0) {
+        return -1;
+    }
+    out->emitted = 0;
+    out->peak_queue = 0;
+    out->final_state = 0;
+    out->positions_considered = 0;
+    if (length == 0) {
+        return 0;
+    }
+    if (data == NULL) {
+        return -1;
+    }
+
+    uint64_t state = 0;
+    for (size_t position = 0; position < length; ++position) {
+        state = (state << 1) + gear[data[position]];
+        if (position + 1 >= window) {
+            out->positions_considered += 1;
+        }
+    }
+    out->final_state = state;
+    return 0;
+}
+
 int one_g02_minimizer_kernel(
     const uint8_t *data,
     size_t length,
@@ -33,6 +65,9 @@ int one_g02_minimizer_kernel(
     one_g02_min_result *out
 ) {
     if (out == NULL || gear == NULL || window == 0 || minimizer_span == 0) {
+        return -1;
+    }
+    if (minimizer_span > SIZE_MAX - window) {
         return -1;
     }
     out->emitted = 0;
