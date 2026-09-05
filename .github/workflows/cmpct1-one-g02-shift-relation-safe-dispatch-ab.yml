@@ -1,0 +1,56 @@
+# ci-lane: fast
+name: CMPCT1 ONE-G0.2 relation safe-dispatch A/B
+on:
+  pull_request:
+    paths:
+      - "benchmarks/one/one_g02_shift_branch_bound_relation_direct_kernel.c"
+      - "benchmarks/one/one_g02_shift_branch_bound_relation_restrict_kernel.c"
+      - "benchmarks/one/one_g02_shift_branch_bound_proof_led_kernel.c"
+      - "benchmarks/one/one_g02_shift_relation_safe_dispatch_kernel.c"
+      - "benchmarks/one/one_g02_shift_relation_safe_dispatch_pair_kernel.c"
+      - "benchmarks/one/one_g02_shift_relation_safe_dispatch_ab.py"
+      - ".github/workflows/cmpct1-one-g02-shift-relation-safe-dispatch-ab.yml"
+  push:
+    branches: ["research/cmpct1"]
+    paths:
+      - "benchmarks/one/one_g02_shift_relation_safe_dispatch_kernel.c"
+      - "benchmarks/one/one_g02_shift_relation_safe_dispatch_pair_kernel.c"
+      - "benchmarks/one/one_g02_shift_relation_safe_dispatch_ab.py"
+      - ".github/workflows/cmpct1-one-g02-shift-relation-safe-dispatch-ab.yml"
+  workflow_dispatch:
+permissions: {contents: read}
+concurrency:
+  group: cmpct1-one-g02-shift-relation-safe-dispatch-ab-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+jobs:
+  safe-dispatch-ab:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with: {ref: "${{ env.EVIDENCE_HEAD }}", clean: true}
+      - name: Bind exact head
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.11"}
+      - name: Install test surface
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[test,audio]'
+      - name: Re-run ONE semantics
+        run: python -m pytest -q tests/one
+      - name: Run frozen overlap-safe dispatch A/B
+        run: |
+          set -o pipefail
+          mkdir -p one-shift-safe-dispatch-artifacts
+          python -m benchmarks.one.one_g02_shift_relation_safe_dispatch_ab \
+            | tee one-shift-safe-dispatch-artifacts/one-g02-shift-relation-safe-dispatch-ab.json
+      - name: Retain exact-head evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: one-g02-shift-relation-safe-dispatch-ab-${{ env.EVIDENCE_HEAD }}
+          path: one-shift-safe-dispatch-artifacts/
+          if-no-files-found: error
