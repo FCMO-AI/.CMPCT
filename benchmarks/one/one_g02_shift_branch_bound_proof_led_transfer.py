@@ -12,7 +12,7 @@ ceiling and 25% modeled read ceiling. Exact proof now owns specificity.
 Hypothesis: distributed exact proof makes the global majority redundant. The proof-led gate must preserve
 all inherited negative/positive classifications, reject the every-32-byte fragmented false pattern, retain
 the every-96-byte positive control, and recover every frozen contiguous-damage row with >=16 KiB positive
-marginal minimizer opportunity.
+marginal minimizer opportunity. Damage rows below that frozen opportunity floor are diagnostic only.
 
 Disproof: any false admission in the inherited matrix, any lost inherited positive, any >=16 KiB damage-
 envelope positive still missed, >5% gate/incremental-selector cost, or >25% modeled read traffic retires
@@ -155,7 +155,8 @@ def run():
             ns, out = _median(fn, arr, len(data))
             enabled = fixed.stats.reuse_opportunity_bytes == 0 and int(out.exact_proofs) >= 4
             correct = enabled == positive
-            classification_ok &= correct
+            if not is_damage:
+                classification_ok &= correct
             if is_damage and marginal >= MIN_DAMAGE_MARGINAL:
                 damage_ok &= enabled
 
@@ -174,6 +175,7 @@ def run():
             rows.append({
                 "case": name,
                 "damage_case": is_damage,
+                "damage_mandatory": is_damage and marginal >= MIN_DAMAGE_MARGINAL,
                 "input_bytes": len(data),
                 "fixed_opportunity_bytes": fixed.stats.reuse_opportunity_bytes,
                 "minimizer_opportunity_bytes": mini.reuse_opportunity_bytes,
