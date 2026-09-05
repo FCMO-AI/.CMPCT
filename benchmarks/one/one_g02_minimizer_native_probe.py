@@ -98,12 +98,11 @@ def _bind(lib: ctypes.CDLL):
     return fn
 
 
-def _native_call(fn, gear, data: bytes) -> _KernelResult:
+def _native_kernel_call(fn, gear, data_array, length: int) -> _KernelResult:
     out = _KernelResult()
-    data_array = (ctypes.c_uint8 * len(data)).from_buffer_copy(data)
     rc = fn(
         data_array,
-        len(data),
+        length,
         gear,
         WINDOW,
         MINIMIZER_SPAN,
@@ -112,6 +111,11 @@ def _native_call(fn, gear, data: bytes) -> _KernelResult:
     if rc != 0:
         raise RuntimeError(f"ONE-G0.2 native minimizer kernel failed: {rc}")
     return out
+
+
+def _native_with_copy(fn, gear, data: bytes) -> _KernelResult:
+    data_array = (ctypes.c_uint8 * len(data)).from_buffer_copy(data)
+    return _native_kernel_call(fn, gear, data_array, len(data))
 
 
 def _median_ns(fn) -> tuple[int, object]:
@@ -147,7 +151,8 @@ def run() -> dict[str, object]:
         rows: list[dict[str, object]] = []
         for name, data in _cases().items():
             py_expected = _python_recurrence(data)
-            native_once = _native_call(fn, gear, data)
+            data_array = (ctypes.c_uint8 * len(data)).from_buffer_copy(data)
+            native_once = _native_kernel_call(fn, gear, data_array, len(data))
             native_tuple = (
                 int(native_once.emitted),
                 int(native_once.peak_queue),
@@ -160,26 +165,31 @@ def run() -> dict[str, object]:
                 )
 
             python_ns, _ = _median_ns(lambda: _python_recurrence(data))
-            native_ns, checked = _median_ns(lambda: _native_call(fn, gear, data))
+            kernel_ns, checked = _median_ns(
+                lambda: _native_kernel_call(fn, gear, data_array, len(data))
+            )
+            with_copy_ns, _ = _median_ns(lambda: _native_with_copy(fn, gear, data))
             assert isinstance(checked, _KernelResult)
             mib = len(data) / (1024 * 1024)
-            native_seconds = native_ns / 1e9
             rows.append(
                 {
                     "case": name,
                     "input_bytes": len(data),
                     "emitted_minimizers": native_tuple[0],
                     "peak_queue_entries": native_tuple[1],
-                    "modeled_kernel_state_bytes": MINIMIZER_SPAN * 16 + 256 * 8,
+                    "reserved_kernel_state_bytes": MINIMIZER_SPAN * 16 + 256 * 8,
+                    "observed_peak_state_payload_bytes": native_tuple[1] * 16 + 256 * 8,
                     "python_median_ns": python_ns,
-                    "native_median_ns": native_ns,
-                    "native_ns_per_input_byte": native_ns / len(data),
-                    "native_mib_per_second": mib / native_seconds,
-                    "compiled_speedup_over_python_recurrence": python_ns / native_ns,
+                    "native_kernel_median_ns": kernel_ns,
+                    "native_with_input_copy_median_ns": with_copy_ns,
+                    "native_kernel_ns_per_input_byte": kernel_ns / len(data),
+                    "native_kernel_mib_per_second": mib / (kernel_ns / 1e9),
+                    "native_with_copy_mib_per_second": mib / (with_copy_ns / 1e9),
+                    "compiled_kernel_speedup_over_python_recurrence": python_ns / kernel_ns,
                 }
             )
         return {
-            "schema": "cmpct-one-g02-minimizer-native-probe-v1",
+            "schema": "cmpct-one-g02-minimizer-native-probe-v2",
             "experimental_version": "ONE-G0.2",
             "source_sha": os.environ.get("EVIDENCE_HEAD") or os.environ.get("GITHUB_SHA") or "local-unbound",
             "repetitions": REPETITIONS,
@@ -187,7 +197,7 @@ def run() -> dict[str, object]:
             "minimizer_span": MINIMIZER_SPAN,
             "hypothesis": "the Gear/rightmost-minimum selector has a credible compiled cost path and the observed Python slowdown is not primarily structural algorithmic cost",
             "disproof": "native recurrence remains far from memory-oriented scan rates, disagrees with Python selector semantics, or requires unbounded state",
-            "claim_boundary": "research microkernel only; excludes exact-proof, extension, index and Law construction costs and is not product/native-reader authority",
+            "claim_boundary": "research microkernel only; kernel-only and Python-to-C-copy costs are reported separately; excludes exact-proof, extension, index and Law construction costs and is not product/native-reader authority",
             "rows": rows,
         }
     finally:
