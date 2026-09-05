@@ -111,6 +111,9 @@ jobs:
       - name: A/B eager versus tail-aware segmented suffix work
         run: python -m benchmarks.one.one_g02_minimizer_segmented_tail_ab | tee one-artifacts/one-g02-minimizer-segmented-tail-ab.json
 
+      - name: Apply original all-case gate to causally repaired tail-aware maintenance
+        run: python -m benchmarks.one.one_g02_minimizer_tail_promotion_ab | tee one-artifacts/one-g02-minimizer-tail-promotion-ab.json
+
       - name: Diagnose segmented-minimum startup amortization crossover
         run: python -m benchmarks.one.one_g02_minimizer_segmented_crossover | tee one-artifacts/one-g02-minimizer-segmented-crossover.json
 
