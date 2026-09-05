@@ -41,6 +41,7 @@ jobs:
         env:
           EVIDENCE_HEAD: ${{ github.sha }}
         run: |
+          set -o pipefail
           python -m benchmarks.one.one_g02_temporal_adjacency_writer_v2 | tee one-g02-temporal-adjacency-writer-v2.json
       - name: Preserve result
         if: always()
