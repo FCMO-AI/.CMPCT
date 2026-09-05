@@ -58,6 +58,24 @@ jobs:
       - name: Re-execute preregistered event-driven dense A/B
         run: python -m benchmarks.one.one_g02_minimizer_event_ab | tee one-maintenance-artifacts/one-g02-minimizer-event-ab.json
 
+      - name: Recover immutable event-driven decision
+        id: event_decision
+        run: |
+          python - <<'PY'
+          import json, os
+          d=json.load(open('one-maintenance-artifacts/one-g02-minimizer-event-ab.json', encoding='utf-8'))
+          with open(os.environ['GITHUB_OUTPUT'],'a',encoding='utf-8') as f:
+              f.write('decision='+d['decision']+'\n')
+          PY
+
+      - name: Event-driven dense maintenance survives frozen gate
+        if: steps.event_decision.outputs.decision == 'promote_event_driven_dense_maintenance'
+        run: echo "event-driven dense maintenance satisfies its immutable gate"
+
+      - name: Event-driven dense maintenance rejected by frozen gate
+        if: steps.event_decision.outputs.decision == 'reject_event_driven_dense_maintenance'
+        run: echo "event-driven dense maintenance fails at least one immutable gate condition"
+
       - name: Attribute remaining maintenance cost by layer
         run: python -m benchmarks.one.one_g02_minimizer_cost_ladder | tee one-maintenance-artifacts/one-g02-minimizer-cost-ladder.json
 
@@ -89,5 +107,5 @@ jobs:
           if-no-files-found: error
 
 # Research-only evidence. Diagnostic ablation arms intentionally do not emit anchors;
-# the counter A/B preserves the exact promoted selector and independent oracle.  This lane
+# event and counter A/Bs preserve the exact promoted selector and independent oracle. This lane
 # creates no format, reader, stored-byte, product-speed, v0.29 or v0.30 claim.
