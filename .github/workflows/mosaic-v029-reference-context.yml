@@ -1,7 +1,7 @@
+# ci-lane: deep
 name: CMPCT v0.29 one-hop reference context ceiling
 
 on:
-  pull_request:
   workflow_dispatch:
 
 permissions:
