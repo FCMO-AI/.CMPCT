@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-REQUIRED_FCMO_ORIENTATION = (
+REQUIRED_PARENT_ORIENTATION = (
     "AGENTS.md",
     "AGENT_HUB.md",
     "AGI_ENGINEERING_OPERATIONS_STANDARD.md",
@@ -11,6 +11,6 @@ REQUIRED_FCMO_ORIENTATION = (
 )
 
 
-def test_adopted_fcmo_orientation_files_are_durable() -> None:
-    missing = [path for path in REQUIRED_FCMO_ORIENTATION if not (ROOT / path).is_file()]
-    assert not missing, f"missing adopted FCMO orientation files: {missing}"
+def test_adopted_parent_orientation_files_are_durable() -> None:
+    missing = [path for path in REQUIRED_PARENT_ORIENTATION if not (ROOT / path).is_file()]
+    assert not missing, f"missing adopted parent-orientation files: {missing}"
