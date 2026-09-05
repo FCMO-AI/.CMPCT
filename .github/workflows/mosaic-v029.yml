@@ -1,7 +1,7 @@
+# ci-lane: deep
 name: CMPCT mosaic next-frontier research gate
 
 on:
-  pull_request:
   workflow_dispatch:
 
 permissions:
@@ -169,6 +169,6 @@ jobs:
             benchmark-artifacts/mosaic-v029-full-artifact.stdout.txt
           if-no-files-found: warn
 
-# Footnote: green here still does not authorize a v0.29 release. It proves the mechanism at primitive
-# and complete-artifact levels only on the mosaic-specific suites. The existing v0.28 frontier and
-# structural competitors must be reconciled in a separate generalization tranche before versioning.
+# Footnote: this v0.29 campaign is retained as reproducible historical evidence after the v0.29.0
+# release. It remains manually runnable, but ordinary pull requests no longer rerun the completed
+# campaign. Current release truth lives in docs/releases/v0.29.0.md and committed benchmark history.
