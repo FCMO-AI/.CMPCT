@@ -4,6 +4,7 @@ on:
   pull_request:
     paths:
       - "benchmarks/one/one_g02_shared_vs_independent_auth_family_ab.py"
+      - "benchmarks/one/one_g02_shared_vs_independent_auth_family_check.py"
       - ".github/workflows/cmpct1-one-g02-shared-vs-independent-auth-family.yml"
   workflow_dispatch:
 permissions: {contents: read}
@@ -32,7 +33,7 @@ jobs:
       - name: Run frozen shared-vs-independent authenticated-family A/B
         run: |
           mkdir -p one-shared-vs-independent-auth-family-artifacts
-          python -m benchmarks.one.one_g02_shared_vs_independent_auth_family_ab | tee one-shared-vs-independent-auth-family-artifacts/one-g02-shared-vs-independent-auth-family.json
+          python -m benchmarks.one.one_g02_shared_vs_independent_auth_family_check | tee one-shared-vs-independent-auth-family-artifacts/one-g02-shared-vs-independent-auth-family.json
       - name: Retain exact-head evidence
         if: always()
         uses: actions/upload-artifact@v4
