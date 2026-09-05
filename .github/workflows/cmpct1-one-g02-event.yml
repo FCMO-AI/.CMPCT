@@ -13,6 +13,8 @@ on:
       - "benchmarks/one/one_g02_minimizer_segmented_counter_kernel.c"
       - "benchmarks/one/one_g02_minimizer_counter_ab.py"
       - "benchmarks/one/one_g02_minimizer_counter_asm.py"
+      - "benchmarks/one/one_g02_minimizer_counter_cost_ladder.c"
+      - "benchmarks/one/one_g02_minimizer_counter_cost_ladder.py"
       - "benchmarks/one/one_g02_minimizer_offset_only_kernel.c"
       - "benchmarks/one/one_g02_minimizer_offset_only_ab.py"
       - ".github/workflows/cmpct1-one-g02-event.yml"
@@ -37,98 +39,87 @@ jobs:
         with:
           ref: ${{ env.EVIDENCE_HEAD }}
           clean: true
-
       - name: Bind evidence to exact head
         run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
-
       - name: Set up Python 3.11
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
           cache: pip
-
       - name: Install repository-authoritative test dependency surface
         run: |
           python -m pip install --upgrade pip
           python -m pip install -e '.[test,audio]'
-
       - name: Re-run ONE semantic and hostile boundary before result
         run: |
           mkdir -p one-maintenance-artifacts
           set -o pipefail
           python -m pytest -q tests/one 2>&1 | tee one-maintenance-artifacts/pytest-one-maintenance.txt
-
       - name: Re-execute preregistered event-driven dense A/B
         run: python -m benchmarks.one.one_g02_minimizer_event_ab | tee one-maintenance-artifacts/one-g02-minimizer-event-ab.json
-
       - name: Recover immutable event-driven decision
         id: event_decision
         run: |
           python - <<'PY'
           import json, os
           d=json.load(open('one-maintenance-artifacts/one-g02-minimizer-event-ab.json', encoding='utf-8'))
-          with open(os.environ['GITHUB_OUTPUT'],'a',encoding='utf-8') as f:
-              f.write('decision='+d['decision']+'\n')
+          with open(os.environ['GITHUB_OUTPUT'],'a',encoding='utf-8') as f: f.write('decision='+d['decision']+'\n')
           PY
-
       - name: Event-driven dense maintenance survives frozen gate
         if: steps.event_decision.outputs.decision == 'promote_event_driven_dense_maintenance'
         run: echo "event-driven dense maintenance satisfies its immutable gate"
-
       - name: Event-driven dense maintenance rejected by frozen gate
         if: steps.event_decision.outputs.decision == 'reject_event_driven_dense_maintenance'
         run: echo "event-driven dense maintenance fails at least one immutable gate condition"
-
-      - name: Attribute remaining maintenance cost by layer
+      - name: Attribute historical maintenance cost by layer
         run: python -m benchmarks.one.one_g02_minimizer_cost_ladder | tee one-maintenance-artifacts/one-g02-minimizer-cost-ladder.json
-
-      - name: Split derived-state store and prefix bookkeeping costs
+      - name: Split historical derived-state store and prefix bookkeeping costs
         run: python -m benchmarks.one.one_g02_minimizer_buffer_attribution | tee one-maintenance-artifacts/one-g02-minimizer-buffer-attribution.json
-
       - name: Falsify per-state block division as remaining owner
         id: counter_ab
         run: python -m benchmarks.one.one_g02_minimizer_counter_ab | tee one-maintenance-artifacts/one-g02-minimizer-counter-ab.json
-
       - name: Verify counter causal mechanism in generated code
         id: counter_asm
         run: python -m benchmarks.one.one_g02_minimizer_counter_asm | tee one-maintenance-artifacts/one-g02-minimizer-counter-asm.json
-
       - name: Generated code supports division-removal explanation
         if: steps.counter_asm.outputs.decision == 'division_removal_mechanism_supported'
         run: echo "baseline contains integer division and counter Builder removes it"
-
       - name: Generated code does not prove division-removal explanation
         if: steps.counter_asm.outputs.decision == 'division_removal_mechanism_not_proven_by_static_codegen'
         run: echo "elapsed win survives, but static codegen does not isolate integer division"
-
       - name: Counter bookkeeping promoted by frozen gate
         if: steps.counter_ab.outputs.decision == 'promote_counter_bookkeeping'
         run: echo "counter bookkeeping materially owns the tested residual"
-
       - name: Counter bookkeeping retired as primary owner
         if: steps.counter_ab.outputs.decision == 'retire_counter_bookkeeping_as_primary_owner'
         run: echo "counter bookkeeping does not materially own the tested residual"
-
       - name: Counter bookkeeping remains inconclusive
         if: steps.counter_ab.outputs.decision == 'counter_bookkeeping_inconclusive'
         run: echo "counter bookkeeping signal is real but below promotion/retirement confidence"
-
+      - name: Re-attribute residual after counter promotion
+        id: counter_cost
+        run: python -m benchmarks.one.one_g02_minimizer_counter_cost_ladder | tee one-maintenance-artifacts/one-g02-minimizer-counter-cost-ladder.json
+      - name: Post-counter buffer/prefix is dominant residual layer
+        if: steps.counter_cost.outputs.dominant_owner == 'buffer_incremental_ns_per_byte'
+        run: echo "buffer/prefix remains the largest post-counter median incremental layer"
+      - name: Post-counter suffix construction is dominant residual layer
+        if: steps.counter_cost.outputs.dominant_owner == 'suffix_incremental_ns_per_byte'
+        run: echo "dense suffix construction is the largest post-counter median incremental layer"
+      - name: Post-counter exact selection is dominant residual layer
+        if: steps.counter_cost.outputs.dominant_owner == 'selection_incremental_ns_per_byte'
+        run: echo "exact selection is the largest post-counter median incremental layer"
       - name: Test offset-only dense suffix representation
         id: offset_only_ab
         run: python -m benchmarks.one.one_g02_minimizer_offset_only_ab | tee one-maintenance-artifacts/one-g02-minimizer-offset-only-ab.json
-
       - name: Offset-only dense suffix promoted by frozen Pareto gate
         if: steps.offset_only_ab.outputs.decision == 'promote_offset_only_dense_suffix'
         run: echo "offset-only dense suffix cuts state without sustained speed debt"
-
       - name: Offset-only dense suffix retired by frozen gate
         if: steps.offset_only_ab.outputs.decision == 'retire_offset_only_dense_suffix'
         run: echo "offset-only dense suffix exports unacceptable elapsed debt"
-
       - name: Offset-only dense suffix remains inconclusive
         if: steps.offset_only_ab.outputs.decision == 'offset_only_dense_suffix_inconclusive'
         run: echo "offset-only suffix state saving survives but timing is not decisive"
-
       - name: Retain exact-head maintenance evidence
         if: always()
         uses: actions/upload-artifact@v4
@@ -138,5 +129,5 @@ jobs:
           if-no-files-found: error
 
 # Research-only evidence. Diagnostic ablation arms intentionally do not emit anchors;
-# event/counter/offset A/Bs preserve the exact selector and independent oracle. This lane
-# creates no format, reader, stored-byte, product-speed, v0.29 or v0.30 claim.
+# exact A/Bs preserve the selector and independent oracle. No format, reader, stored-byte,
+# product-speed, v0.29 or v0.30 authority is created here.
