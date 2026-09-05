@@ -1,7 +1,7 @@
+# ci-lane: deep
 name: CMPCT v0.29 bounded solid LZMA2 ceiling
 
 on:
-  pull_request:
   workflow_dispatch:
 
 permissions:
