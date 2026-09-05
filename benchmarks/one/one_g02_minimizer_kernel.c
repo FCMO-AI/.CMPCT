@@ -63,6 +63,16 @@ int one_g02_minimizer_kernel(
         }
         out->positions_considered += 1;
 
+        uint64_t first_valid = 0;
+        if (position + 1 >= minimizer_span) {
+            first_valid = (uint64_t)(position + 1 - minimizer_span);
+        }
+        /* Expire before insertion so the bounded ring never transiently exceeds span. */
+        while (count > 0 && queue[head].position < first_valid) {
+            head = (head + 1) % minimizer_span;
+            count -= 1;
+        }
+
         /* Rightmost-minimum semantics: pop equal states as well as larger states. */
         while (count > 0) {
             size_t tail_index = (head + count - 1) % minimizer_span;
@@ -76,14 +86,6 @@ int one_g02_minimizer_kernel(
         queue[insert_index].position = (uint64_t)position;
         count += 1;
 
-        uint64_t first_valid = 0;
-        if (position + 1 >= minimizer_span) {
-            first_valid = (uint64_t)(position + 1 - minimizer_span);
-        }
-        while (count > 0 && queue[head].position < first_valid) {
-            head = (head + 1) % minimizer_span;
-            count -= 1;
-        }
         if (count > out->peak_queue) {
             out->peak_queue = count;
         }
