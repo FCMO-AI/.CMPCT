@@ -17,6 +17,8 @@ on:
       - "benchmarks/one/one_g02_minimizer_counter_cost_ladder.py"
       - "benchmarks/one/one_g02_minimizer_offset_only_kernel.c"
       - "benchmarks/one/one_g02_minimizer_offset_only_ab.py"
+      - "benchmarks/one/one_g02_minimizer_offset_cached_kernel.c"
+      - "benchmarks/one/one_g02_minimizer_offset_cached_ab.py"
       - "benchmarks/one/one_g02_minimizer_offset_crossover.py"
       - "benchmarks/one/one_g02_minimizer_inplace_fullblock_kernel.c"
       - "benchmarks/one/one_g02_minimizer_inplace_fullblock_ab.py"
@@ -124,6 +126,18 @@ jobs:
       - name: Offset-only dense suffix remains inconclusive
         if: steps.offset_only_ab.outputs.decision == 'offset_only_dense_suffix_inconclusive'
         run: echo "offset-only suffix state saving survives but timing is not decisive"
+      - name: Falsify redundant suffix-build reads as offset-only cost owner
+        id: offset_cached_ab
+        run: python -m benchmarks.one.one_g02_minimizer_offset_cached_ab | tee one-maintenance-artifacts/one-g02-minimizer-offset-cached-ab.json
+      - name: Cached offset recurrence promoted by frozen causal gate
+        if: steps.offset_cached_ab.outputs.decision == 'promote_cached_offset_recurrence'
+        run: echo "scalar suffix recurrence materially removes offset-only build cost"
+      - name: Redundant suffix-build reads retired as primary owner
+        if: steps.offset_cached_ab.outputs.decision == 'retire_redundant_suffix_build_reads_as_primary_owner'
+        run: echo "build-read traffic falls causally but does not own material elapsed"
+      - name: Cached offset recurrence remains inconclusive
+        if: steps.offset_cached_ab.outputs.decision == 'cached_offset_recurrence_inconclusive'
+        run: echo "cached recurrence signal survives but misses promotion/retirement confidence"
       - name: Map offset-only size crossover without choosing a gate
         run: python -m benchmarks.one.one_g02_minimizer_offset_crossover | tee one-maintenance-artifacts/one-g02-minimizer-offset-crossover.json
       - name: Rehabilitate full-window state with in-place overwrite and tail awareness
