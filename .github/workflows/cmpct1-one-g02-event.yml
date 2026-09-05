@@ -18,6 +18,8 @@ on:
       - "benchmarks/one/one_g02_minimizer_offset_only_kernel.c"
       - "benchmarks/one/one_g02_minimizer_offset_only_ab.py"
       - "benchmarks/one/one_g02_minimizer_offset_crossover.py"
+      - "benchmarks/one/one_g02_minimizer_inplace_fullblock_kernel.c"
+      - "benchmarks/one/one_g02_minimizer_inplace_fullblock_ab.py"
       - ".github/workflows/cmpct1-one-g02-event.yml"
   workflow_dispatch:
 
@@ -123,6 +125,18 @@ jobs:
         run: echo "offset-only suffix state saving survives but timing is not decisive"
       - name: Map offset-only size crossover without choosing a gate
         run: python -m benchmarks.one.one_g02_minimizer_offset_crossover | tee one-maintenance-artifacts/one-g02-minimizer-offset-crossover.json
+      - name: Rehabilitate full-window state with in-place overwrite and tail awareness
+        id: inplace_fullblock
+        run: python -m benchmarks.one.one_g02_minimizer_inplace_fullblock_ab | tee one-maintenance-artifacts/one-g02-minimizer-inplace-fullblock-ab.json
+      - name: In-place full-block rehabilitation promoted by frozen gate
+        if: steps.inplace_fullblock.outputs.decision == 'promote_tail_aware_inplace_fullblock'
+        run: echo "in-place full-block subsumes four-segment maintenance on the frozen gate"
+      - name: In-place full-block rehabilitation retired by frozen gate
+        if: steps.inplace_fullblock.outputs.decision == 'retire_tail_aware_inplace_fullblock_as_primary_rehabilitation'
+        run: echo "in-place full-block does not subsume the counter four-segment baseline"
+      - name: In-place full-block rehabilitation remains inconclusive
+        if: steps.inplace_fullblock.outputs.decision == 'tail_aware_inplace_fullblock_inconclusive'
+        run: echo "in-place full-block signal is below promotion/retirement confidence"
       - name: Retain exact-head maintenance evidence
         if: always()
         uses: actions/upload-artifact@v4
