@@ -32,9 +32,14 @@ class RangeEvaluator:
     """Reconstruct only a requested interval of one root.
 
     Shape, graph, range and declared resource limits are proven by the same static
-    preflight used by the full reference evaluator.  Runtime work is additionally bounded
-    by ``max_work_bytes``.  Root authentication is deliberately not asserted: with the
+    preflight used by the full reference evaluator. Runtime work is additionally bounded
+    by ``max_work_bytes``. Root authentication is deliberately not asserted: with the
     current single SHA-256 root digest, doing so would require a whole-root scan.
+
+    Nested ``concat`` nodes are executed as one associative reconstruction cone. Their
+    stored hierarchy still counts for validation and depth, but a concat whose output is
+    consumed directly by another concat is not separately materialized. This preserves
+    hard fanout bounds without charging a synthetic intermediate-copy tax.
     """
 
     def __init__(self, program: Program):
@@ -62,11 +67,17 @@ class RangeEvaluator:
             raise OneError("range exceeds referenced output")
         return end - ref.start
 
-    def _slice_ref(self, ref: Ref, start: int, length: int, depth: int) -> bytes:
+    def _slice_ref(self, ref: Ref, start: int, length: int, depth: int, *, materialize_concat: bool = True) -> bytes:
         width = self._ref_length(ref)
         if start < 0 or length < 0 or start + length > width:
             raise OneError("requested subrange exceeds reference")
-        return self._eval_node(ref.node, ref.start + start, length, depth)
+        return self._eval_node(
+            ref.node,
+            ref.start + start,
+            length,
+            depth,
+            materialize_concat=materialize_concat,
+        )
 
     @staticmethod
     def _overlap(start: int, length: int, part_start: int, part_len: int) -> tuple[int, int] | None:
@@ -78,7 +89,7 @@ class RangeEvaluator:
             return None
         return lo - part_start, hi - lo
 
-    def _eval_concat(self, node: Node, start: int, length: int, depth: int) -> bytes:
+    def _eval_concat(self, node: Node, start: int, length: int, depth: int, *, materialize_output: bool) -> bytes:
         pieces: list[bytes] = []
         cursor = 0
         for ref in node.refs:
@@ -86,7 +97,19 @@ class RangeEvaluator:
             overlap = self._overlap(start, length, cursor, part_len)
             if overlap is not None:
                 rel, take = overlap
-                pieces.append(self._slice_ref(ref, rel, take, depth + 1))
+                # Concat is associative. If the referenced node is another concat, traverse
+                # through it without materializing the intermediate output. Non-concat Laws
+                # retain their ordinary accounting because their operation is real work.
+                child_is_concat = self.program.nodes[ref.node].op == "concat"
+                pieces.append(
+                    self._slice_ref(
+                        ref,
+                        rel,
+                        take,
+                        depth + 1,
+                        materialize_concat=not child_is_concat,
+                    )
+                )
             cursor += part_len
         if node.surprise:
             overlap = self._overlap(start, length, cursor, len(node.surprise))
@@ -98,7 +121,8 @@ class RangeEvaluator:
         result = b"".join(pieces)
         if len(result) != length:
             raise OneError("range concat coverage mismatch")
-        self._charge(work=length, materialized=length)
+        if materialize_output:
+            self._charge(work=length, materialized=length)
         return result
 
     def _eval_repeat(self, node: Node, start: int, length: int, depth: int) -> bytes:
@@ -143,7 +167,15 @@ class RangeEvaluator:
         self._charge(work=length * len(parts), materialized=length)
         return result
 
-    def _eval_node(self, node_id: int, start: int, length: int, depth: int) -> bytes:
+    def _eval_node(
+        self,
+        node_id: int,
+        start: int,
+        length: int,
+        depth: int,
+        *,
+        materialize_concat: bool = True,
+    ) -> bytes:
         if depth > self.program.limits.max_depth:
             raise OneError("dependency depth exceeds declared limit")
         node_len = self._preflight.lengths[node_id]
@@ -166,7 +198,13 @@ class RangeEvaluator:
                 result = bytes([node.value]) * length
                 self._charge(work=length, materialized=length)
             elif node.op == "concat":
-                result = self._eval_concat(node, start, length, depth)
+                result = self._eval_concat(
+                    node,
+                    start,
+                    length,
+                    depth,
+                    materialize_output=materialize_concat,
+                )
             elif node.op == "repeat":
                 result = self._eval_repeat(node, start, length, depth)
             elif node.op in {"xor", "add8"}:
