@@ -1,3 +1,19 @@
+# FCMO v1 parent doctrine
+
+Before applying the repository-specific orientation below, read **`FCMO_AGI_ENGINEERING_OPERATIONS_STANDARD.md`**. It is the universal parent doctrine for agent behavior in CMPCT.
+
+This is an adoption layer, **not a replacement of CMPCT's existing engineering system**. `docs/AGI_ENGINEERING_STANDARD.md` remains the binding CMPCT specialization for quality ratchets, invention, benchmark ethics, breakthrough rehabilitation, independent oracles, format/portability rules, and promotion gates. The exact release and public-surface contracts below remain in force.
+
+Interpret the hierarchy as:
+
+1. legitimate higher-order constraints and authority;
+2. FCMO AGI Engineering & Operations Standard v1.0 for universal agent behavior;
+3. this `AGENTS.md` and CMPCT's local engineering/release standards for repository-specific execution.
+
+If a local mechanism is stricter or more concrete, preserve it. Do not delete proven CMPCT machinery merely to make wording resemble the FCMO parent. If there is a genuine semantic conflict, surface and resolve it rather than silently weakening either side.
+
+---
+
 # Agent instructions
 
 This repository is the canonical CMPCT project.
