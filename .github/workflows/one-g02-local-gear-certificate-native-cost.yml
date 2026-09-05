@@ -1,0 +1,46 @@
+name: ONE-G0.2 local Gear certificate native cost
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - research/cmpct1
+    paths:
+      - "benchmarks/one/one_g02_local_gear_certificate_native_cost.py"
+      - "benchmarks/one/one_g02_local_gear_certificate_validation.py"
+      - "benchmarks/one/one_g02_gear_replacement_ab.py"
+      - "docs/one/evidence/ONE_G02_LOCAL_GEAR_CERTIFICATE_NATIVE_COST_PREREG_2026-09-05.md"
+      - ".github/workflows/one-g02-local-gear-certificate-native-cost.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  native-cost:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Semantic and hostile ONE suite
+        run: python -m pytest tests/one -q
+      - name: Native carrying-cost gate
+        env:
+          EVIDENCE_HEAD: ${{ github.sha }}
+        run: |
+          mkdir -p artifacts/one
+          set +e
+          python -m benchmarks.one.one_g02_local_gear_certificate_native_cost | tee artifacts/one/local_gear_certificate_native_cost.json
+          rc=${PIPESTATUS[0]}
+          echo "benchmark_exit_code=$rc" >> "$GITHUB_STEP_SUMMARY"
+          cat artifacts/one/local_gear_certificate_native_cost.json >> "$GITHUB_STEP_SUMMARY"
+          exit "$rc"
+      - name: Upload exact-source result
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: one-g02-local-gear-certificate-native-cost-${{ github.sha }}
+          path: artifacts/one/local_gear_certificate_native_cost.json
+          if-no-files-found: error
