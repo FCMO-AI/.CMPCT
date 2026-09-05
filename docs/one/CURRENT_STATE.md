@@ -1,6 +1,6 @@
 # CMPCT ONE — Current Research State
 
-**Status:** `ONE-G0.2` active; semantic substrate exact; shift-invariant reuse opportunity survives; **counter-based tail-aware four-segment minimizer maintenance is the current encoder-discovery baseline**; post-counter residual profiling and offset-only crossover characterization are active  
+**Status:** `ONE-G0.2` active; semantic substrate exact; shift-invariant reuse opportunity survives; **tail-return 8 KiB size dispatch is the current encoder-discovery baseline** (counter path below 8,192 B, lower-state offset-only path at/above 8,192 B); post-counter residual work is now constrained to the co-dominant suffix+selection cluster  
 **Branch:** `research/cmpct1`  
 **Control branch:** `research/cmpct1-cleanroom`  
 **Research PR:** #88 (draft; base is the frozen v0.30 comparator branch)  
@@ -18,6 +18,10 @@
 7. `docs/one/evidence/ONE_G02_COUNTER_BOOKKEEPING_PROMOTION_2026-09-04.md`
 8. `docs/one/evidence/ONE_G02_TAIL_SEGMENTED_PROMOTION_2026-09-04.md`
 9. `docs/one/evidence/ONE_G02_RECORD_SUFFIX_NEGATIVE_2026-09-04.md`
+10. `docs/one/evidence/ONE_G02_OFFSET_PARETO_PAIRED_2026-09-04.md`
+11. `docs/one/evidence/ONE_G02_OFFSET_CROSSOVER_PAIRED_2026-09-04.md`
+12. `docs/one/evidence/ONE_G02_TAIL_8K_DISPATCH_PROMOTION_2026-09-04.md`
+13. `docs/one/evidence/ONE_G02_PAIRED_RESIDUAL_REPEATABILITY_2026-09-04.md`
 
 Do not reconstruct this campaign from chat history.
 
@@ -88,32 +92,48 @@ A record-minimum suffix representation removed about **99.3%** of dense suffix w
 
 Receipt: `docs/one/evidence/ONE_G02_RECORD_SUFFIX_NEGATIVE_2026-09-04.md`.
 
-## Current promoted baseline — monotone block counters
+### Counter bookkeeping promotion
 
-The next causal hypothesis isolated block-coordinate bookkeeping. The prior tail-aware kernel reconstructed block number and offset on every state with runtime division/remainder by the runtime `block_size`. The Builder preserved every selector and state semantic but advanced `q/r` as explicit monotone counters.
+The tail-aware kernel originally reconstructed block number and offset on every state with runtime division/remainder by runtime `block_size`. Explicit monotone `q/r` counters preserved every selector/state semantic while removing runtime division.
 
 Exact result-bearing source `4c906a13ceede4599d3052f22c3ee45058da7432`, workflow `33939806976`, job `101234876826`, artifact `9961421301` (`sha256:923b6b6e0f69a9f9992c414090ca845bd181f60370f9666d205b73c8f1278aa6`) passed all 50 ONE tests and the complete independent anchor oracle.
 
 **Decision:** `promote_counter_bookkeeping`.
 
-Counter/prior-tail elapsed ratios:
-
-- 4,159 B: **0.6621x**;
-- 4,160 B: **0.5253x**;
-- random 1 MiB: **0.8590x**;
-- zlib-random ~1 MiB: **0.8044x**;
-- exact pair ~1 MiB: **0.8736x**;
-- shifted pair +1 B: **0.8450x**;
-- repeated 64 KiB basis, 1 MiB: **0.8931x**;
-- hostile 16,385 B: **0.8102x**.
-
-Large-case median is **0.8590x**, about **14.10% faster**. Every frozen row improved. Reserved state stays **49,248 B**, derived-state read counts and suffix lifecycle are unchanged, source rescans remain zero, and all emitted anchors are exact.
-
-Same-compiler disassembly supports the intended cause: the old target function contains **1 integer division instruction**; the counter Builder contains **0** (366 vs 362 decoded instructions). This is causal support, not a substitute for elapsed evidence.
+Counter/prior-tail elapsed ratios included 4,159 B **0.6621x**, 4,160 B **0.5253x**, random 1 MiB **0.8590x**, zlib-random ~1 MiB **0.8044x**, exact pair **0.8736x**, shifted pair **0.8450x**, repeated 64 KiB basis **0.8931x**, hostile 16,385 B **0.8102x**. Large-case median was **0.8590x**, about **14.10% faster**. Reserved state remained **49,248 B** and source rescans stayed zero. Same-compiler disassembly changed the target from one integer division to zero.
 
 Receipt: `docs/one/evidence/ONE_G02_COUNTER_BOOKKEEPING_PROMOTION_2026-09-04.md`.
 
-## Current scoped negatives and unresolved candidates
+## Current promoted encoder-discovery baseline — tail-return 8 KiB dispatch
+
+The offset-only dense suffix representation removes duplicated 64-bit suffix values and retains direct indexing, exact rightmost-min semantics and zero source rescans. Its enabled reserved state is **41,056 B vs 49,248 B** for the counter representation, a **16.63% reduction**.
+
+Paired Pareto replay established a real regime split: exact enablement at 4,160 B was slower (**1.04660x** median, **1.09247x** p90), while the cross-large median was **0.794097x** counter. The preregistered geometric crossover map then selected **8,192 B** as the first size at which all tested random, repeated and zlib-random-like rows at that size and above met the frozen non-inferiority law. Neither experiment could promote a dispatcher by itself.
+
+The first ordinary 8 KiB wrapper dispatcher was inconclusive: cross-large median **0.998407x**, showing that wrapper/layout debt could erase the lower-state kernel advantage.
+
+A causal rehabilitation changed only the integration shape to a tail-return dispatcher while preserving the frozen 8,192-byte boundary, comparison, size ladder, regimes and 13-round gate. Exact source `dbf5a940ce22c058567dcd4889c13e64200cc741`, workflow `33941920994`, job `101240914393`, artifact `9962132188` (`sha256:52444fe65ff6db0eccc8b9306d68977223adc21f5076fddcd7ea6fa96128ef6a`) passed all **50 ONE tests** and the unchanged promotion gate.
+
+**Decision:** `promote_tail_8k_size_dispatch`.
+
+Key exact-head measurements:
+
+- cross-large median dispatch/counter: **0.900864x** — about **9.91% lower elapsed**;
+- state on enabled offset path: **41,056 B vs 49,248 B** — **16.63% less**;
+- source-byte rescans: **0**;
+- static dispatcher shape: **25 instructions, 0 calls, 4 jumps** (code-shape evidence only);
+- 8,192 B random: median **0.946528x**, p90 **0.958496x**;
+- 8,192 B repeated 4 KiB basis: median **0.936286x**, p90 **0.956490x**;
+- zlib-random-like at the boundary: median **0.913483x**, p90 **0.935492x**;
+- 1 MiB random: **0.906862x**;
+- 1 MiB repeated: **0.901449x**;
+- 1 MiB zlib-random-like: **0.906472x**.
+
+The baseline is therefore now: **counter path below 8,192 input bytes; offset-only path at/above 8,192 bytes; tail-return dispatch**. This is encoder-discovery promotion only. It does not change the ONE reader ontology or establish product speed/stored-byte superiority.
+
+Receipt: `docs/one/evidence/ONE_G02_TAIL_8K_DISPATCH_PROMOTION_2026-09-04.md`.
+
+## Current scoped negatives and causal constraints
 
 ### Event-driven dense selection — rejected
 
@@ -121,31 +141,34 @@ The frozen event-driven dense experiment reduced mature selection recomputes to 
 
 **Decision:** `reject_event_driven_dense_maintenance`. Reopen only with new causal evidence that removes/fuses the exported event-control cost; do not reopen merely because the event count is small.
 
-### Offset-only dense suffix — unresolved crossover
+### Single residual-owner ranking — now constrained by repeatability
 
-A separate Builder keeps four raw Gear-state blocks and stores only `uint16` suffix argmin offsets, avoiding duplicated 64-bit suffix values while retaining direct indexing and zero source rescans.
+The post-counter paired A-B-B-A ladder is useful, but two immutable exact-source runs invert the top-two owner ordering:
 
-It reduces enabled reserved state from **49,248 B to 41,056 B**, **0.83366x** (about **16.63% less**). All five 1 MiB large cases improved, with ratios **0.9394x, 0.9551x, 0.9892x, 0.9689x, 0.9489x** and median **0.9551x**, while the 4,159 B and 4,160 B rows regressed to **1.1194x** and **1.0937x**.
+- source `295d2ebe...`: buffer/prefix **0.662275**, dense suffix **1.459584**, exact selection **1.406956 ns/input-byte** -> run-local owner `dense_suffix`;
+- source `dbf5a940...`: buffer/prefix **0.713417**, dense suffix **1.775622**, exact selection **1.779149 ns/input-byte** -> run-local owner `exact_selection`.
 
-**Decision:** `offset_only_dense_suffix_inconclusive`. This is a plausible size-dependent crossover, not a promotion and not a retirement. `benchmarks/one/one_g02_minimizer_offset_crossover.py` freezes a geometric size ladder and three data regimes to map that crossover without retroactively choosing a dispatch threshold.
+On the later run selection exceeds suffix by only **0.003527 ns/input-byte (~0.20%)**. Both runs agree on the useful causal fact: buffer/prefix is materially smaller and **suffix construction + exact selection are one co-dominant residual cluster**. Hosted timing does not support targeting either one in isolation as a stable global owner.
+
+**Scoped negative constraint:** do not reopen single-layer micro-tuning merely from a rank flip. The next intervention must reduce shared suffix+selection work or demonstrate a stable material separation without transferring the cost to the other layer.
+
+Receipt: `docs/one/evidence/ONE_G02_PAIRED_RESIDUAL_REPEATABILITY_2026-09-04.md`.
 
 ### Other constraints
 
 - ring addressing is not the primary remaining owner;
 - two 2,048-state segments preserved exact semantics but did not consistently beat four segments and used about 1.1588x state;
 - bounded multi-source buckets recovered no extra reuse in the frozen collision probes while exporting state/proof traffic;
-- sparse record-suffix change points are retired under their tested regime.
+- sparse record-suffix change points are retired under their tested regime;
+- a naive ordinary 8 KiB dispatcher is superseded by the tail-return integration because it failed to preserve the kernel-level advantage.
 
 ## Active decisive work
 
-The old cost ladder included the now-removed quotient/remainder overhead, so its layer percentages are historical diagnostics only. The branch now contains a **post-counter residual ladder**:
+The 8 KiB size gate is no longer the research question: it has survived end-to-end wrapper charging under the tail-return integration and is promoted as the encoder-discovery baseline.
 
-- `benchmarks/one/one_g02_minimizer_counter_cost_ladder.c`
-- `benchmarks/one/one_g02_minimizer_counter_cost_ladder.py`
+The next causal Builder must attack the **combined suffix+selection cluster** rather than choosing whichever layer happens to rank first on one hosted run. Preferred hypotheses are forms of concept/work fusion: carry exactly the sufficient argmin information needed by selection during suffix construction, fuse construction and query work so an intermediate state walk disappears, or otherwise collapse the two costs without adding reader semantics, source rescans, irregular branch debt or extra retained state.
 
-It remeasures Gear recurrence -> counter buffer/prefix -> counter dense suffix -> exact counter selector on the same runner and exposes the dominant median incremental ns/input-byte layer. The next Builder must target that measured owner rather than reuse stale ownership percentages.
-
-In parallel, the offset-only geometric crossover instrument is allowed to map evidence but **not** to choose a dispatch threshold. Any thresholded Builder requires a new preregistration after the map exists.
+Any such Builder must preserve exact rightmost-min selector traces, zero source rescans, the 8 KiB counter/offset dispatch law unless separately superseded, and complete state/elapsed accounting. A win that merely moves time from suffix construction into selection is a rejection.
 
 Do not integrate the minimizer into the normal observer as a product-speed claim until the remaining charged compute is materially reduced or the opportunity value demonstrably justifies it under the broader ONE objective.
 
