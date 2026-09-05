@@ -7,7 +7,6 @@ on:
       - "src/**"
       - "native/**"
       - "fuzz/**"
-      - "tests/**"
       - "pyproject.toml"
       - ".github/workflows/fuzz.yml"
   workflow_dispatch:

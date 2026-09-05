@@ -1,7 +1,7 @@
+# ci-lane: deep
 name: CMPCT EntropyGraph II research gate
 
 on:
-  pull_request:
   workflow_dispatch:
 
 permissions:

@@ -1,11 +1,15 @@
+# ci-lane: deep
 name: CMPCT v0.29 byte-identical parallel portfolio
 
 on:
-  pull_request:
   workflow_dispatch:
 
 permissions:
   contents: read
+
+concurrency:
+  group: cmpct-v029-parallel-portfolio-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   parallel-portfolio-oracle:
