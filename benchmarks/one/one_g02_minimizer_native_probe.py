@@ -1,9 +1,9 @@
 """ONE-G0.2 compiled probe for the Gear/rightmost-minimum selector recurrence.
 
-This is deliberately a research microkernel, not native ONE production work. It answers a
-narrow falsifier from NEGATIVE_EVIDENCE: is the ~4x Python slowdown structural to the
-selector, or mostly interpreter/deque overhead? The compiled arm performs only Gear-state
-formation plus bounded rolling-minimum selection. Exact reuse verification, extension,
+This is deliberately a research microkernel, not native ONE production work. It asks whether
+the ~4x Python slowdown is structural to the selector or mostly interpreter/deque overhead.
+The compiled experiment separates three costs: unavoidable Gear formation, Gear + rolling
+minimum maintenance, and Python-to-C input copying. Exact reuse verification, extension,
 indexing and Law-cost accounting remain outside this probe and therefore cannot be hidden
 inside a speed claim.
 """
@@ -85,20 +85,22 @@ def _build_kernel() -> tuple[ctypes.CDLL, tempfile.TemporaryDirectory[str]]:
 
 
 def _bind(lib: ctypes.CDLL):
-    fn = lib.one_g02_minimizer_kernel
-    fn.argtypes = [
-        ctypes.POINTER(ctypes.c_uint8),
-        ctypes.c_size_t,
-        ctypes.POINTER(ctypes.c_uint64),
-        ctypes.c_size_t,
-        ctypes.c_size_t,
-        ctypes.POINTER(_KernelResult),
+    minimizer = lib.one_g02_minimizer_kernel
+    minimizer.argtypes = [
+        ctypes.POINTER(ctypes.c_uint8), ctypes.c_size_t, ctypes.POINTER(ctypes.c_uint64),
+        ctypes.c_size_t, ctypes.c_size_t, ctypes.POINTER(_KernelResult),
     ]
-    fn.restype = ctypes.c_int
-    return fn
+    minimizer.restype = ctypes.c_int
+    gear_only = lib.one_g02_gear_only_kernel
+    gear_only.argtypes = [
+        ctypes.POINTER(ctypes.c_uint8), ctypes.c_size_t, ctypes.POINTER(ctypes.c_uint64),
+        ctypes.c_size_t, ctypes.POINTER(_KernelResult),
+    ]
+    gear_only.restype = ctypes.c_int
+    return minimizer, gear_only
 
 
-def _native_kernel_call(fn, gear, data_array, length: int) -> _KernelResult:
+def _minimizer_call(fn, gear, data_array, length: int) -> _KernelResult:
     out = _KernelResult()
     rc = fn(data_array, length, gear, WINDOW, MINIMIZER_SPAN, ctypes.byref(out))
     if rc != 0:
@@ -106,9 +108,17 @@ def _native_kernel_call(fn, gear, data_array, length: int) -> _KernelResult:
     return out
 
 
+def _gear_call(fn, gear, data_array, length: int) -> _KernelResult:
+    out = _KernelResult()
+    rc = fn(data_array, length, gear, WINDOW, ctypes.byref(out))
+    if rc != 0:
+        raise RuntimeError(f"ONE-G0.2 native Gear kernel failed: {rc}")
+    return out
+
+
 def _native_with_copy(fn, gear, data: bytes) -> _KernelResult:
     data_array = (ctypes.c_uint8 * len(data)).from_buffer_copy(data)
-    return _native_kernel_call(fn, gear, data_array, len(data))
+    return _minimizer_call(fn, gear, data_array, len(data))
 
 
 def _median_ns(fn) -> tuple[int, object]:
@@ -142,29 +152,31 @@ def _cases() -> dict[str, bytes]:
 def run() -> dict[str, object]:
     lib, tempdir = _build_kernel()
     try:
-        fn = _bind(lib)
+        minimizer_fn, gear_fn = _bind(lib)
         gear = (ctypes.c_uint64 * 256)(*_GEAR)
         rows: list[dict[str, object]] = []
         for name, data in _cases().items():
             py_expected = _python_recurrence(data)
             data_array = (ctypes.c_uint8 * len(data)).from_buffer_copy(data)
-            native_once = _native_kernel_call(fn, gear, data_array, len(data))
+            native_once = _minimizer_call(minimizer_fn, gear, data_array, len(data))
             native_tuple = (
-                int(native_once.emitted),
-                int(native_once.peak_queue),
-                int(native_once.final_state),
-                int(native_once.positions_considered),
+                int(native_once.emitted), int(native_once.peak_queue),
+                int(native_once.final_state), int(native_once.positions_considered),
             )
             if native_tuple != py_expected:
                 raise AssertionError(
                     f"native recurrence mismatch for {name}: native={native_tuple} python={py_expected}"
                 )
+            gear_once = _gear_call(gear_fn, gear, data_array, len(data))
+            if int(gear_once.final_state) != py_expected[2] or int(gear_once.positions_considered) != py_expected[3]:
+                raise AssertionError(f"Gear-only semantic mismatch for {name}")
 
             python_ns, _ = _median_ns(lambda: _python_recurrence(data))
+            gear_ns, _ = _median_ns(lambda: _gear_call(gear_fn, gear, data_array, len(data)))
             kernel_ns, checked = _median_ns(
-                lambda: _native_kernel_call(fn, gear, data_array, len(data))
+                lambda: _minimizer_call(minimizer_fn, gear, data_array, len(data))
             )
-            with_copy_ns, _ = _median_ns(lambda: _native_with_copy(fn, gear, data))
+            with_copy_ns, _ = _median_ns(lambda: _native_with_copy(minimizer_fn, gear, data))
             assert isinstance(checked, _KernelResult)
             mib = len(data) / (1024 * 1024)
             rows.append(
@@ -176,24 +188,27 @@ def run() -> dict[str, object]:
                     "reserved_kernel_state_bytes": MINIMIZER_SPAN * 16 + 256 * 8,
                     "observed_peak_state_payload_bytes": native_tuple[1] * 16 + 256 * 8,
                     "python_median_ns": python_ns,
+                    "native_gear_only_median_ns": gear_ns,
                     "native_kernel_median_ns": kernel_ns,
                     "native_with_input_copy_median_ns": with_copy_ns,
-                    "native_kernel_ns_per_input_byte": kernel_ns / len(data),
+                    "native_gear_only_mib_per_second": mib / (gear_ns / 1e9),
                     "native_kernel_mib_per_second": mib / (kernel_ns / 1e9),
                     "native_with_copy_mib_per_second": mib / (with_copy_ns / 1e9),
+                    "minimizer_elapsed_ratio_over_gear_only": kernel_ns / gear_ns,
+                    "incremental_minimizer_ns_per_input_byte": (kernel_ns - gear_ns) / len(data),
                     "compiled_kernel_speedup_over_python_recurrence": python_ns / kernel_ns,
                 }
             )
         return {
-            "schema": "cmpct-one-g02-minimizer-native-probe-v3",
+            "schema": "cmpct-one-g02-minimizer-native-probe-v4",
             "experimental_version": "ONE-G0.2",
             "source_sha": os.environ.get("EVIDENCE_HEAD") or os.environ.get("GITHUB_SHA") or "local-unbound",
             "repetitions": REPETITIONS,
             "window": WINDOW,
             "minimizer_span": MINIMIZER_SPAN,
             "hypothesis": "the Gear/rightmost-minimum selector has a credible compiled cost path and the observed Python slowdown is not primarily structural algorithmic cost",
-            "disproof": "native recurrence remains far from memory-oriented scan rates, disagrees with Python selector semantics including the exact activation boundary, or requires unbounded state",
-            "claim_boundary": "research microkernel only; kernel-only and Python-to-C-copy costs are reported separately; excludes exact-proof, extension, index and Law construction costs and is not product/native-reader authority",
+            "disproof": "native recurrence disagrees with Python semantics, requires unbounded state, or rolling-minimum maintenance remains an excessive multiplier over the same compiled Gear recurrence",
+            "claim_boundary": "research microkernel only; Gear-only, minimizer, and Python-to-C-copy costs are separated; excludes exact-proof, extension, index and Law construction costs and is not product/native-reader authority",
             "rows": rows,
         }
     finally:
