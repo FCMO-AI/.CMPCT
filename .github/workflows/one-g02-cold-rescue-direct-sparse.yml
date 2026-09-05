@@ -44,6 +44,17 @@ jobs:
           python -m benchmarks.one.one_g02_cold_rescue_direct_sparse_ab | tee artifacts/one/cold_rescue_direct_sparse.json
           rc=${PIPESTATUS[0]}
           exit "$rc"
+      - name: Publish evidence summary
+        if: always()
+        run: |
+          echo '## ONE-G0.2 direct sparse cold rescue' >> "$GITHUB_STEP_SUMMARY"
+          echo '```json' >> "$GITHUB_STEP_SUMMARY"
+          if [ -f artifacts/one/cold_rescue_direct_sparse.json ]; then
+            cat artifacts/one/cold_rescue_direct_sparse.json >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo '{"error":"result file missing"}' >> "$GITHUB_STEP_SUMMARY"
+          fi
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
       - name: Preserve result
         if: always()
         uses: actions/upload-artifact@v4
