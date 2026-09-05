@@ -1,9 +1,9 @@
 """ONE-G0.2 sized single-buffer canonical emitter falsifier.
 
-Frozen by ONE_G02_BULK_CANONICAL_EMITTER_PREREG_2026-09-05.md.
-Segment discovery and Program construction are outside the timed region. Both timing
-paths receive an already-validated identical Program so this experiment isolates
-canonical byte emission only.
+Frozen by ONE_G02_BULK_CANONICAL_EMITTER_PREREG_2026-09-05.md and its
+pre-result timing-method amendment. Segment discovery and Program construction
+are outside the timed region. Both timing paths receive the same already-valid
+Program so this experiment isolates canonical byte emission only.
 """
 from __future__ import annotations
 
@@ -24,7 +24,7 @@ from benchmarks.one.one_g02_post_segment_control_cost_owner import (
 )
 from benchmarks.one.one_g02_shift_branch_bound_relation_transfer import _relation_cases
 from experiments.one.bulk_wire import _encode_program_bulk_prevalidated
-from experiments.one.ir import Program
+from experiments.one.ir import Program, Ref, Root
 from experiments.one.vm import evaluate
 from experiments.one.wire import decode_program, encode_program
 
@@ -36,39 +36,57 @@ SIZE_MEDIAN_MAX = 0.90
 NO_REGRESSION_MAX = 1.03
 
 
-def _measure(fn):
-    samples = []
-    value = None
+def _timed_call(fn):
+    t0 = time.perf_counter_ns()
+    value = fn()
+    return time.perf_counter_ns() - t0, value
+
+
+def _measure_pair(program: Program):
+    """Measure baseline/candidate in alternating A/B-B/A order.
+
+    Validation is performed before the timed region. The baseline encoder's
+    internal duplicate validation is suppressed for the complete paired run,
+    exactly matching the parent cost-owner experiment's prevalidated-emission
+    boundary. Alternating order prevents warm-cache/frequency drift from being
+    assigned systematically to either implementation.
+    """
+    program.validate_shape()
+    baseline_samples = []
+    candidate_samples = []
+    baseline_value = None
+    candidate_value = None
     enabled = gc.isenabled()
+    original = Program.validate_shape
     try:
         if enabled:
             gc.disable()
-        for _ in range(ROUNDS):
-            t0 = time.perf_counter_ns()
-            value = fn()
-            samples.append(time.perf_counter_ns() - t0)
-        return float(statistics.median(samples)), value
-    finally:
-        if enabled:
-            gc.enable()
-
-
-def _baseline_prevalidated(program: Program):
-    """Use unchanged canonical encoder with only its duplicate validation suppressed."""
-    program.validate_shape()
-    original = Program.validate_shape
-    try:
         Program.validate_shape = lambda self: None  # type: ignore[method-assign]
-        return _measure(lambda: encode_program(program))
+        for round_index in range(ROUNDS):
+            if round_index % 2 == 0:
+                elapsed, baseline_value = _timed_call(lambda: encode_program(program))
+                baseline_samples.append(elapsed)
+                elapsed, candidate_value = _timed_call(lambda: _encode_program_bulk_prevalidated(program))
+                candidate_samples.append(elapsed)
+            else:
+                elapsed, candidate_value = _timed_call(lambda: _encode_program_bulk_prevalidated(program))
+                candidate_samples.append(elapsed)
+                elapsed, baseline_value = _timed_call(lambda: encode_program(program))
+                baseline_samples.append(elapsed)
     finally:
         Program.validate_shape = original  # type: ignore[method-assign]
+        if enabled:
+            gc.enable()
+    return (
+        float(statistics.median(baseline_samples)),
+        baseline_value,
+        float(statistics.median(candidate_samples)),
+        candidate_value,
+    )
 
 
 def _program_for_case(source: bytes, target: bytes, generic: bool):
-    previous_root = __import__("experiments.one.ir", fromlist=["Root", "Ref"])
     # Keep construction identical to the parent profiler while leaving it untimed.
-    Root = previous_root.Root
-    Ref = previous_root.Ref
     prev = Root(Ref(0), len(source), sha256(source).hexdigest())
     digest = sha256(target).hexdigest()
     if generic:
@@ -102,8 +120,7 @@ def run():
             if not exact:
                 raise AssertionError("bulk emitter canonical reconstruction mismatch")
 
-            baseline_ns, baseline_value = _baseline_prevalidated(program)
-            candidate_ns, candidate_value = _measure(lambda: _encode_program_bulk_prevalidated(program))
+            baseline_ns, baseline_value, candidate_ns, candidate_value = _measure_pair(program)
             if baseline_value != candidate_value:
                 raise AssertionError("timed bulk emitter output differs from canonical baseline")
             ratio = candidate_ns / baseline_ns
@@ -152,11 +169,12 @@ def run():
     )
     decision = "advance_bulk_canonical_emitter" if semantic_ok and perf_ok else "retire_bulk_canonical_emitter"
     result = {
-        "schema": "cmpct-one-g02-bulk-canonical-emitter-v1",
+        "schema": "cmpct-one-g02-bulk-canonical-emitter-v2-paired-order",
         "experimental_version": "ONE-G0.2",
         "source_sha": os.environ.get("EVIDENCE_HEAD", "local"),
         "claim_boundary": "Python research-harness canonical-emission evidence only; Program construction and discovery untimed; no native/product, auth/recovery or comparator authority",
         "frozen_rounds": ROUNDS,
+        "timing_order": "alternating A/B-B/A",
         "semantic_gates_pass": semantic_ok,
         "productive_median_ratio": productive_median,
         "productive_rows_at_or_below_0_90": productive_rows_good,
