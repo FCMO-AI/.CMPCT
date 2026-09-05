@@ -10,6 +10,8 @@ on:
       - "benchmarks/one/one_g02_minimizer_cost_ladder.py"
       - "benchmarks/one/one_g02_minimizer_buffer_attribution.c"
       - "benchmarks/one/one_g02_minimizer_buffer_attribution.py"
+      - "benchmarks/one/one_g02_minimizer_segmented_counter_kernel.c"
+      - "benchmarks/one/one_g02_minimizer_counter_ab.py"
       - ".github/workflows/cmpct1-one-g02-event.yml"
   workflow_dispatch:
 
@@ -62,6 +64,22 @@ jobs:
       - name: Split derived-state store and prefix bookkeeping costs
         run: python -m benchmarks.one.one_g02_minimizer_buffer_attribution | tee one-maintenance-artifacts/one-g02-minimizer-buffer-attribution.json
 
+      - name: Falsify per-state block division as remaining owner
+        id: counter_ab
+        run: python -m benchmarks.one.one_g02_minimizer_counter_ab | tee one-maintenance-artifacts/one-g02-minimizer-counter-ab.json
+
+      - name: Counter bookkeeping promoted by frozen gate
+        if: steps.counter_ab.outputs.decision == 'promote_counter_bookkeeping'
+        run: echo "counter bookkeeping materially owns the tested residual"
+
+      - name: Counter bookkeeping retired as primary owner
+        if: steps.counter_ab.outputs.decision == 'retire_counter_bookkeeping_as_primary_owner'
+        run: echo "counter bookkeeping does not materially own the tested residual"
+
+      - name: Counter bookkeeping remains inconclusive
+        if: steps.counter_ab.outputs.decision == 'counter_bookkeeping_inconclusive'
+        run: echo "counter bookkeeping signal is real but below promotion/retirement confidence"
+
       - name: Retain exact-head maintenance evidence
         if: always()
         uses: actions/upload-artifact@v4
@@ -71,5 +89,5 @@ jobs:
           if-no-files-found: error
 
 # Research-only evidence. Diagnostic ablation arms intentionally do not emit anchors;
-# they are elapsed-cost attribution only and create no format, reader, stored-byte,
-# product-speed, v0.29 or v0.30 claim.
+# the counter A/B preserves the exact promoted selector and independent oracle.  This lane
+# creates no format, reader, stored-byte, product-speed, v0.29 or v0.30 claim.
