@@ -10,7 +10,6 @@ on:
       - "tools/check_performance_regression.py"
       - "tools/aggregate_parity_runs.py"
       - "pyproject.toml"
-      - ".github/workflows/zip-parity.yml"
   push:
     branches: [main]
     paths:
@@ -20,7 +19,6 @@ on:
       - "tools/check_performance_regression.py"
       - "tools/aggregate_parity_runs.py"
       - "pyproject.toml"
-      - ".github/workflows/zip-parity.yml"
   workflow_dispatch:
 
 permissions:
