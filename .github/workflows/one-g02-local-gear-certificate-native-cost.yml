@@ -23,7 +23,12 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
+          python-version: "3.11"
+          cache: pip
+      - name: Install project test environment
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[test]'
       - name: Semantic and hostile ONE suite
         run: python -m pytest tests/one -q
       - name: Native carrying-cost gate
