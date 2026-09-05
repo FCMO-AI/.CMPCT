@@ -100,14 +100,7 @@ def _bind(lib: ctypes.CDLL):
 
 def _native_kernel_call(fn, gear, data_array, length: int) -> _KernelResult:
     out = _KernelResult()
-    rc = fn(
-        data_array,
-        length,
-        gear,
-        WINDOW,
-        MINIMIZER_SPAN,
-        ctypes.byref(out),
-    )
+    rc = fn(data_array, length, gear, WINDOW, MINIMIZER_SPAN, ctypes.byref(out))
     if rc != 0:
         raise RuntimeError(f"ONE-G0.2 native minimizer kernel failed: {rc}")
     return out
@@ -133,7 +126,10 @@ def _cases() -> dict[str, bytes]:
     source_512k = random.Random(7102).randbytes(SIZE // 2)
     starved = random.Random(4876).randbytes(8 * 1024)
     repeated_basis = random.Random(7103).randbytes(64 * 1024)
+    boundary = random.Random(7104).randbytes(MINIMIZER_SPAN + WINDOW)
     return {
+        "below_enablement_4159b": boundary[:-1],
+        "at_enablement_4160b": boundary,
         "random_1mib": random_1m,
         "zlib_random_1mib": zlib.compress(random_1m, level=9),
         "exact_pair_512k": source_512k + source_512k,
@@ -189,14 +185,14 @@ def run() -> dict[str, object]:
                 }
             )
         return {
-            "schema": "cmpct-one-g02-minimizer-native-probe-v2",
+            "schema": "cmpct-one-g02-minimizer-native-probe-v3",
             "experimental_version": "ONE-G0.2",
             "source_sha": os.environ.get("EVIDENCE_HEAD") or os.environ.get("GITHUB_SHA") or "local-unbound",
             "repetitions": REPETITIONS,
             "window": WINDOW,
             "minimizer_span": MINIMIZER_SPAN,
             "hypothesis": "the Gear/rightmost-minimum selector has a credible compiled cost path and the observed Python slowdown is not primarily structural algorithmic cost",
-            "disproof": "native recurrence remains far from memory-oriented scan rates, disagrees with Python selector semantics, or requires unbounded state",
+            "disproof": "native recurrence remains far from memory-oriented scan rates, disagrees with Python selector semantics including the exact activation boundary, or requires unbounded state",
             "claim_boundary": "research microkernel only; kernel-only and Python-to-C-copy costs are reported separately; excludes exact-proof, extension, index and Law construction costs and is not product/native-reader authority",
             "rows": rows,
         }
