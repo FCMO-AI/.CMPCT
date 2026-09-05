@@ -16,6 +16,8 @@ from benchmarks.one.one_g02_end_to_end_direct_emitter_writer import (
     SIZES,
     Segment,
     _build_native,
+    _oracle_plan,
+    _plan_signature,
     _relation_cases,
     _writer_once,
 )
@@ -114,15 +116,24 @@ def run():
                     and int(bresult.best_shift) == int(cresult.best_shift)
                     and int(bresult.exact_proofs) == int(cresult.exact_proofs)
                 )
-                plan_equal = bplan == cplan
+                plan_equal = _plan_signature(bplan) == _plan_signature(cplan)
+                if benabled:
+                    this_plan_oracle = _plan_signature(bplan) == _plan_signature(_oracle_plan(source, target))
+                else:
+                    this_plan_oracle = True
+                plan_oracle_ok &= this_plan_oracle
 
-                # The imported writer already compares native plans to the same Program builder.
-                # Here the ordinary decoder/evaluator plus actual computed roots provides the
-                # independent digest/reconstruction boundary for the new charged dimension.
                 decoded = decode_program(cwire)
                 outputs, vm_stats = evaluate(decoded)
                 exact = outputs == {"previous": source, "current": target}
-                this_semantic = wire_equal and classification_equal and plan_equal and exact_digest_roots and exact
+                this_semantic = (
+                    wire_equal
+                    and classification_equal
+                    and plan_equal
+                    and this_plan_oracle
+                    and exact_digest_roots
+                    and exact
+                )
                 semantic_ok &= this_semantic
                 if not this_semantic:
                     raise AssertionError("root-hash-charged direct emitter changed writer semantics")
@@ -152,6 +163,7 @@ def run():
                     "native_segment_compared_target_bytes": ctraffic,
                     "segments": csegments,
                     "modeled_segment_plan_bytes": csegments * ctypes.sizeof(Segment),
+                    "native_plan_matches_python_oracle": this_plan_oracle,
                     "hierarchy_depth": cdepth,
                     "program_nodes": len(cprogram.nodes),
                     "canonical_wire_bytes": cstats.total_bytes,
@@ -193,6 +205,7 @@ def run():
             "frozen_rounds": ROUNDS,
             "timing_order": "alternating A/B-B/A",
             "semantic_gates_pass": semantic_ok,
+            "native_plan_oracle_pass": plan_oracle_ok,
             "productive_median_ratio": productive_median,
             "productive_rows_at_or_below_1_00": productive_good,
             "productive_size_median_ratios": productive_size_medians,
