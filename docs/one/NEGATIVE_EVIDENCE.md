@@ -60,7 +60,7 @@ This ledger is research evidence, not format or release authority. Failures belo
 
 **Candidate.** `benchmarks/one/one_g02_minimizer_gear_ab.py`, schema `cmpct-one-g02-minimizer-gear-ab-v3`. The selector retains one Gear stream at two horizons: a bounded local aligned cache for short relationships and the rightmost minimum Gear state over a 4,096-position rolling window for global relationships. This is encoder discovery only; emitted candidates remain generic exact reuse Laws.
 
-**Exact-head evidence.** Source `92d11298cbc8fe6deed8210613cb31c75d8a7f2a`, workflow `33931050010`, job `101209548157`, artifact `9958592877`; `50 passed` in `tests/one`.
+**Exact-head evidence.** Source `970326480938d4461bdd5f99bad152b51bda129e`, workflow `33933740375`, job `101217501634`, artifact `9959505729` (`sha256:c17fadcc63202a745ce115325cc6d354b68603af9592393fe6f1f8f570ba77ec`); `50 passed` in `tests/one`.
 
 **Opportunity result.** No fixed-selector opportunity loss was observed across the frozen deterministic matrix. The minimizer also recovers:
 
@@ -72,13 +72,29 @@ This ledger is research evidence, not format or release authority. Failures belo
 
 **Read result.** Negative random/compressed cases remain one source-read equivalent with no proof rereads. Exact repeated relationships pay essentially the same complete proof-read traffic as the fixed baseline. Shifted relations deliberately add about one extra input-sized exact proof because the fixed selector finds no corresponding opportunity.
 
-**Compute result / blocker.** The Python reference is **not competitive**. Relative to the current fixed observer it measured 4.38x elapsed on random 1 MiB, 4.34x on zlib-compressed random, 4.22x on an exact 512 KiB pair, 4.27x on the one-byte-shifted 512 KiB pair, and 4.09x on the shifted starvation adversary. Tiny periodic 4 KiB inputs are ~1.83x–1.96x slower even after global minimizer work is structurally disabled when the input is too short to mature a selector window.
+**Compute result / blocker.** The Python reference is **not competitive**. More importantly, the exact-head native recurrence proves the blocker is not just interpreter overhead. On 1 MiB large cases the Gear-only recurrence is about 2.02–2.10 GiB/s while the current rolling-minimum kernel is only 90.35–92.12 MiB/s: **22.30x–23.14x** elapsed over Gear-only, with about **9.90–10.09 ns of incremental minimizer work per input byte**. Observed live queue state remains small (roughly 2.4 KiB in the microkernel), so state capacity itself is not the explanation.
 
 **Current decision.** `opportunity_semantics_survive_current_falsifiers_compute_review_required`. Do **not** replace `experiments/one/observe.py` with this selector yet and do not claim product-speed or stored-byte superiority.
 
-**Strongest self-critique.** The rolling-minimum algorithm has the right current invariants, but Python spends substantial per-byte interpreter/deque work to obtain them. Low retained state is not enough; CMPCT1 is a density + speed + compute-efficiency project. The selector must earn its opportunity value per CPU and memory traffic before promotion.
+**Strongest self-critique.** The rolling-minimum selector has the right current invariants, but its monotonic-minimum maintenance is structurally expensive even when compiled. Low retained state is not enough; CMPCT1 is a density + speed + compute-efficiency project. The selector must earn its opportunity value per CPU and memory traffic before promotion.
 
-**Next falsifier / reopening predicate.** Measure the same Gear/minimum recurrence in a bulk/native observation microkernel, preserving the exact G0.2 vectors and complete queue/index/proof accounting. Promotion requires a credible memory-bandwidth-oriented path and must also hostile-test collision poisoning / bounded multiple-source handling rather than assuming one 64-bit signal source is always sufficient.
+**Next falsifier / reopening predicate.** Replace the same exact rightmost sliding-minimum semantics with a causally different bounded maintenance algorithm and compare exact emitted positions, compute, and state/memory traffic. The next experiment must not change Gear identity, minimizer span, nomination semantics, proof rules, or reader representation.
+
+## G0.2-N05 — Ring-address arithmetic is not the primary remaining rolling-minimum cost owner
+
+**Frozen instruments.** `benchmarks/one/one_g02_minimizer_wrap_ab.py` and `benchmarks/one/one_g02_minimizer_mask_ab.py`, with compiled kernels in `one_g02_minimizer_branch_kernel.c` and `one_g02_minimizer_mask_kernel.c`.
+
+**Exact-head evidence.** Source `970326480938d4461bdd5f99bad152b51bda129e`, workflow `33933740375`, job `101217501634`, artifact `9959505729` (`sha256:c17fadcc63202a745ce115325cc6d354b68603af9592393fe6f1f8f570ba77ec`). All semantic tuples matched the independent Python recurrence.
+
+**Frozen hypothesis and disproof.** After the earlier branch-wrap A/B showed that runtime modulo owned part of the cost but failed its 15%-on-every-large-case promotion rule, the masked-ring follow-up asked whether residual ring addressing still owned at least 10% on **every** large case, with no tested case more than 5% slower. The 4,096-position span was already frozen and is a power of two, so replacing wrap arithmetic with `& 4095` changed no selector semantics.
+
+**Result.** The mask is useful but not decisive. Relative to branch-wrap it improved large-case medians by only 5.15%–8.74%: random 1 MiB `9.298 ms -> 8.575 ms` (8.43%), zlib-random `9.240 -> 8.788 ms` (5.15%), exact pair `9.300 -> 8.552 ms` (8.74%), shifted pair `9.327 -> 8.602 ms` (8.43%), repeated-64-KiB basis `8.903 -> 8.253 ms` (7.87%). On the 16,385-byte shifted-starvation adversary it regressed `67.091 us -> 71.538 us`, **+6.63%**, violating the frozen 5% no-regression limit. The single boundary case at 4,160 B improved strongly (33.1%), but it is not representative of sustained large-input cost.
+
+**Decision.** `retire_ring_addressing_as_primary_remaining_owner`.
+
+**Causal interpretation.** Removing modulo and then reducing the remaining wrap arithmetic can recover a useful single-digit percentage, but it cannot explain the roughly 22–23x gap between Gear-only and current compiled minimizer maintenance. The primary remaining owner is inside the monotonic-minimum maintenance itself: value comparisons, variable pop/expiry control flow, and associated queue memory traffic.
+
+**Reopening predicate.** Ring addressing may be revisited only as part of a new maintenance layout/algorithm whose total measured effect meets a preregistered material threshold across both large and hostile-small cases. Do not resume isolated wrap micro-tuning.
 
 ## External conceptual corroboration, not repository authority
 
