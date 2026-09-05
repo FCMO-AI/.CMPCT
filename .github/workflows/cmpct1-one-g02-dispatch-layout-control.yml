@@ -14,6 +14,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: cmpct1-one-g02-dispatch-layout-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   layout-control:
     runs-on: ubuntu-latest
