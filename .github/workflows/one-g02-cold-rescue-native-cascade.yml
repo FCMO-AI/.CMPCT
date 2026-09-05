@@ -14,6 +14,7 @@ on:
       - 'benchmarks/one/one_g02_bounded_shift_phase_certificate_validation.py'
       - 'benchmarks/one/one_g02_relation_shared_observer_validation.py'
       - 'docs/one/evidence/ONE_G02_COLD_RESCUE_NATIVE_CASCADE_PREREG_2026-09-05.md'
+      - 'docs/one/evidence/ONE_G02_COLD_RESCUE_NATIVE_CASCADE_HOSTILE_REVIEW_2026-09-05.md'
       - '.github/workflows/one-g02-cold-rescue-native-cascade.yml'
 
 permissions:
