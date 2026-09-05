@@ -7,8 +7,8 @@ bits to make that failure observable at small deterministic scale. Exact 64-byte
 mandatory, so the stress cannot create an incorrect Law.
 
 This is not a claim about natural 64-bit collision frequency. It asks whether bounded multiple-
-source retention is a robust repair when collisions or aliases do occur, and charges proof reads
-and modeled retained-state payload for that repair.
+source retention is a robust repair when collisions or aliases do occur, and charges proof reads,
+modeled retained-state payload and repeated hosted elapsed time for that repair.
 """
 from __future__ import annotations
 
@@ -17,6 +17,8 @@ from dataclasses import dataclass
 import json
 import os
 import random
+import statistics
+import time
 
 from benchmarks.one.one_g02_gear_replacement_ab import (
     _GEAR,
@@ -32,6 +34,7 @@ PREFIX_BYTES = 512 * 1024
 SEPARATOR_BYTES = 8 * 1024
 BUCKET_WIDTH = 4
 SIGNAL_BITS = (8, 12, 16)
+REPETITIONS = 3
 
 
 @dataclass(frozen=True)
@@ -138,6 +141,17 @@ def _observe(data: bytes, *, signal_bits: int, bucket_width: int) -> CollisionRe
     )
 
 
+def _median(data: bytes, *, signal_bits: int, bucket_width: int) -> tuple[int, CollisionResult]:
+    samples: list[int] = []
+    result: CollisionResult | None = None
+    for _ in range(REPETITIONS):
+        start = time.perf_counter_ns()
+        result = _observe(data, signal_bits=signal_bits, bucket_width=bucket_width)
+        samples.append(time.perf_counter_ns() - start)
+    assert result is not None
+    return int(statistics.median(samples)), result
+
+
 def _corpus() -> bytes:
     prefix = random.Random(7301).randbytes(PREFIX_BYTES)
     target = random.Random(7302).randbytes(TARGET_BYTES)
@@ -150,8 +164,8 @@ def run() -> dict[str, object]:
     rows: list[dict[str, object]] = []
     improvements = 0
     for bits in SIGNAL_BITS:
-        single = _observe(data, signal_bits=bits, bucket_width=1)
-        multi = _observe(data, signal_bits=bits, bucket_width=BUCKET_WIDTH)
+        single_ns, single = _median(data, signal_bits=bits, bucket_width=1)
+        multi_ns, multi = _median(data, signal_bits=bits, bucket_width=BUCKET_WIDTH)
         delta = multi.reuse_bytes - single.reuse_bytes
         if delta > 0:
             improvements += 1
@@ -171,6 +185,9 @@ def run() -> dict[str, object]:
             "single_source_modeled_state_bytes": single.modeled_state_payload_bytes,
             "multi_source_modeled_state_bytes": multi.modeled_state_payload_bytes,
             "multi_state_ratio_over_single": multi.modeled_state_payload_bytes / single.modeled_state_payload_bytes,
+            "single_source_median_ns": single_ns,
+            "multi_source_median_ns": multi_ns,
+            "multi_elapsed_ratio_over_single": multi_ns / single_ns,
             "single_source_entries": single.source_entries,
             "multi_source_entries": multi.source_entries,
             "emitted_minimizers": single.emitted,
@@ -178,19 +195,20 @@ def run() -> dict[str, object]:
         })
 
     return {
-        "schema": "cmpct-one-g02-minimizer-collision-ab-v1",
+        "schema": "cmpct-one-g02-minimizer-collision-ab-v2",
         "experimental_version": "ONE-G0.2",
         "source_sha": os.environ.get("EVIDENCE_HEAD") or os.environ.get("GITHUB_SHA") or "local-unbound",
+        "repetitions": REPETITIONS,
         "signal_bits_under_stress": list(SIGNAL_BITS),
         "natural_selector_signal_bits": 64,
         "bounded_bucket_width": BUCKET_WIDTH,
         "hypothesis": "first-writer source retention is structurally vulnerable to signal poisoning, while a small bounded source bucket can recover exact-reuse opportunity under collision pressure without unbounded state",
-        "disproof": "bounded multi-source retention does not recover additional exact reuse under deterministic collision stress, or its proof/state carrying cost is disproportionate to recovered opportunity",
+        "disproof": "bounded multi-source retention does not recover additional exact reuse under deterministic collision stress, or its proof/state/elapsed carrying cost is disproportionate to recovered opportunity",
         "decision": (
             "bounded_multisource_recovers_collision_stressed_opportunity"
             if improvements else "one_source_survives_current_collision_stress"
         ),
-        "claim_boundary": "hostile encoder-side collision amplification only; truncated keys are not evidence that natural 64-bit collisions are frequent, and every surviving reuse remains exact-byte-proven",
+        "claim_boundary": "hostile encoder-side collision amplification only; truncated keys are not evidence that natural 64-bit collisions are frequent, timings are hosted Python carrying-cost evidence only, and every surviving reuse remains exact-byte-proven",
         "rows": rows,
     }
 
