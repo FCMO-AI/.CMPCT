@@ -108,6 +108,9 @@ jobs:
       - name: A/B masked deque against segmented block minimum
         run: python -m benchmarks.one.one_g02_minimizer_segmented_ab | tee one-artifacts/one-g02-minimizer-segmented-ab.json
 
+      - name: A/B eager versus tail-aware segmented suffix work
+        run: python -m benchmarks.one.one_g02_minimizer_segmented_tail_ab | tee one-artifacts/one-g02-minimizer-segmented-tail-ab.json
+
       - name: Diagnose segmented-minimum startup amortization crossover
         run: python -m benchmarks.one.one_g02_minimizer_segmented_crossover | tee one-artifacts/one-g02-minimizer-segmented-crossover.json
 
