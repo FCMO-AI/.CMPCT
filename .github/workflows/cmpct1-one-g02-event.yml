@@ -12,6 +12,8 @@ on:
       - "benchmarks/one/one_g02_minimizer_buffer_attribution.py"
       - "benchmarks/one/one_g02_minimizer_segmented_counter_kernel.c"
       - "benchmarks/one/one_g02_minimizer_counter_ab.py"
+      - "benchmarks/one/one_g02_minimizer_offset_only_kernel.c"
+      - "benchmarks/one/one_g02_minimizer_offset_only_ab.py"
       - ".github/workflows/cmpct1-one-g02-event.yml"
   workflow_dispatch:
 
@@ -98,6 +100,22 @@ jobs:
         if: steps.counter_ab.outputs.decision == 'counter_bookkeeping_inconclusive'
         run: echo "counter bookkeeping signal is real but below promotion/retirement confidence"
 
+      - name: Test offset-only dense suffix representation
+        id: offset_only_ab
+        run: python -m benchmarks.one.one_g02_minimizer_offset_only_ab | tee one-maintenance-artifacts/one-g02-minimizer-offset-only-ab.json
+
+      - name: Offset-only dense suffix promoted by frozen Pareto gate
+        if: steps.offset_only_ab.outputs.decision == 'promote_offset_only_dense_suffix'
+        run: echo "offset-only dense suffix cuts state without sustained speed debt"
+
+      - name: Offset-only dense suffix retired by frozen gate
+        if: steps.offset_only_ab.outputs.decision == 'retire_offset_only_dense_suffix'
+        run: echo "offset-only dense suffix exports unacceptable elapsed debt"
+
+      - name: Offset-only dense suffix remains inconclusive
+        if: steps.offset_only_ab.outputs.decision == 'offset_only_dense_suffix_inconclusive'
+        run: echo "offset-only suffix state saving survives but timing is not decisive"
+
       - name: Retain exact-head maintenance evidence
         if: always()
         uses: actions/upload-artifact@v4
@@ -107,5 +125,5 @@ jobs:
           if-no-files-found: error
 
 # Research-only evidence. Diagnostic ablation arms intentionally do not emit anchors;
-# event and counter A/Bs preserve the exact promoted selector and independent oracle. This lane
+# event/counter/offset A/Bs preserve the exact selector and independent oracle. This lane
 # creates no format, reader, stored-byte, product-speed, v0.29 or v0.30 claim.
