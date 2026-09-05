@@ -108,6 +108,9 @@ jobs:
       - name: A/B masked deque against segmented block minimum
         run: python -m benchmarks.one.one_g02_minimizer_segmented_ab | tee one-artifacts/one-g02-minimizer-segmented-ab.json
 
+      - name: Measure segmented residual against Gear-only floor
+        run: python -m benchmarks.one.one_g02_minimizer_segmented_residual | tee one-artifacts/one-g02-minimizer-segmented-residual.json
+
       - name: Hostile-test bounded sources under collision pressure
         run: python -m benchmarks.one.one_g02_minimizer_collision_ab | tee one-artifacts/one-g02-minimizer-collision-ab.json
 
