@@ -1,0 +1,56 @@
+# ci-lane: fast
+name: CMPCT1 ONE-G0.2 offset-only Pareto replay
+
+on:
+  pull_request:
+    paths:
+      - "benchmarks/one/one_g02_minimizer_segmented_counter_kernel.c"
+      - "benchmarks/one/one_g02_minimizer_offset_only_kernel.c"
+      - "benchmarks/one/one_g02_minimizer_offset_pareto_paired.py"
+      - ".github/workflows/cmpct1-one-g02-offset-pareto.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  pareto:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    env:
+      EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          clean: true
+      - name: Bind exact head
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Re-run ONE semantic boundary
+        run: python -m pytest -q tests/one
+      - name: Run preregistered paired Pareto replay
+        id: pareto
+        run: |
+          mkdir -p one-offset-pareto-artifacts
+          python -m benchmarks.one.one_g02_minimizer_offset_pareto_paired | tee one-offset-pareto-artifacts/one-g02-offset-pareto.json
+      - name: Lower-state offset representation promoted
+        if: steps.pareto.outputs.decision == 'promote_offset_only_pareto_baseline'
+        run: echo "offset-only suffix is a paired non-inferior lower-state research baseline"
+      - name: Lower-state offset representation rejected for elapsed debt
+        if: steps.pareto.outputs.decision == 'reject_offset_only_for_elapsed_debt'
+        run: echo "offset-only state saving exports repeatable large-case elapsed debt"
+      - name: Lower-state offset representation remains inconclusive
+        if: steps.pareto.outputs.decision == 'offset_only_pareto_inconclusive'
+        run: echo "offset-only state saving survives but elapsed Pareto status remains unresolved"
+      - name: Retain exact-head Pareto evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: one-g02-offset-pareto-${{ env.EVIDENCE_HEAD }}
+          path: one-offset-pareto-artifacts/
+          if-no-files-found: error
+
+# Research-baseline Pareto gate only. It creates no product-speed, format, reader or comparator authority.
