@@ -105,6 +105,9 @@ jobs:
       - name: Diagnose block-minimum startup amortization crossover
         run: python -m benchmarks.one.one_g02_minimizer_block_crossover | tee one-artifacts/one-g02-minimizer-block-crossover.json
 
+      - name: A/B masked deque against segmented block minimum
+        run: python -m benchmarks.one.one_g02_minimizer_segmented_ab | tee one-artifacts/one-g02-minimizer-segmented-ab.json
+
       - name: Hostile-test bounded sources under collision pressure
         run: python -m benchmarks.one.one_g02_minimizer_collision_ab | tee one-artifacts/one-g02-minimizer-collision-ab.json
 
