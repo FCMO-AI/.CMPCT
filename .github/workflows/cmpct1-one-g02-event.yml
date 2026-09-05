@@ -1,11 +1,13 @@
 # ci-lane: fast
-name: CMPCT1 ONE-G0.2 event-driven minimizer evidence
+name: CMPCT1 ONE-G0.2 minimizer maintenance evidence
 
 on:
   pull_request:
     paths:
       - "benchmarks/one/one_g02_minimizer_event_kernel.c"
       - "benchmarks/one/one_g02_minimizer_event_ab.py"
+      - "benchmarks/one/one_g02_minimizer_cost_ladder.c"
+      - "benchmarks/one/one_g02_minimizer_cost_ladder.py"
       - ".github/workflows/cmpct1-one-g02-event.yml"
   workflow_dispatch:
 
@@ -13,11 +15,11 @@ permissions:
   contents: read
 
 concurrency:
-  group: cmpct1-one-g02-event-${{ github.event.pull_request.number || github.ref }}
+  group: cmpct1-one-g02-maintenance-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:
-  event-minimizer-evidence:
+  minimizer-evidence:
     runs-on: ubuntu-latest
     timeout-minutes: 8
     env:
@@ -45,20 +47,24 @@ jobs:
 
       - name: Re-run ONE semantic and hostile boundary before result
         run: |
-          mkdir -p one-event-artifacts
+          mkdir -p one-maintenance-artifacts
           set -o pipefail
-          python -m pytest -q tests/one 2>&1 | tee one-event-artifacts/pytest-one-event.txt
+          python -m pytest -q tests/one 2>&1 | tee one-maintenance-artifacts/pytest-one-maintenance.txt
 
-      - name: Execute preregistered event-driven dense A/B
-        run: python -m benchmarks.one.one_g02_minimizer_event_ab | tee one-event-artifacts/one-g02-minimizer-event-ab.json
+      - name: Re-execute preregistered event-driven dense A/B
+        run: python -m benchmarks.one.one_g02_minimizer_event_ab | tee one-maintenance-artifacts/one-g02-minimizer-event-ab.json
 
-      - name: Retain exact-head event evidence
+      - name: Attribute remaining maintenance cost by layer
+        run: python -m benchmarks.one.one_g02_minimizer_cost_ladder | tee one-maintenance-artifacts/one-g02-minimizer-cost-ladder.json
+
+      - name: Retain exact-head maintenance evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: one-g02-event-${{ env.EVIDENCE_HEAD }}
-          path: one-event-artifacts/
+          name: one-g02-maintenance-${{ env.EVIDENCE_HEAD }}
+          path: one-maintenance-artifacts/
           if-no-files-found: error
 
-# Research-only evidence. The A/B changes encoder discovery maintenance only and
-# creates no format, reader, stored-byte, product-speed, v0.29 or v0.30 claim.
+# Research-only evidence. Diagnostic ablation arms intentionally do not emit anchors;
+# they are elapsed-cost attribution only and create no format, reader, stored-byte,
+# product-speed, v0.29 or v0.30 claim.
