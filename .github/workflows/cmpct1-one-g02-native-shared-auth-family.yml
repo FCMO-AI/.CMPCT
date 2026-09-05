@@ -1,0 +1,49 @@
+# ci-lane: fast
+name: CMPCT1 ONE-G0.2 native shared auth family transfer
+on:
+  pull_request:
+    paths:
+      - "benchmarks/one/native/one_g02_shared_auth_family_openssl.c"
+      - "docs/one/prereg/ONE_G02_NATIVE_SHARED_AUTH_FAMILY_FREEZE_2026-09-05.md"
+      - ".github/workflows/cmpct1-one-g02-native-shared-auth-family.yml"
+  workflow_dispatch:
+permissions: {contents: read}
+concurrency:
+  group: cmpct1-one-g02-native-shared-auth-family-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+jobs:
+  native-transfer:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with: {ref: "${{ env.EVIDENCE_HEAD }}", clean: true}
+      - name: Bind exact head
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.11"}
+      - name: Install semantic test surface
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[test,audio]'
+      - name: Re-run ONE semantic boundary
+        run: python -m pytest -q tests/one
+      - name: Compile native OpenSSL transfer profiler
+        run: |
+          mkdir -p one-native-shared-auth-family-artifacts
+          cc -O3 -std=c11 -Wall -Wextra -Wno-deprecated-declarations \
+            benchmarks/one/native/one_g02_shared_auth_family_openssl.c \
+            -lcrypto -o one-native-shared-auth-family-artifacts/one_g02_shared_auth_family_openssl
+      - name: Run frozen native transfer A/B
+        run: |
+          one-native-shared-auth-family-artifacts/one_g02_shared_auth_family_openssl \
+            | tee one-native-shared-auth-family-artifacts/one-g02-native-shared-auth-family.json
+      - name: Retain exact-head evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: one-g02-native-shared-auth-family-${{ env.EVIDENCE_HEAD }}
+          path: one-native-shared-auth-family-artifacts/
+          if-no-files-found: error
