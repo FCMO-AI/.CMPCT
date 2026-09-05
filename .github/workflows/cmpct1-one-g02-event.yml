@@ -17,6 +17,7 @@ on:
       - "benchmarks/one/one_g02_minimizer_counter_cost_ladder.py"
       - "benchmarks/one/one_g02_minimizer_offset_only_kernel.c"
       - "benchmarks/one/one_g02_minimizer_offset_only_ab.py"
+      - "benchmarks/one/one_g02_minimizer_offset_crossover.py"
       - ".github/workflows/cmpct1-one-g02-event.yml"
   workflow_dispatch:
 
@@ -120,6 +121,8 @@ jobs:
       - name: Offset-only dense suffix remains inconclusive
         if: steps.offset_only_ab.outputs.decision == 'offset_only_dense_suffix_inconclusive'
         run: echo "offset-only suffix state saving survives but timing is not decisive"
+      - name: Map offset-only size crossover without choosing a gate
+        run: python -m benchmarks.one.one_g02_minimizer_offset_crossover | tee one-maintenance-artifacts/one-g02-minimizer-offset-crossover.json
       - name: Retain exact-head maintenance evidence
         if: always()
         uses: actions/upload-artifact@v4
