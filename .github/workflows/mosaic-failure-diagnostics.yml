@@ -1,7 +1,7 @@
+# ci-lane: deep
 name: CMPCT mosaic failure diagnostics
 
 on:
-  pull_request:
   workflow_dispatch:
 
 permissions:
