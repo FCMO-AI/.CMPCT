@@ -6,6 +6,13 @@ on:
       - "benchmarks/one/one_g02_shift_branch_bound_relation_direct_kernel.c"
       - "benchmarks/one/one_g02_shift_relation_spatial_locality_ab.py"
       - ".github/workflows/cmpct1-one-g02-shift-relation-spatial-locality-ab.yml"
+  push:
+    branches:
+      - "research/cmpct1"
+    paths:
+      - "benchmarks/one/one_g02_shift_branch_bound_relation_direct_kernel.c"
+      - "benchmarks/one/one_g02_shift_relation_spatial_locality_ab.py"
+      - ".github/workflows/cmpct1-one-g02-shift-relation-spatial-locality-ab.yml"
   workflow_dispatch:
 permissions: {contents: read}
 concurrency:
