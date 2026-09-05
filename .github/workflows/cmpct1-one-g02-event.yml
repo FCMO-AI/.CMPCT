@@ -8,6 +8,8 @@ on:
       - "benchmarks/one/one_g02_minimizer_event_ab.py"
       - "benchmarks/one/one_g02_minimizer_cost_ladder.c"
       - "benchmarks/one/one_g02_minimizer_cost_ladder.py"
+      - "benchmarks/one/one_g02_minimizer_buffer_attribution.c"
+      - "benchmarks/one/one_g02_minimizer_buffer_attribution.py"
       - ".github/workflows/cmpct1-one-g02-event.yml"
   workflow_dispatch:
 
@@ -56,6 +58,9 @@ jobs:
 
       - name: Attribute remaining maintenance cost by layer
         run: python -m benchmarks.one.one_g02_minimizer_cost_ladder | tee one-maintenance-artifacts/one-g02-minimizer-cost-ladder.json
+
+      - name: Split derived-state store and prefix bookkeeping costs
+        run: python -m benchmarks.one.one_g02_minimizer_buffer_attribution | tee one-maintenance-artifacts/one-g02-minimizer-buffer-attribution.json
 
       - name: Retain exact-head maintenance evidence
         if: always()
