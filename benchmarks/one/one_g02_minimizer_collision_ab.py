@@ -3,8 +3,9 @@
 The production research selector uses a 64-bit Gear state, so accidental collisions should be
 rare, but a one-source-per-signal table has a structural weakness: one false source can occupy
 a signal forever. This experiment deliberately truncates the encoder-side signal key to 8/12/16
-bits to make that failure observable at small deterministic scale. Exact 64-byte proof remains
-mandatory, so the stress cannot create an incorrect Law.
+bits to make that failure observable at small deterministic scale, then runs the real 64-bit key
+as an unstressed control. Exact 64-byte proof remains mandatory, so the stress cannot create an
+incorrect Law.
 
 This is not a claim about natural 64-bit collision frequency. It asks whether bounded multiple-
 source retention is a robust repair when collisions or aliases do occur, and charges proof reads,
@@ -33,7 +34,8 @@ TARGET_BYTES = 256 * 1024
 PREFIX_BYTES = 512 * 1024
 SEPARATOR_BYTES = 8 * 1024
 BUCKET_WIDTH = 4
-SIGNAL_BITS = (8, 12, 16)
+STRESS_SIGNAL_BITS = (8, 12, 16)
+CONTROL_SIGNAL_BITS = 64
 REPETITIONS = 3
 
 
@@ -54,8 +56,6 @@ class CollisionResult:
 
     @property
     def modeled_state_payload_bytes(self) -> int:
-        # One u64 key per bucket, one u64 source offset per retained source, plus
-        # the rolling queue's (u64 state, u64 position) entries.
         return 8 * self.index_keys + 8 * self.source_entries + 16 * self.peak_queue_entries
 
 
@@ -76,7 +76,6 @@ def _observe(data: bytes, *, signal_bits: int, bucket_width: int) -> CollisionRe
         h = ((h << 1) + _GEAR[value]) & _U64_MASK
         if position + 1 < WINDOW:
             continue
-
         while minima and minima[-1][0] >= h:
             minima.pop()
         minima.append((h, position))
@@ -100,7 +99,6 @@ def _observe(data: bytes, *, signal_bits: int, bucket_width: int) -> CollisionRe
         bucket = index.get(key)
         matched = False
         if bucket:
-            # Newest-first favors nearby/version-local parents while remaining bounded.
             for source in reversed(bucket):
                 verification_reads += 2 * WINDOW
                 if data[source : source + WINDOW] != data[start : start + WINDOW]:
@@ -117,9 +115,9 @@ def _observe(data: bytes, *, signal_bits: int, bucket_width: int) -> CollisionRe
                 matched = True
                 break
 
-        # First-writer width=1 reproduces the current structural policy: a populated key
-        # never learns a replacement source. Wider buckets learn a new exact-window class
-        # after all retained sources fail proof, evicting the oldest when bounded.
+        # Width=1 reproduces first-writer retention: a populated key never learns a
+        # replacement source. Wider buckets learn a new exact-window class only after all
+        # retained sources fail proof, and evict oldest state to remain strictly bounded.
         if not matched:
             if bucket is None:
                 bucket = deque()
@@ -162,15 +160,19 @@ def _corpus() -> bytes:
 def run() -> dict[str, object]:
     data = _corpus()
     rows: list[dict[str, object]] = []
-    improvements = 0
-    for bits in SIGNAL_BITS:
+    stress_improvements = 0
+    control_delta = None
+    for bits in (*STRESS_SIGNAL_BITS, CONTROL_SIGNAL_BITS):
         single_ns, single = _median(data, signal_bits=bits, bucket_width=1)
         multi_ns, multi = _median(data, signal_bits=bits, bucket_width=BUCKET_WIDTH)
         delta = multi.reuse_bytes - single.reuse_bytes
-        if delta > 0:
-            improvements += 1
+        if bits in STRESS_SIGNAL_BITS and delta > 0:
+            stress_improvements += 1
+        if bits == CONTROL_SIGNAL_BITS:
+            control_delta = delta
         rows.append({
             "signal_bits": bits,
+            "collision_stress": bits != CONTROL_SIGNAL_BITS,
             "input_bytes": len(data),
             "known_repeated_target_bytes": TARGET_BYTES,
             "single_source_reuse_bytes": single.reuse_bytes,
@@ -194,21 +196,24 @@ def run() -> dict[str, object]:
             "peak_minimizer_queue_entries": single.peak_queue_entries,
         })
 
+    if stress_improvements and control_delta == 0:
+        decision = "structural_poisoning_reproduced_but_global_bucket_not_justified_by_64bit_control"
+    elif stress_improvements:
+        decision = "bounded_multisource_recovers_collision_stressed_and_control_opportunity"
+    else:
+        decision = "one_source_survives_current_collision_stress"
     return {
-        "schema": "cmpct-one-g02-minimizer-collision-ab-v2",
+        "schema": "cmpct-one-g02-minimizer-collision-ab-v3",
         "experimental_version": "ONE-G0.2",
         "source_sha": os.environ.get("EVIDENCE_HEAD") or os.environ.get("GITHUB_SHA") or "local-unbound",
         "repetitions": REPETITIONS,
-        "signal_bits_under_stress": list(SIGNAL_BITS),
-        "natural_selector_signal_bits": 64,
+        "signal_bits_under_stress": list(STRESS_SIGNAL_BITS),
+        "natural_selector_signal_bits": CONTROL_SIGNAL_BITS,
         "bounded_bucket_width": BUCKET_WIDTH,
         "hypothesis": "first-writer source retention is structurally vulnerable to signal poisoning, while a small bounded source bucket can recover exact-reuse opportunity under collision pressure without unbounded state",
         "disproof": "bounded multi-source retention does not recover additional exact reuse under deterministic collision stress, or its proof/state/elapsed carrying cost is disproportionate to recovered opportunity",
-        "decision": (
-            "bounded_multisource_recovers_collision_stressed_opportunity"
-            if improvements else "one_source_survives_current_collision_stress"
-        ),
-        "claim_boundary": "hostile encoder-side collision amplification only; truncated keys are not evidence that natural 64-bit collisions are frequent, timings are hosted Python carrying-cost evidence only, and every surviving reuse remains exact-byte-proven",
+        "decision": decision,
+        "claim_boundary": "hostile encoder-side collision amplification plus an unstressed real-key control; truncated keys are not evidence that natural 64-bit collisions are frequent, timings are hosted Python carrying-cost evidence only, and every surviving reuse remains exact-byte-proven",
         "rows": rows,
     }
 
