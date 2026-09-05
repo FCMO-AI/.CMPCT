@@ -12,6 +12,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: cmpct1-one-g02-paired-residual-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   paired-residual:
     runs-on: ubuntu-latest
