@@ -46,9 +46,13 @@ int one_g02_minimizer_kernel(
         return -1;
     }
 
-    queue_entry *queue = (queue_entry *)malloc(minimizer_span * sizeof(queue_entry));
-    if (queue == NULL) {
-        return -2;
+    const int minimizer_enabled = length >= minimizer_span + window;
+    queue_entry *queue = NULL;
+    if (minimizer_enabled) {
+        queue = (queue_entry *)malloc(minimizer_span * sizeof(queue_entry));
+        if (queue == NULL) {
+            return -2;
+        }
     }
 
     size_t head = 0;
@@ -62,6 +66,9 @@ int one_g02_minimizer_kernel(
             continue;
         }
         out->positions_considered += 1;
+        if (!minimizer_enabled) {
+            continue;
+        }
 
         uint64_t first_valid = 0;
         if (position + 1 >= minimizer_span) {
