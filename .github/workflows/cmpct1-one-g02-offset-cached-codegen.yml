@@ -1,0 +1,40 @@
+# ci-lane: fast
+name: CMPCT1 ONE-G0.2 cached suffix codegen diagnostic
+
+on:
+  pull_request:
+    paths:
+      - "benchmarks/one/one_g02_minimizer_offset_only_kernel.c"
+      - "benchmarks/one/one_g02_minimizer_offset_cached_kernel.c"
+      - "benchmarks/one/one_g02_minimizer_offset_cached_asm.py"
+      - ".github/workflows/cmpct1-one-g02-offset-cached-codegen.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  codegen:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    env:
+      EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          clean: true
+      - name: Bind exact head
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+      - name: Run same-compiler codegen diagnostic
+        run: |
+          mkdir -p one-codegen-artifacts
+          python -m benchmarks.one.one_g02_minimizer_offset_cached_asm | tee one-codegen-artifacts/one-g02-offset-cached-asm.json
+      - name: Retain exact-head codegen evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: one-g02-offset-cached-codegen-${{ env.EVIDENCE_HEAD }}
+          path: one-codegen-artifacts/
+          if-no-files-found: error
+
+# Static causal diagnostic only; it does not grant dynamic speed or format authority.
