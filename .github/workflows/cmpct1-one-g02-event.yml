@@ -20,6 +20,7 @@ on:
       - "benchmarks/one/one_g02_minimizer_offset_crossover.py"
       - "benchmarks/one/one_g02_minimizer_inplace_fullblock_kernel.c"
       - "benchmarks/one/one_g02_minimizer_inplace_fullblock_ab.py"
+      - "benchmarks/one/one_g02_minimizer_paired_repeatability.py"
       - ".github/workflows/cmpct1-one-g02-event.yml"
   workflow_dispatch:
 
@@ -137,6 +138,9 @@ jobs:
       - name: In-place full-block rehabilitation remains inconclusive
         if: steps.inplace_fullblock.outputs.decision == 'tail_aware_inplace_fullblock_inconclusive'
         run: echo "in-place full-block signal is below promotion/retirement confidence"
+      - name: Measure paired ABBA repeatability of surviving timing effects
+        id: paired_repeatability
+        run: python -m benchmarks.one.one_g02_minimizer_paired_repeatability | tee one-maintenance-artifacts/one-g02-minimizer-paired-repeatability.json
       - name: Retain exact-head maintenance evidence
         if: always()
         uses: actions/upload-artifact@v4
@@ -146,5 +150,6 @@ jobs:
           if-no-files-found: error
 
 # Research-only evidence. Diagnostic ablation arms intentionally do not emit anchors;
-# exact A/Bs preserve the selector and independent oracle. No format, reader, stored-byte,
-# product-speed, v0.29 or v0.30 authority is created here.
+# exact A/Bs preserve the selector and independent oracle. The paired ABBA lane classifies
+# timing confidence only and does not rewrite immutable prior gates. No format, reader,
+# stored-byte, product-speed, v0.29 or v0.30 authority is created here.
