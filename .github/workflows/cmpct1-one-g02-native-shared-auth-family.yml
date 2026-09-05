@@ -4,6 +4,7 @@ on:
   pull_request:
     paths:
       - "benchmarks/one/native/one_g02_shared_auth_family_openssl.c"
+      - "benchmarks/one/one_g02_native_shared_auth_family_check.py"
       - "docs/one/prereg/ONE_G02_NATIVE_SHARED_AUTH_FAMILY_FREEZE_2026-09-05.md"
       - ".github/workflows/cmpct1-one-g02-native-shared-auth-family.yml"
   workflow_dispatch:
@@ -38,8 +39,12 @@ jobs:
             -lcrypto -o one-native-shared-auth-family-artifacts/one_g02_shared_auth_family_openssl
       - name: Run frozen native transfer A/B
         run: |
+          set -o pipefail
           one-native-shared-auth-family-artifacts/one_g02_shared_auth_family_openssl \
-            | tee one-native-shared-auth-family-artifacts/one-g02-native-shared-auth-family.json
+            | tee one-native-shared-auth-family-artifacts/one-g02-native-shared-auth-family-raw.json
+          python -m benchmarks.one.one_g02_native_shared_auth_family_check \
+            one-native-shared-auth-family-artifacts/one-g02-native-shared-auth-family-raw.json \
+            | tee one-native-shared-auth-family-artifacts/one-g02-native-shared-auth-family-checked.json
       - name: Retain exact-head evidence
         if: always()
         uses: actions/upload-artifact@v4
