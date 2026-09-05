@@ -1,0 +1,64 @@
+# ci-lane: fast
+name: CMPCT1 ONE-G0.2 suffix query cache
+
+on:
+  pull_request:
+    paths:
+      - "benchmarks/one/one_g02_minimizer_offset_only_kernel.c"
+      - "benchmarks/one/one_g02_minimizer_offset_query_cache_kernel.c"
+      - "benchmarks/one/one_g02_minimizer_offset_query_cache_ab.py"
+      - ".github/workflows/cmpct1-one-g02-offset-query-cache.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct1-one-g02-offset-query-cache-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  query-cache:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    env:
+      EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          clean: true
+      - name: Bind exact head
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install repository test dependency surface
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[test,audio]'
+      - name: Re-run ONE semantic boundary
+        run: python -m pytest -q tests/one
+      - name: Run frozen suffix query-cache A/B
+        id: experiment
+        run: |
+          mkdir -p one-query-cache-artifacts
+          python -m benchmarks.one.one_g02_minimizer_offset_query_cache_ab | tee one-query-cache-artifacts/one-g02-offset-query-cache-ab.json
+      - name: Query cache promoted
+        if: steps.experiment.outputs.decision == 'promote_offset_suffix_query_cache'
+        run: echo "query cache removes the indirect suffix stream under the frozen elapsed gate"
+      - name: Query cache rejected
+        if: steps.experiment.outputs.decision == 'reject_suffix_query_cache_for_control_debt'
+        run: echo "query cache removes loads but exports unacceptable event/control debt"
+      - name: Query cache inconclusive
+        if: steps.experiment.outputs.decision == 'suffix_query_cache_inconclusive'
+        run: echo "query cache remains below promotion/rejection confidence"
+      - name: Retain exact-head query-cache evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: one-g02-offset-query-cache-${{ env.EVIDENCE_HEAD }}
+          path: one-query-cache-artifacts/
+          if-no-files-found: error
+
+# Causal encoder-discovery experiment only. The promoted 8KiB dispatch law remains unchanged.
