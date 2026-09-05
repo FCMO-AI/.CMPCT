@@ -69,6 +69,30 @@ def test_translation_shape_middle_range_touches_only_needed_surprises():
     assert stats.work_bytes <= 3 * 4096 + 2
 
 
+def test_nested_concat_is_fused_without_intermediate_materialization():
+    left = b"abcd"
+    right = b"EFGH"
+    expected = left + right
+    nodes = (
+        Node("surprise", surprise=left, declared_length=4),
+        Node("surprise", surprise=right, declared_length=4),
+        Node("concat", refs=(Ref(0), Ref(1)), declared_length=8),
+        Node("concat", refs=(Ref(2),), declared_length=8),
+    )
+    limits = Limits(max_nodes=16, max_output_bytes=64, max_work_bytes=64, max_depth=8)
+    program = Program(nodes, {"x": _root(3, expected)}, limits)
+
+    got, stats = reconstruct_range_unverified(program, "x", 0, 8)
+
+    assert got == expected
+    # The two Surprise leaves are real materialization (8 B total) and the outer concat
+    # materializes the requested root (another 8 B). The nested concat is traversal only.
+    assert stats.work_bytes == 16
+    assert stats.materialized_bytes == 16
+    assert stats.nodes_touched == 4
+    assert stats.max_depth == 3
+
+
 def test_range_is_explicitly_unverified_and_rejects_bad_requests():
     data = b"abcdef"
     p = Program((Node("surprise", surprise=data, declared_length=len(data)),), {"x": _root(0, data)})
