@@ -1,7 +1,16 @@
+# ci-lane: deep
 name: CMPCT neutral-hostile determinism repair
 
 on:
   pull_request:
+    paths:
+      - ".github/workflows/neutral-hostile-determinism-repair.yml"
+      - "benchmarks/neutral_hostile_corpus_v1.py"
+      - "benchmarks/neutral_hostile_determinism_repair_check.py"
+      - "experiments/entropygraph_v028*.py"
+      - "src/cmpct/resemblance.py"
+      - "native/preflate-bridge/**"
+      - "pyproject.toml"
   workflow_dispatch:
 
 permissions:
