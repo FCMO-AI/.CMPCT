@@ -1,6 +1,6 @@
 # CMPCT ONE — Current Research State
 
-**Status:** `ONE-G0.2` active; ONE-01 semantic substrate is independently accounted and exact-head green, while ONE-03 fused-observation economics are under falsification  
+**Status:** `ONE-G0.2` active; ONE-01 semantic substrate is exact-head green, ONE-03 has a surviving shift-invariant reuse selector, and compiled minimizer maintenance is the current falsification target  
 **Branch:** `research/cmpct1`  
 **Control branch:** `research/cmpct1-cleanroom`  
 **Research PR:** #88 (draft; base is the frozen v0.30 comparator branch to avoid inherited-CI fanout)  
@@ -11,124 +11,93 @@
 
 1. `docs/architecture/CMPCT_ONE_CANON_v0.1.md`
 2. `docs/roadmap/CMPCT_ONE_ENGINEERING_GRID_v0.1.md`
-3. `docs/CMPCT1_GENESIS.md`
-4. normal CMPCT repository authorities required by `AGENTS.md`
+3. this file
+4. `docs/CMPCT1_GENESIS.md`
+5. normal CMPCT repository authorities required by `AGENTS.md`
+6. `docs/one/NEGATIVE_EVIDENCE.md` before reopening a selector family
 
 Do not reconstruct the design from chat history.
 
 ## Current decision
 
-CMPCT ONE is the primary CMPCT research line during the Genesis window. The design is one reader-visible information representation based on **Law + Surprise with selective Crystallization**. Historical mechanisms may inform Law discovery but are not the desired permanent reader ontology.
+CMPCT ONE remains the primary CMPCT research line during the Genesis window. The design is one reader-visible information representation based on **Law + Surprise with selective Crystallization**. Historical mechanisms may inform Law discovery but are not a permanent reader ontology.
 
-The encoder may be extremely sophisticated; the reader must remain bounded, deterministic, simple relative to the compiler, hostile-input-safe and capable of exact reconstruction.
-
-Speed/efficiency is co-equal with density. The campaign optimizes useful bits eliminated per unit compute through fused observation, opportunity-gated search, branch-and-bound pruning, analysis reuse, incremental changed-cone work, bulk/vector semantics and Law fusion.
+The encoder may be sophisticated; the reader must remain bounded, deterministic, simple relative to the compiler, hostile-input-safe and exactly reconstructing. Speed/efficiency is co-equal with density. The campaign therefore measures source traffic, verification traffic, retained state and compute alongside opportunity bytes.
 
 ## Frozen comparison authorities
 
 - v0.29/main pivot: `02b8b27cb2d97af7c6e0797984a898e8fa8a8e5d`
 - deferred v0.30 authoritative integration: `f4b158a55a08b9b18b50e4e4abe4b9251048c772`
 
-Do not rewrite or delete the v0.30 evidence/branch forest.
+Do not rewrite or delete the v0.30 evidence/branch forest. The full same-input Genesis decision comparison is due at/after the first activation on **2026-09-11**. No G0.x microbenchmark substitutes for that 15-workload decision.
 
-The full same-input Genesis decision comparison is due at/after the first activation on 2026-09-11. No pre-gate G0.x microbenchmark is a substitute for that 15-workload decision.
-
-## Important inherited negative evidence
-
-The retired v0.30 F-01 reversible-structure thesis proved real composition headroom but failed its stronger general admission/generalization claim. CMPCT1 preserves these scoped constraints:
-
-- human structural labels are not sufficient generic admission predicates;
-- seed-local operator inactivity does not justify global grammar pruning;
-- expanding a synthesis/operator grid is not progress without a new content-derived causal predictor;
-- exact savings found after expensive search do not by themselves prove cheap generic discovery.
-
-ONE therefore requires content-derived Opportunity Gates and explicit discovery economics.
-
-## ONE-01 — semantic substrate checkpoint
+## ONE-01 — semantic substrate
 
 The first reader ontology remains six generic relationships only: `surprise`, `concat`, `repeat`, `fill`, `xor`, `add8`. There are no opaque legacy-codec opcodes.
 
-The reference evaluator retains cycle, depth, output-byte, work-byte, range, declared-length and root-SHA checks; the independent tuple oracle and malformed/resource vectors remain binding.
+The reference evaluator retains cycle, depth, output-byte, work-byte, range, declared-length and root-SHA checks; the independent tuple oracle and malformed/resource vectors remain binding. The current exact-head ONE workflow at source `970326480938d4461bdd5f99bad152b51bda129e` passed **50 tests** in workflow `33933740375`, job `101217501634`, artifact `9959505729` (`sha256:c17fadcc63202a745ce115325cc6d354b68603af9592393fe6f1f8f570ba77ec`).
 
-Exact-head semantic evidence at `4ec174c69a6107ae8f9f10443b48103de10fb1cd` completed green in workflow run `33928351439`, job `101201656121`:
+Complete-wire G0.1 evidence still shows the key representation facts: 64 KiB repetition from a 64-byte basis is 137 wire bytes; 64 KiB fill is 69 bytes; 131,072-byte exact-reuse pair is 65,657 bytes. Tiny framing remains expensive (16 logical repeated bytes -> 74 wire bytes). These are representation facts, not product-speed claims.
 
-- `38 passed` in `tests/one`;
-- evidence artifact `9957633203`;
-- artifact ZIP SHA-256 `6252045bd805ebe5edda0d9053f06e8a00d3933c2513130b329d0c1ebe2d8b0c`.
+## ONE-03 — fused observation and reuse discovery
 
-Complete experimental-wire facts from that exact head include:
+### Fused pass survives
 
-| case | logical bytes | wire bytes | Surprise | control + integrity | reference evaluate |
-| --- | ---: | ---: | ---: | ---: | ---: |
-| 1-byte literal | 1 | 61 | 1 | 60 | 0.044 MiB/s |
-| 16-byte repetition | 16 | 74 | 1 | 73 | 0.671 MiB/s |
-| 64 KiB literal | 65,536 | 65,605 | 65,536 | 69 | 1,089.8 MiB/s |
-| 64 KiB repetition from 64 B | 65,536 | 137 | 64 | 73 | 951.3 MiB/s |
-| 64 KiB zero fill | 65,536 | 69 | 0 | 69 | 1,043.7 MiB/s |
-| 64 KiB exact reuse pair | 131,072 | 65,657 | 65,536 | 121 | 1,109.5 MiB/s |
-| multi-parent XOR | 98,304 | 65,709 | 65,536 | 173 | 21.1 MiB/s |
+The one-pass observer continues to eliminate one complete source scan versus equivalent separate run/reuse scans. On the current exact-head runner:
 
-These are representation/reference-evaluator facts, not product-speed or v0.29/v0.30 wins.
+| deterministic regime | fused / separate Python elapsed | source/read effect |
+| --- | ---: | --- |
+| random 1 MiB | 0.8263x | 50.0% total-read reduction |
+| zeros 1 MiB | 0.9715x | 50.0% total-read reduction |
+| repeated 64 KiB basis | 0.8070x | 25.81% total-read reduction |
 
-### ONE-01 surviving negatives
+Coalesced exact proof remains causally useful: on zeros it removes 16,383 redundant verification operations and about 66.67% of total source traffic versus naive fixed-chunk proof while preserving covered opportunity. The repeated-64-KiB regime still exposes extension/proof rereads as real carrying cost.
 
-- Tiny-object framing/integrity remains a real loss: a 16-byte repeated logical object occupies 74 bytes. Do not tune away required metadata to hide it.
-- The Python multi-parent XOR evaluator is dramatically slower than the bulk copy/fill/repeat cases (~21 MiB/s versus roughly 0.95–1.11 GiB/s on the same hosted evidence run). This is implementation evidence that bytewise Python arithmetic cannot stand in for the eventual bulk/native path; it is not yet permission to start production native ONE work before the Grid preconditions are met.
+### Selector path: shift-invariant rolling Gear minima
 
-The six-operation vocabulary remains provisional until wider inherited-relationship translation shows whether a missing generic primitive is actually needed.
+The current surviving global reuse-discovery hypothesis uses the inherited `cmpct-gear-v1` signal and a **rightmost minimum over a 4,096-position sliding window**, alongside bounded local evidence for short relationships. It is encoder discovery only; surviving candidates compile into generic exact reuse Laws. No CDC/minimizer opcode enters the reader.
 
-## ONE-03 — fused observation checkpoint
+The selector survived the current opportunity falsifiers:
 
-`experiments/one/observe.py` now performs one bounded forward source pass that simultaneously observes:
+- no fixed-selector opportunity loss in the deterministic matrix;
+- +524,288 B opportunity on the ordinary one-byte-shifted 512 KiB pair where aligned fixed chunks see 0 B;
+- recovers the 8,192 B zero-sparse-anchor adversary both aligned and after a one-byte insertion;
+- random/compressed negatives produce no reuse proof rereads;
+- observed queue/index state is much smaller than full fixed indexing on the large regimes.
 
-- runs;
-- fixed-chunk 64-bit fingerprints;
-- exact reuse nominations after byte verification;
-- bounded retained index state;
-- explicit source-scan, verification-reread, opportunity-mass and retained-index-payload accounting.
+Sparse threshold Gear, local+sparse retention, and absolute-coordinate gap fallback are retired for their scoped failures. See `docs/one/NEGATIVE_EVIDENCE.md`.
 
-Fixed chunks and FNV are discovery instrumentation, not canonical archive semantics.
+### Current blocker: compiled monotonic-minimum cost
 
-### Active falsifiable hypothesis
+Exact-head native evidence proves the selector's compute debt is structural, not merely Python overhead. For 1 MiB large cases:
 
-A fused observation pass can remove redundant source scans for cheap Law nomination and, after implementation overhead is controlled, provide a better compute/memory-traffic foundation than separate mechanism-like rescans.
-
-### Exact A/B result
-
-`benchmarks/one/one_g02_fusion_ab.py` compares the fused observer with an equivalent two-pass reference that separately scans runs and fixed-chunk reuse while requiring the same candidate/opportunity output.
-
-On exact head `4ec174c69a6107ae8f9f10443b48103de10fb1cd`, 7-repetition medians on the hosted runner were:
-
-| deterministic 1 MiB regime | fused total source reads | separate total source reads | total-read reduction | fused/separate Python elapsed |
+| regime | Gear-only | current minimizer | elapsed multiplier | incremental minimizer |
 | --- | ---: | ---: | ---: | ---: |
-| random | 1,048,576 | 2,097,152 | 50.00% | 1.0369x (+3.69%) |
-| zeros | 3,145,600 | 4,194,176 | 25.00% | 1.1259x (+12.59%) |
-| repeated 64 KiB basis | 3,014,656 | 4,063,232 | 25.81% | 1.1230x (+12.30%) |
+| random | 2064.4 MiB/s | 90.35 MiB/s | 22.85x | 10.093 ns/B |
+| zlib-random | 2054.9 MiB/s | 90.42 MiB/s | 22.73x | 10.083 ns/B |
+| exact pair | 2097.0 MiB/s | 90.62 MiB/s | 23.14x | 10.070 ns/B |
+| shifted pair | 2020.1 MiB/s | 90.60 MiB/s | 22.30x | 10.054 ns/B |
+| repeated 64 KiB | 2090.4 MiB/s | 92.12 MiB/s | 22.69x | 9.897 ns/B |
 
-The fused algorithm eliminates exactly one full input-sized source scan in all three cases. **It does not yet produce an elapsed-time win in Python.** The current reference loop is 3.7–12.6% slower than the two specialized loops despite lower memory traffic.
+Runtime modulo was a real but secondary owner: branch-wrap improved the old modulo kernel roughly 12–15% on large cases but failed its frozen 15%-every-large-case promotion rule. A stricter power-of-two masked-ring follow-up then improved branch-wrap by only **5.15–8.74%** on large cases and regressed the 16,385-byte shifted-starvation adversary by **6.63%**. Its frozen decision is `retire_ring_addressing_as_primary_remaining_owner`.
 
-This is decision-changing negative evidence, not a reason to narrate a speed win.
+That narrows the primary causal target to the **monotonic-minimum maintenance itself**: variable pop/expiry control flow, comparisons and queue memory traffic. Do not resume isolated ring-wrap tuning without a new causal layout.
 
-### Causal evidence exposed by the A/B
+### Collision stress
 
-The positive-pattern regimes reveal a second cost that fusion alone does not solve:
-
-- zeros: exact candidate verification rereads 2,097,024 bytes, making fused total source traffic almost `3.0x` input despite a one-pass base scan;
-- repeated 64 KiB basis: verification rereads 1,966,080 bytes, making total source traffic `2.875x` input;
-- random: zero false reuse candidates and zero verification rereads, so the cheap negative path remains exactly one source scan.
-
-Thus the next performance question is not "add more features." It is whether reuse nominations can be **coalesced/extended and verified in larger contiguous regions** so the compiler preserves exact proof while avoiding thousands of overlapping 64-byte verification rereads and candidate objects.
+Bounded multi-source retention did not recover any additional exact opportunity over one-source retention even under deterministic 8/12/16-bit signal truncation stress, while adding state. The natural 64-bit control also showed no benefit. Keep one-source retention until a hostile case proves otherwise.
 
 ## Next decisive experiment
 
 Mission Lock for the next G0.2 unit:
 
-- **Hypothesis:** content-derived adjacency/sequence evidence can coalesce fixed-chunk reuse nominations into larger contiguous candidate regions, preserving exact reuse proof while materially reducing verification rereads and candidate count on repeated data, with negligible extra work on random data.
-- **Success evidence:** same exact nominated reusable bytes (or a strictly explained superset later charged by the Law cost model), fewer verification operations/read bytes and lower or neutral elapsed work on positive regimes; random/false-pattern inputs remain sparse and bounded.
-- **Disproof/reform:** if coalescing requires another full source scan, materially raises random-input work/memory, misses ordinary shifted relationships without a compensating later stage, or merely moves the same read traffic into hidden work, reject/reform it rather than tune a benchmark threshold.
-- **Non-goal:** no extension-based/workload-label dispatch and no product/native claim from Python timings.
+- **Hypothesis:** replacing variable deque maintenance with a predictable bounded sliding-minimum algorithm can preserve the exact rightmost-minimum anchor sequence while materially reducing compiled minimizer cost.
+- **Builder constraint:** keep the inherited Gear identity, 64-byte Gear window, 4,096-position minimizer span, rightmost tie rule, opportunity/proof semantics and reader representation unchanged. This is an encoder-only implementation A/B, not a new mechanism.
+- **Required evidence:** exact emitted anchor positions against an independent reference, not merely equal counts; large-case elapsed improvement; explicit reserved/observed state and derived-state traffic; hostile boundary/small cases; no hidden second source scan.
+- **Disproof/reform:** if a block/two-stack/prefix-suffix implementation merely trades branch work for disproportionate state/memory traffic or fails to materially narrow the ~22x Gear-only gap, retire that maintenance family rather than tune thresholds.
+- **Non-goal:** no product-speed, stored-byte, v0.29 or v0.30 superiority claim from this microkernel.
 
-After verification granularity is understood, add the next observation feature family only if it earns measurable opportunity value per added source/CPU/memory cost.
+The most promising first Builder is a block prefix/suffix sliding minimum: it can compute the same exact window minimum with predictable comparisons and one bounded backward pass over **derived Gear states**, not a second source read. Its state cost must be charged explicitly.
 
 ## One-week decision boundary
 
