@@ -36,6 +36,7 @@ jobs:
         env:
           EVIDENCE_HEAD: ${{ github.sha }}
         run: |
+          set -o pipefail
           python -m benchmarks.one.one_g02_damaged_relation_law_expression | tee one-g02-damaged-relation-law-expression.json
       - name: Preserve result
         if: always()
