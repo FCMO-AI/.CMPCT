@@ -10,6 +10,7 @@
 
 typedef struct {
     uint64_t final_state;
+    uint64_t history_seed;
     uint64_t positions_considered;
     uint64_t sparse_anchors;
     uint64_t rescue_active_positions;
@@ -94,8 +95,8 @@ int one_g02_starvation_observation_kernel(
         }
     }
 
-    /* Keep the seed live so an optimizer cannot erase the bounded replay cache bookkeeping. */
-    out->final_state = state ^ (history_seed & 0);
+    out->final_state = state;
+    out->history_seed = history_seed;
     free(history);
     return 0;
 }
