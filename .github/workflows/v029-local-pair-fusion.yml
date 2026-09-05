@@ -1,11 +1,15 @@
+# ci-lane: deep
 name: CMPCT v0.29 locality-bounded pair fusion
 
 on:
-  pull_request:
   workflow_dispatch:
 
 permissions:
   contents: read
+
+concurrency:
+  group: cmpct-v029-local-pair-fusion-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   pair-fusion-oracle:
