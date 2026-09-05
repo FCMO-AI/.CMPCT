@@ -24,12 +24,28 @@ from benchmarks.one.one_g02_minimizer_block_ab import (
     _median_ns,
     _python_anchor_trace,
 )
-from benchmarks.one.one_g02_minimizer_block_crossover import LENGTHS, _regimes, _first_at_or_below
+from benchmarks.one.one_g02_minimizer_block_crossover import LENGTHS as BLOCK_LENGTHS, _regimes
 from benchmarks.one.one_g02_minimizer_segmented_ab import (
     _bind_segmented,
     _build,
     _call_segmented,
 )
+
+# Include the structural point at which two complete 4096-state minimizer spans exist after
+# the 64-byte Gear recurrence warm-up. It is a mechanism-derived diagnostic point, not a
+# fitted promotion threshold.
+TWO_COMPLETE_MINIMIZER_SPANS_BYTES = 64 - 1 + 2 * 4096
+LENGTHS = tuple(sorted(set(BLOCK_LENGTHS + (TWO_COMPLETE_MINIMIZER_SPANS_BYTES,))))
+
+
+def _first_at_or_below(rows: list[dict[str, object]], regime: str, ratio_limit: float):
+    candidates = [
+        int(row["input_bytes"])
+        for row in rows
+        if row["regime"] == regime
+        and float(row["segmented_over_masked_elapsed_ratio"]) <= ratio_limit
+    ]
+    return min(candidates) if candidates else None
 
 
 def run() -> dict[str, object]:
@@ -97,6 +113,10 @@ def run() -> dict[str, object]:
             "source_sha": os.environ.get("EVIDENCE_HEAD") or os.environ.get("GITHUB_SHA") or "local-unbound",
             "purpose": "diagnose segmented fixed setup amortization after frozen rejection; no promotion decision",
             "claim_boundary": "encoder discovery microkernel diagnostic only; no product-speed, stored-byte, reader, v0.29 or v0.30 claim",
+            "structural_probe": {
+                "two_complete_minimizer_spans_bytes": TWO_COMPLETE_MINIMIZER_SPANS_BYTES,
+                "derivation": "(gear_recurrence_bytes - 1) + 2 * minimizer_span_states = 63 + 8192",
+            },
             "lengths": list(LENGTHS),
             "crossover": crossover,
             "rows": rows,
