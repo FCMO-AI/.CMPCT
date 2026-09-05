@@ -36,14 +36,22 @@ No threshold changed after execution.
 
 **Decision:** `promote_counter_bookkeeping`.
 
-The exact-head workflow passed the semantic/hostile ONE test step and the result-bearing counter A/B. Therefore, by the frozen gate:
+Exact result-bearing ratios (`counter / prior tail-aware`):
 
-- every large case is at least **5% faster** than the prior tail-aware baseline;
-- median large-case elapsed is at least **10% faster**;
-- no tested case is more than **5% slower**;
-- emitted anchors, final Gear state and considered-position counts match the independent oracle;
-- reserved state, derived-state reads and suffix-block build/skip counts are unchanged;
-- source-byte rescans remain zero.
+| case | tail ns | counter ns | ratio | change |
+|---|---:|---:|---:|---:|
+| below enablement, 4,159 B | 9,961 | 6,595 | 0.6621x | -33.79% |
+| at enablement, 4,160 B | 18,136 | 9,527 | 0.5253x | -47.47% |
+| random 1 MiB | 5,217,013 | 4,481,457 | 0.8590x | -14.10% |
+| zlib-random ~1 MiB | 5,405,121 | 4,348,012 | 0.8044x | -19.56% |
+| exact pair 512 KiB + 512 KiB | 5,160,530 | 4,508,091 | 0.8736x | -12.64% |
+| shifted pair +1 B | 5,254,947 | 4,440,659 | 0.8450x | -15.50% |
+| repeated 64 KiB basis, 1 MiB | 5,096,467 | 4,551,907 | 0.8931x | -10.69% |
+| hostile shifted-starvation 16,385 B | 77,489 | 62,781 | 0.8102x | -18.98% |
+
+Large-case median ratio is **0.859008x**, i.e. about **14.10% faster**. The worst ratio anywhere in the frozen matrix is **0.893150x**, so every tested case improved; there is no hidden small-input regression.
+
+All emitted anchors, final Gear states and considered-position counts match the independent oracle. Reserved state remains **49,248 B** when enabled; derived-state reads and suffix-block build/skip counts are unchanged; source-byte rescans remain zero.
 
 This is a material encoder-discovery speed win with no representation or state tradeoff.
 
@@ -53,7 +61,10 @@ A same-compiler `-O3` disassembly companion built the prior tail-aware kernel an
 
 **Decision:** `division_removal_mechanism_supported`.
 
-The prior baseline contains at least one integer `div`/`idiv` instruction in the inspected function; the counter Builder contains **zero**. This static result does not replace elapsed evidence, but it supports the intended causal explanation instead of leaving the speed win as unexplained code motion.
+- prior tail-aware function: **366** decoded instructions, **1 integer division instruction**;
+- counter Builder: **362** decoded instructions, **0 integer division instructions**.
+
+This static result does not replace elapsed evidence, but it directly supports the intended causal explanation instead of leaving the speed win as unexplained code motion.
 
 ## Adjacent hypotheses resolved in the same exact-head run
 
@@ -63,28 +74,31 @@ The immutable event-driven dense-maintenance experiment was replayed and its fro
 
 **Decision:** `reject_event_driven_dense_maintenance`.
 
-Do not combine it into the promoted baseline merely because it reduces nominal selection events. It failed at least one of its original exact-oracle / all-case speed / large-case speed / state / event-ratio conditions.
+It reduced selection recomputes to only about **1.39%–1.47% of mature windows** and suffix candidate loads to about **0.65%–0.74%** on the large cases, but that bookkeeping did not buy elapsed speed. Large-case event/tail ratios were **0.9700x–1.0576x**: four of five large cases regressed, including zlib-random at **1.0576x**, while only repeated-64-KiB improved. The below-enablement 4,159 B case regressed to **1.7294x**. This is strong causal negative evidence: eliminating most nominal selection events does not imply lower wall time when event-state/control overhead replaces cheap regular compares.
+
+Do not combine this mechanism into the promoted baseline merely because its event counts look attractive.
 
 ### Offset-only dense suffix values
 
 A new Builder retained four derived Gear-state blocks and stored only `uint16` suffix argmin offsets instead of duplicating every suffix minimum as both value and offset. It keeps direct indexing and deliberately avoids the retired sparse-record cursor/control path.
 
-Enabled-state reservation is structurally reduced from **49,248 B** in the counter dense baseline to **41,056 B**, a ratio of **0.83366x** (about **16.63% less**), while source rescans remain zero and exact selector semantics passed.
+Enabled-state reservation falls from **49,248 B** to **41,056 B**, **0.833658x** (about **16.63% less**). Exact selector semantics and suffix lifecycle match, with zero source rescans.
 
 **Decision:** `offset_only_dense_suffix_inconclusive`.
 
-The candidate did not satisfy its frozen Pareto promotion gate, but it also did not cross its retirement boundary. Preserve it as an unresolved state-vs-elapsed tradeoff; do not make it the baseline and do not generalize it into a negative claim about offset-only representation.
+The large-case signal is promising rather than negative: all five large rows improved, with ratios **0.9394x, 0.9551x, 0.9892x, 0.9689x, 0.9489x** and a median **0.955091x** (about **4.49% faster**), while reducing reserved state 16.63%.
+
+But the small/startup rows export real debt: 4,159 B is **1.1194x** and 4,160 B is **1.0937x** the counter baseline. That violates the frozen <=1.05x all-case promotion condition, while the large rows remain far inside the retirement boundary. The mechanism therefore has a plausible **size-dependent crossover**, not a promotion and not a retirement.
+
+Preserve it for a separately preregistered crossover characterization; do not choose a size threshold retroactively from these rows.
+
+## Current residual attribution caveat
+
+The same run replayed the older cost ladder. On the quotient/remainder baseline it attributes roughly **2.52–2.68 ns/input-byte** to buffer/prefix bookkeeping, **1.50–1.82 ns/B** to dense suffix construction, and only **0.02–0.28 ns/B** to event-style exact selection on the five large cases. However, the newly promoted counter implementation changes the first layer materially. Those old decomposition magnitudes are now historical diagnostics, not current ownership percentages. A new residual ladder must use the counter baseline.
 
 ## Hostile review / claim boundary
 
-This receipt establishes an encoder-discovery microkernel improvement only. It does **not** establish:
-
-- stored-byte improvement;
-- reader or wire-format improvement;
-- product creation/decode speed;
-- full observer speed;
-- superiority to v0.29 or deferred v0.30;
-- release authority.
+This receipt establishes an encoder-discovery microkernel improvement only. It does **not** establish stored-byte improvement, reader/wire improvement, full observer or product speed, superiority to v0.29/deferred-v0.30, or release authority.
 
 The September 11 same-input 15-workload Genesis gate remains mandatory and unchanged.
 
@@ -92,4 +106,8 @@ The September 11 same-input 15-workload Genesis gate remains mandatory and uncha
 
 The counter-based tail-aware four-segment kernel supersedes the quotient/remainder tail-aware kernel as the strongest evidence-backed implementation of the current rightmost-minimum selector. The old implementation remains evidence and comparator history; it is not rewritten.
 
-The next decisive compute question is the residual cost **after** counter promotion. Re-run/decompose maintenance against the counter baseline before attacking another owner. Do not reuse cost ownership percentages measured on the quotient/remainder baseline as though they were still current.
+Next decisive work:
+
+1. rebuild the residual cost ladder against the counter baseline;
+2. separately characterize the offset-only suffix crossover across preregistered geometric input sizes before considering any size gate;
+3. target the largest measured post-counter owner rather than continuing isolated micro-tuning.
