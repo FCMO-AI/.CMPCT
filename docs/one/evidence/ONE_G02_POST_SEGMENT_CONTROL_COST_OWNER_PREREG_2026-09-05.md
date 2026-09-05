@@ -15,20 +15,29 @@ The current ONE evidence has removed several previously entangled costs from the
 
 The corrected temporal-writer v2 result cannot identify the remaining creation-time owner because its Python relation compiler still scans target bytes while constructing `Program` objects. That scan is obsolete relative to the promoted native one-pass segment-plan path. Optimizing `encode_program()` from that mixed timing would therefore be premature.
 
-This experiment begins **after segmentation is already complete**. Segment plans are built outside every timed interval. It asks which of the two remaining Python research-harness stages owns post-plan control creation:
+This experiment begins **after segmentation is already complete**. Segment plans are built outside every timed interval. It first asks whether post-plan control creation is owned by:
 
 1. materializing the generic ONE `Program` graph from an already-known segment plan; or
-2. canonical `encode_program()` serialization of an already-built Program.
+2. the canonical encode boundary of an already-built Program.
+
+Hostile review before result-bearing execution found an important ambiguity: `encode_program()` itself begins with full `Program.validate_shape()`. Therefore an encoder-owned result is decomposed further into:
+
+2a. shape-validation work; and
+2b. byte-identical canonical emission of a Program that has already passed the same validation.
+
+The prevalidated-emission measurement does **not** remove validation from semantics or from any proposed product path. It is a diagnostic measurement only: the exact same Program is validated before the timed emission loop, `Program.validate_shape` is temporarily replaced by a no-op only while timing the otherwise unchanged `encode_program()` implementation, and the resulting wire must remain byte-identical to normal validated encoding. The method is restored immediately afterward.
 
 This is causal diagnosis only. Python nanoseconds are not product-speed authority.
 
 ## Falsifiable hypothesis
 
-**Hypothesis:** canonical wire serialization is the dominant post-plan owner for sufficiently large/structured generic relation programs. If serialization consumes at least 60% of measured `Program`-build + encode time in the median productive row and remains the majority owner across most frozen size classes, a byte-identical bulk/native canonical emitter is justified as the next Builder.
+**Primary hypothesis:** the canonical encode boundary is the dominant post-plan owner for sufficiently large/structured generic relation programs. If it consumes at least 60% of measured `Program`-build + full-encode time in the median productive row and remains the majority owner across most frozen size classes, graph materialization is not the next target.
 
-**Disproof:** if graph materialization owns at least 60%, attack graph construction instead. If neither stage reaches 60%, the boundary is jointly owned and a serializer-only Builder is not justified; investigate fused graph/control construction without resurrecting direct per-segment streaming.
+**Primary disproof:** if graph materialization owns at least 60%, attack graph construction instead. If neither side reaches 60%, the boundary is jointly owned and a single-stage Builder is not justified.
 
-The 60% boundary is frozen before result-bearing execution. It is an ownership threshold, not a speed-promotion threshold.
+**Encoder sub-hypothesis:** if the encode boundary wins, prevalidated byte emission—not repeated shape validation—must independently own at least 60% of validation + prevalidated-emission time under the same majority rules before a bulk/native canonical emitter is justified. If validation owns that envelope, the next research question is safe validation amortization/certification, not faster varints. If neither owns it, retain the encode boundary as joint debt and decompose allocation/copy/varint costs before implementation.
+
+The 60% boundaries are frozen before result-bearing execution. They are ownership thresholds, not speed-promotion thresholds.
 
 ## Frozen corpus
 
@@ -52,13 +61,17 @@ The 256 KiB `fragmented_every96` case must retain the known hostile shape where 
 ## Frozen timing method
 
 - Python 3.11 research harness.
-- 51 interleaved rounds per row.
+- 51 rounds per row.
 - Segment discovery/build occurs outside all timed regions.
 - `Program`-build timing starts from the frozen segment plan and ends with a complete immutable `Program` object.
-- encode timing starts from a complete prebuilt `Program` and ends when `encode_program()` returns the canonical wire and stats.
-- combined timing starts from the frozen segment plan and includes Program construction plus canonical encoding.
-- medians are reported independently. Stage shares use the separate median build and encode measurements: `encode / (build + encode)` and `build / (build + encode)`.
-- Python GC is disabled only inside each timed micro-loop and restored immediately after, to reduce non-causal collection noise while preserving ordinary allocations.
+- full-encode timing starts from a complete prebuilt `Program` and ends when ordinary `encode_program()` returns canonical wire and stats, including its normal `validate_shape()` call.
+- validation timing runs `prebuilt.validate_shape()` alone.
+- prevalidated-emission timing first validates the Program outside the timing loop, temporarily suppresses only the duplicate `validate_shape()` call inside otherwise unchanged `encode_program()`, then measures canonical emission. The original method is restored before any other operation.
+- combined timing starts from the frozen segment plan and includes Program construction plus ordinary validated canonical encoding.
+- medians are reported independently.
+- primary stage shares use `full_encode / (build + full_encode)` and `build / (build + full_encode)`.
+- encoder-internal diagnostic shares use `prevalidated_emit / (validation + prevalidated_emit)` and `validation / (validation + prevalidated_emit)`. No claim is made that separate medians add exactly to full-encode timing.
+- Python GC is disabled only inside each timed micro-loop and restored immediately after.
 
 No result may be interpreted as native writer throughput.
 
@@ -72,7 +85,7 @@ Every row must satisfy all of the following:
 4. total node count is <= declared `Limits.max_nodes`;
 5. all productive rows use exactly the generic ranged-Ref + Surprise + concat structure; no relation opcode exists;
 6. negative controls remain literal and are not granted generic relation structure;
-7. repeated builds from the same frozen plan produce byte-identical canonical wire;
+7. normal full encoding, repeated builds, and prevalidated-emission diagnostic produce byte-identical canonical wire and identical wire stats;
 8. the hostile 256 KiB `fragmented_every96` row requires hierarchy and preserves the already-proven bounded form;
 9. wire bytes, Surprise bytes, control/integrity bytes, node count, concat-reference count, hierarchy depth, segment count and modeled segment-plan bytes are reported.
 
@@ -82,15 +95,20 @@ Any semantic/canonical mismatch invalidates the profile.
 
 Ownership is evaluated over the **21 productive rows** (three productive cases x seven sizes).
 
-Let `E` be each row's median encode share and `G` its median Program-build share.
+Let `E` be each row's full-encode share and `G` its Program-build share. For the encode sub-boundary let `R` be prevalidated-emission share and `V` validation share.
 
-- **advance_bulk_canonical_emitter** iff median `E >= 0.60`, encode is the majority owner (`E > 0.50`) in at least 15/21 productive rows, and at least 5/7 size classes have median productive-row `E >= 0.55`.
-- **advance_program_graph_builder** iff the symmetric graph conditions hold: median `G >= 0.60`, graph is majority owner in at least 15/21 rows, and at least 5/7 size classes have median productive-row `G >= 0.55`.
-- otherwise: **hold_joint_post_segment_boundary**. Do not implement a serializer-only or graph-only optimization from this result.
+Primary owner conditions use all three gates: median share >=0.60, majority share >0.50 in at least 15/21 productive rows, and at least 5/7 size classes with median productive-row share >=0.55.
+
+- If graph satisfies the primary conditions and encode does not: **advance_program_graph_builder**.
+- If neither primary side uniquely satisfies them: **hold_joint_post_segment_boundary**.
+- If encode uniquely satisfies them, apply the same three conditions to the encoder sub-boundary:
+  - prevalidated emission wins: **advance_bulk_canonical_emitter**;
+  - validation wins: **advance_validation_amortization_falsifier**;
+  - neither wins: **hold_joint_encode_boundary**.
 
 Negative controls are reported but do not vote on owner selection because their two-literal-node shape is not representative of the generic relation compiler debt being diagnosed.
 
-The combined timing is reported as a sanity check only. Separate-stage medians are the frozen ownership authority; no attempt will be made to make their sum exactly equal the separately measured combined median.
+The combined timing is reported as a sanity check only. Separate-stage medians are the frozen ownership authority.
 
 ## Hostile reviewer requirements
 
@@ -98,12 +116,14 @@ A passing ownership result must not be overclaimed:
 
 - It does not prove that the selected optimization will improve total writer time by the same fraction; Amdahl's law still applies.
 - It does not establish native performance, arbitrary pair discovery, selective-read authentication, failure blast radius, or superiority over frozen v0.29/deferred-v0.30.
-- A serializer result must preserve **byte-identical canonical wire**. A new compact relation opcode or alternate private format is outside this experiment.
+- A serializer result must preserve **byte-identical canonical wire** and all existing validation obligations. A new compact relation opcode or alternate private format is outside this experiment.
+- A validation result is not permission to delete checks. Any later optimization must prove equivalent validation from trusted builder invariants or amortize repeated work without weakening hostile-input rejection.
 - A graph-builder result must preserve the same Program semantics and bounded grammar.
 - Direct per-segment control streaming remains retired in its tested form; this profile is not permission to retune or rename it.
 
 ## Next action by result
 
-- Encoder-owned: preregister a byte-identical bulk/native canonical emitter from the frozen segment plan/Program semantics, with total writer A/B and memory traffic charged.
+- Emission-owned: preregister a byte-identical bulk/native canonical emitter, retaining equivalent validation and charging total writer A/B plus memory traffic.
+- Validation-owned: preregister a safe validation-amortization/certified-builder falsifier that proves no hostile acceptance regression before claiming speed.
 - Graph-owned: preregister compact/bulk Program graph materialization while retaining canonical encoding unchanged.
-- Joint: profile allocation/copy/varint/control sub-costs or test a fused **bulk** plan-to-wire builder that emits canonical bytes from sized batches; do not use incremental per-segment streaming.
+- Joint primary/encode boundary: profile allocation/copy/varint/control sub-costs or test a fused **bulk** plan-to-wire builder that emits canonical bytes from sized batches; do not use incremental per-segment streaming.
