@@ -96,6 +96,9 @@ jobs:
       - name: A/B modulo ring against bounded branch-wrap
         run: python -m benchmarks.one.one_g02_minimizer_wrap_ab | tee one-artifacts/one-g02-minimizer-wrap-ab.json
 
+      - name: A/B branch-wrap against power-of-two masked ring
+        run: python -m benchmarks.one.one_g02_minimizer_mask_ab | tee one-artifacts/one-g02-minimizer-mask-ab.json
+
       - name: Hostile-test bounded sources under collision pressure
         run: python -m benchmarks.one.one_g02_minimizer_collision_ab | tee one-artifacts/one-g02-minimizer-collision-ab.json
 
