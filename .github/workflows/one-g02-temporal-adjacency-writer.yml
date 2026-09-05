@@ -16,6 +16,19 @@ on:
       - 'experiments/one/vm.py'
       - 'experiments/one/wire.py'
       - '.github/workflows/one-g02-temporal-adjacency-writer.yml'
+  pull_request:
+    paths:
+      - 'benchmarks/one/one_g02_temporal_adjacency_writer_integration.py'
+      - 'benchmarks/one/one_g02_shift_relation_amortization_safe_gate_kernel.c'
+      - 'benchmarks/one/one_g02_shift_relation_sparse_gate_kernel.c'
+      - 'benchmarks/one/one_g02_shift_relation_safe_dispatch_kernel.c'
+      - 'benchmarks/one/one_g02_shift_branch_bound_relation_direct_kernel.c'
+      - 'benchmarks/one/one_g02_shift_branch_bound_relation_restrict_kernel.c'
+      - 'benchmarks/one/one_g02_shift_branch_bound_relation_transfer.py'
+      - 'experiments/one/ir.py'
+      - 'experiments/one/vm.py'
+      - 'experiments/one/wire.py'
+      - '.github/workflows/one-g02-temporal-adjacency-writer.yml'
   workflow_dispatch:
 
 permissions:
