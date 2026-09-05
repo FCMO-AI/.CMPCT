@@ -1,0 +1,43 @@
+# ci-lane: fast
+name: CMPCT1 ONE-G0.2 paired residual attribution
+
+on:
+  pull_request:
+    paths:
+      - "benchmarks/one/one_g02_minimizer_counter_cost_ladder.c"
+      - "benchmarks/one/one_g02_minimizer_counter_cost_paired.py"
+      - ".github/workflows/cmpct1-one-g02-paired-residual.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  paired-residual:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          clean: true
+      - name: Bind exact head
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Run paired post-counter residual attribution
+        id: residual
+        run: |
+          mkdir -p one-paired-residual-artifacts
+          python -m benchmarks.one.one_g02_minimizer_counter_cost_paired | tee one-paired-residual-artifacts/one-g02-counter-cost-paired.json
+      - name: Retain exact-head residual evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: one-g02-paired-residual-${{ env.EVIDENCE_HEAD }}
+          path: one-paired-residual-artifacts/
+          if-no-files-found: error
+
+# Diagnostic only: chooses the next causal profiling target, not an implementation or format.
