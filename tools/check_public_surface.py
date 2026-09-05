@@ -33,6 +33,16 @@ RESTRICTED = {
     "container scratch/private upload path": "/mnt/" + "data/",
 }
 
+# These files intentionally carry the repository's public legal/organizational attribution.
+# Person-name markers remain forbidden everywhere else; this exception does not allow operational
+# project, agent, messaging, workspace, model, path, or artifact provenance through the guard.
+PUBLIC_ATTRIBUTION_FILES = {"COPYRIGHT.md", "LICENSING.md"}
+PUBLIC_ATTRIBUTION_LABELS = {
+    "private person marker",
+    "private person marker (ascii)",
+    "private person marker (accented)",
+}
+
 TEXT_SUFFIXES = {
     "",
     ".md",
@@ -78,10 +88,13 @@ def main() -> int:
             continue
         checked += 1
         folded = text.casefold()
+        rel = path.relative_to(ROOT)
+        rel_text = rel.as_posix()
         for label, token in RESTRICTED.items():
+            if label in PUBLIC_ATTRIBUTION_LABELS and rel_text in PUBLIC_ATTRIBUTION_FILES:
+                continue
             if token.casefold() not in folded:
                 continue
-            rel = path.relative_to(ROOT)
             for lineno, line in enumerate(text.splitlines(), 1):
                 if token.casefold() in line.casefold():
                     findings.append(f"{rel}:{lineno}: {label}: {line.strip()}")
