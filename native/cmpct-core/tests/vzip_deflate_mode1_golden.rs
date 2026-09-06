@@ -33,7 +33,7 @@ fn decode_base64(input: &str) -> Vec<u8> {
     let bytes = input.as_bytes();
     assert_eq!(bytes.len() % 4, 0);
     let mut out = Vec::with_capacity(bytes.len() / 4 * 3);
-    for block in bytes.chunks_exact(4) {
+    for block in bytes.as_chunks::<4>().0 {
         let a = value(block[0]).expect("base64 digit") as u32;
         let b = value(block[1]).expect("base64 digit") as u32;
         let c = if block[2] == b'=' {
