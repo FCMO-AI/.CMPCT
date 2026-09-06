@@ -1,0 +1,151 @@
+name: ONE-G0.2 exact-capacity candidate smoke
+
+on:
+  push:
+    branches: [ research/cmpct1 ]
+    paths:
+      - 'benchmarks/one/native/one_g02_shared_native_writer_exact_capacity.c'
+      - 'benchmarks/one/native/one_g02_shared_native_writer_ref_fused.c'
+      - '.github/workflows/one-g02-exact-capacity-candidate-smoke.yml'
+  workflow_dispatch:
+
+jobs:
+  exact-capacity-candidate-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build and run exact-capacity candidate hostile parity
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > /tmp/exact_capacity_candidate_smoke.c <<'EOF'
+          #include <stdint.h>
+          #include <stdio.h>
+          #include <stdlib.h>
+          #include <string.h>
+
+          #include "benchmarks/one/native/one_g02_shared_native_writer_exact_capacity.c"
+
+          static uint64_t rng_state = 0x6f6e652d673032ULL;
+          static uint32_t rnd32(void) {
+              rng_state ^= rng_state << 13;
+              rng_state ^= rng_state >> 7;
+              rng_state ^= rng_state << 17;
+              return (uint32_t)rng_state;
+          }
+
+          static void fill(uint8_t *p, size_t n, uint8_t salt) {
+              for (size_t i = 0; i < n; ++i) p[i] = (uint8_t)((i * 131u + salt * 17u) & 255u);
+          }
+
+          static int compare_case(const char *name,
+                                  const uint8_t *source, size_t source_len,
+                                  const uint8_t *target, size_t target_len,
+                                  const one_g02_segment *segments, size_t segment_count,
+                                  int enabled, int expect_accept,
+                                  size_t *seed_cap_out, size_t *exact_cap_out) {
+              uint8_t pd[32], cd[32];
+              for (size_t i = 0; i < 32u; ++i) { pd[i] = (uint8_t)(i + 3u); cd[i] = (uint8_t)(255u - i); }
+              uint8_t *a = NULL, *b = NULL;
+              size_t alen=0, asurp=0, acap=0, adepth=0, anodes=0;
+              size_t blen=0, bsurp=0, bcap=0, bdepth=0, bnodes=0;
+              int ar = one_g02_native_writer_exact_capacity_seed(
+                  source, source_len, target, target_len, segments, segment_count,
+                  pd, cd, enabled, &a, &alen, &asurp, &acap, &adepth, &anodes);
+              int br = one_g02_native_writer_exact_capacity(
+                  source, source_len, target, target_len, segments, segment_count,
+                  pd, cd, enabled, &b, &blen, &bsurp, &bcap, &bdepth, &bnodes);
+              if ((ar == 0) != expect_accept || (br == 0) != expect_accept) {
+                  fprintf(stderr, "%s acceptance mismatch seed=%d exact=%d expected=%d\n", name, ar, br, expect_accept);
+                  free(a); free(b); return 1;
+              }
+              if (ar != br) {
+                  fprintf(stderr, "%s rejection-code mismatch seed=%d exact=%d\n", name, ar, br);
+                  free(a); free(b); return 1;
+              }
+              if (expect_accept) {
+                  if (alen != blen || asurp != bsurp || adepth != bdepth || anodes != bnodes ||
+                      bcap != blen || acap < alen || memcmp(a, b, alen) != 0) {
+                      fprintf(stderr,
+                              "%s parity fail len=%zu/%zu cap=%zu/%zu surprise=%zu/%zu depth=%zu/%zu nodes=%zu/%zu\n",
+                              name, alen, blen, acap, bcap, asurp, bsurp, adepth, bdepth, anodes, bnodes);
+                      free(a); free(b); return 1;
+                  }
+                  if (seed_cap_out) *seed_cap_out = acap;
+                  if (exact_cap_out) *exact_cap_out = bcap;
+              }
+              free(a); free(b); return 0;
+          }
+
+          int main(void) {
+              uint8_t source[8192], target[8192];
+              fill(source, sizeof(source), 7u);
+              memcpy(target, source, sizeof(target));
+              size_t accepted = 0u;
+              size_t seed_cap_total = 0u, exact_cap_total = 0u;
+              size_t sc=0, ec=0;
+
+              if (compare_case("disabled", source, 1024u, target, 1024u, NULL, 0u, 0, 1, &sc, &ec)) return 1;
+              seed_cap_total += sc; exact_cap_total += ec; ++accepted;
+
+              one_g02_segment mixed[4] = {
+                  {0u,256u,0u},{256u,128u,1u},{384u,256u,0u},{640u,384u,1u}
+              };
+              if (compare_case("mixed", source, 1024u, target, 1024u, mixed, 4u, 1, 1, &sc, &ec)) return 1;
+              seed_cap_total += sc; exact_cap_total += ec; ++accepted;
+
+              one_g02_segment *hier = calloc(4097u, sizeof(*hier));
+              if (!hier) return 2;
+              for (size_t i = 0; i < 4097u; ++i) { hier[i].start=(uint32_t)i; hier[i].length=1u; hier[i].kind=0u; }
+              if (compare_case("hierarchy-4097", source, sizeof(source), target, 4097u, hier, 4097u, 1, 1, &sc, &ec)) return 1;
+              seed_cap_total += sc; exact_cap_total += ec; ++accepted;
+              free(hier);
+
+              for (size_t trial = 0; trial < 1000u; ++trial) {
+                  const size_t len = 32u + (rnd32() % 4064u);
+                  const size_t maxseg = len < 128u ? len : 128u;
+                  const size_t wanted = 1u + (rnd32() % maxseg);
+                  one_g02_segment *seg = calloc(wanted, sizeof(*seg));
+                  if (!seg) return 2;
+                  size_t covered = 0u;
+                  for (size_t i = 0; i < wanted; ++i) {
+                      size_t left = len - covered;
+                      size_t remain = wanted - i;
+                      size_t part = (remain == 1u) ? left : 1u + (rnd32() % (left - remain + 1u));
+                      seg[i].start = (uint32_t)covered;
+                      seg[i].length = (uint32_t)part;
+                      seg[i].kind = (uint8_t)(rnd32() & 1u);
+                      covered += part;
+                  }
+                  char name[64];
+                  snprintf(name, sizeof(name), "random-%zu", trial);
+                  if (compare_case(name, source, sizeof(source), target, len, seg, wanted, 1, 1, &sc, &ec)) return 1;
+                  seed_cap_total += sc; exact_cap_total += ec; ++accepted;
+                  free(seg);
+              }
+
+              one_g02_segment bad_zero = {0u,0u,0u};
+              if (compare_case("zero-length", source, 8u, target, 8u, &bad_zero, 1u, 1, 0, NULL, NULL)) return 1;
+              one_g02_segment bad_kind = {0u,8u,9u};
+              if (compare_case("unknown-kind", source, 8u, target, 8u, &bad_kind, 1u, 1, 0, NULL, NULL)) return 1;
+              one_g02_segment short_cover = {0u,7u,0u};
+              if (compare_case("incomplete-cover", source, 8u, target, 8u, &short_cover, 1u, 1, 0, NULL, NULL)) return 1;
+
+              /* Acceptance-domain witness: exact wire is tiny, loose seed cap exceeds ONE_MAX_WIRE. */
+              uint8_t dummy = 0u;
+              one_g02_segment cap_drift = {0u,64u*1024u*1024u,0u};
+              if (compare_case("acceptance-domain", &dummy, 64u*1024u*1024u,
+                               &dummy, 64u*1024u*1024u, &cap_drift, 1u, 1, 0, NULL, NULL)) return 1;
+
+              if (exact_cap_total >= seed_cap_total) {
+                  fprintf(stderr, "aggregate capacity did not fall seed=%zu exact=%zu\n", seed_cap_total, exact_cap_total);
+                  return 1;
+              }
+              printf("exact-capacity candidate parity: PASS (%zu accepted; aggregate requested %.4fx)\n",
+                     accepted, (double)exact_cap_total / (double)seed_cap_total);
+              return 0;
+          }
+          EOF
+          cc -std=c11 -O2 -Wall -Wextra -Werror -I. /tmp/exact_capacity_candidate_smoke.c -o /tmp/exact_capacity_candidate_smoke
+          /tmp/exact_capacity_candidate_smoke
