@@ -1,0 +1,56 @@
+name: ONE-G0.2 exact local-index hash A-B
+
+on:
+  push:
+    branches: [research/cmpct1]
+    paths:
+      - 'benchmarks/one/one_g02_local_index_hash_exact_kernel.c'
+      - 'benchmarks/one/one_g02_local_index_hash_exact_ab.py'
+      - 'docs/one/evidence/ONE_G02_LOCAL_INDEX_HASH_EXACT_PREREG_2026-09-06.md'
+      - '.github/workflows/one-g02-local-index-hash-exact.yml'
+  pull_request:
+    paths:
+      - 'benchmarks/one/one_g02_local_index_hash_exact_kernel.c'
+      - 'benchmarks/one/one_g02_local_index_hash_exact_ab.py'
+      - 'docs/one/evidence/ONE_G02_LOCAL_INDEX_HASH_EXACT_PREREG_2026-09-06.md'
+      - '.github/workflows/one-g02-local-index-hash-exact.yml'
+  workflow_dispatch:
+
+permissions: {contents: read}
+concurrency:
+  group: one-g02-local-index-hash-exact-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  exact-local-index-hash:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with: {ref: '${{ env.EVIDENCE_HEAD }}', clean: true}
+      - name: Bind exact head
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install project test environment
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[test]'
+      - name: Semantic and hostile ONE suite
+        run: python -m pytest tests/one -q
+      - name: Frozen exact local-index hash A-B
+        run: |
+          set -o pipefail
+          mkdir -p artifacts/one
+          python -m benchmarks.one.one_g02_local_index_hash_exact_ab | tee artifacts/one/local_index_hash_exact_ab.json
+      - name: Upload exact-source result
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: one-g02-local-index-hash-exact-${{ env.EVIDENCE_HEAD }}
+          path: artifacts/one/local_index_hash_exact_ab.json
+          if-no-files-found: error
