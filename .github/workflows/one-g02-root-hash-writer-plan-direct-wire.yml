@@ -42,3 +42,5 @@ jobs:
           name: one-g02-root-hash-writer-plan-direct-wire-${{ github.sha }}
           path: one-g02-root-hash-writer-plan-direct-wire.json
           if-no-files-found: error
+
+# Registered before the result-bearing run; comment is intentionally non-semantic.
