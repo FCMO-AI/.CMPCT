@@ -58,3 +58,5 @@ If the dense-transition regression remains, reject the transition-mask implement
 ## Claim boundary
 
 Native x86-64/SSE2 segment-kernel implementation only. Even a pass here authorizes only an integrated writer falsifier, not writer/product promotion or a portability claim.
+
+Workflow registration followed the Builder; this non-semantic line exists only to trigger the already-frozen exact-source V2 lane.
