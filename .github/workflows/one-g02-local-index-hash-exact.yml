@@ -6,13 +6,19 @@ on:
     paths:
       - 'benchmarks/one/one_g02_local_index_hash_exact_kernel.c'
       - 'benchmarks/one/one_g02_local_index_hash_exact_ab.py'
+      - 'benchmarks/one/one_g02_local_index_hash_exact_kernel_v2.c'
+      - 'benchmarks/one/one_g02_local_index_hash_exact_ab_v2.py'
       - 'docs/one/evidence/ONE_G02_LOCAL_INDEX_HASH_EXACT_PREREG_2026-09-06.md'
+      - 'docs/one/evidence/ONE_G02_LOCAL_INDEX_HASH_EXACT_HOSTILE_AMENDMENT_2026-09-06.md'
       - '.github/workflows/one-g02-local-index-hash-exact.yml'
   pull_request:
     paths:
       - 'benchmarks/one/one_g02_local_index_hash_exact_kernel.c'
       - 'benchmarks/one/one_g02_local_index_hash_exact_ab.py'
+      - 'benchmarks/one/one_g02_local_index_hash_exact_kernel_v2.c'
+      - 'benchmarks/one/one_g02_local_index_hash_exact_ab_v2.py'
       - 'docs/one/evidence/ONE_G02_LOCAL_INDEX_HASH_EXACT_PREREG_2026-09-06.md'
+      - 'docs/one/evidence/ONE_G02_LOCAL_INDEX_HASH_EXACT_HOSTILE_AMENDMENT_2026-09-06.md'
       - '.github/workflows/one-g02-local-index-hash-exact.yml'
   workflow_dispatch:
 
@@ -42,11 +48,11 @@ jobs:
           python -m pip install -e '.[test]'
       - name: Semantic and hostile ONE suite
         run: python -m pytest tests/one -q
-      - name: Frozen exact local-index hash A-B
+      - name: Frozen exact local-index hash A-B, saturation-repaired
         run: |
           set -o pipefail
           mkdir -p artifacts/one
-          python -m benchmarks.one.one_g02_local_index_hash_exact_ab | tee artifacts/one/local_index_hash_exact_ab.json
+          python -m benchmarks.one.one_g02_local_index_hash_exact_ab_v2 | tee artifacts/one/local_index_hash_exact_ab.json
       - name: Upload exact-source result
         if: always()
         uses: actions/upload-artifact@v4
