@@ -23,14 +23,18 @@ CASES = (
 NEGATIVES = {"fragmented_every32", "independent_random"}
 
 
-def _safe_detail(fn, source: bytes, target: bytes) -> tuple[bool, int]:
+def _safe_detail(fn, source: bytes, target: bytes) -> tuple[bool, int, int]:
     a = (ctypes.c_uint8 * len(source)).from_buffer_copy(source)
     b = (ctypes.c_uint8 * len(target)).from_buffer_copy(target)
     out = Result()
     rc = fn(a, b, len(source), ctypes.byref(out))
     if rc < 0:
         raise RuntimeError(f"safe relation dispatcher failed: {rc}")
-    return int(out.exact_proofs) >= 4, int(out.proof_compared_bytes)
+    return (
+        int(out.exact_proofs) >= 4,
+        int(out.coverage_compared_bytes),
+        int(out.proof_compared_bytes),
+    )
 
 
 def _nomination_traffic(source: bytes, target: bytes, *, witness_only: bool) -> dict[str, int | bool]:
@@ -130,7 +134,6 @@ def run() -> dict[str, object]:
     safe, td = _build_safe()
     rows = []
     opportunity_losses = []
-    false_laws = []
     negative_regressions = []
     try:
         for size in SIZES:
@@ -138,20 +141,19 @@ def run() -> dict[str, object]:
                 generated = _cases(size, seed)
                 for name in CASES:
                     source, target = generated[name]
-                    safe_enabled, safe_proof_bytes = _safe_detail(safe, source, target)
+                    safe_enabled, safe_coverage_bytes, safe_exact_bytes = _safe_detail(safe, source, target)
+                    safe_total_bytes = safe_coverage_bytes + safe_exact_bytes
                     baseline = _nomination_traffic(source, target, witness_only=False)
                     candidate = _nomination_traffic(source, target, witness_only=True)
 
-                    baseline_proof = safe_proof_bytes if baseline["nominated"] else 0
-                    candidate_proof = safe_proof_bytes if candidate["nominated"] else 0
+                    baseline_proof = safe_total_bytes if baseline["nominated"] else 0
+                    candidate_proof = safe_total_bytes if candidate["nominated"] else 0
                     baseline_total = int(baseline["verification_bytes"]) + int(baseline["extension_bytes"]) + baseline_proof
                     candidate_total = int(candidate["verification_bytes"]) + candidate_proof
 
                     if baseline["nominated"] and safe_enabled and not candidate["nominated"]:
                         opportunity_losses.append((size, seed, name))
                     final_candidate_law = bool(candidate["nominated"] and safe_enabled)
-                    if final_candidate_law and not safe_enabled:
-                        false_laws.append((size, seed, name))
                     ratio = candidate_total / baseline_total if baseline_total else (1.0 if candidate_total == 0 else float("inf"))
                     if name in NEGATIVES and baseline_total and ratio > 1.10:
                         negative_regressions.append((size, seed, name, ratio))
@@ -161,7 +163,9 @@ def run() -> dict[str, object]:
                         "seed": seed,
                         "case": name,
                         "safe_relation_enabled": safe_enabled,
-                        "safe_relation_proof_compared_bytes": safe_proof_bytes,
+                        "safe_relation_coverage_compared_bytes": safe_coverage_bytes,
+                        "safe_relation_exact_proof_compared_bytes": safe_exact_bytes,
+                        "safe_relation_total_compared_bytes": safe_total_bytes,
                         "baseline_nominated": bool(baseline["nominated"]),
                         "candidate_nominated": bool(candidate["nominated"]),
                         "candidate_final_law": final_candidate_law,
@@ -185,11 +189,10 @@ def run() -> dict[str, object]:
             decision = "hold_relation_witness_proof_deferral"
 
         return {
-            "schema": "cmpct-one-g02-relation-witness-proof-deferral-v1",
+            "schema": "cmpct-one-g02-relation-witness-proof-deferral-v2",
             "experimental_version": "ONE-G0.2",
             "source_sha": os.environ.get("EVIDENCE_HEAD") or os.environ.get("GITHUB_SHA") or "local-unbound",
             "opportunity_losses": opportunity_losses,
-            "false_laws": false_laws,
             "negative_regressions": negative_regressions,
             "aggregate_baseline_proof_bytes": baseline_aggregate,
             "aggregate_candidate_proof_bytes": candidate_aggregate,
