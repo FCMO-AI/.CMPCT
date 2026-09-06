@@ -1,0 +1,157 @@
+name: ONE-G0.2 exact-capacity full-writer diagnostic
+
+on:
+  push:
+    branches: [ research/cmpct1 ]
+    paths:
+      - 'benchmarks/one/native/one_g02_shared_native_writer_exact_capacity.c'
+      - 'benchmarks/one/native/one_g02_shared_native_writer_ref_fused.c'
+      - '.github/workflows/one-g02-exact-capacity-diagnostic.yml'
+  workflow_dispatch:
+
+jobs:
+  exact-capacity-diagnostic:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build and run non-promotional full-writer A/B
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > /tmp/exact_capacity_diag.c <<'EOF'
+          #define _POSIX_C_SOURCE 200809L
+          #include <inttypes.h>
+          #include <stdint.h>
+          #include <stdio.h>
+          #include <stdlib.h>
+          #include <string.h>
+          #include <time.h>
+
+          #include "benchmarks/one/native/one_g02_shared_native_writer_exact_capacity.c"
+
+          typedef struct {
+              const char *name;
+              size_t source_len, target_len;
+              one_g02_segment *segments;
+              size_t segment_count;
+              int enabled;
+              size_t rounds;
+          } diag_case;
+
+          static uint64_t ns_now(void) {
+              struct timespec ts;
+              if (clock_gettime(CLOCK_MONOTONIC, &ts) != 0) abort();
+              return (uint64_t)ts.tv_sec * UINT64_C(1000000000) + (uint64_t)ts.tv_nsec;
+          }
+
+          static void fill(uint8_t *p, size_t n, uint8_t salt) {
+              for (size_t i = 0; i < n; ++i) p[i] = (uint8_t)((i * 131u + salt * 17u + (i >> 3)) & 255u);
+          }
+
+          static int call_seed(const diag_case *c, const uint8_t *src, const uint8_t *dst,
+                               const uint8_t pd[32], const uint8_t cd[32],
+                               uint8_t **out, size_t *olen, size_t *surp, size_t *cap,
+                               size_t *depth, size_t *nodes) {
+              return one_g02_native_writer_exact_capacity_seed(
+                  src, c->source_len, dst, c->target_len, c->segments, c->segment_count,
+                  pd, cd, c->enabled, out, olen, surp, cap, depth, nodes);
+          }
+
+          static int call_exact(const diag_case *c, const uint8_t *src, const uint8_t *dst,
+                                const uint8_t pd[32], const uint8_t cd[32],
+                                uint8_t **out, size_t *olen, size_t *surp, size_t *cap,
+                                size_t *depth, size_t *nodes) {
+              return one_g02_native_writer_exact_capacity(
+                  src, c->source_len, dst, c->target_len, c->segments, c->segment_count,
+                  pd, cd, c->enabled, out, olen, surp, cap, depth, nodes);
+          }
+
+          static int parity(const diag_case *c, const uint8_t *src, const uint8_t *dst,
+                            const uint8_t pd[32], const uint8_t cd[32],
+                            size_t *seed_cap, size_t *exact_cap, size_t *wire_len) {
+              uint8_t *a=NULL,*b=NULL;
+              size_t al=0,as=0,ac=0,ad=0,an=0, bl=0,bs=0,bc=0,bd=0,bn=0;
+              int ar=call_seed(c,src,dst,pd,cd,&a,&al,&as,&ac,&ad,&an);
+              int br=call_exact(c,src,dst,pd,cd,&b,&bl,&bs,&bc,&bd,&bn);
+              int bad = ar!=0 || br!=0 || al!=bl || as!=bs || ad!=bd || an!=bn || bc!=bl || ac<al || memcmp(a,b,al)!=0;
+              if (bad) {
+                  fprintf(stderr,"PARITY_FAIL %s rc=%d/%d len=%zu/%zu cap=%zu/%zu surp=%zu/%zu depth=%zu/%zu nodes=%zu/%zu\n",
+                          c->name,ar,br,al,bl,ac,bc,as,bs,ad,bd,an,bn);
+              }
+              free(a); free(b);
+              if (bad) return 1;
+              *seed_cap=ac; *exact_cap=bc; *wire_len=bl;
+              return 0;
+          }
+
+          static int time_case(const diag_case *c, const uint8_t *src, const uint8_t *dst,
+                               const uint8_t pd[32], const uint8_t cd[32]) {
+              size_t sc=0,ec=0,wire=0;
+              if (parity(c,src,dst,pd,cd,&sc,&ec,&wire)) return 1;
+
+              /* Warm both paths equally before measured AB/BA alternation. */
+              for (int w=0; w<8; ++w) {
+                  uint8_t *o=NULL; size_t l=0,s=0,cap=0,d=0,n=0;
+                  if (call_seed(c,src,dst,pd,cd,&o,&l,&s,&cap,&d,&n)!=0) return 1; free(o);
+                  o=NULL;
+                  if (call_exact(c,src,dst,pd,cd,&o,&l,&s,&cap,&d,&n)!=0) return 1; free(o);
+              }
+
+              uint64_t seed_ns=0, exact_ns=0;
+              for (size_t r=0; r<c->rounds; ++r) {
+                  int exact_first=(int)(r&1u);
+                  for (int k=0;k<2;++k) {
+                      int do_exact = exact_first ? (k==0) : (k==1);
+                      uint8_t *o=NULL; size_t l=0,s=0,cap=0,d=0,n=0;
+                      uint64_t t0=ns_now();
+                      int rc = do_exact ? call_exact(c,src,dst,pd,cd,&o,&l,&s,&cap,&d,&n)
+                                        : call_seed(c,src,dst,pd,cd,&o,&l,&s,&cap,&d,&n);
+                      uint64_t dt=ns_now()-t0;
+                      if (rc!=0) { free(o); return 1; }
+                      free(o);
+                      if (do_exact) exact_ns += dt; else seed_ns += dt;
+                  }
+              }
+              double tr=(double)exact_ns/(double)seed_ns;
+              double cr=(double)ec/(double)sc;
+              printf("ROW name=%s rounds=%zu wire=%zu seed_cap=%zu exact_cap=%zu capacity_ratio=%.6f seed_ns=%" PRIu64 " exact_ns=%" PRIu64 " elapsed_ratio=%.6f\n",
+                     c->name,c->rounds,wire,sc,ec,cr,seed_ns,exact_ns,tr);
+              return 0;
+          }
+
+          int main(void) {
+              enum { N=8192 };
+              uint8_t *src=malloc(N), *dst=malloc(N);
+              if(!src||!dst) return 2;
+              fill(src,N,7u); memcpy(dst,src,N);
+              for(size_t i=0;i<N;i+=97u) dst[i]^=(uint8_t)(i+1u);
+              uint8_t pd[32],cd[32];
+              for(size_t i=0;i<32u;++i){pd[i]=(uint8_t)(i+3u);cd[i]=(uint8_t)(255u-i);}
+
+              one_g02_segment mixed4[4]={{0u,256u,0u},{256u,128u,1u},{384u,256u,0u},{640u,384u,1u}};
+              one_g02_segment ref8[8];
+              one_g02_segment frag128[128];
+              for(size_t i=0;i<8u;++i){ref8[i].start=(uint32_t)(i*1024u);ref8[i].length=1024u;ref8[i].kind=0u;}
+              for(size_t i=0;i<128u;++i){frag128[i].start=(uint32_t)(i*64u);frag128[i].length=64u;frag128[i].kind=(uint8_t)(i&1u);}
+              one_g02_segment *hier=calloc(4097u,sizeof(*hier));
+              if(!hier) return 2;
+              for(size_t i=0;i<4097u;++i){hier[i].start=(uint32_t)i;hier[i].length=1u;hier[i].kind=0u;}
+
+              diag_case cases[]={
+                  {"disabled-1k",1024u,1024u,NULL,0u,0,2500u},
+                  {"mixed-1k",1024u,1024u,mixed4,4u,1,2500u},
+                  {"ref-heavy-8k",8192u,8192u,ref8,8u,1,1200u},
+                  {"fragmented-8k",8192u,8192u,frag128,128u,1,700u},
+                  {"hierarchy-4097",8192u,4097u,hier,4097u,1,80u}
+              };
+              const size_t count=sizeof(cases)/sizeof(cases[0]);
+              printf("NON_PROMOTIONAL_DIAGNOSTIC exact-capacity full-writer AB; candidate timing includes validation+sizing+allocation+emission\n");
+              for(size_t i=0;i<count;++i) if(time_case(&cases[i],src,dst,pd,cd)) return 1;
+              free(hier); free(src); free(dst);
+              return 0;
+          }
+          EOF
+          cc -std=c11 -O2 -Wall -Wextra -Werror -I. /tmp/exact_capacity_diag.c -o /tmp/exact_capacity_diag
+          /tmp/exact_capacity_diag | tee /tmp/exact-capacity-diagnostic.txt
+          echo 'This workflow is diagnostic only; it cannot promote exact-capacity without the frozen authoritative matrix.'
