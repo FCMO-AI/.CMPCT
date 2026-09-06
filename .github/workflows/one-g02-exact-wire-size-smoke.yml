@@ -19,7 +19,7 @@ jobs:
         run: |
           cc -std=c11 -O2 -Wall -Wextra -Werror -c benchmarks/one/native/one_g02_exact_wire_size.c -o /tmp/exact.o
           cc -std=c11 -O2 -Wall -Wextra -Werror -c benchmarks/one/native/one_g02_shared_native_writer_ref_fused.c -o /tmp/writer.o
-      - name: Build and run byte-count oracle smoke
+      - name: Build and run byte-count oracle parity
         shell: bash
         run: |
           cat >/tmp/exact_smoke.c <<'EOF'
@@ -38,6 +38,7 @@ jobs:
           int one_g02_exact_wire_size(size_t,size_t,const one_g02_segment*,size_t,int,
               size_t*,size_t*,size_t*,size_t*);
 
+          static size_t checks = 0;
           static void check(const uint8_t *s,size_t sl,const uint8_t *t,size_t tl,
                             const one_g02_segment *seg,size_t n,int enabled) {
               uint8_t prev[32]={0}, cur[32]={0}, *wire=NULL;
@@ -51,6 +52,66 @@ jobs:
               assert(sb==esb && depth==edepth && nodes==enodes);
               assert(cap>=wl);
               one_g02_native_writer_free(wire);
+              ++checks;
+          }
+
+          static uint32_t rng_state=0x7a91d35bu;
+          static uint32_t xr(void){
+              uint32_t x=rng_state; x^=x<<13; x^=x>>17; x^=x<<5; return rng_state=x;
+          }
+
+          static void randomized(void) {
+              uint8_t source[512], target[256];
+              for (size_t i=0;i<sizeof(source);++i) source[i]=(uint8_t)(i*37u+11u);
+              for (size_t i=0;i<sizeof(target);++i) target[i]=(uint8_t)(i*19u+3u);
+              for (size_t trial=0; trial<1000; ++trial) {
+                  size_t tl=1u+(xr()%sizeof(target));
+                  size_t wanted=1u+(xr()%24u); if (wanted>tl) wanted=tl;
+                  one_g02_segment seg[24]; size_t left=tl, off=0;
+                  for (size_t i=0;i<wanted;++i) {
+                      size_t remaining=wanted-i;
+                      size_t maxlen=left-(remaining-1u);
+                      size_t len=(i+1u==wanted)?left:(1u+(xr()%maxlen));
+                      uint8_t kind=(uint8_t)(xr()&1u);
+                      seg[i].length=(uint32_t)len; seg[i].kind=kind;
+                      seg[i].start=kind ? (uint32_t)off : (uint32_t)(xr()%(sizeof(source)-len+1u));
+                      off+=len; left-=len;
+                  }
+                  check(source,sizeof(source),target,tl,seg,wanted,1);
+              }
+          }
+
+          static void hierarchy(void) {
+              const size_t n=4097u;
+              uint8_t *source=(uint8_t*)malloc(n), *target=(uint8_t*)malloc(n);
+              one_g02_segment *seg=(one_g02_segment*)malloc(n*sizeof(*seg));
+              assert(source && target && seg);
+              for (size_t i=0;i<n;++i) {
+                  source[i]=target[i]=(uint8_t)i;
+                  seg[i].start=(uint32_t)i; seg[i].length=1u; seg[i].kind=0u;
+              }
+              check(source,n,target,n,seg,n,1);
+              free(seg); free(target); free(source);
+          }
+
+          static void hostile(void) {
+              static const uint8_t s[16]={0}, t[16]={0};
+              one_g02_segment bad={0}; bad.start=0; bad.length=16; bad.kind=9;
+              size_t a,b,c,d; uint8_t prev[32]={0},cur[32]={0},*wire=NULL;
+              size_t wl=0,sb=0,cap=0,depth=0,nodes=0;
+              int wr=one_g02_native_writer(s,16,t,16,&bad,1,prev,cur,1,&wire,&wl,&sb,&cap,&depth,&nodes);
+              int er=one_g02_exact_wire_size(16,16,&bad,1,1,&a,&b,&c,&d);
+              assert(wr<0 && er<0);
+
+              one_g02_segment zero={0}; zero.length=0; zero.kind=0;
+              wr=one_g02_native_writer(s,16,t,16,&zero,1,prev,cur,1,&wire,&wl,&sb,&cap,&depth,&nodes);
+              er=one_g02_exact_wire_size(16,16,&zero,1,1,&a,&b,&c,&d);
+              assert(wr<0 && er<0);
+
+              one_g02_segment shortcov={0}; shortcov.length=15; shortcov.kind=0;
+              wr=one_g02_native_writer(s,16,t,16,&shortcov,1,prev,cur,1,&wire,&wl,&sb,&cap,&depth,&nodes);
+              er=one_g02_exact_wire_size(16,16,&shortcov,1,1,&a,&b,&c,&d);
+              assert(wr<0 && er<0);
           }
 
           int main(void) {
@@ -59,18 +120,13 @@ jobs:
               one_g02_segment seg[]={{0,4,0},{4,4,1},{8,8,0}};
               check(s,16,t,16,seg,3,1);
               check(s,16,t,16,NULL,0,0);
-
-              one_g02_segment all_surprise={{0}};
+              one_g02_segment all_surprise={0};
               all_surprise.start=0; all_surprise.length=16; all_surprise.kind=1;
               check(s,16,t,16,&all_surprise,1,1);
-
-              one_g02_segment bad={{0}};
-              bad.start=0; bad.length=16; bad.kind=9;
-              size_t a,b,c,d; uint8_t prev[32]={0},cur[32]={0},*wire=NULL; size_t wl,sb,cap,depth,nodes;
-              int wr=one_g02_native_writer(s,16,t,16,&bad,1,prev,cur,1,&wire,&wl,&sb,&cap,&depth,&nodes);
-              int er=one_g02_exact_wire_size(16,16,&bad,1,1,&a,&b,&c,&d);
-              assert(wr<0 && er<0);
-              puts("exact wire-size smoke: PASS");
+              randomized();
+              hierarchy();
+              hostile();
+              printf("exact wire-size parity: PASS (%zu accepted plans + hostile rejection parity)\n",checks);
               return 0;
           }
           EOF
