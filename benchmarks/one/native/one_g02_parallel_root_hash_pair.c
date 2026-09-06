@@ -76,6 +76,10 @@ static void init_once(void) {
  * Compute the two independent canonical SHA-256 root identities concurrently.
  * Returns 0 on exact success.  This function owns no input and keeps no digest
  * cache: only one bounded helper executor persists across calls.
+ *
+ * Calls are intentionally single-flight. A wider creator executor can schedule
+ * independent relations around this primitive; silently queueing concurrent calls
+ * here would hide resource/backpressure behavior from evidence.
  */
 int one_g02_hash_pair(const uint8_t *source, size_t source_len,
                       const uint8_t *target, size_t target_len,
@@ -87,8 +91,9 @@ int one_g02_hash_pair(const uint8_t *source, size_t source_len,
         return -2;
 
     pthread_mutex_lock(&G.mu);
-    if (G.stop || G.has_job || !G.done == 0) {
-        /* G.done may be 0 when idle after initialization; has_job is authoritative. */
+    if (G.stop || G.has_job) {
+        pthread_mutex_unlock(&G.mu);
+        return -4;
     }
     G.target = target;
     G.target_len = target_len;
