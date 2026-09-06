@@ -58,11 +58,44 @@ static int add_concat(size_t *n, const one_size_ref *refs, size_t count, uint64_
     return add_uv(n, 0u); /* empty concat Surprise blob */
 }
 
+static int add_concat_from_segments(size_t *n, const one_g02_segment *segments,
+                                    size_t count, uint64_t declared) {
+    if (addz(n, 1u) != 0 || add_uv(n, declared + 1u) != 0 || add_uv(n, (uint64_t)count) != 0)
+        return -1;
+    uint64_t next_surprise_node = 1u;
+    for (size_t i = 0; i < count; ++i) {
+        const one_g02_segment *s = &segments[i];
+        if (s->kind == 0u) {
+            if (add_ref(n, 0u, (uint64_t)s->start, 1u, (uint64_t)s->length) != 0) return -1;
+        } else {
+            if (add_ref(n, next_surprise_node++, 0u, 0u, 0u) != 0) return -1;
+        }
+    }
+    return add_uv(n, 0u);
+}
+
+/* Mirror the seed writer's current conservative acceptance boundary exactly.
+ * Exact sizing may reduce allocation after acceptance, but must not silently
+ * broaden the writer's accepted domain in this experiment. */
+static int seed_checked_cap(size_t source_len, size_t target_len, size_t segments,
+                            size_t intermediate_nodes) {
+    if (source_len > ONE_MAX_OUTPUT || target_len > ONE_MAX_OUTPUT) return -1;
+    if (segments > (SIZE_MAX - 4096u) / 64u) return -1;
+    size_t cap = 4096u + segments * 64u;
+    if (intermediate_nodes > (SIZE_MAX - cap) / 64u) return -1;
+    cap += intermediate_nodes * 64u;
+    if (source_len > SIZE_MAX - cap) return -1;
+    cap += source_len;
+    if (target_len > SIZE_MAX - cap) return -1;
+    cap += target_len;
+    return cap <= ONE_MAX_WIRE ? 0 : -1;
+}
+
 /*
  * Metadata-only exact ONE0 wire sizing oracle for the shared native writer.
- * It deliberately never reads source/target payload bytes.  Return codes mirror
- * the writer's validation classes where practical; callers should compare the
- * accepted/rejected domain against the writer before using this for allocation.
+ * It deliberately never reads source/target payload bytes. Return codes mirror
+ * the writer's validation classes where practical; accepted/rejected domain is
+ * intentionally held to the seed writer during this falsifier.
  */
 int one_g02_exact_wire_size(
     size_t source_len, size_t target_len,
@@ -111,6 +144,7 @@ int one_g02_exact_wire_size(
     }
     const size_t node_count = enabled ? (1u + surprise_count + intermediate_total + 1u) : 2u;
     if (node_count > ONE_MAX_NODES) return -12;
+    if (seed_checked_cap(source_len, target_len, segment_count, intermediate_total) != 0) return -13;
 
     size_t n = 4u; /* ONE0 */
     if (add_uv(&n, ONE_MAX_NODES) != 0 || add_uv(&n, ONE_MAX_OUTPUT) != 0 ||
@@ -123,40 +157,46 @@ int one_g02_exact_wire_size(
         for (size_t i = 0; i < segment_count; ++i)
             if (segments[i].kind == 1u && add_surprise(&n, segments[i].length) != 0) return -13;
 
-        one_size_ref *level = (one_size_ref *)malloc(segment_count * sizeof(*level));
-        if (!level) return -14;
-        uint64_t next_surprise = 1u;
-        for (size_t i = 0; i < segment_count; ++i) {
-            const one_g02_segment *s = &segments[i];
-            level[i].node = s->kind == 0u ? 0u : next_surprise++;
-            level[i].start = s->kind == 0u ? s->start : 0u;
-            level[i].wire_length = s->kind == 0u ? s->length : 0u;
-            level[i].has_length = s->kind == 0u ? 1u : 0u;
-            level[i].span = s->length;
-        }
-        uint64_t next_node = 1u + (uint64_t)surprise_count;
-        size_t nlevel = segment_count;
-        while (nlevel > ONE_MAX_NODES) {
-            const size_t next_count = (nlevel + ONE_MAX_NODES - 1u) / ONE_MAX_NODES;
-            one_size_ref *next = (one_size_ref *)malloc(next_count * sizeof(*next));
-            if (!next) { free(level); return -14; }
-            size_t ni = 0u;
-            for (size_t off = 0; off < nlevel; off += ONE_MAX_NODES) {
-                size_t chunk = nlevel - off;
-                if (chunk > ONE_MAX_NODES) chunk = ONE_MAX_NODES;
-                uint64_t declared = 0u;
-                for (size_t j = 0; j < chunk; ++j) declared += level[off + j].span;
-                if (add_concat(&n, level + off, chunk, declared) != 0) {
-                    free(next); free(level); return -13;
-                }
-                next[ni].node = next_node++;
-                next[ni].start = 0u; next[ni].wire_length = 0u; next[ni].has_length = 0u;
-                next[ni].span = declared; ++ni;
+        if (segment_count <= ONE_MAX_NODES) {
+            if (add_concat_from_segments(&n, segments, segment_count, (uint64_t)target_len) != 0)
+                return -13;
+        } else {
+            /* Hierarchy path mirrors the seed's generic temporary structure. */
+            one_size_ref *level = (one_size_ref *)malloc(segment_count * sizeof(*level));
+            if (!level) return -14;
+            uint64_t next_surprise = 1u;
+            for (size_t i = 0; i < segment_count; ++i) {
+                const one_g02_segment *s = &segments[i];
+                level[i].node = s->kind == 0u ? 0u : next_surprise++;
+                level[i].start = s->kind == 0u ? s->start : 0u;
+                level[i].wire_length = s->kind == 0u ? s->length : 0u;
+                level[i].has_length = s->kind == 0u ? 1u : 0u;
+                level[i].span = s->length;
             }
-            free(level); level = next; nlevel = next_count;
+            uint64_t next_node = 1u + (uint64_t)surprise_count;
+            size_t nlevel = segment_count;
+            while (nlevel > ONE_MAX_NODES) {
+                const size_t next_count = (nlevel + ONE_MAX_NODES - 1u) / ONE_MAX_NODES;
+                one_size_ref *next = (one_size_ref *)malloc(next_count * sizeof(*next));
+                if (!next) { free(level); return -14; }
+                size_t ni = 0u;
+                for (size_t off = 0; off < nlevel; off += ONE_MAX_NODES) {
+                    size_t chunk = nlevel - off;
+                    if (chunk > ONE_MAX_NODES) chunk = ONE_MAX_NODES;
+                    uint64_t declared = 0u;
+                    for (size_t j = 0; j < chunk; ++j) declared += level[off + j].span;
+                    if (add_concat(&n, level + off, chunk, declared) != 0) {
+                        free(next); free(level); return -13;
+                    }
+                    next[ni].node = next_node++;
+                    next[ni].start = 0u; next[ni].wire_length = 0u; next[ni].has_length = 0u;
+                    next[ni].span = declared; ++ni;
+                }
+                free(level); level = next; nlevel = next_count;
+            }
+            if (add_concat(&n, level, nlevel, (uint64_t)target_len) != 0) { free(level); return -13; }
+            free(level);
         }
-        if (add_concat(&n, level, nlevel, (uint64_t)target_len) != 0) { free(level); return -13; }
-        free(level);
     }
 
     /* sorted roots: current, previous */
