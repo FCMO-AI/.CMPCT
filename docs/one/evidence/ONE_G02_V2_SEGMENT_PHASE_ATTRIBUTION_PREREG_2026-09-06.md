@@ -46,3 +46,5 @@ If both are material, preserve both; do not force a single owner. If neither qua
 ## Claim boundary
 
 Attribution only inside the current adjacent-version V2 `_native_plan` boundary. It changes no Law/Surprise semantics, wire bytes, reader behavior or writer policy and grants no v0.29/v0.30 comparison authority.
+
+Workflow registration followed the Builder; this non-semantic line exists only to trigger the already-frozen exact-source attribution lane.
