@@ -1,6 +1,7 @@
 # ONE-G0.2 relation witness proof deferral — hostile-review amendment
 
 Date: 2026-09-06  
+Activation T0: `2026-09-06T01:38:04Z` (environment clock; user timezone unavailable in this execution)  
 Experimental line: `ONE-G0.2`  
 Status: frozen before accepting result authority
 
