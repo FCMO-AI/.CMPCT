@@ -67,3 +67,5 @@ A native-kernel win does **not** promote the writer. If it advances here, the ex
 ## Disproof
 
 Reject this implementation if vector setup/mask-run handling consumes most of the theoretical gain, if dense transitions erase the advantage, or if exact plan identity fails. Do not rescue it with size/case thresholds after seeing results.
+
+Workflow registration followed the Builder; this final sentence is non-semantic and exists only to trigger the already-frozen exact-source lane.
