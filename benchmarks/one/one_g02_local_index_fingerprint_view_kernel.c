@@ -132,6 +132,27 @@ static int scan_fp(const uint8_t *d, size_t n, const uint64_t g[256], local_inde
     return 0;
 }
 
+static int run_key_stream_linear(const uint64_t *keys, size_t n, local_index_result *o) {
+    ring_entry r[LOCAL_CAP] = {{0}};
+    size_t count = 0, head = 0;
+    *o = (local_index_result){0}; o->state_bytes = sizeof(r);
+    for (size_t i = 0; i < n; i++) {
+        if (linear_event(r, &count, &head, keys[i], i * WINDOW, o) != 0) return -1;
+    }
+    return 0;
+}
+
+static int run_key_stream_fp(const uint64_t *keys, size_t n, local_index_result *o) {
+    ring_entry r[LOCAL_CAP] = {{0}};
+    uint8_t fp[FP_CAP] = {0};
+    size_t count = 0, head = 0;
+    *o = (local_index_result){0}; o->state_bytes = sizeof(r) + sizeof(fp);
+    for (size_t i = 0; i < n; i++) {
+        if (fp_event(r, fp, &count, &head, keys[i], i * WINDOW, o) != 0) return -1;
+    }
+    return 0;
+}
+
 int one_g02_local_index_fp_audit(const uint8_t *d, size_t n, const uint64_t g[256],
                                  local_index_result *b, local_index_result *c) {
     if ((!d && n) || !g || !b || !c) return -1;
@@ -144,16 +165,26 @@ int one_g02_local_index_fp_audit(const uint8_t *d, size_t n, const uint64_t g[25
 int one_g02_local_index_fp_key_stream_audit(const uint64_t *keys, size_t n,
                                             local_index_result *b, local_index_result *c) {
     if ((!keys && n) || !b || !c) return -1;
-    ring_entry br[LOCAL_CAP] = {{0}}, cr[LOCAL_CAP] = {{0}};
-    uint8_t fp[FP_CAP] = {0};
-    size_t bc = 0, bh = 0, cc = 0, ch = 0;
-    *b = (local_index_result){0}; *c = (local_index_result){0};
-    b->state_bytes = sizeof(br); c->state_bytes = sizeof(cr) + sizeof(fp);
-    for (size_t i = 0; i < n; i++) {
-        if (linear_event(br, &bc, &bh, keys[i], i * WINDOW, b) != 0) return -2;
-        if (fp_event(cr, fp, &cc, &ch, keys[i], i * WINDOW, c) != 0) return -3;
-        if (bc != cc || b->hits != c->hits || b->decision_checksum != c->decision_checksum) return -4;
-    }
+    if (run_key_stream_linear(keys, n, b) != 0) return -2;
+    if (run_key_stream_fp(keys, n, c) != 0) return -3;
+    return (b->lookup_events == c->lookup_events && b->hits == c->hits &&
+            b->live_entries == c->live_entries && b->decision_checksum == c->decision_checksum) ? 0 : -4;
+}
+
+int one_g02_local_index_fp_key_stream_measure(const uint64_t *keys, size_t n, size_t batch,
+                                              double *bn, double *cn,
+                                              local_index_result *b, local_index_result *c) {
+    if ((!keys && n) || !batch || !bn || !cn || !b || !c) return -1;
+    local_index_result br = {0}, cr = {0};
+    if (one_g02_local_index_fp_key_stream_audit(keys, n, &br, &cr) != 0) return -2;
+    uint64_t t, b1, b2, c1, c2;
+    t = now_ns(); for (size_t i = 0; i < batch; i++) if (run_key_stream_linear(keys, n, &br) != 0) return -3; b1 = now_ns() - t;
+    t = now_ns(); for (size_t i = 0; i < batch; i++) if (run_key_stream_fp(keys, n, &cr) != 0) return -4; c1 = now_ns() - t;
+    t = now_ns(); for (size_t i = 0; i < batch; i++) if (run_key_stream_fp(keys, n, &cr) != 0) return -5; c2 = now_ns() - t;
+    t = now_ns(); for (size_t i = 0; i < batch; i++) if (run_key_stream_linear(keys, n, &br) != 0) return -6; b2 = now_ns() - t;
+    *bn = ((double)b1 + (double)b2) / (2.0 * (double)batch);
+    *cn = ((double)c1 + (double)c2) / (2.0 * (double)batch);
+    *b = br; *c = cr;
     return 0;
 }
 
