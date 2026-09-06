@@ -113,6 +113,19 @@ jobs:
               wr=one_g02_native_writer(s,16,t,16,&shortcov,1,prev,cur,1,&wire,&wl,&sb,&cap,&depth,&nodes);
               er=one_g02_exact_wire_size(16,16,&shortcov,1,1,&a,&b,&c,&d);
               assert(wr<0 && er<0);
+
+              /* Acceptance-domain parity: canonical wire would fit because the
+               * target is a Ref, but the seed's conservative cap exceeds the
+               * 128 MiB limit. Exact sizing must not silently accept it. No
+               * payload is dereferenced because both paths reject pre-emission. */
+              static const uint8_t dummy=0;
+              one_g02_segment capdrift={0};
+              capdrift.start=0u; capdrift.length=64u*1024u*1024u; capdrift.kind=0u;
+              wr=one_g02_native_writer(&dummy,64u*1024u*1024u,&dummy,64u*1024u*1024u,
+                                       &capdrift,1,prev,cur,1,&wire,&wl,&sb,&cap,&depth,&nodes);
+              er=one_g02_exact_wire_size(64u*1024u*1024u,64u*1024u*1024u,
+                                         &capdrift,1,1,&a,&b,&c,&d);
+              assert(wr<0 && er<0);
           }
 
           int main(void) {
