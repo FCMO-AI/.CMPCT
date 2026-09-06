@@ -53,3 +53,5 @@ If no phase qualifies, record diffuse cost; do not pick the largest phase merely
 ## Claim boundary
 
 This lane attributes elapsed only inside the current adjacent-version root-hash-charged V2 research writer. It does not include arbitrary/fused discovery, durability, filesystem semantics or product-native integration. A material owner found here is a candidate for the next writer optimization, not evidence of whole-system CMPCT1 superiority.
+
+Workflow registration was committed after the Builder; this non-semantic note exists only to trigger the already-frozen lane on its registered path.
