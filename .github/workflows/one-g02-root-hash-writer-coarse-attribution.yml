@@ -51,3 +51,5 @@ jobs:
           name: one-g02-root-hash-writer-coarse-attribution-${{ github.sha }}
           path: one-g02-root-hash-writer-coarse-attribution.json
           if-no-files-found: error
+
+# Registered on the research branch before the result-bearing run; this comment is deliberately non-semantic.
