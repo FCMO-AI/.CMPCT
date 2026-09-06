@@ -74,12 +74,19 @@ Before the preregistered timing gate is run, build a native nomination bridge th
 
 The current native minimizer trace exposes selected anchor positions, which is useful but does not by itself prove the full cross-object exact-reuse nomination semantics. Any bridge must preserve exact witness/equality checks rather than treating a minimizer collision as relation authority.
 
+### Bridge implementation state
+
+`benchmarks/one/one_g02_native_nomination_trace_bridge.py` now implements the first semantic bridge without duplicating the native minimizer. It consumes the promoted native selector's emitted anchor positions, reconstructs the Gear signal independently, and replays the existing nomination policy against fresh validation seeds. Its CI lane is `.github/workflows/one-g02-native-nomination-trace-bridge.yml`.
+
+This bridge is deliberately **not** writer-speed evidence: local auditions and nomination event consumption still execute in the Python oracle. Its only admissible result is semantic equivalence (anchor trace, implied Gear signals, and cross-object nomination counts) or rejection. Native timing integration remains blocked until that equivalence passes and nomination event emission is moved into/instrumented from the native observer.
+
 ## Immediate work order
 
 1. preserve the retired always-hot certificate negative;
 2. preserve the 4–256 KiB safe-dispatch transfer result;
-3. implement and independently validate native shared-observer nomination evidence;
-4. only then run the frozen integrated discovery + safe-dispatch A/B;
-5. if the integrated gain is diluted, decompose nomination/admission rather than returning to isolated relation micro-tuning.
+3. independently validate the native nomination trace bridge against reference semantics;
+4. instrument/fuse native nomination events only after semantic equivalence is established;
+5. only then run the frozen integrated discovery + safe-dispatch A/B;
+6. if the integrated gain is diluted, decompose nomination/admission rather than returning to isolated relation micro-tuning.
 
 No reader-visible ONE opcode, stored-byte change, comparator claim, v0.30 development or September-11 Genesis authority is created by this reconciliation.
