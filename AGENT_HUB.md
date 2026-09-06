@@ -27,6 +27,14 @@ This public repository deliberately records repository coordinates rather than d
 
 Do not replace CMPCT's local AGI Engineering Standard, quality ratchet, benchmark ethics, format law, or release gates merely because a more general Hub document exists.
 
+## Optional institutional learning
+
+Public CMPCT operation and contribution do **not** depend on private Agent Hub access. Ordinary CMPCT work has no Commons-participation requirement.
+
+When an FCMO-authorized agent with legitimate Hub access discovers a material CMPCT lesson that plausibly generalizes across FCMO, it may contribute a proposal, experiment, reproduction, counterexample, or evidence under the Hub's `commons/EVOLUTION_PROTOCOL.md`. Preserve public CMPCT evidence here when appropriate and reference it from the Hub rather than making this repository depend on private state.
+
+Hub proposals remain non-canonical until Governance and legitimate human promotion say otherwise. They cannot override CMPCT's local benchmark, format, release, or public-surface law merely by existing.
+
 ## Reciprocity
 
 Agent Hub's private ecosystem registry points back to `FCMO-AI/.CMPCT`, this `AGENT_HUB.md`, `AGENTS.md`, and the local adapted Standard.
