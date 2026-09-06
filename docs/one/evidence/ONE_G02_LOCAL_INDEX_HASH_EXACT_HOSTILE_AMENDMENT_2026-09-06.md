@@ -25,6 +25,18 @@ The only permitted repair is **bound-triggered locator rebuild**: if an absent-k
 
 This repair is deliberately triggered by representational saturation, not by a tuned tombstone percentage. It therefore cannot be adjusted after timing results to move a crossover.
 
+## Exact repaired implementation
+
+The bounded repair is implemented only in:
+
+- `benchmarks/one/one_g02_local_index_hash_exact_kernel_v2.c`;
+- `benchmarks/one/one_g02_local_index_hash_exact_ab_v2.py`;
+- `.github/workflows/one-g02-local-index-hash-exact-v2.yml`.
+
+The v2 kernel counts locator lookup, removal, reinsertion and rebuild probes inside the candidate accounting, and the rebuild executes inside the same native timed scan. The Python harness does not subtract rebuild work or adjust the preregistered `0.30x` probe, `0.90x` mature-size elapsed, `1.03x` per-row, or `2.5x` state gates.
+
+Any result from the original non-v2 script remains evidence only of the saturation defect. Only an exact-source v2 run that includes this amendment may consume repaired performance authority.
+
 ## Authority
 
 Run `34008374000` is authoritative evidence of the implementation defect and remains preserved as negative engineering history, but it has **no performance authority** because the candidate aborted before completing the frozen matrix.
