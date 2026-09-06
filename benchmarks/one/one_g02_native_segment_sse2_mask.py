@@ -62,6 +62,25 @@ def _signature(out, count: int):
     return tuple((int(out[i].kind), int(out[i].start), int(out[i].length)) for i in range(count))
 
 
+def _python_oracle(source: bytes, target: bytes):
+    """Independent specification of maximal runs of is_ref(i)."""
+    n = len(target)
+    if len(source) != n:
+        raise ValueError("source/target size mismatch")
+    if n == 0:
+        return ()
+    out = []
+    i = 0
+    while i < n:
+        ref = i > 0 and target[i] == source[i - 1]
+        begin = i
+        i += 1
+        while i < n and (i > 0 and target[i] == source[i - 1]) == ref:
+            i += 1
+        out.append((0 if ref else 1, begin - 1 if ref else begin, i - begin))
+    return tuple(out)
+
+
 def _reconstruct(source: bytes, target: bytes, sig):
     pieces = []
     for kind, start, length in sig:
@@ -86,7 +105,6 @@ def _tail_case(n: int):
     if n:
         target[0] = 0xA5
     for i in range(1, n):
-        # deterministic mixed runs crossing 16-byte boundaries
         target[i] = source[i-1] if ((i // 3) & 1) else (source[i-1] ^ 0x3C)
     return source, bytes(target)
 
@@ -106,13 +124,15 @@ def _row(scalar, sse2, timed, name: str, size: int, source: bytes, target: bytes
         raise RuntimeError("SSE2 segmenter failed")
     siga = _signature(a, int(sa.segments))
     sigb = _signature(b, int(sb.segments))
+    oracle = _python_oracle(source, target)
     semantic_ok = (
-        siga == sigb and int(sa.compared_target_bytes) == size and int(sb.compared_target_bytes) == size
+        siga == oracle == sigb
+        and int(sa.compared_target_bytes) == size and int(sb.compared_target_bytes) == size
         and _reconstruct(source, target, siga) == target
         and _reconstruct(source, target, sigb) == target
     )
     if not semantic_ok:
-        raise AssertionError(f"segment-plan mismatch: {name}/{size}")
+        raise AssertionError(f"segment-plan/oracle mismatch: {name}/{size}")
     ans = (ctypes.c_uint64 * ROUNDS)()
     bns = (ctypes.c_uint64 * ROUNDS)()
     if timed(src, dst, size, a, b, max(1, size), ROUNDS, ans, bns) != 0:
@@ -159,11 +179,12 @@ def run():
             and cmed <= CONTROL_MEDIAN_MAX and cworst <= CONTROL_ROW_MAX and hmed <= HOSTILE_MEDIAN_MAX
         )
         return {
-            "schema": "cmpct-one-g02-native-segment-sse2-mask-v1",
+            "schema": "cmpct-one-g02-native-segment-sse2-mask-v2",
             "experimental_version": "ONE-G0.2",
             "source_sha": os.environ.get("EVIDENCE_HEAD") or os.environ.get("GITHUB_SHA") or "local-unbound",
             "rounds": ROUNDS,
             "semantic_failures": semantic_failures,
+            "independent_python_oracle": True,
             "mature_productive_median_ratio": pmed,
             "mature_productive_worst_ratio": pworst,
             "mature_control_median_ratio": cmed,
