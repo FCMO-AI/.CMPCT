@@ -9,6 +9,7 @@ on:
       - "benchmarks/one/one_g02_relation_shared_observer_validation.py"
       - "benchmarks/one/one_g02_shift_relation_safe_dispatch_kernel.c"
       - "docs/one/evidence/ONE_G02_RELATION_WITNESS_PROOF_DEFERRAL_PREREG_2026-09-06.md"
+      - "docs/one/evidence/ONE_G02_RELATION_WITNESS_PROOF_DEFERRAL_HOSTILE_AMENDMENT_2026-09-06.md"
       - ".github/workflows/one-g02-relation-witness-proof-deferral.yml"
   pull_request:
     paths:
@@ -16,6 +17,7 @@ on:
       - "benchmarks/one/one_g02_relation_shared_observer_validation.py"
       - "benchmarks/one/one_g02_shift_relation_safe_dispatch_kernel.c"
       - "docs/one/evidence/ONE_G02_RELATION_WITNESS_PROOF_DEFERRAL_PREREG_2026-09-06.md"
+      - "docs/one/evidence/ONE_G02_RELATION_WITNESS_PROOF_DEFERRAL_HOSTILE_AMENDMENT_2026-09-06.md"
       - ".github/workflows/one-g02-relation-witness-proof-deferral.yml"
 
 permissions:
