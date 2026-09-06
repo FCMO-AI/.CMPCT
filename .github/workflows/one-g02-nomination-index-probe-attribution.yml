@@ -1,0 +1,43 @@
+name: ONE-G0.2 nomination index probe attribution
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [research/cmpct1]
+    paths:
+      - "benchmarks/one/one_g02_nomination_index_probe_attribution.py"
+      - "benchmarks/one/one_g02_relation_shared_observer_validation.py"
+      - "docs/one/evidence/ONE_G02_NOMINATION_INDEX_PROBE_ATTRIBUTION_PREREG_2026-09-06.md"
+      - ".github/workflows/one-g02-nomination-index-probe-attribution.yml"
+  pull_request:
+    paths:
+      - "benchmarks/one/one_g02_nomination_index_probe_attribution.py"
+      - "benchmarks/one/one_g02_relation_shared_observer_validation.py"
+      - "docs/one/evidence/ONE_G02_NOMINATION_INDEX_PROBE_ATTRIBUTION_PREREG_2026-09-06.md"
+      - ".github/workflows/one-g02-nomination-index-probe-attribution.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  probe-attribution:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Nomination index probe attribution
+        env:
+          EVIDENCE_HEAD: ${{ github.sha }}
+        run: |
+          mkdir -p artifacts/one
+          python -m benchmarks.one.one_g02_nomination_index_probe_attribution | tee artifacts/one/nomination_index_probe_attribution.json
+      - name: Upload exact-source result
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: one-g02-nomination-index-probe-attribution-${{ github.sha }}
+          path: artifacts/one/nomination_index_probe_attribution.json
+          if-no-files-found: error
