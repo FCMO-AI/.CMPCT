@@ -1,20 +1,22 @@
 #include <stddef.h>
 #include <stdint.h>
+#include <stdlib.h>
 #include <string.h>
 
 /*
  * ONE-G0.2 native causal-transfer consumer for relation witness deferral.
- * It consumes an already-proven native minimizer trace.  Both modes share the
- * same indexing/verification path and stop relation-specific auditions after
- * the first cross-object nomination.  witness_only=0 performs the inherited
- * left/right extension before nomination; witness_only=1 lets an exact 64-B
- * cross witness nominate the pair for the external safe relation proof.
- * The witness is never Law authority.
+ * It consumes an already-proven native minimizer trace. Both modes share the
+ * same demand-grown indexing/verification path and stop relation-specific
+ * auditions after the first cross-object nomination. witness_only=0 performs
+ * inherited left/right extension before nomination; witness_only=1 lets an
+ * exact 64-B cross witness nominate the pair for the external safe proof.
+ * The witness is never Law authority. Research-only, not product ABI.
  */
 #define ONE_G02_WINDOW 64u
 #define ONE_G02_PROOF_BLOCK 4096u
 #define ONE_G02_LOCAL_ENTRIES 64u
 #define ONE_G02_GLOBAL_ENTRIES 8192u
+#define ONE_G02_GLOBAL_INITIAL_ENTRIES 64u
 
 typedef struct {
     uint64_t cross_auditions;
@@ -22,6 +24,7 @@ typedef struct {
     uint64_t nominations;
     uint64_t local_peak_entries;
     uint64_t global_peak_entries;
+    uint64_t global_capacity_entries;
     uint64_t verification_read_bytes;
     uint64_t extension_read_bytes;
     uint64_t anchors_consumed;
@@ -66,8 +69,8 @@ static void audition(const uint8_t *data,size_t length,size_t boundary,size_t st
 int one_g02_native_witness_deferral_consume(const uint8_t *data,size_t length,size_t boundary,const uint64_t gear[256],const uint64_t *anchors,size_t anchor_count,int witness_only,one_g02_witness_consumer_result *out){
     if(!out||!gear||(witness_only!=0&&witness_only!=1))return -1;*out=(one_g02_witness_consumer_result){0};
     if(length==0)return anchor_count==0?0:-3;if(!data||boundary>length||(anchor_count&&!anchors))return -1;
-    one_g02_index_entry local[ONE_G02_LOCAL_ENTRIES]={{0}},global[ONE_G02_GLOBAL_ENTRIES]={{0}};
-    size_t local_head=0,local_count=0,global_count=0,anchor_i=0,covered=0;int nominated=0;uint64_t h=0;uint8_t run_value=data[0];size_t run_length=0;
+    one_g02_index_entry local[ONE_G02_LOCAL_ENTRIES]={{0}};one_g02_index_entry *global=NULL;
+    size_t global_capacity=0,local_head=0,local_count=0,global_count=0,anchor_i=0,covered=0;int nominated=0;uint64_t h=0;uint8_t run_value=data[0];size_t run_length=0;int rc=0;
     for(size_t position=0;position<length;++position){uint8_t value=data[position];
         if(!run_length){run_value=value;run_length=1;}else if(value==run_value)run_length++;else{run_value=value;run_length=1;}
         h=(h<<1)+gear[value];if(position+1<ONE_G02_WINDOW)continue;size_t start=position+1-ONE_G02_WINDOW;int run_dominated=run_length>=ONE_G02_WINDOW;
@@ -75,10 +78,15 @@ int one_g02_native_witness_deferral_consume(const uint8_t *data,size_t length,si
             audition(data,length,boundary,start,have,prior,witness_only,&covered,&nominated,out);
             if(!have){size_t slot;if(local_count<ONE_G02_LOCAL_ENTRIES){slot=(local_head+local_count)%ONE_G02_LOCAL_ENTRIES;local_count++;}else{slot=local_head;local_head=(local_head+1)%ONE_G02_LOCAL_ENTRIES;}
                 local[slot].key=h;local[slot].start=start;local[slot].used=1;if(local_count>out->local_peak_entries)out->local_peak_entries=local_count;}}
-        if(anchor_i<anchor_count){uint64_t anchor=anchors[anchor_i];if(anchor<position)return -4;if(anchor==position){size_t prior=0;int have=find_entry(global,ONE_G02_GLOBAL_ENTRIES,global_count,0,h,&prior);
+        if(anchor_i<anchor_count){uint64_t anchor=anchors[anchor_i];if(anchor<position){rc=-4;goto done;}if(anchor==position){size_t prior=0;int have=find_entry(global,global_capacity,global_count,0,h,&prior);
                 audition(data,length,boundary,start,have,prior,witness_only,&covered,&nominated,out);
-                if(!have&&global_count<ONE_G02_GLOBAL_ENTRIES){global[global_count].key=h;global[global_count].start=start;global[global_count].used=1;global_count++;if(global_count>out->global_peak_entries)out->global_peak_entries=global_count;}
+                if(!have&&global_count<ONE_G02_GLOBAL_ENTRIES){
+                    if(global_count==global_capacity){size_t nc=global_capacity?global_capacity*2:ONE_G02_GLOBAL_INITIAL_ENTRIES;if(nc>ONE_G02_GLOBAL_ENTRIES)nc=ONE_G02_GLOBAL_ENTRIES;
+                        one_g02_index_entry *grown=(one_g02_index_entry*)realloc(global,nc*sizeof(*global));if(!grown){rc=-6;goto done;}global=grown;global_capacity=nc;}
+                    global[global_count].key=h;global[global_count].start=start;global[global_count].used=1;global_count++;if(global_count>out->global_peak_entries)out->global_peak_entries=global_count;}
                 anchor_i++;out->anchors_consumed++;}}
     }
-    if(anchor_i!=anchor_count)return -5;return 0;
+    if(anchor_i!=anchor_count)rc=-5;
+done:
+    out->global_capacity_entries=global_capacity;free(global);return rc;
 }
