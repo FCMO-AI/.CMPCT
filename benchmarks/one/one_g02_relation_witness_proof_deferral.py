@@ -93,7 +93,10 @@ def _nomination_traffic(source: bytes, target: bytes, *, witness_only: bool) -> 
 
         if not run_dominated and (position + 1) % WINDOW == 0:
             prior = local_index.get(h)
-            if not (witness_only and nominated):
+            # This experiment isolates the marginal cost of nominating one pair for relation proof.
+            # Once either arm has nominated the pair, later exact-reuse auditions belong to the
+            # exact-reuse discovery objective and must not be charged only to the baseline arm.
+            if not nominated:
                 audition(start, prior)
             if prior is None:
                 local_index[h] = start
@@ -117,7 +120,7 @@ def _nomination_traffic(source: bytes, target: bytes, *, witness_only: bool) -> 
         last_emitted_position = anchor_position
         anchor_start = anchor_position + 1 - WINDOW
         prior = global_index.get(signal)
-        if not (witness_only and nominated):
+        if not nominated:
             audition(anchor_start, prior)
         if prior is None and len(global_index) < GEAR_MAX_INDEX_ENTRIES:
             global_index[signal] = anchor_start
@@ -189,7 +192,7 @@ def run() -> dict[str, object]:
             decision = "hold_relation_witness_proof_deferral"
 
         return {
-            "schema": "cmpct-one-g02-relation-witness-proof-deferral-v2",
+            "schema": "cmpct-one-g02-relation-witness-proof-deferral-v3",
             "experimental_version": "ONE-G0.2",
             "source_sha": os.environ.get("EVIDENCE_HEAD") or os.environ.get("GITHUB_SHA") or "local-unbound",
             "opportunity_losses": opportunity_losses,
@@ -200,8 +203,9 @@ def run() -> dict[str, object]:
             "decision": decision,
             "rows": rows,
             "claim_boundary": (
-                "modeled/reference proof-traffic evidence for relation nomination only; exact-reuse Law discovery "
-                "semantics are not removed and Python elapsed is not native speed authority"
+                "modeled/reference proof-traffic evidence for relation nomination only; both arms stop relation-specific "
+                "audition accounting after first nomination, exact-reuse Law discovery semantics are not removed, and "
+                "Python elapsed is not native speed authority"
             ),
         }
     finally:
