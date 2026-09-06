@@ -49,6 +49,8 @@ Use the authoritative temporal relation generator and include:
 
 For every row, scalar and SSE2 plans must be byte-for-byte identical over every emitted segment and segment count. Reconstruction from either plan must equal the target. Any mismatch invalidates the lane.
 
+The semantic authority is three-way: scalar C, SSE2 C, and an independent Python oracle that directly emits maximal runs of the frozen `is_ref(i)` predicate. Both C arms must equal the Python oracle exactly before their timing data can count.
+
 ## Frozen performance gates
 
 Native segment-kernel elapsed only, paired A/B–B/A with `CLOCK_MONOTONIC_RAW` inside C and enough batches to amortize call overhead.
@@ -68,4 +70,4 @@ A native-kernel win does **not** promote the writer. If it advances here, the ex
 
 Reject this implementation if vector setup/mask-run handling consumes most of the theoretical gain, if dense transitions erase the advantage, or if exact plan identity fails. Do not rescue it with size/case thresholds after seeing results.
 
-Workflow registration followed the Builder; this final sentence is non-semantic and exists only to trigger the already-frozen exact-source lane.
+Workflow registration followed the Builder; this semantic-audit amendment was frozen before accepting any SSE2 timing result and also retriggers the exact-source lane.
