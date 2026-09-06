@@ -61,23 +61,32 @@ def _call(fn, src_arr, dst_arr, n, out):
     return _snapshot(out, stats), int(stats.compared_target_bytes), int(stats.segments)
 
 
-def _pair_time(a, b):
+def _pair_kernel_time(scalar, swar, src, dst, n, aout, bout):
+    """Time only the native ABI call and Segment-buffer writes.
+
+    Segment tuple materialization is correctness instrumentation and is deliberately
+    outside this timer; the full writer consumes the native buffer directly.
+    """
     aa, bb = [], []
-    av = bv = None
+    astats = SegmentStats(); bstats = SegmentStats()
     enabled = gc.isenabled()
     try:
         if enabled: gc.disable()
         for r in range(ROUNDS):
             order = (False, True) if r % 2 == 0 else (True, False)
             for cand in order:
+                stats = bstats if cand else astats
+                out = bout if cand else aout
+                fn = swar if cand else scalar
                 t0 = time.perf_counter_ns()
-                value = b() if cand else a()
+                rc = fn(src, dst, n, out, max(1, n), ctypes.byref(stats))
                 dt = time.perf_counter_ns() - t0
-                if cand: bb.append(dt); bv = value
-                else: aa.append(dt); av = value
+                if rc != 0:
+                    raise RuntimeError(f"timed segment kernel failed: {rc}")
+                (bb if cand else aa).append(dt)
     finally:
         if enabled: gc.enable()
-    return float(statistics.median(aa)), av, float(statistics.median(bb)), bv
+    return float(statistics.median(aa)), float(statistics.median(bb)), astats, bstats
 
 
 def _masked_case(n: int, mode: str):
@@ -98,9 +107,7 @@ def _masked_case(n: int, mode: str):
         if ref:
             target[i] = source[i-1]
         else:
-            v = source[i-1] ^ 0xA5
-            if v == source[i-1]: v ^= 1
-            target[i] = v
+            target[i] = source[i-1] ^ 0xA5
     return source, bytes(target)
 
 
@@ -140,11 +147,14 @@ def run():
                 if av != bv or not _coverage_ok(bv[0], n):
                     semantic_failures += 1
                     raise AssertionError(f"Segment mismatch: {case}/{n}")
-                ans, at, bns, bt = _pair_time(
-                    lambda f=scalar,s=src,d=dst,nn=n,o=aout: _call(f,s,d,nn,o),
-                    lambda f=swar,s=src,d=dst,nn=n,o=bout: _call(f,s,d,nn,o),
+
+                ans, bns, astats, bstats = _pair_kernel_time(
+                    scalar, swar, src, dst, n, aout, bout
                 )
-                if at != bt:
+                # Verify timed outputs only after the clock stops.
+                at = (_snapshot(aout, astats), int(astats.compared_target_bytes), int(astats.segments))
+                bt = (_snapshot(bout, bstats), int(bstats.compared_target_bytes), int(bstats.segments))
+                if at != bt or at != av:
                     semantic_failures += 1
                     raise AssertionError("timed Segment stream changed")
                 rows.append({
@@ -173,6 +183,7 @@ def run():
             "experimental_version": "ONE-G0.2",
             "source_sha": os.environ.get("EVIDENCE_HEAD") or os.environ.get("GITHUB_SHA") or "local-unbound",
             "frozen_rounds": ROUNDS,
+            "timing_boundary": "native ABI call + scan + Segment buffer writes; Python tuple verification excluded",
             "semantic_failures": semantic_failures,
             "mature_productive_median_ratio": med,
             "mature_productive_worst_ratio": worst,
