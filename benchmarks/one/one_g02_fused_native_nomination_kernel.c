@@ -6,13 +6,16 @@
 /*
  * ONE-G0.2 research Builder: fuse the already-validated pair-nomination event
  * consumer into the promoted offset-only minimizer pass.  The reader ontology
- * is untouched.  This kernel is a semantic/traffic experiment, not product ABI.
+ * is untouched.  The local first-witness index is fixed and tiny; the global
+ * index grows geometrically on demand but retains the exact 8,192-entry cap.
+ * This kernel is research evidence, not product ABI.
  */
 
 #define ONE_G02_WINDOW 64u
 #define ONE_G02_PROOF_BLOCK 4096u
 #define ONE_G02_LOCAL_ENTRIES 64u
 #define ONE_G02_GLOBAL_ENTRIES 8192u
+#define ONE_G02_GLOBAL_INITIAL_ENTRIES 64u
 
 typedef struct {
     uint64_t emitted;
@@ -47,6 +50,8 @@ static int find_entry(
     uint64_t key,
     size_t *start_out
 ) {
+    if (count == 0) return 0;
+    if (entries == NULL || capacity == 0 || count > capacity) return 0;
     for (size_t i = 0; i < count; ++i) {
         const size_t slot = (head + i) % capacity;
         if (entries[slot].used && entries[slot].key == key) {
@@ -199,7 +204,8 @@ int one_g02_fused_native_nomination(
     }
 
     one_g02_index_entry local[ONE_G02_LOCAL_ENTRIES] = {{0}};
-    one_g02_index_entry global[ONE_G02_GLOBAL_ENTRIES] = {{0}};
+    one_g02_index_entry *global = NULL;
+    size_t global_capacity = 0;
     size_t local_head = 0, local_count = 0, global_count = 0;
     size_t covered_until = 0;
 
@@ -312,10 +318,24 @@ int one_g02_fused_native_nomination(
                 const size_t anchor_start = (size_t)(selected_position + 1 - window);
                 size_t prior = 0;
                 const int have_prior = find_entry(
-                    global, ONE_G02_GLOBAL_ENTRIES, global_count, 0, selected_value, &prior
+                    global, global_capacity, global_count, 0, selected_value, &prior
                 );
                 audition(data, length, boundary, anchor_start, have_prior, prior, &covered_until, out);
                 if (!have_prior && global_count < ONE_G02_GLOBAL_ENTRIES) {
+                    if (global_count == global_capacity) {
+                        size_t new_capacity = global_capacity == 0
+                            ? ONE_G02_GLOBAL_INITIAL_ENTRIES
+                            : global_capacity * 2;
+                        if (new_capacity > ONE_G02_GLOBAL_ENTRIES) {
+                            new_capacity = ONE_G02_GLOBAL_ENTRIES;
+                        }
+                        one_g02_index_entry *grown = (one_g02_index_entry *)realloc(
+                            global, new_capacity * sizeof(*global)
+                        );
+                        if (grown == NULL) goto allocation_failure;
+                        global = grown;
+                        global_capacity = new_capacity;
+                    }
                     global[global_count].key = selected_value;
                     global[global_count].start = anchor_start;
                     global[global_count].used = 1;
@@ -365,20 +385,31 @@ int one_g02_fused_native_nomination(
     }
 
     out->final_state = state;
+    out->reserved_state_bytes +=
+        sizeof(local) + global_capacity * sizeof(*global);
+    free(global);
     free(block_values);
     free(suffix_offsets);
     return 0;
 
 bad_state:
+    free(global);
     free(block_values);
     free(suffix_offsets);
     return -5;
 bad_suffix:
+    free(global);
     free(block_values);
     free(suffix_offsets);
     return -6;
 emit_failure:
+    free(global);
     free(block_values);
     free(suffix_offsets);
     return -4;
+allocation_failure:
+    free(global);
+    free(block_values);
+    free(suffix_offsets);
+    return -2;
 }
