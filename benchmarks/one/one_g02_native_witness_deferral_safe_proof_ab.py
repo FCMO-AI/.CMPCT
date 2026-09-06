@@ -2,8 +2,8 @@
 
 Frozen by ONE_G02_NATIVE_WITNESS_DEFERRAL_SAFE_PROOF_PREREG_2026-09-06.md.
 The native minimizer trace is generated once per row outside the timed boundary;
-both arms then consume the identical trace and invoke the identical safe proof
-when nominated. This is a native causal transfer, not fused-writer authority.
+both arms consume the identical trace. Consumer + safe proof timing is performed
+inside one native A/B-B/A wrapper to avoid Python call overhead becoming a small-file owner.
 """
 from __future__ import annotations
 
@@ -13,7 +13,6 @@ import os
 import statistics
 import subprocess
 import tempfile
-import time
 from collections import defaultdict
 from pathlib import Path
 
@@ -28,6 +27,7 @@ CASES = (
 )
 NEGATIVES = {"fragmented_every32", "independent_random"}
 ROUNDS = 21
+BATCH = 8
 MAX_PRODUCTIVE_MEDIAN = 0.95
 MAX_PRODUCTIVE_ROW = 1.03
 MAX_NEGATIVE_SIZE_MEDIAN = 1.03
@@ -65,6 +65,21 @@ class SafeResult(ctypes.Structure):
     ]
 
 
+class TimingResult(ctypes.Structure):
+    _fields_ = [
+        ("baseline_ns_per_call", ctypes.c_double),
+        ("candidate_ns_per_call", ctypes.c_double),
+        ("baseline_dispatch_path", ctypes.c_int),
+        ("candidate_dispatch_path", ctypes.c_int),
+        ("baseline_final_law", ctypes.c_int),
+        ("candidate_final_law", ctypes.c_int),
+        ("baseline_consumer", ConsumerResult),
+        ("candidate_consumer", ConsumerResult),
+        ("baseline_safe", SafeResult),
+        ("candidate_safe", SafeResult),
+    ]
+
+
 def _sig(x: SafeResult) -> tuple[int, ...]:
     return tuple(int(getattr(x, name)) for name, _ in SafeResult._fields_)
 
@@ -80,6 +95,7 @@ def _build():
         str(here / "one_g02_shift_branch_bound_relation_direct_kernel.c"),
         str(here / "one_g02_shift_branch_bound_relation_restrict_kernel.c"),
         str(here / "one_g02_shift_relation_safe_dispatch_kernel.c"),
+        str(here / "one_g02_native_witness_deferral_timing_wrapper.c"),
         "-o", str(lib),
     ], check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     c = ctypes.CDLL(str(lib))
@@ -100,7 +116,12 @@ def _build():
     direct = c.one_g02_shift_branch_bound_relation_direct
     direct.argtypes = safe.argtypes
     direct.restype = ctypes.c_int
-    return selector, consume, safe, direct, td
+    measure = c.one_g02_native_witness_deferral_measure
+    measure.argtypes = [ctypes.POINTER(ctypes.c_uint8), ctypes.c_size_t, ctypes.c_size_t,
+        ctypes.POINTER(ctypes.c_uint64), ctypes.POINTER(ctypes.c_uint64), ctypes.c_size_t,
+        ctypes.c_size_t, ctypes.POINTER(TimingResult)]
+    measure.restype = ctypes.c_int
+    return selector, consume, safe, direct, measure, td
 
 
 def _arm(consume, safe, data_buf, total_len, boundary, gear, trace, emitted, mode, src_ptr, dst_ptr, rel_len):
@@ -140,7 +161,7 @@ def _overlap_checks(safe, direct):
 
 
 def run():
-    selector, consume, safe, direct, td = _build()
+    selector, consume, safe, direct, measure, td = _build()
     gear = (ctypes.c_uint64 * 256)(*_GEAR)
     rows = []
     try:
@@ -165,16 +186,20 @@ def run():
                     emitted = int(sel.emitted)
 
                     base_samples, cand_samples = [], []
+                    last = TimingResult()
                     for _ in range(ROUNDS):
-                        t = time.perf_counter_ns(); _arm(consume, safe, arr, len(data), len(source), gear, trace, emitted, 0, src, dst, len(source)); base_samples.append(time.perf_counter_ns() - t)
-                        t = time.perf_counter_ns(); _arm(consume, safe, arr, len(data), len(source), gear, trace, emitted, 1, src, dst, len(source)); cand_samples.append(time.perf_counter_ns() - t)
-                        t = time.perf_counter_ns(); _arm(consume, safe, arr, len(data), len(source), gear, trace, emitted, 1, src, dst, len(source)); cand_samples.append(time.perf_counter_ns() - t)
-                        t = time.perf_counter_ns(); _arm(consume, safe, arr, len(data), len(source), gear, trace, emitted, 0, src, dst, len(source)); base_samples.append(time.perf_counter_ns() - t)
+                        m = TimingResult()
+                        rc = measure(arr, len(data), len(source), gear, trace, emitted, BATCH, ctypes.byref(m))
+                        if rc != 0:
+                            raise RuntimeError(f"native timing wrapper rc={rc}")
+                        base_samples.append(float(m.baseline_ns_per_call))
+                        cand_samples.append(float(m.candidate_ns_per_call))
+                        last = m
 
                     bcr, bsr, bpath, blaw, btraffic = _arm(consume, safe, arr, len(data), len(source), gear, trace, emitted, 0, src, dst, len(source))
                     ccr, csr, cpath, claw, ctraffic = _arm(consume, safe, arr, len(data), len(source), gear, trace, emitted, 1, src, dst, len(source))
                     bn = float(statistics.median(base_samples)); cn = float(statistics.median(cand_samples)); ratio = cn / bn
-                    semantic_exact = blaw == claw
+                    semantic_exact = blaw == claw and bool(last.baseline_final_law) == blaw and bool(last.candidate_final_law) == claw
                     rows.append({
                         "relation_bytes": size, "seed": seed, "case": name,
                         "baseline_ns": bn, "candidate_ns": cn, "candidate_over_baseline": ratio,
@@ -222,10 +247,10 @@ def run():
         else:
             decision = "hold_native_witness_deferral_safe_proof"
         return {
-            "schema": "cmpct-one-g02-native-witness-deferral-safe-proof-ab-v1",
+            "schema": "cmpct-one-g02-native-witness-deferral-safe-proof-ab-v2",
             "experimental_version": "ONE-G0.2",
             "source_sha": os.environ.get("EVIDENCE_HEAD") or os.environ.get("GITHUB_SHA") or "local-unbound",
-            "frozen_rounds": ROUNDS,
+            "frozen_rounds": ROUNDS, "frozen_batch": BATCH,
             "productive_rows": len(positives),
             "productive_median_candidate_over_baseline": productive_median,
             "worst_productive_candidate_over_baseline": worst_productive,
