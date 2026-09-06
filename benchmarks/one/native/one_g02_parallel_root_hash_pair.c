@@ -17,6 +17,7 @@ typedef struct {
     size_t target_len;
     uint8_t *target_out;
     int has_job;
+    int busy;
     int done;
     int stop;
     int worker_error;
@@ -77,9 +78,9 @@ static void init_once(void) {
  * Returns 0 on exact success.  This function owns no input and keeps no digest
  * cache: only one bounded helper executor persists across calls.
  *
- * Calls are intentionally single-flight. A wider creator executor can schedule
- * independent relations around this primitive; silently queueing concurrent calls
- * here would hide resource/backpressure behavior from evidence.
+ * Calls are intentionally single-flight. `busy` remains asserted from dispatch
+ * until the submitting caller has observed completion, so a second caller cannot
+ * overwrite the target/output pointers after the worker has picked up the job.
  */
 int one_g02_hash_pair(const uint8_t *source, size_t source_len,
                       const uint8_t *target, size_t target_len,
@@ -91,10 +92,11 @@ int one_g02_hash_pair(const uint8_t *source, size_t source_len,
         return -2;
 
     pthread_mutex_lock(&G.mu);
-    if (G.stop || G.has_job) {
+    if (G.stop || G.busy) {
         pthread_mutex_unlock(&G.mu);
         return -4;
     }
+    G.busy = 1;
     G.target = target;
     G.target_len = target_len;
     G.target_out = current_out;
@@ -110,6 +112,7 @@ int one_g02_hash_pair(const uint8_t *source, size_t source_len,
     while (!G.done)
         pthread_cond_wait(&G.done_cv, &G.mu);
     const int worker_error = G.worker_error;
+    G.busy = 0;
     pthread_mutex_unlock(&G.mu);
     return (source_ok && !worker_error) ? 0 : -3;
 }
@@ -124,6 +127,10 @@ size_t one_g02_hash_pair_worker_stack_bytes(void) {
 int one_g02_hash_pair_shutdown(void) {
     if (!G.initialized) return 0;
     pthread_mutex_lock(&G.mu);
+    if (G.busy) {
+        pthread_mutex_unlock(&G.mu);
+        return -2;
+    }
     G.stop = 1;
     pthread_cond_signal(&G.request_cv);
     pthread_mutex_unlock(&G.mu);
