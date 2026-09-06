@@ -62,6 +62,18 @@ Performance advance requires:
 
 Decision is `advance_native_witness_deferral_safe_proof` only if all gates pass. If semantics pass but elapsed does not, return `hold_native_witness_deferral_safe_proof`; if any semantic/safety gate fails, `reject_native_witness_deferral_safe_proof`.
 
+## Hostile-review amendment before result authority
+
+The initial implementation defined the productive timing set from rows that the baseline itself had already nominated and accepted. That is too weak for a frozen matrix whose non-negative cases are intended relation positives: a discovery failure could remove a row from the denominator instead of appearing as a regression.
+
+Before consuming any result from this native A/B, the gate is therefore strengthened as follows without changing any performance threshold:
+
+- every frozen non-negative case (`shift_plus1`, `damage_quarter`, `fragmented_every96`, `hostile_fixed_bands`) at every frozen size/seed must reach an accepted Law in **both** arms;
+- when both arms nominate, the overlap-safe dispatcher path and exact-proof count must agree, because the downstream proof receives the same relation bytes and is supposed to be semantically identical;
+- failure of either condition is a semantic rejection, never a reason to shrink the productive set.
+
+`benchmarks/one/one_g02_native_witness_deferral_strict_semantic_audit.py` implements this stronger pre-result audit around the unchanged timing/traffic A/B. Any earlier run that does not include this strict audit is superseded for promotion authority even if its weaker gate is green.
+
 ## Claim boundary
 
 A pass proves native causal transfer at the selector-trace/event-consumer boundary. It does not yet prove a one-pass fused writer, product creation speed, stored-byte superiority, authenticated placement, selective-read integrity, or comparator supremacy. The next step after a pass is to move the same accepted boundary into the demand-grown fused observer and remeasure total carrying cost.
