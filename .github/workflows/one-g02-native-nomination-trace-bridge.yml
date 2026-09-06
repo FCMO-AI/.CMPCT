@@ -13,6 +13,15 @@ on:
       - "docs/one/evidence/ONE_G02_INTEGRATED_DISCOVERY_SAFE_RELATION_DISPATCH_PREREG_2026-09-06.md"
       - "docs/one/evidence/ONE_G02_FRONTIER_RECONCILIATION_2026-09-06.md"
       - ".github/workflows/one-g02-native-nomination-trace-bridge.yml"
+  pull_request:
+    paths:
+      - "benchmarks/one/one_g02_native_nomination_trace_bridge.py"
+      - "benchmarks/one/one_g02_minimizer_offset_only_kernel.c"
+      - "benchmarks/one/one_g02_relation_shared_observer_validation.py"
+      - "benchmarks/one/one_g02_gear_replacement_ab.py"
+      - "docs/one/evidence/ONE_G02_INTEGRATED_DISCOVERY_SAFE_RELATION_DISPATCH_PREREG_2026-09-06.md"
+      - "docs/one/evidence/ONE_G02_FRONTIER_RECONCILIATION_2026-09-06.md"
+      - ".github/workflows/one-g02-native-nomination-trace-bridge.yml"
 
 permissions:
   contents: read
