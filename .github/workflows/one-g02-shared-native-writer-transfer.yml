@@ -6,6 +6,7 @@ on:
       - research/cmpct1
     paths:
       - 'benchmarks/one/one_g02_shared_native_writer_transfer.py'
+      - 'benchmarks/one/one_g02_shared_native_writer_hostile.py'
       - 'benchmarks/one/native/one_g02_shared_native_writer.c'
       - 'docs/one/evidence/ONE_G02_SHARED_NATIVE_WRITER_TRANSFER_PREREG_2026-09-06.md'
       - '.github/workflows/one-g02-shared-native-writer-transfer.yml'
@@ -30,6 +31,8 @@ jobs:
           python -m pip install -e '.[test]'
       - name: ONE semantic and hostile tests
         run: python -m pytest -q tests/one
+      - name: Native writer max-nodes hostile probe
+        run: python -m benchmarks.one.one_g02_shared_native_writer_hostile
       - name: Run shared native writer transfer falsifier
         env:
           EVIDENCE_HEAD: ${{ github.sha }}
