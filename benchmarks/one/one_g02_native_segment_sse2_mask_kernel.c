@@ -42,13 +42,15 @@ int one_g02_segment_scalar_exact(const uint8_t *src, const uint8_t *dst, size_t 
     stats->compared_target_bytes = n;
     stats->segments = 0;
     if (n == 0) return 0;
+    size_t count = 0;
     size_t i = 0;
     while (i < n) {
         const int ref = i > 0 && dst[i] == src[i - 1];
         const size_t begin = i++;
         while (i < n && (i > 0 && dst[i] == src[i - 1]) == ref) ++i;
-        if (emit_segment(out, cap, (size_t *)&stats->segments, ref, begin, i) != 0) return -2;
+        if (emit_segment(out, cap, &count, ref, begin, i) != 0) return -2;
     }
+    stats->segments = count;
     return 0;
 }
 
@@ -71,11 +73,11 @@ int one_g02_segment_sse2_exact(const uint8_t *src, const uint8_t *dst, size_t n,
         const __m128i a = _mm_loadu_si128((const __m128i *)(src + i - 1));
         const __m128i b = _mm_loadu_si128((const __m128i *)(dst + i));
         const __m128i eq = _mm_cmpeq_epi8(a, b);
-        uint32_t mask = (uint32_t)_mm_movemask_epi8(eq) & 0xffffu;
+        const uint32_t mask = (uint32_t)_mm_movemask_epi8(eq) & 0xffffu;
         unsigned consumed = 0;
         while (consumed < 16u) {
             const unsigned remaining = 16u - consumed;
-            const uint32_t rem_mask = remaining == 32u ? 0xffffffffu : ((1u << remaining) - 1u);
+            const uint32_t rem_mask = (1u << remaining) - 1u;
             const uint32_t tail = (mask >> consumed) & rem_mask;
             const int ref = (int)(tail & 1u);
             const uint32_t diff = ref ? ((~tail) & rem_mask) : (tail & rem_mask);
