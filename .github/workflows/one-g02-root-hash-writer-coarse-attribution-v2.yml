@@ -44,3 +44,5 @@ jobs:
           name: one-g02-root-hash-writer-coarse-attribution-v2-${{ github.sha }}
           path: one-g02-root-hash-writer-coarse-attribution-v2.json
           if-no-files-found: error
+
+# Registered before the terminal v2 result; comment is intentionally non-semantic.
