@@ -8,6 +8,7 @@ on:
       - "benchmarks/one/one_g02_fused_native_nomination_kernel.c"
       - "benchmarks/one/one_g02_local_index_fingerprint_view_kernel.c"
       - "benchmarks/one/one_g02_native_fused_nomination_fp8_ab.py"
+      - "benchmarks/one/one_g02_native_fused_nomination_fp8_hostile_audit.py"
       - "docs/one/evidence/ONE_G02_NATIVE_FUSED_NOMINATION_FP8_MIRRORED_PREREG_2026-09-06.md"
       - ".github/workflows/one-g02-native-fused-nomination-fp8.yml"
   pull_request:
@@ -15,6 +16,7 @@ on:
       - "benchmarks/one/one_g02_fused_native_nomination_kernel.c"
       - "benchmarks/one/one_g02_local_index_fingerprint_view_kernel.c"
       - "benchmarks/one/one_g02_native_fused_nomination_fp8_ab.py"
+      - "benchmarks/one/one_g02_native_fused_nomination_fp8_hostile_audit.py"
       - "docs/one/evidence/ONE_G02_NATIVE_FUSED_NOMINATION_FP8_MIRRORED_PREREG_2026-09-06.md"
       - ".github/workflows/one-g02-native-fused-nomination-fp8.yml"
 
@@ -37,6 +39,12 @@ jobs:
           python -m pip install -e '.[test]'
       - name: Semantic and hostile ONE suite
         run: python -m pytest tests/one -q
+      - name: Forced-collision / wrap semantic audit
+        env:
+          EVIDENCE_HEAD: ${{ github.sha }}
+        run: |
+          mkdir -p artifacts/one
+          python -m benchmarks.one.one_g02_native_fused_nomination_fp8_hostile_audit | tee artifacts/one/native_fused_nomination_fp8_hostile.json
       - name: Exact-source fused nomination fp8 native A-B
         env:
           EVIDENCE_HEAD: ${{ github.sha }}
@@ -53,5 +61,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: one-g02-native-fused-nomination-fp8-${{ github.sha }}
-          path: artifacts/one/native_fused_nomination_fp8.json
+          path: |
+            artifacts/one/native_fused_nomination_fp8.json
+            artifacts/one/native_fused_nomination_fp8_hostile.json
           if-no-files-found: error
