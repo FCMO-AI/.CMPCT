@@ -8,6 +8,7 @@ from __future__ import annotations
 import json
 import os
 import subprocess
+from math import isfinite
 from pathlib import Path
 from statistics import median
 
@@ -37,6 +38,10 @@ def _run_row(root_bytes:int)->dict[str,object]:
     if row["candidate_staged_bytes"]!=expected_staged: problems.append("staged_accounting")
     if row["candidate_total_explicit_workspace_bytes"] != row["baseline_explicit_workspace_bytes"] + row["candidate_extra_explicit_workspace_bytes"]:
         problems.append("workspace_accounting")
+    for key in ("candidate_ratio","candidate_cpu_ratio","candidate_staged_over_source_ratio"):
+        value=float(row[key])
+        if not isfinite(value) or value < 0.0:
+            problems.append(f"nonfinite_or_negative_{key}")
     row["problems"]=problems
     return row
 
@@ -45,9 +50,12 @@ def _learn_threshold(rows:list[dict[str,object]])->int|None:
     ordered=sorted(rows,key=lambda r:int(r["node_count"]))
     for i,row in enumerate(ordered):
         suffix=ordered[i:]
-        if float(row["candidate_ratio"])>0.95: continue
-        if any(float(r["candidate_ratio"])>0.95 for r in suffix): continue
-        if median(float(r["candidate_cpu_ratio"]) for r in suffix)>0.90: continue
+        wall=[float(r["candidate_ratio"]) for r in suffix]
+        cpu=[float(r["candidate_cpu_ratio"]) for r in suffix]
+        if not all(isfinite(x) and x >= 0.0 for x in wall+cpu): continue
+        if wall[0]>0.95: continue
+        if any(x>0.95 for x in wall): continue
+        if median(cpu)>0.90: continue
         return int(row["node_count"])
     return None
 
