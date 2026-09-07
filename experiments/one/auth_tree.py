@@ -13,18 +13,21 @@ import struct
 
 
 HASH_BYTES = 32
+LEAF_DOMAIN = b"ONE-L\x00"
+PARENT_DOMAIN = b"ONE-P\x00"
+ROOT_DOMAIN = b"ONE-R\x00"
 
 
 def _leaf_hash(index: int, total_len: int, payload: bytes) -> bytes:
-    return sha256(b"ONE-L\x00" + struct.pack("<QQ", index, total_len) + payload).digest()
+    return sha256(LEAF_DOMAIN + struct.pack("<QQ", index, total_len) + payload).digest()
 
 
 def _parent_hash(level: int, left: bytes, right: bytes) -> bytes:
-    return sha256(b"ONE-P\x00" + struct.pack("<I", level) + left + right).digest()
+    return sha256(PARENT_DOMAIN + struct.pack("<I", level) + left + right).digest()
 
 
 def _root_commit(total_len: int, leaf_bytes: int, tree_root: bytes) -> bytes:
-    return sha256(b"ONE-R\x00" + struct.pack("<QI", total_len, leaf_bytes) + tree_root).digest()
+    return sha256(ROOT_DOMAIN + struct.pack("<QI", total_len, leaf_bytes) + tree_root).digest()
 
 
 @dataclass(frozen=True)
