@@ -84,6 +84,17 @@ jobs:
           set -o pipefail
           mkdir -p artifacts
           python -m benchmarks.one.one_g02_full_ingest_fused_cache | tee artifacts/one_g02_full_ingest_fused_cache.json
+      - name: Classify strict broad-ingest advancement
+        continue-on-error: true
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          result = json.loads(Path('artifacts/one_g02_full_ingest_fused_cache.json').read_text())
+          if result['decision'] != 'ADVANCE_FUSED_CACHE_TO_BROADER_INGEST':
+              raise SystemExit(f"strict advance not earned: {result['decision']}")
+          print('strict advance earned')
+          PY
       - name: Upload whole-ingest evidence
         if: always()
         uses: actions/upload-artifact@v4
