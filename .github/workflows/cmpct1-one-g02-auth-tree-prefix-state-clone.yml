@@ -1,4 +1,5 @@
 # ci-lane: deep
+# ci-cancel-policy: preserve-running-exact-receipt
 # ci-pr-scope: latest-head-commit-gate
 name: CMPCT1 ONE-G0.2 auth-tree SHA prefix-state clone A/B
 on:
@@ -13,7 +14,7 @@ on:
 permissions: {contents: read}
 concurrency:
   group: cmpct1-one-g02-auth-tree-prefix-state-${{ github.event_name }}-${{ github.event.pull_request.head.sha || github.sha }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 env:
   EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
 jobs:
