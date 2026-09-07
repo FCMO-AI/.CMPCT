@@ -1,0 +1,40 @@
+# ci-lane: fast
+name: CMPCT1 ONE-G0.2 incremental fingerprint cache
+on:
+  pull_request:
+    paths:
+      - "experiments/one/cache_fingerprints.py"
+      - "tests/one/test_cache_fingerprints.py"
+      - "benchmarks/one/one_incremental_fingerprint_cache.py"
+      - ".github/workflows/cmpct1-one-g02-incremental-fingerprint-cache.yml"
+  workflow_dispatch:
+permissions: {contents: read}
+concurrency:
+  group: cmpct1-one-g02-incremental-fingerprint-cache-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+jobs:
+  incremental-fingerprint-cache:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with: {ref: "${{ env.EVIDENCE_HEAD }}", clean: true}
+      - name: Bind exact head
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.11"}
+      - name: Run hostile cache semantics
+        run: python -m pytest -q tests/one/test_cache_fingerprints.py
+      - name: Run frozen cache viability gate
+        run: |
+          mkdir -p one-cache-artifacts
+          python -m benchmarks.one.one_incremental_fingerprint_cache | tee one-cache-artifacts/one-g02-incremental-fingerprint-cache.json
+      - name: Retain exact-head evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: one-g02-incremental-fingerprint-cache-${{ env.EVIDENCE_HEAD }}
+          path: one-cache-artifacts/
+          if-no-files-found: warn
