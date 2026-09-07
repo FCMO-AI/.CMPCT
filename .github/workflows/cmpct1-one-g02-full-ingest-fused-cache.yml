@@ -1,0 +1,93 @@
+# ci-lane: fast
+name: CMPCT1 ONE-G0.2 full ingest fused cache
+
+on:
+  push:
+    branches:
+      - research/cmpct1
+    paths:
+      - experiments/one/cache_fused_observe.py
+      - experiments/one/fused_cache_cost_ledger.py
+      - experiments/one/observe.py
+      - experiments/one/ir.py
+      - experiments/one/vm.py
+      - experiments/one/wire.py
+      - experiments/one/growable_wire.py
+      - benchmarks/one/one_g02_full_ingest_fused_cache.py
+      - benchmarks/one/one_g02_end_to_end_direct_emitter_writer.py
+      - benchmarks/one/one_g02_post_segment_control_cost_owner.py
+      - benchmarks/one/one_g02_shift_branch_bound_relation_transfer.py
+      - benchmarks/one/one_g02_shift_branch_bound_relation_direct_kernel.c
+      - benchmarks/one/one_g02_shift_branch_bound_relation_restrict_kernel.c
+      - benchmarks/one/one_g02_shift_relation_safe_dispatch_kernel.c
+      - benchmarks/one/one_g02_shift_relation_sparse_gate_kernel.c
+      - benchmarks/one/one_g02_shift_relation_amortization_safe_gate_kernel.c
+      - benchmarks/one/one_g02_native_segment_plan_fusion_kernel.c
+      - tests/one/test_cache_fused_observe.py
+      - tests/one/test_fused_cache_cost_ledger.py
+      - docs/one/evidence/ONE_G02_FULL_INGEST_FUSED_CACHE_PREREG_2026-09-07.md
+      - .github/workflows/cmpct1-one-g02-full-ingest-fused-cache.yml
+  pull_request:
+    paths:
+      - experiments/one/cache_fused_observe.py
+      - experiments/one/fused_cache_cost_ledger.py
+      - experiments/one/observe.py
+      - experiments/one/ir.py
+      - experiments/one/vm.py
+      - experiments/one/wire.py
+      - experiments/one/growable_wire.py
+      - benchmarks/one/one_g02_full_ingest_fused_cache.py
+      - benchmarks/one/one_g02_end_to_end_direct_emitter_writer.py
+      - benchmarks/one/one_g02_post_segment_control_cost_owner.py
+      - benchmarks/one/one_g02_shift_branch_bound_relation_transfer.py
+      - benchmarks/one/one_g02_shift_branch_bound_relation_direct_kernel.c
+      - benchmarks/one/one_g02_shift_branch_bound_relation_restrict_kernel.c
+      - benchmarks/one/one_g02_shift_relation_safe_dispatch_kernel.c
+      - benchmarks/one/one_g02_shift_relation_sparse_gate_kernel.c
+      - benchmarks/one/one_g02_shift_relation_amortization_safe_gate_kernel.c
+      - benchmarks/one/one_g02_native_segment_plan_fusion_kernel.c
+      - tests/one/test_cache_fused_observe.py
+      - tests/one/test_fused_cache_cost_ledger.py
+      - docs/one/evidence/ONE_G02_FULL_INGEST_FUSED_CACHE_PREREG_2026-09-07.md
+      - .github/workflows/cmpct1-one-g02-full-ingest-fused-cache.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct1-one-g02-full-ingest-fused-cache-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  full-ingest-fused-cache:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    env:
+      EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: "${{ env.EVIDENCE_HEAD }}"
+          clean: true
+      - name: Bind exact head
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Provision repository test contract
+        run: python -m pip install --disable-pip-version-check -e '.[test]'
+      - name: Run fused-cache hostile tests
+        run: python -m pytest -q tests/one/test_cache_fused_observe.py tests/one/test_fused_cache_cost_ledger.py
+      - name: Run whole-ingest falsifier
+        run: |
+          set -o pipefail
+          mkdir -p artifacts
+          python -m benchmarks.one.one_g02_full_ingest_fused_cache | tee artifacts/one_g02_full_ingest_fused_cache.json
+      - name: Upload whole-ingest evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: one-g02-full-ingest-fused-cache-${{ env.EVIDENCE_HEAD }}
+          path: artifacts/one_g02_full_ingest_fused_cache.json
+          if-no-files-found: warn
