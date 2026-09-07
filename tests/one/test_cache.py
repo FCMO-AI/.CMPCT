@@ -1,4 +1,4 @@
-from experiments.one.cache import ObservationCache, observe_cached
+from experiments.one.cache import BlockSynopsis, ObservationCache, observe_cached
 
 
 def _aggregate(cache: ObservationCache) -> tuple[int, int, int, int, int, int]:
@@ -63,7 +63,7 @@ def test_corrupt_cached_digest_cannot_authorize_stale_synopsis():
     first = observe_cached(data, block_size=4096)
     blocks = list(first.cache.blocks)
     original = blocks[0]
-    blocks[0] = type(original)(
+    blocks[0] = BlockSynopsis(
         digest=b"\x00" * 32,
         length=original.length,
         byte_sum=0,
@@ -71,6 +71,57 @@ def test_corrupt_cached_digest_cannot_authorize_stale_synopsis():
         zero_bytes=original.length,
         min_byte=0,
         max_byte=0,
+        seal=original.seal,
+    )
+    poisoned = ObservationCache(first.cache.policy_id, first.cache.block_size, tuple(blocks))
+    recovered = observe_cached(data, previous=poisoned, block_size=4096)
+    fresh = observe_cached(data, block_size=4096)
+    assert recovered.cache == fresh.cache
+    assert recovered.stats.recomputed_blocks == 1
+    assert recovered.stats.reused_blocks == 1
+
+
+def test_corrupt_cached_features_with_valid_current_digest_are_recomputed():
+    data = b"A" * 4096 + b"B" * 4096
+    first = observe_cached(data, block_size=4096)
+    blocks = list(first.cache.blocks)
+    original = blocks[0]
+    # This is the hostile case the original seed missed: current content identity still
+    # agrees, but the derived cache fields were damaged independently. The old cache
+    # would have reused these values and diverged from a fresh observation.
+    blocks[0] = BlockSynopsis(
+        digest=original.digest,
+        length=original.length,
+        byte_sum=original.byte_sum + 1,
+        transitions=original.transitions,
+        zero_bytes=original.zero_bytes,
+        min_byte=original.min_byte,
+        max_byte=original.max_byte,
+        seal=original.seal,
+    )
+    poisoned = ObservationCache(first.cache.policy_id, first.cache.block_size, tuple(blocks))
+    recovered = observe_cached(data, previous=poisoned, block_size=4096)
+    fresh = observe_cached(data, block_size=4096)
+    assert recovered.cache == fresh.cache
+    assert _aggregate(recovered.cache) == _aggregate(fresh.cache)
+    assert recovered.stats.recomputed_blocks == 1
+    assert recovered.stats.reused_blocks == 1
+
+
+def test_corrupt_synopsis_seal_is_recomputed():
+    data = b"C" * 8192
+    first = observe_cached(data, block_size=4096)
+    blocks = list(first.cache.blocks)
+    original = blocks[1]
+    blocks[1] = BlockSynopsis(
+        digest=original.digest,
+        length=original.length,
+        byte_sum=original.byte_sum,
+        transitions=original.transitions,
+        zero_bytes=original.zero_bytes,
+        min_byte=original.min_byte,
+        max_byte=original.max_byte,
+        seal=b"\xff" * 32,
     )
     poisoned = ObservationCache(first.cache.policy_id, first.cache.block_size, tuple(blocks))
     recovered = observe_cached(data, previous=poisoned, block_size=4096)
@@ -87,7 +138,7 @@ def test_shifted_insertion_is_conservatively_not_relocated():
     incremental = observe_cached(shifted, previous=first.cache, block_size=512)
     fresh = observe_cached(shifted, block_size=512)
     assert incremental.cache == fresh.cache
-    # Position-keyed reuse must not pretend to solve shifted insertion.  A future
+    # Position-keyed reuse must not pretend to solve shifted insertion. A future
     # relocation index has to earn its memory and lookup traffic independently.
     assert incremental.stats.feature_recompute_bytes > 0
 
