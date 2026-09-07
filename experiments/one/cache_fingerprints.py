@@ -84,17 +84,35 @@ def _fingerprints(block: bytes, chunk_size: int) -> tuple[int, ...]:
     return tuple(out)
 
 
-def _seal(digest: bytes, length: int, chunk_size: int, fingerprints: tuple[int, ...]) -> bytes:
+def _seal(
+    digest: bytes,
+    length: int,
+    chunk_size: int,
+    fingerprints: tuple[int, ...],
+    *,
+    policy_id: str,
+    block_size: int,
+) -> bytes:
+    """Seal cached feature state together with the compiler policy that gives it meaning."""
+    policy = policy_id.encode("utf-8")
     h = hashlib.sha256()
     h.update(_SEAL_DOMAIN)
+    h.update(struct.pack(">Q", len(policy)))
+    h.update(policy)
     h.update(digest)
-    h.update(struct.pack(">QQQ", length, chunk_size, len(fingerprints)))
+    h.update(struct.pack(">QQQQ", block_size, length, chunk_size, len(fingerprints)))
     for value in fingerprints:
         h.update(struct.pack(">Q", value))
     return h.digest()
 
 
-def _valid_cached(block: object, chunk_size: int) -> bool:
+def _valid_cached(
+    block: object,
+    *,
+    policy_id: str,
+    block_size: int,
+    chunk_size: int,
+) -> bool:
     if not isinstance(block, FingerprintBlock):
         return False
     if type(block.digest) is not bytes or len(block.digest) != 32:
@@ -110,7 +128,14 @@ def _valid_cached(block: object, chunk_size: int) -> bool:
         return False
     return hmac.compare_digest(
         block.seal,
-        _seal(block.digest, block.length, chunk_size, block.fingerprints),
+        _seal(
+            block.digest,
+            block.length,
+            chunk_size,
+            block.fingerprints,
+            policy_id=policy_id,
+            block_size=block_size,
+        ),
     )
 
 
@@ -154,7 +179,12 @@ def observe_fingerprints_cached(
         cached = prior_blocks[index] if index < len(prior_blocks) else None
         feature_bytes = (len(raw) // chunk_size) * chunk_size
         if (
-            _valid_cached(cached, chunk_size)
+            _valid_cached(
+                cached,
+                policy_id=policy_id,
+                block_size=block_size,
+                chunk_size=chunk_size,
+            )
             and cached.digest == digest
             and cached.length == len(raw)
         ):
@@ -167,7 +197,14 @@ def observe_fingerprints_cached(
                 digest=digest,
                 length=len(raw),
                 fingerprints=fingerprints,
-                seal=_seal(digest, len(raw), chunk_size, fingerprints),
+                seal=_seal(
+                    digest,
+                    len(raw),
+                    chunk_size,
+                    fingerprints,
+                    policy_id=policy_id,
+                    block_size=block_size,
+                ),
             )
             recompute_bytes += feature_bytes
             recomputed_blocks += 1
