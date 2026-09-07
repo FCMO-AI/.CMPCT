@@ -14,6 +14,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import hashlib
+import hmac
 import struct
 
 
@@ -113,7 +114,7 @@ def _seal_valid(value: object) -> bool:
         value.min_byte,
         value.max_byte,
     )
-    return hashlib.compare_digest(value.seal, expected)
+    return hmac.compare_digest(value.seal, expected)
 
 
 def _synopsis(block: bytes, digest: bytes | None = None) -> BlockSynopsis:
