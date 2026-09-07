@@ -30,16 +30,33 @@ def _data(size: int) -> bytes:
     return bytes(((i * 131 + (i >> 5) * 17 + 29) & 0xFF) for i in range(size))
 
 
-def _median_call(fn) -> tuple[float, float]:
-    walls = []
-    cpus = []
-    for _ in range(REPETITIONS):
-        c0 = time.process_time_ns()
-        w0 = time.perf_counter_ns()
-        fn()
-        walls.append(time.perf_counter_ns() - w0)
-        cpus.append(time.process_time_ns() - c0)
-    return statistics.median(walls), statistics.median(cpus)
+def _timed(fn) -> tuple[int, int]:
+    c0 = time.process_time_ns()
+    w0 = time.perf_counter_ns()
+    fn()
+    return time.perf_counter_ns() - w0, time.process_time_ns() - c0
+
+
+def _paired_medians(fresh_fn, cached_fn) -> tuple[float, float, float, float]:
+    """Measure equal samples with alternating execution order to reduce systematic bias."""
+    fresh_walls = []
+    fresh_cpus = []
+    cached_walls = []
+    cached_cpus = []
+    for repetition in range(REPETITIONS):
+        order = ((fresh_fn, fresh_walls, fresh_cpus), (cached_fn, cached_walls, cached_cpus))
+        if repetition % 2:
+            order = tuple(reversed(order))
+        for fn, walls, cpus in order:
+            wall, cpu = _timed(fn)
+            walls.append(wall)
+            cpus.append(cpu)
+    return (
+        statistics.median(fresh_walls),
+        statistics.median(fresh_cpus),
+        statistics.median(cached_walls),
+        statistics.median(cached_cpus),
+    )
 
 
 def main() -> int:
@@ -63,18 +80,21 @@ def main() -> int:
             if incremental.fingerprints != fresh.fingerprints:
                 raise AssertionError(f"fresh/incremental fingerprint divergence: {size=} {case=}")
 
-            fresh_wall, fresh_cpu = _median_call(
-                lambda: observe_fingerprints_cached(
+            def fresh_call():
+                return observe_fingerprints_cached(
                     current, block_size=BLOCK_SIZE, chunk_size=CHUNK_SIZE
                 )
-            )
-            cached_wall, cached_cpu = _median_call(
-                lambda: observe_fingerprints_cached(
+
+            def cached_call():
+                return observe_fingerprints_cached(
                     current,
                     previous=seed.cache,
                     block_size=BLOCK_SIZE,
                     chunk_size=CHUNK_SIZE,
                 )
+
+            fresh_wall, fresh_cpu, cached_wall, cached_cpu = _paired_medians(
+                fresh_call, cached_call
             )
             wall_ratio = cached_wall / fresh_wall
             cpu_ratio = cached_cpu / fresh_cpu
@@ -104,6 +124,7 @@ def main() -> int:
         "head": evidence_head,
         "github_event_sha": os.environ.get("GITHUB_SHA"),
         "repetitions": REPETITIONS,
+        "timing_order": "paired alternating fresh/cached; odd repetitions reversed",
         "block_size": BLOCK_SIZE,
         "chunk_size": CHUNK_SIZE,
         "rows": rows,
