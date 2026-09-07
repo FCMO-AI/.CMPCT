@@ -1,7 +1,4 @@
-"""ONE-G0.2 native carrying-cost probe for the bounded local Gear certificate.
-
-This is a preregistered triage microbenchmark. It does not promote a writer path.
-"""
+"""ONE-G0.2 native carrying-cost probe for the bounded local Gear certificate."""
 from __future__ import annotations
 
 import ctypes
@@ -50,26 +47,19 @@ def _cases() -> dict[str, tuple[bytes, bytes]]:
     s8 = random.Random(73008).randbytes(8 * 1024)
     s64 = random.Random(73064).randbytes(64 * 1024)
     s256 = random.Random(73256).randbytes(256 * 1024)
-    r256 = _random_pair(256 * 1024, 74000)
-    r1m = _random_pair(1024 * 1024, 75000)
-
-    # zlib(random) is intentionally already-compressed/incompressible-like. Truncating
-    # equal deterministic streams keeps the pair lengths equal without adding a decoder.
     za = zlib.compress(random.Random(76001).randbytes(1024 * 1024), level=9)[:1024 * 1024]
     zb = zlib.compress(random.Random(76002).randbytes(1024 * 1024), level=9)[:1024 * 1024]
-
     basis = random.Random(77001).randbytes(4096)
     repeated = basis * 256
-    versioned = _shift(repeated)
     return {
         "tiny_4k_shift1": (s4, _shift(s4)),
         "tiny_8k_fragmented96": (s8, _shift(s8, 96)),
         "mature_64k_shift1": (s64, _shift(s64)),
         "mature_256k_fragmented96": (s256, _shift(s256, 96)),
-        "mature_256k_independent_random": r256,
-        "mature_1m_independent_random": r1m,
+        "mature_256k_independent_random": _random_pair(256 * 1024, 74000),
+        "mature_1m_independent_random": _random_pair(1024 * 1024, 75000),
         "mature_1m_already_compressed_like": (za, zb),
-        "mature_1m_repeated_versioned": (repeated, versioned),
+        "mature_1m_repeated_versioned": (repeated, _shift(repeated)),
     }
 
 
@@ -92,26 +82,39 @@ def _build():
     return lib, td
 
 
-def _invoke(fn, source: bytes, target: bytes, gear) -> Result:
+def _buffers(source: bytes, target: bytes):
     assert len(source) == len(target)
     a = (ctypes.c_uint8 * len(source)).from_buffer_copy(source)
     b = (ctypes.c_uint8 * len(target)).from_buffer_copy(target)
+    return a, b, len(source)
+
+
+def _invoke(fn, a, b, n: int, gear) -> Result:
     out = Result()
-    rc = fn(a, b, len(source), gear, ctypes.byref(out))
+    rc = fn(a, b, n, gear, ctypes.byref(out))
     if rc != 0:
         raise RuntimeError(f"native probe failed rc={rc}")
     return out
 
 
-def _timed(fn, source: bytes, target: bytes, gear) -> tuple[int, Result]:
-    samples: list[int] = []
-    result = None
-    for _ in range(REPETITIONS):
-        t0 = time.perf_counter_ns()
-        result = _invoke(fn, source, target, gear)
-        samples.append(time.perf_counter_ns() - t0)
-    assert result is not None
-    return int(statistics.median(samples)), result
+def _paired_timing(base_fn, cand_fn, a, b, n: int, gear) -> tuple[int, int, Result, Result]:
+    base_samples: list[int] = []
+    cand_samples: list[int] = []
+    base = cand = None
+    for rep in range(REPETITIONS):
+        order = ((base_fn, base_samples, "base"), (cand_fn, cand_samples, "cand"))
+        if rep & 1:
+            order = tuple(reversed(order))
+        for fn, samples, label in order:
+            t0 = time.perf_counter_ns()
+            result = _invoke(fn, a, b, n, gear)
+            samples.append(time.perf_counter_ns() - t0)
+            if label == "base":
+                base = result
+            else:
+                cand = result
+    assert base is not None and cand is not None
+    return int(statistics.median(base_samples)), int(statistics.median(cand_samples)), base, cand
 
 
 def run() -> dict[str, object]:
@@ -119,10 +122,11 @@ def run() -> dict[str, object]:
     gear = (ctypes.c_uint64 * 256)(*_GEAR)
     rows: list[dict[str, object]] = []
     try:
-        for idx, (name, (source, target)) in enumerate(_cases().items()):
-            # Warm both arms and verify mandatory observer parity before timing.
-            base = _invoke(lib.one_g02_certificate_probe_baseline, source, target, gear)
-            cand = _invoke(lib.one_g02_certificate_probe_candidate, source, target, gear)
+        for name, (source, target) in _cases().items():
+            a, b, n = _buffers(source, target)
+            # Warm-up and parity happen outside the timed region. Input copies also stay outside.
+            base = _invoke(lib.one_g02_certificate_probe_baseline, a, b, n, gear)
+            cand = _invoke(lib.one_g02_certificate_probe_candidate, a, b, n, gear)
             if (base.anchors, base.qualifying_runs, base.observer_sink) != (
                 cand.anchors, cand.qualifying_runs, cand.observer_sink
             ):
@@ -130,20 +134,17 @@ def run() -> dict[str, object]:
             if cand.certificate_state_bytes != 136:
                 raise AssertionError(f"certificate state drift: {name}={cand.certificate_state_bytes}")
 
-            # Alternate order by row to reduce systematic thermal/order bias.
-            if idx & 1:
-                cand_ns, cand = _timed(lib.one_g02_certificate_probe_candidate, source, target, gear)
-                base_ns, base = _timed(lib.one_g02_certificate_probe_baseline, source, target, gear)
-            else:
-                base_ns, base = _timed(lib.one_g02_certificate_probe_baseline, source, target, gear)
-                cand_ns, cand = _timed(lib.one_g02_certificate_probe_candidate, source, target, gear)
-
+            base_ns, cand_ns, base, cand = _paired_timing(
+                lib.one_g02_certificate_probe_baseline,
+                lib.one_g02_certificate_probe_candidate,
+                a, b, n, gear,
+            )
             negative = "random" in name or "compressed" in name
             if negative and cand.certificate_nominations:
                 raise AssertionError(f"false exact certificate nomination: {name}")
             rows.append({
                 "case": name,
-                "bytes": len(source),
+                "bytes": n,
                 "baseline_ns": base_ns,
                 "candidate_ns": cand_ns,
                 "elapsed_ratio": cand_ns / base_ns,
