@@ -106,15 +106,20 @@ def _validate_shape(
 
 
 def _seal_message_bytes(policy_id: str, block: FusedObservationBlock) -> int:
-    # Domain + policy length/text + digest + fixed scalar fields + feature payload.
+    # Count every byte passed to SHA-256 by _seal(): domain, policy framing/text,
+    # digest, seven u64 scalar fields, two one-byte flags, the two u64 sequence
+    # counts, and the variable feature payloads.
     return (
         len(_SEAL_DOMAIN)
         + 8
         + len(policy_id.encode("utf-8"))
         + 32
         + 56
+        + 2
+        + 8
         + 8 * len(block.fingerprints)
         + len(block.chunk_run_gate)
+        + 8
         + 24 * len(block.internal_runs)
     )
 
