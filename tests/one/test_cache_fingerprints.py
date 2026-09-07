@@ -36,6 +36,10 @@ def test_fresh_and_cached_fingerprint_stream_matches_independent_oracle():
     assert second.stats.validation_read_bytes == len(data)
     assert second.stats.feature_recompute_bytes == 0
     assert second.stats.reused_blocks == len(first.cache.blocks)
+    assert first.stats.cache_integrity_hash_bytes == 0
+    assert first.stats.cache_feature_payload_read_bytes == 0
+    assert second.stats.cache_integrity_hash_bytes > 0
+    assert second.stats.cache_feature_payload_read_bytes == 8 * len(expected)
 
 
 def test_sparse_edit_recomputes_only_changed_feature_block():
@@ -51,6 +55,10 @@ def test_sparse_edit_recomputes_only_changed_feature_block():
     assert incremental.stats.recomputed_blocks == 1
     assert incremental.stats.feature_recompute_bytes == 4096
     assert incremental.stats.feature_reuse_bytes == len(current) - 4096
+    assert incremental.stats.cache_integrity_hash_bytes > 0
+    assert incremental.stats.cache_feature_payload_read_bytes == 8 * len(
+        incremental.fingerprints
+    ) - 8 * (4096 // 64)
 
 
 def test_cache_feature_corruption_with_valid_content_digest_fails_closed():
@@ -126,6 +134,15 @@ def test_misaligned_block_shape_is_rejected_instead_of_changing_fingerprint_sema
         assert "multiple" in str(exc)
     else:
         raise AssertionError("misaligned block/chunk geometry must fail closed")
+
+
+def test_invalid_utf8_policy_identity_fails_closed():
+    try:
+        observe_fingerprints_cached(b"x" * 4096, policy_id="bad\ud800policy")
+    except ValueError as exc:
+        assert "UTF-8" in str(exc)
+    else:
+        raise AssertionError("unencodable policy identity must fail closed")
 
 
 def test_shifted_insertion_does_not_claim_relocation_reuse():
