@@ -44,6 +44,32 @@ def test_diverse_numeric_root_uses_bulk_digest_and_preserves_opportunities() -> 
     assert candidate.observation.stats.source_scan_bytes == len(data) + candidate.gate.sample_bytes
 
 
+def test_bulk_digest_preserves_incomplete_tail_policy() -> None:
+    data = _diverse_numeric_root(64 * 1024 + 17)
+    baseline = observe(data)
+    candidate = observe_morphology_gated(data)
+    assert candidate.gate.gated
+    assert candidate.observation.runs == baseline.runs
+    assert candidate.observation.reuse == baseline.reuse
+    assert candidate.observation.stats.chunk_fingerprints == baseline.stats.chunk_fingerprints
+    assert candidate.observation.stats.hash_lookups == baseline.stats.hash_lookups
+
+
+def test_bulk_digest_preserves_long_run_gate_semantics() -> None:
+    data = bytearray(_diverse_numeric_root(128 * 1024))
+    # Keep the root globally diverse/numeric while forcing a long-run chunk boundary.
+    start = 64 * 700
+    data[start : start + 256] = b"0" * 256
+    frozen = bytes(data)
+    baseline = observe(frozen)
+    assert baseline.stats.run_opportunity_bytes >= 256
+    candidate = observe_morphology_gated(frozen)
+    assert candidate.gate.gated
+    assert candidate.observation.runs == baseline.runs
+    assert candidate.observation.reuse == baseline.reuse
+    assert candidate.observation.stats.hash_lookups == baseline.stats.hash_lookups
+
+
 def test_repetitive_numeric_root_falls_through_to_generic_observer() -> None:
     data = _repetitive_numeric_root(64 * 1024)
     baseline = observe(data)
