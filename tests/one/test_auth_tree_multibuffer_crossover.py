@@ -6,6 +6,8 @@ bug.  The frozen experiment remains authoritative for result-bearing measurement
 """
 from __future__ import annotations
 
+from math import inf, nan
+
 from benchmarks.one.one_g02_auth_tree_multibuffer_resource_crossover import _learn_threshold
 
 
@@ -25,6 +27,14 @@ def test_crossover_selects_smallest_suffix_that_satisfies_all_frozen_gates() -> 
         _row(40, 0.86, 0.85),
     ]
     assert _learn_threshold(rows) == 20
+
+
+def test_crossover_accepts_exact_frozen_wall_and_cpu_boundaries() -> None:
+    rows = [
+        _row(10, 0.95, 0.90),
+        _row(20, 0.95, 0.90),
+    ]
+    assert _learn_threshold(rows) == 10
 
 
 def test_crossover_rejects_apparent_early_win_when_larger_discovery_row_regresses() -> None:
@@ -66,3 +76,15 @@ def test_crossover_is_order_independent_because_node_count_is_the_dispatch_coord
         _row(20, 0.94, 0.89),
     ]
     assert _learn_threshold(rows) == 20
+
+
+def test_crossover_fails_closed_on_nan_wall_ratio() -> None:
+    assert _learn_threshold([_row(10, nan, 0.80)]) is None
+
+
+def test_crossover_fails_closed_on_infinite_cpu_ratio() -> None:
+    assert _learn_threshold([_row(10, 0.80, inf)]) is None
+
+
+def test_crossover_fails_closed_on_negative_ratio() -> None:
+    assert _learn_threshold([_row(10, -0.10, 0.80)]) is None
