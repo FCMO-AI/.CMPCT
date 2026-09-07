@@ -12,7 +12,9 @@
 
 static void le32(unsigned char *p,uint32_t x){for(int i=0;i<4;i++)p[i]=(unsigned char)(x>>(8*i));}
 static void le64(unsigned char *p,uint64_t x){for(int i=0;i<8;i++)p[i]=(unsigned char)(x>>(8*i));}
-static uint64_t ns(void){struct timespec t;if(clock_gettime(CLOCK_MONOTONIC_RAW,&t)!=0)abort();return (uint64_t)t.tv_sec*1000000000ull+t.tv_nsec;}
+static uint64_t clock_ns(clockid_t id){struct timespec t;if(clock_gettime(id,&t)!=0)abort();return (uint64_t)t.tv_sec*1000000000ull+t.tv_nsec;}
+static uint64_t wall_ns(void){return clock_ns(CLOCK_MONOTONIC_RAW);}
+static uint64_t cpu_ns(void){return clock_ns(CLOCK_PROCESS_CPUTIME_ID);}
 static int cmp_u64(const void *a,const void *b){uint64_t x=*(const uint64_t*)a,y=*(const uint64_t*)b;return x<y?-1:x>y?1:0;}
 
 static void leaf_hash_baseline(uint64_t idx,uint64_t total,const unsigned char *p,size_t n,unsigned char out[32]){
@@ -33,6 +35,15 @@ static size_t geometry(size_t total,uint32_t leaf,size_t *leaves,size_t *parents
     *leaves=width;*parents=0;*levels=0;
     while(width>1){width=(width+1)/2;*parents+=width;(*levels)++;}
     return *leaves+*parents+1;
+}
+
+static size_t tree_workspace_bytes(size_t total,uint32_t leaf){
+    size_t count=(total+leaf-1)/leaf;if(count==0)count=1;
+    return count*32u+((count+1u)/2u)*32u;
+}
+
+static size_t multibuffer_extra_workspace_bytes(void){
+    return (size_t)IMB_MAX_BURST_SIZE*(sizeof(IMB_JOB)+MAX_MESSAGE_BYTES+sizeof(size_t));
 }
 
 static int build_baseline(const unsigned char *data,size_t total,uint32_t leaf,unsigned char root[32]){
@@ -124,34 +135,38 @@ int main(int argc,char **argv){
     if(argc!=4){fprintf(stderr,"usage: %s bytes leaf reps\n",argv[0]);return 2;}
     size_t total=(size_t)strtoull(argv[1],NULL,10);uint32_t leaf=(uint32_t)strtoul(argv[2],NULL,10);int reps=atoi(argv[3]);
     if(!total||!leaf||leaf>MAX_FROZEN_LEAF||reps<3)return 2;
-    unsigned char *data=malloc(total);uint64_t *base=malloc(sizeof(uint64_t)*(size_t)reps),*cand=malloc(sizeof(uint64_t)*(size_t)reps);
-    if(!data||!base||!cand){free(data);free(base);free(cand);return 3;}
+    unsigned char *data=malloc(total);
+    uint64_t *base=malloc(sizeof(uint64_t)*(size_t)reps),*cand=malloc(sizeof(uint64_t)*(size_t)reps);
+    uint64_t *base_cpu=malloc(sizeof(uint64_t)*(size_t)reps),*cand_cpu=malloc(sizeof(uint64_t)*(size_t)reps);
+    if(!data||!base||!cand||!base_cpu||!cand_cpu){free(data);free(base);free(cand);free(base_cpu);free(cand_cpu);return 3;}
     for(size_t i=0;i<total;i++)data[i]=(unsigned char)(((i*131u)^(i>>3)^(i>>11)^0x5au)&255u);
 
-    IMB_MGR *mgr=alloc_mb_mgr(0);if(!mgr){free(data);free(base);free(cand);return 5;}
+    IMB_MGR *mgr=alloc_mb_mgr(0);if(!mgr){free(data);free(base);free(cand);free(base_cpu);free(cand_cpu);return 5;}
     IMB_ARCH arch;init_mb_mgr_auto(mgr,&arch);
 
     unsigned char br[32],cr[32];uint64_t staged=0,staged_check=0;
-    if(!build_baseline(data,total,leaf,br)||!build_candidate(mgr,data,total,leaf,cr,&staged)||memcmp(br,cr,32)!=0){free_mb_mgr(mgr);free(data);free(base);free(cand);return 4;}
+    if(!build_baseline(data,total,leaf,br)||!build_candidate(mgr,data,total,leaf,cr,&staged)||memcmp(br,cr,32)!=0){free_mb_mgr(mgr);free(data);free(base);free(cand);free(base_cpu);free(cand_cpu);return 4;}
     for(int w=0;w<3;w++){
-        if(!build_baseline(data,total,leaf,br)||!build_candidate(mgr,data,total,leaf,cr,&staged_check)){free_mb_mgr(mgr);free(data);free(base);free(cand);return 4;}
-        if(staged_check!=staged){free_mb_mgr(mgr);free(data);free(base);free(cand);return 4;}
+        if(!build_baseline(data,total,leaf,br)||!build_candidate(mgr,data,total,leaf,cr,&staged_check)){free_mb_mgr(mgr);free(data);free(base);free(cand);free(base_cpu);free(cand_cpu);return 4;}
+        if(staged_check!=staged){free_mb_mgr(mgr);free(data);free(base);free(cand);free(base_cpu);free(cand_cpu);return 4;}
     }
     for(int r=0;r<reps;r++){
-        uint64_t t;
+        uint64_t w0,w1,c0,c1;
         if((r&1)==0){
-            t=ns();if(!build_baseline(data,total,leaf,br))return 4;base[r]=ns()-t;
-            t=ns();if(!build_candidate(mgr,data,total,leaf,cr,&staged_check))return 4;cand[r]=ns()-t;
+            c0=cpu_ns();w0=wall_ns();if(!build_baseline(data,total,leaf,br))return 4;w1=wall_ns();c1=cpu_ns();base[r]=w1-w0;base_cpu[r]=c1-c0;
+            c0=cpu_ns();w0=wall_ns();if(!build_candidate(mgr,data,total,leaf,cr,&staged_check))return 4;w1=wall_ns();c1=cpu_ns();cand[r]=w1-w0;cand_cpu[r]=c1-c0;
         }else{
-            t=ns();if(!build_candidate(mgr,data,total,leaf,cr,&staged_check))return 4;cand[r]=ns()-t;
-            t=ns();if(!build_baseline(data,total,leaf,br))return 4;base[r]=ns()-t;
+            c0=cpu_ns();w0=wall_ns();if(!build_candidate(mgr,data,total,leaf,cr,&staged_check))return 4;w1=wall_ns();c1=cpu_ns();cand[r]=w1-w0;cand_cpu[r]=c1-c0;
+            c0=cpu_ns();w0=wall_ns();if(!build_baseline(data,total,leaf,br))return 4;w1=wall_ns();c1=cpu_ns();base[r]=w1-w0;base_cpu[r]=c1-c0;
         }
         if(staged_check!=staged)return 4;
     }
-    if(memcmp(br,cr,32)!=0){free_mb_mgr(mgr);free(data);free(base);free(cand);return 4;}
+    if(memcmp(br,cr,32)!=0){free_mb_mgr(mgr);free(data);free(base);free(cand);free(base_cpu);free(cand_cpu);return 4;}
     qsort(base,(size_t)reps,sizeof(uint64_t),cmp_u64);qsort(cand,(size_t)reps,sizeof(uint64_t),cmp_u64);
+    qsort(base_cpu,(size_t)reps,sizeof(uint64_t),cmp_u64);qsort(cand_cpu,(size_t)reps,sizeof(uint64_t),cmp_u64);
     size_t leaves=0,parents=0,levels=0,nodes=geometry(total,leaf,&leaves,&parents,&levels);
-    printf("{\"root_bytes\":%zu,\"leaf_bytes\":%u,\"reps\":%d,\"leaf_count\":%zu,\"parent_count\":%zu,\"level_count\":%zu,\"node_count\":%zu,\"burst_capacity\":%u,\"imb_arch\":%d,\"imb_features\":%llu,\"candidate_staged_bytes\":%llu,\"candidate_staged_over_source_ratio\":%.9f,\"baseline_median_ns\":%llu,\"candidate_median_ns\":%llu,\"candidate_ratio\":%.9f,\"baseline_root\":\"",total,leaf,reps,leaves,parents,levels,nodes,(unsigned)IMB_MAX_BURST_SIZE,(int)arch,(unsigned long long)mgr->features,(unsigned long long)staged,(double)staged/(double)total,(unsigned long long)base[reps/2],(unsigned long long)cand[reps/2],(double)cand[reps/2]/(double)base[reps/2]);
+    size_t baseline_workspace=tree_workspace_bytes(total,leaf),extra_workspace=multibuffer_extra_workspace_bytes();
+    printf("{\"root_bytes\":%zu,\"leaf_bytes\":%u,\"reps\":%d,\"leaf_count\":%zu,\"parent_count\":%zu,\"level_count\":%zu,\"node_count\":%zu,\"burst_capacity\":%u,\"imb_arch\":%d,\"imb_features\":%llu,\"candidate_staged_bytes\":%llu,\"candidate_staged_over_source_ratio\":%.9f,\"baseline_explicit_workspace_bytes\":%zu,\"candidate_extra_explicit_workspace_bytes\":%zu,\"candidate_total_explicit_workspace_bytes\":%zu,\"baseline_median_ns\":%llu,\"candidate_median_ns\":%llu,\"candidate_ratio\":%.9f,\"baseline_cpu_median_ns\":%llu,\"candidate_cpu_median_ns\":%llu,\"candidate_cpu_ratio\":%.9f,\"baseline_root\":\"",total,leaf,reps,leaves,parents,levels,nodes,(unsigned)IMB_MAX_BURST_SIZE,(int)arch,(unsigned long long)mgr->features,(unsigned long long)staged,(double)staged/(double)total,baseline_workspace,extra_workspace,baseline_workspace+extra_workspace,(unsigned long long)base[reps/2],(unsigned long long)cand[reps/2],(double)cand[reps/2]/(double)base[reps/2],(unsigned long long)base_cpu[reps/2],(unsigned long long)cand_cpu[reps/2],(double)cand_cpu[reps/2]/(double)base_cpu[reps/2]);
     print_hex(br);printf("\",\"candidate_root\":\"");print_hex(cr);printf("\"}\n");
-    free_mb_mgr(mgr);free(data);free(base);free(cand);return 0;
+    free_mb_mgr(mgr);free(data);free(base);free(cand);free(base_cpu);free(cand_cpu);return 0;
 }
