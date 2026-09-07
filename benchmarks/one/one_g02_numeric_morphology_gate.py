@@ -39,6 +39,12 @@ def repetitive_numeric_root(size: int) -> bytes:
     return (row * ((size + len(row) - 1) // len(row)))[:size]
 
 
+def phase_shift_numeric_root(size: int) -> bytes:
+    prefix_size = min(16 * 1024, size // 4)
+    prefix = diverse_numeric_root(prefix_size)
+    return prefix + repetitive_numeric_root(size - len(prefix))
+
+
 def binary_root(size: int) -> bytes:
     seed = bytes(range(256))
     return (seed * ((size + 255) // 256))[:size]
@@ -108,6 +114,7 @@ def main() -> None:
         for family, maker, expected_gate in (
             ("diverse_numeric", diverse_numeric_root, True),
             ("repetitive_numeric", repetitive_numeric_root, False),
+            ("phase_shift_numeric", phase_shift_numeric_root, False),
             ("binary_control", binary_root, False),
         ):
             data = maker(size)
