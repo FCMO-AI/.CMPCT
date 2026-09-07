@@ -20,6 +20,7 @@ import struct
 
 DEFAULT_POLICY_ID = "ONE-G0.2:block-synopsis-v1"
 _SYNOPSIS_SEAL_DOMAIN = b"CMPCT1-ONE-G0.2-SYNOPSIS\x00"
+_U64_MAX = (1 << 64) - 1
 
 
 @dataclass(frozen=True)
@@ -99,11 +100,26 @@ def _seal_fields(
 def _seal_valid(value: object) -> bool:
     if not isinstance(value, BlockSynopsis):
         return False
+    if type(value.digest) is not bytes or type(value.seal) is not bytes:
+        return False
     if len(value.digest) != 32 or len(value.seal) != 32:
+        return False
+    numeric = (value.length, value.byte_sum, value.transitions, value.zero_bytes)
+    if any(type(v) is not int or v < 0 or v > _U64_MAX for v in numeric):
         return False
     if value.length <= 0:
         return False
-    if not (0 <= value.min_byte <= 255 and 0 <= value.max_byte <= 255):
+    if type(value.min_byte) is not int or type(value.max_byte) is not int:
+        return False
+    if not (0 <= value.min_byte <= value.max_byte <= 255):
+        return False
+    # Cheap semantic bounds keep malformed cache state from reaching struct.pack and
+    # reject impossible feature values before any reuse decision.
+    if value.byte_sum > 255 * value.length:
+        return False
+    if value.transitions > value.length - 1:
+        return False
+    if value.zero_bytes > value.length:
         return False
     expected = _seal_fields(
         value.digest,
