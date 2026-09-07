@@ -102,6 +102,29 @@ def test_corrupt_payload_cannot_gain_semantic_authority_from_admission() -> None
     assert candidate.observation.reuse == oracle.reuse
 
 
+def test_malformed_sampled_block_fails_closed_without_exception() -> None:
+    source, cases, seed = _seed(64 << 10)
+    blocks = list(seed.cache.blocks)
+    blocks[0] = object()  # type: ignore[list-item]
+    malformed = replace(seed.cache, blocks=tuple(blocks))
+    candidate = observe_admitted(
+        cases["exact_repeat"],
+        previous=malformed,
+        block_size=BLOCK,
+        chunk_size=CHUNK,
+        min_run=MIN_RUN,
+    )
+    oracle = observe(source, min_run=MIN_RUN, chunk_size=CHUNK)
+    # Seven healthy sampled positions still admit at the frozen 25% policy; the
+    # underlying incremental validator must recompute the malformed block safely.
+    assert candidate.admission.admitted
+    assert candidate.admission.matching_blocks == 7
+    assert candidate.incremental is not None
+    assert candidate.incremental.stats.recomputed_blocks >= 1
+    assert candidate.observation.runs == oracle.runs
+    assert candidate.observation.reuse == oracle.reuse
+
+
 def test_incompatible_policy_falls_back_without_probe_or_cache_state() -> None:
     _, cases, seed = _seed(64 << 10)
     incompatible = replace(seed.cache, policy_id="other-policy")
