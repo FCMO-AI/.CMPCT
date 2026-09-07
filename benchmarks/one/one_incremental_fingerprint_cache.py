@@ -98,9 +98,11 @@ def main() -> int:
             if size >= (256 << 10) and (wall_ratio > 0.50 or cpu_ratio > 0.50):
                 failed = True
 
+    evidence_head = os.environ.get("EVIDENCE_HEAD") or os.environ.get("GITHUB_SHA")
     result = {
         "experiment": "ONE-G0.2 incremental aligned-fingerprint cache",
-        "head": os.environ.get("GITHUB_SHA"),
+        "head": evidence_head,
+        "github_event_sha": os.environ.get("GITHUB_SHA"),
         "repetitions": REPETITIONS,
         "block_size": BLOCK_SIZE,
         "chunk_size": CHUNK_SIZE,
