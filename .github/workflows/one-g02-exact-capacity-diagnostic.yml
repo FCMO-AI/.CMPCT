@@ -93,9 +93,11 @@ jobs:
               /* Warm both paths equally before measured AB/BA alternation. */
               for (int w=0; w<8; ++w) {
                   uint8_t *o=NULL; size_t l=0,s=0,cap=0,d=0,n=0;
-                  if (call_seed(c,src,dst,pd,cd,&o,&l,&s,&cap,&d,&n)!=0) return 1; free(o);
+                  if (call_seed(c,src,dst,pd,cd,&o,&l,&s,&cap,&d,&n)!=0) return 1;
+                  free(o);
                   o=NULL;
-                  if (call_exact(c,src,dst,pd,cd,&o,&l,&s,&cap,&d,&n)!=0) return 1; free(o);
+                  if (call_exact(c,src,dst,pd,cd,&o,&l,&s,&cap,&d,&n)!=0) return 1;
+                  free(o);
               }
 
               uint64_t seed_ns=0, exact_ns=0;
