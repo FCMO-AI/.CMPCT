@@ -1,0 +1,84 @@
+# ci-lane: deep
+name: CMPCT1 ONE-G0.2 auth-tree multi-buffer SHA A/B
+on:
+  push:
+    branches: [research/cmpct1]
+    paths:
+      - "benchmarks/one/native/one_g02_auth_tree_multibuffer_sha.c"
+      - "benchmarks/one/one_g02_auth_tree_multibuffer_sha.py"
+      - "docs/one/prereg/ONE_G02_AUTH_TREE_MULTIBUFFER_SHA_PREREG_2026-09-07.md"
+      - "docs/one/prereg/ONE_G02_AUTH_TREE_MULTIBUFFER_SHA_PROVENANCE_2026-09-07.md"
+      - ".github/workflows/cmpct1-one-g02-auth-tree-multibuffer-sha.yml"
+  pull_request:
+    paths:
+      - "benchmarks/one/native/one_g02_auth_tree_multibuffer_sha.c"
+      - "benchmarks/one/one_g02_auth_tree_multibuffer_sha.py"
+      - "docs/one/prereg/ONE_G02_AUTH_TREE_MULTIBUFFER_SHA_PREREG_2026-09-07.md"
+      - "docs/one/prereg/ONE_G02_AUTH_TREE_MULTIBUFFER_SHA_PROVENANCE_2026-09-07.md"
+      - ".github/workflows/cmpct1-one-g02-auth-tree-multibuffer-sha.yml"
+  workflow_dispatch:
+permissions: {contents: read}
+concurrency:
+  group: cmpct1-one-g02-auth-tree-multibuffer-sha-${{ github.sha }}
+  cancel-in-progress: true
+jobs:
+  multibuffer-sha:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+      IMB_COMMIT: 4f808234a91e87147a4f26167df40f3fd7c7f0c6
+      IMB_INCLUDE: /tmp/imb/include
+      IMB_LIB: /tmp/imb/lib
+    steps:
+      - uses: actions/checkout@v4
+        with: {ref: "${{ env.EVIDENCE_HEAD }}", clean: true}
+      - name: Bind exact ONE head
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.11"}
+      - name: Install repository test dependency surface
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[test,audio]'
+      - name: Re-run ONE semantic boundary
+        run: python -m pytest -q tests/one
+      - name: Build pinned Intel Multi-Buffer research oracle
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y nasm cmake
+          git init /tmp/intel-ipsec-mb
+          git -C /tmp/intel-ipsec-mb remote add origin https://github.com/intel/intel-ipsec-mb.git
+          git -C /tmp/intel-ipsec-mb fetch --depth=1 origin "$IMB_COMMIT"
+          git -C /tmp/intel-ipsec-mb checkout --detach FETCH_HEAD
+          test "$(git -C /tmp/intel-ipsec-mb rev-parse HEAD)" = "$IMB_COMMIT"
+          cmake -S /tmp/intel-ipsec-mb -B /tmp/intel-ipsec-mb/build \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DBUILD_LIBRARY_ONLY=ON \
+            -DCMAKE_INSTALL_PREFIX=/tmp/imb
+          cmake --build /tmp/intel-ipsec-mb/build --parallel 2
+          cmake --install /tmp/intel-ipsec-mb/build
+          test -f "$IMB_INCLUDE/intel-ipsec-mb.h"
+          test -e "$IMB_LIB/libIPSec_MB.so" -o -e "$IMB_LIB/libIPSec_MB.a"
+      - name: Run frozen multi-buffer SHA auth-tree A/B and preserve scientific reds
+        shell: bash
+        run: |
+          mkdir -p one-auth-multibuffer-sha-artifacts
+          set +e
+          python -m benchmarks.one.one_g02_auth_tree_multibuffer_sha | tee one-auth-multibuffer-sha-artifacts/one-g02-auth-tree-multibuffer-sha.json
+          code=${PIPESTATUS[0]}
+          echo "$code" > one-auth-multibuffer-sha-artifacts/scientific-exit-code.txt
+          printf '%s\n' "$IMB_COMMIT" > one-auth-multibuffer-sha-artifacts/intel-ipsec-mb-commit.txt
+          exit 0
+      - name: Retain exact-head evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: one-g02-auth-tree-multibuffer-sha-${{ env.EVIDENCE_HEAD }}
+          path: one-auth-multibuffer-sha-artifacts/
+          if-no-files-found: error
+      - name: Enforce preregistered scientific decision
+        if: always()
+        shell: bash
+        run: test "$(cat one-auth-multibuffer-sha-artifacts/scientific-exit-code.txt)" = "0"
