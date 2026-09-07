@@ -20,14 +20,15 @@ FCMO-authorized agents with organization access can resolve:
 
 - Hub repository: `FCMO-AI/FCMO-Agent-Hub`
 - Canonical universal Core: `standard/CORE.md`
+- Canonical task-gated moral policy: `policy/FCMO_ETHICAL_MORAL_CONSTITUTION_V1.md`
 - Ecosystem map: `ecosystem/REPOSITORIES.md`
 - Machine registry: `ecosystem/repositories.json`
 - Living Commons: `commons/LIVING_COMMONS.md`
 - Knowledge freshness: `governance/KNOWLEDGE_FRESHNESS.md`
 
-This public repository deliberately records repository coordinates rather than depending on a private URL. If the Hub is accessible, use its live Core as the canonical FCMO-wide semantic source and this repository's adapted Standard as the local integration layer. If it is not accessible, continue from the pinned local v1 doctrine and CMPCT canon.
+This public repository deliberately records repository coordinates rather than depending on a private URL. If the Hub is accessible, use its live Core as the canonical FCMO-wide engineering/operational source and this repository's adapted Standard as the local integration layer. If a genuine material moral/value conflict appears, an FCMO-authorized agent with Hub access should use the live promoted Ethical & Moral Constitution v1.0 rather than treating old proposal/red-team material as policy. The policy promotion does **not** change CMPCT's adopted Core v1.0 status or public product authority.
 
-Do not replace CMPCT's local AGI Engineering Standard, quality ratchet, benchmark ethics, format law, or release gates merely because a more general Hub document exists.
+If the Hub is not accessible, continue from the pinned local v1 doctrine and CMPCT canon. Do not replace CMPCT's local AGI Engineering Standard, quality ratchet, benchmark ethics, format law, or release gates merely because a more general Hub document exists.
 
 ## Optional institutional learning and stewardship
 
