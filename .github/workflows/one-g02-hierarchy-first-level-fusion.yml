@@ -1,9 +1,13 @@
-# exact-source retrigger: 2026-09-06T19:07 activation
 name: ONE-G0.2 hierarchy first-level fusion diagnostic
 
 on:
   push:
     branches: [ research/cmpct1 ]
+    paths:
+      - 'benchmarks/one/native/one_g02_hierarchy_first_level_fusion.c'
+      - 'benchmarks/one/native/one_g02_shared_native_writer_ref_fused.c'
+      - '.github/workflows/one-g02-hierarchy-first-level-fusion.yml'
+  pull_request:
     paths:
       - 'benchmarks/one/native/one_g02_hierarchy_first_level_fusion.c'
       - 'benchmarks/one/native/one_g02_shared_native_writer_ref_fused.c'
