@@ -38,7 +38,12 @@ from benchmarks.one.one_g02_shared_graph_auth_pair import _surprise_blob
 from benchmarks.one.one_g02_shared_graph_auth_multiversion import ROOT_SIZES, MUTATIONS
 from benchmarks.one.one_g02_shared_graph_auth_descriptor_tree import _desc_control
 from benchmarks.one.one_g02_descriptor_auth_quaternary_ab import _build as _build_q
-from experiments.one.auth_tree import build_auth_tree
+from experiments.one.auth_tree import (
+    LEAF_DOMAIN,
+    PARENT_DOMAIN,
+    ROOT_DOMAIN,
+    build_auth_tree,
+)
 
 LEAF=80
 COUNT=8
@@ -48,11 +53,11 @@ INNER=18
 MAX_ELAPSED_RATIO=0.80
 MAX_SHA_INPUT_RATIO=0.40
 
-# Exact domain lengths from experiments/one/auth_tree.py and q4 descriptor grammar are measured
-# by deterministic formulas below; this is causal accounting, not a wall-clock surrogate.
-LEAF_DOMAIN_LEN=len(b"ONE-AUTH-LEAF\0")
-PARENT_DOMAIN_LEN=len(b"ONE-AUTH-PARENT\0")
-ROOT_DOMAIN_LEN=len(b"ONE-AUTH-ROOT\0")
+# Domain lengths are imported from the exact AuthTree semantic implementation so accounting
+# cannot silently drift away from the bytes the evaluator/native transfer actually hashes.
+LEAF_DOMAIN_LEN=len(LEAF_DOMAIN)
+PARENT_DOMAIN_LEN=len(PARENT_DOMAIN)
+ROOT_DOMAIN_LEN=len(ROOT_DOMAIN)
 DESC_LEAF_DOMAIN_LEN=len(b"ONE-GDESC-L\0")
 DESC_PARENT_DOMAIN_LEN=len(b"ONE-GDESC-QP\0")
 
@@ -70,15 +75,15 @@ def _families():
 
 
 def _basis_sha_input_bytes(size:int)->int:
-    # build_auth_tree leaf grammar: domain + <Q offset> + complete leaf bytes.
+    # build_auth_tree leaf grammar: domain + <QQ index,total> + complete leaf bytes.
     leaves=(size+LEAF-1)//LEAF
-    total=leaves*(LEAF_DOMAIN_LEN+8)+size
-    width=leaves; level=1
+    total=leaves*(LEAF_DOMAIN_LEN+16)+size
+    width=leaves
     while width>1:
         parents=(width+1)//2
         # binary parent hashes domain + u32 level + two child digests; odd duplicates left.
         total+=parents*(PARENT_DOMAIN_LEN+4+64)
-        width=parents; level+=1
+        width=parents
     # final root commitment domain + u64 total + u32 leaf + top digest.
     total+=ROOT_DOMAIN_LEN+8+4+32
     return total
@@ -151,6 +156,7 @@ def run():
     return {"schema":"cmpct-one-g02-shared-auth-family-creation-v1","experimental_version":"ONE-G0.2",
             "source_sha":os.environ.get("EVIDENCE_HEAD") or os.environ.get("GITHUB_SHA") or "local-unbound",
             "frozen_gate":{"max_elapsed_ratio":MAX_ELAPSED_RATIO,"max_sha_input_ratio":MAX_SHA_INPUT_RATIO},
+            "auth_domain_lengths":{"leaf":LEAF_DOMAIN_LEN,"parent":PARENT_DOMAIN_LEN,"root":ROOT_DOMAIN_LEN},
             "failures":failures,
             "median_elapsed_ratio":median(r["elapsed_ratio"] for r in rows),
             "max_elapsed_ratio":max(r["elapsed_ratio"] for r in rows),
