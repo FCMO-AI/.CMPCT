@@ -11,8 +11,12 @@ on:
       - ".github/workflows/cmpct1-one-g02-auth-tree-multibuffer-resource-crossover.yml"
   workflow_dispatch:
 permissions: {contents: read}
+# Scientific runs are evidence for one immutable source head.  Grouping a whole
+# PR together lets a later docs/handoff commit cancel an already-started
+# result-bearing run before its artifact exists.  Bind concurrency to the exact
+# evidence head instead; duplicate executions of the same head may still cancel.
 concurrency:
-  group: cmpct1-one-g02-auth-tree-multibuffer-resource-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
+  group: cmpct1-one-g02-auth-tree-multibuffer-resource-${{ github.event_name }}-${{ github.event.pull_request.head.sha || github.sha }}
   cancel-in-progress: true
 env:
   EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
