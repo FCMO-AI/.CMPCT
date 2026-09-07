@@ -98,6 +98,29 @@ def main() -> int:
             )
             wall_ratio = cached_wall / fresh_wall
             cpu_ratio = cached_cpu / fresh_cpu
+
+            # Explicit source-traffic accounting. The reference fresh observer performs
+            # content validation plus feature extraction, whereas cached reuse still must
+            # read every current byte for SHA identity. A production fused observer can
+            # combine validation and feature extraction in one source pass, so the
+            # candidate's best possible source-traffic ratio against that floor is never
+            # below 1.0 without trusted changed-range provenance or an already-paid hash.
+            fresh_reference_source_bytes = (
+                fresh.stats.validation_read_bytes + fresh.stats.feature_recompute_bytes
+            )
+            cached_reference_source_bytes = (
+                incremental.stats.validation_read_bytes
+                + incremental.stats.feature_recompute_bytes
+            )
+            fused_fresh_source_floor_bytes = len(current)
+            cached_vs_reference_source_ratio = (
+                cached_reference_source_bytes / fresh_reference_source_bytes
+            )
+            cached_vs_fused_source_floor_ratio = (
+                cached_reference_source_bytes / fused_fresh_source_floor_bytes
+            )
+            cache_payload_ratio = incremental.stats.persistent_payload_bytes / max(1, len(current))
+
             row = {
                 "size": size,
                 "case": case,
@@ -107,6 +130,12 @@ def main() -> int:
                 "cached_cpu_ns": cached_cpu,
                 "wall_ratio": wall_ratio,
                 "cpu_ratio": cpu_ratio,
+                "fresh_reference_source_bytes": fresh_reference_source_bytes,
+                "cached_reference_source_bytes": cached_reference_source_bytes,
+                "fused_fresh_source_floor_bytes": fused_fresh_source_floor_bytes,
+                "cached_vs_reference_source_ratio": cached_vs_reference_source_ratio,
+                "cached_vs_fused_source_floor_ratio": cached_vs_fused_source_floor_ratio,
+                "cache_payload_ratio": cache_payload_ratio,
                 "stats": asdict(incremental.stats),
             }
             rows.append(row)
@@ -130,6 +159,10 @@ def main() -> int:
         "rows": rows,
         "decision": "ADVANCE_TO_NATIVE_FALSIFIER" if not failed else "REJECT_OR_REFORM",
         "scope": "Python writer-discovery viability only; not product/native performance authority",
+        "traffic_scope": (
+            "reference source traffic is explicit; fused production baseline floor is one full "
+            "current-input read, so cache reuse alone cannot claim sub-1x source traffic"
+        ),
     }
     print(json.dumps(result, indent=2, sort_keys=True))
     return 1 if failed else 0
