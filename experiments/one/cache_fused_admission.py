@@ -14,6 +14,7 @@ import hashlib
 
 from experiments.one.cache_fused_observe import (
     DEFAULT_FUSED_POLICY_ID,
+    FusedObservationBlock,
     FusedObservationCache,
     IncrementalObservation,
     observe_incremental,
@@ -87,6 +88,7 @@ def classify_fused_cache_admission(
         and previous.block_size == block_size
         and previous.chunk_size == chunk_size
         and previous.min_run == min_run
+        and type(previous.blocks) is tuple
     )
     if not compatible or not data:
         return FusedCacheAdmissionDecision(
@@ -110,7 +112,16 @@ def classify_fused_cache_admission(
         read_bytes += len(raw)
         digest = hashlib.sha256(raw).digest()
         prior = prior_blocks[index] if index < len(prior_blocks) else None
-        if prior is not None and prior.digest == digest and prior.length == len(raw):
+        # Probe metadata is untrusted writer state. Malformed candidates simply fail to
+        # match; they never get to raise or gain authority from the admission layer.
+        if (
+            isinstance(prior, FusedObservationBlock)
+            and type(prior.digest) is bytes
+            and len(prior.digest) == 32
+            and type(prior.length) is int
+            and prior.digest == digest
+            and prior.length == len(raw)
+        ):
             matches += 1
 
     fraction = matches / len(indices) if indices else 0.0
