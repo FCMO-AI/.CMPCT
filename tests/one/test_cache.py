@@ -131,6 +131,29 @@ def test_corrupt_synopsis_seal_is_recomputed():
     assert recovered.stats.reused_blocks == 1
 
 
+def test_malformed_cached_numeric_fields_fail_closed_without_exception():
+    data = b"D" * 8192
+    first = observe_cached(data, block_size=4096)
+    blocks = list(first.cache.blocks)
+    original = blocks[0]
+    blocks[0] = BlockSynopsis(
+        digest=original.digest,
+        length=original.length,
+        byte_sum=1 << 80,
+        transitions=original.transitions,
+        zero_bytes=original.zero_bytes,
+        min_byte=original.min_byte,
+        max_byte=original.max_byte,
+        seal=original.seal,
+    )
+    poisoned = ObservationCache(first.cache.policy_id, first.cache.block_size, tuple(blocks))
+    recovered = observe_cached(data, previous=poisoned, block_size=4096)
+    fresh = observe_cached(data, block_size=4096)
+    assert recovered.cache == fresh.cache
+    assert recovered.stats.recomputed_blocks == 1
+    assert recovered.stats.reused_blocks == 1
+
+
 def test_shifted_insertion_is_conservatively_not_relocated():
     base = bytes(range(251)) * 40
     first = observe_cached(base, block_size=512)
