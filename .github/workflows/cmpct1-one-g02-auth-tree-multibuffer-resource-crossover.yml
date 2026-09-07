@@ -1,0 +1,106 @@
+# ci-lane: deep
+# ci-pr-scope: latest-head-commit-gate
+name: CMPCT1 ONE-G0.2 auth-tree multi-buffer resource crossover
+on:
+  pull_request:
+    paths:
+      - "benchmarks/one/native/one_g02_auth_tree_multibuffer_sha.c"
+      - "benchmarks/one/one_g02_auth_tree_multibuffer_resource_crossover.py"
+      - "docs/one/prereg/ONE_G02_AUTH_TREE_MULTIBUFFER_RESOURCE_CROSSOVER_PREREG_2026-09-07.md"
+      - ".github/workflows/cmpct1-one-g02-auth-tree-multibuffer-resource-crossover.yml"
+  workflow_dispatch:
+permissions: {contents: read}
+concurrency:
+  group: cmpct1-one-g02-auth-tree-multibuffer-resource-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+env:
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+  IMB_COMMIT: 4f808234a91e87147a4f26167df40f3fd7c7f0c6
+  IMB_INCLUDE: /tmp/imb/include
+  IMB_LIB: /tmp/imb/lib
+jobs:
+  classify:
+    runs-on: ubuntu-latest
+    outputs:
+      relevant: ${{ steps.changed.outputs.relevant }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 2
+          clean: true
+      - name: Bind exact ONE head
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+      - name: Classify latest commit only
+        id: changed
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "relevant=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          git diff-tree --no-commit-id --name-only -r HEAD > /tmp/latest-head-paths.txt
+          cat /tmp/latest-head-paths.txt
+          if grep -Eq '^(benchmarks/one/native/one_g02_auth_tree_multibuffer_sha\.c|benchmarks/one/one_g02_auth_tree_multibuffer_resource_crossover\.py|docs/one/prereg/ONE_G02_AUTH_TREE_MULTIBUFFER_RESOURCE_CROSSOVER_PREREG_2026-09-07\.md|\.github/workflows/cmpct1-one-g02-auth-tree-multibuffer-resource-crossover\.yml)$' /tmp/latest-head-paths.txt; then
+            echo "relevant=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "relevant=false" >> "$GITHUB_OUTPUT"
+          fi
+  resource-crossover:
+    needs: classify
+    if: needs.classify.outputs.relevant == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          clean: true
+      - name: Bind exact ONE head
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.11"}
+      - name: Install repository test dependency surface
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[test,audio]'
+      - name: Re-run ONE semantic boundary
+        run: python -m pytest -q tests/one
+      - name: Build pinned Intel Multi-Buffer research oracle
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y nasm cmake
+          git init /tmp/intel-ipsec-mb
+          git -C /tmp/intel-ipsec-mb remote add origin https://github.com/intel/intel-ipsec-mb.git
+          git -C /tmp/intel-ipsec-mb fetch --depth=1 origin "$IMB_COMMIT"
+          git -C /tmp/intel-ipsec-mb checkout --detach FETCH_HEAD
+          test "$(git -C /tmp/intel-ipsec-mb rev-parse HEAD)" = "$IMB_COMMIT"
+          cmake -S /tmp/intel-ipsec-mb -B /tmp/intel-ipsec-mb/build \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DBUILD_LIBRARY_ONLY=ON \
+            -DCMAKE_INSTALL_PREFIX=/tmp/imb
+          cmake --build /tmp/intel-ipsec-mb/build --parallel 2
+          cmake --install /tmp/intel-ipsec-mb/build
+      - name: Run frozen resource/crossover A/B and preserve scientific reds
+        shell: bash
+        run: |
+          mkdir -p one-auth-multibuffer-resource-artifacts
+          set +e
+          python -m benchmarks.one.one_g02_auth_tree_multibuffer_resource_crossover | tee one-auth-multibuffer-resource-artifacts/one-g02-auth-tree-multibuffer-resource-crossover.json
+          code=${PIPESTATUS[0]}
+          echo "$code" > one-auth-multibuffer-resource-artifacts/scientific-exit-code.txt
+          printf '%s\n' "$IMB_COMMIT" > one-auth-multibuffer-resource-artifacts/intel-ipsec-mb-commit.txt
+          exit 0
+      - name: Retain exact-head evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: one-g02-auth-tree-multibuffer-resource-${{ env.EVIDENCE_HEAD }}
+          path: one-auth-multibuffer-resource-artifacts/
+          if-no-files-found: error
+      - name: Enforce preregistered scientific decision
+        if: always()
+        shell: bash
+        run: test "$(cat one-auth-multibuffer-resource-artifacts/scientific-exit-code.txt)" = "0"
