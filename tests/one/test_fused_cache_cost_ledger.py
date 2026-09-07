@@ -5,9 +5,14 @@ from experiments.one.fused_cache_cost_ledger import audit_integrity_cost, seal_m
 
 
 def _fixture() -> bytes:
-    # Exercise fingerprints, run-gate payload, and internal-run records rather than a
-    # degenerate all-random seal shape.
-    block0 = b"A" * 96 + bytes(range(64)) + b"B" * 96
+    # Exercise fingerprints, run-gate payload, and an internal-run record rather than a
+    # degenerate all-random seal shape. The first block is exactly 256 bytes.
+    block0 = (
+        b"A" * 64
+        + bytes(range(64))
+        + b"B" * 64
+        + bytes((index * 37 + 3) & 0xFF for index in range(64))
+    )
     block1 = bytes((index * 29 + 7) & 0xFF for index in range(256))
     return block0 + block1
 
@@ -15,6 +20,7 @@ def _fixture() -> bytes:
 def test_seal_message_size_is_independent_structural_accounting() -> None:
     result = observe_incremental(_fixture(), block_size=256, chunk_size=64, min_run=8)
     block = result.cache.blocks[0]
+    assert block.internal_runs  # force variable internal-run payload into the fixture
     expected = (
         len(b"CMPCT1-ONE-G0.2-FUSED-OBSERVE-CACHE\x00")
         + 8
