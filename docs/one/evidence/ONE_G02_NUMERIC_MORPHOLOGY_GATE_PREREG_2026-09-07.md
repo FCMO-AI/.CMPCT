@@ -6,64 +6,69 @@ Repository authority identifies deployed ASCII-numeric roots as a measured red f
 
 Activation T0 was recorded as 2026-09-07T17:09:12-06:00.
 
-## Hypothesis
+## Current hypothesis
 
-A bounded, content-derived morphology gate can skip reuse-fingerprint discovery on sufficiently large, strongly numeric ASCII roots **only when bounded evidence distributed across the root is also highly diverse**, reducing observation wall/CPU time while preserving run opportunities and avoiding numeric regions where repetitive material contains useful reuse Laws.
+A bounded morphology classifier can select a **bulk chunk-digest implementation** for sufficiently large, strongly numeric ASCII roots, reducing observation wall/CPU time while preserving the same run and reuse opportunity classes and exact proof semantics as generic observation on the hostile matrix.
 
-The candidate is writer-side discovery policy. ONE bytes, Law + Surprise semantics, reader execution, locality, integrity and recovery contracts are unchanged.
+The classifier selects writer implementation only. It no longer authorizes deletion of reuse discovery. ONE bytes, Law + Surprise semantics, reader execution, locality, integrity and recovery contracts are unchanged.
 
-## Builder
+## Falsified predecessor preserved
 
-`experiments/one/morphology_gate.py` adds:
+The first design skipped reuse fingerprinting outright on numeric-looking roots. It was tightened once to require sampled chunk diversity and again to distribute the same 4096-byte sample budget across eight deterministic windows.
 
-- a classifier reading at most 4096 bytes total, distributed across eight deterministic windows of the root;
-- a minimum input size of 16 KiB so tiny roots do not pay a hard-to-amortize gate;
-- >=98.5% membership in a deliberately narrow numeric/delimiter alphabet;
-- >=35% ASCII digit density;
-- >=90% exact uniqueness across sampled 64-byte chunks;
-- a run-only one-pass observer when all gates pass;
-- exact delegation to the existing generic observer when any gate fails.
+Hostile review then constructed a stronger counterexample **before any completed hosted scientific result**: a diverse numeric root with a repetitive numeric island placed between deterministic sample windows. The classifier still gated it while the generic observer found roughly 10%+ source-scale reuse evidence in local reconstruction. That disproves the premise that bounded sampling can certify global absence of useful reuse.
 
-The distributed sample reads are charged as source traffic. Gated observation retains run discovery but intentionally emits no reuse opportunities.
+The skip-reuse design is therefore retired. Adding more windows would only make the counterexample more annoying, not remove it.
 
-## Hostile reviewer corrections before result authority
+## Reformed builder
 
-The first candidate gated on numeric morphology alone. Review rejected it before benchmarking: repetitive numeric tables can be highly compressible by reuse, so morphology alone could destroy valuable discovery while appearing fast. The gate was tightened to require high sampled chunk diversity.
+`experiments/one/morphology_gate.py` now uses the same bounded morphology evidence only to choose implementation:
 
-A second review found that a contiguous prefix remained too easy to fool: a diverse numeric header followed by a large repetitive numeric body would satisfy a prefix-only gate while hiding substantial reuse. Before any completed scientific workflow result, the classifier was changed to stratify the same 4096-byte budget across eight deterministic root windows. A hostile phase-shift root now requires fall-through and exact equality with generic observation.
+- at most 4096 sampled bytes across eight deterministic windows;
+- minimum input 16 KiB;
+- >=98.5% numeric/delimiter alphabet membership;
+- >=35% digit density;
+- >=90% sampled 64-byte chunk uniqueness;
+- when gated, run observation and 64-byte reuse fingerprinting are both preserved;
+- gated fingerprint nomination uses deterministic BLAKE2b-64 computed on aligned chunks in optimized native code rather than per-byte Python FNV64 arithmetic;
+- exact byte equality remains mandatory before reuse opportunity emission;
+- collision buckets remain bounded by the existing `max_index_entries` contract;
+- ungated inputs delegate exactly to generic `observe`.
 
-This is still sampling, not a proof of global absence of reuse; adversarial structure can evade deterministic windows. The full generic reuse-opportunity fraction on the benchmarked gated roots therefore remains an independent disproof criterion, and any production promotion must measure final stored bytes rather than treating the heuristic as density-safe by construction.
+The selected path consumes the root in aligned chunks; run detection iterates the chunk bytes while the digest operates on the same temporary chunk. The 4096-byte morphology evidence is charged as extra source traffic. Algorithmic retained index payload uses the same 8-byte digest + 8-byte retained-offset lower-bound model as generic observation; actual Python RSS still requires hosted/process measurement.
 
-## Frozen falsifier
+BLAKE2b and FNV64 have different collision partitions, so opportunity identity is not assumed axiomatically. It is an explicit hostile-test and benchmark invariant on the current matrix. Exact reconstruction safety is stronger than fingerprint identity because every emitted reuse still requires byte equality.
 
-`benchmarks/one/one_g02_numeric_morphology_gate.py` uses 256 KiB and 1 MiB roots, 15 paired alternating repetitions, and four families:
+## Frozen falsifier after reform, before result authority
 
-1. diverse numeric ASCII — must gate;
-2. repetitive numeric ASCII — must not gate;
-3. diverse-prefix / repetitive-tail numeric phase shift — must not gate;
-4. binary control — must not gate.
+`benchmarks/one/one_g02_numeric_morphology_gate.py` uses 256 KiB and 1 MiB roots, 15 paired alternating repetitions, and five families:
+
+1. diverse numeric ASCII — morphology selects bulk digest;
+2. numeric root with a repetitive island deliberately located between sample windows — morphology selects bulk digest and **must preserve generic reuse exactly**;
+3. repetitive numeric ASCII — must fall through;
+4. diverse-prefix / repetitive-tail numeric phase shift — must fall through;
+5. binary control — must fall through.
 
 Promotion gates are frozen before hosted result authority:
 
-- diverse numeric wall ratio <= 0.90 versus generic observe;
-- diverse numeric process-CPU ratio <= 0.90;
-- generic observer reuse opportunity bytes on a gated root must be <=2% of source bytes, otherwise the morphology heuristic is discarding too much potential Law evidence and fails regardless of speed;
+- every row must preserve generic run opportunities exactly;
+- every row must preserve generic reuse opportunities exactly on the matrix;
+- gated numeric wall ratio <= 0.90 versus generic observe;
+- gated numeric process-CPU ratio <= 0.90;
 - fall-through families must remain <=1.08 wall and CPU;
-- all run opportunities must match generic observe exactly;
 - every ungated observation must equal generic observe exactly.
 
 No threshold may move after observing CI output to manufacture a pass.
 
 ## Disproof / retirement conditions
 
-Reform or retire this gate if any of the following occurs:
+Reform or retire the bulk-digest selector if any of the following occurs:
 
-- diverse numeric roots fail to achieve the preregistered 10% wall and CPU reduction;
-- a gated root hides >2% source bytes of generic reuse opportunity;
-- repetitive numeric, phase-shift numeric, or binary controls false-gate;
+- gated numeric roots fail to achieve the preregistered 10% wall and CPU reduction;
+- run or reuse opportunities diverge on the hostile matrix;
+- collision behavior creates materially worse discovery on broader corpus evidence;
 - fall-through overhead exceeds 8%;
-- run opportunities diverge;
-- the bounded classifier becomes a material extra memory/source-traffic owner in whole-writer profiling;
-- end-to-end density later regresses materially even when observation-level skipped reuse remains below 2%.
+- the classifier/digest path becomes a material memory-traffic or RSS owner in whole-writer profiling;
+- end-to-end stored bytes regress materially after planner integration despite observation-level parity.
 
-A component pass is not a Genesis scoreboard win. If positive, this gate still has to earn value in the complete writer envelope and at the 2026-09-11 same-input comparator gate.
+A component pass is not a Genesis scoreboard win. If positive, this path still has to earn value in the complete writer envelope and at the 2026-09-11 same-input comparator gate.
