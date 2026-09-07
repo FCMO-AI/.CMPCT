@@ -26,6 +26,7 @@ import statistics
 import time
 
 from experiments.one.cache_fused_observe import observe_incremental
+from experiments.one.fused_cache_cost_ledger import audit_integrity_cost
 from experiments.one.observe import observe
 
 SIZES = (256 << 10, 1 << 20)
@@ -119,12 +120,24 @@ def main() -> int:
 
             baseline = baseline_call()
             candidate = candidate_call()
+            integrity_ledger = audit_integrity_cost(candidate, previous=seed.cache)
             if candidate.observation.runs != baseline.runs or candidate.observation.reuse != baseline.reuse:
                 raise AssertionError(f"observation divergence: {size=} {case=}")
+            if integrity_ledger.recomputed_blocks != candidate.stats.recomputed_blocks:
+                raise AssertionError(f"integrity recompute accounting divergence: {size=} {case=}")
+            if integrity_ledger.reused_blocks != candidate.stats.reused_blocks:
+                raise AssertionError(f"integrity reuse accounting divergence: {size=} {case=}")
             bw, bc, cw, cc = _paired_medians(baseline_call, candidate_call)
             wall_ratio = cw / bw
             cpu_ratio = cc / bc
             actual_read_limit = baseline.stats.total_source_read_bytes + expected_changed_bytes + BLOCK_SIZE
+            charged_candidate_traffic = (
+                candidate.stats.validation_read_bytes
+                + candidate.stats.feature_recompute_bytes
+                + integrity_ledger.charged_hash_bytes
+                + candidate.stats.cache_feature_payload_read_bytes
+                + candidate.stats.verification_read_bytes
+            )
             rows.append({
                 "size": size,
                 "case": case,
@@ -137,8 +150,14 @@ def main() -> int:
                 "candidate_validation_read_bytes": candidate.stats.validation_read_bytes,
                 "candidate_feature_recompute_bytes": candidate.stats.feature_recompute_bytes,
                 "candidate_feature_reuse_bytes": candidate.stats.feature_reuse_bytes,
-                "candidate_cache_integrity_hash_bytes": candidate.stats.cache_integrity_hash_bytes,
+                "candidate_cache_integrity_reported_hash_bytes": candidate.stats.cache_integrity_hash_bytes,
+                "candidate_cache_integrity_verify_hash_bytes": integrity_ledger.expected_verify_hash_bytes,
+                "candidate_cache_integrity_build_hash_bytes": integrity_ledger.expected_build_hash_bytes,
+                "candidate_cache_integrity_total_hash_bytes": integrity_ledger.expected_total_hash_bytes,
+                "candidate_cache_integrity_accounting_gap_bytes": integrity_ledger.accounting_gap_bytes,
+                "candidate_cache_integrity_charged_hash_bytes": integrity_ledger.charged_hash_bytes,
                 "candidate_cache_feature_payload_read_bytes": candidate.stats.cache_feature_payload_read_bytes,
+                "candidate_charged_traffic_lower_bound_bytes": charged_candidate_traffic,
                 "baseline_total_source_read_bytes": baseline.stats.total_source_read_bytes,
                 "candidate_total_source_read_bytes": candidate.stats.total_source_read_bytes,
                 "persistent_payload_bytes": candidate.stats.persistent_payload_bytes,
