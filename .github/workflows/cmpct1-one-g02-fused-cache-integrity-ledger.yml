@@ -1,0 +1,40 @@
+name: CMPCT1 ONE-G0.2 fused cache integrity ledger
+
+on:
+  push:
+    branches:
+      - research/cmpct1
+    paths:
+      - experiments/one/cache_fused_observe.py
+      - experiments/one/fused_cache_cost_ledger.py
+      - tests/one/test_cache_fused_observe.py
+      - tests/one/test_fused_cache_cost_ledger.py
+      - benchmarks/one/one_g02_fused_cache_integrity_ledger.py
+      - .github/workflows/cmpct1-one-g02-fused-cache-integrity-ledger.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  integrity-ledger:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Run hostile ledger tests
+        run: python -m pytest -q tests/one/test_fused_cache_cost_ledger.py tests/one/test_cache_fused_observe.py
+      - name: Run deterministic integrity audit
+        run: |
+          mkdir -p artifacts
+          python benchmarks/one/one_g02_fused_cache_integrity_ledger.py | tee artifacts/one_g02_fused_cache_integrity_ledger.json
+      - name: Upload audit evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: one-g02-fused-cache-integrity-ledger
+          path: artifacts/one_g02_fused_cache_integrity_ledger.json
+          if-no-files-found: warn
