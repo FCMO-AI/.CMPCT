@@ -1,16 +1,17 @@
 """ONE-G0.2 bounded content-addressed relocation cache experiment.
 
-The positional fingerprint cache is deliberately conservative, but versioned data often
-moves unchanged information.  This writer-only experiment asks whether an unchanged
-observation block may be reused after a block-aligned insertion/reorder without changing
-ONE reader semantics.
+This writer-only experiment extends the positional fingerprint cache to reuse unchanged
+observation blocks after block-aligned movement.  It does not change ONE reader semantics
+or archive bytes.
 
 Relocation is admitted only by current SHA-256 content identity plus the existing sealed
-fingerprint payload.  The relocation index is built lazily after the first positional
-identity miss and is bounded by ``max_relocation_entries``.  Index construction, lookups,
-seal hashing and cached-feature reads are all exposed as stats; none are treated as free.
+fingerprint payload.  A global relocation index is *not* built on the first positional
+miss: two consecutive misses are required as cheap evidence that content may actually
+have moved.  A lone sparse mutation therefore recomputes locally and avoids O(n) search.
+Index construction, lookups, seal hashing and cached-feature reads are all exposed as
+stats; none are treated as free.
 
-This does *not* solve arbitrary byte-shifted insertions.  Aligned FNV fingerprints are
+This does not solve arbitrary byte-shifted insertions.  Aligned FNV fingerprints are
 position-relative features, so a one-byte shift legitimately changes their grouping and
 must recompute until a future content-defined observation family earns different
 semantics.
@@ -47,6 +48,7 @@ class RelocationCacheStats:
     relocation_index_entries: int
     relocation_index_payload_bytes: int
     relocation_lookups: int
+    relocation_gate_activations: int
     emitted_fingerprints: int
     persistent_payload_bytes: int
 
@@ -67,14 +69,13 @@ def observe_fingerprints_relocated(
     policy_id: str = DEFAULT_FINGERPRINT_POLICY_ID,
     max_relocation_entries: int = 1 << 16,
 ) -> RelocatedFingerprints:
-    """Return exact aligned fingerprints with bounded cross-position cache reuse.
+    """Return exact aligned fingerprints with opportunity-gated cross-position reuse.
 
-    Positional identity is always tried first.  Only after it misses do we lazily index
-    prior block identities, so exact-repeat workloads pay no relocation-index construction
-    cost.  Duplicate prior identities keep the first structurally valid candidate; since
-    feature payloads are deterministic under one policy, any correctly sealed duplicate
-    is equivalent.  A damaged candidate is skipped in favor of another duplicate when
-    available.
+    Positional identity is always tried first.  One miss is treated as a local mutation;
+    two consecutive positional misses activate bounded relocation search.  This sacrifices
+    reuse of an isolated moved block to avoid paying a whole-cache index build for the far
+    more common sparse-mutation case.  Duplicate identities are safe because a nominated
+    candidate still has to pass the existing sealed-payload validation.
     """
     if type(data) is not bytes:
         raise TypeError("ONE relocation-cache input must be bytes")
@@ -93,6 +94,8 @@ def observe_fingerprints_relocated(
     relocation_index: dict[tuple[bytes, int], list[FingerprintBlock]] | None = None
     relocation_index_entries = 0
     relocation_lookups = 0
+    relocation_gate_activations = 0
+    consecutive_positional_misses = 0
 
     def ensure_relocation_index() -> dict[tuple[bytes, int], list[FingerprintBlock]]:
         nonlocal relocation_index, relocation_index_entries
@@ -102,8 +105,8 @@ def observe_fingerprints_relocated(
         for candidate in prior_blocks:
             if relocation_index_entries >= max_relocation_entries:
                 break
-            # Identity fields are cheap nomination metadata only.  Full seal validation
-            # is deferred until a current digest actually nominates this candidate.
+            # Identity fields are nomination metadata only.  Full seal validation is
+            # deferred until current bytes actually nominate this candidate.
             if (
                 isinstance(candidate, FingerprintBlock)
                 and type(candidate.digest) is bytes
@@ -151,8 +154,14 @@ def observe_fingerprints_relocated(
             ):
                 chosen = positional
                 positional_reused_blocks += 1
+                consecutive_positional_misses = 0
 
-        if chosen is None and compatible:
+        if chosen is None:
+            consecutive_positional_misses += 1
+
+        if chosen is None and compatible and consecutive_positional_misses >= 2:
+            if relocation_index is None:
+                relocation_gate_activations += 1
             relocation_lookups += 1
             candidates = ensure_relocation_index().get((digest, len(raw)), ())
             for candidate in candidates:
@@ -204,8 +213,8 @@ def observe_fingerprints_relocated(
         blocks=tuple(blocks),
     )
     persistent_payload_bytes = sum(72 + 8 * len(block.fingerprints) for block in blocks)
-    # Lower-bound index payload: 32-byte digest + u64 length + u64 candidate reference.
-    # Python dict/list overhead must be measured separately by any runtime benchmark.
+    # Lower-bound index payload only: digest + length + candidate reference.  Runtime
+    # object/RSS overhead must be charged separately before any production claim.
     relocation_index_payload_bytes = relocation_index_entries * 48
 
     return RelocatedFingerprints(
@@ -224,6 +233,7 @@ def observe_fingerprints_relocated(
             relocation_index_entries=relocation_index_entries,
             relocation_index_payload_bytes=relocation_index_payload_bytes,
             relocation_lookups=relocation_lookups,
+            relocation_gate_activations=relocation_gate_activations,
             emitted_fingerprints=len(flat),
             persistent_payload_bytes=persistent_payload_bytes,
         ),
