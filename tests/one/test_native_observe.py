@@ -69,6 +69,26 @@ def test_native_observer_bounded_index_exhaustion_matches_reference() -> None:
     _assert_equal(data, max_index_entries=17)
 
 
+def test_native_observer_seeded_parameter_fuzz_matches_reference() -> None:
+    rng = random.Random(0x0B5E12E)
+    for _ in range(96):
+        size = rng.randrange(0, 2049)
+        data = rng.randbytes(size)
+        # Inject deterministic run/reuse structure into a subset of otherwise random
+        # roots so the fuzz surface exercises both nomination and no-opportunity cases.
+        if size >= 192 and rng.randrange(2):
+            buf = bytearray(data)
+            buf[32:96] = b"Q" * 64
+            buf[128:192] = buf[0:64]
+            data = bytes(buf)
+        _assert_equal(
+            data,
+            min_run=rng.choice((2, 3, 8, 17, 64)),
+            chunk_size=rng.choice((8, 16, 32, 64, 128)),
+            max_index_entries=rng.choice((1, 2, 3, 7, 17, 257)),
+        )
+
+
 def test_native_observer_parameter_validation_matches_contract() -> None:
     with pytest.raises(TypeError):
         observe_native(bytearray(b"x"))  # type: ignore[arg-type]
