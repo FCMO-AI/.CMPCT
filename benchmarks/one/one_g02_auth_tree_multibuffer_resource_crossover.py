@@ -48,7 +48,20 @@ def _run_row(root_bytes:int)->dict[str,object]:
 
 def _learn_threshold(rows:list[dict[str,object]])->int|None:
     ordered=sorted(rows,key=lambda r:int(r["node_count"]))
+    # A deployed threshold dispatches *every* row whose node_count is >= the
+    # threshold.  Therefore a threshold may only start at the first row of a
+    # node-count equivalence class.  Starting in the middle of a tie can make
+    # the learner ignore a bad observation that deployment would still route
+    # to the multi-buffer path.
+    candidate_starts=[]
+    previous_node_count=None
     for i,row in enumerate(ordered):
+        node_count=int(row["node_count"])
+        if node_count!=previous_node_count:
+            candidate_starts.append(i)
+            previous_node_count=node_count
+    for i in candidate_starts:
+        row=ordered[i]
         suffix=ordered[i:]
         wall=[float(r["candidate_ratio"]) for r in suffix]
         cpu=[float(r["candidate_cpu_ratio"]) for r in suffix]
