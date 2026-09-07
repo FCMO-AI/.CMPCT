@@ -46,6 +46,18 @@ def test_repetitive_numeric_root_falls_through_to_preserve_reuse_laws() -> None:
     assert candidate.observation == baseline
 
 
+def test_diverse_prefix_repetitive_tail_does_not_fool_sampling() -> None:
+    size = 256 * 1024
+    prefix = _diverse_numeric_root(16 * 1024)
+    data = prefix + _repetitive_numeric_root(size - len(prefix))
+    baseline = observe(data)
+    assert baseline.stats.reuse_opportunity_bytes > size // 2
+    candidate = observe_morphology_gated(data)
+    assert not candidate.gate.gated
+    assert candidate.gate.unique_chunk_fraction < 0.90
+    assert candidate.observation == baseline
+
+
 def test_tiny_numeric_root_is_not_gated() -> None:
     data = _diverse_numeric_root(4096)
     candidate = observe_morphology_gated(data)
@@ -82,6 +94,7 @@ def test_gate_parameters_fail_closed() -> None:
         {"sample_limit": 0},
         {"minimum_input": 0},
         {"diversity_chunk_size": 0},
+        {"sample_windows": 0},
         {"minimum_numeric_fraction": 1.1},
         {"minimum_digit_fraction": -0.1},
         {"minimum_unique_chunk_fraction": 1.1},
