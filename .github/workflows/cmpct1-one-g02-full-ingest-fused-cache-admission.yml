@@ -1,0 +1,91 @@
+# ci-lane: fast
+name: CMPCT1 ONE-G0.2 full ingest fused cache admission
+
+on:
+  push:
+    branches:
+      - research/cmpct1
+    paths:
+      - experiments/one/cache_fused_admission.py
+      - experiments/one/cache_fused_observe.py
+      - experiments/one/fused_cache_cost_ledger.py
+      - experiments/one/observe.py
+      - benchmarks/one/one_g02_full_ingest_fused_cache_admission.py
+      - benchmarks/one/one_g02_full_ingest_fused_cache.py
+      - benchmarks/one/one_g02_end_to_end_direct_emitter_writer.py
+      - benchmarks/one/one_g02_post_segment_control_cost_owner.py
+      - benchmarks/one/one_g02_shift_branch_bound_relation_transfer.py
+      - benchmarks/one/one_g02_shift_branch_bound_relation_direct_kernel.c
+      - benchmarks/one/one_g02_shift_branch_bound_relation_restrict_kernel.c
+      - benchmarks/one/one_g02_shift_relation_safe_dispatch_kernel.c
+      - benchmarks/one/one_g02_shift_relation_sparse_gate_kernel.c
+      - benchmarks/one/one_g02_shift_relation_amortization_safe_gate_kernel.c
+      - benchmarks/one/one_g02_native_segment_plan_fusion_kernel.c
+      - tests/one/test_cache_fused_admission.py
+      - docs/one/evidence/ONE_G02_FUSED_CACHE_ADMISSION_PREREG_2026-09-07.md
+      - .github/workflows/cmpct1-one-g02-full-ingest-fused-cache-admission.yml
+  pull_request:
+    paths:
+      - experiments/one/cache_fused_admission.py
+      - experiments/one/cache_fused_observe.py
+      - experiments/one/fused_cache_cost_ledger.py
+      - experiments/one/observe.py
+      - benchmarks/one/one_g02_full_ingest_fused_cache_admission.py
+      - benchmarks/one/one_g02_full_ingest_fused_cache.py
+      - benchmarks/one/one_g02_end_to_end_direct_emitter_writer.py
+      - benchmarks/one/one_g02_post_segment_control_cost_owner.py
+      - benchmarks/one/one_g02_shift_branch_bound_relation_transfer.py
+      - benchmarks/one/one_g02_shift_branch_bound_relation_direct_kernel.c
+      - benchmarks/one/one_g02_shift_branch_bound_relation_restrict_kernel.c
+      - benchmarks/one/one_g02_shift_relation_safe_dispatch_kernel.c
+      - benchmarks/one/one_g02_shift_relation_sparse_gate_kernel.c
+      - benchmarks/one/one_g02_shift_relation_amortization_safe_gate_kernel.c
+      - benchmarks/one/one_g02_native_segment_plan_fusion_kernel.c
+      - tests/one/test_cache_fused_admission.py
+      - docs/one/evidence/ONE_G02_FUSED_CACHE_ADMISSION_PREREG_2026-09-07.md
+      - .github/workflows/cmpct1-one-g02-full-ingest-fused-cache-admission.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct1-one-g02-full-ingest-fused-cache-admission-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  cache-admission:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    env:
+      EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: "${{ env.EVIDENCE_HEAD }}"
+          clean: true
+      - name: Bind exact head
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Provision repository test contract
+        run: python -m pip install --disable-pip-version-check -e '.[test]'
+      - name: Run admission hostile tests
+        run: >-
+          python -m pytest -q
+          tests/one/test_cache_fused_admission.py
+          tests/one/test_cache_fused_observe.py
+          tests/one/test_fused_cache_cost_ledger.py
+      - name: Run admission rehabilitation falsifier
+        run: |
+          set -o pipefail
+          mkdir -p artifacts
+          python -m benchmarks.one.one_g02_full_ingest_fused_cache_admission | tee artifacts/one_g02_full_ingest_fused_cache_admission.json
+      - name: Upload admission evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: one-g02-full-ingest-fused-cache-admission-${{ env.EVIDENCE_HEAD }}
+          path: artifacts/one_g02_full_ingest_fused_cache_admission.json
+          if-no-files-found: warn
