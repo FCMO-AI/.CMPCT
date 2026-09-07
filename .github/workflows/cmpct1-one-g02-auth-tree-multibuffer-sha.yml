@@ -1,14 +1,7 @@
 # ci-lane: deep
+# ci-pr-scope: latest-head-commit-gate
 name: CMPCT1 ONE-G0.2 auth-tree multi-buffer SHA A/B
 on:
-  push:
-    branches: [research/cmpct1]
-    paths:
-      - "benchmarks/one/native/one_g02_auth_tree_multibuffer_sha.c"
-      - "benchmarks/one/one_g02_auth_tree_multibuffer_sha.py"
-      - "docs/one/prereg/ONE_G02_AUTH_TREE_MULTIBUFFER_SHA_PREREG_2026-09-07.md"
-      - "docs/one/prereg/ONE_G02_AUTH_TREE_MULTIBUFFER_SHA_PROVENANCE_2026-09-07.md"
-      - ".github/workflows/cmpct1-one-g02-auth-tree-multibuffer-sha.yml"
   pull_request:
     paths:
       - "benchmarks/one/native/one_g02_auth_tree_multibuffer_sha.c"
@@ -19,20 +12,52 @@ on:
   workflow_dispatch:
 permissions: {contents: read}
 concurrency:
-  group: cmpct1-one-g02-auth-tree-multibuffer-sha-${{ github.sha }}
+  group: cmpct1-one-g02-auth-tree-multibuffer-sha-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
+env:
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+  IMB_COMMIT: 4f808234a91e87147a4f26167df40f3fd7c7f0c6
+  IMB_INCLUDE: /tmp/imb/include
+  IMB_LIB: /tmp/imb/lib
 jobs:
-  multibuffer-sha:
+  classify:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
-    env:
-      EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
-      IMB_COMMIT: 4f808234a91e87147a4f26167df40f3fd7c7f0c6
-      IMB_INCLUDE: /tmp/imb/include
-      IMB_LIB: /tmp/imb/lib
+    outputs:
+      relevant: ${{ steps.changed.outputs.relevant }}
     steps:
       - uses: actions/checkout@v4
-        with: {ref: "${{ env.EVIDENCE_HEAD }}", clean: true}
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 2
+          clean: true
+      - name: Bind exact ONE head
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+      - name: Classify latest commit only
+        id: changed
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "relevant=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          git diff-tree --no-commit-id --name-only -r HEAD > /tmp/latest-head-paths.txt
+          cat /tmp/latest-head-paths.txt
+          if grep -Eq '^(benchmarks/one/native/one_g02_auth_tree_multibuffer_sha\.c|benchmarks/one/one_g02_auth_tree_multibuffer_sha\.py|docs/one/prereg/ONE_G02_AUTH_TREE_MULTIBUFFER_SHA_(PREREG|PROVENANCE)_2026-09-07\.md|\.github/workflows/cmpct1-one-g02-auth-tree-multibuffer-sha\.yml)$' /tmp/latest-head-paths.txt; then
+            echo "relevant=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "relevant=false" >> "$GITHUB_OUTPUT"
+          fi
+  multibuffer-sha:
+    needs: classify
+    if: needs.classify.outputs.relevant == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          clean: true
       - name: Bind exact ONE head
         run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
       - uses: actions/setup-python@v5
