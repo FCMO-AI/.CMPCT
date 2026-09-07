@@ -170,18 +170,30 @@ def main() -> int:
                 f"{label}: exact-repeat charged traffic {row['exact_repeat_charged_ratio']:.6f}x > 0.80x"
             )
 
-        # A one-byte edit should still localize feature recomputation strongly enough to
-        # buy at least 15% charged-traffic reduction versus from-scratch observation.
-        if row["sparse_edit_charged_ratio"] > 0.85:
-            failures.append(
-                f"{label}: sparse-edit charged traffic {row['sparse_edit_charged_ratio']:.6f}x > 0.85x"
-            )
-
         sparse = row["one_byte_sparse_edit"]
         if sparse["recomputed_blocks"] != 1:
             failures.append(
                 f"{label}: one-byte edit recomputed {sparse['recomputed_blocks']} blocks, expected 1"
             )
+
+        if row["blocks"] == 1:
+            # A one-block root has no unchanged observation block to reuse after a
+            # one-byte edit. Treat it as a hostile tiny-root control: correctness is
+            # mandatory and bookkeeping may not inflate this deterministic traffic
+            # model by more than 5%, but no reuse win is physically available.
+            if sparse["reused_blocks"] != 0:
+                failures.append(f"{label}: one-block sparse edit unexpectedly reused a block")
+            if row["sparse_edit_charged_ratio"] > 1.05:
+                failures.append(
+                    f"{label}: tiny sparse-edit charged traffic {row['sparse_edit_charged_ratio']:.6f}x > 1.05x"
+                )
+        else:
+            # Multi-block sparse edits must localize feature work strongly enough to buy
+            # at least 15% charged-traffic reduction versus from-scratch observation.
+            if row["sparse_edit_charged_ratio"] > 0.85:
+                failures.append(
+                    f"{label}: sparse-edit charged traffic {row['sparse_edit_charged_ratio']:.6f}x > 0.85x"
+                )
 
     payload = {
         "experiment": "ONE-G0.2 fused observation cache charged-traffic economics",
@@ -193,7 +205,8 @@ def main() -> int:
         "min_run": MIN_RUN,
         "gates": {
             "exact_repeat_charged_ratio_max": 0.80,
-            "one_byte_sparse_edit_charged_ratio_max": 0.85,
+            "multi_block_one_byte_sparse_edit_charged_ratio_max": 0.85,
+            "single_block_sparse_edit_control_ratio_max": 1.05,
             "sparse_recomputed_blocks": 1,
             "fresh_oracle_equivalence_required": True,
         },
