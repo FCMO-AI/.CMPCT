@@ -1,3 +1,4 @@
+# ci-lane: deep
 name: ONE-G0.2 hierarchy first-level fusion diagnostic
 
 on:
@@ -7,19 +8,32 @@ on:
       - 'benchmarks/one/native/one_g02_hierarchy_first_level_fusion.c'
       - 'benchmarks/one/native/one_g02_shared_native_writer_ref_fused.c'
       - '.github/workflows/one-g02-hierarchy-first-level-fusion.yml'
-  pull_request:
-    paths:
-      - 'benchmarks/one/native/one_g02_hierarchy_first_level_fusion.c'
-      - 'benchmarks/one/native/one_g02_shared_native_writer_ref_fused.c'
-      - '.github/workflows/one-g02-hierarchy-first-level-fusion.yml'
   workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: one-g02-hierarchy-first-level-fusion-${{ github.sha }}
+  cancel-in-progress: true
+
+env:
+  EVIDENCE_HEAD: ${{ github.sha }}
 
 jobs:
   hierarchy-first-level-fusion:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
+      - name: Check out exact evidence head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - name: Bind exact evidence head
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
       - name: Build and run preregistered hierarchy fusion diagnostic
         shell: bash
         run: |
