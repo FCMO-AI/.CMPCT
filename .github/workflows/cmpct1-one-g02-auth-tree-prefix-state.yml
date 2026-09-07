@@ -1,33 +1,20 @@
 # ci-lane: deep
+# ci-auto-policy: retired-manual-only
 name: CMPCT1 ONE-G0.2 auth-tree prefix-state A/B
 on:
-  push:
-    branches: [research/cmpct1]
-    paths:
-      - "benchmarks/one/native/one_g02_auth_tree_prefix_state.c"
-      - "benchmarks/one/one_g02_auth_tree_prefix_state.py"
-      - "docs/one/prereg/ONE_G02_AUTH_TREE_PREFIX_STATE_AMORTIZATION_PREREG_2026-09-07.md"
-      - ".github/workflows/cmpct1-one-g02-auth-tree-prefix-state.yml"
-  pull_request:
-    paths:
-      - "benchmarks/one/native/one_g02_auth_tree_prefix_state.c"
-      - "benchmarks/one/one_g02_auth_tree_prefix_state.py"
-      - "docs/one/prereg/ONE_G02_AUTH_TREE_PREFIX_STATE_AMORTIZATION_PREREG_2026-09-07.md"
-      - ".github/workflows/cmpct1-one-g02-auth-tree-prefix-state.yml"
   workflow_dispatch:
 permissions: {contents: read}
-concurrency:
-  group: cmpct1-one-g02-auth-tree-prefix-state-${{ github.sha }}
-  cancel-in-progress: true
+env:
+  EVIDENCE_HEAD: ${{ github.sha }}
 jobs:
   prefix-state:
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    env:
-      EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
     steps:
       - uses: actions/checkout@v4
-        with: {ref: "${{ env.EVIDENCE_HEAD }}", clean: true}
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          clean: true
       - name: Bind exact head
         run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
       - uses: actions/setup-python@v5
@@ -38,7 +25,7 @@ jobs:
           python -m pip install -e '.[test,audio]'
       - name: Re-run ONE semantic boundary
         run: python -m pytest -q tests/one
-      - name: Run frozen prefix-state auth-tree A/B and preserve scientific reds
+      - name: Replay frozen prefix-state auth-tree A/B and preserve scientific red
         shell: bash
         run: |
           mkdir -p one-auth-prefix-state-artifacts
@@ -47,7 +34,7 @@ jobs:
           code=${PIPESTATUS[0]}
           echo "$code" > one-auth-prefix-state-artifacts/scientific-exit-code.txt
           exit 0
-      - name: Retain exact-head evidence
+      - name: Retain replay evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
