@@ -1,0 +1,61 @@
+# ci-lane: fast
+name: CMPCT1 ONE-G0.2 numeric morphology gate
+
+on:
+  push:
+    branches:
+      - research/cmpct1
+    paths:
+      - experiments/one/morphology_gate.py
+      - experiments/one/observe.py
+      - tests/one/test_morphology_gate.py
+      - benchmarks/one/one_g02_numeric_morphology_gate.py
+      - .github/workflows/cmpct1-one-g02-numeric-morphology-gate.yml
+  pull_request:
+    paths:
+      - experiments/one/morphology_gate.py
+      - experiments/one/observe.py
+      - tests/one/test_morphology_gate.py
+      - benchmarks/one/one_g02_numeric_morphology_gate.py
+      - .github/workflows/cmpct1-one-g02-numeric-morphology-gate.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct1-one-g02-numeric-morphology-gate-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  morphology-gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: "${{ env.EVIDENCE_HEAD }}"
+          clean: true
+      - name: Bind exact head
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Provision repository test contract
+        run: python -m pip install --disable-pip-version-check -e '.[test]'
+      - name: Run morphology hostile tests
+        run: python -m pytest -q tests/one/test_morphology_gate.py
+      - name: Run morphology resource falsifier
+        run: |
+          set -o pipefail
+          mkdir -p artifacts
+          python -m benchmarks.one.one_g02_numeric_morphology_gate | tee artifacts/one_g02_numeric_morphology_gate.json
+      - name: Upload morphology evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: one-g02-numeric-morphology-gate-${{ env.EVIDENCE_HEAD }}
+          path: artifacts/one_g02_numeric_morphology_gate.json
+          if-no-files-found: warn
