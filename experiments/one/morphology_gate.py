@@ -34,12 +34,38 @@ class MorphologyObservation:
     gate: MorphologyGateDecision
 
 
+def _stratified_sample(data: bytes, *, sample_limit: int, windows: int = 8) -> bytes:
+    """Read a bounded sample spread across the root instead of trusting its prefix.
+
+    Deterministic windows make phase changes visible to the classifier while keeping the
+    total source-read budget at or below ``sample_limit``. This is discovery evidence,
+    not integrity/security sampling; an adversarial arrangement can still evade it.
+    """
+    if len(data) <= sample_limit:
+        return data
+    windows = max(1, min(windows, sample_limit))
+    base = sample_limit // windows
+    remainder = sample_limit % windows
+    pieces: list[bytes] = []
+    for index in range(windows):
+        width = base + (1 if index < remainder else 0)
+        if width <= 0:
+            continue
+        if windows == 1:
+            start = 0
+        else:
+            start = round(index * (len(data) - width) / (windows - 1))
+        pieces.append(data[start : start + width])
+    return b"".join(pieces)
+
+
 def classify_numeric_ascii(
     data: bytes,
     *,
     sample_limit: int = 4096,
     minimum_input: int = 16384,
     diversity_chunk_size: int = 64,
+    sample_windows: int = 8,
     minimum_numeric_fraction: float = 0.985,
     minimum_digit_fraction: float = 0.35,
     minimum_unique_chunk_fraction: float = 0.90,
@@ -47,9 +73,9 @@ def classify_numeric_ascii(
     """Return a bounded decision for strongly numeric, locally diverse ASCII roots.
 
     Morphology alone is not sufficient: repetitive numeric tables can contain excellent
-    reuse Laws. The bounded prefix therefore must also have high exact chunk diversity
-    before reuse fingerprinting is skipped. Tiny roots are never gated because the
-    classification pass is hard to amortize there.
+    reuse Laws. Bounded windows distributed across the root therefore must also have
+    high exact chunk diversity before reuse fingerprinting is skipped. Tiny roots are
+    never gated because the classification pass is hard to amortize there.
     """
     if type(data) is not bytes:
         raise TypeError("ONE morphology input must be bytes")
@@ -57,6 +83,7 @@ def classify_numeric_ascii(
         "sample_limit": sample_limit,
         "minimum_input": minimum_input,
         "diversity_chunk_size": diversity_chunk_size,
+        "sample_windows": sample_windows,
     }.items():
         if type(value) is not int or value <= 0:
             raise ValueError(f"{name} must be a positive integer")
@@ -68,7 +95,7 @@ def classify_numeric_ascii(
         if not 0.0 <= value <= 1.0:
             raise ValueError(f"{name} must be in [0, 1]")
 
-    sample = data[: min(len(data), sample_limit)]
+    sample = _stratified_sample(data, sample_limit=sample_limit, windows=sample_windows)
     sample_bytes = len(sample)
     if sample_bytes == 0:
         return MorphologyGateDecision(False, 0, 0, 0, 0.0, 0.0, 0, 0, 0.0)
@@ -162,21 +189,18 @@ def observe_morphology_gated(
     sample_limit: int = 4096,
     minimum_input: int = 16384,
     diversity_chunk_size: int = 64,
+    sample_windows: int = 8,
     minimum_numeric_fraction: float = 0.985,
     minimum_digit_fraction: float = 0.35,
     minimum_unique_chunk_fraction: float = 0.90,
 ) -> MorphologyObservation:
-    """Observe with generic fusion unless strong numeric morphology rejects reuse work.
-
-    A gated root still receives one full run-observation pass. The bounded classifier
-    read is separately charged. An ungated root delegates to the existing observer
-    exactly, so this experiment does not perturb generic opportunity semantics.
-    """
+    """Observe with generic fusion unless strong numeric morphology rejects reuse work."""
     decision = classify_numeric_ascii(
         data,
         sample_limit=sample_limit,
         minimum_input=minimum_input,
         diversity_chunk_size=diversity_chunk_size,
+        sample_windows=sample_windows,
         minimum_numeric_fraction=minimum_numeric_fraction,
         minimum_digit_fraction=minimum_digit_fraction,
         minimum_unique_chunk_fraction=minimum_unique_chunk_fraction,
