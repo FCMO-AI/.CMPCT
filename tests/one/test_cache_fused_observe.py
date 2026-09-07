@@ -41,6 +41,53 @@ def test_exact_repeat_reuses_all_fused_blocks():
     assert second.stats.validation_read_bytes == len(data)
 
 
+def test_integrity_hash_accounting_matches_seal_serialization():
+    # Keep this formula independent of the implementation's byte-accounting helper.
+    # The fixture carries fingerprints, run gates, and internal runs so both fixed
+    # sequence-count fields and variable payloads are exercised.
+    policy_id = "ONE-G0.2:fused-run-fnv64-v1"
+    seal_domain = b"CMPCT1-ONE-G0.2-FUSED-OBSERVE-CACHE\x00"
+    block_size = 1024
+    chunk_size = 64
+    data = (
+        b"A" * 120
+        + bytes(range(251)) * 6
+        + b"B" * 160
+        + bytes((i * 37 + 11) & 0xFF for i in range(2200))
+    )
+    first = observe_incremental(
+        data,
+        block_size=block_size,
+        chunk_size=chunk_size,
+        policy_id=policy_id,
+    )
+    second = observe_incremental(
+        data,
+        previous=first.cache,
+        block_size=block_size,
+        chunk_size=chunk_size,
+        policy_id=policy_id,
+    )
+    assert second.stats.reused_blocks == len(first.cache.blocks)
+    assert any(block.internal_runs for block in first.cache.blocks)
+    expected = 0
+    for block in first.cache.blocks:
+        expected += (
+            len(seal_domain)
+            + 8  # policy length
+            + len(policy_id.encode("utf-8"))
+            + 32  # content digest
+            + 56  # seven packed u64 scalar fields
+            + 2  # suffix value + whole_same flag
+            + 8  # fingerprint count
+            + 8 * len(block.fingerprints)
+            + len(block.chunk_run_gate)
+            + 8  # internal-run count
+            + 24 * len(block.internal_runs)
+        )
+    assert second.stats.cache_integrity_hash_bytes == expected
+
+
 def test_one_byte_edit_recomputes_only_changed_block_and_matches_oracle():
     data = bytearray(bytes(range(251)) * 80)
     first = _assert_semantics(bytes(data))
