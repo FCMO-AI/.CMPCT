@@ -221,17 +221,22 @@ def observe_fingerprints_cached(
         digest = hashlib.sha256(raw).digest()
         cached = prior_blocks[index] if index < len(prior_blocks) else None
         feature_bytes = (len(raw) // chunk_size) * chunk_size
-        if _will_hash_cached_seal(cached, chunk_size):
-            cache_integrity_hash_bytes += _seal_input_bytes(policy_id, len(cached.fingerprints))
-        if (
-            _valid_cached(
-                cached,
-                policy_id=policy_id,
-                block_size=block_size,
-                chunk_size=chunk_size,
-            )
+
+        # Cheap falsification first: a content-id or length mismatch already proves that
+        # cached discovery cannot be reused. Only authenticate the cached feature payload
+        # after current content identity says reuse remains possible.
+        identity_match = (
+            isinstance(cached, FingerprintBlock)
             and cached.digest == digest
             and cached.length == len(raw)
+        )
+        if identity_match and _will_hash_cached_seal(cached, chunk_size):
+            cache_integrity_hash_bytes += _seal_input_bytes(policy_id, len(cached.fingerprints))
+        if identity_match and _valid_cached(
+            cached,
+            policy_id=policy_id,
+            block_size=block_size,
+            chunk_size=chunk_size,
         ):
             block = cached
             reuse_bytes += feature_bytes
