@@ -1,0 +1,44 @@
+name: ONE-G0.2 hierarchy first-level fusion diagnostic
+
+on:
+  push:
+    branches: [ research/cmpct1 ]
+    paths:
+      - 'benchmarks/one/native/one_g02_hierarchy_first_level_fusion.c'
+      - 'benchmarks/one/native/one_g02_shared_native_writer_ref_fused.c'
+      - '.github/workflows/one-g02-hierarchy-first-level-fusion.yml'
+  workflow_dispatch:
+
+jobs:
+  hierarchy-first-level-fusion:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build and run preregistered hierarchy fusion diagnostic
+        shell: bash
+        run: |
+          set -euo pipefail
+          cc -std=c11 -O3 -Wall -Wextra -Werror \
+            -Ibenchmarks/one/native \
+            benchmarks/one/native/one_g02_hierarchy_first_level_fusion.c \
+            -o /tmp/one_g02_hierarchy_first_level_fusion
+          /tmp/one_g02_hierarchy_first_level_fusion | tee /tmp/hierarchy-fusion.txt
+          python - <<'PY'
+          import re
+          from pathlib import Path
+          text = Path('/tmp/hierarchy-fusion.txt').read_text()
+          rows = [float(x) for x in re.findall(r'elapsed_ratio=([0-9.]+)', text)]
+          trans = [float(x) for x in re.findall(r'transient_ratio=([0-9.]+)', text)]
+          if len(rows) != 4 or len(trans) != 4:
+              raise SystemExit('missing frozen diagnostic rows')
+          if max(rows) > 1.0:
+              raise SystemExit(f'FAIL: row regression max={max(rows):.6f}x')
+          med = sorted(rows)[len(rows)//2-1:len(rows)//2+1]
+          median = sum(med)/2
+          if median > 0.80:
+              raise SystemExit(f'FAIL: median elapsed {median:.6f}x > 0.80x gate')
+          if max(trans) >= 1.0:
+              raise SystemExit('FAIL: transient staging did not fall on every row')
+          print(f'PASS: hierarchy fusion median elapsed={median:.6f}x max={max(rows):.6f}x max transient={max(trans):.6f}x')
+          PY
