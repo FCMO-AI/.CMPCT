@@ -92,6 +92,33 @@ def test_shape_or_policy_change_invalidates_all_entries():
     assert shape.stats.reused_blocks == 0
 
 
+def test_relabelled_cache_policy_cannot_reuse_blocks_sealed_under_old_policy():
+    """Hostile reviewer: cache metadata alone must not redefine feature semantics."""
+    data = b"policy-sensitive-observation" * 4096
+    first = observe_fingerprints_cached(
+        data, block_size=4096, chunk_size=64, policy_id="policy-a"
+    )
+    # Simulate stale/corrupted persisted cache metadata that is relabelled without
+    # regenerating its feature entries. A top-level compatibility check alone would
+    # accept every unchanged block under policy-b.
+    relabelled = FingerprintCache(
+        policy_id="policy-b",
+        block_size=first.cache.block_size,
+        chunk_size=first.cache.chunk_size,
+        blocks=first.cache.blocks,
+    )
+    recovered = observe_fingerprints_cached(
+        data,
+        previous=relabelled,
+        block_size=4096,
+        chunk_size=64,
+        policy_id="policy-b",
+    )
+    assert recovered.fingerprints == _oracle(data, 64)
+    assert recovered.stats.reused_blocks == 0
+    assert recovered.stats.recomputed_blocks == len(first.cache.blocks)
+
+
 def test_misaligned_block_shape_is_rejected_instead_of_changing_fingerprint_semantics():
     try:
         observe_fingerprints_cached(b"x" * 8192, block_size=1000, chunk_size=64)
