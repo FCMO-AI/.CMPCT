@@ -1,4 +1,5 @@
 # ci-lane: deep
+# ci-cancel-policy: preserve-running-exact-receipt
 # ci-pr-scope: latest-head-commit-gate
 name: CMPCT1 ONE-G0.2 auth-tree multi-buffer resource crossover
 on:
@@ -11,13 +12,13 @@ on:
       - ".github/workflows/cmpct1-one-g02-auth-tree-multibuffer-resource-crossover.yml"
   workflow_dispatch:
 permissions: {contents: read}
-# Scientific runs are evidence for one immutable source head.  Grouping a whole
-# PR together lets a later docs/handoff commit cancel an already-started
-# result-bearing run before its artifact exists.  Bind concurrency to the exact
-# evidence head instead; duplicate executions of the same head may still cancel.
+# Each result-bearing run is evidence for one immutable source head.  The newest-commit
+# classifier keeps unrelated PR commits cheap, while exact-SHA non-cancelling custody
+# prevents later heads (or duplicate scheduling of the same head) from destroying a
+# scarce receipt before its artifact exists.
 concurrency:
   group: cmpct1-one-g02-auth-tree-multibuffer-resource-${{ github.event_name }}-${{ github.event.pull_request.head.sha || github.sha }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 env:
   EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
   IMB_COMMIT: 4f808234a91e87147a4f26167df40f3fd7c7f0c6
