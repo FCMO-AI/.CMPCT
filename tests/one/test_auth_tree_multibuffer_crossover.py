@@ -48,6 +48,19 @@ def test_crossover_rejects_apparent_early_win_when_larger_discovery_row_regresse
     assert _learn_threshold(rows) == 30
 
 
+def test_crossover_rejects_threshold_that_would_split_equal_node_count_rows() -> None:
+    rows = [
+        _row(10, 1.04, 1.02),
+        _row(20, 1.01, 0.88),
+        _row(20, 0.89, 0.86),
+        _row(30, 0.87, 0.84),
+    ]
+    # A deployed node_count >= 20 rule would route *both* node-20 observations
+    # to multi-buffer.  The learner must not skip the bad first tie and return
+    # 20 from the middle of the equivalence class.
+    assert _learn_threshold(rows) == 30
+
+
 def test_crossover_rejects_suffix_when_cpu_median_does_not_pay_for_elapsed_win() -> None:
     rows = [
         _row(10, 0.90, 0.96),
