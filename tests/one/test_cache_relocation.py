@@ -75,6 +75,57 @@ def test_block_reorder_spends_one_probe_block_then_reuses_remainder():
     assert result.stats.relocation_gate_activations == 1
 
 
+def test_repetitive_reorder_indexes_unique_content_not_duplicate_blocks():
+    block_size = 1024
+    a = b"A" * block_size
+    b = b"B" * block_size
+    base = (a + b) * 8
+    current = (b + a) * 8
+    seed = observe_fingerprints_relocated(base, block_size=block_size, chunk_size=64)
+    result = observe_fingerprints_relocated(
+        current,
+        previous=seed.cache,
+        block_size=block_size,
+        chunk_size=64,
+    )
+    assert result.fingerprints == _oracle(current, 64)
+    assert result.stats.recomputed_blocks == 1
+    assert result.stats.relocated_reused_blocks == 15
+    assert result.stats.relocation_index_entries == 2
+    assert result.stats.relocation_index_payload_bytes == 96
+
+
+def test_duplicate_identity_with_damaged_representative_fails_closed():
+    block_size = 1024
+    a = b"A" * block_size
+    b = b"B" * block_size
+    base = (a + b) * 4
+    seed = observe_fingerprints_relocated(base, block_size=block_size, chunk_size=64)
+    blocks = list(seed.cache.blocks)
+    first_a = blocks[0]
+    damaged = list(first_a.fingerprints)
+    damaged[0] ^= 1
+    blocks[0] = FingerprintBlock(first_a.digest, first_a.length, tuple(damaged), first_a.seal)
+    poisoned = FingerprintCache(
+        seed.cache.policy_id,
+        seed.cache.block_size,
+        seed.cache.chunk_size,
+        tuple(blocks),
+    )
+    current = (b + a) * 4
+    result = observe_fingerprints_relocated(
+        current,
+        previous=poisoned,
+        block_size=block_size,
+        chunk_size=64,
+    )
+    assert result.fingerprints == _oracle(current, 64)
+    # The first A representative is deliberately invalid. The unique-identity index is
+    # allowed to lose those reuse opportunities, but it must never reuse corrupt state.
+    assert result.stats.relocation_index_entries == 2
+    assert result.stats.recomputed_blocks >= 2
+
+
 def test_one_byte_insertion_does_not_fake_reuse_of_realigned_fingerprint_groups():
     base = bytes(range(251)) * 80
     seed = observe_fingerprints_relocated(base, block_size=1024, chunk_size=64)
