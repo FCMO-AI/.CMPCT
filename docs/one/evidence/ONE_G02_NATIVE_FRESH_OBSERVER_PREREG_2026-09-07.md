@@ -44,9 +44,9 @@ Deterministic roots at 64 KiB, 256 KiB and 1 MiB:
 - seeded incompressible/random;
 - compressed-like deterministic bytes;
 - long-run-heavy hostile root;
-- false-pattern root with many near-repeated chunks but exact-proof failures.
+- near-repeat false-pattern root whose chunks differ by small byte changes and must not acquire false reuse authority.
 
-Semantic vectors also include tiny/tail shapes around `min_run` and `chunk_size`: 0, 1, 7, 8, 9, 63, 64, 65, 127, 128 and 129 bytes, plus a bounded-index exhaustion case.
+Semantic vectors also include tiny/tail shapes around `min_run` and `chunk_size`: 0, 1, 7, 8, 9, 63, 64, 65, 127, 128 and 129 bytes, plus a bounded-index exhaustion case and seeded small-input parameter fuzz across multiple `min_run`, `chunk_size`, and index bounds.
 
 ## Gates
 
@@ -69,12 +69,12 @@ Python `observe()` remains the semantic oracle. The native wrapper converts only
 ## Disproof / terminal decisions
 
 - any semantic/stat divergence -> `INVALIDATE_NATIVE_OBSERVER`;
-- semantic pass but any timed row >0.25 wall or CPU -> `HOLD_NATIVE_OBSERVER_TRANSFER`;
+- semantic pass but any timed row or per-size geometric family aggregate >0.25 wall or CPU -> `HOLD_NATIVE_OBSERVER_TRANSFER`;
 - all semantics and timing gates pass -> `ADVANCE_NATIVE_FRESH_OBSERVER`.
 
 ## Hostile Reviewer
 
-The strongest expected objection is that easy structured roots can make the Python observer look worse than production material. That is why every timed family must pass individually, including incompressible and false-pattern roots.
+The strongest expected objection is that easy structured roots can make the Python observer look worse than production material. That is why every timed family must pass individually, including incompressible and near-repeat controls.
 
 A second objection is that C FNV/index acceleration may change collision behavior. The native index therefore retains the first source for a fingerprint exactly as the current Python path effectively does, and exact byte proof remains mandatory before reuse emission. A future explicit collision vector can be added only if a deterministic colliding pair is independently available; absence of such a vector is regression debt and prevents claiming adversarial FNV-collision completeness.
 
