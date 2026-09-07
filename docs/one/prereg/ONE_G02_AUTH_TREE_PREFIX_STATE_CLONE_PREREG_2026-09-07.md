@@ -8,6 +8,8 @@
 
 The resource-accounted multi-buffer experiment at source head `502e2e75a0d78ab4d164c3b73188ab804caf17f3` rejected node-count dispatch: the candidate remained slower across 1 KiB-256 KiB and staged about 1.86 source-equivalents at large roots. The next experiment therefore removes staging and attacks repeated per-node SHA initialization/domain-prefix work instead of adding parallel batching.
 
+A prior repository experiment, `benchmarks/one/one_g02_auth_tree_prefix_state.py`, already explores the same logical idea through CPython `hashlib.copy()` at selected 64/256 KiB rows and leaf sizes. This preregistration is therefore explicitly a **native transfer and resource-shape falsification** of that seed, not a claim that prefix-state reuse was newly discovered here. The native test widens the size grid, fixes the currently relevant 112-byte leaf, charges both wall and process CPU, requires zero staging, and runs baseline/candidate in the same OpenSSL C executable. The Python experiment remains useful discovery history but cannot substitute for this native gate.
+
 ## Frozen hypothesis
 
 For current AuthTree semantics, many SHA messages share a fixed prefix:
