@@ -1,5 +1,5 @@
 # ci-lane: deep
-# exact-head research falsifier; workflow existed before this retrigger commit
+# exact-head research falsifier; retrigger marker 2026-09-07 for exact-head execution
 name: CMPCT1 ONE-G0.2 auth-tree packed one-shot A/B
 on:
   push:
