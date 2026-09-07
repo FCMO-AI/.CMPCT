@@ -35,9 +35,7 @@ static void bottom8_recompute_max(one_g02_bottom8 *b) {
     uint8_t m = 0u;
     for (uint8_t i = 1u; i < b->count; ++i) {
         if (b->hash[i] > b->hash[m] ||
-            (b->hash[i] == b->hash[m] && b->pos[i] > b->pos[m])) {
-            m = i;
-        }
+            (b->hash[i] == b->hash[m] && b->pos[i] > b->pos[m])) m = i;
     }
     b->max_index = m;
 }
@@ -58,8 +56,8 @@ static void bottom8_offer(one_g02_bottom8 *b, uint64_t h, uint32_t pos) {
     }
 }
 
-static void observe_baseline_object(const uint8_t *data, size_t n, const uint64_t *gear,
-                                    one_g02_certificate_probe_result *out) {
+static void baseline_object(const uint8_t *data, size_t n, const uint64_t *gear,
+                            one_g02_certificate_probe_result *out) {
     if (n == 0u) return;
     uint64_t h = 0u;
     uint8_t run_value = data[0];
@@ -83,12 +81,10 @@ static void observe_baseline_object(const uint8_t *data, size_t n, const uint64_
     out->observer_sink ^= h;
 }
 
-static void observe_candidate_source(const uint8_t *data, size_t n, const uint64_t *gear,
-                                     one_g02_bottom8 *cert,
-                                     one_g02_certificate_probe_result *out) {
+static void candidate_source(const uint8_t *data, size_t n, const uint64_t *gear,
+                             one_g02_bottom8 *cert, one_g02_certificate_probe_result *out) {
     if (n == 0u) return;
-    uint64_t obs_h = 0u;
-    uint64_t cert_h = 0u;
+    uint64_t obs_h = 0u, cert_h = 0u;
     uint8_t ring[ONE_G02_CERT_WINDOW] = {0};
     uint8_t run_value = data[0];
     size_t run_length = 0u;
@@ -106,7 +102,6 @@ static void observe_candidate_source(const uint8_t *data, size_t n, const uint64
             ++out->anchors;
             out->observer_sink ^= obs_h + (uint64_t)i;
         }
-
         if (i < ONE_G02_CERT_WINDOW) {
             ring[i] = v;
             cert_h = rotl64(cert_h, 1u) ^ gear[v];
@@ -127,15 +122,15 @@ static void observe_candidate_source(const uint8_t *data, size_t n, const uint64
     out->observer_sink ^= obs_h;
 }
 
-static void observe_candidate_target(const uint8_t *source, const uint8_t *target, size_t n,
-                                     const uint64_t *gear, const one_g02_bottom8 *cert,
-                                     one_g02_certificate_probe_result *out) {
+static void candidate_target(const uint8_t *source, const uint8_t *target, size_t n,
+                             const uint64_t *gear, const one_g02_bottom8 *cert,
+                             one_g02_certificate_probe_result *out) {
     if (n == 0u) return;
-    uint64_t obs_h = 0u;
-    uint64_t cert_h = 0u;
+    uint64_t obs_h = 0u, cert_h = 0u;
     uint8_t ring[ONE_G02_CERT_WINDOW] = {0};
     uint8_t run_value = target[0];
     size_t run_length = 0u;
+    int nominated = 0;
     for (size_t i = 0u; i < n; ++i) {
         const uint8_t v = target[i];
         if (run_length == 0u || v != run_value) {
@@ -150,7 +145,6 @@ static void observe_candidate_target(const uint8_t *source, const uint8_t *targe
             ++out->anchors;
             out->observer_sink ^= obs_h + (uint64_t)i;
         }
-
         if (i < ONE_G02_CERT_WINDOW) {
             ring[i] = v;
             cert_h = rotl64(cert_h, 1u) ^ gear[v];
@@ -162,6 +156,7 @@ static void observe_candidate_target(const uint8_t *source, const uint8_t *targe
             cert_h = rotl64(cert_h, 1u) ^ rotl64(gear[old], ONE_G02_CERT_WINDOW) ^ gear[v];
         }
         ++out->certificate_windows;
+        if (nominated) continue;
         const size_t target_pos = i + 1u - ONE_G02_CERT_WINDOW;
         for (uint8_t j = 0u; j < cert->count; ++j) {
             ++out->certificate_hash_checks;
@@ -171,8 +166,8 @@ static void observe_candidate_target(const uint8_t *source, const uint8_t *targe
             if (source_pos + ONE_G02_CERT_WINDOW <= n &&
                 memcmp(source + source_pos, target + target_pos, ONE_G02_CERT_WINDOW) == 0) {
                 ++out->certificate_nominations;
-                out->observer_sink ^= cert_h ^ (uint64_t)target_pos;
-                return;
+                nominated = 1;
+                break;
             }
         }
     }
@@ -185,8 +180,8 @@ int one_g02_certificate_probe_baseline(const uint8_t *source, const uint8_t *tar
                                        one_g02_certificate_probe_result *out) {
     if (!source || !target || !gear || !out) return -1;
     memset(out, 0, sizeof(*out));
-    observe_baseline_object(source, n, gear, out);
-    observe_baseline_object(target, n, gear, out);
+    baseline_object(source, n, gear, out);
+    baseline_object(target, n, gear, out);
     return 0;
 }
 
@@ -197,12 +192,8 @@ int one_g02_certificate_probe_candidate(const uint8_t *source, const uint8_t *ta
     memset(out, 0, sizeof(*out));
     one_g02_bottom8 cert;
     memset(&cert, 0, sizeof(cert));
-    observe_candidate_source(source, n, gear, &cert, out);
-    const uint64_t baseline_anchors = out->anchors;
-    const uint64_t baseline_runs = out->qualifying_runs;
-    observe_candidate_target(source, target, n, gear, &cert, out);
-    (void)baseline_anchors;
-    (void)baseline_runs;
+    candidate_source(source, n, gear, &cert, out);
+    candidate_target(source, target, n, gear, &cert, out);
     out->certificate_state_bytes = ONE_G02_CERT_STATE_BYTES;
     return 0;
 }
