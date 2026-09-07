@@ -6,6 +6,7 @@ on:
     paths:
       - "benchmarks/one/native/one_g02_auth_tree_multibuffer_sha.c"
       - "benchmarks/one/one_g02_auth_tree_multibuffer_resource_crossover.py"
+      - "tests/one/test_auth_tree_multibuffer_crossover.py"
       - "docs/one/prereg/ONE_G02_AUTH_TREE_MULTIBUFFER_RESOURCE_CROSSOVER_PREREG_2026-09-07.md"
       - ".github/workflows/cmpct1-one-g02-auth-tree-multibuffer-resource-crossover.yml"
   workflow_dispatch:
@@ -42,7 +43,7 @@ jobs:
           fi
           git diff-tree --no-commit-id --name-only -r HEAD > /tmp/latest-head-paths.txt
           cat /tmp/latest-head-paths.txt
-          if grep -Eq '^(benchmarks/one/native/one_g02_auth_tree_multibuffer_sha\.c|benchmarks/one/one_g02_auth_tree_multibuffer_resource_crossover\.py|docs/one/prereg/ONE_G02_AUTH_TREE_MULTIBUFFER_RESOURCE_CROSSOVER_PREREG_2026-09-07\.md|\.github/workflows/cmpct1-one-g02-auth-tree-multibuffer-resource-crossover\.yml)$' /tmp/latest-head-paths.txt; then
+          if grep -Eq '^(benchmarks/one/native/one_g02_auth_tree_multibuffer_sha\.c|benchmarks/one/one_g02_auth_tree_multibuffer_resource_crossover\.py|tests/one/test_auth_tree_multibuffer_crossover\.py|docs/one/prereg/ONE_G02_AUTH_TREE_MULTIBUFFER_RESOURCE_CROSSOVER_PREREG_2026-09-07\.md|\.github/workflows/cmpct1-one-g02-auth-tree-multibuffer-resource-crossover\.yml)$' /tmp/latest-head-paths.txt; then
             echo "relevant=true" >> "$GITHUB_OUTPUT"
           else
             echo "relevant=false" >> "$GITHUB_OUTPUT"
