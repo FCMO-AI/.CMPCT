@@ -39,6 +39,7 @@ jobs:
         run: python -m pytest -q tests/one/test_cache_fingerprints.py
       - name: Run frozen cache viability gate
         run: |
+          set -o pipefail
           mkdir -p one-cache-artifacts
           python -m benchmarks.one.one_incremental_fingerprint_cache | tee one-cache-artifacts/one-g02-incremental-fingerprint-cache.json
       - name: Retain exact-head evidence
