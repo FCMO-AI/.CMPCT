@@ -1,0 +1,65 @@
+# ci-lane: fast
+name: CMPCT1 ONE-G0.2 native fresh observer
+
+on:
+  push:
+    branches:
+      - research/cmpct1
+    paths:
+      - experiments/one/observe.py
+      - experiments/one/native_observe.py
+      - experiments/one/native_observe_kernel.c
+      - benchmarks/one/one_g02_native_fresh_observer.py
+      - tests/one/test_native_observe.py
+      - docs/one/evidence/ONE_G02_NATIVE_FRESH_OBSERVER_PREREG_2026-09-07.md
+      - .github/workflows/cmpct1-one-g02-native-fresh-observer.yml
+  pull_request:
+    paths:
+      - experiments/one/observe.py
+      - experiments/one/native_observe.py
+      - experiments/one/native_observe_kernel.c
+      - benchmarks/one/one_g02_native_fresh_observer.py
+      - tests/one/test_native_observe.py
+      - docs/one/evidence/ONE_G02_NATIVE_FRESH_OBSERVER_PREREG_2026-09-07.md
+      - .github/workflows/cmpct1-one-g02-native-fresh-observer.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct1-one-g02-native-fresh-observer-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  native-fresh-observer:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    env:
+      EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: "${{ env.EVIDENCE_HEAD }}"
+          clean: true
+      - name: Bind exact head
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Provision repository test contract
+        run: python -m pip install --disable-pip-version-check -e '.[test]'
+      - name: Run native observer semantic matrix
+        run: python -m pytest -q tests/one/test_native_observe.py
+      - name: Run native fresh-observer transfer gate
+        run: |
+          set -o pipefail
+          mkdir -p artifacts
+          python -m benchmarks.one.one_g02_native_fresh_observer | tee artifacts/one_g02_native_fresh_observer.json
+      - name: Upload native observer evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: one-g02-native-fresh-observer-${{ env.EVIDENCE_HEAD }}
+          path: artifacts/one_g02_native_fresh_observer.json
+          if-no-files-found: warn
