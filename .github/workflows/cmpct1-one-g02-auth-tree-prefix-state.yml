@@ -1,0 +1,60 @@
+# ci-lane: deep
+name: CMPCT1 ONE-G0.2 auth-tree prefix-state A/B
+on:
+  push:
+    branches: [research/cmpct1]
+    paths:
+      - "benchmarks/one/native/one_g02_auth_tree_prefix_state.c"
+      - "benchmarks/one/one_g02_auth_tree_prefix_state.py"
+      - "docs/one/prereg/ONE_G02_AUTH_TREE_PREFIX_STATE_AMORTIZATION_PREREG_2026-09-07.md"
+      - ".github/workflows/cmpct1-one-g02-auth-tree-prefix-state.yml"
+  pull_request:
+    paths:
+      - "benchmarks/one/native/one_g02_auth_tree_prefix_state.c"
+      - "benchmarks/one/one_g02_auth_tree_prefix_state.py"
+      - "docs/one/prereg/ONE_G02_AUTH_TREE_PREFIX_STATE_AMORTIZATION_PREREG_2026-09-07.md"
+      - ".github/workflows/cmpct1-one-g02-auth-tree-prefix-state.yml"
+  workflow_dispatch:
+permissions: {contents: read}
+concurrency:
+  group: cmpct1-one-g02-auth-tree-prefix-state-${{ github.sha }}
+  cancel-in-progress: true
+jobs:
+  prefix-state:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with: {ref: "${{ env.EVIDENCE_HEAD }}", clean: true}
+      - name: Bind exact head
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.11"}
+      - name: Install repository test dependency surface
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[test,audio]'
+      - name: Re-run ONE semantic boundary
+        run: python -m pytest -q tests/one
+      - name: Run frozen prefix-state auth-tree A/B and preserve scientific reds
+        shell: bash
+        run: |
+          mkdir -p one-auth-prefix-state-artifacts
+          set +e
+          python -m benchmarks.one.one_g02_auth_tree_prefix_state | tee one-auth-prefix-state-artifacts/one-g02-auth-tree-prefix-state.json
+          code=${PIPESTATUS[0]}
+          echo "$code" > one-auth-prefix-state-artifacts/scientific-exit-code.txt
+          exit 0
+      - name: Retain exact-head evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: one-g02-auth-tree-prefix-state-${{ env.EVIDENCE_HEAD }}
+          path: one-auth-prefix-state-artifacts/
+          if-no-files-found: error
+      - name: Enforce preregistered scientific decision
+        if: always()
+        shell: bash
+        run: test "$(cat one-auth-prefix-state-artifacts/scientific-exit-code.txt)" = "0"
