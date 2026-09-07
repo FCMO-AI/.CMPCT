@@ -10,12 +10,16 @@ positional miss: two consecutive misses are required as cheap evidence that cont
 actually have moved. A lone sparse mutation therefore recomputes locally and avoids
 unnecessary global lookup work.
 
-The directory stores at most one representative per (digest, length) identity and is
-constructed while the current blocks are already being observed. A subsequent version
-can therefore reuse that directory without rescanning the entire previous cache merely
-to discover relocation candidates. Directory entries are nomination metadata only: the
-pointed-to cached block still must match the key and pass its sealed-feature validation.
-Corrupt/stale directory state can only lose reuse and force recomputation.
+A relocation directory can be carried between versions, but exact-head evidence showed
+that always building it can tax ordinary exact-repeat work. ``persist_directory=False``
+therefore exercises the causally simpler shape: build a bounded relocation index lazily
+from the prior cache only after movement evidence appears, and emit no next-generation
+directory. This keeps the reader and archive unchanged while letting the writer pay
+relocation bookkeeping only on the rare path that uses it.
+
+Directory entries are nomination metadata only: the pointed-to cached block still must
+match the key and pass its sealed-feature validation. Corrupt/stale directory state can
+only lose reuse and force recomputation.
 
 This does not solve arbitrary byte-shifted insertions. Aligned FNV fingerprints are
 position-relative features, so a one-byte shift legitimately changes their grouping and
@@ -110,6 +114,7 @@ def observe_fingerprints_relocated(
     chunk_size: int = 64,
     policy_id: str = DEFAULT_FINGERPRINT_POLICY_ID,
     max_relocation_entries: int = 1 << 16,
+    persist_directory: bool = True,
 ) -> RelocatedFingerprints:
     """Return exact aligned fingerprints with opportunity-gated cross-position reuse.
 
@@ -121,15 +126,21 @@ def observe_fingerprints_relocated(
     When a compatible prior relocation directory is supplied, relocation lookup does not
     scan the previous cache. The directory itself is not trusted: a nominated block must
     still exist at the recorded index, reproduce the directory key, and pass the normal
-    sealed fingerprint validation. If no compatible directory exists, the experiment
-    retains the older bounded lazy-index fallback so the performance difference can be
-    measured rather than silently changing semantics.
+    sealed fingerprint validation. If no compatible directory exists, a bounded lazy
+    index is built from the prior cache only after the two-miss movement gate fires.
+
+    ``persist_directory=False`` emits an empty next-generation directory. It is the
+    opportunity-gated candidate: ordinary exact repeats and sparse edits therefore pay no
+    output-directory construction cost; aligned movement may pay one bounded prior-cache
+    scan after evidence says that relocation is useful.
     """
     if type(data) is not bytes:
         raise TypeError("ONE relocation-cache input must be bytes")
     _validate_shape(policy_id, block_size, chunk_size)
     if type(max_relocation_entries) is not int or max_relocation_entries <= 0:
         raise ValueError("max_relocation_entries must be a positive integer")
+    if type(persist_directory) is not bool:
+        raise TypeError("persist_directory must be bool")
 
     compatible = (
         isinstance(previous, FingerprintCache)
@@ -196,7 +207,7 @@ def observe_fingerprints_relocated(
 
     blocks: list[FingerprintBlock] = []
     flat: list[int] = []
-    output_directory_map: dict[tuple[bytes, int], int] = {}
+    output_directory_map: dict[tuple[bytes, int], int] | None = {} if persist_directory else None
     recompute_bytes = 0
     reuse_bytes = 0
     cache_integrity_hash_bytes = 0
@@ -245,8 +256,8 @@ def observe_fingerprints_relocated(
                 if type(candidate_index) is int and 0 <= candidate_index < len(prior_blocks)
                 else None
             )
-            # The directory is nomination metadata, not authority. Re-check the key
-            # against the actual cached block before spending seal-validation work.
+            # The directory/index is nomination metadata, not authority. Re-check the
+            # key against the actual cached block before spending seal-validation work.
             candidate_identity = (
                 isinstance(candidate, FingerprintBlock)
                 and candidate.digest == digest
@@ -290,7 +301,7 @@ def observe_fingerprints_relocated(
 
         blocks.append(chosen)
         flat.extend(chosen.fingerprints)
-        if len(output_directory_map) < max_relocation_entries:
+        if output_directory_map is not None and len(output_directory_map) < max_relocation_entries:
             output_directory_map.setdefault((digest, len(raw)), index)
 
     cache = FingerprintCache(
@@ -299,7 +310,7 @@ def observe_fingerprints_relocated(
         chunk_size=chunk_size,
         blocks=tuple(blocks),
     )
-    output_entries = tuple(
+    output_entries = () if output_directory_map is None else tuple(
         RelocationDirectoryEntry(digest=key[0], length=key[1], block_index=block_index)
         for key, block_index in output_directory_map.items()
     )
