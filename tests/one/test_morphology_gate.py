@@ -22,21 +22,29 @@ def _repetitive_numeric_root(size: int) -> bytes:
     return (row * ((size + len(row) - 1) // len(row)))[:size]
 
 
-def test_diverse_numeric_root_gates_reuse_but_preserves_runs() -> None:
+def _numeric_island_root(size: int) -> bytes:
+    data = bytearray(_diverse_numeric_root(size))
+    start = size // 7 + 4096
+    end = 2 * size // 7 - 4096
+    data[start:end] = _repetitive_numeric_root(end - start)
+    return bytes(data)
+
+
+def test_diverse_numeric_root_uses_bulk_digest_and_preserves_opportunities() -> None:
     data = _diverse_numeric_root(64 * 1024)
     baseline = observe(data)
     candidate = observe_morphology_gated(data)
     assert candidate.gate.gated
     assert candidate.gate.unique_chunk_fraction >= 0.90
     assert candidate.observation.runs == baseline.runs
-    assert candidate.observation.reuse == ()
-    assert candidate.observation.stats.chunk_fingerprints == 0
-    assert candidate.observation.stats.hash_lookups == 0
-    assert candidate.observation.stats.retained_index_payload_bytes == 0
+    assert candidate.observation.reuse == baseline.reuse
+    assert candidate.observation.stats.chunk_fingerprints == baseline.stats.chunk_fingerprints
+    assert candidate.observation.stats.hash_lookups == baseline.stats.hash_lookups
+    assert candidate.observation.stats.reuse_opportunity_bytes == baseline.stats.reuse_opportunity_bytes
     assert candidate.observation.stats.source_scan_bytes == len(data) + candidate.gate.sample_bytes
 
 
-def test_repetitive_numeric_root_falls_through_to_preserve_reuse_laws() -> None:
+def test_repetitive_numeric_root_falls_through_to_generic_observer() -> None:
     data = _repetitive_numeric_root(64 * 1024)
     baseline = observe(data)
     assert baseline.stats.reuse_opportunity_bytes > 0
@@ -46,7 +54,7 @@ def test_repetitive_numeric_root_falls_through_to_preserve_reuse_laws() -> None:
     assert candidate.observation == baseline
 
 
-def test_diverse_prefix_repetitive_tail_does_not_fool_sampling() -> None:
+def test_diverse_prefix_repetitive_tail_falls_through() -> None:
     size = 256 * 1024
     prefix = _diverse_numeric_root(16 * 1024)
     data = prefix + _repetitive_numeric_root(size - len(prefix))
@@ -56,6 +64,21 @@ def test_diverse_prefix_repetitive_tail_does_not_fool_sampling() -> None:
     assert not candidate.gate.gated
     assert candidate.gate.unique_chunk_fraction < 0.90
     assert candidate.observation == baseline
+
+
+def test_unsampled_repetitive_island_cannot_destroy_reuse_evidence() -> None:
+    size = 256 * 1024
+    data = _numeric_island_root(size)
+    baseline = observe(data)
+    assert baseline.stats.reuse_opportunity_bytes > size // 20
+    candidate = observe_morphology_gated(data)
+    # This construction deliberately evades the deterministic morphology windows.
+    assert candidate.gate.gated
+    # The successor survives because gating now selects an implementation rather than
+    # deleting the reuse opportunity class.
+    assert candidate.observation.runs == baseline.runs
+    assert candidate.observation.reuse == baseline.reuse
+    assert candidate.observation.stats.reuse_opportunity_bytes == baseline.stats.reuse_opportunity_bytes
 
 
 def test_tiny_numeric_root_is_not_gated() -> None:
