@@ -26,11 +26,13 @@ def _data(n:int)->bytes:
     return bytes((((i*131) ^ (i>>3) ^ (i>>11) ^ 0x5a)&255) for i in range(n))
 
 
-def _nodes(total:int,leaf:int)->int:
-    width=max(1,(total+leaf-1)//leaf); nodes=width
+def _geometry(total:int,leaf:int)->tuple[int,int,int]:
+    leaves=max(1,(total+leaf-1)//leaf)
+    width=leaves; parents=0
     while width>1:
-        width=(width+1)//2; nodes+=width
-    return nodes+1
+        width=(width+1)//2
+        parents+=width
+    return leaves,parents,leaves+parents+1  # explicit root commitment
 
 
 def run()->dict[str,object]:
@@ -45,11 +47,20 @@ def run()->dict[str,object]:
             expected=build_auth_tree(data,leaf).root.hex()
             p=subprocess.run([str(BIN),str(root_bytes),str(leaf),str(REPS)],check=True,text=True,capture_output=True)
             row=json.loads(p.stdout)
+            leaves,parents,nodes=_geometry(root_bytes,leaf)
+            row.update({
+                "leaf_count":leaves,
+                "parent_count":parents,
+                "baseline_update_calls":leaves*3 + parents*4 + 3,
+                "candidate_hash_calls":nodes,
+                "candidate_explicit_staging_bytes":root_bytes + leaves*22 + parents*74 + 50,
+                "candidate_explicit_staging_over_source_ratio":(root_bytes + leaves*22 + parents*74 + 50)/root_bytes,
+            })
             problems=[]
             if row["baseline_root"]!=expected: problems.append("baseline_root")
             if row["candidate_root"]!=expected: problems.append("candidate_root")
             if row["baseline_root"]!=row["candidate_root"]: problems.append("cross_root")
-            if row["node_count"]!=_nodes(root_bytes,leaf): problems.append("node_count")
+            if row["node_count"]!=nodes: problems.append("node_count")
             if problems:
                 mismatches.append({"root_bytes":root_bytes,"leaf_bytes":leaf,"problems":problems,"expected":expected,"row":row})
             rows.append(row)
@@ -72,7 +83,7 @@ def run()->dict[str,object]:
         "max_balanced_112_ratio":max(balanced),
         "max_candidate_ratio":worst,
         "decision":"advance_packed_oneshot_auth_tree_hashing" if passed else "reject_packed_oneshot_auth_tree_hashing",
-        "claim_boundary":"exact existing ONE research auth-tree native creation microprofile only; SHA-256/tree/proofs unchanged; no end-to-end ingest, authenticated-range, release or comparator authority",
+        "claim_boundary":"exact existing ONE research auth-tree native creation microprofile only; SHA-256/tree/proofs unchanged; explicit candidate staging bytes are accounting, not measured memory traffic; no end-to-end ingest, authenticated-range, release or comparator authority",
         "rows":rows,
     }
 
