@@ -10,6 +10,7 @@ on:
       - benchmarks/one/one_g02_shift_branch_bound_relation_transfer.py
       - experiments/one/bounded_surprise_pool.py
       - experiments/one/growable_wire.py
+      - tests/one/test_lazy_segment_timing.py
       - docs/one/evidence/ONE_G02_LAZY_SEGMENT_TIMING_PREREG_2026-09-08.md
       - .github/workflows/cmpct1-one-g02-lazy-segment-timing.yml
   workflow_dispatch:
@@ -32,6 +33,7 @@ jobs:
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
           test -f benchmarks/one/one_g02_lazy_segment_timing.py
+          test -f tests/one/test_lazy_segment_timing.py
           test -f docs/one/evidence/ONE_G02_LAZY_SEGMENT_TIMING_PREREG_2026-09-08.md
           grep -q '^SIZE = 1 << 20$' benchmarks/one/one_g02_lazy_segment_timing.py
           grep -q '^REPETITIONS = 21$' benchmarks/one/one_g02_lazy_segment_timing.py
@@ -58,7 +60,11 @@ jobs:
           assert b.ADMITTED_RATIO_MAX == 1.05
           assert b.REJECTED_RATIO_MAX == 0.95
           assert callable(b.run)
+          assert callable(b._adjudicate)
           PY
+
+      - name: Prove frozen decision law
+        run: python -m pytest -q tests/one/test_lazy_segment_timing.py
 
       - name: Run frozen lazy segment timing falsifier
         shell: bash
