@@ -20,6 +20,7 @@ class NativeAuthTree:
     total_len: int
     leaf_bytes: int
     level_widths: tuple[int, ...]
+    level_offsets_nodes: tuple[int, ...]
     packed_nodes: bytes
     root: bytes
 
@@ -41,8 +42,7 @@ class NativeAuthTree:
         width=self.level_widths[level]
         if index < 0 or index >= width:
             raise IndexError("auth-tree node out of range")
-        preceding=sum(self.level_widths[:level])
-        return (preceding + index) * HASH_BYTES
+        return (self.level_offsets_nodes[level] + index) * HASH_BYTES
 
     def digest_at(self, level: int, index: int) -> bytes:
         """Return one stored digest without materializing any complete level."""
@@ -66,6 +66,13 @@ def _widths(total_len: int, leaf_bytes: int) -> tuple[int, ...]:
         out.append(width)
         if width == 1: return tuple(out)
         width=(width+1)//2
+
+
+def _offsets(widths: tuple[int, ...]) -> tuple[int, ...]:
+    out=[]; total=0
+    for width in widths:
+        out.append(total); total += width
+    return tuple(out)
 
 
 def prove_range_packed(data: bytes, tree: NativeAuthTree, start: int, length: int) -> RangeProof:
@@ -145,6 +152,6 @@ def build_auth_tree_native(data: bytes, leaf_bytes: int) -> NativeAuthTree:
     if actual.value != node_count:
         raise RuntimeError("native auth-tree node-count mismatch")
     return NativeAuthTree(
-        total_len=len(data),leaf_bytes=leaf_bytes,level_widths=widths,
+        total_len=len(data),leaf_bytes=leaf_bytes,level_widths=widths,level_offsets_nodes=_offsets(widths),
         packed_nodes=bytes(out),root=bytes(root),
     )
