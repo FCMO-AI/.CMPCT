@@ -16,7 +16,6 @@ import time
 from benchmarks.one.one_g02_end_to_end_direct_emitter_writer import (
     CONTROLS,
     PRODUCTIVE,
-    SIZES,
     Segment,
     SegmentStats,
     _admit,
@@ -37,6 +36,7 @@ from experiments.one.vm import evaluate
 from experiments.one.wire import decode_program
 
 REPETITIONS = 15
+PROFILE_SIZES = (4 * 1024, 256 * 1024, 1 << 20)
 OWNER_SHARE = 0.20
 CLUSTER_SHARE = 0.40
 MIN_OWNER_ROWS_1M = 2
@@ -108,7 +108,6 @@ def _profile_row(admission_fn, segment_fn, source: bytes, target: bytes):
         if was_enabled:
             gc.disable()
         for round_index in range(REPETITIONS):
-            # Alternate instrumented and composed order to reduce drift bias.
             instrumented_first = round_index % 2 == 0
             if not instrumented_first:
                 composed_last, w, c = _timed(
@@ -255,7 +254,7 @@ def run():
     semantic_ok = True
     oracle_ok = True
     try:
-        for size in SIZES:
+        for size in PROFILE_SIZES:
             cases = _relation_cases(size)
             for case in PRODUCTIVE + CONTROLS:
                 source, target, expected_enable, expected_shift = cases[case]
@@ -331,10 +330,11 @@ def run():
         else:
             decision, ownership_counts = _decision(rows)
         return {
-            "schema": "cmpct-one-g02-native-writer-stage-owner-v2",
+            "schema": "cmpct-one-g02-native-writer-stage-owner-v3",
             "experimental_version": "ONE-G0.2",
             "source_sha": os.environ.get("EVIDENCE_HEAD") or os.environ.get("GITHUB_SHA") or "local-unbound",
             "repetitions": REPETITIONS,
+            "profile_sizes": list(PROFILE_SIZES),
             "timing_order": "alternating instrumented/composed",
             "owner_share_threshold": OWNER_SHARE,
             "cluster_share_threshold": CLUSTER_SHARE,
