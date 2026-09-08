@@ -11,4 +11,4 @@ Status: **admissible to falsify; no performance claim yet**.
 7. The 1 MiB causal gates are deliberately stronger than mere parity: <=0.90x prepared for long-runs and <=0.95x for structured. Otherwise the experiment has not shown that mixed execution is the missing cost.
 8. If the candidate HOLDS, do not tune thresholds or add a run-specific dispatcher. Preserve the negative and move reader work to a general reconstruction-plan/native execution boundary.
 
-Execution note: the first commit introduced this workflow and candidate atomically. A follow-up evidence-only touch is used solely so GitHub can instantiate the newly present path-scoped workflow from an already-existing workflow definition. It changes no threshold, implementation, matrix, or interpretation rule.
+Execution note: the first commit introduced this workflow and candidate atomically. Connector-authored ref updates did not emit a usable push-triggered Actions run, so the lane now also accepts path-scoped pull-request synchronization. This evidence-only touch exists solely to instantiate that already-frozen lane; it changes no threshold, implementation, matrix, or interpretation rule.
