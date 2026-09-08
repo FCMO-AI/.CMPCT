@@ -223,4 +223,8 @@ def run():
 if __name__ == "__main__":
     result = run()
     print(json.dumps(result, indent=2, sort_keys=True))
-    raise SystemExit(0 if result["decision"] != "INVALIDATE_COMPARISON" else 1)
+    if result["decision"] == "ADVANCE_CACHE_OVER_NATIVE":
+        raise SystemExit(0)
+    if result["decision"] == "DEMOTE_CACHE_PROMOTE_NATIVE_BASELINE":
+        raise SystemExit(2)
+    raise SystemExit(1)
