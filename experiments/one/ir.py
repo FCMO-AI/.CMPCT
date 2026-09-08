@@ -108,6 +108,13 @@ class Program:
                 raise OneError(f"unknown operation {node.op!r}")
             if not isinstance(node.refs, tuple) or any(not isinstance(ref, Ref) for ref in node.refs):
                 raise OneError("node refs must be a tuple of Ref values")
+            # Canonical wire decoding already rejects concat/xor/add8 fan-in above the
+            # declared node cap.  The in-memory IR must enforce the same resource
+            # envelope so a Program cannot validate locally and then become undecodable.
+            # Reusing max_nodes here preserves the existing wire contract without adding
+            # another reader-visible limit during the Genesis semantics window.
+            if len(node.refs) > self.limits.max_nodes:
+                raise OneError("node reference count exceeds declared limit")
             if not isinstance(node.surprise, bytes):
                 raise OneError("node Surprise must be bytes")
             if not _is_uint(node.count) or not _is_uint(node.value):
