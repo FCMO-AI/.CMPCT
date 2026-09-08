@@ -12,6 +12,7 @@ on:
       - experiments/one/growable_wire.py
       - tests/one/test_lazy_segment_timing.py
       - docs/one/evidence/ONE_G02_LAZY_SEGMENT_TIMING_PREREG_2026-09-08.md
+      - docs/one/evidence/ONE_G02_LAZY_SEGMENT_TIMING_HOSTILE_REVIEW_2026-09-08.md
       - .github/workflows/cmpct1-one-g02-lazy-segment-timing.yml
   workflow_dispatch:
 
@@ -35,6 +36,7 @@ jobs:
           test -f benchmarks/one/one_g02_lazy_segment_timing.py
           test -f tests/one/test_lazy_segment_timing.py
           test -f docs/one/evidence/ONE_G02_LAZY_SEGMENT_TIMING_PREREG_2026-09-08.md
+          test -f docs/one/evidence/ONE_G02_LAZY_SEGMENT_TIMING_HOSTILE_REVIEW_2026-09-08.md
           grep -q '^SIZE = 1 << 20$' benchmarks/one/one_g02_lazy_segment_timing.py
           grep -q '^REPETITIONS = 21$' benchmarks/one/one_g02_lazy_segment_timing.py
           grep -q '^ADMITTED_RATIO_MAX = 1.05$' benchmarks/one/one_g02_lazy_segment_timing.py
