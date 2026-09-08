@@ -30,11 +30,12 @@ def test_native_xor_handles_embedded_zero_bytes():
 
 def test_native_add8_wraps_modulo_256():
     parts = [bytes([250, 255, 1]), bytes([10, 2, 255]), bytes([1, 1, 1])]
-    expected = bytes([5, 2, 1])
-    assert _bulk_equal("add8", parts) == expected
+    assert _bulk_equal("add8", parts) == bytes([5, 2, 1])
 
 
-def test_native_bulk_rejects_bad_widths_and_operand_counts():
+def test_native_bulk_rejects_bad_operation_widths_and_operand_counts():
+    with pytest.raises(OneError, match="unknown native bulk operation"):
+        _bulk_equal("concat", [b"abc", b"abc"])
     with pytest.raises(OneError, match="operand count"):
         _bulk_equal("xor", [b"abc"])
     with pytest.raises(OneError, match="differ"):
@@ -47,6 +48,5 @@ def test_root_authentication_still_fails_closed():
         {"root": Root(Ref(2), 3, "00" * 32)},
         Limits(max_output_bytes=1024, max_work_bytes=8192),
     )
-    plan = compile_execution_plan(program)
     with pytest.raises(OneError, match="sha256 mismatch"):
-        execute_native_bulk_plan(plan)
+        execute_native_bulk_plan(compile_execution_plan(program))

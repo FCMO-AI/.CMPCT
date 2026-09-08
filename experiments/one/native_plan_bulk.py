@@ -40,6 +40,8 @@ def _library() -> ctypes.CDLL:
 
 
 def _bulk_equal(op: str, pieces: list[bytes]) -> bytes:
+    if op not in {"xor", "add8"}:
+        raise OneError(f"unknown native bulk operation {op!r}")
     if len(pieces) < 2 or len(pieces) > 9:
         raise OneError(f"native {op} operand count outside bounded kernel")
     width = len(pieces[0])
