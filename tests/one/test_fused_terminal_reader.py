@@ -4,6 +4,8 @@ from hashlib import sha256
 
 import pytest
 
+from benchmarks.one.one_g02_compact_observer_handoff_writer import FAMILIES
+from benchmarks.one.one_g02_terminal_law_root_sink import SIZES, adjudicate
 from experiments.one.fused_terminal_reader import evaluate_terminal_roots_fused
 from experiments.one.ir import Node, OneError, Program, Ref, Root
 from experiments.one.observe import RunOpportunity
@@ -79,3 +81,53 @@ def test_fused_reader_rejects_tampered_root_commitment():
     bad_roots["current"] = Root(program.roots["current"].ref, len(target), "00" * 32)
     with pytest.raises(OneError, match="sha256 mismatch"):
         evaluate_terminal_roots_fused(Program(program.nodes, bad_roots, program.limits))
+
+
+def _green_rows() -> list[dict]:
+    rows: list[dict] = []
+    for size in SIZES:
+        for family in FAMILIES:
+            wire_ratio = 0.50 if family == "long_runs" else (0.875 if family == "structured" else 1.0)
+            rows.append(
+                {
+                    "bytes": size,
+                    "family": family,
+                    "semantic_ok": True,
+                    "control_wire_bytes": 1000,
+                    "candidate_wire_bytes": int(1000 * wire_ratio),
+                    "candidate_over_control_wire": wire_ratio,
+                    "candidate_over_control_fused_traffic": 1.0,
+                    "candidate_over_control_fused_peak_temporary": 1.0,
+                    "candidate_over_control_fused_wall": 1.0,
+                    "candidate_over_control_fused_cpu": 1.0,
+                }
+            )
+    return rows
+
+
+def test_root_sink_adjudicator_advances_only_complete_green_matrix():
+    assert adjudicate(_green_rows()) == "ADVANCE_TERMINAL_LAW_ROOT_SINK"
+    assert adjudicate(_green_rows()[:-1]) == "INVALIDATE_TERMINAL_LAW_ROOT_SINK"
+
+
+def test_root_sink_adjudicator_rejects_semantic_mismatch():
+    rows = _green_rows()
+    rows[0]["semantic_ok"] = False
+    assert adjudicate(rows) == "INVALIDATE_TERMINAL_LAW_ROOT_SINK"
+
+
+def test_root_sink_adjudicator_holds_exact_traffic_and_time_regressions():
+    rows = _green_rows()
+    rows[0]["candidate_over_control_fused_traffic"] = 1.051
+    assert adjudicate(rows) == "HOLD_TERMINAL_LAW_ROOT_SINK"
+    rows = _green_rows()
+    rows[0]["candidate_over_control_fused_wall"] = 1.051
+    assert adjudicate(rows) == "HOLD_TERMINAL_LAW_ROOT_SINK"
+
+
+def test_root_sink_adjudicator_preserves_density_gates():
+    rows = _green_rows()
+    long_1m = next(row for row in rows if row["bytes"] == (1 << 20) and row["family"] == "long_runs")
+    long_1m["candidate_wire_bytes"] = 551
+    long_1m["candidate_over_control_wire"] = 0.551
+    assert adjudicate(rows) == "HOLD_TERMINAL_LAW_ROOT_SINK"
