@@ -33,8 +33,44 @@ class SurprisePoolStats:
     hierarchy_depth: int
 
 
+@dataclass(frozen=True)
+class SurprisePoolGeometry:
+    max_groups: int
+    group_span_bytes: int
+    groups_for_target: int
+    worst_case_nodes_for_target: int
+
+
 def _ceil_div(value: int, divisor: int) -> int:
     return (value + divisor - 1) // divisor
+
+
+def pool_geometry(limits: Limits, target_length: int) -> SurprisePoolGeometry:
+    """Return the resource-derived grouping geometry without examining corpus bytes."""
+    limits.validate()
+    if type(target_length) is not int or target_length <= 0:
+        raise OneError("bounded Surprise pooling target length must be positive")
+    if target_length > limits.max_output_bytes:
+        raise OneError("target exceeds declared output limit")
+    if limits.max_nodes < 4:
+        raise OneError("node limit too small for bounded Surprise pooling")
+
+    max_groups = (limits.max_nodes - 2) // 2
+    if max_groups < 1:
+        raise OneError("node limit leaves no bounded Surprise groups")
+    group_span = max(1, _ceil_div(limits.max_output_bytes, max_groups))
+    groups_for_target = _ceil_div(target_length, group_span)
+    # Pessimistic graph: source + (Surprise pool + group concat) per group + final concat.
+    # One-group outputs normally omit the final concat, so this intentionally overcharges.
+    worst_case_nodes = 1 + 2 * groups_for_target + 1
+    if groups_for_target > max_groups or worst_case_nodes > limits.max_nodes:
+        raise OneError("declared resource bounds cannot contain pooled Program geometry")
+    return SurprisePoolGeometry(
+        max_groups=max_groups,
+        group_span_bytes=group_span,
+        groups_for_target=groups_for_target,
+        worst_case_nodes_for_target=worst_case_nodes,
+    )
 
 
 def _validate_piece(piece: PlanPiece) -> None:
@@ -120,20 +156,15 @@ def program_from_plan_pooled(
     if not isinstance(source, bytes) or not isinstance(target, bytes):
         raise OneError("pooled Program source/target must be bytes")
     limits = Limits() if limits is None else limits
-    limits.validate()
-    if len(target) > limits.max_output_bytes:
-        raise OneError("target exceeds declared output limit")
-    if limits.max_nodes < 4:
-        raise OneError("node limit too small for bounded Surprise pooling")
-
-    max_groups = (limits.max_nodes - 2) // 2
-    if max_groups < 1:
-        raise OneError("node limit leaves no bounded Surprise groups")
-    group_span = max(1, _ceil_div(limits.max_output_bytes, max_groups))
+    geometry = pool_geometry(limits, len(target))
     frozen_plan = tuple(plan)
-    groups = _split_plan(frozen_plan, target_length=len(target), group_span=group_span)
-    if len(groups) > max_groups:
-        raise OneError("bounded Surprise grouping exceeded derived node budget")
+    groups = _split_plan(
+        frozen_plan,
+        target_length=len(target),
+        group_span=geometry.group_span_bytes,
+    )
+    if len(groups) > geometry.max_groups or len(groups) != geometry.groups_for_target:
+        raise OneError("bounded Surprise grouping violated resource-derived geometry")
 
     nodes: list[Node] = [Node("surprise", surprise=source)]
     level: list[tuple[Ref, int]] = []
@@ -200,8 +231,8 @@ def program_from_plan_pooled(
     program = Program(tuple(nodes), {"previous": previous_root, "current": current_root}, limits)
     stats = SurprisePoolStats(
         groups=len(groups),
-        max_groups=max_groups,
-        group_span_bytes=group_span,
+        max_groups=geometry.max_groups,
+        group_span_bytes=geometry.group_span_bytes,
         surprise_pool_nodes=pool_nodes,
         group_concat_nodes=concat_nodes,
         max_surprise_pool_bytes=max_pool_bytes,
