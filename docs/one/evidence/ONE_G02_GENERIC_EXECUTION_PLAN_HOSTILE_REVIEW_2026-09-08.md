@@ -4,14 +4,16 @@ Status: preregistered, no admissible hosted performance verdict yet.
 
 The candidate is intentionally broader than the retired terminal-specific line: every existing ONE operation participates in the same compiled representation and executor. The benchmark includes XOR/add8 and sliced/multi-parent composition so a Fill-specific implementation cannot pass by accident.
 
-## Pre-result correction
+## Pre-result corrections
 
 The first committed benchmark at `efe61e28b031c3353541956b3e9536e083349038` accidentally made the `shared_basis` Fill zero-length because `basis * 2` already filled the output. That source is **promotion-inadmissible even if CI later reports green**. Before accepting hosted timing evidence, the family was repaired to use a one-quarter basis repeated three times plus a non-zero one-quarter Fill. No threshold or decision criterion moved. Adversarial tests were also added for incomplete/duplicate matrices, semantic failure, a 1.051x decisive regression, and insufficient material wins.
+
+A second pre-result audit found that source `146ca033a8144a55e9f2dd1eb7fa3656825788cc` compiled all stored nodes and would therefore replay unreachable valid nodes, unlike the reference evaluator. `_preflight` must still validate unreachable nodes, but they must not consume runtime work unless a root reaches them. That source and all earlier generic-plan timings are therefore **promotion-inadmissible**. The corrected plan validates the complete Program through `_preflight` and lowers only root-reachable nodes. Hostile vectors now prove both sides: a valid unreachable Fill is not replayed, while a malformed unreachable node still fails compilation.
 
 Hostile constraints:
 
 - `_preflight` remains mandatory before plan construction; compilation cannot bypass cycle, depth, output, range, declared-length, work, or root-shape checks.
-- Unreachable stored nodes remain compiled/validated so validity cannot depend on current roots.
+- Unreachable stored nodes remain validated, while execution/work matches root reachability of the reference VM.
 - Root SHA-256 remains charged on every replay.
 - Compilation is measured separately; repeated-read evidence may not be narrated as cold-read evidence.
 - The executor preserves the reference VM's work accounting exactly in semantic tests.

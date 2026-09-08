@@ -60,8 +60,9 @@ class PlanStats:
 def compile_execution_plan(program: Program) -> GenericExecutionPlan:
     """Validate once and lower the generic ONE graph to dependency order.
 
-    All slice bounds become explicit during compilation. Replay therefore performs no
-    recursive graph walk, cycle search, dynamic range inference, or operation discovery.
+    `_preflight` validates *all* stored nodes, including unreachable ones, preserving the
+    reference validity contract. The executable plan itself contains only nodes reachable
+    from current roots, matching the reference evaluator's execution/work semantics.
     """
     program.validate_shape()
     pf = _preflight(program)
@@ -77,10 +78,8 @@ def compile_execution_plan(program: Program) -> GenericExecutionPlan:
         seen.add(node_id)
         order.append(node_id)
 
-    # Preserve validation semantics for unreachable stored nodes by compiling all nodes,
-    # not only those reachable from a current root.
-    for node_id in range(len(program.nodes)):
-        visit(node_id)
+    for root in program.roots.values():
+        visit(root.ref.node)
 
     ops: list[PlanOp] = []
     for node_id in order:
@@ -89,8 +88,6 @@ def compile_execution_plan(program: Program) -> GenericExecutionPlan:
         for ref in node.refs:
             source_len = pf.lengths[ref.node]
             end = source_len if ref.length is None else ref.start + ref.length
-            # _preflight already proved these bounds; keep assertions here so a future
-            # change cannot silently make compile/replay disagree about ranges.
             if ref.start > source_len or end < ref.start or end > source_len:
                 raise OneError("execution-plan range disagrees with preflight")
             refs.append(PlanRef(ref.node, ref.start, end - ref.start))

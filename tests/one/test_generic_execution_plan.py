@@ -35,15 +35,7 @@ def test_all_six_operations_share_one_execution_plan():
     added = bytes((left + right) & 0xFF for left, right in zip(a, b))
     repeated = a * 3
     output = repeated + bytes([7]) * 5 + x + added + b"!"
-    nodes = [
-        Node("surprise", surprise=a),
-        Node("surprise", surprise=b),
-        Node("repeat", refs=(Ref(0),), count=3),
-        Node("fill", count=5, value=7),
-        Node("xor", refs=(Ref(0), Ref(1))),
-        Node("add8", refs=(Ref(0), Ref(1))),
-        Node("concat", refs=(Ref(2), Ref(3), Ref(4), Ref(5)), surprise=b"!", declared_length=len(output)),
-    ]
+    nodes = [Node("surprise", surprise=a), Node("surprise", surprise=b), Node("repeat", refs=(Ref(0),), count=3), Node("fill", count=5, value=7), Node("xor", refs=(Ref(0), Ref(1))), Node("add8", refs=(Ref(0), Ref(1))), Node("concat", refs=(Ref(2), Ref(3), Ref(4), Ref(5)), surprise=b"!", declared_length=len(output))]
     _assert_same(_program(nodes, output))
 
 
@@ -65,6 +57,26 @@ def test_root_slice_is_preserved():
     source = b"prefix--wanted--suffix"
     output = b"wanted"
     _assert_same(_program([Node("surprise", surprise=source)], output, root_ref=Ref(0, 8, 6)))
+
+
+def test_unreachable_nodes_are_validated_but_not_replayed():
+    output = b"root"
+    nodes = [Node("surprise", surprise=output), Node("fill", count=4096, value=0xAA)]
+    program = _program(nodes, output, root_node=0)
+    reference, reference_stats = evaluate(program)
+    plan = compile_execution_plan(program)
+    candidate, stats = execute_plan(plan)
+    assert candidate == reference
+    assert tuple(op.node for op in plan.ops) == (0,)
+    assert stats.work_bytes == reference_stats.work_bytes
+    assert stats.materialized_bytes == reference_stats.materialized_bytes
+    assert stats.nodes_executed == reference_stats.nodes_evaluated == 1
+
+
+def test_malformed_unreachable_node_still_fails_preflight():
+    program = Program((Node("surprise", surprise=b"ok"), Node("concat", refs=(Ref(99),))), {"root": Root(Ref(0), 2, sha256(b"ok").hexdigest())}, Limits(max_output_bytes=8192, max_work_bytes=32768))
+    with pytest.raises(OneError):
+        compile_execution_plan(program)
 
 
 def test_bad_root_hash_fails_closed():
