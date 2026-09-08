@@ -123,8 +123,43 @@ def _equivalent(a: dict, b: dict) -> bool:
     return all(a[key] == b[key] for key in keys)
 
 
+def _compact_signature(sig: dict) -> dict:
+    """Keep only post-oracle scalars so timed allocation runs do not retain MiB wires/plans."""
+    return {
+        "segments": sig["segments"],
+        "wire_total_bytes": sig["wire_total_bytes"],
+        "surprise_bytes": sig["surprise_bytes"],
+        "reader_work_bytes": sig["reader_work_bytes"],
+        "segment_capacity_bytes": sig["segment_capacity_bytes"],
+    }
+
+
 def _ratio(candidate: float, control: float) -> float:
     return candidate / control if control else float("inf")
+
+
+def _adjudicate(rows: list[dict], semantic_ok: bool) -> tuple[str, bool, bool]:
+    """Apply the frozen promotion law independently of measurement execution."""
+    by_case = {row["case"]: row for row in rows}
+    complete = set(by_case) == set(CASES)
+    admitted_ok = complete and all(
+        by_case[case]["lazy_over_eager_wall"] <= ADMITTED_RATIO_MAX
+        and by_case[case]["lazy_over_eager_cpu"] <= ADMITTED_RATIO_MAX
+        and by_case[case]["lazy_segment_capacity_bytes"]
+        == by_case[case]["eager_segment_capacity_bytes"]
+        for case in ADMITTED
+    )
+    rejected_ok = complete and all(
+        by_case[case]["lazy_over_eager_wall"] <= REJECTED_RATIO_MAX
+        and by_case[case]["lazy_over_eager_cpu"] <= REJECTED_RATIO_MAX
+        and by_case[case]["lazy_segment_capacity_bytes"] == 0
+        for case in REJECTED
+    )
+    if not semantic_ok:
+        return "INVALIDATE_LAZY_SEGMENT_TIMING", admitted_ok, rejected_ok
+    if admitted_ok and rejected_ok:
+        return "ADVANCE_LAZY_SEGMENT_TIMING", admitted_ok, rejected_ok
+    return "HOLD_LAZY_SEGMENT_TIMING", admitted_ok, rejected_ok
 
 
 def run() -> dict:
@@ -167,6 +202,13 @@ def run() -> dict:
             )
             semantic_ok &= case_semantic_ok
 
+            # Equality above is exact on the full plan and canonical wire. Release those
+            # heavy oracle objects before timing so they cannot alter allocator pressure.
+            eager_meta = _compact_signature(eager_sig)
+            lazy_meta = _compact_signature(lazy_sig)
+            eager_sig = None
+            lazy_sig = None
+
             wall = {"eager": [], "lazy": []}
             cpu = {"eager": [], "lazy": []}
             last_value = None
@@ -200,12 +242,12 @@ def run() -> dict:
                 "case": case,
                 "expected_enable": bool(expected_enable),
                 "semantic_ok": case_semantic_ok,
-                "segments": eager_sig["segments"],
-                "canonical_wire_bytes": eager_sig["wire_total_bytes"],
-                "surprise_bytes": eager_sig["surprise_bytes"],
-                "reader_work_bytes": eager_sig["reader_work_bytes"],
-                "eager_segment_capacity_bytes": eager_sig["segment_capacity_bytes"],
-                "lazy_segment_capacity_bytes": lazy_sig["segment_capacity_bytes"],
+                "segments": eager_meta["segments"],
+                "canonical_wire_bytes": eager_meta["wire_total_bytes"],
+                "surprise_bytes": eager_meta["surprise_bytes"],
+                "reader_work_bytes": eager_meta["reader_work_bytes"],
+                "eager_segment_capacity_bytes": eager_meta["segment_capacity_bytes"],
+                "lazy_segment_capacity_bytes": lazy_meta["segment_capacity_bytes"],
                 "eager_wall_ns_median": eager_wall,
                 "lazy_wall_ns_median": lazy_wall,
                 "lazy_over_eager_wall": _ratio(lazy_wall, eager_wall),
@@ -218,25 +260,7 @@ def run() -> dict:
             gc.enable()
         td.cleanup()
 
-    admitted_ok = all(
-        row["lazy_over_eager_wall"] <= ADMITTED_RATIO_MAX
-        and row["lazy_over_eager_cpu"] <= ADMITTED_RATIO_MAX
-        and row["lazy_segment_capacity_bytes"] == row["eager_segment_capacity_bytes"]
-        for row in rows if row["case"] in ADMITTED
-    )
-    rejected_ok = all(
-        row["lazy_over_eager_wall"] <= REJECTED_RATIO_MAX
-        and row["lazy_over_eager_cpu"] <= REJECTED_RATIO_MAX
-        and row["lazy_segment_capacity_bytes"] == 0
-        for row in rows if row["case"] in REJECTED
-    )
-    if not semantic_ok:
-        decision = "INVALIDATE_LAZY_SEGMENT_TIMING"
-    elif admitted_ok and rejected_ok:
-        decision = "ADVANCE_LAZY_SEGMENT_TIMING"
-    else:
-        decision = "HOLD_LAZY_SEGMENT_TIMING"
-
+    decision, admitted_ok, rejected_ok = _adjudicate(rows, semantic_ok)
     return {
         "schema": "cmpct-one-g02-lazy-segment-timing-v1",
         "experimental_version": "ONE-G0.2",
