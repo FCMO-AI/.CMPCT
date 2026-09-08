@@ -1,0 +1,73 @@
+name: CMPCT1 ONE-G0.2 packed observer rehabilitation
+
+on:
+  push:
+    branches:
+      - research/cmpct1
+    paths:
+      - experiments/one/native_observe.py
+      - experiments/one/native_observe_kernel.c
+      - experiments/one/native_observe_view.py
+      - benchmarks/one/one_g02_compact_observer_handoff_writer.py
+      - benchmarks/one/one_g02_packed_observer_rehabilitation.py
+      - tests/one/test_native_observe_view.py
+      - tests/one/test_native_observe_packed.py
+      - docs/one/evidence/ONE_G02_PACKED_OBSERVER_REHABILITATION_PREREG_2026-09-08.md
+      - docs/one/evidence/ONE_G02_PACKED_OBSERVER_REHABILITATION_HOSTILE_REVIEW_PRE_RESULT_2026-09-08.md
+      - .github/workflows/cmpct1-one-g02-packed-observer-rehabilitation.yml
+  workflow_dispatch:
+
+jobs:
+  packed-observer-rehabilitation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      EVIDENCE_HEAD: ${{ github.sha }}
+    steps:
+      - name: Checkout exact source SHA
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+
+      - name: Bind evidence to exact source SHA
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          test -f experiments/one/native_observe_view.py
+          test -f benchmarks/one/one_g02_packed_observer_rehabilitation.py
+          test -f tests/one/test_native_observe_packed.py
+          test -f docs/one/evidence/ONE_G02_PACKED_OBSERVER_REHABILITATION_PREREG_2026-09-08.md
+          test -f docs/one/evidence/ONE_G02_PACKED_OBSERVER_REHABILITATION_HOSTILE_REVIEW_PRE_RESULT_2026-09-08.md
+          grep -q 'GAIN_RETENTION_MAX = 0.60' benchmarks/one/one_g02_packed_observer_rehabilitation.py
+          grep -q 'NO_REGRESSION_MAX = 1.05' benchmarks/one/one_g02_packed_observer_rehabilitation.py
+          grep -q '1 << 20' benchmarks/one/one_g02_compact_observer_handoff_writer.py
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install test environment
+        run: python -m pip install -e '.[test]'
+
+      - name: Prove packed observer semantics
+        run: >-
+          python -m pytest -q
+          tests/one/test_native_observe_view.py
+          tests/one/test_native_observe_packed.py
+
+      - name: Run frozen rehabilitation falsifier
+        shell: bash
+        run: |
+          set -o pipefail
+          python -m benchmarks.one.one_g02_packed_observer_rehabilitation \
+            | tee one_g02_packed_observer_rehabilitation.json
+
+      - name: Preserve exact-head evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: one-g02-packed-observer-rehabilitation-${{ env.EVIDENCE_HEAD }}
+          path: one_g02_packed_observer_rehabilitation.json
+          if-no-files-found: warn
