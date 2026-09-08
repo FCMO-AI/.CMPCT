@@ -2,7 +2,7 @@
 
 Frozen by ONE_G02_BOUNDED_SURPRISE_POOLING_PREREG_2026-09-08.md.  This is a
 representation/resource experiment for already-discovered plans, not product speed or
-comparator authority.
+comparator authority. Hostile-review additions may only strengthen the frozen gates.
 """
 from __future__ import annotations
 
@@ -53,6 +53,58 @@ def _range_rows(program, target: bytes):
     return rows
 
 
+def _fine_fragment_control(limits: Limits):
+    """Attack the wire's per-node ref cap with one-byte alternating plan pieces."""
+    size = 2 * limits.max_nodes
+    source = bytes((index * 17 + 3) & 0xFF for index in range(size))
+    target_mutable = bytearray(source)
+    for index in range(1, size, 2):
+        target_mutable[index] ^= 0x5A
+    target = bytes(target_mutable)
+    plan = tuple(
+        ("ref", index, 1, b"") if index % 2 == 0 else ("surprise", 0, 1, target[index : index + 1])
+        for index in range(size)
+    )
+    previous_root = Root(Ref(0), len(source), sha256(source).hexdigest())
+    pooled, stats = program_from_plan_pooled(
+        source,
+        target,
+        plan,
+        previous_root,
+        sha256(target).hexdigest(),
+        limits=limits,
+    )
+    pooled.validate_shape()
+    max_encoded_refs = max((len(node.refs) for node in pooled.nodes), default=0)
+    wire, wire_stats = encode_program(pooled)
+    decoded = decode_program(wire)
+    outputs, vm_stats = evaluate(decoded)
+    exact = outputs == {"previous": source, "current": target}
+    return {
+        "relation_bytes": size,
+        "segments": len(plan),
+        "max_group_refs_discovered": stats.max_group_refs,
+        "reader_ref_cap": limits.max_nodes,
+        "crystallized_groups": stats.crystallized_groups,
+        "crystallized_bytes": stats.crystallized_bytes,
+        "max_encoded_node_refs": max_encoded_refs,
+        "program_nodes": len(pooled.nodes),
+        "canonical_wire_bytes": wire_stats.total_bytes,
+        "wire_surprise_bytes": wire_stats.surprise_bytes,
+        "control_integrity_bytes": wire_stats.control_integrity_bytes,
+        "reader_work_bytes": vm_stats.work_bytes,
+        "exact_reconstruction": exact,
+        "passes": (
+            stats.max_group_refs > limits.max_nodes
+            and stats.crystallized_groups >= 1
+            and stats.crystallized_bytes > 0
+            and max_encoded_refs <= limits.max_nodes
+            and len(pooled.nodes) <= limits.max_nodes
+            and exact
+        ),
+    }
+
+
 def run():
     limits = Limits()
     rows = []
@@ -95,7 +147,8 @@ def run():
             )
             pooled_surprise = _surprise_payload_bytes(pooled)
             this_surprise_ok = pooled_surprise == legacy_surprise
-            this_resource_ok = len(pooled.nodes) <= limits.max_nodes
+            max_encoded_refs = max((len(node.refs) for node in pooled.nodes), default=0)
+            this_resource_ok = len(pooled.nodes) <= limits.max_nodes and max_encoded_refs <= limits.max_nodes
             semantic_ok &= exact and roots_exact
             resource_ok &= this_resource_ok
             surprise_ok &= this_surprise_ok
@@ -132,6 +185,10 @@ def run():
                 "pooled_surprise_pool_nodes": pool_stats.surprise_pool_nodes,
                 "pooled_group_concat_nodes": pool_stats.group_concat_nodes,
                 "pooled_max_surprise_pool_bytes": pool_stats.max_surprise_pool_bytes,
+                "pooled_crystallized_groups": pool_stats.crystallized_groups,
+                "pooled_crystallized_bytes": pool_stats.crystallized_bytes,
+                "pooled_max_group_refs_discovered": pool_stats.max_group_refs,
+                "pooled_max_encoded_node_refs": max_encoded_refs,
                 "legacy_total_surprise_payload_bytes": legacy_surprise,
                 "pooled_total_surprise_payload_bytes": pooled_surprise,
                 "surprise_payload_equal": this_surprise_ok,
@@ -146,17 +203,19 @@ def run():
                 "range_rows": range_rows,
             })
 
+    fine_fragment = _fine_fragment_control(limits)
     gates = {
         "semantic_exact": semantic_ok,
         "hard_resource_limits": resource_ok,
-        "surprise_payload_unchanged": surprise_ok,
+        "surprise_payload_unchanged_on_frozen_productive_matrix": surprise_ok,
         "hostile_legacy_node_overflow_reproduced": hostile_legacy_overflow_seen,
         "hostile_pooled_program_valid": hostile_pooled_valid_seen,
         "hostile_4k_range_cone_at_or_below_2_1x": range_ok,
+        "hostile_over_fanin_selectively_crystallizes_and_roundtrips": fine_fragment["passes"],
     }
     advance = all(gates.values())
     return {
-        "schema": "cmpct-one-g02-bounded-surprise-pooling-v1",
+        "schema": "cmpct-one-g02-bounded-surprise-pooling-v2",
         "experimental_version": "ONE-G0.2",
         "source_sha": os.environ.get("EVIDENCE_HEAD") or os.environ.get("GITHUB_SHA") or "local-unbound",
         "sizes": list(SIZES),
@@ -174,9 +233,11 @@ def run():
         "decision": "ADVANCE_BOUNDED_SURPRISE_POOLING" if advance else "REJECT_BOUNDED_SURPRISE_POOLING",
         "claim_boundary": (
             "already-discovered temporal plan graph granularity only; generic surprise/concat/ranged-Ref grammar; "
+            "over-fan-in groups may selectively Crystallize under the existing reader ref envelope; "
             "range evidence is explicitly unauthenticated and does not borrow wire indexing or selective integrity; "
             "no product-speed, arbitrary-discovery, format-release or v0.29/v0.30 superiority authority"
         ),
+        "fine_fragment_control": fine_fragment,
         "rows": rows,
     }
 
