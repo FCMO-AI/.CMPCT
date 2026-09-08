@@ -9,6 +9,8 @@ from pathlib import Path
 import subprocess
 import tempfile
 
+from experiments.one.auth_tree import RangeProof
+
 
 HASH_BYTES = 32
 
@@ -22,6 +24,10 @@ class NativeAuthTree:
     root: bytes
 
     @property
+    def leaf_count(self) -> int:
+        return self.level_widths[0]
+
+    @property
     def node_count(self) -> int:
         return len(self.packed_nodes) // HASH_BYTES
 
@@ -29,7 +35,22 @@ class NativeAuthTree:
     def stored_index_bytes(self) -> int:
         return 4 + HASH_BYTES * (self.node_count - 1)
 
+    def _level_node_offset(self, level: int, index: int) -> int:
+        if level < 0 or level >= len(self.level_widths):
+            raise IndexError("auth-tree level out of range")
+        width=self.level_widths[level]
+        if index < 0 or index >= width:
+            raise IndexError("auth-tree node out of range")
+        preceding=sum(self.level_widths[:level])
+        return (preceding + index) * HASH_BYTES
+
+    def digest_at(self, level: int, index: int) -> bytes:
+        """Return one stored digest without materializing any complete level."""
+        off=self._level_node_offset(level,index)
+        return self.packed_nodes[off:off+HASH_BYTES]
+
     def levels(self) -> tuple[tuple[bytes, ...], ...]:
+        """Reference/debug expansion only; the selective path must not require this."""
         levels=[]; off=0
         for width in self.level_widths:
             n=width*HASH_BYTES
@@ -45,6 +66,39 @@ def _widths(total_len: int, leaf_bytes: int) -> tuple[int, ...]:
         out.append(width)
         if width == 1: return tuple(out)
         width=(width+1)//2
+
+
+def prove_range_packed(data: bytes, tree: NativeAuthTree, start: int, length: int) -> RangeProof:
+    """Build the existing generic RangeProof directly from packed native tree state.
+
+    Only sibling digests required by the requested range are read from ``packed_nodes``.
+    Selected leaf hashes are deliberately not read: the verifier recomputes them from the
+    authenticated payload bytes exactly like the independent Python reference path.
+    """
+    if type(data) is not bytes:
+        raise TypeError("data must be bytes")
+    if start < 0 or length < 0 or start + length > len(data) or len(data) != tree.total_len:
+        raise ValueError("invalid proof range")
+    if length == 0:
+        first=min(start // tree.leaf_bytes,tree.leaf_count-1)
+        selected={first}
+    else:
+        first=start // tree.leaf_bytes
+        last=(start+length-1)//tree.leaf_bytes
+        selected=set(range(first,last+1))
+    payloads=tuple(data[i*tree.leaf_bytes:min(len(data),(i+1)*tree.leaf_bytes)] for i in sorted(selected))
+    siblings=[]
+    current=set(selected)
+    for level_no,width in enumerate(tree.level_widths[:-1]):
+        needed=set()
+        for idx in current:
+            sib=idx ^ 1
+            if sib < width and sib not in current:
+                needed.add(sib)
+        for idx in sorted(needed):
+            siblings.append((level_no,idx,tree.digest_at(level_no,idx)))
+        current={idx//2 for idx in current}
+    return RangeProof(tree.total_len,tree.leaf_bytes,first,payloads,tuple(siblings))
 
 
 @lru_cache(maxsize=1)
