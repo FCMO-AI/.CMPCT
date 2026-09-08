@@ -9,26 +9,34 @@ on:
       - experiments/one/native_observe.py
       - experiments/one/native_observe_kernel.c
       - experiments/one/growable_wire.py
+      - experiments/one/bounded_surprise_pool.py
       - benchmarks/one/one_g02_end_to_end_direct_emitter_writer.py
       - benchmarks/one/one_g02_post_segment_control_cost_owner.py
       - benchmarks/one/one_g02_native_writer_stage_owner.py
+      - benchmarks/one/one_g02_bounded_surprise_pooling.py
       - benchmarks/one/one_g02_*relation*_kernel.c
       - benchmarks/one/one_g02_native_segment_plan_fusion_kernel.c
       - tests/one/test_native_writer_stage_owner.py
+      - tests/one/test_bounded_surprise_pool.py
       - docs/one/evidence/ONE_G02_NATIVE_WRITER_STAGE_OWNER_PREREG_2026-09-07.md
+      - docs/one/evidence/ONE_G02_BOUNDED_SURPRISE_POOLING_PREREG_2026-09-08.md
       - .github/workflows/cmpct1-one-g02-native-writer-stage-owner.yml
   pull_request:
     paths:
       - experiments/one/native_observe.py
       - experiments/one/native_observe_kernel.c
       - experiments/one/growable_wire.py
+      - experiments/one/bounded_surprise_pool.py
       - benchmarks/one/one_g02_end_to_end_direct_emitter_writer.py
       - benchmarks/one/one_g02_post_segment_control_cost_owner.py
       - benchmarks/one/one_g02_native_writer_stage_owner.py
+      - benchmarks/one/one_g02_bounded_surprise_pooling.py
       - benchmarks/one/one_g02_*relation*_kernel.c
       - benchmarks/one/one_g02_native_segment_plan_fusion_kernel.c
       - tests/one/test_native_writer_stage_owner.py
+      - tests/one/test_bounded_surprise_pool.py
       - docs/one/evidence/ONE_G02_NATIVE_WRITER_STAGE_OWNER_PREREG_2026-09-07.md
+      - docs/one/evidence/ONE_G02_BOUNDED_SURPRISE_POOLING_PREREG_2026-09-08.md
       - .github/workflows/cmpct1-one-g02-native-writer-stage-owner.yml
   workflow_dispatch:
 
@@ -61,10 +69,25 @@ jobs:
         run: |
           test -f tests/one/test_native_observe.py
           test -f tests/one/test_native_writer_stage_owner.py
+          test -f tests/one/test_bounded_surprise_pool.py
           test -f benchmarks/one/one_g02_native_writer_stage_owner.py
-          python -c "from benchmarks.one.one_g02_native_writer_stage_owner import PROFILE_SIZES, run; assert (1 << 20) in PROFILE_SIZES; assert callable(run)"
-      - name: Run native observer and owner-adjudication suites
-        run: python -m pytest -q tests/one/test_native_observe.py tests/one/test_native_writer_stage_owner.py
+          test -f benchmarks/one/one_g02_bounded_surprise_pooling.py
+          python - <<'PY'
+          from benchmarks.one.one_g02_native_writer_stage_owner import PROFILE_SIZES, run
+          from benchmarks.one.one_g02_bounded_surprise_pooling import SIZES as POOL_SIZES
+          from experiments.one.ir import Limits
+          assert (1 << 20) in PROFILE_SIZES
+          assert (1 << 20) in POOL_SIZES
+          assert Limits().max_nodes == 4096
+          assert callable(run)
+          PY
+      - name: Run native observer, owner-adjudication and pooling suites
+        run: python -m pytest -q tests/one/test_native_observe.py tests/one/test_native_writer_stage_owner.py tests/one/test_bounded_surprise_pool.py tests/one/test_range_vm.py
+      - name: Falsify bounded Surprise pooling under unchanged caps
+        run: |
+          set -o pipefail
+          mkdir -p artifacts
+          python -m benchmarks.one.one_g02_bounded_surprise_pooling | tee artifacts/one_g02_bounded_surprise_pooling.json
       - name: Run native writer stage-owner profile
         run: |
           set -o pipefail
@@ -75,5 +98,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: one-g02-native-writer-stage-owner-${{ env.EVIDENCE_HEAD }}
-          path: artifacts/one_g02_native_writer_stage_owner.json
+          path: artifacts/*.json
           if-no-files-found: warn
