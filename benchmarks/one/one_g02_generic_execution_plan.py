@@ -55,12 +55,13 @@ def _program(family: str, size: int) -> Program:
         output = bytes((x + y + z) & 0xFF for x, y, z in zip(a, b, c))
         nodes = (Node("surprise", surprise=a), Node("surprise", surprise=b), Node("surprise", surprise=c), Node("add8", refs=(Ref(0), Ref(1), Ref(2)), declared_length=size))
     elif family == "shared_basis":
-        half = size // 2
-        basis = seed[:half]
-        repeated = basis * 2
+        # Non-degenerate mixed Law: 3/4 reconstructed from one basis and 1/4 Fill.
+        basis_len = size // 4
+        basis = seed[:basis_len]
+        repeated = basis * 3
         patch = bytes([0x33]) * (size - len(repeated))
         output = repeated + patch
-        nodes = (Node("surprise", surprise=basis), Node("repeat", refs=(Ref(0),), count=2, declared_length=len(repeated)), Node("fill", count=len(patch), value=0x33), Node("concat", refs=(Ref(1), Ref(2)), declared_length=len(output)))
+        nodes = (Node("surprise", surprise=basis), Node("repeat", refs=(Ref(0),), count=3, declared_length=len(repeated)), Node("fill", count=len(patch), value=0x33), Node("concat", refs=(Ref(1), Ref(2)), declared_length=len(output)))
     else:
         raise AssertionError(family)
 
@@ -69,6 +70,20 @@ def _program(family: str, size: int) -> Program:
 
 def _median(values):
     return statistics.median(values)
+
+
+def decide(rows, semantic_ok: bool) -> str:
+    expected = {(size, family) for size in SIZES for family in FAMILIES}
+    observed = {(row["size"], row["family"]) for row in rows}
+    exact = observed == expected and len(rows) == len(expected)
+    if not semantic_ok or not exact:
+        return "INVALIDATE_GENERIC_EXECUTION_PLAN"
+    decisive = [row for row in rows if row["size"] == 1024 * 1024]
+    all_bounded = all(row["wall_ratio"] <= REPLAY_MAX and row["cpu_ratio"] <= REPLAY_MAX for row in decisive)
+    wins = sum(row["wall_ratio"] <= MATERIAL_WIN_MAX and row["cpu_ratio"] <= MATERIAL_WIN_MAX for row in rows)
+    if all_bounded and wins >= MIN_MATERIAL_WINS:
+        return "ADVANCE_GENERIC_EXECUTION_PLAN"
+    return "HOLD_GENERIC_EXECUTION_PLAN"
 
 
 def run():
@@ -91,10 +106,7 @@ def run():
             plan_wall = []
             plan_cpu = []
             for rep in range(REPETITIONS):
-                if rep & 1:
-                    order = ("plan", "ref")
-                else:
-                    order = ("ref", "plan")
+                order = ("plan", "ref") if rep & 1 else ("ref", "plan")
                 for arm in order:
                     w0 = time.perf_counter_ns()
                     c0 = time.process_time_ns()
@@ -128,16 +140,10 @@ def run():
                 "compile_break_even_replays_cpu": (compile_cpu / max(1, rc - pc)) if pc < rc else None,
             })
 
-    exact = {(r["size"], r["family"]) for r in rows} == {(s, f) for s in SIZES for f in FAMILIES} and len(rows) == len(SIZES) * len(FAMILIES)
-    decisive = [r for r in rows if r["size"] == 1024 * 1024]
-    all_bounded = all(r["wall_ratio"] <= REPLAY_MAX and r["cpu_ratio"] <= REPLAY_MAX for r in decisive)
-    wins = sum(r["wall_ratio"] <= MATERIAL_WIN_MAX and r["cpu_ratio"] <= MATERIAL_WIN_MAX for r in rows)
-    if not semantic_ok or not exact:
-        decision = "INVALIDATE_GENERIC_EXECUTION_PLAN"
-    elif all_bounded and wins >= MIN_MATERIAL_WINS:
-        decision = "ADVANCE_GENERIC_EXECUTION_PLAN"
-    else:
-        decision = "HOLD_GENERIC_EXECUTION_PLAN"
+    expected = {(size, family) for size in SIZES for family in FAMILIES}
+    exact = {(row["size"], row["family"]) for row in rows} == expected and len(rows) == len(expected)
+    wins = sum(row["wall_ratio"] <= MATERIAL_WIN_MAX and row["cpu_ratio"] <= MATERIAL_WIN_MAX for row in rows)
+    decision = decide(rows, semantic_ok)
     payload = {"decision": decision, "semantic_ok": semantic_ok, "exact_matrix": exact, "repetitions": REPETITIONS, "replay_max": REPLAY_MAX, "material_win_max": MATERIAL_WIN_MAX, "min_material_wins": MIN_MATERIAL_WINS, "material_wins": wins, "rows": rows}
     print(json.dumps(payload, indent=2, sort_keys=True))
     return 0 if decision == "ADVANCE_GENERIC_EXECUTION_PLAN" else 1

@@ -1,8 +1,12 @@
 # ONE-G0.2 Generic Execution Plan — hostile review before result
 
-Status: preregistered, no hosted performance verdict yet.
+Status: preregistered, no admissible hosted performance verdict yet.
 
 The candidate is intentionally broader than the retired terminal-specific line: every existing ONE operation participates in the same compiled representation and executor. The benchmark includes XOR/add8 and sliced/multi-parent composition so a Fill-specific implementation cannot pass by accident.
+
+## Pre-result correction
+
+The first committed benchmark at `efe61e28b031c3353541956b3e9536e083349038` accidentally made the `shared_basis` Fill zero-length because `basis * 2` already filled the output. That source is **promotion-inadmissible even if CI later reports green**. Before accepting hosted timing evidence, the family was repaired to use a one-quarter basis repeated three times plus a non-zero one-quarter Fill. No threshold or decision criterion moved. Adversarial tests were also added for incomplete/duplicate matrices, semantic failure, a 1.051x decisive regression, and insufficient material wins.
 
 Hostile constraints:
 
