@@ -1,7 +1,7 @@
 """ONE-G0.2 observer-run -> generic fill-Law compiler falsifier.
 
 Frozen by ONE_G02_OBSERVER_RUN_FILL_LAW_PREREG_2026-09-08.md.
-Both arms pay the same native observation/materialization and root hashing.  Only the
+Both arms pay the same native observation/materialization and root hashing. Only the
 candidate consumes qualifying maximal-run evidence into existing fill/concat Law.
 """
 from __future__ import annotations
@@ -76,29 +76,50 @@ def _writer_once(source: bytes, target: bytes, candidate: bool):
     return program, wire, wire_stats, compiler_stats, observation
 
 
-def _time(source: bytes, target: bytes, candidate: bool) -> tuple[float, float]:
-    walls: list[int] = []
-    cpus: list[int] = []
-    value = None
+def _time_pair(source: bytes, target: bytes) -> tuple[float, float, float, float]:
+    control_walls: list[int] = []
+    control_cpus: list[int] = []
+    candidate_walls: list[int] = []
+    candidate_cpus: list[int] = []
+    control_value = None
+    candidate_value = None
     was_enabled = gc.isenabled()
     try:
         if was_enabled:
             gc.disable()
-        for _ in range(REPETITIONS):
-            value = None
-            c0 = time.process_time_ns()
-            w0 = time.perf_counter_ns()
-            value = _writer_once(source, target, candidate)
-            w1 = time.perf_counter_ns()
-            c1 = time.process_time_ns()
-            walls.append(w1 - w0)
-            cpus.append(c1 - c0)
+        for rep in range(REPETITIONS):
+            order = (False, True) if rep % 2 == 0 else (True, False)
+            for candidate in order:
+                # Destroy the preceding same-arm result before either clock starts so
+                # Python object/wire teardown cannot be billed to the opposite arm.
+                if candidate:
+                    candidate_value = None
+                else:
+                    control_value = None
+                c0 = time.process_time_ns()
+                w0 = time.perf_counter_ns()
+                value = _writer_once(source, target, candidate)
+                w1 = time.perf_counter_ns()
+                c1 = time.process_time_ns()
+                if candidate:
+                    candidate_value = value
+                    candidate_walls.append(w1 - w0)
+                    candidate_cpus.append(c1 - c0)
+                else:
+                    control_value = value
+                    control_walls.append(w1 - w0)
+                    control_cpus.append(c1 - c0)
     finally:
         if was_enabled:
             gc.enable()
-    if value is None:
-        raise AssertionError("writer timing produced no value")
-    return float(statistics.median(walls)), float(statistics.median(cpus))
+    if control_value is None or candidate_value is None:
+        raise AssertionError("paired writer timing produced no value")
+    return (
+        float(statistics.median(control_walls)),
+        float(statistics.median(control_cpus)),
+        float(statistics.median(candidate_walls)),
+        float(statistics.median(candidate_cpus)),
+    )
 
 
 def _child(size: int, family: str) -> dict:
@@ -116,13 +137,14 @@ def _child(size: int, family: str) -> dict:
 
     control_outputs, control_vm = evaluate(decode_program(control_wire))
     candidate_outputs, candidate_vm = evaluate(decode_program(candidate_wire))
-    reconstruction_exact = (
-        control_outputs == candidate_outputs == {"previous": source, "current": target}
-    )
+    reconstruction_exact = control_outputs == candidate_outputs == {"previous": source, "current": target}
+    expected_previous_digest = sha256(source).hexdigest()
+    expected_current_digest = sha256(target).hexdigest()
     roots_exact = (
-        candidate_program.roots["previous"].sha256 == sha256(source).hexdigest()
-        and candidate_program.roots["current"].sha256 == sha256(target).hexdigest()
-        and control_program.roots == candidate_program.roots
+        control_program.roots["previous"].sha256 == candidate_program.roots["previous"].sha256 == expected_previous_digest
+        and control_program.roots["current"].sha256 == candidate_program.roots["current"].sha256 == expected_current_digest
+        and control_program.roots["previous"].length == candidate_program.roots["previous"].length == len(source)
+        and control_program.roots["current"].length == candidate_program.roots["current"].length == len(target)
     )
     ops_exact = all(node.op in ALLOWED_CURRENT_OPS for node in candidate_program.nodes)
     caps_ok = (
@@ -133,25 +155,9 @@ def _child(size: int, family: str) -> dict:
     if not semantic_ok:
         raise AssertionError(f"observer-run/fill semantic mismatch: {size=} {family=}")
 
-    # Alternate which complete writer arm is measured first across repetitions by running
-    # two independently medianed loops in a row-isolated child; the subprocess boundary
-    # is the primary defense against cross-row allocator state.
-    control_wall, control_cpu = _time(source, target, False)
-    candidate_wall, candidate_cpu = _time(source, target, True)
-
-    wire_ratio = candidate_ws.total_bytes / control_ws.total_bytes
-    surprise_ratio = candidate_ws.surprise_bytes / control_ws.surprise_bytes
-    reader_work_ratio = candidate_vm.work_bytes / control_vm.work_bytes if control_vm.work_bytes else 1.0
-    wall_ratio = candidate_wall / control_wall
-    cpu_ratio = candidate_cpu / control_cpu
-    bytes_eliminated = control_ws.total_bytes - candidate_ws.total_bytes
-    added_wall_ms = (candidate_wall - control_wall) / 1e6
-    added_cpu_ms = (candidate_cpu - control_cpu) / 1e6
-
-    return {
-        "bytes": size,
-        "family": family,
-        "semantic_ok": semantic_ok,
+    # Preserve scalar authority, then release the large semantic-probe objects before
+    # timing so retained Programs/wires do not perturb the allocation experiment.
+    result_scalars = {
         "native_observer_runs": len(candidate_observation.runs),
         "qualifying_fill_runs": candidate_cs.qualifying_runs,
         "fill_bytes": candidate_cs.fill_bytes,
@@ -161,12 +167,35 @@ def _child(size: int, family: str) -> dict:
         "concat_refs": candidate_cs.concat_refs,
         "control_wire_bytes": control_ws.total_bytes,
         "candidate_wire_bytes": candidate_ws.total_bytes,
-        "candidate_over_control_wire": wire_ratio,
         "control_surprise_bytes": control_ws.surprise_bytes,
         "candidate_surprise_bytes": candidate_ws.surprise_bytes,
-        "candidate_over_control_surprise": surprise_ratio,
         "control_reader_work_bytes": control_vm.work_bytes,
         "candidate_reader_work_bytes": candidate_vm.work_bytes,
+    }
+    del control_program, control_wire, candidate_program, candidate_wire, control_observation, candidate_observation
+    gc.collect()
+
+    control_wall, control_cpu, candidate_wall, candidate_cpu = _time_pair(source, target)
+
+    wire_ratio = result_scalars["candidate_wire_bytes"] / result_scalars["control_wire_bytes"]
+    surprise_ratio = result_scalars["candidate_surprise_bytes"] / result_scalars["control_surprise_bytes"]
+    reader_work_ratio = (
+        result_scalars["candidate_reader_work_bytes"] / result_scalars["control_reader_work_bytes"]
+        if result_scalars["control_reader_work_bytes"] else 1.0
+    )
+    wall_ratio = candidate_wall / control_wall
+    cpu_ratio = candidate_cpu / control_cpu
+    bytes_eliminated = result_scalars["control_wire_bytes"] - result_scalars["candidate_wire_bytes"]
+    added_wall_ms = (candidate_wall - control_wall) / 1e6
+    added_cpu_ms = (candidate_cpu - control_cpu) / 1e6
+
+    return {
+        "bytes": size,
+        "family": family,
+        "semantic_ok": semantic_ok,
+        **result_scalars,
+        "candidate_over_control_wire": wire_ratio,
+        "candidate_over_control_surprise": surprise_ratio,
         "candidate_over_control_reader_work": reader_work_ratio,
         "control_wall_median_ns": control_wall,
         "candidate_wall_median_ns": candidate_wall,
