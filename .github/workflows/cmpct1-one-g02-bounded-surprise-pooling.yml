@@ -1,0 +1,71 @@
+name: CMPCT1 ONE-G0.2 bounded Surprise pooling
+
+on:
+  push:
+    branches:
+      - research/cmpct1
+  pull_request:
+    branches:
+      - research/cmpct1
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  falsify:
+    runs-on: ubuntu-latest
+    env:
+      EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - name: Checkout exact evidence head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 1
+
+      - name: Bind exact source identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          echo "EVIDENCE_HEAD=$EVIDENCE_HEAD"
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Provision repository test environment
+        run: python -m pip install -e '.[test]'
+
+      - name: Reachability guard
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f experiments/one/bounded_surprise_pool.py
+          test -f tests/one/test_bounded_surprise_pool.py
+          test -f benchmarks/one/one_g02_bounded_surprise_pooling.py
+          python - <<'PY'
+          from benchmarks.one.one_g02_bounded_surprise_pooling import SIZES
+          from experiments.one.ir import Limits
+          assert (1 << 20) in SIZES
+          assert Limits().max_nodes == 4096
+          PY
+
+      - name: Semantic and hostile resource tests
+        run: python -m pytest -q tests/one/test_bounded_surprise_pool.py tests/one/test_range_vm.py
+
+      - name: Run frozen bounded Surprise pooling falsifier
+        shell: bash
+        run: |
+          set -o pipefail
+          python -m benchmarks.one.one_g02_bounded_surprise_pooling | tee one-g02-bounded-surprise-pooling-${EVIDENCE_HEAD}.json
+
+      - name: Preserve exact-head evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: one-g02-bounded-surprise-pooling-${{ env.EVIDENCE_HEAD }}
+          path: one-g02-bounded-surprise-pooling-${{ env.EVIDENCE_HEAD }}.json
+          if-no-files-found: warn
