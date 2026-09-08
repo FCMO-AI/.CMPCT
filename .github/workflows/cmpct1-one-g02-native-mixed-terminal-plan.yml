@@ -2,7 +2,7 @@ name: CMPCT1 ONE-G0.2 native mixed terminal plan
 on:
   push:
     branches: [research/cmpct1]
-    paths:
+    paths: &mixed_paths
       - 'experiments/one/native_mixed_terminal_plan.py'
       - 'experiments/one/native_mixed_terminal_plan_kernel.c'
       - 'benchmarks/one/one_g02_native_mixed_terminal_plan.py'
@@ -10,6 +10,8 @@ on:
       - 'docs/one/prereg/ONE_G02_NATIVE_MIXED_TERMINAL_PLAN_PREREG_2026-09-08.md'
       - 'docs/one/evidence/ONE_G02_NATIVE_MIXED_TERMINAL_PLAN_HOSTILE_REVIEW_2026-09-08.md'
       - '.github/workflows/cmpct1-one-g02-native-mixed-terminal-plan.yml'
+  pull_request:
+    paths: *mixed_paths
   workflow_dispatch:
 permissions:
   contents: read
