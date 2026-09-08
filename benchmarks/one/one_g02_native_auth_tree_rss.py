@@ -4,7 +4,6 @@ from __future__ import annotations
 import argparse
 import json
 import os
-import random
 import resource
 import subprocess
 import sys
@@ -21,11 +20,19 @@ LARGE_HARD_MAX=1.05
 LARGE_GOOD_MAX=0.90
 LARGE_GOOD_REQUIRED=2
 SMALL_MAX=1.10
-SEED=0xA17A551
+_DATA_BLOCK=bytes(((i*131) ^ (i>>3) ^ 0x5A) & 0xFF for i in range(4096))
 
 
 def _data(size:int)->bytes:
-    return random.Random(SEED ^ size).randbytes(size)
+    """Construct the source without a source-sized temporary integer/container.
+
+    The root sizes are exact multiples of the frozen 4 KiB block, so multiplication
+    creates the one retained source object directly.  This keeps the pre-tree RSS
+    high-water mark from being polluted by Random.randbytes/getrandbits temporaries.
+    """
+    if size % len(_DATA_BLOCK):
+        raise ValueError("frozen RSS sizes must be 4 KiB aligned")
+    return _DATA_BLOCK * (size // len(_DATA_BLOCK))
 
 
 def _rss_kib()->int:
