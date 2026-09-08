@@ -102,17 +102,25 @@ def _marshal(state) -> Observation:
 
 
 def _median_timing(fn):
+    """Measure construction/work only; retire the previous result after the timer.
+
+    Several component calls return large Python/ctypes objects. Assigning directly over
+    the previous result inside the timed interval would charge that previous object's
+    teardown to the next sample. The preregistered components are construction/work
+    costs, so retain the new result through timer stop and move ownership afterward.
+    """
     wall = []
     cpu = []
     last = None
     for _ in range(REPETITIONS):
         c0 = time.process_time_ns()
         w0 = time.perf_counter_ns()
-        last = fn()
+        current = fn()
         w1 = time.perf_counter_ns()
         c1 = time.process_time_ns()
         wall.append(w1 - w0)
         cpu.append(c1 - c0)
+        last = current
     return float(statistics.median(wall)), float(statistics.median(cpu)), last
 
 
