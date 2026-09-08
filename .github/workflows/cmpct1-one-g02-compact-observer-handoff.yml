@@ -12,6 +12,7 @@ on:
       - tests/one/test_native_observe_view.py
       - tests/one/test_compact_observer_handoff_writer.py
       - docs/one/evidence/ONE_G02_COMPACT_OBSERVER_HANDOFF_WRITER_PREREG_2026-09-08.md
+      - docs/one/evidence/ONE_G02_COMPACT_OBSERVER_HANDOFF_HOSTILE_REVIEW_PRE_RESULT_2026-09-08.md
       - .github/workflows/cmpct1-one-g02-compact-observer-handoff.yml
   workflow_dispatch:
 
@@ -36,6 +37,7 @@ jobs:
           test -f benchmarks/one/one_g02_compact_observer_handoff_writer.py
           test -f tests/one/test_native_observe_view.py
           test -f tests/one/test_compact_observer_handoff_writer.py
+          test -f docs/one/evidence/ONE_G02_COMPACT_OBSERVER_HANDOFF_HOSTILE_REVIEW_PRE_RESULT_2026-09-08.md
           grep -q '1 << 20' benchmarks/one/one_g02_compact_observer_handoff_writer.py
 
       - name: Set up Python 3.12
