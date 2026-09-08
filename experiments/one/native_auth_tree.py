@@ -75,24 +75,21 @@ def _offsets(widths: tuple[int, ...]) -> tuple[int, ...]:
     return tuple(out)
 
 
-def prove_range_packed(data: bytes, tree: NativeAuthTree, start: int, length: int) -> RangeProof:
-    """Build the existing generic RangeProof directly from packed native tree state.
-
-    Only sibling digests required by the requested range are read from ``packed_nodes``.
-    Selected leaf hashes are deliberately not read: the verifier recomputes them from the
-    authenticated payload bytes exactly like the independent Python reference path.
-    """
+def _proof_leaf_interval(data: bytes, tree: NativeAuthTree, start: int, length: int) -> tuple[int,int]:
     if type(data) is not bytes:
         raise TypeError("data must be bytes")
     if start < 0 or length < 0 or start + length > len(data) or len(data) != tree.total_len:
         raise ValueError("invalid proof range")
     if length == 0:
         first=min(start // tree.leaf_bytes,tree.leaf_count-1)
-        selected={first}
-    else:
-        first=start // tree.leaf_bytes
-        last=(start+length-1)//tree.leaf_bytes
-        selected=set(range(first,last+1))
+        return first,first
+    return start // tree.leaf_bytes,(start+length-1)//tree.leaf_bytes
+
+
+def prove_range_packed(data: bytes, tree: NativeAuthTree, start: int, length: int) -> RangeProof:
+    """Original set-based packed proof candidate retained as exact negative evidence."""
+    first,last=_proof_leaf_interval(data,tree,start,length)
+    selected=set(range(first,last+1))
     payloads=tuple(data[i*tree.leaf_bytes:min(len(data),(i+1)*tree.leaf_bytes)] for i in sorted(selected))
     siblings=[]
     current=set(selected)
@@ -105,6 +102,33 @@ def prove_range_packed(data: bytes, tree: NativeAuthTree, start: int, length: in
         for idx in sorted(needed):
             siblings.append((level_no,idx,tree.digest_at(level_no,idx)))
         current={idx//2 for idx in current}
+    return RangeProof(tree.total_len,tree.leaf_bytes,first,payloads,tuple(siblings))
+
+
+def prove_range_packed_interval(data: bytes, tree: NativeAuthTree, start: int, length: int) -> RangeProof:
+    """Generate the same RangeProof using contiguous-interval boundary arithmetic.
+
+    Requested leaves are contiguous. At each binary-tree level their ancestors remain a
+    contiguous interval, so only the two interval boundaries can require external sibling
+    hashes. This removes per-level set construction/scanning while retaining byte-identical
+    proof ordering and reading exactly the same packed sibling digests.
+    """
+    first,last=_proof_leaf_interval(data,tree,start,length)
+    payloads=tuple(
+        data[i*tree.leaf_bytes:min(len(data),(i+1)*tree.leaf_bytes)]
+        for i in range(first,last+1)
+    )
+    siblings=[]
+    lo=first; hi=last
+    for level_no,width in enumerate(tree.level_widths[:-1]):
+        # sorted(set-based-needed) is exactly left boundary first, then right boundary.
+        if lo & 1:
+            left=lo-1
+            siblings.append((level_no,left,tree.digest_at(level_no,left)))
+        right=hi+1
+        if not (hi & 1) and right < width:
+            siblings.append((level_no,right,tree.digest_at(level_no,right)))
+        lo //= 2; hi //= 2
     return RangeProof(tree.total_len,tree.leaf_bytes,first,payloads,tuple(siblings))
 
 
