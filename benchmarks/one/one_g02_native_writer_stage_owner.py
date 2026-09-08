@@ -25,10 +25,8 @@ from benchmarks.one.one_g02_end_to_end_direct_emitter_writer import (
     _plan_signature,
     _relation_cases,
 )
-from benchmarks.one.one_g02_post_segment_control_cost_owner import (
-    _literal_program,
-    _program_from_plan,
-)
+from benchmarks.one.one_g02_post_segment_control_cost_owner import _literal_program
+from experiments.one.bounded_surprise_pool import SurprisePoolStats, program_from_plan_pooled
 from experiments.one.growable_wire import _encode_program_growable_prevalidated
 from experiments.one.ir import Ref, Root
 from experiments.one.native_observe import observe_native
@@ -68,9 +66,13 @@ def _composed_once(admission_fn, segment_fn, source, target, src_arr, dst_arr, s
     observation = observe_native(target)
     result, gate_reads, gate_used, enabled = _admit(admission_fn, src_arr, dst_arr, len(source))
     segment_stats = SegmentStats()
+    pool_stats = None
     if enabled:
         plan = _native_plan(segment_fn, src_arr, dst_arr, len(source), seg_buf, segment_stats)
-        program, hierarchy_depth = _program_from_plan(source, target, plan, previous_root, current_digest)
+        program, pool_stats = program_from_plan_pooled(
+            source, target, plan, previous_root, current_digest
+        )
+        hierarchy_depth = pool_stats.hierarchy_depth
     else:
         plan = ()
         program, hierarchy_depth = _literal_program(source, target, previous_root, current_digest)
@@ -88,6 +90,7 @@ def _composed_once(admission_fn, segment_fn, source, target, src_arr, dst_arr, s
         plan,
         segment_stats,
         hierarchy_depth,
+        pool_stats,
     )
 
 
@@ -144,15 +147,20 @@ def _profile_row(admission_fn, segment_fn, source: bytes, target: bytes):
 
             if enabled:
                 built, w, c = _timed(
-                    lambda: _program_from_plan(source, target, plan, previous_root, current_digest)
+                    lambda: program_from_plan_pooled(
+                        source, target, plan, previous_root, current_digest
+                    )
                 )
+                program, pool_stats = built
+                hierarchy_depth = pool_stats.hierarchy_depth
             else:
                 built, w, c = _timed(
                     lambda: _literal_program(source, target, previous_root, current_digest)
                 )
+                program, hierarchy_depth = built
+                pool_stats = None
             wall["program_construction"].append(w)
             cpu["program_construction"].append(c)
-            program, hierarchy_depth = built
 
             _, w, c = _timed(program.validate_shape)
             wall["validation"].append(w)
@@ -173,6 +181,7 @@ def _profile_row(admission_fn, segment_fn, source: bytes, target: bytes):
                 "segment_stats": segment_stats,
                 "program": program,
                 "hierarchy_depth": hierarchy_depth,
+                "pool_stats": pool_stats,
                 "wire": wire,
                 "stats": stats,
                 "previous_digest": previous_digest,
@@ -269,6 +278,7 @@ def run():
                 plan = last["plan"]
                 observation = last["observation"]
                 segment_stats = last["segment_stats"]
+                pool_stats: SurprisePoolStats | None = last["pool_stats"]
 
                 if enabled:
                     this_oracle = _plan_signature(plan) == _plan_signature(_oracle_plan(source, target))
@@ -308,6 +318,10 @@ def run():
                     "native_plan_matches_python_oracle": this_oracle,
                     "hierarchy_depth": last["hierarchy_depth"],
                     "program_nodes": len(program.nodes),
+                    "pooled_groups": pool_stats.groups if pool_stats is not None else 0,
+                    "pooled_group_span_bytes": pool_stats.group_span_bytes if pool_stats is not None else 0,
+                    "pooled_surprise_nodes": pool_stats.surprise_pool_nodes if pool_stats is not None else 0,
+                    "pooled_max_surprise_bytes": pool_stats.max_surprise_pool_bytes if pool_stats is not None else 0,
                     "canonical_wire_bytes": stats.total_bytes,
                     "surprise_bytes": stats.surprise_bytes,
                     "control_integrity_bytes": stats.control_integrity_bytes,
@@ -330,12 +344,13 @@ def run():
         else:
             decision, ownership_counts = _decision(rows)
         return {
-            "schema": "cmpct-one-g02-native-writer-stage-owner-v3",
+            "schema": "cmpct-one-g02-native-writer-stage-owner-v4",
             "experimental_version": "ONE-G0.2",
             "source_sha": os.environ.get("EVIDENCE_HEAD") or os.environ.get("GITHUB_SHA") or "local-unbound",
             "repetitions": REPETITIONS,
             "profile_sizes": list(PROFILE_SIZES),
             "timing_order": "alternating instrumented/composed",
+            "program_graph_strategy": "bounded output-local Surprise pooling under unchanged hard caps",
             "owner_share_threshold": OWNER_SHARE,
             "cluster_share_threshold": CLUSTER_SHARE,
             "minimum_qualifying_1m_rows": MIN_OWNER_ROWS_1M,
@@ -344,11 +359,12 @@ def run():
             "decision": decision,
             "ownership_counts": ownership_counts,
             "claim_boundary": (
-                "descriptive stage ownership in the current adjacent-version research-writer envelope; "
-                "charges root SHA-256, native fresh observation, relation admission, native segmentation, "
-                "generic Program construction, validation and direct canonical emission; separately reports "
-                "composed-path timing to expose instrumentation distortion; does not establish product writer "
-                "speed, authenticated placement/durability, full arbitrary discovery, or v0.29/v0.30 superiority"
+                "descriptive stage ownership in the current adjacent-version research-writer envelope after "
+                "hard-cap-valid bounded Surprise pooling; charges root SHA-256, native fresh observation, "
+                "relation admission, native segmentation, generic Program construction, validation and direct "
+                "canonical emission; separately reports composed-path timing to expose instrumentation distortion; "
+                "does not establish product writer speed, authenticated placement/durability, full arbitrary "
+                "discovery, or v0.29/v0.30 superiority"
             ),
             "rows": rows,
         }
