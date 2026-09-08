@@ -36,19 +36,22 @@ def _requests(size:int)->tuple[tuple[int,int],...]:
 def _paired(data:bytes,ref_tree,native_tree,start:int,length:int)->tuple[float,float,float,float]:
     for _ in range(WARMUPS):
         prove_range(data,ref_tree,start,length); prove_range_packed_interval(data,native_tree,start,length)
-    rw=[]; rc=[]; nw=[]; nc=[]; previous=None
+    rw=[]; rc=[]; nw=[]; nc=[]
+    result=None
     for rep in range(REPS):
         order=("candidate","reference") if rep & 1 else ("reference","candidate")
         for arm in order:
-            previous=None
+            # Destroy the preceding arm's RangeProof before either timer starts.  The
+            # assignment below would otherwise decref the old object inside the next
+            # arm's interval, contaminating a falsifier whose signal is only a few percent.
+            result=None
             c0=time.process_time_ns(); w0=time.perf_counter_ns()
             result=(prove_range_packed_interval(data,native_tree,start,length)
                     if arm == "candidate" else prove_range(data,ref_tree,start,length))
             w1=time.perf_counter_ns(); c1=time.process_time_ns()
             if arm == "candidate": nw.append(w1-w0); nc.append(c1-c0)
             else: rw.append(w1-w0); rc.append(c1-c0)
-            previous=result
-    previous=None
+    result=None
     return median(rw),median(rc),median(nw),median(nc)
 
 
