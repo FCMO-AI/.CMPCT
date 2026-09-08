@@ -1,0 +1,67 @@
+name: CMPCT1 ONE-G0.2 native auth-tree RSS
+
+on:
+  push:
+    branches:
+      - research/cmpct1
+    paths:
+      - 'experiments/one/auth_tree.py'
+      - 'experiments/one/native_auth_tree.py'
+      - 'experiments/one/native_auth_tree_kernel.c'
+      - 'benchmarks/one/one_g02_native_auth_tree_rss.py'
+      - 'tests/one/test_native_auth_tree.py'
+      - 'tests/one/test_native_auth_tree_rss.py'
+      - 'docs/one/prereg/ONE_G02_NATIVE_AUTH_TREE_RSS_PREREG_2026-09-08.md'
+      - 'docs/one/evidence/ONE_G02_NATIVE_AUTH_TREE_RSS_HOSTILE_REVIEW_2026-09-08.md'
+      - '.github/workflows/cmpct1-one-g02-native-auth-tree-rss.yml'
+  workflow_dispatch:
+
+jobs:
+  native-auth-tree-rss:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      EVIDENCE_HEAD: ${{ github.sha }}
+    steps:
+      - name: Checkout exact source SHA
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+
+      - name: Bind exact source and frozen contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          test -f docs/one/prereg/ONE_G02_NATIVE_AUTH_TREE_RSS_PREREG_2026-09-08.md
+          test -f docs/one/evidence/ONE_G02_NATIVE_AUTH_TREE_RSS_HOSTILE_REVIEW_2026-09-08.md
+          grep -q 'DECISION_SIZE=16 << 20' benchmarks/one/one_g02_native_auth_tree_rss.py
+          grep -q 'LARGE_HARD_MAX=1.05' benchmarks/one/one_g02_native_auth_tree_rss.py
+          grep -q 'LARGE_GOOD_REQUIRED=2' benchmarks/one/one_g02_native_auth_tree_rss.py
+          grep -q 'REPS=7' benchmarks/one/one_g02_native_auth_tree_rss.py
+          ! grep -q 'randbytes' benchmarks/one/one_g02_native_auth_tree_rss.py
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install test environment
+        run: python -m pip install -e '.[test]'
+
+      - name: Prove semantics and RSS decision law
+        run: python -m pytest -q tests/one/test_native_auth_tree.py tests/one/test_native_auth_tree_rss.py
+
+      - name: Run frozen fresh-process RSS falsifier
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/one
+          python -m benchmarks.one.one_g02_native_auth_tree_rss | tee "artifacts/one/native-auth-tree-rss-${EVIDENCE_HEAD}.json"
+
+      - name: Preserve exact-head evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: one-g02-native-auth-tree-rss-${{ env.EVIDENCE_HEAD }}
+          path: artifacts/one/native-auth-tree-rss-${{ env.EVIDENCE_HEAD }}.json
+          if-no-files-found: warn
