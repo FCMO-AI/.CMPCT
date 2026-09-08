@@ -56,7 +56,17 @@ def _paired(data:bytes,ref_tree,native_tree,start:int,length:int)->tuple[float,f
 
 
 def _decide(rows:list[dict[str,object]])->str:
-    if len(rows) != len(SIZES)*len(LEAVES)*len(REQUESTS):
+    expected={
+        (size,leaf,start,length)
+        for size in SIZES
+        for leaf in LEAVES
+        for start,length in _requests(size)
+    }
+    observed={
+        (int(r["size"]),int(r["leaf_bytes"]),int(r["start"]),int(r["length"]))
+        for r in rows
+    }
+    if len(rows) != len(expected) or observed != expected:
         return "INVALIDATE_INTERVAL_PACKED_AUTH_PROOF"
     if not all(bool(r["semantic_ok"]) and int(r["tree_digest_bytes_read"]) == int(r["proof_hash_bytes"]) for r in rows):
         return "INVALIDATE_INTERVAL_PACKED_AUTH_PROOF"
