@@ -54,6 +54,24 @@ def _median_stage(fn)->tuple[float,float]:
     return median(wall),median(cpu)
 
 
+def _paired_stages(proof_fn,verify_fn)->tuple[float,float,float,float]:
+    for _ in range(WARMUPS):
+        result=proof_fn(); result=None
+        result=verify_fn(); result=None
+    pw=[]; pc=[]; vw=[]; vc=[]; result=None
+    for rep in range(REPS):
+        order=("verify","proof") if rep & 1 else ("proof","verify")
+        for stage in order:
+            result=None
+            c0=time.process_time_ns(); w0=time.perf_counter_ns()
+            result=proof_fn() if stage == "proof" else verify_fn()
+            w1=time.perf_counter_ns(); c1=time.process_time_ns()
+            if stage == "proof": pw.append(w1-w0); pc.append(c1-c0)
+            else: vw.append(w1-w0); vc.append(c1-c0)
+    result=None
+    return median(pw),median(pc),median(vw),median(vc)
+
+
 def _decide(rows:list[dict[str,object]])->str:
     expected={(pipeline,leaf,start,length) for pipeline in PIPELINES for leaf in LEAVES for start,length in _requests(SIZE)}
     observed={(str(r["pipeline"]),int(r["leaf_bytes"]),int(r["start"]),int(r["length"])) for r in rows}
@@ -93,8 +111,9 @@ def run()->dict[str,object]:
             for pipeline in PIPELINES:
                 tree_root=ref_tree.root if pipeline == "reference" else native_tree.root
                 stable_proof=ref_proof if pipeline == "reference" else packed_proof
-                proof_wall,proof_cpu=_median_stage(lambda p=pipeline,s=start,l=length: _proof_fn(p,data,ref_tree,native_tree,s,l))
-                verify_wall,verify_cpu=_median_stage(lambda pr=stable_proof,r=tree_root,s=start,l=length: verify_range(pr,r,s,l))
+                proof_fn=lambda p=pipeline,s=start,l=length: _proof_fn(p,data,ref_tree,native_tree,s,l)
+                verify_fn=lambda pr=stable_proof,r=tree_root,s=start,l=length: verify_range(pr,r,s,l)
+                proof_wall,proof_cpu,verify_wall,verify_cpu=_paired_stages(proof_fn,verify_fn)
                 composed_wall,composed_cpu=_median_stage(lambda p=pipeline,r=tree_root,s=start,l=length: verify_range(_proof_fn(p,data,ref_tree,native_tree,s,l),r,s,l))
                 wall_sum=proof_wall+verify_wall; cpu_sum=proof_cpu+verify_cpu
                 rows.append({
