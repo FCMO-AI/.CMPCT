@@ -27,7 +27,7 @@ from benchmarks.one.one_g02_post_segment_control_cost_owner import _literal_prog
 from experiments.one.bounded_surprise_pool import program_from_plan_pooled
 from experiments.one.growable_wire import _encode_program_growable_prevalidated
 from experiments.one.ir import Ref, Root
-from experiments.one.native_observe import observe_native
+from experiments.one.native_observe import _CRun, _CReuse, observe_native
 from experiments.one.native_observe_view import NativeObservationView, observe_native_view
 from experiments.one.vm import evaluate
 from experiments.one.wire import decode_program
@@ -65,10 +65,20 @@ def _target(family: str, size: int) -> bytes:
     if family == "random":
         return random.Random(31000 + size).randbytes(size)
     if family == "near_repeats":
-        out = bytearray(_repeat_to_size(bytes(range(64)), size))
-        for i in range(31, size, 997):
-            out[i] ^= (0x5A + i) & 0xFF
-        return bytes(out)
+        # Low-opportunity control: chunks share an obvious motif but each aligned
+        # observer chunk carries a unique block id, so resemblance must not collapse
+        # into exact fixed-chunk reuse merely because the test generator repeated one
+        # identical 64-byte block.
+        base = bytearray(bytes(range(64)))
+        out = bytearray()
+        block = 0
+        while len(out) < size:
+            chunk = bytearray(base)
+            chunk[:8] = block.to_bytes(8, "little", signed=False)
+            chunk[17] ^= (block * 29) & 0xFF
+            out.extend(chunk)
+            block += 1
+        return bytes(out[:size])
     if family == "compressed_like":
         rng = random.Random(32000 + size)
         chunks = bytearray()
@@ -109,6 +119,8 @@ def _writer_once(admission_fn, segment_fn, source: bytes, target: bytes, src_arr
     program.validate_shape()
     wire, wire_stats = _encode_program_growable_prevalidated(program)
 
+    run_width = ctypes.sizeof(_CRun)
+    reuse_width = ctypes.sizeof(_CReuse)
     if compact:
         assert isinstance(observer, NativeObservationView)
         observer_counts = (observer.run_count, observer.reuse_count)
@@ -118,8 +130,8 @@ def _writer_once(admission_fn, segment_fn, source: bytes, target: bytes, src_arr
         observer_counts = (len(observer.runs), len(observer.reuse))
         run_capacity = max(1, len(target) // 8 + 2)
         reuse_capacity = max(1, len(target) // 64 + 2)
-        output_capacity_bytes = run_capacity * 24 + reuse_capacity * 24
-        output_used_bytes = (observer_counts[0] + observer_counts[1]) * 24
+        output_capacity_bytes = run_capacity * run_width + reuse_capacity * reuse_width
+        output_used_bytes = observer_counts[0] * run_width + observer_counts[1] * reuse_width
 
     return {
         "wire": wire,
@@ -153,8 +165,6 @@ def _time_pair(ctx):
         for round_index in range(REPETITIONS):
             order = (False, True) if round_index % 2 == 0 else (True, False)
             for compact in order:
-                # Release the prior same-arm result before the next timer so object-graph
-                # teardown cannot be charged to either candidate.
                 if compact:
                     compact_value = None
                 else:
@@ -199,7 +209,6 @@ def _same_writer_result(a, b) -> bool:
 
 
 def run():
-    # Compiler/native-library startup is not writer work.
     observe_native(b"warmup" * 32)
     observe_native_view(b"warmup" * 32)
     admission_fn, segment_fn, td = _build_native()
@@ -213,8 +222,6 @@ def run():
                 dst_arr = (ctypes.c_uint8 * size).from_buffer_copy(target)
                 seg_buf = (Segment * size)()
 
-                # Untimed independent authority: the compact buffer view must carry the
-                # exact same observation before whole-writer timing can be interpreted.
                 eager_observation = observe_native(target)
                 compact_authority = observe_native_view(target)
                 observer_exact = compact_authority.materialize() == eager_observation
