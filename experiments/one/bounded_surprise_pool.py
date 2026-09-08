@@ -9,6 +9,12 @@ output-local group needs two nodes (one Surprise pool plus one concat), while th
 also needs the previous/source node and a final current-root concat.  Choosing a fixed
 span from ``max_output_bytes / max_groups`` therefore keeps every legal output inside the
 existing hard node budget without workload-specific tuning.
+
+A second bound matters on the wire: one concat cannot carry more references than the
+reader's declared node cap.  Extremely fine fragmentation can satisfy the node-count
+geometry while still overflowing that per-node reference envelope.  Such a group is
+selectively Crystallized into explicit Surprise instead of manufacturing an unbounded
+control vector.  This is the ONE Law/Surprise fallback, not a new reader mechanism.
 """
 from __future__ import annotations
 
@@ -31,6 +37,9 @@ class SurprisePoolStats:
     max_surprise_pool_bytes: int
     total_surprise_payload_bytes: int
     hierarchy_depth: int
+    crystallized_groups: int
+    crystallized_bytes: int
+    max_group_refs: int
 
 
 @dataclass(frozen=True)
@@ -151,7 +160,8 @@ def program_from_plan_pooled(
 
     Surprise pieces are pooled only inside contiguous output-local groups.  Ranged refs
     recover their original positions, so no reader discovery or temporal-specific opcode
-    is introduced.
+    is introduced.  If a group's discovered fragmentation would exceed the canonical
+    wire's per-node reference envelope, that group is selectively Crystallized instead.
     """
     if not isinstance(source, bytes) or not isinstance(target, bytes):
         raise OneError("pooled Program source/target must be bytes")
@@ -173,8 +183,36 @@ def program_from_plan_pooled(
     max_pool_bytes = 0
     total_surprise = 0
     any_group_concat = False
+    crystallized_groups = 0
+    crystallized_bytes = 0
+    max_group_refs = 0
+    target_cursor = 0
 
     for group in groups:
+        group_length = sum(length for _kind, _offset, length, _payload in group)
+        if group_length <= 0:
+            raise OneError("bounded Surprise group is empty")
+        group_end = target_cursor + group_length
+        if group_end > len(target):
+            raise OneError("bounded Surprise group exceeds target root")
+        max_group_refs = max(max_group_refs, len(group))
+
+        # The experimental wire rejects concat/xor/add8 nodes whose reference count is
+        # above the declared max_nodes cap.  Node-count pooling alone is therefore not a
+        # complete resource proof.  When discovery fragments one output-local group more
+        # finely than the reader can safely represent, crystallize that group instead of
+        # emitting an oversized control vector.
+        if len(group) > limits.max_nodes:
+            crystallized = target[target_cursor:group_end]
+            node_id = len(nodes)
+            nodes.append(Node("surprise", surprise=crystallized))
+            level.append((Ref(node_id), group_length))
+            crystallized_groups += 1
+            crystallized_bytes += group_length
+            total_surprise += group_length
+            target_cursor = group_end
+            continue
+
         pool = b"".join(payload for kind, _offset, _length, payload in group if kind == "surprise")
         pool_id: int | None = None
         if pool:
@@ -186,7 +224,6 @@ def program_from_plan_pooled(
 
         pool_offset = 0
         refs: list[Ref] = []
-        group_length = 0
         for kind, offset, length, payload in group:
             if kind == "ref":
                 if offset + length > len(source):
@@ -196,7 +233,6 @@ def program_from_plan_pooled(
                 assert pool_id is not None
                 refs.append(Ref(pool_id, pool_offset, length))
                 pool_offset += length
-            group_length += length
         if pool_offset != len(pool):
             raise OneError("pooled Surprise cursor mismatch")
         if not refs:
@@ -210,7 +246,10 @@ def program_from_plan_pooled(
             concat_nodes += 1
             any_group_concat = True
             level.append((Ref(node_id), group_length))
+        target_cursor = group_end
 
+    if target_cursor != len(target):
+        raise OneError("bounded Surprise groups do not cover target root")
     if not level:
         raise OneError("bounded Surprise plan produced no current-root pieces")
     if len(level) == 1:
@@ -238,5 +277,8 @@ def program_from_plan_pooled(
         max_surprise_pool_bytes=max_pool_bytes,
         total_surprise_payload_bytes=total_surprise,
         hierarchy_depth=hierarchy_depth,
+        crystallized_groups=crystallized_groups,
+        crystallized_bytes=crystallized_bytes,
+        max_group_refs=max_group_refs,
     )
     return program, stats
