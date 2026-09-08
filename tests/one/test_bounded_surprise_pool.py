@@ -17,14 +17,26 @@ def _root(source: bytes) -> Root:
     return Root(Ref(0), len(source), sha256(source).hexdigest())
 
 
-def test_pool_geometry_is_structurally_within_hard_node_cap_at_max_output():
+def _ceil_div(value: int, divisor: int) -> int:
+    return (value + divisor - 1) // divisor
+
+
+def test_pool_geometry_matches_independent_resource_math_and_hard_node_cap():
     limits = Limits()
+    expected_max_groups = (limits.max_nodes - 2) // 2
+    expected_span = _ceil_div(limits.max_output_bytes, expected_max_groups)
     for target_length in (1, 4 * 1024, 256 * 1024, 1 << 20, limits.max_output_bytes):
         geometry = pool_geometry(limits, target_length)
+        expected_groups = _ceil_div(target_length, expected_span)
+        expected_worst_nodes = 1 + 2 * expected_groups + 1
+        assert geometry.max_groups == expected_max_groups
+        assert geometry.group_span_bytes == expected_span
+        assert geometry.groups_for_target == expected_groups
+        assert geometry.worst_case_nodes_for_target == expected_worst_nodes
         assert geometry.groups_for_target <= geometry.max_groups
         assert geometry.worst_case_nodes_for_target <= limits.max_nodes
     maximum = pool_geometry(limits, limits.max_output_bytes)
-    assert maximum.groups_for_target == maximum.max_groups
+    assert maximum.groups_for_target == expected_max_groups
     assert maximum.worst_case_nodes_for_target == limits.max_nodes
 
 
@@ -44,6 +56,8 @@ def test_fragmented_1m_reproduces_legacy_node_overflow_and_pooled_program_valida
     assert len(pooled.nodes) <= pooled.limits.max_nodes
     assert stats.groups <= stats.max_groups
     assert stats.max_groups == (pooled.limits.max_nodes - 2) // 2
+    assert stats.crystallized_groups == 0
+    assert stats.max_group_refs <= pooled.limits.max_nodes
 
 
 def test_pooled_program_preserves_surprise_bytes_and_canonical_roundtrip():
@@ -53,16 +67,50 @@ def test_pooled_program_preserves_surprise_bytes_and_canonical_roundtrip():
         previous = _root(source)
         digest = sha256(target).hexdigest()
         legacy, _depth = _program_from_plan(source, target, plan, previous, digest)
-        pooled, _stats = program_from_plan_pooled(source, target, plan, previous, digest)
+        pooled, stats = program_from_plan_pooled(source, target, plan, previous, digest)
 
         legacy_surprise = sum(len(node.surprise) for node in legacy.nodes)
         pooled_surprise = sum(len(node.surprise) for node in pooled.nodes)
+        assert stats.crystallized_groups == 0
         assert pooled_surprise == legacy_surprise
 
         wire, _wire_stats = encode_program(pooled)
         decoded = decode_program(wire)
         outputs, _vm_stats = evaluate(decoded)
         assert outputs == {"previous": source, "current": target}
+
+
+def test_over_fan_in_group_selectively_crystallizes_and_roundtrips():
+    size = 2 * Limits().max_nodes
+    source = bytes((index * 17 + 3) & 0xFF for index in range(size))
+    target_mutable = bytearray(source)
+    for index in range(1, size, 2):
+        target_mutable[index] ^= 0x5A
+    target = bytes(target_mutable)
+    plan = tuple(
+        ("ref", index, 1, b"") if index % 2 == 0 else ("surprise", 0, 1, target[index : index + 1])
+        for index in range(size)
+    )
+
+    pooled, stats = program_from_plan_pooled(
+        source,
+        target,
+        plan,
+        _root(source),
+        sha256(target).hexdigest(),
+    )
+    pooled.validate_shape()
+    assert stats.max_group_refs == size
+    assert stats.max_group_refs > pooled.limits.max_nodes
+    assert stats.crystallized_groups == 1
+    assert stats.crystallized_bytes == size
+    assert all(len(node.refs) <= pooled.limits.max_nodes for node in pooled.nodes)
+
+    wire, wire_stats = encode_program(pooled)
+    assert wire_stats.control_integrity_bytes < size
+    decoded = decode_program(wire)
+    outputs, _vm_stats = evaluate(decoded)
+    assert outputs == {"previous": source, "current": target}
 
 
 def test_pooled_1m_fragmented_range_cone_remains_bounded_and_exact():
