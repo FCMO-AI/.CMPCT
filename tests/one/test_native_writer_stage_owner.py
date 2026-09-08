@@ -1,10 +1,16 @@
-from benchmarks.one.one_g02_native_writer_stage_owner import STAGES, _decision
+from benchmarks.one.one_g02_native_writer_stage_owner import PROFILE_SIZES, STAGES, _decision
 
 
 def _row(**shares):
     wall_share = {stage: 0.0 for stage in STAGES}
     wall_share.update(shares)
     return {"relation_bytes": 1 << 20, "wall_share": wall_share}
+
+
+def test_profile_matrix_contains_tiny_256k_and_decision_scale():
+    assert 4 * 1024 in PROFILE_SIZES
+    assert 256 * 1024 in PROFILE_SIZES
+    assert 1 << 20 in PROFILE_SIZES
 
 
 def test_single_stage_owner_requires_repeated_1m_evidence():
