@@ -1,0 +1,67 @@
+name: CMPCT1 ONE-G0.2 packed observer RSS
+
+on:
+  push:
+    branches:
+      - research/cmpct1
+    paths:
+      - experiments/one/native_observe.py
+      - experiments/one/native_observe_kernel.c
+      - experiments/one/native_observe_view.py
+      - benchmarks/one/one_g02_compact_observer_handoff_writer.py
+      - benchmarks/one/one_g02_packed_observer_rehabilitation.py
+      - benchmarks/one/one_g02_packed_observer_rss.py
+      - docs/one/evidence/ONE_G02_PACKED_OBSERVER_RSS_PREREG_2026-09-08.md
+      - .github/workflows/cmpct1-one-g02-packed-observer-rss.yml
+  workflow_dispatch:
+
+jobs:
+  packed-observer-rss:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      EVIDENCE_HEAD: ${{ github.sha }}
+    steps:
+      - name: Checkout exact source SHA
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+
+      - name: Bind evidence to exact source SHA
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          test -f benchmarks/one/one_g02_packed_observer_rss.py
+          test -f docs/one/evidence/ONE_G02_PACKED_OBSERVER_RSS_PREREG_2026-09-08.md
+          grep -q 'REPETITIONS = 7' benchmarks/one/one_g02_packed_observer_rss.py
+          grep -q 'RSS_NO_REGRESSION_MAX = 1.05' benchmarks/one/one_g02_packed_observer_rss.py
+          grep -q 'STRUCTURED_REDUCTION_MAX = 0.95' benchmarks/one/one_g02_packed_observer_rss.py
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install test environment
+        run: python -m pip install -e '.[test]'
+
+      - name: Prove one fresh packed child can reconstruct
+        run: >-
+          python -m benchmarks.one.one_g02_packed_observer_rss
+          --child packed random
+
+      - name: Run frozen fresh-process RSS gate
+        shell: bash
+        run: |
+          set -o pipefail
+          python -m benchmarks.one.one_g02_packed_observer_rss \
+            | tee one_g02_packed_observer_rss.json
+
+      - name: Preserve exact-head RSS evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: one-g02-packed-observer-rss-${{ env.EVIDENCE_HEAD }}
+          path: one_g02_packed_observer_rss.json
+          if-no-files-found: warn
