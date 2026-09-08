@@ -48,9 +48,10 @@ def _write_terminal(node: Node, ref: Ref, sink: bytearray, offset: int) -> tuple
 
     Returns ``(written, stored_surprise_reads)``. Fill uses ``ctypes.memset`` against
     the already allocated root sink so the Python semantic vector does not manufacture
-    a second run-sized payload merely to copy it into the destination. This is still an
-    execution implementation detail; the stored ONE graph and reader ontology remain
-    ordinary ``fill``/``surprise``/``concat``.
+    a second run-sized payload merely to copy it into the destination. Surprise uses a
+    memoryview slice so it likewise avoids manufacturing an uncharged payload copy.
+    These are execution implementation details; the stored ONE graph and reader
+    ontology remain ordinary ``fill``/``surprise``/``concat``.
     """
     length = _terminal_length(node)
     start, end = _ref_bounds(ref, length)
@@ -58,7 +59,7 @@ def _write_terminal(node: Node, ref: Ref, sink: bytearray, offset: int) -> tuple
     if offset + width > len(sink):
         raise OneError("terminal output exceeds root sink")
     if node.op == "surprise":
-        sink[offset : offset + width] = node.surprise[start:end]
+        sink[offset : offset + width] = memoryview(node.surprise)[start:end]
         return width, width
     if width:
         address = ctypes.addressof(ctypes.c_ubyte.from_buffer(sink, offset))
@@ -84,8 +85,6 @@ def evaluate_terminal_roots_fused(program: Program) -> tuple[dict[str, bytes], F
     peak_temporary = 0
 
     for name, root in program.roots.items():
-        # This experiment only handles complete root references. It is deliberately
-        # narrower than the generic VM until selective range fusion gets its own gate.
         root_node = program.nodes[root.ref.node]
         root_node_length = _terminal_length(root_node) if root_node.op in {"surprise", "fill"} else root_node.declared_length
         if root_node_length is None:
@@ -116,7 +115,7 @@ def evaluate_terminal_roots_fused(program: Program) -> tuple[dict[str, bytes], F
                 end = cursor + len(root_node.surprise)
                 if end > len(sink):
                     raise OneError("concat Surprise exceeds root sink")
-                sink[cursor:end] = root_node.surprise
+                sink[cursor:end] = memoryview(root_node.surprise)
                 stored_reads += len(root_node.surprise)
                 sink_writes += len(root_node.surprise)
                 cursor = end
@@ -129,8 +128,6 @@ def evaluate_terminal_roots_fused(program: Program) -> tuple[dict[str, bytes], F
         if sha256(sink).hexdigest() != root.sha256:
             raise OneError(f"root {name!r} sha256 mismatch")
 
-        # Freeze the mutable sink into the same bytes surface returned by the reference
-        # evaluator. Model the copy as one read plus one write of the root.
         value = bytes(sink)
         freeze_traffic += 2 * len(value)
         outputs[name] = value
