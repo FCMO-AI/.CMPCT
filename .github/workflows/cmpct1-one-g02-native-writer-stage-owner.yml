@@ -14,6 +14,7 @@ on:
       - benchmarks/one/one_g02_end_to_end_direct_emitter_writer.py
       - benchmarks/one/one_g02_post_segment_control_cost_owner.py
       - benchmarks/one/one_g02_native_writer_stage_owner.py
+      - benchmarks/one/one_g02_native_observer_boundary_cost.py
       - benchmarks/one/one_g02_bounded_surprise_pooling.py
       - benchmarks/one/one_g02_crystallization_economics.py
       - benchmarks/one/one_g02_*relation*_kernel.c
@@ -22,6 +23,7 @@ on:
       - tests/one/test_bounded_surprise_pool.py
       - tests/one/test_ir_fanin_limit.py
       - docs/one/evidence/ONE_G02_NATIVE_WRITER_STAGE_OWNER_PREREG_2026-09-07.md
+      - docs/one/evidence/ONE_G02_NATIVE_OBSERVER_BOUNDARY_COST_PREREG_2026-09-08.md
       - docs/one/evidence/ONE_G02_BOUNDED_SURPRISE_POOLING_PREREG_2026-09-08.md
       - docs/one/evidence/ONE_G02_CRYSTALLIZATION_ECONOMICS_PREREG_2026-09-08.md
       - docs/one/evidence/ONE_G02_BOUNDED_SURPRISE_POOLING_FANIN_HOSTILE_REVIEW_2026-09-08.md
@@ -36,6 +38,7 @@ on:
       - benchmarks/one/one_g02_end_to_end_direct_emitter_writer.py
       - benchmarks/one/one_g02_post_segment_control_cost_owner.py
       - benchmarks/one/one_g02_native_writer_stage_owner.py
+      - benchmarks/one/one_g02_native_observer_boundary_cost.py
       - benchmarks/one/one_g02_bounded_surprise_pooling.py
       - benchmarks/one/one_g02_crystallization_economics.py
       - benchmarks/one/one_g02_*relation*_kernel.c
@@ -44,6 +47,7 @@ on:
       - tests/one/test_bounded_surprise_pool.py
       - tests/one/test_ir_fanin_limit.py
       - docs/one/evidence/ONE_G02_NATIVE_WRITER_STAGE_OWNER_PREREG_2026-09-07.md
+      - docs/one/evidence/ONE_G02_NATIVE_OBSERVER_BOUNDARY_COST_PREREG_2026-09-08.md
       - docs/one/evidence/ONE_G02_BOUNDED_SURPRISE_POOLING_PREREG_2026-09-08.md
       - docs/one/evidence/ONE_G02_CRYSTALLIZATION_ECONOMICS_PREREG_2026-09-08.md
       - docs/one/evidence/ONE_G02_BOUNDED_SURPRISE_POOLING_FANIN_HOSTILE_REVIEW_2026-09-08.md
@@ -82,14 +86,17 @@ jobs:
           test -f tests/one/test_bounded_surprise_pool.py
           test -f tests/one/test_ir_fanin_limit.py
           test -f benchmarks/one/one_g02_native_writer_stage_owner.py
+          test -f benchmarks/one/one_g02_native_observer_boundary_cost.py
           test -f benchmarks/one/one_g02_bounded_surprise_pooling.py
           test -f benchmarks/one/one_g02_crystallization_economics.py
           python - <<'PY'
           from benchmarks.one.one_g02_native_writer_stage_owner import PROFILE_SIZES, run
+          from benchmarks.one.one_g02_native_observer_boundary_cost import SIZES as BOUNDARY_SIZES, REPETITIONS as BOUNDARY_REPS
           from benchmarks.one.one_g02_bounded_surprise_pooling import SIZES as POOL_SIZES
           from benchmarks.one.one_g02_crystallization_economics import SIZES as ECON_SIZES, SPAN_WIDTHS
           from experiments.one.ir import Limits
           assert (1 << 20) in PROFILE_SIZES
+          assert (1 << 20) in BOUNDARY_SIZES and BOUNDARY_REPS == 15
           assert (1 << 20) in POOL_SIZES
           assert (64 * 1024) in ECON_SIZES and (256 * 1024) in ECON_SIZES
           assert 8 in SPAN_WIDTHS and 9 in SPAN_WIDTHS and 4096 in SPAN_WIDTHS
@@ -108,6 +115,11 @@ jobs:
           set -o pipefail
           mkdir -p artifacts
           python -m benchmarks.one.one_g02_crystallization_economics | tee artifacts/one_g02_crystallization_economics.json
+      - name: Decompose native observer boundary cost
+        run: |
+          set -o pipefail
+          mkdir -p artifacts
+          python -m benchmarks.one.one_g02_native_observer_boundary_cost | tee artifacts/one_g02_native_observer_boundary_cost.json
       - name: Run native writer stage-owner profile
         run: |
           set -o pipefail
