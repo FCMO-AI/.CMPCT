@@ -42,6 +42,23 @@ def test_all_frozen_families_have_exact_requested_length() -> None:
             assert len(target) == size
 
 
+def test_low_opportunity_controls_do_not_accidentally_become_exact_reuse_fixtures() -> None:
+    # This is a premise check, not a performance threshold.  The near-repeat control
+    # must remain resemblance-like while avoiding the earlier generator bug where the
+    # same 64-byte chunk was repeated verbatim and therefore became a high-reuse case.
+    for family in CONTROLS:
+        _, target = _case(family, 64 * 1024)
+        observation = observe_native(target)
+        assert len(observation.runs) + len(observation.reuse) <= 8
+
+
+def test_opportunity_rich_controls_really_include_positive_observer_work() -> None:
+    for family in ("structured", "long_runs"):
+        _, target = _case(family, 64 * 1024)
+        observation = observe_native(target)
+        assert len(observation.runs) + len(observation.reuse) > 0
+
+
 def test_compact_handoff_preserves_small_whole_writer_semantics() -> None:
     size = 4096
     source, target = _case("structured", size)
