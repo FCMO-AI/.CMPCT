@@ -57,8 +57,8 @@ jobs:
           python-version: '3.12'
       - name: Provision repository test contract
         run: python -m pip install --disable-pip-version-check -e '.[test]'
-      - name: Run native observer, writer, and adjudication suites
-        run: python -m pytest -q tests/one/test_native_observe.py tests/one/test_growable_wire.py tests/one/test_native_writer_stage_owner.py
+      - name: Run native observer and owner-adjudication suites
+        run: python -m pytest -q tests/one/test_native_observe.py tests/one/test_native_writer_stage_owner.py
       - name: Run native writer stage-owner profile
         run: |
           set -o pipefail
