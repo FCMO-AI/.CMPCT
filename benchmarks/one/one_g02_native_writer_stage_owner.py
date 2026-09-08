@@ -61,6 +61,36 @@ def _timed(fn):
     return value, w1 - w0, c1 - c0
 
 
+def _composed_once(admission_fn, segment_fn, source, target, src_arr, dst_arr, seg_buf):
+    previous_digest = sha256(source).hexdigest()
+    current_digest = sha256(target).hexdigest()
+    previous_root = Root(Ref(0), len(source), previous_digest)
+    observation = observe_native(target)
+    result, gate_reads, gate_used, enabled = _admit(admission_fn, src_arr, dst_arr, len(source))
+    segment_stats = SegmentStats()
+    if enabled:
+        plan = _native_plan(segment_fn, src_arr, dst_arr, len(source), seg_buf, segment_stats)
+        program, hierarchy_depth = _program_from_plan(source, target, plan, previous_root, current_digest)
+    else:
+        plan = ()
+        program, hierarchy_depth = _literal_program(source, target, previous_root, current_digest)
+    program.validate_shape()
+    wire, stats = _encode_program_growable_prevalidated(program)
+    return (
+        wire,
+        stats,
+        program,
+        observation,
+        result,
+        gate_reads,
+        gate_used,
+        enabled,
+        plan,
+        segment_stats,
+        hierarchy_depth,
+    )
+
+
 def _profile_row(admission_fn, segment_fn, source: bytes, target: bytes):
     n = len(source)
     src_arr = (ctypes.c_uint8 * n).from_buffer_copy(source)
@@ -68,13 +98,27 @@ def _profile_row(admission_fn, segment_fn, source: bytes, target: bytes):
     seg_buf = (Segment * n)()
     wall = {stage: [] for stage in STAGES}
     cpu = {stage: [] for stage in STAGES}
+    composed_wall = []
+    composed_cpu = []
     last = None
+    composed_last = None
 
     was_enabled = gc.isenabled()
     try:
         if was_enabled:
             gc.disable()
-        for _ in range(REPETITIONS):
+        for round_index in range(REPETITIONS):
+            # Alternate instrumented and composed order to reduce drift bias.
+            instrumented_first = round_index % 2 == 0
+            if not instrumented_first:
+                composed_last, w, c = _timed(
+                    lambda: _composed_once(
+                        admission_fn, segment_fn, source, target, src_arr, dst_arr, seg_buf
+                    )
+                )
+                composed_wall.append(w)
+                composed_cpu.append(c)
+
             hashes, w, c = _timed(lambda: (sha256(source).hexdigest(), sha256(target).hexdigest()))
             wall["root_hash"].append(w)
             cpu["root_hash"].append(c)
@@ -135,18 +179,38 @@ def _profile_row(admission_fn, segment_fn, source: bytes, target: bytes):
                 "previous_digest": previous_digest,
                 "current_digest": current_digest,
             }
+
+            if instrumented_first:
+                composed_last, w, c = _timed(
+                    lambda: _composed_once(
+                        admission_fn, segment_fn, source, target, src_arr, dst_arr, seg_buf
+                    )
+                )
+                composed_wall.append(w)
+                composed_cpu.append(c)
     finally:
         if was_enabled:
             gc.enable()
 
-    assert last is not None
+    assert last is not None and composed_last is not None
+    if composed_last[0] != last["wire"] or composed_last[1] != last["stats"]:
+        raise AssertionError("instrumented and composed stage-owner paths changed canonical result")
+
     wall_med = {stage: float(statistics.median(wall[stage])) for stage in STAGES}
     cpu_med = {stage: float(statistics.median(cpu[stage])) for stage in STAGES}
     wall_total = sum(wall_med.values())
     cpu_total = sum(cpu_med.values())
+    composed_wall_med = float(statistics.median(composed_wall))
+    composed_cpu_med = float(statistics.median(composed_cpu))
     wall_share = {stage: (wall_med[stage] / wall_total if wall_total else 0.0) for stage in STAGES}
     cpu_share = {stage: (cpu_med[stage] / cpu_total if cpu_total else 0.0) for stage in STAGES}
-    return last, wall_med, cpu_med, wall_total, cpu_total, wall_share, cpu_share
+    timing_audit = {
+        "composed_wall_median_ns": composed_wall_med,
+        "composed_cpu_median_ns": composed_cpu_med,
+        "stage_sum_over_composed_wall": wall_total / composed_wall_med if composed_wall_med else 0.0,
+        "stage_sum_over_composed_cpu": cpu_total / composed_cpu_med if composed_cpu_med else 0.0,
+    }
+    return last, wall_med, cpu_med, wall_total, cpu_total, wall_share, cpu_share, timing_audit
 
 
 def _decision(rows):
@@ -196,7 +260,7 @@ def run():
             for case in PRODUCTIVE + CONTROLS:
                 source, target, expected_enable, expected_shift = cases[case]
                 profiled = _profile_row(admission_fn, segment_fn, source, target)
-                last, wall_med, cpu_med, wall_total, cpu_total, wall_share, cpu_share = profiled
+                last, wall_med, cpu_med, wall_total, cpu_total, wall_share, cpu_share, timing_audit = profiled
 
                 program = last["program"]
                 wire = last["wire"]
@@ -254,6 +318,7 @@ def run():
                     "stage_cpu_median_ns": cpu_med,
                     "profiled_wall_total_ns": wall_total,
                     "profiled_cpu_total_ns": cpu_total,
+                    **timing_audit,
                     "wall_share": wall_share,
                     "cpu_share": cpu_share,
                     "root_hashes_exact": roots_exact,
@@ -266,10 +331,11 @@ def run():
         else:
             decision, ownership_counts = _decision(rows)
         return {
-            "schema": "cmpct-one-g02-native-writer-stage-owner-v1",
+            "schema": "cmpct-one-g02-native-writer-stage-owner-v2",
             "experimental_version": "ONE-G0.2",
             "source_sha": os.environ.get("EVIDENCE_HEAD") or os.environ.get("GITHUB_SHA") or "local-unbound",
             "repetitions": REPETITIONS,
+            "timing_order": "alternating instrumented/composed",
             "owner_share_threshold": OWNER_SHARE,
             "cluster_share_threshold": CLUSTER_SHARE,
             "minimum_qualifying_1m_rows": MIN_OWNER_ROWS_1M,
@@ -280,9 +346,9 @@ def run():
             "claim_boundary": (
                 "descriptive stage ownership in the current adjacent-version research-writer envelope; "
                 "charges root SHA-256, native fresh observation, relation admission, native segmentation, "
-                "generic Program construction, validation and direct canonical emission; does not establish "
-                "product writer speed, authenticated placement/durability, full arbitrary discovery, or "
-                "v0.29/v0.30 superiority"
+                "generic Program construction, validation and direct canonical emission; separately reports "
+                "composed-path timing to expose instrumentation distortion; does not establish product writer "
+                "speed, authenticated placement/durability, full arbitrary discovery, or v0.29/v0.30 superiority"
             ),
             "rows": rows,
         }
