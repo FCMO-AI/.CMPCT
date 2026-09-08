@@ -3,7 +3,7 @@ from __future__ import annotations
 import pytest
 
 from experiments.one.auth_tree import build_auth_tree, prove_range, verify_range
-from experiments.one.native_auth_tree import build_auth_tree_native, prove_range_packed
+from experiments.one.native_auth_tree import NativeAuthTree, build_auth_tree_native, prove_range_packed
 
 
 @pytest.mark.parametrize("size", [0, 1, 79, 80, 81, 191, 192, 193, 4097, 65536])
@@ -40,6 +40,21 @@ def test_packed_proof_does_not_require_full_level_materialization(monkeypatch: p
     monkeypatch.setattr(type(native),"levels",lambda self: forbidden_levels())
     proof=prove_range_packed(data,native,8192,4096)
     assert verify_range(proof,native.root,8192,4096) == data[8192:12288]
+
+
+def test_packed_proof_reads_exactly_one_digest_per_sibling(monkeypatch: pytest.MonkeyPatch) -> None:
+    data=bytes((i*47 + 11) & 0xFF for i in range(65536))
+    native=build_auth_tree_native(data,112)
+    original=NativeAuthTree.digest_at
+    calls=[]
+    def counted(self: NativeAuthTree, level: int, index: int) -> bytes:
+        calls.append((level,index))
+        return original(self,level,index)
+    monkeypatch.setattr(NativeAuthTree,"digest_at",counted)
+    proof=prove_range_packed(data,native,12288,4096)
+    assert len(calls) == len(proof.siblings)
+    assert calls == [(level,index) for level,index,_ in proof.siblings]
+    assert 32*len(calls) == proof.touched_proof_bytes
 
 
 def test_packed_proof_rejects_invalid_ranges() -> None:
