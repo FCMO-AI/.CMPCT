@@ -4,7 +4,6 @@ from hashlib import sha256
 
 import pytest
 
-from experiments.one.ir import Node, OneError
 from experiments.one.observe import RunOpportunity
 from experiments.one.run_fill_law import MIN_FILL_RUN, program_from_observed_runs
 from experiments.one.vm import evaluate
@@ -32,9 +31,25 @@ def test_long_constant_run_compiles_to_existing_fill_relation():
     assert stats.surprise_bytes_current == len(b"prefixsuffix")
     assert {node.op for node in program.nodes} <= {"surprise", "fill", "concat"}
     assert any(node.op == "fill" and node.count == 512 and node.value == 0xA5 for node in program.nodes)
-    # Both roots are stored in the pair; nevertheless replacing 512 explicit current
-    # bytes with generic Law must reduce Surprise by exactly that amount.
     assert wire_stats.surprise_bytes == len(source) + len(target) - 512
+
+
+def test_multiple_runs_and_gaps_compose_through_generic_concat():
+    source = b"source" * 128
+    target = b"head" + b"A" * 80 + b"middle" + b"B" * 96 + b"tail"
+    runs = (
+        RunOpportunity(start=4, length=80, value=ord("A")),
+        RunOpportunity(start=90, length=96, value=ord("B")),
+    )
+    program, stats, _wire, wire_stats, _vm = _roundtrip(source, target, runs)
+    assert stats.qualifying_runs == 2
+    assert stats.fill_bytes == 176
+    assert stats.surprise_bytes_current == len(b"headmiddletail")
+    assert stats.concat_refs == 5
+    assert sum(node.op == "fill" for node in program.nodes) == 2
+    assert sum(node.op == "surprise" for node in program.nodes) == 4  # prior + three gaps
+    assert sum(node.op == "concat" for node in program.nodes) == 1
+    assert wire_stats.surprise_bytes == len(source) + len(b"headmiddletail")
 
 
 def test_subeconomic_run_stays_literal_without_new_mode():
