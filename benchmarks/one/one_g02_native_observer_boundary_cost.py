@@ -116,6 +116,45 @@ def _median_timing(fn):
     return float(statistics.median(wall)), float(statistics.median(cpu)), last
 
 
+def _paired_full_kernel_timings(data: bytes, expected: Observation, source_ptr, state):
+    """Time full wrapper and kernel without cross-charging Python result teardown.
+
+    The previous implementation reused one ``result`` local across alternating labels.
+    On a full->kernel pair, assigning ``None`` during the kernel interval decref'd the
+    previous Observation and could charge its tuple/object teardown to the C-kernel
+    sample. Keep the two branches' object lifetimes disjoint and release the public
+    wrapper result only after its timer has stopped.
+    """
+    full_wall = []
+    full_cpu = []
+    kernel_wall = []
+    kernel_cpu = []
+    for rep in range(REPETITIONS):
+        labels = ("full", "kernel") if rep % 2 == 0 else ("kernel", "full")
+        for label in labels:
+            if label == "full":
+                c0 = time.process_time_ns()
+                w0 = time.perf_counter_ns()
+                full_result = observe_native(data)
+                w1 = time.perf_counter_ns()
+                c1 = time.process_time_ns()
+                if full_result != expected:
+                    raise AssertionError("timed full-wrapper semantic divergence")
+                full_wall.append(w1 - w0)
+                full_cpu.append(c1 - c0)
+                # Destruction is deliberately outside both decision-bearing timers.
+                del full_result
+            else:
+                c0 = time.process_time_ns()
+                w0 = time.perf_counter_ns()
+                _call_kernel(data, source_ptr, state)
+                w1 = time.perf_counter_ns()
+                c1 = time.process_time_ns()
+                kernel_wall.append(w1 - w0)
+                kernel_cpu.append(c1 - c0)
+    return full_wall, full_cpu, kernel_wall, kernel_cpu
+
+
 def run():
     # Build and resolve all dynamic symbols outside timed regions.
     observe_native(b"warmup" * 32)
@@ -143,30 +182,9 @@ def run():
 
                 # Pair the current public wrapper against the isolated kernel to reduce
                 # systematic order/thermal bias on the decision-bearing ratio.
-                full_wall = []
-                full_cpu = []
-                kernel_wall = []
-                kernel_cpu = []
-                for rep in range(REPETITIONS):
-                    labels = ("full", "kernel") if rep % 2 == 0 else ("kernel", "full")
-                    for label in labels:
-                        c0 = time.process_time_ns()
-                        w0 = time.perf_counter_ns()
-                        if label == "full":
-                            result = observe_native(data)
-                        else:
-                            _call_kernel(data, source_ptr, state)
-                            result = None
-                        w1 = time.perf_counter_ns()
-                        c1 = time.process_time_ns()
-                        if label == "full":
-                            if result != expected:
-                                raise AssertionError(f"timed full-wrapper divergence: {size=} {family=}")
-                            full_wall.append(w1 - w0)
-                            full_cpu.append(c1 - c0)
-                        else:
-                            kernel_wall.append(w1 - w0)
-                            kernel_cpu.append(c1 - c0)
+                full_wall, full_cpu, kernel_wall, kernel_cpu = _paired_full_kernel_timings(
+                    data, expected, source_ptr, state
+                )
 
                 fwall = float(statistics.median(full_wall))
                 fcpu = float(statistics.median(full_cpu))
