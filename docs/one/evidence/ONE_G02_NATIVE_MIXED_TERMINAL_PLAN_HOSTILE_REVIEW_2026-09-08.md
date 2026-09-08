@@ -10,3 +10,5 @@ Status: **admissible to falsify; no performance claim yet**.
 6. The candidate uses the host C compiler as research machinery. A green result is not a portability decision or permission to require this backend canonically.
 7. The 1 MiB causal gates are deliberately stronger than mere parity: <=0.90x prepared for long-runs and <=0.95x for structured. Otherwise the experiment has not shown that mixed execution is the missing cost.
 8. If the candidate HOLDS, do not tune thresholds or add a run-specific dispatcher. Preserve the negative and move reader work to a general reconstruction-plan/native execution boundary.
+
+Execution note: the first commit introduced this workflow and candidate atomically. A follow-up evidence-only touch is used solely so GitHub can instantiate the newly present path-scoped workflow from an already-existing workflow definition. It changes no threshold, implementation, matrix, or interpretation rule.
