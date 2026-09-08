@@ -1,14 +1,14 @@
 from __future__ import annotations
 
-from benchmarks.one.one_g02_interval_packed_auth_proof import DECISION_SIZE, LEAVES, REQUESTS, SIZES, _decide
+from benchmarks.one.one_g02_interval_packed_auth_proof import DECISION_SIZE, LEAVES, SIZES, _decide, _requests
 
 
 def _rows(ratio:float=0.95)->list[dict[str,object]]:
     rows=[]
     for size in SIZES:
         for leaf in LEAVES:
-            for req in range(len(REQUESTS)):
-                rows.append({"size":size,"leaf_bytes":leaf,"start":req,"length":4096,"semantic_ok":True,
+            for start,length in _requests(size):
+                rows.append({"size":size,"leaf_bytes":leaf,"start":start,"length":length,"semantic_ok":True,
                              "tree_digest_bytes_read":320,"proof_hash_bytes":320,
                              "candidate_over_ref_wall":ratio,"candidate_over_ref_cpu":ratio})
     return rows
@@ -20,6 +20,11 @@ def test_green_matrix_advances()->None:
 
 def test_missing_row_invalidates()->None:
     rows=_rows(); rows.pop()
+    assert _decide(rows) == "INVALIDATE_INTERVAL_PACKED_AUTH_PROOF"
+
+
+def test_duplicate_row_cannot_hide_missing_cell()->None:
+    rows=_rows(); rows[-1]=dict(rows[0])
     assert _decide(rows) == "INVALIDATE_INTERVAL_PACKED_AUTH_PROOF"
 
 
