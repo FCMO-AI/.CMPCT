@@ -1,3 +1,4 @@
+# Exact-source research evidence lane; scientific thresholds are bound in the checkout.
 name: CMPCT1 ONE-G0.2 native plan bulk
 on:
   push:
