@@ -1,0 +1,50 @@
+name: CMPCT1 ONE-G0.2 native mixed terminal plan
+on:
+  push:
+    branches: [research/cmpct1]
+    paths:
+      - 'experiments/one/native_mixed_terminal_plan.py'
+      - 'experiments/one/native_mixed_terminal_plan_kernel.c'
+      - 'benchmarks/one/one_g02_native_mixed_terminal_plan.py'
+      - 'tests/one/test_native_mixed_terminal_plan.py'
+      - 'docs/one/prereg/ONE_G02_NATIVE_MIXED_TERMINAL_PLAN_PREREG_2026-09-08.md'
+      - 'docs/one/evidence/ONE_G02_NATIVE_MIXED_TERMINAL_PLAN_HOSTILE_REVIEW_2026-09-08.md'
+      - '.github/workflows/cmpct1-one-g02-native-mixed-terminal-plan.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  native-mixed-terminal-plan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with: {ref: '${{ github.sha }}'}
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.12'}
+      - name: Exact source binding
+        run: |
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          python - <<'PY'
+          import benchmarks.one.one_g02_native_mixed_terminal_plan as b
+          assert b.REPETITIONS == 21
+          assert b.HOT_CONTROL_MAX == 1.05
+          assert b.LONG_1M_OVER_PREPARED_MAX == 0.90
+          assert b.STRUCTURED_1M_OVER_PREPARED_MAX == 0.95
+          assert b.BREAK_EVEN_REPLAYS_MAX == 4.0
+          PY
+      - name: Semantic and decision-law tests
+        run: python -m pytest -q tests/one/test_native_mixed_terminal_plan.py tests/one/test_prepared_terminal_plan.py
+      - name: Run frozen falsifier
+        env: {EVIDENCE_HEAD: '${{ github.sha }}'}
+        run: |
+          set +e
+          python -m benchmarks.one.one_g02_native_mixed_terminal_plan > one_g02_native_mixed_terminal_plan.json
+          rc=$?
+          cat one_g02_native_mixed_terminal_plan.json
+          exit $rc
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: one-g02-native-mixed-terminal-plan-${{ github.sha }}
+          path: one_g02_native_mixed_terminal_plan.json
