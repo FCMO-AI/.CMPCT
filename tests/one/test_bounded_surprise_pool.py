@@ -6,7 +6,7 @@ import pytest
 
 from benchmarks.one.one_g02_end_to_end_direct_emitter_writer import _oracle_plan, _relation_cases
 from benchmarks.one.one_g02_post_segment_control_cost_owner import _program_from_plan
-from experiments.one.bounded_surprise_pool import program_from_plan_pooled
+from experiments.one.bounded_surprise_pool import pool_geometry, program_from_plan_pooled
 from experiments.one.ir import Limits, OneError, Ref, Root
 from experiments.one.range_vm import reconstruct_range_unverified
 from experiments.one.vm import evaluate
@@ -15,6 +15,17 @@ from experiments.one.wire import decode_program, encode_program
 
 def _root(source: bytes) -> Root:
     return Root(Ref(0), len(source), sha256(source).hexdigest())
+
+
+def test_pool_geometry_is_structurally_within_hard_node_cap_at_max_output():
+    limits = Limits()
+    for target_length in (1, 4 * 1024, 256 * 1024, 1 << 20, limits.max_output_bytes):
+        geometry = pool_geometry(limits, target_length)
+        assert geometry.groups_for_target <= geometry.max_groups
+        assert geometry.worst_case_nodes_for_target <= limits.max_nodes
+    maximum = pool_geometry(limits, limits.max_output_bytes)
+    assert maximum.groups_for_target == maximum.max_groups
+    assert maximum.worst_case_nodes_for_target == limits.max_nodes
 
 
 def test_fragmented_1m_reproduces_legacy_node_overflow_and_pooled_program_validates():
