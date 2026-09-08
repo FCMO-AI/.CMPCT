@@ -25,14 +25,20 @@ class RunFillStats:
     bounded: bool
 
 
-def _literal_pair(source: bytes, target: bytes, current_digest: str | None = None) -> tuple[Program, RunFillStats]:
-    digest = current_digest or sha256(target).hexdigest()
+def _literal_pair(
+    source: bytes,
+    target: bytes,
+    current_digest: str | None = None,
+    previous_digest: str | None = None,
+) -> tuple[Program, RunFillStats]:
+    current = current_digest or sha256(target).hexdigest()
+    previous = previous_digest or sha256(source).hexdigest()
     nodes = (Node("surprise", surprise=source), Node("surprise", surprise=target))
     program = Program(
         nodes,
         {
-            "previous": Root(Ref(0), len(source), sha256(source).hexdigest()),
-            "current": Root(Ref(1), len(target), digest),
+            "previous": Root(Ref(0), len(source), previous),
+            "current": Root(Ref(1), len(target), current),
         },
         Limits(),
     )
@@ -46,6 +52,7 @@ def program_from_observed_runs(
     *,
     min_fill_run: int = MIN_FILL_RUN,
     current_digest: str | None = None,
+    previous_digest: str | None = None,
 ) -> tuple[Program, RunFillStats]:
     """Build a bounded pair Program from exact maximal-run evidence.
 
@@ -53,6 +60,9 @@ def program_from_observed_runs(
     the fixed economic floor remain Surprise.  If the resulting generic graph would
     exceed the existing node/ref cap, the function returns the ordinary literal Program
     rather than changing reader limits or inventing another representation mechanism.
+
+    Trusted precomputed root digests may be supplied so callers that already paid root
+    authentication do not accidentally charge the candidate a second full-source hash.
     """
     if type(source) is not bytes or type(target) is not bytes:
         raise TypeError("ONE run/fill compiler inputs must be bytes")
@@ -61,8 +71,8 @@ def program_from_observed_runs(
     if type(min_fill_run) is not int or min_fill_run <= 0:
         raise ValueError("min_fill_run must be a positive integer")
 
-    digest = current_digest or sha256(target).hexdigest()
-    previous_digest = sha256(source).hexdigest()
+    current = current_digest or sha256(target).hexdigest()
+    previous = previous_digest or sha256(source).hexdigest()
     qualifying: list[RunOpportunity] = []
     previous_end = 0
     for run in runs:
@@ -78,7 +88,7 @@ def program_from_observed_runs(
             qualifying.append(run)
 
     if not qualifying:
-        program, _ = _literal_pair(source, target, digest)
+        program, _ = _literal_pair(source, target, current, previous)
         return program, RunFillStats(len(runs), 0, 0, len(target), 0, True)
 
     limits = Limits()
@@ -113,7 +123,7 @@ def program_from_observed_runs(
     # ordinary Surprise for this first compiler experiment rather than expanding limits.
     extra_root_node = 0 if len(pieces) == 1 else 1
     if len(nodes) + extra_root_node > limits.max_nodes or len(pieces) > limits.max_nodes:
-        program, _ = _literal_pair(source, target, digest)
+        program, _ = _literal_pair(source, target, current, previous)
         return program, RunFillStats(len(runs), len(qualifying), 0, len(target), 0, False)
 
     if len(pieces) == 1:
@@ -128,8 +138,8 @@ def program_from_observed_runs(
     program = Program(
         tuple(nodes),
         {
-            "previous": Root(Ref(0), len(source), previous_digest),
-            "current": Root(current_ref, len(target), digest),
+            "previous": Root(Ref(0), len(source), previous),
+            "current": Root(current_ref, len(target), current),
         },
         limits,
     )
