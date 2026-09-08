@@ -170,11 +170,13 @@ def run() -> dict:
             wall = {"eager": [], "lazy": []}
             cpu = {"eager": [], "lazy": []}
             last_value = None
+            value = None
             for rep in range(REPETITIONS):
                 order = ("eager", "lazy") if rep % 2 == 0 else ("lazy", "eager")
                 for arm in order:
-                    # Release the preceding arm before starting either clock. This keeps
-                    # Python/ctypes result teardown out of the next arm's sample.
+                    # Release every reference to the preceding arm before either clock.
+                    # Otherwise assigning the next value can charge teardown to that arm.
+                    value = None
                     last_value = None
                     t0_wall = time.perf_counter_ns()
                     t0_cpu = time.process_time_ns()
@@ -183,9 +185,12 @@ def run() -> dict:
                     t1_wall = time.perf_counter_ns()
                     wall[arm].append(t1_wall - t0_wall)
                     cpu[arm].append(t1_cpu - t0_cpu)
-                    # Keep the current arm alive until after both clocks stop.
+                    # Keep the current arm alive until after both clocks stop, then make
+                    # `value` non-owning so the next pre-clock release is the only teardown.
                     last_value = value
+                    value = None
             last_value = None
+            value = None
 
             eager_wall = float(statistics.median(wall["eager"]))
             lazy_wall = float(statistics.median(wall["lazy"]))
