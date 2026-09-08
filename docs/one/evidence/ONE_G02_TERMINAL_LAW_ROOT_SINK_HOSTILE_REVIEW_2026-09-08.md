@@ -1,6 +1,6 @@
 # ONE-G0.2 terminal Law root-sink hostile review — 2026-09-08
 
-Status: **pre-result review**. No hosted result from the dedicated root-sink lane has been consumed while writing this receipt.
+Status: **pre-result review**. No admissible hosted result from the dedicated root-sink lane has been consumed while writing this receipt.
 
 ## Mission-lock check
 
@@ -9,7 +9,7 @@ The candidate does not alter the stored Program, wire grammar, Fill semantics, r
 ## Attacks and dispositions
 
 1. **Fake work reduction by changing accounting.** Both literal control and run-Fill candidate use the same fused evaluator and the same modeled traffic definition. The old reference evaluator's `work_bytes` is retained separately and is not rewritten retroactively.
-2. **Hidden Fill materialization.** The semantic vector writes Fill directly into the already allocated root sink with `ctypes.memset`; it does not construct a run-sized Python bytes payload outside accounting. Root-sink allocation, root hashing, and conversion to returned immutable bytes remain charged.
+2. **Hidden terminal materialization.** Fill writes directly into the allocated root sink with `ctypes.memset`. Hostile review then found that the first root-sink implementation used `node.surprise[start:end]`, which creates a payload-sized Python bytes slice not represented in modeled traffic. This was repaired before accepting any hosted verdict: Surprise now writes through a `memoryview` slice, avoiding the hidden payload copy. Any root-sink performance/traffic result from source SHA `f6f96ef19d340c17f7944e9eb3281a8210746309` or earlier is therefore **inadmissible for promotion**, even if its workflow later completes green.
 3. **Gifted preprocessing.** Programs are built before reader timing for both arms because the falsified question is reader execution of the same stored graph. No reconstructed bytes or hashes are precomputed outside the timed evaluator call.
 4. **Root integrity weakened.** Every reconstructed root is independently SHA-256 checked against the Program commitment after generic preflight. Tampered-root tests must fail.
 5. **Resource bounds bypassed.** The candidate runs the existing generic `_preflight()` before materialization, preserving unchanged node/depth/output/work bounds. This dependence on a private research helper is acceptable only for this semantic experiment; promotion would need a stable shared preflight surface.
