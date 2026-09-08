@@ -10,7 +10,7 @@ import sys
 from statistics import median
 
 from experiments.one.auth_tree import build_auth_tree
-from experiments.one.native_auth_tree import build_auth_tree_native
+from experiments.one.native_auth_tree import _library, build_auth_tree_native
 
 SIZES=(4 << 20,16 << 20)
 LEAVES=(80,112,192)
@@ -27,7 +27,7 @@ def _data(size:int)->bytes:
     """Construct the source without a source-sized temporary integer/container.
 
     The root sizes are exact multiples of the frozen 4 KiB block, so multiplication
-    creates the one retained source object directly.  This keeps the pre-tree RSS
+    creates the one retained source object directly. This keeps the pre-tree RSS
     high-water mark from being polluted by Random.randbytes/getrandbits temporaries.
     """
     if size % len(_DATA_BLOCK):
@@ -40,6 +40,12 @@ def _rss_kib()->int:
 
 
 def _child(mode:str,size:int,leaf:int)->dict[str,object]:
+    # This falsifier asks about steady writer-process tree-state construction, not
+    # one-time backend loading. Preload the native shared library before creating the
+    # retained source and before the baseline watermark. The later ctypes output arena
+    # and bytes handoff are still inside the measured tree-construction boundary.
+    if mode == "native":
+        _library()
     data=_data(size)
     before=_rss_kib()
     if mode == "reference":
@@ -126,7 +132,7 @@ def run()->dict[str,object]:
         "decision_size":DECISION_SIZE,"large_hard_max":LARGE_HARD_MAX,
         "large_good_max":LARGE_GOOD_MAX,"large_good_required":LARGE_GOOD_REQUIRED,"small_max":SMALL_MAX,
         "rows":rows,"decision":decision,
-        "claim_boundary":"fresh-process Linux ru_maxrss incremental peak during in-memory AuthTree construction; no product ingest, portable allocator, proof throughput or canonical on-disk authority",
+        "claim_boundary":"fresh-process Linux ru_maxrss incremental peak during steady in-memory AuthTree construction after native backend preload; no product ingest, portable allocator, proof throughput or canonical on-disk authority",
     }
 
 
