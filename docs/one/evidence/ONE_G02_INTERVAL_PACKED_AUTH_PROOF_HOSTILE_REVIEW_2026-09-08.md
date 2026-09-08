@@ -31,6 +31,7 @@ Unit coverage includes empty requests, request-at-end, leaf-boundary crossings, 
 6. **No full-tree expansion.** Candidate proof generation must not call `levels()`.
 7. **No verification claim.** `verify_range()` is correctness-only here. Its hash/object construction can become a separate speed owner later.
 8. **No canonical format claim.** Packed memory layout remains a research sidecar shape; disk placement, crash recovery, portability and remote-I/O behavior are separate gates.
+9. **Pre-fix interval timings are inadmissible.** Review found that `_paired()` retained the prior arm's `RangeProof` in the local `result` name and then replaced that object only after the next arm's clocks had started. Its destruction could therefore be charged to the following arm. The repair at `7dd6d9c9862b48310efe8d0d3b095820bd958336` clears the owning reference before either wall or CPU timing begins and keeps the new result alive until both clocks stop. This is especially material because the claimed small-read signal is only a few percent. No semantic code, workload, repetition count, or decision threshold changed. Any interval-proof timing produced from a source before that repair must not influence promotion.
 
 ## Frozen interpretation
 
