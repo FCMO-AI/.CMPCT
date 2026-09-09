@@ -1,0 +1,56 @@
+# ci-lane: deep
+name: CMPCT1 ONE-G0.2 compact validation certificate
+
+on:
+  push:
+    branches: [research/cmpct1]
+    paths:
+      - experiments/one/validated_program.py
+      - experiments/one/range_vm.py
+      - tests/one/test_validated_program.py
+      - benchmarks/one/one_g02_compact_validation_certificate.py
+      - docs/one/evidence/ONE_G02_COMPACT_VALIDATION_CERTIFICATE_PREREG_2026-09-09.md
+      - .github/workflows/cmpct1-one-g02-compact-validation-certificate.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-one-g02-compact-validation-certificate-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  falsifier:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Bind exact source
+        run: |
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          echo "EVIDENCE_HEAD=$GITHUB_SHA" >> "$GITHUB_ENV"
+      - name: Install repository test dependency surface
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[test,audio]'
+      - name: Run validation semantic and hostile tests
+        run: python -m pytest -q tests/one/test_validated_program.py tests/one/test_native_law_range_plan.py tests/one/test_range_vm.py
+      - name: Run frozen compact validation certificate falsifier
+        run: |
+          set +e
+          python -m benchmarks.one.one_g02_compact_validation_certificate > compact-validation-certificate.json
+          status=$?
+          cat compact-validation-certificate.json
+          exit $status
+      - name: Retain exact-source evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: compact-validation-certificate-${{ github.sha }}
+          path: compact-validation-certificate.json
+          if-no-files-found: error
+          retention-days: 30
