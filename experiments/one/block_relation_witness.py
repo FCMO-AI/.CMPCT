@@ -1,17 +1,21 @@
 """ONE-G0.2 block observation record for actionable relation witnesses.
 
-This is writer-only discovery state.  It reuses the 64-byte observation cadence and
-retains bounded transform-invariant signatures.  A witness is only a nomination;
-exact verification remains mandatory before any Law enters a Program.
+Writer-only discovery state. It reuses the 64-byte observation cadence and retains
+bounded transform-invariant signatures. A witness is only a nomination; exact
+verification remains mandatory before any Law enters a Program.
 """
 from __future__ import annotations
 
+from collections import deque
 from dataclasses import dataclass
 
 BLOCK = 64
 PROBES = (5, 27, 53)
-MAX_RECORDS = 8192
-MAX_WITNESSES = 64
+MAX_SIGNATURES = 8192
+BUCKET_RECORDS = 4
+MAX_WITNESSES = 256
+
+Samples = tuple[int, int, int]
 
 
 @dataclass(frozen=True)
@@ -31,62 +35,93 @@ class WitnessObservation:
     modeled_state_bytes: int
 
 
-def _add_signature(block: bytes) -> tuple[int, int]:
-    a, b, c = (block[p] for p in PROBES)
+def _samples(block: bytes) -> Samples:
+    return tuple(block[p] for p in PROBES)  # type: ignore[return-value]
+
+
+def _add_signature(samples: Samples) -> tuple[int, int]:
+    a, b, c = samples
     return ((b - a) & 0xFF, (c - a) & 0xFF)
 
 
-def _xor_signature(block: bytes) -> tuple[int, int]:
-    a, b, c = (block[p] for p in PROBES)
+def _xor_signature(samples: Samples) -> tuple[int, int]:
+    a, b, c = samples
     return (b ^ a, c ^ a)
 
 
-def _value(parent: bytes, child: bytes, op: str) -> int | None:
+def _value(parent: Samples, child: Samples, op: str) -> int | None:
     if op == "add8":
-        values = tuple((child[p] - parent[p]) & 0xFF for p in PROBES)
+        values = tuple((c - p) & 0xFF for p, c in zip(parent, child))
     elif op == "xor":
-        values = tuple(child[p] ^ parent[p] for p in PROBES)
+        values = tuple(c ^ p for p, c in zip(parent, child))
     else:
         raise ValueError(op)
     return values[0] if values[0] != 0 and values.count(values[0]) == len(values) else None
 
 
-def observe_relation_witnesses(data: bytes) -> WitnessObservation:
-    """Make one forward pass and return bounded, directly actionable nominations.
+def _consider_bucket(
+    witnesses: deque[RelationWitness],
+    bucket: list[tuple[int, Samples]],
+    samples: Samples,
+    *,
+    op: str,
+    child_offset: int,
+) -> None:
+    # A signature collision may nominate several geometries. Preserve a bounded set
+    # of candidates and let exact verification decide; observation never authorizes Law.
+    for parent_offset, parent_samples in bucket:
+        value = _value(parent_samples, samples, op)
+        if value is not None:
+            witnesses.append(RelationWitness(op, value, parent_offset, child_offset))
 
-    Transform-invariant signatures allow a later block to nominate an earlier block
-    without rescanning source bytes.  The first record for each signature is retained
-    until the bounded table is full.  Signature collisions are harmless because the
-    downstream exact verifier is authoritative.
+
+def _remember(
+    table: dict[tuple[int, int], list[tuple[int, Samples]]],
+    signature: tuple[int, int],
+    offset: int,
+    samples: Samples,
+) -> None:
+    bucket = table.get(signature)
+    if bucket is None:
+        if len(table) >= MAX_SIGNATURES:
+            return
+        table[signature] = [(offset, samples)]
+        return
+    if len(bucket) < BUCKET_RECORDS:
+        bucket.append((offset, samples))
+
+
+def observe_relation_witnesses(data: bytes) -> WitnessObservation:
+    """Return bounded directly-actionable relation nominations from one forward pass.
+
+    Only the three sampled bytes needed to recover a candidate relation value are
+    retained; full 64-byte blocks are not cached. Up to four records per invariant
+    signature survive collision, and the witness queue keeps the most recent candidates
+    so early harmless collisions cannot permanently crowd out later structure.
     """
-    add_records: dict[tuple[int, int], tuple[int, bytes]] = {}
-    xor_records: dict[tuple[int, int], tuple[int, bytes]] = {}
-    witnesses: list[RelationWitness] = []
+    add_records: dict[tuple[int, int], list[tuple[int, Samples]]] = {}
+    xor_records: dict[tuple[int, int], list[tuple[int, Samples]]] = {}
+    witnesses: deque[RelationWitness] = deque(maxlen=MAX_WITNESSES)
     full = len(data) - (len(data) % BLOCK)
+
     for off in range(0, full, BLOCK):
-        block = data[off : off + BLOCK]
-        add_sig = _add_signature(block)
-        xor_sig = _xor_signature(block)
-        if len(witnesses) < MAX_WITNESSES:
-            prior = add_records.get(add_sig)
-            if prior is not None:
-                value = _value(prior[1], block, "add8")
-                if value is not None:
-                    witnesses.append(RelationWitness("add8", value, prior[0], off))
-        if len(witnesses) < MAX_WITNESSES:
-            prior = xor_records.get(xor_sig)
-            if prior is not None:
-                value = _value(prior[1], block, "xor")
-                if value is not None:
-                    witnesses.append(RelationWitness("xor", value, prior[0], off))
-        if add_sig not in add_records and len(add_records) < MAX_RECORDS:
-            add_records[add_sig] = (off, block)
-        if xor_sig not in xor_records and len(xor_records) < MAX_RECORDS:
-            xor_records[xor_sig] = (off, block)
-    # Model only retained discovery state, not CPython object overhead.  A native form
-    # needs 2-byte signature + 4-byte offset + 3 sampled bytes + table overhead; 16 B
-    # per retained record is deliberately conservative at this stage.
-    records = len(add_records) + len(xor_records)
+        block_samples = _samples(data[off : off + BLOCK])
+        add_sig = _add_signature(block_samples)
+        xor_sig = _xor_signature(block_samples)
+
+        add_bucket = add_records.get(add_sig)
+        if add_bucket is not None:
+            _consider_bucket(witnesses, add_bucket, block_samples, op="add8", child_offset=off)
+        xor_bucket = xor_records.get(xor_sig)
+        if xor_bucket is not None:
+            _consider_bucket(witnesses, xor_bucket, block_samples, op="xor", child_offset=off)
+
+        _remember(add_records, add_sig, off, block_samples)
+        _remember(xor_records, xor_sig, off, block_samples)
+
+    records = sum(map(len, add_records.values())) + sum(map(len, xor_records.values()))
+    # Compact native target accounting: 2-byte signature + 4-byte offset + 3 samples
+    # plus alignment/control, conservatively rounded to 16 B per retained record.
     return WitnessObservation(
         witnesses=tuple(witnesses),
         source_scan_bytes=len(data),

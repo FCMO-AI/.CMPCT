@@ -17,6 +17,14 @@ def test_versioned_xor_yields_actionable_witness():
     assert any(w.op==op and w.value==value and w.child_offset-w.parent_offset==half for w in obs.witnesses)
 
 
+def test_large_versioned_relation_is_not_crowded_out_by_early_collisions():
+    for family in ("add8_versioned","xor_versioned"):
+        data,op,value,_=_case(1024*1024,family)
+        obs=observe_relation_witnesses(data)
+        half=len(data)//2
+        assert any(w.op==op and w.value==value and w.child_offset-w.parent_offset==half for w in obs.witnesses)
+
+
 def test_probe_only_false_positive_never_authorizes_law():
     data,_,_,_=_case(64*1024,"probe_false_positive")
     obs,program,wire,proof,accepted,chosen=_writer(data)
