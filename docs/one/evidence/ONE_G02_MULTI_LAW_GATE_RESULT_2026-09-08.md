@@ -1,31 +1,38 @@
-# ONE-G0.2 fused multi-Law opportunity gate — exact result
+# ONE-G0.2 multi-Law opportunity gate and native carrying-cost result
 
-**Date:** 2026-09-08  
-**Decision:** `ADVANCE_MULTI_LAW_GATE`  
-**Admissible source:** `78aab823542d58a921f428dca466fdd2cbfd8995`  
-**Workflow run:** `34293953696`  
-**Job:** `102286364210`  
-**Artifact:** `10082444320`  
-**Artifact digest:** `sha256:8c24df64b7ed89b324efa2343bfc27c144a7ccccba29d33f8619376de4e56106`
+## Decisions
 
-## Mission result
+- **Nomination substrate:** `ADVANCE_MULTI_LAW_GATE`
+- **Full native carrying cost:** `HOLD_NATIVE_MULTI_LAW_CARRY`
 
-The corrected frozen 24-cell matrix advanced the fused nomination substrate. All 24 rows were present and unique. Every required positive family matched the independent synthetic oracle with zero false negatives, while `random`, `compressed_like`, and corrected `false_pattern` controls produced zero nominations at all three sizes. Charged source-scan traffic was exactly `1.0x` input on every row.
+**Exact source:** `86ce1618ef2433f26c568ebc951d11d5b954e4ac`  
+**Workflow run:** `34302722535`  
+**Job:** `102312897508`  
+**Artifact:** `10085573390`  
+**Artifact digest:** `sha256:1729578b8bf6380228c3be3035faa198809abdd7df6d161eff7db2e5f75c07f3`
 
-The gate nominated four generic ONE Law opportunities from one forward pass: run/Fill structure, exact-reuse/repetition evidence, modulo-256 add8 structure, and bounded lag-64 XOR/resemblance structure. Fingerprint reuse remains nomination only: exact downstream byte proof is still mandatory before any reuse becomes stored Law.
+## Structural gate
 
-At 1 MiB, retained modeled feature payload was approximately 0.40–0.79% of input across the matrix. The smallest 64 KiB rows retained approximately 6.4–12.6%, still below the frozen 15% ceiling.
+The corrected 24-cell nomination matrix passed again at this exact source: zero required-family false negatives, zero unexpected nominations on random/compressed-like/false-pattern controls, exactly one charged source scan, and bounded retained feature payload. This confirms the fused run/reuse/add8/xor signals are a credible nomination substrate. The Python loop timing is not carrying-cost authority.
 
-## Important non-claim
+## Native carrying-cost gate
 
-The hosted Python implementation required roughly 0.49–0.54 seconds per MiB at 1 MiB. That timing is diagnostic only and is not a credible production carrying-cost result. `ADVANCE_MULTI_LAW_GATE` means that the information substrate is selective and bounded enough to deserve native carrying-cost measurement; it does **not** establish acceptable writer throughput, downstream search economics, mature resemblance coverage, or final compression gain.
+The native candidate preserved semantic equality with the Python oracle on every row and kept run/reuse behavior identical to the native baseline. It also maintained high absolute throughput: all 1 MiB rows exceeded the frozen 150 MiB/s floor.
 
-The fixed lag-64 XOR cue remains deliberately narrow. The 256-entry fingerprint table can miss late reuse after saturation. Neither weakness is hidden by this promotion.
+But the extra per-byte add8/XOR histograms were too expensive relative to the already-required run/reuse observer:
 
-## Preresult correction authority
+- median wall ratio: **1.34484x** vs frozen <=1.25x;
+- median CPU ratio: **1.34364x** vs frozen <=1.25x;
+- worst wall ratio: **1.67854x** (`mixed_structured`, 1 MiB);
+- worst CPU ratio: **1.67845x**;
+- 1 MiB `add8_ramp`: about **1.47368x** wall;
+- 1 MiB `xor_chain`: about **1.48286x** wall;
+- negative controls were much cheaper, roughly **1.16-1.17x** at 1 MiB.
 
-Source `9e3e6c627c50f34476c20af148f87a2293548b11` remains inadmissible because its original `false_pattern` generator accidentally contained genuine aligned repeated chunks while the oracle declared reuse negative. The corrected source changes only deterministic phase between short arithmetic patches; candidate code and frozen scientific thresholds were not moved.
+Decision: preserve the information substrate but do not carry full relation histograms on every byte in this form.
 
-## Next falsifiable question
+## Causal interpretation / reopening predicate
 
-Measure the marginal native carrying cost of add8/XOR evidence when fused into the same run+reuse forward pass. The preregistered descendant compares a common native run/reuse arm with an otherwise identical candidate that adds only the two relation histograms and bounded lag ring. If those signals impose excessive native overhead, sample/defer/rework them before any downstream exact-search integration; do not relax this promotion result into permission for expensive writer analysis.
+The red is not semantic and not raw throughput; it is marginal carrying cost. The next rehabilitation must remove most relation-statistic work while preserving the full gate's nominations under adversarial placement. Sampling/deferred relation statistics are valid reopening classes. Threshold relaxation or simply accepting ~34% median observer overhead is not.
+
+This result changes no stored ONE bytes and grants no product-reader or Genesis-comparator authority.
