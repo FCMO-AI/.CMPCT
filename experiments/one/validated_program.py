@@ -19,15 +19,24 @@ _CONSTRUCTION_TOKEN = object()
 
 
 class ValidatedProgram:
-    """Opaque authority proving that one immutable Program snapshot passed full preflight."""
+    """Opaque sealed authority proving one immutable Program snapshot passed full preflight."""
 
-    __slots__ = ("_program", "_preflight")
+    __slots__ = ("_program", "_preflight", "_sealed")
 
     def __init__(self, program: Program, preflight: _Preflight, *, _token: object) -> None:
         if _token is not _CONSTRUCTION_TOKEN:
             raise TypeError("ValidatedProgram must be created by validate_program_snapshot")
-        self._program = program
-        self._preflight = preflight
+        object.__setattr__(self, "_program", program)
+        object.__setattr__(self, "_preflight", preflight)
+        object.__setattr__(self, "_sealed", True)
+
+    def __setattr__(self, name: str, value: object) -> None:
+        # A validation capability is useful only if its identity cannot later be rebound to
+        # another Program. This protects normal in-process use against stale-authority bugs;
+        # Python reflection is not treated as a hostile-process security boundary.
+        if getattr(self, "_sealed", False):
+            raise AttributeError("ValidatedProgram is immutable")
+        object.__setattr__(self, name, value)
 
     @property
     def program(self) -> Program:
