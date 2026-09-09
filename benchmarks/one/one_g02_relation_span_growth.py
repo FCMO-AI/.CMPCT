@@ -32,12 +32,16 @@ def _root(node: int, data: bytes) -> dict[str, Root]:
     return {"root": Root(Ref(node), len(data), sha256(data).hexdigest())}
 
 
+def _relation_byte(parent_byte: int, op: str, value: int) -> int:
+    return ((parent_byte + value) & 0xFF) if op == "add8" else (parent_byte ^ value)
+
+
 def _case(size: int, op: str, family: str) -> tuple[bytes, bytes, int, tuple[int, ...]]:
     half = size // 2
     rng = random.Random(0x51A90000 ^ size ^ (0xA8 if op == "add8" else 0x58) ^ len(family))
     parent = bytes(rng.randrange(256) for _ in range(half))
     value = 37 if op == "add8" else 0xA7
-    child = bytearray(((b + value) & 0xFF) if op == "add8" else (b ^ value) for b in parent)
+    child = bytearray(_relation_byte(b, op, value) for b in parent)
     if family == "long_exact":
         nominations = (0,)
     elif family == "sparse_cracks":
@@ -50,10 +54,14 @@ def _case(size: int, op: str, family: str) -> tuple[bytes, bytes, int, tuple[int
                 nominations_list.append(resume)
         nominations = tuple(nominations_list)
     elif family == "false_seed":
-        # Preserve one real seed then destroy the relation immediately after it. A correct
-        # exact grower may spend bounded work proving the nomination false beyond the seed.
+        # Preserve one exact 64-byte seed, then force the first post-seed byte to disagree
+        # before filling the remaining tail with deterministic noise.  The previous exact
+        # source 04d0b2b5... randomized this boundary but did not *guarantee* mismatch, so
+        # that source is inadmissible for promotion regardless of hosted outcome.
         for i in range(SEED_BYTES, half):
             child[i] = rng.randrange(256)
+        expected = _relation_byte(parent[SEED_BYTES], op, value)
+        child[SEED_BYTES] = (expected + 1) & 0xFF
         nominations = (0,)
     else:
         raise ValueError(family)
@@ -85,7 +93,7 @@ def _fixed_runs(parent: bytes, child: bytes, op: str, value: int) -> tuple[tuple
         width=min(FIXED_WINDOW,len(parent)-start); ok=True
         for i in range(start,start+width):
             checked += 1
-            exp=((parent[i]+value)&255) if op=="add8" else (parent[i]^value)
+            exp=_relation_byte(parent[i], op, value)
             if child[i] != exp: ok=False; break
         if ok: runs.append((start,width))
     return tuple(runs), checked

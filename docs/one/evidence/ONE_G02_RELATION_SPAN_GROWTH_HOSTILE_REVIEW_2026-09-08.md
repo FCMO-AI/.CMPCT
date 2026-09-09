@@ -8,3 +8,4 @@
 6. Verification byte counts are part of the promotion law; wall/CPU is reported but cannot hide extra exact scanning.
 7. The synthetic matrix is mechanism evidence only. It does not establish general resemblance discovery, real-world density, selective locality or a Genesis supersession point.
 8. If growth wins only on long-exact but fails sparse cracks, HOLD and improve bounded resumption rather than weaken the matrix.
+9. **Pre-result control repair.** Source `04d0b2b5d727ab44cd9ccba15231763176e85dc7` randomized bytes after the 64-byte true false-seed prefix but did not guarantee the first post-seed byte violated the relation. That makes the negative-control boundary probabilistic and the SHA scientifically inadmissible for promotion regardless of any hosted result. The repaired lineage forces that first post-seed byte to a deterministic non-relation value. Matrix, candidate algorithm, limits, repetitions, thresholds and interpretation law are unchanged.
