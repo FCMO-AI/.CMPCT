@@ -121,6 +121,27 @@ def _compile_range_from_valid_snapshot(
         if node.op in {"surprise", "fill", "add8", "xor"}:
             emit_terminal(ref, rel_start, take)
             return
+
+        if node.op == "repeat":
+            child = node.refs[0]
+            child_width = _ref_width(program, child)
+            if child_width == 0:
+                raise OneError("non-empty native range requested from empty repeat source")
+            node_len = _node_length(node)
+            outer_lo, _outer_hi = _ref_bounds(ref, node_len)
+            position = outer_lo + rel_start
+            remaining = take
+            emitted_before = cursor
+            while remaining:
+                child_rel = position % child_width
+                chunk = min(remaining, child_width - child_rel)
+                walk(child, child_rel, chunk)
+                position += chunk
+                remaining -= chunk
+            if cursor - emitted_before != take:
+                raise OneError("native range repeat coverage mismatch")
+            return
+
         if node.op != "concat":
             raise OneError(f"unsupported native range topology {node.op!r}")
 
