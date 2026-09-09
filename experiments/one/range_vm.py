@@ -15,7 +15,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from .ir import Node, OneError, Program, Ref
-from .vm import _preflight
+from .vm import _Preflight, _preflight
 
 
 @dataclass(frozen=True)
@@ -44,8 +44,28 @@ class RangeEvaluator:
 
     def __init__(self, program: Program):
         program.validate_shape()
+        self._initialize(program, _preflight(program))
+
+    @classmethod
+    def from_validated(cls, validated):
+        """Build the generic evaluator from a sealed full-Program validation authority.
+
+        This is for repeated reads after an explicit Program/archive-open validation. Raw
+        Programs must continue through ``__init__`` and therefore pay the full preflight.
+        """
+        # Local import avoids making validated_program depend on range_vm while keeping the
+        # authority type check exact at runtime.
+        from .validated_program import ValidatedProgram
+
+        if not isinstance(validated, ValidatedProgram):
+            raise TypeError("validated must be ValidatedProgram")
+        self = cls.__new__(cls)
+        self._initialize(validated.program, validated.preflight)
+        return self
+
+    def _initialize(self, program: Program, preflight: _Preflight) -> None:
         self.program = program
-        self._preflight = _preflight(program)
+        self._preflight = preflight
         self._work = 0
         self._materialized = 0
         self._touched: set[int] = set()
@@ -198,13 +218,7 @@ class RangeEvaluator:
                 result = bytes([node.value]) * length
                 self._charge(work=length, materialized=length)
             elif node.op == "concat":
-                result = self._eval_concat(
-                    node,
-                    start,
-                    length,
-                    depth,
-                    materialize_output=materialize_concat,
-                )
+                result = self._eval_concat(node, start, length, depth, materialize_output=materialize_concat)
             elif node.op == "repeat":
                 result = self._eval_repeat(node, start, length, depth)
             elif node.op in {"xor", "add8"}:
@@ -212,7 +226,7 @@ class RangeEvaluator:
             else:
                 raise OneError(f"unknown operation {node.op!r}")
             if len(result) != length:
-                raise OneError("range evaluator produced wrong length")
+                raise OneError("range node produced wrong length")
             return result
         finally:
             self._active.remove(key)
@@ -220,24 +234,25 @@ class RangeEvaluator:
     def reconstruct(self, root_name: str, start: int, length: int) -> tuple[bytes, RangeEvaluationStats]:
         if root_name not in self.program.roots:
             raise OneError(f"unknown root {root_name!r}")
-        root = self.program.roots[root_name]
         if type(start) is not int or type(length) is not int or start < 0 or length < 0:
             raise OneError("range start/length must be non-negative integers")
+        root = self.program.roots[root_name]
         if start + length > root.length:
             raise OneError("requested range exceeds root")
+
+        # Reset per-request counters so one evaluator can serve multiple selective reads
+        # after its Program has been preflight-validated once.
+        self._work = 0
+        self._materialized = 0
+        self._touched.clear()
+        self._active.clear()
+        self._max_depth_seen = 0
+
         value = self._slice_ref(root.ref, start, length, 1)
-        if len(value) != length:
-            raise OneError("root range length mismatch")
         return value, RangeEvaluationStats(
             requested_bytes=length,
             materialized_bytes=self._materialized,
             work_bytes=self._work,
             nodes_touched=len(self._touched),
             max_depth=self._max_depth_seen,
-            authenticated=False,
         )
-
-
-def reconstruct_range_unverified(program: Program, root_name: str, start: int, length: int) -> tuple[bytes, RangeEvaluationStats]:
-    """Return an exact but *unauthenticated* root slice and measured cone cost."""
-    return RangeEvaluator(program).reconstruct(root_name, start, length)
