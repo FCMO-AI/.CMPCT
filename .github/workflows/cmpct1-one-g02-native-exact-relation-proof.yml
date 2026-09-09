@@ -6,6 +6,7 @@ on:
       - 'experiments/one/native_relation_span_growth.py'
       - 'experiments/one/relation_span_growth.py'
       - 'benchmarks/one/one_g02_native_exact_relation_proof.py'
+      - 'tests/one/test_native_relation_span_growth.py'
       - 'docs/one/evidence/ONE_G02_NATIVE_EXACT_RELATION_PROOF_PREREG_2026-09-09.md'
       - '.github/workflows/cmpct1-one-g02-native-exact-relation-proof.yml'
   workflow_dispatch:
@@ -29,8 +30,8 @@ jobs:
           grep -q 'PyBytes_AsString' experiments/one/native_relation_span_growth.py
           grep -q '_mm_add_epi8' experiments/one/native_relation_span_growth.py
           grep -q 'same `RelationGrowthResult` fields' docs/one/evidence/ONE_G02_NATIVE_EXACT_RELATION_PROOF_PREREG_2026-09-09.md
-      - name: Python exact-proof semantic oracle tests
-        run: python -m pytest -q tests/one/test_relation_span_growth.py
+      - name: exact-proof semantic oracle and native parity tests
+        run: python -m pytest -q tests/one/test_relation_span_growth.py tests/one/test_native_relation_span_growth.py
       - name: native exact relation-proof falsifier
         run: |
           mkdir -p artifacts
