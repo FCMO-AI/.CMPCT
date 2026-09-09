@@ -3,7 +3,7 @@ from __future__ import annotations
 import pytest
 
 from benchmarks.one.one_g02_native_law_terminal_reader import _case
-from experiments.one.ir import Node, OneError, Program, Ref, Root
+from experiments.one.ir import Limits, Node, OneError, Program, Ref, Root
 from experiments.one.native_law_range_plan import (
     compile_validated_native_law_range_plan,
     execute_native_law_range_plan,
@@ -75,6 +75,24 @@ def test_compact_lengths_are_immutable_by_construction():
     assert lengths[0] >= 0
 
 
+def test_compact_validation_falls_back_without_narrowing_wide_logical_domain():
+    huge = 1 << 64
+    program = Program(
+        nodes=(Node("fill", count=huge, value=7, declared_length=huge),),
+        roots={"root": Root(Ref(0), huge, "0" * 64)},
+        limits=Limits(
+            max_nodes=1,
+            max_output_bytes=huge,
+            max_work_bytes=3 * huge,
+            max_depth=1,
+        ),
+    )
+    ordinary = validate_program_snapshot(program)
+    compact = validate_program_snapshot_compact(program)
+    assert not compact.uses_compact_lengths
+    assert compact.preflight == ordinary.preflight
+
+
 def test_validated_generic_range_baseline_rejects_raw_program():
     program = _case(32 * 1024, "xor")
     with pytest.raises(TypeError, match="ValidatedProgram"):
@@ -87,7 +105,6 @@ def test_validated_snapshot_isolated_from_caller_root_mapping_mutation():
     caller_program = Program(original.nodes, roots, original.limits)
     validated = validate_program_snapshot(caller_program)
 
-    # Caller-owned mapping is mutable by design; validated authority must not alias it.
     roots["current"] = Root(Ref(0), original.roots["previous"].length, "0" * 64)
     roots["injected"] = Root(Ref(0), original.roots["previous"].length, "0" * 64)
 
