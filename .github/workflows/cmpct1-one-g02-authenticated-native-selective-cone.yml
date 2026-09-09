@@ -5,6 +5,7 @@ on:
     branches: [research/cmpct1]
     paths:
       - experiments/one/selective_auth.py
+      - experiments/one/native_law_terminal_plan.py
       - experiments/one/native_law_range_plan.py
       - experiments/one/authenticated_native_selective_cone.py
       - tests/one/test_selective_auth.py
