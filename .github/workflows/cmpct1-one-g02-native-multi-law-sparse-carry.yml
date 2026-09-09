@@ -1,0 +1,62 @@
+# Exact-source research evidence lane for the sparse relation-signal rehabilitation.
+name: CMPCT1 ONE-G0.2 native multi-Law sparse carry
+on:
+  push:
+    branches: [research/cmpct1]
+    paths: &paths
+      - 'benchmarks/one/one_g02_native_multi_law_carry.py'
+      - 'benchmarks/one/one_g02_native_multi_law_sparse_carry.py'
+      - 'benchmarks/one/one_g02_multi_law_gate.py'
+      - 'experiments/one/multi_law_gate.py'
+      - '.github/workflows/cmpct1-one-g02-native-multi-law-sparse-carry.yml'
+  pull_request:
+    paths: *paths
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  sparse-carry:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - name: Checkout exact source SHA
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install test environment
+        run: python -m pip install -e '.[test]'
+      - name: Exact source and frozen-law binding
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          python - <<'PY'
+          import benchmarks.one.one_g02_native_multi_law_sparse_carry as b
+          assert b.REPETITIONS == 21
+          assert b.SAMPLE_STRIDE == 16
+          assert b.MAX_MEDIAN_OVERHEAD == 1.30
+          assert b.MAX_1MIB_MEDIAN_OVERHEAD == 1.30
+          assert b.MAX_1MIB_ROW_OVERHEAD == 1.40
+          assert b.MIN_1MIB_THROUGHPUT_MIB_S == 200.0
+          assert b._SPARSE_SOURCE != b.full._C_SOURCE
+          assert 'p & 15u' in b._SPARSE_SOURCE
+          assert 'data[p - LAG]' in b._SPARSE_SOURCE
+          assert 'ring[LAG]' not in b._SPARSE_SOURCE
+          PY
+      - name: Preserve parent semantic authority
+        run: python -m pytest -q tests/one/test_multi_law_gate.py
+      - name: Run frozen sparse carrying-cost falsifier
+        run: |
+          set -o pipefail
+          python -m benchmarks.one.one_g02_native_multi_law_sparse_carry | tee one_g02_native_multi_law_sparse_carry.json
+      - name: Preserve exact-head evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: one-g02-native-multi-law-sparse-carry-${{ env.EVIDENCE_HEAD }}
+          path: one_g02_native_multi_law_sparse_carry.json
+          if-no-files-found: warn
