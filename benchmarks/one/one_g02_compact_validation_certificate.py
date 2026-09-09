@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import gc
 import json
+import os
 import statistics
 import time
 
@@ -57,12 +58,8 @@ def run():
         base = _case(ROOT_BYTES, family)
         for unrelated in UNRELATED_COUNTS:
             program = _with_unrelated_nodes(base, unrelated)
-            ordinary, ordinary_open_cpu = _median_cpu_ns(
-                lambda p=program: validate_program_snapshot(p)
-            )
-            compact, compact_open_cpu = _median_cpu_ns(
-                lambda p=program: validate_program_snapshot_compact(p)
-            )
+            ordinary, ordinary_open_cpu = _median_cpu_ns(lambda p=program: validate_program_snapshot(p))
+            compact, compact_open_cpu = _median_cpu_ns(lambda p=program: validate_program_snapshot_compact(p))
 
             if compact.preflight_entry_count != ordinary.preflight_entry_count:
                 raise AssertionError("compact certificate entry count diverged")
@@ -76,61 +73,46 @@ def run():
             ordinary_reader = RangeEvaluator.from_validated(ordinary)
             compact_reader = RangeEvaluator.from_validated(compact)
             ordinary_result, ordinary_request_cpu = _median_cpu_ns(
-                lambda r=ordinary_reader: r.reconstruct(
-                    "current", REQUEST_START, REQUEST_BYTES
-                )
+                lambda r=ordinary_reader: r.reconstruct("current", REQUEST_START, REQUEST_BYTES)
             )
             compact_result, compact_request_cpu = _median_cpu_ns(
-                lambda r=compact_reader: r.reconstruct(
-                    "current", REQUEST_START, REQUEST_BYTES
-                )
+                lambda r=compact_reader: r.reconstruct("current", REQUEST_START, REQUEST_BYTES)
             )
             exact = compact_result == ordinary_result
             semantic_ok &= exact
             if not exact:
                 raise AssertionError("compact certificate range result diverged")
 
-            retained_ratio = compact.python_preflight_bytes / max(
-                ordinary.python_preflight_bytes, 1
-            )
+            retained_ratio = compact.python_preflight_bytes / max(ordinary.python_preflight_bytes, 1)
             request_ratio = compact_request_cpu / max(ordinary_request_cpu, 1)
             open_ratio = compact_open_cpu / max(ordinary_open_cpu, 1)
             request_ratios.append(request_ratio)
             open_ratios.append(open_ratio)
-            rows.append(
-                {
-                    "family": family,
-                    "root_bytes": ROOT_BYTES,
-                    "request_bytes": REQUEST_BYTES,
-                    "unrelated_nodes": unrelated,
-                    "program_nodes": len(program.nodes),
-                    "ordinary_open_cpu_ns": ordinary_open_cpu,
-                    "compact_open_cpu_ns": compact_open_cpu,
-                    "compact_over_ordinary_open_cpu": open_ratio,
-                    "ordinary_request_cpu_ns": ordinary_request_cpu,
-                    "compact_request_cpu_ns": compact_request_cpu,
-                    "compact_over_ordinary_request_cpu": request_ratio,
-                    "ordinary_python_preflight_bytes": ordinary.python_preflight_bytes,
-                    "compact_python_preflight_bytes": compact.python_preflight_bytes,
-                    "compact_over_ordinary_python_preflight": retained_ratio,
-                    "modeled_preflight_bytes": compact.modeled_preflight_bytes,
-                    "preflight_entries": compact.preflight_entry_count,
-                    "compact_bytes_per_entry_plus_scalars": (
-                        compact.python_preflight_bytes
-                        / max(compact.preflight_entry_count, 1)
-                    ),
-                    "semantic_ok": exact,
-                }
-            )
+            rows.append({
+                "family": family,
+                "root_bytes": ROOT_BYTES,
+                "request_bytes": REQUEST_BYTES,
+                "unrelated_nodes": unrelated,
+                "program_nodes": len(program.nodes),
+                "ordinary_open_cpu_ns": ordinary_open_cpu,
+                "compact_open_cpu_ns": compact_open_cpu,
+                "compact_over_ordinary_open_cpu": open_ratio,
+                "ordinary_request_cpu_ns": ordinary_request_cpu,
+                "compact_request_cpu_ns": compact_request_cpu,
+                "compact_over_ordinary_request_cpu": request_ratio,
+                "ordinary_python_preflight_bytes": ordinary.python_preflight_bytes,
+                "compact_python_preflight_bytes": compact.python_preflight_bytes,
+                "compact_over_ordinary_python_preflight": retained_ratio,
+                "modeled_preflight_bytes": compact.modeled_preflight_bytes,
+                "preflight_entries": compact.preflight_entry_count,
+                "compact_bytes_per_entry_plus_scalars": compact.python_preflight_bytes / max(compact.preflight_entry_count, 1),
+                "semantic_ok": exact,
+            })
 
     large_rows = [r for r in rows if r["unrelated_nodes"] == 4096]
-    memory_large_ok = all(
-        r["compact_over_ordinary_python_preflight"] <= MAX_MEMORY_RATIO_AT_4096
-        for r in large_rows
-    )
+    memory_large_ok = all(r["compact_over_ordinary_python_preflight"] <= MAX_MEMORY_RATIO_AT_4096 for r in large_rows)
     compact_size_ok = all(
-        r["compact_python_preflight_bytes"]
-        <= MAX_BYTES_PER_ENTRY * r["preflight_entries"] + MAX_BYTES_FIXED
+        r["compact_python_preflight_bytes"] <= MAX_BYTES_PER_ENTRY * r["preflight_entries"] + MAX_BYTES_FIXED
         for r in rows
     )
     median_request_ratio = statistics.median(request_ratios)
@@ -148,6 +130,7 @@ def run():
     return {
         "schema": "cmpct-one-g02-compact-validation-certificate-v1",
         "experimental_version": "ONE-G0.2",
+        "source_sha": os.environ.get("EVIDENCE_HEAD") or os.environ.get("GITHUB_SHA") or "local-unbound",
         "root_bytes": ROOT_BYTES,
         "request_bytes": REQUEST_BYTES,
         "rounds": ROUNDS,
@@ -155,23 +138,12 @@ def run():
             "median_compact_over_ordinary_request_cpu": median_request_ratio,
             "worst_compact_over_ordinary_request_cpu": worst_request_ratio,
             "median_compact_over_ordinary_open_cpu": median_open_ratio,
-            "large_retained_memory_ratios": {
-                r["family"]: r["compact_over_ordinary_python_preflight"]
-                for r in large_rows
-            },
-            "max_compact_python_preflight_bytes": max(
-                r["compact_python_preflight_bytes"] for r in rows
-            ),
+            "large_retained_memory_ratios": {r["family"]: r["compact_over_ordinary_python_preflight"] for r in large_rows},
+            "max_compact_python_preflight_bytes": max(r["compact_python_preflight_bytes"] for r in rows),
             "gates": gates,
             "advance": advance,
-            "decision": (
-                "ADVANCE_COMPACT_VALIDATION_CERTIFICATE"
-                if advance
-                else (
-                    "INVALIDATE_COMPACT_VALIDATION_CERTIFICATE"
-                    if not semantic_ok
-                    else "HOLD_COMPACT_VALIDATION_CERTIFICATE"
-                )
+            "decision": "ADVANCE_COMPACT_VALIDATION_CERTIFICATE" if advance else (
+                "INVALIDATE_COMPACT_VALIDATION_CERTIFICATE" if not semantic_ok else "HOLD_COMPACT_VALIDATION_CERTIFICATE"
             ),
         },
         "rows": rows,
