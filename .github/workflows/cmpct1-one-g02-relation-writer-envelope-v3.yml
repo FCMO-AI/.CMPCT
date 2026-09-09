@@ -5,6 +5,7 @@ on:
     paths:
       - 'benchmarks/one/one_g02_relation_writer_envelope_v3.py'
       - 'benchmarks/one/one_g02_relation_writer_envelope_v3_corrected.py'
+      - 'benchmarks/one/one_g02_relation_writer_envelope_v3_nocopy.py'
       - 'benchmarks/one/one_g02_relation_writer_envelope_v2.py'
       - 'experiments/one/block_relation_witness.py'
       - 'experiments/one/relation_span_growth.py'
@@ -13,6 +14,7 @@ on:
       - 'benchmarks/one/one_g02_end_to_end_direct_emitter_writer.py'
       - 'docs/one/evidence/ONE_G02_RELATION_WRITER_ENVELOPE_V3_PREREG_2026-09-09.md'
       - 'docs/one/evidence/ONE_G02_RELATION_WRITER_ENVELOPE_V3_INITIAL_INVALIDATION_2026-09-09.md'
+      - 'docs/one/evidence/ONE_G02_RELATION_WRITER_ENVELOPE_V3_COPY_INVALIDATION_2026-09-09.md'
       - '.github/workflows/cmpct1-one-g02-relation-writer-envelope-v3.yml'
   workflow_dispatch:
 permissions:
@@ -35,14 +37,15 @@ jobs:
           grep -q 'MAX_MEDIAN_CONTROL_CPU_RATIO = 1.35' benchmarks/one/one_g02_relation_writer_envelope_v3.py
           grep -q 'MAX_CONTROL_CPU_RATIO = 1.75' benchmarks/one/one_g02_relation_writer_envelope_v3.py
           grep -q 'const size_t l0=0u' benchmarks/one/one_g02_relation_writer_envelope_v3_corrected.py
+          grep -q 'PyBytes_AsString' benchmarks/one/one_g02_relation_writer_envelope_v3_nocopy.py
           grep -q 'GATE_PROBE_RATIO = 0.046875' benchmarks/one/one_g02_relation_writer_envelope_v3.py
       - name: inherited semantic adversaries
         run: python -m pytest -q tests/one/test_relation_witness_transfer.py tests/one/test_relation_span_growth.py
-      - name: opportunity-gated writer falsifier
+      - name: zero-copy opportunity-gated writer falsifier
         run: |
           mkdir -p artifacts
           set +e
-          EVIDENCE_HEAD="${GITHUB_SHA}" python -m benchmarks.one.one_g02_relation_writer_envelope_v3_corrected | tee artifacts/one_g02_relation_writer_envelope_v3.json
+          EVIDENCE_HEAD="${GITHUB_SHA}" python -m benchmarks.one.one_g02_relation_writer_envelope_v3_nocopy | tee artifacts/one_g02_relation_writer_envelope_v3.json
           rc=${PIPESTATUS[0]}
           set -e
           exit $rc
