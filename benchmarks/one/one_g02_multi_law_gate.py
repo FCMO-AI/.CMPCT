@@ -67,12 +67,15 @@ def make_case(family: str, size: int) -> bytes:
         packed = zlib.compress(source, 9)
         return _repeat_to_size(packed, size)
     if family == "false_pattern":
-        # Short local coincidences deliberately below the global arithmetic/xor gate.
+        # Short local arithmetic coincidences deliberately below the global gate.
+        # Each patch receives a distinct phase so the control does not accidentally
+        # contain an exactly repeated aligned 64-byte chunk.
         out = bytearray(rng.randrange(256) for _ in range(size))
-        for start in range(1024, size, 8192):
+        for patch_id, start in enumerate(range(1024, size, 8192)):
             end = min(start + 96, size)
+            base = (7 + 29 * patch_id) & 0xFF
             for i in range(start, end):
-                out[i] = (7 + 5 * (i - start)) & 0xFF
+                out[i] = (base + 5 * (i - start)) & 0xFF
         return bytes(out)
     raise ValueError(family)
 
