@@ -68,8 +68,15 @@ def test_repeat_lowers_through_existing_terminal_schedule():
     expected = (data * 8)[start : start + length]
     plan = compile_native_law_range_plan(program, "root", start, length)
     assert execute_native_law_range_plan(plan) == expected
-    assert plan.command_count == 4
-    assert plan.packed_source_bytes == length
+    # The Repeat-bulk rehabilitation deliberately lowers a direct periodic
+    # Repeat(Surprise) cone to one bounded periodic descriptor and borrows the
+    # immutable basis instead of packing the requested output into source_blob.
+    assert plan.bulk_periodic
+    assert plan.command_count == 1
+    assert plan.packed_source_bytes == 0
+    assert plan.source_plan_write_bytes == 0
+    assert plan.source_read_bytes == length
+    assert plan.sink_write_bytes == length
 
 
 def test_concat_surprise_tail_is_explicitly_unsupported():
