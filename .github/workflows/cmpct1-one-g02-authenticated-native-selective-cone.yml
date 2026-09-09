@@ -1,0 +1,32 @@
+name: CMPCT1 ONE-G0.2 authenticated native selective cone
+
+on:
+  push:
+    branches: [research/cmpct1]
+    paths:
+      - experiments/one/selective_auth.py
+      - tests/one/test_selective_auth.py
+      - benchmarks/one/one_g02_authenticated_native_selective_cone.py
+      - .github/workflows/cmpct1-one-g02-authenticated-native-selective-cone.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  semantic-seam:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Bind exact source
+        run: |
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          echo "EVIDENCE_HEAD=$GITHUB_SHA" >> "$GITHUB_ENV"
+      - name: Install test dependency
+        run: python -m pip install -q pytest
+      - name: Run selective-auth semantic and hostile tests
+        run: python -m pytest -q tests/one/test_selective_auth.py tests/one/test_auth_tree.py
