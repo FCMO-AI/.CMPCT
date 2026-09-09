@@ -18,11 +18,11 @@ from benchmarks.one.one_g02_native_law_terminal_reader import (
     LAW_FAMILIES,
     _case,
 )
-from experiments.one.auth_tree import build_auth_tree
+from experiments.one.auth_tree import RangeProof, build_auth_tree, prove_range, verify_range
 from experiments.one.authenticated_native_selective_cone import (
     reconstruct_authenticated_native_range,
 )
-from experiments.one.ir import Node, OneError, Program, Ref, Root
+from experiments.one.ir import Limits, Node, OneError, Program, Ref, Root
 from experiments.one.selective_auth import reconstruct_authenticated_range
 from experiments.one.vm import evaluate
 
@@ -89,39 +89,81 @@ def _paired(base_fn, cand_fn):
     )
 
 
+def _expect_reject(label, fn, failures):
+    try:
+        fn()
+        failures.append(label)
+    except (OneError, ValueError):
+        pass
+
+
 def _hostile_controls():
-    data = bytes((i * 17 + 3) & 255 for i in range(32 * 1024))
-    program = _case(len(data), "xor")
+    program = _case(32 * 1024, "xor")
     outputs, _ = evaluate(program)
     current = outputs["current"]
     tree = build_auth_tree(current, LEAF_BYTES)
     failures = []
 
     bad_root = bytes([tree.root[0] ^ 1]) + tree.root[1:]
-    try:
-        reconstruct_authenticated_native_range(
+    _expect_reject(
+        "wrong_expected_root_accepted",
+        lambda: reconstruct_authenticated_native_range(
             program, "current", tree, bad_root, 4096, 64
-        )
-        failures.append("wrong_expected_root_accepted")
-    except ValueError:
-        pass
+        ),
+        failures,
+    )
 
     nodes = list(program.nodes)
     src = bytearray(nodes[0].surprise)
     src[5000] ^= 1
     nodes[0] = Node(
-        "surprise",
-        surprise=bytes(src),
-        declared_length=nodes[0].declared_length,
+        "surprise", surprise=bytes(src), declared_length=nodes[0].declared_length
     )
     mutated = Program(tuple(nodes), program.roots, program.limits)
-    try:
-        reconstruct_authenticated_native_range(
+    _expect_reject(
+        "mutated_payload_accepted",
+        lambda: reconstruct_authenticated_native_range(
             mutated, "current", tree, tree.root, 4992, 64
+        ),
+        failures,
+    )
+
+    # Exercise generic proof grammar directly so sibling digest/coordinate corruption
+    # is part of this experiment's hostile matrix, not merely inherited test coverage.
+    proof = prove_range(current, tree, 4096, 64)
+    if proof.siblings:
+        siblings = list(proof.siblings)
+        level, index, digest = siblings[0]
+        bad_digest = bytes([digest[0] ^ 1]) + digest[1:]
+        siblings[0] = (level, index, bad_digest)
+        bad_sibling = RangeProof(
+            proof.total_len,
+            proof.leaf_bytes,
+            proof.first_leaf,
+            proof.leaf_payloads,
+            tuple(siblings),
         )
-        failures.append("mutated_payload_accepted")
-    except ValueError:
-        pass
+        _expect_reject(
+            "mutated_sibling_digest_accepted",
+            lambda: verify_range(bad_sibling, tree.root, 4096, 64),
+            failures,
+        )
+
+        siblings = list(proof.siblings)
+        level, index, digest = siblings[0]
+        siblings[0] = (level, index + 1_000_000, digest)
+        bad_coordinate = RangeProof(
+            proof.total_len,
+            proof.leaf_bytes,
+            proof.first_leaf,
+            proof.leaf_payloads,
+            tuple(siblings),
+        )
+        _expect_reject(
+            "mutated_proof_coordinate_accepted",
+            lambda: verify_range(bad_coordinate, tree.root, 4096, 64),
+            failures,
+        )
 
     repeat_program = Program(
         nodes=(
@@ -131,13 +173,35 @@ def _hostile_controls():
         roots={"root": Root(Ref(1), 32768, "0" * 64)},
     )
     repeat_tree = build_auth_tree(b"abcd" * 8192, LEAF_BYTES)
-    try:
-        reconstruct_authenticated_native_range(
+    _expect_reject(
+        "unsupported_repeat_silently_accepted",
+        lambda: reconstruct_authenticated_native_range(
             repeat_program, "root", repeat_tree, repeat_tree.root, 0, 64
-        )
-        failures.append("unsupported_repeat_silently_accepted")
-    except OneError:
-        pass
+        ),
+        failures,
+    )
+
+    malformed = Program(
+        nodes=(Node("add8", refs=(Ref(1), Ref(1)), declared_length=64),),
+        roots={"root": Root(Ref(0), 64, "0" * 64)},
+    )
+    malformed_tree = build_auth_tree(b"x" * 64, 64)
+    _expect_reject(
+        "malformed_forward_ref_accepted",
+        lambda: reconstruct_authenticated_native_range(
+            malformed, "root", malformed_tree, malformed_tree.root, 0, 1
+        ),
+        failures,
+    )
+
+    overbudget = Program(program.nodes, program.roots, Limits(max_output_bytes=1))
+    _expect_reject(
+        "overbudget_program_accepted",
+        lambda: reconstruct_authenticated_native_range(
+            overbudget, "current", tree, tree.root, 0, 64
+        ),
+        failures,
+    )
 
     return {"failures": failures, "passed": not failures}
 
@@ -165,7 +229,7 @@ def run():
                 base, bw, bc, cand, cw, cc = _paired(base_fn, cand_fn)
                 base_value, base_stats = base
                 cand_value, cand_stats = cand
-                expected = full[start:start+length]
+                expected = full[start : start + length]
                 exact = base_value == cand_value == expected
                 if not exact:
                     raise AssertionError("authenticated selective output mismatch")
@@ -209,10 +273,13 @@ def run():
                         "candidate_over_incumbent_data_movement": movement_ratio,
                         "candidate_packed_source_bytes": cand_stats.packed_source_bytes,
                         "candidate_source_read_bytes": cand_stats.source_read_bytes,
+                        "candidate_source_plan_write_bytes": cand_stats.source_plan_write_bytes,
                         "candidate_sink_write_bytes": cand_stats.sink_write_bytes,
                         "authenticated_leaf_payload_bytes": cand_stats.proof_payload_bytes,
                         "sibling_hash_bytes": cand_stats.proof_hash_bytes,
                         "sibling_hash_count": cand_stats.proof_hash_bytes // 32,
+                        "proof_coordinate_objects": cand_stats.proof_coordinate_objects,
+                        "proof_coordinate_wire_bytes": None,
                         "stored_auth_index_bytes": cand_stats.auth_index_bytes,
                         "candidate_peak_temporary_bytes": cand_stats.peak_temporary_bytes,
                         "plan_commands": cand_stats.plan_commands,
@@ -230,19 +297,29 @@ def run():
     worst_cpu = max(positive_cpu_ratios)
     median_movement = statistics.median(positive_movement_ratios)
 
-    fixed = [r for r in rows if r["kind"] == "law" and r["request"] == "begin_tiny"]
+    fixed = [
+        r for r in rows if r["kind"] == "law" and r["request"] == "begin_tiny"
+    ]
     locality_groups = {}
     for family in LAW_FAMILIES:
         group = [r for r in fixed if r["family"] == family]
         locality_groups[family] = {
             "cone_bytes": sorted(set(r["cone_bytes"] for r in group)),
-            "source_read_bytes": sorted(set(r["candidate_source_read_bytes"] for r in group)),
-            "auth_payload_bytes": sorted(set(r["authenticated_leaf_payload_bytes"] for r in group)),
+            "source_read_bytes": sorted(
+                set(r["candidate_source_read_bytes"] for r in group)
+            ),
+            "source_plan_write_bytes": sorted(
+                set(r["candidate_source_plan_write_bytes"] for r in group)
+            ),
+            "auth_payload_bytes": sorted(
+                set(r["authenticated_leaf_payload_bytes"] for r in group)
+            ),
             "sibling_hash_counts": [r["sibling_hash_count"] for r in group],
         }
     fixed_cone_ok = all(
         len(v["cone_bytes"]) == 1
         and len(v["source_read_bytes"]) == 1
+        and len(v["source_plan_write_bytes"]) == 1
         and len(v["auth_payload_bytes"]) == 1
         for v in locality_groups.values()
     )
@@ -269,7 +346,7 @@ def run():
     }
     advance = all(gates.values())
     return {
-        "schema": "cmpct-one-g02-authenticated-native-selective-cone-v1",
+        "schema": "cmpct-one-g02-authenticated-native-selective-cone-v2",
         "experimental_version": "ONE-G0.2",
         "source_sha": os.environ.get("EVIDENCE_HEAD")
         or os.environ.get("GITHUB_SHA")
