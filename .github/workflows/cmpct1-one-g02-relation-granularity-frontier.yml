@@ -1,5 +1,6 @@
 # Exact-source evidence lane for ONE-G0.2 generic relation granularity.
 # Evidence-trigger touch only: scientific matrix and decision law remain frozen.
+# PR evidence touch: no scientific content changed.
 name: CMPCT1 ONE-G0.2 relation granularity frontier
 on:
   push:
