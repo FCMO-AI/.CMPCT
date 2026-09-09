@@ -30,8 +30,10 @@ jobs:
         run: |
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
           echo "EVIDENCE_HEAD=$GITHUB_SHA" >> "$GITHUB_ENV"
-      - name: Install test dependency
-        run: python -m pip install -q pytest
+      - name: Install repository test dependency surface
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[test,audio]'
       - name: Run validated-Program semantic and hostile tests
         run: python -m pytest -q tests/one/test_validated_program.py tests/one/test_native_law_range_plan.py
       - name: Run frozen validated-Program selective-plan falsifier
