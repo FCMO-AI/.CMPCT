@@ -1,16 +1,10 @@
+# ci-lane: deep
+# Historical promoted receipt. Durable authority is recorded in
+# docs/one/evidence/ONE_G02_END_TO_END_DIRECT_EMITTER_WRITER_RESULT_2026-09-05.md.
+# Keep this lane manually reproducible; do not rediscover the same result on every ONE commit.
 name: ONE-G0.2 end-to-end direct emitter writer
 
 on:
-  push:
-    branches:
-      - research/cmpct1
-  pull_request:
-    paths:
-      - 'experiments/one/**'
-      - 'benchmarks/one/**'
-      - 'tests/one/**'
-      - 'docs/one/evidence/ONE_G02_END_TO_END_DIRECT_EMITTER_WRITER_PREREG_2026-09-05.md'
-      - '.github/workflows/one-g02-end-to-end-direct-emitter-writer.yml'
   workflow_dispatch:
 
 permissions:
