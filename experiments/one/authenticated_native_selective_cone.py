@@ -13,6 +13,7 @@ from .auth_tree import AuthTree, verify_range
 from .ir import OneError, Program
 from .native_law_range_plan import (
     compile_native_law_range_plan,
+    compile_validated_native_law_range_plan,
     execute_native_law_range_plan,
 )
 from .selective_auth import (
@@ -20,6 +21,7 @@ from .selective_auth import (
     _leaf_selection,
     proof_from_leaf_payloads,
 )
+from .validated_program import ValidatedProgram
 
 
 @dataclass(frozen=True)
@@ -80,8 +82,9 @@ def _clocked(fn):
     return value, time.perf_counter_ns() - w0, time.process_time_ns() - c0
 
 
-def reconstruct_authenticated_native_range(
+def _reconstruct_authenticated_native_range(
     program: Program,
+    compile_plan,
     root_name: str,
     tree: AuthTree,
     expected_auth_root: bytes,
@@ -102,9 +105,7 @@ def reconstruct_authenticated_native_range(
     cone_length = cone_end - cone_start
 
     plan, prep_wall, prep_cpu = _clocked(
-        lambda: compile_native_law_range_plan(
-            program, root_name, cone_start, cone_length
-        )
+        lambda: compile_plan(root_name, cone_start, cone_length)
     )
     cone, exec_wall, exec_cpu = _clocked(
         lambda: execute_native_law_range_plan(plan)
@@ -145,4 +146,50 @@ def reconstruct_authenticated_native_range(
         proof_prepare_cpu_ns=proof_cpu,
         verify_wall_ns=verify_wall,
         verify_cpu_ns=verify_cpu,
+    )
+
+
+def reconstruct_authenticated_native_range(
+    program: Program,
+    root_name: str,
+    tree: AuthTree,
+    expected_auth_root: bytes,
+    start: int,
+    length: int,
+) -> tuple[bytes, AuthenticatedNativeSelectiveStats]:
+    """Authenticated cone reconstruction from a raw Program with full per-request preflight."""
+    return _reconstruct_authenticated_native_range(
+        program,
+        lambda name, cone_start, cone_length: compile_native_law_range_plan(
+            program, name, cone_start, cone_length
+        ),
+        root_name,
+        tree,
+        expected_auth_root,
+        start,
+        length,
+    )
+
+
+def reconstruct_validated_authenticated_native_range(
+    validated: ValidatedProgram,
+    root_name: str,
+    tree: AuthTree,
+    expected_auth_root: bytes,
+    start: int,
+    length: int,
+) -> tuple[bytes, AuthenticatedNativeSelectiveStats]:
+    """Authenticated native cone reconstruction after one sealed full-Program open."""
+    if not isinstance(validated, ValidatedProgram):
+        raise TypeError("validated must be ValidatedProgram")
+    return _reconstruct_authenticated_native_range(
+        validated.program,
+        lambda name, cone_start, cone_length: compile_validated_native_law_range_plan(
+            validated, name, cone_start, cone_length
+        ),
+        root_name,
+        tree,
+        expected_auth_root,
+        start,
+        length,
     )
