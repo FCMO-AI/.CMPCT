@@ -39,6 +39,15 @@ def test_validated_snapshot_isolated_from_caller_root_mapping_mutation():
     assert execute_native_law_range_plan(plan) == expected
 
 
+def test_validated_authority_is_sealed_against_program_rebinding():
+    original = _case(32 * 1024, "xor")
+    other = _case(32 * 1024, "add8")
+    validated = validate_program_snapshot(original)
+    with pytest.raises(AttributeError, match="immutable"):
+        validated._program = other
+    assert validated.program == validate_program_snapshot(original).program
+
+
 def test_validated_authority_cannot_be_constructed_directly():
     program = _case(32 * 1024, "add8")
     with pytest.raises(TypeError, match="validate_program_snapshot"):
