@@ -12,7 +12,7 @@ from pathlib import Path
 import subprocess
 import tempfile
 
-from experiments.one.relation_span_growth import RelationGrowthResult, RelationSpan
+from experiments.one.relation_span_growth import RelationGrowthResult
 
 _C = r'''
 #include <stdint.h>
@@ -149,5 +149,7 @@ def grow_relation_spans_native(parent: bytes, child: bytes, *, op: str, value: i
                                            runs,max(len(ordered),1),ctypes.byref(count),ctypes.byref(compared),
                                            ctypes.byref(accepted),ctypes.byref(rejected))
     if rc: raise RuntimeError(rc)
-    out = tuple(RelationSpan(int(runs[i].start), int(runs[i].length)) for i in range(count.value))
+    # Match the authoritative Python oracle's representation exactly: runs are plain
+    # `(start, length)` tuples, not a native-only wrapper type.
+    out = tuple((int(runs[i].start), int(runs[i].length)) for i in range(count.value))
     return RelationGrowthResult(out, int(compared.value), int(accepted.value), int(rejected.value))
