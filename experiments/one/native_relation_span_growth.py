@@ -23,16 +23,19 @@ _C = r'''
 
 typedef struct { uint64_t start, length; } run_t;
 
-/* Return bytes inspected. `*ok` is 1 only if the complete requested width matched.
-   On mismatch, inspected includes the mismatching byte exactly like the Python oracle. */
+/* Return semantic bytes inspected. `*loaded` charges actual source bytes loaded from EACH
+   input (so a 16-byte SIMD pair adds 16, not 32). `*ok` is 1 only if the complete requested
+   width matched. On mismatch, semantic cost includes the mismatching byte exactly like the
+   Python oracle even when the SIMD load touched later lanes. */
 static size_t verify_exact(const uint8_t *a, const uint8_t *b, size_t start, size_t width,
-                           uint32_t op, uint8_t value, int *ok) {
+                           uint32_t op, uint8_t value, int *ok, uint64_t *loaded) {
     size_t i = 0;
 #if defined(__SSE2__)
     const __m128i vv = _mm_set1_epi8((char)value);
     for (; i + 16u <= width; i += 16u) {
         const __m128i va = _mm_loadu_si128((const __m128i *)(a + start + i));
         const __m128i vb = _mm_loadu_si128((const __m128i *)(b + start + i));
+        *loaded += 16u;
         const __m128i expected = op == 1u ? _mm_add_epi8(va, vv) : _mm_xor_si128(va, vv);
         const unsigned mask = (unsigned)_mm_movemask_epi8(_mm_cmpeq_epi8(expected, vb));
         if (mask != 0xffffu) {
@@ -45,6 +48,7 @@ static size_t verify_exact(const uint8_t *a, const uint8_t *b, size_t start, siz
     }
 #endif
     for (; i < width; ++i) {
+        ++*loaded;
         const uint8_t expected = op == 1u ? (uint8_t)(a[start+i] + value)
                                           : (uint8_t)(a[start+i] ^ value);
         if (b[start+i] != expected) { *ok = 0; return i + 1u; }
@@ -59,23 +63,24 @@ int grow_relation_spans_native(
     const uint64_t *noms, size_t nom_count,
     size_t seed_bytes, size_t extension_bytes,
     run_t *runs, size_t run_cap,
-    size_t *out_count, uint64_t *out_compared, uint64_t *out_accepted, uint64_t *out_rejected
+    size_t *out_count, uint64_t *out_compared, uint64_t *out_accepted, uint64_t *out_rejected,
+    uint64_t *out_loaded
 ) {
-    if (!out_count || !out_compared || !out_accepted || !out_rejected ||
+    if (!out_count || !out_compared || !out_accepted || !out_rejected || !out_loaded ||
         (n && (!a || !b)) || !seed_bytes || !extension_bytes || (op != 1u && op != 2u)) return 2;
-    *out_count = 0; *out_compared = 0; *out_accepted = 0; *out_rejected = 0;
+    *out_count = 0; *out_compared = 0; *out_accepted = 0; *out_rejected = 0; *out_loaded = 0;
     uint64_t covered_until = 0;
     for (size_t ni = 0; ni < nom_count; ++ni) {
         const uint64_t seed = noms[ni];
         if (seed > (uint64_t)n || seed_bytes > (size_t)((uint64_t)n - seed) || seed < covered_until) continue;
         int ok = 0;
-        size_t cost = verify_exact(a,b,(size_t)seed,seed_bytes,op,value,&ok);
+        size_t cost = verify_exact(a,b,(size_t)seed,seed_bytes,op,value,&ok,out_loaded);
         *out_compared += cost;
         if (!ok) { ++*out_rejected; continue; }
         uint64_t start = seed, end = seed + seed_bytes;
         while (end < (uint64_t)n) {
             const size_t width = (size_t)(((uint64_t)n-end) < extension_bytes ? ((uint64_t)n-end) : extension_bytes);
-            cost = verify_exact(a,b,(size_t)end,width,op,value,&ok);
+            cost = verify_exact(a,b,(size_t)end,width,op,value,&ok,out_loaded);
             *out_compared += cost;
             if (ok) { end += width; continue; }
             end += cost ? (uint64_t)(cost-1u) : 0u;
@@ -112,7 +117,8 @@ def _lib():
                    ctypes.c_uint32, ctypes.c_uint8, ctypes.POINTER(ctypes.c_uint64), ctypes.c_size_t,
                    ctypes.c_size_t, ctypes.c_size_t, ctypes.POINTER(_Run), ctypes.c_size_t,
                    ctypes.POINTER(ctypes.c_size_t), ctypes.POINTER(ctypes.c_uint64),
-                   ctypes.POINTER(ctypes.c_uint64), ctypes.POINTER(ctypes.c_uint64)]
+                   ctypes.POINTER(ctypes.c_uint64), ctypes.POINTER(ctypes.c_uint64),
+                   ctypes.POINTER(ctypes.c_uint64)]
     fn.restype = ctypes.c_int
     return lib
 
@@ -120,36 +126,49 @@ _pybytes_as_string = ctypes.pythonapi.PyBytes_AsString
 _pybytes_as_string.argtypes = [ctypes.py_object]
 _pybytes_as_string.restype = ctypes.c_void_p
 
-def grow_relation_spans_native(parent: bytes, child: bytes, *, op: str, value: int,
-                               nominations: tuple[int, ...], seed_bytes: int = 64,
-                               extension_bytes: int = 4096) -> RelationGrowthResult:
+
+def _grow_native(parent: bytes, child: bytes, *, op: str, value: int,
+                 nominations: tuple[int, ...], seed_bytes: int,
+                 extension_bytes: int) -> tuple[RelationGrowthResult, int]:
     if type(parent) is not bytes or type(child) is not bytes or len(parent) != len(child):
         raise ValueError("native relation proof requires equal immutable bytes inputs")
     if op not in {"add8", "xor"} or not 0 <= value <= 255 or seed_bytes <= 0 or extension_bytes <= 0:
         raise ValueError("invalid relation geometry")
     total = len(parent)
-    # If the seed itself cannot fit, the Python oracle skips every nomination without reading.
     if seed_bytes > total:
-        return RelationGrowthResult((), 0, 0, 0)
-    # Match the Python oracle for every representable and non-representable Python int.
-    # Any negative or seed > total is guaranteed to be skipped by the oracle, so discard
-    # it before the bounded uint64 ABI rather than risking marshaling overflow.
+        return RelationGrowthResult((), 0, 0, 0), 0
     normalized = {int(x) for x in nominations}
     ordered = tuple(sorted(x for x in normalized if 0 <= x <= total))
-    # An extension larger than the finite input is semantically equivalent to `total`:
-    # Python takes min(extension_bytes, total-end). Clamp before the bounded size_t ABI.
     native_extension = min(extension_bytes, max(total, 1))
     noms = (ctypes.c_uint64 * max(len(ordered), 1))(*ordered) if ordered else (ctypes.c_uint64 * 1)()
     runs = (_Run * max(len(ordered), 1))()
-    count = ctypes.c_size_t(); compared = ctypes.c_uint64(); accepted = ctypes.c_uint64(); rejected = ctypes.c_uint64()
+    count = ctypes.c_size_t(); compared = ctypes.c_uint64(); accepted = ctypes.c_uint64(); rejected = ctypes.c_uint64(); loaded = ctypes.c_uint64()
     ap = ctypes.cast(_pybytes_as_string(parent), ctypes.POINTER(ctypes.c_uint8))
     bp = ctypes.cast(_pybytes_as_string(child), ctypes.POINTER(ctypes.c_uint8))
     op_id = 1 if op == "add8" else 2
     rc = _lib().grow_relation_spans_native(ap,bp,len(parent),op_id,value,noms,len(ordered),seed_bytes,native_extension,
                                            runs,max(len(ordered),1),ctypes.byref(count),ctypes.byref(compared),
-                                           ctypes.byref(accepted),ctypes.byref(rejected))
+                                           ctypes.byref(accepted),ctypes.byref(rejected),ctypes.byref(loaded))
     if rc: raise RuntimeError(rc)
-    # Match the authoritative Python oracle's representation exactly: runs are plain
-    # `(start, length)` tuples, not a native-only wrapper type.
     out = tuple((int(runs[i].start), int(runs[i].length)) for i in range(count.value))
-    return RelationGrowthResult(out, int(compared.value), int(accepted.value), int(rejected.value))
+    return RelationGrowthResult(out, int(compared.value), int(accepted.value), int(rejected.value)), int(loaded.value)
+
+
+def grow_relation_spans_native(parent: bytes, child: bytes, *, op: str, value: int,
+                               nominations: tuple[int, ...], seed_bytes: int = 64,
+                               extension_bytes: int = 4096) -> RelationGrowthResult:
+    result, _loaded = _grow_native(parent, child, op=op, value=value, nominations=nominations,
+                                   seed_bytes=seed_bytes, extension_bytes=extension_bytes)
+    return result
+
+
+def grow_relation_spans_native_metered(parent: bytes, child: bytes, *, op: str, value: int,
+                                       nominations: tuple[int, ...], seed_bytes: int = 64,
+                                       extension_bytes: int = 4096) -> tuple[RelationGrowthResult, int]:
+    """Return exact oracle-compatible result plus actual bytes loaded from each input.
+
+    The load counter exposes SIMD read amplification without changing the semantic proof
+    result. Multiply by two for aggregate parent+child memory traffic.
+    """
+    return _grow_native(parent, child, op=op, value=value, nominations=nominations,
+                        seed_bytes=seed_bytes, extension_bytes=extension_bytes)
