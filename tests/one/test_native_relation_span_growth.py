@@ -43,7 +43,10 @@ def test_native_nomination_normalization_matches_oracle():
     n = 16384
     parent = bytes((i * 29 + 5) & 0xFF for i in range(n))
     child = _apply(parent, "xor", 203)
-    nominations = (4096, 0, 0, -64, 8192, 128, 4096, n + 64, 64)
+    nominations = (
+        4096, 0, 0, -64, 8192, 128, 4096, n + 64, 64,
+        1 << 64, 1 << 100, -(1 << 100),
+    )
     _same(parent, child, "xor", 203, nominations)
 
 
