@@ -5,6 +5,11 @@ only a full root Concat whose children are either direct Surprise spans or exist
 add8/xor nodes with one Surprise operand plus one uniform Fill operand. Compatible cones
 are written directly into final root positions through one bounded native invocation.
 Unsupported shapes fail closed to the caller; there is no fallback inside this module.
+
+Research portability note: the current wrapper uses CPython's stable C API through ctypes
+to allocate the final immutable bytes object once, then fills that private object before
+it is returned to Python. This removes a research-boundary bytearray->bytes copy; it is not
+a canonical ABI or portability decision.
 """
 from __future__ import annotations
 
@@ -40,7 +45,7 @@ class FusedRootLawPlan:
     commands: object
     keepers: tuple[ctypes.c_char_p, ...]
     command_count: int
-    stored_source_bytes: int
+    command_source_read_bytes: int
     derived_bytes: int
     modeled_traffic_bytes: int
 
@@ -49,7 +54,7 @@ class FusedRootLawPlan:
 class FusedRootLawStats:
     root_bytes: int
     command_count: int
-    stored_source_bytes: int
+    command_source_read_bytes: int
     derived_bytes: int
     modeled_traffic_bytes: int
 
@@ -73,6 +78,17 @@ def _library() -> ctypes.CDLL:
     return lib
 
 
+@lru_cache(maxsize=1)
+def _python_bytes_api():
+    make = ctypes.pythonapi.PyBytes_FromStringAndSize
+    make.argtypes = [ctypes.c_void_p, ctypes.c_ssize_t]
+    make.restype = ctypes.py_object
+    address = ctypes.pythonapi.PyBytes_AsString
+    address.argtypes = [ctypes.py_object]
+    address.restype = ctypes.c_void_p
+    return make, address
+
+
 def _full_ref(ref, op: PlanOp) -> bool:
     return ref.start == 0 and ref.length == op.length
 
@@ -88,7 +104,6 @@ def compile_fused_root_law_plan(plan: GenericExecutionPlan) -> FusedRootLawPlan:
 
     specs: list[tuple[int, bytes, int, int]] = []  # kind, source, value, length
     offset = 0
-    stored_source_bytes = 0
     derived_bytes = 0
 
     for root_ref in root_op.refs:
@@ -97,7 +112,6 @@ def compile_fused_root_law_plan(plan: GenericExecutionPlan) -> FusedRootLawPlan:
             raise OneError("root Law fusion requires full child refs")
         if child.op == "surprise" and not child.refs and child.length == len(child.surprise):
             specs.append((0, child.surprise, 0, child.length))
-            stored_source_bytes += child.length
             offset += child.length
             continue
         if child.op not in {"xor", "add8"} or child.surprise or len(child.refs) != 2:
@@ -127,7 +141,6 @@ def compile_fused_root_law_plan(plan: GenericExecutionPlan) -> FusedRootLawPlan:
             raise OneError("root Law relation geometry is not fusible")
         kind = 1 if child.op == "xor" else 2
         specs.append((kind, source_op.surprise, fill_op.value, child.length))
-        stored_source_bytes += child.length
         derived_bytes += child.length
         offset += child.length
 
@@ -147,9 +160,8 @@ def compile_fused_root_law_plan(plan: GenericExecutionPlan) -> FusedRootLawPlan:
         commands[i].kind = kind
         dst += length
 
-    # Traffic model charges stored-source reads, final writes, and one root-auth read.
-    # A relation source may legitimately be read once for its direct COPY and once for a
-    # derived child; both appear as separate commands and are therefore both charged.
+    # Traffic model charges every command source read, every final-root write, and one
+    # full root-authentication read. There is intentionally no hidden root-freeze copy.
     source_reads = sum(length for _, _, _, length in specs)
     modeled_traffic = source_reads + root.length + root.length
     return FusedRootLawPlan(
@@ -159,29 +171,26 @@ def compile_fused_root_law_plan(plan: GenericExecutionPlan) -> FusedRootLawPlan:
         commands,
         tuple(keepers),
         len(specs),
-        stored_source_bytes,
+        source_reads,
         derived_bytes,
         modeled_traffic,
     )
 
 
 def execute_fused_root_law_plan(plan: FusedRootLawPlan) -> tuple[dict[str, bytes], FusedRootLawStats]:
-    sink = bytearray(plan.root_length)
-    if plan.root_length:
-        view = (ctypes.c_uint8 * plan.root_length).from_buffer(sink)
-        ptr = ctypes.cast(view, _U8P)
-    else:
-        ptr = _U8P()
+    make_bytes, bytes_address = _python_bytes_api()
+    value = make_bytes(None, plan.root_length)
+    address = bytes_address(value)
+    ptr = ctypes.cast(address, _U8P) if plan.root_length else _U8P()
     rc = _library().one_execute_root_law_plan(ptr, plan.root_length, plan.commands, plan.command_count)
     if rc:
         raise OneError(f"root Law fusion kernel rejected with status {rc}")
-    value = bytes(sink)
     if sha256(value).hexdigest() != plan.root_sha256:
         raise OneError("root Law fusion sha256 mismatch")
     return {plan.root_name: value}, FusedRootLawStats(
         plan.root_length,
         plan.command_count,
-        plan.stored_source_bytes,
+        plan.command_source_read_bytes,
         plan.derived_bytes,
         plan.modeled_traffic_bytes,
     )
