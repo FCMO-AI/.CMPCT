@@ -6,6 +6,7 @@ on:
     branches: [research/cmpct1]
     paths:
       - experiments/one/validated_program.py
+      - experiments/one/range_vm.py
       - experiments/one/native_law_range_plan.py
       - experiments/one/native_law_terminal_plan.py
       - experiments/one/native_law_terminal_plan_kernel.c
