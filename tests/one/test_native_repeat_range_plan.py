@@ -92,7 +92,10 @@ def test_bulk_repeat_honors_sliced_root_phase() -> None:
             Node("repeat", refs=(Ref(0),), count=256, declared_length=len(full)),
         ),
         roots={"current": Root(Ref(1, 17, 4096), 4096, sha256(sliced).hexdigest())},
-        limits=Limits(max_output_bytes=8192, max_work_bytes=32768),
+        # Validation certifies every stored node, not just the sliced root. The
+        # Repeat node is 16 KiB logically, so the declared output bound must
+        # admit that complete valid node even though only 4 KiB is exposed.
+        limits=Limits(max_output_bytes=len(full), max_work_bytes=32768),
     )
     validated = validate_program_snapshot_compact(program)
     for start, length in ((0, 64), (13, 257), (1000, 2048)):
