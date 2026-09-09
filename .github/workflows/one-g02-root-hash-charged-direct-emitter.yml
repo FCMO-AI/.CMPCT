@@ -1,16 +1,10 @@
+# ci-lane: deep
+# Historical promoted receipt. Durable authority is recorded in
+# docs/one/evidence/ONE_G02_ROOT_HASH_CHARGED_DIRECT_EMITTER_RESULT_2026-09-05.md.
+# Keep this lane manually reproducible; do not rediscover the same result on every ONE commit.
 name: ONE-G0.2 root-hash-charged direct emitter
 
 on:
-  push:
-    branches:
-      - research/cmpct1
-  pull_request:
-    paths:
-      - 'experiments/one/**'
-      - 'benchmarks/one/**'
-      - 'tests/one/**'
-      - 'docs/one/evidence/ONE_G02_ROOT_HASH_CHARGED_DIRECT_EMITTER_PREREG_2026-09-05.md'
-      - '.github/workflows/one-g02-root-hash-charged-direct-emitter.yml'
   workflow_dispatch:
 
 permissions:
@@ -21,7 +15,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     env:
-      EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+      EVIDENCE_HEAD: ${{ github.sha }}
     steps:
       - uses: actions/checkout@v4
         with:
