@@ -3,6 +3,7 @@ from __future__ import annotations
 import pytest
 
 from benchmarks.one.one_g02_native_law_terminal_reader import _case
+from benchmarks.one.one_g02_selective_preflight_scaling import _with_unrelated_nodes
 from experiments.one.ir import Limits, Node, OneError, Program, Ref, Root
 from experiments.one.native_law_range_plan import (
     compile_validated_native_law_range_plan,
@@ -42,33 +43,46 @@ def test_validated_generic_range_baseline_matches_raw_evaluator_across_repeated_
 def test_compact_validated_generic_range_matches_ordinary_validated(family):
     program = _case(128 * 1024, family)
     ordinary = validate_program_snapshot(program)
-    compact = validate_program_snapshot_compact(program)
-    assert compact.uses_compact_lengths
+    candidate = validate_program_snapshot_compact(program)
     assert not ordinary.uses_compact_lengths
-    assert compact.preflight_entry_count == ordinary.preflight_entry_count
-    assert compact.preflight.max_depth == ordinary.preflight.max_depth
-    assert compact.preflight.worst_work_bytes == ordinary.preflight.worst_work_bytes
-    assert tuple(compact.preflight.lengths) == tuple(ordinary.preflight.lengths)
+    assert candidate.preflight_entry_count == ordinary.preflight_entry_count
+    assert candidate.preflight.max_depth == ordinary.preflight.max_depth
+    assert candidate.preflight.worst_work_bytes == ordinary.preflight.worst_work_bytes
+    assert tuple(candidate.preflight.lengths) == tuple(ordinary.preflight.lengths)
+    assert candidate.python_preflight_bytes <= ordinary.python_preflight_bytes
 
-    compact_reader = RangeEvaluator.from_validated(compact)
+    candidate_reader = RangeEvaluator.from_validated(candidate)
     ordinary_reader = RangeEvaluator.from_validated(ordinary)
     for start, length in [(0, 4096), (65500, 211), (128 * 1024 - 4096, 4096)]:
         expected, expected_stats = ordinary_reader.reconstruct("current", start, length)
-        actual, actual_stats = compact_reader.reconstruct("current", start, length)
+        actual, actual_stats = candidate_reader.reconstruct("current", start, length)
         assert actual == expected
         assert actual_stats == expected_stats
 
 
-def test_compact_validation_certificate_reduces_retained_python_preflight_state():
+def test_compact_validation_certificate_declines_memory_negative_tiny_graph():
     program = _case(128 * 1024, "xor_crack")
     ordinary = validate_program_snapshot(program)
+    candidate = validate_program_snapshot_compact(program)
+    assert candidate.python_preflight_bytes == ordinary.python_preflight_bytes
+    assert not candidate.uses_compact_lengths
+    assert candidate.modeled_preflight_bytes == ordinary.modeled_preflight_bytes
+
+
+def test_compact_validation_certificate_admits_memory_positive_large_graph():
+    base = _case(128 * 1024, "xor_crack")
+    program = _with_unrelated_nodes(base, 1024)
+    ordinary = validate_program_snapshot(program)
     compact = validate_program_snapshot_compact(program)
+    assert compact.uses_compact_lengths
     assert compact.python_preflight_bytes < ordinary.python_preflight_bytes
     assert compact.modeled_preflight_bytes == ordinary.modeled_preflight_bytes
 
 
 def test_compact_lengths_are_immutable_by_construction():
-    compact = validate_program_snapshot_compact(_case(32 * 1024, "xor"))
+    base = _case(32 * 1024, "xor")
+    compact = validate_program_snapshot_compact(_with_unrelated_nodes(base, 1024))
+    assert compact.uses_compact_lengths
     lengths = compact.preflight.lengths
     with pytest.raises(TypeError):
         lengths[0] = 1
