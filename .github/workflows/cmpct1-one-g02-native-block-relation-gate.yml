@@ -1,0 +1,79 @@
+name: CMPCT1 ONE-G0.2 native block relation gate
+on:
+  push:
+    branches: [research/cmpct1]
+    paths: &paths
+      - 'benchmarks/one/one_g02_native_block_relation_gate.py'
+      - 'benchmarks/one/one_g02_native_multi_law_carry.py'
+      - '.github/workflows/cmpct1-one-g02-native-block-relation-gate.yml'
+  pull_request:
+    paths: *paths
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  block-relation-gate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - name: Checkout exact source SHA
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install test environment
+        run: python -m pip install -e '.[test]'
+      - name: Exact source and frozen-law binding
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          python - <<'PY'
+          import benchmarks.one.one_g02_native_block_relation_gate as b
+          assert b.REPETITIONS == 21
+          assert b.SIZES == (64*1024, 256*1024, 1024*1024)
+          assert len(b.FAMILIES) == 8
+          assert b.SAMPLE_OFFSETS == (0,9,18,27,36,45,54,63)
+          assert b.MAX_MEDIAN_OVERHEAD == 1.30
+          assert b.MAX_1MIB_MEDIAN_OVERHEAD == 1.30
+          assert b.MAX_1MIB_ROW_OVERHEAD == 1.40
+          assert b.MIN_1MIB_THROUGHPUT_MIB_S == 200.0
+          # The corrected source must suppress uniform/uniform pairs through run state.
+          assert 'previous_chunk_uniform && current_chunk_uniform' in b._C_SOURCE
+          PY
+      - name: Hostile generator and semantic preflight
+        run: |
+          python - <<'PY'
+          import benchmarks.one.one_g02_native_block_relation_gate as b
+          for size in b.SIZES:
+              for family in b.FAMILIES:
+                  data=b.make_case(family,size)
+                  out=b._candidate(data)
+                  if family in {'unique_pair_add8','unique_pair_xor'}:
+                      assert not b._has_duplicate_aligned_chunk(data)
+                      assert not out.reuse
+                  if family=='unique_pair_add8':
+                      assert out.add8 and not out.xor_nom
+                  elif family=='unique_pair_xor':
+                      assert out.xor_nom and not out.add8
+                  elif family=='sample_trap':
+                      assert out.sampled_add8_candidates + out.sampled_xor_candidates > 0
+                      assert out.verified_add8_pairs + out.verified_xor_pairs == 0
+                      assert not out.add8 and not out.xor_nom
+                  elif family not in {'unique_pair_add8','unique_pair_xor'}:
+                      assert not out.add8 and not out.xor_nom
+          PY
+      - name: Run frozen 24-cell falsifier
+        run: |
+          set -o pipefail
+          python -m benchmarks.one.one_g02_native_block_relation_gate | tee one_g02_native_block_relation_gate.json
+      - name: Preserve exact-head evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: one-g02-native-block-relation-gate-${{ env.EVIDENCE_HEAD }}
+          path: one_g02_native_block_relation_gate.json
+          if-no-files-found: warn
