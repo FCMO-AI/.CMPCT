@@ -1,4 +1,5 @@
 name: cmpct1-one-g02-native-proof-writer-integration
+# Keep this workflow self-scoped so evidence-lane activation/repairs rerun the exact frozen gate.
 on:
   push:
     branches: [research/cmpct1]
