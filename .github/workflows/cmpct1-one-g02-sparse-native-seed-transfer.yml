@@ -1,0 +1,52 @@
+name: cmpct1-one-g02-sparse-native-seed-transfer
+on:
+  push:
+    branches: [research/cmpct1]
+    paths:
+      - 'benchmarks/one/one_g02_sparse_native_seed_transfer.py'
+      - 'benchmarks/one/one_g02_relation_writer_envelope_v3.py'
+      - 'benchmarks/one/one_g02_relation_writer_envelope_v3_corrected.py'
+      - 'benchmarks/one/one_g02_relation_writer_envelope_v3_nocopy.py'
+      - 'benchmarks/one/one_g02_relation_writer_envelope_v2.py'
+      - 'experiments/one/relation_span_growth.py'
+      - 'experiments/one/growable_wire.py'
+      - 'docs/one/evidence/ONE_G02_SPARSE_NATIVE_SEED_TRANSFER_PREREG_2026-09-09.md'
+      - '.github/workflows/cmpct1-one-g02-sparse-native-seed-transfer.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  falsify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with: {ref: '${{ github.sha }}'}
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.12'}
+      - run: python -m pip install -e '.[test]'
+      - name: bind exact source and frozen law
+        run: |
+          test "$(git rev-parse HEAD)" = "${GITHUB_SHA}"
+          grep -q 'MAX_MEDIAN_NOVEL_CPU_OVER_V3 = 0.85' benchmarks/one/one_g02_sparse_native_seed_transfer.py
+          grep -q 'MAX_NOVEL_CPU_OVER_V3 = 1.00' benchmarks/one/one_g02_sparse_native_seed_transfer.py
+          grep -q 'MAX_POSITIVE_TOTAL_PROBE_RATIO = 0.09375' benchmarks/one/one_g02_sparse_native_seed_transfer.py
+          grep -q 'PyBytes_AsString' benchmarks/one/one_g02_sparse_native_seed_transfer.py
+          grep -q 'grow_relation_spans' benchmarks/one/one_g02_sparse_native_seed_transfer.py
+          grep -q 'candidate final wire byte-identical to V3' docs/one/evidence/ONE_G02_SPARSE_NATIVE_SEED_TRANSFER_PREREG_2026-09-09.md
+      - name: inherited semantic adversaries
+        run: python -m pytest -q tests/one/test_relation_witness_transfer.py tests/one/test_relation_span_growth.py
+      - name: sparse native seed-transfer falsifier
+        run: |
+          mkdir -p artifacts
+          set +e
+          EVIDENCE_HEAD="${GITHUB_SHA}" python -m benchmarks.one.one_g02_sparse_native_seed_transfer | tee artifacts/one_g02_sparse_native_seed_transfer.json
+          rc=${PIPESTATUS[0]}
+          set -e
+          exit $rc
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: one-g02-sparse-native-seed-transfer-${{ github.sha }}
+          path: artifacts/one_g02_sparse_native_seed_transfer.json
+          if-no-files-found: warn
