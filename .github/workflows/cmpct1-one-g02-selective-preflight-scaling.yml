@@ -1,0 +1,41 @@
+name: CMPCT1 ONE-G0.2 selective preflight scaling
+
+on:
+  push:
+    branches: [research/cmpct1]
+    paths:
+      - benchmarks/one/one_g02_selective_preflight_scaling.py
+      - experiments/one/native_law_range_plan.py
+      - experiments/one/native_law_terminal_plan.py
+      - experiments/one/vm.py
+      - .github/workflows/cmpct1-one-g02-selective-preflight-scaling.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  cost-owner:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Bind exact source
+        run: |
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          echo "EVIDENCE_HEAD=$GITHUB_SHA" >> "$GITHUB_ENV"
+      - name: Run fixed-cone preflight scaling diagnostic
+        run: |
+          python -m benchmarks.one.one_g02_selective_preflight_scaling > selective-preflight-scaling.json
+          cat selective-preflight-scaling.json
+      - name: Retain exact-source evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: selective-preflight-scaling-${{ github.sha }}
+          path: selective-preflight-scaling.json
+          if-no-files-found: error
+          retention-days: 30
