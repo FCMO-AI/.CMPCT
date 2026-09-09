@@ -7,6 +7,7 @@ on:
       - 'experiments/one/multi_law_gate.py'
       - 'tests/one/test_multi_law_gate.py'
       - 'benchmarks/one/one_g02_multi_law_gate.py'
+      - 'benchmarks/one/one_g02_native_multi_law_carry.py'
       - 'docs/one/prereg/ONE_G02_MULTI_LAW_GATE_PREREG_2026-09-08.md'
       - 'docs/one/evidence/ONE_G02_MULTI_LAW_GATE_HOSTILE_REVIEW_2026-09-08.md'
       - '.github/workflows/cmpct1-one-g02-multi-law-gate.yml'
@@ -36,26 +37,34 @@ jobs:
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
           python - <<'PY'
-          import benchmarks.one.one_g02_multi_law_gate as b
-          assert b.REPETITIONS == 9
-          assert b.MAX_FALSE_NEGATIVES == 0
-          assert b.MAX_NEGATIVE_NOMINATIONS == 1
-          assert b.MAX_RETAINED_FRACTION == 0.15
-          assert len(b.SIZES) * len(b.FAMILIES) == 24
+          import benchmarks.one.one_g02_multi_law_gate as g
+          import benchmarks.one.one_g02_native_multi_law_carry as n
+          assert g.REPETITIONS == 9
+          assert g.MAX_FALSE_NEGATIVES == 0
+          assert g.MAX_NEGATIVE_NOMINATIONS == 1
+          assert g.MAX_RETAINED_FRACTION == 0.15
+          assert len(g.SIZES) * len(g.FAMILIES) == 24
+          assert n.REPETITIONS == 21
+          assert n.MAX_MEDIAN_OVERHEAD == 1.25
+          assert n.MAX_ROW_OVERHEAD == 1.40
+          assert n.MIN_1MIB_THROUGHPUT_MIB_S == 150.0
           PY
       - name: Semantic and decision-law tests
         run: python -m pytest -q tests/one/test_multi_law_gate.py
-      - name: Run frozen falsifier
+      - name: Run frozen nomination falsifier
         run: |
-          set +e
-          python -m benchmarks.one.one_g02_multi_law_gate > one_g02_multi_law_gate.json
-          rc=$?
-          cat one_g02_multi_law_gate.json
-          exit $rc
+          set -o pipefail
+          python -m benchmarks.one.one_g02_multi_law_gate | tee one_g02_multi_law_gate.json
+      - name: Run native carrying-cost falsifier
+        run: |
+          set -o pipefail
+          python -m benchmarks.one.one_g02_native_multi_law_carry | tee one_g02_native_multi_law_carry.json
       - name: Preserve exact-head evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: one-g02-multi-law-gate-${{ env.EVIDENCE_HEAD }}
-          path: one_g02_multi_law_gate.json
+          path: |
+            one_g02_multi_law_gate.json
+            one_g02_native_multi_law_carry.json
           if-no-files-found: warn
