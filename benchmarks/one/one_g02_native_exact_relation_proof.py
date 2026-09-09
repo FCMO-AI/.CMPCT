@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import gc, json, random, statistics, time
 from experiments.one.relation_span_growth import grow_relation_spans
-from experiments.one.native_relation_span_growth import grow_relation_spans_native
+from experiments.one.native_relation_span_growth import grow_relation_spans_native, grow_relation_spans_native_metered
 
 SIZES=(64*1024,256*1024,1024*1024)
 OPS=("add8","xor")
@@ -51,10 +51,13 @@ def run():
                     nc,nr=_time(grow_relation_spans_native,p,c,op,v,noms);pc,pr=_time(grow_relation_spans,p,c,op,v,noms)
                 else:
                     pc,pr=_time(grow_relation_spans,p,c,op,v,noms);nc,nr=_time(grow_relation_spans_native,p,c,op,v,noms)
-                semantic=(nr==pr);ratio=nc/max(pc,1);kind="productive" if fam in {"exact","sparse_cracks","multi_region"} else "hostile"
+                metered,loaded=grow_relation_spans_native_metered(p,c,op=op,value=v,nominations=noms)
+                semantic=(nr==pr==metered)
+                traffic_ok=(loaded>=nr.compared_bytes)
+                ratio=nc/max(pc,1);kind="productive" if fam in {"exact","sparse_cracks","multi_region"} else "hostile"
                 (productive if kind=="productive" else hostile).append(ratio)
-                rows.append({"bytes":n,"op":op,"family":fam,"kind":kind,"semantic_ok":semantic,"python_cpu_ns":pc,"native_cpu_ns":nc,"native_over_python_cpu":ratio,"compared_bytes":pr.compared_bytes,"accepted_bytes":pr.accepted_bytes,"rejected_seeds":pr.rejected_seeds,"run_count":len(pr.runs)})
-    invalid=any(not r["semantic_ok"] for r in rows)
+                rows.append({"bytes":n,"op":op,"family":fam,"kind":kind,"semantic_ok":semantic,"traffic_ok":traffic_ok,"python_cpu_ns":pc,"native_cpu_ns":nc,"native_over_python_cpu":ratio,"compared_bytes":pr.compared_bytes,"native_loaded_bytes_per_input":loaded,"native_loaded_bytes_parent_plus_child":2*loaded,"native_load_amplification_over_semantic":loaded/max(pr.compared_bytes,1),"accepted_bytes":pr.accepted_bytes,"rejected_seeds":pr.rejected_seeds,"run_count":len(pr.runs)})
+    invalid=any(not r["semantic_ok"] or not r["traffic_ok"] for r in rows)
     hold=(statistics.median(productive)>MAX_MEDIAN_PRODUCTIVE_CPU_RATIO or max(productive)>MAX_PRODUCTIVE_CPU_RATIO or statistics.median(hostile)>MAX_MEDIAN_HOSTILE_CPU_RATIO or max(hostile)>MAX_HOSTILE_CPU_RATIO)
     decision="INVALIDATE_NATIVE_EXACT_RELATION_PROOF" if invalid else "HOLD_NATIVE_EXACT_RELATION_PROOF" if hold else "ADVANCE_NATIVE_EXACT_RELATION_PROOF"
     print(json.dumps({"experiment":"ONE-G0.2 native exact relation proof","decision":decision,"source_sha":__import__("os").environ.get("EVIDENCE_HEAD"),"median_productive_cpu_ratio":statistics.median(productive),"worst_productive_cpu_ratio":max(productive),"median_hostile_cpu_ratio":statistics.median(hostile),"worst_hostile_cpu_ratio":max(hostile),"rows":rows},sort_keys=True))
