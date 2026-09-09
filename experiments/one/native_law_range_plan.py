@@ -31,11 +31,15 @@ class NativeLawRangePlan:
     root_name: str
     root_start: int
     length: int
-    source_blob: bytes
+    # Private mutable backing store. It is never exposed to the reader and is not
+    # modified after compilation. ctypes views it directly, avoiding the previous
+    # bytearray -> bytes -> ctypes full-cone copy chain.
+    source_blob: bytearray
     source_buffer: object
     commands: object
     command_count: int
     source_read_bytes: int
+    source_plan_write_bytes: int
     sink_write_bytes: int
     max_work_bytes: int
 
@@ -85,7 +89,9 @@ def compile_native_law_range_plan(
 
         if node.op == "surprise":
             src_lo, src_hi = _ref_bounds(effective, node_len)
-            payload = node.surprise[src_lo:src_hi]
+            # memoryview keeps the source-side extraction from creating an otherwise
+            # invisible temporary bytes object before the one charged plan write.
+            payload = memoryview(node.surprise)[src_lo:src_hi]
             if len(payload) != take:
                 raise OneError("native range Surprise slice mismatch")
             src_off = len(blob)
@@ -137,15 +143,13 @@ def compile_native_law_range_plan(
             node_cursor = child_hi
 
         if node.surprise:
-            # Keep this first candidate narrow and auditable. A concat Surprise tail is
-            # valid ONE but is reported as unsupported rather than reconstructed outside
-            # the native schedule or hidden in fallback.
+            # Keep this candidate narrow and auditable. A concat Surprise tail is valid
+            # ONE but is reported as unsupported rather than reconstructed out-of-band.
             raise OneError("concat Surprise tail native range lowering not yet supported")
 
         if cursor - emitted_before != take:
             raise OneError("native range concat coverage mismatch")
 
-    # Root Ref can itself select a subrange from its node.
     walk(root.ref, start, length)
     if cursor != length:
         raise OneError("native range plan produced wrong output length")
@@ -156,9 +160,10 @@ def compile_native_law_range_plan(
         if kind in {COPY, ADD8_CONST, XOR_CONST} and src_off + width > len(blob):
             raise OneError("native range command exceeds packed source")
 
-    packed = bytes(blob)
+    # Zero-copy ctypes view into the plan-owned bytearray. The plan is immutable by
+    # convention after this point and holds `blob` alive for the native call.
     source_buffer = (
-        (ctypes.c_uint8 * len(packed)).from_buffer_copy(packed) if packed else None
+        (ctypes.c_uint8 * len(blob)).from_buffer(blob) if blob else None
     )
     commands = (
         (_LawCmd * len(steps))(*(_LawCmd(*step) for step in steps)) if steps else None
@@ -167,11 +172,12 @@ def compile_native_law_range_plan(
         root_name=root_name,
         root_start=start,
         length=length,
-        source_blob=packed,
+        source_blob=blob,
         source_buffer=source_buffer,
         commands=commands,
         command_count=len(steps),
         source_read_bytes=source_reads,
+        source_plan_write_bytes=len(blob),
         sink_write_bytes=length,
         max_work_bytes=program.limits.max_work_bytes,
     )
@@ -201,7 +207,11 @@ def execute_native_law_range_plan(plan: NativeLawRangePlan) -> bytes:
     )
     if rc != 0:
         raise OneError(f"native Law range schedule rejected with status {rc}")
-    modeled_work = plan.source_read_bytes + plan.sink_write_bytes
+    modeled_work = (
+        plan.source_read_bytes
+        + plan.source_plan_write_bytes
+        + plan.sink_write_bytes
+    )
     if modeled_work > plan.max_work_bytes:
         raise OneError("native Law range modeled work exceeds declared limit")
     return sink
