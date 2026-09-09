@@ -1,4 +1,5 @@
 # ci-lane: deep
+# Re-armed after first workflow-file introduction so push evidence is exact-source.
 name: CMPCT1 ONE Genesis gate readiness
 
 on:
