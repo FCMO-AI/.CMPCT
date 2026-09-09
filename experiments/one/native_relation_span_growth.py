@@ -67,7 +67,7 @@ int grow_relation_spans_native(
     uint64_t covered_until = 0;
     for (size_t ni = 0; ni < nom_count; ++ni) {
         const uint64_t seed = noms[ni];
-        if (seed > (uint64_t)n || seed + seed_bytes > (uint64_t)n || seed < covered_until) continue;
+        if (seed > (uint64_t)n || seed_bytes > (size_t)((uint64_t)n - seed) || seed < covered_until) continue;
         int ok = 0;
         size_t cost = verify_exact(a,b,(size_t)seed,seed_bytes,op,value,&ok);
         *out_compared += cost;
@@ -127,19 +127,25 @@ def grow_relation_spans_native(parent: bytes, child: bytes, *, op: str, value: i
         raise ValueError("native relation proof requires equal immutable bytes inputs")
     if op not in {"add8", "xor"} or not 0 <= value <= 255 or seed_bytes <= 0 or extension_bytes <= 0:
         raise ValueError("invalid relation geometry")
+    total = len(parent)
+    # If the seed itself cannot fit, the Python oracle skips every nomination without reading.
+    if seed_bytes > total:
+        return RelationGrowthResult((), 0, 0, 0)
     # Match the Python oracle for every representable and non-representable Python int.
     # Any negative or seed > total is guaranteed to be skipped by the oracle, so discard
     # it before the bounded uint64 ABI rather than risking marshaling overflow.
-    total = len(parent)
     normalized = {int(x) for x in nominations}
     ordered = tuple(sorted(x for x in normalized if 0 <= x <= total))
+    # An extension larger than the finite input is semantically equivalent to `total`:
+    # Python takes min(extension_bytes, total-end). Clamp before the bounded size_t ABI.
+    native_extension = min(extension_bytes, max(total, 1))
     noms = (ctypes.c_uint64 * max(len(ordered), 1))(*ordered) if ordered else (ctypes.c_uint64 * 1)()
     runs = (_Run * max(len(ordered), 1))()
     count = ctypes.c_size_t(); compared = ctypes.c_uint64(); accepted = ctypes.c_uint64(); rejected = ctypes.c_uint64()
     ap = ctypes.cast(_pybytes_as_string(parent), ctypes.POINTER(ctypes.c_uint8))
     bp = ctypes.cast(_pybytes_as_string(child), ctypes.POINTER(ctypes.c_uint8))
     op_id = 1 if op == "add8" else 2
-    rc = _lib().grow_relation_spans_native(ap,bp,len(parent),op_id,value,noms,len(ordered),seed_bytes,extension_bytes,
+    rc = _lib().grow_relation_spans_native(ap,bp,len(parent),op_id,value,noms,len(ordered),seed_bytes,native_extension,
                                            runs,max(len(ordered),1),ctypes.byref(count),ctypes.byref(compared),
                                            ctypes.byref(accepted),ctypes.byref(rejected))
     if rc: raise RuntimeError(rc)
