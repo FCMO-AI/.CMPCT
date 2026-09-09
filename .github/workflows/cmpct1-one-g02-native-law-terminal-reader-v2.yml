@@ -1,0 +1,47 @@
+name: cmpct1-one-g02-native-law-terminal-reader-v2
+on:
+  push:
+    branches: [research/cmpct1]
+    paths:
+      - 'benchmarks/one/one_g02_native_law_terminal_reader_v2.py'
+      - 'experiments/one/native_law_terminal_plan.py'
+      - 'experiments/one/native_law_terminal_plan_kernel.c'
+      - 'tests/one/test_native_law_terminal_plan.py'
+      - 'docs/one/evidence/ONE_G02_NATIVE_LAW_TERMINAL_READER_V2_PREREG_2026-09-09.md'
+      - '.github/workflows/cmpct1-one-g02-native-law-terminal-reader-v2.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  falsify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with: {ref: '${{ github.sha }}'}
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.12'}
+      - run: python -m pip install -e '.[test]'
+      - name: bind exact source and unchanged V1 gates
+        run: |
+          test "$(git rev-parse HEAD)" = "${GITHUB_SHA}"
+          grep -q 'MAX_MEDIAN_LAW_CPU_RATIO = 0.75' benchmarks/one/one_g02_native_law_terminal_reader_v2.py
+          grep -q 'MAX_MEDIAN_CONTROL_CPU_RATIO = 1.10' benchmarks/one/one_g02_native_law_terminal_reader_v2.py
+          grep -q 'MAX_MEDIAN_LAW_TRAFFIC_RATIO = 0.75' benchmarks/one/one_g02_native_law_terminal_reader_v2.py
+          grep -q 'Retain V1 thresholds exactly' docs/one/evidence/ONE_G02_NATIVE_LAW_TERMINAL_READER_V2_PREREG_2026-09-09.md
+      - name: inherited semantics and native Law terminal adversaries
+        run: python -m pytest -q tests/one/test_fused_terminal_reader.py tests/one/test_native_mixed_terminal_plan.py tests/one/test_native_law_terminal_plan.py
+      - name: V2 direct-final and fail-closed falsifier
+        run: |
+          mkdir -p artifacts
+          set +e
+          EVIDENCE_HEAD="${GITHUB_SHA}" python -m benchmarks.one.one_g02_native_law_terminal_reader_v2 | tee artifacts/one_g02_native_law_terminal_reader_v2.json
+          rc=${PIPESTATUS[0]}
+          set -e
+          exit $rc
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: one-g02-native-law-terminal-reader-v2-${{ github.sha }}
+          path: artifacts/one_g02_native_law_terminal_reader_v2.json
+          if-no-files-found: warn
