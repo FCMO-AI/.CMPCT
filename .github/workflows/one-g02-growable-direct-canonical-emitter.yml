@@ -1,16 +1,9 @@
+# ci-lane: deep
+# Historical isolated emitter lane superseded by broader relation-to-wire and
+# root-hash-charged writer receipts. Keep manual reproduction available.
 name: ONE-G0.2 growable direct canonical emitter
 
 on:
-  push:
-    branches:
-      - research/cmpct1
-  pull_request:
-    paths:
-      - 'experiments/one/**'
-      - 'benchmarks/one/**'
-      - 'tests/one/**'
-      - 'docs/one/evidence/ONE_G02_GROWABLE_DIRECT_CANONICAL_EMITTER_PREREG_2026-09-05.md'
-      - '.github/workflows/one-g02-growable-direct-canonical-emitter.yml'
   workflow_dispatch:
 
 permissions:
