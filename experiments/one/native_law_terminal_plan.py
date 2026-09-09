@@ -62,6 +62,17 @@ def _library() -> ctypes.CDLL:
         ctypes.c_size_t,
     ]
     fn.restype = ctypes.c_int
+    periodic = lib.one_copy_periodic
+    periodic.argtypes = [
+        ctypes.POINTER(ctypes.c_uint8),
+        ctypes.c_size_t,
+        ctypes.POINTER(ctypes.c_uint8),
+        ctypes.c_size_t,
+        ctypes.c_size_t,
+        ctypes.c_size_t,
+        ctypes.c_size_t,
+    ]
+    periodic.restype = ctypes.c_int
     return lib
 
 
