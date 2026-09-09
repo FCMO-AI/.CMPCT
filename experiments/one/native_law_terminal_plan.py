@@ -110,7 +110,8 @@ def _node_length(node: Node) -> int:
     return node.declared_length
 
 
-def _constant_law(program: Program, node: Node, ref: Ref) -> tuple[bytes, int, int]:
+def _constant_law(program: Program, node: Node, ref: Ref) -> tuple[memoryview, int, int]:
+    """Return a zero-copy view of the Surprise source plus constant-Law metadata."""
     if node.op not in {"add8", "xor"} or node.surprise or len(node.refs) != 2:
         raise OneError("unsupported Law shape for native terminal lowering")
     node_len = _node_length(node)
@@ -139,7 +140,7 @@ def _constant_law(program: Program, node: Node, ref: Ref) -> tuple[bytes, int, i
     if src_hi > len(source_node.surprise):
         raise OneError("Law source range exceeds Surprise operand")
     kind = ADD8_CONST if node.op == "add8" else XOR_CONST
-    return source_node.surprise[src_lo:src_hi], fill_node.value, kind
+    return memoryview(source_node.surprise)[src_lo:src_hi], fill_node.value, kind
 
 
 def compile_native_law_terminal_plan(program: Program) -> NativeLawTerminalPlan:
