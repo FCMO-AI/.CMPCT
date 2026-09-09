@@ -7,13 +7,12 @@ callers provide nominations and successful runs still compile through ordinary O
 from __future__ import annotations
 
 import ctypes
-from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
 import subprocess
 import tempfile
 
-from experiments.one.relation_span_growth import RelationGrowthResult
+from experiments.one.relation_span_growth import RelationGrowthResult, RelationSpan
 
 _C = r'''
 #include <stdint.h>
@@ -128,7 +127,8 @@ def grow_relation_spans_native(parent: bytes, child: bytes, *, op: str, value: i
         raise ValueError("native relation proof requires equal immutable bytes inputs")
     if op not in {"add8", "xor"} or not 0 <= value <= 255 or seed_bytes <= 0 or extension_bytes <= 0:
         raise ValueError("invalid relation geometry")
-    ordered = tuple(sorted(set(int(x) for x in nominations)))
+    # Match the Python oracle exactly: coerce to int, discard negatives, de-duplicate, sort.
+    ordered = tuple(sorted({int(x) for x in nominations if int(x) >= 0}))
     noms = (ctypes.c_uint64 * max(len(ordered), 1))(*ordered) if ordered else (ctypes.c_uint64 * 1)()
     runs = (_Run * max(len(ordered), 1))()
     count = ctypes.c_size_t(); compared = ctypes.c_uint64(); accepted = ctypes.c_uint64(); rejected = ctypes.c_uint64()
@@ -139,5 +139,5 @@ def grow_relation_spans_native(parent: bytes, child: bytes, *, op: str, value: i
                                            runs,max(len(ordered),1),ctypes.byref(count),ctypes.byref(compared),
                                            ctypes.byref(accepted),ctypes.byref(rejected))
     if rc: raise RuntimeError(rc)
-    out = tuple((int(runs[i].start), int(runs[i].length)) for i in range(count.value))
+    out = tuple(RelationSpan(int(runs[i].start), int(runs[i].length)) for i in range(count.value))
     return RelationGrowthResult(out, int(compared.value), int(accepted.value), int(rejected.value))
