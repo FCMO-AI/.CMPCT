@@ -127,8 +127,12 @@ def grow_relation_spans_native(parent: bytes, child: bytes, *, op: str, value: i
         raise ValueError("native relation proof requires equal immutable bytes inputs")
     if op not in {"add8", "xor"} or not 0 <= value <= 255 or seed_bytes <= 0 or extension_bytes <= 0:
         raise ValueError("invalid relation geometry")
-    # Match the Python oracle exactly: coerce to int, discard negatives, de-duplicate, sort.
-    ordered = tuple(sorted({int(x) for x in nominations if int(x) >= 0}))
+    # Match the Python oracle for every representable and non-representable Python int.
+    # Any negative or seed > total is guaranteed to be skipped by the oracle, so discard
+    # it before the bounded uint64 ABI rather than risking marshaling overflow.
+    total = len(parent)
+    normalized = {int(x) for x in nominations}
+    ordered = tuple(sorted(x for x in normalized if 0 <= x <= total))
     noms = (ctypes.c_uint64 * max(len(ordered), 1))(*ordered) if ordered else (ctypes.c_uint64 * 1)()
     runs = (_Run * max(len(ordered), 1))()
     count = ctypes.c_size_t(); compared = ctypes.c_uint64(); accepted = ctypes.c_uint64(); rejected = ctypes.c_uint64()
