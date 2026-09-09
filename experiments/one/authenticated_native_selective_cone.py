@@ -29,6 +29,7 @@ class AuthenticatedNativeSelectiveStats:
     cone_bytes: int
     packed_source_bytes: int
     source_read_bytes: int
+    source_plan_write_bytes: int
     sink_write_bytes: int
     proof_payload_bytes: int
     proof_hash_bytes: int
@@ -46,9 +47,18 @@ class AuthenticatedNativeSelectiveStats:
     fallback_reason: str | None = None
 
     @property
+    def proof_coordinate_objects(self) -> int:
+        # RangeProof represents each sibling as one (level, index, digest) tuple.
+        return self.proof_hash_bytes // 32
+
+    @property
     def modeled_data_movement_bytes(self) -> int:
+        # Charge source traffic twice when a source byte is packed: once for reading the
+        # Program payload, once for writing it to the contiguous native source plan.
+        # Proof payload/hash units use the same logical movement convention as incumbent.
         return (
             self.source_read_bytes
+            + self.source_plan_write_bytes
             + self.sink_write_bytes
             + self.proof_payload_bytes
             + self.proof_hash_bytes
@@ -56,8 +66,10 @@ class AuthenticatedNativeSelectiveStats:
 
     @property
     def peak_temporary_bytes(self) -> int:
-        # Conservative accounting for simultaneously live packed source, reconstructed
-        # cone, and proof payload copies. Proof hashes are persisted-index reads.
+        # The source plan now has one backing allocation with a zero-copy ctypes view.
+        # Conservatively count source plan + reconstructed auth-leaf cone + proof payload.
+        # Command objects are separately reported by count because their Python object
+        # footprint is implementation-specific rather than stable wire/resource bytes.
         return self.packed_source_bytes + self.cone_bytes + self.proof_payload_bytes
 
 
@@ -119,6 +131,7 @@ def reconstruct_authenticated_native_range(
         cone_bytes=cone_length,
         packed_source_bytes=plan.packed_source_bytes,
         source_read_bytes=plan.source_read_bytes,
+        source_plan_write_bytes=plan.source_plan_write_bytes,
         sink_write_bytes=plan.sink_write_bytes,
         proof_payload_bytes=proof.touched_data_bytes,
         proof_hash_bytes=proof.touched_proof_bytes,
