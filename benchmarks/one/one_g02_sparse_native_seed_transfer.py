@@ -237,7 +237,8 @@ def run():
                 iwire = incumbent[0]
                 v3wire = v3c[1]
                 v3program = v3c[2]
-                v3chosen = None if v3c[3] is None or not getattr(v3c[3], "witnesses", ()) else None
+                v3accepted = int(v3c[5])
+                v3selection = v3c[6]
                 v4inc, v4wire, v4program, gate_choice, proof, accepted, selection, gate_cpu, seed_cpu, proof_cpu, emit_cpu, gate_probe, seed_probe, seed_count = v4c
 
                 iexact, _ = v2._decode_exact(iwire, source, target)
@@ -246,6 +247,8 @@ def run():
                 semantic = (
                     iexact and v3exact and v4exact
                     and v4wire == v3wire
+                    and selection == v3selection
+                    and accepted >= v3accepted
                     and v4program.roots["previous"].sha256 == v3program.roots["previous"].sha256
                     and v4program.roots["current"].sha256 == v3program.roots["current"].sha256
                     and v4inc[0] == iwire
@@ -282,8 +285,10 @@ def run():
                     "expected_gate": expected_gate,
                     "gate_correct": gate_correct,
                     "seed_count": seed_count,
+                    "v3_accepted_relation_bytes": v3accepted,
                     "accepted_relation_bytes": accepted,
                     "proof_bytes": proof,
+                    "v3_selection": v3selection,
                     "selection": selection,
                     "incumbent_wire_bytes": len(iwire),
                     "v3_wire_bytes": len(v3wire),
