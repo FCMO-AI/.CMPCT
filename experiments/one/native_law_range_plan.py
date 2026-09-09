@@ -23,6 +23,7 @@ from .native_law_terminal_plan import (
     _library,
     _node_length,
 )
+from .validated_program import ValidatedProgram
 from .vm import _preflight
 
 
@@ -54,15 +55,13 @@ def _ref_width(program: Program, ref: Ref) -> int:
     return hi - lo
 
 
-def compile_native_law_range_plan(
+def _compile_range_from_valid_snapshot(
     program: Program,
     root_name: str,
     start: int,
     length: int,
 ) -> NativeLawRangePlan:
-    """Lower exactly ``[start,start+length)`` of one root into a native schedule."""
-    program.validate_shape()
-    _preflight(program)
+    """Lower one range after full Program validation authority has already been established."""
     if root_name not in program.roots:
         raise OneError(f"unknown root {root_name!r}")
     root = program.roots[root_name]
@@ -181,6 +180,30 @@ def compile_native_law_range_plan(
         sink_write_bytes=length,
         max_work_bytes=program.limits.max_work_bytes,
     )
+
+
+def compile_native_law_range_plan(
+    program: Program,
+    root_name: str,
+    start: int,
+    length: int,
+) -> NativeLawRangePlan:
+    """Lower a range from a raw Program, retaining the inherited full validation boundary."""
+    program.validate_shape()
+    _preflight(program)
+    return _compile_range_from_valid_snapshot(program, root_name, start, length)
+
+
+def compile_validated_native_law_range_plan(
+    validated: ValidatedProgram,
+    root_name: str,
+    start: int,
+    length: int,
+) -> NativeLawRangePlan:
+    """Lower a range from an immutable Program whose complete graph already passed preflight."""
+    if not isinstance(validated, ValidatedProgram):
+        raise TypeError("validated must be ValidatedProgram")
+    return _compile_range_from_valid_snapshot(validated.program, root_name, start, length)
 
 
 def execute_native_law_range_plan(plan: NativeLawRangePlan) -> bytes:
