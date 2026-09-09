@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import ctypes
+
 import pytest
 
 from benchmarks.one.one_g02_native_law_terminal_reader import FAMILIES, _case
@@ -28,7 +30,17 @@ def test_native_range_matches_generic_range(family, n):
         assert got == expected
         assert plan.length == length
         assert plan.packed_source_bytes <= length
+        assert plan.source_plan_write_bytes == plan.packed_source_bytes
         assert plan.sink_write_bytes == length
+
+
+def test_native_source_buffer_views_single_plan_backing_allocation():
+    program = _case(32 * 1024, "xor")
+    plan = compile_native_law_range_plan(program, "current", 4096, 4096)
+    assert isinstance(plan.source_blob, bytearray)
+    assert plan.source_buffer is not None
+    second_view = (ctypes.c_uint8 * len(plan.source_blob)).from_buffer(plan.source_blob)
+    assert ctypes.addressof(plan.source_buffer) == ctypes.addressof(second_view)
 
 
 def test_native_range_crosses_sparse_crack_boundaries():
