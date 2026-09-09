@@ -22,6 +22,24 @@ def test_validated_range_plan_matches_generic_reader(family):
         assert execute_native_law_range_plan(plan) == expected
 
 
+@pytest.mark.parametrize("family", ["add8", "xor", "add8_crack", "xor_crack"])
+def test_validated_generic_range_baseline_matches_raw_evaluator_across_repeated_reads(family):
+    program = _case(128 * 1024, family)
+    validated = validate_program_snapshot(program)
+    reused = RangeEvaluator.from_validated(validated)
+    for start, length in [(0, 4096), (65500, 211), (128 * 1024 - 4096, 4096)]:
+        expected, expected_stats = RangeEvaluator(program).reconstruct("current", start, length)
+        actual, actual_stats = reused.reconstruct("current", start, length)
+        assert actual == expected
+        assert actual_stats == expected_stats
+
+
+def test_validated_generic_range_baseline_rejects_raw_program():
+    program = _case(32 * 1024, "xor")
+    with pytest.raises(TypeError, match="ValidatedProgram"):
+        RangeEvaluator.from_validated(program)
+
+
 def test_validated_snapshot_isolated_from_caller_root_mapping_mutation():
     original = _case(32 * 1024, "xor")
     roots = dict(original.roots)
