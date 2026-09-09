@@ -1,16 +1,9 @@
+# ci-lane: deep
+# Historical diagnostic superseded by the broader end-to-end and root-hash-charged writer gates.
+# Keep manual reproduction available without spending runners on every ONE change.
 name: ONE-G0.2 growable emitter boundary diagnostic
 
 on:
-  push:
-    branches:
-      - research/cmpct1
-  pull_request:
-    paths:
-      - 'experiments/one/**'
-      - 'benchmarks/one/one_g02_growable_emitter_boundary_diagnostic.py'
-      - 'tests/one/**'
-      - 'docs/one/evidence/ONE_G02_GROWABLE_EMITTER_BOUNDARY_DIAGNOSTIC_PREREG_2026-09-05.md'
-      - '.github/workflows/one-g02-growable-emitter-boundary-diagnostic.yml'
   workflow_dispatch:
 
 permissions:
