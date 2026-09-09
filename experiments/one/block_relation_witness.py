@@ -6,14 +6,13 @@ verification remains mandatory before any Law enters a Program.
 """
 from __future__ import annotations
 
-from collections import deque
 from dataclasses import dataclass
 
 BLOCK = 64
 PROBES = (5, 27, 53)
 MAX_SIGNATURES = 8192
 BUCKET_RECORDS = 4
-MAX_WITNESSES = 256
+WITNESS_BLOCK_BUDGET = 128
 
 Samples = tuple[int, int, int]
 
@@ -60,15 +59,13 @@ def _value(parent: Samples, child: Samples, op: str) -> int | None:
 
 
 def _consider_bucket(
-    witnesses: deque[RelationWitness],
+    witnesses: list[RelationWitness],
     bucket: list[tuple[int, Samples]],
     samples: Samples,
     *,
     op: str,
     child_offset: int,
 ) -> None:
-    # A signature collision may nominate several geometries. Preserve a bounded set
-    # of candidates and let exact verification decide; observation never authorizes Law.
     for parent_offset, parent_samples in bucket:
         value = _value(parent_samples, samples, op)
         if value is not None:
@@ -94,38 +91,45 @@ def _remember(
 def observe_relation_witnesses(data: bytes) -> WitnessObservation:
     """Return bounded directly-actionable relation nominations from one forward pass.
 
-    Only the three sampled bytes needed to recover a candidate relation value are
-    retained; full 64-byte blocks are not cached. Up to four records per invariant
-    signature survive collision, and the witness queue keeps the most recent candidates
-    so early harmless collisions cannot permanently crowd out later structure.
+    All aligned blocks contribute transform-invariant signatures. Candidate witness
+    material is retained only at a deterministic set of at most ~128 block positions
+    spread over the stream; this is retention sampling, not observation sampling, so it
+    cannot authorize a false Law and does not add source rereads. Up to four records per
+    signature preserve bounded collision alternatives.
     """
     add_records: dict[tuple[int, int], list[tuple[int, Samples]]] = {}
     xor_records: dict[tuple[int, int], list[tuple[int, Samples]]] = {}
-    witnesses: deque[RelationWitness] = deque(maxlen=MAX_WITNESSES)
+    witnesses: list[RelationWitness] = []
     full = len(data) - (len(data) % BLOCK)
+    blocks = full // BLOCK
+    witness_stride = max(1, (blocks + WITNESS_BLOCK_BUDGET - 1) // WITNESS_BLOCK_BUDGET)
 
-    for off in range(0, full, BLOCK):
+    for block_index, off in enumerate(range(0, full, BLOCK)):
         block_samples = _samples(data[off : off + BLOCK])
         add_sig = _add_signature(block_samples)
         xor_sig = _xor_signature(block_samples)
 
-        add_bucket = add_records.get(add_sig)
-        if add_bucket is not None:
-            _consider_bucket(witnesses, add_bucket, block_samples, op="add8", child_offset=off)
-        xor_bucket = xor_records.get(xor_sig)
-        if xor_bucket is not None:
-            _consider_bucket(witnesses, xor_bucket, block_samples, op="xor", child_offset=off)
+        # Retain geometry at evenly spread stream positions. Every block is still
+        # observed and indexed; only candidate handoff records are thinned.
+        if block_index % witness_stride == 0:
+            add_bucket = add_records.get(add_sig)
+            if add_bucket is not None:
+                _consider_bucket(witnesses, add_bucket, block_samples, op="add8", child_offset=off)
+            xor_bucket = xor_records.get(xor_sig)
+            if xor_bucket is not None:
+                _consider_bucket(witnesses, xor_bucket, block_samples, op="xor", child_offset=off)
 
         _remember(add_records, add_sig, off, block_samples)
         _remember(xor_records, xor_sig, off, block_samples)
 
+    signature_count = len(add_records) + len(xor_records)
     records = sum(map(len, add_records.values())) + sum(map(len, xor_records.values()))
-    # Compact native target accounting: 2-byte signature + 4-byte offset + 3 samples
-    # plus alignment/control, conservatively rounded to 16 B per retained record.
+    # Compact target accounting: signature/control ~=4 B per bucket, each retained
+    # offset+3 samples rounded to 8 B, witness op/value+two offsets rounded to 12 B.
     return WitnessObservation(
         witnesses=tuple(witnesses),
         source_scan_bytes=len(data),
-        probe_bytes=(full // BLOCK) * len(PROBES),
+        probe_bytes=blocks * len(PROBES),
         retained_records=records,
-        modeled_state_bytes=records * 16 + len(witnesses) * 16,
+        modeled_state_bytes=signature_count * 4 + records * 8 + len(witnesses) * 12,
     )

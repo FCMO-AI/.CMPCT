@@ -17,12 +17,24 @@ def test_versioned_xor_yields_actionable_witness():
     assert any(w.op==op and w.value==value and w.child_offset-w.parent_offset==half for w in obs.witnesses)
 
 
-def test_large_versioned_relation_is_not_crowded_out_by_early_collisions():
+def test_large_versioned_relation_keeps_early_and_late_actionable_geometry():
     for family in ("add8_versioned","xor_versioned"):
         data,op,value,_=_case(1024*1024,family)
         obs=observe_relation_witnesses(data)
         half=len(data)//2
-        assert any(w.op==op and w.value==value and w.child_offset-w.parent_offset==half for w in obs.witnesses)
+        offsets=sorted(w.child_offset-half for w in obs.witnesses if w.op==op and w.value==value and w.child_offset-w.parent_offset==half)
+        assert offsets
+        assert offsets[0] <= 16*1024
+        assert offsets[-1] >= half-16*1024
+
+
+def test_sparse_cracks_can_resume_after_multiple_boundaries():
+    for family in ("add8_sparse_cracks","xor_sparse_cracks"):
+        data,op,value,_=_case(1024*1024,family)
+        _,_,_,proof,accepted,chosen=_writer(data)
+        assert chosen==(op,value)
+        assert accepted >= len(data)//2 - 128*1024
+        assert proof>0
 
 
 def test_probe_only_false_positive_never_authorizes_law():
