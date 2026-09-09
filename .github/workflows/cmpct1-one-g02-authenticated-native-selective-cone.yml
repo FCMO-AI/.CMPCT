@@ -1,3 +1,4 @@
+# ci-lane: deep
 name: CMPCT1 ONE-G0.2 authenticated native selective cone
 
 on:
@@ -16,6 +17,10 @@ on:
 
 permissions:
   contents: read
+
+concurrency:
+  group: cmpct-one-g02-authenticated-native-selective-cone-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   falsifier:
