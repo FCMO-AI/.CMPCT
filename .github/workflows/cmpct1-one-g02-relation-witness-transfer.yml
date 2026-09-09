@@ -1,0 +1,44 @@
+name: cmpct1-one-g02-relation-witness-transfer
+on:
+  push:
+    branches: [research/cmpct1]
+    paths:
+      - 'experiments/one/block_relation_witness.py'
+      - 'benchmarks/one/one_g02_relation_witness_transfer.py'
+      - 'tests/one/test_relation_witness_transfer.py'
+      - 'docs/one/prereg/ONE_G02_RELATION_WITNESS_TRANSFER_PREREG_2026-09-08.md'
+      - 'docs/one/evidence/ONE_G02_RELATION_WITNESS_TRANSFER_HOSTILE_REVIEW_2026-09-08.md'
+      - '.github/workflows/cmpct1-one-g02-relation-witness-transfer.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  falsify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with: {ref: research/cmpct1}
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.12'}
+      - run: python -m pip install -e '.[test]'
+      - name: bind exact source
+        run: |
+          test "$(git rev-parse HEAD)" = "${GITHUB_SHA}"
+          grep -q 'MAX_POSITIVE_WIRE_RATIO=0.60' benchmarks/one/one_g02_relation_witness_transfer.py
+          grep -q 'MAX_FALSE_PROOF_BYTES=8192' benchmarks/one/one_g02_relation_witness_transfer.py
+      - run: python -m pytest -q tests/one/test_relation_witness_transfer.py
+      - name: frozen falsifier
+        run: |
+          mkdir -p artifacts
+          set +e
+          python benchmarks/one/one_g02_relation_witness_transfer.py | tee artifacts/one_g02_relation_witness_transfer.json
+          rc=${PIPESTATUS[0]}
+          set -e
+          exit $rc
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: one-g02-relation-witness-transfer-${{ github.sha }}
+          path: artifacts/one_g02_relation_witness_transfer.json
+          if-no-files-found: warn
