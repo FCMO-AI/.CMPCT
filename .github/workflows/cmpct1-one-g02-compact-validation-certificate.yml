@@ -1,4 +1,5 @@
 # ci-lane: deep
+# evidence-rearm: stale range-vm test import repaired before compact-certificate adjudication
 name: CMPCT1 ONE-G0.2 compact validation certificate
 
 on:
