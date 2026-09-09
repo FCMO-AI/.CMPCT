@@ -1,8 +1,9 @@
 """Cone-proportional native execution for ordinary ONE Law terminals.
 
 This is an experimental lowering layer. It reads the existing Program topology and lowers
-only one requested root interval into the same native COPY/FILL/ADD8/XOR schedule used by
-the promoted whole-root terminal reader. It introduces no reader-visible operation.
+only one requested root interval into bounded native execution. Ordinary Law terminals use
+the promoted COPY/FILL/ADD8/XOR schedule. A validated direct Repeat(Surprise) cone may use
+a bulk periodic-copy kernel that is an execution detail, not a reader-visible ONE operation.
 Unsupported topology raises OneError so callers can measure fallback explicitly.
 """
 from __future__ import annotations
@@ -32,9 +33,8 @@ class NativeLawRangePlan:
     root_name: str
     root_start: int
     length: int
-    # Private mutable backing store. It is never exposed to the reader and is not
-    # modified after compilation. ctypes views it directly, avoiding the previous
-    # bytearray -> bytes -> ctypes full-cone copy chain.
+    # Private mutable backing store for ordinary scheduled terminals. It is never exposed
+    # to the reader and is not modified after compilation.
     source_blob: bytearray
     source_buffer: object
     commands: object
@@ -43,16 +43,81 @@ class NativeLawRangePlan:
     source_plan_write_bytes: int
     sink_write_bytes: int
     max_work_bytes: int
+    # Optional borrowed immutable source for a validated direct periodic view. Keeping the
+    # exact Program bytes object alive lets the bulk kernel read it without a cone-sized
+    # source-plan copy.
+    periodic_source: bytes | None = None
+    periodic_source_offset: int = 0
+    periodic_width: int = 0
+    periodic_phase: int = 0
 
     @property
     def packed_source_bytes(self) -> int:
         return len(self.source_blob)
+
+    @property
+    def bulk_periodic(self) -> bool:
+        return self.periodic_source is not None
 
 
 def _ref_width(program: Program, ref: Ref) -> int:
     node_len = _node_length(program.nodes[ref.node])
     lo, hi = _ref_bounds(ref, node_len)
     return hi - lo
+
+
+def _direct_periodic_plan(
+    program: Program,
+    root_name: str,
+    start: int,
+    length: int,
+) -> NativeLawRangePlan | None:
+    """Return a zero-repack plan for a validated direct Repeat(Surprise) root.
+
+    This performs no discovery. The caller has already established complete Program
+    validity; this function merely recognizes the explicit stored topology and maps the
+    requested root coordinate into the repeated child period.
+    """
+    if length == 0:
+        return None
+    root = program.roots[root_name]
+    node = program.nodes[root.ref.node]
+    if node.op != "repeat" or len(node.refs) != 1:
+        return None
+    child = node.refs[0]
+    child_node = program.nodes[child.node]
+    if child_node.op != "surprise":
+        return None
+
+    child_len = _node_length(child_node)
+    child_lo, child_hi = _ref_bounds(child, child_len)
+    period = child_hi - child_lo
+    if period == 0:
+        raise OneError("non-empty native range requested from empty repeat source")
+    node_len = _node_length(node)
+    root_lo, _root_hi = _ref_bounds(root.ref, node_len)
+    phase = (root_lo + start) % period
+
+    return NativeLawRangePlan(
+        root_name=root_name,
+        root_start=start,
+        length=length,
+        source_blob=bytearray(),
+        source_buffer=None,
+        commands=None,
+        # One bounded execution descriptor, independent of cone/period quotient.
+        command_count=1,
+        # The bulk kernel consumes one source byte per emitted byte. There is no
+        # intermediate source-plan write.
+        source_read_bytes=length,
+        source_plan_write_bytes=0,
+        sink_write_bytes=length,
+        max_work_bytes=program.limits.max_work_bytes,
+        periodic_source=child_node.surprise,
+        periodic_source_offset=child_lo,
+        periodic_width=period,
+        periodic_phase=phase,
+    )
 
 
 def _compile_range_from_valid_snapshot(
@@ -69,6 +134,10 @@ def _compile_range_from_valid_snapshot(
         raise OneError("range start/length must be non-negative integers")
     if start + length > root.length:
         raise OneError("requested range exceeds root")
+
+    periodic = _direct_periodic_plan(program, root_name, start, length)
+    if periodic is not None:
+        return periodic
 
     blob = bytearray()
     steps: list[tuple[int, int, int, int, int]] = []
@@ -88,8 +157,6 @@ def _compile_range_from_valid_snapshot(
 
         if node.op == "surprise":
             src_lo, src_hi = _ref_bounds(effective, node_len)
-            # memoryview keeps the source-side extraction from creating an otherwise
-            # invisible temporary bytes object before the one charged plan write.
             payload = memoryview(node.surprise)[src_lo:src_hi]
             if len(payload) != take:
                 raise OneError("native range Surprise slice mismatch")
@@ -163,8 +230,6 @@ def _compile_range_from_valid_snapshot(
             node_cursor = child_hi
 
         if node.surprise:
-            # Keep this candidate narrow and auditable. A concat Surprise tail is valid
-            # ONE but is reported as unsupported rather than reconstructed out-of-band.
             raise OneError("concat Surprise tail native range lowering not yet supported")
 
         if cursor - emitted_before != take:
@@ -180,8 +245,6 @@ def _compile_range_from_valid_snapshot(
         if kind in {COPY, ADD8_CONST, XOR_CONST} and src_off + width > len(blob):
             raise OneError("native range command exceeds packed source")
 
-    # Zero-copy ctypes view into the plan-owned bytearray. The plan is immutable by
-    # convention after this point and holds `blob` alive for the native call.
     source_buffer = (
         (ctypes.c_uint8 * len(blob)).from_buffer(blob) if blob else None
     )
@@ -236,21 +299,38 @@ def execute_native_law_range_plan(plan: NativeLawRangePlan) -> bytes:
         if plan.length
         else ctypes.POINTER(ctypes.c_uint8)()
     )
-    source_ptr = (
-        ctypes.cast(plan.source_buffer, ctypes.POINTER(ctypes.c_uint8))
-        if plan.source_buffer is not None
-        else ctypes.POINTER(ctypes.c_uint8)()
-    )
-    rc = _library().one_apply_law_terminal_schedule(
-        sink_ptr,
-        plan.length,
-        source_ptr,
-        len(plan.source_blob),
-        plan.commands,
-        plan.command_count,
-    )
-    if rc != 0:
-        raise OneError(f"native Law range schedule rejected with status {rc}")
+
+    if plan.bulk_periodic:
+        source_raw = bytes_ptr(plan.periodic_source)
+        source_ptr = ctypes.cast(source_raw, ctypes.POINTER(ctypes.c_uint8))
+        rc = _library().one_copy_periodic(
+            sink_ptr,
+            plan.length,
+            source_ptr,
+            len(plan.periodic_source),
+            plan.periodic_source_offset,
+            plan.periodic_width,
+            plan.periodic_phase,
+        )
+        if rc != 0:
+            raise OneError(f"native periodic range copy rejected with status {rc}")
+    else:
+        source_ptr = (
+            ctypes.cast(plan.source_buffer, ctypes.POINTER(ctypes.c_uint8))
+            if plan.source_buffer is not None
+            else ctypes.POINTER(ctypes.c_uint8)()
+        )
+        rc = _library().one_apply_law_terminal_schedule(
+            sink_ptr,
+            plan.length,
+            source_ptr,
+            len(plan.source_blob),
+            plan.commands,
+            plan.command_count,
+        )
+        if rc != 0:
+            raise OneError(f"native Law range schedule rejected with status {rc}")
+
     modeled_work = (
         plan.source_read_bytes
         + plan.source_plan_write_bytes
