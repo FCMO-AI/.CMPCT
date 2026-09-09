@@ -36,9 +36,8 @@ class _PackedLengths:
             packed.byteswap()
         self._blob = packed.tobytes()
         self._count = len(packed)
-        # bytes is immutable, so this view is read-only.  On little-endian machines a native
-        # uint64 cast gives direct scalar indexing without allocating the tuple produced by
-        # Struct.unpack_from on every hot lookup.  Big-endian hosts keep explicit LE decoding.
+        # bytes is immutable, so this view is read-only. On little-endian machines a native
+        # uint64 cast removes tuple-producing Struct.unpack_from from the hot lookup path.
         self._view = memoryview(self._blob).cast("Q") if sys.byteorder == "little" else None
 
     def __len__(self) -> int:
@@ -117,8 +116,12 @@ class ValidatedProgram:
         if isinstance(lengths, _PackedLengths):
             length_bytes = lengths.python_bytes
         else:
-            length_bytes = sys.getsizeof(lengths) + sum(sys.getsizeof(value) for value in lengths)
+            length_bytes = _ordinary_lengths_python_bytes(lengths)
         return sys.getsizeof(self._preflight) + length_bytes
+
+
+def _ordinary_lengths_python_bytes(lengths) -> int:
+    return sys.getsizeof(lengths) + sum(sys.getsizeof(value) for value in lengths)
 
 
 def _snapshot_program(program: Program) -> Program:
@@ -139,17 +142,24 @@ def validate_program_snapshot(program: Program) -> ValidatedProgram:
 
 
 def validate_program_snapshot_compact(program: Program) -> ValidatedProgram:
-    """Retain validated node lengths densely when the exact semantic domain permits it.
+    """Use a dense immutable length proof only when it is semantically safe *and* smaller.
 
     Full ordinary validation always happens first. ONE's research IR currently permits limits
     above uint64, so an extreme valid logical graph must not become invalid merely because this
-    optional in-memory representation is narrower. Such graphs retain the ordinary certificate.
+    optional representation is narrower. For uint64-safe graphs we compare honest retained
+    proof state and keep the compact form only when it strictly reduces memory. This prevents
+    tiny graphs from paying fixed compact metadata/lookup overhead for no resident-state gain.
     """
     snapshot, preflight = _fully_preflight_snapshot(program)
     if any(value > _MAX_U64 for value in preflight.lengths):
         return ValidatedProgram(snapshot, preflight, _token=_CONSTRUCTION_TOKEN)
+
+    packed_lengths = _PackedLengths(preflight.lengths)
+    if packed_lengths.python_bytes >= _ordinary_lengths_python_bytes(preflight.lengths):
+        return ValidatedProgram(snapshot, preflight, _token=_CONSTRUCTION_TOKEN)
+
     compact = _Preflight(
-        lengths=_PackedLengths(preflight.lengths),
+        lengths=packed_lengths,
         max_depth=preflight.max_depth,
         worst_work_bytes=preflight.worst_work_bytes,
     )
