@@ -10,6 +10,7 @@ read paths. It changes no ONE wire or validation semantic.
 """
 from __future__ import annotations
 
+import sys
 from types import MappingProxyType
 
 from .ir import Program
@@ -45,6 +46,24 @@ class ValidatedProgram:
     @property
     def preflight(self) -> _Preflight:
         return self._preflight
+
+    @property
+    def preflight_entry_count(self) -> int:
+        return len(self._preflight.lengths)
+
+    @property
+    def modeled_preflight_bytes(self) -> int:
+        """Stable state model: one uint64 output length per node plus two uint64 scalars."""
+        return 8 * len(self._preflight.lengths) + 16
+
+    @property
+    def python_preflight_bytes(self) -> int:
+        """Approximate CPython retained bytes for the proof object and its length integers."""
+        return (
+            sys.getsizeof(self._preflight)
+            + sys.getsizeof(self._preflight.lengths)
+            + sum(sys.getsizeof(value) for value in self._preflight.lengths)
+        )
 
 
 def validate_program_snapshot(program: Program) -> ValidatedProgram:
