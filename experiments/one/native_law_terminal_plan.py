@@ -65,6 +65,17 @@ def _library() -> ctypes.CDLL:
     return lib
 
 
+@lru_cache(maxsize=1)
+def _bytes_api():
+    alloc = ctypes.pythonapi.PyBytes_FromStringAndSize
+    alloc.argtypes = [ctypes.c_void_p, ctypes.c_ssize_t]
+    alloc.restype = ctypes.py_object
+    ptr = ctypes.pythonapi.PyBytes_AsString
+    ptr.argtypes = [ctypes.py_object]
+    ptr.restype = ctypes.c_void_p
+    return alloc, ptr
+
+
 @dataclass
 class NativeLawRoot:
     name: str
@@ -86,6 +97,11 @@ class NativeLawTerminalPlan:
     command_count: int
 
 
+def has_native_law_op(program: Program) -> bool:
+    """Cheap static eligibility check; no data discovery or byte scanning."""
+    return any(node.op in {"add8", "xor"} for node in program.nodes)
+
+
 def _node_length(node: Node) -> int:
     if node.op in {"surprise", "fill"}:
         return _terminal_length(node)
@@ -95,13 +111,11 @@ def _node_length(node: Node) -> int:
 
 
 def _constant_law(program: Program, node: Node, ref: Ref) -> tuple[bytes, int, int]:
-    """Return (source bytes, constant, command kind) for an eligible Law range."""
     if node.op not in {"add8", "xor"} or node.surprise or len(node.refs) != 2:
         raise OneError("unsupported Law shape for native terminal lowering")
     node_len = _node_length(node)
     out_lo, out_hi = _ref_bounds(ref, node_len)
     width = out_hi - out_lo
-
     source_ref = None
     fill_ref = None
     for operand in node.refs:
@@ -114,14 +128,12 @@ def _constant_law(program: Program, node: Node, ref: Ref) -> tuple[bytes, int, i
             raise OneError("native Law terminal requires one Surprise and one Fill operand")
     if source_ref is None or fill_ref is None:
         raise OneError("native Law terminal requires one Surprise and one Fill operand")
-
     source_node = program.nodes[source_ref.node]
     fill_node = program.nodes[fill_ref.node]
     src_lo, src_hi = _ref_bounds(source_ref, _node_length(source_node))
     fill_lo, fill_hi = _ref_bounds(fill_ref, _node_length(fill_node))
     if src_hi - src_lo != node_len or fill_hi - fill_lo != node_len:
         raise OneError("Law operands do not cover declared Law output")
-
     src_lo += out_lo
     src_hi = src_lo + width
     if src_hi > len(source_node.surprise):
@@ -131,26 +143,20 @@ def _constant_law(program: Program, node: Node, ref: Ref) -> tuple[bytes, int, i
 
 
 def compile_native_law_terminal_plan(program: Program) -> NativeLawTerminalPlan:
-    """Validate and lower supported ordinary ONE terminal cones into native commands."""
     program.validate_shape()
     _preflight(program)
-
     prepared: list[NativeLawRoot] = []
     total_packed = 0
     total_commands = 0
-
     for name, root in program.roots.items():
         root_node = program.nodes[root.ref.node]
         root_len = _node_length(root_node)
         start, end = _ref_bounds(root.ref, root_len)
         if start != 0 or end != root_len or root.length != root_len:
             raise OneError("native Law terminal reader currently requires complete root references")
-
         blob = bytearray()
         steps: list[tuple[int, int, int, int, int]] = []
-        cursor = 0
-        source_reads = 0
-        sink_writes = 0
+        cursor = source_reads = sink_writes = 0
 
         def emit(node: Node, ref: Ref) -> None:
             nonlocal cursor, source_reads, sink_writes
@@ -185,11 +191,9 @@ def compile_native_law_terminal_plan(program: Program) -> NativeLawTerminalPlan:
             if root_node.surprise:
                 raise OneError("native Law terminal concat Surprise tail is not yet lowered")
             for child_ref in root_node.refs:
-                child = program.nodes[child_ref.node]
-                emit(child, child_ref)
+                emit(program.nodes[child_ref.node], child_ref)
         else:
             raise OneError("unsupported root operation for native Law terminal plan")
-
         if cursor != root.length:
             raise OneError(f"root {name!r} native Law terminal length mismatch")
         for offset, width, src_off, _value, kind in steps:
@@ -197,90 +201,45 @@ def compile_native_law_terminal_plan(program: Program) -> NativeLawTerminalPlan:
                 raise OneError("native Law terminal command exceeds root")
             if kind in {COPY, ADD8_CONST, XOR_CONST} and src_off + width > len(blob):
                 raise OneError("native Law terminal command exceeds packed source")
-
-        command_array = (
-            (_LawCmd * len(steps))(
-                *(_LawCmd(off, width, src, value, kind) for off, width, src, value, kind in steps)
-            )
-            if steps
-            else None
-        )
+        command_array = ((_LawCmd * len(steps))(*(_LawCmd(*step) for step in steps)) if steps else None)
         packed = bytes(blob)
-        source_buffer = (
-            (ctypes.c_uint8 * len(packed)).from_buffer_copy(packed) if packed else None
-        )
-        prepared.append(
-            NativeLawRoot(
-                name,
-                root.length,
-                root.sha256,
-                packed,
-                source_buffer,
-                command_array,
-                len(steps),
-                source_reads,
-                sink_writes,
-            )
-        )
+        source_buffer = ((ctypes.c_uint8 * len(packed)).from_buffer_copy(packed) if packed else None)
+        prepared.append(NativeLawRoot(name, root.length, root.sha256, packed, source_buffer, command_array, len(steps), source_reads, sink_writes))
         total_packed += len(packed)
         total_commands += len(steps)
-
-    return NativeLawTerminalPlan(
-        tuple(prepared), program.limits.max_work_bytes, total_packed, total_commands
-    )
+    return NativeLawTerminalPlan(tuple(prepared), program.limits.max_work_bytes, total_packed, total_commands)
 
 
-def _apply_root(root: NativeLawRoot) -> bytes:
-    sink = bytearray(root.length)
-    sink_ptr = (
-        ctypes.cast(
-            (ctypes.c_uint8 * len(sink)).from_buffer(sink),
-            ctypes.POINTER(ctypes.c_uint8),
-        )
-        if sink
-        else ctypes.POINTER(ctypes.c_uint8)()
-    )
-    source_ptr = (
-        ctypes.cast(root.source_buffer, ctypes.POINTER(ctypes.c_uint8))
-        if root.source_buffer is not None
-        else ctypes.POINTER(ctypes.c_uint8)()
-    )
-    rc = _library().one_apply_law_terminal_schedule(
-        sink_ptr,
-        len(sink),
-        source_ptr,
-        len(root.source_blob),
-        root.commands,
-        root.command_count,
-    )
+def _apply_root_direct(root: NativeLawRoot) -> bytes:
+    """Execute directly into a newly allocated final immutable bytes object.
+
+    The object is not exposed outside this function until native writes and SHA-256
+    verification complete. This removes V1's bytearray -> bytes full-root freeze copy.
+    """
+    alloc, bytes_ptr = _bytes_api()
+    sink = alloc(None, root.length)
+    raw = bytes_ptr(sink)
+    sink_ptr = ctypes.cast(raw, ctypes.POINTER(ctypes.c_uint8)) if root.length else ctypes.POINTER(ctypes.c_uint8)()
+    source_ptr = ctypes.cast(root.source_buffer, ctypes.POINTER(ctypes.c_uint8)) if root.source_buffer is not None else ctypes.POINTER(ctypes.c_uint8)()
+    rc = _library().one_apply_law_terminal_schedule(sink_ptr, root.length, source_ptr, len(root.source_blob), root.commands, root.command_count)
     if rc != 0:
         raise OneError(f"native Law terminal schedule rejected with status {rc}")
     if sha256(sink).hexdigest() != root.sha256_hex:
         raise OneError(f"root {root.name!r} sha256 mismatch")
-    return bytes(sink)
+    return sink
 
 
-def execute_native_law_terminal_plan(
-    plan: NativeLawTerminalPlan,
-) -> tuple[dict[str, bytes], FusedTerminalStats]:
+def execute_native_law_terminal_plan(plan: NativeLawTerminalPlan) -> tuple[dict[str, bytes], FusedTerminalStats]:
     outputs: dict[str, bytes] = {}
-    source_reads = sink_writes = hash_reads = freeze_traffic = peak_temporary = 0
+    source_reads = sink_writes = hash_reads = peak_temporary = 0
     for root in plan.roots:
-        outputs[root.name] = _apply_root(root)
+        outputs[root.name] = _apply_root_direct(root)
         source_reads += root.source_read_bytes
         sink_writes += root.sink_write_bytes
         hash_reads += root.length
-        freeze_traffic += 2 * root.length
         peak_temporary = max(peak_temporary, root.length)
-    modeled = source_reads + sink_writes + hash_reads + freeze_traffic
+    freeze_traffic = 0
+    modeled = source_reads + sink_writes + hash_reads
     if modeled > plan.max_work_bytes:
         raise OneError("native Law terminal modeled memory traffic exceeds declared work limit")
-    return outputs, FusedTerminalStats(
-        source_reads,
-        sink_writes,
-        hash_reads,
-        freeze_traffic,
-        modeled,
-        peak_temporary,
-        len(outputs),
-    )
+    return outputs, FusedTerminalStats(source_reads, sink_writes, hash_reads, freeze_traffic, modeled, peak_temporary, len(outputs))
