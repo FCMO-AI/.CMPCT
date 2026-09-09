@@ -50,6 +50,19 @@ def test_native_nomination_normalization_matches_oracle():
     _same(parent, child, "xor", 203, nominations)
 
 
+def test_native_finite_geometry_bounds_match_oracle():
+    # These cases defend the bounded native ABI against Python's unbounded integers.
+    # The semantic oracle skips an oversized seed without touching bytes, and clamps an
+    # arbitrarily large extension to the finite remainder of the input.
+    for n in (0, 1, 63, 64, 65, 4097):
+        parent = bytes((i * 41 + 7) & 0xFF for i in range(n))
+        child = _apply(parent, "add8", 19)
+        nominations = (-(1 << 100), -1, 0, 1, n, n + 1, 1 << 100)
+        _same(parent, child, "add8", 19, nominations, seed=max(1, n + 1), ext=1 << 100)
+        if n:
+            _same(parent, child, "add8", 19, nominations, seed=1, ext=1 << 100)
+
+
 def test_native_random_cracks_match_oracle():
     rng = random.Random(0xC0DEC0DE)
     n = 32768
