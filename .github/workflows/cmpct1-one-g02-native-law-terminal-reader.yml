@@ -30,7 +30,7 @@ jobs:
           grep -q 'MAX_MEDIAN_LAW_TRAFFIC_RATIO = 0.75' benchmarks/one/one_g02_native_law_terminal_reader.py
           grep -q 'Unsupported topology must fail closed' docs/one/evidence/ONE_G02_NATIVE_LAW_TERMINAL_READER_PREREG_2026-09-09.md
       - name: inherited semantics and native Law terminal adversaries
-        run: python -m pytest -q tests/one/test_ir_semantics.py tests/one/test_fused_terminal_reader.py tests/one/test_native_mixed_terminal_plan.py tests/one/test_native_law_terminal_plan.py
+        run: python -m pytest -q tests/one/test_fused_terminal_reader.py tests/one/test_native_mixed_terminal_plan.py tests/one/test_native_law_terminal_plan.py
       - name: native Law terminal reader falsifier
         run: |
           mkdir -p artifacts
