@@ -26,7 +26,7 @@ _MAX_U64 = (1 << 64) - 1
 class _PackedLengths:
     """Immutable dense uint64 node-length table used only by a validated authority."""
 
-    __slots__ = ("_blob", "_count")
+    __slots__ = ("_blob", "_count", "_view")
 
     def __init__(self, values) -> None:
         packed = array("Q", values)
@@ -36,6 +36,10 @@ class _PackedLengths:
             packed.byteswap()
         self._blob = packed.tobytes()
         self._count = len(packed)
+        # bytes is immutable, so this view is read-only.  On little-endian machines a native
+        # uint64 cast gives direct scalar indexing without allocating the tuple produced by
+        # Struct.unpack_from on every hot lookup.  Big-endian hosts keep explicit LE decoding.
+        self._view = memoryview(self._blob).cast("Q") if sys.byteorder == "little" else None
 
     def __len__(self) -> int:
         return self._count
@@ -49,9 +53,14 @@ class _PackedLengths:
             index += self._count
         if index < 0 or index >= self._count:
             raise IndexError(index)
+        if self._view is not None:
+            return self._view[index]
         return _U64.unpack_from(self._blob, index * 8)[0]
 
     def __iter__(self):
+        if self._view is not None:
+            yield from self._view
+            return
         for index in range(self._count):
             yield _U64.unpack_from(self._blob, index * 8)[0]
 
@@ -61,7 +70,8 @@ class _PackedLengths:
 
     @property
     def python_bytes(self) -> int:
-        return sys.getsizeof(self) + sys.getsizeof(self._blob)
+        view_bytes = sys.getsizeof(self._view) if self._view is not None else 0
+        return sys.getsizeof(self) + sys.getsizeof(self._blob) + view_bytes
 
 
 class ValidatedProgram:
