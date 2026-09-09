@@ -55,7 +55,7 @@ def test_native_range_crosses_sparse_crack_boundaries():
     assert execute_native_law_range_plan(plan) == expected
 
 
-def test_repeat_is_explicitly_unsupported_not_hidden_fallback():
+def test_repeat_lowers_through_existing_terminal_schedule():
     data = b"abcd"
     program = Program(
         nodes=(
@@ -64,8 +64,12 @@ def test_repeat_is_explicitly_unsupported_not_hidden_fallback():
         ),
         roots={"root": Root(Ref(1), 32, "0" * 64)},
     )
-    with pytest.raises(OneError, match="unsupported native range topology"):
-        compile_native_law_range_plan(program, "root", 0, 8)
+    start, length = 3, 11
+    expected = (data * 8)[start : start + length]
+    plan = compile_native_law_range_plan(program, "root", start, length)
+    assert execute_native_law_range_plan(plan) == expected
+    assert plan.command_count == 4
+    assert plan.packed_source_bytes == length
 
 
 def test_concat_surprise_tail_is_explicitly_unsupported():
