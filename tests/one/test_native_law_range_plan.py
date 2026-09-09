@@ -1,0 +1,68 @@
+from __future__ import annotations
+
+import pytest
+
+from benchmarks.one.one_g02_native_law_terminal_reader import FAMILIES, _case
+from experiments.one.ir import Node, OneError, Program, Ref, Root
+from experiments.one.native_law_range_plan import (
+    compile_native_law_range_plan,
+    execute_native_law_range_plan,
+)
+from experiments.one.range_vm import RangeEvaluator
+
+
+@pytest.mark.parametrize("family", FAMILIES)
+@pytest.mark.parametrize("n", [32 * 1024, 128 * 1024])
+def test_native_range_matches_generic_range(family, n):
+    program = _case(n, family)
+    probes = [
+        (0, 1),
+        (17, 257),
+        (n // 2 - 31, 127),
+        (n - 4096, 4096),
+    ]
+    for start, length in probes:
+        expected, _ = RangeEvaluator(program).reconstruct("current", start, length)
+        plan = compile_native_law_range_plan(program, "current", start, length)
+        got = execute_native_law_range_plan(plan)
+        assert got == expected
+        assert plan.length == length
+        assert plan.packed_source_bytes <= length
+        assert plan.sink_write_bytes == length
+
+
+def test_native_range_crosses_sparse_crack_boundaries():
+    n = 128 * 1024
+    program = _case(n, "xor_crack")
+    crack_at = n // 2
+    start = crack_at - 23
+    length = 101
+    expected, _ = RangeEvaluator(program).reconstruct("current", start, length)
+    plan = compile_native_law_range_plan(program, "current", start, length)
+    assert plan.command_count == 3
+    assert execute_native_law_range_plan(plan) == expected
+
+
+def test_repeat_is_explicitly_unsupported_not_hidden_fallback():
+    data = b"abcd"
+    program = Program(
+        nodes=(
+            Node("surprise", surprise=data, declared_length=4),
+            Node("repeat", refs=(Ref(0),), count=8, declared_length=32),
+        ),
+        roots={"root": Root(Ref(1), 32, "0" * 64)},
+    )
+    with pytest.raises(OneError, match="unsupported native range topology"):
+        compile_native_law_range_plan(program, "root", 0, 8)
+
+
+def test_concat_surprise_tail_is_explicitly_unsupported():
+    program = Program(
+        nodes=(
+            Node("surprise", surprise=b"abcd", declared_length=4),
+            Node("concat", refs=(Ref(0),), surprise=b"ef", declared_length=6),
+        ),
+        roots={"root": Root(Ref(1), 6, "0" * 64)},
+    )
+    with pytest.raises(OneError, match="Surprise tail"):
+        compile_native_law_range_plan(program, "root", 3, 3)
