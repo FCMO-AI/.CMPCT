@@ -1,3 +1,5 @@
+# Exact-source evidence lane. This descendant exists only after the corrected benchmark
+# has passed local semantic/hostile preflight; workflow creation itself was not evidence.
 name: CMPCT1 ONE-G0.2 native block relation gate
 on:
   push:
@@ -41,7 +43,6 @@ jobs:
           assert b.MAX_1MIB_MEDIAN_OVERHEAD == 1.30
           assert b.MAX_1MIB_ROW_OVERHEAD == 1.40
           assert b.MIN_1MIB_THROUGHPUT_MIB_S == 200.0
-          # The corrected source must suppress uniform/uniform pairs through run state.
           assert 'previous_chunk_uniform && current_chunk_uniform' in b._C_SOURCE
           PY
       - name: Hostile generator and semantic preflight
