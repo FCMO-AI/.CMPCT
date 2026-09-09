@@ -15,6 +15,7 @@ from typing import Iterable
 from .auth_tree import AuthTree, RangeProof, verify_range
 from .ir import OneError, Program
 from .range_vm import RangeEvaluator
+from .validated_program import ValidatedProgram
 
 
 @dataclass(frozen=True)
@@ -93,19 +94,15 @@ def proof_from_leaf_payloads(
     return RangeProof(tree.total_len, tree.leaf_bytes, first, payloads, tuple(siblings))
 
 
-def reconstruct_authenticated_range(
-    program: Program,
+def _reconstruct_authenticated_with_evaluator(
+    evaluator: RangeEvaluator,
     root_name: str,
     tree: AuthTree,
     expected_auth_root: bytes,
     start: int,
     length: int,
 ) -> tuple[bytes, AuthenticatedSelectiveStats]:
-    """Reconstruct and authenticate one requested root interval.
-
-    The only reconstructed bytes are the Merkle leaves intersecting the request.
-    Complete-root reconstruction or hashing is neither required nor performed.
-    """
+    program = evaluator.program
     if root_name not in program.roots:
         raise OneError(f"unknown root {root_name!r}")
     root = program.roots[root_name]
@@ -120,9 +117,7 @@ def reconstruct_authenticated_range(
     cone_end = min(tree.total_len, (last + 1) * tree.leaf_bytes)
     cone_length = cone_end - cone_start
 
-    cone, range_stats = RangeEvaluator(program).reconstruct(
-        root_name, cone_start, cone_length
-    )
+    cone, range_stats = evaluator.reconstruct(root_name, cone_start, cone_length)
     payloads = []
     cursor = 0
     for index in range(first, last + 1):
@@ -147,3 +142,42 @@ def reconstruct_authenticated_range(
         max_depth=range_stats.max_depth,
     )
     return value, stats
+
+
+def reconstruct_authenticated_range(
+    program: Program,
+    root_name: str,
+    tree: AuthTree,
+    expected_auth_root: bytes,
+    start: int,
+    length: int,
+) -> tuple[bytes, AuthenticatedSelectiveStats]:
+    """Reconstruct/authenticate one interval from a raw Program.
+
+    This API preserves the inherited fail-closed contract: it performs a complete Program
+    preflight through ``RangeEvaluator(program)`` before serving the range.
+    """
+    return _reconstruct_authenticated_with_evaluator(
+        RangeEvaluator(program), root_name, tree, expected_auth_root, start, length
+    )
+
+
+def reconstruct_validated_authenticated_range(
+    validated: ValidatedProgram,
+    root_name: str,
+    tree: AuthTree,
+    expected_auth_root: bytes,
+    start: int,
+    length: int,
+) -> tuple[bytes, AuthenticatedSelectiveStats]:
+    """Serve a repeated authenticated range after one sealed full-Program open."""
+    if not isinstance(validated, ValidatedProgram):
+        raise TypeError("validated must be ValidatedProgram")
+    return _reconstruct_authenticated_with_evaluator(
+        RangeEvaluator.from_validated(validated),
+        root_name,
+        tree,
+        expected_auth_root,
+        start,
+        length,
+    )
