@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import random
 
-from experiments.one.native_relation_span_growth import grow_relation_spans_native
+from experiments.one.native_relation_span_growth import grow_relation_spans_native, grow_relation_spans_native_metered
 from experiments.one.relation_span_growth import grow_relation_spans
 
 
@@ -13,7 +13,9 @@ def _apply(parent: bytes, op: str, value: int) -> bytes:
 def _same(parent: bytes, child: bytes, op: str, value: int, nominations: tuple[int, ...], seed=64, ext=4096):
     py = grow_relation_spans(parent, child, op=op, value=value, nominations=nominations, seed_bytes=seed, extension_bytes=ext)
     native = grow_relation_spans_native(parent, child, op=op, value=value, nominations=nominations, seed_bytes=seed, extension_bytes=ext)
-    assert native == py
+    metered, loaded = grow_relation_spans_native_metered(parent, child, op=op, value=value, nominations=nominations, seed_bytes=seed, extension_bytes=ext)
+    assert native == py == metered
+    assert loaded >= py.compared_bytes
 
 
 def test_native_exact_full_and_cracks_match_oracle():
@@ -51,9 +53,6 @@ def test_native_nomination_normalization_matches_oracle():
 
 
 def test_native_finite_geometry_bounds_match_oracle():
-    # These cases defend the bounded native ABI against Python's unbounded integers.
-    # The semantic oracle skips an oversized seed without touching bytes, and clamps an
-    # arbitrarily large extension to the finite remainder of the input.
     for n in (0, 1, 63, 64, 65, 4097):
         parent = bytes((i * 41 + 7) & 0xFF for i in range(n))
         child = _apply(parent, "add8", 19)
@@ -61,6 +60,22 @@ def test_native_finite_geometry_bounds_match_oracle():
         _same(parent, child, "add8", 19, nominations, seed=max(1, n + 1), ext=1 << 100)
         if n:
             _same(parent, child, "add8", 19, nominations, seed=1, ext=1 << 100)
+
+
+def test_native_load_meter_exposes_vector_read_amplification():
+    n = 8192
+    parent = bytes((i * 13 + 17) & 0xFF for i in range(n))
+    child = bytearray(_apply(parent, "xor", 91))
+    child[64] ^= 1
+    result, loaded = grow_relation_spans_native_metered(
+        parent, bytes(child), op="xor", value=91,
+        nominations=tuple(range(0, n - 63, 64)), seed_bytes=64, extension_bytes=4096,
+    )
+    assert loaded >= result.compared_bytes
+    # Exact vector proof may touch later lanes than the semantic first-mismatch frontier,
+    # but it must never read beyond the finite proof regions by more than one SIMD vector
+    # for each failed verification call.
+    assert loaded - result.compared_bytes <= 15 * max(1, result.rejected_seeds + len(result.runs))
 
 
 def test_native_random_cracks_match_oracle():
