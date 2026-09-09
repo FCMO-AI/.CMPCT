@@ -88,6 +88,9 @@ def run():
                     "program_nodes": len(program.nodes),
                     "declared_max_nodes": program.limits.max_nodes,
                     "validation_open_cpu_ns": validation_cpu_ns,
+                    "validation_preflight_entries": validated.preflight_entry_count,
+                    "validation_modeled_preflight_bytes": validated.modeled_preflight_bytes,
+                    "validation_python_preflight_bytes": validated.python_preflight_bytes,
                     "incumbent_per_request_compile_cpu_ns": incumbent_cpu_ns,
                     "candidate_per_request_compile_cpu_ns": candidate_cpu_ns,
                     "candidate_over_incumbent": ratio,
@@ -114,7 +117,7 @@ def run():
         ),
     }
     return {
-        "schema": "cmpct-one-g02-validated-program-selective-plan-v1",
+        "schema": "cmpct-one-g02-validated-program-selective-plan-v2",
         "experimental_version": "ONE-G0.2",
         "root_bytes": ROOT_BYTES,
         "request_bytes": REQUEST_BYTES,
@@ -128,11 +131,18 @@ def run():
             "median_large_candidate_over_incumbent": statistics.median(
                 r["candidate_over_incumbent"] for r in large_rows
             ),
+            "max_validation_modeled_preflight_bytes": max(
+                r["validation_modeled_preflight_bytes"] for r in rows
+            ),
+            "max_validation_python_preflight_bytes": max(
+                r["validation_python_preflight_bytes"] for r in rows
+            ),
             "gates": gates,
             "advance": all(gates.values()),
             "interpretation": (
-                "validation_open_cpu_ns is deliberately disclosed separately: the candidate models repeated "
-                "range requests after one complete immutable Program-open validation, never skipped validation."
+                "validation_open_cpu_ns and retained preflight state are deliberately disclosed separately: "
+                "the candidate models repeated range requests after one complete immutable Program-open "
+                "validation, never skipped validation."
             ),
         },
         "rows": rows,
