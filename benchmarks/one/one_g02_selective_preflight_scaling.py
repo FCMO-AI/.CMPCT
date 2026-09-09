@@ -13,7 +13,7 @@ import statistics
 import time
 
 from benchmarks.one.one_g02_native_law_terminal_reader import _case
-from experiments.one.ir import Node, Program
+from experiments.one.ir import Limits, Node, Program
 from experiments.one.native_law_range_plan import compile_native_law_range_plan
 
 ROOT_BYTES = 128 * 1024
@@ -30,7 +30,18 @@ def _with_unrelated_nodes(base: Program, count: int) -> Program:
     for i in range(count):
         payload = bytes(((i * 17 + j) & 0xFF) for j in range(32))
         nodes.append(Node("surprise", surprise=payload, declared_length=len(payload)))
-    return Program(tuple(nodes), base.roots, base.limits)
+
+    # The diagnostic varies valid graph size, not malformed-resource behavior. The default
+    # 4096-node ceiling would make the final cell invalid once the live root nodes are added,
+    # aborting before the cost-owner measurement. Preserve every inherited resource limit and
+    # raise only max_nodes enough to admit the exact synthetic graph under test.
+    limits = Limits(
+        max_nodes=max(base.limits.max_nodes, len(nodes)),
+        max_output_bytes=base.limits.max_output_bytes,
+        max_work_bytes=base.limits.max_work_bytes,
+        max_depth=base.limits.max_depth,
+    )
+    return Program(tuple(nodes), base.roots, limits)
 
 
 def _median_cpu_ns(fn) -> int:
@@ -71,6 +82,7 @@ def run():
                     "request_bytes": REQUEST_BYTES,
                     "unrelated_nodes": dead_nodes,
                     "program_nodes": len(program.nodes),
+                    "declared_max_nodes": program.limits.max_nodes,
                     "compile_cpu_ns": cpu_ns,
                     "over_zero_unrelated": cpu_ns / max(baseline_ns, 1),
                 }
