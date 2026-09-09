@@ -7,6 +7,7 @@ on:
     paths:
       - experiments/one/native_law_range_plan.py
       - tests/one/test_native_repeat_range_plan.py
+      - tests/one/test_native_law_range_plan.py
       - benchmarks/one/one_g02_native_selective_repeat_lowering.py
       - docs/one/evidence/ONE_G02_NATIVE_SELECTIVE_REPEAT_LOWERING_PREREG_2026-09-09.md
       - .github/workflows/cmpct1-one-g02-native-selective-repeat-lowering.yml
