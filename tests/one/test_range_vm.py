@@ -5,12 +5,22 @@ from hashlib import sha256
 import pytest
 
 from experiments.one.ir import Limits, Node, OneError, Program, Ref, Root
-from experiments.one.range_vm import reconstruct_range_unverified
+from experiments.one.range_vm import RangeEvaluator
 from experiments.one.vm import evaluate
 
 
 def _root(node: int, data: bytes) -> Root:
     return Root(Ref(node), len(data), sha256(data).hexdigest())
+
+
+def _reconstruct_range_unverified(program: Program, root_name: str, start: int, length: int):
+    """Exercise the current generic range-evaluator surface.
+
+    The old module-level ``reconstruct_range_unverified`` helper was removed when repeated
+    reads moved to the reusable ``RangeEvaluator`` object. Keep these tests on the current
+    public research surface rather than importing a stale helper name.
+    """
+    return RangeEvaluator(program).reconstruct(root_name, start, length)
 
 
 def _assert_ranges(program: Program, root_name: str) -> None:
@@ -19,7 +29,7 @@ def _assert_ranges(program: Program, root_name: str) -> None:
     probes = [(0, 0), (0, min(3, len(expected))), (len(expected)//3, min(5, len(expected)-len(expected)//3)),
               (max(0, len(expected)-4), min(4, len(expected))), (0, len(expected))]
     for start, length in probes:
-        got, stats = reconstruct_range_unverified(program, root_name, start, length)
+        got, stats = _reconstruct_range_unverified(program, root_name, start, length)
         assert got == expected[start:start+length]
         assert stats.requested_bytes == length
         assert stats.authenticated is False
@@ -61,7 +71,7 @@ def test_translation_shape_middle_range_touches_only_needed_surprises():
     edited[-11] ^= 0x77
     from benchmarks.one.one_g02_translation_law_surprise_ir_compile import _programs
     _, program, _ = _programs(base, bytes(edited))
-    got, stats = reconstruct_range_unverified(program, "edited", 30720, 4096)
+    got, stats = _reconstruct_range_unverified(program, "edited", 30720, 4096)
     assert got == bytes(edited)[30720:34816]
     # Base + concat + only the in-range one-byte Surprise should be touched.
     assert stats.nodes_touched == 3
@@ -82,7 +92,7 @@ def test_nested_concat_is_fused_without_intermediate_materialization():
     limits = Limits(max_nodes=16, max_output_bytes=64, max_work_bytes=64, max_depth=8)
     program = Program(nodes, {"x": _root(3, expected)}, limits)
 
-    got, stats = reconstruct_range_unverified(program, "x", 0, 8)
+    got, stats = _reconstruct_range_unverified(program, "x", 0, 8)
 
     assert got == expected
     # The two Surprise leaves are real materialization (8 B total) and the outer concat
@@ -96,10 +106,10 @@ def test_nested_concat_is_fused_without_intermediate_materialization():
 def test_range_is_explicitly_unverified_and_rejects_bad_requests():
     data = b"abcdef"
     p = Program((Node("surprise", surprise=data, declared_length=len(data)),), {"x": _root(0, data)})
-    got, stats = reconstruct_range_unverified(p, "x", 1, 3)
+    got, stats = _reconstruct_range_unverified(p, "x", 1, 3)
     assert got == b"bcd"
     assert not stats.authenticated
     with pytest.raises(OneError):
-        reconstruct_range_unverified(p, "x", 5, 2)
+        _reconstruct_range_unverified(p, "x", 5, 2)
     with pytest.raises(OneError):
-        reconstruct_range_unverified(p, "missing", 0, 1)
+        _reconstruct_range_unverified(p, "missing", 0, 1)
