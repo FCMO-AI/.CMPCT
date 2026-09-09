@@ -6,6 +6,7 @@ on:
     paths:
       - experiments/one/selective_auth.py
       - experiments/one/native_law_range_plan.py
+      - experiments/one/authenticated_native_selective_cone.py
       - tests/one/test_selective_auth.py
       - tests/one/test_native_law_range_plan.py
       - benchmarks/one/one_g02_authenticated_native_selective_cone.py
@@ -16,9 +17,9 @@ permissions:
   contents: read
 
 jobs:
-  semantic-seam:
+  falsifier:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -36,3 +37,18 @@ jobs:
           tests/one/test_selective_auth.py
           tests/one/test_native_law_range_plan.py
           tests/one/test_auth_tree.py
+      - name: Run frozen authenticated selective-cone falsifier
+        run: |
+          set +e
+          python -m benchmarks.one.one_g02_authenticated_native_selective_cone > authenticated-native-selective-cone.json
+          status=$?
+          cat authenticated-native-selective-cone.json
+          exit $status
+      - name: Retain exact-source evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: authenticated-native-selective-cone-${{ github.sha }}
+          path: authenticated-native-selective-cone.json
+          if-no-files-found: error
+          retention-days: 30
