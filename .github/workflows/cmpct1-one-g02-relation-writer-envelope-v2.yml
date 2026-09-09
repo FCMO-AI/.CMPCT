@@ -1,0 +1,50 @@
+name: cmpct1-one-g02-relation-writer-envelope-v2
+on:
+  push:
+    branches: [research/cmpct1]
+    paths:
+      - 'benchmarks/one/one_g02_relation_writer_envelope_v2.py'
+      - 'experiments/one/block_relation_witness.py'
+      - 'experiments/one/relation_span_growth.py'
+      - 'experiments/one/growable_wire.py'
+      - 'benchmarks/one/one_g02_root_hash_charged_direct_emitter.py'
+      - 'benchmarks/one/one_g02_end_to_end_direct_emitter_writer.py'
+      - 'docs/one/evidence/ONE_G02_RELATION_WRITER_ENVELOPE_V2_PREREG_2026-09-09.md'
+      - '.github/workflows/cmpct1-one-g02-relation-writer-envelope-v2.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  falsify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with: {ref: '${{ github.sha }}'}
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.12'}
+      - run: python -m pip install -e '.[test]'
+      - name: bind exact source and frozen law
+        run: |
+          test "$(git rev-parse HEAD)" = "${GITHUB_SHA}"
+          grep -q 'MIN_NOVEL_WIRE_SAVING = 0.25' benchmarks/one/one_g02_relation_writer_envelope_v2.py
+          grep -q 'MIN_MEDIAN_MARGINAL_MBIT_PER_CPU_S = 20.0' benchmarks/one/one_g02_relation_writer_envelope_v2.py
+          grep -q 'MAX_MEDIAN_CONTROL_CPU_RATIO = 1.35' benchmarks/one/one_g02_relation_writer_envelope_v2.py
+          grep -q 'MAX_CONTROL_CPU_RATIO = 1.75' benchmarks/one/one_g02_relation_writer_envelope_v2.py
+          grep -q 'candidate \*\*starts by paying that same incumbent writer path\*\*' docs/one/evidence/ONE_G02_RELATION_WRITER_ENVELOPE_V2_PREREG_2026-09-09.md
+      - name: inherited semantic adversaries
+        run: python -m pytest -q tests/one/test_relation_witness_transfer.py tests/one/test_relation_span_growth.py
+      - name: corrected frozen writer-envelope falsifier
+        run: |
+          mkdir -p artifacts
+          set +e
+          EVIDENCE_HEAD="${GITHUB_SHA}" python -m benchmarks.one.one_g02_relation_writer_envelope_v2 | tee artifacts/one_g02_relation_writer_envelope_v2.json
+          rc=${PIPESTATUS[0]}
+          set -e
+          exit $rc
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: one-g02-relation-writer-envelope-v2-${{ github.sha }}
+          path: artifacts/one_g02_relation_writer_envelope_v2.json
+          if-no-files-found: warn
