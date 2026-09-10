@@ -30,7 +30,7 @@ Any size regression is a HOLD for general candidate-boundary certification even 
 
 The falsifier uses only deterministic synthetic trees unrelated to Genesis:
 
-- `tiny_add8_1b`: two one-byte files related by ADD8 constant;
+- `tiny_add8_2b`: two two-byte files related by ADD8 constant;
 - `tiny_xor_2b`: two two-byte files related by XOR constant;
 - `tiny_fill_1b`: one one-byte constant file;
 - `beneficial_add8_4k`: a high-entropy 4096-byte base followed by an exact ADD8 constant target;
@@ -38,7 +38,7 @@ The falsifier uses only deterministic synthetic trees unrelated to Genesis:
 - `incompressible_pair_4k`: two unrelated deterministic high-entropy files;
 - `mixed_hostile_tree`: tiny relation opportunities, unrelated bytes, empty file, directory, executable mode, and safe symlink in one arbitrary tree.
 
-File names are descriptive to the falsifier, but the candidate builder receives no relation labels, constants, source/target pairing, or expected operation. It receives only the tree root.
+The two-byte ADD8 row is intentional: a one-byte nonempty target is itself a Fill candidate, so it would not isolate ADD8 selection in the current generic discovery order. File names are descriptive to the falsifier, but the candidate builder receives no relation labels, constants, source/target pairing, or expected operation. It receives only the tree root.
 
 ## Accounting
 
