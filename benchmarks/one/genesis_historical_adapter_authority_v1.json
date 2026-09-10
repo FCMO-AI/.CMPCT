@@ -1,0 +1,61 @@
+{
+  "schema": "cmpct-one-genesis-historical-adapter-authority-v1",
+  "claim_boundary": "pre-gate adapter provenance and admissibility only; no Genesis workload measurement, comparison, scoring, or winner selection",
+  "experimental_version": "ONE-G0.2",
+  "frozen_contenders": {
+    "v0.29": {
+      "source_sha": "02b8b27cb2d97af7c6e0797984a898e8fa8a8e5d",
+      "direct_input_surface": "experiments/entropygraph_v029_residual_strict.py",
+      "required_entry_points": ["build", "strong_verify", "extract"],
+      "historical_15_workload_harness": "benchmarks/mosaic_v029_generalization_bench.py",
+      "adapter_rule": "wrap direct frozen product surface against executor-owned workload paths; do not invoke historical corpus generator",
+      "selective_access_surface": {
+        "status": "not-yet-proven",
+        "rule": "must be measured only if an exact frozen reader surface is identified; otherwise report explicit unavailable rather than inferred zero"
+      }
+    },
+    "v0.30": {
+      "source_sha": "f4b158a55a08b9b18b50e4e4abe4b9251048c772",
+      "direct_input_surface": "experiments/entropygraph_v030_release_product.py",
+      "required_entry_points": ["build", "strong_verify", "extract", "list_members", "read_member", "read_member_with_stats"],
+      "adapter_rule": "wrap direct frozen product surface against executor-owned workload paths; do not invoke historical corpus generator",
+      "selective_access_surface": {
+        "status": "surface-present",
+        "entry_point": "read_member_with_stats",
+        "rule": "metric semantics still require transfer-workload falsification before production admission"
+      },
+      "historical_broad_authority": {
+        "source_sha": "e75f3d3e2d7a774836c35c0dd50cc130a07a02c6",
+        "workflow_run": 33578285446,
+        "workflow": ".github/workflows/v030-canonical-authority.yml",
+        "canonical_harness": "benchmarks/v030_release_generalization_canonical.py",
+        "evidence_record": "benchmarks/history/2026-09-02-v030-canonical-generalization-red-e75f.json",
+        "relationship_to_frozen_contender": "historical evidence authority only; not the executable frozen v0.30 contender because e75f != f4b158",
+        "forbidden_interpretation": "do not silently execute e75f in place of frozen f4b158 and do not retrospectively synthesize a per-workload best-of-v0.30 supercodec"
+      }
+    }
+  },
+  "input_ownership": {
+    "owner": "CMPCT1 Genesis measurement executor",
+    "historical_generalization_harnesses_may_generate_gate_inputs": false,
+    "adapters_may_choose_alternate_input_roots": false,
+    "physical_identity_must_be_verified_before_and_after_each_contender": true
+  },
+  "pre_gate_probe_authority": {
+    "source_sha": "524464e927e1607f31c0b7806cbb49c08c95afa7",
+    "workflow_run": 34465389051,
+    "job": 102832635593,
+    "artifact": 10147355500,
+    "artifact_digest": "sha256:5cf99ce065285d5e284977744858568a27642d66f27dc81b5ad1b590e8783969",
+    "result": "PASS",
+    "scope": "exact-SHA checkout plus external synthetic-tree build -> strong_verify -> extract exactness for v0.29 and v0.30; no Genesis 15-workload access"
+  },
+  "hard_rules": [
+    "The frozen source SHA is part of the measurement identity.",
+    "Historical broad evidence and the final frozen executable line are distinct when their SHAs differ.",
+    "A missing historical metric is explicit unavailable, never synthetic zero.",
+    "Adapter wrappers may normalize measurement output but may not replace, weaken, or emulate the frozen compressor semantics.",
+    "No reader-visible legacy mechanism may be added to ONE merely to match a comparator.",
+    "No pre-2026-09-11 probe may execute or inspect contender results on the frozen 15-workload Genesis matrix."
+  ]
+}
