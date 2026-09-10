@@ -9,8 +9,10 @@ on:
       - 'benchmarks/one/one_genesis_contender_raw_adapter.py'
       - 'benchmarks/one/one_genesis_contender_workload_measurement.py'
       - 'benchmarks/one/one_genesis_selective_access_plan.py'
+      - 'benchmarks/one/one_genesis_gate_measurement_executor.py'
       - 'tests/one/test_genesis_contender_raw_adapter.py'
       - 'tests/one/test_genesis_contender_workload_measurement.py'
+      - 'tests/one/test_genesis_gate_authorization_chain.py'
       - 'docs/one/prereg/ONE_GENESIS_CONTENDER_RAW_ADAPTER_ASSEMBLY_v0.1_2026-09-10.md'
       - '.github/workflows/one-genesis-raw-adapter-contract.yml'
   workflow_dispatch:
@@ -34,13 +36,14 @@ jobs:
           python-version: '3.11'
       - name: Install test dependency
         run: python -m pip install pytest
-      - name: Falsify workload and 15-row assembly contracts
+      - name: Falsify workload, adapter, and authorization contracts
         env:
           PYTHONPATH: ${{ github.workspace }}
         run: |
           python -m pytest -q \
             tests/one/test_genesis_contender_workload_measurement.py \
             tests/one/test_genesis_contender_raw_adapter.py \
+            tests/one/test_genesis_gate_authorization_chain.py \
             | tee raw-adapter-contract-tests.txt
       - name: Prove adapter import does not load Genesis corpus generators
         env:
@@ -55,6 +58,15 @@ jobs:
           ]
           assert forbidden == [], forbidden
           PY
+      - name: Prove adapter bootstraps from a foreign cwd
+        run: |
+          foreign="$(mktemp -d)"
+          (
+            cd "$foreign"
+            python "${GITHUB_WORKSPACE}/benchmarks/one/one_genesis_contender_raw_adapter.py" >/tmp/adapter-bootstrap.out 2>/tmp/adapter-bootstrap.err && exit 1 || true
+          )
+          grep -q 'explicit real-gate executor authorization' /tmp/adapter-bootstrap.err
+          ! grep -q 'ModuleNotFoundError' /tmp/adapter-bootstrap.err
       - name: Preserve contract evidence
         if: always()
         uses: actions/upload-artifact@v6
