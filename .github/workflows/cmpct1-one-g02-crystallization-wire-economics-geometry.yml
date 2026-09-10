@@ -1,0 +1,67 @@
+name: CMPCT1 ONE-G0.2 Crystallization wire economics geometry
+
+on:
+  push:
+    branches: [research/cmpct1]
+    paths:
+      - experiments/one/general_law_archive.py
+      - experiments/one/authenticated_archive_envelope.py
+      - benchmarks/one/one_g02_crystallization_wire_economics_geometry.py
+      - tests/one/test_crystallization_wire_economics_geometry.py
+      - docs/one/prereg/ONE_G02_CRYSTALLIZATION_WIRE_ECONOMICS_GEOMETRY_PREREG_2026-09-10.md
+      - .github/workflows/cmpct1-one-g02-crystallization-wire-economics-geometry.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-one-g02-crystallization-wire-economics-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  geometry:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Bind exact source
+        run: test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+      - name: Install test dependencies
+        run: python -m pip install -e '.[test]'
+      - name: Run geometry harness falsifiers
+        run: python -m pytest -q tests/one/test_crystallization_wire_economics_geometry.py | tee one-g02-crystallization-wire-economics-geometry-tests.txt
+      - name: Run preregistered transfer geometry
+        run: python -m benchmarks.one.one_g02_crystallization_wire_economics_geometry | tee one-g02-crystallization-wire-economics-geometry.txt
+      - name: Assert descriptive claim boundary
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          p = json.loads(Path('one-g02-crystallization-wire-economics-geometry.json').read_text())
+          assert p['decision'] in {
+              'ADVANCE_CRYSTALLIZATION_ECONOMICS_MODEL',
+              'HOLD_CRYSTALLIZATION_ECONOMICS_MODEL',
+              'RETIRE_OR_REPAIR_CRYSTALLIZATION_ECONOMICS_MODEL',
+          }
+          assert len(p['rows']) == 48
+          for flag in ('genesis_inputs_executed', 'genesis_comparison_executed', 'genesis_scoring_executed', 'genesis_winner_selected'):
+              assert p[flag] is False
+          print('decision=' + p['decision'])
+          print('tiny_regression_present=', p['tiny_regression_present'])
+          print('first_non_regressing_length=', p['first_non_regressing_length'])
+          PY
+      - name: Retain exact-source geometry evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: one-g02-crystallization-wire-economics-geometry-${{ github.sha }}
+          path: |
+            one-g02-crystallization-wire-economics-geometry.json
+            one-g02-crystallization-wire-economics-geometry.txt
+            one-g02-crystallization-wire-economics-geometry-tests.txt
+          if-no-files-found: warn
+          retention-days: 30
