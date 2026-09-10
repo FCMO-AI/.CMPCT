@@ -17,7 +17,7 @@ def test_breadth_law_pays_complete_bytes_without_semantic_debt(tmp_path: Path, m
     assert payload["law"]["reader_relation_structure"]["add_target_op"] == "add8"
     assert payload["law"]["reader_relation_structure"]["xor_target_op"] == "xor"
     assert payload["law"]["reader_relation_structure"]["exact_copy_reuses_base_ref"] is True
-    assert payload["comparison_executed"] is False
-    assert payload["scoring_executed"] is False
-    assert payload["winner_selected"] is False
+    assert payload["genesis_comparison_executed"] is False
+    assert payload["genesis_scoring_executed"] is False
+    assert payload["genesis_winner_selected"] is False
     assert economics.OUT.is_file()
