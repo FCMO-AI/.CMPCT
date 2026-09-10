@@ -1,12 +1,18 @@
 from __future__ import annotations
 
 from copy import deepcopy
+import json
+from pathlib import Path
 
 from benchmarks.one.one_genesis_gate_result_validator import (
+    IDENTITY_MANIFEST,
     V029_SHA,
     V030_SHA,
     validate_gate_result,
 )
+
+READINESS_SOURCE = "070d4f803c7b4441f517fc5c0b90f19214f5b05f"
+READINESS_DIGEST = "sha256:a1b009dfed8deeed3a9d46ab0cc4cdaf224141c903b2c8bdcdeae32434074abd"
 
 
 def _measurement(stored: int):
@@ -29,49 +35,44 @@ def _measurement(stored: int):
 
 
 def _payload():
+    frozen = json.loads(Path(IDENTITY_MANIFEST).read_text(encoding="utf-8"))
     rows = []
-    for suite, count in (("neutral_hostile_v1", 10), ("resemblance_hostile_v1", 5)):
-        for i in range(count):
-            name = f"w{i:02d}"
-            rows.append(
-                {
-                    "suite": suite,
-                    "name": name,
-                    "files": i + 1,
-                    "logical_bytes": 8192 + i,
-                    "tree_sha256": f"{i + 1:064x}",
-                    "measurements": {
-                        "cmpct1": _measurement(1000),
-                        "v0.29": _measurement(1100),
-                        "v0.30": _measurement(1050),
+    for identity in frozen["workloads"]:
+        rows.append(
+            {
+                **identity,
+                "measurements": {
+                    "cmpct1": _measurement(1000),
+                    "v0.29": _measurement(1100),
+                    "v0.30": _measurement(1050),
+                },
+                "comparisons": {
+                    "v0.29": {
+                        "size_status": "SIZE_WIN",
+                        "creation_status": "WIN",
+                        "read_status": "WIN",
+                        "selective_resource_status": "WIN",
+                        "semantic_status": "PASS",
+                        "verdict": "WIN",
                     },
-                    "comparisons": {
-                        "v0.29": {
-                            "size_status": "SIZE_WIN",
-                            "creation_status": "WIN",
-                            "read_status": "WIN",
-                            "selective_resource_status": "WIN",
-                            "semantic_status": "PASS",
-                            "verdict": "WIN",
-                        },
-                        "v0.30": {
-                            "size_status": "SIZE_WIN",
-                            "creation_status": "WIN",
-                            "read_status": "WIN",
-                            "selective_resource_status": "WIN",
-                            "semantic_status": "PASS",
-                            "verdict": "WIN",
-                        },
+                    "v0.30": {
+                        "size_status": "SIZE_WIN",
+                        "creation_status": "WIN",
+                        "read_status": "WIN",
+                        "selective_resource_status": "WIN",
+                        "semantic_status": "PASS",
+                        "verdict": "WIN",
                     },
-                }
-            )
+                },
+            }
+        )
     return {
         "schema": "cmpct-one-genesis-gate-result-v1",
         "cmpct1_candidate_sha": "a" * 40,
         "frozen_comparators": {"v0.29": V029_SHA, "v0.30": V030_SHA},
         "readiness_authority": {
-            "source_sha": "b" * 40,
-            "artifact_digest": "sha256:" + "c" * 64,
+            "source_sha": READINESS_SOURCE,
+            "artifact_digest": READINESS_DIGEST,
             "all_15_identities_exact": True,
         },
         "environment": {
@@ -125,6 +126,31 @@ def test_missing_workload_fails_closed():
     assert any("exactly 15 workload" in error for error in result.errors)
 
 
+def test_substituted_workload_identity_fails_closed():
+    payload = _payload()
+    payload["workloads"][0]["name"] = "01_plausible_but_not_frozen"
+    result = validate_gate_result(payload)
+    assert not result.ok
+    assert any("unexpected gate workload identity" in error for error in result.errors)
+    assert any("missing frozen gate workload identity" in error for error in result.errors)
+
+
+def test_identity_hash_drift_fails_closed():
+    payload = _payload()
+    payload["workloads"][0]["tree_sha256"] = "f" * 64
+    result = validate_gate_result(payload)
+    assert not result.ok
+    assert any("tree_sha256 differs from frozen readiness authority" in error for error in result.errors)
+
+
+def test_wrong_readiness_authority_fails_closed():
+    payload = _payload()
+    payload["readiness_authority"]["artifact_digest"] = "sha256:" + "0" * 64
+    result = validate_gate_result(payload)
+    assert not result.ok
+    assert any("readiness artifact digest differs" in error for error in result.errors)
+
+
 def test_wrong_frozen_comparator_fails_closed():
     payload = _payload()
     payload["frozen_comparators"]["v0.30"] = "f" * 40
@@ -162,3 +188,17 @@ def test_duplicate_identity_fails_closed():
     result = validate_gate_result(payload)
     assert not result.ok
     assert any("duplicate workload identity" in error for error in result.errors)
+
+
+def test_candidate_and_gate_source_must_be_same_hex_commit():
+    payload = _payload()
+    payload["cmpct1_candidate_sha"] = "not-a-commit-but-forty-characters-long----"
+    result = validate_gate_result(payload)
+    assert not result.ok
+    assert any("40-hex commit identity" in error for error in result.errors)
+
+    payload = _payload()
+    payload["final_adjudication"]["gate_run_source_sha"] = "b" * 40
+    result = validate_gate_result(payload)
+    assert not result.ok
+    assert any("must equal frozen cmpct1_candidate_sha" in error for error in result.errors)
