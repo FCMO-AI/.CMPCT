@@ -33,8 +33,6 @@ CERTIFIED_STATUS = "CERTIFIED_FOR_GENESIS"
 
 def _peak_rss_bytes() -> int:
     value = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
-    # Linux reports KiB, Darwin bytes. Hosted Genesis runners are Linux, but retain a
-    # correct conversion if the transfer falsifier is run on macOS.
     return int(value if sys.platform == "darwin" else value * 1024)
 
 
@@ -44,6 +42,55 @@ def _regular_files(root: Path) -> list[tuple[str, Path]]:
         if stat.S_ISREG(path.lstat().st_mode):
             rows.append((path.relative_to(root).as_posix(), path))
     return sorted(rows)
+
+
+def _source_semantic_manifest(root: Path) -> dict[str, dict[str, Any]]:
+    """Describe source semantics independently with lstat/readlink."""
+    rows: dict[str, dict[str, Any]] = {}
+    for path in sorted(root.rglob("*"), key=lambda item: item.relative_to(root).as_posix()):
+        rel = path.relative_to(root).as_posix()
+        info = path.lstat()
+        mode = stat.S_IMODE(info.st_mode)
+        if stat.S_ISDIR(info.st_mode):
+            row: dict[str, Any] = {"kind": "dir", "mode": mode, "path": rel}
+        elif stat.S_ISLNK(info.st_mode):
+            row = {"kind": "symlink", "mode": mode, "path": rel, "target": os.readlink(path)}
+        elif stat.S_ISREG(info.st_mode):
+            data = path.read_bytes()
+            row = {
+                "kind": "file",
+                "mode": mode,
+                "path": rel,
+                "size": len(data),
+                "sha256": sha256(data).hexdigest(),
+            }
+        else:
+            raise RuntimeError(f"unsupported source entry kind: {rel}")
+        rows[rel] = row
+    return rows
+
+
+def _archive_semantic_manifest(opened: Any) -> dict[str, dict[str, Any]]:
+    """Project the authenticated archive manifest onto source-tree semantics only."""
+    rows: dict[str, dict[str, Any]] = {}
+    for rel, value in opened.base.entries.items():
+        kind = value.get("kind")
+        row: dict[str, Any] = {"kind": kind, "mode": value.get("mode"), "path": rel}
+        if kind == "symlink":
+            row["target"] = value.get("target")
+        elif kind == "file":
+            row["size"] = value.get("size")
+            row["sha256"] = value.get("sha256")
+        rows[rel] = row
+    return rows
+
+
+def _assert_tree_semantics(source: dict[str, dict[str, Any]], archive: dict[str, dict[str, Any]]) -> None:
+    if set(source) != set(archive):
+        raise RuntimeError("archive path universe differs from executor-owned source tree")
+    drift = [rel for rel in sorted(source) if source[rel] != archive[rel]]
+    if drift:
+        raise RuntimeError(f"archive tree semantics differ from executor-owned source tree: {drift[:8]}")
 
 
 def _git_head() -> str:
@@ -59,13 +106,7 @@ def _git_object_sha(path: str) -> str:
 
 
 def _assert_candidate_boundary_certified() -> dict[str, Any]:
-    """Require explicit path/blob/runtime-tree certification before production ONE import.
-
-    The exact checkout commit is independently bound by the executor in `_authorize`.
-    Runtime certification deliberately does not embed that enclosing commit SHA because a
-    manifest cannot contain the cryptographic identity of the commit that contains itself.
-    Instead it certifies the stable `experiments/one` tree plus the exact entry-point blobs.
-    """
+    """Require explicit path/blob/runtime-tree certification before production ONE import."""
     try:
         payload = json.loads(CANDIDATE_BOUNDARY_MANIFEST.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as exc:
@@ -73,9 +114,7 @@ def _assert_candidate_boundary_certified() -> dict[str, Any]:
     if payload.get("schema") != "cmpct-one-genesis-one-candidate-boundary-v1":
         raise RuntimeError("Genesis ONE candidate-boundary authority has wrong schema")
     if payload.get("status") != CERTIFIED_STATUS:
-        raise RuntimeError(
-            "Genesis ONE candidate boundary is not certified for production gate execution"
-        )
+        raise RuntimeError("Genesis ONE candidate boundary is not certified for production gate execution")
     certified = payload.get("certified_candidate")
     if not isinstance(certified, dict):
         raise RuntimeError("Genesis ONE candidate certification is missing certified_candidate")
@@ -89,9 +128,7 @@ def _assert_candidate_boundary_certified() -> dict[str, Any]:
     }
     for field, value in expected.items():
         if certified.get(field) != value:
-            raise RuntimeError(
-                f"Genesis ONE candidate certification {field} differs from worker runtime"
-            )
+            raise RuntimeError(f"Genesis ONE candidate certification {field} differs from worker runtime")
     return certified
 
 
@@ -127,7 +164,6 @@ def _timed(call):
 
 
 def _load_surface():
-    # Dynamic import keeps product import/runtime initialization inside the fresh worker.
     archive = importlib.import_module("experiments.one.general_law_archive")
     reader = importlib.import_module("experiments.one.authenticated_archive_envelope")
     return archive, reader
@@ -152,6 +188,7 @@ def _build(root: Path, archive_path: Path) -> dict[str, Any]:
 
 def _whole(root: Path, archive_path: Path) -> dict[str, Any]:
     expected = _regular_files(root)
+    source_semantics = _source_semantic_manifest(root)
 
     def action():
         _archive, reader = _load_surface()
@@ -168,14 +205,14 @@ def _whole(root: Path, archive_path: Path) -> dict[str, Any]:
     for rel, path in expected:
         if digests.get(rel) != sha256(path.read_bytes()).hexdigest():
             raise RuntimeError(f"whole-read reconstruction mismatch: {rel}")
-    source_paths = {path.relative_to(root).as_posix() for path in root.rglob("*")}
-    if set(opened.list_paths()) != source_paths:
-        raise RuntimeError("archive path universe differs from executor-owned source tree")
+    _assert_tree_semantics(source_semantics, _archive_semantic_manifest(opened))
     return {
         "phase": "whole_read",
         **timing,
         "returned_bytes": returned,
         "regular_files": len(expected),
+        "tree_entries": len(source_semantics),
+        "tree_semantics_checked": True,
         "exact": True,
         "integrity_checked_by_reader": True,
     }
@@ -196,7 +233,6 @@ def _selective(root: Path, archive_path: Path, member: str) -> dict[str, Any]:
     (digest, access), timing = _timed(action)
     if digest != sha256(member_path.read_bytes()).hexdigest():
         raise RuntimeError("selective member reconstruction mismatch")
-    access_row = asdict(access)
     return {
         "phase": "selective_access",
         **timing,
@@ -204,7 +240,7 @@ def _selective(root: Path, archive_path: Path, member: str) -> dict[str, Any]:
         "requested_bytes": requested,
         "exact": True,
         "integrity_checked_by_reader": True,
-        "access": access_row,
+        "access": asdict(access),
     }
 
 
