@@ -24,6 +24,15 @@ from typing import Any
 
 SCHEMA = "cmpct-one-genesis-cmpct1-worker-v1"
 ROOT = Path(__file__).resolve().parents[2]
+# The measurement harness intentionally executes this worker by absolute script path
+# from a sealed checkout.  In that invocation shape Python places benchmarks/one on
+# sys.path rather than the repository root, so the candidate's experiments.one
+# package would otherwise be unreachable.  Bind imports to this worker's own checkout
+# instead of relying on caller cwd or PYTHONPATH.
+_ROOT_TEXT = str(ROOT)
+if _ROOT_TEXT not in sys.path:
+    sys.path.insert(0, _ROOT_TEXT)
+
 CANDIDATE_BOUNDARY_MANIFEST = ROOT / "benchmarks" / "one" / "genesis_one_candidate_boundary_v1.json"
 CREATOR_SURFACE = "experiments/one/general_law_archive.py"
 READER_SURFACE = "experiments/one/authenticated_archive_envelope.py"
