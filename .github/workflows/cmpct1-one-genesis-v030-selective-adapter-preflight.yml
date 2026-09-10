@@ -1,0 +1,99 @@
+# ci-lane: fast
+name: CMPCT1 ONE Genesis v0.30 selective adapter preflight
+
+on:
+  push:
+    branches: [research/cmpct1]
+    paths:
+      - benchmarks/one/one_genesis_v030_selective_adapter_probe.py
+      - benchmarks/one/one_genesis_historical_adapter_probe.py
+      - tests/one/test_genesis_v030_selective_adapter_probe.py
+      - .github/workflows/cmpct1-one-genesis-v030-selective-adapter-preflight.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-one-genesis-v030-selective-adapter-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - name: Checkout CMPCT1 exact source
+        uses: actions/checkout@v4
+      - name: Bind exact source
+        run: |
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          echo "EVIDENCE_HEAD=$GITHUB_SHA" >> "$GITHUB_ENV"
+      - name: Checkout frozen v0.30 comparator
+        uses: actions/checkout@v4
+        with:
+          ref: f4b158a55a08b9b18b50e4e4abe4b9251048c772
+          path: frozen-v030
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install current test dependencies
+        run: python -m pip install -e '.[test]'
+      - name: Assert frozen comparator identity
+        run: test "$(git -C frozen-v030 rev-parse HEAD)" = "f4b158a55a08b9b18b50e4e4abe4b9251048c772"
+      - name: Falsify selective evidence normalization
+        run: python -m pytest -q tests/one/test_genesis_v030_selective_adapter_probe.py | tee v030-selective-tests.txt
+      - name: Probe exact frozen selective facade on synthetic external input
+        run: |
+          python -m benchmarks.one.one_genesis_v030_selective_adapter_probe \
+            --v030-repo frozen-v030 \
+            --work-root v030-selective-transfer \
+            --output v030-selective-probe.json
+      - name: Enforce claim boundary
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          p = json.loads(Path('v030-selective-probe.json').read_text())
+          assert p['schema'] == 'cmpct-one-genesis-v030-selective-adapter-probe-v2'
+          assert p['frozen_v030_sha'] == 'f4b158a55a08b9b18b50e4e4abe4b9251048c772'
+          assert p['synthetic'] is True
+          assert p['genesis_inputs_used'] is False
+          assert p['comparison_executed'] is False
+          assert p['scoring_executed'] is False
+          assert p['winner_selected'] is False
+          assert len(p['members']) == 3
+          for row in p['members']:
+              assert row['stats']['logical_bytes'] == row['logical_bytes']
+              assert row['stats']['locality_measurement_state'] in {
+                  'directly-measured', 'external-instrumentation-required'
+              }
+          PY
+      - name: Build exact-source receipt
+        if: always()
+        run: |
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          probe = Path('v030-selective-probe.json')
+          p = json.loads(probe.read_text()) if probe.exists() else None
+          receipt = {
+              'schema': 'cmpct-one-genesis-v030-selective-adapter-preflight-receipt-v1',
+              'source_sha': os.environ['EVIDENCE_HEAD'],
+              'frozen_v030_sha': 'f4b158a55a08b9b18b50e4e4abe4b9251048c772',
+              'probe': p if p is not None else 'unavailable',
+              'claim_boundary': 'synthetic external-tree selective API exactness/accounting availability only; no Genesis workload, contender comparison, scoring, or winner selection',
+          }
+          Path('v030-selective-adapter-receipt.json').write_text(json.dumps(receipt, indent=2, sort_keys=True) + '\n')
+          PY
+      - name: Upload exact-source evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cmpct-one-v030-selective-adapter-${{ github.sha }}
+          path: |
+            v030-selective-tests.txt
+            v030-selective-probe.json
+            v030-selective-adapter-receipt.json
+          if-no-files-found: warn
+          retention-days: 30
