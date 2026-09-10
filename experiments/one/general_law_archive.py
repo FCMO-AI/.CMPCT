@@ -8,7 +8,10 @@ algebra. Unsupported structure falls back to ordinary Surprise.
 The initial discovery policy is intentionally small and auditable: only the immediately
 preceding regular file may predict the current file, and only exact reuse, Fill,
 ADD8(constant), or XOR(constant) are nominated. Positive nominations are exact-proofed.
-The reader performs no discovery and uses the existing authenticated archive reader.
+Relation nominations are additionally gated to a direct Surprise predictor so the current
+promoted authenticated selective reader is never handed a nested Law topology it cannot
+lower cone-proportionally. The reader performs no discovery and uses the existing
+authenticated archive reader.
 """
 from __future__ import annotations
 
@@ -83,6 +86,16 @@ def _all_xor(source: bytes, target: bytes, mask: int) -> bool:
     return all((left ^ mask) == right for left, right in zip(source, target, strict=True))
 
 
+def _selective_safe_relation_predictor(nodes: list[Node], ref: Ref) -> bool:
+    """Return whether the current native selective lowering can consume this predictor.
+
+    This is an encoder-side topology check only. It performs no byte discovery and keeps
+    the reader-visible representation unchanged. Exact reuse remains separately eligible
+    because it reuses an already-valid root rather than wrapping that root in a new Law.
+    """
+    return 0 <= ref.node < len(nodes) and nodes[ref.node].op == "surprise"
+
+
 def _discover_root(
     data: bytes,
     digest: str,
@@ -113,7 +126,15 @@ def _discover_root(
 
     if previous is not None:
         prior_data, _prior_digest, prior_ref = previous
-        if len(prior_data) == len(data) and data:
+        # The current native selective reader can lower one-hop constant Laws whose data
+        # operand is Surprise. Emitting a new Law over a prior Law would remain valid ONE,
+        # but would make the product seam fail selective reads. Treat that topology as an
+        # opportunity rejected on reader/access cost until nested lowering is promoted.
+        if (
+            len(prior_data) == len(data)
+            and data
+            and _selective_safe_relation_predictor(nodes, prior_ref)
+        ):
             delta = (data[positions[0]] - prior_data[positions[0]]) & 0xFF
             sampled += len(positions) * 2
             if all(((prior_data[index] + delta) & 0xFF) == data[index] for index in positions):
