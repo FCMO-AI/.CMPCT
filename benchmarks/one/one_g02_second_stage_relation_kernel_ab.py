@@ -18,7 +18,7 @@ from experiments.one.general_law_archive import _all_add8, _all_xor, _sample_pos
 OUT = Path("one-g02-second-stage-relation-kernel-ab.json")
 LENGTHS = (256, 4096, 16384, 65536, 262144)
 RELATIONS = ("add8", "xor")
-KINDS = ("true", "stage2_collision", "dual_collision")
+KINDS = ("true", "stage2_collision_first", "stage2_collision_last", "dual_collision_early")
 REPETITIONS = 101
 
 
@@ -66,12 +66,16 @@ def _apply(relation: str, source: bytes) -> bytes:
 def _make_case(relation: str, length: int, kind: str) -> tuple[bytes, bytes]:
     source = _stream(length, f"one-g02-stage2-kernel-{relation}-{length}")
     target = bytearray(_apply(relation, source))
-    if kind == "stage2_collision":
-        second = _second_positions(length)
+    second = _second_positions(length)
+    if kind == "stage2_collision_first":
         if not second:
             raise RuntimeError("missing second-stage positions")
         target[second[0]] ^= 1
-    elif kind == "dual_collision":
+    elif kind == "stage2_collision_last":
+        if not second:
+            raise RuntimeError("missing second-stage positions")
+        target[second[-1]] ^= 1
+    elif kind == "dual_collision_early":
         target[_outside_sparse(length)] ^= 1
     elif kind != "true":
         raise KeyError(kind)
@@ -206,7 +210,8 @@ def _timed_row(relation: str, length: int, kind: str) -> dict[str, Any]:
     ccm = int(statistics.median(cc))
     second_bytes = 2 * second_count
     baseline_modeled = 2 * length
-    candidate_modeled = second_bytes + (baseline_modeled if kind != "stage2_collision" else 0)
+    stage2_kill = kind in {"stage2_collision_first", "stage2_collision_last"}
+    candidate_modeled = second_bytes + (0 if stage2_kill else baseline_modeled)
 
     return {
         "case": f"{relation}-{length}-{kind}",
@@ -241,7 +246,7 @@ def decide(rows: list[dict[str, Any]]) -> tuple[str, dict[str, bool]]:
         and row["baseline_value"] == row["candidate_value"] == row["expected"]
         for row in rows
     )
-    hostile = [row for row in rows if row["kind"] == "stage2_collision"]
+    hostile = [row for row in rows if row["kind"] in {"stage2_collision_first", "stage2_collision_last"}]
     h2 = all(
         _within_noise(row["candidate_cpu_ns"], row["baseline_cpu_ns"])
         and _within_noise(row["candidate_wall_ns"], row["baseline_wall_ns"])
@@ -251,22 +256,29 @@ def decide(rows: list[dict[str, Any]]) -> tuple[str, dict[str, bool]]:
         for row in hostile
         if row["length"] >= 4096
     )
-    survivors = [row for row in rows if row["kind"] in {"true", "dual_collision"} and row["length"] >= 4096]
+    survivors = [row for row in rows if row["kind"] in {"true", "dual_collision_early"} and row["length"] >= 4096]
     h3 = all(row["cpu_ratio"] <= 1.20 and row["wall_ratio"] <= 1.20 for row in survivors)
     broad = [row for row in rows if row["length"] >= 4096]
     h4 = (
         statistics.median(row["cpu_ratio"] for row in broad) <= 1.00
         and statistics.median(row["wall_ratio"] for row in broad) <= 1.00
     )
+    early = [row for row in hostile if row["kind"] == "stage2_collision_first" and row["length"] >= 4096]
+    late = [row for row in hostile if row["kind"] == "stage2_collision_last" and row["length"] >= 4096]
+    dual = [row for row in rows if row["kind"] == "dual_collision_early" and row["length"] >= 4096]
+    h5 = bool(early and late and dual) and all(
+        row["cpu_ratio"] <= 0.50 or row["wall_ratio"] <= 0.50 for row in late
+    )
     hypotheses = {
         "H1_correctness": h1,
         "H2_hostile_benefit": h2,
         "H3_survivor_debt": h3,
         "H4_broad_kernel_economics": h4,
+        "H5_geometry_sensitivity": h5,
     }
     if not h1:
         return "RETIRE_SECOND_STAGE_RELATION_KERNEL", hypotheses
-    if not all((h2, h3, h4)):
+    if not all((h2, h3, h4, h5)):
         return "HOLD_SECOND_STAGE_RELATION_KERNEL", hypotheses
     return "ADVANCE_SECOND_STAGE_RELATION_KERNEL_TO_WRITER_AB", hypotheses
 
@@ -280,10 +292,11 @@ def run() -> dict[str, Any]:
     ]
     decision, hypotheses = decide(rows)
     broad = [row for row in rows if row["length"] >= 4096]
-    kills = [row for row in rows if row["kind"] == "stage2_collision"]
-    survivors = [row for row in rows if row["kind"] in {"true", "dual_collision"}]
+    kills_first = [row for row in rows if row["kind"] == "stage2_collision_first"]
+    kills_last = [row for row in rows if row["kind"] == "stage2_collision_last"]
+    survivors = [row for row in rows if row["kind"] in {"true", "dual_collision_early"}]
     return {
-        "schema": "cmpct-one-g02-second-stage-relation-kernel-ab-v2",
+        "schema": "cmpct-one-g02-second-stage-relation-kernel-ab-v3",
         "experimental_version": "ONE-G0.2",
         "repetitions": REPETITIONS,
         "relations": list(RELATIONS),
@@ -294,8 +307,10 @@ def run() -> dict[str, Any]:
         "summary": {
             "broad_median_cpu_ratio": statistics.median(row["cpu_ratio"] for row in broad),
             "broad_median_wall_ratio": statistics.median(row["wall_ratio"] for row in broad),
-            "kill_median_cpu_ratio": statistics.median(row["cpu_ratio"] for row in kills),
-            "kill_median_wall_ratio": statistics.median(row["wall_ratio"] for row in kills),
+            "first_kill_median_cpu_ratio": statistics.median(row["cpu_ratio"] for row in kills_first),
+            "first_kill_median_wall_ratio": statistics.median(row["wall_ratio"] for row in kills_first),
+            "last_kill_median_cpu_ratio": statistics.median(row["cpu_ratio"] for row in kills_last),
+            "last_kill_median_wall_ratio": statistics.median(row["wall_ratio"] for row in kills_last),
             "survivor_median_cpu_ratio": statistics.median(row["cpu_ratio"] for row in survivors),
             "survivor_median_wall_ratio": statistics.median(row["wall_ratio"] for row in survivors),
         },
@@ -303,6 +318,7 @@ def run() -> dict[str, Any]:
         "decision": decision,
         "claim_boundary": "post-primary relation-check kernel timing only; no writer/product/runtime or Genesis claim",
         "supersedes_unisolated_schema": "cmpct-one-g02-second-stage-relation-kernel-ab-v1",
+        "supersedes_pre_hostile_geometry_schema": "cmpct-one-g02-second-stage-relation-kernel-ab-v2",
         "genesis_inputs_executed": False,
         "genesis_comparison_executed": False,
         "genesis_scoring_executed": False,
