@@ -12,8 +12,10 @@ on:
       - experiments/one/ir.py
       - experiments/one/wire.py
       - benchmarks/one/one_g02_general_law_archive_boundary.py
+      - benchmarks/one/one_g02_general_law_archive_creation_profile.py
       - tests/one/test_general_law_archive.py
       - docs/one/prereg/ONE_G02_GENERAL_LAW_ARCHIVE_BOUNDARY_PREREG_2026-09-10.md
+      - docs/one/prereg/ONE_G02_GENERAL_LAW_ARCHIVE_CREATION_PROFILE_PREREG_2026-09-10.md
       - .github/workflows/cmpct1-one-g02-general-law-archive-boundary.yml
   workflow_dispatch:
 
@@ -67,7 +69,7 @@ jobs:
           assert g['false_pattern_exact_proof_exercised'] is True
           assert g['auth_source_reread_bytes'] == 0
           PY
-      - name: Retain exact-source evidence
+      - name: Retain exact-source boundary evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
@@ -76,5 +78,47 @@ jobs:
             one-g02-general-law-archive-boundary.json
             one-g02-general-law-archive-boundary.txt
             one-g02-general-law-archive-tests.txt
+          if-no-files-found: warn
+          retention-days: 30
+
+  creation-profile:
+    needs: boundary-falsifier
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Bind exact source
+        run: test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+      - name: Install test dependencies
+        run: python -m pip install -e '.[test]'
+      - name: Run preregistered fresh-process creation profile
+        run: python -m benchmarks.one.one_g02_general_law_archive_creation_profile | tee one-g02-general-law-archive-creation-profile.txt
+      - name: Preserve decision truth
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          p = json.loads(Path('one-g02-general-law-archive-creation-profile.json').read_text())
+          assert p['schema'] == 'cmpct-one-g02-general-law-archive-creation-profile-v1'
+          assert p['experimental_version'] == 'ONE-G0.2'
+          assert 'no Genesis corpus' in p['claim_boundary']
+          assert p['decision'] in {'ADVANCE_CREATION_PROFILE', 'HOLD_CREATION_COMPUTE'}
+          assert p['gates']['semantic_exact'] is True
+          assert p['gates']['unrelated_wire_byte_identical'] is True
+          assert p['gates']['unrelated_exact_proof_bytes'] == 0
+          assert p['gates']['candidate_auth_source_reread_zero'] is True
+          print('creation_profile_decision=' + p['decision'])
+          PY
+      - name: Retain exact-source creation evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: one-g02-general-law-archive-creation-profile-${{ github.sha }}
+          path: |
+            one-g02-general-law-archive-creation-profile.json
+            one-g02-general-law-archive-creation-profile.txt
           if-no-files-found: warn
           retention-days: 30
