@@ -111,8 +111,14 @@ def run() -> dict:
         n = 64 * 1024
         base = _pattern(n, 11)
         add = bytes(((b + 37) & 0xFF) for b in base)
-        xor = bytes((b ^ 0xA5) for b in add)
+        xor_source = _hash_stream(n, b"xor-source")
+        xor = bytes((b ^ 0xA5) for b in xor_source)
 
+        # Keep each relation independently discoverable under the promoted selective
+        # topology rule. In particular, do not put XOR immediately after ADD8: the
+        # product seam intentionally rejects a nested Law predictor until nested
+        # selective lowering is promoted. This fixture tests all required root classes
+        # without weakening that reader/access safety invariant.
         mixed = _case(
             root,
             "mixed_law_tree",
@@ -120,9 +126,10 @@ def run() -> dict:
                 ("00-base.bin", base),
                 ("01-copy.bin", base),
                 ("02-add8.bin", add),
-                ("03-xor.bin", xor),
-                ("04-fill.bin", b"Z" * n),
-                ("05-noise.bin", _hash_stream(n, b"noise")),
+                ("03-fill.bin", b"Z" * n),
+                ("04-xor-source.bin", xor_source),
+                ("05-xor.bin", xor),
+                ("06-noise.bin", _hash_stream(n, b"noise")),
                 ("nested/tiny.txt", b"tiny"),
                 ("empty.bin", b""),
             ],
