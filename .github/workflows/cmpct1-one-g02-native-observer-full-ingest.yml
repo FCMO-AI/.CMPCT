@@ -1,5 +1,5 @@
 # ci-lane: fast
-# evidence rearm 2026-09-09c: candidate, benchmark, thresholds and semantics unchanged
+# evidence rearm 2026-09-09d: only inherited-test paths repaired; candidate, benchmark, thresholds and semantics unchanged
 name: CMPCT1 ONE-G0.2 native observer full ingest
 
 on:
@@ -46,8 +46,8 @@ jobs:
         run: >-
           python -m pytest -q
           tests/one/test_native_observe.py
-          tests/one/test_wire.py
-          tests/one/test_vm.py
+          tests/one/test_one_g01_wire.py
+          tests/one/test_one_g01_vm.py
       - name: Run frozen full-ingest transfer falsifier
         run: |
           set -o pipefail
