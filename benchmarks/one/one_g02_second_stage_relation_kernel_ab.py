@@ -2,8 +2,8 @@ from __future__ import annotations
 
 """Causal hosted A/B for ONE-G0.2 second-stage ADD8/XOR rejection.
 
-This benchmark starts after the existing primary sampler and economic gate.  It measures
-only the relation-check boundary; it is not an archive/product/Genesis benchmark.
+This benchmark starts after the existing primary sampler and economic gate. It measures
+only the incremental relation-check boundary; it is not an archive/product/Genesis benchmark.
 """
 
 from hashlib import sha256
@@ -32,8 +32,7 @@ def _stream(n: int, label: str) -> bytes:
     return bytes(out[:n])
 
 
-def _second_positions(length: int) -> tuple[int, ...]:
-    primary = _sample_positions(length)
+def _second_positions_from_primary(primary: tuple[int, ...]) -> tuple[int, ...]:
     pset = set(primary)
     mids = {
         left + (right - left) // 2
@@ -43,8 +42,13 @@ def _second_positions(length: int) -> tuple[int, ...]:
     return tuple(sorted(mids - pset))
 
 
+def _second_positions(length: int) -> tuple[int, ...]:
+    return _second_positions_from_primary(tuple(_sample_positions(length)))
+
+
 def _outside_sparse(length: int) -> int:
-    used = set(_sample_positions(length)) | set(_second_positions(length))
+    primary = tuple(_sample_positions(length))
+    used = set(primary) | set(_second_positions_from_primary(primary))
     for i in range(length):
         if i not in used:
             return i
@@ -74,41 +78,88 @@ def _make_case(relation: str, length: int, kind: str) -> tuple[bytes, bytes]:
     return source, bytes(target)
 
 
-def _primary_pass(relation: str, source: bytes, target: bytes) -> bool:
-    positions = _sample_positions(len(source))
+def _nomination_constant(relation: str, source: bytes, target: bytes, primary: tuple[int, ...]) -> int:
+    index = primary[0]
     if relation == "add8":
-        d = (target[positions[0]] - source[positions[0]]) & 0xFF
-        return all(((source[i] + d) & 0xFF) == target[i] for i in positions)
-    m = source[positions[0]] ^ target[positions[0]]
-    return all((source[i] ^ m) == target[i] for i in positions)
+        return (target[index] - source[index]) & 0xFF
+    if relation == "xor":
+        return source[index] ^ target[index]
+    raise KeyError(relation)
+
+
+def _primary_pass(relation: str, source: bytes, target: bytes) -> bool:
+    primary = tuple(_sample_positions(len(source)))
+    constant = _nomination_constant(relation, source, target, primary)
+    if relation == "add8":
+        return all(((source[i] + constant) & 0xFF) == target[i] for i in primary)
+    return all((source[i] ^ constant) == target[i] for i in primary)
+
+
+def _baseline_prepared(
+    relation: str,
+    source: bytes,
+    target: bytes,
+    constant: int,
+    primary: tuple[int, ...],
+) -> bool:
+    """Timed baseline: nomination and primary sampling are already paid."""
+    del primary
+    if relation == "add8":
+        return _all_add8(source, target, constant)
+    if relation == "xor":
+        return _all_xor(source, target, constant)
+    raise KeyError(relation)
+
+
+def _candidate_prepared(
+    relation: str,
+    source: bytes,
+    target: bytes,
+    constant: int,
+    primary: tuple[int, ...],
+) -> bool:
+    """Timed candidate: charge midpoint arithmetic/loads, then identical exact proof for survivors."""
+    if relation == "add8":
+        for left, right in zip(primary, primary[1:], strict=False):
+            midpoint = left + (right - left) // 2
+            if left < midpoint < right and ((source[midpoint] + constant) & 0xFF) != target[midpoint]:
+                return False
+        return _all_add8(source, target, constant)
+    if relation == "xor":
+        for left, right in zip(primary, primary[1:], strict=False):
+            midpoint = left + (right - left) // 2
+            if left < midpoint < right and (source[midpoint] ^ constant) != target[midpoint]:
+                return False
+        return _all_xor(source, target, constant)
+    raise KeyError(relation)
 
 
 def _baseline(relation: str, source: bytes, target: bytes) -> bool:
-    if relation == "add8":
-        d = (target[_sample_positions(len(source))[0]] - source[_sample_positions(len(source))[0]]) & 0xFF
-        return _all_add8(source, target, d)
-    m = source[_sample_positions(len(source))[0]] ^ target[_sample_positions(len(source))[0]]
-    return _all_xor(source, target, m)
+    primary = tuple(_sample_positions(len(source)))
+    constant = _nomination_constant(relation, source, target, primary)
+    return _baseline_prepared(relation, source, target, constant, primary)
 
 
 def _candidate(relation: str, source: bytes, target: bytes) -> bool:
-    primary = _sample_positions(len(source))
-    second = _second_positions(len(source))
-    if relation == "add8":
-        d = (target[primary[0]] - source[primary[0]]) & 0xFF
-        if not all(((source[i] + d) & 0xFF) == target[i] for i in second):
-            return False
-        return _all_add8(source, target, d)
-    m = source[primary[0]] ^ target[primary[0]]
-    if not all((source[i] ^ m) == target[i] for i in second):
-        return False
-    return _all_xor(source, target, m)
+    primary = tuple(_sample_positions(len(source)))
+    constant = _nomination_constant(relation, source, target, primary)
+    return _candidate_prepared(relation, source, target, constant, primary)
 
 
-def _measure(fn: Callable[[str, bytes, bytes], bool], relation: str, source: bytes, target: bytes) -> tuple[bool, int, int]:
+PreparedFn = Callable[[str, bytes, bytes, int, tuple[int, ...]], bool]
+
+
+def _measure(
+    fn: PreparedFn,
+    relation: str,
+    source: bytes,
+    target: bytes,
+    constant: int,
+    primary: tuple[int, ...],
+) -> tuple[bool, int, int]:
     t0w = time.perf_counter_ns()
     t0c = time.process_time_ns()
-    value = fn(relation, source, target)
+    value = fn(relation, source, target, constant, primary)
     cpu = time.process_time_ns() - t0c
     wall = time.perf_counter_ns() - t0w
     return value, wall, cpu
@@ -116,14 +167,18 @@ def _measure(fn: Callable[[str, bytes, bytes], bool], relation: str, source: byt
 
 def _timed_row(relation: str, length: int, kind: str) -> dict[str, Any]:
     source, target = _make_case(relation, length, kind)
+    primary = tuple(_sample_positions(length))
+    constant = _nomination_constant(relation, source, target, primary)
+    second_count = len(_second_positions_from_primary(primary))
+
     assert _primary_pass(relation, source, target)
     expected = kind == "true"
-    assert _baseline(relation, source, target) is expected
-    assert _candidate(relation, source, target) is expected
+    assert _baseline_prepared(relation, source, target, constant, primary) is expected
+    assert _candidate_prepared(relation, source, target, constant, primary) is expected
 
-    # Warm both paths before timing.
-    _baseline(relation, source, target)
-    _candidate(relation, source, target)
+    # Warm the exact timed boundary. Primary sampling/nomination stays outside both arms.
+    _baseline_prepared(relation, source, target, constant, primary)
+    _candidate_prepared(relation, source, target, constant, primary)
 
     bw: list[int] = []
     bc: list[int] = []
@@ -133,8 +188,8 @@ def _timed_row(relation: str, length: int, kind: str) -> dict[str, Any]:
     for rep in range(REPETITIONS):
         order = ("candidate", "baseline") if rep & 1 else ("baseline", "candidate")
         for arm in order:
-            fn = _candidate if arm == "candidate" else _baseline
-            value, wall, cpu = _measure(fn, relation, source, target)
+            fn = _candidate_prepared if arm == "candidate" else _baseline_prepared
+            value, wall, cpu = _measure(fn, relation, source, target, constant, primary)
             checksum ^= int(value)
             if arm == "candidate":
                 cw.append(wall)
@@ -149,7 +204,7 @@ def _timed_row(relation: str, length: int, kind: str) -> dict[str, Any]:
     bcm = int(statistics.median(bc))
     cwm = int(statistics.median(cw))
     ccm = int(statistics.median(cc))
-    second_bytes = 2 * len(_second_positions(length))
+    second_bytes = 2 * second_count
     baseline_modeled = 2 * length
     candidate_modeled = second_bytes + (baseline_modeled if kind != "stage2_collision" else 0)
 
@@ -162,7 +217,8 @@ def _timed_row(relation: str, length: int, kind: str) -> dict[str, Any]:
         "primary_pass": True,
         "baseline_value": expected,
         "candidate_value": expected,
-        "second_positions": len(_second_positions(length)),
+        "second_positions": second_count,
+        "timing_boundary": "post-primary-sampler-and-nomination",
         "baseline_wall_ns": bwm,
         "candidate_wall_ns": cwm,
         "baseline_cpu_ns": bcm,
@@ -227,12 +283,13 @@ def run() -> dict[str, Any]:
     kills = [row for row in rows if row["kind"] == "stage2_collision"]
     survivors = [row for row in rows if row["kind"] in {"true", "dual_collision"}]
     return {
-        "schema": "cmpct-one-g02-second-stage-relation-kernel-ab-v1",
+        "schema": "cmpct-one-g02-second-stage-relation-kernel-ab-v2",
         "experimental_version": "ONE-G0.2",
         "repetitions": REPETITIONS,
         "relations": list(RELATIONS),
         "lengths": list(LENGTHS),
         "kinds": list(KINDS),
+        "timing_boundary": "post-primary-sampler-and-nomination",
         "rows": rows,
         "summary": {
             "broad_median_cpu_ratio": statistics.median(row["cpu_ratio"] for row in broad),
@@ -244,7 +301,8 @@ def run() -> dict[str, Any]:
         },
         "hypotheses": hypotheses,
         "decision": decision,
-        "claim_boundary": "relation-check kernel timing only; no writer/product/runtime or Genesis claim",
+        "claim_boundary": "post-primary relation-check kernel timing only; no writer/product/runtime or Genesis claim",
+        "supersedes_unisolated_schema": "cmpct-one-g02-second-stage-relation-kernel-ab-v1",
         "genesis_inputs_executed": False,
         "genesis_comparison_executed": False,
         "genesis_scoring_executed": False,
