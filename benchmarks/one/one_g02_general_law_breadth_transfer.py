@@ -10,7 +10,6 @@ from dataclasses import asdict
 from hashlib import sha256
 import json
 from pathlib import Path
-import shutil
 import stat
 import tempfile
 from typing import Any
@@ -38,10 +37,6 @@ def _write_mode(path: Path, data: bytes, mode: int) -> None:
 
 def _build_transfer_tree(root: Path) -> None:
     root.mkdir(parents=True, exist_ok=True)
-
-    # Relation islands intentionally use distinct lengths. The current bounded policy only
-    # examines the immediately preceding regular file, so length changes prevent a Law root
-    # from accidentally becoming the predictor for the next relation family.
     add_base = _hash_stream(32 * 1024, b"breadth-add-base")
     add_target = bytes(((byte + 37) & 0xFF) for byte in add_base)
     xor_base = _hash_stream(32 * 1024 + 17, b"breadth-xor-base")
@@ -85,10 +80,10 @@ def _filesystem_snapshot(root: Path) -> dict[str, dict[str, Any]]:
 
 def _archive_snapshot(root: Path, wire: bytes) -> tuple[dict[str, dict[str, Any]], bool]:
     opened = open_authenticated_archive(wire)
+    source = _filesystem_snapshot(root)
     observed: dict[str, dict[str, Any]] = {}
     exact = True
-
-    for rel, expected in _filesystem_snapshot(root).items():
+    for rel, expected in source.items():
         entry = opened.base.entries.get(rel)
         if entry is None:
             exact = False
@@ -103,10 +98,68 @@ def _archive_snapshot(root: Path, wire: bytes) -> tuple[dict[str, dict[str, Any]
         observed[rel] = row
         if row != expected:
             exact = False
-
-    if set(observed) != set(_filesystem_snapshot(root)):
+    if set(observed) != set(source):
         exact = False
     return observed, exact
+
+
+def _reader_relation_structure(opened: Any) -> tuple[dict[str, Any], bool]:
+    """Identify emitted relationships from parsed reader state, not builder counters."""
+    program = opened.program
+
+    def ref_for(path: str):
+        entry = opened.base.entries[path]
+        return program.roots[entry["root"]].ref
+
+    add_base = ref_for("00-add-base.bin")
+    add_target = ref_for("01-add-target.bin")
+    xor_base = ref_for("02-xor-base.bin")
+    xor_target = ref_for("03-xor-target.bin")
+    exact_base = ref_for("04-exact-base.bin")
+    exact_copy = ref_for("05-exact-copy.bin")
+    fill = ref_for("06-fill.bin")
+    noise = ref_for("07-noise.bin")
+
+    add_node = program.nodes[add_target.node]
+    xor_node = program.nodes[xor_target.node]
+    fill_node = program.nodes[fill.node]
+    rows = {
+        "add_base_op": program.nodes[add_base.node].op,
+        "add_target_op": add_node.op,
+        "add_predictor_is_base": bool(add_node.refs and add_node.refs[0] == add_base),
+        "add_constant_is_37": bool(
+            len(add_node.refs) == 2
+            and program.nodes[add_node.refs[1].node].op == "fill"
+            and program.nodes[add_node.refs[1].node].value == 37
+        ),
+        "xor_base_op": program.nodes[xor_base.node].op,
+        "xor_target_op": xor_node.op,
+        "xor_predictor_is_base": bool(xor_node.refs and xor_node.refs[0] == xor_base),
+        "xor_constant_is_0xa5": bool(
+            len(xor_node.refs) == 2
+            and program.nodes[xor_node.refs[1].node].op == "fill"
+            and program.nodes[xor_node.refs[1].node].value == 0xA5
+        ),
+        "exact_copy_reuses_base_ref": exact_copy == exact_base,
+        "fill_op": fill_node.op,
+        "fill_value_is_q": fill_node.value == ord("Q"),
+        "noise_op": program.nodes[noise.node].op,
+    }
+    expected = {
+        "add_base_op": "surprise",
+        "add_target_op": "add8",
+        "add_predictor_is_base": True,
+        "add_constant_is_37": True,
+        "xor_base_op": "surprise",
+        "xor_target_op": "xor",
+        "xor_predictor_is_base": True,
+        "xor_constant_is_0xa5": True,
+        "exact_copy_reuses_base_ref": True,
+        "fill_op": "fill",
+        "fill_value_is_q": True,
+        "noise_op": "surprise",
+    }
+    return rows, rows == expected
 
 
 def run() -> dict[str, Any]:
@@ -114,12 +167,12 @@ def run() -> dict[str, Any]:
         root = Path(tmp) / "tree"
         _build_transfer_tree(root)
         source_snapshot = _filesystem_snapshot(root)
-
         wire_a, stats_a = build_general_law_archive(root)
         wire_b, stats_b = build_general_law_archive(root)
         archive_snapshot, exact = _archive_snapshot(root, wire_a)
         opened = open_authenticated_archive(wire_a)
         ops = sorted({node.op for node in opened.program.nodes})
+        reader_structure, reader_structure_exact = _reader_relation_structure(opened)
 
         gates = {
             "surprise_present": stats_a.surprise_roots > 0,
@@ -127,13 +180,12 @@ def run() -> dict[str, Any]:
             "exact_reuse_present": stats_a.exact_reuse_roots > 0,
             "add8_present": stats_a.add8_roots > 0,
             "xor_present": stats_a.xor_roots > 0,
+            "reader_relation_structure_exact": reader_structure_exact,
             "whole_tree_semantics_exact": exact and source_snapshot == archive_snapshot,
             "deterministic_wire": wire_a == wire_b and stats_a == stats_b,
             "generic_reader_ontology_only": set(ops) <= ALLOWED_OPS,
         }
-        passed = all(gates.values())
-        decision = "ADVANCE_GENERAL_LAW_BREADTH_ONLY" if passed else "HOLD_GENERAL_LAW_BREADTH"
-
+        decision = "ADVANCE_GENERAL_LAW_BREADTH_ONLY" if all(gates.values()) else "HOLD_GENERAL_LAW_BREADTH"
         payload = {
             "schema": "cmpct-one-g02-general-law-breadth-transfer-v1",
             "experimental_version": "ONE-G0.2",
@@ -141,6 +193,7 @@ def run() -> dict[str, Any]:
             "claim_boundary": "transfer-only represented breadth; no Genesis corpus, comparator comparison, scoring, or winner selection",
             "gates": gates,
             "reader_ops": ops,
+            "reader_relation_structure": reader_structure,
             "wire_sha256": sha256(wire_a).hexdigest(),
             "wire_bytes": len(wire_a),
             "stats": asdict(stats_a),
