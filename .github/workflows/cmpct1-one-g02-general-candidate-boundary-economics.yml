@@ -22,6 +22,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: cmpct-one-g02-general-candidate-boundary-economics-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   economics:
     runs-on: ubuntu-latest
@@ -67,6 +71,7 @@ jobs:
           assert len(payload["rows"]) == 7
           for row in payload["rows"]:
               assert row["gates"]["expected_structure_exercised"] is True
+              assert row["reader_structure_evidence"]["ok"] is True
           if any(row["decision"] != "PASS" for row in payload["rows"]):
               assert payload["decision"] == "HOLD_GENERAL_CANDIDATE_BOUNDARY_ECONOMICS"
           print(payload["decision"])
@@ -93,6 +98,7 @@ jobs:
               "result_sha256": hashlib.sha256(result_path.read_bytes()).hexdigest(),
               "claim_boundary": result["claim_boundary"],
               "anti_vacuity_gate": True,
+              "reader_side_structure_proof": True,
               "genesis_inputs_executed": result["genesis_inputs_executed"],
               "genesis_comparison_executed": result["genesis_comparison_executed"],
               "genesis_scoring_executed": result["genesis_scoring_executed"],
