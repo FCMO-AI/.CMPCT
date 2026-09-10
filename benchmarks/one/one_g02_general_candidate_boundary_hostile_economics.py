@@ -26,7 +26,6 @@ OUT = Path("one-g02-general-candidate-boundary-hostile-economics.json")
 ALLOWED_OPS = {"surprise", "concat", "repeat", "fill", "xor", "add8"}
 ADVANCE = "ADVANCE_GENERAL_CANDIDATE_BOUNDARY_ECONOMICS_PREFLIGHT"
 HOLD = "HOLD_GENERAL_CANDIDATE_BOUNDARY_ECONOMICS"
-LAW_COUNT_FIELDS = ("exact_reuse_roots", "fill_roots", "add8_roots", "xor_roots")
 EXPECTED_RELATION_FIELD: dict[str, str | None] = {
     "tiny_add8_2b": "add8_roots",
     "tiny_xor_2b": "xor_roots",
@@ -153,12 +152,57 @@ def _archive_snapshot(wire: bytes) -> dict[str, dict[str, Any]]:
     return rows
 
 
-def _expected_structure_exercised(name: str, stats: Any) -> bool:
-    """Prevent an economics ADVANCE from being earned by silently falling back to Surprise."""
-    relation_field = EXPECTED_RELATION_FIELD[name]
-    if relation_field is None:
-        return all(getattr(stats, field) == 0 for field in LAW_COUNT_FIELDS)
-    return getattr(stats, relation_field) >= 1
+def _entry_root(opened: Any, path: str) -> Any:
+    entry = opened.base.entries[path]
+    return opened.program.roots[entry["root"]]
+
+
+def _entry_root_op(opened: Any, path: str) -> str:
+    root = _entry_root(opened, path)
+    return opened.program.nodes[root.ref.node].op
+
+
+def _reader_structure_evidence(name: str, opened: Any) -> dict[str, Any]:
+    """Prove the preregistered structure from the reader graph, not writer counters."""
+    if name == "tiny_add8_2b":
+        actual = _entry_root_op(opened, "b.bin")
+        return {"kind": "root_op", "path": "b.bin", "expected": "add8", "actual": actual, "ok": actual == "add8"}
+    if name == "tiny_xor_2b":
+        actual = _entry_root_op(opened, "b.bin")
+        return {"kind": "root_op", "path": "b.bin", "expected": "xor", "actual": actual, "ok": actual == "xor"}
+    if name == "tiny_fill_1b":
+        actual = _entry_root_op(opened, "a.bin")
+        return {"kind": "root_op", "path": "a.bin", "expected": "fill", "actual": actual, "ok": actual == "fill"}
+    if name == "beneficial_add8_4k":
+        actual = _entry_root_op(opened, "b.bin")
+        return {"kind": "root_op", "path": "b.bin", "expected": "add8", "actual": actual, "ok": actual == "add8"}
+    if name == "beneficial_exact_reuse_4k":
+        left = _entry_root(opened, "a.bin").ref
+        right = _entry_root(opened, "b.bin").ref
+        return {"kind": "shared_root_ref", "left": "a.bin", "right": "b.bin", "ok": left == right}
+    if name == "incompressible_pair_4k":
+        left = _entry_root(opened, "a.bin").ref
+        right = _entry_root(opened, "b.bin").ref
+        left_op = _entry_root_op(opened, "a.bin")
+        right_op = _entry_root_op(opened, "b.bin")
+        ok = left_op == right_op == "surprise" and left != right
+        return {
+            "kind": "independent_surprise_roots",
+            "left_op": left_op,
+            "right_op": right_op,
+            "distinct_refs": left != right,
+            "ok": ok,
+        }
+    if name == "mixed_hostile_tree":
+        actual = _entry_root_op(opened, "01-small-add.bin")
+        return {
+            "kind": "root_op",
+            "path": "01-small-add.bin",
+            "expected": "add8",
+            "actual": actual,
+            "ok": actual == "add8",
+        }
+    raise KeyError(name)
 
 
 def _run_row(name: str, builder: Callable[[Path], None], parent: Path) -> dict[str, Any]:
@@ -174,6 +218,7 @@ def _run_row(name: str, builder: Callable[[Path], None], parent: Path) -> dict[s
     law_snapshot = _archive_snapshot(law_wire_a)
     surprise_snapshot = _archive_snapshot(surprise_wire)
     ops = sorted({node.op for node in law_opened.program.nodes})
+    structure_evidence = _reader_structure_evidence(name, law_opened)
 
     law_bytes = len(law_wire_a)
     surprise_bytes = len(surprise_wire)
@@ -183,12 +228,13 @@ def _run_row(name: str, builder: Callable[[Path], None], parent: Path) -> dict[s
         "surprise_semantics_exact": surprise_snapshot == expected,
         "deterministic_law_wire": law_wire_a == law_wire_b and law_stats_a == law_stats_b,
         "generic_reader_ontology_only": set(ops) <= ALLOWED_OPS,
-        "expected_structure_exercised": _expected_structure_exercised(name, law_stats_a),
+        "expected_structure_exercised": structure_evidence["ok"],
         "complete_bytes_non_regressing": law_bytes <= surprise_bytes,
     }
     return {
         "name": name,
         "expected_relation_field": EXPECTED_RELATION_FIELD[name],
+        "reader_structure_evidence": structure_evidence,
         "decision": "PASS" if all(gates.values()) else "HOLD",
         "gates": gates,
         "law_wire_bytes": law_bytes,
