@@ -2,7 +2,9 @@ from __future__ import annotations
 
 """Transfer-only falsifier for the proposed ONE Genesis candidate product boundary.
 
-Frozen by ONE_G02_GENESIS_CANDIDATE_ADAPTER_PROBE_PREREG_2026-09-10.md.
+Frozen by ONE_G02_GENESIS_CANDIDATE_ADAPTER_PROBE_PREREG_2026-09-10.md and repaired
+under ONE_G02_SELECTIVE_SAFE_DISCOVERY_GATE_PREREG_2026-09-10.md after the original
+hosted probe exposed a nested-Law selective incompatibility.
 This module deliberately does not import or generate the frozen Genesis workload suites.
 """
 
@@ -35,16 +37,18 @@ def _hash_stream(n: int, seed: bytes) -> bytes:
 
 def _make_tree(root: Path) -> dict[str, bytes]:
     n = 64 * 1024
-    base = _hash_stream(n, b"one-candidate-adapter-base")
-    add = bytes(((b + 37) & 0xFF) for b in base)
-    xor = bytes((b ^ 0xA5) for b in add)
+    base_a = _hash_stream(n, b"one-candidate-adapter-base-a")
+    add_a = bytes(((b + 37) & 0xFF) for b in base_a)
+    base_b = _hash_stream(n, b"one-candidate-adapter-base-b")
+    xor_b = bytes((b ^ 0xA5) for b in base_b)
     files = {
-        "00-base.bin": base,
-        "01-copy.bin": base,
-        "02-add8.bin": add,
-        "03-xor.bin": xor,
-        "04-fill.bin": b"Q" * n,
-        "05-noise.bin": _hash_stream(n, b"one-candidate-adapter-noise"),
+        "00-base-a.bin": base_a,
+        "01-add8-a.bin": add_a,
+        "02-base-b.bin": base_b,
+        "03-xor-b.bin": xor_b,
+        "04-copy-xor.bin": xor_b,
+        "05-fill.bin": b"Q" * n,
+        "06-noise.bin": _hash_stream(n, b"one-candidate-adapter-noise"),
         "nested/tiny.txt": b"ONE transfer fixture\n",
         "empty.bin": b"",
     }
