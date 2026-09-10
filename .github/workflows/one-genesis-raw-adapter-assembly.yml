@@ -1,0 +1,131 @@
+# ci-lane: research
+name: CMPCT1 ONE raw adapter assembly
+
+on:
+  push:
+    branches:
+      - research/cmpct1
+    paths:
+      - 'benchmarks/one/one_genesis_contender_workload_measurement.py'
+      - 'benchmarks/one/one_genesis_cmpct1_product_worker.py'
+      - 'benchmarks/one/one_genesis_historical_product_worker.py'
+      - 'tests/one/test_genesis_contender_workload_measurement.py'
+      - 'docs/one/prereg/ONE_GENESIS_CONTENDER_RAW_ADAPTER_ASSEMBLY_v0.1_2026-09-10.md'
+      - '.github/workflows/one-genesis-raw-adapter-assembly.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  V029_SHA: 02b8b27cb2d97af7c6e0797984a898e8fa8a8e5d
+  V030_SHA: f4b158a55a08b9b18b50e4e4abe4b9251048c772
+
+jobs:
+  raw-adapter-assembly:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout CMPCT1 exact source
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.sha }}
+          path: cmpct1
+      - name: Checkout frozen v0.29
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ env.V029_SHA }}
+          path: frozen-v029
+      - name: Checkout frozen v0.30
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ env.V030_SHA }}
+          path: frozen-v030
+      - name: Bind exact sources
+        run: |
+          set -euo pipefail
+          test "$(git -C cmpct1 rev-parse HEAD)" = "${GITHUB_SHA}"
+          test "$(git -C frozen-v029 rev-parse HEAD)" = "${V029_SHA}"
+          test "$(git -C frozen-v030 rev-parse HEAD)" = "${V030_SHA}"
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+          cache-dependency-path: frozen-v030/pyproject.toml
+      - name: Install frozen/current surface dependencies
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y zstd gcc ffmpeg
+          python -m pip install --upgrade pip
+          python -m pip install -e './frozen-v030[test,audio]'
+          python -m pip install pytest numpy pillow reportlab python-docx openpyxl python-pptx
+      - name: Falsify assembly invariants
+        env:
+          PYTHONPATH: ${{ github.workspace }}/cmpct1
+        run: |
+          python -m pytest -q cmpct1/tests/one/test_genesis_contender_workload_measurement.py \
+            | tee raw-adapter-contract-tests.txt
+      - name: Create transfer-only external tree
+        run: |
+          mkdir -p transfer/nested receipts
+          python - <<'PY'
+          from pathlib import Path
+          root=Path('transfer')
+          (root/'largest.bin').write_bytes(bytes(range(256))*32)
+          (root/'nested'/'reuse.bin').write_bytes((root/'largest.bin').read_bytes())
+          (root/'nested'/'tiny.txt').write_text('ONE transfer fixture\n', encoding='utf-8')
+          PY
+      - name: Measure CMPCT1 five-sample boundary on transfer tree
+        env:
+          PYTHONPATH: ${{ github.workspace }}/cmpct1
+        run: |
+          python cmpct1/benchmarks/one/one_genesis_contender_workload_measurement.py \
+            --contender cmpct1 --checkout cmpct1 --root transfer --member largest.bin \
+            --transfer-fixture --output receipts/cmpct1.json
+      - name: Measure frozen v0.29 five-sample boundary on transfer tree
+        env:
+          PYTHONPATH: ${{ github.workspace }}/cmpct1
+        run: |
+          python cmpct1/benchmarks/one/one_genesis_contender_workload_measurement.py \
+            --contender v0.29 --checkout frozen-v029 --root transfer --member largest.bin \
+            --transfer-fixture --output receipts/v029.json
+      - name: Measure frozen v0.30 five-sample boundary on transfer tree
+        env:
+          PYTHONPATH: ${{ github.workspace }}/cmpct1
+        run: |
+          python cmpct1/benchmarks/one/one_genesis_contender_workload_measurement.py \
+            --contender v0.30 --checkout frozen-v030 --root transfer --member largest.bin \
+            --transfer-fixture --output receipts/v030.json
+      - name: Enforce raw-only claim boundary
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          for name in ('cmpct1','v029','v030'):
+              row=json.loads(Path(f'receipts/{name}.json').read_text())
+              assert row['schema'] == 'cmpct-one-genesis-workload-measurement-v1'
+              assert row['synthetic'] is True
+              assert row['production_eligible'] is False
+              assert row['repetitions'] == 5
+              assert row['statistic'] == 'median'
+              assert row['comparison_executed'] is False
+              assert row['scoring_executed'] is False
+              assert row['winner_selected'] is False
+              assert row['measurement']['stored_bytes'] > 0
+              assert len(row['measurement']['creation']['samples']) == 5
+              assert len(row['measurement']['whole_read']['samples']) == 5
+          assert json.loads(Path('receipts/v029.json').read_text())['measurement']['selective_access']['status'] == 'unavailable'
+          assert len(json.loads(Path('receipts/v030.json').read_text())['measurement']['selective_access']['samples']) == 5
+          assert len(json.loads(Path('receipts/cmpct1.json').read_text())['measurement']['selective_access']['samples']) == 5
+          PY
+      - name: Preserve transfer-only raw evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: one-genesis-raw-adapter-assembly-${{ github.sha }}
+          path: |
+            receipts/*.json
+            raw-adapter-contract-tests.txt
+          if-no-files-found: warn
+          retention-days: 90
