@@ -7,7 +7,9 @@ on:
       - experiments/one/general_law_archive.py
       - experiments/one/authenticated_archive_envelope.py
       - benchmarks/one/one_g02_general_law_archive_creation_profile_v2.py
+      - benchmarks/one/one_g02_general_law_archive_creation_profile_v2_validate.py
       - tests/one/test_general_law_archive_creation_profile_v2.py
+      - tests/one/test_general_law_archive_creation_profile_v2_validate.py
       - docs/one/prereg/ONE_G02_GENERAL_LAW_ARCHIVE_CREATION_PROFILE_V2_PREREG_2026-09-10.md
       - docs/one/evidence/ONE_G02_GENERAL_LAW_CREATION_PROFILE_TOPOLOGY_DEBT_2026-09-10.md
       - .github/workflows/cmpct1-one-g02-general-law-archive-creation-profile-v2.yml
@@ -33,29 +35,22 @@ jobs:
         run: test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
       - name: Install test dependencies
         run: python -m pip install -e '.[test]'
-      - name: Run V2 semantic/topology tests
-        run: python -m pytest -q tests/one/test_general_law_archive_creation_profile_v2.py | tee one-g02-general-law-archive-creation-profile-v2-tests.txt
+      - name: Run V2 topology and validator falsifiers
+        run: |
+          python -m pytest -q \
+            tests/one/test_general_law_archive_creation_profile_v2.py \
+            tests/one/test_general_law_archive_creation_profile_v2_validate.py \
+            | tee one-g02-general-law-archive-creation-profile-v2-tests.txt
       - name: Run preregistered fresh-process V2 profile
         run: python -m benchmarks.one.one_g02_general_law_archive_creation_profile_v2 | tee one-g02-general-law-archive-creation-profile-v2.txt
-      - name: Preserve fail-closed decision truth
+      - name: Independently validate raw V2 receipt
+        run: python -m benchmarks.one.one_g02_general_law_archive_creation_profile_v2_validate
+      - name: Print decision and resource ratios
         run: |
           python - <<'PY'
           import json
           from pathlib import Path
           p = json.loads(Path('one-g02-general-law-archive-creation-profile-v2.json').read_text())
-          assert p['schema'] == 'cmpct-one-g02-general-law-archive-creation-profile-v2'
-          assert p['experimental_version'] == 'ONE-G0.2'
-          assert p['decision'] in {
-              'ADVANCE_CREATION_PROFILE_V2',
-              'HOLD_CREATION_COMPUTE_V2',
-              'RETIRE_OR_REPAIR_V2',
-          }
-          assert p['genesis_inputs_executed'] is False
-          assert p['genesis_comparison_executed'] is False
-          assert p['genesis_scoring_executed'] is False
-          assert p['genesis_winner_selected'] is False
-          assert p['gates']['semantic_exact'] is True
-          assert p['gates']['reader_structure_exact'] is True
           print('decision=' + p['decision'])
           for row in p['rows']:
               print(row['case'], 'stored_ratio=', row['stored_ratio'], 'cpu_ratio=', row['build_cpu_ratio'], 'rss_ratio=', row['peak_rss_ratio'])
