@@ -5,7 +5,9 @@
   "frozen_v030_sha": "f4b158a55a08b9b18b50e4e4abe4b9251048c772",
   "ledger": {
     "path": "docs/one/evidence/ONE_GENESIS_FROZEN_COMPARATOR_LEDGER_2026-09-09.md",
-    "introduction_commit": "257d218ccd36f94c06b0e6efab8bfbe674e0d3da"
+    "introduction_commit": "257d218ccd36f94c06b0e6efab8bfbe674e0d3da",
+    "addendum_path": "docs/one/evidence/ONE_GENESIS_FROZEN_COMPARATOR_LEDGER_ADDENDUM_2026-09-09.md",
+    "geometry_addendum_commit": "14cb87cd66256da17b1d66902bf9bdd3f0f45df5"
   },
   "records": [
     {
@@ -22,6 +24,16 @@
       "role": "v030_canonical_runtime_red",
       "path": "benchmarks/history/2026-09-02-v030-canonical-runtime-red-e75f.json",
       "blob_sha": "039462436333cb162c58b84131a5cc12a51ec1c0"
+    },
+    {
+      "role": "v030_geometry_complete_artifact_positive",
+      "path": "benchmarks/history/2026-08-17-geometry-v030-seed-preci.json",
+      "blob_sha": "0a18dc9ff32cd5dbfb6922ba8edd58b30a05d4c2"
+    },
+    {
+      "role": "v030_hierarchical_geometry_detached_discovery_only",
+      "path": "benchmarks/history/2026-08-17-hierarchical-geometry-v030-preci.json",
+      "blob_sha": "7b1c8e0613669c8cc4e0c262867dfda95a1b2e68"
     },
     {
       "role": "v030_prefixgraph_positive_mechanism_oracle",
@@ -49,6 +61,7 @@
     "carry_measured_runtime_and_resource_debt_with_each_historical_win": true,
     "preserve_each_historical_loss": true,
     "primary_15_workload_same_input_same_semantics_gate_remains_required": true,
+    "detached_payload_results_are_not_whole_archive_scores": true,
     "unverified_17_97_percent_late_clustered_claim_admitted": false
   }
 }
