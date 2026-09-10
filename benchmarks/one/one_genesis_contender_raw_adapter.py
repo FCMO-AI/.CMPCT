@@ -12,12 +12,19 @@ import json
 import os
 from pathlib import Path
 import subprocess
+import sys
 from typing import Any, Callable
+
+# The executor deliberately launches this current-candidate orchestration script with cwd
+# set to each contender checkout. Historical checkouts do not contain these ONE Genesis
+# helpers, so bind imports to the script's own candidate source rather than ambient cwd.
+ROOT = Path(__file__).resolve().parents[2]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
 
 from benchmarks.one.one_genesis_contender_workload_measurement import measure_workload
 from benchmarks.one.one_genesis_selective_access_plan import select_primary_request
 
-ROOT = Path(__file__).resolve().parents[2]
 IDENTITY_MANIFEST = ROOT / "benchmarks" / "one" / "genesis_gate_workload_identity_v1.json"
 CONTENDERS = ("cmpct1", "v0.29", "v0.30")
 
