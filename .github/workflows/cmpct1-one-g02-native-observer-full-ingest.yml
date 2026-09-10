@@ -1,5 +1,5 @@
 # ci-lane: fast
-# evidence rearm 2026-09-09b: candidate, benchmark, thresholds and semantics unchanged
+# evidence rearm 2026-09-09c: candidate, benchmark, thresholds and semantics unchanged
 name: CMPCT1 ONE-G0.2 native observer full ingest
 
 on:
@@ -15,23 +15,13 @@ on:
       - benchmarks/one/one_g02_end_to_end_direct_emitter_writer.py
       - docs/one/evidence/ONE_G02_NATIVE_OBSERVER_FULL_INGEST_PREREG_2026-09-09.md
       - .github/workflows/cmpct1-one-g02-native-observer-full-ingest.yml
-  pull_request:
-    paths:
-      - experiments/one/observe.py
-      - experiments/one/native_observe.py
-      - experiments/one/native_observe_kernel.c
-      - benchmarks/one/one_g02_native_observer_full_ingest.py
-      - benchmarks/one/one_g02_full_ingest_fused_cache.py
-      - benchmarks/one/one_g02_end_to_end_direct_emitter_writer.py
-      - docs/one/evidence/ONE_G02_NATIVE_OBSERVER_FULL_INGEST_PREREG_2026-09-09.md
-      - .github/workflows/cmpct1-one-g02-native-observer-full-ingest.yml
   workflow_dispatch:
 
 permissions:
   contents: read
 
 concurrency:
-  group: cmpct1-one-g02-native-observer-full-ingest-${{ github.event.pull_request.head.sha || github.sha }}
+  group: cmpct1-one-g02-native-observer-full-ingest-${{ github.sha }}
   cancel-in-progress: true
 
 jobs:
@@ -39,7 +29,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     env:
-      EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+      EVIDENCE_HEAD: ${{ github.sha }}
     steps:
       - uses: actions/checkout@v4
         with:
