@@ -43,7 +43,7 @@ jobs:
           import json
           from pathlib import Path
           p = json.loads(Path('one-g02-crystallization-marginal-cost-model.json').read_text())
-          assert p['schema'] == 'cmpct-one-g02-crystallization-marginal-cost-model-v1'
+          assert p['schema'] == 'cmpct-one-g02-crystallization-marginal-cost-model-v2'
           assert p['decision'] in {
               'ADVANCE_MARGINAL_COST_ADMISSION_MODEL',
               'HOLD_MARGINAL_COST_ADMISSION_MODEL',
@@ -60,6 +60,7 @@ jobs:
           print('false_reject_count=', p['false_reject_count'])
           print('sign_error_count=', p['sign_error_count'])
           print('boundary_false_admit_count=', p['boundary_false_admit_count'])
+          print('boundary_false_reject_count=', p['boundary_false_reject_count'])
           print('max_abs_residual_by_family=', p['max_abs_residual_by_family'])
           PY
       - name: Retain exact-source marginal-cost evidence
