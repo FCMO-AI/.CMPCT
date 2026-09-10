@@ -1,0 +1,153 @@
+name: CMPCT v0.30 HyperPack frontier
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-v030-hyperpack-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  hostile-hyperpack:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      CMPCT_PREFLATE_BRIDGE: ${{ github.workspace }}/native/preflate-bridge/target/release/cmpct-preflate-bridge
+    steps:
+      - name: Check out candidate
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install deterministic benchmark dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y zstd ffmpeg gcc libsndfile1
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[audio,test]'
+          python -m pip install numpy==2.4.6
+
+      - name: Build pinned memory-safe Preflate bridge
+        run: |
+          rustup toolchain install 1.89.0 --profile minimal
+          cargo +1.89.0 build --release --manifest-path native/preflate-bridge/Cargo.toml
+
+      - name: Generate deterministic hostile structural tree
+        run: |
+          mkdir -p benchmark-artifacts
+          python - <<'PY'
+          import importlib.util
+          from pathlib import Path
+          import sys
+          path=Path('benchmarks/resemblance_hostile_corpus_v1.py')
+          spec=importlib.util.spec_from_file_location('cmpct_v030_hostile', path)
+          assert spec and spec.loader
+          mod=importlib.util.module_from_spec(spec); sys.modules[spec.name]=mod; spec.loader.exec_module(mod)
+          mod.build(Path('benchmark-artifacts/resemblance-hostile'))
+          PY
+
+      - name: Compile and run Multi-View HyperPack candidate
+        run: |
+          set -o pipefail
+          python -m py_compile experiments/entropygraph_v030_hyperpack.py
+          python experiments/entropygraph_v030_hyperpack.py \
+            benchmark-artifacts/resemblance-hostile \
+            --work-root benchmark-artifacts/CMPCT_V030_HyperPack \
+            --output benchmark-artifacts/v030-hyperpack.json \
+            2>&1 | tee benchmark-artifacts/v030-hyperpack.stdout.txt
+
+      - name: Enforce exactness locality and inherited-floor monotonicity
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          r=json.loads(Path('benchmark-artifacts/v030-hyperpack.json').read_text())
+          assert r['schema'] == 'cmpct-v030-hyperpack-v1', r
+          assert r['exact_roundtrip'] is True, r
+          assert r['strong_verify']['ok'] is True, r
+          s=r['stats']
+          assert s['archive_bytes'] <= s['attempt5_bytes'], s
+          h=s['hyperpack']['hyperpack']
+          assert h['read_amp'] <= 8.0 + 1e-12, h
+          assert h['worst_member_amp'] <= 8.0 + 1e-12, h
+          # Footnote: a research hypothesis is allowed to lose. CI protects correctness and inherited
+          # floors; the public release gate below reports whether it actually beats the external frontier.
+          print(json.dumps({
+              'attempt5_bytes': s['attempt5_bytes'],
+              'candidate_bytes': s['archive_bytes'],
+              'saving_vs_attempt5': s['saving_vs_attempt5'],
+              'saving_vs_attempt6_pack': h['saving_vs_attempt6'],
+              'read_amp': h['read_amp'],
+              'worst_member_amp': h['worst_member_amp'],
+          }, indent=2))
+          PY
+
+      - name: Judge exact-tree structural frontier
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          r=json.loads(Path('benchmark-artifacts/v030-hyperpack.json').read_text())
+          b=r['stats']['archive_bytes']
+          a5=r['stats']['attempt5_bytes']
+          zstd19=47065652
+          zpaq5=47062639
+          verdict={
+              'candidate_bytes': b,
+              'attempt5_bytes': a5,
+              'saving_vs_attempt5': a5-b,
+              'delta_vs_solid_zstd19': b-zstd19,
+              'delta_vs_zpaq_m5': b-zpaq5,
+              'beats_solid_zstd19': b < zstd19,
+              'beats_zpaq_m5': b < zpaq5,
+              'structural_frontier_breakthrough': b < min(zstd19, zpaq5),
+          }
+          Path('benchmark-artifacts/v030-hyperpack-verdict.json').write_text(json.dumps(verdict, indent=2)+'\n')
+          print(json.dumps(verdict, indent=2))
+          PY
+
+      - name: Public-surface guard
+        run: python tools/check_public_surface.py
+
+      - name: Summarize HyperPack experiment
+        if: always()
+        run: |
+          if [ -f benchmark-artifacts/v030-hyperpack-verdict.json ]; then
+            python - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          import json
+          from pathlib import Path
+          v=json.loads(Path('benchmark-artifacts/v030-hyperpack-verdict.json').read_text())
+          print('## CMPCT v0.30 — Multi-View HyperPack')
+          print(f"- candidate: **{v['candidate_bytes']:,} B**")
+          print(f"- saving vs accepted attempt-5: **{v['saving_vs_attempt5']:,} B**")
+          print(f"- vs solid Zstd-19: **{v['delta_vs_solid_zstd19']:+,} B**")
+          print(f"- vs ZPAQ m5: **{v['delta_vs_zpaq_m5']:+,} B**")
+          print(f"- structural frontier breakthrough: **{'PASS' if v['structural_frontier_breakthrough'] else 'NOT YET'}**")
+          PY
+          fi
+
+      - name: Upload HyperPack evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cmpct-v030-hyperpack-${{ github.sha }}
+          path: |
+            benchmark-artifacts/v030-hyperpack.json
+            benchmark-artifacts/v030-hyperpack-verdict.json
+            benchmark-artifacts/v030-hyperpack.stdout.txt
+          if-no-files-found: warn
+
+# Footnote: this workflow deliberately does not fail merely because HyperPack fails to beat an external
+# compressor. A red hypothesis and a broken implementation are different facts. Release promotion remains
+# forbidden until the measured candidate beats the inherited CMPCT floor and survives broader workloads.
