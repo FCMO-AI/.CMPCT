@@ -15,6 +15,27 @@ def _pattern(length: int, salt: int = 0) -> bytes:
     return (block * ((length + len(block) - 1) // len(block)))[:length]
 
 
+def _selective_invariants(stats) -> tuple:
+    """Return deterministic range geometry/resource accounting, excluding clocks."""
+    return (
+        stats.requested_bytes,
+        stats.cone_start,
+        stats.cone_bytes,
+        stats.packed_source_bytes,
+        stats.source_read_bytes,
+        stats.source_plan_write_bytes,
+        stats.sink_write_bytes,
+        stats.proof_payload_bytes,
+        stats.proof_hash_bytes,
+        stats.auth_index_bytes,
+        stats.plan_commands,
+        stats.fallback,
+        stats.fallback_reason,
+        stats.modeled_data_movement_bytes,
+        stats.peak_temporary_bytes,
+    )
+
+
 def _make_tree(root: Path, shape: str) -> dict[str, bytes]:
     if shape == "32k":
         payloads = {"data.bin": _pattern(32 * 1024, 1)}
@@ -95,4 +116,4 @@ def test_fused_builder_is_wire_identical_and_removes_auth_reread(tmp_path: Path,
             base_data, base_stats = baseline_open.read_range(rel, start, length)
             fused_data, fused_stats = fused_open.read_range(rel, start, length)
             assert fused_data == base_data == expected[start:start + length]
-            assert fused_stats == base_stats
+            assert _selective_invariants(fused_stats) == _selective_invariants(base_stats)
