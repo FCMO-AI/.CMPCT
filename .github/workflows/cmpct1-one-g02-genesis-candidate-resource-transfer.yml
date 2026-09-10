@@ -1,0 +1,103 @@
+# ci-lane: fast
+name: CMPCT1 ONE G0.2 candidate resource transfer
+
+on:
+  push:
+    branches: [research/cmpct1]
+    paths:
+      - benchmarks/one/one_g02_genesis_candidate_resource_transfer.py
+      - benchmarks/one/one_genesis_contender_workload_measurement.py
+      - benchmarks/one/one_genesis_cmpct1_product_worker.py
+      - experiments/one/**
+      - docs/one/prereg/ONE_G02_GENESIS_CANDIDATE_RESOURCE_TRANSFER_PREREG_2026-09-10.md
+      - docs/one/prereg/ONE_GENESIS_CANDIDATE_TREE_SEMANTICS_2026-09-10.md
+      - .github/workflows/cmpct1-one-g02-genesis-candidate-resource-transfer.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-one-g02-candidate-resource-transfer-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  transfer-resource-falsifier:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Bind exact source
+        run: |
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          echo "EVIDENCE_HEAD=$GITHUB_SHA" >> "$GITHUB_ENV"
+      - name: Install package
+        run: python -m pip install -e '.[test]'
+      - name: Check CI topology
+        run: python tools/check_ci_topology.py .github/workflows/cmpct1-one-g02-genesis-candidate-resource-transfer.yml
+      - name: Falsify worker semantics and runtime certification
+        run: python -m pytest -q tests/one/test_genesis_cmpct1_product_worker.py | tee one-g02-resource-transfer-tests.txt
+      - name: Run transfer-only five-sample resource falsifier
+        run: |
+          python -m benchmarks.one.one_g02_genesis_candidate_resource_transfer | tee one-g02-resource-transfer.txt
+          python - <<'PY'
+          import json, math
+          from pathlib import Path
+          p = json.loads(Path('one-g02-genesis-candidate-resource-transfer.json').read_text())
+          assert p['schema'] == 'cmpct-one-g02-genesis-candidate-resource-transfer-v1'
+          assert p['decision'] == 'ADVANCE_RESOURCE_OBSERVABILITY_ONLY'
+          assert p['source_sha'] == '${{ github.sha }}'
+          assert p['transfer_only'] is True
+          assert p['production_eligible'] is False
+          assert p['genesis_workload_modules_imported'] is False
+          assert p['genesis_inputs_executed'] is False
+          assert p['comparison_executed'] is False
+          assert p['scoring_executed'] is False
+          assert p['winner_selected'] is False
+          assert p['repetitions'] == 5
+          assert p['wire_deterministic_across_samples'] is True
+          assert p['whole_tree_semantics_exact_across_samples'] is True
+          assert p['authenticated_selective_exact_across_samples'] is True
+          for phase in ('creation', 'whole_read', 'selective_access'):
+              s = p['resource_summary'][phase]
+              assert s['repetitions'] == 5
+              assert s['process_boundary'] == 'fresh-process'
+              for metric in ('cpu_s', 'wall_s', 'peak_rss_bytes'):
+                  for stat in ('median', 'min', 'max'):
+                      value = s[metric][stat]
+                      assert isinstance(value, (int, float)) and not isinstance(value, bool)
+                      assert math.isfinite(value) and value >= 0
+          PY
+      - name: Retain exact-source receipt
+        if: always()
+        run: |
+          python - <<'PY'
+          import hashlib, json, os
+          from pathlib import Path
+          evidence = Path('one-g02-genesis-candidate-resource-transfer.json')
+          p = json.loads(evidence.read_text()) if evidence.exists() else None
+          receipt = {
+              'schema': 'cmpct-one-g02-genesis-candidate-resource-transfer-receipt-v1',
+              'source_sha': os.environ['EVIDENCE_HEAD'],
+              'probe': p if p is not None else 'unavailable',
+              'probe_sha256': ('sha256:' + hashlib.sha256(evidence.read_bytes()).hexdigest()) if evidence.exists() else 'unavailable',
+              'candidate_boundary_status': 'HOLD_UNTIL_COMPLETE_PRODUCT_BOUNDARY_IS_CERTIFIED',
+              'claim_boundary': 'transfer-only resource observability/repeatability and exact-tree semantic falsification; no Genesis inputs, comparator comparison, scoring, winner selection, or candidate certification',
+          }
+          Path('one-g02-genesis-candidate-resource-transfer-receipt.json').write_text(json.dumps(receipt, indent=2, sort_keys=True) + '\n')
+          PY
+      - name: Upload evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: one-g02-candidate-resource-transfer-${{ github.sha }}
+          path: |
+            one-g02-genesis-candidate-resource-transfer.json
+            one-g02-genesis-candidate-resource-transfer-receipt.json
+            one-g02-resource-transfer.txt
+            one-g02-resource-transfer-tests.txt
+          if-no-files-found: error
+          retention-days: 30
