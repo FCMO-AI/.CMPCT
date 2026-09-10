@@ -8,12 +8,14 @@ on:
       - "benchmarks/one/one_g02_general_candidate_boundary_hostile_economics.py"
       - "tests/one/test_general_candidate_boundary_hostile_economics.py"
       - "docs/one/prereg/ONE_G02_GENERAL_CANDIDATE_BOUNDARY_HOSTILE_ECONOMICS_PREREG_2026-09-10.md"
+      - "docs/one/prereg/ONE_G02_GENERAL_CANDIDATE_BOUNDARY_HOSTILE_ECONOMICS_ANTI_VACUITY_AMENDMENT_2026-09-10.md"
       - ".github/workflows/cmpct1-one-g02-general-candidate-boundary-economics.yml"
   pull_request:
     paths:
       - "benchmarks/one/one_g02_general_candidate_boundary_hostile_economics.py"
       - "tests/one/test_general_candidate_boundary_hostile_economics.py"
       - "docs/one/prereg/ONE_G02_GENERAL_CANDIDATE_BOUNDARY_HOSTILE_ECONOMICS_PREREG_2026-09-10.md"
+      - "docs/one/prereg/ONE_G02_GENERAL_CANDIDATE_BOUNDARY_HOSTILE_ECONOMICS_ANTI_VACUITY_AMENDMENT_2026-09-10.md"
       - ".github/workflows/cmpct1-one-g02-general-candidate-boundary-economics.yml"
   workflow_dispatch:
 
@@ -34,16 +36,19 @@ jobs:
           python-version: "3.12"
           cache: pip
 
-      - name: Install project
-        run: python -m pip install -e .
+      - name: Bind exact source
+        run: test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+
+      - name: Install project and test dependencies
+        run: python -m pip install -e '.[test]'
 
       - name: Run hostile economics tests
         run: python -m pytest -q tests/one/test_general_candidate_boundary_hostile_economics.py
 
       - name: Run transfer-only economics falsifier
-        run: python benchmarks/one/one_g02_general_candidate_boundary_hostile_economics.py
+        run: python -m benchmarks.one.one_g02_general_candidate_boundary_hostile_economics
 
-      - name: Assert Genesis remained dark
+      - name: Assert fail-closed decision, intended structure, and Genesis darkness
         run: |
           python - <<'PY'
           import json
@@ -51,10 +56,19 @@ jobs:
 
           path = Path("one-g02-general-candidate-boundary-hostile-economics.json")
           payload = json.loads(path.read_text(encoding="utf-8"))
+          assert payload["decision"] in {
+              "ADVANCE_GENERAL_CANDIDATE_BOUNDARY_ECONOMICS_PREFLIGHT",
+              "HOLD_GENERAL_CANDIDATE_BOUNDARY_ECONOMICS",
+          }
           assert payload["genesis_inputs_executed"] is False
           assert payload["genesis_comparison_executed"] is False
           assert payload["genesis_scoring_executed"] is False
           assert payload["genesis_winner_selected"] is False
+          assert len(payload["rows"]) == 7
+          for row in payload["rows"]:
+              assert row["gates"]["expected_structure_exercised"] is True
+          if any(row["decision"] != "PASS" for row in payload["rows"]):
+              assert payload["decision"] == "HOLD_GENERAL_CANDIDATE_BOUNDARY_ECONOMICS"
           print(payload["decision"])
           for row in payload["rows"]:
               print(row["name"], row["law_wire_bytes"], row["surprise_wire_bytes"], row["law_minus_surprise_bytes"], row["decision"])
@@ -72,12 +86,13 @@ jobs:
           result = json.loads(result_path.read_text(encoding="utf-8"))
           source_sha = os.environ["GITHUB_SHA"]
           receipt = {
-              "schema": "cmpct-one-g02-general-candidate-boundary-economics-hosted-receipt-v1",
+              "schema": "cmpct-one-g02-general-candidate-boundary-economics-hosted-receipt-v2",
               "source_sha": source_sha,
               "experimental_version": result["experimental_version"],
               "decision": result["decision"],
               "result_sha256": hashlib.sha256(result_path.read_bytes()).hexdigest(),
               "claim_boundary": result["claim_boundary"],
+              "anti_vacuity_gate": True,
               "genesis_inputs_executed": result["genesis_inputs_executed"],
               "genesis_comparison_executed": result["genesis_comparison_executed"],
               "genesis_scoring_executed": result["genesis_scoring_executed"],
