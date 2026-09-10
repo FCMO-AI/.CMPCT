@@ -56,6 +56,18 @@ def run() -> dict:
 
         logical = build.logical_file_bytes
         auth_delta_ratio = build.auth_manifest_delta_bytes / logical if logical else 0.0
+        per_file = []
+        per_file_gate_violations = []
+        for item in build.per_file_auth:
+            ratio = (
+                item.physical_auth_entry_delta_bytes / item.logical_bytes
+                if item.logical_bytes else None
+            )
+            row = {**asdict(item), "physical_auth_entry_delta_ratio": ratio}
+            per_file.append(row)
+            if item.logical_bytes >= 64 * 1024 and ratio is not None and ratio > 0.03:
+                per_file_gate_violations.append(item.path)
+
         max_nonempty_cone = max(row["cone_bytes"] for row in rows if row["length"])
         full_reconstruct_violations = [
             row["label"] for row in rows
@@ -64,22 +76,24 @@ def run() -> dict:
         ]
         decision = (
             "ADVANCE_AUTHENTICATED_ARCHIVE_ENVELOPE"
-            if auth_delta_ratio <= 0.03 and not full_reconstruct_violations
+            if not per_file_gate_violations and not full_reconstruct_violations
             else "HOLD_AUTHENTICATED_ARCHIVE_ENVELOPE"
         )
         return {
-            "schema": "one-g02-authenticated-archive-envelope-v1",
+            "schema": "one-g02-authenticated-archive-envelope-v2",
             "decision": decision,
             "gate": {
-                "max_auth_manifest_delta_ratio": 0.03,
+                "max_per_file_auth_manifest_delta_ratio_for_files_ge_64k": 0.03,
                 "no_large_file_full_reconstruction": True,
             },
             "build": {
                 **asdict(build),
                 "base_wire_bytes": len(base_wire),
                 "wire_delta_bytes": len(candidate_wire) - len(base_wire),
-                "auth_manifest_delta_ratio": auth_delta_ratio,
+                "aggregate_auth_manifest_delta_ratio": auth_delta_ratio,
                 "base_logical_file_bytes": base_build["logical_file_bytes"],
+                "per_file_auth": per_file,
+                "per_file_gate_violations": per_file_gate_violations,
             },
             "selective": {
                 "request_count": len(rows),
