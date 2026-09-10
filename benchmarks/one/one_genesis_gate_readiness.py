@@ -6,11 +6,11 @@ This program intentionally does not encode any workload with CMPCT1, v0.29, or v
 It proves only that the portable 15-workload substrate regenerates exactly and that the
 frozen comparator checkouts are the authorities preregistered by CMPCT1 Genesis.
 
-Authority reconciliation: the initial readiness preregistration named repair-v5 even
-though the already-accepted v0.29 generalization authority consumes repair-v6 for five
-portable neutral/hostile rows. Readiness therefore follows the pre-existing accepted
-v0.29 substrate authority (repair-v6) rather than changing any expected identity after
-observation. The failed v5 readiness artifact remains preserved as evidence of this bug.
+Authority reconciliation: the current shared gate substrate uses the accepted repair-v6
+portable identity. Frozen comparators remain frozen at their recorded SHAs and are only
+required to contain the evidence/code that belongs to those historical commits; they do
+not need to contain later substrate receipts. All contenders will consume the same live
+repair-v6 trees when the gate is actually run. Earlier HOLD artifacts remain preserved.
 """
 
 import argparse
@@ -43,10 +43,13 @@ AUTHORITY_FILES = (
     RECONCILIATION,
 )
 
+# These are historical contents required to identify the frozen comparator itself.
+# Shared September-11 input authority is checked separately through AUTHORITY_FILES and
+# the regenerated 15-row matrix; do not require future repair receipts inside old SHAs.
 REQUIRED_V029 = (
     "benchmarks/mosaic_v029_generalization_bench.py",
     "benchmarks/history/2026-08-16-entropygraph-v028.json",
-    "benchmarks/history/2026-08-19-neutral-hostile-determinism-repair-v6.json",
+    "benchmarks/history/2026-08-17-neutral-hostile-determinism-repair-v5.json",
     "benchmarks/history/2026-08-17-mosaic-v029-generalization-v3.json",
 )
 REQUIRED_V030 = (
@@ -111,8 +114,8 @@ def _build_identity_matrix(work_root: Path) -> tuple[list[dict[str, Any]], list[
         ROOT / "benchmarks" / "resemblance_hostile_corpus_v1.py",
         "cmpct_one_genesis_readiness_hostile",
     )
-    # The preserved v0.29 generalization rows are explicitly repair-v6 authority.
-    # Use that exact accepted producer policy; do not synthesize or update expected hashes here.
+    # Current portable substrate authority is repair-v6. This is independent of the
+    # historical repair version embedded in either frozen comparator's own evidence.
     repair = general._load(
         ROOT / "benchmarks" / "neutral_hostile_determinism_repair_v6.py",
         "cmpct_one_genesis_readiness_repair_v6",
