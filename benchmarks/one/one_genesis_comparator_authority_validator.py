@@ -79,11 +79,18 @@ def validate() -> dict[str, object]:
             "carry_measured_runtime_and_resource_debt_with_each_historical_win",
             "preserve_each_historical_loss",
             "primary_15_workload_same_input_same_semantics_gate_remains_required",
+            "detached_payload_results_are_not_whole_archive_scores",
         ):
             if admissibility.get(key) is not True:
                 errors.append(f"required admissibility law not true: {key}")
         if admissibility.get("unverified_17_97_percent_late_clustered_claim_admitted") is not False:
             errors.append("unverified late-clustered claim must remain excluded")
+
+    roles = {record.get("role") for record in records if isinstance(record, dict)}
+    if "v030_geometry_complete_artifact_positive" not in roles:
+        errors.append("complete-artifact Geometry authority missing")
+    if "v030_hierarchical_geometry_detached_discovery_only" not in roles:
+        errors.append("detached Hierarchical Geometry discovery authority missing")
 
     result: dict[str, object] = {
         "schema": "cmpct-one-genesis-frozen-comparator-authority-validation-v1",
