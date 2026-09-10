@@ -14,14 +14,22 @@ requires both the calendar gate and the explicit ``--execute-real-gate`` switch.
 
 import argparse
 from datetime import datetime
+import hashlib
 import json
 import os
 from pathlib import Path
+import shutil
 import subprocess
 from typing import Any
 from zoneinfo import ZoneInfo
 
 from benchmarks.one.one_genesis_gate_executor_preflight import V029_SHA, V030_SHA, build_plan
+from benchmarks.one.one_genesis_gate_readiness import (
+    GENERALIZATION,
+    _build_identity_matrix,
+    _load as _readiness_load,
+    _tree_stats,
+)
 
 ROOT = Path(__file__).resolve().parents[2]
 IDENTITY_MANIFEST = ROOT / "benchmarks" / "one" / "genesis_gate_workload_identity_v1.json"
@@ -35,6 +43,8 @@ REQUIRED_MEASUREMENT_KEYS = (
     "semantics",
     "reader_burden",
 )
+SEMANTIC_KEYS = ("exact", "integrity", "recovery", "portable")
+READER_BURDEN_KEYS = ("reader_discovery", "hidden_codec")
 
 
 def _load(path: Path) -> Any:
@@ -44,6 +54,14 @@ def _load(path: Path) -> Any:
 def _write(path: Path, payload: Any) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+
+def _sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for block in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(block)
+    return digest.hexdigest()
 
 
 def _looks_like_sha(value: Any) -> bool:
@@ -114,6 +132,90 @@ def _fixture_output(contender: str, source_sha: str) -> dict[str, Any]:
     }
 
 
+def _suite_root(work_root: Path, suite: str) -> Path:
+    if suite == "neutral_hostile_v1":
+        return work_root / "neutral"
+    if suite == "resemblance_hostile_v1":
+        return work_root / "resemblance"
+    raise RuntimeError(f"unknown frozen suite {suite!r}")
+
+
+def _snapshot_physical_inputs(work_root: Path) -> list[dict[str, Any]]:
+    """Measure the bytes actually offered to adapters; do not trust adapter self-report."""
+    general = _readiness_load(GENERALIZATION, "cmpct_one_genesis_measurement_physical_verify")
+    rows: list[dict[str, Any]] = []
+    for frozen in _identity_rows():
+        suite = str(frozen["suite"])
+        workload = _suite_root(work_root, suite) / str(frozen["name"])
+        if not workload.is_dir():
+            raise RuntimeError(f"physical gate input missing {suite}/{frozen['name']}")
+        files, logical = _tree_stats(workload)
+        rows.append(
+            {
+                "suite": suite,
+                "name": frozen["name"],
+                "files": files,
+                "logical_bytes": logical,
+                "tree_sha256": general.ENGINE.BASE.treehash(workload),
+            }
+        )
+
+    expected_by_suite = {
+        suite: {str(row["name"]) for row in _identity_rows() if row["suite"] == suite}
+        for suite in ("neutral_hostile_v1", "resemblance_hostile_v1")
+    }
+    for suite, expected_names in expected_by_suite.items():
+        root = _suite_root(work_root, suite)
+        observed_names = {path.name for path in root.iterdir() if path.is_dir()} if root.is_dir() else set()
+        if observed_names != expected_names:
+            raise RuntimeError(
+                f"physical gate suite contents differ for {suite}: "
+                f"missing={sorted(expected_names - observed_names)} unexpected={sorted(observed_names - expected_names)}"
+            )
+    return rows
+
+
+def _validate_physical_rows(rows: list[dict[str, Any]]) -> None:
+    expected = {(row["suite"], row["name"]): row for row in _identity_rows()}
+    observed = {(row.get("suite"), row.get("name")): row for row in rows}
+    errors: list[str] = []
+    if len(rows) != 15 or len(observed) != 15:
+        errors.append(f"physical input seal must contain exactly 15 unique rows, got {len(rows)}/{len(observed)}")
+    if set(observed) != set(expected):
+        errors.append("physical input seal workload set differs from frozen identity authority")
+    for key, frozen in expected.items():
+        row = observed.get(key)
+        if row is None:
+            continue
+        for field in ("files", "logical_bytes", "tree_sha256"):
+            if row.get(field) != frozen.get(field):
+                errors.append(f"{key}: physical {field} differs from frozen identity")
+    if errors:
+        raise RuntimeError("physical Genesis input seal failed: " + "; ".join(errors))
+
+
+def _seal_physical_inputs(work_root: Path) -> dict[str, Any]:
+    """Regenerate once, then independently bind the on-disk trees to frozen identities."""
+    shutil.rmtree(work_root, ignore_errors=True)
+    work_root.mkdir(parents=True, exist_ok=True)
+    readiness_rows, readiness_errors = _build_identity_matrix(work_root)
+    if readiness_errors or len(readiness_rows) != 15 or not all(row.get("pass") for row in readiness_rows):
+        raise RuntimeError("physical Genesis input generation failed: " + "; ".join(readiness_errors or ["identity row failed"]))
+    rows = _snapshot_physical_inputs(work_root)
+    _validate_physical_rows(rows)
+    return {
+        "schema": "cmpct-one-genesis-physical-input-seal-v1",
+        "claim_boundary": "exact physical input identity only; no contender measurement or scoring",
+        "all_15_identities_exact": True,
+        "work_root": str(work_root.resolve()),
+        "rows": rows,
+    }
+
+
+def _assert_physical_inputs_unchanged(work_root: Path) -> None:
+    _validate_physical_rows(_snapshot_physical_inputs(work_root))
+
+
 def _adapter_output(
     contender: str,
     source_sha: str,
@@ -145,6 +247,28 @@ def _adapter_output(
     if not output_path.is_file():
         raise RuntimeError(f"{contender}: adapter did not persist CMPCT_GENESIS_OUTPUT")
     return _load(output_path)
+
+
+def _is_unavailable(value: Any) -> bool:
+    return value == "unavailable" or (isinstance(value, dict) and value.get("status") == "unavailable")
+
+
+def _validate_timed_or_access_family(value: Any, label: str, errors: list[str]) -> None:
+    if _is_unavailable(value):
+        return
+    if not isinstance(value, dict):
+        errors.append(f"{label} must be an object or explicit unavailable")
+        return
+    if value.get("measured") is not True:
+        errors.append(f"{label} must declare measured=true or explicit unavailable")
+        return
+    for metric_name, metric_value in value.items():
+        if metric_name in {"status", "notes", "process_boundary", "cache_semantics", "measured"}:
+            continue
+        if isinstance(metric_value, bool):
+            continue
+        if isinstance(metric_value, (int, float)) and metric_value < 0:
+            errors.append(f"{label}.{metric_name} must be non-negative")
 
 
 def _validate_raw(payload: dict[str, Any], contender: str, expected_sha: str, *, synthetic: bool) -> None:
@@ -188,6 +312,33 @@ def _validate_raw(payload: dict[str, Any], contender: str, expected_sha: str, *,
         missing = [field for field in REQUIRED_MEASUREMENT_KEYS if field not in measurement]
         if missing:
             errors.append(f"{key}: missing measurement fields {missing}")
+            continue
+
+        stored = measurement.get("stored_bytes")
+        if not (_is_unavailable(stored) or (isinstance(stored, int) and not isinstance(stored, bool) and stored >= 0)):
+            errors.append(f"{key}: stored_bytes must be a non-negative integer or explicit unavailable")
+        for family in ("creation", "whole_read", "selective_access"):
+            _validate_timed_or_access_family(measurement.get(family), f"{key}: {family}", errors)
+
+        semantics = measurement.get("semantics")
+        if _is_unavailable(semantics):
+            pass
+        elif not isinstance(semantics, dict):
+            errors.append(f"{key}: semantics must be an object or explicit unavailable")
+        else:
+            for field in SEMANTIC_KEYS:
+                if not isinstance(semantics.get(field), bool):
+                    errors.append(f"{key}: semantics.{field} must be boolean")
+
+        reader = measurement.get("reader_burden")
+        if _is_unavailable(reader):
+            pass
+        elif not isinstance(reader, dict):
+            errors.append(f"{key}: reader_burden must be an object or explicit unavailable")
+        else:
+            for field in READER_BURDEN_KEYS:
+                if not isinstance(reader.get(field), bool):
+                    errors.append(f"{key}: reader_burden.{field} must be boolean")
     if set(expected) != seen:
         errors.append("raw output does not cover exactly the frozen workload set")
     if errors:
@@ -229,12 +380,19 @@ def execute(
     raw_dir.mkdir(parents=True, exist_ok=True)
     outputs: dict[str, dict[str, Any]] = {}
     adapter_manifest: dict[str, Any] = {}
+    physical_seal_path: Path | None = None
+    physical_seal_digest: str | None = None
     if not fixture:
         adapter_manifest = _load(adapters_path)  # type: ignore[arg-type]
         if adapter_manifest.get("schema") != "cmpct-one-genesis-adapters-v1":
             raise RuntimeError("invalid Genesis adapter manifest schema")
         if set(adapter_manifest.get("adapters", {})) != set(CONTENDERS):
             raise RuntimeError("adapter manifest must define exactly cmpct1, v0.29, v0.30")
+        assert work_root is not None
+        physical_seal = _seal_physical_inputs(work_root)
+        physical_seal_path = raw_dir / "physical-input-seal.json"
+        _write(physical_seal_path, physical_seal)
+        physical_seal_digest = "sha256:" + _sha256(physical_seal_path)
 
     # Sequential persistence is intentional: a later failure cannot erase earlier raw evidence.
     for contender in CONTENDERS:
@@ -244,6 +402,9 @@ def execute(
             _write(raw_path, payload)
         else:
             assert work_root is not None
+            # The executor, not the adapter, owns input identity. Recheck before and after
+            # each contender so an adapter cannot accidentally mutate the shared exam tree.
+            _assert_physical_inputs_unchanged(work_root)
             payload = _adapter_output(
                 contender,
                 sources[contender],
@@ -251,6 +412,7 @@ def execute(
                 work_root,
                 raw_path,
             )
+            _assert_physical_inputs_unchanged(work_root)
         _validate_raw(payload, contender, sources[contender], synthetic=fixture)
         outputs[contender] = payload
 
@@ -280,9 +442,19 @@ def execute(
         "gate_open": opened,
         "synthetic": fixture,
         "production_eligible": not fixture,
+        "physical_input_seal": (
+            {
+                "path": str(physical_seal_path.resolve()),
+                "sha256": physical_seal_digest,
+                "all_15_identities_exact": True,
+            }
+            if physical_seal_path is not None
+            else {"status": "not-executed-in-fixture"}
+        ),
         "raw_files": [str((raw_dir / f"{name.replace('.', '')}-raw.json").resolve()) for name in CONTENDERS],
         "workloads": joined_rows,
         "execution_state": {
+            "physical_input_seal_executed": not fixture,
             "contender_measurement_executed": not fixture,
             "fixture_plumbing_executed": fixture,
             "comparisons_executed": False,
@@ -320,6 +492,7 @@ def main() -> None:
         "gate_open": result["gate_open"],
         "synthetic": result["synthetic"],
         "workloads": len(result["workloads"]),
+        "physical_input_seal_executed": result["execution_state"]["physical_input_seal_executed"],
         "scoring_executed": result["execution_state"]["scoring_executed"],
     }, indent=2))
 
