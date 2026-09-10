@@ -31,7 +31,8 @@ def test_authenticated_law_archive_roundtrip_and_selective_cones(n: int) -> None
     assert opened.program.roots["f000000"].sha256 == sha256(previous).hexdigest()
     assert opened.program.roots["f000001"].sha256 == sha256(current).hexdigest()
     assert opened.program.nodes[opened.program.roots["f000001"].ref.node].op == "add8"
-    assert stats.law_bytes > 0
+    assert stats.control_integrity_bytes > 0
+    assert stats.surprise_bytes < stats.logical_file_bytes
 
     requests = [
         (0, 0),
