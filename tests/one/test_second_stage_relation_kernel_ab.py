@@ -1,17 +1,22 @@
 from __future__ import annotations
 
+import benchmarks.one.one_g02_second_stage_relation_kernel_ab as kernel
 from benchmarks.one.one_g02_second_stage_relation_kernel_ab import (
     KINDS,
     LENGTHS,
     RELATIONS,
     REPETITIONS,
     _baseline,
+    _baseline_prepared,
     _candidate,
+    _candidate_prepared,
     _make_case,
+    _nomination_constant,
     _primary_pass,
     _second_positions,
     decide,
 )
+from experiments.one.general_law_archive import _sample_positions as writer_sample_positions
 
 
 def test_kernel_contract_is_frozen() -> None:
@@ -21,7 +26,7 @@ def test_kernel_contract_is_frozen() -> None:
     assert KINDS == ("true", "stage2_collision", "dual_collision")
     for length in LENGTHS:
         assert len(_second_positions(length)) == 15
-        assert not (set(_second_positions(length)) & set(__import__("experiments.one.general_law_archive", fromlist=["_sample_positions"])._sample_positions(length)))
+        assert not (set(_second_positions(length)) & set(writer_sample_positions(length)))
 
 
 def test_kernel_candidate_is_rejection_only_and_truth_equivalent() -> None:
@@ -33,6 +38,23 @@ def test_kernel_candidate_is_rejection_only_and_truth_equivalent() -> None:
                 expected = kind == "true"
                 assert _baseline(relation, source, target) is expected
                 assert _candidate(relation, source, target) is expected
+
+
+def test_prepared_timing_boundary_does_not_resample_primary(monkeypatch) -> None:
+    for relation in RELATIONS:
+        for kind in KINDS:
+            source, target = _make_case(relation, 4096, kind)
+            primary = tuple(writer_sample_positions(len(source)))
+            constant = _nomination_constant(relation, source, target, primary)
+            expected = kind == "true"
+
+            def fail_resample(_length: int):
+                raise AssertionError("prepared timing arm must not resample primary positions")
+
+            monkeypatch.setattr(kernel, "_sample_positions", fail_resample)
+            assert _baseline_prepared(relation, source, target, constant, primary) is expected
+            assert _candidate_prepared(relation, source, target, constant, primary) is expected
+            monkeypatch.undo()
 
 
 def _row(kind: str, cpu_ratio: float, wall_ratio: float, *, length: int = 4096) -> dict:
@@ -55,7 +77,7 @@ def _row(kind: str, cpu_ratio: float, wall_ratio: float, *, length: int = 4096) 
 
 def test_decision_refuses_survivor_debt_even_with_large_kill_win() -> None:
     rows = []
-    for relation in RELATIONS:
+    for _relation in RELATIONS:
         rows.extend(
             [
                 _row("true", 1.25, 1.25),
