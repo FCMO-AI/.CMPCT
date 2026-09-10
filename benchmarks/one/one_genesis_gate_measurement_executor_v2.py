@@ -2,24 +2,25 @@ from __future__ import annotations
 
 """Portable-evidence wrapper for the CMPCT1 Genesis raw-measurement executor.
 
-V1 already owns and rechecks the exact physical exam trees.  V2 keeps that contract but
+V1 already owns and rechecks the exact physical exam trees. V2 keeps that contract but
 splits two different identities that V1 currently conflates:
 
-* ``physical-input-seal.json`` is a diagnostic receipt.  It intentionally records the
+* ``physical-input-seal.json`` is a diagnostic receipt. It intentionally records the
   runner-local ``work_root`` and therefore its file SHA-256 is not portable.
 * ``physical-input-scientific-identity.json`` hashes only suite/name/files/logical bytes/
   tree SHA-256, so identical exam bytes have one scientific identity across machines.
 
-Both receipts are persisted before the first real contender runs.  The diagnostic file
+Both receipts are persisted before the first real contender runs. The diagnostic file
 hash is retained for exact-source forensics; only the scientific identity is admissible
 as the cross-run identity of the 15-workload exam.
 
 This module deliberately reuses V1's corpus generation, raw validation, adapter contract
-and calendar/explicit-activation locks.  It adds no contender logic, comparison, scoring,
+and calendar/explicit-activation locks. It adds no contender logic, comparison, scoring,
 or winner selection.
 """
 
 import argparse
+import json
 from pathlib import Path
 from typing import Any
 
@@ -40,7 +41,7 @@ def execute(
 ) -> dict[str, Any]:
     """Execute V1 semantics with a portable scientific input identity.
 
-    Fixture mode remains contender-free.  Real mode persists both the diagnostic seal and
+    Fixture mode remains contender-free. Real mode persists both the diagnostic seal and
     its path-independent scientific identity before any adapter is invoked.
     """
     if not v1._looks_like_sha(candidate_sha):
@@ -87,13 +88,12 @@ def execute(
         physical_seal_file_digest = "sha256:" + v1._sha256(physical_seal_path)
 
         scientific = scientific_identity_receipt(physical_seal)
+        scientific_rows = scientific.get("scientific_identity", {}).get("rows", [])
+        if len(scientific_rows) != 15:
+            raise RuntimeError("scientific physical-input identity did not bind exactly 15 workloads")
         scientific_identity_path = raw_dir / "physical-input-scientific-identity.json"
         v1._write(scientific_identity_path, scientific)
-        scientific_identity_digest = str(scientific["scientific_identity_sha256"])
-
-        # The portable receipt must itself bind the exact same 15 rows that V1 just sealed.
-        if scientific.get("workload_count") != 15:
-            raise RuntimeError("scientific physical-input identity did not bind exactly 15 workloads")
+        scientific_identity_digest = "sha256:" + str(scientific["scientific_identity_sha256"])
 
     # Sequential persistence is intentional: a later failure cannot erase earlier raw evidence.
     for contender in v1.CONTENDERS:
@@ -191,7 +191,7 @@ def main() -> None:
         work_root=args.work_root,
     )
     v1._write(args.output, result)
-    print(v1.json.dumps({
+    print(json.dumps({
         "schema": result["schema"],
         "evidence_contract": result["evidence_contract"],
         "candidate": result["cmpct1_candidate_sha"],
