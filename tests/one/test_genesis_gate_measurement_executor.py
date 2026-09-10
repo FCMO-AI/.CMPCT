@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from copy import deepcopy
+import json
 from pathlib import Path
 
 import pytest
@@ -10,6 +11,7 @@ from benchmarks.one.one_genesis_gate_measurement_executor import (
     V029_SHA,
     _fixture_output,
     _identity_rows,
+    _physical_seal_binding,
     _validate_physical_rows,
     _validate_raw,
     execute,
@@ -87,6 +89,54 @@ def test_fixture_cannot_smuggle_real_execution_inputs(tmp_path: Path):
             adapters_path=tmp_path / "adapters.json",
             work_root=None,
         )
+
+
+def _seal(root: str) -> dict:
+    return {
+        "schema": "cmpct-one-genesis-physical-input-seal-v1",
+        "claim_boundary": "exact physical input identity only; no contender measurement or scoring",
+        "all_15_identities_exact": True,
+        "work_root": root,
+        "rows": deepcopy(_identity_rows()),
+    }
+
+
+def _write_seal(path: Path, seal: dict) -> None:
+    path.write_text(json.dumps(seal, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+
+def test_executor_physical_binding_separates_portable_identity_from_runner_path(tmp_path: Path):
+    seal_a = _seal("/home/runner/work/cmpct/genesis")
+    seal_b = _seal("/mnt/ephemeral/another-runner/genesis")
+    path_a = tmp_path / "seal-a.json"
+    path_b = tmp_path / "seal-b.json"
+    _write_seal(path_a, seal_a)
+    _write_seal(path_b, seal_b)
+
+    binding_a, identity_a = _physical_seal_binding(seal_a, path_a)
+    binding_b, identity_b = _physical_seal_binding(seal_b, path_b)
+
+    # Local serialized evidence differs because it retains work_root for diagnosis.
+    assert binding_a["sha256"] != binding_b["sha256"]
+    assert binding_a["sha256_scope"].startswith("diagnostic serialized seal")
+    # Scientific identity is portable and is now the value the executor exposes explicitly.
+    assert binding_a["scientific_identity_sha256"] == binding_b["scientific_identity_sha256"]
+    assert identity_a["scientific_identity_sha256"] == identity_b["scientific_identity_sha256"]
+    assert binding_a["work_root_in_scientific_digest"] is False
+
+
+def test_executor_physical_binding_changes_when_exam_tree_changes(tmp_path: Path):
+    seal_a = _seal("/tmp/a")
+    seal_b = deepcopy(seal_a)
+    seal_b["rows"][0]["tree_sha256"] = "f" * 64
+    path_a = tmp_path / "seal-a.json"
+    path_b = tmp_path / "seal-b.json"
+    _write_seal(path_a, seal_a)
+    _write_seal(path_b, seal_b)
+
+    binding_a, _ = _physical_seal_binding(seal_a, path_a)
+    binding_b, _ = _physical_seal_binding(seal_b, path_b)
+    assert binding_a["scientific_identity_sha256"] != binding_b["scientific_identity_sha256"]
 
 
 def test_physical_input_identity_drift_fails_closed():
