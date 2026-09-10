@@ -1,6 +1,9 @@
 # ci-lane: fast
 name: CMPCT1 ONE G0.2 candidate resource transfer
 
+# Exact-source pre-Genesis re-arm only. Scientific law, corpus, thresholds,
+# candidate semantics, and Genesis embargo remain unchanged.
+
 on:
   push:
     branches: [research/cmpct1]
