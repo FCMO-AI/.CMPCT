@@ -297,7 +297,9 @@ def run() -> dict[str, Any]:
     tiny_binary = [row for row in rows if row["relation"] in {"add8", "xor"} and row["length"] <= 10]
     predicted_law_rows = [row for row in rows if row["relation"] != "unrelated" and row["predicted_admit"]]
     h1 = all(row["complete_bytes_non_regressing"] for row in rows) and mixed["complete_bytes_non_regressing"]
-    h2 = all(row["economic_structure_matches_model"] for row in predicted_law_rows)
+    # Fail closed over every frozen row, including unrelated false-pattern controls. The
+    # independent oracle separately re-derives expected admission for proved Law rows.
+    h2 = all(row["economic_structure_matches_model"] for row in rows)
     h3 = all(row["semantic_exact"] and row["economic_deterministic"] and row["generic_reader_ontology_only"] for row in rows)
     h3 = h3 and mixed["semantic_exact"] and mixed["economic_deterministic"] and mixed["generic_reader_ontology_only"] and mixed["mixed_shapes_ok"]
     proof_a = sum(row["current_stats"]["discovery_exact_proof_bytes"] for row in tiny_binary)
@@ -312,6 +314,7 @@ def run() -> dict[str, Any]:
 
     false_admits = [row["case"] for row in rows if not row["complete_bytes_non_regressing"]]
     false_rejects = [row["case"] for row in predicted_law_rows if not row["economic_structure_matches_model"]]
+    false_patterns = [row["case"] for row in rows if row["relation"] == "unrelated" and not row["economic_structure_matches_model"]]
     if not h1 or not h3:
         decision = "RETIRE_OR_REPAIR_ECONOMIC_WRITER_ADMISSION"
     elif h2 and h4 and h5 and resource_complete:
@@ -327,12 +330,13 @@ def run() -> dict[str, Any]:
         "timing_gate": {"relative": TIMING_RELATIVE_REGRESSION, "absolute_seconds": TIMING_ABSOLUTE_REGRESSION_S},
         "rows": rows,
         "mixed": mixed,
-        "hypotheses": {"H1_economic_safety": h1, "H2_opportunity_preservation": h2, "H3_semantic_representation_invariance": h3, "H4_proof_work_pruning": h4, "H5_creation_cost_sanity": h5},
+        "hypotheses": {"H1_economic_safety": h1, "H2_opportunity_and_false_pattern_selection": h2, "H3_semantic_representation_invariance": h3, "H4_proof_work_pruning": h4, "H5_creation_cost_sanity": h5},
         "tiny_binary_current_exact_proof_bytes": proof_a,
         "tiny_binary_economic_exact_proof_bytes": proof_b,
         "proof_work_reduction_bytes": proof_a - proof_b,
         "false_admits": false_admits,
         "false_rejects": false_rejects,
+        "false_patterns": false_patterns,
         "timing_regressions": timing_regressions,
         "resource_evidence_complete": resource_complete,
         "decision": decision,
