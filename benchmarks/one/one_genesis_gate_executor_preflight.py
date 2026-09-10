@@ -92,10 +92,9 @@ def _validate_authorities(candidate_sha: str) -> tuple[list[str], dict[str, Any]
         errors.append("workload identity manifest must contain exactly 15 workloads")
     if identity.get("suite_counts") != {"neutral_hostile_v1": 10, "resemblance_hostile_v1": 5}:
         errors.append("workload identity suite counts are not the frozen 10/5 split")
-    readiness = identity.get("readiness_authority", {})
-    if readiness.get("source_sha") != READINESS_SOURCE:
+    if identity.get("readiness_source_sha") != READINESS_SOURCE:
         errors.append("workload identity manifest readiness source differs from frozen authority")
-    if readiness.get("artifact_digest") != READINESS_DIGEST:
+    if identity.get("readiness_artifact_digest") != READINESS_DIGEST:
         errors.append("workload identity manifest readiness digest differs from frozen authority")
 
     if comparator.get("schema") != "cmpct-one-genesis-frozen-comparator-authority-v1":
@@ -115,10 +114,7 @@ def _validate_authorities(candidate_sha: str) -> tuple[list[str], dict[str, Any]
         if admissibility.get(key) is not True:
             errors.append(f"frozen comparator authority missing required admissibility rule {key}")
 
-    authority_hashes = {
-        str(path.relative_to(ROOT)): _sha256(path)
-        for path in REQUIRED_FILES
-    }
+    authority_hashes = {str(path.relative_to(ROOT)): _sha256(path) for path in REQUIRED_FILES}
     return errors, {
         "workload_identity_schema": identity.get("schema"),
         "workload_count": len(rows) if isinstance(rows, list) else None,
