@@ -1,0 +1,76 @@
+name: CMPCT1 ONE-G0.2 Genesis candidate adapter probe
+
+on:
+  push:
+    branches:
+      - research/cmpct1
+    paths:
+      - experiments/one/general_law_archive.py
+      - experiments/one/authenticated_archive_envelope.py
+      - experiments/one/ir.py
+      - experiments/one/wire.py
+      - benchmarks/one/one_g02_genesis_candidate_adapter_probe.py
+      - docs/one/prereg/ONE_G02_GENESIS_CANDIDATE_ADAPTER_PROBE_PREREG_2026-09-10.md
+      - .github/workflows/cmpct1-one-g02-genesis-candidate-adapter-probe.yml
+  pull_request:
+    paths:
+      - experiments/one/general_law_archive.py
+      - experiments/one/authenticated_archive_envelope.py
+      - experiments/one/ir.py
+      - experiments/one/wire.py
+      - benchmarks/one/one_g02_genesis_candidate_adapter_probe.py
+      - docs/one/prereg/ONE_G02_GENESIS_CANDIDATE_ADAPTER_PROBE_PREREG_2026-09-10.md
+      - .github/workflows/cmpct1-one-g02-genesis-candidate-adapter-probe.yml
+  workflow_dispatch:
+
+concurrency:
+  group: cmpct1-one-g02-genesis-candidate-adapter-probe-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  adapter-falsifier:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Bind exact source
+        run: test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+      - name: Install test dependencies
+        run: python -m pip install -e '.[test]'
+      - name: Run transfer-only ONE adapter falsifier
+        run: python -m benchmarks.one.one_g02_genesis_candidate_adapter_probe | tee one-g02-genesis-candidate-adapter-probe.txt
+      - name: Enforce claim boundary
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          p = json.loads(Path('one-g02-genesis-candidate-adapter-probe.json').read_text())
+          assert p['schema'] == 'cmpct-one-g02-genesis-candidate-adapter-probe-v1'
+          assert p['experimental_version'] == 'ONE-G0.2'
+          assert p['decision'] == 'ADVANCE_ONE_ADAPTER_BOUNDARY'
+          assert p['deterministic_wire'] is True
+          assert p['whole_reconstruction_exact'] is True
+          assert p['authenticated_selective_exact'] is True
+          assert p['generic_reader_ontology_only'] is True
+          assert p['genesis_workload_modules_imported'] is False
+          assert p['genesis_inputs_executed'] is False
+          assert p['comparison_executed'] is False
+          assert p['scoring_executed'] is False
+          assert p['winner_selected'] is False
+          assert p['reader_burden'] == {'reader_discovery': False, 'hidden_codec': False}
+          assert p['complete_stored_bytes'] == p['stats']['wire_bytes']
+          print('decision=' + p['decision'])
+          PY
+      - name: Retain exact-source evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: one-g02-genesis-candidate-adapter-probe-${{ github.sha }}
+          path: |
+            one-g02-genesis-candidate-adapter-probe.json
+            one-g02-genesis-candidate-adapter-probe.txt
+          if-no-files-found: warn
+          retention-days: 30
