@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-"""Transfer-only complete-byte economics for general Law versus Surprise-only ONE."""
+"""Transfer-only complete-byte economics for general Law versus authenticated Surprise-only ONE."""
 
 from dataclasses import asdict
 from hashlib import sha256
@@ -10,9 +10,10 @@ import tempfile
 from typing import Any
 
 from benchmarks.one import one_g02_general_law_breadth_transfer as breadth
-from experiments.one.archive_envelope import build_archive as build_surprise_archive
-from experiments.one.archive_envelope import open_archive as open_surprise_archive
-from experiments.one.authenticated_archive_envelope import open_authenticated_archive
+from experiments.one.authenticated_archive_envelope import (
+    build_authenticated_archive as build_surprise_archive,
+    open_authenticated_archive,
+)
 from experiments.one.general_law_archive import build_general_law_archive
 
 OUT = Path("one-g02-general-law-breadth-economics-transfer.json")
@@ -21,8 +22,9 @@ OUT = Path("one-g02-general-law-breadth-economics-transfer.json")
 def _opened_snapshot(source: dict[str, dict[str, Any]], opened: Any) -> tuple[dict[str, dict[str, Any]], bool]:
     observed: dict[str, dict[str, Any]] = {}
     exact = True
+    entries = opened.entries if hasattr(opened, "entries") else opened.base.entries
     for rel, expected in source.items():
-        entry = opened.entries.get(rel) if hasattr(opened, "entries") else opened.base.entries.get(rel)
+        entry = entries.get(rel)
         if entry is None:
             exact = False
             continue
@@ -51,7 +53,7 @@ def run() -> dict[str, Any]:
         surprise_wire_b, surprise_stats_b = build_surprise_archive(root)
 
         law_opened = open_authenticated_archive(law_wire_a)
-        surprise_opened = open_surprise_archive(surprise_wire_a)
+        surprise_opened = open_authenticated_archive(surprise_wire_a)
         law_snapshot, law_exact = _opened_snapshot(source, law_opened)
         surprise_snapshot, surprise_exact = _opened_snapshot(source, surprise_opened)
         reader_structure, reader_structure_exact = breadth._reader_relation_structure(law_opened)
@@ -78,7 +80,7 @@ def run() -> dict[str, Any]:
             "schema": "cmpct-one-g02-general-law-breadth-economics-transfer-v1",
             "experimental_version": "ONE-G0.2",
             "decision": decision,
-            "claim_boundary": "transfer-only complete persistent-byte representation economics; no Genesis corpus, frozen comparator, timing/RSS promotion, scoring, or winner selection",
+            "claim_boundary": "transfer-only complete persistent-byte representation economics versus authenticated Surprise-only ONE; no Genesis corpus, frozen comparator, timing/RSS promotion, scoring, or winner selection",
             "logical_source_bytes": logical_bytes,
             "gates": gates,
             "law": {
