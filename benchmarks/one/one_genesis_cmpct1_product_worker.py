@@ -27,6 +27,7 @@ ROOT = Path(__file__).resolve().parents[2]
 CANDIDATE_BOUNDARY_MANIFEST = ROOT / "benchmarks" / "one" / "genesis_one_candidate_boundary_v1.json"
 CREATOR_SURFACE = "experiments/one/general_law_archive.py"
 READER_SURFACE = "experiments/one/authenticated_archive_envelope.py"
+RUNTIME_TREE = "experiments/one"
 CERTIFIED_STATUS = "CERTIFIED_FOR_GENESIS"
 
 
@@ -49,12 +50,21 @@ def _git_head() -> str:
     return subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
 
 
-def _assert_candidate_boundary_certified(source_sha: str) -> dict[str, Any]:
-    """Require explicit source/surface certification before any production ONE import.
+def _git_object_sha(path: str) -> str:
+    """Return the exact Git object identity from the current sealed checkout."""
+    value = subprocess.check_output(["git", "rev-parse", f"HEAD:{path}"], text=True).strip()
+    if len(value) != 40 or any(char not in "0123456789abcdef" for char in value):
+        raise RuntimeError(f"invalid Git object identity for {path}")
+    return value
 
-    Calendar/executor authorization establishes *when* measurement may run.  It does not
-    establish *what* implementation is scientifically eligible.  That second authority
-    lives in the candidate-boundary manifest and must bind the exact surfaces below.
+
+def _assert_candidate_boundary_certified() -> dict[str, Any]:
+    """Require explicit path/blob/runtime-tree certification before production ONE import.
+
+    The exact checkout commit is independently bound by the executor in `_authorize`.
+    Runtime certification deliberately does not embed that enclosing commit SHA because a
+    manifest cannot contain the cryptographic identity of the commit that contains itself.
+    Instead it certifies the stable `experiments/one` tree plus the exact entry-point blobs.
     """
     try:
         payload = json.loads(CANDIDATE_BOUNDARY_MANIFEST.read_text(encoding="utf-8"))
@@ -70,14 +80,17 @@ def _assert_candidate_boundary_certified(source_sha: str) -> dict[str, Any]:
     if not isinstance(certified, dict):
         raise RuntimeError("Genesis ONE candidate certification is missing certified_candidate")
     expected = {
-        "source_sha": source_sha,
         "creator_path": CREATOR_SURFACE,
+        "creator_blob_sha": _git_object_sha(CREATOR_SURFACE),
         "reader_path": READER_SURFACE,
+        "reader_blob_sha": _git_object_sha(READER_SURFACE),
+        "runtime_tree_path": RUNTIME_TREE,
+        "runtime_tree_sha": _git_object_sha(RUNTIME_TREE),
     }
     for field, value in expected.items():
         if certified.get(field) != value:
             raise RuntimeError(
-                f"Genesis ONE candidate certification {field} differs from worker surface"
+                f"Genesis ONE candidate certification {field} differs from worker runtime"
             )
     return certified
 
@@ -90,7 +103,7 @@ def _authorize(transfer_fixture: bool) -> dict[str, Any]:
     source = os.environ.get("CMPCT_GENESIS_SOURCE_SHA", "")
     if len(source) != 40 or source != _git_head():
         raise RuntimeError("production worker source SHA is not bound to checkout HEAD")
-    certified = _assert_candidate_boundary_certified(source)
+    certified = _assert_candidate_boundary_certified()
     return {
         "transfer_fixture": False,
         "production_authorized": True,
