@@ -5,6 +5,12 @@ from __future__ import annotations
 This program intentionally does not encode any workload with CMPCT1, v0.29, or v0.30.
 It proves only that the portable 15-workload substrate regenerates exactly and that the
 frozen comparator checkouts are the authorities preregistered by CMPCT1 Genesis.
+
+Authority reconciliation: the initial readiness preregistration named repair-v5 even
+though the already-accepted v0.29 generalization authority consumes repair-v6 for five
+portable neutral/hostile rows. Readiness therefore follows the pre-existing accepted
+v0.29 substrate authority (repair-v6) rather than changing any expected identity after
+observation. The failed v5 readiness artifact remains preserved as evidence of this bug.
 """
 
 import argparse
@@ -23,22 +29,24 @@ ROOT = Path(__file__).resolve().parents[2]
 V029_SHA = "02b8b27cb2d97af7c6e0797984a898e8fa8a8e5d"
 V030_SHA = "f4b158a55a08b9b18b50e4e4abe4b9251048c772"
 PREREG = ROOT / "docs" / "one" / "evidence" / "ONE_GENESIS_GATE_READINESS_PREREG_2026-09-09.md"
+RECONCILIATION = ROOT / "docs" / "one" / "evidence" / "ONE_GENESIS_GATE_READINESS_AUTHORITY_RECONCILIATION_2026-09-09.md"
 GENERALIZATION = ROOT / "benchmarks" / "mosaic_v029_generalization_bench.py"
 
 AUTHORITY_FILES = (
     ROOT / "benchmarks" / "neutral_hostile_corpus_v1.py",
     ROOT / "benchmarks" / "resemblance_hostile_corpus_v1.py",
-    ROOT / "benchmarks" / "neutral_hostile_determinism_repair_v5.py",
+    ROOT / "benchmarks" / "neutral_hostile_determinism_repair_v6.py",
     ROOT / "benchmarks" / "history" / "2026-08-16-entropygraph-v028.json",
-    ROOT / "benchmarks" / "history" / "2026-08-17-neutral-hostile-determinism-repair-v5.json",
+    ROOT / "benchmarks" / "history" / "2026-08-19-neutral-hostile-determinism-repair-v6.json",
     ROOT / "benchmarks" / "history" / "2026-08-17-mosaic-v029-generalization-v3.json",
     PREREG,
+    RECONCILIATION,
 )
 
 REQUIRED_V029 = (
     "benchmarks/mosaic_v029_generalization_bench.py",
     "benchmarks/history/2026-08-16-entropygraph-v028.json",
-    "benchmarks/history/2026-08-17-neutral-hostile-determinism-repair-v5.json",
+    "benchmarks/history/2026-08-19-neutral-hostile-determinism-repair-v6.json",
     "benchmarks/history/2026-08-17-mosaic-v029-generalization-v3.json",
 )
 REQUIRED_V030 = (
@@ -103,9 +111,11 @@ def _build_identity_matrix(work_root: Path) -> tuple[list[dict[str, Any]], list[
         ROOT / "benchmarks" / "resemblance_hostile_corpus_v1.py",
         "cmpct_one_genesis_readiness_hostile",
     )
+    # The preserved v0.29 generalization rows are explicitly repair-v6 authority.
+    # Use that exact accepted producer policy; do not synthesize or update expected hashes here.
     repair = general._load(
-        ROOT / "benchmarks" / "neutral_hostile_determinism_repair_v5.py",
-        "cmpct_one_genesis_readiness_repair",
+        ROOT / "benchmarks" / "neutral_hostile_determinism_repair_v6.py",
+        "cmpct_one_genesis_readiness_repair_v6",
     )
     repair.install_generation_hooks(neutral)
 
