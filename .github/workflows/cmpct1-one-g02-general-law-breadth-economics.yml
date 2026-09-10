@@ -56,9 +56,9 @@ jobs:
           assert all(p['gates'].values())
           assert p['law']['stored_bytes'] <= p['surprise_only']['stored_bytes']
           assert p['stored_byte_delta'] <= 0
-          assert p['comparison_executed'] is False
-          assert p['scoring_executed'] is False
-          assert p['winner_selected'] is False
+          assert p['genesis_comparison_executed'] is False
+          assert p['genesis_scoring_executed'] is False
+          assert p['genesis_winner_selected'] is False
           print('law_stored_bytes=' + str(p['law']['stored_bytes']))
           print('surprise_stored_bytes=' + str(p['surprise_only']['stored_bytes']))
           print('law_over_surprise_ratio=' + str(p['law_over_surprise_stored_ratio']))
