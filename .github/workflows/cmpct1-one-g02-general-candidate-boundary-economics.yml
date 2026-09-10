@@ -1,0 +1,99 @@
+name: CMPCT1 ONE-G0.2 general candidate-boundary economics
+
+on:
+  push:
+    branches:
+      - research/cmpct1
+    paths:
+      - "benchmarks/one/one_g02_general_candidate_boundary_hostile_economics.py"
+      - "tests/one/test_general_candidate_boundary_hostile_economics.py"
+      - "docs/one/prereg/ONE_G02_GENERAL_CANDIDATE_BOUNDARY_HOSTILE_ECONOMICS_PREREG_2026-09-10.md"
+      - ".github/workflows/cmpct1-one-g02-general-candidate-boundary-economics.yml"
+  pull_request:
+    paths:
+      - "benchmarks/one/one_g02_general_candidate_boundary_hostile_economics.py"
+      - "tests/one/test_general_candidate_boundary_hostile_economics.py"
+      - "docs/one/prereg/ONE_G02_GENERAL_CANDIDATE_BOUNDARY_HOSTILE_ECONOMICS_PREREG_2026-09-10.md"
+      - ".github/workflows/cmpct1-one-g02-general-candidate-boundary-economics.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  economics:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install project
+        run: python -m pip install -e .
+
+      - name: Run hostile economics tests
+        run: python -m pytest -q tests/one/test_general_candidate_boundary_hostile_economics.py
+
+      - name: Run transfer-only economics falsifier
+        run: python benchmarks/one/one_g02_general_candidate_boundary_hostile_economics.py
+
+      - name: Assert Genesis remained dark
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          path = Path("one-g02-general-candidate-boundary-hostile-economics.json")
+          payload = json.loads(path.read_text(encoding="utf-8"))
+          assert payload["genesis_inputs_executed"] is False
+          assert payload["genesis_comparison_executed"] is False
+          assert payload["genesis_scoring_executed"] is False
+          assert payload["genesis_winner_selected"] is False
+          print(payload["decision"])
+          for row in payload["rows"]:
+              print(row["name"], row["law_wire_bytes"], row["surprise_wire_bytes"], row["law_minus_surprise_bytes"], row["decision"])
+          PY
+
+      - name: Preserve exact-source receipt
+        run: |
+          python - <<'PY'
+          import hashlib
+          import json
+          import os
+          from pathlib import Path
+
+          result_path = Path("one-g02-general-candidate-boundary-hostile-economics.json")
+          result = json.loads(result_path.read_text(encoding="utf-8"))
+          source_sha = os.environ["GITHUB_SHA"]
+          receipt = {
+              "schema": "cmpct-one-g02-general-candidate-boundary-economics-hosted-receipt-v1",
+              "source_sha": source_sha,
+              "experimental_version": result["experimental_version"],
+              "decision": result["decision"],
+              "result_sha256": hashlib.sha256(result_path.read_bytes()).hexdigest(),
+              "claim_boundary": result["claim_boundary"],
+              "genesis_inputs_executed": result["genesis_inputs_executed"],
+              "genesis_comparison_executed": result["genesis_comparison_executed"],
+              "genesis_scoring_executed": result["genesis_scoring_executed"],
+              "genesis_winner_selected": result["genesis_winner_selected"],
+          }
+          Path("one-g02-general-candidate-boundary-hosted-receipt.json").write_text(
+              json.dumps(receipt, indent=2, sort_keys=True) + "\n",
+              encoding="utf-8",
+          )
+          PY
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: one-g02-general-candidate-boundary-economics-${{ github.sha }}
+          if-no-files-found: error
+          retention-days: 30
+          path: |
+            one-g02-general-candidate-boundary-hostile-economics.json
+            one-g02-general-candidate-boundary-hosted-receipt.json
