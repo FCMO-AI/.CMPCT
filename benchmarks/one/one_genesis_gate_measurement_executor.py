@@ -30,6 +30,7 @@ from benchmarks.one.one_genesis_gate_readiness import (
     _load as _readiness_load,
     _tree_stats,
 )
+from benchmarks.one.one_genesis_physical_seal_identity import scientific_identity_receipt
 
 ROOT = Path(__file__).resolve().parents[2]
 IDENTITY_MANIFEST = ROOT / "benchmarks" / "one" / "genesis_gate_workload_identity_v1.json"
@@ -212,6 +213,25 @@ def _seal_physical_inputs(work_root: Path) -> dict[str, Any]:
     }
 
 
+def _physical_seal_binding(seal: dict[str, Any], seal_path: Path) -> tuple[dict[str, Any], dict[str, Any]]:
+    """Bind both local serialized evidence and a runner-portable scientific identity.
+
+    The serialized seal intentionally retains ``work_root`` for diagnosis, so its file hash is
+    machine-local evidence.  Genesis scientific identity must instead be stable across runners
+    that materialize byte-identical trees at different absolute paths.
+    """
+    identity = scientific_identity_receipt(seal)
+    binding = {
+        "path": str(seal_path.resolve()),
+        "sha256": "sha256:" + _sha256(seal_path),
+        "sha256_scope": "diagnostic serialized seal including runner-local work_root; not scientific identity",
+        "scientific_identity_sha256": identity["scientific_identity_sha256"],
+        "work_root_in_scientific_digest": identity["work_root_in_scientific_digest"],
+        "all_15_identities_exact": True,
+    }
+    return binding, identity
+
+
 def _assert_physical_inputs_unchanged(work_root: Path) -> None:
     _validate_physical_rows(_snapshot_physical_inputs(work_root))
 
@@ -381,7 +401,8 @@ def execute(
     outputs: dict[str, dict[str, Any]] = {}
     adapter_manifest: dict[str, Any] = {}
     physical_seal_path: Path | None = None
-    physical_seal_digest: str | None = None
+    physical_identity_path: Path | None = None
+    physical_seal_binding: dict[str, Any] | None = None
     if not fixture:
         adapter_manifest = _load(adapters_path)  # type: ignore[arg-type]
         if adapter_manifest.get("schema") != "cmpct-one-genesis-adapters-v1":
@@ -392,7 +413,10 @@ def execute(
         physical_seal = _seal_physical_inputs(work_root)
         physical_seal_path = raw_dir / "physical-input-seal.json"
         _write(physical_seal_path, physical_seal)
-        physical_seal_digest = "sha256:" + _sha256(physical_seal_path)
+        physical_seal_binding, physical_identity = _physical_seal_binding(physical_seal, physical_seal_path)
+        physical_identity_path = raw_dir / "physical-input-identity.json"
+        _write(physical_identity_path, physical_identity)
+        physical_seal_binding["scientific_identity_path"] = str(physical_identity_path.resolve())
 
     # Sequential persistence is intentional: a later failure cannot erase earlier raw evidence.
     for contender in CONTENDERS:
@@ -443,12 +467,8 @@ def execute(
         "synthetic": fixture,
         "production_eligible": not fixture,
         "physical_input_seal": (
-            {
-                "path": str(physical_seal_path.resolve()),
-                "sha256": physical_seal_digest,
-                "all_15_identities_exact": True,
-            }
-            if physical_seal_path is not None
+            physical_seal_binding
+            if physical_seal_binding is not None
             else {"status": "not-executed-in-fixture"}
         ),
         "raw_files": [str((raw_dir / f"{name.replace('.', '')}-raw.json").resolve()) for name in CONTENDERS],
