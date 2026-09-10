@@ -1,5 +1,5 @@
 # ci-lane: deep
-# Re-armed after first workflow-file introduction so push evidence is exact-source.
+# Re-armed after authority reconciliation: accepted v0.29 generalization uses repair-v6.
 name: CMPCT1 ONE Genesis gate readiness
 
 on:
@@ -8,13 +8,14 @@ on:
     paths:
       - benchmarks/neutral_hostile_corpus_v1.py
       - benchmarks/resemblance_hostile_corpus_v1.py
-      - benchmarks/neutral_hostile_determinism_repair_v5.py
+      - benchmarks/neutral_hostile_determinism_repair_v6.py
       - benchmarks/history/2026-08-16-entropygraph-v028.json
-      - benchmarks/history/2026-08-17-neutral-hostile-determinism-repair-v5.json
+      - benchmarks/history/2026-08-19-neutral-hostile-determinism-repair-v6.json
       - benchmarks/history/2026-08-17-mosaic-v029-generalization-v3.json
       - benchmarks/mosaic_v029_generalization_bench.py
       - benchmarks/one/one_genesis_gate_readiness.py
       - docs/one/evidence/ONE_GENESIS_GATE_READINESS_PREREG_2026-09-09.md
+      - docs/one/evidence/ONE_GENESIS_GATE_READINESS_AUTHORITY_RECONCILIATION_2026-09-09.md
       - .github/workflows/cmpct1-one-genesis-gate-readiness.yml
   workflow_dispatch:
 
