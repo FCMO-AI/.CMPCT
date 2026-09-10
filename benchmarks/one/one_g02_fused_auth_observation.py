@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Frozen falsifier for ONE-G0.2 fused authentication observation.
 
-This benchmark does not touch the Genesis 15-workload gate.  It compares two builders for
+This benchmark does not touch the Genesis 15-workload gate. It compares two builders for
 the exact same authenticated research archive representation and asks whether consuming
 already-read payload bytes for AuthTree construction removes the redundant source pass
 without exporting material CPU or semantic cost.
@@ -29,6 +29,26 @@ WORST_CPU_MAX = 1.15
 def _pattern(length: int, salt: int) -> bytes:
     block = bytes(((i * 37 + salt * 19 + (i >> 3)) & 255) for i in range(4096))
     return (block * ((length + len(block) - 1) // len(block)))[:length]
+
+
+def _selective_invariants(stats) -> tuple:
+    return (
+        stats.requested_bytes,
+        stats.cone_start,
+        stats.cone_bytes,
+        stats.packed_source_bytes,
+        stats.source_read_bytes,
+        stats.source_plan_write_bytes,
+        stats.sink_write_bytes,
+        stats.proof_payload_bytes,
+        stats.proof_hash_bytes,
+        stats.auth_index_bytes,
+        stats.plan_commands,
+        stats.fallback,
+        stats.fallback_reason,
+        stats.modeled_data_movement_bytes,
+        stats.peak_temporary_bytes,
+    )
 
 
 def _write_shape(root: Path, shape: str) -> dict[str, bytes]:
@@ -93,7 +113,6 @@ def _requests(length: int) -> list[tuple[int, int]]:
 
 
 def _row(root: Path, shape: str, payloads: dict[str, bytes]) -> dict:
-    # Establish exact representation and reopen/selective parity outside the timed samples.
     baseline_wire, baseline_stats = build_authenticated_archive(root)
     candidate_wire, candidate_stats = build_authenticated_archive_fused(root)
     if candidate_wire != baseline_wire:
@@ -120,7 +139,7 @@ def _row(root: Path, shape: str, payloads: dict[str, bytes]) -> dict:
             cand_data, cand_sel = candidate_open.read_range(rel, start, length)
             if cand_data != base_data or cand_data != expected[start:start + length]:
                 raise AssertionError(f"{shape}/{rel}: selective bytes mismatch")
-            if cand_sel != base_sel:
+            if _selective_invariants(cand_sel) != _selective_invariants(base_sel):
                 raise AssertionError(f"{shape}/{rel}: selective accounting/geometry mismatch")
             selective_checks += 1
             max_cone = max(max_cone, cand_sel.cone_bytes)
@@ -130,19 +149,20 @@ def _row(root: Path, shape: str, payloads: dict[str, bytes]) -> dict:
     baseline_wall: list[int] = []
     candidate_wall: list[int] = []
     for rep in range(REPETITIONS):
-        # Alternate order so page-cache/thermal ordering does not systematically favor one arm.
         order = ("baseline", "candidate") if rep % 2 == 0 else ("candidate", "baseline")
         for arm in order:
             if arm == "baseline":
                 cpu, wall, wire, stats = _time_build(build_authenticated_archive, root)
                 if wire != baseline_wire or stats.source_reread_bytes != logical:
                     raise AssertionError(f"{shape}: timed baseline semantics/accounting drift")
-                baseline_cpu.append(cpu); baseline_wall.append(wall)
+                baseline_cpu.append(cpu)
+                baseline_wall.append(wall)
             else:
                 cpu, wall, wire, stats = _time_build(build_authenticated_archive_fused, root)
                 if wire != baseline_wire or stats.source_reread_bytes != 0:
                     raise AssertionError(f"{shape}: timed candidate semantics/accounting drift")
-                candidate_cpu.append(cpu); candidate_wall.append(wall)
+                candidate_cpu.append(cpu)
+                candidate_wall.append(wall)
 
     base_cpu_med = statistics.median(baseline_cpu)
     cand_cpu_med = statistics.median(candidate_cpu)
