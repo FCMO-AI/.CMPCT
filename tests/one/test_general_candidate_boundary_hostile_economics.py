@@ -34,12 +34,7 @@ def test_hostile_candidate_boundary_falsifier_is_fail_closed_and_genesis_dark(tm
             "PASS" if all(row["gates"].values()) else "HOLD"
         )
 
-    expected_decision = (
-        "ADVANCE_GENERAL_CANDIDATE_BOUNDARY_ECONOMICS_PREFLIGHT"
-        if all(row["decision"] == "PASS" for row in payload["rows"])
-        else "HOLD_GENERAL_CANDIDATE_BOUNDARY_ECONOMICS"
-    )
-    assert payload["decision"] == expected_decision
+    assert payload["decision"] == bench._aggregate_decision(payload["rows"])
     expected_losing = {row["name"] for row in payload["rows"] if row["decision"] == "HOLD"}
     assert {row["name"] for row in payload["losing_rows"]} == expected_losing
 
@@ -47,7 +42,7 @@ def test_hostile_candidate_boundary_falsifier_is_fail_closed_and_genesis_dark(tm
     assert persisted == payload
 
 
-def test_a_single_complete_byte_regression_forces_hold(monkeypatch: pytest.MonkeyPatch):
+def test_a_single_complete_byte_regression_forces_hold():
     fake_rows = [
         {
             "name": "synthetic-regression",
@@ -71,11 +66,10 @@ def test_a_single_complete_byte_regression_forces_hold(monkeypatch: pytest.Monke
         }
     ]
 
-    # Exercise the aggregation rule independently from the actual transfer outcome.
-    all_pass = all(row["decision"] == "PASS" for row in fake_rows)
-    decision = (
-        "ADVANCE_GENERAL_CANDIDATE_BOUNDARY_ECONOMICS_PREFLIGHT"
-        if all_pass
-        else "HOLD_GENERAL_CANDIDATE_BOUNDARY_ECONOMICS"
-    )
-    assert decision == "HOLD_GENERAL_CANDIDATE_BOUNDARY_ECONOMICS"
+    assert bench._aggregate_decision(fake_rows) == bench.HOLD
+
+
+def test_empty_row_set_cannot_vacuously_advance():
+    # If corpus construction breaks and yields no rows, fail closed rather than letting
+    # Python's all([]) turn missing evidence into an ADVANCE decision.
+    assert bench._aggregate_decision([]) == bench.HOLD
