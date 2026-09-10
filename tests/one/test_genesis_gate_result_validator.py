@@ -207,6 +207,30 @@ def test_unavailable_stored_bytes_require_unavailable_size_status():
     assert validate_gate_result(payload).ok
 
 
+def test_clean_verdict_cannot_hide_candidate_semantic_veto():
+    for field in ("exact", "integrity", "recovery", "portable"):
+        payload = _payload()
+        payload["workloads"][0]["measurements"]["cmpct1"]["semantics"][field] = False
+        result = validate_gate_result(payload)
+        assert not result.ok
+        assert any("veto-class candidate semantic/reader failure" in error for error in result.errors)
+
+    payload = _payload()
+    payload["workloads"][0]["measurements"]["cmpct1"]["semantics"]["integrity"] = False
+    payload["workloads"][0]["comparisons"]["v0.29"]["verdict"] = "LOSS"
+    payload["workloads"][0]["comparisons"]["v0.30"]["verdict"] = "INVALID"
+    assert validate_gate_result(payload).ok
+
+
+def test_clean_verdict_cannot_hide_reader_discovery_or_hidden_codec():
+    for field in ("reader_discovery", "hidden_codec"):
+        payload = _payload()
+        payload["workloads"][0]["measurements"]["cmpct1"]["reader_burden"][field] = True
+        result = validate_gate_result(payload)
+        assert not result.ok
+        assert any("veto-class candidate semantic/reader failure" in error for error in result.errors)
+
+
 def test_duplicate_identity_fails_closed():
     payload = _payload()
     payload["workloads"][1]["name"] = payload["workloads"][0]["name"]
