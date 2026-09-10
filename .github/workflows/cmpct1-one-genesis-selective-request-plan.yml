@@ -1,0 +1,75 @@
+# ci-lane: deep
+name: CMPCT1 ONE Genesis selective request plan
+
+on:
+  push:
+    branches: [research/cmpct1]
+    paths:
+      - benchmarks/neutral_hostile_corpus_v1.py
+      - benchmarks/resemblance_hostile_corpus_v1.py
+      - benchmarks/neutral_hostile_determinism_repair_v6.py
+      - benchmarks/history/2026-08-19-neutral-hostile-determinism-repair-v6.json
+      - benchmarks/history/2026-08-17-mosaic-v029-generalization-v3.json
+      - benchmarks/mosaic_v029_generalization_bench.py
+      - benchmarks/one/one_genesis_selective_request_plan.py
+      - docs/one/evidence/ONE_GENESIS_SELECTIVE_REQUEST_PLAN_PREREG_2026-09-09.md
+      - .github/workflows/cmpct1-one-genesis-selective-request-plan.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-one-genesis-selective-plan-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  selective-plan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Bind exact source
+        run: |
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          echo "EVIDENCE_HEAD=$GITHUB_SHA" >> "$GITHUB_ENV"
+      - name: Install deterministic media dependency
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
+      - name: Install repository dependency surface
+        run: python -m pip install -e '.[test,audio]'
+      - name: Build source-derived request plan twice
+        run: |
+          python -m benchmarks.one.one_genesis_selective_request_plan --output one-genesis-selective-request-plan-a.json
+          python -m benchmarks.one.one_genesis_selective_request_plan --output one-genesis-selective-request-plan-b.json
+      - name: Require exact plan determinism and non-scoring boundary
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          a = json.loads(Path('one-genesis-selective-request-plan-a.json').read_text())
+          b = json.loads(Path('one-genesis-selective-request-plan-b.json').read_text())
+          assert a['decision'] == b['decision'] == 'READY_SELECTIVE_REQUEST_PLAN'
+          assert a['totals']['workloads'] == b['totals']['workloads'] == 15
+          assert a['totals']['all_workload_identities_exact'] is True
+          assert b['totals']['all_workload_identities_exact'] is True
+          assert a['totals']['plan_sha256'] == b['totals']['plan_sha256']
+          assert a['requests'] == b['requests']
+          for d in (a, b):
+              assert d['scoring_executed'] is False
+              assert d['candidate_encoding_executed'] is False
+              assert d['comparator_encoding_executed'] is False
+              assert d['archive_layout_inspected'] is False
+          PY
+      - name: Retain exact-source request plan
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: one-genesis-selective-request-plan-${{ github.sha }}
+          path: one-genesis-selective-request-plan-a.json
+          if-no-files-found: error
+          retention-days: 30
