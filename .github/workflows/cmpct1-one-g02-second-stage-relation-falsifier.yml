@@ -51,7 +51,7 @@ jobs:
         run: python -m pytest -q tests/one/test_second_stage_relation_falsifier.py tests/one/test_second_stage_relation_kernel_ab.py | tee one-g02-second-stage-relation-falsifier-tests.txt
       - name: Run preregistered transfer oracle
         run: python -m benchmarks.one.one_g02_second_stage_relation_falsifier | tee one-g02-second-stage-relation-falsifier.txt
-      - name: Run preregistered relation-kernel A/B
+      - name: Run preregistered isolated relation-kernel A/B
         run: python -m benchmarks.one.one_g02_second_stage_relation_kernel_ab | tee one-g02-second-stage-relation-kernel-ab.txt
       - name: Assert claim boundaries
         run: |
@@ -71,7 +71,8 @@ jobs:
               'HOLD_SECOND_STAGE_FALSIFIER',
               'RETIRE_OR_REPAIR_SECOND_STAGE_FALSIFIER',
           }
-          assert k['schema'] == 'cmpct-one-g02-second-stage-relation-kernel-ab-v1'
+          assert k['schema'] == 'cmpct-one-g02-second-stage-relation-kernel-ab-v2'
+          assert k['timing_boundary'] == 'post-primary-sampler-and-nomination'
           assert k['repetitions'] == 101
           assert k['relations'] == ['add8', 'xor']
           assert k['lengths'] == [256, 4096, 16384, 65536, 262144]
