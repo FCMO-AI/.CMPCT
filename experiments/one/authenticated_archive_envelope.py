@@ -33,6 +33,14 @@ AUTH_FIELD = "auth_tree_v1"
 
 
 @dataclass(frozen=True)
+class AuthFileMetadataStats:
+    path: str
+    logical_bytes: int
+    physical_auth_entry_delta_bytes: int
+    raw_auth_index_bytes: int
+
+
+@dataclass(frozen=True)
 class AuthenticatedArchiveBuildStats:
     logical_file_bytes: int
     wire_bytes: int
@@ -42,6 +50,7 @@ class AuthenticatedArchiveBuildStats:
     raw_auth_index_bytes: int
     source_reread_bytes: int
     regular_files: int
+    per_file_auth: tuple[AuthFileMetadataStats, ...]
 
 
 @dataclass(frozen=True)
@@ -80,6 +89,10 @@ def _serialize_tree(tree: AuthTree) -> dict[str, Any]:
         "root": tree.root.hex(),
         "levels_b64": [base64.b64encode(b"".join(level)).decode("ascii") for level in tree.levels],
     }
+
+
+def _entry_wire_bytes(entry: dict[str, Any]) -> int:
+    return len(json.dumps(entry, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8"))
 
 
 def _level_counts(total_len: int, leaf_bytes: int) -> tuple[int, ...]:
@@ -125,7 +138,7 @@ def _deserialize_tree(value: Any, total_len: int) -> AuthTree:
         levels.append(tuple(blob[i : i + 32] for i in range(0, len(blob), 32)))
 
     # Validate the stored tree's own internal structure at open without reconstructing
-    # file bytes.  Requested leaves are still checked against these commitments at read.
+    # file bytes. Requested leaves are still checked against these commitments at read.
     for level_no, current in enumerate(levels[:-1], start=1):
         parent = levels[level_no]
         expected: list[bytes] = []
@@ -163,6 +176,7 @@ def build_authenticated_archive(source: Path) -> tuple[bytes, AuthenticatedArchi
     raw_index_bytes = 0
     reread_bytes = 0
     regular_files = 0
+    per_file_auth: list[AuthFileMetadataStats] = []
     for entry in entries:
         if entry.get("kind") != "file":
             continue
@@ -173,7 +187,16 @@ def build_authenticated_archive(source: Path) -> tuple[bytes, AuthenticatedArchi
             raise OneError("archive source changed during authentication build")
         tree = build_auth_tree(data, AUTH_LEAF_BYTES)
         raw_index_bytes += tree.stored_index_bytes
+        base_entry_bytes = _entry_wire_bytes(entry)
         entry[AUTH_FIELD] = _serialize_tree(tree)
+        per_file_auth.append(
+            AuthFileMetadataStats(
+                path=entry["path"],
+                logical_bytes=len(data),
+                physical_auth_entry_delta_bytes=_entry_wire_bytes(entry) - base_entry_bytes,
+                raw_auth_index_bytes=tree.stored_index_bytes,
+            )
+        )
 
     authenticated_manifest = _canonical_manifest(entries)
     delta = len(authenticated_manifest) - len(base_manifest)
@@ -205,6 +228,7 @@ def build_authenticated_archive(source: Path) -> tuple[bytes, AuthenticatedArchi
         raw_auth_index_bytes=raw_index_bytes,
         source_reread_bytes=reread_bytes,
         regular_files=regular_files,
+        per_file_auth=tuple(per_file_auth),
     )
 
 
