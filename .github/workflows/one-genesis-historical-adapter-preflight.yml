@@ -9,10 +9,14 @@ on:
       - 'benchmarks/one/one_genesis_physical_seal_identity.py'
       - 'benchmarks/one/one_genesis_historical_adapter_probe.py'
       - 'benchmarks/one/one_genesis_historical_metric_normalization.py'
+      - 'benchmarks/one/one_genesis_historical_product_worker.py'
+      - 'benchmarks/one/one_genesis_historical_product_worker_probe.py'
       - 'benchmarks/one/one_g02_genesis_candidate_adapter_probe.py'
       - 'tests/one/test_genesis_physical_seal_identity.py'
       - 'tests/one/test_genesis_historical_metric_normalization.py'
+      - 'tests/one/test_genesis_historical_product_worker.py'
       - 'docs/one/prereg/ONE_G02_GENESIS_CANDIDATE_ADAPTER_PROBE_PREREG_2026-09-10.md'
+      - 'docs/one/prereg/ONE_GENESIS_HISTORICAL_PRODUCT_WORKER_v0.1_2026-09-10.md'
       - '.github/workflows/one-genesis-historical-adapter-preflight.yml'
   workflow_dispatch:
 
@@ -62,13 +66,14 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -e './frozen-v030[test,audio]'
           python -m pip install pytest numpy pillow reportlab python-docx openpyxl python-pptx
-      - name: Falsify portable identity and metric normalization
+      - name: Falsify portable identity, normalization, and historical worker
         env:
           PYTHONPATH: ${{ github.workspace }}/cmpct1
         run: |
           python -m pytest -q \
             cmpct1/tests/one/test_genesis_physical_seal_identity.py \
             cmpct1/tests/one/test_genesis_historical_metric_normalization.py \
+            cmpct1/tests/one/test_genesis_historical_product_worker.py \
             | tee receipts-contract-tests.txt
       - name: Probe frozen v0.29 on external synthetic tree
         env:
@@ -87,6 +92,16 @@ jobs:
             --contender v0.30 \
             --checkout frozen-v030 \
             --output receipts/v030.json
+      - name: Falsify fresh-process frozen product measurement worker
+        env:
+          PYTHONPATH: ${{ github.workspace }}/cmpct1
+        run: |
+          python cmpct1/benchmarks/one/one_genesis_historical_product_worker_probe.py \
+            --current cmpct1 \
+            --v029 frozen-v029 \
+            --v030 frozen-v030 \
+            --output receipts/historical-product-worker.json \
+            | tee receipts/historical-product-worker.txt
       - name: Probe current ONE candidate boundary on transfer-only tree
         env:
           PYTHONPATH: ${{ github.workspace }}/cmpct1
@@ -110,6 +125,18 @@ jobs:
               assert row['comparisons_executed'] is False
               assert row['scoring_executed'] is False
               assert row['winner_selected'] is False
+          worker=json.loads(Path('receipts/historical-product-worker.json').read_text())
+          assert worker['decision'] == 'ADVANCE_HISTORICAL_PRODUCT_WORKER'
+          assert worker['external_tree']['files'] == 4
+          assert worker['v029_selective_fabricated'] is False
+          assert worker['genesis_15_workloads_touched'] is False
+          assert worker['comparisons_executed'] is False
+          assert worker['scoring_executed'] is False
+          assert worker['winner_selected'] is False
+          for contender in ('v029', 'v030'):
+              assert worker['rows'][contender]['creation']['stored_bytes'] > 0
+              assert worker['rows'][contender]['whole_read']['exact'] is True
+              assert worker['rows'][contender]['creation']['authorization']['production_authorized'] is False
           one=json.loads(Path('receipts/one-candidate.json').read_text())
           assert one['decision'] == 'ADVANCE_ONE_ADAPTER_BOUNDARY'
           assert one['deterministic_wire'] is True
