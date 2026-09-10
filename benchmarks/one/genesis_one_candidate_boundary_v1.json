@@ -1,0 +1,54 @@
+{
+  "schema": "cmpct-one-genesis-one-candidate-boundary-v1",
+  "experimental_version": "ONE-G0.2",
+  "status": "HOLD_UNTIL_COMPLETE_PRODUCT_BOUNDARY_IS_CERTIFIED",
+  "authorities": {
+    "canon": "docs/architecture/CMPCT_ONE_CANON_v0.1.md",
+    "engineering_grid": "docs/roadmap/CMPCT_ONE_ENGINEERING_GRID_v0.1.md",
+    "current_state": "docs/one/CURRENT_STATE.md",
+    "genesis": "docs/CMPCT1_GENESIS.md"
+  },
+  "required_candidate_properties": [
+    "general arbitrary-tree input rather than one favorable relation fixture",
+    "automatic bounded Law plus Surprise discovery/selection under ONE semantics",
+    "complete persistent bytes counted including Program, Surprise/root payloads, metadata, integrity/authentication and indexes",
+    "byte-exact whole reconstruction",
+    "authenticated selective access or explicit unavailable cells without inferred zeroes",
+    "creation CPU/wall/peak-memory measured under the same resource boundary as comparators",
+    "reader performs no discovery",
+    "no hidden legacy codec or mechanism opcode",
+    "candidate source SHA frozen before first Genesis contender execution"
+  ],
+  "known_surfaces": {
+    "authenticated_law_archive_exact_add8": {
+      "path": "experiments/one/authenticated_law_archive.py",
+      "classification": "mechanism-composition-evidence-only",
+      "genesis_general_candidate_eligible_alone": false,
+      "reason": "the promoted archive experiment proves authenticated composition for an exact ADD8 Law fixture; it is not automatic general-tree Law discovery"
+    },
+    "surprise_only_archive_envelope": {
+      "path": "experiments/one/archive_envelope.py",
+      "classification": "general-envelope-reference-only",
+      "genesis_general_candidate_eligible_alone": false,
+      "reason": "the envelope supplies archive semantics but build_program is Surprise-only and therefore cannot stand in for the best ONE Law plus Surprise research state"
+    },
+    "preferred_temporal_research_writer": {
+      "classification": "promoted-research-writer-principle-not-product",
+      "genesis_general_candidate_eligible_alone": false,
+      "authority": "docs/one/CURRENT_STATE.md",
+      "reason": "CURRENT_STATE explicitly calls the best evidenced temporal path a research-writer path, not a canonical product writer claim"
+    }
+  },
+  "anti_cherrypick_rules": [
+    "do not score authenticated exact-ADD8 as the general ONE contender",
+    "do not score Surprise-only envelope as the best ONE contender when claiming Law plus Surprise",
+    "do not choose a different ONE mechanism surface per workload",
+    "do not omit persistent side bytes or integrity/index bytes",
+    "do not substitute mechanism-level timing for complete product creation/read resource accounting",
+    "if no complete eligible ONE product boundary is certified by gate execution time, report the missing boundary explicitly rather than manufacture one"
+  ],
+  "genesis_inputs_executed": false,
+  "comparison_executed": false,
+  "scoring_executed": false,
+  "winner_selected": false
+}
