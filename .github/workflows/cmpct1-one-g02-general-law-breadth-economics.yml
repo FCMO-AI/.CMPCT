@@ -1,0 +1,76 @@
+# ci-lane: fast
+name: CMPCT1 ONE-G0.2 general Law breadth economics
+
+on:
+  push:
+    branches: [research/cmpct1]
+    paths:
+      - experiments/one/general_law_archive.py
+      - experiments/one/archive_envelope.py
+      - experiments/one/authenticated_archive_envelope.py
+      - experiments/one/ir.py
+      - experiments/one/wire.py
+      - benchmarks/one/one_g02_general_law_breadth_transfer.py
+      - benchmarks/one/one_g02_general_law_breadth_economics_transfer.py
+      - tests/one/test_general_law_breadth_economics_transfer.py
+      - docs/one/prereg/ONE_G02_GENERAL_LAW_BREADTH_ECONOMICS_TRANSFER_PREREG_2026-09-10.md
+      - .github/workflows/cmpct1-one-g02-general-law-breadth-economics.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-one-g02-general-law-breadth-economics-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  breadth-economics:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Bind exact source
+        run: test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+      - name: Install test dependencies
+        run: python -m pip install -e '.[test]'
+      - name: Check CI topology
+        run: python tools/check_ci_topology.py .github/workflows/cmpct1-one-g02-general-law-breadth-economics.yml
+      - name: Run economics hostile test
+        run: python -m pytest -q tests/one/test_general_law_breadth_economics_transfer.py | tee one-g02-general-law-breadth-economics-tests.txt
+      - name: Run preregistered economics falsifier
+        run: python -m benchmarks.one.one_g02_general_law_breadth_economics_transfer | tee one-g02-general-law-breadth-economics.txt
+      - name: Assert narrow decision and preserve numbers
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          p = json.loads(Path('one-g02-general-law-breadth-economics-transfer.json').read_text())
+          assert p['schema'] == 'cmpct-one-g02-general-law-breadth-economics-transfer-v1'
+          assert p['experimental_version'] == 'ONE-G0.2'
+          assert p['decision'] == 'ADVANCE_BREADTH_REPRESENTATION_ECONOMICS_ONLY'
+          assert 'no Genesis corpus' in p['claim_boundary']
+          assert all(p['gates'].values())
+          assert p['law']['stored_bytes'] <= p['surprise_only']['stored_bytes']
+          assert p['stored_byte_delta'] <= 0
+          assert p['comparison_executed'] is False
+          assert p['scoring_executed'] is False
+          assert p['winner_selected'] is False
+          print('law_stored_bytes=' + str(p['law']['stored_bytes']))
+          print('surprise_stored_bytes=' + str(p['surprise_only']['stored_bytes']))
+          print('law_over_surprise_ratio=' + str(p['law_over_surprise_stored_ratio']))
+          PY
+      - name: Retain exact-source evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: one-g02-general-law-breadth-economics-${{ github.sha }}
+          path: |
+            one-g02-general-law-breadth-economics-transfer.json
+            one-g02-general-law-breadth-economics.txt
+            one-g02-general-law-breadth-economics-tests.txt
+          if-no-files-found: warn
+          retention-days: 30
