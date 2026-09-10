@@ -20,9 +20,12 @@
       "required_entry_points": ["build", "strong_verify", "extract", "list_members", "read_member", "read_member_with_stats"],
       "adapter_rule": "wrap direct frozen product surface against executor-owned workload paths; do not invoke historical corpus generator",
       "selective_access_surface": {
-        "status": "surface-present",
+        "status": "surface-present-partially-instrumented",
         "entry_point": "read_member_with_stats",
-        "rule": "metric semantics still require transfer-workload falsification before production admission"
+        "frozen_dispatch": "entropygraph_v030_release_product.py dispatches compact-control/logs specially and otherwise delegates to the frozen base reader",
+        "r24_semantics": "decoded_context_bytes=None and amplification=None are explicitly not instrumented; normalize selective resource/amplification evidence to unavailable, never zero",
+        "r25_semantics": "when decoded_context_bytes and amplification are returned, require internal consistency before admitting measured selective evidence",
+        "rule": "correct member content may establish semantic exactness even when traffic/amplification is unavailable; missing instrumentation is neither a zero-cost access claim nor an automatic loss"
       },
       "historical_broad_authority": {
         "source_sha": "e75f3d3e2d7a774836c35c0dd50cc130a07a02c6",
@@ -54,6 +57,7 @@
     "The frozen source SHA is part of the measurement identity.",
     "Historical broad evidence and the final frozen executable line are distinct when their SHAs differ.",
     "A missing historical metric is explicit unavailable, never synthetic zero.",
+    "Correct selective content and measured selective resource cost are separate claims; exactness does not manufacture traffic instrumentation.",
     "Adapter wrappers may normalize measurement output but may not replace, weaken, or emulate the frozen compressor semantics.",
     "No reader-visible legacy mechanism may be added to ONE merely to match a comparator.",
     "No pre-2026-09-11 probe may execute or inspect contender results on the frozen 15-workload Genesis matrix."
