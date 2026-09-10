@@ -6,6 +6,10 @@ from pathlib import Path
 import subprocess
 import sys
 
+import pytest
+
+from benchmarks.one import one_genesis_cmpct1_product_worker as worker
+
 
 def _run(args: list[str], *, env: dict[str, str] | None = None) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
@@ -13,6 +17,31 @@ def _run(args: list[str], *, env: dict[str, str] | None = None) -> subprocess.Co
         text=True,
         capture_output=True,
         env=env,
+    )
+
+
+def _write_candidate_manifest(
+    path: Path,
+    *,
+    source_sha: str,
+    creator_path: str = worker.CREATOR_SURFACE,
+    reader_path: str = worker.READER_SURFACE,
+    status: str = worker.CERTIFIED_STATUS,
+) -> None:
+    path.write_text(
+        json.dumps(
+            {
+                "schema": "cmpct-one-genesis-one-candidate-boundary-v1",
+                "status": status,
+                "certified_candidate": {
+                    "source_sha": source_sha,
+                    "creator_path": creator_path,
+                    "reader_path": reader_path,
+                },
+            }
+        )
+        + "\n",
+        encoding="utf-8",
     )
 
 
@@ -98,3 +127,51 @@ def test_executor_authorization_cannot_bypass_uncertified_candidate_boundary(tmp
     assert result.returncode != 0
     assert "candidate boundary is not certified" in result.stderr
     assert not (tmp_path / "a.one").exists()
+
+
+def test_candidate_boundary_rejects_certified_wrong_creator(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
+    source = "a" * 40
+    manifest = tmp_path / "candidate.json"
+    _write_candidate_manifest(
+        manifest,
+        source_sha=source,
+        creator_path="experiments/one/not-the-certified-creator.py",
+    )
+    monkeypatch.setattr(worker, "CANDIDATE_BOUNDARY_MANIFEST", manifest)
+    with pytest.raises(RuntimeError, match="creator_path differs from worker surface"):
+        worker._assert_candidate_boundary_certified(source)
+
+
+def test_candidate_boundary_rejects_certified_wrong_reader(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
+    source = "b" * 40
+    manifest = tmp_path / "candidate.json"
+    _write_candidate_manifest(
+        manifest,
+        source_sha=source,
+        reader_path="experiments/one/not-the-certified-reader.py",
+    )
+    monkeypatch.setattr(worker, "CANDIDATE_BOUNDARY_MANIFEST", manifest)
+    with pytest.raises(RuntimeError, match="reader_path differs from worker surface"):
+        worker._assert_candidate_boundary_certified(source)
+
+
+def test_candidate_boundary_rejects_certified_wrong_source(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
+    source = "c" * 40
+    manifest = tmp_path / "candidate.json"
+    _write_candidate_manifest(manifest, source_sha="d" * 40)
+    monkeypatch.setattr(worker, "CANDIDATE_BOUNDARY_MANIFEST", manifest)
+    with pytest.raises(RuntimeError, match="source_sha differs from worker surface"):
+        worker._assert_candidate_boundary_certified(source)
+
+
+def test_candidate_boundary_accepts_exact_source_and_surface_binding(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
+    source = "e" * 40
+    manifest = tmp_path / "candidate.json"
+    _write_candidate_manifest(manifest, source_sha=source)
+    monkeypatch.setattr(worker, "CANDIDATE_BOUNDARY_MANIFEST", manifest)
+    certified = worker._assert_candidate_boundary_certified(source)
+    assert certified == {
+        "source_sha": source,
+        "creator_path": worker.CREATOR_SURFACE,
+        "reader_path": worker.READER_SURFACE,
+    }
