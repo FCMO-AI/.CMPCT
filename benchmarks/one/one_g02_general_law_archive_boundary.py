@@ -14,7 +14,7 @@ from pathlib import Path
 import tempfile
 
 from experiments.one.authenticated_archive_envelope import build_authenticated_archive, open_authenticated_archive
-from experiments.one.general_law_archive import SAMPLE_POINTS, build_general_law_archive
+from experiments.one.general_law_archive import SAMPLE_POINTS, _sample_positions, build_general_law_archive
 
 GENERIC_OPS = {"surprise", "concat", "repeat", "fill", "xor", "add8"}
 
@@ -154,12 +154,9 @@ def run() -> dict:
         false_root.mkdir()
         source = _pattern(4097, 17)
         target = bytearray(((b + 7) & 0xFF) for b in source)
-        from experiments.one.general_law_archive import _sample_positions
         sample_set = set(_sample_positions(len(source)))
         adversary = next(i for i in range(len(source)) if i not in sample_set)
         target[adversary] ^= 1
-        false = _case(false_root.parent, false_root.name, []) if False else None
-        # Build directly because the adversarial byte position must be preserved exactly.
         (false_root / "a.bin").write_bytes(source)
         (false_root / "b.bin").write_bytes(bytes(target))
         false_wire, false_stats = build_general_law_archive(false_root)
