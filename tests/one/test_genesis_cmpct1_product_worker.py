@@ -20,24 +20,31 @@ def _run(args: list[str], *, env: dict[str, str] | None = None) -> subprocess.Co
     )
 
 
+def _runtime_identity() -> dict[str, str]:
+    return {
+        "creator_path": worker.CREATOR_SURFACE,
+        "creator_blob_sha": worker._git_object_sha(worker.CREATOR_SURFACE),
+        "reader_path": worker.READER_SURFACE,
+        "reader_blob_sha": worker._git_object_sha(worker.READER_SURFACE),
+        "runtime_tree_path": worker.RUNTIME_TREE,
+        "runtime_tree_sha": worker._git_object_sha(worker.RUNTIME_TREE),
+    }
+
+
 def _write_candidate_manifest(
     path: Path,
     *,
-    source_sha: str,
-    creator_path: str = worker.CREATOR_SURFACE,
-    reader_path: str = worker.READER_SURFACE,
     status: str = worker.CERTIFIED_STATUS,
+    overrides: dict[str, str] | None = None,
 ) -> None:
+    certified = _runtime_identity()
+    certified.update(overrides or {})
     path.write_text(
         json.dumps(
             {
                 "schema": "cmpct-one-genesis-one-candidate-boundary-v1",
                 "status": status,
-                "certified_candidate": {
-                    "source_sha": source_sha,
-                    "creator_path": creator_path,
-                    "reader_path": reader_path,
-                },
+                "certified_candidate": certified,
             }
         )
         + "\n",
@@ -129,49 +136,33 @@ def test_executor_authorization_cannot_bypass_uncertified_candidate_boundary(tmp
     assert not (tmp_path / "a.one").exists()
 
 
-def test_candidate_boundary_rejects_certified_wrong_creator(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
-    source = "a" * 40
+@pytest.mark.parametrize(
+    ("field", "bad_value"),
+    [
+        ("creator_path", "experiments/one/not-the-certified-creator.py"),
+        ("creator_blob_sha", "1" * 40),
+        ("reader_path", "experiments/one/not-the-certified-reader.py"),
+        ("reader_blob_sha", "2" * 40),
+        ("runtime_tree_path", "experiments/not-one"),
+        ("runtime_tree_sha", "3" * 40),
+    ],
+)
+def test_candidate_boundary_rejects_runtime_identity_drift(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    field: str,
+    bad_value: str,
+):
     manifest = tmp_path / "candidate.json"
-    _write_candidate_manifest(
-        manifest,
-        source_sha=source,
-        creator_path="experiments/one/not-the-certified-creator.py",
-    )
+    _write_candidate_manifest(manifest, overrides={field: bad_value})
     monkeypatch.setattr(worker, "CANDIDATE_BOUNDARY_MANIFEST", manifest)
-    with pytest.raises(RuntimeError, match="creator_path differs from worker surface"):
-        worker._assert_candidate_boundary_certified(source)
+    with pytest.raises(RuntimeError, match=field + " differs from worker runtime"):
+        worker._assert_candidate_boundary_certified()
 
 
-def test_candidate_boundary_rejects_certified_wrong_reader(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
-    source = "b" * 40
+def test_candidate_boundary_accepts_exact_runtime_tree_binding(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
     manifest = tmp_path / "candidate.json"
-    _write_candidate_manifest(
-        manifest,
-        source_sha=source,
-        reader_path="experiments/one/not-the-certified-reader.py",
-    )
+    _write_candidate_manifest(manifest)
     monkeypatch.setattr(worker, "CANDIDATE_BOUNDARY_MANIFEST", manifest)
-    with pytest.raises(RuntimeError, match="reader_path differs from worker surface"):
-        worker._assert_candidate_boundary_certified(source)
-
-
-def test_candidate_boundary_rejects_certified_wrong_source(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
-    source = "c" * 40
-    manifest = tmp_path / "candidate.json"
-    _write_candidate_manifest(manifest, source_sha="d" * 40)
-    monkeypatch.setattr(worker, "CANDIDATE_BOUNDARY_MANIFEST", manifest)
-    with pytest.raises(RuntimeError, match="source_sha differs from worker surface"):
-        worker._assert_candidate_boundary_certified(source)
-
-
-def test_candidate_boundary_accepts_exact_source_and_surface_binding(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
-    source = "e" * 40
-    manifest = tmp_path / "candidate.json"
-    _write_candidate_manifest(manifest, source_sha=source)
-    monkeypatch.setattr(worker, "CANDIDATE_BOUNDARY_MANIFEST", manifest)
-    certified = worker._assert_candidate_boundary_certified(source)
-    assert certified == {
-        "source_sha": source,
-        "creator_path": worker.CREATOR_SURFACE,
-        "reader_path": worker.READER_SURFACE,
-    }
+    certified = worker._assert_candidate_boundary_certified()
+    assert certified == _runtime_identity()
