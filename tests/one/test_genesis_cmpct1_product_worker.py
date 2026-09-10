@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import os
 from pathlib import Path
+import stat
 import subprocess
 import sys
 
@@ -56,11 +57,15 @@ def test_transfer_fixture_build_whole_and_selective_are_exact(tmp_path: Path):
     root = tmp_path / "tree"
     root.mkdir()
     base = bytes(range(256)) * 32
-    (root / "a.bin").write_bytes(base)
+    a = root / "a.bin"
+    a.write_bytes(base)
+    a.chmod(0o640)
     (root / "copy.bin").write_bytes(base)
     nested = root / "nested"
     nested.mkdir()
+    nested.chmod(0o750)
     (nested / "fill.bin").write_bytes(b"F" * 8192)
+    (root / "a-link").symlink_to("a.bin")
 
     archive = tmp_path / "candidate.one"
     build_json = tmp_path / "build.json"
@@ -87,8 +92,10 @@ def test_transfer_fixture_build_whole_and_selective_are_exact(tmp_path: Path):
     assert whole.returncode == 0, whole.stderr
     restored = json.loads(whole_json.read_text())
     assert restored["exact"] is True
+    assert restored["tree_semantics_checked"] is True
+    assert restored["tree_entries"] == 5
     assert restored["integrity_checked_by_reader"] is True
-    assert restored["returned_bytes"] == sum(p.stat().st_size for p in (root / "a.bin", root / "copy.bin", nested / "fill.bin"))
+    assert restored["returned_bytes"] == sum(p.stat().st_size for p in (a, root / "copy.bin", nested / "fill.bin"))
 
     selective = _run([
         "--mode", "selective", "--root", str(root), "--archive", str(archive),
@@ -101,6 +108,48 @@ def test_transfer_fixture_build_whole_and_selective_are_exact(tmp_path: Path):
     assert selected["access"]["fallback"] is False
     assert selected["scoring_executed"] is False
     assert selected["winner_selected"] is False
+
+
+def test_tree_semantics_reject_mode_target_kind_and_path_drift(tmp_path: Path):
+    root = tmp_path / "tree"
+    root.mkdir()
+    file_path = root / "file"
+    file_path.write_bytes(b"abc")
+    file_path.chmod(0o600)
+    (root / "link").symlink_to("file")
+    source = worker._source_semantic_manifest(root)
+
+    exact = {key: dict(value) for key, value in source.items()}
+    worker._assert_tree_semantics(source, exact)
+
+    for field, value in (("mode", 0o777), ("kind", "dir")):
+        changed = {key: dict(row) for key, row in exact.items()}
+        changed["file"][field] = value
+        with pytest.raises(RuntimeError, match="tree semantics differ"):
+            worker._assert_tree_semantics(source, changed)
+
+    changed_target = {key: dict(row) for key, row in exact.items()}
+    changed_target["link"]["target"] = "elsewhere"
+    with pytest.raises(RuntimeError, match="tree semantics differ"):
+        worker._assert_tree_semantics(source, changed_target)
+
+    missing = {key: dict(row) for key, row in exact.items() if key != "link"}
+    with pytest.raises(RuntimeError, match="path universe differs"):
+        worker._assert_tree_semantics(source, missing)
+
+
+def test_source_semantic_manifest_uses_lstat_and_preserves_symlink_target(tmp_path: Path):
+    root = tmp_path / "tree"
+    root.mkdir()
+    target = root / "target"
+    target.write_bytes(b"payload")
+    target.chmod(0o640)
+    (root / "link").symlink_to("target")
+    rows = worker._source_semantic_manifest(root)
+    assert rows["target"]["kind"] == "file"
+    assert rows["target"]["mode"] == stat.S_IMODE(target.lstat().st_mode)
+    assert rows["link"]["kind"] == "symlink"
+    assert rows["link"]["target"] == "target"
 
 
 def test_production_worker_fails_closed_without_executor_authorization(tmp_path: Path):
@@ -118,7 +167,6 @@ def test_production_worker_fails_closed_without_executor_authorization(tmp_path:
 
 
 def test_executor_authorization_cannot_bypass_uncertified_candidate_boundary(tmp_path: Path):
-    """The calendar/executor gate must not silently choose an ineligible ONE product surface."""
     root = tmp_path / "tree"
     root.mkdir()
     (root / "x").write_bytes(b"x")
