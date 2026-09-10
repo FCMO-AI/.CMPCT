@@ -10,6 +10,7 @@ on:
       - benchmarks/one/one_g02_crystallization_marginal_cost_model.py
       - benchmarks/one/one_g02_economic_writer_admission.py
       - benchmarks/one/one_g02_economic_writer_admission_worker.py
+      - benchmarks/one/one_g02_economic_writer_selective_validation.py
       - tests/one/test_crystallization_marginal_cost_model.py
       - tests/one/test_economic_writer_admission.py
       - docs/one/prereg/ONE_G02_CRYSTALLIZATION_MARGINAL_COST_MODEL_PREREG_2026-09-10.md
@@ -95,12 +96,15 @@ jobs:
         run: python -m pytest -q tests/one/test_economic_writer_admission.py | tee one-g02-economic-writer-admission-tests.txt
       - name: Run preregistered writer-admission transfer experiment
         run: python -m benchmarks.one.one_g02_economic_writer_admission | tee one-g02-economic-writer-admission.txt
+      - name: Run selective-access companion falsifier
+        run: python -m benchmarks.one.one_g02_economic_writer_selective_validation | tee one-g02-economic-writer-selective-validation.txt
       - name: Assert writer-admission claim boundary
         run: |
           python - <<'PY'
           import json
           from pathlib import Path
           p = json.loads(Path('one-g02-economic-writer-admission.json').read_text())
+          s = json.loads(Path('one-g02-economic-writer-selective-validation.json').read_text())
           assert p['schema'] == 'cmpct-one-g02-economic-writer-admission-v1'
           assert p['frozen_model'] == {'exact_reuse': -3, 'fill': 1, 'add8': 11, 'xor': 11}
           assert p['timing_gate'] == {'relative': 0.05, 'absolute_seconds': 0.003}
@@ -109,14 +113,19 @@ jobs:
               'HOLD_ECONOMIC_WRITER_ADMISSION',
               'RETIRE_OR_REPAIR_ECONOMIC_WRITER_ADMISSION',
           }
-          for flag in ('genesis_inputs_executed', 'genesis_comparison_executed', 'genesis_scoring_executed', 'genesis_winner_selected'):
-              assert p[flag] is False
+          assert s['schema'] == 'cmpct-one-g02-economic-writer-selective-validation-v1'
+          assert s['decision'] in {'ADVANCE_ECONOMIC_WRITER_SELECTIVE_ACCESS', 'HOLD_ECONOMIC_WRITER_SELECTIVE_ACCESS'}
+          for doc in (p, s):
+              for flag in ('genesis_inputs_executed', 'genesis_comparison_executed', 'genesis_scoring_executed', 'genesis_winner_selected'):
+                  assert doc[flag] is False
           print('decision=' + p['decision'])
+          print('selective_decision=' + s['decision'])
           print('hypotheses=', p['hypotheses'])
           print('proof_work_reduction_bytes=', p['proof_work_reduction_bytes'])
           print('false_admits=', p['false_admits'])
           print('false_rejects=', p['false_rejects'])
           print('timing_regressions=', p['timing_regressions'])
+          print('native_no_fallback=', s['native_no_fallback'])
           PY
       - name: Retain exact-source writer-admission evidence
         if: always()
@@ -127,5 +136,7 @@ jobs:
             one-g02-economic-writer-admission.json
             one-g02-economic-writer-admission.txt
             one-g02-economic-writer-admission-tests.txt
+            one-g02-economic-writer-selective-validation.json
+            one-g02-economic-writer-selective-validation.txt
           if-no-files-found: warn
           retention-days: 30
