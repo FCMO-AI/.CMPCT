@@ -26,6 +26,16 @@ OUT = Path("one-g02-general-candidate-boundary-hostile-economics.json")
 ALLOWED_OPS = {"surprise", "concat", "repeat", "fill", "xor", "add8"}
 ADVANCE = "ADVANCE_GENERAL_CANDIDATE_BOUNDARY_ECONOMICS_PREFLIGHT"
 HOLD = "HOLD_GENERAL_CANDIDATE_BOUNDARY_ECONOMICS"
+LAW_COUNT_FIELDS = ("exact_reuse_roots", "fill_roots", "add8_roots", "xor_roots")
+EXPECTED_RELATION_FIELD: dict[str, str | None] = {
+    "tiny_add8_2b": "add8_roots",
+    "tiny_xor_2b": "xor_roots",
+    "tiny_fill_1b": "fill_roots",
+    "beneficial_add8_4k": "add8_roots",
+    "beneficial_exact_reuse_4k": "exact_reuse_roots",
+    "incompressible_pair_4k": None,
+    "mixed_hostile_tree": "add8_roots",
+}
 
 
 def _hash_stream(n: int, seed: bytes) -> bytes:
@@ -143,6 +153,14 @@ def _archive_snapshot(wire: bytes) -> dict[str, dict[str, Any]]:
     return rows
 
 
+def _expected_structure_exercised(name: str, stats: Any) -> bool:
+    """Prevent an economics ADVANCE from being earned by silently falling back to Surprise."""
+    relation_field = EXPECTED_RELATION_FIELD[name]
+    if relation_field is None:
+        return all(getattr(stats, field) == 0 for field in LAW_COUNT_FIELDS)
+    return getattr(stats, relation_field) >= 1
+
+
 def _run_row(name: str, builder: Callable[[Path], None], parent: Path) -> dict[str, Any]:
     root = parent / name
     builder(root)
@@ -165,10 +183,12 @@ def _run_row(name: str, builder: Callable[[Path], None], parent: Path) -> dict[s
         "surprise_semantics_exact": surprise_snapshot == expected,
         "deterministic_law_wire": law_wire_a == law_wire_b and law_stats_a == law_stats_b,
         "generic_reader_ontology_only": set(ops) <= ALLOWED_OPS,
+        "expected_structure_exercised": _expected_structure_exercised(name, law_stats_a),
         "complete_bytes_non_regressing": law_bytes <= surprise_bytes,
     }
     return {
         "name": name,
+        "expected_relation_field": EXPECTED_RELATION_FIELD[name],
         "decision": "PASS" if all(gates.values()) else "HOLD",
         "gates": gates,
         "law_wire_bytes": law_bytes,
