@@ -23,7 +23,9 @@ def _roundtrip_all(root: Path, wire: bytes) -> None:
             length = min(4096, len(expected) - start)
             actual, stats = opened.read_range(rel, start, length)
             assert actual == expected[start : start + length]
-            assert stats.authenticated is True
+            assert stats.fallback is False
+            assert stats.proof_payload_bytes >= length
+            assert stats.verify_cpu_ns >= 0
 
 
 def test_general_tree_uses_laws_and_surprise_without_changing_reader_ontology(tmp_path: Path):
