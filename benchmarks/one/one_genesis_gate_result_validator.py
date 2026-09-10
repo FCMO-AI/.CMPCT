@@ -34,6 +34,7 @@ REQUIRED_COMPARISON_KEYS = (
     "semantic_status",
     "verdict",
 )
+ALLOWED_SIZE_STATUSES = {"SIZE_WIN", "SIZE_EQUAL", "SIZE_LOSS", "unavailable"}
 ALLOWED_ROW_VERDICTS = {"WIN", "FALLBACK/EQUAL", "DEBT", "LOSS", "INVALID"}
 ALLOWED_FINAL_DECISIONS = {
     "KEEP_CMPCT1_PRIMARY",
@@ -126,6 +127,43 @@ def _validate_measurement(measurement: Any, label: str, errors: list[str]) -> No
                 errors.append(
                     f"{label}.{family}.{metric_name} is zero without measured=true; use unavailable for missing cells"
                 )
+
+
+def _validate_size_status(
+    candidate: Any,
+    comparator: Any,
+    declared: Any,
+    label: str,
+    errors: list[str],
+) -> None:
+    """Bind the derived SIZE_* label to the retained raw stored-byte measurements."""
+    if declared not in ALLOWED_SIZE_STATUSES:
+        errors.append(f"{label}.size_status has invalid value {declared!r}")
+        return
+    candidate_stored = candidate.get("stored_bytes") if isinstance(candidate, dict) else None
+    comparator_stored = comparator.get("stored_bytes") if isinstance(comparator, dict) else None
+    if _is_unavailable(candidate_stored) or _is_unavailable(comparator_stored):
+        if declared != "unavailable":
+            errors.append(f"{label}.size_status must be unavailable when stored bytes are unavailable")
+        return
+    if not (
+        isinstance(candidate_stored, int)
+        and candidate_stored >= 0
+        and isinstance(comparator_stored, int)
+        and comparator_stored >= 0
+    ):
+        return  # Measurement validation emits the type/range errors.
+    expected = (
+        "SIZE_WIN"
+        if candidate_stored < comparator_stored
+        else "SIZE_LOSS"
+        if candidate_stored > comparator_stored
+        else "SIZE_EQUAL"
+    )
+    if declared != expected:
+        errors.append(
+            f"{label}.size_status={declared!r} contradicts stored bytes; expected {expected}"
+        )
 
 
 def validate_gate_result(payload: Any) -> ValidationResult:
@@ -225,6 +263,13 @@ def validate_gate_result(payload: Any) -> ValidationResult:
             for key in REQUIRED_COMPARISON_KEYS:
                 if key not in comp:
                     errors.append(f"{suite}/{name}.comparisons.{comparator} missing {key}")
+            _validate_size_status(
+                measurements.get("cmpct1"),
+                measurements.get(comparator),
+                comp.get("size_status"),
+                f"{suite}/{name}.comparisons.{comparator}",
+                errors,
+            )
             verdict = comp.get("verdict")
             if verdict is not None and verdict not in ALLOWED_ROW_VERDICTS:
                 errors.append(f"{suite}/{name}.comparisons.{comparator} invalid verdict {verdict!r}")
