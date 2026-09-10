@@ -6,6 +6,7 @@ on:
     branches: [research/cmpct1]
     paths:
       - benchmarks/one/genesis_gate_workload_identity_v1.json
+      - benchmarks/one/one_genesis_gate_readiness.py
       - benchmarks/one/one_genesis_gate_result_validator.py
       - benchmarks/one/one_genesis_gate_executor_preflight.py
       - benchmarks/one/one_genesis_gate_measurement_executor.py
@@ -27,7 +28,7 @@ concurrency:
 jobs:
   artifact-contract:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -37,8 +38,11 @@ jobs:
         run: |
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
           echo "EVIDENCE_HEAD=$GITHUB_SHA" >> "$GITHUB_ENV"
-      - name: Install test dependency surface
-        run: python -m pip install -e '.[test]'
+      - name: Install test and deterministic-corpus dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq ffmpeg
+          python -m pip install -e '.[test]'
       - name: Check CI topology for this workflow
         run: python tools/check_ci_topology.py .github/workflows/cmpct1-one-genesis-gate-result-contract.yml
       - name: Falsify gate-result, preflight, and raw-measurement contracts
@@ -62,25 +66,42 @@ jobs:
           result = json.loads(Path('genesis-fixture-joined.json').read_text())
           assert result['synthetic'] is True
           assert result['production_eligible'] is False
+          assert result['physical_input_seal'] == {'status': 'not-executed-in-fixture'}
           assert len(result['workloads']) == 15
           state = result['execution_state']
+          assert state['physical_input_seal_executed'] is False
           assert state['contender_measurement_executed'] is False
           assert state['comparisons_executed'] is False
           assert state['scoring_executed'] is False
           assert state['winner_selected'] is False
           assert len(list(Path('genesis-fixture-raw').glob('*-raw.json'))) == 3
           PY
+      - name: Exercise physical-input seal without contenders
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          from benchmarks.one.one_genesis_gate_measurement_executor import _seal_physical_inputs
+          seal = _seal_physical_inputs(Path('genesis-physical-work'))
+          assert seal['schema'] == 'cmpct-one-genesis-physical-input-seal-v1'
+          assert seal['all_15_identities_exact'] is True
+          assert len(seal['rows']) == 15
+          Path('genesis-physical-input-seal.json').write_text(json.dumps(seal, indent=2, sort_keys=True) + '\n')
+          PY
       - name: Retain exact-source contract receipt
         if: always()
         run: |
           python - <<'PY'
-          import json, os
+          import hashlib, json, os
           from pathlib import Path
           log = Path('genesis-gate-result-contract.txt')
           fixture = Path('genesis-fixture-joined.json')
+          physical = Path('genesis-physical-input-seal.json')
           fixture_payload = json.loads(fixture.read_text()) if fixture.exists() else None
+          physical_payload = json.loads(physical.read_text()) if physical.exists() else None
+          physical_digest = ('sha256:' + hashlib.sha256(physical.read_bytes()).hexdigest()) if physical.exists() else 'unavailable'
           payload = {
-              'schema': 'cmpct-one-genesis-gate-result-contract-receipt-v3',
+              'schema': 'cmpct-one-genesis-gate-result-contract-receipt-v4',
               'source_sha': os.environ['EVIDENCE_HEAD'],
               'frozen_v029': '02b8b27cb2d97af7c6e0797984a898e8fa8a8e5d',
               'frozen_v030': 'f4b158a55a08b9b18b50e4e4abe4b9251048c772',
@@ -94,7 +115,13 @@ jobs:
                   'workloads': len(fixture_payload.get('workloads', [])),
                   'execution_state': fixture_payload.get('execution_state'),
               } if fixture_payload else 'unavailable'),
-              'claim_boundary': 'artifact-shape, exact workload-identity, executor-preflight, and synthetic raw-measurement plumbing only; no Genesis contender encoding, comparison, scoring, or winner selection executed',
+              'physical_input_seal': ({
+                  'schema': physical_payload.get('schema'),
+                  'all_15_identities_exact': physical_payload.get('all_15_identities_exact'),
+                  'workloads': len(physical_payload.get('rows', [])),
+                  'artifact_sha256': physical_digest,
+              } if physical_payload else 'unavailable'),
+              'claim_boundary': 'artifact-shape, exact workload-identity, executor-preflight, synthetic raw-measurement plumbing, and physical 15-tree input sealing only; no Genesis contender encoding, comparison, scoring, or winner selection executed',
           }
           Path('genesis-gate-result-contract.json').write_text(json.dumps(payload, indent=2) + '\n')
           PY
@@ -103,6 +130,8 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: genesis-gate-result-contract-${{ github.sha }}
-          path: genesis-gate-result-contract.json
+          path: |
+            genesis-gate-result-contract.json
+            genesis-physical-input-seal.json
           if-no-files-found: error
           retention-days: 30
