@@ -1,18 +1,13 @@
 from __future__ import annotations
 
-"""Transfer-only resource observability falsifier for the ONE-G0.2 product boundary.
+"""Transfer-only resource observability falsifier for the ONE-G0.2 product boundary."""
 
-This probe never imports or constructs the Genesis 15-workload corpus. It exercises the
-fresh-process CMPCT1 worker through the generic one-workload measurement layer on a small
-independent tree, retaining all samples and refusing to score or compare contenders.
-"""
-
-from hashlib import sha256
 import json
 import math
 from pathlib import Path
 import random
 import statistics
+import sys
 import tempfile
 import zlib
 
@@ -32,11 +27,9 @@ FORBIDDEN_MODULE_FRAGMENTS = (
 def _write_transfer_tree(root: Path) -> str:
     root.mkdir(parents=True, exist_ok=False)
     rng = random.Random(0x0A11CE)
-
     tiny = root / "tiny.txt"
     tiny.write_text("ONE transfer fixture\n", encoding="utf-8")
     tiny.chmod(0o640)
-
     structured = root / "structured"
     structured.mkdir()
     structured.chmod(0o750)
@@ -48,14 +41,12 @@ def _write_transfer_tree(root: Path) -> str:
         "".join(json.dumps(row, sort_keys=True, separators=(",", ":")) + "\n" for row in rows),
         encoding="utf-8",
     )
-
-    repeated = (b"LAW-SURPRISE-TRANSFER|" * 2048)
+    repeated = b"LAW-SURPRISE-TRANSFER|" * 2048
     (root / "repeated.bin").write_bytes(repeated)
     edited = bytearray(repeated)
     for offset in range(101, len(edited), 4093):
         edited[offset] ^= 0x5A
     (root / "local-edit.bin").write_bytes(bytes(edited))
-
     random_bytes = bytes(rng.randrange(256) for _ in range(65536))
     (root / "random.bin").write_bytes(random_bytes)
     (root / "already-compressed.z").write_bytes(zlib.compress(random_bytes, level=9))
@@ -78,16 +69,23 @@ def _phase_summary(family: dict) -> dict:
         if not all(_finite_nonnegative(value) for value in values):
             raise RuntimeError(f"invalid {key} sample")
         numeric = [float(value) for value in values]
-        out[key] = {
-            "median": statistics.median(numeric),
-            "min": min(numeric),
-            "max": max(numeric),
-        }
+        out[key] = {"median": statistics.median(numeric), "min": min(numeric), "max": max(numeric)}
     return out
 
 
+def _assert_worker_attestation(samples: list[dict], phase: str) -> None:
+    if len(samples) != REPETITIONS:
+        raise RuntimeError(f"{phase} did not retain five fresh worker samples")
+    for index, row in enumerate(samples):
+        if row.get("genesis_workload_modules_imported") is not False:
+            raise RuntimeError(f"{phase} worker {index} did not attest Genesis import isolation")
+        observed = row.get("forbidden_module_fragments")
+        if not isinstance(observed, list) or set(observed) != set(FORBIDDEN_MODULE_FRAGMENTS):
+            raise RuntimeError(f"{phase} worker {index} used a different import-isolation boundary")
+
+
 def run() -> dict:
-    before_modules = set(__import__("sys").modules)
+    before_modules = set(sys.modules)
     with tempfile.TemporaryDirectory(prefix="one-g02-resource-transfer-") as td:
         root = Path(td) / "transfer-tree"
         member = _write_transfer_tree(root)
@@ -99,13 +97,10 @@ def run() -> dict:
             transfer_fixture=True,
         )
 
-    imported = sorted(set(__import__("sys").modules) - before_modules)
-    forbidden = sorted(
-        name for name in imported if any(fragment in name for fragment in FORBIDDEN_MODULE_FRAGMENTS)
-    )
+    imported = sorted(set(sys.modules) - before_modules)
+    forbidden = sorted(name for name in imported if any(fragment in name for fragment in FORBIDDEN_MODULE_FRAGMENTS))
     if forbidden:
-        raise RuntimeError(f"Genesis workload module imported by transfer falsifier: {forbidden}")
-
+        raise RuntimeError(f"Genesis workload module imported by transfer falsifier parent: {forbidden}")
     if result.get("synthetic") is not True or result.get("production_eligible") is not False:
         raise RuntimeError("transfer evidence was mislabeled as production")
     for flag in ("comparison_executed", "scoring_executed", "winner_selected"):
@@ -116,30 +111,23 @@ def run() -> dict:
     creation = measurement["creation"]
     whole = measurement["whole_read"]
     selective = measurement["selective_access"]
-
     creation_samples = creation.get("samples", [])
+    whole_samples = whole.get("samples", [])
+    selective_samples = selective.get("samples", [])
+    _assert_worker_attestation(creation_samples, "creation")
+    _assert_worker_attestation(whole_samples, "whole_read")
+    _assert_worker_attestation(selective_samples, "selective_access")
+
     wire_sizes = {row.get("stored_bytes") for row in creation_samples}
     wire_hashes = {row.get("wire_sha256") for row in creation_samples}
     if len(wire_sizes) != 1 or len(wire_hashes) != 1:
         raise RuntimeError("current ONE transfer wire is not deterministic across five builds")
-
-    whole_samples = whole.get("samples", [])
-    if not all(
-        row.get("exact") is True
-        and row.get("tree_semantics_checked") is True
-        and row.get("integrity_checked_by_reader") is True
-        for row in whole_samples
-    ):
+    if not all(row.get("exact") is True and row.get("tree_semantics_checked") is True and row.get("integrity_checked_by_reader") is True for row in whole_samples):
         raise RuntimeError("whole-read transfer samples did not prove exact tree semantics")
-
-    selective_samples = selective.get("samples", [])
-    if not all(
-        row.get("exact") is True and row.get("integrity_checked_by_reader") is True
-        for row in selective_samples
-    ):
+    if not all(row.get("exact") is True and row.get("integrity_checked_by_reader") is True for row in selective_samples):
         raise RuntimeError("selective transfer samples are not exact/authenticated")
 
-    payload = {
+    return {
         "schema": SCHEMA,
         "experimental_version": "ONE-G0.2",
         "decision": "ADVANCE_RESOURCE_OBSERVABILITY_ONLY",
@@ -147,6 +135,7 @@ def run() -> dict:
         "transfer_only": True,
         "production_eligible": False,
         "genesis_workload_modules_imported": False,
+        "worker_import_isolation_attested_all_15_fresh_processes": True,
         "genesis_inputs_executed": False,
         "comparison_executed": False,
         "scoring_executed": False,
@@ -163,12 +152,8 @@ def run() -> dict:
             "selective_access": _phase_summary(selective),
         },
         "raw_measurement": measurement,
-        "claim_boundary": (
-            "transfer-only repeatability and fresh-process CPU/wall/RSS observability for the current "
-            "ONE product surface; no Genesis workload, comparator, scoring, or candidate certification"
-        ),
+        "claim_boundary": "transfer-only repeatability and fresh-process CPU/wall/RSS observability for current ONE product surface; no Genesis workload, comparator, scoring, or candidate certification",
     }
-    return payload
 
 
 def main() -> None:
