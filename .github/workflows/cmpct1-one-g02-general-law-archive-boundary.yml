@@ -1,0 +1,80 @@
+# ci-lane: fast
+name: CMPCT1 ONE-G0.2 general Law archive boundary
+
+on:
+  push:
+    branches: [research/cmpct1]
+    paths:
+      - experiments/one/general_law_archive.py
+      - experiments/one/archive_envelope.py
+      - experiments/one/authenticated_archive_envelope.py
+      - experiments/one/authenticated_native_selective_cone.py
+      - experiments/one/ir.py
+      - experiments/one/wire.py
+      - benchmarks/one/one_g02_general_law_archive_boundary.py
+      - tests/one/test_general_law_archive.py
+      - docs/one/prereg/ONE_G02_GENERAL_LAW_ARCHIVE_BOUNDARY_PREREG_2026-09-10.md
+      - .github/workflows/cmpct1-one-g02-general-law-archive-boundary.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-one-g02-general-law-archive-boundary-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  boundary-falsifier:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Bind exact source
+        run: |
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          echo "EVIDENCE_HEAD=$GITHUB_SHA" >> "$GITHUB_ENV"
+      - name: Install test dependencies
+        run: python -m pip install -e '.[test]'
+      - name: Check CI topology
+        run: python tools/check_ci_topology.py .github/workflows/cmpct1-one-g02-general-law-archive-boundary.yml
+      - name: Run semantic and hostile boundary tests
+        run: python -m pytest -q tests/one/test_general_law_archive.py | tee one-g02-general-law-archive-tests.txt
+      - name: Run preregistered transfer falsifier
+        run: python -m benchmarks.one.one_g02_general_law_archive_boundary | tee one-g02-general-law-archive-boundary.txt
+      - name: Assert claim boundary and decision
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          p = json.loads(Path('one-g02-general-law-archive-boundary.json').read_text())
+          assert p['schema'] == 'cmpct-one-g02-general-law-archive-boundary-v1'
+          assert p['experimental_version'] == 'ONE-G0.2'
+          assert p['decision'] == 'ADVANCE_BOUNDARY_SEED'
+          assert 'no Genesis corpus' in p['claim_boundary']
+          g = p['gates']
+          assert g['whole_reconstruction_exact'] is True
+          assert g['authenticated_selective_exact'] is True
+          assert g['deterministic_wire'] is True
+          assert g['generic_reader_ontology_only'] is True
+          assert g['unrelated_false_laws'] == 0
+          assert g['unrelated_exact_relation_proof_bytes'] == 0
+          assert g['unrelated_fallback_wire_byte_identical'] is True
+          assert g['false_pattern_add8_roots'] == 0
+          assert g['false_pattern_exact_proof_exercised'] is True
+          assert g['auth_source_reread_bytes'] == 0
+          PY
+      - name: Retain exact-source evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: one-g02-general-law-archive-boundary-${{ github.sha }}
+          path: |
+            one-g02-general-law-archive-boundary.json
+            one-g02-general-law-archive-boundary.txt
+            one-g02-general-law-archive-tests.txt
+          if-no-files-found: warn
+          retention-days: 30
