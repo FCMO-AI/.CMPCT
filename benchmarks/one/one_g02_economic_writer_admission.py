@@ -26,6 +26,8 @@ BINARY_LENGTHS = (2, 4, 8, 9, 10, 11, 12, 16, 32, 256, 4096)
 SIMPLE_LENGTHS = (1, 2, 8, 32, 4096)
 UNRELATED_LENGTHS = (8, 32, 4096)
 REPEATS = 5
+TIMING_RELATIVE_REGRESSION = 0.05
+TIMING_ABSOLUTE_REGRESSION_S = 0.003
 
 
 def _hash_stream(n: int, seed: bytes) -> bytes:
@@ -153,6 +155,13 @@ def _build_once(root: Path, economic: bool) -> tuple[bytes, Any, Any]:
     return wire, stats, open_authenticated_archive(wire)
 
 
+def _timing_regression(candidate_s: float, base_s: float) -> bool:
+    return (
+        candidate_s - base_s > TIMING_ABSOLUTE_REGRESSION_S
+        and candidate_s > base_s * (1.0 + TIMING_RELATIVE_REGRESSION)
+    )
+
+
 def _isolated_row(parent: Path, relation: str, length: int) -> dict[str, Any]:
     root = parent / f"{relation}-{length}"
     _write_pair(root, relation, length)
@@ -178,14 +187,8 @@ def _isolated_row(parent: Path, relation: str, length: int) -> dict[str, Any]:
 
     resource_a = _resource_measure(root, False)
     resource_b = _resource_measure(root, True)
-    cpu_regression = (
-        resource_b["median_cpu_s"] - resource_a["median_cpu_s"] > 0.001
-        and resource_b["median_cpu_s"] > resource_a["median_cpu_s"] * 1.10
-    )
-    wall_regression = (
-        resource_b["median_wall_s"] - resource_a["median_wall_s"] > 0.001
-        and resource_b["median_wall_s"] > resource_a["median_wall_s"] * 1.10
-    )
+    cpu_regression = _timing_regression(resource_b["median_cpu_s"], resource_a["median_cpu_s"])
+    wall_regression = _timing_regression(resource_b["median_wall_s"], resource_a["median_wall_s"])
 
     return {
         "case": f"{relation}-{length}",
@@ -226,7 +229,6 @@ def _mixed_row(parent: Path) -> dict[str, Any]:
     resource_b = _resource_measure(root, True)
     ops_b = sorted({node.op for node in opened_b.program.nodes})
 
-    # Reader-side evidence for the deliberately mixed opportunity sequence.
     def op(opened: Any, path: str) -> str:
         entry = opened.base.entries[path]
         root_obj = opened.program.roots[entry["root"]]
@@ -246,14 +248,8 @@ def _mixed_row(parent: Path) -> dict[str, Any]:
     reuse_target = opened_b.program.roots[opened_b.base.entries["06-reuse-target.bin"]["root"]].ref
     economic_shapes["exact_reuse"] = "exact_reuse" if reuse_source == reuse_target else op(opened_b, "06-reuse-target.bin")
 
-    cpu_regression = (
-        resource_b["median_cpu_s"] - resource_a["median_cpu_s"] > 0.001
-        and resource_b["median_cpu_s"] > resource_a["median_cpu_s"] * 1.10
-    )
-    wall_regression = (
-        resource_b["median_wall_s"] - resource_a["median_wall_s"] > 0.001
-        and resource_b["median_wall_s"] > resource_a["median_wall_s"] * 1.10
-    )
+    cpu_regression = _timing_regression(resource_b["median_cpu_s"], resource_a["median_cpu_s"])
+    wall_regression = _timing_regression(resource_b["median_wall_s"], resource_a["median_wall_s"])
     shapes_ok = economic_shapes == {
         "short_add8": "surprise",
         "long_xor": "xor",
@@ -328,6 +324,7 @@ def run() -> dict[str, Any]:
         "experimental_version": "ONE-G0.2",
         "claim_boundary": "synthetic transfer writer-selection evidence only; no Genesis inputs, comparators, scoring, or product-default promotion",
         "frozen_model": {"exact_reuse": -3, "fill": 1, "add8": 11, "xor": 11},
+        "timing_gate": {"relative": TIMING_RELATIVE_REGRESSION, "absolute_seconds": TIMING_ABSOLUTE_REGRESSION_S},
         "rows": rows,
         "mixed": mixed,
         "hypotheses": {"H1_economic_safety": h1, "H2_opportunity_preservation": h2, "H3_semantic_representation_invariance": h3, "H4_proof_work_pruning": h4, "H5_creation_cost_sanity": h5},
