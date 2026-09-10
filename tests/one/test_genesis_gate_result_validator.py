@@ -182,6 +182,31 @@ def test_unavailable_is_explicitly_accepted_but_synthetic_zero_is_not():
     assert any("zero without measured=true" in error for error in result.errors)
 
 
+def test_size_status_must_match_retained_stored_bytes():
+    payload = _payload()
+    payload["workloads"][0]["comparisons"]["v0.29"]["size_status"] = "SIZE_LOSS"
+    result = validate_gate_result(payload)
+    assert not result.ok
+    assert any("contradicts stored bytes" in error for error in result.errors)
+
+    payload = _payload()
+    payload["workloads"][0]["measurements"]["cmpct1"]["stored_bytes"] = 1100
+    payload["workloads"][0]["comparisons"]["v0.29"]["size_status"] = "SIZE_EQUAL"
+    assert validate_gate_result(payload).ok
+
+
+def test_unavailable_stored_bytes_require_unavailable_size_status():
+    payload = _payload()
+    payload["workloads"][0]["measurements"]["cmpct1"]["stored_bytes"] = "unavailable"
+    result = validate_gate_result(payload)
+    assert not result.ok
+    assert any("size_status must be unavailable" in error for error in result.errors)
+
+    payload["workloads"][0]["comparisons"]["v0.29"]["size_status"] = "unavailable"
+    payload["workloads"][0]["comparisons"]["v0.30"]["size_status"] = "unavailable"
+    assert validate_gate_result(payload).ok
+
+
 def test_duplicate_identity_fails_closed():
     payload = _payload()
     payload["workloads"][1]["name"] = payload["workloads"][0]["name"]
