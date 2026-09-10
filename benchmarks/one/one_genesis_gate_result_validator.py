@@ -36,6 +36,7 @@ REQUIRED_COMPARISON_KEYS = (
 )
 ALLOWED_SIZE_STATUSES = {"SIZE_WIN", "SIZE_EQUAL", "SIZE_LOSS", "unavailable"}
 ALLOWED_ROW_VERDICTS = {"WIN", "FALLBACK/EQUAL", "DEBT", "LOSS", "INVALID"}
+CLEAN_ROW_VERDICTS = {"WIN", "FALLBACK/EQUAL"}
 ALLOWED_FINAL_DECISIONS = {
     "KEEP_CMPCT1_PRIMARY",
     "REACTIVATE_V030_PRIMARY",
@@ -166,6 +167,27 @@ def _validate_size_status(
         )
 
 
+def _candidate_has_hard_veto(candidate: Any) -> bool:
+    """Return true only for vetoes explicit in the frozen raw measurement schema.
+
+    The execution contract makes incorrect reconstruction, integrity/recovery weakening,
+    portability loss, reader discovery, and hidden codec/mechanism dependence veto-class.
+    This helper deliberately does not infer unrecorded resource/locality failures.
+    """
+    if not isinstance(candidate, dict):
+        return False
+    semantics = candidate.get("semantics")
+    if isinstance(semantics, dict):
+        for key in ("exact", "integrity", "recovery", "portable"):
+            if semantics.get(key) is False:
+                return True
+    reader = candidate.get("reader_burden")
+    if isinstance(reader, dict):
+        if reader.get("reader_discovery") is True or reader.get("hidden_codec") is True:
+            return True
+    return False
+
+
 def validate_gate_result(payload: Any) -> ValidationResult:
     errors: list[str] = []
     root = _require_mapping(payload, "result", errors)
@@ -273,6 +295,10 @@ def validate_gate_result(payload: Any) -> ValidationResult:
             verdict = comp.get("verdict")
             if verdict is not None and verdict not in ALLOWED_ROW_VERDICTS:
                 errors.append(f"{suite}/{name}.comparisons.{comparator} invalid verdict {verdict!r}")
+            if verdict in CLEAN_ROW_VERDICTS and _candidate_has_hard_veto(measurements.get("cmpct1")):
+                errors.append(
+                    f"{suite}/{name}.comparisons.{comparator} cannot be {verdict} with a veto-class candidate semantic/reader failure"
+                )
 
     for missing in sorted(set(expected_identities) - identities):
         errors.append(f"missing frozen gate workload identity {missing[0]}/{missing[1]}")
