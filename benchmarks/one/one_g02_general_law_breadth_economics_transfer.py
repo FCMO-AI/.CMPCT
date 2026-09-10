@@ -15,6 +15,7 @@ from experiments.one.authenticated_archive_envelope import (
     open_authenticated_archive,
 )
 from experiments.one.general_law_archive import build_general_law_archive
+from experiments.one.wire import encode_program
 
 OUT = Path("one-g02-general-law-breadth-economics-transfer.json")
 
@@ -40,6 +41,22 @@ def _opened_snapshot(source: dict[str, dict[str, Any]], opened: Any) -> tuple[di
     return observed, exact and set(observed) == set(source)
 
 
+def _wire_accounting(opened: Any, *, manifest_bytes: int, raw_auth_index_bytes: int) -> dict[str, int]:
+    encoded, stats = encode_program(opened.program)
+    return {
+        "stored_bytes": len(encoded),
+        "manifest_bytes": manifest_bytes,
+        "surprise_bytes": stats.surprise_bytes,
+        "control_integrity_bytes": stats.control_integrity_bytes,
+        "raw_auth_index_bytes": raw_auth_index_bytes,
+        "nodes": len(opened.program.nodes),
+    }
+
+
+def _decision(gates: dict[str, bool]) -> str:
+    return "ADVANCE_BREADTH_REPRESENTATION_ECONOMICS_ONLY" if all(gates.values()) else "HOLD_BREADTH_REPRESENTATION_ECONOMICS"
+
+
 def run() -> dict[str, Any]:
     with tempfile.TemporaryDirectory(prefix="one-g02-breadth-economics-") as tmp:
         root = Path(tmp) / "tree"
@@ -59,6 +76,8 @@ def run() -> dict[str, Any]:
         reader_structure, reader_structure_exact = breadth._reader_relation_structure(law_opened)
         law_ops = sorted({node.op for node in law_opened.program.nodes})
         surprise_ops = sorted({node.op for node in surprise_opened.program.nodes})
+        law_accounting = _wire_accounting(law_opened, manifest_bytes=law_stats_a.authenticated_manifest_bytes, raw_auth_index_bytes=law_stats_a.raw_auth_index_bytes)
+        surprise_accounting = _wire_accounting(surprise_opened, manifest_bytes=surprise_stats_a.authenticated_manifest_bytes, raw_auth_index_bytes=surprise_stats_a.raw_auth_index_bytes)
 
         law_bytes = len(law_wire_a)
         surprise_bytes = len(surprise_wire_a)
@@ -70,12 +89,10 @@ def run() -> dict[str, Any]:
             "reader_relation_structure_exact": reader_structure_exact,
             "generic_reader_ontology_only": set(law_ops) <= breadth.ALLOWED_OPS and set(surprise_ops) <= breadth.ALLOWED_OPS,
             "complete_stored_bytes_nonregression": law_bytes <= surprise_bytes,
+            "law_accounting_closes": law_accounting["stored_bytes"] == law_bytes,
+            "surprise_accounting_closes": surprise_accounting["stored_bytes"] == surprise_bytes,
         }
-        decision = (
-            "ADVANCE_BREADTH_REPRESENTATION_ECONOMICS_ONLY"
-            if all(gates.values())
-            else "HOLD_BREADTH_REPRESENTATION_ECONOMICS"
-        )
+        decision = _decision(gates)
         payload = {
             "schema": "cmpct-one-g02-general-law-breadth-economics-transfer-v1",
             "experimental_version": "ONE-G0.2",
@@ -83,19 +100,8 @@ def run() -> dict[str, Any]:
             "claim_boundary": "transfer-only complete persistent-byte representation economics versus authenticated Surprise-only ONE; no Genesis corpus, frozen comparator, timing/RSS promotion, scoring, or winner selection",
             "logical_source_bytes": logical_bytes,
             "gates": gates,
-            "law": {
-                "stored_bytes": law_bytes,
-                "wire_sha256": sha256(law_wire_a).hexdigest(),
-                "stats": asdict(law_stats_a),
-                "reader_ops": law_ops,
-                "reader_relation_structure": reader_structure,
-            },
-            "surprise_only": {
-                "stored_bytes": surprise_bytes,
-                "wire_sha256": sha256(surprise_wire_a).hexdigest(),
-                "stats": asdict(surprise_stats_a),
-                "reader_ops": surprise_ops,
-            },
+            "law": {"stored_bytes": law_bytes, "wire_sha256": sha256(law_wire_a).hexdigest(), "stats": asdict(law_stats_a), "accounting": law_accounting, "reader_ops": law_ops, "reader_relation_structure": reader_structure},
+            "surprise_only": {"stored_bytes": surprise_bytes, "wire_sha256": sha256(surprise_wire_a).hexdigest(), "stats": asdict(surprise_stats_a), "accounting": surprise_accounting, "reader_ops": surprise_ops},
             "stored_byte_delta": law_bytes - surprise_bytes,
             "law_over_surprise_stored_ratio": law_bytes / surprise_bytes if surprise_bytes else None,
             "genesis_comparison_executed": False,
