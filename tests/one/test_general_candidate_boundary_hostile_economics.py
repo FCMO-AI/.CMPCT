@@ -23,11 +23,14 @@ def test_hostile_candidate_boundary_falsifier_is_fail_closed_and_genesis_dark(tm
 
     for row in payload["rows"]:
         # The experiment is allowed to discover economic losses. It is not allowed to
-        # excuse semantic, determinism, or reader-ontology failures as economics.
+        # excuse semantic, determinism, reader-ontology, or missing intended structure
+        # as economics. Otherwise a Surprise fallback could vacuously earn ADVANCE.
         assert row["gates"]["law_semantics_exact"] is True
         assert row["gates"]["surprise_semantics_exact"] is True
         assert row["gates"]["deterministic_law_wire"] is True
         assert row["gates"]["generic_reader_ontology_only"] is True
+        assert row["gates"]["expected_structure_exercised"] is True
+        assert row["expected_relation_field"] == bench.EXPECTED_RELATION_FIELD[row["name"]]
         assert set(row["reader_ops"]) <= bench.ALLOWED_OPS
         assert row["law_minus_surprise_bytes"] == row["law_wire_bytes"] - row["surprise_wire_bytes"]
         assert row["decision"] == (
@@ -52,6 +55,7 @@ def test_a_single_complete_byte_regression_forces_hold():
                 "surprise_semantics_exact": True,
                 "deterministic_law_wire": True,
                 "generic_reader_ontology_only": True,
+                "expected_structure_exercised": True,
                 "complete_bytes_non_regressing": False,
             },
             "law_wire_bytes": 101,
@@ -60,6 +64,34 @@ def test_a_single_complete_byte_regression_forces_hold():
             "law_ratio": 1.01,
             "law_wire_sha256": "0" * 64,
             "surprise_wire_sha256": "1" * 64,
+            "reader_ops": ["surprise"],
+            "law_stats": {},
+            "surprise_stats": {},
+        }
+    ]
+
+    assert bench._aggregate_decision(fake_rows) == bench.HOLD
+
+
+def test_missing_intended_structure_forces_hold_even_when_bytes_do_not_regress():
+    fake_rows = [
+        {
+            "name": "synthetic-vacuous-fallback",
+            "decision": "HOLD",
+            "gates": {
+                "law_semantics_exact": True,
+                "surprise_semantics_exact": True,
+                "deterministic_law_wire": True,
+                "generic_reader_ontology_only": True,
+                "expected_structure_exercised": False,
+                "complete_bytes_non_regressing": True,
+            },
+            "law_wire_bytes": 100,
+            "surprise_wire_bytes": 100,
+            "law_minus_surprise_bytes": 0,
+            "law_ratio": 1.0,
+            "law_wire_sha256": "0" * 64,
+            "surprise_wire_sha256": "0" * 64,
             "reader_ops": ["surprise"],
             "law_stats": {},
             "surprise_stats": {},
