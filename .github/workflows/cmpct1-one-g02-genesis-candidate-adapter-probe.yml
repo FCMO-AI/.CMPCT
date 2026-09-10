@@ -12,9 +12,11 @@ on:
       - benchmarks/one/one_g02_genesis_candidate_adapter_probe.py
       - benchmarks/one/one_genesis_cmpct1_product_worker.py
       - benchmarks/one/one_genesis_selective_access_plan.py
+      - tests/one/test_general_law_archive.py
       - tests/one/test_genesis_cmpct1_product_worker.py
       - tests/one/test_genesis_selective_access_plan.py
       - docs/one/prereg/ONE_G02_GENESIS_CANDIDATE_ADAPTER_PROBE_PREREG_2026-09-10.md
+      - docs/one/prereg/ONE_G02_SELECTIVE_SAFE_DISCOVERY_GATE_PREREG_2026-09-10.md
       - docs/one/prereg/ONE_GENESIS_PRODUCT_ADAPTER_MEASUREMENT_v0.1_2026-09-10.md
       - docs/one/prereg/ONE_GENESIS_SELECTIVE_ACCESS_PLAN_v0.1_2026-09-10.md
       - .github/workflows/cmpct1-one-g02-genesis-candidate-adapter-probe.yml
@@ -27,9 +29,11 @@ on:
       - benchmarks/one/one_g02_genesis_candidate_adapter_probe.py
       - benchmarks/one/one_genesis_cmpct1_product_worker.py
       - benchmarks/one/one_genesis_selective_access_plan.py
+      - tests/one/test_general_law_archive.py
       - tests/one/test_genesis_cmpct1_product_worker.py
       - tests/one/test_genesis_selective_access_plan.py
       - docs/one/prereg/ONE_G02_GENESIS_CANDIDATE_ADAPTER_PROBE_PREREG_2026-09-10.md
+      - docs/one/prereg/ONE_G02_SELECTIVE_SAFE_DISCOVERY_GATE_PREREG_2026-09-10.md
       - docs/one/prereg/ONE_GENESIS_PRODUCT_ADAPTER_MEASUREMENT_v0.1_2026-09-10.md
       - docs/one/prereg/ONE_GENESIS_SELECTIVE_ACCESS_PLAN_v0.1_2026-09-10.md
       - .github/workflows/cmpct1-one-g02-genesis-candidate-adapter-probe.yml
@@ -52,9 +56,10 @@ jobs:
         run: test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
       - name: Install test dependencies
         run: python -m pip install -e '.[test]'
-      - name: Falsify deterministic access plan and fresh-process worker
+      - name: Falsify discovery, deterministic access plan and fresh-process worker
         run: |
           python -m pytest -q \
+            tests/one/test_general_law_archive.py \
             tests/one/test_genesis_selective_access_plan.py \
             tests/one/test_genesis_cmpct1_product_worker.py \
             | tee one-genesis-candidate-measurement-seam-tests.txt
