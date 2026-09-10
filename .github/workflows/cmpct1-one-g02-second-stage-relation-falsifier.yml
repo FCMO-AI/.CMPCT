@@ -7,10 +7,13 @@ on:
       - experiments/one/general_law_archive.py
       - benchmarks/one/one_g02_second_stage_relation_falsifier.py
       - benchmarks/one/one_g02_second_stage_relation_kernel_ab.py
+      - benchmarks/one/one_g02_second_stage_dual_collision_tail.py
       - tests/one/test_second_stage_relation_falsifier.py
       - tests/one/test_second_stage_relation_kernel_ab.py
+      - tests/one/test_second_stage_dual_collision_tail.py
       - docs/one/prereg/ONE_G02_SECOND_STAGE_RELATION_FALSIFIER_PREREG_2026-09-10.md
       - docs/one/prereg/ONE_G02_SECOND_STAGE_RELATION_KERNEL_AB_PREREG_2026-09-10.md
+      - docs/one/prereg/ONE_G02_SECOND_STAGE_DUAL_COLLISION_TAIL_PREREG_2026-09-10.md
       - .github/workflows/cmpct1-one-g02-second-stage-relation-falsifier.yml
   pull_request:
     branches: [agent/v030-authoritative-integration]
@@ -18,10 +21,13 @@ on:
       - experiments/one/general_law_archive.py
       - benchmarks/one/one_g02_second_stage_relation_falsifier.py
       - benchmarks/one/one_g02_second_stage_relation_kernel_ab.py
+      - benchmarks/one/one_g02_second_stage_dual_collision_tail.py
       - tests/one/test_second_stage_relation_falsifier.py
       - tests/one/test_second_stage_relation_kernel_ab.py
+      - tests/one/test_second_stage_dual_collision_tail.py
       - docs/one/prereg/ONE_G02_SECOND_STAGE_RELATION_FALSIFIER_PREREG_2026-09-10.md
       - docs/one/prereg/ONE_G02_SECOND_STAGE_RELATION_KERNEL_AB_PREREG_2026-09-10.md
+      - docs/one/prereg/ONE_G02_SECOND_STAGE_DUAL_COLLISION_TAIL_PREREG_2026-09-10.md
       - .github/workflows/cmpct1-one-g02-second-stage-relation-falsifier.yml
   workflow_dispatch:
 
@@ -48,11 +54,18 @@ jobs:
       - name: Install test dependencies
         run: python -m pip install -e '.[test]'
       - name: Run hostile falsifiers
-        run: python -m pytest -q tests/one/test_second_stage_relation_falsifier.py tests/one/test_second_stage_relation_kernel_ab.py | tee one-g02-second-stage-relation-falsifier-tests.txt
+        run: |
+          python -m pytest -q \
+            tests/one/test_second_stage_relation_falsifier.py \
+            tests/one/test_second_stage_relation_kernel_ab.py \
+            tests/one/test_second_stage_dual_collision_tail.py \
+            | tee one-g02-second-stage-relation-falsifier-tests.txt
       - name: Run preregistered transfer oracle
         run: python -m benchmarks.one.one_g02_second_stage_relation_falsifier | tee one-g02-second-stage-relation-falsifier.txt
       - name: Run preregistered isolated relation-kernel A/B
         run: python -m benchmarks.one.one_g02_second_stage_relation_kernel_ab | tee one-g02-second-stage-relation-kernel-ab.txt
+      - name: Run preregistered dual-collision tail supplement
+        run: python -m benchmarks.one.one_g02_second_stage_dual_collision_tail | tee one-g02-second-stage-dual-collision-tail.txt
       - name: Assert claim boundaries
         run: |
           python - <<'PY'
@@ -60,6 +73,7 @@ jobs:
           from pathlib import Path
           p = json.loads(Path('one-g02-second-stage-relation-falsifier.json').read_text())
           k = json.loads(Path('one-g02-second-stage-relation-kernel-ab.json').read_text())
+          t = json.loads(Path('one-g02-second-stage-dual-collision-tail.json').read_text())
           assert p['schema'] == 'cmpct-one-g02-second-stage-relation-falsifier-v1'
           assert p['writer_sample_points'] == 16
           assert p['frozen_oracle_sample_points'] == 16
@@ -82,14 +96,28 @@ jobs:
               'HOLD_SECOND_STAGE_RELATION_KERNEL',
               'RETIRE_SECOND_STAGE_RELATION_KERNEL',
           }
-          for doc in (p, k):
+          assert t['schema'] == 'cmpct-one-g02-second-stage-dual-collision-tail-v1'
+          assert t['timing_boundary'] == 'post-primary-sampler-and-nomination'
+          assert t['relations'] == ['add8', 'xor']
+          assert t['lengths'] == [4096, 16384, 65536, 262144]
+          assert t['kind'] == 'dual_collision_late'
+          assert t['repetitions'] == 101
+          assert t['does_not_modify_v3_kernel_decision'] is True
+          assert t['decision'] in {
+              'ADVANCE_SECOND_STAGE_DUAL_COLLISION_TAIL_SAFETY_ONLY',
+              'HOLD_SECOND_STAGE_DUAL_COLLISION_TAIL',
+              'RETIRE_SECOND_STAGE_DUAL_COLLISION_TAIL',
+          }
+          for doc in (p, k, t):
               for flag in ('genesis_inputs_executed', 'genesis_comparison_executed', 'genesis_scoring_executed', 'genesis_winner_selected'):
                   assert doc[flag] is False
           print('oracle_decision=' + p['decision'])
-          print('oracle_summary=', p['summary'])
           print('kernel_decision=' + k['decision'])
           print('kernel_hypotheses=', k['hypotheses'])
           print('kernel_summary=', k['summary'])
+          print('tail_decision=' + t['decision'])
+          print('tail_hypotheses=', t['hypotheses'])
+          print('tail_summary=', t['summary'])
           PY
       - name: Retain exact-source evidence
         if: always()
@@ -101,6 +129,8 @@ jobs:
             one-g02-second-stage-relation-falsifier.txt
             one-g02-second-stage-relation-kernel-ab.json
             one-g02-second-stage-relation-kernel-ab.txt
+            one-g02-second-stage-dual-collision-tail.json
+            one-g02-second-stage-dual-collision-tail.txt
             one-g02-second-stage-relation-falsifier-tests.txt
           if-no-files-found: warn
           retention-days: 30
