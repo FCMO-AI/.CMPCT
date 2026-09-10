@@ -29,6 +29,11 @@ CREATOR_SURFACE = "experiments/one/general_law_archive.py"
 READER_SURFACE = "experiments/one/authenticated_archive_envelope.py"
 RUNTIME_TREE = "experiments/one"
 CERTIFIED_STATUS = "CERTIFIED_FOR_GENESIS"
+FORBIDDEN_TRANSFER_MODULE_FRAGMENTS = (
+    "one_genesis_gate_readiness",
+    "neutral_hostile",
+    "resemblance_hostile",
+)
 
 
 def _peak_rss_bytes() -> int:
@@ -150,6 +155,20 @@ def _authorize(transfer_fixture: bool) -> dict[str, Any]:
     }
 
 
+def _transfer_import_attestation() -> dict[str, Any]:
+    loaded = sorted(
+        name
+        for name in sys.modules
+        if any(fragment in name for fragment in FORBIDDEN_TRANSFER_MODULE_FRAGMENTS)
+    )
+    if loaded:
+        raise RuntimeError(f"transfer worker imported Genesis workload authority: {loaded}")
+    return {
+        "genesis_workload_modules_imported": False,
+        "forbidden_module_fragments": list(FORBIDDEN_TRANSFER_MODULE_FRAGMENTS),
+    }
+
+
 def _timed(call):
     cpu0 = time.process_time()
     wall0 = time.perf_counter()
@@ -262,10 +281,12 @@ def run(*, mode: str, root: Path, archive: Path, member: str | None, transfer_fi
         phase = _selective(root, archive, member)
     else:
         raise RuntimeError(f"unknown mode: {mode}")
+    transfer_attestation = _transfer_import_attestation() if transfer_fixture else {}
     return {
         "schema": SCHEMA,
         "experimental_version": "ONE-G0.2",
         "authorization": auth,
+        **transfer_attestation,
         "scoring_executed": False,
         "winner_selected": False,
         **phase,
