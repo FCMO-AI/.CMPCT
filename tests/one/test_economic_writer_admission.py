@@ -5,6 +5,7 @@ from pathlib import Path
 
 import pytest
 
+from benchmarks.one.one_g02_economic_writer_admission import _timing_regression
 from experiments.one.authenticated_archive_envelope import open_authenticated_archive
 from experiments.one.general_law_archive import (
     build_general_law_archive,
@@ -61,7 +62,16 @@ def test_marginal_model_rejects_unknown_relation_and_negative_length() -> None:
         predicted_law_complete_delta_bytes("add8", -1)
 
 
-def test_tiny_add8_rejection_becomes_surprise_and_avoids_exact_proof(tmp_path: Path) -> None:
+def test_project_timing_gate_requires_both_relative_and_absolute_regression() -> None:
+    # Large relative noise below 3 ms is not a confirmed project regression.
+    assert not _timing_regression(0.0129, 0.0100)
+    # More than 3 ms but <=5% is also not a confirmed regression.
+    assert not _timing_regression(0.1031, 0.1000)
+    # Both gates must be exceeded.
+    assert _timing_regression(0.1060, 0.1000)
+
+
+def test_tiny_add8_rejection_becomes_surprise_avoids_proof_and_reads_selectively(tmp_path: Path) -> None:
     root = tmp_path / "tiny-add8"
     _write_relation(root, "add8", 8)
     current, current_stats = build_general_law_archive(root)
@@ -70,7 +80,12 @@ def test_tiny_add8_rejection_becomes_surprise_and_avoids_exact_proof(tmp_path: P
     assert _target_op(economic) == "surprise"
     assert len(economic) < len(current)
     assert economic_stats.discovery_exact_proof_bytes < current_stats.discovery_exact_proof_bytes
-    assert open_authenticated_archive(economic).read_file("01-target.bin") == (root / "01-target.bin").read_bytes()
+    opened = open_authenticated_archive(economic)
+    target = (root / "01-target.bin").read_bytes()
+    assert opened.read_file("01-target.bin") == target
+    selective, selective_stats = opened.read_range("01-target.bin", 2, 4)
+    assert selective == target[2:6]
+    assert selective_stats.requested_bytes == 4
 
 
 def test_break_even_add8_is_preserved_as_same_generic_law(tmp_path: Path) -> None:
@@ -84,7 +99,7 @@ def test_break_even_add8_is_preserved_as_same_generic_law(tmp_path: Path) -> Non
     assert current_stats == economic_stats
 
 
-def test_profitable_xor_is_preserved_wire_identically(tmp_path: Path) -> None:
+def test_profitable_xor_is_preserved_wire_identically_and_reads_selectively(tmp_path: Path) -> None:
     root = tmp_path / "profitable-xor"
     _write_relation(root, "xor", 32)
     current, current_stats = build_general_law_archive(root)
@@ -93,6 +108,11 @@ def test_profitable_xor_is_preserved_wire_identically(tmp_path: Path) -> None:
     assert _target_op(economic) == "xor"
     assert current == economic
     assert current_stats == economic_stats
+    opened = open_authenticated_archive(economic)
+    target = (root / "01-target.bin").read_bytes()
+    selective, selective_stats = opened.read_range("01-target.bin", 11, 7)
+    assert selective == target[11:18]
+    assert selective_stats.requested_bytes == 7
 
 
 def test_default_writer_policy_remains_unchanged(tmp_path: Path) -> None:
