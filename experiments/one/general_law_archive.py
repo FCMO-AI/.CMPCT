@@ -40,6 +40,17 @@ from .wire import encode_program
 
 SAMPLE_POINTS = 16
 
+# Frozen ONE-G0.2 transfer-calibrated marginal representation terms.  These are fixed
+# serialization-cost estimates, not learned corpus thresholds: predicted complete-wire
+# delta is K_relation - target_length.  Product-default use remains separately gated by
+# the writer-integration experiment preregistered on 2026-09-10.
+MARGINAL_FIXED_COST_BYTES = {
+    "exact_reuse": -3,
+    "fill": 1,
+    "add8": 11,
+    "xor": 11,
+}
+
 
 @dataclass(frozen=True)
 class GeneralLawArchiveStats:
@@ -64,6 +75,25 @@ class GeneralLawArchiveStats:
     add8_roots: int
     xor_roots: int
     surprise_roots: int
+
+
+def predicted_law_complete_delta_bytes(relation: str, target_length: int) -> int:
+    """Return the frozen O(1) marginal complete-wire delta estimate for one Law.
+
+    The model intentionally depends only on relation representation and target length,
+    both already known to the encoder.  It performs no corpus lookup and allocates no
+    target-sized state.
+    """
+    if relation not in MARGINAL_FIXED_COST_BYTES:
+        raise OneError(f"unsupported marginal-cost relation: {relation}")
+    if target_length < 0:
+        raise OneError("target length must be non-negative")
+    return MARGINAL_FIXED_COST_BYTES[relation] - target_length
+
+
+def economically_admit_law(relation: str, target_length: int) -> bool:
+    """Admit only candidates predicted not to increase complete persisted bytes."""
+    return predicted_law_complete_delta_bytes(relation, target_length) <= 0
 
 
 def _sample_positions(length: int) -> tuple[int, ...]:
@@ -101,8 +131,15 @@ def _discover_root(
     digest: str,
     nodes: list[Node],
     previous: tuple[bytes, str, Ref] | None,
+    *,
+    economic_admission: bool = False,
 ) -> tuple[Ref, str, int, int]:
-    """Return (root ref, class, sampled bytes, exact-proof bytes)."""
+    """Return (root ref, class, sampled bytes, exact-proof bytes).
+
+    When ``economic_admission`` is enabled, sampled ADD8/XOR nominations that the frozen
+    marginal-cost model predicts would increase complete wire bytes are rejected before
+    their O(n) exact-proof scan.  Predicted admissions still require the same exact proof.
+    """
     sampled = 0
     proof = 0
     positions = _sample_positions(len(data))
@@ -112,17 +149,25 @@ def _discover_root(
         if len(prior_data) == len(data) and prior_digest == digest:
             proof += len(data) * 2
             if data == prior_data:
-                return prior_ref, "exact_reuse", sampled, proof
+                # Exact reuse is economically admissible for every non-negative length
+                # under the frozen model (K=-3), but keep the explicit policy check so the
+                # selection rule remains uniform and independently testable.
+                if not economic_admission or economically_admit_law("exact_reuse", len(data)):
+                    return prior_ref, "exact_reuse", sampled, proof
 
     if data:
         value = data[positions[0]]
         sampled += len(positions)
         if all(data[index] == value for index in positions):
-            proof += len(data)
-            if _all_equal(data, value):
-                node_id = len(nodes)
-                nodes.append(Node("fill", count=len(data), value=value, declared_length=len(data)))
-                return Ref(node_id), "fill", sampled, proof
+            # Fill has K=1 and every non-empty target is non-regressing.  The check is
+            # deliberately before the full proof so future representation changes remain
+            # fail-closed rather than assuming Fill is always free.
+            if not economic_admission or economically_admit_law("fill", len(data)):
+                proof += len(data)
+                if _all_equal(data, value):
+                    node_id = len(nodes)
+                    nodes.append(Node("fill", count=len(data), value=value, declared_length=len(data)))
+                    return Ref(node_id), "fill", sampled, proof
 
     if previous is not None:
         prior_data, _prior_digest, prior_ref = previous
@@ -138,29 +183,36 @@ def _discover_root(
             delta = (data[positions[0]] - prior_data[positions[0]]) & 0xFF
             sampled += len(positions) * 2
             if all(((prior_data[index] + delta) & 0xFF) == data[index] for index in positions):
-                proof += len(data) * 2
-                if _all_add8(prior_data, data, delta):
-                    fill_id = len(nodes)
-                    nodes.append(Node("fill", count=len(data), value=delta, declared_length=len(data)))
-                    law_id = len(nodes)
-                    nodes.append(Node("add8", refs=(prior_ref, Ref(fill_id)), declared_length=len(data)))
-                    return Ref(law_id), "add8", sampled, proof
+                # Reject a known-negative candidate before spending O(n) exact-proof work.
+                if not economic_admission or economically_admit_law("add8", len(data)):
+                    proof += len(data) * 2
+                    if _all_add8(prior_data, data, delta):
+                        fill_id = len(nodes)
+                        nodes.append(Node("fill", count=len(data), value=delta, declared_length=len(data)))
+                        law_id = len(nodes)
+                        nodes.append(Node("add8", refs=(prior_ref, Ref(fill_id)), declared_length=len(data)))
+                        return Ref(law_id), "add8", sampled, proof
 
             mask = data[positions[0]] ^ prior_data[positions[0]]
             sampled += len(positions) * 2
             if all((prior_data[index] ^ mask) == data[index] for index in positions):
-                proof += len(data) * 2
-                if _all_xor(prior_data, data, mask):
-                    fill_id = len(nodes)
-                    nodes.append(Node("fill", count=len(data), value=mask, declared_length=len(data)))
-                    law_id = len(nodes)
-                    nodes.append(Node("xor", refs=(prior_ref, Ref(fill_id)), declared_length=len(data)))
-                    return Ref(law_id), "xor", sampled, proof
+                if not economic_admission or economically_admit_law("xor", len(data)):
+                    proof += len(data) * 2
+                    if _all_xor(prior_data, data, mask):
+                        fill_id = len(nodes)
+                        nodes.append(Node("fill", count=len(data), value=mask, declared_length=len(data)))
+                        law_id = len(nodes)
+                        nodes.append(Node("xor", refs=(prior_ref, Ref(fill_id)), declared_length=len(data)))
+                        return Ref(law_id), "xor", sampled, proof
 
     return _file_nodes(data, nodes), "surprise", sampled, proof
 
 
-def build_general_law_archive(source: Path) -> tuple[bytes, GeneralLawArchiveStats]:
+def build_general_law_archive(
+    source: Path,
+    *,
+    economic_admission: bool = False,
+) -> tuple[bytes, GeneralLawArchiveStats]:
     source = Path(source)
     if not source.is_dir():
         raise OneError("archive source must be a directory")
@@ -212,7 +264,13 @@ def build_general_law_archive(source: Path) -> tuple[bytes, GeneralLawArchiveSta
         if logical_total > MAX_ARCHIVE_LOGICAL_BYTES:
             raise OneError("archive logical bytes exceed research cap")
         digest = sha256(data).hexdigest()
-        ref, relation, sampled, proved = _discover_root(data, digest, nodes, previous)
+        ref, relation, sampled, proved = _discover_root(
+            data,
+            digest,
+            nodes,
+            previous,
+            economic_admission=economic_admission,
+        )
         sampled_bytes += sampled
         proof_bytes += proved
         classes[relation] += 1
