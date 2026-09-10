@@ -10,6 +10,7 @@ on:
       - benchmarks/one/one_g02_crystallization_marginal_cost_model.py
       - benchmarks/one/one_g02_economic_writer_admission.py
       - benchmarks/one/one_g02_economic_writer_admission_worker.py
+      - benchmarks/one/one_g02_economic_writer_admission_oracle.py
       - benchmarks/one/one_g02_economic_writer_selective_validation.py
       - tests/one/test_crystallization_marginal_cost_model.py
       - tests/one/test_economic_writer_admission.py
@@ -25,6 +26,7 @@ on:
       - benchmarks/one/one_g02_crystallization_marginal_cost_model.py
       - benchmarks/one/one_g02_economic_writer_admission.py
       - benchmarks/one/one_g02_economic_writer_admission_worker.py
+      - benchmarks/one/one_g02_economic_writer_admission_oracle.py
       - benchmarks/one/one_g02_economic_writer_selective_validation.py
       - tests/one/test_crystallization_marginal_cost_model.py
       - tests/one/test_economic_writer_admission.py
@@ -115,6 +117,8 @@ jobs:
         run: python -m pytest -q tests/one/test_economic_writer_admission.py | tee one-g02-economic-writer-admission-tests.txt
       - name: Run preregistered writer-admission transfer experiment
         run: python -m benchmarks.one.one_g02_economic_writer_admission | tee one-g02-economic-writer-admission.txt
+      - name: Run independent admission oracle
+        run: python -m benchmarks.one.one_g02_economic_writer_admission_oracle | tee one-g02-economic-writer-admission-oracle.txt
       - name: Run selective-access companion falsifier
         run: python -m benchmarks.one.one_g02_economic_writer_selective_validation | tee one-g02-economic-writer-selective-validation.txt
       - name: Assert writer-admission claim boundary
@@ -123,6 +127,7 @@ jobs:
           import json
           from pathlib import Path
           p = json.loads(Path('one-g02-economic-writer-admission.json').read_text())
+          o = json.loads(Path('one-g02-economic-writer-admission-oracle.json').read_text())
           s = json.loads(Path('one-g02-economic-writer-selective-validation.json').read_text())
           assert p['schema'] == 'cmpct-one-g02-economic-writer-admission-v1'
           assert p['frozen_model'] == {'exact_reuse': -3, 'fill': 1, 'add8': 11, 'xor': 11}
@@ -132,12 +137,17 @@ jobs:
               'HOLD_ECONOMIC_WRITER_ADMISSION',
               'RETIRE_OR_REPAIR_ECONOMIC_WRITER_ADMISSION',
           }
+          assert o['schema'] == 'cmpct-one-g02-economic-writer-admission-oracle-v1'
+          assert o['frozen_k'] == {'exact_reuse': -3, 'fill': 1, 'add8': 11, 'xor': 11}
+          assert o['decision'] in {'ADVANCE_INDEPENDENT_ADMISSION_ORACLE', 'HOLD_INDEPENDENT_ADMISSION_ORACLE'}
           assert s['schema'] == 'cmpct-one-g02-economic-writer-selective-validation-v1'
           assert s['decision'] in {'ADVANCE_ECONOMIC_WRITER_SELECTIVE_ACCESS', 'HOLD_ECONOMIC_WRITER_SELECTIVE_ACCESS'}
-          for doc in (p, s):
+          for doc in (p, o, s):
               for flag in ('genesis_inputs_executed', 'genesis_comparison_executed', 'genesis_scoring_executed', 'genesis_winner_selected'):
                   assert doc[flag] is False
           print('decision=' + p['decision'])
+          print('oracle_decision=' + o['decision'])
+          print('oracle_mismatches=', o['mismatches'])
           print('selective_decision=' + s['decision'])
           print('hypotheses=', p['hypotheses'])
           print('proof_work_reduction_bytes=', p['proof_work_reduction_bytes'])
@@ -155,6 +165,8 @@ jobs:
             one-g02-economic-writer-admission.json
             one-g02-economic-writer-admission.txt
             one-g02-economic-writer-admission-tests.txt
+            one-g02-economic-writer-admission-oracle.json
+            one-g02-economic-writer-admission-oracle.txt
             one-g02-economic-writer-selective-validation.json
             one-g02-economic-writer-selective-validation.txt
           if-no-files-found: warn
