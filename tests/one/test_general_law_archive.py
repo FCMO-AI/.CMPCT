@@ -41,14 +41,22 @@ def _roundtrip_all(root: Path, wire: bytes) -> None:
 def test_general_tree_uses_laws_and_surprise_without_changing_reader_ontology(tmp_path: Path):
     root = tmp_path / "tree"
     root.mkdir()
-    base = _pattern(32 * 1024, 11)
-    (root / "00-base.bin").write_bytes(base)
-    (root / "01-copy.bin").write_bytes(base)
-    (root / "02-add8.bin").write_bytes(bytes(((b + 37) & 0xFF) for b in base))
-    xor_source = (root / "02-add8.bin").read_bytes()
-    (root / "03-xor.bin").write_bytes(bytes((b ^ 0xA5) for b in xor_source))
-    (root / "04-fill.bin").write_bytes(b"Z" * (32 * 1024))
-    (root / "05-noise.bin").write_bytes(_pattern(32 * 1024, 97))
+    size = 32 * 1024
+
+    # Keep ADD8 and XOR on independent Surprise-seeded relation islands. This exercises
+    # both Law classes while ensuring the product seam only emits topology the promoted
+    # authenticated selective reader can lower cone-proportionally.
+    base_a = _hash_stream(size, b"general-law-base-a")
+    add_a = bytes(((b + 37) & 0xFF) for b in base_a)
+    base_b = _hash_stream(size, b"general-law-base-b")
+    xor_b = bytes((b ^ 0xA5) for b in base_b)
+    (root / "00-base-a.bin").write_bytes(base_a)
+    (root / "01-add8-a.bin").write_bytes(add_a)
+    (root / "02-base-b.bin").write_bytes(base_b)
+    (root / "03-xor-b.bin").write_bytes(xor_b)
+    (root / "04-copy-xor.bin").write_bytes(xor_b)
+    (root / "05-fill.bin").write_bytes(b"Z" * size)
+    (root / "06-noise.bin").write_bytes(_hash_stream(size, b"general-law-noise"))
     (root / "nested").mkdir()
     (root / "nested" / "tiny.txt").write_bytes(b"tiny")
     (root / "empty").write_bytes(b"")
@@ -66,6 +74,30 @@ def test_general_tree_uses_laws_and_surprise_without_changing_reader_ontology(tm
     assert stats.source_read_bytes == stats.logical_file_bytes
     assert stats.max_predictor_bytes <= max(p.stat().st_size for p in root.rglob("*") if p.is_file())
     assert {node.op for node in opened.program.nodes} <= {"surprise", "concat", "repeat", "fill", "xor", "add8"}
+
+
+def test_relation_after_law_is_pruned_to_surprise_to_preserve_selective_boundary(tmp_path: Path):
+    root = tmp_path / "tree"
+    root.mkdir()
+    size = 32 * 1024
+    base = _hash_stream(size, b"nested-law-source")
+    add = bytes(((b + 37) & 0xFF) for b in base)
+    would_be_nested_xor = bytes((b ^ 0xA5) for b in add)
+    (root / "00-base.bin").write_bytes(base)
+    (root / "01-add8.bin").write_bytes(add)
+    (root / "02-nested-xor-opportunity.bin").write_bytes(would_be_nested_xor)
+
+    wire, stats = build_general_law_archive(root)
+    opened = open_authenticated_archive(wire)
+
+    assert stats.add8_roots == 1
+    assert stats.xor_roots == 0
+    assert stats.surprise_roots == 2
+    # Third regular root must be a direct Surprise rather than a Law wrapped around Law.
+    third_entry = opened.base.entries["02-nested-xor-opportunity.bin"]
+    third_root = opened.program.roots[third_entry["root"]]
+    assert opened.program.nodes[third_root.ref.node].op == "surprise"
+    _roundtrip_all(root, wire)
 
 
 def test_unrelated_hash_streams_are_cheaply_rejected_without_exact_relation_scan(tmp_path: Path):
@@ -160,8 +192,8 @@ def test_safe_relative_symlink_semantics_match_existing_archive_reader(tmp_path:
     wire, stats = build_general_law_archive(root)
     opened = open_authenticated_archive(wire)
     assert stats.symlinks == 1
-    assert opened.entries["alias.txt"]["kind"] == "symlink"
-    assert opened.entries["alias.txt"]["target"] == "target.txt"
+    assert opened.base.entries["alias.txt"]["kind"] == "symlink"
+    assert opened.base.entries["alias.txt"]["target"] == "target.txt"
     assert opened.read_file("target.txt") == b"target"
 
 
