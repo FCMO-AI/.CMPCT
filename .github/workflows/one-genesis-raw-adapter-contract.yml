@@ -1,0 +1,65 @@
+# ci-lane: research
+name: CMPCT1 ONE raw adapter contract
+
+on:
+  push:
+    branches:
+      - research/cmpct1
+    paths:
+      - 'benchmarks/one/one_genesis_contender_raw_adapter.py'
+      - 'benchmarks/one/one_genesis_contender_workload_measurement.py'
+      - 'benchmarks/one/one_genesis_selective_access_plan.py'
+      - 'tests/one/test_genesis_contender_raw_adapter.py'
+      - 'tests/one/test_genesis_contender_workload_measurement.py'
+      - 'docs/one/prereg/ONE_GENESIS_CONTENDER_RAW_ADAPTER_ASSEMBLY_v0.1_2026-09-10.md'
+      - '.github/workflows/one-genesis-raw-adapter-contract.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  raw-adapter-contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout exact CMPCT1 source
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.sha }}
+      - name: Bind exact source
+        run: test "$(git rev-parse HEAD)" = "${GITHUB_SHA}"
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - name: Install test dependency
+        run: python -m pip install pytest
+      - name: Falsify workload and 15-row assembly contracts
+        env:
+          PYTHONPATH: ${{ github.workspace }}
+        run: |
+          python -m pytest -q \
+            tests/one/test_genesis_contender_workload_measurement.py \
+            tests/one/test_genesis_contender_raw_adapter.py \
+            | tee raw-adapter-contract-tests.txt
+      - name: Prove adapter import does not load Genesis corpus generators
+        env:
+          PYTHONPATH: ${{ github.workspace }}
+        run: |
+          python - <<'PY'
+          import sys
+          import benchmarks.one.one_genesis_contender_raw_adapter  # noqa: F401
+          forbidden = [
+              name for name in sys.modules
+              if 'neutral_hostile' in name or 'resemblance_hostile' in name
+          ]
+          assert forbidden == [], forbidden
+          PY
+      - name: Preserve contract evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: one-genesis-raw-adapter-contract-${{ github.sha }}
+          path: raw-adapter-contract-tests.txt
+          if-no-files-found: warn
+          retention-days: 90
