@@ -5,6 +5,7 @@ on:
   push:
     branches: [research/cmpct1]
     paths:
+      - benchmarks/one/genesis_gate_workload_identity_v1.json
       - benchmarks/one/one_genesis_gate_result_validator.py
       - tests/one/test_genesis_gate_result_validator.py
       - docs/one/prereg/ONE_GENESIS_GATE_EXECUTION_CONTRACT_2026-09-10.md
@@ -49,8 +50,10 @@ jobs:
               'source_sha': os.environ['EVIDENCE_HEAD'],
               'frozen_v029': '02b8b27cb2d97af7c6e0797984a898e8fa8a8e5d',
               'frozen_v030': 'f4b158a55a08b9b18b50e4e4abe4b9251048c772',
+              'readiness_source': '070d4f803c7b4441f517fc5c0b90f19214f5b05f',
+              'readiness_artifact_digest': 'sha256:a1b009dfed8deeed3a9d46ab0cc4cdaf224141c903b2c8bdcdeae32434074abd',
               'pytest_output': log.read_text() if log.exists() else 'unavailable',
-              'claim_boundary': 'artifact-shape contract only; no Genesis compression/scoring executed',
+              'claim_boundary': 'artifact-shape and exact workload-identity contract only; no Genesis compression/scoring executed',
           }
           Path('genesis-gate-result-contract.json').write_text(json.dumps(payload, indent=2) + '\n')
           PY
