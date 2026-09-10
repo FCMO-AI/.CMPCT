@@ -79,3 +79,22 @@ def test_production_worker_fails_closed_without_executor_authorization(tmp_path:
     ], env=env)
     assert result.returncode != 0
     assert "executor authorization" in result.stderr
+
+
+def test_executor_authorization_cannot_bypass_uncertified_candidate_boundary(tmp_path: Path):
+    """The calendar/executor gate must not silently choose an ineligible ONE product surface."""
+    root = tmp_path / "tree"
+    root.mkdir()
+    (root / "x").write_bytes(b"x")
+    env = os.environ.copy()
+    env["CMPCT_GENESIS_REAL_GATE_AUTHORIZED"] = "1"
+    env["CMPCT_GENESIS_SOURCE_SHA"] = subprocess.check_output(
+        ["git", "rev-parse", "HEAD"], text=True
+    ).strip()
+    result = _run([
+        "--mode", "build", "--root", str(root), "--archive", str(tmp_path / "a.one"),
+        "--output", str(tmp_path / "out.json"),
+    ], env=env)
+    assert result.returncode != 0
+    assert "candidate boundary is not certified" in result.stderr
+    assert not (tmp_path / "a.one").exists()
