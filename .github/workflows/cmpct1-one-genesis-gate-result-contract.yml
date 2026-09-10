@@ -1,4 +1,4 @@
-# ci-lane: narrow
+# ci-lane: fast
 name: CMPCT1 ONE Genesis gate result contract
 
 on:
@@ -7,7 +7,9 @@ on:
     paths:
       - benchmarks/one/genesis_gate_workload_identity_v1.json
       - benchmarks/one/one_genesis_gate_result_validator.py
+      - benchmarks/one/one_genesis_gate_executor_preflight.py
       - tests/one/test_genesis_gate_result_validator.py
+      - tests/one/test_genesis_gate_executor_preflight.py
       - docs/one/prereg/ONE_GENESIS_GATE_EXECUTION_CONTRACT_2026-09-10.md
       - docs/one/evidence/ONE_GENESIS_FROZEN_COMPARATOR_LEDGER_2026-09-09.md
       - .github/workflows/cmpct1-one-genesis-gate-result-contract.yml
@@ -35,9 +37,14 @@ jobs:
           echo "EVIDENCE_HEAD=$GITHUB_SHA" >> "$GITHUB_ENV"
       - name: Install test dependency surface
         run: python -m pip install -e '.[test]'
-      - name: Falsify gate-result contract
+      - name: Check CI topology for this workflow
+        run: python tools/check_ci_topology.py .github/workflows/cmpct1-one-genesis-gate-result-contract.yml
+      - name: Falsify gate-result and executor-preflight contracts
         run: |
-          python -m pytest -q tests/one/test_genesis_gate_result_validator.py | tee genesis-gate-result-contract.txt
+          python -m pytest -q \
+            tests/one/test_genesis_gate_result_validator.py \
+            tests/one/test_genesis_gate_executor_preflight.py \
+            | tee genesis-gate-result-contract.txt
       - name: Retain exact-source contract receipt
         if: always()
         run: |
@@ -46,14 +53,14 @@ jobs:
           from pathlib import Path
           log = Path('genesis-gate-result-contract.txt')
           payload = {
-              'schema': 'cmpct-one-genesis-gate-result-contract-receipt-v1',
+              'schema': 'cmpct-one-genesis-gate-result-contract-receipt-v2',
               'source_sha': os.environ['EVIDENCE_HEAD'],
               'frozen_v029': '02b8b27cb2d97af7c6e0797984a898e8fa8a8e5d',
               'frozen_v030': 'f4b158a55a08b9b18b50e4e4abe4b9251048c772',
               'readiness_source': '070d4f803c7b4441f517fc5c0b90f19214f5b05f',
               'readiness_artifact_digest': 'sha256:a1b009dfed8deeed3a9d46ab0cc4cdaf224141c903b2c8bdcdeae32434074abd',
               'pytest_output': log.read_text() if log.exists() else 'unavailable',
-              'claim_boundary': 'artifact-shape and exact workload-identity contract only; no Genesis compression/scoring executed',
+              'claim_boundary': 'artifact-shape, exact workload-identity, and executor-preflight contract only; no Genesis contender encoding/scoring executed',
           }
           Path('genesis-gate-result-contract.json').write_text(json.dumps(payload, indent=2) + '\n')
           PY
