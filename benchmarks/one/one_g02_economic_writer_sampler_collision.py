@@ -3,7 +3,7 @@ from __future__ import annotations
 """Transfer-only hostile falsifier for sampled Law nomination collisions.
 
 Constructs ADD8/XOR near-misses that satisfy every frozen discovery sample but disagree at
-one unsampled byte.  Genesis inputs are never used.
+one unsampled byte. Genesis inputs are never used.
 """
 
 from dataclasses import asdict
@@ -22,6 +22,7 @@ from experiments.one.general_law_archive import (
 )
 
 OUT = Path("one-g02-economic-writer-sampler-collision.json")
+FROZEN_SAMPLE_POINTS = 16
 LENGTHS = (17, 32, 256, 4096)
 RELATIONS = ("add8", "xor")
 ALLOWED_OPS = {"surprise", "concat", "repeat", "fill", "xor", "add8"}
@@ -40,9 +41,16 @@ def _oracle_sample_positions(length: int) -> tuple[int, ...]:
     """Independent transcription of the preregistered 16-point sampling geometry."""
     if length <= 0:
         return ()
-    if length <= SAMPLE_POINTS:
+    if length <= FROZEN_SAMPLE_POINTS:
         return tuple(range(length))
-    return tuple(sorted({(i * (length - 1)) // (SAMPLE_POINTS - 1) for i in range(SAMPLE_POINTS)}))
+    return tuple(
+        sorted(
+            {
+                (i * (length - 1)) // (FROZEN_SAMPLE_POINTS - 1)
+                for i in range(FROZEN_SAMPLE_POINTS)
+            }
+        )
+    )
 
 
 def _relation_holds(relation: str, source: int, target: int) -> bool:
@@ -70,10 +78,8 @@ def _write_near_miss(root: Path, relation: str, length: int) -> tuple[bytes, byt
     poison = unsampled[0]
     target[poison] ^= 0x01
 
-    source_path = root / "00-source.bin"
-    target_path = root / "01-target.bin"
-    source_path.write_bytes(source)
-    target_path.write_bytes(bytes(target))
+    (root / "00-source.bin").write_bytes(source)
+    (root / "01-target.bin").write_bytes(bytes(target))
     return source, bytes(target), poison, positions
 
 
@@ -82,7 +88,11 @@ def _snapshot(opened: Any) -> dict[str, str]:
 
 
 def _expected_snapshot(root: Path) -> dict[str, str]:
-    return {path.name: sha256(path.read_bytes()).hexdigest() for path in sorted(root.iterdir()) if path.is_file()}
+    return {
+        path.name: sha256(path.read_bytes()).hexdigest()
+        for path in sorted(root.iterdir())
+        if path.is_file()
+    }
 
 
 def _target_structure(opened: Any) -> str:
@@ -96,7 +106,9 @@ def _row(parent: Path, relation: str, length: int) -> dict[str, Any]:
     source, target, poison, oracle_positions = _write_near_miss(root, relation, length)
     writer_positions = tuple(_sample_positions(length))
 
-    sampled_relation_holds = all(_relation_holds(relation, source[index], target[index]) for index in oracle_positions)
+    sampled_relation_holds = all(
+        _relation_holds(relation, source[index], target[index]) for index in oracle_positions
+    )
     poison_breaks_relation = not _relation_holds(relation, source[poison], target[poison])
 
     current_wire, current_stats = build_general_law_archive(root, economic_admission=False)
@@ -148,7 +160,7 @@ def run() -> dict[str, Any]:
         parent = Path(td)
         rows = [_row(parent, relation, length) for relation in RELATIONS for length in LENGTHS]
 
-    h1 = all(
+    h1 = SAMPLE_POINTS == FROZEN_SAMPLE_POINTS and all(
         row["sampler_matches_frozen_oracle"]
         and row["sampled_relation_holds"]
         and row["poison_breaks_relation"]
@@ -176,10 +188,11 @@ def run() -> dict[str, Any]:
     else:
         decision = "ADVANCE_SAMPLER_COLLISION_SAFETY_ONLY"
 
-    result = {
+    return {
         "schema": "cmpct-one-g02-economic-writer-sampler-collision-v1",
         "experimental_version": "ONE-G0.2",
-        "sample_points": SAMPLE_POINTS,
+        "writer_sample_points": SAMPLE_POINTS,
+        "frozen_oracle_sample_points": FROZEN_SAMPLE_POINTS,
         "relations": list(RELATIONS),
         "lengths": list(LENGTHS),
         "rows": rows,
@@ -197,7 +210,6 @@ def run() -> dict[str, Any]:
         "genesis_scoring_executed": False,
         "genesis_winner_selected": False,
     }
-    return result
 
 
 def main() -> int:
