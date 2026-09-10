@@ -78,6 +78,28 @@ def _snapshot(opened: Any) -> dict[str, tuple[int, str]]:
     return result
 
 
+def _stable_non_regressing_length(rows: list[dict[str, Any]]) -> int | None:
+    """Return the first measured length after which every larger measured row stays non-regressing.
+
+    The preregistered decision continues to use the weaker H2 existence test. This stronger tail
+    statistic is descriptive only: it prevents a single isolated green point from being narrated as
+    a stable economic crossover and gives a future admission model a falsifiable geometry target.
+    """
+    ordered = sorted(rows, key=lambda row: row["length"])
+    for index, row in enumerate(ordered):
+        if all(tail["non_regressing"] for tail in ordered[index:]):
+            return int(row["length"])
+    return None
+
+
+def _post_first_crossover_regressions(rows: list[dict[str, Any]]) -> list[int]:
+    ordered = sorted(rows, key=lambda row: row["length"])
+    first = next((index for index, row in enumerate(ordered) if row["non_regressing"]), None)
+    if first is None:
+        return []
+    return [int(row["length"]) for row in ordered[first + 1 :] if not row["non_regressing"]]
+
+
 def _row(parent: Path, family: str, length: int) -> dict[str, Any]:
     root = parent / f"{family}-{length}"
     _build_tree(root, family, length)
@@ -130,13 +152,18 @@ def run() -> dict[str, Any]:
         for row in rows
     )
     first_non_regressing: dict[str, int | None] = {}
+    stable_non_regressing: dict[str, int | None] = {}
+    post_first_regressions: dict[str, list[int]] = {}
     eventually_non_regressing = True
     for family in FAMILIES:
         family_rows = [row for row in rows if row["family"] == family]
         hits = [row["length"] for row in family_rows if row["non_regressing"]]
         first_non_regressing[family] = min(hits) if hits else None
+        stable_non_regressing[family] = _stable_non_regressing_length(family_rows)
+        post_first_regressions[family] = _post_first_crossover_regressions(family_rows)
         eventually_non_regressing &= bool(hits)
 
+    stable_tail_all_families = all(stable_non_regressing[family] is not None for family in FAMILIES)
     tiny_regression_present = any(row["length"] <= 16 and row["candidate_minus_control_bytes"] > 0 for row in rows)
     if not structural_ok:
         decision = "RETIRE_OR_REPAIR_CRYSTALLIZATION_ECONOMICS_MODEL"
@@ -146,13 +173,16 @@ def run() -> dict[str, Any]:
         decision = "HOLD_CRYSTALLIZATION_ECONOMICS_MODEL"
 
     payload = {
-        "schema": "cmpct-one-g02-crystallization-wire-economics-geometry-v1",
+        "schema": "cmpct-one-g02-crystallization-wire-economics-geometry-v2",
         "experimental_version": "ONE-G0.2",
         "claim_boundary": "synthetic transfer complete-wire economics geometry only; descriptive crossover evidence, not a product threshold or Genesis result",
         "lengths": list(LENGTHS),
         "families": list(FAMILIES),
         "rows": rows,
         "first_non_regressing_length": first_non_regressing,
+        "stable_non_regressing_length": stable_non_regressing,
+        "post_first_crossover_regression_lengths": post_first_regressions,
+        "stable_non_regressing_tail_all_families": stable_tail_all_families,
         "tiny_regression_present": tiny_regression_present,
         "all_structural_gates_exact": structural_ok,
         "every_family_eventually_non_regressing": eventually_non_regressing,
