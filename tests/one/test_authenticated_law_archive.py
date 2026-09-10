@@ -25,7 +25,7 @@ def test_authenticated_law_archive_roundtrip_and_selective_cones(n: int) -> None
     wire, stats = build_authenticated_add8_pair_archive(previous, current)
     opened = open_authenticated_archive(wire)
 
-    assert opened.list_paths() == (CURRENT_PATH, PREVIOUS_PATH)
+    assert opened.list_paths() == (PREVIOUS_PATH, CURRENT_PATH)
     assert opened.read_file(PREVIOUS_PATH) == previous
     assert opened.read_file(CURRENT_PATH) == current
     assert opened.program.roots["f000000"].sha256 == sha256(previous).hexdigest()
