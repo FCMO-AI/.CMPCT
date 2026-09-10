@@ -12,10 +12,13 @@ on:
       - benchmarks/one/one_g02_economic_writer_admission_worker.py
       - benchmarks/one/one_g02_economic_writer_admission_oracle.py
       - benchmarks/one/one_g02_economic_writer_selective_validation.py
+      - benchmarks/one/one_g02_economic_writer_sampler_collision.py
       - tests/one/test_crystallization_marginal_cost_model.py
       - tests/one/test_economic_writer_admission.py
+      - tests/one/test_economic_writer_sampler_collision.py
       - docs/one/prereg/ONE_G02_CRYSTALLIZATION_MARGINAL_COST_MODEL_PREREG_2026-09-10.md
       - docs/one/prereg/ONE_G02_CRYSTALLIZATION_ECONOMIC_ADMISSION_WRITER_PREREG_2026-09-10.md
+      - docs/one/prereg/ONE_G02_ECONOMIC_WRITER_SAMPLER_COLLISION_PREREG_2026-09-10.md
       - .github/workflows/cmpct1-one-g02-crystallization-marginal-cost-model.yml
   pull_request:
     branches: [agent/v030-authoritative-integration]
@@ -28,10 +31,13 @@ on:
       - benchmarks/one/one_g02_economic_writer_admission_worker.py
       - benchmarks/one/one_g02_economic_writer_admission_oracle.py
       - benchmarks/one/one_g02_economic_writer_selective_validation.py
+      - benchmarks/one/one_g02_economic_writer_sampler_collision.py
       - tests/one/test_crystallization_marginal_cost_model.py
       - tests/one/test_economic_writer_admission.py
+      - tests/one/test_economic_writer_sampler_collision.py
       - docs/one/prereg/ONE_G02_CRYSTALLIZATION_MARGINAL_COST_MODEL_PREREG_2026-09-10.md
       - docs/one/prereg/ONE_G02_CRYSTALLIZATION_ECONOMIC_ADMISSION_WRITER_PREREG_2026-09-10.md
+      - docs/one/prereg/ONE_G02_ECONOMIC_WRITER_SAMPLER_COLLISION_PREREG_2026-09-10.md
       - .github/workflows/cmpct1-one-g02-crystallization-marginal-cost-model.yml
   workflow_dispatch:
 
@@ -121,6 +127,10 @@ jobs:
         run: python -m benchmarks.one.one_g02_economic_writer_admission_oracle | tee one-g02-economic-writer-admission-oracle.txt
       - name: Run selective-access companion falsifier
         run: python -m benchmarks.one.one_g02_economic_writer_selective_validation | tee one-g02-economic-writer-selective-validation.txt
+      - name: Run sampler-collision hostile falsifiers
+        run: python -m pytest -q tests/one/test_economic_writer_sampler_collision.py | tee one-g02-economic-writer-sampler-collision-tests.txt
+      - name: Run preregistered sampler-collision hostile experiment
+        run: python -m benchmarks.one.one_g02_economic_writer_sampler_collision | tee one-g02-economic-writer-sampler-collision.txt
       - name: Assert writer-admission claim boundary
         run: |
           python - <<'PY'
@@ -129,6 +139,7 @@ jobs:
           p = json.loads(Path('one-g02-economic-writer-admission.json').read_text())
           o = json.loads(Path('one-g02-economic-writer-admission-oracle.json').read_text())
           s = json.loads(Path('one-g02-economic-writer-selective-validation.json').read_text())
+          c = json.loads(Path('one-g02-economic-writer-sampler-collision.json').read_text())
           assert p['schema'] == 'cmpct-one-g02-economic-writer-admission-v1'
           assert p['frozen_model'] == {'exact_reuse': -3, 'fill': 1, 'add8': 11, 'xor': 11}
           assert p['timing_gate'] == {'relative': 0.05, 'absolute_seconds': 0.003}
@@ -142,13 +153,23 @@ jobs:
           assert o['decision'] in {'ADVANCE_INDEPENDENT_ADMISSION_ORACLE', 'HOLD_INDEPENDENT_ADMISSION_ORACLE'}
           assert s['schema'] == 'cmpct-one-g02-economic-writer-selective-validation-v1'
           assert s['decision'] in {'ADVANCE_ECONOMIC_WRITER_SELECTIVE_ACCESS', 'HOLD_ECONOMIC_WRITER_SELECTIVE_ACCESS'}
-          for doc in (p, o, s):
+          assert c['schema'] == 'cmpct-one-g02-economic-writer-sampler-collision-v1'
+          assert c['writer_sample_points'] == 16
+          assert c['frozen_oracle_sample_points'] == 16
+          assert c['decision'] in {
+              'ADVANCE_SAMPLER_COLLISION_SAFETY_ONLY',
+              'HOLD_SAMPLER_COLLISION_SAFETY',
+              'RETIRE_OR_REPAIR_SAMPLER_COLLISION_SAFETY',
+          }
+          for doc in (p, o, s, c):
               for flag in ('genesis_inputs_executed', 'genesis_comparison_executed', 'genesis_scoring_executed', 'genesis_winner_selected'):
                   assert doc[flag] is False
           print('decision=' + p['decision'])
           print('oracle_decision=' + o['decision'])
           print('oracle_mismatches=', o['mismatches'])
           print('selective_decision=' + s['decision'])
+          print('sampler_collision_decision=' + c['decision'])
+          print('sampler_collision_false_survivors=', c['false_survivors'])
           print('hypotheses=', p['hypotheses'])
           print('proof_work_reduction_bytes=', p['proof_work_reduction_bytes'])
           print('false_admits=', p['false_admits'])
@@ -169,5 +190,8 @@ jobs:
             one-g02-economic-writer-admission-oracle.txt
             one-g02-economic-writer-selective-validation.json
             one-g02-economic-writer-selective-validation.txt
+            one-g02-economic-writer-sampler-collision.json
+            one-g02-economic-writer-sampler-collision.txt
+            one-g02-economic-writer-sampler-collision-tests.txt
           if-no-files-found: warn
           retention-days: 30
