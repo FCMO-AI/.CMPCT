@@ -13,9 +13,12 @@ on:
       - experiments/one/wire.py
       - benchmarks/one/one_g02_general_law_archive_boundary.py
       - benchmarks/one/one_g02_general_law_archive_creation_profile.py
+      - benchmarks/one/one_g02_general_law_breadth_transfer.py
       - tests/one/test_general_law_archive.py
+      - tests/one/test_general_law_breadth_transfer.py
       - docs/one/prereg/ONE_G02_GENERAL_LAW_ARCHIVE_BOUNDARY_PREREG_2026-09-10.md
       - docs/one/prereg/ONE_G02_GENERAL_LAW_ARCHIVE_CREATION_PROFILE_PREREG_2026-09-10.md
+      - docs/one/prereg/ONE_G02_GENERAL_LAW_BREADTH_TRANSFER_PREREG_2026-09-10.md
       - .github/workflows/cmpct1-one-g02-general-law-archive-boundary.yml
   workflow_dispatch:
 
@@ -78,6 +81,55 @@ jobs:
             one-g02-general-law-archive-boundary.json
             one-g02-general-law-archive-boundary.txt
             one-g02-general-law-archive-tests.txt
+          if-no-files-found: warn
+          retention-days: 30
+
+  breadth-transfer:
+    needs: boundary-falsifier
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Bind exact source
+        run: test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+      - name: Install test dependencies
+        run: python -m pip install -e '.[test]'
+      - name: Run breadth transfer hostile tests
+        run: python -m pytest -q tests/one/test_general_law_breadth_transfer.py | tee one-g02-general-law-breadth-transfer-tests.txt
+      - name: Run preregistered represented-breadth falsifier
+        run: python -m benchmarks.one.one_g02_general_law_breadth_transfer | tee one-g02-general-law-breadth-transfer.txt
+      - name: Assert narrow decision boundary
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          p = json.loads(Path('one-g02-general-law-breadth-transfer.json').read_text())
+          assert p['schema'] == 'cmpct-one-g02-general-law-breadth-transfer-v1'
+          assert p['experimental_version'] == 'ONE-G0.2'
+          assert p['decision'] == 'ADVANCE_GENERAL_LAW_BREADTH_ONLY'
+          assert 'no Genesis corpus' in p['claim_boundary']
+          g = p['gates']
+          for key in (
+              'surprise_present', 'fill_present', 'exact_reuse_present',
+              'add8_present', 'xor_present', 'whole_tree_semantics_exact',
+              'deterministic_wire', 'generic_reader_ontology_only',
+          ):
+              assert g[key] is True, key
+          assert set(p['reader_ops']) <= {'surprise', 'concat', 'repeat', 'fill', 'xor', 'add8'}
+          print('breadth_transfer_decision=' + p['decision'])
+          PY
+      - name: Retain exact-source breadth evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: one-g02-general-law-breadth-transfer-${{ github.sha }}
+          path: |
+            one-g02-general-law-breadth-transfer.json
+            one-g02-general-law-breadth-transfer.txt
+            one-g02-general-law-breadth-transfer-tests.txt
           if-no-files-found: warn
           retention-days: 30
 
