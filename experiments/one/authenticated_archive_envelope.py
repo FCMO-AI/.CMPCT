@@ -70,6 +70,10 @@ class OpenedAuthenticatedArchive:
 
     def read_range(self, path: str, start: int, length: int) -> tuple[bytes, AuthenticatedNativeSelectiveStats]:
         entry = self.base._regular(path)
+        if type(start) is not int or type(length) is not int or start < 0 or length < 0:
+            raise OneError("range start/length must be non-negative integers")
+        if start + length > entry["size"]:
+            raise OneError("requested archive range exceeds file")
         tree = self.trees.get(path)
         if tree is None:
             raise OneError("archive file authentication tree missing")
@@ -137,8 +141,6 @@ def _deserialize_tree(value: Any, total_len: int) -> AuthTree:
             raise OneError("archive authentication level width invalid")
         levels.append(tuple(blob[i : i + 32] for i in range(0, len(blob), 32)))
 
-    # Validate the stored tree's own internal structure at open without reconstructing
-    # file bytes. Requested leaves are still checked against these commitments at read.
     for level_no, current in enumerate(levels[:-1], start=1):
         parent = levels[level_no]
         expected: list[bytes] = []
