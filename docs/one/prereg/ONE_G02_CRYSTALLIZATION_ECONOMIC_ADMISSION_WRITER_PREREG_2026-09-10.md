@@ -46,7 +46,7 @@ Use only synthetic/transfer trees independent of Genesis. The matrix must includ
 6. unrelated deterministic pseudo-random pairs that must remain Surprise;
 7. one mixed tree containing profitable and unprofitable opportunities together plus empty file, directory, executable mode and symlink.
 
-The builder receives only the source tree and an encoder policy switch selecting current-vs-economic admission. It receives no expected relation label, expected result, crossover, workload identity, or Genesis information.
+The builder receives only the tree path and an encoder policy switch selecting current-vs-economic admission. It receives no family label, expected relation, expected result, crossover, workload identity, or Genesis information.
 
 ## Arms
 
@@ -85,14 +85,18 @@ H3 — **semantic/representation invariance**: A and B reconstruct the exact sam
 
 H4 — **proof-work pruning**: across the tiny ADD8/XOR rejection subset, B's `discovery_exact_proof_bytes` must be strictly lower than A's. Sampling traffic may remain equal. This is the causal compute-efficiency benefit expected from early economic rejection.
 
-H5 — **creation-cost sanity**: B must not cause a material creation regression. The primary observable is median CPU/wall over repeated builds; any >10% regression with at least 1 ms absolute increase is HOLD pending explanation. Improvements are reported, not required, because microbench timing can be noisy.
+H5 — **creation-cost sanity**: B must not cause a confirmed creation regression under the repository normative timing rule in `docs/PERFORMANCE_RELEASE_GATE.md`: the median slowdown must exceed **both 5% relative and 3 ms absolute** to count as a timing regression. Improvements are reported, not required, because hosted microbench timing can be noisy.
+
+### Pre-result amendment record
+
+The first committed draft of this preregistration mistakenly used `>10% relative and >=1 ms absolute` for H5. While the exact-source integration run was still queued and before any writer-integration result was observed, the normative performance gate was reread and this mismatch was corrected to the repository-authoritative `>5%` **and** `>3 ms` rule. The admission constants, transfer matrix, byte gates, semantic gates, proof-work hypothesis, and decision vocabulary were not changed. This amendment is itself durable evidence and must not be rewritten after results arrive.
 
 H6 — **reader/access non-regression by construction**: no new reader mechanism is introduced. For rows where A and B emit the same Law shape, wire equality is preferred and must be reported. For economically rejected rows, reader work may change only because the target is Surprise rather than a Law cone; selective-read behavior must remain valid and exact.
 
 ## Decision vocabulary
 
 - `ADVANCE_ECONOMIC_WRITER_ADMISSION` only if H1-H4 hold, H3 has no hidden reader mechanism, and H5 does not trigger;
-- `HOLD_ECONOMIC_WRITER_ADMISSION` for false rejects, unexplained creation regression, missing resource evidence, or mixed-tree interaction that prevents safe promotion;
+- `HOLD_ECONOMIC_WRITER_ADMISSION` for false rejects, confirmed creation regression, missing resource evidence, or mixed-tree interaction that prevents safe promotion;
 - `RETIRE_OR_REPAIR_ECONOMIC_WRITER_ADMISSION` for any false admit that increases complete bytes, semantic failure, nondeterminism, hidden codec/opcode, result-dependent constant change, or Genesis leakage.
 
 An ADVANCE permits a later, separate commit to make economic admission the default general-Law writer policy. It does not by itself authorize Genesis scoring or claim superiority over v0.29/v0.30.
