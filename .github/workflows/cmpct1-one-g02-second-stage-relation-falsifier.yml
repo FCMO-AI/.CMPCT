@@ -1,0 +1,81 @@
+name: CMPCT1 ONE-G0.2 second-stage relation falsifier
+
+on:
+  push:
+    branches: [research/cmpct1]
+    paths:
+      - experiments/one/general_law_archive.py
+      - benchmarks/one/one_g02_second_stage_relation_falsifier.py
+      - tests/one/test_second_stage_relation_falsifier.py
+      - docs/one/prereg/ONE_G02_SECOND_STAGE_RELATION_FALSIFIER_PREREG_2026-09-10.md
+      - .github/workflows/cmpct1-one-g02-second-stage-relation-falsifier.yml
+  pull_request:
+    branches: [agent/v030-authoritative-integration]
+    paths:
+      - experiments/one/general_law_archive.py
+      - benchmarks/one/one_g02_second_stage_relation_falsifier.py
+      - tests/one/test_second_stage_relation_falsifier.py
+      - docs/one/prereg/ONE_G02_SECOND_STAGE_RELATION_FALSIFIER_PREREG_2026-09-10.md
+      - .github/workflows/cmpct1-one-g02-second-stage-relation-falsifier.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-one-g02-second-stage-relation-falsifier-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  second-stage-relation-falsifier:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Bind exact source
+        run: test "$(git rev-parse HEAD)" = "${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}"
+      - name: Install test dependencies
+        run: python -m pip install -e '.[test]'
+      - name: Run hostile falsifiers
+        run: python -m pytest -q tests/one/test_second_stage_relation_falsifier.py | tee one-g02-second-stage-relation-falsifier-tests.txt
+      - name: Run preregistered transfer oracle
+        run: python -m benchmarks.one.one_g02_second_stage_relation_falsifier | tee one-g02-second-stage-relation-falsifier.txt
+      - name: Assert claim boundary
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          p = json.loads(Path('one-g02-second-stage-relation-falsifier.json').read_text())
+          assert p['schema'] == 'cmpct-one-g02-second-stage-relation-falsifier-v1'
+          assert p['writer_sample_points'] == 16
+          assert p['frozen_oracle_sample_points'] == 16
+          assert p['relations'] == ['add8', 'xor']
+          assert p['lengths'] == [32, 256, 4096, 16384]
+          assert p['kinds'] == ['true', 'stage2_collision', 'dual_collision']
+          assert p['decision'] in {
+              'ADVANCE_SECOND_STAGE_FALSIFIER_ORACLE_ONLY',
+              'HOLD_SECOND_STAGE_FALSIFIER',
+              'RETIRE_OR_REPAIR_SECOND_STAGE_FALSIFIER',
+          }
+          for flag in ('genesis_inputs_executed', 'genesis_comparison_executed', 'genesis_scoring_executed', 'genesis_winner_selected'):
+              assert p[flag] is False
+          print('decision=' + p['decision'])
+          print('hypotheses=', p['hypotheses'])
+          print('summary=', p['summary'])
+          PY
+      - name: Retain exact-source evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: one-g02-second-stage-relation-falsifier-${{ github.event.pull_request.head.sha || github.sha }}
+          path: |
+            one-g02-second-stage-relation-falsifier.json
+            one-g02-second-stage-relation-falsifier.txt
+            one-g02-second-stage-relation-falsifier-tests.txt
+          if-no-files-found: warn
+          retention-days: 30
