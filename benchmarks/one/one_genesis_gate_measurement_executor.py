@@ -2,13 +2,13 @@ from __future__ import annotations
 
 """Sealed raw-measurement executor for the CMPCT1 Genesis gate.
 
-This module deliberately stops *before* comparison/adjudication.  Its job is to bind one
+This module deliberately stops *before* comparison/adjudication. Its job is to bind one
 candidate and the two frozen comparators to the exact 15-workload authority, execute each
 contender through an explicit adapter contract, and persist each contender's raw output
 before producing a joined raw-measurement bundle.
 
-Before 2026-09-11 America/Mexico_City only ``--fixture`` is legal.  Fixture mode never
-invokes contender code and is permanently marked synthetic/non-evidence.  Real execution
+Before 2026-09-11 America/Mexico_City only ``--fixture`` is legal. Fixture mode never
+invokes contender code and is permanently marked synthetic/non-evidence. Real execution
 requires both the calendar gate and the explicit ``--execute-real-gate`` switch.
 """
 
@@ -18,15 +18,10 @@ import json
 import os
 from pathlib import Path
 import subprocess
-import sys
 from typing import Any
 from zoneinfo import ZoneInfo
 
-from benchmarks.one.one_genesis_gate_executor_preflight import (
-    V029_SHA,
-    V030_SHA,
-    build_receipt,
-)
+from benchmarks.one.one_genesis_gate_executor_preflight import V029_SHA, V030_SHA, build_plan
 
 ROOT = Path(__file__).resolve().parents[2]
 IDENTITY_MANIFEST = ROOT / "benchmarks" / "one" / "genesis_gate_workload_identity_v1.json"
@@ -86,17 +81,18 @@ def _fixture_measurement(identity: dict[str, Any], contender: str) -> dict[str, 
     logical = int(identity["logical_bytes"])
     offset = {"cmpct1": 11, "v0.29": 17, "v0.30": 23}[contender]
     stored = logical + offset
+    span = min(4096, logical)
     return {
         "stored_bytes": stored,
         "creation": {"measured": True, "cpu_s": 0.001, "wall_s": 0.001, "peak_rss_bytes": 1},
         "whole_read": {"measured": True, "cpu_s": 0.001, "wall_s": 0.001},
         "selective_access": {
             "measured": True,
-            "requested_bytes": min(4096, logical),
-            "touched_bytes": min(4096, logical),
-            "decoded_bytes": min(4096, logical),
+            "requested_bytes": span,
+            "touched_bytes": span,
+            "decoded_bytes": span,
             "authentication_bytes": 1,
-            "reconstruction_work": min(4096, logical),
+            "reconstruction_work": span,
             "temporary_bytes": 1,
         },
         "semantics": {"exact": True, "integrity": True, "recovery": True, "portable": True},
@@ -214,9 +210,9 @@ def execute(
     opened = _gate_open(now)
 
     # Reuse the already-falsified authority/candidate binding rather than reimplementing it.
-    preflight = build_receipt(candidate_sha=candidate_sha, now_value=now.isoformat(), allow_dirty_tracked_tree=False)
-    if preflight.get("verdict") != "EXECUTOR_PREFLIGHT_READY":
-        raise RuntimeError("Genesis executor preflight is not READY")
+    preflight = build_plan(candidate_sha, now=now)
+    if preflight.get("decision") != "EXECUTOR_PREFLIGHT_READY":
+        raise RuntimeError("Genesis executor preflight is not READY: " + "; ".join(preflight.get("errors", [])))
 
     if fixture:
         if execute_real_gate or adapters_path is not None or work_root is not None:
@@ -247,11 +243,12 @@ def execute(
             payload = _fixture_output(contender, sources[contender])
             _write(raw_path, payload)
         else:
+            assert work_root is not None
             payload = _adapter_output(
                 contender,
                 sources[contender],
                 adapter_manifest["adapters"][contender],
-                work_root,  # type: ignore[arg-type]
+                work_root,
                 raw_path,
             )
         _validate_raw(payload, contender, sources[contender], synthetic=fixture)
