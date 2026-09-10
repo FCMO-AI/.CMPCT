@@ -63,11 +63,13 @@ def test_marginal_model_rejects_unknown_relation_and_negative_length() -> None:
 
 
 def test_project_timing_gate_requires_both_relative_and_absolute_regression() -> None:
-    # Large relative noise below 3 ms is not a confirmed project regression.
+    # Large relative noise below the >3 ms boundary is not confirmed.
     assert not _timing_regression(0.0129, 0.0100)
-    # More than 3 ms but <=5% is also not a confirmed regression.
+    assert not _timing_regression(0.0130, 0.0100)
+    # More than 3 ms but <=5% is also not confirmed.
     assert not _timing_regression(0.1031, 0.1000)
-    # Both gates must be exceeded.
+    assert not _timing_regression(0.1050, 0.1000)
+    # Both repository gates must be strictly exceeded.
     assert _timing_regression(0.1060, 0.1000)
 
 
