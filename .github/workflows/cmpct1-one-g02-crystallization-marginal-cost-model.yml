@@ -13,12 +13,15 @@ on:
       - benchmarks/one/one_g02_economic_writer_admission_oracle.py
       - benchmarks/one/one_g02_economic_writer_selective_validation.py
       - benchmarks/one/one_g02_economic_writer_sampler_collision.py
+      - benchmarks/one/one_g02_second_stage_relation_falsifier.py
       - tests/one/test_crystallization_marginal_cost_model.py
       - tests/one/test_economic_writer_admission.py
       - tests/one/test_economic_writer_sampler_collision.py
+      - tests/one/test_second_stage_relation_falsifier.py
       - docs/one/prereg/ONE_G02_CRYSTALLIZATION_MARGINAL_COST_MODEL_PREREG_2026-09-10.md
       - docs/one/prereg/ONE_G02_CRYSTALLIZATION_ECONOMIC_ADMISSION_WRITER_PREREG_2026-09-10.md
       - docs/one/prereg/ONE_G02_ECONOMIC_WRITER_SAMPLER_COLLISION_PREREG_2026-09-10.md
+      - docs/one/prereg/ONE_G02_SECOND_STAGE_RELATION_FALSIFIER_PREREG_2026-09-10.md
       - .github/workflows/cmpct1-one-g02-crystallization-marginal-cost-model.yml
   pull_request:
     branches: [agent/v030-authoritative-integration]
@@ -32,12 +35,15 @@ on:
       - benchmarks/one/one_g02_economic_writer_admission_oracle.py
       - benchmarks/one/one_g02_economic_writer_selective_validation.py
       - benchmarks/one/one_g02_economic_writer_sampler_collision.py
+      - benchmarks/one/one_g02_second_stage_relation_falsifier.py
       - tests/one/test_crystallization_marginal_cost_model.py
       - tests/one/test_economic_writer_admission.py
       - tests/one/test_economic_writer_sampler_collision.py
+      - tests/one/test_second_stage_relation_falsifier.py
       - docs/one/prereg/ONE_G02_CRYSTALLIZATION_MARGINAL_COST_MODEL_PREREG_2026-09-10.md
       - docs/one/prereg/ONE_G02_CRYSTALLIZATION_ECONOMIC_ADMISSION_WRITER_PREREG_2026-09-10.md
       - docs/one/prereg/ONE_G02_ECONOMIC_WRITER_SAMPLER_COLLISION_PREREG_2026-09-10.md
+      - docs/one/prereg/ONE_G02_SECOND_STAGE_RELATION_FALSIFIER_PREREG_2026-09-10.md
       - .github/workflows/cmpct1-one-g02-crystallization-marginal-cost-model.yml
   workflow_dispatch:
 
@@ -131,6 +137,10 @@ jobs:
         run: python -m pytest -q tests/one/test_economic_writer_sampler_collision.py | tee one-g02-economic-writer-sampler-collision-tests.txt
       - name: Run preregistered sampler-collision hostile experiment
         run: python -m benchmarks.one.one_g02_economic_writer_sampler_collision | tee one-g02-economic-writer-sampler-collision.txt
+      - name: Run second-stage relation falsifiers
+        run: python -m pytest -q tests/one/test_second_stage_relation_falsifier.py | tee one-g02-second-stage-relation-falsifier-tests.txt
+      - name: Run preregistered second-stage relation oracle
+        run: python -m benchmarks.one.one_g02_second_stage_relation_falsifier | tee one-g02-second-stage-relation-falsifier.txt
       - name: Assert writer-admission claim boundary
         run: |
           python - <<'PY'
@@ -140,6 +150,7 @@ jobs:
           o = json.loads(Path('one-g02-economic-writer-admission-oracle.json').read_text())
           s = json.loads(Path('one-g02-economic-writer-selective-validation.json').read_text())
           c = json.loads(Path('one-g02-economic-writer-sampler-collision.json').read_text())
+          r = json.loads(Path('one-g02-second-stage-relation-falsifier.json').read_text())
           assert p['schema'] == 'cmpct-one-g02-economic-writer-admission-v1'
           assert p['frozen_model'] == {'exact_reuse': -3, 'fill': 1, 'add8': 11, 'xor': 11}
           assert p['timing_gate'] == {'relative': 0.05, 'absolute_seconds': 0.003}
@@ -161,7 +172,18 @@ jobs:
               'HOLD_SAMPLER_COLLISION_SAFETY',
               'RETIRE_OR_REPAIR_SAMPLER_COLLISION_SAFETY',
           }
-          for doc in (p, o, s, c):
+          assert r['schema'] == 'cmpct-one-g02-second-stage-relation-falsifier-v1'
+          assert r['writer_sample_points'] == 16
+          assert r['frozen_oracle_sample_points'] == 16
+          assert r['relations'] == ['add8', 'xor']
+          assert r['lengths'] == [32, 256, 4096, 16384]
+          assert r['kinds'] == ['true', 'stage2_collision', 'dual_collision']
+          assert r['decision'] in {
+              'ADVANCE_SECOND_STAGE_FALSIFIER_ORACLE_ONLY',
+              'HOLD_SECOND_STAGE_FALSIFIER',
+              'RETIRE_OR_REPAIR_SECOND_STAGE_FALSIFIER',
+          }
+          for doc in (p, o, s, c, r):
               for flag in ('genesis_inputs_executed', 'genesis_comparison_executed', 'genesis_scoring_executed', 'genesis_winner_selected'):
                   assert doc[flag] is False
           print('decision=' + p['decision'])
@@ -170,6 +192,9 @@ jobs:
           print('selective_decision=' + s['decision'])
           print('sampler_collision_decision=' + c['decision'])
           print('sampler_collision_false_survivors=', c['false_survivors'])
+          print('second_stage_decision=' + r['decision'])
+          print('second_stage_hypotheses=', r['hypotheses'])
+          print('second_stage_summary=', r['summary'])
           print('hypotheses=', p['hypotheses'])
           print('proof_work_reduction_bytes=', p['proof_work_reduction_bytes'])
           print('false_admits=', p['false_admits'])
@@ -193,5 +218,8 @@ jobs:
             one-g02-economic-writer-sampler-collision.json
             one-g02-economic-writer-sampler-collision.txt
             one-g02-economic-writer-sampler-collision-tests.txt
+            one-g02-second-stage-relation-falsifier.json
+            one-g02-second-stage-relation-falsifier.txt
+            one-g02-second-stage-relation-falsifier-tests.txt
           if-no-files-found: warn
           retention-days: 30
