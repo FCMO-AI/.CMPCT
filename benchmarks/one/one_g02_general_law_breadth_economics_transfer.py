@@ -96,9 +96,9 @@ def run() -> dict[str, Any]:
             },
             "stored_byte_delta": law_bytes - surprise_bytes,
             "law_over_surprise_stored_ratio": law_bytes / surprise_bytes if surprise_bytes else None,
-            "comparison_executed": False,
-            "scoring_executed": False,
-            "winner_selected": False,
+            "genesis_comparison_executed": False,
+            "genesis_scoring_executed": False,
+            "genesis_winner_selected": False,
         }
         OUT.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
         return payload
