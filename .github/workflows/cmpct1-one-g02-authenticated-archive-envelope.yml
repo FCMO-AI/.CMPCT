@@ -49,7 +49,7 @@ jobs:
           tests/one/test_native_law_range_plan.py
           tests/one/test_validated_program.py
       - name: Run frozen physical-accounting falsifier
-        run: python benchmarks/one/one_g02_authenticated_archive_envelope.py --output authenticated-archive-envelope.json
+        run: PYTHONPATH=. python benchmarks/one/one_g02_authenticated_archive_envelope.py --output authenticated-archive-envelope.json
       - name: Bind artifact to exact source
         run: |
           python - <<'PY'
