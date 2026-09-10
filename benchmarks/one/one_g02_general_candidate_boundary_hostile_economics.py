@@ -24,6 +24,8 @@ from experiments.one.general_law_archive import build_general_law_archive
 
 OUT = Path("one-g02-general-candidate-boundary-hostile-economics.json")
 ALLOWED_OPS = {"surprise", "concat", "repeat", "fill", "xor", "add8"}
+ADVANCE = "ADVANCE_GENERAL_CANDIDATE_BOUNDARY_ECONOMICS_PREFLIGHT"
+HOLD = "HOLD_GENERAL_CANDIDATE_BOUNDARY_ECONOMICS"
 
 
 def _hash_stream(n: int, seed: bytes) -> bytes:
@@ -181,12 +183,16 @@ def _run_row(name: str, builder: Callable[[Path], None], parent: Path) -> dict[s
     }
 
 
+def _aggregate_decision(rows: list[dict[str, Any]]) -> str:
+    """Apply the preregistered per-row no-regression rule without averaging losses away."""
+    return ADVANCE if rows and all(row["decision"] == "PASS" for row in rows) else HOLD
+
+
 def run() -> dict[str, Any]:
     with tempfile.TemporaryDirectory(prefix="one-g02-candidate-hostile-") as tmp:
         parent = Path(tmp)
         rows = [_run_row(name, builder, parent) for name, builder in BUILDERS]
 
-    all_pass = all(row["decision"] == "PASS" for row in rows)
     losing_rows = [
         {
             "name": row["name"],
@@ -199,11 +205,7 @@ def run() -> dict[str, Any]:
     payload = {
         "schema": "cmpct-one-g02-general-candidate-boundary-hostile-economics-v1",
         "experimental_version": "ONE-G0.2",
-        "decision": (
-            "ADVANCE_GENERAL_CANDIDATE_BOUNDARY_ECONOMICS_PREFLIGHT"
-            if all_pass
-            else "HOLD_GENERAL_CANDIDATE_BOUNDARY_ECONOMICS"
-        ),
+        "decision": _aggregate_decision(rows),
         "claim_boundary": (
             "transfer-only necessary-property falsifier; no Genesis inputs, comparator comparison, "
             "scoring, or winner selection"
