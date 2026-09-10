@@ -256,3 +256,19 @@ class RangeEvaluator:
             nodes_touched=len(self._touched),
             max_depth=self._max_depth_seen,
         )
+
+
+def reconstruct_range_unverified(
+    program: Program,
+    root_name: str,
+    start: int,
+    length: int,
+) -> tuple[bytes, RangeEvaluationStats]:
+    """Compatibility helper for an exact but deliberately unauthenticated root slice.
+
+    The reusable ``RangeEvaluator`` is the preferred repeated-read API. Keep this wrapper
+    because existing one-shot experiments and conformance tests depend on its explicit
+    unauthenticated contract; removing it during evaluator refactors must not silently
+    invalidate those independent checks.
+    """
+    return RangeEvaluator(program).reconstruct(root_name, start, length)
