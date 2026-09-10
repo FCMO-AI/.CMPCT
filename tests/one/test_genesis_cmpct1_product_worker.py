@@ -21,6 +21,17 @@ def _run(args: list[str], *, env: dict[str, str] | None = None) -> subprocess.Co
     )
 
 
+def _run_script(args: list[str], *, env: dict[str, str] | None = None) -> subprocess.CompletedProcess[str]:
+    """Use the exact absolute-script invocation shape used by workload measurement."""
+    return subprocess.run(
+        [sys.executable, str(worker.ROOT / "benchmarks" / "one" / "one_genesis_cmpct1_product_worker.py"), *args],
+        cwd=worker.ROOT,
+        text=True,
+        capture_output=True,
+        env=env,
+    )
+
+
 def _runtime_identity() -> dict[str, str]:
     return {
         "creator_path": worker.CREATOR_SURFACE,
@@ -92,6 +103,28 @@ def test_transfer_fixture_build_whole_and_selective_are_exact(tmp_path: Path):
     assert selected["access"]["fallback"] is False
     assert selected["scoring_executed"] is False
     assert selected["winner_selected"] is False
+
+
+def test_direct_script_transfer_fixture_imports_candidate_from_sealed_checkout(tmp_path: Path):
+    """Regression test for the actual fresh-process absolute-script invocation seam."""
+    root = tmp_path / "tree"
+    root.mkdir()
+    (root / "x.bin").write_bytes((b"direct-script-seam" * 512))
+    archive = tmp_path / "candidate.one"
+    output = tmp_path / "build.json"
+    result = _run_script([
+        "--mode", "build",
+        "--root", str(root),
+        "--archive", str(archive),
+        "--output", str(output),
+        "--transfer-fixture",
+    ])
+    assert result.returncode == 0, result.stderr
+    row = json.loads(output.read_text())
+    _assert_transfer_attestation(row)
+    assert row["phase"] == "creation"
+    assert row["stored_bytes"] == archive.stat().st_size
+    assert row["authorization"] == {"transfer_fixture": True, "production_authorized": False}
 
 
 def test_tree_semantics_reject_mode_target_kind_and_path_drift(tmp_path: Path):
