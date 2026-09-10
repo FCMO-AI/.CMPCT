@@ -102,6 +102,16 @@ def receipt(seal: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def scientific_identity_receipt(seal: dict[str, Any]) -> dict[str, Any]:
+    """Explicit API name for callers binding the portable scientific exam identity.
+
+    ``receipt`` remains the stable compatibility entrypoint.  This alias makes the
+    scientific-vs-diagnostic distinction visible at integration sites without changing
+    the serialized receipt or digest semantics.
+    """
+    return receipt(seal)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--seal", type=Path, required=True)
