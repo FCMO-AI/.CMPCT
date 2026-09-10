@@ -217,7 +217,7 @@ def _physical_seal_binding(seal: dict[str, Any], seal_path: Path) -> tuple[dict[
     """Bind both local serialized evidence and a runner-portable scientific identity.
 
     The serialized seal intentionally retains ``work_root`` for diagnosis, so its file hash is
-    machine-local evidence.  Genesis scientific identity must instead be stable across runners
+    machine-local evidence. Genesis scientific identity must instead be stable across runners
     that materialize byte-identical trees at different absolute paths.
     """
     identity = scientific_identity_receipt(seal)
@@ -242,6 +242,8 @@ def _adapter_output(
     adapter: dict[str, Any],
     work_root: Path,
     output_path: Path,
+    *,
+    real_gate_authorized: bool,
 ) -> dict[str, Any]:
     command = adapter.get("command")
     checkout = Path(str(adapter.get("checkout", ""))).resolve()
@@ -255,6 +257,9 @@ def _adapter_output(
         raise RuntimeError(f"{contender}: checkout HEAD {observed} != sealed source {source_sha}")
 
     env = os.environ.copy()
+    # Ambient authorization is never trusted. Only execute() may inject the marker after
+    # both the calendar gate and explicit --execute-real-gate switch have passed.
+    env.pop("CMPCT_GENESIS_REAL_GATE_AUTHORIZED", None)
     env.update(
         {
             "CMPCT_GENESIS_CONTENDER": contender,
@@ -263,6 +268,8 @@ def _adapter_output(
             "CMPCT_GENESIS_OUTPUT": str(output_path.resolve()),
         }
     )
+    if real_gate_authorized:
+        env["CMPCT_GENESIS_REAL_GATE_AUTHORIZED"] = "1"
     subprocess.run(command, cwd=checkout, env=env, check=True)
     if not output_path.is_file():
         raise RuntimeError(f"{contender}: adapter did not persist CMPCT_GENESIS_OUTPUT")
@@ -380,7 +387,6 @@ def execute(
     now = _now(now_value)
     opened = _gate_open(now)
 
-    # Reuse the already-falsified authority/candidate binding rather than reimplementing it.
     preflight = build_plan(candidate_sha, now=now)
     if preflight.get("decision") != "EXECUTOR_PREFLIGHT_READY":
         raise RuntimeError("Genesis executor preflight is not READY: " + "; ".join(preflight.get("errors", [])))
@@ -418,7 +424,6 @@ def execute(
         _write(physical_identity_path, physical_identity)
         physical_seal_binding["scientific_identity_path"] = str(physical_identity_path.resolve())
 
-    # Sequential persistence is intentional: a later failure cannot erase earlier raw evidence.
     for contender in CONTENDERS:
         raw_path = raw_dir / f"{contender.replace('.', '')}-raw.json"
         if fixture:
@@ -426,8 +431,6 @@ def execute(
             _write(raw_path, payload)
         else:
             assert work_root is not None
-            # The executor, not the adapter, owns input identity. Recheck before and after
-            # each contender so an adapter cannot accidentally mutate the shared exam tree.
             _assert_physical_inputs_unchanged(work_root)
             payload = _adapter_output(
                 contender,
@@ -435,6 +438,7 @@ def execute(
                 adapter_manifest["adapters"][contender],
                 work_root,
                 raw_path,
+                real_gate_authorized=True,
             )
             _assert_physical_inputs_unchanged(work_root)
         _validate_raw(payload, contender, sources[contender], synthetic=fixture)
