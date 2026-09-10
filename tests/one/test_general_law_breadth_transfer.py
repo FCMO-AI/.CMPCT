@@ -16,11 +16,22 @@ def test_preregistered_transfer_exercises_every_current_general_law_family(tmp_p
         "exact_reuse_present": True,
         "add8_present": True,
         "xor_present": True,
+        "reader_relation_structure_exact": True,
         "whole_tree_semantics_exact": True,
         "deterministic_wire": True,
         "generic_reader_ontology_only": True,
     }
     assert set(payload["reader_ops"]) <= breadth.ALLOWED_OPS
+    structure = payload["reader_relation_structure"]
+    assert structure["add_target_op"] == "add8"
+    assert structure["add_predictor_is_base"] is True
+    assert structure["add_constant_is_37"] is True
+    assert structure["xor_target_op"] == "xor"
+    assert structure["xor_predictor_is_base"] is True
+    assert structure["xor_constant_is_0xa5"] is True
+    assert structure["exact_copy_reuses_base_ref"] is True
+    assert structure["fill_op"] == "fill"
+    assert structure["noise_op"] == "surprise"
     stats = payload["stats"]
     assert stats["surprise_roots"] > 0
     assert stats["fill_roots"] > 0
