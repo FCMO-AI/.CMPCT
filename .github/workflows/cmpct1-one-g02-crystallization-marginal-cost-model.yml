@@ -8,8 +8,12 @@ on:
       - experiments/one/authenticated_archive_envelope.py
       - benchmarks/one/one_g02_crystallization_wire_economics_geometry.py
       - benchmarks/one/one_g02_crystallization_marginal_cost_model.py
+      - benchmarks/one/one_g02_economic_writer_admission.py
+      - benchmarks/one/one_g02_economic_writer_admission_worker.py
       - tests/one/test_crystallization_marginal_cost_model.py
+      - tests/one/test_economic_writer_admission.py
       - docs/one/prereg/ONE_G02_CRYSTALLIZATION_MARGINAL_COST_MODEL_PREREG_2026-09-10.md
+      - docs/one/prereg/ONE_G02_CRYSTALLIZATION_ECONOMIC_ADMISSION_WRITER_PREREG_2026-09-10.md
       - .github/workflows/cmpct1-one-g02-crystallization-marginal-cost-model.yml
   workflow_dispatch:
 
@@ -72,5 +76,55 @@ jobs:
             one-g02-crystallization-marginal-cost-model.json
             one-g02-crystallization-marginal-cost-model.txt
             one-g02-crystallization-marginal-cost-model-tests.txt
+          if-no-files-found: warn
+          retention-days: 30
+
+  economic-writer-admission:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Bind exact source
+        run: test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+      - name: Install test dependencies
+        run: python -m pip install -e '.[test]'
+      - name: Run writer-admission falsifiers
+        run: python -m pytest -q tests/one/test_economic_writer_admission.py | tee one-g02-economic-writer-admission-tests.txt
+      - name: Run preregistered writer-admission transfer experiment
+        run: python -m benchmarks.one.one_g02_economic_writer_admission | tee one-g02-economic-writer-admission.txt
+      - name: Assert writer-admission claim boundary
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          p = json.loads(Path('one-g02-economic-writer-admission.json').read_text())
+          assert p['schema'] == 'cmpct-one-g02-economic-writer-admission-v1'
+          assert p['frozen_model'] == {'exact_reuse': -3, 'fill': 1, 'add8': 11, 'xor': 11}
+          assert p['decision'] in {
+              'ADVANCE_ECONOMIC_WRITER_ADMISSION',
+              'HOLD_ECONOMIC_WRITER_ADMISSION',
+              'RETIRE_OR_REPAIR_ECONOMIC_WRITER_ADMISSION',
+          }
+          for flag in ('genesis_inputs_executed', 'genesis_comparison_executed', 'genesis_scoring_executed', 'genesis_winner_selected'):
+              assert p[flag] is False
+          assert not p['false_admits']
+          print('decision=' + p['decision'])
+          print('hypotheses=', p['hypotheses'])
+          print('proof_work_reduction_bytes=', p['proof_work_reduction_bytes'])
+          print('false_rejects=', p['false_rejects'])
+          print('timing_regressions=', p['timing_regressions'])
+          PY
+      - name: Retain exact-source writer-admission evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: one-g02-economic-writer-admission-${{ github.sha }}
+          path: |
+            one-g02-economic-writer-admission.json
+            one-g02-economic-writer-admission.txt
+            one-g02-economic-writer-admission-tests.txt
           if-no-files-found: warn
           retention-days: 30
