@@ -42,6 +42,7 @@ jobs:
           import json
           from pathlib import Path
           p = json.loads(Path('one-g02-crystallization-wire-economics-geometry.json').read_text())
+          assert p['schema'] == 'cmpct-one-g02-crystallization-wire-economics-geometry-v2'
           assert p['decision'] in {
               'ADVANCE_CRYSTALLIZATION_ECONOMICS_MODEL',
               'HOLD_CRYSTALLIZATION_ECONOMICS_MODEL',
@@ -53,6 +54,9 @@ jobs:
           print('decision=' + p['decision'])
           print('tiny_regression_present=', p['tiny_regression_present'])
           print('first_non_regressing_length=', p['first_non_regressing_length'])
+          print('stable_non_regressing_length=', p['stable_non_regressing_length'])
+          print('post_first_crossover_regression_lengths=', p['post_first_crossover_regression_lengths'])
+          print('stable_non_regressing_tail_all_families=', p['stable_non_regressing_tail_all_families'])
           PY
       - name: Retain exact-source geometry evidence
         if: always()
