@@ -10,7 +10,13 @@ on:
       - experiments/one/ir.py
       - experiments/one/wire.py
       - benchmarks/one/one_g02_genesis_candidate_adapter_probe.py
+      - benchmarks/one/one_genesis_cmpct1_product_worker.py
+      - benchmarks/one/one_genesis_selective_access_plan.py
+      - tests/one/test_genesis_cmpct1_product_worker.py
+      - tests/one/test_genesis_selective_access_plan.py
       - docs/one/prereg/ONE_G02_GENESIS_CANDIDATE_ADAPTER_PROBE_PREREG_2026-09-10.md
+      - docs/one/prereg/ONE_GENESIS_PRODUCT_ADAPTER_MEASUREMENT_v0.1_2026-09-10.md
+      - docs/one/prereg/ONE_GENESIS_SELECTIVE_ACCESS_PLAN_v0.1_2026-09-10.md
       - .github/workflows/cmpct1-one-g02-genesis-candidate-adapter-probe.yml
   pull_request:
     paths:
@@ -19,7 +25,13 @@ on:
       - experiments/one/ir.py
       - experiments/one/wire.py
       - benchmarks/one/one_g02_genesis_candidate_adapter_probe.py
+      - benchmarks/one/one_genesis_cmpct1_product_worker.py
+      - benchmarks/one/one_genesis_selective_access_plan.py
+      - tests/one/test_genesis_cmpct1_product_worker.py
+      - tests/one/test_genesis_selective_access_plan.py
       - docs/one/prereg/ONE_G02_GENESIS_CANDIDATE_ADAPTER_PROBE_PREREG_2026-09-10.md
+      - docs/one/prereg/ONE_GENESIS_PRODUCT_ADAPTER_MEASUREMENT_v0.1_2026-09-10.md
+      - docs/one/prereg/ONE_GENESIS_SELECTIVE_ACCESS_PLAN_v0.1_2026-09-10.md
       - .github/workflows/cmpct1-one-g02-genesis-candidate-adapter-probe.yml
   workflow_dispatch:
 
@@ -30,7 +42,7 @@ concurrency:
 jobs:
   adapter-falsifier:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -40,6 +52,12 @@ jobs:
         run: test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
       - name: Install test dependencies
         run: python -m pip install -e '.[test]'
+      - name: Falsify deterministic access plan and fresh-process worker
+        run: |
+          python -m pytest -q \
+            tests/one/test_genesis_selective_access_plan.py \
+            tests/one/test_genesis_cmpct1_product_worker.py \
+            | tee one-genesis-candidate-measurement-seam-tests.txt
       - name: Run transfer-only ONE adapter falsifier
         run: python -m benchmarks.one.one_g02_genesis_candidate_adapter_probe | tee one-g02-genesis-candidate-adapter-probe.txt
       - name: Enforce claim boundary
@@ -72,5 +90,6 @@ jobs:
           path: |
             one-g02-genesis-candidate-adapter-probe.json
             one-g02-genesis-candidate-adapter-probe.txt
+            one-genesis-candidate-measurement-seam-tests.txt
           if-no-files-found: warn
           retention-days: 30
