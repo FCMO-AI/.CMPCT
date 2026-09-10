@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from hashlib import sha256
 from pathlib import Path
 
 import pytest
@@ -10,6 +11,15 @@ from experiments.one.general_law_archive import SAMPLE_POINTS, _sample_positions
 
 def _pattern(n: int, seed: int = 0) -> bytes:
     return bytes(((index * 73 + (index >> 3) * 19 + seed) & 0xFF) for index in range(n))
+
+
+def _hash_stream(n: int, seed: bytes) -> bytes:
+    out = bytearray()
+    counter = 0
+    while len(out) < n:
+        out.extend(sha256(seed + counter.to_bytes(8, "little")).digest())
+        counter += 1
+    return bytes(out[:n])
 
 
 def _roundtrip_all(root: Path, wire: bytes) -> None:
@@ -58,6 +68,25 @@ def test_general_tree_uses_laws_and_surprise_without_changing_reader_ontology(tm
     assert {node.op for node in opened.program.nodes} <= {"surprise", "concat", "repeat", "fill", "xor", "add8"}
 
 
+def test_unrelated_hash_streams_are_cheaply_rejected_without_exact_relation_scan(tmp_path: Path):
+    root = tmp_path / "tree"
+    root.mkdir()
+    size = 64 * 1024
+    (root / "a.bin").write_bytes(_hash_stream(size, b"a"))
+    (root / "b.bin").write_bytes(_hash_stream(size, b"b"))
+
+    wire, stats = build_general_law_archive(root)
+    assert stats.exact_reuse_roots == 0
+    assert stats.fill_roots == 0
+    assert stats.add8_roots == 0
+    assert stats.xor_roots == 0
+    assert stats.surprise_roots == 2
+    assert stats.discovery_exact_proof_bytes == 0
+    # First file: 16 fill samples. Second: 16 fill + 32 ADD8 + 32 XOR bytes.
+    assert stats.discovery_sample_bytes == SAMPLE_POINTS * 6
+    _roundtrip_all(root, wire)
+
+
 def test_identical_tree_build_is_byte_deterministic(tmp_path: Path):
     root = tmp_path / "tree"
     root.mkdir()
@@ -103,6 +132,37 @@ def test_law_bearing_complete_archive_beats_same_authenticated_surprise_seam_on_
     assert law_stats.wire_bytes == len(law_wire)
     assert surprise_stats.wire_bytes == len(surprise_wire)
     _roundtrip_all(root, law_wire)
+
+
+def test_surprise_only_fallback_has_no_wire_tax_against_authenticated_archive_seam(tmp_path: Path):
+    root = tmp_path / "tree"
+    root.mkdir()
+    (root / "a.bin").write_bytes(_hash_stream(48 * 1024, b"left"))
+    (root / "b.bin").write_bytes(_hash_stream(47 * 1024, b"right"))
+
+    law_wire, stats = build_general_law_archive(root)
+    surprise_wire, _ = build_authenticated_archive(root)
+    assert stats.surprise_roots == 2
+    assert stats.exact_reuse_roots == stats.fill_roots == stats.add8_roots == stats.xor_roots == 0
+    assert law_wire == surprise_wire
+
+
+def test_safe_relative_symlink_semantics_match_existing_archive_reader(tmp_path: Path):
+    root = tmp_path / "tree"
+    root.mkdir()
+    (root / "target.txt").write_bytes(b"target")
+    link = root / "alias.txt"
+    try:
+        link.symlink_to("target.txt")
+    except OSError as exc:
+        pytest.skip(f"symlinks unavailable: {exc}")
+
+    wire, stats = build_general_law_archive(root)
+    opened = open_authenticated_archive(wire)
+    assert stats.symlinks == 1
+    assert opened.entries["alias.txt"]["kind"] == "symlink"
+    assert opened.entries["alias.txt"]["target"] == "target.txt"
+    assert opened.read_file("target.txt") == b"target"
 
 
 def test_sample_gate_is_fixed_size_for_large_inputs():
