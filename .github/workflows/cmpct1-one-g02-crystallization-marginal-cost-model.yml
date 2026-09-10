@@ -16,6 +16,21 @@ on:
       - docs/one/prereg/ONE_G02_CRYSTALLIZATION_MARGINAL_COST_MODEL_PREREG_2026-09-10.md
       - docs/one/prereg/ONE_G02_CRYSTALLIZATION_ECONOMIC_ADMISSION_WRITER_PREREG_2026-09-10.md
       - .github/workflows/cmpct1-one-g02-crystallization-marginal-cost-model.yml
+  pull_request:
+    branches: [agent/v030-authoritative-integration]
+    paths:
+      - experiments/one/general_law_archive.py
+      - experiments/one/authenticated_archive_envelope.py
+      - benchmarks/one/one_g02_crystallization_wire_economics_geometry.py
+      - benchmarks/one/one_g02_crystallization_marginal_cost_model.py
+      - benchmarks/one/one_g02_economic_writer_admission.py
+      - benchmarks/one/one_g02_economic_writer_admission_worker.py
+      - benchmarks/one/one_g02_economic_writer_selective_validation.py
+      - tests/one/test_crystallization_marginal_cost_model.py
+      - tests/one/test_economic_writer_admission.py
+      - docs/one/prereg/ONE_G02_CRYSTALLIZATION_MARGINAL_COST_MODEL_PREREG_2026-09-10.md
+      - docs/one/prereg/ONE_G02_CRYSTALLIZATION_ECONOMIC_ADMISSION_WRITER_PREREG_2026-09-10.md
+      - .github/workflows/cmpct1-one-g02-crystallization-marginal-cost-model.yml
   workflow_dispatch:
 
 permissions:
@@ -31,11 +46,13 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
       - name: Bind exact source
-        run: test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+        run: test "$(git rev-parse HEAD)" = "${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}"
       - name: Install test dependencies
         run: python -m pip install -e '.[test]'
       - name: Run marginal-cost falsifiers
@@ -72,7 +89,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: one-g02-crystallization-marginal-cost-model-${{ github.sha }}
+          name: one-g02-crystallization-marginal-cost-model-${{ github.event.pull_request.head.sha || github.sha }}
           path: |
             one-g02-crystallization-marginal-cost-model.json
             one-g02-crystallization-marginal-cost-model.txt
@@ -85,11 +102,13 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
       - name: Bind exact source
-        run: test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+        run: test "$(git rev-parse HEAD)" = "${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}"
       - name: Install test dependencies
         run: python -m pip install -e '.[test]'
       - name: Run writer-admission falsifiers
@@ -131,7 +150,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: one-g02-economic-writer-admission-${{ github.sha }}
+          name: one-g02-economic-writer-admission-${{ github.event.pull_request.head.sha || github.sha }}
           path: |
             one-g02-economic-writer-admission.json
             one-g02-economic-writer-admission.txt
