@@ -1,13 +1,13 @@
 """ONE-G0.2 automatic general-tree Law + Surprise authenticated archive seed.
 
-This is a research product-boundary candidate, not a Genesis winner claim.  It accepts the
+This is a research product-boundary candidate, not a Genesis winner claim. It accepts the
 same supported arbitrary tree shape as the complete archive envelope, performs bounded
 encoder-only discovery, and compiles accepted structure into the existing generic ONE
-algebra.  Unsupported structure falls back to ordinary Surprise.
+algebra. Unsupported structure falls back to ordinary Surprise.
 
 The initial discovery policy is intentionally small and auditable: only the immediately
 preceding regular file may predict the current file, and only exact reuse, Fill,
-ADD8(constant), or XOR(constant) are nominated.  Positive nominations are exact-proofed.
+ADD8(constant), or XOR(constant) are nominated. Positive nominations are exact-proofed.
 The reader performs no discovery and uses the existing authenticated archive reader.
 """
 from __future__ import annotations
@@ -68,8 +68,6 @@ def _sample_positions(length: int) -> tuple[int, ...]:
         return ()
     if length <= SAMPLE_POINTS:
         return tuple(range(length))
-    # Integer spacing is deterministic and includes both ends without retaining state
-    # proportional to the file size.
     return tuple(sorted({(i * (length - 1)) // (SAMPLE_POINTS - 1) for i in range(SAMPLE_POINTS)}))
 
 
@@ -99,7 +97,6 @@ def _discover_root(
     if previous is not None:
         prior_data, prior_digest, prior_ref = previous
         if len(prior_data) == len(data) and prior_digest == digest:
-            # Hash identity is a cheap gate; retain byte equality as the exact builder proof.
             proof += len(data) * 2
             if data == prior_data:
                 return prior_ref, "exact_reuse", sampled, proof
@@ -202,7 +199,6 @@ def build_general_law_archive(source: Path) -> tuple[bytes, GeneralLawArchiveSta
         root_name = f"f{regular_index:06d}"
         regular_index += 1
         roots[root_name] = Root(ref=ref, length=len(data), sha256=digest)
-
         base_entry = {
             "kind": "file",
             "mode": mode,
@@ -230,11 +226,22 @@ def build_general_law_archive(source: Path) -> tuple[bytes, GeneralLawArchiveSta
 
     if len(nodes) > MAX_ARCHIVE_NODES:
         raise OneError("archive node count exceeds research cap")
-    root_bytes = logical_total + len(manifest)
+
+    # Match the existing authenticated Surprise seam's resource-limit accounting exactly.
+    # This is important for fallback comparisons because Limits are serialized in ONE0:
+    # changing only a policy multiplier would otherwise create wire-byte noise unrelated
+    # to Law representation. The base seam builds with the unauthenticated manifest and
+    # then charges six work bytes per added auth-manifest byte.
+    base_root_bytes = logical_total + len(base_manifest)
+    auth_delta = len(manifest) - len(base_manifest)
+    base_work_limit = min(
+        MAX_ARCHIVE_WORK_BYTES,
+        max(1, base_root_bytes * 6 + len(nodes) * 64),
+    )
     limits = Limits(
         max_nodes=MAX_ARCHIVE_NODES,
-        max_output_bytes=max(1, root_bytes),
-        max_work_bytes=min(MAX_ARCHIVE_WORK_BYTES, max(1, root_bytes * 8 + len(nodes) * 64)),
+        max_output_bytes=max(1, logical_total + len(manifest)),
+        max_work_bytes=base_work_limit + auth_delta * 6,
         max_depth=MAX_ARCHIVE_DEPTH,
     )
     program = Program(nodes=tuple(nodes), roots=roots, limits=limits)
@@ -247,7 +254,7 @@ def build_general_law_archive(source: Path) -> tuple[bytes, GeneralLawArchiveSta
         surprise_bytes=wire_stats.surprise_bytes,
         control_integrity_bytes=wire_stats.control_integrity_bytes,
         authenticated_manifest_bytes=len(manifest),
-        auth_manifest_delta_bytes=len(manifest) - len(base_manifest),
+        auth_manifest_delta_bytes=auth_delta,
         raw_auth_index_bytes=raw_auth_index_bytes,
         source_read_bytes=source_read_bytes,
         authentication_source_reread_bytes=0,
