@@ -1,5 +1,9 @@
 name: CMPCT1 ONE-G0.2 Genesis candidate adapter probe
 
+# Exact-source re-arm before the Genesis date boundary. This changes no scientific
+# law, corpus, threshold, candidate mechanism, or reader semantics; it exists so the
+# current branch state can produce a fresh hosted transfer receipt before candidate freeze.
+
 on:
   push:
     branches:
