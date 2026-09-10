@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 from copy import deepcopy
+import inspect
 from pathlib import Path
 
 import pytest
 
 from benchmarks.one.one_genesis_gate_executor_preflight import _git_head
 from benchmarks.one import one_genesis_gate_measurement_executor as v1
+from benchmarks.one import one_genesis_gate_measurement_executor_v2 as v2
 from benchmarks.one.one_genesis_gate_measurement_executor_v2 import execute
 from benchmarks.one.one_genesis_physical_seal_identity import scientific_identity_receipt
 
@@ -38,6 +40,13 @@ def test_fixture_remains_non_evidence_and_executes_no_scientific_seal(tmp_path: 
     assert result["execution_state"]["scientific_input_identity_executed"] is False
     assert result["execution_state"]["contender_measurement_executed"] is False
     assert result["execution_state"]["scoring_executed"] is False
+
+
+def test_v2_delegates_to_one_execution_loop_instead_of_reimplementing_gate_logic():
+    source = inspect.getsource(v2.execute)
+    assert "v1.execute(" in source
+    for forbidden in ("_seal_physical_inputs(", "_adapter_output(", "_assert_physical_inputs_unchanged("):
+        assert forbidden not in source
 
 
 def test_scientific_identity_ignores_runner_root_but_diagnostic_file_does_not(tmp_path: Path):
@@ -75,7 +84,7 @@ def test_real_path_persists_scientific_identity_before_first_adapter(monkeypatch
     calls: list[str] = []
 
     def fake_adapter(contender, source_sha, adapter, root, output_path):
-        scientific = tmp_path / "raw" / "physical-input-scientific-identity.json"
+        scientific = tmp_path / "raw" / "physical-input-identity.json"
         assert scientific.is_file(), "portable identity must exist before the first contender starts"
         calls.append(contender)
         payload = v1._fixture_output(contender, source_sha)
