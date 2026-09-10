@@ -7,8 +7,11 @@ on:
       - experiments/one/general_law_archive.py
       - experiments/one/authenticated_archive_envelope.py
       - benchmarks/one/one_g02_crystallization_wire_economics_geometry.py
+      - benchmarks/one/one_g02_crystallization_marginal_cost_model.py
       - tests/one/test_crystallization_wire_economics_geometry.py
+      - tests/one/test_crystallization_marginal_cost_model.py
       - docs/one/prereg/ONE_G02_CRYSTALLIZATION_WIRE_ECONOMICS_GEOMETRY_PREREG_2026-09-10.md
+      - docs/one/prereg/ONE_G02_CRYSTALLIZATION_MARGINAL_COST_MODEL_PREREG_2026-09-10.md
       - .github/workflows/cmpct1-one-g02-crystallization-wire-economics-geometry.yml
   workflow_dispatch:
 
@@ -58,14 +61,45 @@ jobs:
           print('post_first_crossover_regression_lengths=', p['post_first_crossover_regression_lengths'])
           print('stable_non_regressing_tail_all_families=', p['stable_non_regressing_tail_all_families'])
           PY
-      - name: Retain exact-source geometry evidence
+      - name: Run marginal-cost model falsifiers
+        run: python -m pytest -q tests/one/test_crystallization_marginal_cost_model.py | tee one-g02-crystallization-marginal-cost-model-tests.txt
+      - name: Run preregistered marginal-cost model
+        run: python -m benchmarks.one.one_g02_crystallization_marginal_cost_model | tee one-g02-crystallization-marginal-cost-model.txt
+      - name: Assert marginal-cost claim boundary
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          p = json.loads(Path('one-g02-crystallization-marginal-cost-model.json').read_text())
+          assert p['schema'] == 'cmpct-one-g02-crystallization-marginal-cost-model-v1'
+          assert p['calibration_length'] == 23
+          assert 23 not in p['lengths']
+          assert p['decision'] in {
+              'ADVANCE_MARGINAL_COST_ADMISSION_MODEL',
+              'HOLD_MARGINAL_COST_ADMISSION_MODEL',
+              'RETIRE_OR_REPAIR_MARGINAL_COST_ADMISSION_MODEL',
+          }
+          for flag in ('genesis_inputs_executed', 'genesis_comparison_executed', 'genesis_scoring_executed', 'genesis_winner_selected'):
+              assert p[flag] is False
+          print('marginal_decision=' + p['decision'])
+          print('k_bytes=', p['k_bytes'])
+          print('false_admit_count=', p['false_admit_count'])
+          print('false_reject_count=', p['false_reject_count'])
+          print('sign_error_count=', p['sign_error_count'])
+          print('boundary_false_admit_count=', p['boundary_false_admit_count'])
+          print('max_abs_residual_by_family=', p['max_abs_residual_by_family'])
+          PY
+      - name: Retain exact-source geometry and marginal-cost evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: one-g02-crystallization-wire-economics-geometry-${{ github.sha }}
+          name: one-g02-crystallization-wire-economics-${{ github.sha }}
           path: |
             one-g02-crystallization-wire-economics-geometry.json
             one-g02-crystallization-wire-economics-geometry.txt
             one-g02-crystallization-wire-economics-geometry-tests.txt
+            one-g02-crystallization-marginal-cost-model.json
+            one-g02-crystallization-marginal-cost-model.txt
+            one-g02-crystallization-marginal-cost-model-tests.txt
           if-no-files-found: warn
           retention-days: 30
