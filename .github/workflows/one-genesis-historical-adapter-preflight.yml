@@ -8,7 +8,11 @@ on:
     paths:
       - 'benchmarks/one/one_genesis_physical_seal_identity.py'
       - 'benchmarks/one/one_genesis_historical_adapter_probe.py'
+      - 'benchmarks/one/one_genesis_historical_metric_normalization.py'
+      - 'benchmarks/one/one_g02_genesis_candidate_adapter_probe.py'
       - 'tests/one/test_genesis_physical_seal_identity.py'
+      - 'tests/one/test_genesis_historical_metric_normalization.py'
+      - 'docs/one/prereg/ONE_G02_GENESIS_CANDIDATE_ADAPTER_PROBE_PREREG_2026-09-10.md'
       - '.github/workflows/one-genesis-historical-adapter-preflight.yml'
   workflow_dispatch:
 
@@ -58,10 +62,14 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -e './frozen-v030[test,audio]'
           python -m pip install pytest numpy pillow reportlab python-docx openpyxl python-pptx
-      - name: Falsify portable physical-seal identity
+      - name: Falsify portable identity and metric normalization
         env:
           PYTHONPATH: ${{ github.workspace }}/cmpct1
-        run: python -m pytest -q cmpct1/tests/one/test_genesis_physical_seal_identity.py
+        run: |
+          python -m pytest -q \
+            cmpct1/tests/one/test_genesis_physical_seal_identity.py \
+            cmpct1/tests/one/test_genesis_historical_metric_normalization.py \
+            | tee receipts-contract-tests.txt
       - name: Probe frozen v0.29 on external synthetic tree
         env:
           PYTHONPATH: ${{ github.workspace }}/cmpct1
@@ -79,6 +87,14 @@ jobs:
             --contender v0.30 \
             --checkout frozen-v030 \
             --output receipts/v030.json
+      - name: Probe current ONE candidate boundary on transfer-only tree
+        env:
+          PYTHONPATH: ${{ github.workspace }}/cmpct1
+        working-directory: cmpct1
+        run: |
+          python -m benchmarks.one.one_g02_genesis_candidate_adapter_probe \
+            | tee ../receipts/one-candidate.txt
+          cp one-g02-genesis-candidate-adapter-probe.json ../receipts/one-candidate.json
       - name: Enforce pre-gate claim boundary
         run: |
           python - <<'PY'
@@ -94,12 +110,28 @@ jobs:
               assert row['comparisons_executed'] is False
               assert row['scoring_executed'] is False
               assert row['winner_selected'] is False
+          one=json.loads(Path('receipts/one-candidate.json').read_text())
+          assert one['decision'] == 'ADVANCE_ONE_ADAPTER_BOUNDARY'
+          assert one['deterministic_wire'] is True
+          assert one['whole_reconstruction_exact'] is True
+          assert one['authenticated_selective_exact'] is True
+          assert one['generic_reader_ontology_only'] is True
+          assert one['reader_burden'] == {'reader_discovery': False, 'hidden_codec': False}
+          assert one['genesis_workload_modules_imported'] is False
+          assert one['genesis_inputs_executed'] is False
+          assert one['comparison_executed'] is False
+          assert one['scoring_executed'] is False
+          assert one['winner_selected'] is False
+          assert one['complete_stored_bytes'] == one['stats']['wire_bytes']
           PY
       - name: Preserve adapter preflight receipts
         if: always()
         uses: actions/upload-artifact@v6
         with:
           name: one-genesis-historical-adapter-preflight-${{ github.sha }}
-          path: receipts/*.json
+          path: |
+            receipts/*.json
+            receipts/*.txt
+            receipts-contract-tests.txt
           if-no-files-found: warn
           retention-days: 90
