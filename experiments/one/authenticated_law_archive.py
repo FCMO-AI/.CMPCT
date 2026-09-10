@@ -21,7 +21,7 @@ from .archive_envelope import (
     _canonical_manifest,
 )
 from .auth_tree import build_auth_tree
-from .authenticated_archive_envelope import AUTH_FIELD, AUTH_LEAF_BYTES, _serialize_tree
+from .authenticated_archive_envelope import AUTH_LEAF_BYTES, _serialize_tree
 from .ir import Limits, Node, Program, Ref, Root
 from .wire import encode_program
 
@@ -34,7 +34,7 @@ ADD_VALUE = 37
 class AuthenticatedLawArchiveStats:
     logical_file_bytes: int
     wire_bytes: int
-    law_bytes: int
+    control_integrity_bytes: int
     surprise_bytes: int
     auth_index_bytes: int
     nodes: int
@@ -84,7 +84,6 @@ def build_authenticated_add8_pair_archive(previous: bytes, current: bytes, *, mo
     nodes.append(Node("surprise", surprise=manifest, declared_length=len(manifest)))
     roots[MANIFEST_ROOT] = Root(Ref(manifest_id), len(manifest), sha256(manifest).hexdigest())
 
-    # Conservative bounds cover full evaluation/hash work while remaining explicit and finite.
     logical_plus_manifest = n * 2 + len(manifest)
     limits = Limits(
         max_nodes=MAX_ARCHIVE_NODES,
@@ -98,7 +97,7 @@ def build_authenticated_add8_pair_archive(previous: bytes, current: bytes, *, mo
     return wire, AuthenticatedLawArchiveStats(
         logical_file_bytes=n * 2,
         wire_bytes=len(wire),
-        law_bytes=wstats.law_bytes,
+        control_integrity_bytes=wstats.control_integrity_bytes,
         surprise_bytes=wstats.surprise_bytes,
         auth_index_bytes=previous_tree.stored_index_bytes + current_tree.stored_index_bytes,
         nodes=len(nodes),
