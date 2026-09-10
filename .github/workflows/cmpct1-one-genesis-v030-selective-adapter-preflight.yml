@@ -5,6 +5,8 @@ on:
   push:
     branches: [research/cmpct1]
     paths:
+      - benchmarks/one/genesis_selective_access_authority_v1.json
+      - benchmarks/one/one_genesis_selective_access_authority_validator.py
       - benchmarks/one/one_genesis_v030_selective_adapter_probe.py
       - benchmarks/one/one_genesis_historical_adapter_probe.py
       - tests/one/test_genesis_v030_selective_adapter_probe.py
@@ -25,6 +27,8 @@ jobs:
     steps:
       - name: Checkout CMPCT1 exact source
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - name: Bind exact source
         run: |
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
@@ -41,6 +45,11 @@ jobs:
         run: python -m pip install -e '.[test]'
       - name: Assert frozen comparator identity
         run: test "$(git -C frozen-v030 rev-parse HEAD)" = "f4b158a55a08b9b18b50e4e4abe4b9251048c772"
+      - name: Validate frozen selective-access authority
+        run: |
+          python -m benchmarks.one.one_genesis_selective_access_authority_validator \
+            --repo . \
+            --output selective-access-authority-validation.json
       - name: Falsify selective evidence normalization
         run: python -m pytest -q tests/one/test_genesis_v030_selective_adapter_probe.py | tee v030-selective-tests.txt
       - name: Probe exact frozen selective facade on synthetic external input
@@ -55,6 +64,10 @@ jobs:
           import json
           from pathlib import Path
           p = json.loads(Path('v030-selective-probe.json').read_text())
+          a = json.loads(Path('selective-access-authority-validation.json').read_text())
+          assert a['decision'] == 'SELECTIVE_ACCESS_AUTHORITY_VALID'
+          assert a['genesis_measurement_executed'] is False
+          assert a['scoring_executed'] is False
           assert p['schema'] == 'cmpct-one-genesis-v030-selective-adapter-probe-v2'
           assert p['frozen_v030_sha'] == 'f4b158a55a08b9b18b50e4e4abe4b9251048c772'
           assert p['synthetic'] is True
@@ -76,13 +89,17 @@ jobs:
           import json, os
           from pathlib import Path
           probe = Path('v030-selective-probe.json')
+          authority = Path('selective-access-authority-validation.json')
           p = json.loads(probe.read_text()) if probe.exists() else None
+          a = json.loads(authority.read_text()) if authority.exists() else None
           receipt = {
-              'schema': 'cmpct-one-genesis-v030-selective-adapter-preflight-receipt-v1',
+              'schema': 'cmpct-one-genesis-v030-selective-adapter-preflight-receipt-v2',
               'source_sha': os.environ['EVIDENCE_HEAD'],
+              'frozen_v029_sha': '02b8b27cb2d97af7c6e0797984a898e8fa8a8e5d',
               'frozen_v030_sha': 'f4b158a55a08b9b18b50e4e4abe4b9251048c772',
+              'selective_access_authority': a if a is not None else 'unavailable',
               'probe': p if p is not None else 'unavailable',
-              'claim_boundary': 'synthetic external-tree selective API exactness/accounting availability only; no Genesis workload, contender comparison, scoring, or winner selection',
+              'claim_boundary': 'comparator selective-access authority plus synthetic external-tree v0.30 exactness/accounting availability only; no Genesis workload, contender comparison, scoring, or winner selection',
           }
           Path('v030-selective-adapter-receipt.json').write_text(json.dumps(receipt, indent=2, sort_keys=True) + '\n')
           PY
@@ -92,6 +109,7 @@ jobs:
         with:
           name: cmpct-one-v030-selective-adapter-${{ github.sha }}
           path: |
+            selective-access-authority-validation.json
             v030-selective-tests.txt
             v030-selective-probe.json
             v030-selective-adapter-receipt.json
