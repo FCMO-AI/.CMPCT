@@ -14,11 +14,14 @@ on:
       - benchmarks/one/one_g02_general_law_archive_boundary.py
       - benchmarks/one/one_g02_general_law_archive_creation_profile.py
       - benchmarks/one/one_g02_general_law_breadth_transfer.py
+      - benchmarks/one/one_g02_general_candidate_boundary_hostile_economics.py
       - tests/one/test_general_law_archive.py
       - tests/one/test_general_law_breadth_transfer.py
+      - tests/one/test_general_candidate_boundary_hostile_economics.py
       - docs/one/prereg/ONE_G02_GENERAL_LAW_ARCHIVE_BOUNDARY_PREREG_2026-09-10.md
       - docs/one/prereg/ONE_G02_GENERAL_LAW_ARCHIVE_CREATION_PROFILE_PREREG_2026-09-10.md
       - docs/one/prereg/ONE_G02_GENERAL_LAW_BREADTH_TRANSFER_PREREG_2026-09-10.md
+      - docs/one/prereg/ONE_G02_GENERAL_CANDIDATE_BOUNDARY_HOSTILE_ECONOMICS_PREREG_2026-09-10.md
       - .github/workflows/cmpct1-one-g02-general-law-archive-boundary.yml
   workflow_dispatch:
 
@@ -130,6 +133,58 @@ jobs:
             one-g02-general-law-breadth-transfer.json
             one-g02-general-law-breadth-transfer.txt
             one-g02-general-law-breadth-transfer-tests.txt
+          if-no-files-found: warn
+          retention-days: 30
+
+  candidate-boundary-economics:
+    needs: boundary-falsifier
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Bind exact source
+        run: test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+      - name: Install test dependencies
+        run: python -m pip install -e '.[test]'
+      - name: Run hostile candidate-boundary economics tests
+        run: python -m pytest -q tests/one/test_general_candidate_boundary_hostile_economics.py | tee one-g02-general-candidate-boundary-hostile-economics-tests.txt
+      - name: Run preregistered candidate-boundary economics falsifier
+        run: python -m benchmarks.one.one_g02_general_candidate_boundary_hostile_economics | tee one-g02-general-candidate-boundary-hostile-economics.txt
+      - name: Assert fail-closed decision boundary and Genesis darkness
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          p = json.loads(Path('one-g02-general-candidate-boundary-hostile-economics.json').read_text())
+          assert p['schema'] == 'cmpct-one-g02-general-candidate-boundary-hostile-economics-v1'
+          assert p['experimental_version'] == 'ONE-G0.2'
+          assert p['decision'] in {
+              'ADVANCE_GENERAL_CANDIDATE_BOUNDARY_ECONOMICS_PREFLIGHT',
+              'HOLD_GENERAL_CANDIDATE_BOUNDARY_ECONOMICS',
+          }
+          assert p['genesis_inputs_executed'] is False
+          assert p['genesis_comparison_executed'] is False
+          assert p['genesis_scoring_executed'] is False
+          assert p['genesis_winner_selected'] is False
+          assert len(p['rows']) == 7
+          if any(row['decision'] != 'PASS' for row in p['rows']):
+              assert p['decision'] == 'HOLD_GENERAL_CANDIDATE_BOUNDARY_ECONOMICS'
+          print('candidate_boundary_economics_decision=' + p['decision'])
+          for row in p['rows']:
+              print(row['name'], row['law_wire_bytes'], row['surprise_wire_bytes'], row['law_minus_surprise_bytes'], row['decision'])
+          PY
+      - name: Retain exact-source candidate-boundary economics evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: one-g02-general-candidate-boundary-economics-${{ github.sha }}
+          path: |
+            one-g02-general-candidate-boundary-hostile-economics.json
+            one-g02-general-candidate-boundary-hostile-economics.txt
+            one-g02-general-candidate-boundary-hostile-economics-tests.txt
           if-no-files-found: warn
           retention-days: 30
 
