@@ -23,6 +23,11 @@ from typing import Any
 
 
 SCHEMA = "cmpct-one-genesis-cmpct1-worker-v1"
+ROOT = Path(__file__).resolve().parents[2]
+CANDIDATE_BOUNDARY_MANIFEST = ROOT / "benchmarks" / "one" / "genesis_one_candidate_boundary_v1.json"
+CREATOR_SURFACE = "experiments/one/general_law_archive.py"
+READER_SURFACE = "experiments/one/authenticated_archive_envelope.py"
+CERTIFIED_STATUS = "CERTIFIED_FOR_GENESIS"
 
 
 def _peak_rss_bytes() -> int:
@@ -44,6 +49,39 @@ def _git_head() -> str:
     return subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
 
 
+def _assert_candidate_boundary_certified(source_sha: str) -> dict[str, Any]:
+    """Require explicit source/surface certification before any production ONE import.
+
+    Calendar/executor authorization establishes *when* measurement may run.  It does not
+    establish *what* implementation is scientifically eligible.  That second authority
+    lives in the candidate-boundary manifest and must bind the exact surfaces below.
+    """
+    try:
+        payload = json.loads(CANDIDATE_BOUNDARY_MANIFEST.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise RuntimeError("Genesis ONE candidate-boundary authority is unreadable") from exc
+    if payload.get("schema") != "cmpct-one-genesis-one-candidate-boundary-v1":
+        raise RuntimeError("Genesis ONE candidate-boundary authority has wrong schema")
+    if payload.get("status") != CERTIFIED_STATUS:
+        raise RuntimeError(
+            "Genesis ONE candidate boundary is not certified for production gate execution"
+        )
+    certified = payload.get("certified_candidate")
+    if not isinstance(certified, dict):
+        raise RuntimeError("Genesis ONE candidate certification is missing certified_candidate")
+    expected = {
+        "source_sha": source_sha,
+        "creator_path": CREATOR_SURFACE,
+        "reader_path": READER_SURFACE,
+    }
+    for field, value in expected.items():
+        if certified.get(field) != value:
+            raise RuntimeError(
+                f"Genesis ONE candidate certification {field} differs from worker surface"
+            )
+    return certified
+
+
 def _authorize(transfer_fixture: bool) -> dict[str, Any]:
     if transfer_fixture:
         return {"transfer_fixture": True, "production_authorized": False}
@@ -52,7 +90,14 @@ def _authorize(transfer_fixture: bool) -> dict[str, Any]:
     source = os.environ.get("CMPCT_GENESIS_SOURCE_SHA", "")
     if len(source) != 40 or source != _git_head():
         raise RuntimeError("production worker source SHA is not bound to checkout HEAD")
-    return {"transfer_fixture": False, "production_authorized": True, "source_sha": source}
+    certified = _assert_candidate_boundary_certified(source)
+    return {
+        "transfer_fixture": False,
+        "production_authorized": True,
+        "source_sha": source,
+        "candidate_boundary_certified": True,
+        "candidate_boundary": certified,
+    }
 
 
 def _timed(call):
