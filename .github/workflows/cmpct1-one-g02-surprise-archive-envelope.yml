@@ -39,6 +39,6 @@ jobs:
         run: >-
           python -m pytest -q
           tests/one/test_archive_envelope.py
-          tests/one/test_wire.py
+          tests/one/test_one_g01_wire.py
           tests/one/test_range_vm.py
           tests/one/test_validated_program.py
