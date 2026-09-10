@@ -17,7 +17,7 @@ from experiments.one.authenticated_archive_envelope import (
     open_authenticated_archive,
 )
 from experiments.one.ir import Node, OneError, Program, Root
-from experiments.one.wire import decode_program, encode_program
+from experiments.one.wire import encode_program
 
 
 def _fixture(root: Path) -> dict[str, bytes]:
@@ -65,7 +65,6 @@ def test_authenticated_archive_reopens_and_reads_only_requested_cones(tmp_path: 
             assert stats.cone_bytes <= max(AUTH_LEAF_BYTES * 2, length + AUTH_LEAF_BYTES * 2)
             assert stats.cone_bytes < len(original[path]) or len(original[path]) <= AUTH_LEAF_BYTES
 
-    # The >1 MiB cross-chunk request must not reconstruct the whole file.
     _, stats = archive.read_range("large.bin", CHUNK_BYTES - 31, 127)
     assert stats.cone_bytes == AUTH_LEAF_BYTES * 2
     assert stats.source_read_bytes == AUTH_LEAF_BYTES * 2
@@ -76,7 +75,10 @@ def test_authenticated_archive_reopens_and_reads_only_requested_cones(tmp_path: 
 
 
 def _mutate_manifest(wire: bytes, mutate) -> bytes:
-    program = decode_program(wire)
+    # Parse through the archive authority rather than the generic ONE0 default caps: the
+    # archive profile deliberately declares a wider bounded node envelope than ONE0's
+    # tiny standalone research default.
+    program = open_authenticated_archive(wire).program
     manifest_id = program.roots[MANIFEST_ROOT].ref.node
     document = json.loads(program.nodes[manifest_id].surprise)
     mutate(document)
@@ -165,5 +167,5 @@ def test_out_of_range_request_fails_closed(tmp_path: Path) -> None:
     src = tmp_path / "src"; src.mkdir(); _fixture(src)
     wire, _ = build_authenticated_archive(src)
     archive = open_authenticated_archive(wire)
-    with pytest.raises(OneError):
+    with pytest.raises(OneError, match="requested archive range exceeds file"):
         archive.read_range("small.bin", 200, 1000)
