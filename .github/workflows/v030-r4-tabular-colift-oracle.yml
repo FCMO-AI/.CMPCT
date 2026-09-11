@@ -1,0 +1,146 @@
+# ci-lane: deep
+# ci-pr-scope: latest-head-commit-gate
+# ci-cancel-policy: preserve-running-exact-receipt
+name: CMPCT v0.30 R4 tabular co-lift oracle
+
+on:
+  push:
+    branches: [agent/v030-authoritative-integration]
+    paths:
+      - 'benchmarks/v030_r4_tabular_colift_oracle.py'
+      - 'benchmarks/v030_r4_zstd_parameter_decomposition.py'
+      - 'benchmarks/v030_external_competitors.py'
+      - 'benchmarks/v030_release_generalization.py'
+      - 'benchmarks/neutral_hostile_corpus_v1.py'
+      - 'benchmarks/neutral_hostile_determinism_repair_v*.py'
+      - 'experiments/entropygraph_v025.py'
+      - 'experiments/entropygraph_v030_product_fs.py'
+      - 'experiments/entropygraph_v030_release_product.py'
+      - '.github/workflows/v030-r4-tabular-colift-oracle.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'benchmarks/v030_r4_tabular_colift_oracle.py'
+      - 'benchmarks/v030_r4_zstd_parameter_decomposition.py'
+      - 'benchmarks/v030_external_competitors.py'
+      - 'benchmarks/v030_release_generalization.py'
+      - 'benchmarks/neutral_hostile_corpus_v1.py'
+      - 'benchmarks/neutral_hostile_determinism_repair_v*.py'
+      - 'experiments/entropygraph_v025.py'
+      - 'experiments/entropygraph_v030_product_fs.py'
+      - 'experiments/entropygraph_v030_release_product.py'
+      - '.github/workflows/v030-r4-tabular-colift-oracle.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-v030-r4-tabular-colift-${{ github.event.pull_request.head.sha || github.sha }}
+  cancel-in-progress: false
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+
+jobs:
+  latest-head-impact:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      run_deep: ${{ steps.scope.outputs.run_deep }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 2
+      - name: Bind exact head and classify only its changed files
+        id: scope
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            echo 'run_deep=true' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          git diff-tree --no-commit-id --name-only -r HEAD > /tmp/latest-head-files.txt
+          if grep -Eq '^(benchmarks/v030_r4_tabular_colift_oracle\.py|benchmarks/v030_r4_zstd_parameter_decomposition\.py|benchmarks/v030_external_competitors\.py|benchmarks/v030_release_generalization\.py|benchmarks/neutral_hostile_corpus_v1\.py|benchmarks/neutral_hostile_determinism_repair_v[^/]*\.py|experiments/entropygraph_v025\.py|experiments/entropygraph_v030_product_fs\.py|experiments/entropygraph_v030_release_product\.py|\.github/workflows/v030-r4-tabular-colift-oracle\.yml)$' /tmp/latest-head-files.txt; then
+            echo 'run_deep=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'run_deep=false' >> "$GITHUB_OUTPUT"
+          fi
+
+  tabular-colift-oracle:
+    needs: latest-head-impact
+    if: needs.latest-head-impact.outputs.run_deep == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - name: Bind exact candidate head
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install frozen-corpus dependencies
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y zstd gcc ffmpeg libsndfile1
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[audio,test]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
+      - name: Compile exact R4 oracle
+        run: python -m py_compile benchmarks/v030_r4_tabular_colift_oracle.py
+      - name: Measure reversible Analytics tabular co-lift
+        run: |
+          mkdir -p benchmark-artifacts
+          python benchmarks/v030_r4_tabular_colift_oracle.py \
+            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-r4-tabular-colift-work" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-r4-tabular-colift.json"
+      - name: Enforce diagnostic contract
+        run: |
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          d=json.loads(Path('benchmark-artifacts/v030-r4-tabular-colift.json').read_text())
+          assert d['schema']=='cmpct-v030-r4-tabular-colift-oracle-v1'
+          assert d['source_commit']==os.environ['EVIDENCE_HEAD']
+          assert d['workload']=='04_analytics_and_database'
+          assert d['row_count']==90000
+          assert len(d['fields'])==8
+          assert [v['level'] for v in d['variants']]==[3,5,9]
+          assert all(v['repetitions']==2 for v in d['variants'])
+          assert d['canonical_tree_sha256']
+          assert d['fixed_level15_archive_bytes']>0 and d['accepted_v029_bytes']>0
+          h=d['hypothesis']
+          assert h['exact_two_format_reconstruction']
+          assert h['hostile_rotated_rows_rejected']
+          assert isinstance(h['best_pair_saving_exceeds_whole_archive_gap'], bool)
+          assert isinstance(h['best_writer_under_one_second'], bool)
+          assert isinstance(h['supported_as_structural_feasibility_oracle'], bool)
+          c=d['contract']
+          assert c['diagnostic_only'] and c['release_credit'] is False
+          assert c['production_format_changed'] is False and c['production_selector_changed'] is False
+          assert c['exact_source_bytes_required']
+          assert c['whole_archive_saving_is_optimistic_pair_delta_not_integrated_product_size']
+          assert c['reader_reconstruction_time_measured']
+          PY
+      - name: CI topology self-check
+        run: python tools/check_ci_topology.py .github/workflows/v030-r4-tabular-colift-oracle.yml
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: v030-r4-tabular-colift-${{ env.EVIDENCE_HEAD }}
+          path: benchmark-artifacts/v030-r4-tabular-colift.json
+          if-no-files-found: error
+          retention-days: 90
+
+# Diagnostic only. A positive pair-level feasibility result is not product credit: publication requires a
+# bounded authenticated owner, exact member reconstruction, dependency/locality/recovery accounting, RSS,
+# native-reader proof and all-15 hostile evidence under the normal zero-byte/timing rules.
