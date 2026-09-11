@@ -5,6 +5,12 @@ from pathlib import Path
 import subprocess
 import sys
 
+import pytest
+
+from benchmarks.one.one_genesis_contender_workload_measurement import (
+    _historical_runtime_provenance,
+)
+
 
 def test_historical_surface_prefers_frozen_cmpct_over_ambient_package(tmp_path: Path) -> None:
     frozen = tmp_path / "frozen"
@@ -85,3 +91,47 @@ worker._load_surface("fixture", frozen)
     )
     assert completed.returncode != 0
     assert "imported cmpct outside frozen checkout" in completed.stderr
+
+
+def test_measurement_retains_stable_frozen_runtime_provenance(tmp_path: Path) -> None:
+    checkout = tmp_path / "v030"
+    package = checkout / "src" / "cmpct"
+    package.mkdir(parents=True)
+    package_file = package / "builder.py"
+    package_file.write_text("# fixture\n", encoding="utf-8")
+    source_sha = "f4b158a55a08b9b18b50e4e4abe4b9251048c772"
+    sample = {
+        "frozen_source_sha": source_sha,
+        "frozen_cmpct_import_roots": {"cmpct.builder": str(package_file)},
+    }
+
+    result = _historical_runtime_provenance(
+        contender="v0.30",
+        checkout=checkout,
+        sample_families=[[dict(sample) for _ in range(5)], [dict(sample) for _ in range(5)]],
+    )
+
+    assert result is not None
+    assert result["status"] == "source_sealed"
+    assert result["source_sha"] == source_sha
+    assert result["sample_count"] == 10
+    assert result["loaded_cmpct_modules"]["cmpct.builder"] == str(package_file.resolve())
+
+
+def test_measurement_rejects_runtime_provenance_outside_frozen_checkout(tmp_path: Path) -> None:
+    checkout = tmp_path / "v030"
+    (checkout / "src" / "cmpct").mkdir(parents=True)
+    escaped = tmp_path / "harness" / "src" / "cmpct" / "builder.py"
+    escaped.parent.mkdir(parents=True)
+    escaped.write_text("# fixture\n", encoding="utf-8")
+    sample = {
+        "frozen_source_sha": "f4b158a55a08b9b18b50e4e4abe4b9251048c772",
+        "frozen_cmpct_import_roots": {"cmpct.builder": str(escaped)},
+    }
+
+    with pytest.raises(RuntimeError, match="escaped frozen checkout"):
+        _historical_runtime_provenance(
+            contender="v0.30",
+            checkout=checkout,
+            sample_families=[[sample]],
+        )
