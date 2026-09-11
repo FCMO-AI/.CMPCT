@@ -8,6 +8,7 @@ on:
     branches: [agent/v030-authoritative-integration]
     paths:
       - 'benchmarks/v030_r4_zstd_parameter_decomposition.py'
+      - 'benchmarks/v030_r4_zstd_parameter_floor.py'
       - 'benchmarks/v030_external_competitors.py'
       - 'benchmarks/v030_release_generalization.py'
       - 'benchmarks/neutral_hostile_corpus_v1.py'
@@ -20,6 +21,7 @@ on:
     branches: [main]
     paths:
       - 'benchmarks/v030_r4_zstd_parameter_decomposition.py'
+      - 'benchmarks/v030_r4_zstd_parameter_floor.py'
       - 'benchmarks/v030_external_competitors.py'
       - 'benchmarks/v030_release_generalization.py'
       - 'benchmarks/neutral_hostile_corpus_v1.py'
@@ -65,7 +67,7 @@ jobs:
           fi
           git diff-tree --no-commit-id --name-only -r HEAD > /tmp/latest-head-files.txt
           cat /tmp/latest-head-files.txt
-          if grep -Eq '^(benchmarks/v030_r4_zstd_parameter_decomposition\.py|benchmarks/v030_external_competitors\.py|benchmarks/v030_release_generalization\.py|benchmarks/neutral_hostile_corpus_v1\.py|benchmarks/neutral_hostile_determinism_repair_v[^/]*\.py|experiments/entropygraph_v025\.py|experiments/entropygraph_v030_product_fs\.py|experiments/entropygraph_v030_release_product\.py|\.github/workflows/v030-r4-zstd-parameter-decomposition\.yml)$' /tmp/latest-head-files.txt; then
+          if grep -Eq '^(benchmarks/v030_r4_zstd_parameter_decomposition\.py|benchmarks/v030_r4_zstd_parameter_floor\.py|benchmarks/v030_external_competitors\.py|benchmarks/v030_release_generalization\.py|benchmarks/neutral_hostile_corpus_v1\.py|benchmarks/neutral_hostile_determinism_repair_v[^/]*\.py|experiments/entropygraph_v025\.py|experiments/entropygraph_v030_product_fs\.py|experiments/entropygraph_v030_release_product\.py|\.github/workflows/v030-r4-zstd-parameter-decomposition\.yml)$' /tmp/latest-head-files.txt; then
             echo 'run_deep=true' >> "$GITHUB_OUTPUT"
           else
             echo 'run_deep=false' >> "$GITHUB_OUTPUT"
@@ -96,13 +98,18 @@ jobs:
           python -m pip install -e '.[audio,test]'
           python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
       - name: Compile oracle
-        run: python -m py_compile benchmarks/v030_r4_zstd_parameter_decomposition.py
+        run: python -m py_compile benchmarks/v030_r4_zstd_parameter_decomposition.py benchmarks/v030_r4_zstd_parameter_floor.py
       - name: Decompose Zstd level-15 to level-19 speed-density frontier
         run: |
           mkdir -p benchmark-artifacts
           python benchmarks/v030_r4_zstd_parameter_decomposition.py \
             --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-zstd-param-work" \
             --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-zstd-parameter-decomposition.json"
+      - name: Solve exact optimistic parameter-family floor
+        run: |
+          python benchmarks/v030_r4_zstd_parameter_floor.py \
+            --input "$GITHUB_WORKSPACE/benchmark-artifacts/v030-zstd-parameter-decomposition.json" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-zstd-parameter-floor.json"
       - name: Enforce diagnostic contract
         run: |
           python - <<'PY'
@@ -126,6 +133,18 @@ jobs:
               assert row['aggregate']['level19']['predicted_archive_bytes'] <= row['aggregate']['level15']['predicted_archive_bytes']
               assert row['pareto_variants']
           assert isinstance(d['hypothesis_supported'], bool)
+
+          f=json.loads(Path('benchmark-artifacts/v030-zstd-parameter-floor.json').read_text())
+          assert f['schema']=='cmpct-v030-r4-zstd-parameter-floor-v1'
+          assert f['source_commit']==os.environ['EVIDENCE_HEAD']
+          assert len(f['rows'])==3
+          assert f['contract']['diagnostic_only'] and f['contract']['release_credit'] is False
+          assert f['contract']['oracle_has_per_payload_perfect_foresight']
+          assert f['contract']['negative_timing_deltas_clamped_to_zero']
+          assert f['contract']['no_production_policy_changed']
+          assert isinstance(f['conclusions']['office_floor_unreachable_with_measured_parameter_family'], bool)
+          assert isinstance(f['conclusions']['analytics_floor_reachable_with_oracle'], bool)
+          assert isinstance(f['conclusions']['developer_floor_unreachable_with_measured_parameter_family'], bool)
           PY
       - name: CI topology self-check
         run: python tools/check_ci_topology.py .github/workflows/v030-r4-zstd-parameter-decomposition.yml
@@ -133,9 +152,12 @@ jobs:
         if: always()
         with:
           name: v030-r4-zstd-parameter-decomposition-${{ env.EVIDENCE_HEAD }}
-          path: benchmark-artifacts/v030-zstd-parameter-decomposition.json
+          path: |
+            benchmark-artifacts/v030-zstd-parameter-decomposition.json
+            benchmark-artifacts/v030-zstd-parameter-floor.json
           if-no-files-found: error
           retention-days: 90
 
-# Diagnostic-only parameter attribution. A positive result authorizes only a whole-archive hybrid
-# candidate with held-out controls; a negative result closes parameter recombination as the primary R4.
+# Diagnostic-only parameter attribution. A positive call-level hybrid result is now paired with an
+# optimistic per-payload oracle floor. If even perfect foresight cannot cross a required v0.29 floor,
+# the measured parameter family is closed for that red rather than rescued with more thresholds.
