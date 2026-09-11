@@ -3,13 +3,13 @@ from __future__ import annotations
 """R4 diagnostic: can shared Zstd context recover high-effort density cheaply?
 
 The ordinary level-15 -> level-19 frontier is now bounded: whole-archive parameter hybrids remain too
-large/slow and one hostile control regresses.  This experiment asks a different mechanistic question.
+large/slow and one hostile control regresses. This experiment asks a different mechanistic question.
 Instead of spending more search effort independently inside every physical pack, can a bounded dictionary
 learn recurring context once and let cheap per-pack compression reuse it?
 
-This is deliberately an optimistic oracle, not a format proposal.  The dictionary bytes, a conservative
+This is deliberately an optimistic oracle, not a format proposal. The dictionary bytes, a conservative
 physical header/reference tax, training time, eligibility scan and every dictionary-compression call are
-charged.  Every compressed payload must round-trip.  A positive result earns only a whole-archive design
+charged. Every compressed payload must round-trip. A positive result earns only a whole-archive design
 experiment with explicit dependency/locality accounting; a negative result retires shared Zstd dictionaries
 as the primary R4 for these reds.
 """
@@ -18,7 +18,6 @@ import argparse
 import json
 from pathlib import Path
 import shutil
-import statistics
 import time
 
 import zstandard as zstd
@@ -84,7 +83,7 @@ def _measure_variant(
     baseline_archive_bytes: int,
     baseline_payload: int,
     eligible: list[tuple[str, dict]],
-    baseline_rows: dict[str, dict],
+    baseline_physical: dict[str, int],
     dictionary: zstd.ZstdCompressionDict,
     dictionary_bytes: int,
     training_s: float,
@@ -101,7 +100,7 @@ def _measure_variant(
     for key, rec in eligible:
         raw = rec["raw"]
         count = int(rec["calls"])
-        base = baseline_rows[key]["variants"]["level15"]["physical_payload_bytes"]
+        base = int(baseline_physical[key])
         started = time.perf_counter()
         blob = cctx.compress(raw)
         elapsed = time.perf_counter() - started
@@ -142,12 +141,19 @@ def _one(name: str, source: Path, accepted_v029: int, work: Path) -> dict:
     verify_s = ZD._verify(profile, archive, root / "out", expected)
     baseline_archive = archive.stat().st_size
 
-    baseline_rows: dict[str, dict] = {}
+    # Only the physical level-15 baseline is needed here. Do not call ZD._measure_raw(): that function
+    # intentionally executes the entire 15->19 parameter matrix and would spend substantial CPU without
+    # changing this dictionary hypothesis.
+    baseline_physical: dict[str, int] = {}
     baseline_payload = 0
     for key, rec in raws.items():
-        measured = ZD._measure_raw(rec["raw"], int(rec["calls"]))
-        baseline_rows[key] = measured
-        baseline_payload += measured["variants"]["level15"]["physical_payload_bytes"] * int(rec["calls"])
+        raw = rec["raw"]
+        blob = V25.zc(raw, ZD.LOW_LEVEL)
+        if V25.zd(blob, len(raw)) != raw:
+            raise RuntimeError("level-15 baseline round-trip failed")
+        physical = ZD._physical(len(raw), len(blob))
+        baseline_physical[key] = physical
+        baseline_payload += physical * int(rec["calls"])
 
     eligible, eligibility_s, tested_bytes = _cheap_eligibility(raws)
     samples = _samples([rec["raw"] for _, rec in eligible])
@@ -158,9 +164,10 @@ def _one(name: str, source: Path, accepted_v029: int, work: Path) -> dict:
     EXT._verify_extracted(zip_root / "out", EXT._tree(stage), "zip_deflate9")
 
     variants = []
+    total_sample_bytes = sum(map(len, samples))
     if len(samples) >= 8:
         for dict_size in DICT_SIZES:
-            if sum(map(len, samples)) <= dict_size * 2:
+            if total_sample_bytes <= dict_size * 2:
                 continue
             try:
                 dictionary, training_s = _dict_blob(dict_size, samples)
@@ -173,7 +180,7 @@ def _one(name: str, source: Path, accepted_v029: int, work: Path) -> dict:
                         baseline_archive_bytes=baseline_archive,
                         baseline_payload=baseline_payload,
                         eligible=eligible,
-                        baseline_rows=baseline_rows,
+                        baseline_physical=baseline_physical,
                         dictionary=dictionary,
                         dictionary_bytes=actual_dict_bytes,
                         training_s=training_s,
@@ -247,9 +254,6 @@ def run(work: Path) -> dict:
         "analytics_budget_candidate_beats_v029": bool(ab and ab["predicted_archive_bytes"] < analytics["accepted_v029_bytes"]),
         "controls_can_fallback_without_size_regression": all(True for _ in controls),
     }
-    # The primary mechanistic success criterion is intentionally demanding: context sharing must both cross
-    # the inherited density floor and keep its *charged dictionary pipeline* inside ZIP create time.  Whole-
-    # archive integration would still be required because this oracle does not yet encode dictionary ownership.
     hypothesis["supported"] = (
         hypothesis["analytics_has_dictionary_candidate_inside_zip_budget"]
         and hypothesis["analytics_budget_candidate_beats_v029"]
@@ -276,6 +280,7 @@ def run(work: Path) -> dict:
             "production_format_changed": False,
             "production_selector_changed": False,
             "same_fixed_level15_structural_representation": True,
+            "redundant_parameter_sweep_removed": True,
         },
         "next_if_supported": "design a bounded dictionary-owner representation, charge decode dependency/locality, and strong-verify complete archives on all 15",
         "next_if_falsified": "retire shared Zstd dictionaries as the primary R4 for the large Analytics red; choose a different structural representation/execution mechanism",
