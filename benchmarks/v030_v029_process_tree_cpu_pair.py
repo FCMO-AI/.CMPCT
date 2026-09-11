@@ -159,8 +159,8 @@ def run(repo: Path, v029: Path, v030: Path, work: Path) -> dict:
 def main() -> None:
     p = argparse.ArgumentParser()
     p.add_argument("--repo", type=Path, default=Path.cwd())
-    p.add_argument("--v029-checkout", type=Path, required=True)
-    p.add_argument("--v030-checkout", type=Path, required=True)
+    p.add_argument("--v029-checkout", type=Path)
+    p.add_argument("--v030-checkout", type=Path)
     p.add_argument("--work-root", type=Path, default=Path("benchmark-artifacts/v030-v029-tree-cpu-work"))
     p.add_argument("--output", type=Path, default=Path("benchmark-artifacts/v030-v029-tree-cpu.json"))
     p.add_argument("--child", action="store_true")
@@ -168,7 +168,11 @@ def main() -> None:
     p.add_argument("--source", type=Path); p.add_argument("--archive", type=Path)
     a = p.parse_args()
     if a.child:
+        if None in (a.engine, a.checkout, a.source, a.archive):
+            p.error("--child requires --engine, --checkout, --source and --archive")
         _child(a.engine, a.checkout.resolve(), a.source.resolve(), a.archive.resolve(), a.output.resolve()); return
+    if a.v029_checkout is None or a.v030_checkout is None:
+        p.error("top-level run requires --v029-checkout and --v030-checkout")
     d = run(a.repo.resolve(), a.v029_checkout.resolve(), a.v030_checkout.resolve(), a.work_root.resolve())
     a.output.parent.mkdir(parents=True, exist_ok=True); a.output.write_text(json.dumps(d, indent=2, default=str) + "\n")
     print(json.dumps([{k:r[k] for k in ("workload","v030_over_v029_tree_cpu_ratio","v030_over_v029_wall_ratio","v030_minus_v029_bytes")} for r in d["rows"]], indent=2))
