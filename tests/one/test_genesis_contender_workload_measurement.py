@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from copy import deepcopy
 from pathlib import Path
 
 import pytest
@@ -54,6 +53,15 @@ def _fixture_dirs(tmp_path: Path) -> tuple[Path, Path]:
     return checkout, root
 
 
+def _sealed_historical_phase(mode: str, index: int, contender: str, checkout: Path) -> dict:
+    row = _phase(mode, index)
+    row["frozen_source_sha"] = mod.FROZEN[contender]
+    row["frozen_cmpct_import_roots"] = {
+        "cmpct": str((checkout / "src" / "cmpct" / "__init__.py").resolve())
+    }
+    return row
+
+
 def test_five_sample_cmpct1_measurement_retains_samples_and_medians(monkeypatch, tmp_path: Path):
     checkout, root = _fixture_dirs(tmp_path)
     monkeypatch.setattr(
@@ -97,6 +105,7 @@ def test_five_sample_cmpct1_measurement_retains_samples_and_medians(monkeypatch,
     assert measurement["selective_access"]["touched_bytes"] == {"status": "unavailable"}
     assert measurement["semantics"] == {"status": "unavailable"}
     assert measurement["reader_burden"] == {"status": "unavailable"}
+    assert "runtime_source_provenance" not in measurement
 
 
 def test_v029_selective_is_unavailable_and_never_invoked(monkeypatch, tmp_path: Path):
@@ -116,7 +125,7 @@ def test_v029_selective_is_unavailable_and_never_invoked(monkeypatch, tmp_path: 
         mode = kwargs["mode"]
         index = counts[mode]
         counts[mode] += 1
-        return _phase(mode, index)
+        return _sealed_historical_phase(mode, index, "v0.29", checkout)
 
     monkeypatch.setattr(mod, "_run_worker", fake_worker)
     result = mod.measure_workload(
@@ -128,6 +137,11 @@ def test_v029_selective_is_unavailable_and_never_invoked(monkeypatch, tmp_path: 
     )
     assert counts == {"build": 5, "whole": 5, "selective": 0}
     assert result["measurement"]["selective_access"]["status"] == "unavailable"
+    provenance = result["measurement"]["runtime_source_provenance"]
+    assert provenance["status"] == "source_sealed"
+    assert provenance["source_sha"] == mod.FROZEN["v0.29"]
+    assert provenance["sample_count"] == 10
+    assert provenance["loaded_cmpct_modules"]
 
 
 def test_deterministic_wire_mismatch_fails_closed():
