@@ -23,7 +23,55 @@ def _boundary(tmp_path, *, status=mod.CERTIFIED_STATUS, eligible=True, candidate
     return path
 
 
+def _seal_ok(monkeypatch):
+    monkeypatch.setattr(mod, "_assert_initial_contender_checkout_sealed", lambda: None)
+
+
+def test_initial_contender_checkout_rejects_worktree_drift(monkeypatch):
+    class Result:
+        def __init__(self, stdout):
+            self.stdout = stdout
+
+    monkeypatch.setattr(
+        mod.subprocess,
+        "run",
+        lambda *args, **kwargs: Result(" M experiments/entropygraph_v030_release_product.py\n"),
+    )
+    with pytest.raises(RuntimeError, match="working-tree drift"):
+        mod._assert_initial_contender_checkout_sealed()
+
+
+@pytest.mark.parametrize(
+    "ignored_path",
+    (
+        "experiments/entropygraph_v030_release_product.so",
+        "experiments/injected_runtime.pyd",
+        "native/injected_runtime.dll",
+    ),
+)
+def test_initial_contender_checkout_rejects_ignored_native_runtime(monkeypatch, ignored_path):
+    class Result:
+        def __init__(self, stdout):
+            self.stdout = stdout
+
+    outputs = iter((Result(""), Result(ignored_path + "\n")))
+    monkeypatch.setattr(mod.subprocess, "run", lambda *args, **kwargs: next(outputs))
+    with pytest.raises(RuntimeError, match="ignored native runtime artifacts"):
+        mod._assert_initial_contender_checkout_sealed()
+
+
+def test_initial_contender_checkout_allows_ignored_bytecode(monkeypatch):
+    class Result:
+        def __init__(self, stdout):
+            self.stdout = stdout
+
+    outputs = iter((Result(""), Result("experiments/__pycache__/x.cpython-312.pyc\n")))
+    monkeypatch.setattr(mod.subprocess, "run", lambda *args, **kwargs: next(outputs))
+    mod._assert_initial_contender_checkout_sealed()
+
+
 def test_cmpct1_matching_certification_routes_frozen_runtime_then_delegates(monkeypatch, tmp_path):
+    _seal_ok(monkeypatch)
     monkeypatch.setattr(mod, "BOUNDARY", _boundary(tmp_path))
     monkeypatch.setenv("CMPCT_GENESIS_REAL_GATE_AUTHORIZED", "1")
     monkeypatch.setenv("CMPCT_GENESIS_CONTENDER", "cmpct1")
@@ -37,6 +85,7 @@ def test_cmpct1_matching_certification_routes_frozen_runtime_then_delegates(monk
 
 
 def test_cmpct1_candidate_sha_substitution_fails_closed(monkeypatch, tmp_path):
+    _seal_ok(monkeypatch)
     monkeypatch.setattr(mod, "BOUNDARY", _boundary(tmp_path, candidate="a" * 40))
     monkeypatch.setenv("CMPCT_GENESIS_REAL_GATE_AUTHORIZED", "1")
     monkeypatch.setenv("CMPCT_GENESIS_CONTENDER", "cmpct1")
@@ -47,6 +96,7 @@ def test_cmpct1_candidate_sha_substitution_fails_closed(monkeypatch, tmp_path):
 
 
 def test_cmpct1_hold_boundary_fails_closed(monkeypatch, tmp_path):
+    _seal_ok(monkeypatch)
     monkeypatch.setattr(mod, "BOUNDARY", _boundary(tmp_path, status="HOLD_UNTIL_COMPLETE_PRODUCT_BOUNDARY_IS_CERTIFIED"))
     monkeypatch.setenv("CMPCT_GENESIS_REAL_GATE_AUTHORIZED", "1")
     monkeypatch.setenv("CMPCT_GENESIS_CONTENDER", "cmpct1")
@@ -57,6 +107,7 @@ def test_cmpct1_hold_boundary_fails_closed(monkeypatch, tmp_path):
 
 
 def test_cmpct1_noneligible_boundary_fails_closed(monkeypatch, tmp_path):
+    _seal_ok(monkeypatch)
     monkeypatch.setattr(mod, "BOUNDARY", _boundary(tmp_path, eligible=False))
     monkeypatch.setenv("CMPCT_GENESIS_REAL_GATE_AUTHORIZED", "1")
     monkeypatch.setenv("CMPCT_GENESIS_CONTENDER", "cmpct1")
@@ -77,6 +128,7 @@ def test_missing_explicit_executor_authorization_fails_closed(monkeypatch, tmp_p
 
 
 def test_frozen_comparator_does_not_consume_one_candidate_boundary_or_route_one_worker(monkeypatch, tmp_path):
+    _seal_ok(monkeypatch)
     monkeypatch.setattr(mod, "BOUNDARY", _boundary(tmp_path, status="HOLD_UNTIL_COMPLETE_PRODUCT_BOUNDARY_IS_CERTIFIED"))
     monkeypatch.setenv("CMPCT_GENESIS_REAL_GATE_AUTHORIZED", "1")
     monkeypatch.setenv("CMPCT_GENESIS_CONTENDER", "v0.29")
