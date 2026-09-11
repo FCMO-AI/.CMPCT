@@ -1,0 +1,121 @@
+# ci-lane: deep
+# ci-pr-scope: latest-head-commit-gate
+# ci-cancel-policy: preserve-running-exact-receipt
+name: CMPCT v0.30 R4 content ZIP full matrix
+
+on:
+  push:
+    branches: [agent/v030-authoritative-integration]
+    paths:
+      - 'experiments/v030_r4_content_zip_builder.py'
+      - 'benchmarks/v030_r4_content_zip_builder_oracle.py'
+      - 'benchmarks/v030_r4_content_zip_full_matrix.py'
+      - 'benchmarks/neutral_hostile_corpus_v1.py'
+      - 'benchmarks/resemblance_hostile_corpus_v1.py'
+      - 'benchmarks/neutral_hostile_determinism_repair_v*.py'
+      - 'src/cmpct/builder.py'
+      - 'src/cmpct/reader.py'
+      - 'src/cmpct/codec.py'
+      - '.github/workflows/v030-r4-content-zip-full-matrix.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'experiments/v030_r4_content_zip_builder.py'
+      - 'benchmarks/v030_r4_content_zip_builder_oracle.py'
+      - 'benchmarks/v030_r4_content_zip_full_matrix.py'
+      - 'benchmarks/neutral_hostile_corpus_v1.py'
+      - 'benchmarks/resemblance_hostile_corpus_v1.py'
+      - 'benchmarks/neutral_hostile_determinism_repair_v*.py'
+      - 'src/cmpct/builder.py'
+      - 'src/cmpct/reader.py'
+      - 'src/cmpct/codec.py'
+      - '.github/workflows/v030-r4-content-zip-full-matrix.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-v030-r4-content-zip-matrix-${{ github.event.pull_request.head.sha || github.sha }}
+  cancel-in-progress: false
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+
+jobs:
+  latest-head-impact:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      run_deep: ${{ steps.scope.outputs.run_deep }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 2
+      - id: scope
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then echo 'run_deep=true' >> "$GITHUB_OUTPUT"; exit 0; fi
+          git diff-tree --no-commit-id --name-only -r HEAD > /tmp/latest-head-files.txt
+          if grep -Eq '^(experiments/v030_r4_content_zip_builder\.py|benchmarks/v030_r4_content_zip_(builder_oracle|full_matrix)\.py|benchmarks/(neutral_hostile_corpus_v1|resemblance_hostile_corpus_v1|neutral_hostile_determinism_repair_v[^/]*)\.py|src/cmpct/(builder|reader|codec)\.py|\.github/workflows/v030-r4-content-zip-full-matrix\.yml)$' /tmp/latest-head-files.txt; then echo 'run_deep=true' >> "$GITHUB_OUTPUT"; else echo 'run_deep=false' >> "$GITHUB_OUTPUT"; fi
+
+  content-zip-full-matrix:
+    needs: latest-head-impact
+    if: needs.latest-head-impact.outputs.run_deep == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install frozen-corpus dependencies
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y zstd gcc ffmpeg libsndfile1
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[audio,test]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
+      - run: python -m py_compile experiments/v030_r4_content_zip_builder.py benchmarks/v030_r4_content_zip_full_matrix.py
+      - name: Measure exact 15-workload matrix
+        run: |
+          mkdir -p benchmark-artifacts
+          python benchmarks/v030_r4_content_zip_full_matrix.py \
+            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-r4-content-zip-matrix-work" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-r4-content-zip-matrix.json"
+      - name: Enforce diagnostic contract
+        run: |
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          d=json.loads(Path('benchmark-artifacts/v030-r4-content-zip-matrix.json').read_text())
+          assert d['schema']=='cmpct-v030-r4-content-zip-full-matrix-v1'
+          assert d['source_commit']==os.environ['EVIDENCE_HEAD']
+          assert len(d['rows'])==15 and d['totals']['workloads']==15
+          assert d['totals']['accepted_v029_bytes']==137_499_525
+          assert d['hypothesis']['all_trees_exact']
+          assert d['hypothesis']['all_vzip_ranges_exact']
+          c=d['contract']; assert c['diagnostic_only'] and c['release_credit'] is False
+          assert c['shipping_builder_changed'] is False and c['format_changed'] is False and c['reader_changed'] is False
+          PY
+      - name: CI topology self-check
+        run: python tools/check_ci_topology.py .github/workflows/v030-r4-content-zip-full-matrix.yml
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: v030-r4-content-zip-full-matrix-${{ env.EVIDENCE_HEAD }}
+          path: benchmark-artifacts/v030-r4-content-zip-matrix.json
+          if-no-files-found: error
+          retention-days: 90
+
+# Research-only matrix. A green job proves evidence integrity, not product promotion.
