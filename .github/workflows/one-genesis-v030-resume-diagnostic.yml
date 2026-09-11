@@ -8,6 +8,7 @@ on:
     paths:
       - '.github/workflows/one-genesis-v030-resume-diagnostic.yml'
       - 'benchmarks/one/one_genesis_v030_resume_diagnostic.py'
+      - 'benchmarks/one/one_genesis_historical_product_worker.py'
   workflow_dispatch:
 
 permissions:
@@ -45,6 +46,9 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y zstd ffmpeg gcc libsndfile1
           python -m pip install -e '.[test]'
+          # Frozen v0.30 declares this as its audio extra. The media workload exercises
+          # wav/flac coding, so the gate must provision the declared Python binding too.
+          python -m pip install 'soundfile>=0.12'
 
       - name: Materialize frozen v0.30 checkout
         run: |
