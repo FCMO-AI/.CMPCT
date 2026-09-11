@@ -61,8 +61,19 @@ jobs:
           test "$(git -C /tmp/cmpct-v030-frozen rev-parse HEAD)" = "$FROZEN_V030_SHA"
       - name: Build deterministic physical corpus
         run: |
-          python benchmarks/neutral_hostile_corpus_v1.py --output benchmark-artifacts/neutral-hostile
-          python benchmarks/neutral_hostile_determinism_repair_v1.py --root benchmark-artifacts/neutral-hostile
+          python - <<'PY'
+          import importlib.util
+          from pathlib import Path
+          root=Path('benchmark-artifacts/neutral-hostile')
+          def load(path,name):
+              spec=importlib.util.spec_from_file_location(name,path)
+              mod=importlib.util.module_from_spec(spec); spec.loader.exec_module(mod); return mod
+          neutral=load(Path('benchmarks/neutral_hostile_corpus_v1.py'),'cmpct_rss_neutral')
+          repair=load(Path('benchmarks/neutral_hostile_determinism_repair_v1.py'),'cmpct_rss_repair')
+          repair.install_generation_hooks(neutral)
+          neutral.build(root)
+          repair.normalize_root(root)
+          PY
       - name: Attribute Analytics RSS
         run: |
           mkdir -p benchmark-artifacts/rss
