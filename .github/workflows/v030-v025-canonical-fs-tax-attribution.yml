@@ -4,6 +4,16 @@
 name: CMPCT v0.30 v0.25 canonical FS tax attribution
 
 on:
+  push:
+    branches: [agent/v030-authoritative-integration]
+    paths:
+      - 'benchmarks/v030_v025_canonical_fs_tax_attribution.py'
+      - 'benchmarks/v030_v025_physical_attribution.py'
+      - 'benchmarks/neutral_hostile_corpus_v1.py'
+      - 'benchmarks/neutral_hostile_determinism_repair_v*.py'
+      - 'experiments/entropygraph_v025.py'
+      - 'experiments/entropygraph_v030_product_fs.py'
+      - '.github/workflows/v030-v025-canonical-fs-tax-attribution.yml'
   pull_request:
     branches: [main]
     paths:
