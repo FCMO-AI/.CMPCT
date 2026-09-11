@@ -1,0 +1,138 @@
+# ci-lane: deep
+# ci-pr-scope: latest-head-commit-gate
+# ci-cancel-policy: preserve-running-exact-receipt
+name: CMPCT v0.30 R4 tabular binary owner oracle
+
+on:
+  push:
+    branches: [agent/v030-authoritative-integration]
+    paths:
+      - 'benchmarks/v030_r4_tabular_binary_owner_oracle.py'
+      - 'benchmarks/v030_r4_tabular_owner_oracle.py'
+      - 'benchmarks/v030_r4_tabular_owner_range_oracle.py'
+      - 'benchmarks/v030_r4_zstd_parameter_decomposition.py'
+      - 'benchmarks/v030_external_competitors.py'
+      - 'benchmarks/v030_release_generalization.py'
+      - 'benchmarks/neutral_hostile_corpus_v1.py'
+      - 'benchmarks/neutral_hostile_determinism_repair_v*.py'
+      - 'experiments/entropygraph_v030_release_product.py'
+      - '.github/workflows/v030-r4-tabular-binary-owner-oracle.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'benchmarks/v030_r4_tabular_binary_owner_oracle.py'
+      - 'benchmarks/v030_r4_tabular_owner_oracle.py'
+      - 'benchmarks/v030_r4_tabular_owner_range_oracle.py'
+      - 'benchmarks/v030_r4_zstd_parameter_decomposition.py'
+      - 'benchmarks/v030_external_competitors.py'
+      - 'benchmarks/v030_release_generalization.py'
+      - 'benchmarks/neutral_hostile_corpus_v1.py'
+      - 'benchmarks/neutral_hostile_determinism_repair_v*.py'
+      - 'experiments/entropygraph_v030_release_product.py'
+      - '.github/workflows/v030-r4-tabular-binary-owner-oracle.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-v030-r4-tabular-binary-owner-${{ github.event.pull_request.head.sha || github.sha }}
+  cancel-in-progress: false
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+
+jobs:
+  latest-head-impact:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      run_deep: ${{ steps.scope.outputs.run_deep }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 2
+      - name: Bind exact head and classify only its changed files
+        id: scope
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then echo 'run_deep=true' >> "$GITHUB_OUTPUT"; exit 0; fi
+          git diff-tree --no-commit-id --name-only -r HEAD > /tmp/latest-head-files.txt
+          if grep -Eq '^(benchmarks/v030_r4_tabular_binary_owner_oracle\.py|benchmarks/v030_r4_tabular_owner_oracle\.py|benchmarks/v030_r4_tabular_owner_range_oracle\.py|benchmarks/v030_r4_zstd_parameter_decomposition\.py|benchmarks/v030_external_competitors\.py|benchmarks/v030_release_generalization\.py|benchmarks/neutral_hostile_corpus_v1\.py|benchmarks/neutral_hostile_determinism_repair_v[^/]*\.py|experiments/entropygraph_v030_release_product\.py|\.github/workflows/v030-r4-tabular-binary-owner-oracle\.yml)$' /tmp/latest-head-files.txt; then echo 'run_deep=true' >> "$GITHUB_OUTPUT"; else echo 'run_deep=false' >> "$GITHUB_OUTPUT"; fi
+
+  tabular-binary-owner-oracle:
+    needs: latest-head-impact
+    if: needs.latest-head-impact.outputs.run_deep == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - name: Bind exact candidate head
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install frozen-corpus dependencies
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y zstd gcc ffmpeg libsndfile1
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[audio,test]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
+      - name: Compile exact binary-owner oracle
+        run: python -m py_compile benchmarks/v030_r4_tabular_binary_owner_oracle.py
+      - name: Measure binary owner density, exact ranges and cold locality
+        run: |
+          mkdir -p benchmark-artifacts
+          python benchmarks/v030_r4_tabular_binary_owner_oracle.py \
+            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-r4-tabular-binary-owner-work" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-r4-tabular-binary-owner.json"
+      - name: Enforce diagnostic contract
+        run: |
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          d=json.loads(Path('benchmark-artifacts/v030-r4-tabular-binary-owner.json').read_text())
+          assert d['schema']=='cmpct-v030-r4-tabular-binary-owner-oracle-v1'
+          assert d['source_commit']==os.environ['EVIDENCE_HEAD']
+          assert d['workload']=='04_analytics_and_database'
+          assert d['row_count']==90000 and len(d['fields'])==8
+          assert [v['row_group_rows'] for v in d['variants']]==[2048,4096,8192]
+          assert all(len(v['requests'])==6 for v in d['variants'])
+          assert all(v['stored_bytes']>0 and v['manifest_bytes']>0 and v['payload_bytes']>0 for v in d['variants'])
+          assert all(isinstance(v['cold_locality_pass'], bool) for v in d['variants'])
+          h=d['hypothesis']
+          assert h['exact_full_reconstruction']
+          assert h['exact_4k_ranges_reconstructed']
+          assert h['payload_corruption_rejected']
+          assert h['deterministic_owner_bytes']
+          assert isinstance(h['at_least_one_cold_owner_meets_8x_8mib_density_and_writer'], bool)
+          c=d['contract']
+          assert c['diagnostic_only'] and c['release_credit'] is False
+          assert c['production_format_changed'] is False and c['production_selector_changed'] is False
+          assert c['binary_manifest_authenticated'] and c['payloads_authenticated']
+          assert c['offsets_derived_not_stored'] and c['range_lengths_in_authenticated_manifest']
+          assert c['reader_discovery'] is False
+          assert c['whole_archive_projection_is_optimistic_not_integrated_product_size']
+          PY
+      - name: CI topology self-check
+        run: python tools/check_ci_topology.py .github/workflows/v030-r4-tabular-binary-owner-oracle.yml
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: v030-r4-tabular-binary-owner-${{ env.EVIDENCE_HEAD }}
+          path: benchmark-artifacts/v030-r4-tabular-binary-owner.json
+          if-no-files-found: error
+          retention-days: 90
+
+# Diagnostic only. A cold-locality pass authorizes only research integration into a composite product candidate.
+# It grants no canonical-format, native, recovery, release or benchmark credit by itself.
