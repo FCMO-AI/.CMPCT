@@ -12,11 +12,13 @@ on:
       - 'benchmarks/one/one_genesis_contender_workload_measurement.py'
       - 'benchmarks/one/one_genesis_selective_access_plan.py'
       - 'benchmarks/one/one_genesis_gate_measurement_executor.py'
+      - 'benchmarks/one/one_genesis_gate_measurement_executor_v2.py'
       - 'tests/one/test_genesis_certified_adapter.py'
       - 'tests/one/test_genesis_cmpct1_frozen_worker_launcher.py'
       - 'tests/one/test_genesis_contender_raw_adapter.py'
       - 'tests/one/test_genesis_contender_workload_measurement.py'
       - 'tests/one/test_genesis_gate_authorization_chain.py'
+      - 'tests/one/test_genesis_gate_measurement_executor_v2.py'
       - 'docs/one/prereg/ONE_GENESIS_CONTENDER_RAW_ADAPTER_ASSEMBLY_v0.1_2026-09-10.md'
       - '.github/workflows/one-genesis-raw-adapter-contract.yml'
   workflow_dispatch:
@@ -40,7 +42,7 @@ jobs:
           python-version: '3.11'
       - name: Install test dependency
         run: python -m pip install pytest
-      - name: Falsify workload, adapter, seal, and authorization contracts
+      - name: Falsify workload, adapter, seal, manifest, and authorization contracts
         env:
           PYTHONPATH: ${{ github.workspace }}
         run: |
@@ -50,6 +52,7 @@ jobs:
             tests/one/test_genesis_contender_workload_measurement.py \
             tests/one/test_genesis_contender_raw_adapter.py \
             tests/one/test_genesis_gate_authorization_chain.py \
+            tests/one/test_genesis_gate_measurement_executor_v2.py \
             | tee raw-adapter-contract-tests.txt
       - name: Prove adapter import does not load Genesis corpus generators
         env:
