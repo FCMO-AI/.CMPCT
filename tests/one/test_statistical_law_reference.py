@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import math
 import random
 
 import pytest
@@ -12,6 +13,23 @@ from experiments.one.statistical_law_reference import (
     decode_verified_block,
     encode_block,
 )
+
+
+def _exact_kt_bits(source: bytes) -> float:
+    if not source:
+        return 0.0
+    counts = [[0] * 256 for _ in range(256)]
+    totals = [0] * 256
+    bits = 8.0
+    previous = source[0]
+    for symbol in source[1:]:
+        bits -= math.log2(
+            (counts[previous][symbol] + 0.5) / (totals[previous] + 128.0)
+        )
+        counts[previous][symbol] += 1
+        totals[previous] += 1
+        previous = symbol
+    return bits
 
 
 @pytest.mark.parametrize(
@@ -46,6 +64,24 @@ def test_deterministic_hostile_round_trips() -> None:
         payload = encode_block(source)
         assert decode_block(payload, len(source)) == source
         assert encode_block(source) == payload
+
+
+def test_real_bitstream_tracks_exact_kt_codelength() -> None:
+    rng = random.Random(7)
+    vectors = [
+        bytes((0,)) * 4096,
+        bytes((0, 1)) * 2048,
+        b"Law+Surprise|" * 315,
+        rng.randbytes(4096),
+    ]
+    for source in vectors:
+        realized_bits = len(encode_block(source)) * 8
+        ideal_bits = _exact_kt_bits(source)
+        # Arithmetic finalization/byte padding is allowed, but the concrete
+        # format must not silently turn a good probability model into a poor
+        # bitstream before any container charges are considered.
+        assert realized_bits >= ideal_bits - 1e-9
+        assert realized_bits - ideal_bits <= 16.0
 
 
 def test_exact_maximum_block_round_trip() -> None:
