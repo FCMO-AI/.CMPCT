@@ -13,9 +13,11 @@ from benchmarks import v030_r4_npz_mode2_owner_inversion as M2
 
 SCHEMA="cmpct-v030-r4-mode2-full-matrix-v1"
 
-# The matrix harness deliberately calls the candidate through this module's worker process. Patch only
-# the admitted candidate implementation; discovery, baselines, corpus generation, verification gates,
-# process-tree accounting and exact fallback stay identical to the raw dual-owner matrix.
+# The matrix harness launches fresh workers using Path(__file__) from its own module. Point that binding
+# at this wrapper so subprocesses execute the same mode-2 builder/extractor patch as the parent. The
+# previous run mixed raw-dual workers with a mode-2 verifier and therefore failed before producing a
+# scientific receipt; candidate semantics and thresholds are unchanged here.
+MATRIX.__file__=__file__
 MATRIX.DUAL._build_candidate=M2._build
 MATRIX.DUAL._extract_candidate=M2._extract
 
