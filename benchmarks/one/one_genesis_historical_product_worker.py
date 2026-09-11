@@ -22,7 +22,7 @@ import tempfile
 import time
 from typing import Any
 
-SCHEMA = "cmpct-one-genesis-historical-worker-v1"
+SCHEMA = "cmpct-one-genesis-historical-worker-v2"
 FROZEN = {
     "v029": {
         "sha": "02b8b27cb2d97af7c6e0797984a898e8fa8a8e5d",
@@ -79,16 +79,70 @@ def _authorize(contender: str, checkout: Path, transfer_fixture: bool) -> dict[s
     }
 
 
+def _resolved_module_file(module: Any) -> Path | None:
+    raw = getattr(module, "__file__", None)
+    if not raw:
+        return None
+    try:
+        return Path(raw).resolve()
+    except (OSError, RuntimeError):
+        return None
+
+
+def _is_within(path: Path, root: Path) -> bool:
+    try:
+        path.relative_to(root)
+        return True
+    except ValueError:
+        return False
+
+
+def _assert_frozen_cmpct_imports(checkout: Path) -> dict[str, str]:
+    """Fail closed if historical product code resolves CMPCT from the harness checkout.
+
+    Genesis freezes the whole historical contender, not just its experiment facade.  The
+    worker itself lives in the modern harness, so editable-install/site-package entries can
+    otherwise satisfy ``import cmpct`` from the harness branch.  Every loaded ``cmpct``
+    module must therefore originate under the frozen checkout's ``src/cmpct`` tree.
+    """
+
+    frozen_pkg = (checkout / "src" / "cmpct").resolve()
+    if not frozen_pkg.is_dir():
+        raise RuntimeError(f"frozen cmpct package missing: {frozen_pkg}")
+    observed: dict[str, str] = {}
+    escaped: dict[str, str] = {}
+    for name, module in sorted(sys.modules.items()):
+        if name != "cmpct" and not name.startswith("cmpct."):
+            continue
+        path = _resolved_module_file(module)
+        if path is None:
+            continue
+        observed[name] = str(path)
+        if not _is_within(path, frozen_pkg):
+            escaped[name] = str(path)
+    if escaped:
+        raise RuntimeError(
+            "historical contender imported cmpct outside frozen checkout: "
+            + json.dumps(escaped, sort_keys=True)
+        )
+    return observed
+
+
 def _load_surface(contender: str, checkout: Path):
     module_path = checkout / str(FROZEN[contender]["module"])
     if not module_path.is_file():
         raise RuntimeError(f"frozen product module missing: {module_path}")
-    # Historical modules use local imports. Put the frozen checkout first so the current
-    # research branch cannot satisfy those imports accidentally.
+
+    # Historical experiment modules import both sibling experiment modules and ``cmpct``.
+    # Seal all three roots to the frozen checkout *before* loading the product facade.  In
+    # particular, checkout/src must precede the modern harness editable install.
     checkout_s = str(checkout)
     experiments_s = str(checkout / "experiments")
+    frozen_src_s = str(checkout / "src")
+    sys.path.insert(0, frozen_src_s)
     sys.path.insert(0, experiments_s)
     sys.path.insert(0, checkout_s)
+
     name = f"cmpct_genesis_frozen_{contender}_{FROZEN[contender]['sha'][:12]}"
     module_spec = importlib.util.spec_from_file_location(name, module_path)
     if module_spec is None or module_spec.loader is None:
@@ -96,7 +150,8 @@ def _load_surface(contender: str, checkout: Path):
     module = importlib.util.module_from_spec(module_spec)
     sys.modules[name] = module
     module_spec.loader.exec_module(module)
-    return module
+    import_roots = _assert_frozen_cmpct_imports(checkout)
+    return module, import_roots
 
 
 def _timed(call):
@@ -144,7 +199,6 @@ def _verify_ok(result: Any) -> bool:
     if isinstance(result, dict):
         if "ok" in result:
             return bool(result["ok"])
-        # Some historical verifier variants return an evidence dict and raise on failure.
         return True
     return result is None or result is True
 
@@ -255,7 +309,7 @@ def run(
         raise RuntimeError("Genesis workload machinery already imported")
 
     authorization = _authorize(contender, checkout, transfer_fixture)
-    surface = _load_surface(contender, checkout)
+    surface, import_roots = _load_surface(contender, checkout)
     forbidden = _forbidden_imports()
     if forbidden:
         raise RuntimeError(f"historical product imported Genesis workload machinery: {forbidden}")
@@ -271,6 +325,7 @@ def run(
     else:
         raise RuntimeError(f"unknown mode: {mode}")
 
+    import_roots = _assert_frozen_cmpct_imports(checkout)
     forbidden = _forbidden_imports()
     if forbidden:
         raise RuntimeError(f"historical product imported Genesis workload machinery: {forbidden}")
@@ -279,6 +334,7 @@ def run(
         "contender": contender,
         "frozen_source_sha": FROZEN[contender]["sha"],
         "frozen_product_module": FROZEN[contender]["module"],
+        "frozen_cmpct_import_roots": import_roots,
         "authorization": authorization,
         "genesis_inputs_generated": False,
         "comparison_executed": False,
