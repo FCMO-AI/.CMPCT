@@ -3,9 +3,10 @@ from __future__ import annotations
 """Fail-closed validator for the durable ONE Genesis certification authority.
 
 This tool performs no workload generation, contender execution, comparison, scoring, or
-winner selection.  It encodes the exact pre-gate candidate identities already established
+winner selection. It encodes the exact pre-gate candidate identities already established
 by hosted transfer evidence so the post-boundary authority transition can be checked
-mechanically rather than by visual inspection.
+mechanically rather than by visual inspection. A supplied physical checkout must also be
+clean enough that the bytes Python can execute are represented by those Git identities.
 """
 
 import argparse
@@ -24,6 +25,7 @@ READER_BLOB_SHA = "bad59c45bbd60d99fe0ad594ab16e715a9d681c9"
 RUNTIME_TREE_PATH = "experiments/one"
 RUNTIME_TREE_SHA = "9245db9d6e762666a426d540f34e625242ea21bf"
 CERTIFIED_STATUS = "CERTIFIED_FOR_GENESIS"
+FORBIDDEN_IGNORED_RUNTIME_SUFFIXES = frozenset((".so", ".dylib", ".dll", ".pyd"))
 
 EXPECTED = {
     "candidate_sha": FROZEN_CANDIDATE_SHA,
@@ -40,10 +42,46 @@ def _git(checkout: Path, spec: str) -> str:
     return subprocess.check_output(["git", "-C", str(checkout), "rev-parse", spec], text=True).strip()
 
 
+def _assert_checkout_clean(checkout: Path) -> None:
+    status = subprocess.run(
+        ["git", "-C", str(checkout), "status", "--porcelain=v1", "--untracked-files=all"],
+        text=True,
+        capture_output=True,
+        check=True,
+    )
+    if status.stdout.strip():
+        raise RuntimeError("frozen candidate checkout has working-tree drift from certified Git state")
+    ignored = subprocess.run(
+        [
+            "git",
+            "-C",
+            str(checkout),
+            "ls-files",
+            "--others",
+            "--ignored",
+            "--exclude-standard",
+        ],
+        text=True,
+        capture_output=True,
+        check=True,
+    )
+    dangerous = [
+        line
+        for line in ignored.stdout.splitlines()
+        if Path(line).suffix.lower() in FORBIDDEN_IGNORED_RUNTIME_SUFFIXES
+    ]
+    if dangerous:
+        raise RuntimeError(
+            "frozen candidate checkout contains ignored native runtime artifacts: "
+            + ", ".join(sorted(dangerous)[:8])
+        )
+
+
 def _validate_checkout(checkout: Path) -> dict[str, str]:
     checkout = checkout.resolve()
     if not checkout.is_dir():
         raise RuntimeError("frozen candidate checkout is not a directory")
+    _assert_checkout_clean(checkout)
     observed = {
         "candidate_sha": _git(checkout, "HEAD"),
         "creator_blob_sha": _git(checkout, f"HEAD:{CREATOR_PATH}"),
