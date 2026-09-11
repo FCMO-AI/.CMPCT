@@ -11,13 +11,6 @@ on:
       - 'benchmarks/one/one_genesis_historical_product_worker.py'
       - 'benchmarks/one/one_genesis_contender_workload_measurement.py'
       - 'tests/test_one_genesis_historical_source_seal.py'
-  pull_request:
-    paths:
-      - '.github/workflows/one-genesis-v030-resume-diagnostic.yml'
-      - 'benchmarks/one/one_genesis_v030_resume_diagnostic.py'
-      - 'benchmarks/one/one_genesis_historical_product_worker.py'
-      - 'benchmarks/one/one_genesis_contender_workload_measurement.py'
-      - 'tests/test_one_genesis_historical_source_seal.py'
   workflow_dispatch:
 
 permissions:
@@ -35,12 +28,12 @@ jobs:
       V030_SHA: f4b158a55a08b9b18b50e4e4abe4b9251048c772
       CMPCT_GENESIS_REAL_GATE_AUTHORIZED: '1'
       CMPCT_GENESIS_SOURCE_SHA: f4b158a55a08b9b18b50e4e4abe4b9251048c772
-      EXPECTED_HARNESS_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+      EXPECTED_HARNESS_SHA: ${{ github.sha }}
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          ref: ${{ github.sha }}
 
       - name: Bind diagnostic harness source
         run: |
