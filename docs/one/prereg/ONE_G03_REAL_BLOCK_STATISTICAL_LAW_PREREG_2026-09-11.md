@@ -56,20 +56,30 @@ No learned table, histogram, model, dictionary, or probability state is stored i
 
 ## Fixed real coder
 
-The reference realization will use one deterministic integer arithmetic/range-coding algorithm, implemented in repository source and covered by an independent decoder oracle.
+The reference realization uses one deterministic **32-bit integer arithmetic coder** implemented in repository source and covered by an independent decoder path.
 
-Required fixed properties before measurement:
+The result-bearing format is fixed before the 15-workload measurement:
 
-- integer-only arithmetic;
-- no platform floating point;
+- inclusive arithmetic interval starts at `[0, 2^32-1]`;
+- integer cumulative intervals use exact floor division of the KT odd weights above;
+- E1/E2/E3 normalization thresholds are `2^31`, `2^30`, and `3*2^30`;
+- emitted bits are packed MSB-first;
+- pending underflow bits use the ordinary complement rule;
+- finalization increments the pending count once, then emits `0` if `low < 2^30` else `1`, followed by all pending complements;
+- a partial final output byte is zero-padded on the right;
+- the block bootstrap byte is stored literally before the arithmetic payload.
+
+Required properties before measurement:
+
+- integer-only encode/decode decisions;
+- no platform floating point in any reader-visible or writer admission decision;
 - exact encoder/decoder symmetry;
-- explicit finalization rule;
 - byte-exact deterministic output across repeated encodes;
 - bounded state independent of source size except for output buffer;
-- malformed/truncated stream fails closed rather than returning silent bytes;
+- malformed/truncated stream fails closed under the authenticated envelope rather than returning accepted incorrect bytes;
 - no external compression library or historical CMPCT codec may encode the Statistical Law payload.
 
-The exact integer interval width, normalization threshold, byte-carry convention and finalization bytes must be committed in source **before the 15-workload measurement workflow is enabled**. If implementation review changes any of those details, update this preregistration in a commit that precedes result-bearing CI; never alter them after seeing the 15-workload result.
+If implementation review changes any coder detail above, this preregistration must change in a commit that precedes result-bearing CI. No coder detail may be changed after seeing the 15-workload result.
 
 ## Surprise arm
 
@@ -84,15 +94,17 @@ The winner is chosen by exact complete diagnostic wire bytes for that block. The
 
 ## Cheap opportunity gate
 
-The writer may avoid full Statistical-Law encoding only through the following preregistered cheap gate:
+The writer may avoid full Statistical-Law encoding only through the following preregistered deterministic gate:
 
 - inspect at most the first **4,096 bytes** of a block (or the whole block if shorter);
-- compute the same previous-byte KT ideal codelength on that sample;
-- extrapolate only the sample ratio, not a learned table;
-- if sample modeled ratio is `>= 0.97`, reject `STAT_H1` immediately and emit `SURPRISE_RAW`;
-- otherwise attempt the real Statistical Law coder and then perform exact byte-cost comparison against raw Surprise.
+- encode that sample with the **exact same integer arithmetic bitstream** specified above, starting from reset predictor state;
+- compute `sample_realized_ratio = len(finalized_sample_payload) / len(sample)`;
+- if `sample_realized_ratio >= 0.97`, reject `STAT_H1` immediately and emit `SURPRISE_RAW`;
+- otherwise attempt the full-block Statistical Law coder and then perform exact byte-cost comparison against raw Surprise.
 
-The sample bytes are part of the single source observation; they must not be reread from storage solely for the gate. Instrument sample bytes, attempted blocks, rejected blocks, coded blocks, and total coder input bytes.
+The ideal KT codelength may still be recorded as analysis, but it has **no authority over the branch decision**. This removes platform floating-point behavior from admission while keeping the gate sparse: at most 4 KiB is coded before deciding whether to pay for a full 64 KiB block.
+
+The sample bytes are part of the single source observation; they must not be reread from storage solely for the gate. Instrument sample bytes, realized sample payload bytes, attempted blocks, rejected blocks, coded blocks, and total coder input bytes.
 
 A later experiment may improve the gate, but this result may not tune `0.97` after seeing outcomes.
 
@@ -144,8 +156,9 @@ Creation evidence must report at least:
 
 - source bytes observed;
 - sample-gate bytes;
+- realized sample payload bytes;
 - full Statistical-Law coder input bytes;
-- blocks rejected before coding;
+- blocks rejected before full coding;
 - blocks encoded and then rejected on exact wire cost;
 - blocks selected as Law;
 - creation CPU and wall time;
@@ -154,7 +167,7 @@ Creation evidence must report at least:
 - emitted control/index/digest bytes;
 - emitted payload bytes.
 
-The implementation must not claim one fused memory pass merely because Python reads each file once: internal NumPy/Python/coder memory traffic is separate debt unless actually instrumented or implemented as a fused loop.
+The implementation must not claim one fused memory pass merely because Python reads each file once: internal Python/native/coder memory traffic is separate debt unless actually instrumented or implemented as a fused loop.
 
 ## Oracle and hostile review
 
@@ -166,7 +179,8 @@ Before the full 15-workload result is accepted:
 4. truncation at every byte position for small encoded streams must fail or be proven unable to produce an accepted incorrect block under digest verification;
 5. one-bit payload corruptions on bounded vectors must be detected by decode failure or digest mismatch;
 6. deterministic re-encode must be byte-identical;
-7. resource bounds must reject declared lengths outside the block contract before allocation/decode.
+7. resource bounds must reject declared lengths outside the block contract before allocation/decode;
+8. native optimization, if used for result-bearing timing or bytes, must reproduce the scalar semantic vectors byte-for-byte before measurement.
 
 ## Promotion / rejection
 
