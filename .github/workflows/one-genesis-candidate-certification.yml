@@ -1,0 +1,55 @@
+# ci-lane: narrow
+name: CMPCT1 ONE Genesis candidate certification
+
+on:
+  push:
+    branches:
+      - research/cmpct1
+    paths:
+      - 'benchmarks/one/genesis_one_candidate_boundary_v1.json'
+      - 'benchmarks/one/one_genesis_candidate_certification_validator.py'
+      - 'tests/one/test_genesis_candidate_certification_validator.py'
+      - '.github/workflows/one-genesis-candidate-certification.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  candidate-certification-contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Bind exact harness source
+        run: test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install test dependencies
+        run: python -m pip install -e '.[test]'
+      - name: Falsify certification identity and physical-checkout shortcuts
+        run: |
+          python -m pytest -q tests/one/test_genesis_candidate_certification_validator.py \
+            | tee candidate-certification-tests.txt
+      - name: Assert authority remains pre-execution
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          row=json.loads(Path('benchmarks/one/genesis_one_candidate_boundary_v1.json').read_text())
+          assert row['genesis_inputs_executed'] is False
+          assert row['comparison_executed'] is False
+          assert row['scoring_executed'] is False
+          assert row['winner_selected'] is False
+          PY
+      - name: Preserve exact-source falsifier output
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: one-genesis-candidate-certification-${{ github.sha }}
+          path: candidate-certification-tests.txt
+          if-no-files-found: warn
+          retention-days: 30
