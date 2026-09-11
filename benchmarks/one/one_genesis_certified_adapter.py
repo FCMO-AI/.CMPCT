@@ -16,6 +16,7 @@ this layer.
 import json
 import os
 from pathlib import Path
+import subprocess
 import sys
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -28,6 +29,7 @@ from benchmarks.one.one_genesis_contender_raw_adapter import run as run_raw_adap
 BOUNDARY = ROOT / "benchmarks" / "one" / "genesis_one_candidate_boundary_v1.json"
 FROZEN_WORKER_LAUNCHER = ROOT / "benchmarks" / "one" / "one_genesis_cmpct1_frozen_worker_launcher.py"
 CERTIFIED_STATUS = "CERTIFIED_FOR_GENESIS"
+FORBIDDEN_IGNORED_RUNTIME_SUFFIXES = frozenset((".so", ".dylib", ".dll", ".pyd"))
 
 
 def _load_boundary() -> dict:
@@ -38,6 +40,51 @@ def _load_boundary() -> dict:
     if payload.get("schema") != "cmpct-one-genesis-one-candidate-boundary-v1":
         raise RuntimeError("Genesis ONE candidate-boundary authority has wrong schema")
     return payload
+
+
+def _assert_initial_contender_checkout_sealed() -> None:
+    """Require every contender to start from its committed checkout bytes.
+
+    HEAD identity is necessary but not sufficient: Git can remain at the frozen commit while
+    tracked files are edited/deleted or untracked modules are added.  The gate therefore
+    rejects ordinary worktree drift for ONE *and* both frozen comparators before any product
+    code is invoked.  Ignored caches are allowed, except native libraries that could replace
+    or augment committed Python code during import/load.
+    """
+    checkout = Path.cwd().resolve()
+    status = subprocess.run(
+        ["git", "-C", str(checkout), "status", "--porcelain=v1", "--untracked-files=all"],
+        text=True,
+        capture_output=True,
+        check=True,
+    )
+    if status.stdout.strip():
+        raise RuntimeError("Genesis contender checkout has working-tree drift from sealed Git state")
+
+    ignored = subprocess.run(
+        [
+            "git",
+            "-C",
+            str(checkout),
+            "ls-files",
+            "--others",
+            "--ignored",
+            "--exclude-standard",
+        ],
+        text=True,
+        capture_output=True,
+        check=True,
+    )
+    dangerous = [
+        line
+        for line in ignored.stdout.splitlines()
+        if Path(line).suffix.lower() in FORBIDDEN_IGNORED_RUNTIME_SUFFIXES
+    ]
+    if dangerous:
+        raise RuntimeError(
+            "Genesis contender checkout contains ignored native runtime artifacts: "
+            + ", ".join(sorted(dangerous)[:8])
+        )
 
 
 def _assert_cmpct1_certification() -> dict:
@@ -62,6 +109,7 @@ def _route_cmpct1_worker_to_frozen_checkout() -> None:
 def run() -> dict:
     if os.environ.get("CMPCT_GENESIS_REAL_GATE_AUTHORIZED") != "1":
         raise RuntimeError("certified adapter requires explicit real-gate executor authorization")
+    _assert_initial_contender_checkout_sealed()
     contender = os.environ.get("CMPCT_GENESIS_CONTENDER", "")
     if contender == "cmpct1":
         _assert_cmpct1_certification()
