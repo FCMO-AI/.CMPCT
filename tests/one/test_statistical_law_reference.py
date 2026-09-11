@@ -48,6 +48,15 @@ def test_deterministic_hostile_round_trips() -> None:
         assert encode_block(source) == payload
 
 
+def test_exact_maximum_block_round_trip() -> None:
+    source = bytes((0,)) * MAX_BLOCK_BYTES
+    payload = encode_block(source)
+    assert decode_block(payload, len(source)) == source
+    # This is a semantic/resource vector, not a density gate.  It also catches
+    # accidental state carry across the fixed 64 KiB restart contract.
+    assert len(payload) == 168
+
+
 def test_verified_envelope_rejects_length_and_corruption() -> None:
     source = b"bounded statistical law " * 80
     payload = encode_block(source)
@@ -87,3 +96,5 @@ def test_resource_bounds_fail_before_decode() -> None:
             decode_block(b"x", length)
     with pytest.raises(StatisticalLawError, match="block length"):
         encode_block(b"")
+    with pytest.raises(StatisticalLawError, match="block length"):
+        encode_block(bytes(MAX_BLOCK_BYTES + 1))
