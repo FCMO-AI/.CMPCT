@@ -62,6 +62,7 @@ def test_candidate_checkout_identity_is_independently_bound(monkeypatch, tmp_pat
         f"HEAD:{mod.READER_PATH}": mod.READER_BLOB_SHA,
         f"HEAD:{mod.RUNTIME_TREE_PATH}": mod.RUNTIME_TREE_SHA,
     }
+    monkeypatch.setattr(mod, "_assert_checkout_clean", lambda _checkout: None)
     monkeypatch.setattr(mod, "_git", lambda _checkout, spec: observed[spec])
     result = mod.validate_authority(_certified(), candidate_checkout=checkout)
     assert result["candidate_checkout_verified"] is True
@@ -77,6 +78,51 @@ def test_candidate_checkout_runtime_tree_drift_fails_closed(monkeypatch, tmp_pat
         f"HEAD:{mod.READER_PATH}": mod.READER_BLOB_SHA,
         f"HEAD:{mod.RUNTIME_TREE_PATH}": "0" * 40,
     }
+    monkeypatch.setattr(mod, "_assert_checkout_clean", lambda _checkout: None)
     monkeypatch.setattr(mod, "_git", lambda _checkout, spec: observed[spec])
     with pytest.raises(RuntimeError, match="runtime_tree_sha differs"):
         mod.validate_authority(_certified(), candidate_checkout=checkout)
+
+
+def test_candidate_checkout_worktree_drift_fails_closed(monkeypatch, tmp_path: Path):
+    checkout = tmp_path / "candidate"
+    checkout.mkdir()
+
+    class Result:
+        def __init__(self, stdout: str):
+            self.stdout = stdout
+
+    monkeypatch.setattr(
+        mod.subprocess,
+        "run",
+        lambda *args, **kwargs: Result(" M experiments/one/general_law_archive.py\n"),
+    )
+    with pytest.raises(RuntimeError, match="working-tree drift"):
+        mod._assert_checkout_clean(checkout)
+
+
+def test_candidate_checkout_ignored_native_artifact_fails_closed(monkeypatch, tmp_path: Path):
+    checkout = tmp_path / "candidate"
+    checkout.mkdir()
+
+    class Result:
+        def __init__(self, stdout: str):
+            self.stdout = stdout
+
+    outputs = iter((Result(""), Result("experiments/one/general_law_archive.so\n")))
+    monkeypatch.setattr(mod.subprocess, "run", lambda *args, **kwargs: next(outputs))
+    with pytest.raises(RuntimeError, match="ignored native runtime artifacts"):
+        mod._assert_checkout_clean(checkout)
+
+
+def test_candidate_checkout_allows_ignored_bytecode(monkeypatch, tmp_path: Path):
+    checkout = tmp_path / "candidate"
+    checkout.mkdir()
+
+    class Result:
+        def __init__(self, stdout: str):
+            self.stdout = stdout
+
+    outputs = iter((Result(""), Result("experiments/one/__pycache__/wire.cpython-312.pyc\n")))
+    monkeypatch.setattr(mod.subprocess, "run", lambda *args, **kwargs: next(outputs))
+    mod._assert_checkout_clean(checkout)
