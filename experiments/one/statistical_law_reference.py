@@ -35,6 +35,7 @@ class BlockChoice:
     payload: bytes
     sample_bytes: int
     sample_kt_bits: float
+    sample_payload_bytes: int
     sample_ratio: float
     stat_attempted: bool
     fixed_charge_bytes: int
@@ -67,8 +68,7 @@ class _BitWriter:
 
 
 class _BitReader:
-    __slots__ = ("data", "byte_pos", "bit_pos")
-
+    __slots__ = ("data", "byte_pos", "bit_pos")n
     def __init__(self, data: bytes) -> None:
         self.data = data
         self.byte_pos = 0
@@ -96,7 +96,7 @@ def _validate_length(length: int) -> None:
 
 
 def kt_prequential_bits(source: bytes) -> float:
-    """Exact KT-model prequential codelength used only by writer discovery."""
+    """Exact KT-model codelength for analysis only, never an admission decision."""
 
     _validate_length(len(source))
     counts = [[0] * ALPHABET for _ in range(ALPHABET)]
@@ -176,18 +176,22 @@ def encode_block(block: bytes) -> bytes:
 
 
 def choose_block_payload(block: bytes) -> BlockChoice:
-    """Apply the preregistered cheap gate and exact Law-vs-Surprise byte test."""
+    """Apply the preregistered deterministic gate and exact byte comparison."""
 
     _validate_length(len(block))
     sample = block[:SAMPLE_BYTES]
+    # Admission uses the exact finalized integer bitstream, never float
+    # codelength. kt_prequential_bits remains diagnostic information only.
+    sample_payload = encode_block(sample)
     sample_bits = kt_prequential_bits(sample)
-    sample_ratio = sample_bits / (8.0 * len(sample))
+    sample_ratio = len(sample_payload) / len(sample)
     if sample_ratio >= SAMPLE_REJECT_RATIO:
         return BlockChoice(
             kind="surprise_raw",
             payload=block,
             sample_bytes=len(sample),
             sample_kt_bits=sample_bits,
+            sample_payload_bytes=len(sample_payload),
             sample_ratio=sample_ratio,
             stat_attempted=False,
             fixed_charge_bytes=BLOCK_FIXED_CHARGE_BYTES,
@@ -206,6 +210,7 @@ def choose_block_payload(block: bytes) -> BlockChoice:
         payload=payload,
         sample_bytes=len(sample),
         sample_kt_bits=sample_bits,
+        sample_payload_bytes=len(sample_payload),
         sample_ratio=sample_ratio,
         stat_attempted=True,
         fixed_charge_bytes=BLOCK_FIXED_CHARGE_BYTES,
