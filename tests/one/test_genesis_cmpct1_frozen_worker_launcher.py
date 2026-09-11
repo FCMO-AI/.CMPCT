@@ -30,6 +30,7 @@ def test_launcher_rejects_checkout_sha_substitution(monkeypatch, tmp_path: Path)
         " D experiments/one/authenticated_archive_envelope.py\n",
         "?? experiments/one/injected_runtime.py\n",
         " M benchmarks/one/one_genesis_cmpct1_product_worker.py\n",
+        "?? benchmarks/one/injected_package_surface.py\n",
     ),
 )
 def test_launcher_rejects_runtime_worktree_drift(monkeypatch, tmp_path: Path, status_line: str):
@@ -59,6 +60,45 @@ def test_launcher_rejects_runtime_worktree_drift(monkeypatch, tmp_path: Path, st
         "--",
         *mod.SEALED_RUNTIME_PATHS,
     ]]
+
+
+@pytest.mark.parametrize(
+    "ignored_path",
+    (
+        "experiments/one/general_law_archive.so",
+        "experiments/one/native_override.dylib",
+        "benchmarks/one/one_genesis_cmpct1_product_worker.pyd",
+        "benchmarks/one/native_override.dll",
+    ),
+)
+def test_launcher_rejects_ignored_native_runtime_artifacts(monkeypatch, tmp_path: Path, ignored_path: str):
+    checkout = tmp_path / "candidate"
+    checkout.mkdir()
+
+    class Result:
+        def __init__(self, stdout: str):
+            self.stdout = stdout
+
+    outputs = iter((Result(""), Result(ignored_path + "\n")))
+    monkeypatch.setattr(mod.subprocess, "run", lambda *args, **kwargs: next(outputs))
+    with pytest.raises(RuntimeError, match="ignored native runtime artifacts"):
+        mod._assert_runtime_worktree_sealed(checkout)
+
+
+def test_launcher_allows_ignored_bytecode_cache(monkeypatch, tmp_path: Path):
+    checkout = tmp_path / "candidate"
+    checkout.mkdir()
+
+    class Result:
+        def __init__(self, stdout: str):
+            self.stdout = stdout
+
+    outputs = iter((
+        Result(""),
+        Result("experiments/one/__pycache__/wire.cpython-312.pyc\n"),
+    ))
+    monkeypatch.setattr(mod.subprocess, "run", lambda *args, **kwargs: next(outputs))
+    mod._assert_runtime_worktree_sealed(checkout)
 
 
 def test_launcher_accepts_clean_runtime_worktree(monkeypatch, tmp_path: Path):
