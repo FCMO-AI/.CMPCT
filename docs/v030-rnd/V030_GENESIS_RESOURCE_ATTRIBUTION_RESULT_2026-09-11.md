@@ -16,6 +16,8 @@ The frozen contender remains `f4b158a55a08b9b18b50e4e4abe4b9251048c772`. No cont
 
 Both diagnostics execute the unchanged frozen v0.30 source through a detached worktree, verify all loaded `cmpct` modules resolve inside that checkout, generate benchmark inputs outside the measured child, and carry no release credit.
 
+Important claim boundary: these are source-sealed **code** replays on the current hosted environment, not same-runner replays of the original Genesis environment. The product semantic tree matches the frozen Genesis product tree on the measured controls, but Analytics archive bytes differ by 18 B (`10,392,476 B` in the child-CPU replay versus `10,392,494 B` in the original source-sealed gate). Therefore the replays are authoritative for diagnosing accounting mechanisms (inherited high-water and child CPU), but their absolute CPU/wall numbers must not be substituted into the original gate as a new comparator score.
+
 ## RSS: Genesis high-water is already present at process start
 
 Genesis reported `511,176,704 B` creation peak RSS for frozen v0.30 on every one of its 15 workloads. The attribution probe measured Analytics and DEFLATE-family as controls:
@@ -35,17 +37,16 @@ The current resident-memory endpoints are informative but are **not peak measure
 
 The source-sealed child-CPU companion measures `RUSAGE_SELF` and `RUSAGE_CHILDREN` around the unchanged frozen build in a fresh child.
 
-| workload | frozen v0.30 wall | parent/self CPU | reaped child CPU | total process-tree CPU | source-sealed v0.29 CPU | v0.29 wall |
+| workload | replay v0.30 wall | parent/self CPU | reaped child CPU | total process-tree CPU | original Genesis v0.29 CPU | original v0.29 wall |
 |---|---:|---:|---:|---:|---:|---:|
 | Analytics | 109.6490 s | 1.3905 s | 261.5150 s | **262.9055 s** | 209.7236 s | 209.7459 s |
 | DEFLATE-family | 1.5358 s | 0.4455 s | 1.7310 s | **2.1764 s** | 6.6890 s | 6.6896 s |
 
-The two controls show opposite economics:
+The decisive result is internal to v0.30: on Analytics, more than `99%` of the measured CPU charged to the process tree is outside the parent (`261.52 s` child versus `1.39 s` self). Genesis `time.process_time()` therefore materially undercharged v0.30 compute on this path. DEFLATE-family also has meaningful child CPU (`1.73 s` child versus `0.45 s` self).
 
-- **Analytics:** v0.30 finishes substantially sooner in elapsed time because it parallelizes, but consumes about `25.36%` more total CPU than v0.29 (`262.91 / 209.72`). This is a real compute-efficiency debt even though latency is better.
-- **DEFLATE-family:** v0.30 improves both elapsed latency and total CPU materially.
+The cross-runner comparison to original v0.29 is **diagnostic only**. It suggests different economics — Analytics replay tree CPU is numerically above the historical v0.29 CPU while DEFLATE replay is below it — but it is not a same-runner process-tree benchmark and must not be promoted as a new v0.30-v0.29 score. A direct paired source-sealed process-tree CPU comparison is required before claiming a percentage compute win/loss.
 
-Therefore the Genesis aggregate `33.0603 s` creation CPU for v0.30 remains a correct parent-process measurement, but it must not be described as total compute. The frozen matrix aggregate elapsed creation wall remains about `347.28 s` versus `806.62 s` for v0.29, so the near-term line still has a real latency advantage. Compute-efficiency now requires explicit process-tree CPU attribution on material expensive paths.
+Therefore the Genesis aggregate `33.0603 s` creation CPU for v0.30 remains a correct parent-process measurement, but it must not be described as total compute. The original frozen matrix aggregate elapsed creation wall remains about `347.28 s` versus `806.62 s` for v0.29, so the gate still contains a real elapsed-latency advantage. Compute-efficiency now requires explicit paired process-tree CPU attribution on material expensive paths.
 
 ## Consequence for R4 / Analytics
 
@@ -53,7 +54,7 @@ Analytics is simultaneously:
 
 - the second-largest frozen density deficit versus v0.29;
 - the largest block of expensive r25 audition work that ultimately loses publication to r24;
-- a case where v0.30 lowers elapsed time through parallelism but spends more total CPU than v0.29.
+- a demonstrated case where parent-only CPU accounting misses nearly all descendant compute.
 
 That strengthens, rather than weakens, the current sparse-R4 objective. A useful Analytics mechanism must not merely make the stored bytes smaller. It should either:
 
@@ -72,4 +73,5 @@ They do alter future reporting discipline:
 - never use the historical uniform `ru_maxrss` as workload-attributed build memory;
 - charge descendant CPU where v0.30 uses process parallelism;
 - use sampled current process-tree RSS for operation memory;
+- separate same-runner comparator claims from source-sealed accounting diagnostics;
 - keep elapsed wall, total CPU and memory as separate axes rather than collapsing them into one speed claim.
