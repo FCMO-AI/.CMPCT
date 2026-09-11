@@ -5,8 +5,9 @@ from __future__ import annotations
 This script belongs to the harness checkout, not to any contender checkout. The executor
 runs it with cwd set to the sealed contender checkout. For CMPCT1 it requires the durable
 candidate-boundary authority to name exactly the same frozen commit that the executor
-selected before delegating to the raw adapter. This prevents a certification commit from
-silently becoming the scientific contender merely because the harness branch advanced.
+selected before delegating to the raw adapter. It also routes the CMPCT1 phase worker
+through a launcher that imports the product runtime from the sealed contender checkout,
+not from the newer harness checkout.
 
 No workload generation, measurement, comparison, scoring, or winner selection occurs in
 this layer.
@@ -21,9 +22,11 @@ ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
+from benchmarks.one import one_genesis_contender_workload_measurement as workload_measurement
 from benchmarks.one.one_genesis_contender_raw_adapter import run as run_raw_adapter
 
 BOUNDARY = ROOT / "benchmarks" / "one" / "genesis_one_candidate_boundary_v1.json"
+FROZEN_WORKER_LAUNCHER = ROOT / "benchmarks" / "one" / "one_genesis_cmpct1_frozen_worker_launcher.py"
 CERTIFIED_STATUS = "CERTIFIED_FOR_GENESIS"
 
 
@@ -50,12 +53,19 @@ def _assert_cmpct1_certification() -> dict:
     return certified
 
 
+def _route_cmpct1_worker_to_frozen_checkout() -> None:
+    if not FROZEN_WORKER_LAUNCHER.is_file():
+        raise RuntimeError("CMPCT1 frozen worker launcher is missing from certified harness")
+    workload_measurement.CMPCT1_WORKER = FROZEN_WORKER_LAUNCHER
+
+
 def run() -> dict:
     if os.environ.get("CMPCT_GENESIS_REAL_GATE_AUTHORIZED") != "1":
         raise RuntimeError("certified adapter requires explicit real-gate executor authorization")
     contender = os.environ.get("CMPCT_GENESIS_CONTENDER", "")
     if contender == "cmpct1":
         _assert_cmpct1_certification()
+        _route_cmpct1_worker_to_frozen_checkout()
     return run_raw_adapter()
 
 
