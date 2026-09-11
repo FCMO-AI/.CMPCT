@@ -2,11 +2,13 @@ from __future__ import annotations
 
 from copy import deepcopy
 import inspect
+import json
 from pathlib import Path
+import sys
 
 import pytest
 
-from benchmarks.one.one_genesis_gate_executor_preflight import _git_head
+from benchmarks.one.one_genesis_gate_executor_preflight import _git_head, V029_SHA, V030_SHA
 from benchmarks.one import one_genesis_gate_measurement_executor as v1
 from benchmarks.one import one_genesis_gate_measurement_executor_v2 as v2
 from benchmarks.one.one_genesis_gate_measurement_executor_v2 import execute
@@ -21,6 +23,32 @@ def _fake_seal(work_root: Path) -> dict:
         "work_root": str(work_root.resolve()),
         "rows": deepcopy(v1._identity_rows()),
     }
+
+
+def _adapter_manifest(tmp_path: Path, *, candidate_sha: str, command: list[str] | None = None) -> Path:
+    command = command or [sys.executable, str(v2.HARNESS_ADAPTER)]
+    path = tmp_path / "adapters.json"
+    path.write_text(
+        json.dumps(
+            {
+                "schema": "cmpct-one-genesis-adapters-v1",
+                "harness_sha": _git_head(),
+                "candidate_sha": candidate_sha,
+                "frozen_comparators": {"v0.29": V029_SHA, "v0.30": V030_SHA},
+                "adapters": {
+                    "cmpct1": {"checkout": str(tmp_path / "cmpct1"), "command": list(command)},
+                    "v0.29": {"checkout": str(tmp_path / "v029"), "command": list(command)},
+                    "v0.30": {"checkout": str(tmp_path / "v030"), "command": list(command)},
+                },
+                "execution_authorized": False,
+                "comparisons_executed": False,
+                "scoring_executed": False,
+                "winner_selected": False,
+            }
+        ),
+        encoding="utf-8",
+    )
+    return path
 
 
 def test_fixture_remains_non_evidence_and_executes_no_scientific_seal(tmp_path: Path):
@@ -49,6 +77,38 @@ def test_v2_delegates_to_one_execution_loop_instead_of_reimplementing_gate_logic
         assert forbidden not in source
 
 
+def test_adapter_manifest_command_substitution_fails_before_executor(monkeypatch, tmp_path: Path):
+    head = _git_head()
+    adapters = _adapter_manifest(tmp_path, candidate_sha=head, command=[sys.executable, str(tmp_path / "substitute.py")])
+    monkeypatch.setattr(v1, "execute", lambda **kwargs: pytest.fail("V1 executor must not receive substituted adapter"))
+    with pytest.raises(RuntimeError, match="command differs from certified harness adapter"):
+        execute(
+            candidate_sha=head,
+            raw_dir=tmp_path / "raw",
+            now_value="2026-09-11T00:00:00-06:00",
+            fixture=False,
+            execute_real_gate=True,
+            adapters_path=adapters,
+            work_root=tmp_path / "work",
+        )
+
+
+def test_adapter_manifest_candidate_substitution_fails_before_executor(monkeypatch, tmp_path: Path):
+    head = _git_head()
+    adapters = _adapter_manifest(tmp_path, candidate_sha="0" * 40)
+    monkeypatch.setattr(v1, "execute", lambda **kwargs: pytest.fail("V1 executor must not receive wrong candidate authority"))
+    with pytest.raises(RuntimeError, match="candidate SHA differs"):
+        execute(
+            candidate_sha=head,
+            raw_dir=tmp_path / "raw",
+            now_value="2026-09-11T00:00:00-06:00",
+            fixture=False,
+            execute_real_gate=True,
+            adapters_path=adapters,
+            work_root=tmp_path / "work",
+        )
+
+
 def test_scientific_identity_ignores_runner_root_but_diagnostic_file_does_not(tmp_path: Path):
     first = _fake_seal(tmp_path / "runner-a")
     second = _fake_seal(tmp_path / "runner-b")
@@ -70,14 +130,7 @@ def test_scientific_identity_changes_when_exam_tree_changes(tmp_path: Path):
 def test_real_path_persists_scientific_identity_before_first_adapter(monkeypatch, tmp_path: Path):
     head = _git_head()
     work_root = tmp_path / "physical"
-    adapters = tmp_path / "adapters.json"
-    adapters.write_text(
-        '{"schema":"cmpct-one-genesis-adapters-v1","adapters":{'
-        '"cmpct1":{"checkout":"x","command":["x"]},'
-        '"v0.29":{"checkout":"x","command":["x"]},'
-        '"v0.30":{"checkout":"x","command":["x"]}}}',
-        encoding="utf-8",
-    )
+    adapters = _adapter_manifest(tmp_path, candidate_sha=head)
     monkeypatch.setattr(v1, "_seal_physical_inputs", lambda root: _fake_seal(root))
     monkeypatch.setattr(v1, "_assert_physical_inputs_unchanged", lambda root: None)
 
