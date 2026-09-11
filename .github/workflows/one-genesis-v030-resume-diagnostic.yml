@@ -9,6 +9,11 @@ on:
       - '.github/workflows/one-genesis-v030-resume-diagnostic.yml'
       - 'benchmarks/one/one_genesis_v030_resume_diagnostic.py'
       - 'benchmarks/one/one_genesis_historical_product_worker.py'
+  pull_request:
+    paths:
+      - '.github/workflows/one-genesis-v030-resume-diagnostic.yml'
+      - 'benchmarks/one/one_genesis_v030_resume_diagnostic.py'
+      - 'benchmarks/one/one_genesis_historical_product_worker.py'
   workflow_dispatch:
 
 permissions:
