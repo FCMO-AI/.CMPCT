@@ -9,11 +9,15 @@ on:
       - '.github/workflows/one-genesis-v030-resume-diagnostic.yml'
       - 'benchmarks/one/one_genesis_v030_resume_diagnostic.py'
       - 'benchmarks/one/one_genesis_historical_product_worker.py'
+      - 'benchmarks/one/one_genesis_contender_workload_measurement.py'
+      - 'tests/test_one_genesis_historical_source_seal.py'
   pull_request:
     paths:
       - '.github/workflows/one-genesis-v030-resume-diagnostic.yml'
       - 'benchmarks/one/one_genesis_v030_resume_diagnostic.py'
       - 'benchmarks/one/one_genesis_historical_product_worker.py'
+      - 'benchmarks/one/one_genesis_contender_workload_measurement.py'
+      - 'tests/test_one_genesis_historical_source_seal.py'
   workflow_dispatch:
 
 permissions:
@@ -56,6 +60,9 @@ jobs:
           # wav/flac coding, so the gate must provision the declared Python binding too.
           python -m pip install 'soundfile>=0.12'
 
+      - name: Falsify ambient historical-source leakage
+        run: python -m pytest -q tests/test_one_genesis_historical_source_seal.py
+
       - name: Materialize frozen v0.30 checkout
         run: |
           git cat-file -e "$V030_SHA^{commit}"
@@ -72,7 +79,7 @@ jobs:
             --output "$RUNNER_TEMP/genesis-v030/v030-raw.json" \
             --progress "$RUNNER_TEMP/genesis-v030/progress.json"
 
-      - name: Validate completed v0.30 raw shape
+      - name: Validate completed v0.30 raw shape and runtime provenance
         if: success()
         run: |
           python - <<'PY'
@@ -85,6 +92,14 @@ jobs:
           assert p['source_sha'] == 'f4b158a55a08b9b18b50e4e4abe4b9251048c772'
           assert p['synthetic'] is False and p['production_eligible'] is True
           assert len(p['rows']) == 15
+          for row in p['rows']:
+              provenance = row['measurement']['runtime_source_provenance']
+              assert provenance['status'] == 'source_sealed'
+              assert provenance['source_sha'] == p['source_sha']
+              assert provenance['frozen_package_root'].endswith('/cmpct-v030/src/cmpct')
+              assert provenance['sample_count'] in (10, 15)
+              for module_path in provenance['loaded_cmpct_modules'].values():
+                  assert '/cmpct-v030/src/cmpct/' in module_path or module_path.endswith('/cmpct-v030/src/cmpct/__init__.py')
           assert p['comparisons_executed'] is False
           assert p['scoring_executed'] is False
           assert p['winner_selected'] is False
