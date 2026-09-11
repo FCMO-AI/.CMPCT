@@ -16,6 +16,8 @@ This result evaluates the sparse tabular admission + authenticated binary owner 
 
 The workflow completed successfully as an evidence/integrity lane. That does not imply the research hypothesis passed.
 
+The current-run ordinary-v0.30 Analytics baseline is `10,392,496 B`, 2 B above the original source-sealed Genesis v0.30 row (`10,392,494 B`) despite the same logical payload. This is another reason to treat the experiment as causal/diagnostic rather than silently replace the frozen gate. The 2.10 MB negative margin is vastly larger than that environment drift.
+
 ## Matrix result
 
 Across all 15 workloads:
@@ -36,13 +38,13 @@ Frozen workload: `neutral_hostile_v1/04_analytics_and_database`
 
 | metric | baseline v0.30 | integrated R4 | accepted v0.29 |
 |---|---:|---:|---:|
-| logical bytes | 31,268,131 | 31,268,131 | same input |
+| logical bytes | 31,265,767 | 31,265,767 | same input |
 | authenticated stored bytes | 10,392,496 | **8,237,189** | **6,135,172** |
 | R4 saving vs v0.30 | — | **2,155,307 B (20.739%)** | — |
 | remaining deficit vs v0.29 | — | **+2,102,017 B (+34.262%)** | — |
 | single-run create wall | 135.3471 s | 37.4938 s | not remeasured in this lane |
 
-The R4 mechanism therefore recovers a large and real fraction of the frozen v0.30 deficit while also avoiding much of the expensive existing portfolio path in this single run. But the preregistered density requirement was strict: the integrated candidate had to beat the accepted same-input v0.29 artifact. It does not. `supported_for_productization_design=false` is therefore the correct result.
+The R4 mechanism therefore recovers a large and real fraction of the current-run v0.30 deficit while also avoiding much of the expensive existing portfolio path in this single run. But the preregistered density requirement was strict: the integrated candidate had to beat the accepted same-input v0.29 artifact. It does not. `supported_for_productization_design=false` is therefore the correct result.
 
 Do not convert the single-run wall reduction into a release speed claim. Timing was not repeated, total descendant CPU was not charged by this receipt, and the research wrapper changes which bytes reach the ordinary v0.30 base build.
 
@@ -114,7 +116,7 @@ The correct next question is not “how do we make this threshold pass?”. It i
 ## Next decisive work
 
 1. preserve this R4 as a negative/ablation, not a shipping candidate;
-2. attribute the remaining Analytics gap against the v0.25 stream/derived/pack structure and the current r24 base after the two tabular members are removed;
+2. test the complementary exact NPY/NPZ container-member relation exposed by v0.25 attribution together with the tabular owner before attempting broad stream-federation productization;
 3. investigate whether the cheap observation signal can reject or reshape expensive r25 auditions before child-process work begins;
 4. charge same-runner process-tree CPU and sampled process-tree RSS on any future Analytics contender;
 5. only if density later crosses the 6,135,172 B accepted-v0.29 floor should actual file-backed selective I/O, recovery and native parity become promotion blockers.
