@@ -6,10 +6,14 @@ on:
     branches:
       - research/cmpct1
     paths:
+      - 'benchmarks/one/one_genesis_certified_adapter.py'
+      - 'benchmarks/one/one_genesis_cmpct1_frozen_worker_launcher.py'
       - 'benchmarks/one/one_genesis_contender_raw_adapter.py'
       - 'benchmarks/one/one_genesis_contender_workload_measurement.py'
       - 'benchmarks/one/one_genesis_selective_access_plan.py'
       - 'benchmarks/one/one_genesis_gate_measurement_executor.py'
+      - 'tests/one/test_genesis_certified_adapter.py'
+      - 'tests/one/test_genesis_cmpct1_frozen_worker_launcher.py'
       - 'tests/one/test_genesis_contender_raw_adapter.py'
       - 'tests/one/test_genesis_contender_workload_measurement.py'
       - 'tests/one/test_genesis_gate_authorization_chain.py'
@@ -36,11 +40,13 @@ jobs:
           python-version: '3.11'
       - name: Install test dependency
         run: python -m pip install pytest
-      - name: Falsify workload, adapter, and authorization contracts
+      - name: Falsify workload, adapter, seal, and authorization contracts
         env:
           PYTHONPATH: ${{ github.workspace }}
         run: |
           python -m pytest -q \
+            tests/one/test_genesis_certified_adapter.py \
+            tests/one/test_genesis_cmpct1_frozen_worker_launcher.py \
             tests/one/test_genesis_contender_workload_measurement.py \
             tests/one/test_genesis_contender_raw_adapter.py \
             tests/one/test_genesis_gate_authorization_chain.py \
