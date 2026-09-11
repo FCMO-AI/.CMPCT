@@ -4,6 +4,11 @@ from __future__ import annotations
 
 This tool performs only source/path binding. It never generates workloads, authorizes a
 real gate, executes contenders, computes comparisons, or selects a winner.
+
+The orchestration script comes from the current harness checkout, while each adapter cwd
+remains the exact sealed contender checkout. This separation is required so a durable
+post-boundary certification commit can authorize the frozen pre-gate ONE candidate
+without silently replacing that candidate with the newer harness HEAD.
 """
 
 import argparse
@@ -15,7 +20,8 @@ from typing import Any
 
 V029_SHA = "02b8b27cb2d97af7c6e0797984a898e8fa8a8e5d"
 V030_SHA = "f4b158a55a08b9b18b50e4e4abe4b9251048c772"
-RAW_ADAPTER_REL = Path("benchmarks/one/one_genesis_contender_raw_adapter.py")
+ROOT = Path(__file__).resolve().parents[2]
+CERTIFIED_ADAPTER_REL = Path("benchmarks/one/one_genesis_certified_adapter.py")
 
 
 def _sha(value: str, label: str) -> str:
@@ -40,15 +46,14 @@ def _bind_checkout(checkout: Path, expected: str, label: str) -> Path:
     return checkout
 
 
-def _candidate_adapter(candidate_checkout: Path) -> Path:
-    candidate_root = candidate_checkout.resolve()
-    script = (candidate_root / RAW_ADAPTER_REL).resolve()
+def _harness_adapter() -> Path:
+    script = (ROOT / CERTIFIED_ADAPTER_REL).resolve()
     try:
-        script.relative_to(candidate_root)
+        script.relative_to(ROOT.resolve())
     except ValueError as exc:
-        raise RuntimeError("raw adapter resolves outside sealed candidate checkout") from exc
+        raise RuntimeError("certified adapter resolves outside harness checkout") from exc
     if not script.is_file():
-        raise RuntimeError(f"raw adapter script missing from sealed candidate checkout: {script}")
+        raise RuntimeError(f"certified harness adapter script missing: {script}")
     return script
 
 
@@ -69,7 +74,7 @@ def build_manifest(
     candidate = _bind_checkout(candidate_checkout, candidate_sha, "CMPCT1")
     v029 = _bind_checkout(v029_checkout, V029_SHA, "v0.29")
     v030 = _bind_checkout(v030_checkout, V030_SHA, "v0.30")
-    script = _candidate_adapter(candidate)
+    script = _harness_adapter()
     command = [python_executable, str(script)]
     adapters = {
         "cmpct1": {"checkout": str(candidate), "command": list(command)},
@@ -80,7 +85,8 @@ def build_manifest(
         raise RuntimeError("adapter manifest must contain exactly the three Genesis contenders")
     return {
         "schema": "cmpct-one-genesis-adapters-v1",
-        "claim_boundary": "source/path binding only; no authorization, contender execution, workload generation, comparison, scoring, or winner selection",
+        "claim_boundary": "source/path binding only; harness orchestration is separate from sealed contender checkouts; no authorization, contender execution, workload generation, comparison, scoring, or winner selection",
+        "harness_sha": _head(ROOT),
         "candidate_sha": candidate_sha,
         "frozen_comparators": {"v0.29": V029_SHA, "v0.30": V030_SHA},
         "adapters": adapters,
@@ -111,6 +117,7 @@ def main() -> None:
     args.output.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     print(json.dumps({
         "schema": payload["schema"],
+        "harness_sha": payload["harness_sha"],
         "candidate_sha": payload["candidate_sha"],
         "adapters": sorted(payload["adapters"]),
         "execution_authorized": payload["execution_authorized"],
