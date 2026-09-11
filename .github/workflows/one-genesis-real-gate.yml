@@ -44,6 +44,10 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y zstd ffmpeg gcc libsndfile1
           python -m pip install -e '.[test]'
+          # Frozen v0.30 declares soundfile>=0.12 in its audio extra. The Genesis
+          # media workload reaches that exact path, so this is comparator environment
+          # provisioning rather than a contender modification.
+          python -m pip install 'soundfile>=0.12'
 
       - name: Materialize exact frozen contender worktrees
         run: |
