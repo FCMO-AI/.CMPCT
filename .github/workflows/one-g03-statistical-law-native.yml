@@ -1,0 +1,37 @@
+# ci-lane: research-semantic
+name: CMPCT1 ONE-G0.3 Statistical Law native parity
+
+on:
+  push:
+    branches:
+      - research/cmpct1
+    paths:
+      - 'native/cmpct-core/src/bin/one_g03_statistical_law_reference.rs'
+      - '.github/workflows/one-g03-statistical-law-native.yml'
+  pull_request:
+    paths:
+      - 'native/cmpct-core/src/bin/one_g03_statistical_law_reference.rs'
+      - '.github/workflows/one-g03-statistical-law-native.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  native-statistical-law-parity:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 1
+
+      - name: Bind exact source
+        run: |
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$(git status --porcelain=v1 --untracked-files=all)" = ""
+
+      - name: Run native semantic parity tests
+        working-directory: native/cmpct-core
+        run: cargo test --locked --bin one_g03_statistical_law_reference
