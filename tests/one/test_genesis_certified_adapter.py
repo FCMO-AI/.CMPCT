@@ -23,14 +23,17 @@ def _boundary(tmp_path, *, status=mod.CERTIFIED_STATUS, eligible=True, candidate
     return path
 
 
-def test_cmpct1_matching_certification_delegates(monkeypatch, tmp_path):
+def test_cmpct1_matching_certification_routes_frozen_runtime_then_delegates(monkeypatch, tmp_path):
     monkeypatch.setattr(mod, "BOUNDARY", _boundary(tmp_path))
     monkeypatch.setenv("CMPCT_GENESIS_REAL_GATE_AUTHORIZED", "1")
     monkeypatch.setenv("CMPCT_GENESIS_CONTENDER", "cmpct1")
     monkeypatch.setenv("CMPCT_GENESIS_SOURCE_SHA", "a" * 40)
     expected = {"schema": "cmpct-one-genesis-contender-raw-v1", "rows": [], "scoring_executed": False}
+    routed = []
+    monkeypatch.setattr(mod, "_route_cmpct1_worker_to_frozen_checkout", lambda: routed.append(True))
     monkeypatch.setattr(mod, "run_raw_adapter", lambda: expected)
     assert mod.run() is expected
+    assert routed == [True]
 
 
 def test_cmpct1_candidate_sha_substitution_fails_closed(monkeypatch, tmp_path):
@@ -73,11 +76,12 @@ def test_missing_explicit_executor_authorization_fails_closed(monkeypatch, tmp_p
         mod.run()
 
 
-def test_frozen_comparator_does_not_consume_one_candidate_boundary(monkeypatch, tmp_path):
+def test_frozen_comparator_does_not_consume_one_candidate_boundary_or_route_one_worker(monkeypatch, tmp_path):
     monkeypatch.setattr(mod, "BOUNDARY", _boundary(tmp_path, status="HOLD_UNTIL_COMPLETE_PRODUCT_BOUNDARY_IS_CERTIFIED"))
     monkeypatch.setenv("CMPCT_GENESIS_REAL_GATE_AUTHORIZED", "1")
     monkeypatch.setenv("CMPCT_GENESIS_CONTENDER", "v0.29")
     monkeypatch.setenv("CMPCT_GENESIS_SOURCE_SHA", "c" * 40)
     expected = {"schema": "cmpct-one-genesis-contender-raw-v1", "rows": [], "scoring_executed": False}
+    monkeypatch.setattr(mod, "_route_cmpct1_worker_to_frozen_checkout", lambda: pytest.fail("comparator must not route CMPCT1 worker"))
     monkeypatch.setattr(mod, "run_raw_adapter", lambda: expected)
     assert mod.run() is expected
