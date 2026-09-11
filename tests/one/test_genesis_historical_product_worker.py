@@ -62,6 +62,7 @@ def _install(monkeypatch: pytest.MonkeyPatch, contender: str, surface: FakeSurfa
 
 def test_wrong_frozen_checkout_sha_fails_closed(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
     root = _tree(tmp_path)
+    monkeypatch.setattr(worker, "_forbidden_imports", lambda: [])
     monkeypatch.setattr(worker, "_git_head", lambda _checkout: "0" * 40)
     with pytest.raises(RuntimeError, match="checkout SHA mismatch"):
         worker.run(
@@ -72,6 +73,7 @@ def test_wrong_frozen_checkout_sha_fails_closed(monkeypatch: pytest.MonkeyPatch,
 
 def test_production_requires_executor_authorization(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
     root = _tree(tmp_path)
+    monkeypatch.setattr(worker, "_forbidden_imports", lambda: [])
     monkeypatch.setattr(worker, "_git_head", lambda _checkout: worker.FROZEN["v029"]["sha"])
     monkeypatch.delenv("CMPCT_GENESIS_REAL_GATE_AUTHORIZED", raising=False)
     with pytest.raises(RuntimeError, match="requires executor authorization"):
