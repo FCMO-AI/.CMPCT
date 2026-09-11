@@ -81,7 +81,7 @@ def test_adapter_missing_executor_owned_workload_fails_closed(tmp_path: Path):
     work_root = tmp_path / "work"
     checkout = tmp_path / "checkout"
     checkout.mkdir()
-    _materialize(work_root, identities[:-1])
+    _materialize(work_root, identities[1:])
     with pytest.raises(RuntimeError, match="workload directory missing"):
         mod._assemble_rows(
             contender="v0.30",
