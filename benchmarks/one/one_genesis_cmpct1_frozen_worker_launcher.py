@@ -20,23 +20,26 @@ import sys
 HARNESS_ROOT = Path(__file__).resolve().parents[2]
 HARNESS_BOUNDARY = HARNESS_ROOT / "benchmarks" / "one" / "genesis_one_candidate_boundary_v1.json"
 WORKER_MODULE = "benchmarks.one.one_genesis_cmpct1_product_worker"
+# Seal every repository-local Python surface that can participate in loading the worker
+# and ONE runtime, not just the two leaf files certified separately in the boundary.
 SEALED_RUNTIME_PATHS = (
     "experiments/one",
-    "benchmarks/one/one_genesis_cmpct1_product_worker.py",
+    "benchmarks/one",
 )
+FORBIDDEN_IGNORED_RUNTIME_SUFFIXES = frozenset((".so", ".dylib", ".dll", ".pyd"))
 
 
 def _assert_runtime_worktree_sealed(root: Path) -> None:
-    """Reject tracked or ordinary-untracked drift in the frozen runtime cone.
+    """Reject working-tree drift capable of changing the frozen scientific runtime.
 
     Commit/tree/blob identity alone is insufficient because Python executes working-tree
     bytes.  A checkout can remain at the authorized HEAD while a tracked runtime file is
-    edited/deleted, or a new importable source file is added.  Genesis must fail closed in
-    that state rather than measure bytes not represented by the frozen Git authority.
+    edited/deleted, or a new importable source file is added.  Ordinary tracked/untracked
+    drift is rejected across both the ONE package and the worker package.
 
-    Ignored files are intentionally excluded: Python bytecode and native build caches may
-    legitimately appear between fresh-process phases.  The frozen worker's committed source
-    identities remain independently checked by the candidate-boundary certification.
+    Git-ignored bytecode/output caches are permitted because fresh-process phases can create
+    them.  Ignored native-library artifacts are *not* permitted: Python/ctypes can load such
+    files ahead of committed source while Git still reports the checkout as clean.
     """
     result = subprocess.run(
         [
@@ -55,6 +58,33 @@ def _assert_runtime_worktree_sealed(root: Path) -> None:
     )
     if result.stdout.strip():
         raise RuntimeError("CMPCT1 frozen worker launcher runtime worktree differs from sealed Git state")
+
+    ignored = subprocess.run(
+        [
+            "git",
+            "-C",
+            str(root),
+            "ls-files",
+            "--others",
+            "--ignored",
+            "--exclude-standard",
+            "--",
+            *SEALED_RUNTIME_PATHS,
+        ],
+        text=True,
+        capture_output=True,
+        check=True,
+    )
+    dangerous = [
+        line
+        for line in ignored.stdout.splitlines()
+        if Path(line).suffix.lower() in FORBIDDEN_IGNORED_RUNTIME_SUFFIXES
+    ]
+    if dangerous:
+        raise RuntimeError(
+            "CMPCT1 frozen worker launcher found ignored native runtime artifacts: "
+            + ", ".join(sorted(dangerous)[:8])
+        )
 
 
 def _sealed_candidate_root() -> Path:
