@@ -20,6 +20,41 @@ import sys
 HARNESS_ROOT = Path(__file__).resolve().parents[2]
 HARNESS_BOUNDARY = HARNESS_ROOT / "benchmarks" / "one" / "genesis_one_candidate_boundary_v1.json"
 WORKER_MODULE = "benchmarks.one.one_genesis_cmpct1_product_worker"
+SEALED_RUNTIME_PATHS = (
+    "experiments/one",
+    "benchmarks/one/one_genesis_cmpct1_product_worker.py",
+)
+
+
+def _assert_runtime_worktree_sealed(root: Path) -> None:
+    """Reject tracked or ordinary-untracked drift in the frozen runtime cone.
+
+    Commit/tree/blob identity alone is insufficient because Python executes working-tree
+    bytes.  A checkout can remain at the authorized HEAD while a tracked runtime file is
+    edited/deleted, or a new importable source file is added.  Genesis must fail closed in
+    that state rather than measure bytes not represented by the frozen Git authority.
+
+    Ignored files are intentionally excluded: Python bytecode and native build caches may
+    legitimately appear between fresh-process phases.  The frozen worker's committed source
+    identities remain independently checked by the candidate-boundary certification.
+    """
+    result = subprocess.run(
+        [
+            "git",
+            "-C",
+            str(root),
+            "status",
+            "--porcelain=v1",
+            "--untracked-files=all",
+            "--",
+            *SEALED_RUNTIME_PATHS,
+        ],
+        text=True,
+        capture_output=True,
+        check=True,
+    )
+    if result.stdout.strip():
+        raise RuntimeError("CMPCT1 frozen worker launcher runtime worktree differs from sealed Git state")
 
 
 def _sealed_candidate_root() -> Path:
@@ -34,6 +69,7 @@ def _sealed_candidate_root() -> Path:
     observed = subprocess.check_output(["git", "-C", str(root), "rev-parse", "HEAD"], text=True).strip()
     if len(expected) != 40 or observed != expected:
         raise RuntimeError("CMPCT1 frozen worker launcher checkout differs from executor-sealed source")
+    _assert_runtime_worktree_sealed(root)
     return root
 
 
