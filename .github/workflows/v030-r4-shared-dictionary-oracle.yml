@@ -1,0 +1,144 @@
+# ci-lane: deep
+# ci-pr-scope: latest-head-commit-gate
+# ci-cancel-policy: preserve-running-exact-receipt
+name: CMPCT v0.30 R4 shared dictionary oracle
+
+on:
+  push:
+    branches: [agent/v030-authoritative-integration]
+    paths:
+      - 'benchmarks/v030_r4_shared_dictionary_oracle.py'
+      - 'benchmarks/v030_r4_zstd_parameter_decomposition.py'
+      - 'benchmarks/v030_external_competitors.py'
+      - 'benchmarks/v030_release_generalization.py'
+      - 'benchmarks/neutral_hostile_corpus_v1.py'
+      - 'benchmarks/neutral_hostile_determinism_repair_v*.py'
+      - 'experiments/entropygraph_v025.py'
+      - 'experiments/entropygraph_v030_product_fs.py'
+      - 'experiments/entropygraph_v030_release_product.py'
+      - '.github/workflows/v030-r4-shared-dictionary-oracle.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'benchmarks/v030_r4_shared_dictionary_oracle.py'
+      - 'benchmarks/v030_r4_zstd_parameter_decomposition.py'
+      - 'benchmarks/v030_external_competitors.py'
+      - 'benchmarks/v030_release_generalization.py'
+      - 'benchmarks/neutral_hostile_corpus_v1.py'
+      - 'benchmarks/neutral_hostile_determinism_repair_v*.py'
+      - 'experiments/entropygraph_v025.py'
+      - 'experiments/entropygraph_v030_product_fs.py'
+      - 'experiments/entropygraph_v030_release_product.py'
+      - '.github/workflows/v030-r4-shared-dictionary-oracle.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-v030-r4-shared-dictionary-${{ github.event.pull_request.head.sha || github.sha }}
+  cancel-in-progress: false
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+
+jobs:
+  latest-head-impact:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      run_deep: ${{ steps.scope.outputs.run_deep }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 2
+      - name: Bind exact head and classify only its changed files
+        id: scope
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            echo 'run_deep=true' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          git diff-tree --no-commit-id --name-only -r HEAD > /tmp/latest-head-files.txt
+          if grep -Eq '^(benchmarks/v030_r4_shared_dictionary_oracle\.py|benchmarks/v030_r4_zstd_parameter_decomposition\.py|benchmarks/v030_external_competitors\.py|benchmarks/v030_release_generalization\.py|benchmarks/neutral_hostile_corpus_v1\.py|benchmarks/neutral_hostile_determinism_repair_v[^/]*\.py|experiments/entropygraph_v025\.py|experiments/entropygraph_v030_product_fs\.py|experiments/entropygraph_v030_release_product\.py|\.github/workflows/v030-r4-shared-dictionary-oracle\.yml)$' /tmp/latest-head-files.txt; then
+            echo 'run_deep=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'run_deep=false' >> "$GITHUB_OUTPUT"
+          fi
+
+  shared-dictionary-oracle:
+    needs: latest-head-impact
+    if: needs.latest-head-impact.outputs.run_deep == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - name: Bind exact candidate head
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install frozen-corpus and comparator dependencies
+        run: |
+          set -euo pipefail
+          test -f /etc/apt/sources.list.d/ubuntu.sources
+          sudo apt-get -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" -o Dir::Etc::sourceparts="-" update
+          sudo apt-get -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" -o Dir::Etc::sourceparts="-" install -y zstd gcc ffmpeg libsndfile1
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[audio,test]'
+      - name: Compile exact R4 oracle
+        run: python -m py_compile benchmarks/v030_r4_shared_dictionary_oracle.py
+      - name: Measure charged shared-dictionary oracle
+        run: |
+          mkdir -p benchmark-artifacts
+          python benchmarks/v030_r4_shared_dictionary_oracle.py \
+            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-r4-shared-dictionary-work" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-r4-shared-dictionary.json"
+      - name: Enforce diagnostic contract
+        run: |
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          d=json.loads(Path('benchmark-artifacts/v030-r4-shared-dictionary.json').read_text())
+          assert d['schema']=='cmpct-v030-r4-shared-dictionary-oracle-v1'
+          assert d['source_commit']==os.environ['EVIDENCE_HEAD']
+          assert d['targets']==['02_office_workspace','04_analytics_and_database','01_developer_repository','08_many_tiny_files','07_incompressible_and_encrypted_like']
+          assert d['dict_sizes']==[16384,32768,65536]
+          assert d['dict_levels']==[3,5,9]
+          assert len(d['rows'])==5
+          c=d['contract']
+          assert c['diagnostic_only'] and c['release_credit'] is False
+          assert c['dictionary_bytes_fully_charged'] and c['training_time_charged']
+          assert c['eligibility_scan_time_charged'] and c['dictionary_compression_time_charged']
+          assert c['per_reference_physical_tax_charged'] and c['mandatory_payload_roundtrip']
+          assert c['production_format_changed'] is False and c['production_selector_changed'] is False
+          assert c['same_fixed_level15_structural_representation']
+          assert isinstance(d['hypothesis']['supported'], bool)
+          for row in d['rows']:
+            assert row['level15_archive_bytes'] > 0 and row['zip_deflate9']['archive_bytes'] > 0
+            for v in row['variants']:
+              assert v['dictionary_and_reference_overhead_bytes'] >= v['dict_size_bytes']
+              assert isinstance(v['inside_zip_create_budget'], bool)
+          PY
+      - name: CI topology self-check
+        run: python tools/check_ci_topology.py .github/workflows/v030-r4-shared-dictionary-oracle.yml
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: v030-r4-shared-dictionary-${{ env.EVIDENCE_HEAD }}
+          path: benchmark-artifacts/v030-r4-shared-dictionary.json
+          if-no-files-found: error
+          retention-days: 90
+
+# Diagnostic-only. The dictionary is fully byte-charged and its training/compression work is charged.
+# A positive result still requires a real format-level owner, bounded dependency/locality, recovery, RSS,
+# native-reader and all-15 evidence before any selector or release credit.
