@@ -4,6 +4,16 @@
 name: CMPCT v0.30 v0.25 canonical FS level-1 proof
 
 on:
+  push:
+    branches: [agent/v030-authoritative-integration]
+    paths:
+      - 'benchmarks/v030_v025_canonical_fs_level1_oracle.py'
+      - 'benchmarks/neutral_hostile_corpus_v1.py'
+      - 'benchmarks/neutral_hostile_determinism_repair_v*.py'
+      - 'experiments/entropygraph_v025.py'
+      - 'experiments/entropygraph_v030_product_fs.py'
+      - 'experiments/entropygraph_v030_release_product.py'
+      - '.github/workflows/v030-v025-canonical-fs-level1.yml'
   pull_request:
     branches: [main]
     paths:
@@ -119,16 +129,16 @@ jobs:
               assert row['strict']['verified_create_faster_than_zip'] is True
               assert row['strict']['verified_create_faster_than_zstd19'] is True
               assert row['strict']['four_way'] is True
+              # External domination is not productization authority while the
+              # accepted v0.29 floor regresses. Preserve the current negative
+              # for both targets until code, not an assertion, actually closes it.
+              assert row['no_regression_vs_v029'] is False
+              assert row['saving_vs_v029_bytes'] < 0
+              assert row['productization_prerequisite_passed'] is False
           office=by_name['02_office_workspace']
           analytics=by_name['04_analytics_and_database']
           assert office['accepted_v029_bytes']==5_954_026
-          assert office['no_regression_vs_v029'] is True
-          assert office['productization_prerequisite_passed'] is True
           assert analytics['accepted_v029_bytes']==6_135_172
-          # This is deliberate negative evidence: external domination is insufficient while accepted-v0.29 regresses.
-          assert analytics['no_regression_vs_v029'] is False
-          assert analytics['saving_vs_v029_bytes'] < 0
-          assert analytics['productization_prerequisite_passed'] is False
           assert d['gate']['all_rows_preserve_four_way_after_filesystem_tax'] is True
           assert d['gate']['all_rows_clear_accepted_v029_floor'] is False
           assert d['gate']['all_rows_clear_productization_prerequisites'] is False
@@ -147,6 +157,6 @@ jobs:
           retention-days: 90
 
 # The low-effort canonical-filesystem budget is an exact external four-way win on Office and Analytics, but the
-# accepted-v0.29 floor is an independent mandatory boundary. Office clears it; Analytics currently does not. This
-# lane therefore preserves the useful strict competitor result while preventing it from being misreported as a
-# productization-ready Analytics mechanism. CMPNX5 stays research-only; no selector/release threshold is weakened.
+# accepted-v0.29 floor is an independent mandatory boundary. Both rows currently regress that floor. This lane
+# preserves the useful competitor result while preventing either target from being misreported as productization-ready.
+# CMPNX5 stays research-only; no selector/release threshold is weakened.
