@@ -1,0 +1,131 @@
+# ci-lane: deep
+# ci-pr-scope: latest-head-commit-gate
+# ci-cancel-policy: cancel-obsolete
+name: CMPCT v0.30 v0.25 canonical FS tax attribution
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'benchmarks/v030_v025_canonical_fs_tax_attribution.py'
+      - 'benchmarks/v030_v025_physical_attribution.py'
+      - 'benchmarks/neutral_hostile_corpus_v1.py'
+      - 'benchmarks/neutral_hostile_determinism_repair_v*.py'
+      - 'experiments/entropygraph_v025.py'
+      - 'experiments/entropygraph_v030_product_fs.py'
+      - '.github/workflows/v030-v025-canonical-fs-tax-attribution.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-v030-v025-canonical-fs-tax-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+  PYTHONPATH: ${{ github.workspace }}
+
+jobs:
+  latest-head-impact:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      run_deep: ${{ steps.scope.outputs.run_deep }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 2
+      - name: Bind exact head and classify only its changed files
+        id: scope
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            echo 'run_deep=true' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          git diff-tree --no-commit-id --name-only -r HEAD > /tmp/latest-head-files.txt
+          cat /tmp/latest-head-files.txt
+          if grep -Eq '^(benchmarks/v030_v025_canonical_fs_tax_attribution\.py|benchmarks/v030_v025_physical_attribution\.py|benchmarks/neutral_hostile_corpus_v1\.py|benchmarks/neutral_hostile_determinism_repair_v[^/]*\.py|experiments/entropygraph_v025\.py|experiments/entropygraph_v030_product_fs\.py|\.github/workflows/v030-v025-canonical-fs-tax-attribution\.yml)$' /tmp/latest-head-files.txt; then
+            echo 'run_deep=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'run_deep=false' >> "$GITHUB_OUTPUT"
+          fi
+
+  canonical-fs-tax:
+    needs: latest-head-impact
+    if: needs.latest-head-impact.outputs.run_deep == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - name: Bind exact evidence head
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install frozen-corpus dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y zstd gcc ffmpeg libsndfile1
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[audio,test]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
+      - name: Compile diagnostic
+        run: |
+          python -m py_compile \
+            benchmarks/v030_v025_canonical_fs_tax_attribution.py \
+            benchmarks/v030_v025_physical_attribution.py \
+            experiments/entropygraph_v025.py \
+            experiments/entropygraph_v030_product_fs.py
+      - name: Measure raw vs canonical level-1 physical tax
+        run: |
+          mkdir -p benchmark-artifacts
+          python benchmarks/v030_v025_canonical_fs_tax_attribution.py \
+            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-v025-canonical-fs-tax-work" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-v025-canonical-fs-tax.json"
+      - name: Independently enforce identity and accounting
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          d=json.loads(Path('benchmark-artifacts/v030-v025-canonical-fs-tax.json').read_text())
+          assert d['schema']=='cmpct-v030-v025-canonical-fs-tax-attribution-v1'
+          assert d['level_cap']==1
+          assert d['targets']==['02_office_workspace','04_analytics_and_database']
+          assert len(d['rows'])==2
+          assert d['measurement']['valid'] is True
+          for row in d['rows']:
+              assert row['identities_verified'] is True
+              assert row['accepted_v029_bytes'] > 0
+              assert row['filesystem']['manifest_bytes'] > 0
+              for variant in ('raw_level1','canonical_level1'):
+                  v=row[variant]
+                  assert v['archive_bytes'] > 0
+                  assert v['physical_attribution']['physical']['accounting_exact'] is True
+                  p=v['physical_attribution']['physical']
+                  assert p['stream_pack_bytes']+p['ordinary_pack_bytes']+p['metadata_recovery_framing_bytes']==v['archive_bytes']
+              assert row['delta']['canonical_minus_raw_level1_bytes'] == row['canonical_level1']['archive_bytes']-row['raw_level1']['archive_bytes']
+              assert row['delta']['canonical_level1_minus_v029_bytes'] == row['canonical_level1']['archive_bytes']-row['accepted_v029_bytes']
+          assert 'diagnostic-only causal attribution' in d['claim_boundary']
+          PY
+      - name: CI topology self-check
+        run: python tools/check_ci_topology.py .github/workflows/v030-v025-canonical-fs-tax-attribution.yml
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: v030-v025-canonical-fs-tax-${{ env.EVIDENCE_HEAD }}
+          path: benchmark-artifacts/v030-v025-canonical-fs-tax.json
+          if-no-files-found: warn
+          retention-days: 90
+
+# A green run means only that the physical/identity attribution is sound. The
+# measured tax may be positive or negative and remains diagnostic evidence.
