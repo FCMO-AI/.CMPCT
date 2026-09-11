@@ -39,8 +39,11 @@ jobs:
         with:
           python-version: '3.12'
 
-      - name: Install harness dependencies
-        run: python -m pip install -e '.[test]'
+      - name: Install deterministic corpus and harness dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y zstd ffmpeg gcc libsndfile1
+          python -m pip install -e '.[test]'
 
       - name: Materialize exact frozen contender worktrees
         run: |
@@ -50,33 +53,42 @@ jobs:
           git worktree add --detach "$RUNNER_TEMP/cmpct1-candidate" "$CANDIDATE_SHA"
           git worktree add --detach "$RUNNER_TEMP/cmpct-v029" "$V029_SHA"
           git worktree add --detach "$RUNNER_TEMP/cmpct-v030" "$V030_SHA"
-          test "$(git -C "$RUNNER_TEMP/cmpct1-candidate" rev-parse HEAD)" = "$CANDIDATE_SHA"
-          test "$(git -C "$RUNNER_TEMP/cmpct-v029" rev-parse HEAD)" = "$V029_SHA"
-          test "$(git -C "$RUNNER_TEMP/cmpct-v030" rev-parse HEAD)" = "$V030_SHA"
-          test "$(git -C "$RUNNER_TEMP/cmpct1-candidate" status --porcelain=v1 --untracked-files=all)" = ""
-          test "$(git -C "$RUNNER_TEMP/cmpct-v029" status --porcelain=v1 --untracked-files=all)" = ""
-          test "$(git -C "$RUNNER_TEMP/cmpct-v030" status --porcelain=v1 --untracked-files=all)" = ""
+          for spec in \
+            "$RUNNER_TEMP/cmpct1-candidate:$CANDIDATE_SHA" \
+            "$RUNNER_TEMP/cmpct-v029:$V029_SHA" \
+            "$RUNNER_TEMP/cmpct-v030:$V030_SHA"; do
+            path="${spec%%:*}"; sha="${spec##*:}"
+            test "$(git -C "$path" rev-parse HEAD)" = "$sha"
+            test "$(git -C "$path" status --porcelain=v1 --untracked-files=all)" = ""
+          done
 
-      - name: Mechanically certify frozen ONE candidate
+      - name: Ensure exact frozen ONE certification
         run: |
           mkdir -p "$RUNNER_TEMP/genesis"
-          python -m benchmarks.one.one_genesis_candidate_certification_transition \
-            --authority benchmarks/one/genesis_one_candidate_boundary_v1.json \
-            --candidate-checkout "$RUNNER_TEMP/cmpct1-candidate" \
-            --output "$RUNNER_TEMP/genesis/certified-boundary.json"
-          mv "$RUNNER_TEMP/genesis/certified-boundary.json" benchmarks/one/genesis_one_candidate_boundary_v1.json
+          STATUS="$(python - <<'PY'
+          import json
+          print(json.load(open('benchmarks/one/genesis_one_candidate_boundary_v1.json'))['status'])
+          PY
+          )"
+          if [ "$STATUS" = "HOLD_UNTIL_COMPLETE_PRODUCT_BOUNDARY_IS_CERTIFIED" ]; then
+            python -m benchmarks.one.one_genesis_candidate_certification_transition \
+              --authority benchmarks/one/genesis_one_candidate_boundary_v1.json \
+              --candidate-checkout "$RUNNER_TEMP/cmpct1-candidate" \
+              --output "$RUNNER_TEMP/genesis/certified-boundary.json"
+            mv "$RUNNER_TEMP/genesis/certified-boundary.json" benchmarks/one/genesis_one_candidate_boundary_v1.json
+            git config user.name github-actions[bot]
+            git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+            git add benchmarks/one/genesis_one_candidate_boundary_v1.json
+            git commit -m 'evidence(one): certify frozen Genesis candidate'
+            git push origin HEAD:research/cmpct1
+          elif [ "$STATUS" != "CERTIFIED_FOR_GENESIS" ]; then
+            echo "Unexpected candidate-boundary status: $STATUS" >&2
+            exit 1
+          fi
           python -m benchmarks.one.one_genesis_candidate_certification_validator \
             --authority benchmarks/one/genesis_one_candidate_boundary_v1.json \
             --candidate-checkout "$RUNNER_TEMP/cmpct1-candidate" \
             --output "$RUNNER_TEMP/genesis/certification-validation.json"
-
-      - name: Persist certification authority before contender execution
-        run: |
-          git config user.name github-actions[bot]
-          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
-          git add benchmarks/one/genesis_one_candidate_boundary_v1.json
-          git commit -m 'evidence(one): certify frozen Genesis candidate'
-          git push origin HEAD:research/cmpct1
           echo "HARNESS_SHA=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
           test "$(git status --porcelain=v1 --untracked-files=all)" = ""
 
@@ -103,9 +115,9 @@ jobs:
       - name: Fail closed on execution-state or candidate substitution
         run: |
           python - <<'PY'
-          import json
+          import json, os
           from pathlib import Path
-          p=json.loads(Path('${{ runner.temp }}/genesis/raw-measurements.json').read_text())
+          p=json.loads((Path(os.environ['RUNNER_TEMP'])/'genesis/raw-measurements.json').read_text())
           assert p['schema']=='cmpct-one-genesis-raw-measurements-v1'
           assert p['cmpct1_candidate_sha']=='38f17f4a45686a59a853bf62f0c840e228879e17'
           assert p['frozen_comparators']=={
@@ -137,13 +149,15 @@ jobs:
           cat > "$EVIDENCE_DIR/RUN_IDENTITY.md" <<EOF
           # ONE Genesis real-gate raw execution identity
 
-          - harness head after certification: \`$HARNESS_SHA\`
+          - harness head: \`$HARNESS_SHA\`
           - frozen ONE candidate: \`$CANDIDATE_SHA\`
           - frozen v0.29: \`$V029_SHA\`
           - frozen v0.30: \`$V030_SHA\`
           - workflow run: \`$GITHUB_RUN_ID\`
           - raw execution only: **no comparison/scoring/winner selection in this workflow**
           EOF
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
           git add "$EVIDENCE_DIR"
           git commit -m 'evidence(one): preserve raw Genesis gate measurements'
           git push origin HEAD:research/cmpct1
