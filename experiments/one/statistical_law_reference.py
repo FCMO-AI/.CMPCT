@@ -2,18 +2,23 @@
 
 This is deliberately a small scalar semantic authority, not a production coder.
 It realizes a previous-byte adaptive KT Law with an exact deterministic 32-bit
-integer arithmetic bitstream.  Learned model state is reconstructed by the
+integer arithmetic bitstream. Learned model state is reconstructed by the
 reader and is never serialized.
 
-The reader performs no discovery.  It is given a block length and coded
-payload and executes the same bounded Law.
+The reader performs no discovery. It is given a block length and coded payload
+and executes the same bounded Law.
 """
 from __future__ import annotations
 
 import hashlib
+import math
+from dataclasses import dataclass
 
 ALPHABET = 256
 MAX_BLOCK_BYTES = 65_536
+SAMPLE_BYTES = 4_096
+SAMPLE_REJECT_RATIO = 0.97
+BLOCK_FIXED_CHARGE_BYTES = 49
 TOP = (1 << 32) - 1
 HALF = 1 << 31
 FIRST_QTR = 1 << 30
@@ -22,6 +27,18 @@ THIRD_QTR = FIRST_QTR * 3
 
 class StatisticalLawError(ValueError):
     """Malformed/resource-invalid reference Statistical Law payload."""
+
+
+@dataclass(frozen=True)
+class BlockChoice:
+    kind: str
+    payload: bytes
+    sample_bytes: int
+    sample_kt_bits: float
+    sample_ratio: float
+    stat_attempted: bool
+    fixed_charge_bytes: int
+    diagnostic_wire_bytes: int
 
 
 class _BitWriter:
@@ -58,7 +75,7 @@ class _BitReader:
         self.bit_pos = 0
 
     def read(self) -> int:
-        # Arithmetic decoding convention: absent tail bits are zero.  The
+        # Arithmetic decoding convention: absent tail bits are zero. The
         # authenticated outer envelope separately binds declared payload
         # length, so truncation is rejected before/after semantic decode.
         if self.byte_pos >= len(self.data):
@@ -78,11 +95,29 @@ def _validate_length(length: int) -> None:
         )
 
 
+def kt_prequential_bits(source: bytes) -> float:
+    """Exact KT-model prequential codelength used only by writer discovery."""
+
+    _validate_length(len(source))
+    counts = [[0] * ALPHABET for _ in range(ALPHABET)]
+    totals = [0] * ALPHABET
+    bits = 8.0
+    previous = source[0]
+    for symbol in source[1:]:
+        bits -= math.log2(
+            (counts[previous][symbol] + 0.5) / (totals[previous] + 128.0)
+        )
+        counts[previous][symbol] += 1
+        totals[previous] += 1
+        previous = symbol
+    return bits
+
+
 def encode_block(block: bytes) -> bytes:
     """Encode one independently restartable non-empty block.
 
-    Byte 0 is bootstrap Surprise.  Remaining bytes are arithmetic-coded under
-    the adaptive previous-byte KT Law.  For symbol count n, integer weight is
+    Byte 0 is bootstrap Surprise. Remaining bytes are arithmetic-coded under
+    the adaptive previous-byte KT Law. For symbol count n, integer weight is
     exactly ``2*n + 1``; total context weight is ``2*N + 256``.
     """
 
@@ -138,6 +173,44 @@ def encode_block(block: bytes) -> bytes:
     pending += 1
     emit(0 if low < FIRST_QTR else 1)
     return bytes((first,)) + writer.finish()
+
+
+def choose_block_payload(block: bytes) -> BlockChoice:
+    """Apply the preregistered cheap gate and exact Law-vs-Surprise byte test."""
+
+    _validate_length(len(block))
+    sample = block[:SAMPLE_BYTES]
+    sample_bits = kt_prequential_bits(sample)
+    sample_ratio = sample_bits / (8.0 * len(sample))
+    if sample_ratio >= SAMPLE_REJECT_RATIO:
+        return BlockChoice(
+            kind="surprise_raw",
+            payload=block,
+            sample_bytes=len(sample),
+            sample_kt_bits=sample_bits,
+            sample_ratio=sample_ratio,
+            stat_attempted=False,
+            fixed_charge_bytes=BLOCK_FIXED_CHARGE_BYTES,
+            diagnostic_wire_bytes=BLOCK_FIXED_CHARGE_BYTES + len(block),
+        )
+
+    candidate = encode_block(block)
+    if len(candidate) < len(block):
+        kind = "stat_h1"
+        payload = candidate
+    else:
+        kind = "surprise_raw"
+        payload = block
+    return BlockChoice(
+        kind=kind,
+        payload=payload,
+        sample_bytes=len(sample),
+        sample_kt_bits=sample_bits,
+        sample_ratio=sample_ratio,
+        stat_attempted=True,
+        fixed_charge_bytes=BLOCK_FIXED_CHARGE_BYTES,
+        diagnostic_wire_bytes=BLOCK_FIXED_CHARGE_BYTES + len(payload),
+    )
 
 
 def decode_block(payload: bytes, output_length: int) -> bytes:
