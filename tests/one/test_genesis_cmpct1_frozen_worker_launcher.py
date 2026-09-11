@@ -23,6 +23,55 @@ def test_launcher_rejects_checkout_sha_substitution(monkeypatch, tmp_path: Path)
         mod._sealed_candidate_root()
 
 
+@pytest.mark.parametrize(
+    "status_line",
+    (
+        " M experiments/one/general_law_archive.py\n",
+        " D experiments/one/authenticated_archive_envelope.py\n",
+        "?? experiments/one/injected_runtime.py\n",
+        " M benchmarks/one/one_genesis_cmpct1_product_worker.py\n",
+    ),
+)
+def test_launcher_rejects_runtime_worktree_drift(monkeypatch, tmp_path: Path, status_line: str):
+    checkout = tmp_path / "candidate"
+    checkout.mkdir()
+
+    class Result:
+        stdout = status_line
+
+    calls: list[list[str]] = []
+
+    def fake_run(args, **kwargs):
+        calls.append(list(args))
+        assert kwargs.get("check") is True
+        return Result()
+
+    monkeypatch.setattr(mod.subprocess, "run", fake_run)
+    with pytest.raises(RuntimeError, match="runtime worktree differs from sealed Git state"):
+        mod._assert_runtime_worktree_sealed(checkout)
+    assert calls == [[
+        "git",
+        "-C",
+        str(checkout),
+        "status",
+        "--porcelain=v1",
+        "--untracked-files=all",
+        "--",
+        *mod.SEALED_RUNTIME_PATHS,
+    ]]
+
+
+def test_launcher_accepts_clean_runtime_worktree(monkeypatch, tmp_path: Path):
+    checkout = tmp_path / "candidate"
+    checkout.mkdir()
+
+    class Result:
+        stdout = ""
+
+    monkeypatch.setattr(mod.subprocess, "run", lambda *args, **kwargs: Result())
+    mod._assert_runtime_worktree_sealed(checkout)
+
+
 def test_launcher_import_must_resolve_inside_candidate_checkout(monkeypatch, tmp_path: Path):
     checkout = tmp_path / "candidate"
     checkout.mkdir()
