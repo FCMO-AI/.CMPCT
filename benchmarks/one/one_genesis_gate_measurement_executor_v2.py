@@ -6,10 +6,13 @@ The original V2 prototype duplicated the sealed executor in order to add a path-
 scientific identity.  V1 now owns that capability directly, so keeping two execution loops
 would create a worse risk: future fixes could land in one executor but not the other.
 
-This module therefore preserves the V2 output contract while delegating all corpus sealing,
-adapter execution, mutation checks, raw persistence, validation, and calendar locks to the
-single V1 execution path.  Before delegation it independently seals the adapter manifest so
-a correct contender checkout cannot be paired with a substituted executable command.
+This module therefore preserves the V2 output contract while delegating corpus sealing,
+adapter execution, mutation checks, raw persistence, validation, and the authoritative
+execution loop to V1.  Before delegation it independently seals the adapter manifest so a
+correct contender checkout cannot be paired with a substituted executable command.  The
+calendar/switch denial is mirrored before manifest parsing so premature calls still fail on
+the temporal authority, not on incidental file state.
+
 It adds no contender logic, comparison, scoring, or winner selection.
 """
 
@@ -75,6 +78,14 @@ def _validate_adapter_manifest(path: Path, candidate_sha: str) -> dict[str, Any]
     return payload
 
 
+def _precheck_real_gate(now_value: str | None, execute_real_gate: bool) -> None:
+    now = v1._now(now_value)
+    if not v1._gate_open(now):
+        raise RuntimeError("real Genesis contender execution is calendar-locked until 2026-09-11 America/Mexico_City")
+    if not execute_real_gate:
+        raise RuntimeError("real Genesis execution requires explicit --execute-real-gate")
+
+
 def execute(
     *,
     candidate_sha: str,
@@ -87,6 +98,7 @@ def execute(
 ) -> dict[str, Any]:
     """Run the single sealed executor and expose the stable V2 evidence labels."""
     if not fixture:
+        _precheck_real_gate(now_value, execute_real_gate)
         if adapters_path is None:
             raise RuntimeError("real Genesis execution requires an adapter manifest")
         _validate_adapter_manifest(adapters_path, candidate_sha)
