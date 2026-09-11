@@ -43,7 +43,11 @@ def test_hostile_candidate_boundary_falsifier_is_fail_closed_and_genesis_dark(tm
     assert {row["name"] for row in payload["losing_rows"]} == expected_losing
 
     persisted = json.loads(bench.OUT.read_text(encoding="utf-8"))
-    assert persisted == payload
+    # Dataclass-derived stats can legitimately retain tuples in memory while JSON
+    # represents those sequences as arrays. Compare the durable receipt against the
+    # exact JSON projection of the returned payload rather than Python container types.
+    json_payload = json.loads(json.dumps(payload))
+    assert persisted == json_payload
 
 
 def test_a_single_complete_byte_regression_forces_hold():
