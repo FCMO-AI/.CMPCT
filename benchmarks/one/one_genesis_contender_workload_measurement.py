@@ -206,6 +206,53 @@ def _selective_family(samples: list[dict[str, Any]], member: str) -> dict[str, A
     }
 
 
+def _historical_runtime_provenance(
+    *,
+    contender: str,
+    checkout: Path,
+    sample_families: list[list[dict[str, Any]]],
+) -> dict[str, Any] | None:
+    if contender == "cmpct1":
+        return None
+    expected_sha = FROZEN[contender]
+    frozen_root = (checkout / "src" / "cmpct").resolve()
+    observed_maps: list[dict[str, str]] = []
+    for family in sample_families:
+        for index, sample in enumerate(family):
+            if sample.get("frozen_source_sha") != expected_sha:
+                raise RuntimeError(
+                    f"historical sample {index} source SHA differs from frozen authority"
+                )
+            roots = sample.get("frozen_cmpct_import_roots")
+            if not isinstance(roots, dict):
+                raise RuntimeError("historical sample missing frozen cmpct runtime provenance")
+            normalized: dict[str, str] = {}
+            for module_name, raw_path in roots.items():
+                if not isinstance(module_name, str) or not isinstance(raw_path, str):
+                    raise RuntimeError("historical runtime provenance has non-string entry")
+                path = Path(raw_path).resolve()
+                try:
+                    path.relative_to(frozen_root)
+                except ValueError as exc:
+                    raise RuntimeError(
+                        f"historical runtime provenance escaped frozen checkout: {module_name}={path}"
+                    ) from exc
+                normalized[module_name] = str(path)
+            observed_maps.append(dict(sorted(normalized.items())))
+    if not observed_maps:
+        raise RuntimeError("historical measurement produced no runtime provenance samples")
+    canonical = observed_maps[0]
+    if any(row != canonical for row in observed_maps[1:]):
+        raise RuntimeError("historical runtime provenance changed across fresh-process samples")
+    return {
+        "status": "source_sealed",
+        "source_sha": expected_sha,
+        "frozen_package_root": str(frozen_root),
+        "loaded_cmpct_modules": canonical,
+        "sample_count": len(observed_maps),
+    }
+
+
 def measure_workload(
     *,
     contender: str,
@@ -261,6 +308,7 @@ def measure_workload(
         ]
         _assert_whole_exact(whole_samples)
 
+        selective_samples: list[dict[str, Any]] = []
         if contender == "v0.29":
             selective: Any = {
                 "status": "unavailable",
@@ -287,6 +335,11 @@ def measure_workload(
             ]
             selective = _selective_family(selective_samples, member)
 
+    runtime_provenance = _historical_runtime_provenance(
+        contender=contender,
+        checkout=checkout,
+        sample_families=[build_samples, whole_samples, selective_samples],
+    )
     measurement = {
         "stored_bytes": stored_bytes,
         "creation": _timing_family(build_samples),
@@ -298,6 +351,8 @@ def measure_workload(
         "semantics": {"status": "unavailable"},
         "reader_burden": {"status": "unavailable"},
     }
+    if runtime_provenance is not None:
+        measurement["runtime_source_provenance"] = runtime_provenance
     return {
         "schema": SCHEMA,
         "contender": contender,
