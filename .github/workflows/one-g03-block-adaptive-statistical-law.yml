@@ -1,0 +1,81 @@
+# ci-lane: research-diagnostic
+name: CMPCT1 ONE-G0.3 block-adaptive Statistical Law
+
+on:
+  push:
+    branches:
+      - research/cmpct1
+    paths:
+      - '.github/workflows/one-g03-block-adaptive-statistical-law.yml'
+      - 'benchmarks/one/one_g03_block_adaptive_statistical_law.py'
+      - 'tests/one/test_g03_block_adaptive_statistical_law.py'
+      - 'docs/one/prereg/ONE_G03_BLOCK_ADAPTIVE_STATISTICAL_LAW_PREREG_2026-09-11.md'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-one-g03-block-adaptive-statistical-law
+  cancel-in-progress: false
+
+jobs:
+  block-adaptive-statistical-law:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.sha }}
+
+      - name: Bind diagnostic source
+        run: |
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$(git status --porcelain=v1 --untracked-files=all)" = ""
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install exact diagnostic dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y zstd ffmpeg
+          python -m pip install -e '.[test]'
+
+      - name: Run mathematical and hostile unit tests
+        run: python -m pytest -q tests/one/test_g03_block_adaptive_statistical_law.py
+
+      - name: Run exact 15-workload block-adaptive diagnostic
+        run: |
+          mkdir -p "$RUNNER_TEMP/one-g03-block-adaptive"
+          python -m benchmarks.one.one_g03_block_adaptive_statistical_law \
+            --work-root "$RUNNER_TEMP/one-g03-block-adaptive/workloads" \
+            --output "$RUNNER_TEMP/one-g03-block-adaptive/result.json"
+
+      - name: Validate claim boundary
+        run: |
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          p=json.loads((Path(os.environ['RUNNER_TEMP'])/'one-g03-block-adaptive/result.json').read_text())
+          assert p['schema']=='cmpct-one-g03-block-adaptive-statistical-law-v1'
+          assert len(p['rows'])==15
+          assert p['model']['block_bytes']==65536
+          assert p['model']['stored_learned_model_bytes']==0
+          assert p['genesis_scoring_executed'] is False
+          assert p['winner_selected'] is False
+          assert p['gate']['decision'] in {'ADVANCE_BLOCK_ADAPTIVE_STATISTICAL_LAW','HOLD_BLOCK_ADAPTIVE_STATISTICAL_LAW'}
+          assert all(r['measurement']['observation_passes']==1 for r in p['rows'])
+          assert all(r['measurement']['measured_bytes']==r['logical_bytes'] for r in p['rows'])
+          PY
+
+      - name: Upload diagnostic evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cmpct-one-g03-block-adaptive-statistical-law-${{ github.run_id }}
+          path: ${{ runner.temp }}/one-g03-block-adaptive/result.json
+          if-no-files-found: warn
+          retention-days: 90
