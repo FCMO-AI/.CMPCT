@@ -7,11 +7,14 @@ import random
 import pytest
 
 from experiments.one.statistical_law_reference import (
+    BLOCK_FIXED_CHARGE_BYTES,
     MAX_BLOCK_BYTES,
     StatisticalLawError,
+    choose_block_payload,
     decode_block,
     decode_verified_block,
     encode_block,
+    kt_prequential_bits,
 )
 
 
@@ -77,6 +80,7 @@ def test_real_bitstream_tracks_exact_kt_codelength() -> None:
     for source in vectors:
         realized_bits = len(encode_block(source)) * 8
         ideal_bits = _exact_kt_bits(source)
+        assert kt_prequential_bits(source) == pytest.approx(ideal_bits, abs=1e-9)
         # Arithmetic finalization/byte padding is allowed, but the concrete
         # format must not silently turn a good probability model into a poor
         # bitstream before any container charges are considered.
@@ -84,11 +88,30 @@ def test_real_bitstream_tracks_exact_kt_codelength() -> None:
         assert realized_bits - ideal_bits <= 16.0
 
 
+def test_preregistered_gate_selects_law_and_surprise_causally() -> None:
+    compressible = bytes((0,)) * 4096
+    law = choose_block_payload(compressible)
+    assert law.kind == "stat_h1"
+    assert law.stat_attempted is True
+    assert law.sample_ratio < 0.97
+    assert decode_block(law.payload, len(compressible)) == compressible
+    assert law.diagnostic_wire_bytes == BLOCK_FIXED_CHARGE_BYTES + len(law.payload)
+    assert len(law.payload) < len(compressible)
+
+    incompressible = random.Random(0x51A7).randbytes(4096)
+    surprise = choose_block_payload(incompressible)
+    assert surprise.kind == "surprise_raw"
+    assert surprise.payload == incompressible
+    assert surprise.stat_attempted is False
+    assert surprise.sample_ratio >= 0.97
+    assert surprise.diagnostic_wire_bytes == BLOCK_FIXED_CHARGE_BYTES + len(incompressible)
+
+
 def test_exact_maximum_block_round_trip() -> None:
     source = bytes((0,)) * MAX_BLOCK_BYTES
     payload = encode_block(source)
     assert decode_block(payload, len(source)) == source
-    # This is a semantic/resource vector, not a density gate.  It also catches
+    # This is a semantic/resource vector, not a density gate. It also catches
     # accidental state carry across the fixed 64 KiB restart contract.
     assert len(payload) == 168
 
