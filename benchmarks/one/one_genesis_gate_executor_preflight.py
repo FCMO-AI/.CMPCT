@@ -6,8 +6,13 @@ This module intentionally performs no contender encoding, benchmarking, or scori
 freezes the exact candidate SHA, verifies the preregistered workload/comparator authority,
 and emits a machine-readable execution plan that a September-11 executor can consume.
 
-The scientific purpose is to remove execution-time freedom *before* results exist. The
-plan is not gate evidence and cannot be used to claim a winner.
+The harness checkout is deliberately *not* the candidate checkout. Tests, CI hardening,
+and the post-boundary certification authority may advance on the harness branch while the
+scientific ONE contender remains the exact pre-gate candidate sealed by the adapter
+manifest. Conflating those identities would either silently substitute a newer candidate
+or make a durable certification commit impossible to execute.
+
+The plan is not gate evidence and cannot be used to claim a winner.
 """
 
 import argparse
@@ -126,20 +131,23 @@ def _validate_authorities(candidate_sha: str) -> tuple[list[str], dict[str, Any]
 
 def build_plan(candidate_sha: str, *, now: datetime | None = None) -> dict[str, Any]:
     errors, authority = _validate_authorities(candidate_sha)
-    observed_head = _git_head()
-    if observed_head != candidate_sha:
-        errors.append(f"candidate SHA {candidate_sha} does not equal checked-out HEAD {observed_head}")
+    harness_head = _git_head()
 
+    # Candidate identity is sealed independently by the adapter manifest/checkouts.  Do
+    # not require the harness HEAD to equal the candidate: the post-boundary certification
+    # commit necessarily advances the harness while the scientific contender stays frozen.
     current = now.astimezone(GATE_TZ) if now is not None else datetime.now(GATE_TZ)
     gate_open = current.date().isoformat() >= GATE_DATE
 
     return {
         "schema": "cmpct-one-genesis-gate-execution-plan-v1",
-        "claim_boundary": "preflight/execution plumbing only; no contender encoding, measurements, scoring, or winner selection executed",
+        "claim_boundary": "preflight/execution plumbing only; harness identity is separate from the frozen contender; no contender encoding, measurements, scoring, or winner selection executed",
         "experimental_version": "ONE-G0.2",
         "candidate_sha": candidate_sha,
-        "checked_out_head": observed_head,
-        "candidate_head_exact": observed_head == candidate_sha,
+        "checked_out_head": harness_head,
+        "harness_head": harness_head,
+        "candidate_head_exact": harness_head == candidate_sha,
+        "candidate_identity_binding": "adapter-manifest sealed checkout; harness HEAD is not candidate authority",
         "frozen_comparators": {"v0.29": V029_SHA, "v0.30": V030_SHA},
         "readiness_authority": {
             "source_sha": READINESS_SOURCE,
@@ -194,6 +202,7 @@ def main() -> None:
     print(json.dumps({
         "decision": result["decision"],
         "candidate_sha": result["candidate_sha"],
+        "harness_head": result["harness_head"],
         "gate_open": result["gate_clock"]["gate_open"],
         "errors": result["errors"],
         "scoring_executed": result["scoring_executed"],
