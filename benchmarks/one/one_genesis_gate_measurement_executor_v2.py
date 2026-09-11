@@ -8,16 +8,71 @@ would create a worse risk: future fixes could land in one executor but not the o
 
 This module therefore preserves the V2 output contract while delegating all corpus sealing,
 adapter execution, mutation checks, raw persistence, validation, and calendar locks to the
-single V1 execution path.  It adds no contender logic, comparison, scoring, or winner
-selection.
+single V1 execution path.  Before delegation it independently seals the adapter manifest so
+a correct contender checkout cannot be paired with a substituted executable command.
+It adds no contender logic, comparison, scoring, or winner selection.
 """
 
 import argparse
 import json
 from pathlib import Path
+import subprocess
+import sys
 from typing import Any
 
 from benchmarks.one import one_genesis_gate_measurement_executor as v1
+from benchmarks.one.one_genesis_gate_executor_preflight import V029_SHA, V030_SHA
+
+HARNESS_ADAPTER = (v1.ROOT / "benchmarks" / "one" / "one_genesis_certified_adapter.py").resolve()
+CONTENDERS = ("cmpct1", "v0.29", "v0.30")
+
+
+def _harness_head() -> str:
+    return subprocess.check_output(
+        ["git", "-C", str(v1.ROOT), "rev-parse", "HEAD"], text=True
+    ).strip()
+
+
+def _validate_adapter_manifest(path: Path, candidate_sha: str) -> dict[str, Any]:
+    """Fail closed if source-bound adapter orchestration was substituted after binding."""
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise RuntimeError("Genesis adapter manifest is unreadable") from exc
+    if payload.get("schema") != "cmpct-one-genesis-adapters-v1":
+        raise RuntimeError("Genesis adapter manifest has wrong schema")
+    if payload.get("harness_sha") != _harness_head():
+        raise RuntimeError("Genesis adapter manifest harness SHA differs from executing harness")
+    if payload.get("candidate_sha") != candidate_sha:
+        raise RuntimeError("Genesis adapter manifest candidate SHA differs from requested candidate")
+    if payload.get("frozen_comparators") != {"v0.29": V029_SHA, "v0.30": V030_SHA}:
+        raise RuntimeError("Genesis adapter manifest frozen comparator authority differs")
+    if payload.get("execution_authorized") is not False:
+        raise RuntimeError("Genesis adapter manifest must remain non-authorizing")
+    if payload.get("comparisons_executed") is not False or payload.get("scoring_executed") is not False:
+        raise RuntimeError("Genesis adapter manifest contains post-measurement state")
+    if payload.get("winner_selected") is not False:
+        raise RuntimeError("Genesis adapter manifest contains winner-selection state")
+
+    adapters = payload.get("adapters")
+    if not isinstance(adapters, dict) or set(adapters) != set(CONTENDERS):
+        raise RuntimeError("Genesis adapter manifest must define exactly three contenders")
+    expected_command = [sys.executable, str(HARNESS_ADAPTER)]
+    checkouts: list[Path] = []
+    for contender in CONTENDERS:
+        row = adapters.get(contender)
+        if not isinstance(row, dict):
+            raise RuntimeError(f"{contender}: Genesis adapter row is not an object")
+        command = row.get("command")
+        if command != expected_command:
+            raise RuntimeError(f"{contender}: Genesis adapter command differs from certified harness adapter")
+        checkout_raw = row.get("checkout")
+        if not isinstance(checkout_raw, str) or not checkout_raw:
+            raise RuntimeError(f"{contender}: Genesis adapter checkout is missing")
+        checkouts.append(Path(checkout_raw).resolve())
+    if len(set(checkouts)) != len(CONTENDERS):
+        raise RuntimeError("Genesis adapter manifest aliases contender checkouts")
+    return payload
 
 
 def execute(
@@ -31,6 +86,11 @@ def execute(
     work_root: Path | None,
 ) -> dict[str, Any]:
     """Run the single sealed executor and expose the stable V2 evidence labels."""
+    if not fixture:
+        if adapters_path is None:
+            raise RuntimeError("real Genesis execution requires an adapter manifest")
+        _validate_adapter_manifest(adapters_path, candidate_sha)
+
     result = v1.execute(
         candidate_sha=candidate_sha,
         raw_dir=raw_dir,
