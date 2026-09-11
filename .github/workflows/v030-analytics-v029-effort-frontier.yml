@@ -4,6 +4,20 @@
 name: CMPCT v0.30 Analytics v0.29 effort frontier
 
 on:
+  push:
+    branches: [agent/v030-authoritative-integration]
+    paths:
+      - 'benchmarks/v030_analytics_v029_effort_frontier.py'
+      - 'benchmarks/v030_analytics_v029_effort_decision.py'
+      - 'benchmarks/v030_v025_canonical_fs_level1_oracle.py'
+      - 'benchmarks/v030_external_competitors.py'
+      - 'benchmarks/v030_release_generalization.py'
+      - 'benchmarks/neutral_hostile_corpus_v1.py'
+      - 'benchmarks/neutral_hostile_determinism_repair_v*.py'
+      - 'experiments/entropygraph_v025.py'
+      - 'experiments/entropygraph_v030_product_fs.py'
+      - 'experiments/entropygraph_v030_release_product.py'
+      - '.github/workflows/v030-analytics-v029-effort-frontier.yml'
   pull_request:
     branches: [main]
     paths:
