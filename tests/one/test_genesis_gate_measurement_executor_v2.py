@@ -83,7 +83,8 @@ def test_real_path_persists_scientific_identity_before_first_adapter(monkeypatch
 
     calls: list[str] = []
 
-    def fake_adapter(contender, source_sha, adapter, root, output_path):
+    def fake_adapter(contender, source_sha, adapter, root, output_path, *, real_gate_authorized=False):
+        assert real_gate_authorized is True
         scientific = tmp_path / "raw" / "physical-input-identity.json"
         assert scientific.is_file(), "portable identity must exist before the first contender starts"
         calls.append(contender)

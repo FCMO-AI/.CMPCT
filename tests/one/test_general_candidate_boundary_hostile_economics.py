@@ -10,6 +10,7 @@ from benchmarks.one import one_g02_general_candidate_boundary_hostile_economics 
 
 def test_hostile_candidate_boundary_falsifier_is_fail_closed_and_genesis_dark(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(bench, "OUT", tmp_path / "candidate-boundary-hostile-economics.json")
     payload = bench.run()
 
     assert payload["schema"] == "cmpct-one-g02-general-candidate-boundary-hostile-economics-v1"
