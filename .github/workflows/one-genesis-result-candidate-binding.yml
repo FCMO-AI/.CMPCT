@@ -1,0 +1,46 @@
+# ci-lane: narrow
+name: CMPCT1 ONE Genesis result candidate binding
+
+on:
+  push:
+    branches:
+      - research/cmpct1
+    paths:
+      - 'benchmarks/one/one_genesis_candidate_certification_validator.py'
+      - 'benchmarks/one/one_genesis_gate_result_validator.py'
+      - 'benchmarks/one/one_genesis_gate_result_candidate_binding.py'
+      - 'tests/one/test_genesis_gate_result_validator.py'
+      - 'tests/one/test_genesis_gate_result_candidate_binding.py'
+      - '.github/workflows/one-genesis-result-candidate-binding.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  frozen-candidate-result-binding:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - name: Bind exact harness source
+        run: test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install test dependencies
+        run: python -m pip install -e '.[test]'
+      - name: Falsify structural and frozen-candidate result substitution
+        run: |
+          python -m pytest -q \
+            tests/one/test_genesis_gate_result_validator.py \
+            tests/one/test_genesis_gate_result_candidate_binding.py \
+            | tee genesis-result-candidate-binding-tests.txt
+      - name: Retain exact-source falsifier output
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: one-genesis-result-candidate-binding-${{ github.sha }}
+          path: genesis-result-candidate-binding-tests.txt
+          if-no-files-found: warn
+          retention-days: 30
