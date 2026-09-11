@@ -10,6 +10,12 @@ on:
       - 'tests/one/test_statistical_law_reference.py'
       - 'docs/one/prereg/ONE_G03_REAL_BLOCK_STATISTICAL_LAW_PREREG_2026-09-11.md'
       - '.github/workflows/one-g03-statistical-law-reference.yml'
+  pull_request:
+    paths:
+      - 'experiments/one/statistical_law_reference.py'
+      - 'tests/one/test_statistical_law_reference.py'
+      - 'docs/one/prereg/ONE_G03_REAL_BLOCK_STATISTICAL_LAW_PREREG_2026-09-11.md'
+      - '.github/workflows/one-g03-statistical-law-reference.yml'
   workflow_dispatch:
 
 permissions:
