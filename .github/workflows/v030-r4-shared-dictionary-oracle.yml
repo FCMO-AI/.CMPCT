@@ -8,6 +8,7 @@ on:
     branches: [agent/v030-authoritative-integration]
     paths:
       - 'benchmarks/v030_r4_shared_dictionary_oracle.py'
+      - 'benchmarks/v030_r4_shared_dictionary_deep_oracle.py'
       - 'benchmarks/v030_r4_zstd_parameter_decomposition.py'
       - 'benchmarks/v030_external_competitors.py'
       - 'benchmarks/v030_release_generalization.py'
@@ -21,6 +22,7 @@ on:
     branches: [main]
     paths:
       - 'benchmarks/v030_r4_shared_dictionary_oracle.py'
+      - 'benchmarks/v030_r4_shared_dictionary_deep_oracle.py'
       - 'benchmarks/v030_r4_zstd_parameter_decomposition.py'
       - 'benchmarks/v030_external_competitors.py'
       - 'benchmarks/v030_release_generalization.py'
@@ -66,7 +68,7 @@ jobs:
             exit 0
           fi
           git diff-tree --no-commit-id --name-only -r HEAD > /tmp/latest-head-files.txt
-          if grep -Eq '^(benchmarks/v030_r4_shared_dictionary_oracle\.py|benchmarks/v030_r4_zstd_parameter_decomposition\.py|benchmarks/v030_external_competitors\.py|benchmarks/v030_release_generalization\.py|benchmarks/neutral_hostile_corpus_v1\.py|benchmarks/neutral_hostile_determinism_repair_v[^/]*\.py|experiments/entropygraph_v025\.py|experiments/entropygraph_v030_product_fs\.py|experiments/entropygraph_v030_release_product\.py|\.github/workflows/v030-r4-shared-dictionary-oracle\.yml)$' /tmp/latest-head-files.txt; then
+          if grep -Eq '^(benchmarks/v030_r4_shared_dictionary_oracle\.py|benchmarks/v030_r4_shared_dictionary_deep_oracle\.py|benchmarks/v030_r4_zstd_parameter_decomposition\.py|benchmarks/v030_external_competitors\.py|benchmarks/v030_release_generalization\.py|benchmarks/neutral_hostile_corpus_v1\.py|benchmarks/neutral_hostile_determinism_repair_v[^/]*\.py|experiments/entropygraph_v025\.py|experiments/entropygraph_v030_product_fs\.py|experiments/entropygraph_v030_release_product\.py|\.github/workflows/v030-r4-shared-dictionary-oracle\.yml)$' /tmp/latest-head-files.txt; then
             echo 'run_deep=true' >> "$GITHUB_OUTPUT"
           else
             echo 'run_deep=false' >> "$GITHUB_OUTPUT"
@@ -96,11 +98,11 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -e '.[audio,test]'
       - name: Compile exact R4 oracle
-        run: python -m py_compile benchmarks/v030_r4_shared_dictionary_oracle.py
-      - name: Measure charged shared-dictionary oracle
+        run: python -m py_compile benchmarks/v030_r4_shared_dictionary_oracle.py benchmarks/v030_r4_shared_dictionary_deep_oracle.py
+      - name: Measure charged shared-dictionary oracle through high effort
         run: |
           mkdir -p benchmark-artifacts
-          python benchmarks/v030_r4_shared_dictionary_oracle.py \
+          python benchmarks/v030_r4_shared_dictionary_deep_oracle.py \
             --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-r4-shared-dictionary-work" \
             --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-r4-shared-dictionary.json"
       - name: Enforce diagnostic contract
@@ -113,7 +115,7 @@ jobs:
           assert d['source_commit']==os.environ['EVIDENCE_HEAD']
           assert d['targets']==['02_office_workspace','04_analytics_and_database','01_developer_repository','08_many_tiny_files','07_incompressible_and_encrypted_like']
           assert d['dict_sizes']==[16384,32768,65536]
-          assert d['dict_levels']==[3,5,9]
+          assert d['dict_levels']==[3,5,9,15,19]
           assert len(d['rows'])==5
           c=d['contract']
           assert c['diagnostic_only'] and c['release_credit'] is False
@@ -140,5 +142,5 @@ jobs:
           retention-days: 90
 
 # Diagnostic-only. The dictionary is fully byte-charged and its training/compression work is charged.
-# A positive result still requires a real format-level owner, bounded dependency/locality, recovery, RSS,
-# native-reader and all-15 evidence before any selector or release credit.
+# This hostile extension includes the baseline and high-effort backends so a negative cannot be dismissed
+# as an artifact of testing only cheap dictionary compression. Positive evidence still earns no release credit.
