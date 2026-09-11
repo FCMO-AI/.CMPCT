@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from pathlib import Path
-from types import SimpleNamespace
 
 import pytest
 
@@ -56,7 +55,9 @@ def _tree(tmp_path: Path) -> Path:
 def _install(monkeypatch: pytest.MonkeyPatch, contender: str, surface: FakeSurface, root: Path):
     monkeypatch.setattr(worker, "_git_head", lambda _checkout: worker.FROZEN[contender]["sha"])
     surface.source_root = root
-    monkeypatch.setattr(worker, "_load_surface", lambda _contender, _checkout: surface)
+    fake_roots = {"cmpct": str((root.parent / "src" / "cmpct" / "__init__.py").resolve())}
+    monkeypatch.setattr(worker, "_load_surface", lambda _contender, _checkout: (surface, fake_roots))
+    monkeypatch.setattr(worker, "_assert_frozen_cmpct_imports", lambda _checkout: fake_roots)
     monkeypatch.setattr(worker, "_forbidden_imports", lambda: [])
 
 
@@ -95,6 +96,8 @@ def test_build_reports_actual_persistent_archive(monkeypatch: pytest.MonkeyPatch
     assert row["stored_bytes"] == archive.stat().st_size
     assert row["stored_bytes"] > 0
     assert row["authorization"]["production_authorized"] is False
+    assert row["frozen_source_sha"] == worker.FROZEN["v029"]["sha"]
+    assert row["frozen_cmpct_import_roots"]
     assert row["comparison_executed"] is False
     assert row["scoring_executed"] is False
     assert row["cpu_s"] >= 0
@@ -167,5 +170,7 @@ def test_v030_selective_preserves_raw_access_stats(monkeypatch: pytest.MonkeyPat
     assert row["exact"] is True
     assert row["returned_bytes"] == len((root / "a.bin").read_bytes())
     assert row["product_access_stats"]["archive_bytes_read"] == 123
+    assert row["frozen_source_sha"] == worker.FROZEN["v030"]["sha"]
+    assert row["frozen_cmpct_import_roots"]
     assert row["comparison_executed"] is False
     assert row["winner_selected"] is False
