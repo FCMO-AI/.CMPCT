@@ -192,6 +192,7 @@ def test_size_status_must_match_retained_stored_bytes():
     payload = _payload()
     payload["workloads"][0]["measurements"]["cmpct1"]["stored_bytes"] = 1100
     payload["workloads"][0]["comparisons"]["v0.29"]["size_status"] = "SIZE_EQUAL"
+    payload["workloads"][0]["comparisons"]["v0.30"]["size_status"] = "SIZE_LOSS"
     assert validate_gate_result(payload).ok
 
 
