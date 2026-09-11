@@ -1,0 +1,111 @@
+# ci-lane: deep
+# ci-pr-scope: latest-head-commit-gate
+# ci-cancel-policy: preserve-running-exact-receipt
+name: CMPCT v0.30 R4 hidden ZIP information-yield gate
+
+on:
+  push:
+    branches: [agent/v030-authoritative-integration]
+    paths:
+      - 'benchmarks/v030_r4_content_zip_information_yield_gate.py'
+      - 'experiments/v030_r4_content_zip_builder.py'
+      - 'experiments/v030_r4_zip_preflight.py'
+      - 'benchmarks/neutral_hostile_corpus_v1.py'
+      - 'benchmarks/resemblance_hostile_corpus_v1.py'
+      - 'benchmarks/neutral_hostile_determinism_repair_v*.py'
+      - '.github/workflows/v030-r4-content-zip-information-yield-gate.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'benchmarks/v030_r4_content_zip_information_yield_gate.py'
+      - 'experiments/v030_r4_content_zip_builder.py'
+      - 'experiments/v030_r4_zip_preflight.py'
+      - 'benchmarks/neutral_hostile_corpus_v1.py'
+      - 'benchmarks/resemblance_hostile_corpus_v1.py'
+      - 'benchmarks/neutral_hostile_determinism_repair_v*.py'
+      - '.github/workflows/v030-r4-content-zip-information-yield-gate.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+
+concurrency:
+  group: cmpct-v030-r4-zip-yield-gate-${{ github.event.pull_request.head.sha || github.sha }}
+  cancel-in-progress: false
+
+jobs:
+  latest-head-impact:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      run_deep: ${{ steps.scope.outputs.run_deep }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 2
+      - id: scope
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then echo 'run_deep=true' >> "$GITHUB_OUTPUT"; exit 0; fi
+          git diff-tree --no-commit-id --name-only -r HEAD > /tmp/latest-head-files.txt
+          if grep -Eq '^(benchmarks/v030_r4_content_zip_information_yield_gate\.py|experiments/v030_r4_(content_zip_builder|zip_preflight)\.py|benchmarks/(neutral_hostile_corpus_v1|resemblance_hostile_corpus_v1|neutral_hostile_determinism_repair_v[^/]*)\.py|\.github/workflows/v030-r4-content-zip-information-yield-gate\.yml)$' /tmp/latest-head-files.txt; then echo 'run_deep=true' >> "$GITHUB_OUTPUT"; else echo 'run_deep=false' >> "$GITHUB_OUTPUT"; fi
+
+  yield-gate:
+    needs: latest-head-impact
+    if: needs.latest-head-impact.outputs.run_deep == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install exact corpus dependencies
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y zstd gcc ffmpeg libsndfile1
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[audio,test]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
+      - run: python -m py_compile benchmarks/v030_r4_content_zip_information_yield_gate.py experiments/v030_r4_zip_preflight.py
+      - name: Run exact 15-workload plus hostile yield gate
+        run: |
+          mkdir -p benchmark-artifacts
+          python benchmarks/v030_r4_content_zip_information_yield_gate.py \
+            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-r4-zip-yield-gate-work" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-r4-zip-yield-gate.json"
+      - name: Enforce receipt contract only
+        run: |
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          d=json.loads(Path('benchmark-artifacts/v030-r4-zip-yield-gate.json').read_text())
+          assert d['schema']=='cmpct-v030-r4-content-zip-information-yield-gate-v1'
+          assert d['source_commit']==os.environ['EVIDENCE_HEAD']
+          assert len(d['rows'])==15
+          c=d['contract']; assert c['diagnostic_only'] and not c['release_credit'] and not c['shipping_builder_changed']
+          assert c['preflight_composed'] and c['threshold_preregistered_from_control_cost_envelope'] and not c['workload_identity_used']
+          PY
+      - run: python tools/check_ci_topology.py .github/workflows/v030-r4-content-zip-information-yield-gate.yml
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: v030-r4-zip-yield-gate-${{ env.EVIDENCE_HEAD }}
+          path: benchmark-artifacts/v030-r4-zip-yield-gate.json
+          if-no-files-found: error
+          retention-days: 90
+
+# Research-only economic gate. Green means evidence integrity, not shipping promotion.
