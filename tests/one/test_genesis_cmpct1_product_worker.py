@@ -187,13 +187,25 @@ def test_executor_authorization_cannot_bypass_uncertified_candidate_boundary(tmp
     root = tmp_path / "tree"
     root.mkdir()
     (root / "x").write_bytes(b"x")
+    manifest = tmp_path / "uncertified-candidate.json"
+    _write_candidate_manifest(manifest, status="HOLD_UNTIL_COMPLETE_PRODUCT_BOUNDARY_IS_CERTIFIED")
+    archive = tmp_path / "a.one"
+    output = tmp_path / "out.json"
     env = os.environ.copy()
     env["CMPCT_GENESIS_REAL_GATE_AUTHORIZED"] = "1"
     env["CMPCT_GENESIS_SOURCE_SHA"] = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
-    result = _run(["--mode", "build", "--root", str(root), "--archive", str(tmp_path / "a.one"), "--output", str(tmp_path / "out.json")], env=env)
+    bootstrap = (
+        "import sys; "
+        "from pathlib import Path; "
+        "from benchmarks.one import one_genesis_cmpct1_product_worker as w; "
+        f"w.CANDIDATE_BOUNDARY_MANIFEST = Path({str(manifest)!r}); "
+        f"sys.argv = ['one_genesis_cmpct1_product_worker', '--mode', 'build', '--root', {str(root)!r}, '--archive', {str(archive)!r}, '--output', {str(output)!r}]; "
+        "w.main()"
+    )
+    result = subprocess.run([sys.executable, "-c", bootstrap], text=True, capture_output=True, env=env)
     assert result.returncode != 0
     assert "candidate boundary is not certified" in result.stderr
-    assert not (tmp_path / "a.one").exists()
+    assert not archive.exists()
 
 
 @pytest.mark.parametrize(("field", "bad_value"), [("creator_path", "experiments/one/not-the-certified-creator.py"), ("creator_blob_sha", "1" * 40), ("reader_path", "experiments/one/not-the-certified-reader.py"), ("reader_blob_sha", "2" * 40), ("runtime_tree_path", "experiments/not-one"), ("runtime_tree_sha", "3" * 40)])
