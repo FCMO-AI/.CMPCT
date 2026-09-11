@@ -1,0 +1,108 @@
+# ci-lane: deep
+# ci-pr-scope: latest-head-commit-gate
+# ci-cancel-policy: preserve-running-exact-receipt
+name: CMPCT v0.30 frozen RSS attribution
+
+on:
+  push:
+    branches: [agent/v030-authoritative-integration]
+    paths:
+      - 'benchmarks/v030_frozen_rss_attribution.py'
+      - 'benchmarks/neutral_hostile_corpus_v1.py'
+      - 'benchmarks/neutral_hostile_determinism_repair_v*.py'
+      - '.github/workflows/v030-frozen-rss-attribution.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'benchmarks/v030_frozen_rss_attribution.py'
+      - 'benchmarks/neutral_hostile_corpus_v1.py'
+      - 'benchmarks/neutral_hostile_determinism_repair_v*.py'
+      - '.github/workflows/v030-frozen-rss-attribution.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+  FROZEN_V030_SHA: f4b158a55a08b9b18b50e4e4abe4b9251048c772
+
+concurrency:
+  group: cmpct-v030-frozen-rss-${{ github.event.pull_request.head.sha || github.sha }}
+  cancel-in-progress: false
+
+jobs:
+  rss-attribution:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 0
+      - name: Bind exact harness head
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install exact dependencies
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y zstd gcc ffmpeg libsndfile1
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[audio,test]'
+      - name: Materialize frozen v0.30 checkout
+        run: |
+          set -euo pipefail
+          git worktree add --detach /tmp/cmpct-v030-frozen "$FROZEN_V030_SHA"
+          test "$(git -C /tmp/cmpct-v030-frozen rev-parse HEAD)" = "$FROZEN_V030_SHA"
+      - name: Build deterministic physical corpus
+        run: |
+          python benchmarks/neutral_hostile_corpus_v1.py --output benchmark-artifacts/neutral-hostile
+          python benchmarks/neutral_hostile_determinism_repair_v1.py --root benchmark-artifacts/neutral-hostile
+      - name: Attribute Analytics RSS
+        run: |
+          mkdir -p benchmark-artifacts/rss
+          python benchmarks/v030_frozen_rss_attribution.py \
+            --checkout /tmp/cmpct-v030-frozen \
+            --root benchmark-artifacts/neutral-hostile/04_analytics_and_database \
+            --output benchmark-artifacts/rss/analytics.json
+      - name: Attribute incompressible RSS
+        run: |
+          python benchmarks/v030_frozen_rss_attribution.py \
+            --checkout /tmp/cmpct-v030-frozen \
+            --root benchmark-artifacts/neutral-hostile/07_incompressible_and_encrypted_like \
+            --output benchmark-artifacts/rss/incompressible.json
+      - name: Enforce source seal and attribution contract
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          frozen='f4b158a55a08b9b18b50e4e4abe4b9251048c772'
+          for name in ('analytics','incompressible'):
+              d=json.loads(Path(f'benchmark-artifacts/rss/{name}.json').read_text())
+              assert d['schema']=='cmpct-v030-frozen-rss-attribution-child-v1'
+              assert d['frozen_sha']==frozen
+              assert d['archive_bytes']>0
+              assert d['strong_verify'].get('ok', True)
+              assert d['frozen_cmpct_import_roots']
+              for mod,path in d['frozen_cmpct_import_roots'].items():
+                  assert '/tmp/cmpct-v030-frozen/src/cmpct/' in path, (mod,path)
+              a=d['attribution']
+              assert a['post_build_hwm_bytes']>=a['post_import_hwm_bytes']
+              assert a['import_current_increment_bytes']>=0
+              assert a['build_hwm_increment_over_import_bytes']>=0
+          PY
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: v030-frozen-rss-attribution-${{ env.EVIDENCE_HEAD }}
+          path: benchmark-artifacts/rss/*.json
+          if-no-files-found: error
+          retention-days: 90
+
+# Diagnostic only. This lane attributes process RSS accounting; it does not change, score, or optimize
+# the frozen v0.30 product and gives no release credit.
