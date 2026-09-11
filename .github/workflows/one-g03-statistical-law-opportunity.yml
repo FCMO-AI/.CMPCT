@@ -29,6 +29,11 @@ jobs:
           fetch-depth: 0
           ref: ${{ github.sha }}
 
+      - name: Bind diagnostic source
+        run: |
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$(git status --porcelain=v1 --untracked-files=all)" = ""
+
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
