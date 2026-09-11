@@ -68,7 +68,8 @@ class _BitWriter:
 
 
 class _BitReader:
-    __slots__ = ("data", "byte_pos", "bit_pos")n
+    __slots__ = ("data", "byte_pos", "bit_pos")
+
     def __init__(self, data: bytes) -> None:
         self.data = data
         self.byte_pos = 0
