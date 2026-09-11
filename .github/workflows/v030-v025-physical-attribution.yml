@@ -1,0 +1,130 @@
+# ci-lane: deep
+# ci-pr-scope: latest-head-commit-gate
+# ci-cancel-policy: preserve-running-exact-receipt
+name: CMPCT v0.30 v0.25 physical attribution
+
+on:
+  push:
+    branches: [agent/v030-authoritative-integration]
+    paths:
+      - 'benchmarks/v030_v025_physical_attribution.py'
+      - '.github/workflows/v030-v025-physical-attribution.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'benchmarks/v030_v025_physical_attribution.py'
+      - 'benchmarks/neutral_hostile_corpus_v1.py'
+      - 'benchmarks/neutral_hostile_determinism_repair_v*.py'
+      - 'experiments/entropygraph_v025.py'
+      - '.github/workflows/v030-v025-physical-attribution.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-v030-v025-physical-attribution-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: false
+
+env:
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+  PYTHONPATH: ${{ github.workspace }}
+
+jobs:
+  physical-attribution:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+
+      - name: Bind exact evidence head
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+
+      - name: Install frozen-corpus dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y zstd gcc ffmpeg libsndfile1
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[audio,test]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
+
+      - name: Compile attribution diagnostic
+        run: |
+          python -m py_compile \
+            benchmarks/v030_v025_physical_attribution.py \
+            experiments/entropygraph_v025.py
+
+      - name: Attribute exact v0.25 physical bytes and conservative logical stream coverage
+        run: |
+          mkdir -p benchmark-artifacts
+          python benchmarks/v030_v025_physical_attribution.py \
+            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-v025-physical-attribution-work" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-v025-physical-attribution.json"
+
+      - name: Independently enforce diagnostic integrity and claim boundary
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          p=Path('benchmark-artifacts/v030-v025-physical-attribution.json')
+          d=json.loads(p.read_text())
+          assert d['schema']=='cmpct-v030-v025-physical-attribution-v1'
+          assert d['workloads']==[
+              '02_office_workspace',
+              '04_analytics_and_database',
+              '01_developer_repository',
+          ]
+          assert len(d['rows'])==3
+          by_name={r['workload']:r for r in d['rows']}
+          for name,row in by_name.items():
+              assert row['logical_bytes'] > 0
+              assert row['file_count'] > 0
+              assert row['archive_bytes'] > 0
+              assert len(row['tree_sha256']) == 64
+              assert row['attribution']['authenticated_tree_sha256']==row['tree_sha256']
+              assert row['attribution']['physical']['accounting_exact'] is True
+              p=row['attribution']['physical']
+              assert (
+                  p['stream_pack_bytes']
+                  + p['ordinary_pack_bytes']
+                  + p['metadata_recovery_framing_bytes']
+              ) == row['archive_bytes']
+              frac=row['attribution']['logical']['conservative_stream_logical_fraction']
+              assert 0.0 <= frac <= 1.0
+          # Hypothesis truth is research evidence, not CI pass/fail. Only its
+          # schema and mechanical subclaims are enforced here.
+          h=d['hypothesis']
+          assert set(h)=={
+              'office_stream_logical_majority',
+              'analytics_stream_logical_majority',
+              'developer_control_stream_free',
+              'physical_accounting_exact_all_rows',
+              'supported',
+          }
+          assert h['physical_accounting_exact_all_rows'] is True
+          assert isinstance(h['supported'], bool)
+          assert 'diagnostic attribution only' in d['claim_boundary']
+          PY
+
+      - name: CI topology self-check
+        run: python tools/check_ci_topology.py .github/workflows/v030-v025-physical-attribution.yml
+
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: v030-v025-physical-attribution-${{ env.EVIDENCE_HEAD }}
+          path: benchmark-artifacts/v030-v025-physical-attribution.json
+          if-no-files-found: warn
+          retention-days: 90
+
+# This lane is deliberately diagnostic-only. A supported causal hypothesis does
+# not authorize a selector, a format change, or release credit. A falsified
+# hypothesis is retained as useful negative evidence and does not make CI red;
+# only measurement/accounting/integrity failures do.
