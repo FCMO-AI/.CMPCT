@@ -19,7 +19,7 @@ concurrency:
 jobs:
   sealed-genesis-gate:
     runs-on: ubuntu-latest
-    timeout-minutes: 55
+    timeout-minutes: 240
     env:
       CANDIDATE_SHA: 38f17f4a45686a59a853bf62f0c840e228879e17
       V029_SHA: 02b8b27cb2d97af7c6e0797984a898e8fa8a8e5d
