@@ -23,7 +23,7 @@ changes no product, selector, format, or comparator and earns no release credit.
 import argparse
 from contextlib import contextmanager
 import json
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 import shutil
 import tempfile
 import time
@@ -106,7 +106,7 @@ def _one(name: str, source: Path, work: Path, accepted_v029_bytes: int) -> dict:
         extracted = root / "canonical-out"
         with _level1(canonical_archive, profile):
             V25.extract(extracted)
-        manifest_path = extracted.joinpath(*FS.PurePosixPath(FS.FILESYSTEM_MANIFEST).parts)
+        manifest_path = extracted.joinpath(*PurePosixPath(FS.FILESYSTEM_MANIFEST).parts)
         if not manifest_path.is_file() or manifest_path.is_symlink():
             raise RuntimeError("canonical level-1 extraction omitted filesystem manifest")
         decoded = FS.decode_manifest(
