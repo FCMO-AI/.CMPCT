@@ -33,7 +33,38 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  latest-head-impact:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      run_deep: ${{ steps.scope.outputs.run_deep }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 2
+      - name: Bind exact head and classify only its changed files
+        id: scope
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            echo 'run_deep=true' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          git diff-tree --no-commit-id --name-only -r HEAD > /tmp/latest-head-files.txt
+          cat /tmp/latest-head-files.txt
+          if grep -Eq '^(benchmarks/v030_frozen_rss_attribution\.py|benchmarks/neutral_hostile_corpus_v1\.py|benchmarks/neutral_hostile_determinism_repair_v[^/]*\.py|\.github/workflows/v030-frozen-rss-attribution\.yml)$' /tmp/latest-head-files.txt; then
+            echo 'run_deep=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'run_deep=false' >> "$GITHUB_OUTPUT"
+          fi
+
   rss-attribution:
+    needs: latest-head-impact
+    if: needs.latest-head-impact.outputs.run_deep == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     steps:
@@ -54,6 +85,8 @@ jobs:
           sudo apt-get install -y zstd gcc ffmpeg libsndfile1
           python -m pip install --upgrade pip
           python -m pip install -e '.[audio,test]'
+      - name: Compile exact attribution harness
+        run: python -m py_compile benchmarks/v030_frozen_rss_attribution.py
       - name: Materialize frozen v0.30 checkout
         run: |
           set -euo pipefail
@@ -107,6 +140,8 @@ jobs:
               assert a['import_current_increment_bytes']>=0
               assert a['build_hwm_increment_over_import_bytes']>=0
           PY
+      - name: CI topology self-check
+        run: python tools/check_ci_topology.py .github/workflows/v030-frozen-rss-attribution.yml
       - uses: actions/upload-artifact@v6
         if: always()
         with:
@@ -116,4 +151,5 @@ jobs:
           retention-days: 90
 
 # Diagnostic only. This lane attributes process RSS accounting; it does not change, score, or optimize
-# the frozen v0.30 product and gives no release credit.
+# the frozen v0.30 product and gives no release credit. Fresh-process phase attribution is required before
+# treating Genesis process-lifetime ru_maxrss as product-owned resource debt.
