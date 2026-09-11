@@ -1,0 +1,57 @@
+name: ONE-G0.2 fused phase witness native cost
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [research/cmpct1]
+    paths:
+      - 'benchmarks/one/one_g02_fused_phase_witness_native_cost.py'
+      - 'benchmarks/one/one_g02_bounded_shift_phase_certificate_validation.py'
+      - 'benchmarks/one/one_g02_gear_replacement_ab.py'
+      - 'docs/one/evidence/ONE_G02_FUSED_PHASE_WITNESS_NATIVE_COST_PREREG_2026-09-05.md'
+      - '.github/workflows/one-g02-fused-phase-witness-native-cost.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  fused-phase-cost:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install project test environment
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[test]'
+      - name: ONE semantic and hostile tests
+        run: python -m pytest -q tests/one
+      - name: Frozen fused phase-witness carrying-cost A/B
+        env:
+          EVIDENCE_HEAD: ${{ github.sha }}
+        run: |
+          mkdir -p artifacts/one
+          set +e
+          python -m benchmarks.one.one_g02_fused_phase_witness_native_cost | tee artifacts/one/fused_phase_witness_native_cost.json
+          rc=${PIPESTATUS[0]}
+          exit "$rc"
+      - name: Publish evidence annotation
+        if: always()
+        run: |
+          if [ -f artifacts/one/fused_phase_witness_native_cost.json ]; then
+            payload=$(python -c 'import json; print(json.dumps(json.load(open("artifacts/one/fused_phase_witness_native_cost.json")),separators=(",",":")))')
+            echo "::notice title=ONE-G0.2 fused phase witness evidence::$payload"
+          else
+            echo '::error title=ONE-G0.2 fused phase witness evidence::result file missing'
+          fi
+      - name: Preserve result
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: one-g02-fused-phase-witness-native-cost-${{ github.sha }}
+          path: artifacts/one/fused_phase_witness_native_cost.json
+          if-no-files-found: error

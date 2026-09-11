@@ -1,0 +1,68 @@
+name: CMPCT1 ONE-G0.2 native auth verify
+
+on:
+  push:
+    branches:
+      - research/cmpct1
+    paths:
+      - 'experiments/one/auth_tree.py'
+      - 'experiments/one/native_auth_tree.py'
+      - 'experiments/one/native_auth_verify.py'
+      - 'experiments/one/native_auth_verify_kernel.c'
+      - 'benchmarks/one/one_g02_native_auth_verify.py'
+      - 'tests/one/test_native_auth_verify.py'
+      - 'tests/one/test_native_auth_verify_benchmark.py'
+      - 'docs/one/prereg/ONE_G02_NATIVE_AUTH_VERIFY_PREREG_2026-09-08.md'
+      - 'docs/one/evidence/ONE_G02_NATIVE_AUTH_VERIFY_HOSTILE_REVIEW_2026-09-08.md'
+      - '.github/workflows/cmpct1-one-g02-native-auth-verify.yml'
+  workflow_dispatch:
+
+jobs:
+  native-auth-verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      EVIDENCE_HEAD: ${{ github.sha }}
+    steps:
+      - name: Checkout exact source SHA
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+
+      - name: Bind exact source and frozen contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          test -f docs/one/prereg/ONE_G02_NATIVE_AUTH_VERIFY_PREREG_2026-09-08.md
+          test -f docs/one/evidence/ONE_G02_NATIVE_AUTH_VERIFY_HOSTILE_REVIEW_2026-09-08.md
+          grep -q 'SIZE=1 << 20' benchmarks/one/one_g02_native_auth_verify.py
+          grep -q 'WORST_MAX=0.65' benchmarks/one/one_g02_native_auth_verify.py
+          grep -q 'MATERIAL_MAX=0.50' benchmarks/one/one_g02_native_auth_verify.py
+          grep -q 'MATERIAL_ROWS=12' benchmarks/one/one_g02_native_auth_verify.py
+          grep -q 'REPS=21' benchmarks/one/one_g02_native_auth_verify.py
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install test environment
+        run: python -m pip install -e '.[test]'
+
+      - name: Prove semantics and decision law
+        run: python -m pytest -q tests/one/test_native_auth_tree.py tests/one/test_native_auth_verify.py tests/one/test_native_auth_verify_benchmark.py
+
+      - name: Run frozen native verifier falsifier
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/one
+          python -m benchmarks.one.one_g02_native_auth_verify | tee "artifacts/one/native-auth-verify-${EVIDENCE_HEAD}.json"
+
+      - name: Preserve exact-head evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: one-g02-native-auth-verify-${{ env.EVIDENCE_HEAD }}
+          path: artifacts/one/native-auth-verify-${{ env.EVIDENCE_HEAD }}.json
+          if-no-files-found: warn

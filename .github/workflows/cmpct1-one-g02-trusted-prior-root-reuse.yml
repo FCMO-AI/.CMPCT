@@ -1,0 +1,63 @@
+name: CMPCT1 ONE-G0.2 trusted prior-root reuse
+
+on:
+  push:
+    branches: [research/cmpct1]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  trusted-prior-root-reuse:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      EVIDENCE_HEAD: ${{ github.sha }}
+    steps:
+      - name: Checkout exact source SHA
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+
+      - name: Bind exact source and frozen preregistration
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          test -f docs/one/prereg/ONE_G02_TRUSTED_PRIOR_ROOT_REUSE_PREREG_2026-09-08.md
+          test -f docs/one/evidence/ONE_G02_TRUSTED_PRIOR_ROOT_REUSE_HOSTILE_REVIEW_2026-09-08.md
+          test -f benchmarks/one/one_g02_trusted_prior_root_reuse.py
+          test -f tests/one/test_trusted_prior_root_reuse.py
+          python - <<'PY'
+          from benchmarks.one.one_g02_trusted_prior_root_reuse import DECISION_SIZE, SIZES, run
+          assert DECISION_SIZE == 1 << 20
+          assert tuple(SIZES) == (64 << 10, 1 << 20)
+          assert callable(run)
+          PY
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install test environment
+        run: python -m pip install -e '.[test]'
+
+      - name: Prove frozen decision law and writer semantics
+        run: python -m pytest -q tests/one/test_trusted_prior_root_reuse.py tests/one/test_lazy_segment_timing.py
+
+      - name: Run frozen trusted-prior falsifier
+        shell: bash
+        run: |
+          set -o pipefail
+          mkdir -p .artifacts/one
+          python -m benchmarks.one.one_g02_trusted_prior_root_reuse \
+            | tee .artifacts/one/one-g02-trusted-prior-root-reuse-${EVIDENCE_HEAD}.json
+
+      - name: Preserve exact-head evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: one-g02-trusted-prior-root-reuse-${{ env.EVIDENCE_HEAD }}
+          path: .artifacts/one/one-g02-trusted-prior-root-reuse-${{ env.EVIDENCE_HEAD }}.json
+          if-no-files-found: warn

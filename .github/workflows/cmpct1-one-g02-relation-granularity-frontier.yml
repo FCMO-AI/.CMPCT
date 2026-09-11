@@ -1,0 +1,70 @@
+# Exact-source evidence lane for ONE-G0.2 generic relation granularity.
+# Evidence-trigger touch only: scientific matrix and decision law remain frozen.
+name: CMPCT1 ONE-G0.2 relation granularity frontier
+on:
+  push:
+    branches: [research/cmpct1]
+    paths: &paths
+      - 'benchmarks/one/one_g02_relation_granularity_frontier.py'
+      - 'docs/one/prereg/ONE_G02_RELATION_GRANULARITY_FRONTIER_PREREG_2026-09-08.md'
+      - '.github/workflows/cmpct1-one-g02-relation-granularity-frontier.yml'
+  pull_request:
+    paths: *paths
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  relation-granularity-frontier:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - name: Checkout exact source SHA
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install test environment
+        run: python -m pip install -e '.[test]'
+      - name: Exact source and frozen-law binding
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          python - <<'PY'
+          import benchmarks.one.one_g02_relation_granularity_frontier as b
+          assert b.SIZES == (64*1024, 256*1024, 1024*1024)
+          assert b.BLOCKS == (64, 128, 256, 512, 1024, 2048, 4096)
+          assert b.OPS == ('add8', 'xor')
+          assert b.MAX_NODES == 4096
+          assert b.MAX_1MIB_WIRE_RATIO == 0.55
+          assert b.REPLAY_REPETITIONS == 7
+          PY
+      - name: Hostile node-envelope and generator preflight
+        run: |
+          python - <<'PY'
+          import benchmarks.one.one_g02_relation_granularity_frontier as b
+          for op in b.OPS:
+              data, pairs = b._case(op, 1024*1024, 64)
+              assert not b._has_duplicate_blocks(data, 64)
+              assert b._candidate(data, pairs, op, 64) is None
+              for block in (512, 1024, 2048, 4096):
+                  data, pairs = b._case(op, 1024*1024, block)
+                  assert not b._has_duplicate_blocks(data, block)
+                  candidate = b._candidate(data, pairs, op, block)
+                  assert candidate is not None
+                  assert len(candidate.nodes) <= b.MAX_NODES
+          PY
+      - name: Run frozen 42-cell frontier
+        run: |
+          set -o pipefail
+          python -m benchmarks.one.one_g02_relation_granularity_frontier | tee one_g02_relation_granularity_frontier.json
+      - name: Preserve exact-head evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: one-g02-relation-granularity-frontier-${{ env.EVIDENCE_HEAD }}
+          path: one_g02_relation_granularity_frontier.json
+          if-no-files-found: warn

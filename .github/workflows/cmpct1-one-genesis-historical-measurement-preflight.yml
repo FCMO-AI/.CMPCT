@@ -1,0 +1,179 @@
+# ci-lane: fast
+name: CMPCT1 ONE Genesis historical measurement preflight
+
+on:
+  push:
+    branches: [research/cmpct1]
+    paths:
+      - benchmarks/one/one_genesis_historical_measurement_probe.py
+      - benchmarks/one/one_genesis_historical_adapter_probe.py
+      - benchmarks/one/one_genesis_v030_selective_adapter_probe.py
+      - benchmarks/one/one_genesis_fresh_process_meter.py
+      - benchmarks/one/one_genesis_historical_operation_worker.py
+      - benchmarks/one/one_genesis_historical_fresh_process_probe.py
+      - benchmarks/one/genesis_historical_adapter_authority_v1.json
+      - benchmarks/one/genesis_selective_access_authority_v1.json
+      - tests/one/test_genesis_historical_measurement_probe.py
+      - tests/one/test_genesis_fresh_process_meter.py
+      - .github/workflows/cmpct1-one-genesis-historical-measurement-preflight.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-one-genesis-historical-measurement-preflight-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  synthetic-transfer:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout CMPCT1 exact source
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Bind exact source
+        run: |
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          echo "EVIDENCE_HEAD=$GITHUB_SHA" >> "$GITHUB_ENV"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Checkout frozen v0.29
+        uses: actions/checkout@v4
+        with:
+          ref: 02b8b27cb2d97af7c6e0797984a898e8fa8a8e5d
+          path: frozen-v029
+      - name: Checkout frozen v0.30
+        uses: actions/checkout@v4
+        with:
+          ref: f4b158a55a08b9b18b50e4e4abe4b9251048c772
+          path: frozen-v030
+      - name: Assert frozen comparator identities
+        run: |
+          test "$(git -C frozen-v029 rev-parse HEAD)" = "02b8b27cb2d97af7c6e0797984a898e8fa8a8e5d"
+          test "$(git -C frozen-v030 rev-parse HEAD)" = "f4b158a55a08b9b18b50e4e4abe4b9251048c772"
+      - name: Install project test dependencies
+        run: python -m pip install -e '.[test]'
+      - name: Falsify measurement normalization and resource boundary
+        run: |
+          python -m pytest -q \
+            tests/one/test_genesis_historical_measurement_probe.py \
+            tests/one/test_genesis_fresh_process_meter.py \
+            | tee historical-measurement-tests.txt
+      - name: Exercise fresh-process meter on hosted Linux
+        run: |
+          python -m benchmarks.one.one_genesis_fresh_process_meter --output fresh-process-meter.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          row = json.loads(Path('fresh-process-meter.json').read_text())
+          assert row['schema'] == 'cmpct-one-genesis-fresh-process-meter-v1'
+          assert row['returncode'] == 0
+          assert row['cpu_total_s'] > 0
+          assert row['peak_rss_bytes'] >= 16 * 1024 * 1024
+          assert row['resource_scope'] == 'direct-child-process'
+          assert row['descendant_resource_scope'].startswith('unavailable')
+          PY
+      - name: Measure frozen v0.29 on external synthetic transfer tree
+        run: |
+          python -m benchmarks.one.one_genesis_historical_measurement_probe \
+            --contender v0.29 --checkout frozen-v029 --work-root transfer-v029 \
+            --output v029-historical-measurement.json
+      - name: Measure frozen v0.30 on external synthetic transfer tree
+        run: |
+          python -m benchmarks.one.one_genesis_historical_measurement_probe \
+            --contender v0.30 --checkout frozen-v030 --work-root transfer-v030 \
+            --output v030-historical-measurement.json
+      - name: Meter v0.29 cold operations in fresh processes
+        run: |
+          python -m benchmarks.one.one_genesis_historical_fresh_process_probe \
+            --contender v0.29 --checkout frozen-v029 --work-root fresh-v029 \
+            --output v029-fresh-process.json
+      - name: Meter v0.30 cold operations in fresh processes
+        run: |
+          python -m benchmarks.one.one_genesis_historical_fresh_process_probe \
+            --contender v0.30 --checkout frozen-v030 --work-root fresh-v030 \
+            --output v030-fresh-process.json
+      - name: Enforce pre-gate claim boundary
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          expected = {
+              'v029-historical-measurement.json': ('v0.29', '02b8b27cb2d97af7c6e0797984a898e8fa8a8e5d'),
+              'v030-historical-measurement.json': ('v0.30', 'f4b158a55a08b9b18b50e4e4abe4b9251048c772'),
+          }
+          for name, (contender, sha) in expected.items():
+              row = json.loads(Path(name).read_text())
+              assert row['schema'] == 'cmpct-one-genesis-historical-measurement-probe-v1'
+              assert row['contender'] == contender and row['source_sha'] == sha
+              assert row['synthetic'] is True and row['genesis_inputs_used'] is False
+              assert row['historical_generalization_harness_invoked'] is False
+              assert row['historical_corpus_modules_newly_loaded'] == []
+              assert row['stored_bytes'] > 0
+              assert row['creation']['measured'] is True
+              assert row['whole_read']['measured'] is True and row['whole_read']['exact'] is True
+              assert row['comparison_executed'] is False and row['scoring_executed'] is False
+              assert row['winner_selected'] is False
+          v029 = json.loads(Path('v029-historical-measurement.json').read_text())
+          v030 = json.loads(Path('v030-historical-measurement.json').read_text())
+          assert v029['selective_access']['status'] == 'unavailable'
+          assert v030['selective_access']['status'] in {'measured-reader-latency-only', 'measured-with-direct-locality'}
+
+          for name, contender in [('v029-fresh-process.json', 'v0.29'), ('v030-fresh-process.json', 'v0.30')]:
+              row = json.loads(Path(name).read_text())
+              assert row['schema'] == 'cmpct-one-genesis-historical-fresh-process-probe-v1'
+              assert row['contender'] == contender and row['synthetic'] is True
+              assert row['genesis_inputs_used'] is False and row['archive_bytes'] > 0
+              assert row['comparison_executed'] is False and row['scoring_executed'] is False
+              assert row['winner_selected'] is False
+              for op in ('build', 'verify', 'extract'):
+                  measurement = row[op]
+                  assert measurement['returncode'] == 0
+                  assert measurement['cpu_total_s'] > 0
+                  assert measurement['wall_s'] > 0
+                  assert measurement['peak_rss_bytes'] > 0
+                  assert measurement['resource_scope'] == 'direct-child-process'
+                  assert measurement['descendant_resource_scope'].startswith('unavailable')
+          PY
+      - name: Retain exact-source receipt
+        if: always()
+        run: |
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          def load(name):
+              p = Path(name)
+              return json.loads(p.read_text()) if p.exists() else 'unavailable'
+          payload = {
+              'schema': 'cmpct-one-genesis-historical-measurement-preflight-receipt-v3',
+              'source_sha': os.environ['EVIDENCE_HEAD'],
+              'frozen_v029_sha': '02b8b27cb2d97af7c6e0797984a898e8fa8a8e5d',
+              'frozen_v030_sha': 'f4b158a55a08b9b18b50e4e4abe4b9251048c772',
+              'fresh_process_meter': load('fresh-process-meter.json'),
+              'v029': load('v029-historical-measurement.json'),
+              'v030': load('v030-historical-measurement.json'),
+              'v029_fresh_process': load('v029-fresh-process.json'),
+              'v030_fresh_process': load('v030-fresh-process.json'),
+              'claim_boundary': 'synthetic external-tree common vocabulary plus direct-child cold-operation CPU/RSS only; descendants remain unavailable; no Genesis 15-workload execution, comparison, scoring, or winner selection',
+          }
+          Path('historical-measurement-preflight-receipt.json').write_text(json.dumps(payload, indent=2, sort_keys=True) + '\n')
+          PY
+      - name: Upload receipt
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cmpct-one-historical-measurement-preflight-${{ github.sha }}
+          path: |
+            historical-measurement-tests.txt
+            fresh-process-meter.json
+            v029-historical-measurement.json
+            v030-historical-measurement.json
+            v029-fresh-process.json
+            v030-fresh-process.json
+            historical-measurement-preflight-receipt.json
+          if-no-files-found: error
+          retention-days: 30

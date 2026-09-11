@@ -1,0 +1,60 @@
+name: CMPCT1 ONE-G0.2 prepared terminal plan
+
+on:
+  push:
+    branches: [research/cmpct1]
+    paths:
+      - 'experiments/one/prepared_terminal_plan.py'
+      - 'benchmarks/one/one_g02_prepared_terminal_plan.py'
+      - 'tests/one/test_prepared_terminal_plan.py'
+      - 'docs/one/prereg/ONE_G02_PREPARED_TERMINAL_PLAN_PREREG_2026-09-08.md'
+      - 'docs/one/evidence/ONE_G02_PREPARED_TERMINAL_PLAN_HOSTILE_REVIEW_2026-09-08.md'
+      - '.github/workflows/cmpct1-one-g02-prepared-terminal-plan.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  prepared-terminal-plan:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      EVIDENCE_HEAD: ${{ github.sha }}
+    steps:
+      - name: Checkout exact source SHA
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - name: Bind evidence to exact source SHA
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          test -f experiments/one/prepared_terminal_plan.py
+          test -f benchmarks/one/one_g02_prepared_terminal_plan.py
+          test -f tests/one/test_prepared_terminal_plan.py
+          test -f docs/one/prereg/ONE_G02_PREPARED_TERMINAL_PLAN_PREREG_2026-09-08.md
+          test -f docs/one/evidence/ONE_G02_PREPARED_TERMINAL_PLAN_HOSTILE_REVIEW_2026-09-08.md
+          grep -q 'REPETITIONS=21' benchmarks/one/one_g02_prepared_terminal_plan.py
+          grep -q 'HOT_CONTROL_MAX=1.05' benchmarks/one/one_g02_prepared_terminal_plan.py
+          grep -q 'LONG_BREAK_EVEN_REPLAYS_MAX=4.0' benchmarks/one/one_g02_prepared_terminal_plan.py
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install test environment
+        run: python -m pip install -e '.[test]'
+      - name: Prove prepared-plan semantics and decision law
+        run: python -m pytest -q tests/one/test_prepared_terminal_plan.py tests/one/test_native_terminal_fill.py tests/one/test_fused_terminal_reader.py tests/one/test_run_fill_law.py
+      - name: Run frozen prepared terminal plan falsifier
+        shell: bash
+        run: |
+          set -o pipefail
+          python -m benchmarks.one.one_g02_prepared_terminal_plan | tee one_g02_prepared_terminal_plan.json
+      - name: Preserve exact-head evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: one-g02-prepared-terminal-plan-${{ env.EVIDENCE_HEAD }}
+          path: one_g02_prepared_terminal_plan.json
+          if-no-files-found: warn

@@ -1,0 +1,67 @@
+{
+  "schema": "cmpct-one-genesis-frozen-comparator-authority-v1",
+  "claim_boundary": "pre-gate authority manifest only; no CMPCT1/comparator encoding or Genesis scoring executed",
+  "frozen_v029_sha": "02b8b27cb2d97af7c6e0797984a898e8fa8a8e5d",
+  "frozen_v030_sha": "f4b158a55a08b9b18b50e4e4abe4b9251048c772",
+  "ledger": {
+    "path": "docs/one/evidence/ONE_GENESIS_FROZEN_COMPARATOR_LEDGER_2026-09-09.md",
+    "introduction_commit": "257d218ccd36f94c06b0e6efab8bfbe674e0d3da",
+    "addendum_path": "docs/one/evidence/ONE_GENESIS_FROZEN_COMPARATOR_LEDGER_ADDENDUM_2026-09-09.md",
+    "geometry_addendum_commit": "14cb87cd66256da17b1d66902bf9bdd3f0f45df5"
+  },
+  "records": [
+    {
+      "role": "v029_shipping_vs_accepted_research_frontier",
+      "path": "benchmarks/history/2026-09-02-v029-shipping-vs-frontier.json",
+      "blob_sha": "1cd09cc6209400ab229f52306c933f5ad77e7451"
+    },
+    {
+      "role": "v030_broad_generalization_red",
+      "path": "benchmarks/history/2026-09-02-v030-canonical-generalization-red-e75f.json",
+      "blob_sha": "c3a5487396ee8a0864d80803269ecd5276ee6451"
+    },
+    {
+      "role": "v030_canonical_runtime_red",
+      "path": "benchmarks/history/2026-09-02-v030-canonical-runtime-red-e75f.json",
+      "blob_sha": "039462436333cb162c58b84131a5cc12a51ec1c0"
+    },
+    {
+      "role": "v030_geometry_complete_artifact_positive",
+      "path": "benchmarks/history/2026-08-17-geometry-v030-seed-preci.json",
+      "blob_sha": "0a18dc9ff32cd5dbfb6922ba8edd58b30a05d4c2"
+    },
+    {
+      "role": "v030_hierarchical_geometry_detached_discovery_only",
+      "path": "benchmarks/history/2026-08-17-hierarchical-geometry-v030-preci.json",
+      "blob_sha": "7b1c8e0613669c8cc4e0c262867dfda95a1b2e68"
+    },
+    {
+      "role": "v030_prefixgraph_positive_mechanism_oracle",
+      "path": "benchmarks/history/2026-08-17-v030-prefixgraph-oracle-v1.json",
+      "blob_sha": "8c3712dffef80eedd0e0d887bd4d08ab20da98c3"
+    },
+    {
+      "role": "v030_prefixgraph_window_negative",
+      "path": "benchmarks/history/2026-08-30-v030-prefixgraph-window-frontier-negative.json",
+      "blob_sha": "9a00107bbf311ad406c047b162207410bfd0b6e4"
+    },
+    {
+      "role": "v030_runtime_negative_evidence",
+      "path": "benchmarks/history/2026-08-28-v030-runtime-negative-evidence.json",
+      "blob_sha": "a3d9ed1012df6ff4dd9978a6fe16b84158bc8de3"
+    },
+    {
+      "role": "v030_shifted_prefixgraph_structural_negatives",
+      "path": "benchmarks/history/2026-08-31-v030-shifted-prefixgraph-structural-negatives.json",
+      "blob_sha": "26c9e96ab7e712561cbac346ebdb8f148273f26a"
+    }
+  ],
+  "admissibility": {
+    "no_posthoc_best_per_row_oracle": true,
+    "carry_measured_runtime_and_resource_debt_with_each_historical_win": true,
+    "preserve_each_historical_loss": true,
+    "primary_15_workload_same_input_same_semantics_gate_remains_required": true,
+    "detached_payload_results_are_not_whole_archive_scores": true,
+    "unverified_17_97_percent_late_clustered_claim_admitted": false
+  }
+}

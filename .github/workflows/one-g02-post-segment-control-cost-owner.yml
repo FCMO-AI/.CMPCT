@@ -1,0 +1,45 @@
+name: ONE-G0.2 post-segment control cost owner
+
+on:
+  pull_request:
+    paths:
+      - 'benchmarks/one/one_g02_post_segment_control_cost_owner.py'
+      - 'docs/one/evidence/ONE_G02_POST_SEGMENT_CONTROL_COST_OWNER_PREREG_2026-09-05.md'
+      - 'experiments/one/ir.py'
+      - 'experiments/one/vm.py'
+      - 'experiments/one/wire.py'
+      - '.github/workflows/one-g02-post-segment-control-cost-owner.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  post-segment-control-cost-owner:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install project test environment
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[test]'
+      - name: ONE semantic and hostile tests
+        run: python -m pytest -q tests/one
+      - name: Frozen post-segment control cost-owner profile
+        env:
+          EVIDENCE_HEAD: ${{ github.sha }}
+        run: |
+          set -o pipefail
+          python -m benchmarks.one.one_g02_post_segment_control_cost_owner | tee one-g02-post-segment-control-cost-owner.json
+      - name: Preserve result
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: one-g02-post-segment-control-cost-owner-${{ github.sha }}
+          path: one-g02-post-segment-control-cost-owner.json
+          if-no-files-found: error

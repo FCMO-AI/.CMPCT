@@ -1,0 +1,61 @@
+name: ONE-G0.2 fused nomination demand-grown index
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [research/cmpct1]
+    paths:
+      - "benchmarks/one/one_g02_fused_native_nomination_kernel.c"
+      - "benchmarks/one/one_g02_fused_nomination_demand_index_validation.py"
+      - "benchmarks/one/one_g02_fused_native_nomination_validation.py"
+      - "benchmarks/one/one_g02_native_nomination_event_consumer_kernel.c"
+      - "benchmarks/one/one_g02_minimizer_offset_only_kernel.c"
+      - "docs/one/evidence/ONE_G02_FUSED_NOMINATION_BOUNDED_DEMAND_INDEX_PREREG_2026-09-06.md"
+      - ".github/workflows/one-g02-fused-nomination-demand-index.yml"
+  pull_request:
+    paths:
+      - "benchmarks/one/one_g02_fused_native_nomination_kernel.c"
+      - "benchmarks/one/one_g02_fused_nomination_demand_index_validation.py"
+      - "benchmarks/one/one_g02_fused_native_nomination_validation.py"
+      - "benchmarks/one/one_g02_native_nomination_event_consumer_kernel.c"
+      - "benchmarks/one/one_g02_minimizer_offset_only_kernel.c"
+      - "docs/one/evidence/ONE_G02_FUSED_NOMINATION_BOUNDED_DEMAND_INDEX_PREREG_2026-09-06.md"
+      - ".github/workflows/one-g02-fused-nomination-demand-index.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  demand-grown-index:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Install project test environment
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[test]'
+      - name: Semantic and hostile ONE suite
+        run: python -m pytest tests/one -q
+      - name: Demand-grown event-index semantic/resource gate
+        env:
+          EVIDENCE_HEAD: ${{ github.sha }}
+        run: |
+          mkdir -p artifacts/one
+          set +e
+          python -m benchmarks.one.one_g02_fused_nomination_demand_index_validation | tee artifacts/one/fused_nomination_demand_index.json
+          rc=${PIPESTATUS[0]}
+          echo "benchmark_exit_code=$rc" >> "$GITHUB_STEP_SUMMARY"
+          cat artifacts/one/fused_nomination_demand_index.json >> "$GITHUB_STEP_SUMMARY"
+          exit "$rc"
+      - name: Upload exact-source result
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: one-g02-fused-nomination-demand-index-${{ github.sha }}
+          path: artifacts/one/fused_nomination_demand_index.json
+          if-no-files-found: error

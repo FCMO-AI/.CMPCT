@@ -1,0 +1,49 @@
+name: ONE-G0.2 fused nomination actual-state audit
+
+on:
+  push:
+    branches: [research/cmpct1]
+    paths:
+      - 'benchmarks/one/one_g02_fused_nomination_actual_state_audit.py'
+      - 'benchmarks/one/one_g02_fused_native_nomination_kernel.c'
+      - 'benchmarks/one/one_g02_native_nomination_event_consumer_kernel.c'
+      - 'benchmarks/one/one_g02_minimizer_offset_only_kernel.c'
+      - 'docs/one/evidence/ONE_G02_FUSED_NOMINATION_ACTUAL_STATE_AUDIT_PREREG_2026-09-06.md'
+      - '.github/workflows/one-g02-fused-nomination-actual-state-audit.yml'
+  pull_request:
+    paths:
+      - 'benchmarks/one/one_g02_fused_nomination_actual_state_audit.py'
+      - 'benchmarks/one/one_g02_fused_native_nomination_kernel.c'
+      - 'benchmarks/one/one_g02_native_nomination_event_consumer_kernel.c'
+      - 'benchmarks/one/one_g02_minimizer_offset_only_kernel.c'
+      - 'docs/one/evidence/ONE_G02_FUSED_NOMINATION_ACTUAL_STATE_AUDIT_PREREG_2026-09-06.md'
+      - '.github/workflows/one-g02-fused-nomination-actual-state-audit.yml'
+
+jobs:
+  fused-nomination-actual-state-audit:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install project test environment
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[test]'
+      - name: Semantic and hostile ONE suite
+        run: python -m pytest tests/one -q
+      - name: Frozen actual-state audit
+        env:
+          EVIDENCE_HEAD: ${{ github.sha }}
+        run: |
+          mkdir -p artifacts/one
+          python -m benchmarks.one.one_g02_fused_nomination_actual_state_audit | tee artifacts/one/fused_nomination_actual_state_audit.json
+      - name: Upload exact-source result
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: one-g02-fused-nomination-actual-state-audit-${{ github.sha }}
+          path: artifacts/one/fused_nomination_actual_state_audit.json
+          if-no-files-found: error

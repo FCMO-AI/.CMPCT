@@ -1,0 +1,62 @@
+# ci-lane: fast
+# evidence rearm 2026-09-09d: only inherited-test paths repaired; candidate, benchmark, thresholds and semantics unchanged
+name: CMPCT1 ONE-G0.2 native observer full ingest
+
+on:
+  push:
+    branches:
+      - research/cmpct1
+    paths:
+      - experiments/one/observe.py
+      - experiments/one/native_observe.py
+      - experiments/one/native_observe_kernel.c
+      - benchmarks/one/one_g02_native_observer_full_ingest.py
+      - benchmarks/one/one_g02_full_ingest_fused_cache.py
+      - benchmarks/one/one_g02_end_to_end_direct_emitter_writer.py
+      - docs/one/evidence/ONE_G02_NATIVE_OBSERVER_FULL_INGEST_PREREG_2026-09-09.md
+      - .github/workflows/cmpct1-one-g02-native-observer-full-ingest.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct1-one-g02-native-observer-full-ingest-${{ github.sha }}
+  cancel-in-progress: true
+
+jobs:
+  falsifier:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      EVIDENCE_HEAD: ${{ github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: "${{ env.EVIDENCE_HEAD }}"
+          clean: true
+      - name: Bind exact head
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Provision repository test contract
+        run: python -m pip install --disable-pip-version-check -e '.[test]'
+      - name: Run inherited observer and writer semantics
+        run: >-
+          python -m pytest -q
+          tests/one/test_native_observe.py
+          tests/one/test_one_g01_wire.py
+          tests/one/test_one_g01_vm.py
+      - name: Run frozen full-ingest transfer falsifier
+        run: |
+          set -o pipefail
+          mkdir -p artifacts
+          python -m benchmarks.one.one_g02_native_observer_full_ingest | tee artifacts/one_g02_native_observer_full_ingest.json
+      - name: Retain exact-source evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: one-g02-native-observer-full-ingest-${{ env.EVIDENCE_HEAD }}
+          path: artifacts/one_g02_native_observer_full_ingest.json
+          if-no-files-found: error

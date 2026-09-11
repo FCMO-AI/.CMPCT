@@ -1,0 +1,51 @@
+# ci-lane: fast
+name: CMPCT1 ONE-G0.2 fused observation cache
+on:
+  push:
+    branches:
+      - "research/cmpct1"
+    paths:
+      - "experiments/one/cache_fused_observe.py"
+      - "tests/one/test_cache_fused_observe.py"
+      - "benchmarks/one/one_incremental_fused_observe.py"
+      - ".github/workflows/cmpct1-one-g02-fused-observation-cache.yml"
+  pull_request:
+    paths:
+      - "experiments/one/cache_fused_observe.py"
+      - "tests/one/test_cache_fused_observe.py"
+      - "benchmarks/one/one_incremental_fused_observe.py"
+      - ".github/workflows/cmpct1-one-g02-fused-observation-cache.yml"
+  workflow_dispatch:
+permissions: {contents: read}
+concurrency:
+  group: cmpct1-one-g02-fused-observation-cache-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+jobs:
+  fused-observation-cache:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with: {ref: "${{ env.EVIDENCE_HEAD }}", clean: true}
+      - name: Bind exact head
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.11"}
+      - name: Provision repository test contract
+        run: python -m pip install --disable-pip-version-check -e '.[test]'
+      - name: Run hostile fused-cache oracle tests
+        run: python -m pytest -q tests/one/test_cache_fused_observe.py
+      - name: Run frozen fused-cache resource gate
+        run: |
+          set -o pipefail
+          mkdir -p one-fused-observation-cache-artifacts
+          python -m benchmarks.one.one_incremental_fused_observe | tee one-fused-observation-cache-artifacts/one-g02-fused-observation-cache.json
+      - name: Retain exact-head evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: one-g02-fused-observation-cache-${{ env.EVIDENCE_HEAD }}
+          path: one-fused-observation-cache-artifacts/
+          if-no-files-found: warn

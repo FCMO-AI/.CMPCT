@@ -1,0 +1,32 @@
+# ci-lane: narrow
+name: CMPCT1 ONE Genesis gate dossier contract
+
+on:
+  push:
+    branches: [research/cmpct1]
+    paths:
+      - benchmarks/one/one_genesis_gate_result_contract.py
+      - docs/one/evidence/ONE_GENESIS_GATE_MEASUREMENT_CONTRACT_2026-09-09.md
+      - .github/workflows/cmpct1-one-genesis-gate-contract.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-one-genesis-gate-contract-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Bind exact source
+        run: test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Prove dossier validator fails closed
+        run: python -m benchmarks.one.one_genesis_gate_result_contract --self-test

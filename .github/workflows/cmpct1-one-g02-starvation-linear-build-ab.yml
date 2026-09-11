@@ -1,0 +1,43 @@
+# ci-lane: fast
+name: CMPCT1 ONE-G0.2 starvation linear queue build A/B
+on:
+  pull_request:
+    paths:
+      - "benchmarks/one/one_g02_starvation_linear_build_kernel.c"
+      - "benchmarks/one/one_g02_starvation_linear_build_ab.py"
+      - ".github/workflows/cmpct1-one-g02-starvation-linear-build-ab.yml"
+  workflow_dispatch:
+permissions: {contents: read}
+concurrency:
+  group: cmpct1-one-g02-starvation-linear-build-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+jobs:
+  ab:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    env:
+      EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with: {ref: "${{ env.EVIDENCE_HEAD }}", clean: true}
+      - name: Bind exact head
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.11"}
+      - name: Install repository test dependency surface
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[test,audio]'
+      - name: Re-run ONE semantic boundary
+        run: python -m pytest -q tests/one
+      - name: Run exact linear-build A/B
+        run: |
+          mkdir -p one-linear-build-artifacts
+          python -m benchmarks.one.one_g02_starvation_linear_build_ab | tee one-linear-build-artifacts/one-g02-starvation-linear-build-ab.json
+      - name: Retain exact-head evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: one-g02-starvation-linear-build-${{ env.EVIDENCE_HEAD }}
+          path: one-linear-build-artifacts/
+          if-no-files-found: error

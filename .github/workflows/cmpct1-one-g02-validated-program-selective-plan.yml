@@ -1,0 +1,59 @@
+# ci-lane: deep
+name: CMPCT1 ONE-G0.2 validated Program selective plan
+
+on:
+  push:
+    branches: [research/cmpct1]
+    paths:
+      - experiments/one/validated_program.py
+      - experiments/one/range_vm.py
+      - experiments/one/native_law_range_plan.py
+      - experiments/one/native_law_terminal_plan.py
+      - experiments/one/native_law_terminal_plan_kernel.c
+      - tests/one/test_validated_program.py
+      - benchmarks/one/one_g02_selective_preflight_scaling.py
+      - benchmarks/one/one_g02_validated_program_selective_plan.py
+      - .github/workflows/cmpct1-one-g02-validated-program-selective-plan.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-one-g02-validated-program-selective-plan-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  falsifier:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Bind exact source
+        run: |
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          echo "EVIDENCE_HEAD=$GITHUB_SHA" >> "$GITHUB_ENV"
+      - name: Install repository test dependency surface
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[test,audio]'
+      - name: Run validated-Program semantic and hostile tests
+        run: python -m pytest -q tests/one/test_validated_program.py tests/one/test_native_law_range_plan.py
+      - name: Run frozen validated-Program selective-plan falsifier
+        run: |
+          set +e
+          python -m benchmarks.one.one_g02_validated_program_selective_plan > validated-program-selective-plan.json
+          status=$?
+          cat validated-program-selective-plan.json
+          exit $status
+      - name: Retain exact-source evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: validated-program-selective-plan-${{ github.sha }}
+          path: validated-program-selective-plan.json
+          if-no-files-found: error
+          retention-days: 30

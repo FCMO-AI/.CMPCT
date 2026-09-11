@@ -1,0 +1,56 @@
+# ci-lane: fast
+name: CMPCT1 ONE-G0.2 minimizer marginal information yield
+
+on:
+  pull_request:
+    paths:
+      - "benchmarks/one/one_g02_minimizer_kernel.c"
+      - "benchmarks/one/one_g02_minimizer_segmented_counter_kernel.c"
+      - "benchmarks/one/one_g02_minimizer_offset_only_kernel.c"
+      - "benchmarks/one/one_g02_minimizer_size_dispatch_tail_kernel.c"
+      - "benchmarks/one/one_g02_minimizer_miy.py"
+      - ".github/workflows/cmpct1-one-g02-minimizer-miy.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct1-one-g02-minimizer-miy-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  marginal-yield:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          clean: true
+      - name: Bind exact head
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install repository test dependency surface
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[test,audio]'
+      - name: Re-run ONE semantic boundary
+        run: python -m pytest -q tests/one
+      - name: Run marginal information-yield map
+        run: |
+          mkdir -p one-miy-artifacts
+          python -m benchmarks.one.one_g02_minimizer_miy | tee one-miy-artifacts/one-g02-minimizer-miy.json
+      - name: Retain exact-head marginal-yield evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: one-g02-minimizer-miy-${{ env.EVIDENCE_HEAD }}
+          path: one-miy-artifacts/
+          if-no-files-found: error
+
+# Opportunity bytes are discovery headroom only; no stored-byte or product claim is implied.

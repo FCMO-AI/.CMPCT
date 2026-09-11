@@ -1,0 +1,61 @@
+name: CMPCT1 ONE-G0.2 relation root fusion
+on:
+  push:
+    branches: [research/cmpct1]
+    paths: &paths
+      - 'experiments/one/relation_root_fusion.py'
+      - 'benchmarks/one/one_g02_relation_root_fusion.py'
+      - 'tests/one/test_relation_root_fusion.py'
+      - 'docs/one/prereg/ONE_G02_RELATION_ROOT_FUSION_PREREG_2026-09-08.md'
+      - 'docs/one/evidence/ONE_G02_RELATION_ROOT_FUSION_HOSTILE_REVIEW_2026-09-08.md'
+      - '.github/workflows/cmpct1-one-g02-relation-root-fusion.yml'
+  pull_request:
+    paths: *paths
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  relation-root-fusion:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - name: Checkout exact source SHA
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install test environment
+        run: python -m pip install -e '.[test]'
+      - name: Exact source and frozen-law binding
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          python - <<'PY'
+          import benchmarks.one.one_g02_relation_root_fusion as b
+          assert b.SIZES == (64*1024, 256*1024, 1024*1024)
+          assert b.BLOCKS == (512, 1024, 2048, 4096)
+          assert b.OPS == ('add8', 'xor')
+          assert b.REPETITIONS == 11
+          assert b.MAX_WORK_RATIO == 1.50
+          assert b.MAX_MATERIALIZED_RATIO == 1.10
+          assert b.MAX_DECISIVE_LITERAL_TIME_RATIO == 1.50
+          assert b.MAX_DECISIVE_NATIVE_TIME_RATIO == 0.50
+          assert b.SYSTEM_READY_TIME_RATIO == 1.05
+          PY
+      - name: Run semantic and adversarial decision tests
+        run: python -m pytest -q tests/one/test_relation_root_fusion.py
+      - name: Run frozen 24-cell falsifier
+        run: |
+          set -o pipefail
+          python -m benchmarks.one.one_g02_relation_root_fusion | tee one_g02_relation_root_fusion.json
+      - name: Preserve exact-head evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: one-g02-relation-root-fusion-${{ env.EVIDENCE_HEAD }}
+          path: one_g02_relation_root_fusion.json
+          if-no-files-found: warn

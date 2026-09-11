@@ -1,0 +1,46 @@
+# ci-lane: deep
+# Historical promoted receipt. Durable authority is recorded in
+# docs/one/evidence/ONE_G02_ROOT_HASH_CHARGED_DIRECT_EMITTER_RESULT_2026-09-05.md.
+# Keep this lane manually reproducible; do not rediscover the same result on every ONE commit.
+name: ONE-G0.2 root-hash-charged direct emitter
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  root-hash-charged-direct-emitter:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      EVIDENCE_HEAD: ${{ github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: "${{ env.EVIDENCE_HEAD }}"
+          clean: true
+      - name: Bind exact head
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install project test environment
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[test]'
+      - name: ONE semantic and hostile tests
+        run: python -m pytest -q tests/one
+      - name: Frozen root-hash-charged direct emitter falsifier
+        run: |
+          set -o pipefail
+          python -m benchmarks.one.one_g02_root_hash_charged_direct_emitter | tee one-g02-root-hash-charged-direct-emitter.json
+      - name: Preserve result
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: one-g02-root-hash-charged-direct-emitter-${{ env.EVIDENCE_HEAD }}
+          path: one-g02-root-hash-charged-direct-emitter.json
+          if-no-files-found: error

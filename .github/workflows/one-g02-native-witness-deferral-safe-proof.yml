@@ -1,0 +1,62 @@
+name: ONE-G0.2 native witness-deferral safe-proof A-B
+
+on:
+  push:
+    branches: [research/cmpct1]
+    paths:
+      - 'benchmarks/one/one_g02_native_witness_deferral_consumer_kernel.c'
+      - 'benchmarks/one/one_g02_native_witness_deferral_timing_wrapper.c'
+      - 'benchmarks/one/one_g02_native_witness_deferral_safe_proof_ab.py'
+      - 'benchmarks/one/one_g02_native_witness_deferral_strict_semantic_audit.py'
+      - 'benchmarks/one/one_g02_shift_relation_safe_dispatch_kernel.c'
+      - 'docs/one/evidence/ONE_G02_NATIVE_WITNESS_DEFERRAL_SAFE_PROOF_PREREG_2026-09-06.md'
+      - '.github/workflows/one-g02-native-witness-deferral-safe-proof.yml'
+  pull_request:
+    paths:
+      - 'benchmarks/one/one_g02_native_witness_deferral_consumer_kernel.c'
+      - 'benchmarks/one/one_g02_native_witness_deferral_timing_wrapper.c'
+      - 'benchmarks/one/one_g02_native_witness_deferral_safe_proof_ab.py'
+      - 'benchmarks/one/one_g02_native_witness_deferral_strict_semantic_audit.py'
+      - 'benchmarks/one/one_g02_shift_relation_safe_dispatch_kernel.c'
+      - 'docs/one/evidence/ONE_G02_NATIVE_WITNESS_DEFERRAL_SAFE_PROOF_PREREG_2026-09-06.md'
+      - '.github/workflows/one-g02-native-witness-deferral-safe-proof.yml'
+  workflow_dispatch:
+
+permissions: {contents: read}
+concurrency:
+  group: one-g02-native-witness-deferral-safe-proof-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  native-witness-deferral-safe-proof:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with: {ref: '${{ env.EVIDENCE_HEAD }}', clean: true}
+      - name: Bind exact head
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install project test environment
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[test]'
+      - name: Semantic and hostile ONE suite
+        run: python -m pytest tests/one -q
+      - name: Frozen native witness-deferral A-B with strict semantic audit
+        run: |
+          set -o pipefail
+          mkdir -p artifacts/one
+          python -m benchmarks.one.one_g02_native_witness_deferral_strict_semantic_audit | tee artifacts/one/native_witness_deferral_safe_proof_ab.json
+      - name: Upload exact-source result
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: one-g02-native-witness-deferral-safe-proof-${{ env.EVIDENCE_HEAD }}
+          path: artifacts/one/native_witness_deferral_safe_proof_ab.json
+          if-no-files-found: error

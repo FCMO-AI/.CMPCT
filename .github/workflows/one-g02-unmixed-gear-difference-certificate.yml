@@ -1,0 +1,56 @@
+name: ONE-G0.2 unmixed Gear-difference certificate
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [research/cmpct1]
+    paths:
+      - 'benchmarks/one/one_g02_unmixed_gear_difference_certificate_validation.py'
+      - 'benchmarks/one/one_g02_gear_difference_phase_certificate_validation.py'
+      - 'docs/one/evidence/ONE_G02_UNMIXED_GEAR_DIFFERENCE_CERTIFICATE_PREREG_2026-09-05.md'
+      - '.github/workflows/one-g02-unmixed-gear-difference-certificate.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  structural-validation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install project test environment
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[test]'
+      - name: ONE semantic and hostile tests
+        run: python -m pytest -q tests/one
+      - name: Frozen unmixed Gear-difference structural validation
+        env:
+          EVIDENCE_HEAD: ${{ github.sha }}
+        run: |
+          mkdir -p artifacts/one
+          set +e
+          python -m benchmarks.one.one_g02_unmixed_gear_difference_certificate_validation | tee artifacts/one/unmixed_gear_difference_certificate.json
+          rc=${PIPESTATUS[0]}
+          exit "$rc"
+      - name: Publish evidence annotation
+        if: always()
+        run: |
+          if [ -f artifacts/one/unmixed_gear_difference_certificate.json ]; then
+            payload=$(python -c 'import json; print(json.dumps(json.load(open("artifacts/one/unmixed_gear_difference_certificate.json")),separators=(",",":")))')
+            echo "::notice title=ONE-G0.2 unmixed Gear-difference certificate evidence::$payload"
+          else
+            echo '::error title=ONE-G0.2 unmixed Gear-difference certificate evidence::result file missing'
+          fi
+      - name: Preserve result
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: one-g02-unmixed-gear-difference-${{ github.sha }}
+          path: artifacts/one/unmixed_gear_difference_certificate.json
+          if-no-files-found: error

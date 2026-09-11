@@ -1,0 +1,64 @@
+# ci-lane: deep
+name: CMPCT1 ONE-G0.2 validated authenticated selective lifecycle
+
+on:
+  push:
+    branches: [research/cmpct1]
+    paths:
+      - experiments/one/validated_program.py
+      - experiments/one/native_law_range_plan.py
+      - experiments/one/authenticated_native_selective_cone.py
+      - tests/one/test_validated_program.py
+      - tests/one/test_native_law_range_plan.py
+      - tests/one/test_selective_auth.py
+      - benchmarks/one/one_g02_validated_authenticated_selective_lifecycle.py
+      - docs/one/evidence/ONE_G02_VALIDATED_AUTHENTICATED_SELECTIVE_LIFECYCLE_PREREG_2026-09-09.md
+      - .github/workflows/cmpct1-one-g02-validated-authenticated-selective-lifecycle.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-one-g02-validated-authenticated-selective-lifecycle-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  falsifier:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Bind exact source
+        run: |
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          echo "EVIDENCE_HEAD=$GITHUB_SHA" >> "$GITHUB_ENV"
+      - name: Install repository test dependency surface
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[test,audio]'
+      - name: Run inherited validation/authentication/cone hostile tests
+        run: >-
+          python -m pytest -q
+          tests/one/test_validated_program.py
+          tests/one/test_selective_auth.py
+          tests/one/test_native_law_range_plan.py
+          tests/one/test_auth_tree.py
+      - name: Run frozen lifecycle falsifier
+        run: |
+          set +e
+          python -m benchmarks.one.one_g02_validated_authenticated_selective_lifecycle > validated-authenticated-selective-lifecycle.json
+          status=$?
+          cat validated-authenticated-selective-lifecycle.json
+          exit $status
+      - name: Retain exact-source evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: validated-authenticated-selective-lifecycle-${{ github.sha }}
+          path: validated-authenticated-selective-lifecycle.json
+          if-no-files-found: error
+          retention-days: 30

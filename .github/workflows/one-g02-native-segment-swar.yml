@@ -1,0 +1,45 @@
+name: ONE-G0.2 native Segment SWAR
+
+on:
+  push:
+    branches:
+      - research/cmpct1
+    paths:
+      - 'benchmarks/one/one_g02_native_segment_swar.py'
+      - 'benchmarks/one/native/one_g02_segment_swar.c'
+      - 'docs/one/evidence/ONE_G02_NATIVE_SEGMENT_SWAR_PREREG_2026-09-06.md'
+      - '.github/workflows/one-g02-native-segment-swar.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  native-segment-swar:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install project test environment
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[test]'
+      - name: ONE semantic and hostile tests
+        run: python -m pytest -q tests/one
+      - name: Run exact native Segment SWAR falsifier
+        env:
+          EVIDENCE_HEAD: ${{ github.sha }}
+        run: |
+          set -o pipefail
+          python -m benchmarks.one.one_g02_native_segment_swar | tee one-g02-native-segment-swar.json
+      - name: Preserve Segment SWAR evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: one-g02-native-segment-swar-${{ github.sha }}
+          path: one-g02-native-segment-swar.json
+          if-no-files-found: error

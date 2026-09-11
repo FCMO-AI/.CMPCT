@@ -1,0 +1,46 @@
+name: ONE-G0.2 simple relation linear phase attribution
+
+on:
+  push:
+    branches:
+      - research/cmpct1
+    paths:
+      - 'benchmarks/one/one_g02_simple_relation_linear_phase_attribution.py'
+      - 'benchmarks/one/one_g02_shared_native_writer_ref_fusion.py'
+      - 'benchmarks/one/native/one_g02_shared_native_writer_ref_fused.c'
+      - 'docs/one/evidence/ONE_G02_SIMPLE_RELATION_LINEAR_PHASE_ATTRIBUTION_PREREG_2026-09-06.md'
+      - '.github/workflows/one-g02-simple-relation-linear-phase-attribution.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  simple-relation-linear-phase-attribution:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install project test environment
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[test]'
+      - name: ONE semantic and hostile tests
+        run: python -m pytest -q tests/one
+      - name: Run simple-relation linear phase attribution
+        env:
+          EVIDENCE_HEAD: ${{ github.sha }}
+        run: |
+          set -o pipefail
+          python -m benchmarks.one.one_g02_simple_relation_linear_phase_attribution | tee one-g02-simple-relation-linear-phase-attribution.json
+      - name: Preserve attribution evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: one-g02-simple-relation-linear-phase-attribution-${{ github.sha }}
+          path: one-g02-simple-relation-linear-phase-attribution.json
+          if-no-files-found: error

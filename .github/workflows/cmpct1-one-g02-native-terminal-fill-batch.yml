@@ -1,0 +1,62 @@
+name: CMPCT1 ONE-G0.2 native terminal Fill batch
+
+on:
+  push:
+    branches: [research/cmpct1]
+    paths:
+      - 'experiments/one/native_terminal_fill.py'
+      - 'experiments/one/native_terminal_fill_kernel.c'
+      - 'benchmarks/one/one_g02_native_terminal_fill_batch.py'
+      - 'tests/one/test_native_terminal_fill.py'
+      - 'docs/one/prereg/ONE_G02_NATIVE_TERMINAL_FILL_BATCH_PREREG_2026-09-08.md'
+      - 'docs/one/evidence/ONE_G02_NATIVE_TERMINAL_FILL_BATCH_HOSTILE_REVIEW_2026-09-08.md'
+      - '.github/workflows/cmpct1-one-g02-native-terminal-fill-batch.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  native-terminal-fill-batch:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      EVIDENCE_HEAD: ${{ github.sha }}
+    steps:
+      - name: Checkout exact source SHA
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - name: Bind evidence to exact source SHA
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          test -f experiments/one/native_terminal_fill.py
+          test -f experiments/one/native_terminal_fill_kernel.c
+          test -f benchmarks/one/one_g02_native_terminal_fill_batch.py
+          test -f tests/one/test_native_terminal_fill.py
+          test -f docs/one/prereg/ONE_G02_NATIVE_TERMINAL_FILL_BATCH_PREREG_2026-09-08.md
+          test -f docs/one/evidence/ONE_G02_NATIVE_TERMINAL_FILL_BATCH_HOSTILE_REVIEW_2026-09-08.md
+          grep -q 'REPETITIONS = 21' benchmarks/one/one_g02_native_terminal_fill_batch.py
+          grep -q 'CONTROL_MAX = 1.05' benchmarks/one/one_g02_native_terminal_fill_batch.py
+          grep -q 'LONG_RUNS_OVER_SCALAR_MAX = 0.75' benchmarks/one/one_g02_native_terminal_fill_batch.py
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install test environment
+        run: python -m pip install -e '.[test]'
+      - name: Prove native terminal Fill semantics and decision law
+        run: python -m pytest -q tests/one/test_native_terminal_fill.py tests/one/test_fused_terminal_reader.py tests/one/test_run_fill_law.py
+      - name: Run frozen native terminal Fill batch falsifier
+        shell: bash
+        run: |
+          set -o pipefail
+          python -m benchmarks.one.one_g02_native_terminal_fill_batch | tee one_g02_native_terminal_fill_batch.json
+      - name: Preserve exact-head evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: one-g02-native-terminal-fill-batch-${{ env.EVIDENCE_HEAD }}
+          path: one_g02_native_terminal_fill_batch.json
+          if-no-files-found: warn

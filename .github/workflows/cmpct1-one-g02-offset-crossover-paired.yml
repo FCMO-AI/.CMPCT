@@ -1,0 +1,44 @@
+# ci-lane: fast
+name: CMPCT1 ONE-G0.2 paired offset crossover map
+
+on:
+  pull_request:
+    paths:
+      - "benchmarks/one/one_g02_minimizer_segmented_counter_kernel.c"
+      - "benchmarks/one/one_g02_minimizer_offset_only_kernel.c"
+      - "benchmarks/one/one_g02_minimizer_offset_crossover_paired.py"
+      - ".github/workflows/cmpct1-one-g02-offset-crossover-paired.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  crossover:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    env:
+      EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          clean: true
+      - name: Bind exact head
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Run preregistered paired crossover map
+        id: crossover
+        run: |
+          mkdir -p one-offset-crossover-artifacts
+          python -m benchmarks.one.one_g02_minimizer_offset_crossover_paired | tee one-offset-crossover-artifacts/one-g02-offset-crossover-paired.json
+      - name: Retain exact-head crossover evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: one-g02-offset-crossover-paired-${{ env.EVIDENCE_HEAD }}
+          path: one-offset-crossover-artifacts/
+          if-no-files-found: error
+
+# Discovery map only. Any selected size boundary requires a separate frozen dispatcher A/B.

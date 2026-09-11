@@ -1,0 +1,108 @@
+# ci-lane: deep
+# exact-source retrigger after workflow registration
+name: ONE-G0.2 segment-observation root-hash fusion
+
+on:
+  push:
+    branches: [ research/cmpct1 ]
+    paths:
+      - 'benchmarks/one/one_g02_segment_observation_root_hash_fusion.py'
+      - 'benchmarks/one/native/one_g02_segment_observation_root_hash_fusion.c'
+      - 'benchmarks/one/native/one_g02_plan_carried_current_root_hash.c'
+      - 'benchmarks/one/one_g02_native_segment_plan_fusion_kernel.c'
+      - 'docs/one/prereg/ONE_G02_SEGMENT_OBSERVATION_ROOT_HASH_FUSION_PREREG_2026-09-06.md'
+      - '.github/workflows/one-g02-segment-observation-root-hash-fusion.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: one-g02-segment-root-fusion-${{ github.sha }}
+  cancel-in-progress: true
+
+jobs:
+  segment-observation-root-hash-fusion:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      EVIDENCE_HEAD: ${{ github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+      - name: Assert exact evidence source
+        shell: bash
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install project test environment
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[test]'
+      - name: ONE semantic and hostile tests
+        run: python -m pytest -q tests/one
+      - name: Strict native build
+        run: |
+          cc -O3 -std=c11 -Wall -Wextra -Werror -fPIC -shared \
+            benchmarks/one/one_g02_native_segment_plan_fusion_kernel.c \
+            benchmarks/one/native/one_g02_plan_carried_current_root_hash.c \
+            benchmarks/one/native/one_g02_segment_observation_root_hash_fusion.c \
+            -lcrypto -o /tmp/one-g02-segment-root-fusion-strict.so
+      - name: Frozen segment-observation root-hash fusion falsifier
+        id: falsifier
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -o pipefail
+          python -m benchmarks.one.one_g02_segment_observation_root_hash_fusion | tee one-g02-segment-observation-root-hash-fusion.json
+      - name: Publish aggregate result
+        id: aggregate
+        if: always()
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          p = Path('one-g02-segment-observation-root-hash-fusion.json')
+          if not p.exists():
+              raise SystemExit('no result JSON')
+          d = json.loads(p.read_text())
+          with Path(os.environ['GITHUB_STEP_SUMMARY']).open('a') as f:
+              print('## ONE-G0.2 segment-observation root-hash fusion', file=f)
+              for k in ('source_sha','decision','semantic_gates_pass','mature_all_median_ratio','mature_productive_median_ratio','mature_fragmented_median_ratio','mature_worst_ratio'):
+                  print(f'- **{k}:** `{d.get(k)}`', file=f)
+              print('\n| size | case | segments | ratio |', file=f)
+              print('|---:|---|---:|---:|', file=f)
+              for r in d['rows']:
+                  if r['relation_bytes'] >= 16384:
+                      print(f"| {r['relation_bytes']} | {r['case']} | {r['segments']} | {r['candidate_over_baseline']:.6f}x |", file=f)
+          def safe(v): return str(v).replace('.', 'p').replace('-', 'm')
+          with Path(os.environ['GITHUB_OUTPUT']).open('a') as f:
+              print(f"decision={d['decision']}", file=f)
+              print(f"all={safe(round(d['mature_all_median_ratio'],6))}", file=f)
+              print(f"prod={safe(round(d['mature_productive_median_ratio'],6))}", file=f)
+              print(f"frag={safe(round(d['mature_fragmented_median_ratio'],6))}", file=f)
+              print(f"worst={safe(round(d['mature_worst_ratio'],6))}", file=f)
+          PY
+      - name: Preserve result
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: one-g02-segment-root-${{ steps.aggregate.outputs.decision }}-all-${{ steps.aggregate.outputs.all }}-prod-${{ steps.aggregate.outputs.prod }}-frag-${{ steps.aggregate.outputs.frag }}-worst-${{ steps.aggregate.outputs.worst }}-${{ github.sha }}
+          path: one-g02-segment-observation-root-hash-fusion.json
+          if-no-files-found: warn
+      - name: Enforce preregistered decision
+        if: always()
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          p = Path('one-g02-segment-observation-root-hash-fusion.json')
+          if not p.exists(): raise SystemExit('benchmark did not produce JSON')
+          d = json.loads(p.read_text())
+          raise SystemExit(0 if d.get('decision') == 'advance_segment_observation_root_hash_fusion' else 1)
+          PY

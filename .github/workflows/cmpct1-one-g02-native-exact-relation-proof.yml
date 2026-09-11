@@ -1,0 +1,48 @@
+name: cmpct1-one-g02-native-exact-relation-proof
+on:
+  push:
+    branches: [research/cmpct1]
+    paths:
+      - 'experiments/one/native_relation_span_growth.py'
+      - 'experiments/one/relation_span_growth.py'
+      - 'benchmarks/one/one_g02_native_exact_relation_proof.py'
+      - 'tests/one/test_native_relation_span_growth.py'
+      - 'docs/one/evidence/ONE_G02_NATIVE_EXACT_RELATION_PROOF_PREREG_2026-09-09.md'
+      - '.github/workflows/cmpct1-one-g02-native-exact-relation-proof.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  falsify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with: {ref: '${{ github.sha }}'}
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.12'}
+      - run: python -m pip install -e '.[test]'
+      - name: bind exact source and frozen law
+        run: |
+          test "$(git rev-parse HEAD)" = "${GITHUB_SHA}"
+          grep -q 'MAX_MEDIAN_PRODUCTIVE_CPU_RATIO=0.25' benchmarks/one/one_g02_native_exact_relation_proof.py
+          grep -q 'MAX_PRODUCTIVE_CPU_RATIO=0.50' benchmarks/one/one_g02_native_exact_relation_proof.py
+          grep -q 'PyBytes_AsString' experiments/one/native_relation_span_growth.py
+          grep -q '_mm_add_epi8' experiments/one/native_relation_span_growth.py
+          grep -q 'same `RelationGrowthResult` fields' docs/one/evidence/ONE_G02_NATIVE_EXACT_RELATION_PROOF_PREREG_2026-09-09.md
+      - name: exact-proof semantic oracle and native parity tests
+        run: python -m pytest -q tests/one/test_relation_span_growth.py tests/one/test_native_relation_span_growth.py
+      - name: native exact relation-proof falsifier
+        run: |
+          mkdir -p artifacts
+          set +e
+          EVIDENCE_HEAD="${GITHUB_SHA}" python -m benchmarks.one.one_g02_native_exact_relation_proof | tee artifacts/one_g02_native_exact_relation_proof.json
+          rc=${PIPESTATUS[0]}
+          set -e
+          exit $rc
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: one-g02-native-exact-relation-proof-${{ github.sha }}
+          path: artifacts/one_g02_native_exact_relation_proof.json
+          if-no-files-found: warn

@@ -1,0 +1,36 @@
+# ci-lane: fast
+name: CMPCT1 ONE-G0.2 auth tree fanout Pareto
+on:
+  pull_request:
+    paths:
+      - "benchmarks/one/one_g02_auth_tree_fanout_pareto.py"
+      - ".github/workflows/cmpct1-one-g02-auth-tree-fanout.yml"
+  workflow_dispatch:
+permissions: {contents: read}
+concurrency:
+  group: cmpct1-one-g02-auth-tree-fanout-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+jobs:
+  fanout-pareto:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with: {ref: "${{ env.EVIDENCE_HEAD }}", clean: true}
+      - name: Bind exact head
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.11"}
+      - name: Run frozen fanout Pareto
+        run: |
+          mkdir -p one-auth-fanout-artifacts
+          python -m benchmarks.one.one_g02_auth_tree_fanout_pareto | tee one-auth-fanout-artifacts/one-g02-auth-tree-fanout.json
+      - name: Retain exact-head evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: one-g02-auth-tree-fanout-${{ env.EVIDENCE_HEAD }}
+          path: one-auth-fanout-artifacts/
+          if-no-files-found: error

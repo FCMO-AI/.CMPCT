@@ -1,0 +1,67 @@
+# ci-lane: narrow
+name: CMPCT1 ONE Genesis frozen comparator authority
+
+on:
+  push:
+    branches: [research/cmpct1]
+    paths:
+      - benchmarks/one/genesis_frozen_comparator_authority_v1.json
+      - benchmarks/one/one_genesis_comparator_authority_validator.py
+      - docs/one/evidence/ONE_GENESIS_FROZEN_COMPARATOR_LEDGER_2026-09-09.md
+      - .github/workflows/cmpct1-one-genesis-comparator-authority.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-one-genesis-comparator-authority-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  frozen-authority:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Bind exact source and fetch frozen commits
+        run: |
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          echo "EVIDENCE_HEAD=$GITHUB_SHA" >> "$GITHUB_ENV"
+          git fetch --no-tags --depth=1 origin \
+            02b8b27cb2d97af7c6e0797984a898e8fa8a8e5d \
+            f4b158a55a08b9b18b50e4e4abe4b9251048c772
+      - name: Validate frozen evidence identities
+        run: python benchmarks/one/one_genesis_comparator_authority_validator.py
+      - name: Bind exact-source receipt
+        if: always()
+        run: |
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          path = Path('genesis-frozen-comparator-authority-validation.json')
+          if path.exists():
+              data = json.loads(path.read_text())
+          else:
+              data = {
+                  'schema': 'cmpct-one-genesis-frozen-comparator-authority-validation-v1',
+                  'ok': False,
+                  'errors': ['validator did not emit result'],
+              }
+          data['source_sha'] = os.environ['EVIDENCE_HEAD']
+          data['claim_boundary'] = 'identity/admissibility validation only; no compression or Genesis scoring executed'
+          path.write_text(json.dumps(data, indent=2) + '\n')
+          PY
+      - name: Upload frozen authority receipt
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: genesis-frozen-comparator-authority-${{ github.sha }}
+          path: genesis-frozen-comparator-authority-validation.json
+          if-no-files-found: error
+          retention-days: 30

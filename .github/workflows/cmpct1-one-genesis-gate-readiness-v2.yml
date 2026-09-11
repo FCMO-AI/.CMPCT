@@ -1,0 +1,93 @@
+# ci-lane: deep
+# V2 binds both expected identities and generation to the already-accepted repair-v6 substrate.
+name: CMPCT1 ONE Genesis gate readiness V2
+
+on:
+  push:
+    branches: [research/cmpct1]
+    paths:
+      - benchmarks/neutral_hostile_corpus_v1.py
+      - benchmarks/resemblance_hostile_corpus_v1.py
+      - benchmarks/neutral_hostile_determinism_repair_v6.py
+      - benchmarks/history/2026-08-16-entropygraph-v028.json
+      - benchmarks/history/2026-08-19-neutral-hostile-determinism-repair-v6.json
+      - benchmarks/history/2026-08-17-mosaic-v029-generalization-v3.json
+      - benchmarks/mosaic_v029_generalization_bench.py
+      - benchmarks/one/one_genesis_gate_readiness.py
+      - benchmarks/one/one_genesis_gate_readiness_v2.py
+      - docs/one/evidence/ONE_GENESIS_GATE_READINESS_V2_PREREG_2026-09-09.md
+      - .github/workflows/cmpct1-one-genesis-gate-readiness-v2.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-one-genesis-gate-readiness-v2-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  readiness-v2:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout CMPCT1 exact source
+        uses: actions/checkout@v4
+        with:
+          path: cmpct1
+      - name: Checkout frozen v0.29
+        uses: actions/checkout@v4
+        with:
+          ref: 02b8b27cb2d97af7c6e0797984a898e8fa8a8e5d
+          path: frozen-v029
+      - name: Checkout frozen v0.30
+        uses: actions/checkout@v4
+        with:
+          ref: f4b158a55a08b9b18b50e4e4abe4b9251048c772
+          path: frozen-v030
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Bind exact CMPCT1 source
+        working-directory: cmpct1
+        run: |
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          echo "EVIDENCE_HEAD=$GITHUB_SHA" >> "$GITHUB_ENV"
+      - name: Install deterministic media dependency
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
+          ffmpeg -version | head -n 1
+      - name: Install current repository dependency surface
+        working-directory: cmpct1
+        run: python -m pip install -e '.[test,audio]'
+      - name: Verify repair-v6 portable substrate and frozen comparator authority only
+        working-directory: cmpct1
+        run: >-
+          python -m benchmarks.one.one_genesis_gate_readiness_v2
+          --v029-dir ../frozen-v029
+          --v030-dir ../frozen-v030
+          --output one-genesis-gate-readiness-v2.json
+      - name: Assert V2 did not score the Genesis gate
+        working-directory: cmpct1
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          d = json.loads(Path('one-genesis-gate-readiness-v2.json').read_text())
+          assert d['schema'] == 'cmpct-one-genesis-gate-readiness-v2'
+          assert d['scoring_executed'] is False
+          assert d['candidate_encoding_executed'] is False
+          assert d['comparator_encoding_executed'] is False
+          assert d['readiness_revision']['generation_authority'] == 'neutral-hostile-repair-v6'
+          assert d['readiness_revision']['expected_hashes_changed'] is False
+          assert d['decision'] in {'READY_FOR_GENESIS_GATE', 'HOLD_GATE_READINESS'}
+          PY
+      - name: Retain exact-source V2 readiness manifest
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: one-genesis-gate-readiness-v2-${{ github.sha }}
+          path: cmpct1/one-genesis-gate-readiness-v2.json
+          if-no-files-found: error
+          retention-days: 30

@@ -1,0 +1,68 @@
+name: ONE-G0.2 demand-grown nomination index carrying cost
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [research/cmpct1]
+    paths:
+      - "benchmarks/one/one_g02_demand_index_carrying_cost.py"
+      - "benchmarks/one/one_g02_fused_native_nomination_carrying_cost.py"
+      - "benchmarks/one/one_g02_fused_native_nomination_timing_wrapper.c"
+      - "benchmarks/one/one_g02_fused_native_nomination_kernel.c"
+      - "benchmarks/one/one_g02_native_nomination_event_consumer_kernel.c"
+      - "benchmarks/one/one_g02_minimizer_offset_only_kernel.c"
+      - "docs/one/evidence/ONE_G02_DEMAND_INDEX_CARRYING_COST_PREREG_2026-09-06.md"
+      - ".github/workflows/one-g02-demand-index-carrying-cost.yml"
+  pull_request:
+    paths:
+      - "benchmarks/one/one_g02_demand_index_carrying_cost.py"
+      - "benchmarks/one/one_g02_fused_native_nomination_carrying_cost.py"
+      - "benchmarks/one/one_g02_fused_native_nomination_timing_wrapper.c"
+      - "benchmarks/one/one_g02_fused_native_nomination_kernel.c"
+      - "benchmarks/one/one_g02_native_nomination_event_consumer_kernel.c"
+      - "benchmarks/one/one_g02_minimizer_offset_only_kernel.c"
+      - "docs/one/evidence/ONE_G02_DEMAND_INDEX_CARRYING_COST_PREREG_2026-09-06.md"
+      - ".github/workflows/one-g02-demand-index-carrying-cost.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  demand-index-carrying-cost:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Install project test environment
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[test]'
+      - name: Semantic and hostile ONE suite
+        run: python -m pytest tests/one -q
+      - name: Demand-index semantic/resource prerequisite
+        env:
+          EVIDENCE_HEAD: ${{ github.sha }}
+        run: |
+          mkdir -p artifacts/one
+          python -m benchmarks.one.one_g02_fused_nomination_demand_index_validation | tee artifacts/one/demand_index_resource.json
+      - name: Demand-index paired carrying-cost gate
+        env:
+          EVIDENCE_HEAD: ${{ github.sha }}
+        run: |
+          set +e
+          python -m benchmarks.one.one_g02_demand_index_carrying_cost | tee artifacts/one/demand_index_carrying_cost.json
+          rc=${PIPESTATUS[0]}
+          echo "benchmark_exit_code=$rc" >> "$GITHUB_STEP_SUMMARY"
+          cat artifacts/one/demand_index_carrying_cost.json >> "$GITHUB_STEP_SUMMARY"
+          exit "$rc"
+      - name: Upload exact-source result
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: one-g02-demand-index-carrying-cost-${{ github.sha }}
+          path: artifacts/one/*.json
+          if-no-files-found: error

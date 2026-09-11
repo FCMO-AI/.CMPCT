@@ -1,0 +1,43 @@
+# ci-lane: fast
+name: CMPCT1 ONE-G0.2 authenticated range alignment transfer
+on:
+  pull_request:
+    paths:
+      - "experiments/one/auth_tree.py"
+      - "benchmarks/one/one_g02_selective_auth_alignment_transfer.py"
+      - ".github/workflows/cmpct1-one-g02-selective-auth-alignment.yml"
+  workflow_dispatch:
+permissions: {contents: read}
+concurrency:
+  group: cmpct1-one-g02-auth-alignment-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+jobs:
+  auth-alignment:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with: {ref: "${{ env.EVIDENCE_HEAD }}", clean: true}
+      - name: Bind exact head
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.11"}
+      - name: Install repository test dependency surface
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[test,audio]'
+      - name: Run ONE semantic boundary
+        run: python -m pytest -q tests/one
+      - name: Run frozen alignment transfer
+        run: |
+          mkdir -p one-auth-alignment-artifacts
+          python -m benchmarks.one.one_g02_selective_auth_alignment_transfer | tee one-auth-alignment-artifacts/one-g02-auth-alignment.json
+      - name: Retain exact-head evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: one-g02-auth-alignment-${{ env.EVIDENCE_HEAD }}
+          path: one-auth-alignment-artifacts/
+          if-no-files-found: error

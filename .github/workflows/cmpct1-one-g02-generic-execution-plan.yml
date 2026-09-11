@@ -1,0 +1,60 @@
+name: CMPCT1 ONE-G0.2 generic execution plan
+on:
+  push:
+    branches: [research/cmpct1]
+    paths: &plan_paths
+      - 'experiments/one/generic_execution_plan.py'
+      - 'tests/one/test_generic_execution_plan.py'
+      - 'benchmarks/one/one_g02_generic_execution_plan.py'
+      - 'docs/one/prereg/ONE_G02_GENERIC_EXECUTION_PLAN_PREREG_2026-09-08.md'
+      - 'docs/one/evidence/ONE_G02_GENERIC_EXECUTION_PLAN_HOSTILE_REVIEW_2026-09-08.md'
+      - '.github/workflows/cmpct1-one-g02-generic-execution-plan.yml'
+  pull_request:
+    paths: *plan_paths
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  generic-execution-plan:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - name: Checkout exact source SHA
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install test environment
+        run: python -m pip install -e '.[test]'
+      - name: Exact source binding
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          python - <<'PY'
+          import benchmarks.one.one_g02_generic_execution_plan as b
+          assert b.REPETITIONS == 9
+          assert b.REPLAY_MAX == 1.05
+          assert b.MATERIAL_WIN_MAX == 0.95
+          assert b.MIN_MATERIAL_WINS == 8
+          assert len(b.SIZES) * len(b.FAMILIES) == 18
+          PY
+      - name: Semantic and hostile tests
+        run: python -m pytest -q tests/one/test_generic_execution_plan.py
+      - name: Run frozen falsifier
+        run: |
+          set +e
+          python -m benchmarks.one.one_g02_generic_execution_plan > one_g02_generic_execution_plan.json
+          rc=$?
+          cat one_g02_generic_execution_plan.json
+          exit $rc
+      - name: Preserve exact-head evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: one-g02-generic-execution-plan-${{ env.EVIDENCE_HEAD }}
+          path: one_g02_generic_execution_plan.json
+          if-no-files-found: warn

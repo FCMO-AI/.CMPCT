@@ -1,0 +1,192 @@
+# ci-lane: gate-critical
+name: CMPCT1 ONE Genesis real gate
+
+on:
+  push:
+    branches:
+      - research/cmpct1
+    paths:
+      - '.github/workflows/one-genesis-real-gate.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: cmpct-one-genesis-real-gate
+  cancel-in-progress: false
+
+jobs:
+  sealed-genesis-gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    env:
+      CANDIDATE_SHA: 38f17f4a45686a59a853bf62f0c840e228879e17
+      V029_SHA: 02b8b27cb2d97af7c6e0797984a898e8fa8a8e5d
+      V030_SHA: f4b158a55a08b9b18b50e4e4abe4b9251048c772
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: research/cmpct1
+
+      - name: Bind triggering harness source
+        run: |
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$(git status --porcelain=v1 --untracked-files=all)" = ""
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install deterministic corpus and harness dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y zstd ffmpeg gcc libsndfile1
+          python -m pip install -e '.[test]'
+          # Frozen v0.30 declares soundfile>=0.12 in its audio extra. The Genesis
+          # media workload reaches that exact path, so this is comparator environment
+          # provisioning rather than a contender modification.
+          python -m pip install 'soundfile>=0.12'
+
+      - name: Materialize exact frozen contender worktrees
+        run: |
+          git cat-file -e "$CANDIDATE_SHA^{commit}"
+          git cat-file -e "$V029_SHA^{commit}"
+          git cat-file -e "$V030_SHA^{commit}"
+          git worktree add --detach "$RUNNER_TEMP/cmpct1-candidate" "$CANDIDATE_SHA"
+          git worktree add --detach "$RUNNER_TEMP/cmpct-v029" "$V029_SHA"
+          git worktree add --detach "$RUNNER_TEMP/cmpct-v030" "$V030_SHA"
+          for spec in \
+            "$RUNNER_TEMP/cmpct1-candidate:$CANDIDATE_SHA" \
+            "$RUNNER_TEMP/cmpct-v029:$V029_SHA" \
+            "$RUNNER_TEMP/cmpct-v030:$V030_SHA"; do
+            path="${spec%%:*}"; sha="${spec##*:}"
+            test "$(git -C "$path" rev-parse HEAD)" = "$sha"
+            test "$(git -C "$path" status --porcelain=v1 --untracked-files=all)" = ""
+          done
+
+      - name: Ensure exact frozen ONE certification
+        run: |
+          mkdir -p "$RUNNER_TEMP/genesis"
+          STATUS="$(python - <<'PY'
+          import json
+          print(json.load(open('benchmarks/one/genesis_one_candidate_boundary_v1.json'))['status'])
+          PY
+          )"
+          if [ "$STATUS" = "HOLD_UNTIL_COMPLETE_PRODUCT_BOUNDARY_IS_CERTIFIED" ]; then
+            python -m benchmarks.one.one_genesis_candidate_certification_transition \
+              --authority benchmarks/one/genesis_one_candidate_boundary_v1.json \
+              --candidate-checkout "$RUNNER_TEMP/cmpct1-candidate" \
+              --output "$RUNNER_TEMP/genesis/certified-boundary.json"
+            mv "$RUNNER_TEMP/genesis/certified-boundary.json" benchmarks/one/genesis_one_candidate_boundary_v1.json
+            git config user.name github-actions[bot]
+            git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+            git add benchmarks/one/genesis_one_candidate_boundary_v1.json
+            git commit -m 'evidence(one): certify frozen Genesis candidate'
+            git push origin HEAD:research/cmpct1
+          elif [ "$STATUS" != "CERTIFIED_FOR_GENESIS" ]; then
+            echo "Unexpected candidate-boundary status: $STATUS" >&2
+            exit 1
+          fi
+          python -m benchmarks.one.one_genesis_candidate_certification_validator \
+            --authority benchmarks/one/genesis_one_candidate_boundary_v1.json \
+            --candidate-checkout "$RUNNER_TEMP/cmpct1-candidate" \
+            --output "$RUNNER_TEMP/genesis/certification-validation.json"
+          echo "HARNESS_SHA=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
+          test "$(git status --porcelain=v1 --untracked-files=all)" = ""
+
+      - name: Build exact source-bound adapter manifest
+        run: |
+          python -m benchmarks.one.one_genesis_adapter_manifest_builder \
+            --candidate-sha "$CANDIDATE_SHA" \
+            --candidate-checkout "$RUNNER_TEMP/cmpct1-candidate" \
+            --v029-checkout "$RUNNER_TEMP/cmpct-v029" \
+            --v030-checkout "$RUNNER_TEMP/cmpct-v030" \
+            --output "$RUNNER_TEMP/genesis/adapters.json"
+
+      - name: Execute sealed same-input 15-workload Genesis measurement
+        run: |
+          mkdir -p "$RUNNER_TEMP/genesis/raw" "$RUNNER_TEMP/genesis/workloads"
+          python -m benchmarks.one.one_genesis_gate_measurement_executor_v2 \
+            --candidate-sha "$CANDIDATE_SHA" \
+            --raw-dir "$RUNNER_TEMP/genesis/raw" \
+            --output "$RUNNER_TEMP/genesis/raw-measurements.json" \
+            --execute-real-gate \
+            --adapters "$RUNNER_TEMP/genesis/adapters.json" \
+            --work-root "$RUNNER_TEMP/genesis/workloads"
+
+      - name: Fail closed on execution-state, candidate, or historical-runtime substitution
+        run: |
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          p=json.loads((Path(os.environ['RUNNER_TEMP'])/'genesis/raw-measurements.json').read_text())
+          assert p['schema']=='cmpct-one-genesis-raw-measurements-v1'
+          assert p['cmpct1_candidate_sha']=='38f17f4a45686a59a853bf62f0c840e228879e17'
+          frozen={
+              'v0.29':'02b8b27cb2d97af7c6e0797984a898e8fa8a8e5d',
+              'v0.30':'f4b158a55a08b9b18b50e4e4abe4b9251048c772'}
+          assert p['frozen_comparators']==frozen
+          assert p['synthetic'] is False and p['production_eligible'] is True
+          s=p['execution_state']
+          assert s['physical_input_seal_executed'] is True
+          assert s['contender_measurement_executed'] is True
+          assert s['scientific_input_identity_executed'] is True
+          assert s['comparisons_executed'] is False
+          assert s['scoring_executed'] is False
+          assert s['winner_selected'] is False
+          assert len(p['workloads'])==15
+          for workload in p['workloads']:
+              measurements=workload['measurements']
+              for contender, expected_sha in frozen.items():
+                  provenance=measurements[contender].get('runtime_source_provenance')
+                  assert provenance is not None, (workload['suite'], workload['name'], contender)
+                  assert provenance['status']=='source_sealed'
+                  assert provenance['source_sha']==expected_sha
+                  # Five build + five whole-read samples are mandatory; v0.30 may add
+                  # five selective samples when the frozen surface supports the request.
+                  assert provenance['sample_count'] >= 10
+                  assert provenance['loaded_cmpct_modules']
+          PY
+
+      - name: Preserve raw Genesis evidence in repository
+        run: |
+          EVIDENCE_DIR="docs/one/evidence/genesis/2026-09-11"
+          mkdir -p "$EVIDENCE_DIR/raw"
+          cp "$RUNNER_TEMP/genesis/raw-measurements.json" "$EVIDENCE_DIR/raw-measurements.json"
+          cp "$RUNNER_TEMP/genesis/adapters.json" "$EVIDENCE_DIR/adapters.json"
+          cp "$RUNNER_TEMP/genesis/certification-validation.json" "$EVIDENCE_DIR/certification-validation.json"
+          cp "$RUNNER_TEMP/genesis/raw/physical-input-seal.json" "$EVIDENCE_DIR/raw/physical-input-seal.json"
+          cp "$RUNNER_TEMP/genesis/raw/physical-input-identity.json" "$EVIDENCE_DIR/raw/physical-input-identity.json"
+          cp "$RUNNER_TEMP/genesis/raw/cmpct1-raw.json" "$EVIDENCE_DIR/raw/cmpct1-raw.json"
+          cp "$RUNNER_TEMP/genesis/raw/v029-raw.json" "$EVIDENCE_DIR/raw/v029-raw.json"
+          cp "$RUNNER_TEMP/genesis/raw/v030-raw.json" "$EVIDENCE_DIR/raw/v030-raw.json"
+          cat > "$EVIDENCE_DIR/RUN_IDENTITY.md" <<EOF
+          # ONE Genesis real-gate raw execution identity
+
+          - harness head: \`$HARNESS_SHA\`
+          - frozen ONE candidate: \`$CANDIDATE_SHA\`
+          - frozen v0.29: \`$V029_SHA\`
+          - frozen v0.30: \`$V030_SHA\`
+          - workflow run: \`$GITHUB_RUN_ID\`
+          - raw execution only: **no comparison/scoring/winner selection in this workflow**
+          EOF
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add "$EVIDENCE_DIR"
+          git commit -m 'evidence(one): preserve raw Genesis gate measurements'
+          git push origin HEAD:research/cmpct1
+
+      - name: Upload exact raw evidence bundle
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cmpct-one-genesis-real-gate-${{ github.run_id }}
+          path: |
+            ${{ runner.temp }}/genesis/certification-validation.json
+            ${{ runner.temp }}/genesis/adapters.json
+            ${{ runner.temp }}/genesis/raw-measurements.json
+            ${{ runner.temp }}/genesis/raw/
+          if-no-files-found: warn
+          retention-days: 90

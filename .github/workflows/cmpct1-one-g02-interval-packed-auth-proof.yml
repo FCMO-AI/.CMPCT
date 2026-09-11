@@ -1,0 +1,66 @@
+name: CMPCT1 ONE-G0.2 interval packed auth proof
+
+on:
+  push:
+    branches:
+      - research/cmpct1
+    paths:
+      - 'experiments/one/auth_tree.py'
+      - 'experiments/one/native_auth_tree.py'
+      - 'experiments/one/native_auth_tree_kernel.c'
+      - 'benchmarks/one/one_g02_interval_packed_auth_proof.py'
+      - 'tests/one/test_native_auth_tree.py'
+      - 'tests/one/test_interval_packed_auth_proof.py'
+      - 'docs/one/prereg/ONE_G02_INTERVAL_PACKED_AUTH_PROOF_PREREG_2026-09-08.md'
+      - 'docs/one/evidence/ONE_G02_INTERVAL_PACKED_AUTH_PROOF_HOSTILE_REVIEW_2026-09-08.md'
+      - '.github/workflows/cmpct1-one-g02-interval-packed-auth-proof.yml'
+  workflow_dispatch:
+
+jobs:
+  interval-packed-auth-proof:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      EVIDENCE_HEAD: ${{ github.sha }}
+    steps:
+      - name: Checkout exact source SHA
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+
+      - name: Bind exact source and frozen contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          test -f docs/one/prereg/ONE_G02_INTERVAL_PACKED_AUTH_PROOF_PREREG_2026-09-08.md
+          test -f docs/one/evidence/ONE_G02_INTERVAL_PACKED_AUTH_PROOF_HOSTILE_REVIEW_2026-09-08.md
+          grep -q 'DECISION_SIZE=1 << 20' benchmarks/one/one_g02_interval_packed_auth_proof.py
+          grep -q 'LARGE_MAX=1.10' benchmarks/one/one_g02_interval_packed_auth_proof.py
+          grep -q 'LARGE_NONREGRESS_REQUIRED=14' benchmarks/one/one_g02_interval_packed_auth_proof.py
+          grep -q 'REPS=21' benchmarks/one/one_g02_interval_packed_auth_proof.py
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install test environment
+        run: python -m pip install -e '.[test]'
+
+      - name: Prove interval semantics and decision law
+        run: python -m pytest -q tests/one/test_native_auth_tree.py tests/one/test_interval_packed_auth_proof.py
+
+      - name: Run frozen interval packed proof falsifier
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/one
+          python -m benchmarks.one.one_g02_interval_packed_auth_proof | tee "artifacts/one/interval-packed-auth-proof-${EVIDENCE_HEAD}.json"
+
+      - name: Preserve exact-head evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: one-g02-interval-packed-auth-proof-${{ env.EVIDENCE_HEAD }}
+          path: artifacts/one/interval-packed-auth-proof-${{ env.EVIDENCE_HEAD }}.json
+          if-no-files-found: warn

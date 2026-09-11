@@ -1,0 +1,50 @@
+name: CMPCT1 ONE-G0.2 native sampled multi-Law carry
+on:
+  push:
+    branches: [research/cmpct1]
+    paths: &paths
+      - 'benchmarks/one/one_g02_native_multi_law_sampled_carry.py'
+      - 'tests/one/test_native_multi_law_sampled_carry.py'
+      - 'docs/one/prereg/ONE_G02_NATIVE_MULTI_LAW_SAMPLED_CARRY_PREREG_2026-09-08.md'
+      - 'docs/one/evidence/ONE_G02_NATIVE_MULTI_LAW_SAMPLED_CARRY_HOSTILE_REVIEW_2026-09-08.md'
+      - '.github/workflows/cmpct1-one-g02-native-multi-law-sampled-carry.yml'
+  pull_request:
+    paths: *paths
+  workflow_dispatch:
+permissions: {contents: read}
+jobs:
+  sampled-multi-law-carry:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env: {EVIDENCE_HEAD: "${{ github.event.pull_request.head.sha || github.sha }}"}
+    steps:
+      - uses: actions/checkout@v4
+        with: {ref: "${{ env.EVIDENCE_HEAD }}"}
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.12'}
+      - run: python -m pip install -e '.[test]'
+      - name: Bind exact source and frozen law
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          python - <<'PY'
+          import benchmarks.one.one_g02_native_multi_law_sampled_carry as b
+          assert b.REPETITIONS == 21
+          assert b.SAMPLE_MASK == 3
+          assert (b.SAMPLED_SUPPORT_NUM, b.SAMPLED_SUPPORT_DEN) == (1, 2)
+          assert b.MAX_MEDIAN_OVERHEAD == 1.20 and b.MAX_ROW_OVERHEAD == 1.35
+          assert b.MAX_RELATION_MEDIAN_VS_FULL == 0.90
+          assert b.MIN_1MIB_THROUGHPUT_MIB_S == 250.0
+          assert len(b.SIZES) * len(b.FAMILIES) == 30
+          PY
+      - run: python -m pytest -q tests/one/test_native_multi_law_sampled_carry.py
+      - name: Run frozen 30-cell falsifier
+        run: |
+          set -o pipefail
+          python -m benchmarks.one.one_g02_native_multi_law_sampled_carry | tee one_g02_native_multi_law_sampled_carry.json
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: "one-g02-native-multi-law-sampled-carry-${{ env.EVIDENCE_HEAD }}"
+          path: one_g02_native_multi_law_sampled_carry.json
+          if-no-files-found: warn

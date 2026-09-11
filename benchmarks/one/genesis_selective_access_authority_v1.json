@@ -1,0 +1,44 @@
+{
+  "schema": "cmpct-one-genesis-selective-access-authority-v1",
+  "claim_boundary": "historical selective-access measurement capability and inherited evidence identity only; no Genesis workload measurement, scoring, or winner selection",
+  "rules": {
+    "missing_direct_measurement_is_unavailable_not_zero": true,
+    "missing_direct_measurement_is_not_an_automatic_loss": true,
+    "historical_evidence_may_not_be_relabelled_as_same-input_gate_measurement": true,
+    "wrappers_may_instrument_existing_operations_but_may_not_add_new_reader_semantics": true
+  },
+  "comparators": {
+    "v0.29": {
+      "source_sha": "02b8b27cb2d97af7c6e0797984a898e8fa8a8e5d",
+      "direct_product_surface": {
+        "path": "experiments/entropygraph_v029_residual_strict.py",
+        "blob_sha": "4fabe7102bbd727acd7c72ba41c055829676a731",
+        "build": true,
+        "extract": true,
+        "strong_verify": true,
+        "public_selective_member_read": false,
+        "gate_direct_selective_measurement_state": "unavailable-unless-an-exact-frozen-surface-is-later-produced"
+      },
+      "inherited_locality_authority": {
+        "path": ".github/workflows/mosaic-v029-reference-context.yml",
+        "blob_sha": "5b90488f605c48c9c539c42df08fdd481710870f",
+        "kind": "historical-research-oracle-not-same-input-gate-measurement",
+        "max_total_read_amplification_ceiling": 8.0,
+        "max_context_only_read_amplification_ceiling": 4.0,
+        "max_context_slice_bytes": 131072
+      }
+    },
+    "v0.30": {
+      "source_sha": "f4b158a55a08b9b18b50e4e4abe4b9251048c772",
+      "direct_product_surface": {
+        "path": "experiments/entropygraph_v030_release_product_base.py",
+        "blob_sha": "b6b87b5c2b2f50fe53114ad3b5d228cd1e887367",
+        "list_members": true,
+        "read_member": true,
+        "read_member_with_stats": true,
+        "r24_direct_locality_accounting": "unavailable-in-facade; stats explicitly return null decoded context and request operation instrumentation or inherited evidence",
+        "r25_direct_locality_accounting": "must be falsified on external transfer input before gate admission"
+      }
+    }
+  }
+}

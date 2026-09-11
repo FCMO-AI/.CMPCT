@@ -1,0 +1,77 @@
+# ci-lane: fast
+name: CMPCT1 ONE-G0.2 cached suffix repeatability
+
+on:
+  pull_request:
+    paths:
+      - "benchmarks/one/one_g02_minimizer_offset_cached_kernel.c"
+      - "benchmarks/one/one_g02_minimizer_offset_cached_ab.py"
+      - "benchmarks/one/one_g02_minimizer_offset_cached_repeatability.py"
+      - ".github/workflows/cmpct1-one-g02-offset-cached-repeat.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct1-one-g02-offset-cached-repeat-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  repeatability:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    env:
+      EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - name: Check out exact research head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          clean: true
+      - name: Bind evidence to exact head
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Install repository-authoritative test dependency surface
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[test,audio]'
+      - name: Re-run ONE semantic and hostile boundary
+        run: |
+          mkdir -p one-cached-repeat-artifacts
+          set -o pipefail
+          python -m pytest -q tests/one 2>&1 | tee one-cached-repeat-artifacts/pytest-one.txt
+      - name: Re-execute immutable single-batch cached recurrence A/B
+        run: python -m benchmarks.one.one_g02_minimizer_offset_cached_ab | tee one-cached-repeat-artifacts/one-g02-offset-cached-ab.json
+      - name: Run preregistered paired cached recurrence confidence test
+        id: repeat
+        run: python -m benchmarks.one.one_g02_minimizer_offset_cached_repeatability | tee one-cached-repeat-artifacts/one-g02-offset-cached-repeatability.json
+      - name: Enabled cached recurrence is repeatably positive
+        if: steps.repeat.outputs.enabled_decision == 'repeatably_positive_enabled'
+        run: echo "enabled suffix recurrence speed effect repeats under ABBA ordering"
+      - name: Enabled cached recurrence is repeatably negative
+        if: steps.repeat.outputs.enabled_decision == 'repeatably_negative_enabled'
+        run: echo "cached recurrence has a repeatable enabled-case regression"
+      - name: Enabled cached recurrence timing remains uncertain
+        if: steps.repeat.outputs.enabled_decision == 'timing_uncertain_enabled'
+        run: echo "cached recurrence timing remains below confidence threshold"
+      - name: Below-enablement overhead repeats
+        if: steps.repeat.outputs.unenabled_decision == 'repeatable_unenabled_overhead'
+        run: echo "the no-suffix 4159-byte path carries repeatable compiled-function overhead"
+      - name: Below-enablement slowdown does not repeat
+        if: steps.repeat.outputs.unenabled_decision == 'unenabled_timing_not_repeatably_negative'
+        run: echo "the single-batch 4159-byte slowdown is not repeatably negative"
+      - name: Retain exact-head confidence evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: one-g02-offset-cached-repeat-${{ env.EVIDENCE_HEAD }}
+          path: one-cached-repeat-artifacts/
+          if-no-files-found: error
+
+# Confidence companion only. It cannot rewrite the immutable cached-recurrence A/B gate
+# and creates no reader, wire, stored-byte, product-speed, v0.29 or v0.30 authority.

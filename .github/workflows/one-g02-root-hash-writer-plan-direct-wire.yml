@@ -1,0 +1,46 @@
+name: ONE-G0.2 root-hash writer plan-direct wire
+
+on:
+  push:
+    branches:
+      - research/cmpct1
+    paths:
+      - 'benchmarks/one/one_g02_root_hash_writer_plan_direct_wire.py'
+      - 'docs/one/evidence/ONE_G02_ROOT_HASH_WRITER_PLAN_DIRECT_WIRE_PREREG_2026-09-06.md'
+      - '.github/workflows/one-g02-root-hash-writer-plan-direct-wire.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  plan-direct-wire:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install project test environment
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[test]'
+      - name: ONE semantic and hostile tests
+        run: python -m pytest -q tests/one
+      - name: Frozen plan-direct canonical writer falsifier
+        env:
+          EVIDENCE_HEAD: ${{ github.sha }}
+        run: |
+          set -o pipefail
+          python -m benchmarks.one.one_g02_root_hash_writer_plan_direct_wire | tee one-g02-root-hash-writer-plan-direct-wire.json
+      - name: Preserve result
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: one-g02-root-hash-writer-plan-direct-wire-${{ github.sha }}
+          path: one-g02-root-hash-writer-plan-direct-wire.json
+          if-no-files-found: error
+
+# Registered before the result-bearing run; comment is intentionally non-semantic.

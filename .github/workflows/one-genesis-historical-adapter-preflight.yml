@@ -1,0 +1,164 @@
+# ci-lane: research
+name: CMPCT1 ONE historical adapter preflight
+
+on:
+  push:
+    branches:
+      - research/cmpct1
+    paths:
+      - 'benchmarks/one/one_genesis_physical_seal_identity.py'
+      - 'benchmarks/one/one_genesis_historical_adapter_probe.py'
+      - 'benchmarks/one/one_genesis_historical_metric_normalization.py'
+      - 'benchmarks/one/one_genesis_historical_product_worker.py'
+      - 'benchmarks/one/one_genesis_historical_product_worker_probe.py'
+      - 'benchmarks/one/one_g02_genesis_candidate_adapter_probe.py'
+      - 'tests/one/test_genesis_physical_seal_identity.py'
+      - 'tests/one/test_genesis_historical_metric_normalization.py'
+      - 'tests/one/test_genesis_historical_product_worker.py'
+      - 'docs/one/prereg/ONE_G02_GENESIS_CANDIDATE_ADAPTER_PROBE_PREREG_2026-09-10.md'
+      - 'docs/one/prereg/ONE_GENESIS_HISTORICAL_PRODUCT_WORKER_v0.1_2026-09-10.md'
+      - '.github/workflows/one-genesis-historical-adapter-preflight.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  V029_SHA: 02b8b27cb2d97af7c6e0797984a898e8fa8a8e5d
+  V030_SHA: f4b158a55a08b9b18b50e4e4abe4b9251048c772
+
+jobs:
+  adapter-preflight:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout CMPCT1 exact source
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.sha }}
+          path: cmpct1
+      - name: Checkout frozen v0.29
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ env.V029_SHA }}
+          path: frozen-v029
+      - name: Checkout frozen v0.30
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ env.V030_SHA }}
+          path: frozen-v030
+      - name: Bind exact sources
+        run: |
+          set -euo pipefail
+          test "$(git -C cmpct1 rev-parse HEAD)" = "${GITHUB_SHA}"
+          test "$(git -C frozen-v029 rev-parse HEAD)" = "${V029_SHA}"
+          test "$(git -C frozen-v030 rev-parse HEAD)" = "${V030_SHA}"
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+          cache-dependency-path: frozen-v030/pyproject.toml
+      - name: Install frozen-surface dependencies
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y zstd gcc ffmpeg
+          python -m pip install --upgrade pip
+          python -m pip install -e './frozen-v030[test,audio]'
+          python -m pip install pytest numpy pillow reportlab python-docx openpyxl python-pptx
+      - name: Falsify portable identity, normalization, and historical worker
+        env:
+          PYTHONPATH: ${{ github.workspace }}/cmpct1
+        run: |
+          python -m pytest -q \
+            cmpct1/tests/one/test_genesis_physical_seal_identity.py \
+            cmpct1/tests/one/test_genesis_historical_metric_normalization.py \
+            cmpct1/tests/one/test_genesis_historical_product_worker.py \
+            | tee receipts-contract-tests.txt
+      - name: Probe frozen v0.29 on external synthetic tree
+        env:
+          PYTHONPATH: ${{ github.workspace }}/cmpct1
+        run: |
+          mkdir -p receipts
+          python cmpct1/benchmarks/one/one_genesis_historical_adapter_probe.py \
+            --contender v0.29 \
+            --checkout frozen-v029 \
+            --output receipts/v029.json
+      - name: Probe frozen v0.30 on external synthetic tree
+        env:
+          PYTHONPATH: ${{ github.workspace }}/cmpct1
+        run: |
+          python cmpct1/benchmarks/one/one_genesis_historical_adapter_probe.py \
+            --contender v0.30 \
+            --checkout frozen-v030 \
+            --output receipts/v030.json
+      - name: Falsify fresh-process frozen product measurement worker
+        env:
+          PYTHONPATH: ${{ github.workspace }}/cmpct1
+        run: |
+          python cmpct1/benchmarks/one/one_genesis_historical_product_worker_probe.py \
+            --current cmpct1 \
+            --v029 frozen-v029 \
+            --v030 frozen-v030 \
+            --output receipts/historical-product-worker.json \
+            | tee receipts/historical-product-worker.txt
+      - name: Probe current ONE candidate boundary on transfer-only tree
+        env:
+          PYTHONPATH: ${{ github.workspace }}/cmpct1
+        working-directory: cmpct1
+        run: |
+          python -m benchmarks.one.one_g02_genesis_candidate_adapter_probe \
+            | tee ../receipts/one-candidate.txt
+          cp one-g02-genesis-candidate-adapter-probe.json ../receipts/one-candidate.json
+      - name: Enforce pre-gate claim boundary
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          for name in ('v029', 'v030'):
+              row=json.loads(Path(f'receipts/{name}.json').read_text())
+              assert row['external_input_owned_by_probe'] is True
+              assert row['historical_generalization_harness_invoked'] is False
+              assert row['historical_corpus_modules_newly_loaded'] == []
+              assert row['build_verify_extract_exact'] is True
+              assert row['genesis_15_workloads_touched'] is False
+              assert row['comparisons_executed'] is False
+              assert row['scoring_executed'] is False
+              assert row['winner_selected'] is False
+          worker=json.loads(Path('receipts/historical-product-worker.json').read_text())
+          assert worker['decision'] == 'ADVANCE_HISTORICAL_PRODUCT_WORKER'
+          assert worker['external_tree']['files'] == 4
+          assert worker['v029_selective_fabricated'] is False
+          assert worker['genesis_15_workloads_touched'] is False
+          assert worker['comparisons_executed'] is False
+          assert worker['scoring_executed'] is False
+          assert worker['winner_selected'] is False
+          for contender in ('v029', 'v030'):
+              assert worker['rows'][contender]['creation']['stored_bytes'] > 0
+              assert worker['rows'][contender]['whole_read']['exact'] is True
+              assert worker['rows'][contender]['creation']['authorization']['production_authorized'] is False
+          one=json.loads(Path('receipts/one-candidate.json').read_text())
+          assert one['decision'] == 'ADVANCE_ONE_ADAPTER_BOUNDARY'
+          assert one['deterministic_wire'] is True
+          assert one['whole_reconstruction_exact'] is True
+          assert one['authenticated_selective_exact'] is True
+          assert one['generic_reader_ontology_only'] is True
+          assert one['reader_burden'] == {'reader_discovery': False, 'hidden_codec': False}
+          assert one['genesis_workload_modules_imported'] is False
+          assert one['genesis_inputs_executed'] is False
+          assert one['comparison_executed'] is False
+          assert one['scoring_executed'] is False
+          assert one['winner_selected'] is False
+          assert one['complete_stored_bytes'] == one['stats']['wire_bytes']
+          PY
+      - name: Preserve adapter preflight receipts
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: one-genesis-historical-adapter-preflight-${{ github.sha }}
+          path: |
+            receipts/*.json
+            receipts/*.txt
+            receipts-contract-tests.txt
+          if-no-files-found: warn
+          retention-days: 90

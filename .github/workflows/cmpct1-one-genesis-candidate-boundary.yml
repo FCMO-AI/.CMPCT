@@ -1,0 +1,81 @@
+# ci-lane: fast
+name: CMPCT1 ONE Genesis candidate boundary
+
+on:
+  push:
+    branches: [research/cmpct1]
+    paths:
+      - benchmarks/one/genesis_one_candidate_boundary_v1.json
+      - benchmarks/one/one_genesis_candidate_boundary_validator.py
+      - tests/one/test_genesis_candidate_boundary_validator.py
+      - .github/workflows/cmpct1-one-genesis-candidate-boundary.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-one-genesis-candidate-boundary-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  falsify-shortcuts:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Bind exact source
+        run: |
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          echo "EVIDENCE_HEAD=$GITHUB_SHA" >> "$GITHUB_ENV"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install test dependencies
+        run: python -m pip install -e '.[test]'
+      - name: Falsify candidate-boundary shortcuts
+        run: python -m pytest -q tests/one/test_genesis_candidate_boundary_validator.py | tee candidate-boundary-tests.txt
+      - name: Assert authority remains pre-gate only
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          row = json.loads(Path('benchmarks/one/genesis_one_candidate_boundary_v1.json').read_text())
+          assert row['schema'] == 'cmpct-one-genesis-one-candidate-boundary-v1'
+          assert row['experimental_version'] == 'ONE-G0.2'
+          assert row['status'] == 'HOLD_UNTIL_COMPLETE_PRODUCT_BOUNDARY_IS_CERTIFIED'
+          assert row['genesis_inputs_executed'] is False
+          assert row['comparison_executed'] is False
+          assert row['scoring_executed'] is False
+          assert row['winner_selected'] is False
+          assert row['known_surfaces']['authenticated_law_archive_exact_add8']['genesis_general_candidate_eligible_alone'] is False
+          assert row['known_surfaces']['surprise_only_archive_envelope']['genesis_general_candidate_eligible_alone'] is False
+          assert row['known_surfaces']['preferred_temporal_research_writer']['genesis_general_candidate_eligible_alone'] is False
+          PY
+      - name: Retain receipt
+        if: always()
+        run: |
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          authority = json.loads(Path('benchmarks/one/genesis_one_candidate_boundary_v1.json').read_text())
+          receipt = {
+              'schema': 'cmpct-one-genesis-candidate-boundary-ci-receipt-v1',
+              'source_sha': os.environ['EVIDENCE_HEAD'],
+              'experimental_version': authority['experimental_version'],
+              'authority_status': authority['status'],
+              'claim_boundary': 'candidate structural eligibility and anti-cherrypick rules only; no Genesis inputs, contender execution, comparison, scoring, or winner selection',
+          }
+          Path('candidate-boundary-receipt.json').write_text(json.dumps(receipt, indent=2, sort_keys=True) + '\n')
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: cmpct-one-genesis-candidate-boundary-${{ github.sha }}
+          path: |
+            candidate-boundary-tests.txt
+            candidate-boundary-receipt.json
+          if-no-files-found: error
+          retention-days: 30

@@ -1,0 +1,42 @@
+# ci-lane: fast
+name: CMPCT1 ONE-G0.2 epoch-min charged MIY
+on:
+  pull_request:
+    paths:
+      - "benchmarks/one/one_g02_epoch_min_charged_miy.py"
+      - ".github/workflows/cmpct1-one-g02-epoch-min-charged-miy.yml"
+  workflow_dispatch:
+permissions: {contents: read}
+concurrency:
+  group: cmpct1-one-g02-epoch-charged-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+jobs:
+  charged:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with: {ref: "${{ env.EVIDENCE_HEAD }}", clean: true}
+      - name: Bind exact head
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.11"}
+      - name: Install repository test dependency surface
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[test,audio]'
+      - name: Re-run ONE semantic boundary
+        run: python -m pytest -q tests/one
+      - name: Run fully charged MIY comparison
+        run: |
+          mkdir -p one-epoch-charged-artifacts
+          python -m benchmarks.one.one_g02_epoch_min_charged_miy | tee one-epoch-charged-artifacts/one-g02-epoch-min-charged-miy.json
+      - name: Retain exact-head evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: one-g02-epoch-min-charged-${{ env.EVIDENCE_HEAD }}
+          path: one-epoch-charged-artifacts/
+          if-no-files-found: error

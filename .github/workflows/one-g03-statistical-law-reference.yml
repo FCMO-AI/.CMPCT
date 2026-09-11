@@ -1,0 +1,47 @@
+# ci-lane: research-semantic
+name: CMPCT1 ONE-G0.3 Statistical Law reference
+
+on:
+  push:
+    branches:
+      - research/cmpct1
+    paths:
+      - 'experiments/one/statistical_law_reference.py'
+      - 'tests/one/test_statistical_law_reference.py'
+      - 'docs/one/prereg/ONE_G03_REAL_BLOCK_STATISTICAL_LAW_PREREG_2026-09-11.md'
+      - '.github/workflows/one-g03-statistical-law-reference.yml'
+  pull_request:
+    paths:
+      - 'experiments/one/statistical_law_reference.py'
+      - 'tests/one/test_statistical_law_reference.py'
+      - 'docs/one/prereg/ONE_G03_REAL_BLOCK_STATISTICAL_LAW_PREREG_2026-09-11.md'
+      - '.github/workflows/one-g03-statistical-law-reference.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  statistical-law-reference:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 1
+
+      - name: Bind exact source
+        run: |
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$(git status --porcelain=v1 --untracked-files=all)" = ""
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install test dependency
+        run: python -m pip install 'pytest>=8'
+
+      - name: Run reference semantic and hostile vectors
+        run: python -m pytest -q tests/one/test_statistical_law_reference.py

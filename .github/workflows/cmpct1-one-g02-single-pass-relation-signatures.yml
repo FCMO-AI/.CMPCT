@@ -1,0 +1,50 @@
+name: cmpct1-one-g02-single-pass-relation-signatures
+on:
+  push:
+    branches: [research/cmpct1]
+    paths:
+      - 'benchmarks/one/one_g02_single_pass_relation_signatures.py'
+      - 'benchmarks/one/one_g02_sparse_native_seed_transfer.py'
+      - 'benchmarks/one/one_g02_relation_writer_envelope_v3*.py'
+      - 'benchmarks/one/one_g02_relation_writer_envelope_v2.py'
+      - 'experiments/one/relation_span_growth.py'
+      - 'docs/one/evidence/ONE_G02_SINGLE_PASS_RELATION_SIGNATURES_PREREG_2026-09-09.md'
+      - '.github/workflows/cmpct1-one-g02-single-pass-relation-signatures.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  falsify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with: {ref: '${{ github.sha }}'}
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.12'}
+      - run: python -m pip install -e '.[test]'
+      - name: bind exact source and frozen law
+        run: |
+          test "$(git rev-parse HEAD)" = "${GITHUB_SHA}"
+          grep -q 'MAX_MEDIAN_NOM_CPU_OVER_V4 = 0.60' benchmarks/one/one_g02_single_pass_relation_signatures.py
+          grep -q 'MAX_NOM_CPU_OVER_V4 = 0.80' benchmarks/one/one_g02_single_pass_relation_signatures.py
+          grep -q 'PROBE_RATIO = 0.046875' benchmarks/one/one_g02_single_pass_relation_signatures.py
+          grep -q 'PyBytes_AsString' benchmarks/one/one_g02_single_pass_relation_signatures.py
+          grep -q 'grow_relation_spans' benchmarks/one/one_g02_single_pass_relation_signatures.py
+          grep -q 'final canonical wire byte-identical to V4' docs/one/evidence/ONE_G02_SINGLE_PASS_RELATION_SIGNATURES_PREREG_2026-09-09.md
+      - name: inherited semantic adversaries
+        run: python -m pytest -q tests/one/test_relation_witness_transfer.py tests/one/test_relation_span_growth.py
+      - name: single-pass relation-signature falsifier
+        run: |
+          mkdir -p artifacts
+          set +e
+          EVIDENCE_HEAD="${GITHUB_SHA}" python -m benchmarks.one.one_g02_single_pass_relation_signatures | tee artifacts/one_g02_single_pass_relation_signatures.json
+          rc=${PIPESTATUS[0]}
+          set -e
+          exit $rc
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: one-g02-single-pass-relation-signatures-${{ github.sha }}
+          path: artifacts/one_g02_single_pass_relation_signatures.json
+          if-no-files-found: warn

@@ -1,0 +1,41 @@
+# ci-lane: focused
+name: CMPCT1 ONE-G0.2 opened authenticated reader
+
+on:
+  push:
+    branches: [research/cmpct1]
+    paths:
+      - experiments/one/opened_authenticated_reader.py
+      - tests/one/test_opened_authenticated_reader.py
+      - experiments/one/validated_program.py
+      - experiments/one/authenticated_native_selective_cone.py
+      - .github/workflows/cmpct1-one-g02-opened-authenticated-reader.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-one-g02-opened-authenticated-reader-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Bind exact source
+        run: test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+      - name: Install tests
+        run: python -m pip install -e '.[test,audio]'
+      - name: Run shared-open semantics
+        run: >-
+          python -m pytest -q
+          tests/one/test_opened_authenticated_reader.py
+          tests/one/test_validated_program.py
+          tests/one/test_native_law_range_plan.py
+          tests/one/test_selective_auth.py

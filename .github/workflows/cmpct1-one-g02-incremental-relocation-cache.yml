@@ -1,0 +1,51 @@
+# ci-lane: fast
+name: CMPCT1 ONE-G0.2 incremental relocation cache
+on:
+  push:
+    branches:
+      - "research/cmpct1"
+    paths:
+      - "experiments/one/cache_relocation.py"
+      - "tests/one/test_cache_relocation.py"
+      - "benchmarks/one/one_incremental_relocation_cache.py"
+      - ".github/workflows/cmpct1-one-g02-incremental-relocation-cache.yml"
+  pull_request:
+    paths:
+      - "experiments/one/cache_relocation.py"
+      - "tests/one/test_cache_relocation.py"
+      - "benchmarks/one/one_incremental_relocation_cache.py"
+      - ".github/workflows/cmpct1-one-g02-incremental-relocation-cache.yml"
+  workflow_dispatch:
+permissions: {contents: read}
+concurrency:
+  group: cmpct1-one-g02-incremental-relocation-cache-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+jobs:
+  incremental-relocation-cache:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with: {ref: "${{ env.EVIDENCE_HEAD }}", clean: true}
+      - name: Bind exact head
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.11"}
+      - name: Provision repository test contract
+        run: python -m pip install --disable-pip-version-check -e '.[test]'
+      - name: Run hostile relocation-cache semantics
+        run: python -m pytest -q tests/one/test_cache_relocation.py
+      - name: Run frozen relocation-cache gate
+        run: |
+          set -o pipefail
+          mkdir -p one-relocation-cache-artifacts
+          python -m benchmarks.one.one_incremental_relocation_cache | tee one-relocation-cache-artifacts/one-g02-incremental-relocation-cache.json
+      - name: Retain exact-head evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: one-g02-incremental-relocation-cache-${{ env.EVIDENCE_HEAD }}
+          path: one-relocation-cache-artifacts/
+          if-no-files-found: warn

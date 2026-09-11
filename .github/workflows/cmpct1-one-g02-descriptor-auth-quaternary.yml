@@ -1,0 +1,42 @@
+# ci-lane: fast
+name: CMPCT1 ONE-G0.2 quaternary descriptor auth A/B
+on:
+  pull_request:
+    paths:
+      - "benchmarks/one/one_g02_descriptor_auth_quaternary_ab.py"
+      - ".github/workflows/cmpct1-one-g02-descriptor-auth-quaternary.yml"
+  workflow_dispatch:
+permissions: {contents: read}
+concurrency:
+  group: cmpct1-one-g02-descriptor-auth-quaternary-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+jobs:
+  quaternary:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with: {ref: "${{ env.EVIDENCE_HEAD }}", clean: true}
+      - name: Bind exact head
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.11"}
+      - name: Install repository test dependency surface
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[test,audio]'
+      - name: Re-run ONE semantic boundary
+        run: python -m pytest -q tests/one
+      - name: Run frozen quaternary descriptor authentication A/B
+        run: |
+          mkdir -p one-descriptor-auth-quaternary-artifacts
+          python -m benchmarks.one.one_g02_descriptor_auth_quaternary_ab | tee one-descriptor-auth-quaternary-artifacts/one-g02-descriptor-auth-quaternary.json
+      - name: Retain exact-head evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: one-g02-descriptor-auth-quaternary-${{ env.EVIDENCE_HEAD }}
+          path: one-descriptor-auth-quaternary-artifacts/
+          if-no-files-found: error

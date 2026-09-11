@@ -1,0 +1,98 @@
+name: CMPCT1 ONE-G0.2 small-vector observer
+
+on:
+  push:
+    branches:
+      - research/cmpct1
+    paths:
+      - experiments/one/native_observe.py
+      - experiments/one/native_observe_kernel.c
+      - experiments/one/native_observe_view.py
+      - experiments/one/native_observe_small_vector.py
+      - experiments/one/run_fill_law.py
+      - benchmarks/one/one_g02_compact_observer_handoff_writer.py
+      - benchmarks/one/one_g02_small_vector_observer.py
+      - benchmarks/one/one_g02_observer_run_fill_law.py
+      - tests/one/test_native_observe_small_vector.py
+      - tests/one/test_run_fill_law.py
+      - tests/one/test_observer_run_fill_law_benchmark.py
+      - docs/one/evidence/ONE_G02_SMALL_VECTOR_OBSERVER_PREREG_2026-09-08.md
+      - docs/one/prereg/ONE_G02_OBSERVER_RUN_FILL_LAW_PREREG_2026-09-08.md
+      - docs/one/evidence/ONE_G02_OBSERVER_RUN_FILL_LAW_HOSTILE_REVIEW_2026-09-08.md
+      - .github/workflows/cmpct1-one-g02-small-vector-observer.yml
+  workflow_dispatch:
+
+jobs:
+  small-vector-observer:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    env:
+      EVIDENCE_HEAD: ${{ github.sha }}
+    steps:
+      - name: Checkout exact source SHA
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+
+      - name: Bind evidence to exact source SHA
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          test -f experiments/one/native_observe_small_vector.py
+          test -f benchmarks/one/one_g02_small_vector_observer.py
+          test -f tests/one/test_native_observe_small_vector.py
+          test -f docs/one/evidence/ONE_G02_SMALL_VECTOR_OBSERVER_PREREG_2026-09-08.md
+          test -f experiments/one/run_fill_law.py
+          test -f benchmarks/one/one_g02_observer_run_fill_law.py
+          test -f tests/one/test_run_fill_law.py
+          test -f tests/one/test_observer_run_fill_law_benchmark.py
+          test -f docs/one/prereg/ONE_G02_OBSERVER_RUN_FILL_LAW_PREREG_2026-09-08.md
+          test -f docs/one/evidence/ONE_G02_OBSERVER_RUN_FILL_LAW_HOSTILE_REVIEW_2026-09-08.md
+          grep -q 'REPETITIONS = 21' benchmarks/one/one_g02_small_vector_observer.py
+          grep -q 'NO_REGRESSION_MAX = 1.05' benchmarks/one/one_g02_small_vector_observer.py
+          grep -q 'STRUCTURED_GAIN_MAX = 0.60' benchmarks/one/one_g02_small_vector_observer.py
+          grep -q 'MIN_FILL_RUN = 32' experiments/one/run_fill_law.py
+          grep -q 'LONG_RUNS_1M_WIRE_MAX = 0.55' benchmarks/one/one_g02_observer_run_fill_law.py
+          grep -q 'STRUCTURED_1M_WIRE_MAX = 0.90' benchmarks/one/one_g02_observer_run_fill_law.py
+          grep -q 'RUN_RICH_TIME_MAX = 1.10' benchmarks/one/one_g02_observer_run_fill_law.py
+          grep -q 'CONTROL_TIME_MAX = 1.05' benchmarks/one/one_g02_observer_run_fill_law.py
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install test environment
+        run: python -m pip install -e '.[test]'
+
+      - name: Prove one-slot and run-fill semantics
+        run: >-
+          python -m pytest -q
+          tests/one/test_native_observe_small_vector.py
+          tests/one/test_run_fill_law.py
+          tests/one/test_observer_run_fill_law_benchmark.py
+
+      - name: Run frozen row-isolated small-vector falsifier
+        shell: bash
+        run: |
+          set -o pipefail
+          python -m benchmarks.one.one_g02_small_vector_observer \
+            | tee one_g02_small_vector_observer.json
+
+      - name: Run frozen observer-run fill-Law falsifier
+        shell: bash
+        run: |
+          set -o pipefail
+          python -m benchmarks.one.one_g02_observer_run_fill_law \
+            | tee one_g02_observer_run_fill_law.json
+
+      - name: Preserve exact-head evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: one-g02-observer-evidence-${{ env.EVIDENCE_HEAD }}
+          path: |
+            one_g02_small_vector_observer.json
+            one_g02_observer_run_fill_law.json
+          if-no-files-found: warn

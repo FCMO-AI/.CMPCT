@@ -1,0 +1,63 @@
+# ci-lane: deep
+# evidence-rearm: dependency surface fixed before selective-cone adjudication
+name: CMPCT1 ONE-G0.2 authenticated native selective cone
+
+on:
+  push:
+    branches: [research/cmpct1]
+    paths:
+      - experiments/one/selective_auth.py
+      - experiments/one/native_law_terminal_plan.py
+      - experiments/one/native_law_range_plan.py
+      - experiments/one/authenticated_native_selective_cone.py
+      - tests/one/test_selective_auth.py
+      - tests/one/test_native_law_range_plan.py
+      - benchmarks/one/one_g02_authenticated_native_selective_cone.py
+      - .github/workflows/cmpct1-one-g02-authenticated-native-selective-cone.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-one-g02-authenticated-native-selective-cone-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  falsifier:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Bind exact source
+        run: |
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          echo "EVIDENCE_HEAD=$GITHUB_SHA" >> "$GITHUB_ENV"
+      - name: Install repository test dependency surface
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[test,audio]'
+      - name: Run selective-auth and native-cone semantic/hostile tests
+        run: >-
+          python -m pytest -q
+          tests/one/test_selective_auth.py
+          tests/one/test_native_law_range_plan.py
+          tests/one/test_auth_tree.py
+      - name: Run frozen authenticated selective-cone falsifier
+        run: |
+          set +e
+          python -m benchmarks.one.one_g02_authenticated_native_selective_cone > authenticated-native-selective-cone.json
+          status=$?
+          cat authenticated-native-selective-cone.json
+          exit $status
+      - name: Retain exact-source evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: authenticated-native-selective-cone-${{ github.sha }}
+          path: authenticated-native-selective-cone.json
+          if-no-files-found: error
+          retention-days: 30

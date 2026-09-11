@@ -1,0 +1,45 @@
+name: ONE-G0.2 native segment SSE2 mask
+
+on:
+  push:
+    branches:
+      - research/cmpct1
+    paths:
+      - 'benchmarks/one/one_g02_native_segment_sse2_mask.py'
+      - 'benchmarks/one/one_g02_native_segment_sse2_mask_kernel.c'
+      - 'docs/one/evidence/ONE_G02_NATIVE_SEGMENT_SSE2_MASK_PREREG_2026-09-06.md'
+      - '.github/workflows/one-g02-native-segment-sse2-mask.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  segment-sse2:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install project test environment
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[test]'
+      - name: ONE semantic and hostile tests
+        run: python -m pytest -q tests/one
+      - name: Frozen SSE2 exact segment falsifier
+        env:
+          EVIDENCE_HEAD: ${{ github.sha }}
+        run: |
+          set -o pipefail
+          python -m benchmarks.one.one_g02_native_segment_sse2_mask | tee one-g02-native-segment-sse2-mask.json
+      - name: Preserve exact-source evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: one-g02-native-segment-sse2-mask-${{ github.sha }}
+          path: one-g02-native-segment-sse2-mask.json
+          if-no-files-found: error

@@ -1,0 +1,50 @@
+# ci-lane: fast
+name: CMPCT1 ONE-G0.2 compact history rescue
+
+on:
+  pull_request:
+    paths:
+      - "benchmarks/one/one_g02_compact_history_rescue.py"
+      - ".github/workflows/cmpct1-one-g02-compact-history-rescue.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct1-one-g02-compact-history-rescue-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  compact-state:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          clean: true
+      - name: Bind exact head
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install repository test dependency surface
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[test,audio]'
+      - name: Re-run ONE semantic boundary
+        run: python -m pytest -q tests/one
+      - name: Falsify compact history state
+        run: |
+          mkdir -p one-compact-history-artifacts
+          python -m benchmarks.one.one_g02_compact_history_rescue | tee one-compact-history-artifacts/one-g02-compact-history-rescue.json
+      - name: Retain exact-head compact-state evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: one-g02-compact-history-rescue-${{ env.EVIDENCE_HEAD }}
+          path: one-compact-history-artifacts/
+          if-no-files-found: error

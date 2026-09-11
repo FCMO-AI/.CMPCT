@@ -1,0 +1,76 @@
+# ci-lane: gate-critical diagnostic
+name: CMPCT1 frozen v0.30 media-build stderr diagnostic
+
+on:
+  push:
+    branches:
+      - research/cmpct1
+    paths:
+      - '.github/workflows/one-genesis-v030-media-build-stderr-diagnostic.yml'
+      - 'benchmarks/one/one_genesis_v030_media_build_stderr_diagnostic.py'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-one-genesis-v030-media-build-stderr-diagnostic
+  cancel-in-progress: false
+
+jobs:
+  v030-media-build-stderr:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      V030_SHA: f4b158a55a08b9b18b50e4e4abe4b9251048c772
+      CMPCT_GENESIS_REAL_GATE_AUTHORIZED: '1'
+      CMPCT_GENESIS_SOURCE_SHA: f4b158a55a08b9b18b50e4e4abe4b9251048c772
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: research/cmpct1
+
+      - name: Bind diagnostic harness source
+        run: |
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$(git status --porcelain=v1 --untracked-files=all)" = ""
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install exact gate dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y zstd ffmpeg gcc libsndfile1
+          python -m pip install -e '.[test]'
+
+      - name: Materialize frozen v0.30 checkout
+        run: |
+          git cat-file -e "$V030_SHA^{commit}"
+          git worktree add --detach "$RUNNER_TEMP/cmpct-v030" "$V030_SHA"
+          test "$(git -C "$RUNNER_TEMP/cmpct-v030" rev-parse HEAD)" = "$V030_SHA"
+          test "$(git -C "$RUNNER_TEMP/cmpct-v030" status --porcelain=v1 --untracked-files=all)" = ""
+
+      - name: Capture exact frozen media-build failure
+        run: |
+          mkdir -p "$RUNNER_TEMP/genesis-v030-stderr"
+          python -m benchmarks.one.one_genesis_v030_media_build_stderr_diagnostic \
+            --checkout "$RUNNER_TEMP/cmpct-v030" \
+            --work-root "$RUNNER_TEMP/genesis-v030-stderr/workloads" \
+            --archive "$RUNNER_TEMP/genesis-v030-stderr/media.cmpct" \
+            --worker-output "$RUNNER_TEMP/genesis-v030-stderr/worker.json" \
+            --receipt "$RUNNER_TEMP/genesis-v030-stderr/receipt.json"
+
+      - name: Upload exact failure receipt
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cmpct-one-genesis-v030-media-build-stderr-${{ github.run_id }}
+          path: |
+            ${{ runner.temp }}/genesis-v030-stderr/receipt.json
+            ${{ runner.temp }}/genesis-v030-stderr/worker.json
+            ${{ runner.temp }}/genesis-v030-stderr/media.cmpct
+          if-no-files-found: warn
+          retention-days: 90

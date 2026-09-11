@@ -1,0 +1,66 @@
+name: CMPCT1 ONE-G0.2 auth selective-open stage owner
+
+on:
+  push:
+    branches:
+      - research/cmpct1
+    paths:
+      - 'experiments/one/auth_tree.py'
+      - 'experiments/one/native_auth_tree.py'
+      - 'experiments/one/native_auth_tree_kernel.c'
+      - 'benchmarks/one/one_g02_auth_selective_open_stage_owner.py'
+      - 'tests/one/test_native_auth_tree.py'
+      - 'tests/one/test_auth_selective_open_stage_owner.py'
+      - 'docs/one/prereg/ONE_G02_AUTH_SELECTIVE_OPEN_STAGE_OWNER_PREREG_2026-09-08.md'
+      - 'docs/one/evidence/ONE_G02_AUTH_SELECTIVE_OPEN_STAGE_OWNER_HOSTILE_REVIEW_2026-09-08.md'
+      - '.github/workflows/cmpct1-one-g02-auth-selective-open-stage-owner.yml'
+  workflow_dispatch:
+
+jobs:
+  auth-selective-open-stage-owner:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      EVIDENCE_HEAD: ${{ github.sha }}
+    steps:
+      - name: Checkout exact source SHA
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+
+      - name: Bind exact source and frozen contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          test -f docs/one/prereg/ONE_G02_AUTH_SELECTIVE_OPEN_STAGE_OWNER_PREREG_2026-09-08.md
+          test -f docs/one/evidence/ONE_G02_AUTH_SELECTIVE_OPEN_STAGE_OWNER_HOSTILE_REVIEW_2026-09-08.md
+          grep -q 'SIZE=1 << 20' benchmarks/one/one_g02_auth_selective_open_stage_owner.py
+          grep -q 'OWNER_SHARE=0.60' benchmarks/one/one_g02_auth_selective_open_stage_owner.py
+          grep -q 'OWNER_ROWS=12' benchmarks/one/one_g02_auth_selective_open_stage_owner.py
+          grep -q 'REPS=21' benchmarks/one/one_g02_auth_selective_open_stage_owner.py
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install test environment
+        run: python -m pip install -e '.[test]'
+
+      - name: Prove semantics and owner decision law
+        run: python -m pytest -q tests/one/test_native_auth_tree.py tests/one/test_auth_selective_open_stage_owner.py
+
+      - name: Run frozen selective-open stage-owner profiler
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/one
+          python -m benchmarks.one.one_g02_auth_selective_open_stage_owner | tee "artifacts/one/auth-selective-open-stage-owner-${EVIDENCE_HEAD}.json"
+
+      - name: Preserve exact-head evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: one-g02-auth-selective-open-stage-owner-${{ env.EVIDENCE_HEAD }}
+          path: artifacts/one/auth-selective-open-stage-owner-${{ env.EVIDENCE_HEAD }}.json
+          if-no-files-found: warn

@@ -1,0 +1,47 @@
+# ci-lane: deep
+# ci-auto-policy: retired-manual-only
+name: CMPCT1 ONE-G0.2 auth-tree prefix-state A/B
+on:
+  workflow_dispatch:
+permissions: {contents: read}
+env:
+  EVIDENCE_HEAD: ${{ github.sha }}
+jobs:
+  prefix-state:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          clean: true
+      - name: Bind exact head
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.11"}
+      - name: Install repository test dependency surface
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[test,audio]'
+      - name: Re-run ONE semantic boundary
+        run: python -m pytest -q tests/one
+      - name: Replay frozen prefix-state auth-tree A/B and preserve scientific red
+        shell: bash
+        run: |
+          mkdir -p one-auth-prefix-state-artifacts
+          set +e
+          python -m benchmarks.one.one_g02_auth_tree_prefix_state | tee one-auth-prefix-state-artifacts/one-g02-auth-tree-prefix-state.json
+          code=${PIPESTATUS[0]}
+          echo "$code" > one-auth-prefix-state-artifacts/scientific-exit-code.txt
+          exit 0
+      - name: Retain replay evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: one-g02-auth-tree-prefix-state-${{ env.EVIDENCE_HEAD }}
+          path: one-auth-prefix-state-artifacts/
+          if-no-files-found: error
+      - name: Enforce preregistered scientific decision
+        if: always()
+        shell: bash
+        run: test "$(cat one-auth-prefix-state-artifacts/scientific-exit-code.txt)" = "0"

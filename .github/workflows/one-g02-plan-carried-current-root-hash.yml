@@ -1,0 +1,117 @@
+# ci-lane: deep
+# exact-source result-bearing falsifier; summary and artifact metadata remain visible on preregistered negatives
+name: ONE-G0.2 plan-carried current-root hash
+
+on:
+  push:
+    branches: [ research/cmpct1 ]
+    paths:
+      - 'benchmarks/one/one_g02_plan_carried_current_root_hash.py'
+      - 'benchmarks/one/native/one_g02_plan_carried_current_root_hash.c'
+      - 'benchmarks/one/one_g02_native_segment_plan_fusion_kernel.c'
+      - 'docs/one/prereg/ONE_G02_PLAN_CARRIED_CURRENT_ROOT_HASH_PREREG_2026-09-06.md'
+      - '.github/workflows/one-g02-plan-carried-current-root-hash.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: one-g02-plan-carried-root-${{ github.sha }}
+  cancel-in-progress: true
+
+jobs:
+  plan-carried-current-root-hash:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      EVIDENCE_HEAD: ${{ github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+      - name: Assert exact evidence source
+        shell: bash
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install project test environment
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[test]'
+      - name: ONE semantic and hostile tests
+        run: python -m pytest -q tests/one
+      - name: Build kernel strictly
+        run: |
+          cc -O3 -std=c11 -Wall -Wextra -Werror -fPIC -shared \
+            benchmarks/one/one_g02_native_segment_plan_fusion_kernel.c \
+            benchmarks/one/native/one_g02_plan_carried_current_root_hash.c \
+            -lcrypto -o /tmp/one-g02-plan-root-hash-strict.so
+      - name: Frozen plan-carried current-root hash falsifier
+        id: falsifier
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -o pipefail
+          python -m benchmarks.one.one_g02_plan_carried_current_root_hash | tee one-g02-plan-carried-current-root-hash.json
+      - name: Publish exact aggregate result
+        id: aggregate
+        if: always()
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          p = Path('one-g02-plan-carried-current-root-hash.json')
+          summary = Path(os.environ['GITHUB_STEP_SUMMARY'])
+          with summary.open('a') as f:
+              print('## ONE-G0.2 plan-carried current-root hash', file=f)
+              if not p.exists():
+                  print('No JSON result was produced.', file=f)
+          if not p.exists():
+              raise SystemExit(0)
+          d = json.loads(p.read_text())
+          keys = (
+              'source_sha', 'decision', 'semantic_gates_pass', 'native_plan_oracle_pass',
+              'mature_productive_median_ratio', 'mature_productive_worst_ratio',
+              'fragmented_mature_median_ratio', 'control_mature_median_ratio')
+          with summary.open('a') as f:
+              for k in keys:
+                  print(f'- **{k}:** `{d.get(k)}`', file=f)
+              print('\n### Mature rows', file=f)
+              print('| size | case | segments | ratio |', file=f)
+              print('|---:|---|---:|---:|', file=f)
+              for r in d.get('rows', []):
+                  if r.get('relation_bytes', 0) >= 16384:
+                      print(f"| {r['relation_bytes']} | {r['case']} | {r['segments']} | {r['candidate_over_baseline']:.6f}x |", file=f)
+          out = Path(os.environ['GITHUB_OUTPUT'])
+          def safe(v): return str(v).replace('.', 'p').replace('-', 'm')
+          with out.open('a') as f:
+              print(f"decision={d['decision']}", file=f)
+              print(f"prod={safe(round(d['mature_productive_median_ratio'],6))}", file=f)
+              print(f"worst={safe(round(d['mature_productive_worst_ratio'],6))}", file=f)
+              print(f"frag={safe(round(d['fragmented_mature_median_ratio'],6))}", file=f)
+              print(f"ctl={safe(round(d['control_mature_median_ratio'],6))}", file=f)
+          PY
+      - name: Preserve result
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: one-g02-plan-root-${{ steps.aggregate.outputs.decision }}-prod-${{ steps.aggregate.outputs.prod }}-worst-${{ steps.aggregate.outputs.worst }}-frag-${{ steps.aggregate.outputs.frag }}-ctl-${{ steps.aggregate.outputs.ctl }}-${{ github.sha }}
+          path: one-g02-plan-carried-current-root-hash.json
+          if-no-files-found: warn
+      - name: Enforce preregistered decision
+        if: always()
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          p = Path('one-g02-plan-carried-current-root-hash.json')
+          if not p.exists():
+              raise SystemExit('benchmark did not produce result JSON')
+          d = json.loads(p.read_text())
+          raise SystemExit(0 if d.get('decision') == 'advance_plan_carried_current_root_hash_to_writer' else 1)
+          PY

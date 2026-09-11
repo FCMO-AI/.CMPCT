@@ -1,0 +1,67 @@
+# ci-lane: fast
+name: CMPCT1 ONE-G0.2 bulk digest generalization
+
+on:
+  push:
+    branches:
+      - research/cmpct1
+    paths:
+      - experiments/one/morphology_gate.py
+      - experiments/one/observe.py
+      - benchmarks/one/one_g02_bulk_digest_generalization.py
+      - benchmarks/one/one_g02_bulk_digest_rss_probe.py
+      - .github/workflows/cmpct1-one-g02-bulk-digest-generalization.yml
+  pull_request:
+    paths:
+      - experiments/one/morphology_gate.py
+      - experiments/one/observe.py
+      - benchmarks/one/one_g02_bulk_digest_generalization.py
+      - benchmarks/one/one_g02_bulk_digest_rss_probe.py
+      - .github/workflows/cmpct1-one-g02-bulk-digest-generalization.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct1-one-g02-bulk-digest-generalization-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  bulk-digest-generalization:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: "${{ env.EVIDENCE_HEAD }}"
+          clean: true
+      - name: Bind exact head
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Provision repository test contract
+        run: python -m pip install --disable-pip-version-check -e '.[test]'
+      - name: Run morphology hostile tests
+        run: python -m pytest -q tests/one/test_morphology_gate.py
+      - name: Run generic bulk digest probe
+        run: |
+          set -o pipefail
+          mkdir -p artifacts
+          python -m benchmarks.one.one_g02_bulk_digest_generalization | tee artifacts/one_g02_bulk_digest_generalization.json
+      - name: Run isolated RSS probe
+        run: |
+          set -o pipefail
+          python -m benchmarks.one.one_g02_bulk_digest_rss_probe | tee artifacts/one_g02_bulk_digest_rss_probe.json
+      - name: Upload probe evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: one-g02-bulk-digest-generalization-${{ env.EVIDENCE_HEAD }}
+          path: |
+            artifacts/one_g02_bulk_digest_generalization.json
+            artifacts/one_g02_bulk_digest_rss_probe.json
+          if-no-files-found: warn

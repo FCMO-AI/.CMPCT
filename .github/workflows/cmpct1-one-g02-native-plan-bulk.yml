@@ -1,0 +1,62 @@
+# Exact-source research evidence lane; scientific thresholds are bound in the checkout.
+name: CMPCT1 ONE-G0.2 native plan bulk
+on:
+  push:
+    branches: [research/cmpct1]
+    paths: &paths
+      - 'experiments/one/native_plan_bulk.py'
+      - 'experiments/one/native_plan_bulk_kernel.c'
+      - 'tests/one/test_native_plan_bulk.py'
+      - 'tests/one/test_native_plan_bulk_benchmark.py'
+      - 'benchmarks/one/one_g02_native_plan_bulk.py'
+      - 'docs/one/prereg/ONE_G02_NATIVE_PLAN_BULK_PREREG_2026-09-08.md'
+      - 'docs/one/evidence/ONE_G02_NATIVE_PLAN_BULK_HOSTILE_REVIEW_2026-09-08.md'
+      - '.github/workflows/cmpct1-one-g02-native-plan-bulk.yml'
+  pull_request:
+    paths: *paths
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  native-plan-bulk:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - name: Checkout exact source SHA
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install test environment
+        run: python -m pip install -e '.[test]'
+      - name: Exact source binding
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          python - <<'PY'
+          import benchmarks.one.one_g02_native_plan_bulk as b
+          assert b.REPETITIONS == 9
+          assert b.ARITHMETIC_MAX == 0.35
+          assert b.NON_ARITHMETIC_MAX == 1.05
+          assert len(b.SIZES) * len(b.FAMILIES) == 18
+          PY
+      - name: Semantic and decision-law tests
+        run: python -m pytest -q tests/one/test_native_plan_bulk.py tests/one/test_native_plan_bulk_benchmark.py
+      - name: Run frozen falsifier
+        run: |
+          set +e
+          python -m benchmarks.one.one_g02_native_plan_bulk > one_g02_native_plan_bulk.json
+          rc=$?
+          cat one_g02_native_plan_bulk.json
+          exit $rc
+      - name: Preserve exact-head evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: one-g02-native-plan-bulk-${{ env.EVIDENCE_HEAD }}
+          path: one_g02_native_plan_bulk.json
+          if-no-files-found: warn

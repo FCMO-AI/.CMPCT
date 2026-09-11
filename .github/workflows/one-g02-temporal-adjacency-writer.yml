@@ -1,0 +1,65 @@
+name: ONE-G0.2 temporal adjacency writer
+
+on:
+  push:
+    branches:
+      - research/cmpct1
+    paths:
+      - 'benchmarks/one/one_g02_temporal_adjacency_writer_integration.py'
+      - 'benchmarks/one/one_g02_shift_relation_amortization_safe_gate_kernel.c'
+      - 'benchmarks/one/one_g02_shift_relation_sparse_gate_kernel.c'
+      - 'benchmarks/one/one_g02_shift_relation_safe_dispatch_kernel.c'
+      - 'benchmarks/one/one_g02_shift_branch_bound_relation_direct_kernel.c'
+      - 'benchmarks/one/one_g02_shift_branch_bound_relation_restrict_kernel.c'
+      - 'benchmarks/one/one_g02_shift_branch_bound_relation_transfer.py'
+      - 'experiments/one/ir.py'
+      - 'experiments/one/vm.py'
+      - 'experiments/one/wire.py'
+      - '.github/workflows/one-g02-temporal-adjacency-writer.yml'
+  pull_request:
+    paths:
+      - 'benchmarks/one/one_g02_temporal_adjacency_writer_integration.py'
+      - 'benchmarks/one/one_g02_shift_relation_amortization_safe_gate_kernel.c'
+      - 'benchmarks/one/one_g02_shift_relation_sparse_gate_kernel.c'
+      - 'benchmarks/one/one_g02_shift_relation_safe_dispatch_kernel.c'
+      - 'benchmarks/one/one_g02_shift_branch_bound_relation_direct_kernel.c'
+      - 'benchmarks/one/one_g02_shift_branch_bound_relation_restrict_kernel.c'
+      - 'benchmarks/one/one_g02_shift_branch_bound_relation_transfer.py'
+      - 'experiments/one/ir.py'
+      - 'experiments/one/vm.py'
+      - 'experiments/one/wire.py'
+      - '.github/workflows/one-g02-temporal-adjacency-writer.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  temporal-adjacency-writer:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install project test environment
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[test]'
+      - name: ONE semantic and hostile tests
+        run: python -m pytest -q tests/one
+      - name: Frozen temporal-adjacency writer integration
+        env:
+          EVIDENCE_HEAD: ${{ github.sha }}
+        run: |
+          set -o pipefail
+          python -m benchmarks.one.one_g02_temporal_adjacency_writer_integration | tee one-g02-temporal-adjacency-writer.json
+      - name: Preserve result
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: one-g02-temporal-adjacency-writer-${{ github.sha }}
+          path: one-g02-temporal-adjacency-writer.json
+          if-no-files-found: error

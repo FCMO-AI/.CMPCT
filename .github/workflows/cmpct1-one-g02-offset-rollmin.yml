@@ -1,0 +1,64 @@
+# ci-lane: fast
+name: CMPCT1 ONE-G0.2 rolling-min suffix fusion
+
+on:
+  pull_request:
+    paths:
+      - "benchmarks/one/one_g02_minimizer_offset_only_kernel.c"
+      - "benchmarks/one/one_g02_minimizer_offset_rollmin_kernel.c"
+      - "benchmarks/one/one_g02_minimizer_offset_rollmin_ab.py"
+      - ".github/workflows/cmpct1-one-g02-offset-rollmin.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct1-one-g02-offset-rollmin-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  rolling-min:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    env:
+      EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          clean: true
+      - name: Bind exact head
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install repository test dependency surface
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[test,audio]'
+      - name: Re-run ONE semantic boundary
+        run: python -m pytest -q tests/one
+      - name: Run frozen rolling-min suffix fusion A/B
+        id: experiment
+        run: |
+          mkdir -p one-rollmin-artifacts
+          python -m benchmarks.one.one_g02_minimizer_offset_rollmin_ab | tee one-rollmin-artifacts/one-g02-offset-rollmin-ab.json
+      - name: Rolling-min fusion promoted
+        if: steps.experiment.outputs.decision == 'promote_offset_rollmin_suffix_fusion'
+        run: echo "rolling suffix minimum removes redundant derived-state work under the frozen gate"
+      - name: Rolling-min fusion rejected
+        if: steps.experiment.outputs.decision == 'reject_offset_rollmin_for_elapsed_debt'
+        run: echo "rolling suffix minimum reduces nominal reads but exports unacceptable elapsed debt"
+      - name: Rolling-min fusion inconclusive
+        if: steps.experiment.outputs.decision == 'offset_rollmin_inconclusive'
+        run: echo "rolling suffix minimum remains below promotion/rejection confidence"
+      - name: Retain exact-head rolling-min evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: one-g02-offset-rollmin-${{ env.EVIDENCE_HEAD }}
+          path: one-rollmin-artifacts/
+          if-no-files-found: error
+
+# Causal encoder-discovery experiment only. The promoted 8KiB dispatch law is unchanged.

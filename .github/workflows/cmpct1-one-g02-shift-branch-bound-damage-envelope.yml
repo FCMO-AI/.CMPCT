@@ -1,0 +1,45 @@
+# ci-lane: fast
+name: CMPCT1 ONE-G0.2 branch-bound damage envelope
+on:
+  pull_request:
+    paths:
+      - "benchmarks/one/one_g02_shift_branch_bound_stratified_kernel.c"
+      - "benchmarks/one/one_g02_shift_branch_bound_damage_envelope.py"
+      - ".github/workflows/cmpct1-one-g02-shift-branch-bound-damage-envelope.yml"
+  workflow_dispatch:
+permissions: {contents: read}
+concurrency:
+  group: cmpct1-one-g02-shift-branch-bound-damage-envelope-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+jobs:
+  damage-envelope:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with: {ref: "${{ env.EVIDENCE_HEAD }}", clean: true}
+      - name: Bind exact head
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.11"}
+      - name: Install test surface
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[test,audio]'
+      - name: Re-run ONE semantics
+        run: python -m pytest -q tests/one
+      - name: Run frozen contiguous-damage envelope
+        run: |
+          set -o pipefail
+          mkdir -p one-shift-branch-bound-envelope-artifacts
+          python -m benchmarks.one.one_g02_shift_branch_bound_damage_envelope \
+            | tee one-shift-branch-bound-envelope-artifacts/one-g02-shift-branch-bound-damage-envelope.json
+      - name: Retain exact-head evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: one-g02-shift-branch-bound-damage-envelope-${{ env.EVIDENCE_HEAD }}
+          path: one-shift-branch-bound-envelope-artifacts/
+          if-no-files-found: error

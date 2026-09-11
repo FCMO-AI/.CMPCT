@@ -1,0 +1,54 @@
+name: cmpct1-one-g02-native-proof-writer-integration
+# Keep this workflow self-scoped so evidence-lane activation/repairs rerun the exact frozen gate.
+on:
+  push:
+    branches: [research/cmpct1]
+    paths:
+      - 'benchmarks/one/one_g02_native_proof_writer_integration.py'
+      - 'benchmarks/one/one_g02_sparse_native_seed_transfer.py'
+      - 'benchmarks/one/one_g02_relation_writer_envelope_v3.py'
+      - 'benchmarks/one/one_g02_relation_writer_envelope_v3_nocopy.py'
+      - 'benchmarks/one/one_g02_relation_writer_envelope_v2.py'
+      - 'experiments/one/native_relation_span_growth.py'
+      - 'experiments/one/relation_span_growth.py'
+      - 'tests/one/test_native_relation_span_growth.py'
+      - 'docs/one/evidence/ONE_G02_NATIVE_PROOF_WRITER_INTEGRATION_PREREG_2026-09-09.md'
+      - '.github/workflows/cmpct1-one-g02-native-proof-writer-integration.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  falsify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with: {ref: '${{ github.sha }}'}
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.12'}
+      - run: python -m pip install -e '.[test]'
+      - name: bind exact source and frozen law
+        run: |
+          test "$(git rev-parse HEAD)" = "${GITHUB_SHA}"
+          grep -q 'MAX_MEDIAN_NOVEL_CPU_OVER_V4 = 0.60' benchmarks/one/one_g02_native_proof_writer_integration.py
+          grep -q 'MAX_NOVEL_CPU_OVER_V4 = 0.80' benchmarks/one/one_g02_native_proof_writer_integration.py
+          grep -q 'MAX_PHYSICAL_PROOF_LOAD_AMPLIFICATION = 1.01' benchmarks/one/one_g02_native_proof_writer_integration.py
+          grep -q 'grow_relation_spans_native_metered' benchmarks/one/one_g02_native_proof_writer_integration.py
+          grep -q 'byte-identical to V4' docs/one/evidence/ONE_G02_NATIVE_PROOF_WRITER_INTEGRATION_PREREG_2026-09-09.md
+          grep -q 'ADVANCE_NATIVE_EXACT_RELATION_PROOF' docs/one/evidence/ONE_G02_NATIVE_PROOF_WRITER_INTEGRATION_PREREG_2026-09-09.md
+      - name: inherited semantic and native proof adversaries
+        run: python -m pytest -q tests/one/test_relation_span_growth.py tests/one/test_native_relation_span_growth.py tests/one/test_relation_witness_transfer.py
+      - name: native proof writer integration falsifier
+        run: |
+          mkdir -p artifacts
+          set +e
+          EVIDENCE_HEAD="${GITHUB_SHA}" python -m benchmarks.one.one_g02_native_proof_writer_integration | tee artifacts/one_g02_native_proof_writer_integration.json
+          rc=${PIPESTATUS[0]}
+          set -e
+          exit $rc
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: one-g02-native-proof-writer-integration-${{ github.sha }}
+          path: artifacts/one_g02_native_proof_writer_integration.json
+          if-no-files-found: warn
