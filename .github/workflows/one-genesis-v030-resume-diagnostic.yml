@@ -31,15 +31,16 @@ jobs:
       V030_SHA: f4b158a55a08b9b18b50e4e4abe4b9251048c772
       CMPCT_GENESIS_REAL_GATE_AUTHORIZED: '1'
       CMPCT_GENESIS_SOURCE_SHA: f4b158a55a08b9b18b50e4e4abe4b9251048c772
+      EXPECTED_HARNESS_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          ref: research/cmpct1
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
 
       - name: Bind diagnostic harness source
         run: |
-          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$(git rev-parse HEAD)" = "$EXPECTED_HARNESS_SHA"
           test "$(git status --porcelain=v1 --untracked-files=all)" = ""
 
       - uses: actions/setup-python@v5
