@@ -1,0 +1,127 @@
+# ci-lane: deep
+# ci-pr-scope: latest-head-commit-gate
+# ci-cancel-policy: preserve-running-exact-receipt
+name: CMPCT v0.30 R4 integrated tabular archive
+
+on:
+  push:
+    branches: [agent/v030-authoritative-integration]
+    paths:
+      - 'benchmarks/v030_r4_tabular_integrated_archive.py'
+      - 'benchmarks/v030_r4_tabular_admission_oracle_v2.py'
+      - 'benchmarks/v030_r4_tabular_owner_oracle.py'
+      - 'benchmarks/v030_r4_tabular_binary_owner_fast_oracle.py'
+      - 'benchmarks/neutral_hostile_corpus_v1.py'
+      - 'benchmarks/resemblance_hostile_corpus_v1.py'
+      - 'benchmarks/neutral_hostile_determinism_repair_v*.py'
+      - 'experiments/entropygraph_v030_release_product*.py'
+      - '.github/workflows/v030-r4-tabular-integrated-archive.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'benchmarks/v030_r4_tabular_integrated_archive.py'
+      - 'benchmarks/v030_r4_tabular_admission_oracle_v2.py'
+      - 'benchmarks/v030_r4_tabular_owner_oracle.py'
+      - 'benchmarks/v030_r4_tabular_binary_owner_fast_oracle.py'
+      - 'benchmarks/neutral_hostile_corpus_v1.py'
+      - 'benchmarks/resemblance_hostile_corpus_v1.py'
+      - 'benchmarks/neutral_hostile_determinism_repair_v*.py'
+      - 'experiments/entropygraph_v030_release_product*.py'
+      - '.github/workflows/v030-r4-tabular-integrated-archive.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+
+concurrency:
+  group: cmpct-v030-r4-tabular-integrated-${{ github.event.pull_request.head.sha || github.sha }}
+  cancel-in-progress: false
+
+jobs:
+  latest-head-impact:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      run_deep: ${{ steps.scope.outputs.run_deep }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 2
+      - id: scope
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then echo 'run_deep=true' >> "$GITHUB_OUTPUT"; exit 0; fi
+          git diff-tree --no-commit-id --name-only -r HEAD > /tmp/latest-head-files.txt
+          if grep -Eq '^(benchmarks/v030_r4_tabular_(integrated_archive|admission_oracle_v2|owner_oracle|binary_owner_fast_oracle)\.py|benchmarks/(neutral_hostile_corpus_v1|resemblance_hostile_corpus_v1|neutral_hostile_determinism_repair_v[^/]*)\.py|experiments/entropygraph_v030_release_product[^/]*\.py|\.github/workflows/v030-r4-tabular-integrated-archive\.yml)$' /tmp/latest-head-files.txt; then echo 'run_deep=true' >> "$GITHUB_OUTPUT"; else echo 'run_deep=false' >> "$GITHUB_OUTPUT"; fi
+
+  integrated-tabular:
+    needs: latest-head-impact
+    if: needs.latest-head-impact.outputs.run_deep == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install exact corpus dependencies
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y zstd gcc ffmpeg libsndfile1
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[audio,test]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
+      - name: Compile integrated research path
+        run: |
+          python -m py_compile \
+            benchmarks/v030_r4_tabular_integrated_archive.py \
+            benchmarks/v030_r4_tabular_admission_oracle_v2.py \
+            benchmarks/v030_r4_tabular_owner_oracle.py \
+            benchmarks/v030_r4_tabular_binary_owner_fast_oracle.py
+      - name: Run exact 15-workload integrated falsifier
+        run: |
+          mkdir -p benchmark-artifacts
+          python benchmarks/v030_r4_tabular_integrated_archive.py \
+            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-r4-tabular-integrated-work" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-r4-tabular-integrated.json"
+      - name: Enforce evidence contract, not scientific promotion
+        run: |
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          d=json.loads(Path('benchmark-artifacts/v030-r4-tabular-integrated.json').read_text())
+          assert d['schema']=='cmpct-v030-r4-tabular-integrated-archive-v1'
+          assert d['source_commit']==os.environ['EVIDENCE_HEAD']
+          assert len(d['rows'])==15
+          c=d['contract']
+          assert c['diagnostic_only'] and not c['release_credit']
+          assert not c['production_format_changed'] and not c['production_selector_changed']
+          assert c['nonaccepted_fallback_is_ordinary_v030_bytes']
+          assert c['discovery_and_exact_proof_charged'] and c['fresh_process_builds'] and c['peak_rss_measured']
+          assert c['authenticated_component_wrapper'] and c['full_reconstruction_verified'] and c['owner_corruption_rejected']
+          # A green workflow certifies receipt integrity. The hypothesis may honestly be false.
+          print(json.dumps({'totals':d['totals'],'hypothesis':d['hypothesis']},sort_keys=True))
+          PY
+      - run: python tools/check_ci_topology.py .github/workflows/v030-r4-tabular-integrated-archive.yml
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: v030-r4-tabular-integrated-${{ env.EVIDENCE_HEAD }}
+          path: benchmark-artifacts/v030-r4-tabular-integrated.json
+          if-no-files-found: error
+          retention-days: 90
+
+# Research-only integrated falsifier. Green proves the receipt is well-formed, not that R4 earned promotion.
