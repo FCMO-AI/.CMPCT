@@ -52,3 +52,28 @@ def test_block_observer_charges_fixed_resets_and_exact_source_bytes(tmp_path: Pa
     assert result["stored_learned_model_bytes"] == 0
     assert result["bounded_model_state_bytes"] == MODEL_STATE_BYTES
     assert result["modeled_payload_bytes"] < result["measured_bytes"]
+
+
+def test_file_boundaries_are_hard_predictor_resets(tmp_path: Path) -> None:
+    """No statistical context may leak between independent file roots.
+
+    This catches an attractive but invalid optimization where the final byte of one file
+    becomes free predictive state for the first byte of the next.  ONE may discover
+    cross-file Laws explicitly, but this block-adaptive Statistical Law is preregistered
+    as file-reset and must charge each non-empty file/block independently.
+    """
+    root = tmp_path / "tree"
+    root.mkdir()
+    left = b"AB" * 1000
+    right = b"AB" * 1000
+    (root / "a.bin").write_bytes(left)
+    (root / "b.bin").write_bytes(right)
+
+    result = observe_workload(root)
+    expected_bits = kt_block_bits(left) + kt_block_bits(right)
+    expected_bytes = math.ceil(expected_bits / 8.0) + 2 * FRAME_BYTES_PER_BLOCK
+
+    assert result["nonempty_blocks"] == 2
+    assert result["measured_bytes"] == len(left) + len(right)
+    assert result["modeled_payload_bytes"] == expected_bytes
+    assert result["modeled_payload_bytes"] != math.ceil(kt_block_bits(left + right) / 8.0) + FRAME_BYTES_PER_BLOCK
