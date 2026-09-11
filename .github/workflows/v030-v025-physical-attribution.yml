@@ -4,6 +4,14 @@
 name: CMPCT v0.30 v0.25 physical attribution
 
 on:
+  push:
+    branches: [agent/v030-authoritative-integration]
+    paths:
+      - 'benchmarks/v030_v025_physical_attribution.py'
+      - 'benchmarks/neutral_hostile_corpus_v1.py'
+      - 'benchmarks/neutral_hostile_determinism_repair_v*.py'
+      - 'experiments/entropygraph_v025.py'
+      - '.github/workflows/v030-v025-physical-attribution.yml'
   pull_request:
     branches: [main]
     paths:
@@ -18,7 +26,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: cmpct-v030-v025-physical-attribution-${{ github.event.pull_request.number || github.ref }}
+  group: cmpct-v030-v025-physical-attribution-${{ github.event.pull_request.head.sha || github.sha }}
   cancel-in-progress: false
 
 env:
