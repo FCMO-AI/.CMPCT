@@ -1,0 +1,94 @@
+# ci-lane: deep
+# ci-cancel-policy: preserve-running-exact-receipt
+name: CMPCT v0.30 Office payload pread8 referee
+
+on:
+  push:
+    branches: [agent/v030-authoritative-integration]
+    paths:
+      - 'benchmarks/v030_r4_office_payload_pread8_referee.py'
+      - '.github/workflows/v030-r4-office-payload-pread8.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+env:
+  PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.sha }}
+  V029_SHA: 02b8b27cb2d97af7c6e0797984a898e8fa8a8e5d
+concurrency:
+  group: cmpct-v030-r4-office-pread8-${{ github.sha }}
+  cancel-in-progress: false
+jobs:
+  pread8:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 85
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 0
+      - run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+      - uses: actions/setup-python@v6
+        with: {python-version: '3.11', cache: pip}
+      - name: Install exact research dependencies
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y zstd gcc ffmpeg libsndfile1
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[audio,test]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx msgpack zstandard
+      - name: Prepare frozen v0.29 checkout
+        run: |
+          git worktree add --detach "$RUNNER_TEMP/cmpct-v029" "$V029_SHA"
+          test "$(git -C "$RUNNER_TEMP/cmpct-v029" rev-parse HEAD)" = "$V029_SHA"
+      - run: python -m py_compile benchmarks/v030_r4_office_payload_pread8_referee.py
+      - name: Run actual-pread refill referee
+        run: |
+          mkdir -p benchmark-artifacts
+          python benchmarks/v030_r4_office_payload_pread8_referee.py \
+            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-r4-office-pread8-work" \
+            --v029-checkout "$RUNNER_TEMP/cmpct-v029" \
+            --worker "$GITHUB_WORKSPACE/benchmarks/v030_r4_frozen_v029_product_worker.py" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-r4-office-pread8.json"
+      - name: Assert receipt integrity, not verdict
+        run: |
+          python - <<'PY'
+          import json,os
+          d=json.load(open('benchmark-artifacts/v030-r4-office-pread8.json'))
+          assert d['source_commit']==os.environ['EVIDENCE_HEAD']
+          assert d['frozen_v7']=={'candidate_bytes':5952805,'density_margin_bytes':1221,'prior_worst_bytes':32746,'v029_bytes':5954026}
+          c=d['contract']; assert c['representation_bytes_unchanged'] and c['fixed_refill_bytes']==8 and c['no_refill_sweep'] and c['actual_os_pread_for_payload_ranges']
+          print(json.dumps({'physical_refill':{k:v for k,v in d['physical_refill'].items() if k!='rows'},'hypothesis':d['hypothesis']},sort_keys=True))
+          PY
+      - name: Persist scientific receipt on integration PR
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python - <<'PY' >/tmp/receipt.md
+          import json,os
+          d=json.load(open('benchmark-artifacts/v030-r4-office-pread8.json')); p=d['physical_refill']
+          print('### v0.30 Office payload pread8 — exact-head receipt')
+          print()
+          print(f"- head: `{os.environ['EVIDENCE_HEAD']}`")
+          print(f"- hypothesis: **{'SUPPORTED' if d['hypothesis']['eight_byte_exact_start_pread_refill_preserves_office_8x'] else 'FALSE'}**")
+          print(f"- frozen v7: `5,952,805 B`, margin to v0.29 `1,221 B`, prior worst `32,746/32,768 B`")
+          print(f"- fixed 8 B exact-start refill; fixed/pair requests `{p['fixed_requests']}/{p['pair_requests']}`")
+          print(f"- exact/pread/locality/pair failures: `{p['exact_failures']}/{p['pread_failures']}/{p['locality_failures']}/{p['pair_failures']}`")
+          print(f"- logical vs physical payload bytes across probes: `{p['total_logical_payload_bytes']}` -> `{p['total_pread_payload_bytes']}` (overfetch `{p['total_payload_overfetch_bytes']} B`), pread calls `{p['total_pread_calls']}`")
+          print(f"- worst fixed: `{p['worst_fixed_probe']}`")
+          print(f"- worst pair: `{p['worst_page_pair']}`")
+          print('- actual os.pread executes planned payload ranges; decoder still discovers intervals from in-memory compressed bytes. No representation/release credit.')
+          PY
+          gh pr comment 56 --repo FCMO-AI/.CMPCT --body-file /tmp/receipt.md
+      - run: python tools/check_ci_topology.py .github/workflows/v030-r4-office-payload-pread8.yml
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: v030-r4-office-pread8-${{ env.EVIDENCE_HEAD }}
+          path: benchmark-artifacts/v030-r4-office-pread8.json
+          if-no-files-found: error
+          retention-days: 90
+# Green means receipt integrity; JSON owns the scientific verdict.
