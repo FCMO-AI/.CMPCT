@@ -6,18 +6,18 @@ Mission lock
 ============
 The synthetic exact-head referee showed that a page-local contiguous compressed window preserves the
 same RFC-1951 guarded physical reads while removing most Python segmented-source dispatch debt without
-an archive-sized buffer.  This transfer keeps Office v7 economics frozen at 5,952,805 B, the 644 B
+an archive-sized buffer. This transfer keeps Office v7 economics frozen at 5,952,805 B, the 644 B
 metadata grouping, 360 B locator/root charge, 4 KiB request, seed selector and 8x limit.
 
-The earlier fixed 8-byte exact-start source is deliberately retained as a *negative control*: it had
-27 fixed and 27 page-pair locality failures after physical refill.  Its failure is not a prerequisite
-for the new mechanism.  We rerun it to rebuild the identical candidate and preserve its measured debt,
-then let actual page-guarded ``os.pread`` bytes drive the bit decoder.
+The corrected fixed 8-byte exact-start physical control is rebuilt first. Its exact artifact proved
+1,800 fixed + 908 adjacent-page probes with zero locality failures and a 32,751 / 32,768 B worst read,
+leaving only 17 B slack. The new mechanism must preserve that contract while letting actual guarded
+``os.pread`` windows drive bit decoding and avoiding O(compressed-stream) resident storage.
 
 Disproof
 ========
 Any byte mismatch, uncovered logical compressed interval, live compressed window >32,768 B, or charged
-fixed/pair read >32,768 B falsifies transfer.  Do not move 8x, alter metadata groups, or change the
+fixed/pair read >32,768 B falsifies transfer. Do not move 8x, alter metadata groups, or change the
 candidate to make this pass.
 """
 
@@ -88,6 +88,8 @@ class WindowSeedReader(SEED.SeedReader):
 
 def run(work:Path,v029_checkout:Path,worker:Path)->dict:
     t0=time.perf_counter();base=PREAD8.run(work,v029_checkout,worker)
+    if not base['hypothesis']['eight_byte_exact_start_pread_refill_preserves_office_8x']:raise RuntimeError('corrected frozen Office pread8 control lost support')
+    if base['physical_refill']['locality_failures'] or base['physical_refill']['pair_failures']:raise RuntimeError('corrected frozen Office pread8 locality drift')
     if base['frozen_v7']['candidate_bytes']!=5_952_805 or base['frozen_v7']['grouped_metadata_bytes']!=48_787:raise RuntimeError('frozen v7 economics drift')
     manifest=json.loads((work/'current'/'manifest.json').read_text());pool=(work/'current'/'streams.bin').read_bytes();hashes=sorted({r['stream_hash'] for r in manifest['derived'].values()})
     fixed=pair=exact_fail=locality_fail=pair_fail=cover_fail=0;worst=None;worst_pair=None;max_window=0;physical_total=logical_total=0
@@ -131,7 +133,7 @@ def run(work:Path,v029_checkout:Path,worker:Path)->dict:
                 if worst is None or combined>worst['combined_bytes']:worst=q
         finally:os.close(fd)
     supported=exact_fail==0 and locality_fail==0 and pair_fail==0 and cover_fail==0 and max_window<=LIMIT
-    return {'schema':SCHEMA,'source_commit':os.environ.get('EVIDENCE_HEAD'),'frozen_v7':base['frozen_v7'],'baseline_pread8':{'hypothesis_supported':base['hypothesis']['eight_byte_exact_start_pread_refill_preserves_office_8x'],'locality_failures':base['physical_refill']['locality_failures'],'pair_failures':base['physical_refill']['pair_failures'],'total_logical_payload_bytes':base['physical_refill']['total_logical_payload_bytes'],'total_physical_payload_bytes':base['physical_refill']['total_pread_payload_bytes'],'total_pread_calls':base['physical_refill']['total_pread_calls'],'worst_fixed_probe':base['physical_refill']['worst_fixed_probe'],'worst_page_pair':base['physical_refill']['worst_page_pair']},'window_transfer':{'fixed_requests':fixed,'pair_requests':pair,'exact_failures':exact_fail,'locality_failures':locality_fail,'pair_failures':pair_fail,'coverage_failures':cover_fail,'total_logical_payload_bytes':logical_total,'total_physical_payload_bytes':physical_total,'physical_minus_logical_bytes':physical_total-logical_total,'max_live_window_bytes':max_window,'worst_fixed_probe':worst,'worst_page_pair':worst_pair},'profile':{'wall_s_including_negative_control':time.perf_counter()-t0},'hypothesis':{'bounded_window_dispatch_transfers_to_frozen_office_v7_under_8x':supported},'contract':{'diagnostic_only':True,'release_credit':False,'candidate_bytes_unchanged':True,'same_644b_metadata_groups':True,'same_locator_root_charge':True,'same_8x_limit':True,'same_seed_selector':True,'actual_os_pread_drives_bit_decoder':True,'no_archive_sized_compressed_buffer':True,'negative_pread8_control_not_prerequisite':True,'no_threshold_sweep':True,'remaining_debt':'if supported: isolate throughput/RSS then integrate serialized auth/root/recovery/native; if false: preserve exact guard overfetch and redesign range ownership without moving 8x'}}
+    return {'schema':SCHEMA,'source_commit':os.environ.get('EVIDENCE_HEAD'),'frozen_v7':base['frozen_v7'],'baseline_pread8':{'hypothesis_supported':True,'locality_failures':0,'pair_failures':0,'total_logical_payload_bytes':base['physical_refill']['total_logical_payload_bytes'],'total_physical_payload_bytes':base['physical_refill']['total_pread_payload_bytes'],'total_pread_calls':base['physical_refill']['total_pread_calls'],'worst_fixed_probe':base['physical_refill']['worst_fixed_probe'],'worst_page_pair':base['physical_refill']['worst_page_pair']},'window_transfer':{'fixed_requests':fixed,'pair_requests':pair,'exact_failures':exact_fail,'locality_failures':locality_fail,'pair_failures':pair_fail,'coverage_failures':cover_fail,'total_logical_payload_bytes':logical_total,'total_physical_payload_bytes':physical_total,'physical_minus_logical_bytes':physical_total-logical_total,'max_live_window_bytes':max_window,'worst_fixed_probe':worst,'worst_page_pair':worst_pair},'profile':{'wall_s_including_pread8_control':time.perf_counter()-t0},'hypothesis':{'bounded_window_dispatch_transfers_to_frozen_office_v7_under_8x':supported},'contract':{'diagnostic_only':True,'release_credit':False,'candidate_bytes_unchanged':True,'same_644b_metadata_groups':True,'same_locator_root_charge':True,'same_8x_limit':True,'same_seed_selector':True,'actual_os_pread_drives_bit_decoder':True,'no_archive_sized_compressed_buffer':True,'pread8_control_rebuilt_exactly':True,'no_threshold_sweep':True,'remaining_debt':'if supported: isolate throughput/RSS then integrate serialized auth/root/recovery/native; if false: preserve exact guard overfetch and redesign range ownership without moving 8x'}}
 
 def main():
     p=argparse.ArgumentParser();p.add_argument('--work-root',type=Path,default=Path('benchmark-artifacts/v030-r4-office-window-work'));p.add_argument('--v029-checkout',type=Path,required=True);p.add_argument('--worker',type=Path,default=Path('benchmarks/v030_r4_frozen_v029_product_worker.py'));p.add_argument('--output',type=Path,default=Path('benchmark-artifacts/v030-r4-office-window-guard-transfer.json'));a=p.parse_args();d=run(a.work_root,a.v029_checkout,a.worker);a.output.parent.mkdir(parents=True,exist_ok=True);a.output.write_text(json.dumps(d,indent=2,sort_keys=True)+'\n');print(json.dumps({'baseline_pread8':d['baseline_pread8'],'window_transfer':d['window_transfer'],'hypothesis':d['hypothesis'],'profile':d['profile']},sort_keys=True))
