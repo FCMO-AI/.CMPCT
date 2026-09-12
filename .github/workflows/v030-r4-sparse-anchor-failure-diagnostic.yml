@@ -1,0 +1,83 @@
+# ci-lane: deep
+# ci-pr-scope: latest-head-commit-gate
+# ci-cancel-policy: preserve-running-exact-receipt
+name: CMPCT v0.30 R4 sparse-anchor failure diagnostic
+
+on:
+  push:
+    branches: [agent/v030-authoritative-integration]
+    paths:
+      - 'benchmarks/v030_r4_sparse_anchor_failure_diagnostic.py'
+      - '.github/workflows/v030-r4-sparse-anchor-failure-diagnostic.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.sha }}
+
+concurrency:
+  group: cmpct-v030-r4-sparsecold-diag-${{ github.sha }}
+  cancel-in-progress: false
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install exact corpus dependencies
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y zstd gcc ffmpeg libsndfile1
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[audio,test]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
+      - name: Compile diagnostic and unchanged candidate
+        run: |
+          python -m py_compile benchmarks/v030_r4_sparse_anchor_failure_diagnostic.py
+          python -m py_compile benchmarks/v030_r4_deflate_sparse_anchor_cold_reader.py
+      - name: Capture first candidate failure
+        run: |
+          set -euo pipefail
+          mkdir -p benchmark-artifacts
+          python benchmarks/v030_r4_sparse_anchor_failure_diagnostic.py \
+            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-r4-sparsecold-diag-work" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-r4-sparsecold-diag.json"
+          python - <<'PY'
+          import json, os
+          d=json.load(open('benchmark-artifacts/v030-r4-sparsecold-diag.json'))
+          assert d['schema']=='cmpct-v030-r4-sparse-anchor-failure-diagnostic-v1'
+          assert d['source_commit']==os.environ['EVIDENCE_HEAD']
+          assert d['diagnostic_completed']
+          c=d['contract']
+          assert not c['reader_modified'] and not c['request_set_modified'] and not c['thresholds_modified']
+          assert c['diagnostic_only'] and not c['release_credit']
+          print(json.dumps({
+            'reproduced_candidate_failure':d['reproduced_candidate_failure'],
+            'metadata':d.get('metadata'),
+            'requests':d.get('requests'),
+            'setup_failure':d.get('setup_failure'),
+            'elapsed_wall_s':d['elapsed_wall_s'],
+          }, sort_keys=True))
+          PY
+      - run: python tools/check_ci_topology.py .github/workflows/v030-r4-sparse-anchor-failure-diagnostic.yml
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: v030-r4-sparse-anchor-failure-diagnostic-${{ env.EVIDENCE_HEAD }}
+          path: benchmark-artifacts/v030-r4-sparsecold-diag.json
+          if-no-files-found: error
+          retention-days: 90
+
+# Green means the negative/diagnostic receipt was captured, not that the candidate passed.
