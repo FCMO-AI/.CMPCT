@@ -1,0 +1,100 @@
+# ci-lane: deep
+# ci-cancel-policy: preserve-running-exact-receipt
+name: CMPCT v0.30 real Office checkpoint economics
+
+on:
+  push:
+    branches: [agent/v030-authoritative-integration]
+    paths:
+      - 'benchmarks/v030_r4_office_locator_checkpoint_economics.py'
+      - '.github/workflows/v030-r4-office-locator-checkpoint-economics.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+env:
+  PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.sha }}
+  V029_SHA: 02b8b27cb2d97af7c6e0797984a898e8fa8a8e5d
+concurrency:
+  group: cmpct-v030-r4-office-checkpoint-economics-${{ github.sha }}
+  cancel-in-progress: false
+jobs:
+  office-economics:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 85
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 0
+      - run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+      - uses: actions/setup-python@v6
+        with: {python-version: '3.11', cache: pip}
+      - name: Install exact research dependencies
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y zstd gcc ffmpeg libsndfile1
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[audio,test]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx msgpack zstandard
+      - name: Prepare frozen v0.29 checkout
+        run: |
+          set -euo pipefail
+          git cat-file -e "$V029_SHA^{commit}"
+          git worktree add --detach "$RUNNER_TEMP/cmpct-v029" "$V029_SHA"
+          test "$(git -C "$RUNNER_TEMP/cmpct-v029" rev-parse HEAD)" = "$V029_SHA"
+      - run: python -m py_compile benchmarks/v030_r4_office_locator_checkpoint_economics.py
+      - name: Run exact real-Office economics gate
+        run: |
+          mkdir -p benchmark-artifacts
+          python benchmarks/v030_r4_office_locator_checkpoint_economics.py \
+            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-r4-office-locator-checkpoint-economics-work" \
+            --v029-checkout "$RUNNER_TEMP/cmpct-v029" \
+            --frozen-worker "$GITHUB_WORKSPACE/benchmarks/v030_r4_frozen_v029_product_worker.py" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-r4-office-locator-checkpoint-economics.json"
+      - name: Assert receipt integrity, not verdict
+        run: |
+          python - <<'PY'
+          import json,os
+          d=json.load(open('benchmark-artifacts/v030-r4-office-locator-checkpoint-economics.json'))
+          assert d['source_commit']==os.environ['EVIDENCE_HEAD']
+          assert d['contract']['v7_representation_unchanged']
+          assert d['contract']['same_actual_locator_bytes_and_queries']
+          assert d['contract']['checkpoint_stride_records']==256
+          assert d['contract']['fixed_8x_and_auth_unchanged']
+          assert d['economics']['exact_lookup_parity']
+          print(json.dumps({'v7_receipt':d['v7_receipt'],'actual_office_locator':d['actual_office_locator'],'economics':d['economics'],'hypothesis':d['hypothesis']},sort_keys=True))
+          PY
+      - name: Persist scientific receipt on integration PR
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python - <<'PY' > /tmp/receipt.md
+          import json,os
+          d=json.load(open('benchmark-artifacts/v030-r4-office-locator-checkpoint-economics.json'))
+          a=d['actual_office_locator']; e=d['economics']; b=d['streaming_v7']; c=d['checkpoint_candidate']; v=d['v7_receipt']
+          print('### v0.30 real Office checkpoint economics — exact-head receipt')
+          print()
+          print(f"- head: `{os.environ['EVIDENCE_HEAD']}`")
+          print(f"- hypothesis: **{'SUPPORTED' if d['hypothesis']['checkpoints_are_worth_integrating_for_actual_office_locator'] else 'FALSE'}**")
+          print(f"- unchanged v7 bytes / v0.29 / density margin: `{v['candidate_bytes_with_locator']}` / `{v['same_input_v029_bytes']}` / `{v['density_margin_bytes']} B`")
+          print(f"- unchanged worst 4 KiB charge / slack: `{v['charged_worst_read_bytes']}` / `{v['locality_margin_bytes']} B`")
+          print(f"- actual LOC1: `{a['raw_locator_bytes']} B`, `{a['record_count']}` records, `{a['exact_queries']}` exact lookups, checkpoint state `{a['checkpoint_bytes']} B`")
+          print(f"- streaming build+late / build+all: `{b['build_plus_late_wall_s']:.6f}` / `{b['build_plus_all_wall_s']:.6f} s`")
+          print(f"- checkpoint build+late / build+all: `{c['build_plus_late_wall_s']:.6f}` / `{c['build_plus_all_wall_s']:.6f} s`")
+          print(f"- cold ratio `{e['cold_build_plus_late_ratio']:.3f}x` (<=1.10); repeated-read speedup `{e['warm_build_plus_all_speedup_x']:.2f}x` (>=2.0); RSS delta `{e['checkpoint_rss_delta_vs_streaming_kib']} KiB` (<=1024)")
+          print('- exact same v7 representation/auth/locality; algorithm-economics decision only; no release credit.')
+          PY
+          gh pr comment 56 --repo FCMO-AI/.CMPCT --body-file /tmp/receipt.md
+      - run: python tools/check_ci_topology.py .github/workflows/v030-r4-office-locator-checkpoint-economics.yml
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: v030-r4-office-locator-checkpoint-economics-${{ env.EVIDENCE_HEAD }}
+          path: benchmark-artifacts/v030-r4-office-locator-checkpoint-economics.json
+          if-no-files-found: error
+          retention-days: 90
+# Green means receipt integrity; JSON owns the scientific/economic verdict.
