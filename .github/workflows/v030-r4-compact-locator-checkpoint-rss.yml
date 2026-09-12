@@ -1,0 +1,83 @@
+# ci-lane: deep
+# ci-cancel-policy: preserve-running-exact-receipt
+name: CMPCT v0.30 compact locator checkpoint RSS
+
+on:
+  push:
+    branches: [agent/v030-authoritative-integration]
+    paths:
+      - 'benchmarks/v030_r4_compact_locator_checkpoint_rss.py'
+      - '.github/workflows/v030-r4-compact-locator-checkpoint-rss.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+env:
+  PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.sha }}
+concurrency:
+  group: cmpct-v030-r4-compact-locator-checkpoint-rss-${{ github.sha }}
+  cancel-in-progress: false
+jobs:
+  checkpoint-rss:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 1
+      - run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+      - uses: actions/setup-python@v6
+        with: {python-version: '3.11', cache: pip}
+      - name: Install exact research dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[audio,test]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx msgpack zstandard
+      - run: python -m py_compile benchmarks/v030_r4_compact_locator_checkpoint_rss.py
+      - name: Run fresh-process hidden-cost gate
+        run: |
+          mkdir -p benchmark-artifacts
+          python benchmarks/v030_r4_compact_locator_checkpoint_rss.py \
+            --output benchmark-artifacts/v030-r4-compact-locator-checkpoint-rss.json
+      - name: Assert receipt integrity, not verdict
+        run: |
+          python - <<'PY'
+          import json,os
+          d=json.load(open('benchmark-artifacts/v030-r4-compact-locator-checkpoint-rss.json'))
+          assert d['source_commit']==os.environ['EVIDENCE_HEAD']
+          assert d['contract']['candidate_and_stride_frozen']
+          assert d['contract']['fresh_process']
+          assert d['contract']['representation_bytes_unchanged']
+          print(json.dumps({'measurement':d['measurement'],'limits':d['limits'],'hypothesis':d['hypothesis']},sort_keys=True))
+          PY
+      - name: Persist scientific receipt on integration PR
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python - <<'PY' > /tmp/receipt.md
+          import json,os
+          d=json.load(open('benchmark-artifacts/v030-r4-compact-locator-checkpoint-rss.json'))
+          m=d['measurement']; lim=d['limits']
+          print('### v0.30 checkpoint RSS hidden-cost gate — exact-head receipt')
+          print()
+          print(f"- head: `{os.environ['EVIDENCE_HEAD']}`")
+          print(f"- hypothesis: **{'SUPPORTED' if d['hypothesis']['checkpoint_python_hidden_cost_is_bounded'] else 'FALSE'}**")
+          print(f"- LOC1/records/checkpoint payload: `{m['raw_bytes']} B` / `{m['records']}` / `{m['packed_checkpoint_bytes']} B`")
+          print(f"- parse/build Python peak: `{m['python_peak_bytes']} B` (ceiling `{lim['python_peak_bytes']} B`)")
+          print(f"- current RSS before/after/delta: `{m['current_rss_before_kib']}` / `{m['current_rss_after_kib']}` / `{m['current_rss_delta_kib']} KiB` (delta ceiling `{lim['current_rss_delta_kib']} KiB`)")
+          print(f"- process peak RSS before/after: `{m['peak_rss_before_kib']}` / `{m['peak_rss_after_kib']} KiB`")
+          print('- candidate/stride/archive bytes/auth/locality frozen; hidden-cost diagnostic only; no release credit.')
+          PY
+          gh pr comment 56 --repo FCMO-AI/.CMPCT --body-file /tmp/receipt.md
+      - run: python tools/check_ci_topology.py .github/workflows/v030-r4-compact-locator-checkpoint-rss.yml
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: v030-r4-compact-locator-checkpoint-rss-${{ env.EVIDENCE_HEAD }}
+          path: benchmark-artifacts/v030-r4-compact-locator-checkpoint-rss.json
+          if-no-files-found: error
+          retention-days: 90
+# Green means receipt integrity; JSON owns scientific verdict.
