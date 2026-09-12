@@ -1,0 +1,138 @@
+# ci-lane: deep
+# ci-pr-scope: latest-head-commit-gate
+# ci-cancel-policy: preserve-running-exact-receipt
+name: CMPCT v0.30 R4 Office SFV3 derived views
+
+on:
+  push:
+    branches: [agent/v030-authoritative-integration]
+    paths:
+      - 'benchmarks/v030_r4_office_sfv3_derived_views.py'
+      - 'benchmarks/v030_r4_office_exact_stream_federation_v2.py'
+      - 'benchmarks/mosaic_v029_generalization_bench.py'
+      - 'benchmarks/neutral_hostile_corpus_v1.py'
+      - 'benchmarks/neutral_hostile_determinism_repair_v*.py'
+      - 'experiments/entropygraph_v030_release_product*.py'
+      - 'src/cmpct/**'
+      - '.github/workflows/v030-r4-office-sfv3-derived-views.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'benchmarks/v030_r4_office_sfv3_derived_views.py'
+      - 'benchmarks/v030_r4_office_exact_stream_federation_v2.py'
+      - 'benchmarks/mosaic_v029_generalization_bench.py'
+      - 'benchmarks/neutral_hostile_corpus_v1.py'
+      - 'benchmarks/neutral_hostile_determinism_repair_v*.py'
+      - 'experiments/entropygraph_v030_release_product*.py'
+      - 'src/cmpct/**'
+      - '.github/workflows/v030-r4-office-sfv3-derived-views.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+
+concurrency:
+  group: cmpct-v030-r4-office-sfv3-${{ github.event.pull_request.head.sha || github.sha }}
+  cancel-in-progress: false
+
+jobs:
+  latest-head-impact:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      run_deep: ${{ steps.scope.outputs.run_deep }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 2
+      - id: scope
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then echo 'run_deep=true' >> "$GITHUB_OUTPUT"; exit 0; fi
+          git diff-tree --no-commit-id --name-only -r HEAD > /tmp/latest-head-files.txt
+          if grep -Eq '^(benchmarks/v030_r4_office_(sfv3_derived_views|exact_stream_federation_v2)\.py|benchmarks/mosaic_v029_generalization_bench\.py|benchmarks/(neutral_hostile_corpus_v1|neutral_hostile_determinism_repair_v[^/]*)\.py|experiments/entropygraph_v030_release_product[^/]*\.py|src/cmpct/.*|\.github/workflows/v030-r4-office-sfv3-derived-views\.yml)$' /tmp/latest-head-files.txt; then echo 'run_deep=true' >> "$GITHUB_OUTPUT"; else echo 'run_deep=false' >> "$GITHUB_OUTPUT"; fi
+
+  office-sfv3:
+    needs: latest-head-impact
+    if: needs.latest-head-impact.outputs.run_deep == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install exact corpus dependencies
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y zstd gcc ffmpeg libsndfile1
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[audio,test]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
+      - name: Compile SFV3 falsifier
+        run: |
+          python -m py_compile \
+            benchmarks/v030_r4_office_sfv3_derived_views.py \
+            benchmarks/v030_r4_office_exact_stream_federation_v2.py
+      - name: Run exact SFV3 derived-view falsifier
+        run: |
+          mkdir -p benchmark-artifacts
+          python benchmarks/v030_r4_office_sfv3_derived_views.py \
+            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-r4-office-sfv3-work" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-r4-office-sfv3.json"
+      - name: Enforce evidence contract, not scientific promotion
+        run: |
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          d=json.loads(Path('benchmark-artifacts/v030-r4-office-sfv3.json').read_text())
+          assert d['schema']=='cmpct-v030-r4-office-sfv3-derived-views-v1'
+          assert d['source_commit']==os.environ['EVIDENCE_HEAD']
+          c=d['contract']
+          assert c['diagnostic_only'] and not c['release_credit']
+          assert not c['production_format_changed'] and not c['production_selector_changed']
+          assert c['exact_decoded_byte_identity_only'] and c['no_workload_name_path_hash_dispatch']
+          assert c['no_threshold_sweep'] and c['all_wrapper_bytes_charged']
+          assert c['derived_locality_measured_not_waived']
+          assert c['derived_physical_metric_excludes_future_auth_index_and_is_optimistic']
+          assert d['hypothesis']['exact_tree']
+          assert d['hypothesis']['derived_views_found_without_path_dispatch']
+          print(json.dumps({
+            'baseline_v030_bytes':d['baseline_v030_bytes'],
+            'candidate_bytes':d['candidate_bytes'],
+            'accepted_v029_office_bytes':d['accepted_v029_office_bytes'],
+            'saving_vs_v030_bytes':d['saving_vs_v030_bytes'],
+            'margin_vs_v029_bytes':d['margin_vs_v029_bytes'],
+            'baseline_create_wall_s':d['baseline_create_wall_s'],
+            'candidate_create_wall_s':d['candidate_create_wall_s'],
+            'component_bytes':d['candidate']['component_bytes'],
+            'derived_file_count':d['candidate']['derived_file_count'],
+            'derived_logical_bytes':d['candidate']['derived_logical_bytes'],
+            'max_derived_physical_amplification_without_auth_index':d['max_derived_physical_amplification_without_auth_index'],
+            'max_derived_reconstruction_amplification':d['max_derived_reconstruction_amplification'],
+            'hypothesis':d['hypothesis']
+          },sort_keys=True))
+          PY
+      - run: python tools/check_ci_topology.py .github/workflows/v030-r4-office-sfv3-derived-views.yml
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: v030-r4-office-sfv3-${{ env.EVIDENCE_HEAD }}
+          path: benchmark-artifacts/v030-r4-office-sfv3.json
+          if-no-files-found: error
+          retention-days: 90
+
+# Research-only derived-view falsifier. Green means receipt integrity, never product promotion.
