@@ -58,10 +58,22 @@ jobs:
           python - <<'PY'
           import json,os
           d=json.load(open('benchmark-artifacts/v030-r4-office-pread8.json'))
+          assert d['schema']=='cmpct-v030-r4-office-payload-pread8-referee-v2'
           assert d['source_commit']==os.environ['EVIDENCE_HEAD']
-          assert d['frozen_v7']=={'candidate_bytes':5952805,'density_margin_bytes':1221,'prior_worst_bytes':32746,'v029_bytes':5954026}
-          c=d['contract']; assert c['representation_bytes_unchanged'] and c['fixed_refill_bytes']==8 and c['no_refill_sweep'] and c['actual_os_pread_for_payload_ranges']
-          print(json.dumps({'physical_refill':{k:v for k,v in d['physical_refill'].items() if k!='rows'},'hypothesis':d['hypothesis']},sort_keys=True))
+          v=d['frozen_v7']
+          assert v['candidate_bytes']==5_952_805
+          assert v['v029_bytes']==5_954_026
+          assert v['density_margin_bytes']==1_221
+          assert v['prior_worst_bytes']==32_746
+          assert v['grouped_metadata_bytes']==48_787
+          assert v['group_body_limit_bytes']==644
+          c=d['contract']
+          assert c['representation_bytes_unchanged']
+          assert c['same_644b_groups']
+          assert c['fixed_refill_bytes']==8
+          assert c['no_refill_sweep']
+          assert c['actual_os_pread_for_payload_ranges']
+          print(json.dumps({'frozen_v7':v,'physical_refill':{k:v for k,v in d['physical_refill'].items() if k!='rows'},'hypothesis':d['hypothesis']},sort_keys=True))
           PY
       - name: Persist scientific receipt on integration PR
         env:
@@ -69,12 +81,12 @@ jobs:
         run: |
           python - <<'PY' >/tmp/receipt.md
           import json,os
-          d=json.load(open('benchmark-artifacts/v030-r4-office-pread8.json')); p=d['physical_refill']
+          d=json.load(open('benchmark-artifacts/v030-r4-office-pread8.json')); p=d['physical_refill']; v=d['frozen_v7']
           print('### v0.30 Office payload pread8 — exact-head receipt')
           print()
           print(f"- head: `{os.environ['EVIDENCE_HEAD']}`")
           print(f"- hypothesis: **{'SUPPORTED' if d['hypothesis']['eight_byte_exact_start_pread_refill_preserves_office_8x'] else 'FALSE'}**")
-          print(f"- frozen v7: `5,952,805 B`, margin to v0.29 `1,221 B`, prior worst `32,746/32,768 B`")
+          print(f"- frozen v7: `{v['candidate_bytes']} B`, margin to v0.29 `{v['density_margin_bytes']} B`, prior worst `{v['prior_worst_bytes']}/32768 B`, 644 B grouped metadata `{v['grouped_metadata_bytes']} B`")
           print(f"- fixed 8 B exact-start refill; fixed/pair requests `{p['fixed_requests']}/{p['pair_requests']}`")
           print(f"- exact/pread/locality/pair failures: `{p['exact_failures']}/{p['pread_failures']}/{p['locality_failures']}/{p['pair_failures']}`")
           print(f"- logical vs physical payload bytes across probes: `{p['total_logical_payload_bytes']}` -> `{p['total_pread_payload_bytes']}` (overfetch `{p['total_payload_overfetch_bytes']} B`), pread calls `{p['total_pread_calls']}`")
