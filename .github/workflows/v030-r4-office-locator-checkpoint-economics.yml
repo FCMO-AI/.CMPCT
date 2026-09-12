@@ -66,7 +66,15 @@ jobs:
           assert d['contract']['checkpoint_stride_records']==256
           assert d['contract']['fixed_8x_and_auth_unchanged']
           assert d['economics']['exact_lookup_parity']
-          print(json.dumps({'v7_receipt':d['v7_receipt'],'actual_office_locator':d['actual_office_locator'],'economics':d['economics'],'hypothesis':d['hypothesis']},sort_keys=True))
+          # Bind this economics decision to the exact adjudicated v7 product evidence. A changed Office
+          # representation needs a new referee rather than silently inheriting these timing results.
+          v=d['v7_receipt']
+          assert v['candidate_bytes_with_locator']==5_952_805
+          assert v['same_input_v029_bytes']==5_954_026
+          assert v['density_margin_bytes']==1_221
+          assert v['charged_worst_read_bytes']==32_746
+          assert v['locality_margin_bytes']==22
+          print(json.dumps({'v7_receipt':v,'actual_office_locator':d['actual_office_locator'],'economics':d['economics'],'hypothesis':d['hypothesis']},sort_keys=True))
           PY
       - name: Persist scientific receipt on integration PR
         env:
