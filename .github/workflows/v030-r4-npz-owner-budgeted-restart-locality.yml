@@ -110,11 +110,26 @@ jobs:
           assert not c['production_format_changed'] and not c['production_selector_changed']
           assert c['no_span_sweep'] and c['candidate_lattice_equals_request_size']
           assert c['placement_uses_locality_budget_not_size_outcome'] and c['all_selected_histories_fully_charged']
-          assert c['every_service_region_endpoint_verified']
+          assert c['infeasible_selection_is_scientific_negative']
+          if d['selection_feasible']:
+              assert c['every_service_region_endpoint_verified']
+              assert d['hypothesis']['reconstruction_budget_covers_stream']
+              assert d['candidate_bytes'] is not None
+          else:
+              assert not c['every_service_region_endpoint_verified']
+              assert not d['hypothesis']['reconstruction_budget_covers_stream']
+              assert not d['hypothesis']['supported_for_product_prototype']
+              assert d['candidate_bytes'] is None
+              assert d['selection_failure_reason']
+              assert d['coverage_end'] < d['logical_npy_bytes']
           print(json.dumps({
             'npz_owner_bytes':d['npz_owner_bytes'],
             'candidate_restart_points':d['candidate_restart_points'],
             'selected_restart_points':d['selected_restart_points'],
+            'coverage_end':d['coverage_end'],
+            'logical_npy_bytes':d['logical_npy_bytes'],
+            'selection_feasible':d['selection_feasible'],
+            'selection_failure_reason':d['selection_failure_reason'],
             'restart_state_bytes':d['restart_state_bytes'],
             'candidate_bytes':d['candidate_bytes'],
             'accepted_v029_bytes':d['accepted_v029_bytes'],
@@ -134,4 +149,5 @@ jobs:
           if-no-files-found: error
           retention-days: 90
 
-# Research-only budget-driven restart falsifier. Green means receipt integrity, not promotion.
+# Research-only budget-driven restart falsifier. Green means receipt integrity, including a preserved
+# preregistered scientific negative; it never means mechanism promotion.
