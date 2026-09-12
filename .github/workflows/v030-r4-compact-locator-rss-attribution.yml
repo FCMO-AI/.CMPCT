@@ -9,7 +9,10 @@ on:
       - 'benchmarks/v030_r4_compact_locator_rss_attribution.py'
       - '.github/workflows/v030-r4-compact-locator-rss-attribution.yml'
   workflow_dispatch:
-permissions: {contents: read}
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
 env:
   PYTHONPATH: ${{ github.workspace }}
   EVIDENCE_HEAD: ${{ github.sha }}
@@ -53,6 +56,31 @@ jobs:
           assert d['contract']['no_product_threshold_or_locality_change']
           print(json.dumps({'input':d['input'],'fresh_process_stages':d['fresh_process_stages'],'attribution':d['attribution'],'hypothesis':d['hypothesis']},sort_keys=True))
           PY
+      - name: Persist concise scientific receipt on integration PR
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python - <<'PY' > /tmp/receipt.md
+          import json, os
+          d=json.load(open('benchmark-artifacts/v030-r4-locator-rss-attribution.json'))
+          s=d['fresh_process_stages']['streaming_direct_rule']
+          t=d['fresh_process_stages']['historical_table']
+          i=d['fresh_process_stages']['import_only']
+          r=d['fresh_process_stages']['raw_read']
+          a=d['attribution']
+          print('### v0.30 compact locator RSS attribution — exact-head receipt')
+          print()
+          print(f"- head: `{os.environ['EVIDENCE_HEAD']}`")
+          print(f"- hypothesis: **{'SUPPORTED' if d['hypothesis']['large_hosted_rss_is_not_persistent_locator_parser_state'] else 'FALSE'}**")
+          print(f"- deterministic LOC1 bytes / records: `{d['input']['raw_locator_bytes']}` / `{d['input']['streaming_record_count']}`")
+          print(f"- import-only current RSS: `{i['current_rss_kib']} KiB`")
+          print(f"- raw-read current RSS: `{r['current_rss_kib']} KiB`")
+          print(f"- streaming: current/peak RSS `{s['current_rss_kib']}/{s['peak_rss_kib']} KiB`, incremental vs raw `{s['rss_delta_vs_raw_read_kib']} KiB`, parse heap peak `{s['parse_python_peak_bytes']} B`, CPU `{s['parse_cpu_s']:.6f} s`, wall `{s['parse_wall_s']:.6f} s`")
+          print(f"- historical table: current/peak RSS `{t['current_rss_kib']}/{t['peak_rss_kib']} KiB`, incremental vs raw `{t['rss_delta_vs_raw_read_kib']} KiB`, parse heap peak `{t['parse_python_peak_bytes']} B`, CPU `{t['parse_cpu_s']:.6f} s`, wall `{t['parse_wall_s']:.6f} s`")
+          print(f"- streaming heap saved vs table: `{a['streaming_python_peak_saved_vs_table_bytes']} B`")
+          print('- contract: representation/locality/product thresholds unchanged; diagnostic only; no release credit.')
+          PY
+          gh pr comment 56 --repo FCMO-AI/.CMPCT --body-file /tmp/receipt.md
       - run: python tools/check_ci_topology.py .github/workflows/v030-r4-compact-locator-rss-attribution.yml
       - uses: actions/upload-artifact@v6
         if: always()
