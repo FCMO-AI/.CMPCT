@@ -1,5 +1,4 @@
 # ci-lane: deep
-# ci-pr-scope: latest-head-commit-gate
 # ci-cancel-policy: preserve-running-exact-receipt
 name: CMPCT v0.30 R4 sparse-anchor page closure
 
