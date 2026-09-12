@@ -26,7 +26,7 @@ SCHEMA='cmpct-v030-r4-dense-guard-dispatch-referee-v1';REPS=5;POISONS=(0x00,0xA5
 
 class DenseGuardedBuffer(bytearray):
     def __init__(self,fd:int,size:int,anchors:list[dict],poison:int):
-        super().__init__([poison])*size
+        super().__init__([poison] * size)
         self.fd=fd;self.size=size;self.anchors=anchors;self.pages=set();self.ranges=[];self.calls=0;self.poison=poison
     def ensure_page(self,page:int):
         if page in self.pages:return
