@@ -65,10 +65,8 @@ def block_state_bytes(block: dict) -> bytes:
     return bytes(out)
 
 
-def serialize_page(page: int, tokens: list[tuple[int, int, int, int, int, int]], blocks: list[dict]) -> tuple[bytes, dict]:
+def serialize_page(page: int, local: list[tuple[int, int, int, int, int, int]], blocks: list[dict]) -> tuple[bytes, dict]:
     base = page * PAGE
-    end = base + PAGE
-    local = [t for t in tokens if t[0] < end and t[0] + t[1] > base]
     bids = sorted({t[5] for t in local})
     out = bytearray(b"DPG1")
     out += DEP.uvarint(page)
@@ -100,6 +98,25 @@ def serialize_page(page: int, tokens: list[tuple[int, int, int, int, int, int]],
     }
 
 
+def group_tokens_by_page(tokens: list[tuple[int, int, int, int, int, int]], pages: int) -> list[list[tuple[int, int, int, int, int, int]]]:
+    """One pass over tokens; preserve output order within every page.
+
+    DEFLATE copy tokens are at most 258 output bytes, so a token normally touches one page and at
+    most two at a 4 KiB boundary. This avoids an accidental pages*token_count benchmark cost while
+    preserving exactly the same serialized representation and boundary-token duplication.
+    """
+    grouped: list[list[tuple[int, int, int, int, int, int]]] = [[] for _ in range(pages)]
+    for token in tokens:
+        start, length, *_ = token
+        first = start // PAGE
+        last = (start + length - 1) // PAGE
+        if first < 0 or last >= pages:
+            raise RuntimeError("token page outside decoded output")
+        for page in range(first, last + 1):
+            grouped[page].append(token)
+    return grouped
+
+
 def run(work: Path) -> dict:
     shutil.rmtree(work, ignore_errors=True)
     work.mkdir(parents=True)
@@ -121,14 +138,14 @@ def run(work: Path) -> dict:
         raise RuntimeError("token parser mismatch")
 
     pages = math.ceil(len(actual) / PAGE)
-    # Sorting is already output order, so page membership is deterministic. The straightforward
-    # implementation is intentionally transparent; this experiment prices bytes, not builder speed.
-    frames = []
+    page_tokens = group_tokens_by_page(parsed["tokens"], pages)
     total_raw = total_compressed = total_token_desc = total_block_state = total_token_refs = 0
     max_frame = min_frame = None
-    for page in range(pages):
-        raw, stats = serialize_page(page, parsed["tokens"], parsed["blocks"])
+    frame_hash_accumulator = hashlib.sha256()
+    for page, local in enumerate(page_tokens):
+        raw, stats = serialize_page(page, local, parsed["blocks"])
         enc = zlib.compress(raw, 9)
+        frame_hash_accumulator.update(hashlib.sha256(enc).digest())
         total_raw += len(raw)
         total_compressed += len(enc)
         total_token_desc += stats["token_descriptor_bytes"]
@@ -136,7 +153,6 @@ def run(work: Path) -> dict:
         total_token_refs += stats["tokens"]
         max_frame = len(enc) if max_frame is None else max(max_frame, len(enc))
         min_frame = len(enc) if min_frame is None else min(min_frame, len(enc))
-        frames.append((len(raw), len(enc), hashlib.sha256(enc).digest()))
 
     auth_bytes = pages * FRAME_AUTH_BYTES
     directory_bytes = pages * DIRECTORY_RECORD_BYTES
@@ -171,6 +187,7 @@ def run(work: Path) -> dict:
             "stored_sidecar_bytes": framed_sidecar,
             "min_compressed_frame_bytes": min_frame,
             "max_compressed_frame_bytes": max_frame,
+            "frame_digest_accumulator_sha256": frame_hash_accumulator.hexdigest(),
             "whole_sidecar_zlib9_reference_bytes": len(global_reference),
             "addressability_tax_vs_global_zlib9_bytes": framed_sidecar - len(global_reference),
         },
