@@ -5,22 +5,23 @@ from __future__ import annotations
 Mission lock
 ============
 The bounded-window referee preserved the exact physical geometry and recovered 63.4% of the dense
-source-dispatch speedup, but its bit reader still loops once per requested bit.  DEFLATE decoding asks
+source-dispatch speedup, but its bit reader still loops once per requested bit. DEFLATE decoding asks
 for many 1-bit Huffman steps plus bounded extra-bit fields, so Python loop traffic remains a plausible
-runtime debt.  Replace only ``AbsoluteWindowBitReader.read`` with direct little-endian integer loads
-from at most three bytes.  Keep bit offsets, alignment, page windows, 48-bit guard, pread ranges/calls,
+runtime debt. Replace only ``AbsoluteWindowBitReader.read`` with direct little-endian integer loads
+from at most four bytes. Keep bit offsets, alignment, page windows, 48-bit guard, pread ranges/calls,
 reconstruction and requests identical.
 
 Disproof
 ========
-Any byte/range/call/page mismatch rejects semantics.  Timing must improve a majority of probes and the
-median bulk/window ratio must be <1.0 to support the runtime hypothesis.  No representation or release
+Any byte/range/call/page mismatch rejects semantics. Timing must improve a majority of probes and the
+median bulk/window ratio must be <1.0 to support the runtime hypothesis. No representation or release
 credit follows from this synthetic causal test.
 """
 
 import argparse,json,os,statistics,tempfile,time
 from pathlib import Path
 from benchmarks import v030_r4_bounded_token_guard_pread_referee as G
+from benchmarks import v030_r4_deflate_dependency_cone_oracle as CONE
 from benchmarks import v030_r4_deflate_dependency_index_budget as DEP
 from benchmarks import v030_r4_deflate_sparse_anchor_cold_reader as COLD
 from benchmarks import v030_r4_pread_bit_source_referee as SRC
@@ -35,25 +36,19 @@ class BulkBitReader(WINDOW.AbsoluteWindowBitReader):
         byte_abs=self.bit>>3;shift=self.bit&7;idx=byte_abs-self.base_byte
         need=(shift+n+7)>>3
         if idx<0 or idx+need>len(self.data):raise ValueError('guarded local compressed window exhausted')
-        # RFC-1951 fields consumed here never need more than 24 bits. Explicit byte assembly avoids
-        # slices, int.from_bytes allocation and the old per-bit Python loop.
         word=self.data[idx]
         if need>1:word|=self.data[idx+1]<<8
         if need>2:word|=self.data[idx+2]<<16
         if need>3:word|=self.data[idx+3]<<24
-        v=(word>>shift)&((1<<n)-1)
-        self.bit+=n
-        return v
+        v=(word>>shift)&((1<<n)-1);self.bit+=n;return v
 
 class BulkWindowReader(WINDOW.WindowGuardedReader):
     def _decode_page(self,page:int,depth:int)->bytes:
-        # Deliberately mirror the accepted window reader; only BitReader class changes.
         cached=self.page_cache.get(page)
         if cached is not None:return cached
         anchor=self.anchors[page];self.anchor_frames.add(page);page_base=page*COLD.PAGE;page_end=min(page_base+COLD.PAGE,self.output_bytes)
         out_start=anchor['token_start'];out_pos=out_start;local=bytearray();bid=anchor['block_id'];base,window=self.comp.ensure_page(page)
         br=BulkBitReader(window,base,anchor['bit_start']);segment_start=br.bit;tables=self._tables(bid)
-        from benchmarks import v030_r4_deflate_dependency_cone_oracle as CONE
         def finish_segment():
             nonlocal segment_start
             a=segment_start//8;b=(br.bit+7)//8
