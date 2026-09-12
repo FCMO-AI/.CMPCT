@@ -15,10 +15,10 @@ monotone under set inclusion, so if the exact unique transitive closure of every
 bytes. This checks O(N/4096) supersets rather than every byte offset.
 
 Falsifiable hypothesis: all exact Office SFV4 derived streams pass the adjacent-page-pair closure bound,
-while the known exact-unsafe hostile streams (all-zero and repeated-row NPY) are still rejected. Known
-safe ramp and seeded-normal controls should pass. This is a diagnostic referee only; the full byte parent
-graph is forbidden as shipping admission state, and decoded-work success does not gift physical I/O,
-index bytes, authentication, recovery, seeks, or reader implementation cost.
+while the known exact-unsafe hostile streams (all-zero and repeated-row NPY payloads) are still rejected.
+Known safe ramp and seeded-normal controls should pass. This is a diagnostic referee only; the full byte
+parent graph is forbidden as shipping admission state, and decoded-work success does not gift physical
+I/O, index bytes, authentication, recovery, seeks, or reader implementation cost.
 
 Disproof: any Office page pair exceeds 32,768 B; any known unsafe hostile stream passes; or a known safe
 control fails. Preserve that result instead of changing the 8x threshold.
@@ -112,12 +112,35 @@ def run(work: Path) -> dict:
         r = pair_referee(comp, raw)
         office.append({"rel": rel, "compressed_bytes": len(comp), **r})
 
+    # Keep the hostile-control contract explicit and fail closed on inventory drift. The first
+    # page-pair run accidentally used stale *_npy labels while HOSTILE.cases() exposes *_f32 keys,
+    # which misclassified the two known-unsafe controls as expected-safe despite the referee
+    # correctly rejecting them. A changed control inventory must never silently alter the verdict.
+    hostile_cases = HOSTILE.cases()
+    hostile_expectations = {
+        "all_zero_f32": True,
+        "repeated_row_f32": True,
+        "ramp_f32": False,
+        "seeded_normal_f32": False,
+    }
+    if set(hostile_cases) != set(hostile_expectations):
+        raise RuntimeError(
+            "hostile control inventory drift: "
+            f"cases={sorted(hostile_cases)} expected={sorted(hostile_expectations)}"
+        )
+
     controls = []
-    expected_unsafe = {"all_zero_npy", "repeated_row_npy"}
-    for name, raw in HOSTILE.cases().items():
+    for name, raw in hostile_cases.items():
         comp = HOSTILE.raw_deflate(raw)
         r = pair_referee(comp, raw)
-        controls.append({"case": name, "expected_exact_unsafe": name in expected_unsafe, "compressed_bytes": len(comp), **r})
+        controls.append(
+            {
+                "case": name,
+                "expected_exact_unsafe": hostile_expectations[name],
+                "compressed_bytes": len(comp),
+                **r,
+            }
+        )
 
     office_fail = sum(r["pairs_over_8x"] > 0 for r in office)
     unsafe_missed = sum(r["expected_exact_unsafe"] and r["pairs_over_8x"] == 0 for r in controls)
