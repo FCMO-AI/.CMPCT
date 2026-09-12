@@ -7,6 +7,7 @@ on:
   push:
     branches: [agent/v030-authoritative-integration]
     paths:
+      - 'benchmarks/v030_r4_office_serialized_group_directory_v2.py'
       - 'benchmarks/v030_r4_office_serialized_group_directory_referee.py'
       - 'benchmarks/v030_r4_office_three_family_group_locality_referee.py'
       - 'benchmarks/v030_r4_office_slack_derived_group_locality_referee.py'
@@ -49,7 +50,7 @@ jobs:
           test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
           if [ "$EVENT_NAME" = workflow_dispatch ]; then echo run_deep=true >> "$GITHUB_OUTPUT"; exit 0; fi
           git diff-tree --no-commit-id --name-only -r HEAD > /tmp/files
-          if grep -Eq '^(benchmarks/v030_r4_office_serialized_group_directory_referee\.py|benchmarks/v030_r4_office_three_family_group_locality_referee\.py|benchmarks/v030_r4_office_slack_derived_group_locality_referee\.py|benchmarks/v030_r4_office_group_charge_locality_referee\.py|benchmarks/v030_r4_office_gated_seed_superframe_economic_referee\.py|benchmarks/v030_r4_office_gated_page_seed_referee\.py|benchmarks/v030_r4_office_sparse_superframe_economic_referee\.py|benchmarks/v030_r4_office_same_input_sparse_budget_referee\.py|benchmarks/v030_r4_office_page_seed_cold_reader\.py|benchmarks/v030_r4_frozen_v029_product_worker\.py|\.github/workflows/v030-r4-office-serialized-group-directory\.yml)$' /tmp/files; then echo run_deep=true >> "$GITHUB_OUTPUT"; else echo run_deep=false >> "$GITHUB_OUTPUT"; fi
+          if grep -Eq '^(benchmarks/v030_r4_office_serialized_group_directory_v2\.py|benchmarks/v030_r4_office_serialized_group_directory_referee\.py|benchmarks/v030_r4_office_three_family_group_locality_referee\.py|benchmarks/v030_r4_office_slack_derived_group_locality_referee\.py|benchmarks/v030_r4_office_group_charge_locality_referee\.py|benchmarks/v030_r4_office_gated_seed_superframe_economic_referee\.py|benchmarks/v030_r4_office_gated_page_seed_referee\.py|benchmarks/v030_r4_office_sparse_superframe_economic_referee\.py|benchmarks/v030_r4_office_same_input_sparse_budget_referee\.py|benchmarks/v030_r4_office_page_seed_cold_reader\.py|benchmarks/v030_r4_frozen_v029_product_worker\.py|\.github/workflows/v030-r4-office-serialized-group-directory\.yml)$' /tmp/files; then echo run_deep=true >> "$GITHUB_OUTPUT"; else echo run_deep=false >> "$GITHUB_OUTPUT"; fi
 
   serialized-group-directory:
     needs: latest-head-impact
@@ -78,39 +79,43 @@ jobs:
           git cat-file -e "$V029_SHA^{commit}"
           git worktree add --detach "$RUNNER_TEMP/cmpct-v029" "$V029_SHA"
           test "$(git -C "$RUNNER_TEMP/cmpct-v029" rev-parse HEAD)" = "$V029_SHA"
-      - run: python -m py_compile benchmarks/v030_r4_office_serialized_group_directory_referee.py
-      - name: Run serialized group-directory referee
+      - run: python -m py_compile benchmarks/v030_r4_office_serialized_group_directory_referee.py benchmarks/v030_r4_office_serialized_group_directory_v2.py
+      - name: Run root-bound serialized group-directory referee
         run: |
           set -euo pipefail
           mkdir -p benchmark-artifacts
-          python benchmarks/v030_r4_office_serialized_group_directory_referee.py \
-            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/serialized-group-directory-work" \
+          python benchmarks/v030_r4_office_serialized_group_directory_v2.py \
+            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/serialized-group-directory-v2-work" \
             --v029-checkout "$RUNNER_TEMP/cmpct-v029" \
             --worker "$GITHUB_WORKSPACE/benchmarks/v030_r4_frozen_v029_product_worker.py" \
-            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-r4-office-serialized-group-directory.json"
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-r4-office-serialized-group-directory-v2.json"
       - name: Assert receipt integrity, not scientific verdict
         run: |
           python - <<'PY'
           import json,os
-          d=json.load(open('benchmark-artifacts/v030-r4-office-serialized-group-directory.json'))
+          d=json.load(open('benchmark-artifacts/v030-r4-office-serialized-group-directory-v2.json'))
           assert d['source_commit']==os.environ['EVIDENCE_HEAD']
           assert d['frozen_v029']['source_sealed'] and d['frozen_v029']['reconstruction_exact']
           assert d['contract']['actual_os_pread_for_metadata']
           assert d['contract']['primary_and_tail_directory_copies_charged']
           assert d['contract']['footer_root_charged']
+          assert d['contract']['directory_set_bound_to_footer_sha256_root']
+          assert d['contract']['v1_non_authoritative_after_hostile_review']
           assert d['contract']['fixed_group_body_bytes']==644
           assert d['contract']['fixed_limit_bytes']==32768
-          assert d['hostile_controls']['primary_directory_corruption_detected']
-          assert d['hostile_controls']['tail_directory_recovery_exact']
-          assert d['hostile_controls']['group_body_corruption_detected']
-          print(json.dumps({'serialized_store':d['serialized_store'],'selective_directory_charge':d['selective_directory_charge'],'hostile_controls':d['hostile_controls'],'hypothesis':d['hypothesis']},sort_keys=True))
+          h=d['hostile_controls']
+          assert h['primary_directory_set_root_valid'] and h['tail_directory_set_root_valid']
+          assert h['corrupted_primary_set_root_rejected'] and h['tail_recovers_under_same_footer_root']
+          assert h['corrupted_footer_root_rejected_primary'] and h['corrupted_footer_root_rejected_tail']
+          assert h['group_body_corruption_detected']
+          print(json.dumps({'serialized_store':d['serialized_store'],'selective_directory_charge':d['selective_directory_charge'],'hostile_controls':h,'hypothesis':d['hypothesis']},sort_keys=True))
           PY
       - run: python tools/check_ci_topology.py .github/workflows/v030-r4-office-serialized-group-directory.yml
       - uses: actions/upload-artifact@v6
         if: always()
         with:
-          name: v030-r4-office-serialized-group-directory-${{ env.EVIDENCE_HEAD }}
-          path: benchmark-artifacts/v030-r4-office-serialized-group-directory.json
+          name: v030-r4-office-serialized-group-directory-v2-${{ env.EVIDENCE_HEAD }}
+          path: benchmark-artifacts/v030-r4-office-serialized-group-directory-v2.json
           if-no-files-found: error
           retention-days: 90
 
