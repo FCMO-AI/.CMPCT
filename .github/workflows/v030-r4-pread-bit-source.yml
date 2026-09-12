@@ -46,10 +46,12 @@ jobs:
           python - <<'PY'
           import json,os
           d=json.load(open('benchmark-artifacts/v030-r4-pread-bit-source.json'))
+          assert d['schema']=='cmpct-v030-r4-pread-bit-source-referee-v2'
           assert d['source_commit']==os.environ['EVIDENCE_HEAD']
           assert d['contract']['coldreader_code_unchanged']
           assert d['contract']['builder_runtime_separated']
           assert d['contract']['no_refill_sweep']
+          assert d['contract']['timing_is_diagnostic_not_acceptance']
           print(json.dumps({'input':d['input'],'summary':d['summary'],'failures':d['failures'],'hypothesis':d['hypothesis']},sort_keys=True))
           PY
       - name: Persist scientific receipt on integration PR
@@ -59,13 +61,15 @@ jobs:
           python - <<'PY' >/tmp/receipt.md
           import json,os
           d=json.load(open('benchmark-artifacts/v030-r4-pread-bit-source.json'));s=d['summary']
-          print('### v0.30 direct pread BitReader source — exact-head receipt')
+          print('### v0.30 direct pread BitReader source + timing — exact-head receipt')
           print()
           print(f"- head: `{os.environ['EVIDENCE_HEAD']}`")
           print(f"- hypothesis: **{'SUPPORTED' if d['hypothesis']['unchanged_bitreader_consumes_direct_pread_source_exactly'] else 'FALSE'}**")
           print(f"- deterministic raw/compressed/probes: `{d['input']['raw_bytes']}` / `{d['input']['compressed_bytes']}` / `{d['input']['probes']}`")
           print(f"- failures: `{d['failures']}`; max physical payload `{s['max_physical_payload_bytes']} B`; max pread calls `{s['max_pread_calls']}`; max call `{s['max_call_bytes']} B`")
-          print('- existing ColdReader/BitReader code unchanged; 8 B exact-start source only; diagnostic, no product/release credit.')
+          print(f"- resident total CPU/wall: `{s['resident_total_cpu_s']:.6f}` / `{s['resident_total_wall_s']:.6f} s`; direct-pread: `{s['pread_total_cpu_s']:.6f}` / `{s['pread_total_wall_s']:.6f} s`")
+          print(f"- diagnostic slowdown: wall `{s['pread_vs_resident_wall_ratio']:.2f}x`, CPU `{s['pread_vs_resident_cpu_ratio']:.2f}x`")
+          print('- existing ColdReader/BitReader code unchanged; 8 B exact-start source only; timing is hidden-cost evidence, not an acceptance threshold; no product/release credit.')
           PY
           gh pr comment 56 --repo FCMO-AI/.CMPCT --body-file /tmp/receipt.md
       - run: python tools/check_ci_topology.py .github/workflows/v030-r4-pread-bit-source.yml
