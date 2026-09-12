@@ -57,7 +57,7 @@ jobs:
           python - <<'PY'
           import json,os
           d=json.load(open('benchmark-artifacts/v030-r4-office-window-guard-transfer.json'))
-          assert d['schema']=='cmpct-v030-r4-office-window-guard-transfer-v1'
+          assert d['schema']=='cmpct-v030-r4-office-window-guard-transfer-v2'
           assert d['source_commit']==os.environ['EVIDENCE_HEAD']
           assert d['frozen_v7']['candidate_bytes']==5_952_805
           assert d['frozen_v7']['v029_bytes']==5_954_026
@@ -65,7 +65,8 @@ jobs:
           assert d['contract']['same_8x_limit']
           assert d['contract']['actual_os_pread_drives_bit_decoder']
           assert d['contract']['no_archive_sized_compressed_buffer']
-          print(json.dumps({'frozen_v7':d['frozen_v7'],'window_transfer':d['window_transfer'],'hypothesis':d['hypothesis']},sort_keys=True))
+          assert d['contract']['negative_pread8_control_not_prerequisite']
+          print(json.dumps({'frozen_v7':d['frozen_v7'],'baseline_pread8':d['baseline_pread8'],'window_transfer':d['window_transfer'],'hypothesis':d['hypothesis']},sort_keys=True))
           PY
       - name: Persist scientific receipt on integration PR
         env:
@@ -79,6 +80,7 @@ jobs:
           print(f"- head: `{os.environ['EVIDENCE_HEAD']}`")
           print(f"- hypothesis: **{'SUPPORTED' if h['bounded_window_dispatch_transfers_to_frozen_office_v7_under_8x'] else 'FALSE'}**")
           print(f"- frozen candidate: `{d['frozen_v7']['candidate_bytes']} B` vs v0.29 `{d['frozen_v7']['v029_bytes']} B`; density margin `{d['frozen_v7']['density_margin_bytes']} B`")
+          print(f"- preserved pread8 negative control: supported `{b['hypothesis_supported']}`, locality/pair failures `{b['locality_failures']}/{b['pair_failures']}`")
           print(f"- fixed/pair probes: `{w['fixed_requests']}/{w['pair_requests']}`; exact/locality/pair/coverage failures `{w['exact_failures']}/{w['locality_failures']}/{w['pair_failures']}/{w['coverage_failures']}`")
           print(f"- logical -> physical payload across window probes: `{w['total_logical_payload_bytes']}` -> `{w['total_physical_payload_bytes']}` B; delta `{w['physical_minus_logical_bytes']} B`; max live window `{w['max_live_window_bytes']} B`")
           print(f"- worst fixed: `{w['worst_fixed_probe']}`")
