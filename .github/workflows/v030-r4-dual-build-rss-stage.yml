@@ -1,0 +1,120 @@
+# ci-lane: deep
+# ci-pr-scope: latest-head-commit-gate
+# ci-cancel-policy: preserve-running-exact-receipt
+name: CMPCT v0.30 R4 dual-build RSS stage attribution
+
+on:
+  push:
+    branches: [agent/v030-authoritative-integration]
+    paths:
+      - 'benchmarks/v030_r4_dual_build_rss_stage_attribution.py'
+      - '.github/workflows/v030-r4-dual-build-rss-stage.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'benchmarks/v030_r4_dual_build_rss_stage_attribution.py'
+      - '.github/workflows/v030-r4-dual-build-rss-stage.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+
+concurrency:
+  group: cmpct-v030-r4-dual-rss-stage-${{ github.event.pull_request.head.sha || github.sha }}
+  cancel-in-progress: false
+
+jobs:
+  latest-head-impact:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      run_deep: ${{ steps.scope.outputs.run_deep }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 2
+      - id: scope
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then echo 'run_deep=true' >> "$GITHUB_OUTPUT"; exit 0; fi
+          git diff-tree --no-commit-id --name-only -r HEAD > /tmp/latest-head-files.txt
+          if grep -Eq '^(benchmarks/v030_r4_dual_build_rss_stage_attribution\.py|\.github/workflows/v030-r4-dual-build-rss-stage\.yml)$' /tmp/latest-head-files.txt; then echo 'run_deep=true' >> "$GITHUB_OUTPUT"; else echo 'run_deep=false' >> "$GITHUB_OUTPUT"; fi
+
+  rss-stage:
+    needs: latest-head-impact
+    if: needs.latest-head-impact.outputs.run_deep == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install exact corpus dependencies
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y zstd gcc ffmpeg libsndfile1
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[audio,test]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
+      - run: python -m py_compile benchmarks/v030_r4_dual_build_rss_stage_attribution.py
+      - name: Prepare frozen input and relation paths outside measured workers
+        run: |
+          mkdir -p benchmark-artifacts
+          python benchmarks/v030_r4_dual_build_rss_stage_attribution.py \
+            --prepare-only \
+            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-r4-rss-stage-work"
+      - name: Launch isolated stage workers from runner shell
+        shell: bash
+        run: |
+          set -euo pipefail
+          WORK="$GITHUB_WORKSPACE/benchmark-artifacts/v030-r4-rss-stage-work"
+          mkdir -p "$WORK/stage-workers"
+          for mode in runtime tabular_read tabular_parse tabular_encode npz_read stripped_base_build; do
+            python benchmarks/v030_r4_dual_build_rss_stage_attribution.py \
+              --work-root "$WORK" \
+              --worker "$mode" \
+              --worker-out "$WORK/out-$mode" \
+              --worker-json "$WORK/stage-workers/$mode.json"
+          done
+      - name: Aggregate attribution receipt
+        run: |
+          python benchmarks/v030_r4_dual_build_rss_stage_attribution.py \
+            --aggregate \
+            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-r4-rss-stage-work" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-r4-rss-stage.json"
+      - name: Enforce diagnostic provenance
+        run: |
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          d=json.loads(Path('benchmark-artifacts/v030-r4-rss-stage.json').read_text())
+          assert d['schema']=='cmpct-v030-r4-dual-build-rss-stage-attribution-v1'
+          assert d['source_commit']==os.environ['EVIDENCE_HEAD']
+          c=d['contract']; assert c['diagnostic_only'] and not c['release_credit']
+          assert c['fresh_shell_process_per_stage'] and c['preparation_unmeasured'] and c['no_memory_threshold_sweep']
+          print(json.dumps({'stages':d['fresh_process_stages'],'qualifying':d['qualifying_primary_owner_stages'],'classification':d['classification']},sort_keys=True))
+          PY
+      - run: python tools/check_ci_topology.py .github/workflows/v030-r4-dual-build-rss-stage.yml
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: v030-r4-dual-rss-stage-${{ env.EVIDENCE_HEAD }}
+          path: benchmark-artifacts/v030-r4-rss-stage.json
+          if-no-files-found: error
+          retention-days: 90
+
+# Attribution diagnostic only. Green means receipt integrity, not a memory-budget pass.
