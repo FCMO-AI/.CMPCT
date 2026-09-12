@@ -1,0 +1,137 @@
+# ci-lane: deep
+# ci-pr-scope: latest-head-commit-gate
+# ci-cancel-policy: preserve-running-exact-receipt
+name: CMPCT v0.30 R4 budgeted restart locality
+
+on:
+  push:
+    branches: [agent/v030-authoritative-integration]
+    paths:
+      - 'benchmarks/v030_r4_npz_owner_budgeted_restart_locality.py'
+      - 'benchmarks/v030_r4_npz_owner_restart_locality.py'
+      - 'benchmarks/v030_r4_analytics_dual_owner_oracle.py'
+      - 'benchmarks/v030_r4_npz_mode2_owner_inversion.py'
+      - 'benchmarks/mosaic_v029_generalization_bench.py'
+      - 'benchmarks/neutral_hostile_corpus_v1.py'
+      - 'benchmarks/neutral_hostile_determinism_repair_v*.py'
+      - 'experiments/entropygraph_v030_release_product*.py'
+      - 'src/cmpct/**'
+      - '.github/workflows/v030-r4-npz-owner-budgeted-restart-locality.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'benchmarks/v030_r4_npz_owner_budgeted_restart_locality.py'
+      - 'benchmarks/v030_r4_npz_owner_restart_locality.py'
+      - 'benchmarks/v030_r4_analytics_dual_owner_oracle.py'
+      - 'benchmarks/v030_r4_npz_mode2_owner_inversion.py'
+      - 'benchmarks/mosaic_v029_generalization_bench.py'
+      - 'benchmarks/neutral_hostile_corpus_v1.py'
+      - 'benchmarks/neutral_hostile_determinism_repair_v*.py'
+      - 'experiments/entropygraph_v030_release_product*.py'
+      - 'src/cmpct/**'
+      - '.github/workflows/v030-r4-npz-owner-budgeted-restart-locality.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+
+concurrency:
+  group: cmpct-v030-r4-budgeted-restart-${{ github.event.pull_request.head.sha || github.sha }}
+  cancel-in-progress: false
+
+jobs:
+  latest-head-impact:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      run_deep: ${{ steps.scope.outputs.run_deep }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 2
+      - id: scope
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then echo 'run_deep=true' >> "$GITHUB_OUTPUT"; exit 0; fi
+          git diff-tree --no-commit-id --name-only -r HEAD > /tmp/latest-head-files.txt
+          if grep -Eq '^(benchmarks/v030_r4_(npz_owner_budgeted_restart_locality|npz_owner_restart_locality|analytics_dual_owner_oracle|npz_mode2_owner_inversion)\.py|benchmarks/mosaic_v029_generalization_bench\.py|benchmarks/(neutral_hostile_corpus_v1|neutral_hostile_determinism_repair_v[^/]*)\.py|experiments/entropygraph_v030_release_product[^/]*\.py|src/cmpct/.*|\.github/workflows/v030-r4-npz-owner-budgeted-restart-locality\.yml)$' /tmp/latest-head-files.txt; then echo 'run_deep=true' >> "$GITHUB_OUTPUT"; else echo 'run_deep=false' >> "$GITHUB_OUTPUT"; fi
+
+  budgeted-restart:
+    needs: latest-head-impact
+    if: needs.latest-head-impact.outputs.run_deep == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install exact corpus dependencies
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y zstd gcc ffmpeg libsndfile1
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[audio,test]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
+      - name: Compile budgeted restart falsifier
+        run: |
+          python -m py_compile \
+            benchmarks/v030_r4_npz_owner_budgeted_restart_locality.py \
+            benchmarks/v030_r4_npz_owner_restart_locality.py
+      - name: Run exact budget-driven restart falsifier
+        run: |
+          mkdir -p benchmark-artifacts
+          python benchmarks/v030_r4_npz_owner_budgeted_restart_locality.py \
+            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-r4-budgeted-restart-work" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-r4-budgeted-restart.json"
+      - name: Enforce evidence contract, not scientific promotion
+        run: |
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          d=json.loads(Path('benchmark-artifacts/v030-r4-budgeted-restart.json').read_text())
+          assert d['schema']=='cmpct-v030-r4-npz-owner-budgeted-restart-locality-v1'
+          assert d['source_commit']==os.environ['EVIDENCE_HEAD']
+          c=d['contract']
+          assert c['diagnostic_only'] and not c['release_credit']
+          assert not c['production_format_changed'] and not c['production_selector_changed']
+          assert c['no_span_sweep'] and c['candidate_lattice_equals_request_size']
+          assert c['placement_uses_locality_budget_not_size_outcome'] and c['all_selected_histories_fully_charged']
+          assert c['every_service_region_endpoint_verified']
+          print(json.dumps({
+            'npz_owner_bytes':d['npz_owner_bytes'],
+            'candidate_restart_points':d['candidate_restart_points'],
+            'selected_restart_points':d['selected_restart_points'],
+            'restart_state_bytes':d['restart_state_bytes'],
+            'candidate_bytes':d['candidate_bytes'],
+            'accepted_v029_bytes':d['accepted_v029_bytes'],
+            'margin_vs_v029_bytes':d['margin_vs_v029_bytes'],
+            'restart_state':d['restart_state'],
+            'max_physical_amplification':d['max_physical_amplification'],
+            'max_reconstruction_amplification':d['max_reconstruction_amplification'],
+            'hypothesis':d['hypothesis']
+          },sort_keys=True))
+          PY
+      - run: python tools/check_ci_topology.py .github/workflows/v030-r4-npz-owner-budgeted-restart-locality.yml
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: v030-r4-budgeted-restart-${{ env.EVIDENCE_HEAD }}
+          path: benchmark-artifacts/v030-r4-budgeted-restart.json
+          if-no-files-found: error
+          retention-days: 90
+
+# Research-only budget-driven restart falsifier. Green means receipt integrity, not promotion.
