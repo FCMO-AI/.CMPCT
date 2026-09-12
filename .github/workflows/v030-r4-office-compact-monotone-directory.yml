@@ -7,6 +7,7 @@ on:
   push:
     branches: [agent/v030-authoritative-integration]
     paths:
+      - 'benchmarks/v030_r4_office_compact_monotone_directory_v3.py'
       - 'benchmarks/v030_r4_office_compact_monotone_directory_v2.py'
       - 'benchmarks/v030_r4_office_compact_monotone_directory_referee.py'
       - 'benchmarks/v030_r4_office_three_family_group_locality_referee.py'
@@ -51,7 +52,7 @@ jobs:
           test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
           if [ "$EVENT_NAME" = workflow_dispatch ]; then echo run_deep=true >> "$GITHUB_OUTPUT"; exit 0; fi
           git diff-tree --no-commit-id --name-only -r HEAD > /tmp/files
-          if grep -Eq '^(benchmarks/v030_r4_office_compact_monotone_directory_v2\.py|benchmarks/v030_r4_office_compact_monotone_directory_referee\.py|benchmarks/v030_r4_office_three_family_group_locality_referee\.py|benchmarks/v030_r4_office_serialized_group_directory_referee\.py|benchmarks/v030_r4_office_slack_derived_group_locality_referee\.py|benchmarks/v030_r4_office_group_charge_locality_referee\.py|benchmarks/v030_r4_office_gated_seed_superframe_economic_referee\.py|benchmarks/v030_r4_office_gated_page_seed_referee\.py|benchmarks/v030_r4_office_sparse_superframe_economic_referee\.py|benchmarks/v030_r4_office_same_input_sparse_budget_referee\.py|benchmarks/v030_r4_office_page_seed_cold_reader\.py|benchmarks/v030_r4_frozen_v029_product_worker\.py|\.github/workflows/v030-r4-office-compact-monotone-directory\.yml)$' /tmp/files; then echo run_deep=true >> "$GITHUB_OUTPUT"; else echo run_deep=false >> "$GITHUB_OUTPUT"; fi
+          if grep -Eq '^(benchmarks/v030_r4_office_compact_monotone_directory_v3\.py|benchmarks/v030_r4_office_compact_monotone_directory_v2\.py|benchmarks/v030_r4_office_compact_monotone_directory_referee\.py|benchmarks/v030_r4_office_three_family_group_locality_referee\.py|benchmarks/v030_r4_office_serialized_group_directory_referee\.py|benchmarks/v030_r4_office_slack_derived_group_locality_referee\.py|benchmarks/v030_r4_office_group_charge_locality_referee\.py|benchmarks/v030_r4_office_gated_seed_superframe_economic_referee\.py|benchmarks/v030_r4_office_gated_page_seed_referee\.py|benchmarks/v030_r4_office_sparse_superframe_economic_referee\.py|benchmarks/v030_r4_office_same_input_sparse_budget_referee\.py|benchmarks/v030_r4_office_page_seed_cold_reader\.py|benchmarks/v030_r4_frozen_v029_product_worker\.py|\.github/workflows/v030-r4-office-compact-monotone-directory\.yml)$' /tmp/files; then echo run_deep=true >> "$GITHUB_OUTPUT"; else echo run_deep=false >> "$GITHUB_OUTPUT"; fi
 
   compact-monotone-locator:
     needs: latest-head-impact
@@ -80,21 +81,21 @@ jobs:
           git cat-file -e "$V029_SHA^{commit}"
           git worktree add --detach "$RUNNER_TEMP/cmpct-v029" "$V029_SHA"
           test "$(git -C "$RUNNER_TEMP/cmpct-v029" rev-parse HEAD)" = "$V029_SHA"
-      - run: python -m py_compile benchmarks/v030_r4_office_compact_monotone_directory_referee.py benchmarks/v030_r4_office_compact_monotone_directory_v2.py
-      - name: Run hostile-reviewed compact monotone locator referee
+      - run: python -m py_compile benchmarks/v030_r4_office_compact_monotone_directory_referee.py benchmarks/v030_r4_office_compact_monotone_directory_v2.py benchmarks/v030_r4_office_compact_monotone_directory_v3.py
+      - name: Run resource-bounded hostile-reviewed compact monotone locator referee
         run: |
           set -euo pipefail
           mkdir -p benchmark-artifacts
-          python benchmarks/v030_r4_office_compact_monotone_directory_v2.py \
-            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/compact-monotone-v2-work" \
+          python benchmarks/v030_r4_office_compact_monotone_directory_v3.py \
+            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/compact-monotone-v3-work" \
             --v029-checkout "$RUNNER_TEMP/cmpct-v029" \
             --worker "$GITHUB_WORKSPACE/benchmarks/v030_r4_frozen_v029_product_worker.py" \
-            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-r4-office-compact-monotone-directory-v2.json"
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-r4-office-compact-monotone-directory-v3.json"
       - name: Assert receipt integrity, not scientific verdict
         run: |
           python - <<'PY'
           import json,os
-          d=json.load(open('benchmark-artifacts/v030-r4-office-compact-monotone-directory-v2.json'))
+          d=json.load(open('benchmark-artifacts/v030-r4-office-compact-monotone-directory-v3.json'))
           assert d['source_commit']==os.environ['EVIDENCE_HEAD']
           assert d['frozen_v029']['source_sealed'] and d['frozen_v029']['reconstruction_exact']
           assert d['contract']['same_644b_groups'] and d['contract']['same_group_bytes']
@@ -103,21 +104,27 @@ jobs:
           assert d['contract']['primary_tail_recovery_copy_charged']
           assert d['contract']['v1_non_authoritative_after_hostile_review']
           assert d['contract']['corrupted_footer_root_must_fail_closed']
+          assert d['contract']['v2_non_authoritative_after_resource_hostile_review']
+          assert d['contract']['locator_expansion_must_be_bounded_before_full_materialization']
           assert d['contract']['fixed_limit_bytes']==32768
+          assert d['resource_bounds']['max_locator_raw_bytes']==1048576
+          assert d['resource_bounds']['bounded_output_request_bytes']==1048577
           h=d['hostile_controls']
           assert h['primary_locator_corruption_rejected']
           assert h['tail_locator_recovery_under_same_root']
           assert h['group_body_corruption_detected']
           assert h['corrupted_footer_root_rejects_primary']
           assert h['corrupted_footer_root_rejects_tail']
-          print(json.dumps({'compact_locator':d['compact_locator'],'selective_read':d['selective_read'],'hostile_controls':h,'hypothesis':d['hypothesis']},sort_keys=True))
+          assert h['over_limit_locator_expansion_rejected_before_unbounded_output']
+          assert h['concatenated_trailing_locator_stream_rejected']
+          print(json.dumps({'compact_locator':d['compact_locator'],'selective_read':d['selective_read'],'hostile_controls':h,'resource_bounds':d['resource_bounds'],'hypothesis':d['hypothesis']},sort_keys=True))
           PY
       - run: python tools/check_ci_topology.py .github/workflows/v030-r4-office-compact-monotone-directory.yml
       - uses: actions/upload-artifact@v6
         if: always()
         with:
-          name: v030-r4-office-compact-monotone-directory-v2-${{ env.EVIDENCE_HEAD }}
-          path: benchmark-artifacts/v030-r4-office-compact-monotone-directory-v2.json
+          name: v030-r4-office-compact-monotone-directory-v3-${{ env.EVIDENCE_HEAD }}
+          path: benchmark-artifacts/v030-r4-office-compact-monotone-directory-v3.json
           if-no-files-found: error
           retention-days: 90
 
