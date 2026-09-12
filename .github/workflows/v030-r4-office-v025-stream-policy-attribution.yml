@@ -30,7 +30,9 @@ jobs:
       run_deep: ${{ steps.scope.outputs.run_deep }}
     steps:
       - uses: actions/checkout@v6
-        with: {ref: '${{ env.EVIDENCE_HEAD }}', fetch-depth: 2}
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 2
       - id: scope
         env: {EVENT_NAME: '${{ github.event_name }}'}
         run: |
@@ -47,7 +49,9 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v6
-        with: {ref: '${{ env.EVIDENCE_HEAD }}', fetch-depth: 2}
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 2
       - run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
       - uses: actions/setup-python@v6
         with: {python-version: '3.11', cache: pip}
