@@ -14,6 +14,16 @@ on:
       - 'benchmarks/neutral_hostile_corpus_v1.py'
       - 'benchmarks/neutral_hostile_determinism_repair_v*.py'
       - '.github/workflows/v030-r4-analytics-rss-attribution.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'benchmarks/v030_r4_analytics_rss_attribution.py'
+      - 'benchmarks/v030_r4_analytics_dual_owner_oracle.py'
+      - 'experiments/entropygraph_v030_release_product.py'
+      - 'benchmarks/mosaic_v029_generalization_bench.py'
+      - 'benchmarks/neutral_hostile_corpus_v1.py'
+      - 'benchmarks/neutral_hostile_determinism_repair_v*.py'
+      - '.github/workflows/v030-r4-analytics-rss-attribution.yml'
   workflow_dispatch:
 
 permissions:
@@ -21,10 +31,10 @@ permissions:
 
 env:
   PYTHONPATH: ${{ github.workspace }}
-  EVIDENCE_HEAD: ${{ github.sha }}
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
 
 concurrency:
-  group: cmpct-v030-r4-analytics-rss-${{ github.sha }}
+  group: cmpct-v030-r4-analytics-rss-${{ github.event.pull_request.head.sha || github.sha }}
   cancel-in-progress: false
 
 jobs:
@@ -35,13 +45,18 @@ jobs:
       run_deep: ${{ steps.scope.outputs.run_deep }}
     steps:
       - uses: actions/checkout@v6
-        with: {ref: '${{ env.EVIDENCE_HEAD }}', fetch-depth: 2}
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 2
       - id: scope
+        env:
+          EVENT_NAME: ${{ github.event_name }}
         run: |
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
-          git diff-tree --no-commit-id --name-only -r HEAD > /tmp/files
-          if grep -Eq '^(benchmarks/v030_r4_analytics_rss_attribution\.py|\.github/workflows/v030-r4-analytics-rss-attribution\.yml)$' /tmp/files; then echo 'run_deep=true' >> "$GITHUB_OUTPUT"; else echo 'run_deep=false' >> "$GITHUB_OUTPUT"; fi
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then echo 'run_deep=true' >> "$GITHUB_OUTPUT"; exit 0; fi
+          git diff-tree --no-commit-id --name-only -r HEAD > /tmp/latest-head-files.txt
+          if grep -Eq '^(benchmarks/v030_r4_analytics_rss_attribution\.py|\.github/workflows/v030-r4-analytics-rss-attribution\.yml)$' /tmp/latest-head-files.txt; then echo 'run_deep=true' >> "$GITHUB_OUTPUT"; else echo 'run_deep=false' >> "$GITHUB_OUTPUT"; fi
 
   rss-attribution:
     needs: latest-head-impact
@@ -50,10 +65,13 @@ jobs:
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v6
-        with: {ref: '${{ env.EVIDENCE_HEAD }}'}
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
       - run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
       - uses: actions/setup-python@v6
-        with: {python-version: '3.11', cache: pip}
+        with:
+          python-version: '3.11'
+          cache: pip
       - name: Install exact corpus dependencies
         run: |
           set -euo pipefail
@@ -63,21 +81,47 @@ jobs:
           python -m pip install -e '.[audio,test]'
           python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
       - run: python -m py_compile benchmarks/v030_r4_analytics_rss_attribution.py
-      - name: Run fresh-process attribution
+      - name: Prepare frozen Analytics input outside measured workers
         run: |
           mkdir -p benchmark-artifacts
-          python benchmarks/v030_r4_analytics_rss_attribution.py --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-r4-rss-work" --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-r4-rss-attribution.json"
+          python benchmarks/v030_r4_analytics_rss_attribution.py \
+            --prepare-only \
+            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-r4-rss-work"
+      - name: Launch each measured operation from runner shell
+        shell: bash
+        run: |
+          set -euo pipefail
+          WORK="$GITHUB_WORKSPACE/benchmark-artifacts/v030-r4-rss-work"
+          SOURCE="$WORK/neutral/04_analytics_and_database"
+          CANDIDATE="$WORK/dual-candidate"
+          mkdir -p "$WORK/rss-workers"
+          for mode in runtime product_import dual_import v030_build dual_build dual_extract; do
+            python benchmarks/v030_r4_analytics_rss_attribution.py \
+              --worker "$mode" \
+              --source "$SOURCE" \
+              --worker-out "$WORK/worker-$mode" \
+              --candidate "$CANDIDATE" \
+              --worker-json "$WORK/rss-workers/$mode.json"
+          done
+      - name: Aggregate isolated receipts
+        run: |
+          python benchmarks/v030_r4_analytics_rss_attribution.py \
+            --aggregate \
+            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-r4-rss-work" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-r4-rss-attribution.json"
       - name: Enforce diagnostic provenance
         run: |
           python - <<'PY'
           import json, os
           from pathlib import Path
           d=json.loads(Path('benchmark-artifacts/v030-r4-rss-attribution.json').read_text())
-          assert d['schema']=='cmpct-v030-r4-analytics-rss-attribution-v1'
+          assert d['schema']=='cmpct-v030-r4-analytics-rss-attribution-v2'
           assert d['source_commit']==os.environ['EVIDENCE_HEAD']
-          assert d['contract']['diagnostic_only'] and not d['contract']['release_credit']
-          assert d['contract']['fresh_process_per_operation'] and d['contract']['corpus_generation_outside_measured_workers']
-          print(json.dumps({'fresh_process':d['fresh_process'],'max_fresh_product_operation_rss_kib':d['max_fresh_product_operation_rss_kib'],'max_fresh_to_monolithic_ratio':d['max_fresh_to_monolithic_ratio'],'interpretation':d['interpretation']},sort_keys=True))
+          c=d['contract']
+          assert c['diagnostic_only'] and not c['release_credit']
+          assert c['fresh_process_per_operation'] and c['corpus_generation_outside_measured_workers']
+          assert c['workers_launched_independently_from_runner_shell']
+          print(json.dumps({'fresh_process':d['fresh_process'],'runtime_peak_rss_kib':d['runtime_peak_rss_kib'],'max_fresh_product_operation_rss_kib':d['max_fresh_product_operation_rss_kib'],'max_fresh_minus_runtime_peak_kib_diagnostic_only':d['max_fresh_minus_runtime_peak_kib_diagnostic_only'],'max_fresh_to_monolithic_ratio':d['max_fresh_to_monolithic_ratio'],'interpretation':d['interpretation']},sort_keys=True))
           PY
       - run: python tools/check_ci_topology.py .github/workflows/v030-r4-analytics-rss-attribution.yml
       - uses: actions/upload-artifact@v6
