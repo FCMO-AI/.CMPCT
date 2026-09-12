@@ -1,0 +1,98 @@
+# ci-lane: deep
+# ci-cancel-policy: preserve-running-exact-receipt
+name: CMPCT v0.30 Office bounded window transfer
+on:
+  push:
+    branches: [agent/v030-authoritative-integration]
+    paths:
+      - 'benchmarks/v030_r4_office_window_guard_transfer_referee.py'
+      - '.github/workflows/v030-r4-office-window-guard-transfer.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+env:
+  PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.sha }}
+  V029_SHA: 02b8b27cb2d97af7c6e0797984a898e8fa8a8e5d
+concurrency:
+  group: cmpct-v030-r4-office-window-${{ github.sha }}
+  cancel-in-progress: false
+jobs:
+  office-window-transfer:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 85
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 0
+      - run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+      - uses: actions/setup-python@v6
+        with: {python-version: '3.11', cache: pip}
+      - name: Install exact research dependencies
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y zstd gcc ffmpeg libsndfile1
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[audio,test]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx msgpack zstandard
+      - name: Prepare frozen v0.29 checkout
+        run: |
+          git worktree add --detach "$RUNNER_TEMP/cmpct-v029" "$V029_SHA"
+          test "$(git -C "$RUNNER_TEMP/cmpct-v029" rev-parse HEAD)" = "$V029_SHA"
+      - run: python -m py_compile benchmarks/v030_r4_office_window_guard_transfer_referee.py
+      - name: Run Office bounded-window transfer referee
+        run: |
+          mkdir -p benchmark-artifacts
+          python benchmarks/v030_r4_office_window_guard_transfer_referee.py \
+            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-r4-office-window-work" \
+            --v029-checkout "$RUNNER_TEMP/cmpct-v029" \
+            --worker "$GITHUB_WORKSPACE/benchmarks/v030_r4_frozen_v029_product_worker.py" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-r4-office-window-guard-transfer.json"
+      - name: Assert receipt integrity, not scientific verdict
+        run: |
+          python - <<'PY'
+          import json,os
+          d=json.load(open('benchmark-artifacts/v030-r4-office-window-guard-transfer.json'))
+          assert d['schema']=='cmpct-v030-r4-office-window-guard-transfer-v1'
+          assert d['source_commit']==os.environ['EVIDENCE_HEAD']
+          assert d['frozen_v7']['candidate_bytes']==5_952_805
+          assert d['frozen_v7']['v029_bytes']==5_954_026
+          assert d['contract']['candidate_bytes_unchanged']
+          assert d['contract']['same_8x_limit']
+          assert d['contract']['actual_os_pread_drives_bit_decoder']
+          assert d['contract']['no_archive_sized_compressed_buffer']
+          print(json.dumps({'frozen_v7':d['frozen_v7'],'window_transfer':d['window_transfer'],'hypothesis':d['hypothesis']},sort_keys=True))
+          PY
+      - name: Persist scientific receipt on integration PR
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python - <<'PY' >/tmp/receipt.md
+          import json,os
+          d=json.load(open('benchmark-artifacts/v030-r4-office-window-guard-transfer.json'));w=d['window_transfer'];h=d['hypothesis'];b=d['baseline_pread8']
+          print('### v0.30 Office bounded local-window transfer — exact-head receipt')
+          print()
+          print(f"- head: `{os.environ['EVIDENCE_HEAD']}`")
+          print(f"- hypothesis: **{'SUPPORTED' if h['bounded_window_dispatch_transfers_to_frozen_office_v7_under_8x'] else 'FALSE'}**")
+          print(f"- frozen candidate: `{d['frozen_v7']['candidate_bytes']} B` vs v0.29 `{d['frozen_v7']['v029_bytes']} B`; density margin `{d['frozen_v7']['density_margin_bytes']} B`")
+          print(f"- fixed/pair probes: `{w['fixed_requests']}/{w['pair_requests']}`; exact/locality/pair/coverage failures `{w['exact_failures']}/{w['locality_failures']}/{w['pair_failures']}/{w['coverage_failures']}`")
+          print(f"- logical -> physical payload across window probes: `{w['total_logical_payload_bytes']}` -> `{w['total_physical_payload_bytes']}` B; delta `{w['physical_minus_logical_bytes']} B`; max live window `{w['max_live_window_bytes']} B`")
+          print(f"- worst fixed: `{w['worst_fixed_probe']}`")
+          print(f"- worst pair: `{w['worst_page_pair']}`")
+          print(f"- pread8 reference payload: logical `{b['total_logical_payload_bytes']}` -> physical `{b['total_physical_payload_bytes']}` B, calls `{b['total_pread_calls']}`")
+          print('- actual os.pread bytes drive the bit decoder; same 644 B metadata groups, seed selector, locator/root charge and 8x law. No release credit.')
+          PY
+          gh pr comment 56 --repo FCMO-AI/.CMPCT --body-file /tmp/receipt.md
+      - run: python tools/check_ci_topology.py .github/workflows/v030-r4-office-window-guard-transfer.yml
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: v030-r4-office-window-guard-transfer-${{ env.EVIDENCE_HEAD }}
+          path: benchmark-artifacts/v030-r4-office-window-guard-transfer.json
+          if-no-files-found: error
+          retention-days: 90
+# Green means receipt integrity; JSON owns the scientific verdict.
