@@ -1,6 +1,7 @@
 # ci-lane: deep
 # ci-pr-scope: latest-head-commit-gate
 # ci-cancel-policy: preserve-running-exact-receipt
+# exact-head reactivation: 2026-09-12 post-Genesis v0.30 primary line
 name: CMPCT v0.30 Analytics v0.29 effort frontier
 
 on:
