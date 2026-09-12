@@ -1,6 +1,7 @@
 # ci-lane: deep
 # ci-pr-scope: latest-head-commit-gate
 # ci-cancel-policy: preserve-running-exact-receipt
+# receipt-activation: workflow existed before this exact-head push
 name: CMPCT v0.30 R4 Office whole-superframe locality
 
 on:
