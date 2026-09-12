@@ -8,6 +8,13 @@ on:
     branches: [agent/v030-authoritative-integration]
     paths:
       - 'benchmarks/v030_r4_office_gated_page_seed_referee.py'
+      - 'benchmarks/v030_r4_office_sparse_superframe_economic_referee.py'
+      - 'benchmarks/v030_r4_office_same_input_sparse_budget_referee.py'
+      - 'benchmarks/v030_r4_office_page_seed_cold_reader.py'
+      - 'benchmarks/v030_r4_office_sparse_anchor_cold_reader_transfer.py'
+      - 'benchmarks/v030_r4_deflate_sparse_anchor_cold_reader.py'
+      - 'benchmarks/v030_r4_deflate_dependency_index_budget.py'
+      - 'benchmarks/v030_r4_frozen_v029_product_worker.py'
       - '.github/workflows/v030-r4-office-gated-page-seed.yml'
   workflow_dispatch:
 
@@ -41,7 +48,7 @@ jobs:
           test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
           if [ "$EVENT_NAME" = workflow_dispatch ]; then echo run_deep=true >> "$GITHUB_OUTPUT"; exit 0; fi
           git diff-tree --no-commit-id --name-only -r HEAD > /tmp/files
-          if grep -Eq '^(benchmarks/v030_r4_office_gated_page_seed_referee\.py|\.github/workflows/v030-r4-office-gated-page-seed\.yml)$' /tmp/files; then echo run_deep=true >> "$GITHUB_OUTPUT"; else echo run_deep=false >> "$GITHUB_OUTPUT"; fi
+          if grep -Eq '^(benchmarks/v030_r4_office_gated_page_seed_referee\.py|benchmarks/v030_r4_office_sparse_superframe_economic_referee\.py|benchmarks/v030_r4_office_same_input_sparse_budget_referee\.py|benchmarks/v030_r4_office_page_seed_cold_reader\.py|benchmarks/v030_r4_office_sparse_anchor_cold_reader_transfer\.py|benchmarks/v030_r4_deflate_sparse_anchor_cold_reader\.py|benchmarks/v030_r4_deflate_dependency_index_budget\.py|benchmarks/v030_r4_frozen_v029_product_worker\.py|\.github/workflows/v030-r4-office-gated-page-seed\.yml)$' /tmp/files; then echo run_deep=true >> "$GITHUB_OUTPUT"; else echo run_deep=false >> "$GITHUB_OUTPUT"; fi
 
   gated-page-seed:
     needs: latest-head-impact
