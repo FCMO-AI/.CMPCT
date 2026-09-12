@@ -6,6 +6,7 @@ on:
     branches: [agent/v030-authoritative-integration]
     paths:
       - 'benchmarks/v030_r4_capped_token_dependency_certificate.py'
+      - 'benchmarks/v030_r4_capped_token_dependency_certificate_v2.py'
       - '.github/workflows/v030-r4-capped-token-certificate.yml'
   workflow_dispatch:
 permissions:
@@ -37,31 +38,32 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -e '.[audio,test]'
           python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
-      - run: python -m py_compile benchmarks/v030_r4_capped_token_dependency_certificate.py
-      - name: Run bounded token certificate referee
+      - run: python -m py_compile benchmarks/v030_r4_capped_token_dependency_certificate.py benchmarks/v030_r4_capped_token_dependency_certificate_v2.py
+      - name: Run resource-tight bounded token certificate referee
         run: |
           set -euo pipefail
           mkdir -p benchmark-artifacts
-          python benchmarks/v030_r4_capped_token_dependency_certificate.py \
-            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-r4-capped-token-work" \
-            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-r4-capped-token.json"
+          python benchmarks/v030_r4_capped_token_dependency_certificate_v2.py \
+            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-r4-capped-token-v2-work" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-r4-capped-token-v2.json"
           python - <<'PY'
           import json, os
-          d=json.load(open('benchmark-artifacts/v030-r4-capped-token.json'))
-          assert d['schema']=='cmpct-v030-r4-capped-token-dependency-certificate-v1'
+          d=json.load(open('benchmark-artifacts/v030-r4-capped-token-v2.json'))
+          assert d['schema']=='cmpct-v030-r4-capped-token-dependency-certificate-v2'
           assert d['source_commit']==os.environ['EVIDENCE_HEAD']
           c=d['contract']
           assert c['diagnostic_only'] and not c['release_credit'] and c['frozen_8x_limit']
           assert not c['candidate_retains_per_decoded_byte_parent_graph']
           assert c['exact_parent_graph_used_only_as_referee'] and not c['product_admission_authorized']
+          assert c['candidate_query_position_state_is_only_capped_seen_set']
           print(json.dumps({'summary':d['summary'],'hypothesis':d['hypothesis']},sort_keys=True))
           PY
       - run: python tools/check_ci_topology.py .github/workflows/v030-r4-capped-token-certificate.yml
       - uses: actions/upload-artifact@v6
         if: always()
         with:
-          name: v030-r4-capped-token-certificate-${{ env.EVIDENCE_HEAD }}
-          path: benchmark-artifacts/v030-r4-capped-token.json
+          name: v030-r4-capped-token-certificate-v2-${{ env.EVIDENCE_HEAD }}
+          path: benchmark-artifacts/v030-r4-capped-token-v2.json
           if-no-files-found: error
           retention-days: 90
 # Green means the referee completed. Scientific PASS/FAIL lives in the artifact hypothesis.
