@@ -3,6 +3,8 @@ from __future__ import annotations
 """Genesis15 transfer referee for locality-derived r24 micro-packing.
 
 Research-only. Does not rerun/rescore frozen ONE/v0.29/v0.30 contenders.
+When full regeneration drifts, exact-matching frozen rows may still be measured as a
+sealed diagnostic subset, but the full Genesis15 experiment remains invalid.
 """
 
 import argparse
@@ -65,44 +67,93 @@ def _seal_rows(root: Path) -> tuple[dict[tuple[str, str], Path], list[dict]]:
     return paths, rows
 
 
+def _summarize(rows: dict[str, dict]) -> dict:
+    if not rows:
+        return {
+            "same_grammar_independent_bytes": 0,
+            "same_grammar_derived_bytes": 0,
+            "delta_bytes": 0,
+            "delta_pct": 0.0,
+            "grouped_wins": 0,
+            "zero_group_ties": 0,
+            "economic_failures": 0,
+            "invariant_failures": 0,
+            "max_member_amplification": 0.0,
+            "max_decode_unit_bytes": 0,
+            "independent_build_cpu_s_sum": 0.0,
+            "derived_build_cpu_s_sum": 0.0,
+            "independent_build_wall_s_sum": 0.0,
+            "derived_build_wall_s_sum": 0.0,
+        }
+    independent_total = sum(int(r["same_grammar_independent_bytes"]) for r in rows.values())
+    derived_total = sum(int(r["same_grammar_derived_bytes"]) for r in rows.values())
+    delta = derived_total - independent_total
+    return {
+        "same_grammar_independent_bytes": independent_total,
+        "same_grammar_derived_bytes": derived_total,
+        "delta_bytes": delta,
+        "delta_pct": (delta / independent_total * 100.0) if independent_total else 0.0,
+        "grouped_wins": sum(1 for r in rows.values() if r["derived_group_count"] > 0 and r["same_grammar_delta_bytes"] < 0),
+        "zero_group_ties": sum(1 for r in rows.values() if r["derived_group_count"] == 0 and r["same_grammar_delta_bytes"] == 0),
+        "economic_failures": sum(1 for r in rows.values() if not r["economic_pass"]),
+        "invariant_failures": sum(1 for r in rows.values() if not r["invariants_pass"]),
+        "max_member_amplification": max(float(r["max_member_amplification"]) for r in rows.values()),
+        "max_decode_unit_bytes": max(int(r["max_decode_unit_bytes"]) for r in rows.values()),
+        "independent_build_cpu_s_sum": sum(float(r["independent_build_cpu_s"]) for r in rows.values()),
+        "derived_build_cpu_s_sum": sum(float(r["derived_build_cpu_s"]) for r in rows.values()),
+        "independent_build_wall_s_sum": sum(float(r["independent_build_wall_s"]) for r in rows.values()),
+        "derived_build_wall_s_sum": sum(float(r["derived_build_wall_s"]) for r in rows.values()),
+    }
+
+
+def _measure(paths: dict[tuple[str, str], Path], identities: list[tuple[str, str]], work_root: Path) -> dict[str, dict]:
+    rows: dict[str, dict] = {}
+    for suite, name in identities:
+        key = f"{suite}/{name}"
+        rows[key] = SAME._one(paths[(suite, name)], work_root / suite / name)
+    return rows
+
+
 def run(work_root: Path) -> dict:
     shutil.rmtree(work_root, ignore_errors=True)
     work_root.mkdir(parents=True, exist_ok=True)
     paths, seal = _seal_rows(work_root / "corpus")
     seal_keys = {(r["suite"], r["name"]) for r in seal}
+    matching = [(r["suite"], r["name"]) for r in seal if r["match"] and (r["suite"], r["name"]) in EXPECTED]
+    mismatching = [(r["suite"], r["name"]) for r in seal if not r["match"] or (r["suite"], r["name"]) not in EXPECTED]
     exact_seal = (
         seal_keys == set(EXPECTED)
         and len(seal) == 15
-        and all(r["match"] for r in seal)
+        and len(matching) == 15
         and sum(r["logical_bytes"] for r in seal) == EXPECTED_LOGICAL
     )
+
     if not exact_seal:
+        sealed_rows = _measure(paths, matching, work_root / "sealed-subset-work")
         return {
             "schema": "cmpct-v030-r24-micropack-genesis15-transfer-v1",
             "experiment_valid": False,
             "release_credit": False,
+            "canonical_builder_changed": False,
             "corpus_seal_pass": False,
             "seal": seal,
+            "matching_identities": [f"{s}/{n}" for s, n in matching],
+            "mismatching_identities": [f"{s}/{n}" for s, n in mismatching],
+            "sealed_subset_rows": sealed_rows,
+            "sealed_subset_aggregate": _summarize(sealed_rows),
             "verdict": "INVALID_GENESIS15_INPUT_SEAL",
         }
 
-    rows = {}
-    for suite, name in EXPECTED:
-        key = f"{suite}/{name}"
-        rows[key] = SAME._one(paths[(suite, name)], work_root / "work" / suite / name)
-
+    rows = _measure(paths, list(EXPECTED), work_root / "work")
     invariant_failures = [k for k, r in rows.items() if not r["invariants_pass"]]
     economic_failures = [k for k, r in rows.items() if not r["economic_pass"]]
     grouped_wins = [k for k, r in rows.items() if r["derived_group_count"] > 0 and r["same_grammar_delta_bytes"] < 0]
     zero_group_ties = [k for k, r in rows.items() if r["derived_group_count"] == 0 and r["same_grammar_delta_bytes"] == 0]
-
-    independent_total = sum(int(r["same_grammar_independent_bytes"]) for r in rows.values())
-    derived_total = sum(int(r["same_grammar_derived_bytes"]) for r in rows.values())
-    aggregate_delta = derived_total - independent_total
+    aggregate = _summarize(rows)
 
     if invariant_failures:
         verdict = "RETIRE_GENESIS15_MICROPACK_TRANSFER"
-    elif economic_failures or aggregate_delta >= 0:
+    elif economic_failures or aggregate["delta_bytes"] >= 0:
         verdict = "GENESIS15_MICROPACK_NEEDS_ECONOMIC_ADMISSION"
     else:
         verdict = "GENESIS15_MICROPACK_GENERALIZES"
@@ -115,21 +166,7 @@ def run(work_root: Path) -> dict:
         "corpus_seal_pass": True,
         "expected_logical_bytes": EXPECTED_LOGICAL,
         "rows": rows,
-        "aggregate": {
-            "same_grammar_independent_bytes": independent_total,
-            "same_grammar_derived_bytes": derived_total,
-            "delta_bytes": aggregate_delta,
-            "delta_pct": (aggregate_delta / independent_total * 100.0) if independent_total else 0.0,
-            "grouped_wins": len(grouped_wins),
-            "zero_group_ties": len(zero_group_ties),
-            "grouped_losses_or_ties": len(economic_failures),
-            "max_member_amplification": max(float(r["max_member_amplification"]) for r in rows.values()),
-            "max_decode_unit_bytes": max(int(r["max_decode_unit_bytes"]) for r in rows.values()),
-            "independent_build_cpu_s_sum": sum(float(r["independent_build_cpu_s"]) for r in rows.values()),
-            "derived_build_cpu_s_sum": sum(float(r["derived_build_cpu_s"]) for r in rows.values()),
-            "independent_build_wall_s_sum": sum(float(r["independent_build_wall_s"]) for r in rows.values()),
-            "derived_build_wall_s_sum": sum(float(r["derived_build_wall_s"]) for r in rows.values()),
-        },
+        "aggregate": aggregate,
         "invariant_failures": invariant_failures,
         "economic_failures": economic_failures,
         "grouped_wins": grouped_wins,
@@ -151,6 +188,8 @@ def main() -> None:
         "experiment_valid": result["experiment_valid"],
         "verdict": result["verdict"],
         "aggregate": result.get("aggregate"),
+        "sealed_subset_aggregate": result.get("sealed_subset_aggregate"),
+        "mismatching_identities": result.get("mismatching_identities", []),
         "economic_failures": result.get("economic_failures", []),
     }, indent=2, sort_keys=True), flush=True)
 
