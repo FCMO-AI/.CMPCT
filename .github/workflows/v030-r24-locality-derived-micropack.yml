@@ -108,13 +108,13 @@ jobs:
           dev=d['workloads']['01_developer_repository']
           tiny=d['workloads']['08_many_tiny_files']
           verdict=d['verdict'].lower().replace('_','-')
-          print(f"artifact_name=v030-locality-{verdict}-devcc{dev['candidate_saving_vs_derived_c25cc01_bytes']}-devind{dev['candidate_saving_vs_independent_r24_bytes']}-tinycc{tiny['candidate_saving_vs_derived_c25cc01_bytes']}-tinyind{tiny['candidate_saving_vs_independent_r24_bytes']}-${{{{ env.EVIDENCE_HEAD }}}}")
+          print(f"artifact_name=v030-locality-{verdict}-devcc{dev['candidate_saving_vs_derived_c25cc01_bytes']}-devind{dev['candidate_saving_vs_independent_r24_bytes']}-tinycc{tiny['candidate_saving_vs_derived_c25cc01_bytes']}-tinyind{tiny['candidate_saving_vs_independent_r24_bytes']}")
           PY
       - run: python tools/check_ci_topology.py .github/workflows/v030-r24-locality-derived-micropack.yml
       - uses: actions/upload-artifact@v6
         if: always()
         with:
-          name: ${{ steps.receipt.outputs.artifact_name || format('v030-locality-derived-micropack-{0}', env.EVIDENCE_HEAD) }}
+          name: ${{ steps.receipt.outputs.artifact_name || 'v030-locality-derived-micropack-no-summary' }}-${{ env.EVIDENCE_HEAD }}
           path: benchmark-artifacts/v030-r24-locality-derived-micropack.json
           if-no-files-found: error
           retention-days: 90
