@@ -71,26 +71,25 @@ jobs:
               'RETIRE_CONTENT_CURRENT15_SELECTIVE':'retire',
               'CONTENT_CURRENT15_SELECTIVE_EXECUTION_BLOCKED':'blocked',
           }[d['verdict']]
-          maxk=d['max_decode_workload'] or 'none'
-          slug=lambda s: re.sub(r'[^A-Za-z0-9_-]+','-',s.replace('/','_'))[:20]
+          def slug_key(key):
+              tail=key.split('/',1)[-1]
+              return re.sub(r'[^A-Za-z0-9_-]+','-',tail)[:18]
           debt_parts=[]
           debt_detail={}
-          for key in d['timing_debt'][:2]:
+          for key in d['timing_debt'][:3]:
               row=d['rows'][key]
               i=row['timings']['independent']['median_read_wall_ms_per_probe']
               c=row['timings']['content_economic']['median_read_wall_ms_per_probe']
-              debt_parts.append(f"{slug(key)}-{i:.3f}to{c:.3f}")
+              debt_parts.append(f"{slug_key(key)}-{i:.3f}to{c:.3f}")
               debt_detail[key]={'independent_ms_per_probe':i,'content_ms_per_probe':c,'max_decode_unit_bytes':row['variants']['content_economic']['max_decode_unit_bytes']}
           outs={
               'short':short,
-              'done':str(d['completed_workloads']),
               'grouped':str(len(d['grouped_workloads'])),
               'debt':str(len(d['timing_debt'])),
               'debtwork':'+'.join(debt_parts) if debt_parts else 'none',
               'inv':str(len(d['invariant_failures'])),
               'maxdecode':str(d['max_decode_unit_bytes']),
-              'maxwork':slug(maxk),
-              'fp':d['corpus_fingerprint'][:12],
+              'fp':d['corpus_fingerprint'][:10],
           }
           with open(os.environ['GITHUB_OUTPUT'],'a',encoding='utf-8') as fh:
               for k,v in outs.items(): fh.write(f'{k}={v}\n')
@@ -99,7 +98,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: v030-sel15-${{ steps.receipt.outputs.short || 'nosummary' }}-g${{ steps.receipt.outputs.grouped }}-debt${{ steps.receipt.outputs.debt }}-${{ steps.receipt.outputs.debtwork }}-inv${{ steps.receipt.outputs.inv }}-max${{ steps.receipt.outputs.maxdecode }}-fp${{ steps.receipt.outputs.fp }}-${{ github.sha }}
+          name: v030-sel15-${{ steps.receipt.outputs.short || 'nosummary' }}-g${{ steps.receipt.outputs.grouped }}-d${{ steps.receipt.outputs.debt }}-${{ steps.receipt.outputs.debtwork }}-inv${{ steps.receipt.outputs.inv }}-max${{ steps.receipt.outputs.maxdecode }}-fp${{ steps.receipt.outputs.fp }}-${{ github.sha }}
           path: benchmark-artifacts/v030-content-current15-selective.json
           if-no-files-found: error
           retention-days: 90
