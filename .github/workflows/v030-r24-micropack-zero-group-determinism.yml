@@ -1,0 +1,86 @@
+# ci-lane: deep
+# ci-pr-scope: latest-head-commit-gate
+# ci-cancel-policy: preserve-running-exact-receipt
+name: CMPCT v0.30 zero-group micropack determinism
+
+on:
+  push:
+    branches: [agent/v030-authoritative-integration]
+    paths:
+      - 'benchmarks/v030_r24_micropack_zero_group_determinism_referee.py'
+      - '.github/workflows/v030-r24-micropack-zero-group-determinism.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'benchmarks/v030_r24_micropack_zero_group_determinism_referee.py'
+      - '.github/workflows/v030-r24-micropack-zero-group-determinism.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+concurrency:
+  group: cmpct-v030-zero-group-determinism-${{ github.event.pull_request.head.sha || github.sha }}
+  cancel-in-progress: false
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+
+jobs:
+  zero-group-determinism:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install deterministic corpus dependencies
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y zstd gcc ffmpeg libsndfile1
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[audio,test]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
+      - run: python -m py_compile benchmarks/v030_r24_micropack_zero_group_determinism_referee.py
+      - name: Execute zero-group determinism referee
+        run: |
+          mkdir -p benchmark-artifacts
+          python benchmarks/v030_r24_micropack_zero_group_determinism_referee.py \
+            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-zero-group-determinism-work" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-zero-group-determinism.json"
+      - name: Enforce receipt integrity, not preferred result
+        id: receipt
+        run: |
+          python - <<'PY' >> "$GITHUB_OUTPUT"
+          import json
+          from pathlib import Path
+          d=json.loads(Path('benchmark-artifacts/v030-zero-group-determinism.json').read_text())
+          assert d['schema']=='cmpct-v030-r24-zero-group-determinism-v1'
+          assert d['experiment_valid'] is True and d['release_credit'] is False
+          assert d['canonical_builder_changed'] is False
+          assert d['workload_identity']['name']=='04_deflate_family'
+          assert d['verdict'] in {
+              'ZERO_GROUP_MECHANISM_INVARIANT_FAILURE',
+              'BASE_OR_DERIVED_BUILD_NONDETERMINISTIC',
+              'ZERO_GROUP_DIFF_HOST_METADATA_ONLY',
+              'ZERO_GROUP_DERIVED_SIDE_EFFECT',
+              'ZERO_GROUP_NOOP_CONFIRMED',
+          }
+          print('artifact_name=v030-zero-group-'+d['verdict'].lower().replace('_','-'))
+          PY
+      - run: python tools/check_ci_topology.py .github/workflows/v030-r24-micropack-zero-group-determinism.yml
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: ${{ steps.receipt.outputs.artifact_name || 'v030-zero-group-no-summary' }}-${{ env.EVIDENCE_HEAD }}
+          path: benchmark-artifacts/v030-zero-group-determinism.json
+          if-no-files-found: error
+          retention-days: 90
+
+# Research-only. A green workflow means the diagnostic receipt is valid, not that the mechanism won.
