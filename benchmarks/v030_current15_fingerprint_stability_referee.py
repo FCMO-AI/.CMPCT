@@ -14,9 +14,9 @@ regeneration on one runner. Disproof: any workload differs in files, logical
 bytes, or tree_sha256 between build A and build B.
 
 When a workload differs, the referee additionally attributes the drift to exact
-relative file paths and records size/hash/first-differing-byte evidence. That
-attribution is observational only: this benchmark does not modify or normalize
-the generated corpus.
+relative file paths and records size/hash/first-differing-byte evidence plus a
+bounded byte window around that offset. That attribution is observational only:
+this benchmark does not modify or normalize the generated corpus.
 """
 
 import argparse
@@ -26,6 +26,8 @@ from pathlib import Path
 import shutil
 
 from benchmarks import v030_r24_micropack_current15_transfer as CUR
+
+_CONTEXT_RADIUS = 96
 
 
 def _map(rows: list[dict]) -> dict[str, dict]:
@@ -59,6 +61,19 @@ def _first_difference(a: Path, b: Path) -> int | None:
             return offset + common
 
 
+def _context(path: Path, offset: int | None) -> dict | None:
+    if offset is None:
+        return None
+    size = path.stat().st_size
+    start = max(0, int(offset) - _CONTEXT_RADIUS)
+    end = min(size, int(offset) + _CONTEXT_RADIUS)
+    with path.open('rb') as fh:
+        fh.seek(start)
+        data = fh.read(end - start)
+    ascii_text = ''.join(chr(b) if 32 <= b < 127 else '.' for b in data)
+    return {'start': start, 'end': end, 'hex': data.hex(), 'ascii': ascii_text}
+
+
 def _file_differences(a_root: Path, b_root: Path) -> dict[str, dict]:
     a_files = {p.relative_to(a_root).as_posix(): p for p in a_root.rglob('*') if p.is_file()}
     b_files = {p.relative_to(b_root).as_posix(): p for p in b_root.rglob('*') if p.is_file()}
@@ -72,12 +87,15 @@ def _file_differences(a_root: Path, b_root: Path) -> dict[str, dict]:
         sha_a, sha_b = _sha256(pa), _sha256(pb)
         if size_a == size_b and sha_a == sha_b:
             continue
+        first_diff = _first_difference(pa, pb)
         out[rel] = {
             'size_a': size_a,
             'size_b': size_b,
             'sha256_a': sha_a,
             'sha256_b': sha_b,
-            'first_differing_byte': _first_difference(pa, pb),
+            'first_differing_byte': first_diff,
+            'context_a': _context(pa, first_diff),
+            'context_b': _context(pb, first_diff),
         }
     return out
 
@@ -106,7 +124,7 @@ def run(work_root: Path) -> dict:
     fp_b = CUR._fingerprint(second)
     stable = not diffs and fp_a == fp_b
     return {
-        'schema':'cmpct-v030-current15-fingerprint-stability-v2',
+        'schema':'cmpct-v030-current15-fingerprint-stability-v3',
         'experiment_valid':True,
         'release_credit':False,
         'corpus_mutated':False,
