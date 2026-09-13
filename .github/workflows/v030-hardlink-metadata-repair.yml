@@ -23,31 +23,30 @@ jobs:
         run: |
           python - <<'PY'
           from pathlib import Path
-
           path = Path('native/cmpct-portable/src/manifest.rs')
           text = path.read_text()
-
           old_derive = '#[derive(Debug, Clone)]\npub(crate) struct FsMetadata {'
           new_derive = '#[derive(Debug, Clone, PartialEq, Eq)]\npub(crate) struct FsMetadata {'
           if text.count(old_derive) != 1:
               raise SystemExit('FsMetadata derive anchor drifted; refuse repair')
           text = text.replace(old_derive, new_derive, 1)
-
-          old_block = '''                if !matches!(&owner.kind, FsKind::File { .. }) {
-                    return Err(PortableError::Format(
-                        "r25 hardlink owner is not a regular file".into(),
-                    ));
-                }
-'''
-          new_block = old_block + '''                if entry.metadata != owner.metadata {
-                    return Err(PortableError::Format(
-                        "r25 hardlink metadata must match regular-file owner".into(),
-                    ));
-                }
-'''
+          old_block = (
+              '                if !matches!(&owner.kind, FsKind::File { .. }) {\n'
+              '                    return Err(PortableError::Format(\n'
+              '                        "r25 hardlink owner is not a regular file".into(),\n'
+              '                    ));\n'
+              '                }\n'
+          )
+          addition = (
+              '                if entry.metadata != owner.metadata {\n'
+              '                    return Err(PortableError::Format(\n'
+              '                        "r25 hardlink metadata must match regular-file owner".into(),\n'
+              '                    ));\n'
+              '                }\n'
+          )
           if text.count(old_block) != 1:
               raise SystemExit('hardlink owner validation anchor drifted; refuse repair')
-          text = text.replace(old_block, new_block, 1)
+          text = text.replace(old_block, old_block + addition, 1)
           path.write_text(text)
           PY
           git diff --check
