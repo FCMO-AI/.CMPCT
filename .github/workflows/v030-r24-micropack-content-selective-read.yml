@@ -36,9 +36,10 @@ jobs:
           python -m benchmarks.v030_r24_micropack_content_selective_read_referee \
             --output benchmark-artifacts/v030-micropack-content-selective-read.json
       - name: Validate and expose receipt
+        id: receipt
         run: |
           python - <<'PY'
-          import json
+          import json, os
           from pathlib import Path
           p = Path('benchmark-artifacts/v030-micropack-content-selective-read.json')
           r = json.loads(p.read_text())
@@ -76,11 +77,27 @@ jobs:
           payload = json.dumps(compact, sort_keys=True, separators=(',', ':'))
           print(payload)
           print(f'::notice title=v030 selective-read receipt::{payload}')
-          summary = Path('${{ github.step_summary }}') if '${{ github.step_summary }}' else None
+          dev = compact['sources']['origin_developer']
+          tiny = compact['sources']['origin_tiny_files']
+          def ms(v): return f'{float(v):.3f}'
+          outputs = {
+              'verdict': r['verdict'],
+              'dev_ind_ms': ms(dev['independent_ms_per_probe']),
+              'dev_ext_ms': ms(dev['extension_ms_per_probe']),
+              'dev_content_ms': ms(dev['content_ms_per_probe']),
+              'dev_decode': str(dev['content_max_decode']),
+              'tiny_ind_ms': ms(tiny['independent_ms_per_probe']),
+              'tiny_ext_ms': ms(tiny['extension_ms_per_probe']),
+              'tiny_content_ms': ms(tiny['content_ms_per_probe']),
+              'tiny_decode': str(tiny['content_max_decode']),
+          }
+          with open(os.environ['GITHUB_OUTPUT'], 'a', encoding='utf-8') as fh:
+              for k, v in outputs.items():
+                  fh.write(f'{k}={v}\n')
           PY
       - uses: actions/upload-artifact@v4
         with:
-          name: v030-content-economic-selective-read-${{ github.sha }}
+          name: v030-sel-${{ steps.receipt.outputs.verdict }}-dev-${{ steps.receipt.outputs.dev_ind_ms }}-${{ steps.receipt.outputs.dev_ext_ms }}-${{ steps.receipt.outputs.dev_content_ms }}-d${{ steps.receipt.outputs.dev_decode }}-tiny-${{ steps.receipt.outputs.tiny_ind_ms }}-${{ steps.receipt.outputs.tiny_ext_ms }}-${{ steps.receipt.outputs.tiny_content_ms }}-d${{ steps.receipt.outputs.tiny_decode }}-${{ github.sha }}
           path: benchmark-artifacts/v030-micropack-content-selective-read.json
           if-no-files-found: error
           retention-days: 30
