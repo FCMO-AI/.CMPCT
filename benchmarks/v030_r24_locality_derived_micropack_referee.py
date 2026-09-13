@@ -3,14 +3,13 @@ from __future__ import annotations
 """Locality-derived r24 micro-pack referee.
 
 Mission: docs/V030_R24_LOCALITY_DERIVED_MICROPACK_MISSION_2026-09-12.md
-Research-only.  The independent arm shares the exact release scan policy with the
+Research-only. The independent arm shares the exact release scan policy with the
 candidate and disables only ``_build_micro_packs``; otherwise the release scan's
 container-pack geometry would be changed by the same ``micro_pack_max_file`` knob
 and the experiment would not be one-variable.
 """
 
 import argparse
-import hashlib
 import json
 from pathlib import Path
 import shutil
@@ -35,75 +34,80 @@ class NoMicroPackBuilder(BUILDER.Builder):
 
 
 class LocalityDerivedBuilder(BUILDER.Builder):
-    """Group text blobs only while every member remains within the 8x contract."""
+    """Mature r24 builder with only micro-pack grouping replaced by an 8x-derived law."""
 
     def _build_micro_packs(self):
-        self._locality_derived_groups = []
-        max_file = int(self.micro_pack_max_file)
-        if max_file <= 0:
-            return
+        refs = {}
+        for row in self.files:
+            if row[1] != R24.K_FILE or not row[6] or row[6][0] != R24.S_BLOB:
+                continue
+            h = bytes(row[6][1])
+            refs.setdefault(h, []).append(row)
 
-        buckets: dict[str, list[tuple[bytes, BUILDER.Candidate]]] = {}
-        for h, c in list(self.cands.items()):
-            if len(c.raw) > max_file or c.deflates:
+        eligible = []
+        for h, rows in refs.items():
+            c = self.cands.get(h)
+            if c is None or c.deflates or len(c.raw) > self.micro_pack_max_file:
                 continue
-            exts = {hint[1].lower() for hint in c.hints if hint and hint[1]}
-            if len(exts) != 1:
+            if not any(x in BUILDER.TEXT_EXT for x in c.hints):
                 continue
-            ext = next(iter(exts))
-            if not ext or not BUILDER._is_text_like(c.raw[:4096], ext):
-                continue
+            eligible.append((h, c))
+
+        buckets = {}
+        for h, c in eligible:
+            ext = next((x for x in sorted(c.hints) if x in BUILDER.TEXT_EXT), ".text")
             buckets.setdefault(ext, []).append((h, c))
 
-        for ext, items in sorted(buckets.items()):
+        emitted_groups = []
+
+        def flush(group):
+            if len(group) < 2:
+                return
+            buf = bytearray()
+            slots = {}
+            for h, c in group:
+                off = len(buf)
+                buf += c.raw
+                slots[h] = (off, len(c.raw))
+            first_size = len(group[0][1].raw)
+            if len(buf) > int(LOCALITY_BUDGET * max(1, first_size)):
+                raise RuntimeError("locality-derived group exceeds 8x smallest-member law")
+            ph = self.add_content(bytes(buf), ".cmpct-pack")
+            for h, (off, ln) in slots.items():
+                for row in refs[h]:
+                    row[6] = [R24.S_PACK, ph, off, ln]
+            for h in slots:
+                if h != ph:
+                    self.cands.pop(h, None)
+            emitted_groups.append({
+                "members": len(group),
+                "raw_bytes": len(buf),
+                "smallest_member_bytes": first_size,
+                "max_raw_amplification": len(buf) / max(1, first_size),
+            })
+
+        for _ext, items in sorted(buckets.items()):
             items.sort(key=lambda hc: (len(hc[1].raw), hc[0]))
-            group: list[tuple[bytes, BUILDER.Candidate]] = []
-            group_raw = 0
-
-            def flush() -> None:
-                nonlocal group, group_raw
-                if len(group) >= 2:
-                    raw = b"".join(c.raw for _h, c in group)
-                    pack_hash = hashlib.sha256(raw).digest()
-                    if pack_hash not in self.cands:
-                        pack_cand = BUILDER.Candidate(raw, BUILDER.ext_class(ext))
-                        pack_cand.hints.add((f".cmpct-locality-pack-{ext or 'none'}", ext))
-                        self.cands[pack_hash] = pack_cand
-                    off = 0
-                    for h, c in group:
-                        for fi, _fext in c.hints:
-                            self.files[fi][6] = (R24.S_PACK, pack_hash, off, len(c.raw))
-                        off += len(c.raw)
-                    for h, _c in group:
-                        self.cands.pop(h, None)
-                    self._locality_derived_groups.append({
-                        "ext": ext,
-                        "members": len(group),
-                        "raw_bytes": len(raw),
-                        "min_member_bytes": min(len(c.raw) for _h, c in group),
-                        "max_member_bytes": max(len(c.raw) for _h, c in group),
-                    })
-                group = []
-                group_raw = 0
-
-            for item in items:
-                size = len(item[1].raw)
-                if size <= 0:
-                    flush()
-                    continue
+            group = []
+            used = 0
+            cap = 0
+            for h, c in items:
+                size = len(c.raw)
                 if not group:
-                    group = [item]
-                    group_raw = size
+                    group = [(h, c)]
+                    used = size
+                    cap = int(LOCALITY_BUDGET * max(1, size))
                     continue
-                smallest = len(group[0][1].raw)
-                if group_raw + size > int(LOCALITY_BUDGET * max(1, smallest)):
-                    flush()
-                    group = [item]
-                    group_raw = size
+                if used + size > cap:
+                    flush(group)
+                    group = [(h, c)]
+                    used = size
+                    cap = int(LOCALITY_BUDGET * max(1, size))
                 else:
-                    group.append(item)
-                    group_raw += size
-            flush()
+                    group.append((h, c))
+                    used += size
+            flush(group)
+        self._locality_derived_groups = emitted_groups
 
 
 def _build_with(builder: BUILDER.Builder, out: Path) -> dict:
@@ -195,9 +199,7 @@ def _build_variants(source: Path, work: Path) -> dict:
     candidate_stats = MEMBERSHIP._write_candidate(derived, candidate)
     verify_work = work / "candidate-verify"
     verify_work.mkdir(parents=True, exist_ok=True)
-    candidate_verify = MEMBERSHIP._verify_candidate(
-        candidate, derived_index, str(dv["tree_sha256"]), verify_work
-    )
+    candidate_verify = MEMBERSHIP._verify_candidate(candidate, derived_index, str(dv["tree_sha256"]), verify_work)
     parsed = MEMBERSHIP._parse_candidate_bytes(candidate.read_bytes())
     hostile = MEMBERSHIP._hostile_table(derived_index)
     rows["derived_membership"] = {
