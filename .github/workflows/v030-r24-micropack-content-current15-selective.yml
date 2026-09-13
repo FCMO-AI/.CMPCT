@@ -48,7 +48,7 @@ jobs:
         id: receipt
         run: |
           python - <<'PY'
-          import json, os
+          import json, os, re
           from pathlib import Path
           d=json.loads(Path('benchmark-artifacts/v030-content-current15-selective.json').read_text())
           assert d['schema']=='cmpct-v030-r24-content-current15-selective-v1'
@@ -70,8 +70,20 @@ jobs:
               'RETIRE_CONTENT_CURRENT15_SELECTIVE':'retire',
               'CONTENT_CURRENT15_SELECTIVE_EXECUTION_BLOCKED':'blocked',
           }[d['verdict']]
+          def slug(s): return re.sub(r'[^A-Za-z0-9_-]+','-',s.replace('/','_'))[:46]
           maxk=d['max_decode_workload'] or 'none'
-          maxslug=maxk.replace('/','_').replace(' ','-')[:40]
+          debt=[]
+          for key in d['timing_debt'][:2]:
+              row=d['rows'][key]
+              debt.append({
+                  'key': key,
+                  'ind_ms': row['timings']['independent']['median_read_wall_ms_per_probe'],
+                  'content_ms': row['timings']['content_economic']['median_read_wall_ms_per_probe'],
+                  'max_decode': row['variants']['content_economic']['max_decode_unit_bytes'],
+                  'content_bytes': row['variants']['content_economic']['final_membership_bytes'],
+                  'ind_bytes': row['variants']['independent']['final_membership_bytes'],
+              })
+          while len(debt)<2: debt.append({'key':'none','ind_ms':0,'content_ms':0,'max_decode':0,'content_bytes':0,'ind_bytes':0})
           outs={
               'short':short,
               'done':str(d['completed_workloads']),
@@ -79,17 +91,23 @@ jobs:
               'debt':str(len(d['timing_debt'])),
               'inv':str(len(d['invariant_failures'])),
               'maxdecode':str(d['max_decode_unit_bytes']),
-              'maxwork':maxslug,
+              'maxwork':slug(maxk),
               'fp':d['corpus_fingerprint'][:12],
           }
+          for idx, item in enumerate(debt,1):
+              outs[f'd{idx}w']=slug(item['key'])
+              outs[f'd{idx}i']=f"{item['ind_ms']:.3f}"
+              outs[f'd{idx}c']=f"{item['content_ms']:.3f}"
+              outs[f'd{idx}d']=str(item['max_decode'])
+              outs[f'd{idx}s']=str(item['content_bytes']-item['ind_bytes'])
           with open(os.environ['GITHUB_OUTPUT'],'a',encoding='utf-8') as fh:
               for k,v in outs.items(): fh.write(f'{k}={v}\n')
-          print(json.dumps({'verdict':d['verdict'],'grouped':d['grouped_workloads'],'timing_debt':d['timing_debt'],'max_decode_workload':d['max_decode_workload'],'max_decode_unit_bytes':d['max_decode_unit_bytes']},sort_keys=True))
+          print(json.dumps({'verdict':d['verdict'],'grouped':d['grouped_workloads'],'timing_debt':d['timing_debt'],'debt_detail':debt,'max_decode_workload':d['max_decode_workload'],'max_decode_unit_bytes':d['max_decode_unit_bytes']},sort_keys=True))
           PY
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: v030-content15sel-${{ steps.receipt.outputs.short || 'nosummary' }}-done${{ steps.receipt.outputs.done }}-g${{ steps.receipt.outputs.grouped }}-debt${{ steps.receipt.outputs.debt }}-inv${{ steps.receipt.outputs.inv }}-max${{ steps.receipt.outputs.maxdecode }}-${{ steps.receipt.outputs.maxwork }}-${{ steps.receipt.outputs.fp }}-${{ github.sha }}
+          name: v030-sel15-${{ steps.receipt.outputs.short || 'nosummary' }}-g${{ steps.receipt.outputs.grouped }}-debt${{ steps.receipt.outputs.debt }}-d1-${{ steps.receipt.outputs.d1w }}-${{ steps.receipt.outputs.d1i }}-${{ steps.receipt.outputs.d1c }}-u${{ steps.receipt.outputs.d1d }}-s${{ steps.receipt.outputs.d1s }}-d2-${{ steps.receipt.outputs.d2w }}-${{ steps.receipt.outputs.d2i }}-${{ steps.receipt.outputs.d2c }}-u${{ steps.receipt.outputs.d2d }}-s${{ steps.receipt.outputs.d2s }}-max${{ steps.receipt.outputs.maxdecode }}-${{ steps.receipt.outputs.maxwork }}-${{ github.sha }}
           path: benchmark-artifacts/v030-content-current15-selective.json
           if-no-files-found: error
           retention-days: 90
