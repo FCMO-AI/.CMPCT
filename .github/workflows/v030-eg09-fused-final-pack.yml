@@ -62,7 +62,8 @@ jobs:
               d=json.loads(p.read_text()); d['candidate_sha']=os.environ['GITHUB_SHA']; d['candidate_ref']=os.environ['GITHUB_REF_NAME']; p.write_text(json.dumps(d,indent=2,sort_keys=True))
               failed=[k for k,v in (d.get('conditions') or {}).items() if not v]
               fail='none' if not failed else '.'.join(sorted(failed))
-              label=f"{d.get('verdict')}-fail{fail}-cpu{d.get('aggregate_cpu_ratio')}-wall{d.get('aggregate_wall_ratio')}-rss{d.get('max_positive_rss_delta_kib')}"
+              mismatch_names='.'.join(x.get('name','?') for x in d.get('identity_mismatches',[])) or 'none'
+              label=f"{d.get('verdict')}-fail{fail}-delta{d.get('aggregate_byte_delta')}-abs{d.get('aggregate_abs_byte_delta')}-mm{mismatch_names}-cpu{d.get('aggregate_cpu_ratio')}-wall{d.get('aggregate_wall_ratio')}-rss{d.get('max_positive_rss_delta_kib')}"
           else:
               lines=[x.strip() for x in e.read_text(errors='replace').splitlines() if x.strip()] if e.exists() else []; label='HARNESS_FAIL-'+re.sub(r'[^A-Za-z0-9_.-]+','-',lines[-1] if lines else 'no-receipt')[:120]
           label=re.sub(r'[^A-Za-z0-9_.-]+','-',label)[:180]
