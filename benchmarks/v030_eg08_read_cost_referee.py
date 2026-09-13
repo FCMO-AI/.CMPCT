@@ -10,7 +10,6 @@ import argparse
 import json
 import os
 from pathlib import Path
-import shutil
 import statistics
 import subprocess
 import sys
@@ -45,13 +44,16 @@ from pathlib import Path
 module,op,archive,source=sys.argv[1:5]
 m=importlib.import_module(module)
 archive=Path(archive); source=Path(source)
-expected=m._treehash(source)
+tree_owner=m if hasattr(m,"_treehash") else getattr(m,"EG07",None)
+if tree_owner is None or not hasattr(tree_owner,"_treehash"):
+    raise RuntimeError(f"{module} exposes no authoritative tree hash owner")
+expected=tree_owner._treehash(source)
 c0=time.process_time(); w0=time.perf_counter()
 if op == "extract":
     with tempfile.TemporaryDirectory(prefix="cmpct-eg08-read-extract-") as td:
         dest=Path(td)/"out"
         m.extract(archive,dest)
-        observed=m._treehash(dest)
+        observed=tree_owner._treehash(dest)
         ok=observed==expected
 elif op == "verify":
     result=m.strong_verify(archive,expected_tree=expected)
@@ -60,7 +62,7 @@ elif op == "verify":
 else:
     raise SystemExit("bad op")
 cpu=time.process_time()-c0; wall=time.perf_counter()-w0
-print(json.dumps({"ok":ok,"expected_tree":expected,"observed_tree":observed,"cpu_s":cpu,"wall_s":wall,"peak_rss_kib":resource.getrusage(resource.RUSAGE_SELF).ru_maxrss,"module_path":str(Path(m.__file__).resolve())},sort_keys=True))
+print(json.dumps({"ok":ok,"expected_tree":expected,"observed_tree":observed,"cpu_s":cpu,"wall_s":wall,"peak_rss_kib":resource.getrusage(resource.RUSAGE_SELF).ru_maxrss,"module_path":str(Path(m.__file__).resolve()),"tree_owner_path":str(Path(tree_owner.__file__).resolve())},sort_keys=True))
 '''
 
 
@@ -80,6 +82,8 @@ def fresh_op(module: str, op: str, archive: Path, source: Path) -> dict:
     out=json.loads(lines[-1])
     if Path(out["module_path"]).resolve()!=_expected_module_path(module):
         raise RuntimeError(f"source leak {module}: {out['module_path']}")
+    if Path(out["tree_owner_path"]).resolve()!=_expected_module_path(EG07_MODULE):
+        raise RuntimeError(f"tree authority leak {module}: {out['tree_owner_path']}")
     if not out["ok"]:
         raise RuntimeError(f"{module} {op} semantic failure")
     return out
@@ -95,6 +99,7 @@ def med_ops(module: str, op: str, archive: Path, source: Path) -> dict:
         "expected_tree":rows[0]["expected_tree"],
         "all_tree_identity":all(x["expected_tree"]==x["observed_tree"] for x in rows),
         "module_path":rows[0]["module_path"],
+        "tree_owner_path":rows[0]["tree_owner_path"],
     }
 
 
@@ -153,7 +158,7 @@ def main() -> None:
         }
         verdict="EG08_READ_COST_SURVIVES" if all(conditions.values()) else "EG08_READ_COST_DEBT"
         out={
-            "schema":"v030-eg08-read-cost-v1","verdict":verdict,"conditions":conditions,"timing_rule":{"relative":REL,"absolute_s":ABS_S,"repetitions":REPS},"workloads":rows,
+            "schema":"v030-eg08-read-cost-v2","verdict":verdict,"conditions":conditions,"timing_rule":{"relative":REL,"absolute_s":ABS_S,"repetitions":REPS},"workloads":rows,
             "aggregate_saved_bytes":sum(int(r["saved_bytes"]) for r in rows),
             "worst_extract_cpu_ratio":max(float(r["operations"]["extract"]["cpu_ratio"]) for r in rows),
             "worst_extract_wall_ratio":max(float(r["operations"]["extract"]["wall_ratio"]) for r in rows),
