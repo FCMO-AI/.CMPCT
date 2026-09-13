@@ -66,6 +66,10 @@ class ReusedCCtxFusedPathBlindDictionaryBuilder(TimedFusedPathBlindDictionaryBui
         return dst.raw[:n]
 
     def _encode_candidate(self, h, c):
+        # Preserve the inherited dictionary-blob fast path before consulting the
+        # independent cache: the path-blind dictionary blob does not exist there.
+        if self.dict_hash is not None and h == self.dict_hash:
+            return CODEC_RAW, c.raw, b''
         cached = self._fused_normal_encode_cache.get(h)
         if cached is None:
             self._fused_misses += 1
@@ -77,8 +81,6 @@ class ReusedCCtxFusedPathBlindDictionaryBuilder(TimedFusedPathBlindDictionaryBui
                 self.dictionary = dictionary
         else:
             self._fused_hits += 1
-        if self.dict_hash is not None and h == self.dict_hash:
-            return CODEC_RAW, c.raw, b''
         if h in self.secondary_stream_hashes or h in self.canonical_deflate:
             return cached
         codec, comp, meta = cached
