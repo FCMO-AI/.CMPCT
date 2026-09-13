@@ -1,0 +1,65 @@
+name: v030 adaptive effort economics
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [agent/v030-authoritative-integration]
+    paths:
+      - 'benchmarks/v030_adaptive_effort_economics_referee.py'
+      - 'docs/V030_ADAPTIVE_EFFORT_ECONOMICS_MISSION_LOCK_2026-09-13.md'
+      - '.github/workflows/v030-adaptive-effort-economics.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  referee:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install system dependencies
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg zstd
+      - name: Install package and benchmark dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e .
+          python -m pip install numpy reportlab python-docx openpyxl pillow python-pptx
+      - name: Run H-EFFORT-4 observational referee
+        id: referee
+        continue-on-error: true
+        run: |
+          mkdir -p evidence
+          set +e
+          PYTHONPATH=. python benchmarks/v030_adaptive_effort_economics_referee.py --out evidence/adaptive-effort-economics.json > evidence/adaptive-effort-economics.stdout.txt 2> evidence/adaptive-effort-economics.stderr.txt
+          rc=$?
+          echo "$rc" > evidence/adaptive-effort-economics.exitcode.txt
+          exit $rc
+      - name: Surface referee diagnostics
+        if: always()
+        run: |
+          echo '=== H-EFFORT-4 exit code ==='
+          cat evidence/adaptive-effort-economics.exitcode.txt 2>/dev/null || true
+          echo '=== H-EFFORT-4 stderr ==='
+          cat evidence/adaptive-effort-economics.stderr.txt 2>/dev/null || true
+          echo '=== H-EFFORT-4 aggregate stdout ==='
+          cat evidence/adaptive-effort-economics.stdout.txt 2>/dev/null || true
+      - name: Preserve exact-head metadata
+        if: always()
+        run: |
+          git rev-parse HEAD > evidence/head.txt
+          git status --short > evidence/git-status.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: v030-adaptive-effort-economics-${{ github.sha }}
+          path: evidence/
+          if-no-files-found: error
+      - name: Enforce referee success
+        if: steps.referee.outcome != 'success'
+        run: exit 1
