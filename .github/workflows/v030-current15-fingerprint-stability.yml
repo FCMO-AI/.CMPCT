@@ -1,0 +1,70 @@
+name: CMPCT v0.30 current15 fingerprint stability
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [agent/v030-authoritative-integration]
+    paths:
+      - benchmarks/v030_current15_fingerprint_stability_referee.py
+      - benchmarks/v030_r24_micropack_current15_transfer.py
+      - benchmarks/neutral_hostile_corpus_v1.py
+      - benchmarks/resemblance_hostile_corpus_v1.py
+      - .github/workflows/v030-current15-fingerprint-stability.yml
+
+permissions:
+  contents: read
+
+jobs:
+  stability:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install corpus dependencies
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y gcc ffmpeg libsndfile1
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[audio,test]'
+      - name: Run back-to-back stability referee
+        run: |
+          mkdir -p benchmark-artifacts
+          python -m benchmarks.v030_current15_fingerprint_stability_referee \
+            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-current15-stability-work" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-current15-stability.json"
+      - name: Validate and expose receipt
+        id: receipt
+        run: |
+          python - <<'PY'
+          import json, os, re
+          from pathlib import Path
+          d=json.loads(Path('benchmark-artifacts/v030-current15-stability.json').read_text())
+          assert d['schema']=='cmpct-v030-current15-fingerprint-stability-v1'
+          assert d['experiment_valid'] is True
+          assert d['release_credit'] is False
+          assert d['corpus_mutated'] is False
+          assert d['workloads_a']==15 and d['workloads_b']==15
+          assert d['verdict'] in {'CURRENT15_FINGERPRINT_STABLE','CURRENT15_FINGERPRINT_SUBSTRATE_UNSTABLE'}
+          unstable=d['unstable_workloads']
+          slug='none' if not unstable else '+'.join(re.sub(r'[^A-Za-z0-9_-]+','-',x.replace('/','_'))[:36] for x in unstable[:4])
+          outs={'short':'stable' if not unstable else 'unstable','n':str(len(unstable)),'u':slug,'fa':d['fingerprint_a'][:12],'fb':d['fingerprint_b'][:12]}
+          with open(os.environ['GITHUB_OUTPUT'],'a',encoding='utf-8') as fh:
+              for k,v in outs.items(): fh.write(f'{k}={v}\n')
+          print(json.dumps({'verdict':d['verdict'],'fingerprint_a':d['fingerprint_a'],'fingerprint_b':d['fingerprint_b'],'unstable_workloads':unstable,'differences':d['differences']},sort_keys=True))
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: v030-current15fp-${{ steps.receipt.outputs.short || 'nosummary' }}-n${{ steps.receipt.outputs.n }}-${{ steps.receipt.outputs.u }}-${{ steps.receipt.outputs.fa }}-${{ steps.receipt.outputs.fb }}-${{ github.sha }}
+          path: benchmark-artifacts/v030-current15-stability.json
+          if-no-files-found: error
+          retention-days: 90
+
+# Diagnostic benchmark-substrate evidence; never a product score.
