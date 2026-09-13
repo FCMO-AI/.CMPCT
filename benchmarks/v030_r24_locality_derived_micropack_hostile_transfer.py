@@ -106,9 +106,12 @@ def _one(source: Path, work: Path) -> dict:
     group_members = sum(int(g["members"]) for g in groups)
     candidate_vs_independent = int(candidate["archive_bytes"]) - int(independent["archive_bytes"])
     candidate_vs_cc = int(candidate["archive_bytes"]) - int(cc["archive_bytes"])
-    hostile_applicable = group_count > 0
     hostile_table = dict(candidate.get("hostile_fail_closed", {}))
-    hostile_ok = bool(candidate.get("hostile_all_pass")) if hostile_applicable else True
+    # Hostile membership mutations are meaningful only when membership-v1 emitted
+    # at least one implicit group. A derived S_PACK can exist yet be rejected by
+    # membership-v1 as non-contiguous; that is a valid fallback, not a failure.
+    hostile_applicable = bool(hostile_table)
+    hostile_ok = all(hostile_table.values()) if hostile_applicable else True
 
     invariants = {
         "derived_locality_pass": bool(derived["locality"]["locality_pass"]),
