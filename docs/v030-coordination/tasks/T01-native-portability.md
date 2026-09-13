@@ -96,6 +96,14 @@ This coordination-only mutation is the fingerprint-neutral admission request for
 
 No format byte, product code, benchmark corpus, threshold, locality ceiling, recovery rule, integrity rule, or platform requirement changes here.
 
+### Post-v16 exact-fingerprint revalidation request — 2026-09-13
+
+Mission lock: the current authoritative product fingerprint should already contain the landed implicit-v4 Python/native/recovery implementation; the remaining question is whether the normative native-authority and ZIP-portability matrices still pass together without any product mutation. The disproof condition is strict: any substantive matrix failure, candidate-fingerprint disagreement, exact-tree/member mismatch, recovery/locality regression, or result-bearing receipt failure blocks credit. Classifier-only greens and stale historical receipts do not count.
+
+This T01-only mutation is deliberately fingerprint-neutral and exists solely to request fresh result-bearing native-authority and ZIP-portability execution on the current product candidate after the v16 research negative. It changes no archive bytes, selector rule, benchmark corpus, threshold, locality ceiling, integrity/recovery requirement, native parser contract, Android requirement, or release score.
+
+If both lanes finish green, record their exact candidate fingerprint and source custody before advancing any portability claim. If either lane is red, preserve the failure and diagnose it before touching product code; missing runners, dependency outages, timeouts and custody defects are infrastructure evidence rather than product losses.
+
 ## Current continuation rule
 
 Work directly on the authoritative branch. Preserve useful earlier implementation/evidence provenance where it still applies, but rerun every normative native/platform receipt on the final reconciled fingerprint. Historical or pre-fingerprint greens prove mechanisms only.
