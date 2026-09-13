@@ -7,14 +7,16 @@ Mission lock
 The current15 fingerprint referee found immediate back-to-back byte drift in exactly
 three neutral workloads: office, logs/telemetry and incremental backups.  The data
 recipes are deterministic; the exported container bytes were not, because wall-clock
-metadata entered OOXML/PDF/ZIP/GZIP containers.
+metadata entered OOXML/PDF/ZIP/GZIP containers and ReportLab named an image XObject
+from its absolute source pathname.
 
 This module does not alter workload payload semantics, corpus membership, benchmark
 thresholds or product policy.  It runs the existing neutral/hostile producer under a
-fixed reproducible-build clock, canonicalizes only volatile container timestamps, and
-then recomputes the producer manifest.  The acceptance test is byte-level: two
-consecutive current15 builds on one exact runner must have identical per-workload tree
-SHA-256 values and therefore an identical portfolio fingerprint.
+fixed reproducible-build clock, makes ReportLab image identity content-derived,
+canonicalizes only volatile container timestamps, and then recomputes the producer
+manifest.  The acceptance test is byte-level: two consecutive current15 builds on one
+exact runner must have identical per-workload tree SHA-256 values and therefore an
+identical portfolio fingerprint.
 
 Research substrate only.  Once independently reproduced, the normalization can be
 folded into the shared public corpus producer rather than remaining a v0.30 wrapper.
@@ -38,12 +40,7 @@ _W3CDTF = re.compile(
 
 
 def _normalize_zip_container(path: Path) -> None:
-    """Rewrite one generated ZIP-family container with a fixed DOS timestamp.
-
-    OOXML core properties are also normalized because python-docx/openpyxl/python-pptx
-    may serialize the construction clock inside docProps/core.xml even after ZIP entry
-    timestamps are fixed.  No user payload member is added, removed or renamed.
-    """
+    """Rewrite one generated ZIP-family container with a fixed DOS timestamp."""
     with zipfile.ZipFile(path, "r") as src:
         comment = src.comment
         entries = []
@@ -63,13 +60,11 @@ def _normalize_zip_container(path: Path) -> None:
                 info = zipfile.ZipInfo(old.filename, _FIXED_ZIP_TIME)
                 info.compress_type = old.compress_type
                 info.comment = old.comment
-                # Extended timestamp fields can themselves carry wall-clock values.  The
-                # benchmark contract needs content semantics, not host filesystem times.
                 info.extra = b""
                 info.internal_attr = old.internal_attr
                 info.external_attr = old.external_attr
                 info.create_system = old.create_system
-                info.flag_bits = old.flag_bits & 0x800  # retain UTF-8 filename intent only
+                info.flag_bits = old.flag_bits & 0x800
                 kwargs = {"compress_type": old.compress_type}
                 if old.compress_type == zipfile.ZIP_DEFLATED:
                     kwargs["compresslevel"] = 6
@@ -112,8 +107,9 @@ def _rebuild_manifest(root: Path, manifest: dict) -> dict:
     out["generated_utc"] = _FIXED_ISO
     out["corpora"] = corpora
     out["reproducibility_note"] = (
-        "Current15 deterministic substrate: workload PRNG streams are fixed and volatile "
-        "OOXML/PDF/ZIP/GZIP wall-clock metadata is normalized before tree hashing."
+        "Current15 deterministic substrate: workload PRNG streams are fixed; volatile "
+        "OOXML/PDF/ZIP/GZIP clock metadata is normalized; ReportLab image XObject "
+        "identity is derived from image bytes rather than absolute benchmark paths."
     )
     (root / "MANIFEST.json").write_text(json.dumps(out, indent=2), encoding="utf-8")
     return out
@@ -123,26 +119,33 @@ def build(root: Path) -> dict:
     previous_epoch = os.environ.get("SOURCE_DATE_EPOCH")
     os.environ["SOURCE_DATE_EPOCH"] = _FIXED_EPOCH
 
-    # ReportLab's PDFDocument derives CreationDate/ModDate and the document ID from
-    # the wall clock unless invariant mode is enabled.  Setting the global config was
-    # insufficient on hosted CI: file-level attribution still isolated client_report.pdf.
-    # Force the invariant argument at the exact Canvas constructor used by the shared
-    # corpus producer, then restore both the constructor and global config afterwards.
     try:
         from reportlab import rl_config
+        from reportlab.lib.utils import ImageReader
         previous_invariant = rl_config.invariant
         rl_config.invariant = 1
     except Exception:
         rl_config = None
+        ImageReader = None
         previous_invariant = None
 
     original_canvas = BASE.canvas.Canvas
 
-    def deterministic_canvas(*args, **kwargs):
-        kwargs["invariant"] = 1
-        return original_canvas(*args, **kwargs)
+    class DeterministicCanvas(original_canvas):
+        def __init__(self, *args, **kwargs):
+            kwargs["invariant"] = 1
+            super().__init__(*args, **kwargs)
 
-    BASE.canvas.Canvas = deterministic_canvas
+        def drawImage(self, image, *args, **kwargs):
+            # ReportLab hashes a filename string when drawImage receives a path, which
+            # makes /.../a/chart.png and /.../b/chart.png different XObject names even
+            # when their image bytes are identical. ImageReader makes the XObject name
+            # derive from decoded image content instead. This changes no visible pixels.
+            if ImageReader is not None and isinstance(image, (str, os.PathLike)):
+                image = ImageReader(os.fspath(image))
+            return super().drawImage(image, *args, **kwargs)
+
+    BASE.canvas.Canvas = DeterministicCanvas
     try:
         manifest = BASE.build(root)
     finally:
