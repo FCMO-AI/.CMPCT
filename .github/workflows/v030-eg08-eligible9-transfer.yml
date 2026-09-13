@@ -67,7 +67,10 @@ jobs:
           from pathlib import Path
           p=Path('evidence/eg08-eligible9-transfer.json'); e=Path('evidence/stderr.txt'); code=int('${{ steps.transfer.outputs.exit_code || 1 }}')
           if p.exists():
-              d=json.loads(p.read_text()); d['candidate_sha']=os.environ['GITHUB_SHA']; d['candidate_ref']=os.environ['GITHUB_REF_NAME']; p.write_text(json.dumps(d,indent=2,sort_keys=True)); label=f"{d.get('verdict')}-save{d.get('aggregate_saved_bytes')}-wins{d.get('non_office_strict_win_count')}-cpu{d.get('worst_cpu_ratio')}"
+              d=json.loads(p.read_text()); d['candidate_sha']=os.environ['GITHUB_SHA']; d['candidate_ref']=os.environ['GITHUB_REF_NAME']; p.write_text(json.dumps(d,indent=2,sort_keys=True))
+              failed=[k for k,v in (d.get('conditions') or {}).items() if not v]
+              fail_label='none' if not failed else '.'.join(sorted(failed))
+              label=f"{d.get('verdict')}-fail{fail_label}-save{d.get('aggregate_saved_bytes')}-wins{d.get('non_office_strict_win_count')}-cpu{d.get('worst_cpu_ratio')}"
           else:
               lines=[x.strip() for x in e.read_text(errors='replace').splitlines() if x.strip()] if e.exists() else []; label='HARNESS_FAIL-'+re.sub(r'[^A-Za-z0-9_.-]+','-',lines[-1] if lines else 'no-receipt')[:120]
           label=re.sub(r'[^A-Za-z0-9_.-]+','-',label)[:180]
