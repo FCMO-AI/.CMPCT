@@ -90,15 +90,18 @@ jobs:
           import json
           from pathlib import Path
           d=json.loads(Path('benchmark-artifacts/v030-current15-micropack.json').read_text())
-          assert d['schema']=='cmpct-v030-r24-micropack-current15-transfer-v1'
-          assert d['experiment_valid'] is True and d['release_credit'] is False
+          assert d['schema']=='cmpct-v030-r24-micropack-current15-transfer-v2'
+          assert d['release_credit'] is False
           assert d['canonical_builder_changed'] is False
-          assert len(d['rows']) == 15 and len(d['identities']) == 15
+          assert len(d['identities']) == 15
           assert len(d['corpus_fingerprint']) == 64
+          assert d['completed_workloads'] + len(d['execution_errors']) == 15
+          assert d['experiment_valid'] is (len(d['execution_errors']) == 0)
           assert d['verdict'] in {
               'CURRENT15_MICROPACK_GENERALIZES',
               'CURRENT15_MICROPACK_NEEDS_ECONOMIC_ADMISSION',
               'RETIRE_CURRENT15_MICROPACK_TRANSFER',
+              'CURRENT15_MICROPACK_EXECUTION_BLOCKED',
           }
           PY
       - name: Expose decisive current15 summary
@@ -113,8 +116,9 @@ jobs:
               'CURRENT15_MICROPACK_GENERALIZES':'generalizes',
               'CURRENT15_MICROPACK_NEEDS_ECONOMIC_ADMISSION':'needs-admission',
               'RETIRE_CURRENT15_MICROPACK_TRANSFER':'retire',
+              'CURRENT15_MICROPACK_EXECUTION_BLOCKED':'blocked',
           }[d['verdict']]
-          print(f"artifact_name=v030-current15-{short}-delta{a['delta_bytes']}-wins{a['grouped_wins']}-ties{a['zero_group_ties']}-fails{a['economic_failures']}-{d['corpus_fingerprint'][:12]}")
+          print(f"artifact_name=v030-current15-{short}-done{d['completed_workloads']}-delta{a['delta_bytes']}-wins{a['grouped_wins']}-fails{a['economic_failures']}-exec{a['execution_failures']}-{d['corpus_fingerprint'][:12]}")
           PY
       - run: python tools/check_ci_topology.py .github/workflows/v030-r24-micropack-current15-transfer.yml
       - uses: actions/upload-artifact@v6
