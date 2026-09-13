@@ -22,11 +22,11 @@ const BETA_SHA: [u8; 32] = [
     61, 124, 249, 27, 55, 1, 241, 104, 47, 34, 245, 13, 166, 75,
 ];
 
-fn graph() -> (Vec<PortableEntry>, ContentIdentities) {
+fn graph(control_len: usize) -> (Vec<PortableEntry>, ContentIdentities) {
     let entries = vec![
         PortableEntry {
             path: FILESYSTEM_MANIFEST.into(),
-            size: CONTROL.len() as u64,
+            size: control_len as u64,
             kind: 0,
             mode: 0,
             mtime_ns: 0,
@@ -47,7 +47,7 @@ fn graph() -> (Vec<PortableEntry>, ContentIdentities) {
         },
     ];
     let mut identities = ContentIdentities::new();
-    identities.insert(FILESYSTEM_MANIFEST.into(), (CONTROL.len() as u64, [0; 32]));
+    identities.insert(FILESYSTEM_MANIFEST.into(), (control_len as u64, [0; 32]));
     identities.insert("dir/alpha.bin".into(), (100, ALPHA_SHA));
     identities.insert("dir/beta.bin".into(), (68, BETA_SHA));
     (entries, identities)
@@ -55,7 +55,7 @@ fn graph() -> (Vec<PortableEntry>, ContentIdentities) {
 
 #[test]
 fn independent_python_vector_reconstructs_exact_rust_manifest() {
-    let (graph, identities) = graph();
+    let (graph, identities) = graph(CONTROL.len());
     let manifest = FsManifest::parse_with_identities(CONTROL, &graph, &identities).unwrap();
     let entries = manifest.entries();
     assert_eq!(entries.len(), 5);
@@ -114,4 +114,26 @@ fn independent_python_vector_reconstructs_exact_rust_manifest() {
         FsKind::Symlink { target } => assert_eq!(target, "dir/beta.bin"),
         _ => panic!("symlink did not reconstruct"),
     }
+}
+
+#[test]
+fn implicit_v4_rejects_hardlink_metadata_divergence_from_owner() {
+    // The Python reference rejects a hardlink whose inode-owned metadata differs from
+    // its regular owner. Mutate only the hardlink metadata override from [0] to
+    // [MODE, +1] while preserving the same authenticated owner index.
+    let mut control = CONTROL.to_vec();
+    let marker = [3_u8, 145, 0, 0];
+    let position = control
+        .windows(marker.len())
+        .position(|window| window == marker)
+        .expect("hardlink row marker missing from independent control vector");
+    control.splice(position + 1..position + 3, [146_u8, 1, 1]);
+
+    let (graph, identities) = graph(control.len());
+    let error = FsManifest::parse_with_identities(&control, &graph, &identities)
+        .expect_err("hardlink metadata divergence must be rejected like the Python reference");
+    assert!(
+        error.to_string().contains("hardlink metadata"),
+        "unexpected rejection: {error}"
+    );
 }
