@@ -146,17 +146,20 @@ def _reconstruct(eg07_archive: Path, eg08_archive: Path) -> dict:
                 "actual_sha256": _sha(actual["payload"]),
             })
 
-        # Classify each call after the final selected payload is known. A call is
-        # final-selected only if its candidate bytes equal the actual stored bytes
-        # and that storage differs from the EG07 incumbent. Everything else is
-        # discarded work, split into superseded-best vs never-best for diagnosis.
+        # Classify each call after the final decision. EG08 retains the first
+        # strict-best payload across later ties, so only the strict-best rung
+        # recorded in best_level may receive final-selected credit.
         changed = int(actual["codec"]) != int(row["codec"]) or actual["payload"] != row["payload"]
+        actual_payload_sha = _sha(actual["payload"])
         for call in local_calls:
             candidate_is_final = (
                 changed
+                and best_level is not None
+                and int(call["level"]) == int(best_level)
+                and bool(call["became_strict_best"])
                 and int(call["candidate_codec"]) == int(actual["codec"])
                 and int(call["candidate_storage_bytes"]) == int(actual["csize"])
-                and call["candidate_payload_sha256"] == _sha(actual["payload"])
+                and call["candidate_payload_sha256"] == actual_payload_sha
             )
             if candidate_is_final:
                 call["outcome"] = "final_selected"
