@@ -120,15 +120,29 @@ def _rebuild_manifest(root: Path, manifest: dict) -> dict:
 
 
 def build(root: Path) -> dict:
-    previous = os.environ.get("SOURCE_DATE_EPOCH")
+    previous_epoch = os.environ.get("SOURCE_DATE_EPOCH")
     os.environ["SOURCE_DATE_EPOCH"] = _FIXED_EPOCH
+
+    # ReportLab's PDFDocument derives CreationDate/ModDate and the document ID from
+    # the wall clock unless invariant mode is enabled.  The office workload is meant
+    # to vary by deterministic content, not by when CI happened to create the PDF.
+    try:
+        from reportlab import rl_config
+        previous_invariant = rl_config.invariant
+        rl_config.invariant = 1
+    except Exception:
+        rl_config = None
+        previous_invariant = None
+
     try:
         manifest = BASE.build(root)
     finally:
-        if previous is None:
+        if rl_config is not None:
+            rl_config.invariant = previous_invariant
+        if previous_epoch is None:
             os.environ.pop("SOURCE_DATE_EPOCH", None)
         else:
-            os.environ["SOURCE_DATE_EPOCH"] = previous
+            os.environ["SOURCE_DATE_EPOCH"] = previous_epoch
 
     _normalize_neutral(root)
     return _rebuild_manifest(root, manifest)
