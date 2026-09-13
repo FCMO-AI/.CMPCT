@@ -25,6 +25,7 @@ state changes. No audition is skipped.
 """
 
 import ctypes
+import hashlib
 import msgpack
 import time
 
@@ -36,7 +37,6 @@ from benchmarks.v030_r24_pathdict_fused_encode_referee_v6 import CanonicalRecord
 from benchmarks.v030_r24_pathdict_fused_encode_referee_v4 import TimedFusedPathBlindDictionaryBuilder
 
 
-# Bind the stable public Zstd CDict API without changing the product codec module.
 _create_cdict = C._z.ZSTD_createCDict
 _create_cdict.argtypes = [ctypes.c_void_p, ctypes.c_size_t, ctypes.c_int]
 _create_cdict.restype = ctypes.c_void_p
@@ -56,7 +56,7 @@ class CompiledDictFusedBuilder(TimedFusedPathBlindDictionaryBuilder):
         self._cdict_compile_cpu_s=0.0; self._cdict_compile_wall_s=0.0
 
     def _ensure_native_state(self, dictionary:bytes):
-        key=(len(dictionary), C.hashlib.sha256(dictionary).digest()) if hasattr(C,'hashlib') else (len(dictionary), dictionary[:32])
+        key=(len(dictionary), hashlib.sha256(dictionary).digest())
         if self._compiled_for==key and self._cctx and self._cdict:
             return
         self.close_native_state()
