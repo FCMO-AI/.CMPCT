@@ -90,3 +90,5 @@ jobs:
           path: benchmark-artifacts/v030-pathdict-fused-v7.json
           if-no-files-found: error
           retention-days: 90
+
+# Trigger-only edit after first registration of this workflow on the research branch.
