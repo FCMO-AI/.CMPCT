@@ -35,7 +35,7 @@ jobs:
         run: |
           python -m benchmarks.v030_r24_micropack_content_selective_read_referee \
             --output benchmark-artifacts/v030-micropack-content-selective-read.json
-      - name: Validate receipt shape
+      - name: Validate and expose receipt
         run: |
           python - <<'PY'
           import json
@@ -53,11 +53,30 @@ jobs:
               'RETIRE_CONTENT_ECONOMIC_SELECTIVE_READ',
           }
           assert not r['invariant_failures'], r['invariant_failures']
-          print(json.dumps({
+          compact = {
               'verdict': r['verdict'],
               'timing_debt_vs_independent': r['timing_debt_vs_independent'],
               'timing_debt_vs_extension': r['timing_debt_vs_extension'],
-          }, sort_keys=True))
+              'sources': {
+                  name: {
+                      'content_bytes': row.get('variants', {}).get('content_economic', {}).get('final_membership_bytes'),
+                      'independent_bytes': row.get('variants', {}).get('independent', {}).get('final_membership_bytes'),
+                      'extension_bytes': row.get('variants', {}).get('extension', {}).get('final_membership_bytes'),
+                      'content_max_decode': row.get('variants', {}).get('content_economic', {}).get('max_decode_unit_bytes'),
+                      'content_max_amp': row.get('variants', {}).get('content_economic', {}).get('max_member_amplification'),
+                      'independent_ms_per_probe': row.get('timings', {}).get('independent', {}).get('median_read_wall_ms_per_probe'),
+                      'extension_ms_per_probe': row.get('timings', {}).get('extension', {}).get('median_read_wall_ms_per_probe'),
+                      'content_ms_per_probe': row.get('timings', {}).get('content_economic', {}).get('median_read_wall_ms_per_probe'),
+                      'content_decoded_context_sum': row.get('timings', {}).get('content_economic', {}).get('sum_decoded_context_bytes'),
+                      'independent_decoded_context_sum': row.get('timings', {}).get('independent', {}).get('sum_decoded_context_bytes'),
+                  }
+                  for name, row in r['sources'].items()
+              },
+          }
+          payload = json.dumps(compact, sort_keys=True, separators=(',', ':'))
+          print(payload)
+          print(f'::notice title=v030 selective-read receipt::{payload}')
+          summary = Path('${{ github.step_summary }}') if '${{ github.step_summary }}' else None
           PY
       - uses: actions/upload-artifact@v4
         with:
