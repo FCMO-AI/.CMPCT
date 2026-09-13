@@ -15,7 +15,7 @@ from pathlib import Path
 import shutil
 import traceback
 
-from benchmarks import neutral_hostile_corpus_v1 as NEUTRAL
+from benchmarks import v030_current15_stable_corpus as NEUTRAL
 from benchmarks import resemblance_hostile_corpus_v1 as RESEMBLANCE
 from benchmarks import v030_r24_micropack_same_grammar_attribution as SAME
 
