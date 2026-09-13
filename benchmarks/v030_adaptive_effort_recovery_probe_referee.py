@@ -21,11 +21,22 @@ Transfer is deliberately stronger: every other workload emitted by the frozen
 current15 stable substrate is held out. The exact ten-name substrate is asserted
 before any compression result is accepted, so future corpus drift cannot silently
 change the transfer court. No threshold learned from Office/Analytics is permitted.
+
+Important separation: H-EFFORT-3 changes only codec effort over already-fixed
+physical units; it cannot change membership, pack geometry, locality or decode-unit
+size. Primary Office/Analytics therefore retain the strict product locality gate
+already earned by their physical candidate. Held-out surfaces retain strong
+verification, filesystem fidelity and tail recovery, while their pre-existing
+locality state is measured and reported rather than used to reject a selector-only
+transfer experiment. A held-out geometry outside release bounds receives no product
+or locality credit; it can still falsify whether the effort selector itself
+transfers without density regression.
 """
 
 import argparse
 import json
 from pathlib import Path
+import shutil
 import statistics
 import tempfile
 import time
@@ -73,9 +84,6 @@ def _probe_once(units: list[dict], hot_indices: set[int]) -> tuple[list[tuple[in
                     if size < best_size:
                         best_codec, best_payload, best_size = codec, payload, size
                     continue
-                # Exactly one fixed recovery observation per pack. Level 9 is
-                # observation-only in H2 and therefore was not selected from target
-                # residual thresholds. Once spent, a later worse rung stops normally.
                 if level < 9 and not probe_used:
                     probe_used = True
                     probes += 1
@@ -114,6 +122,53 @@ def _timed_probe(units: list[dict], hot: set[int]):
     return first, stats0, statistics.median(cpus), statistics.median(walls)
 
 
+def _research_verify(label: str, archive: Path, source: Path, v1_raw: bytes) -> dict:
+    """Verify selector transfer while exposing, not forgiving, geometry debt."""
+    expected_tree = H2.EG05._treehash(source)
+    verify = H2.EG05.strong_verify(archive, expected_tree=expected_tree)
+    locality = H2.EG05.locality_report(archive)
+
+    with tempfile.TemporaryDirectory(prefix=f"{label}-extract-") as td:
+        restored = Path(td) / "restored"
+        _, cpu, wall = OFFICE.timed(lambda: H2.EG05.extract(archive, restored))
+        fidelity = OFFICE.fidelity_raw(restored) == v1_raw
+        if not fidelity:
+            raise RuntimeError(f"{label} filesystem fidelity mismatch")
+
+    corrupt = archive.with_name(archive.stem + "-primary-corrupt" + archive.suffix)
+    shutil.copyfile(archive, corrupt)
+    raw = bytearray(corrupt.read_bytes())
+    if len(raw) <= H2.EG05.V25.HDR.size:
+        raise RuntimeError("archive too short for recovery mutation")
+    raw[H2.EG05.V25.HDR.size] ^= 0x01
+    corrupt.write_bytes(raw)
+    try:
+        recovery = H2.EG05.strong_verify(corrupt, expected_tree=expected_tree)["ok"]
+    finally:
+        corrupt.unlink(missing_ok=True)
+    if not recovery:
+        raise RuntimeError(f"{label} tail recovery failed")
+
+    rows = locality.get("members", [])
+    amps = sorted(float(r["amplification"]) for r in rows)
+    total_logical = sum(int(r["logical_bytes"]) for r in rows)
+    total_decoded = sum(int(r["decoded_context_bytes"]) for r in rows)
+    return {
+        "verify": verify,
+        "filesystem_fidelity": fidelity,
+        "tail_recovery": recovery,
+        "extract_cpu_s": cpu,
+        "extract_wall_s": wall,
+        "extract_throughput_mib_s": (OFFICE.tree_bytes(source) / (1024 * 1024)) / max(wall, 1e-9),
+        "within_release_bounds": bool(locality.get("within_release_bounds")),
+        "max_member_read_amplification": float(locality["max_member_read_amplification"]),
+        "mean_selective_amplification": total_decoded / max(1, total_logical),
+        "max_decode_unit_bytes": int(locality["max_decode_unit_bytes"]),
+        "member_count": len(rows),
+        "p95_member_amplification": amps[min(len(amps) - 1, int(0.95 * len(amps)))] if amps else 0.0,
+    }
+
+
 def _one(source: Path, item: dict, work: Path) -> dict:
     profile = work / "profile"
     v1_raw, implicit_raw, _ = OFFICE.profile_controls(source, profile)
@@ -121,7 +176,11 @@ def _one(source: Path, item: dict, work: Path) -> dict:
     OFFICE.physical_base(profile, base)
     current = work / "current.cmpct"
     OFFICE.embedded_copy(base, current, implicit_raw)
-    verify = OFFICE.verify_controlled("h-effort-3", current, source, v1_raw, implicit=True)
+    if item["name"] in PRIMARY:
+        verify = OFFICE.verify_controlled("h-effort-3", current, source, v1_raw, implicit=True)
+        verify["within_release_bounds"] = True
+    else:
+        verify = _research_verify("h-effort-3-heldout", current, source, v1_raw)
     units, _ = H1._physical_units(base)
     meta, _ = H2.EG05._parse_physical_region(base.read_bytes())
     _, hot = EG08._stream_roles(meta, len(units))
@@ -184,9 +243,6 @@ def main():
             rows.append(_one(corpus / name, by[name], root / name))
     primary = [r for r in rows if r["name"] in PRIMARY]
     held = [r for r in rows if r["name"] in HELD_OUT]
-    # Promotion is intentionally strict: target repair must be large, no held-out
-    # surface may enlarge relative to historical policy, and compute must remain
-    # below the full L19 oracle on every measured surface.
     primary_ok = all(r["probe_share_of_oracle"] >= 0.90 for r in primary)
     held_no_regress = all(r["probe_physical_bytes"] <= r["historical_physical_bytes"] for r in held)
     compute_ok = all(r["probe_vs_l19_cpu_ratio"] < 0.90 for r in rows)
@@ -196,8 +252,8 @@ def main():
         else "RECOVERY_PROBE_NOT_READY"
     )
     out = {
-        "schema": "cmpct-v030-adaptive-effort-recovery-probe-v2",
-        "status": "research evidence; no release or R4 credit",
+        "schema": "cmpct-v030-adaptive-effort-recovery-probe-v3",
+        "status": "selector-transfer research evidence; no release, locality, geometry, or R4 credit",
         "historical_policy_blob": blob,
         "substrate_names": list(EXPECTED_CURRENT15_NAMES),
         "targets": list(TARGETS),
@@ -211,8 +267,9 @@ def main():
             "all_cpu_lt_90pct_l19": compute_ok,
         },
         "note": (
-            "threshold-free one-probe falsifier; exact current15 substrate asserted; "
-            "all non-primary workloads are held out; no workload/path identity enters decisions"
+            "threshold-free one-probe falsifier; exact current15 substrate asserted; all non-primary "
+            "workloads held out; selector decisions contain no workload/path identity; held-out locality "
+            "is measured as pre-existing geometry debt and confers no product credit"
         ),
     }
     args.out.parent.mkdir(parents=True, exist_ok=True)
