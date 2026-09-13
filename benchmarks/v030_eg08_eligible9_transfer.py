@@ -90,6 +90,16 @@ def main() -> None:
             w=work/f"{family}-{item['name']}"; w.mkdir(); row,v29=one(family,root/item["name"],item,w,args.v029_checkout); rows.append(row); analytics_v29=v29 or analytics_v29
         non_office_wins=sum(1 for r in rows if r["name"]!="02_office_workspace" and r["saved_bytes"]>0)
         analytics=next(r for r in rows if r["name"]==ANALYTICS)
+        low_yield_rows=[
+            {
+                "family":r["family"],"name":r["name"],"saved_bytes":r["saved_bytes"],"cpu_ratio":r["cpu_ratio"],
+                "effort_attempts":r["effort_attempts"],"repack_cpu_s":r["repack_cpu_s"],"selected_levels":r["selected_levels"],
+            }
+            for r in rows if r["saved_bytes"]<4096 and r["cpu_ratio"]>1.50
+        ]
+        selected_level_totals={"current":0,"3":0,"6":0,"12":0,"19":0}
+        for r in rows:
+            for level,count in r["selected_levels"].items(): selected_level_totals[str(level)]=selected_level_totals.get(str(level),0)+int(count)
         conditions={
             "nine_workloads":len(rows)==9,
             "all_current_sources_sealed":all(r["current_source_sealed"] for r in rows),
@@ -100,13 +110,14 @@ def main() -> None:
             "at_least_two_non_office_strict_wins":non_office_wins>=2,
             "analytics_strict_eg07_byte_win":analytics["saved_bytes"]>0,
             "analytics_at_least_10x_faster_than_v029":analytics.get("eg08_cpu_ratio_vs_v029",999)<=0.10,
-            "low_yield_cpu_export_cost_ok":all(not (r["saved_bytes"]<4096 and r["cpu_ratio"]>1.50) for r in rows),
+            "low_yield_cpu_export_cost_ok":not low_yield_rows,
         }
         verdict="EG08_ELIGIBLE9_TRANSFER_PASSES" if all(conditions.values()) else "EG08_ELIGIBLE9_TRANSFER_BLOCKED"
         out={
-            "schema":"v030-eg08-eligible9-transfer-v2","verdict":verdict,"conditions":conditions,"workloads":rows,"non_office_strict_win_count":non_office_wins,
+            "schema":"v030-eg08-eligible9-transfer-v3","verdict":verdict,"conditions":conditions,"workloads":rows,"non_office_strict_win_count":non_office_wins,
             "aggregate_eg07_bytes":sum(int(r["eg07_bytes"]) for r in rows),"aggregate_eg08_bytes":sum(int(r["eg08_bytes"]) for r in rows),"aggregate_saved_bytes":sum(int(r["saved_bytes"]) for r in rows),
             "worst_cpu_ratio":max(float(r["cpu_ratio"]) for r in rows),"max_positive_rss_delta_kib":max(0,max(int(r["rss_delta_kib"]) for r in rows)),"analytics_frozen_v029":analytics_v29,
+            "low_yield_cpu_offenders":low_yield_rows,"selected_level_totals":selected_level_totals,
         }
         args.out.parent.mkdir(parents=True,exist_ok=True); args.out.write_text(json.dumps(out,indent=2,sort_keys=True),encoding="utf-8"); print(json.dumps(out,indent=2,sort_keys=True))
 
