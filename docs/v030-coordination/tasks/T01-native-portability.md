@@ -104,6 +104,16 @@ This T01-only mutation is deliberately fingerprint-neutral and exists solely to 
 
 If both lanes finish green, record their exact candidate fingerprint and source custody before advancing any portability claim. If either lane is red, preserve the failure and diagnose it before touching product code; missing runners, dependency outages, timeouts and custody defects are infrastructure evidence rather than product losses.
 
+### Post-hardlink-custody exact-fingerprint revalidation request — 2026-09-13
+
+The hardlink metadata parity repair is already present in the product candidate, and native-authority has independently completed green on release fingerprint `e617b854ae2af6997dce59d1d69a7dec583c03355e637a7c3a3b8749318e98c3` at source `bb75d1912499e4660b2ef319894131885f4fb4db`. Its strict artifact reports a stable fingerprint and green G04, PrefixGraph, Logs inverse, implicit-v4, recovery, genuine r24 fallback, builder-independent golden and shared-core facts.
+
+This coordination-only mutation does not participate in the release fingerprint. It is the deliberate request to execute the full result-bearing ZIP-portability matrix (and any other T01-scoped classifier that requires this hook) on the same unchanged product fingerprint so T01 can distinguish a real exact-candidate parity result from stale historical receipts.
+
+Disproof remains strict: any ZIP round-trip/member-tree mismatch, candidate-fingerprint disagreement, dependency-lock drift, locality/recovery regression, or substantive matrix failure blocks portability credit. Classifier-only green, stale receipts, or a harness/provider failure do not count as a product result. Diagnose infrastructure/custody failures before touching product code.
+
+No archive grammar, product code, selector rule, benchmark corpus, threshold, locality ceiling, integrity/recovery requirement, platform requirement, release score, or version is changed by this request.
+
 ## Current continuation rule
 
 Work directly on the authoritative branch. Preserve useful earlier implementation/evidence provenance where it still applies, but rerun every normative native/platform receipt on the final reconciled fingerprint. Historical or pre-fingerprint greens prove mechanisms only.
