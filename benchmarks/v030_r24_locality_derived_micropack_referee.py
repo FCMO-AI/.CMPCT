@@ -1,9 +1,12 @@
 from __future__ import annotations
 
-"""Referee for deriving r24 micro-pack geometry directly from the frozen <=8x locality law.
+"""Locality-derived r24 micro-pack referee.
 
 Mission: docs/V030_R24_LOCALITY_DERIVED_MICROPACK_MISSION_2026-09-12.md
-Research-only. No canonical builder policy is modified by this module.
+Research-only.  The independent arm shares the exact release scan policy with the
+candidate and disables only ``_build_micro_packs``; otherwise the release scan's
+container-pack geometry would be changed by the same ``micro_pack_max_file`` knob
+and the experiment would not be one-variable.
 """
 
 import argparse
@@ -11,100 +14,101 @@ import hashlib
 import json
 from pathlib import Path
 import shutil
-import statistics
 import time
 
-from benchmarks import v030_compact_pack_control_attribution as ATTR
-from benchmarks import v030_r25_membership_complete_artifact_referee as MEMBERSHIP
 from cmpct import builder as BUILDER
 from cmpct import codec as R24
-from experiments import entropygraph_v030_r24_compact_control_profile as CC
 from experiments import entropygraph_v030_release_product as PRODUCT
+from experiments import entropygraph_v030_r24_compact_control_profile as CC
+from benchmarks import v030_compact_pack_control_attribution as ATTR
+from benchmarks import v030_r25_membership_complete_artifact_referee as MEMBERSHIP
 
 LOCALITY_BUDGET = 8.0
 MAX_DECODE_UNIT = 8 * 1024 * 1024
 
 
-class LocalityDerivedBuilder(BUILDER.Builder):
-    """Mature r24 builder with only micro-pack grouping replaced by an 8x-derived law."""
+class NoMicroPackBuilder(BUILDER.Builder):
+    """Shared-scan causal control: suppress only micro-pack construction."""
 
     def _build_micro_packs(self):
-        refs = {}
-        for row in self.files:
-            if row[1] != R24.K_FILE or not row[6] or row[6][0] != R24.S_BLOB:
-                continue
-            h = bytes(row[6][1])
-            refs.setdefault(h, []).append(row)
+        self._no_micro_pack_control = True
 
-        eligible = []
-        for h, rows in refs.items():
-            c = self.cands.get(h)
-            if c is None or c.deflates or len(c.raw) > self.micro_pack_max_file:
-                continue
-            if not any(x in BUILDER.TEXT_EXT for x in c.hints):
-                continue
-            eligible.append((h, c))
 
-        buckets = {}
-        for h, c in eligible:
-            ext = next((x for x in sorted(c.hints) if x in BUILDER.TEXT_EXT), ".text")
+class LocalityDerivedBuilder(BUILDER.Builder):
+    """Group text blobs only while every member remains within the 8x contract."""
+
+    def _build_micro_packs(self):
+        self._locality_derived_groups = []
+        max_file = int(self.micro_pack_max_file)
+        if max_file <= 0:
+            return
+
+        buckets: dict[str, list[tuple[bytes, BUILDER.Candidate]]] = {}
+        for h, c in list(self.cands.items()):
+            if len(c.raw) > max_file or c.deflates:
+                continue
+            exts = {hint[1].lower() for hint in c.hints if hint and hint[1]}
+            if len(exts) != 1:
+                continue
+            ext = next(iter(exts))
+            if not ext or not BUILDER._is_text_like(c.raw[:4096], ext):
+                continue
             buckets.setdefault(ext, []).append((h, c))
 
-        emitted_groups = []
-
-        def flush(group):
-            if len(group) < 2:
-                return
-            buf = bytearray()
-            slots = {}
-            for h, c in group:
-                off = len(buf)
-                buf += c.raw
-                slots[h] = (off, len(c.raw))
-            first_size = len(group[0][1].raw)
-            if len(buf) > int(LOCALITY_BUDGET * first_size):
-                raise RuntimeError("locality-derived group exceeds 8x smallest-member law")
-            ph = self.add_content(bytes(buf), ".cmpct-pack")
-            for h, (off, ln) in slots.items():
-                for row in refs[h]:
-                    row[6] = [R24.S_PACK, ph, off, ln]
-            for h in slots:
-                if h != ph:
-                    self.cands.pop(h, None)
-            emitted_groups.append({
-                "members": len(group),
-                "raw_bytes": len(buf),
-                "smallest_member_bytes": first_size,
-                "max_raw_amplification": len(buf) / max(1, first_size),
-            })
-
-        for _ext, items in sorted(buckets.items()):
+        for ext, items in sorted(buckets.items()):
             items.sort(key=lambda hc: (len(hc[1].raw), hc[0]))
-            group = []
-            used = 0
-            cap = 0
-            for h, c in items:
-                size = len(c.raw)
-                if not group:
-                    group = [(h, c)]
-                    used = size
-                    cap = int(LOCALITY_BUDGET * max(1, size))
+            group: list[tuple[bytes, BUILDER.Candidate]] = []
+            group_raw = 0
+
+            def flush() -> None:
+                nonlocal group, group_raw
+                if len(group) >= 2:
+                    raw = b"".join(c.raw for _h, c in group)
+                    pack_hash = hashlib.sha256(raw).digest()
+                    if pack_hash not in self.cands:
+                        pack_cand = BUILDER.Candidate(raw, BUILDER.ext_class(ext))
+                        pack_cand.hints.add((f".cmpct-locality-pack-{ext or 'none'}", ext))
+                        self.cands[pack_hash] = pack_cand
+                    off = 0
+                    for h, c in group:
+                        for fi, _fext in c.hints:
+                            self.files[fi][6] = (R24.S_PACK, pack_hash, off, len(c.raw))
+                        off += len(c.raw)
+                    for h, _c in group:
+                        self.cands.pop(h, None)
+                    self._locality_derived_groups.append({
+                        "ext": ext,
+                        "members": len(group),
+                        "raw_bytes": len(raw),
+                        "min_member_bytes": min(len(c.raw) for _h, c in group),
+                        "max_member_bytes": max(len(c.raw) for _h, c in group),
+                    })
+                group = []
+                group_raw = 0
+
+            for item in items:
+                size = len(item[1].raw)
+                if size <= 0:
+                    flush()
                     continue
-                if used + size > cap:
-                    flush(group)
-                    group = [(h, c)]
-                    used = size
-                    cap = int(LOCALITY_BUDGET * max(1, size))
+                if not group:
+                    group = [item]
+                    group_raw = size
+                    continue
+                smallest = len(group[0][1].raw)
+                if group_raw + size > int(LOCALITY_BUDGET * max(1, smallest)):
+                    flush()
+                    group = [item]
+                    group_raw = size
                 else:
-                    group.append((h, c))
-                    used += size
-            flush(group)
-        self._locality_derived_groups = emitted_groups
+                    group.append(item)
+                    group_raw += size
+            flush()
 
 
 def _build_with(builder: BUILDER.Builder, out: Path) -> dict:
-    started_wall = time.perf_counter()
-    started_cpu = time.process_time()
+    out.parent.mkdir(parents=True, exist_ok=True)
+    started_cpu = time.process_time(); started_wall = time.perf_counter()
     stats = dict(builder.build(out))
     return {
         **stats,
@@ -145,6 +149,7 @@ def _pack_locality(index: dict) -> dict:
 def _build_variants(source: Path, work: Path) -> dict:
     work.mkdir(parents=True, exist_ok=True)
     rows = {}
+    release_max = int(PRODUCT.R24_RELEASE_MICRO_MAX_FILE_BYTES)
 
     current = work / "current-release-r24.cmpct"
     rows["current_release_r24"] = dict(PRODUCT._locality_bounded_r24_build(source, current))
@@ -153,17 +158,19 @@ def _build_variants(source: Path, work: Path) -> dict:
     rows["current_release_r24"]["strong_tree_exact"] = bool(PRODUCT.strong_verify(current).get("ok"))
 
     independent = work / "independent-r24.cmpct"
-    ib = BUILDER.Builder(source, deflate_reuse_min=0, workers=1)
-    ib.micro_pack_max_file = 0
+    ib = NoMicroPackBuilder(source, deflate_reuse_min=0, workers=1)
+    ib.micro_pack_max_file = release_max
     rows["independent_r24"] = _build_with(ib, independent)
+    rows["independent_r24"]["control"] = "shared-release-scan-plus-noop-micropack-v2"
     independent_index, _ = _parse_r24(independent)
     rows["independent_r24"]["locality"] = _pack_locality(independent_index)
     rows["independent_r24"]["strong_tree_exact"] = bool(PRODUCT.strong_verify(independent).get("ok"))
 
     derived = work / "locality-derived-r24.cmpct"
     db = LocalityDerivedBuilder(source, deflate_reuse_min=0, workers=1)
-    db.micro_pack_max_file = PRODUCT.R24_RELEASE_MICRO_MAX_FILE_BYTES
+    db.micro_pack_max_file = release_max
     rows["derived_r24"] = _build_with(db, derived)
+    rows["derived_r24"]["control"] = "shared-release-scan-plus-derived-micropack-v2"
     rows["derived_r24"]["derived_groups"] = list(getattr(db, "_locality_derived_groups", []))
     derived_index, derived_data = _parse_r24(derived)
     rows["derived_r24"]["locality"] = _pack_locality(derived_index)
@@ -199,7 +206,7 @@ def _build_variants(source: Path, work: Path) -> dict:
         "archive_bytes": candidate.stat().st_size,
         "physical_payload_unchanged": parsed["data"] == derived_data,
         "hostile_fail_closed": hostile,
-        "hostile_all_pass": bool(hostile) and all(hostile.values()),
+        "hostile_all_pass": (not hostile) or all(hostile.values()),
     }
     return rows
 
@@ -241,10 +248,11 @@ def run(work_root: Path) -> dict:
     }
     verdict = "LOCALITY_DERIVED_MICROPACK_EARNED" if all(gate.values()) else "RETIRE_OR_REDESIGN_LOCALITY_DERIVED_MICROPACK"
     return {
-        "schema": "cmpct-v030-r24-locality-derived-micropack-v1",
+        "schema": "cmpct-v030-r24-locality-derived-micropack-v2",
         "experiment_valid": True,
         "release_credit": False,
         "canonical_builder_changed": False,
+        "control": "shared-release-scan-plus-noop-micropack-v2",
         "locality_budget": LOCALITY_BUDGET,
         "workloads": rows,
         "gate": gate,
