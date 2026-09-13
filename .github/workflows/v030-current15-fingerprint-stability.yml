@@ -54,16 +54,26 @@ jobs:
           assert d['workloads_a']==15 and d['workloads_b']==15
           assert d['verdict'] in {'CURRENT15_FINGERPRINT_STABLE','CURRENT15_FINGERPRINT_SUBSTRATE_UNSTABLE'}
           unstable=d['unstable_workloads']
-          slug=lambda s: re.sub(r'[^A-Za-z0-9_-]+','-',s.replace('/','_'))[:36]
-          u='none' if not unstable else '+'.join(slug(x) for x in unstable[:3])
-          first_file='none'; first_offset='none'
+          first_file='none'; first_offset='none'; ctxa='none'; ctxb='none'
           if unstable:
               fd=d.get('file_differences',{}).get(unstable[0],{})
               if fd:
-                  first_file=slug(next(iter(fd)))
-                  off=fd[next(iter(fd))].get('first_differing_byte')
+                  first_file=next(iter(fd))
+                  rec=fd[first_file]
+                  off=rec.get('first_differing_byte')
                   first_offset='none' if off is None else str(off)
-          outs={'short':'stable' if not unstable else 'unstable','n':str(len(unstable)),'u':u,'file':first_file,'off':first_offset,'fa':d['fingerprint_a'][:12],'fb':d['fingerprint_b'][:12]}
+                  for key,outkey in [('context_a','a'),('context_b','b')]:
+                      ctx=rec.get(key)
+                      if not ctx or off is None:
+                          sig='none'
+                      else:
+                          raw=bytes.fromhex(ctx['hex']); rel=int(off)-int(ctx['start'])
+                          lo=max(0,rel-8); hi=min(len(raw),rel+16)
+                          sig=raw[lo:hi].hex()
+                      if outkey=='a': ctxa=sig
+                      else: ctxb=sig
+          slug=lambda s: re.sub(r'[^A-Za-z0-9_-]+','-',str(s).replace('/','_'))[:28]
+          outs={'short':'stable' if not unstable else 'unstable','n':str(len(unstable)),'file':slug(first_file),'off':first_offset,'ctxa':ctxa,'ctxb':ctxb,'fa':d['fingerprint_a'][:10],'fb':d['fingerprint_b'][:10]}
           with open(os.environ['GITHUB_OUTPUT'],'a',encoding='utf-8') as fh:
               for k,v in outs.items(): fh.write(f'{k}={v}\n')
           print(json.dumps({'verdict':d['verdict'],'fingerprint_a':d['fingerprint_a'],'fingerprint_b':d['fingerprint_b'],'unstable_workloads':unstable,'differences':d['differences'],'file_differences':d.get('file_differences',{})},sort_keys=True))
@@ -71,7 +81,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: v030-current15fp-${{ steps.receipt.outputs.short || 'nosummary' }}-n${{ steps.receipt.outputs.n }}-${{ steps.receipt.outputs.u }}-file-${{ steps.receipt.outputs.file }}-off-${{ steps.receipt.outputs.off }}-${{ steps.receipt.outputs.fa }}-${{ steps.receipt.outputs.fb }}-${{ github.sha }}
+          name: v030-fp-${{ steps.receipt.outputs.short || 'nosummary' }}-n${{ steps.receipt.outputs.n }}-${{ steps.receipt.outputs.file }}-off${{ steps.receipt.outputs.off }}-a${{ steps.receipt.outputs.ctxa }}-b${{ steps.receipt.outputs.ctxb }}-${{ steps.receipt.outputs.fa }}-${{ steps.receipt.outputs.fb }}-${{ github.sha }}
           path: benchmark-artifacts/v030-current15-stability.json
           if-no-files-found: error
           retention-days: 90
