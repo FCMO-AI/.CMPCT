@@ -23,7 +23,7 @@ const OVERRIDE_MASK: u64 =
 
 pub(crate) type ContentIdentities = HashMap<String, (u64, [u8; 32])>;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct FsMetadata {
     pub mode: u32,
     pub mtime_ns: i64,
@@ -137,6 +137,11 @@ impl FsManifest {
                 if !matches!(&owner.kind, FsKind::File { .. }) {
                     return Err(PortableError::Format(
                         "r25 hardlink owner is not a regular file".into(),
+                    ));
+                }
+                if entry.metadata != owner.metadata {
+                    return Err(PortableError::Format(
+                        "r25 hardlink metadata must match regular-file owner".into(),
                     ));
                 }
             }
