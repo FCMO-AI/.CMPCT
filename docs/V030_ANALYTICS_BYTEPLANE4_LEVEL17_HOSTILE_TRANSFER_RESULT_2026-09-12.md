@@ -22,10 +22,10 @@ The preregistered transfer verdict required both positives to select the transfo
 - selected transforms: **8/8 strong auditions**
 - raw transformed bytes: **2,097,152 B**
 - net payload saving: **2,056,148 B**
-- strong-transform CPU: **0.3783257385 s**
+- strong transformed-payload **Zstd-17 compression** CPU: **0.3783257385 s**
 - speedup versus L19: **-333.12%**
 
-The representation signal is enormous, but the current Python transform execution dominates the whole job and violates the frozen speed gate.
+The representation signal is enormous, but recompressing the already shuffled payload at level 17 dominates the whole job and violates the frozen speed gate.
 
 ### Positive: `mixed32`
 
@@ -60,14 +60,16 @@ Both false friends passed the frozen rejection contract.
 
 The verdict is negative because `counter32` failed the preregistered speed requirement. The result must not be repaired by changing width, level, positive threshold or fixture identity.
 
-However, the causal failure is narrower than “BytePlane4 does not generalize.” The fixed representation produced very large byte wins on both independently generated structured positives and zero false positives on both entropy-dense negatives. The failure was execution cost: on the largest counter fixture, strong BytePlane transformation alone consumed about 0.378 s while the entire direct-L19 verified creation took only about 0.110 s.
+However, the causal failure is narrower than “BytePlane4 does not generalize.” The fixed representation produced very large byte wins on both independently generated structured positives and zero false positives on both entropy-dense negatives. The failure was execution cost inside the transformed-payload strong encode.
 
-That distinction redirects work from selector/representation tuning to **bulk transform execution**. It is consistent with the existing native-core roadmap and with the ONE-derived lesson to move repeated byte-oriented work out of Python hot loops when the representation has already earned its existence.
+A hostile review of the exact implementation corrected an initially tempting but wrong diagnosis: `_shuffle4()` is performed before the `strong_transform_cpu_s` timer, during the cheap level-1 audition. The reported ~0.378 s on `counter32` therefore **cannot be attributed to Python byte-plane shuffling**. It is the subsequent Zstd-17 compression of the already shuffled payload. This correction is important because optimizing the transpose would attack the wrong bottleneck.
+
+The cheap audition has already paid for `plane1 = Zstd-1(BytePlane4(raw))`. The next causal question is therefore whether those already-computed `plane1` bytes can be reused as the final transformed representation when they also beat direct level 17, eliminating the redundant transformed level-17 encode entirely. That is a direct ONE-style fused-observation/reuse hypothesis, not a new selector or representation width.
 
 ## Next decisive action
 
-Do not modify the frozen representation or selector. Profile the exact width-4 forward/inverse transform implementation and build a byte-identical bulk implementation using a low-level contiguous operation (first a vectorized/slicing lower-bound referee, then native C/Rust only if the lower bound is material). The experiment must hold compressed bytes and transform selection constant and measure only transform CPU/wall/RSS.
+Freeze level 17, width 4 and the same cheap audition. Build an **audition-reuse referee** in which a cheap-gate winner may store the already-produced framed level-1 transformed payload directly if it is strictly smaller than direct level 17. No transformed level-17 recompression is allowed in the candidate.
 
-The target is causal: determine whether implementation overhead, rather than the representation itself, explains the `counter32` failure. If a byte-identical bulk transform cannot recover most of the 0.378 s cost, retire transform-execution optimization and preserve the seed as an Analytics-specific research result. If it can, transfer the faster primitive back to the frozen Analytics seed and rerun the same hostile fixtures unchanged.
+First test the frozen Analytics workload against direct L17 and the prior strong BP4+L17 seed. Continuation requires crossing the accepted-v0.29 byte floor while materially reducing complete verified creation. If Analytics cannot retain the byte floor, retire audition reuse without tuning. If it can, rerun the exact same hostile fixtures unchanged; `counter32` then becomes a particularly strong falsifier because its prior failure was almost entirely transformed-payload level-17 work.
 
 No aggregate v0.30 score changes. `research/cmpct1` and the frozen ONE Genesis result remain untouched.
