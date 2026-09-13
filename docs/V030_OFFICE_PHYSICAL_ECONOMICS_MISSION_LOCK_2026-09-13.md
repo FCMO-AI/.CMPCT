@@ -105,3 +105,11 @@ If mixed, rank the byte-weighted causes and attack the largest general mechanism
 - Frozen Genesis scores remain frozen.
 - Historical comparators must execute frozen source packages with the source seal.
 - Negative results and harness failures are durable evidence, not reasons to weaken the referee.
+
+## Comparator semantic-identity amendment
+
+This amendment changes **no hypothesis, threshold, corpus, locality rule or verdict law**. It only seals the historical comparator identity after an earlier source-sealed run proved that executing the shipping r24 `Builder` from the correct frozen checkout is not equivalent to executing the v0.29 research product used by Genesis.
+
+The exact Genesis recovery harness (`7e14e6867a329bc3281e9016e673c46dc3feb081`) identifies frozen v0.29 as `experiments/entropygraph_v029_residual_strict.py` at source `02b8b27cb2d97af7c6e0797984a898e8fa8a8e5d`. The referee must therefore load that facade from the frozen checkout in a fresh process and fail closed if any loaded `cmpct` module escapes the frozen checkout's `src/cmpct` tree.
+
+The earlier Office run that executed the shipping r24 `Builder` and reported approximately 15.45 MB is retained as a **comparator-semantic harness invalid**, not as product evidence. It may not enter the H-OFFICE-PHYS-1 regret denominator. The existing B↔C same-payload observation remains independent of this comparator correction.
