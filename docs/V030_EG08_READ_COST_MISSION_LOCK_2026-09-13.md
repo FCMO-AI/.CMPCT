@@ -74,3 +74,7 @@ This referee does not change the EG08 effort ladder, pack membership, selectors,
 ## Execution note — post-EG11
 
 The contract above remains byte-for-byte unchanged in meaning after EG11. EG11 proved that EG08's exact bytes can be created with less duplicate encoder work; it does not answer whether those bytes export reader cost. Re-execute this already-frozen hostile review before giving EG08/EG11 frontier promotion credit. No threshold, surface, repetition count or timing rule is changed by this note.
+
+## Independent reproduction note
+
+Hosted run `34765042618` produced `EG08_READ_COST_DEBT` solely because Office strong verification crossed the inherited rule by about `+6.3% / +5.8 ms`; extraction had no confirmed regression and reader RSS delta was zero. Because the absolute effect is small and close enough to ordinary hosted timing scales to deserve adversarial replication, execute this **unchanged** contract one additional time on a fresh hosted runner. Do not pool, average, retune or replace either run after observing it. The first result remains evidence regardless of reproduction outcome. A second matching Office debt strengthens the frame-level cost diagnosis; disagreement leaves timing stability as explicit ambiguity and still does not authorize promotion.
