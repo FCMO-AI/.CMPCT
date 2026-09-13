@@ -1,9 +1,9 @@
-name: CMPCT v0.30 pathdict CCtx attribution lane
+name: CMPCT v0.30 pathdict research attribution lane
 on:
   workflow_dispatch:
   push:
     branches: [agent/v030-authoritative-integration]
-    paths: ['benchmarks/v030_r24_pathdict_fused_encode_referee_v11.py','benchmarks/v030_r24_pathdict_fused_encode_referee_v10.py','benchmarks/v030_r24_pathdict_fused_encode_referee.py','src/cmpct/**','.github/workflows/v030-r24-pathdict-fused-encode-v10.yml']
+    paths: ['benchmarks/v030_r24_pathdict_admission_attribution_v12.py','benchmarks/v030_r24_pathdict_fused_encode_referee_v8.py','benchmarks/v030_r24_pathdict_fused_encode_referee.py','src/cmpct/**','.github/workflows/v030-r24-pathdict-fused-encode-v10.yml']
 permissions: {contents: read}
 jobs:
   referee:
@@ -16,19 +16,11 @@ jobs:
       - run: sudo apt-get update && sudo apt-get install -y zstd gcc ffmpeg libsndfile1 && python -m pip install -e '.[audio,test]'
       - run: |
           mkdir -p benchmark-artifacts
-          python -m benchmarks.v030_r24_pathdict_fused_encode_referee_v11 --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/work" --output "$GITHUB_WORKSPACE/benchmark-artifacts/v11.json"
-      - id: summary
-        run: |
-          python - <<'PY'
-          import json,os
-          d=json.load(open('benchmark-artifacts/v11.json'));r=d['rows'];a=d['aggregate'];ff=sum(x['fused']['frame_identity_failures'] for x in r.values());calls=sum(x['fused']['sticky_calls'] for x in r.values());cpu=sum(x['fused']['sticky_encode_cpu_s'] for x in r.values());wall=sum(x['fused']['sticky_encode_wall_s'] for x in r.values());bad=len(d['identity_failures']);print({'verdict':d['verdict'],'identity_failures':bad,'frame_failures':ff,'calls':calls,'native_cpu_s':cpu,'native_wall_s':wall,'aggregate':a})
-          with open(os.environ['GITHUB_OUTPUT'],'a') as f:
-           for k,v in {'id':bad,'ff':ff,'calls':calls,'cpu':f'{cpu:.3f}','wall':f'{wall:.3f}','cs':f"{a['cpu_ratio_vs_single_independent']:.3f}",'ws':f"{a['wall_ratio_vs_single_independent']:.3f}"}.items():f.write(f'{k}={v}\n')
-          PY
+          python -m benchmarks.v030_r24_pathdict_admission_attribution_v12 --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/work" --output "$GITHUB_WORKSPACE/benchmark-artifacts/v12.json"
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: v030-pathdict-v11-id${{ steps.summary.outputs.id }}-ff${{ steps.summary.outputs.ff }}-calls${{ steps.summary.outputs.calls }}-cpu${{ steps.summary.outputs.cpu }}-wall${{ steps.summary.outputs.wall }}-cs${{ steps.summary.outputs.cs }}-ws${{ steps.summary.outputs.ws }}-${{ github.sha }}
-          path: benchmark-artifacts/v11.json
+          name: v030-pathdict-v12-${{ github.sha }}
+          path: benchmark-artifacts/v12.json
           if-no-files-found: error
           retention-days: 90
