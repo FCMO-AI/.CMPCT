@@ -17,15 +17,30 @@ from experiments import entropygraph_v030_federated_adaptive_effort_candidate_v8
 
 def fresh_build(module: str, source: Path, archive: Path) -> dict:
     code = r'''
-import importlib,json,resource,time,sys
+import importlib,json,resource,time,sys,traceback
 from pathlib import Path
-m=importlib.import_module(sys.argv[1]); source=Path(sys.argv[2]); out=Path(sys.argv[3])
-c0=time.process_time(); w0=time.perf_counter(); result=m.build(source,out); cpu=time.process_time()-c0; wall=time.perf_counter()-w0
-print(json.dumps({'module':sys.argv[1],'module_path':str(Path(m.__file__).resolve()),'archive_bytes':out.stat().st_size,'create_cpu_s':cpu,'create_wall_s':wall,'peak_rss_kib':int(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss),'result':result},default=str,sort_keys=True))
+try:
+    m=importlib.import_module(sys.argv[1]); source=Path(sys.argv[2]); out=Path(sys.argv[3])
+    c0=time.process_time(); w0=time.perf_counter(); result=m.build(source,out); cpu=time.process_time()-c0; wall=time.perf_counter()-w0
+    print(json.dumps({'module':sys.argv[1],'module_path':str(Path(m.__file__).resolve()),'archive_bytes':out.stat().st_size,'create_cpu_s':cpu,'create_wall_s':wall,'peak_rss_kib':int(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss),'result':result},default=str,sort_keys=True))
+except Exception:
+    traceback.print_exc()
+    raise
 '''
     env=dict(os.environ); env["PYTHONNOUSERSITE"]="1"
-    p=subprocess.run([sys.executable,"-c",code,module,str(source),str(archive)],check=True,capture_output=True,text=True,env=env)
-    return json.loads(p.stdout.strip().splitlines()[-1])
+    p=subprocess.run([sys.executable,"-c",code,module,str(source),str(archive)],capture_output=True,text=True,env=env)
+    if p.returncode != 0:
+        raise RuntimeError(
+            f"fresh-build failure module={module} source={source.name} rc={p.returncode}\n"
+            f"--- child stdout ---\n{p.stdout}\n--- child stderr ---\n{p.stderr}"
+        )
+    try:
+        return json.loads(p.stdout.strip().splitlines()[-1])
+    except Exception as exc:
+        raise RuntimeError(
+            f"fresh-build emitted no parseable receipt module={module} source={source.name}\n"
+            f"--- child stdout ---\n{p.stdout}\n--- child stderr ---\n{p.stderr}"
+        ) from exc
 
 
 def recovery(archive: Path, source: Path, work: Path) -> bool:
