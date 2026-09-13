@@ -47,23 +47,31 @@ jobs:
           import json, os, re
           from pathlib import Path
           d=json.loads(Path('benchmark-artifacts/v030-current15-stability.json').read_text())
-          assert d['schema']=='cmpct-v030-current15-fingerprint-stability-v1'
+          assert d['schema']=='cmpct-v030-current15-fingerprint-stability-v2'
           assert d['experiment_valid'] is True
           assert d['release_credit'] is False
           assert d['corpus_mutated'] is False
           assert d['workloads_a']==15 and d['workloads_b']==15
           assert d['verdict'] in {'CURRENT15_FINGERPRINT_STABLE','CURRENT15_FINGERPRINT_SUBSTRATE_UNSTABLE'}
           unstable=d['unstable_workloads']
-          slug='none' if not unstable else '+'.join(re.sub(r'[^A-Za-z0-9_-]+','-',x.replace('/','_'))[:36] for x in unstable[:4])
-          outs={'short':'stable' if not unstable else 'unstable','n':str(len(unstable)),'u':slug,'fa':d['fingerprint_a'][:12],'fb':d['fingerprint_b'][:12]}
+          slug=lambda s: re.sub(r'[^A-Za-z0-9_-]+','-',s.replace('/','_'))[:36]
+          u='none' if not unstable else '+'.join(slug(x) for x in unstable[:3])
+          first_file='none'; first_offset='none'
+          if unstable:
+              fd=d.get('file_differences',{}).get(unstable[0],{})
+              if fd:
+                  first_file=slug(next(iter(fd)))
+                  off=fd[next(iter(fd))].get('first_differing_byte')
+                  first_offset='none' if off is None else str(off)
+          outs={'short':'stable' if not unstable else 'unstable','n':str(len(unstable)),'u':u,'file':first_file,'off':first_offset,'fa':d['fingerprint_a'][:12],'fb':d['fingerprint_b'][:12]}
           with open(os.environ['GITHUB_OUTPUT'],'a',encoding='utf-8') as fh:
               for k,v in outs.items(): fh.write(f'{k}={v}\n')
-          print(json.dumps({'verdict':d['verdict'],'fingerprint_a':d['fingerprint_a'],'fingerprint_b':d['fingerprint_b'],'unstable_workloads':unstable,'differences':d['differences']},sort_keys=True))
+          print(json.dumps({'verdict':d['verdict'],'fingerprint_a':d['fingerprint_a'],'fingerprint_b':d['fingerprint_b'],'unstable_workloads':unstable,'differences':d['differences'],'file_differences':d.get('file_differences',{})},sort_keys=True))
           PY
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: v030-current15fp-${{ steps.receipt.outputs.short || 'nosummary' }}-n${{ steps.receipt.outputs.n }}-${{ steps.receipt.outputs.u }}-${{ steps.receipt.outputs.fa }}-${{ steps.receipt.outputs.fb }}-${{ github.sha }}
+          name: v030-current15fp-${{ steps.receipt.outputs.short || 'nosummary' }}-n${{ steps.receipt.outputs.n }}-${{ steps.receipt.outputs.u }}-file-${{ steps.receipt.outputs.file }}-off-${{ steps.receipt.outputs.off }}-${{ steps.receipt.outputs.fa }}-${{ steps.receipt.outputs.fb }}-${{ github.sha }}
           path: benchmark-artifacts/v030-current15-stability.json
           if-no-files-found: error
           retention-days: 90
