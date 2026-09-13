@@ -1,0 +1,67 @@
+name: CMPCT v0.30 content-economic selective read
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - agent/v030-authoritative-integration
+    paths:
+      - benchmarks/v030_r24_micropack_content_selective_read_referee.py
+      - benchmarks/v030_r24_micropack_content_economic_admission.py
+      - benchmarks/v030_r24_locality_derived_micropack_referee.py
+      - benchmarks/v030_r24_micropack_same_grammar_attribution.py
+      - benchmarks/v030_compact_pack_control_attribution.py
+      - src/cmpct/**
+      - .github/workflows/v030-r24-micropack-content-selective-read.yml
+
+permissions:
+  contents: read
+
+jobs:
+  selective-read-referee:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install exact-head test dependencies
+        run: python -m pip install -e '.[test]'
+      - name: Run content-economic selective-read referee
+        run: |
+          python -m benchmarks.v030_r24_micropack_content_selective_read_referee \
+            --output benchmark-artifacts/v030-micropack-content-selective-read.json
+      - name: Validate receipt shape
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          p = Path('benchmark-artifacts/v030-micropack-content-selective-read.json')
+          r = json.loads(p.read_text())
+          assert r['experiment_valid'] is True
+          assert r['release_credit'] is False
+          assert r['canonical_builder_changed'] is False
+          assert r['source_commit'] == '${{ github.sha }}', (r.get('source_commit'), '${{ github.sha }}')
+          assert r['verdict'] in {
+              'CONTENT_ECONOMIC_SELECTIVE_READ_SURVIVES',
+              'CONTENT_ECONOMIC_SELECTIVE_READ_SAFE_WITH_EXTENSION_DEBT',
+              'CONTENT_ECONOMIC_SELECTIVE_READ_REHABILITATION_REQUIRED',
+              'RETIRE_CONTENT_ECONOMIC_SELECTIVE_READ',
+          }
+          assert not r['invariant_failures'], r['invariant_failures']
+          print(json.dumps({
+              'verdict': r['verdict'],
+              'timing_debt_vs_independent': r['timing_debt_vs_independent'],
+              'timing_debt_vs_extension': r['timing_debt_vs_extension'],
+          }, sort_keys=True))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: v030-content-economic-selective-read-${{ github.sha }}
+          path: benchmark-artifacts/v030-micropack-content-selective-read.json
+          if-no-files-found: error
+          retention-days: 30
