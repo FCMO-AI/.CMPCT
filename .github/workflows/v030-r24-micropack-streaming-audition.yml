@@ -6,6 +6,7 @@ on:
     branches: [agent/v030-authoritative-integration]
     paths:
       - benchmarks/v030_r24_micropack_streaming_audition_referee.py
+      - benchmarks/v030_r24_micropack_content_retained_state_referee.py
       - benchmarks/v030_r24_micropack_content_economic_admission.py
       - benchmarks/v030_r24_locality_derived_micropack_referee.py
       - benchmarks/v030_r24_locality_derived_micropack_hostile_transfer.py
@@ -47,7 +48,7 @@ jobs:
         id: receipt
         run: |
           python - <<'PY'
-          import json, os, re
+          import json, os
           from pathlib import Path
           d=json.loads(Path('benchmark-artifacts/v030-streaming-audition.json').read_text())
           assert d['schema']=='cmpct-v030-r24-streaming-audition-v1'
@@ -65,8 +66,6 @@ jobs:
               'rssn':str(len(d['origin_rss_improvements'])),
               'devrss':str(dev['peak_rss_delta_kib']),
               'tinyrss':str(tiny['peak_rss_delta_kib']),
-              'devcpu':f"{dev['cpu_delta_s']:+.3f}",
-              'tinycpu':f"{tiny['cpu_delta_s']:+.3f}",
           }
           with open(os.environ['GITHUB_OUTPUT'],'a',encoding='utf-8') as fh:
               for k,v in outs.items(): fh.write(f'{k}={v}\n')
