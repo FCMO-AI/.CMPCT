@@ -1,0 +1,83 @@
+name: CMPCT v0.30 EG09 fused final-pack referee
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - agent/v030-authoritative-integration
+    paths:
+      - experiments/entropygraph_v030_federated_fused_effort_candidate_v9.py
+      - benchmarks/v030_eg09_fused_final_pack_referee.py
+      - benchmarks/v030_current15_stable_corpus.py
+      - benchmarks/resemblance_hostile_corpus_v1.py
+      - docs/V030_EG09_FUSED_FINAL_PACK_MISSION_LOCK_2026-09-13.md
+      - .github/workflows/v030-eg09-fused-final-pack.yml
+
+permissions:
+  contents: read
+
+jobs:
+  fused-final-pack:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install current15 system dependency
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq ffmpeg
+      - name: Install dependencies
+        run: python -m pip install -e '.[test]'
+      - name: Syntax check
+        run: python -m py_compile experiments/entropygraph_v030_federated_fused_effort_candidate_v9.py benchmarks/v030_eg09_fused_final_pack_referee.py
+      - name: Run fused final-pack referee
+        id: referee
+        continue-on-error: true
+        shell: bash
+        run: |
+          mkdir -p evidence
+          set +e
+          python -m benchmarks.v030_eg09_fused_final_pack_referee \
+            --out evidence/eg09-fused-final-pack.json \
+            > >(tee evidence/stdout.txt) \
+            2> >(tee evidence/stderr.txt >&2)
+          code=$?
+          echo "exit_code=$code" >> "$GITHUB_OUTPUT"
+          exit 0
+      - name: Bind receipt
+        id: classify
+        if: always()
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json,os,re
+          from pathlib import Path
+          p=Path('evidence/eg09-fused-final-pack.json'); e=Path('evidence/stderr.txt'); code=int('${{ steps.referee.outputs.exit_code || 1 }}')
+          if p.exists():
+              d=json.loads(p.read_text()); d['candidate_sha']=os.environ['GITHUB_SHA']; d['candidate_ref']=os.environ['GITHUB_REF_NAME']; p.write_text(json.dumps(d,indent=2,sort_keys=True))
+              failed=[k for k,v in (d.get('conditions') or {}).items() if not v]
+              fail='none' if not failed else '.'.join(sorted(failed))
+              label=f"{d.get('verdict')}-fail{fail}-cpu{d.get('aggregate_cpu_ratio')}-wall{d.get('aggregate_wall_ratio')}-rss{d.get('max_positive_rss_delta_kib')}"
+          else:
+              lines=[x.strip() for x in e.read_text(errors='replace').splitlines() if x.strip()] if e.exists() else []; label='HARNESS_FAIL-'+re.sub(r'[^A-Za-z0-9_.-]+','-',lines[-1] if lines else 'no-receipt')[:120]
+          label=re.sub(r'[^A-Za-z0-9_.-]+','-',label)[:180]
+          with open(os.environ['GITHUB_OUTPUT'],'a') as f: f.write(f"label={label}\nexit_code={code}\n")
+          PY
+      - name: Upload evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: v030-eg09-fused-final-pack-${{ steps.classify.outputs.label }}-${{ github.sha }}
+          path: |
+            evidence/eg09-fused-final-pack.json
+            evidence/stdout.txt
+            evidence/stderr.txt
+          if-no-files-found: error
+      - name: Enforce harness exit
+        if: always()
+        run: test "${{ steps.classify.outputs.exit_code }}" = "0"
