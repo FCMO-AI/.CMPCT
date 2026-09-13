@@ -1,68 +1,34 @@
-name: CMPCT v0.30 pathdict sticky raw dictionary v10
-
+name: CMPCT v0.30 pathdict CCtx attribution lane
 on:
   workflow_dispatch:
   push:
     branches: [agent/v030-authoritative-integration]
-    paths:
-      - benchmarks/v030_r24_pathdict_fused_encode_referee.py
-      - benchmarks/v030_r24_pathdict_fused_encode_referee_v3.py
-      - benchmarks/v030_r24_pathdict_fused_encode_referee_v4.py
-      - benchmarks/v030_r24_pathdict_fused_encode_referee_v6.py
-      - benchmarks/v030_r24_pathdict_fused_encode_referee_v8.py
-      - benchmarks/v030_r24_pathdict_fused_encode_referee_v10.py
-      - benchmarks/v030_r24_pathblind_dictionary_referee.py
-      - benchmarks/v030_r24_micropack_same_grammar_attribution.py
-      - benchmarks/v030_r24_micropack_current15_transfer.py
-      - benchmarks/v030_current15_stable_corpus.py
-      - benchmarks/neutral_hostile_corpus_v1.py
-      - benchmarks/resemblance_hostile_corpus_v1.py
-      - src/cmpct/**
-      - .github/workflows/v030-r24-pathdict-fused-encode-v10.yml
-
+    paths: ['benchmarks/v030_r24_pathdict_fused_encode_referee_v11.py','benchmarks/v030_r24_pathdict_fused_encode_referee_v10.py','benchmarks/v030_r24_pathdict_fused_encode_referee.py','src/cmpct/**','.github/workflows/v030-r24-pathdict-fused-encode-v10.yml']
 permissions: {contents: read}
-
 jobs:
-  sticky-rawdict-v10:
+  referee:
     runs-on: ubuntu-24.04
     timeout-minutes: 90
     steps:
       - uses: actions/checkout@v4
-        with: {fetch-depth: 1}
       - uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-          cache: pip
-      - name: Install benchmark dependencies
-        run: |
-          set -euo pipefail
-          sudo apt-get update
-          sudo apt-get install -y zstd gcc ffmpeg libsndfile1
-          python -m pip install --upgrade pip
-          python -m pip install -e '.[audio,test]'
-      - name: Compile referee
-        run: python -m py_compile benchmarks/v030_r24_pathdict_fused_encode_referee.py benchmarks/v030_r24_pathdict_fused_encode_referee_v6.py benchmarks/v030_r24_pathdict_fused_encode_referee_v10.py
-      - name: Execute sticky raw-dictionary referee
-        run: |
+        with: {python-version: '3.11'}
+      - run: sudo apt-get update && sudo apt-get install -y zstd gcc ffmpeg libsndfile1 && python -m pip install -e '.[audio,test]'
+      - run: |
           mkdir -p benchmark-artifacts
-          python -m benchmarks.v030_r24_pathdict_fused_encode_referee_v10 --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-pathdict-fused-v10-work" --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-pathdict-fused-v10.json"
-      - name: Validate and expose receipt
-        id: receipt
+          python -m benchmarks.v030_r24_pathdict_fused_encode_referee_v11 --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/work" --output "$GITHUB_WORKSPACE/benchmark-artifacts/v11.json"
+      - id: summary
         run: |
           python - <<'PY'
           import json,os
-          from pathlib import Path
-          d=json.loads(Path('benchmark-artifacts/v030-pathdict-fused-v10.json').read_text()); assert d['schema']=='cmpct-v030-r24-pathdict-fused-encode-v1'; assert d['release_credit'] is False and d['canonical_builder_changed'] is False and d['genesis_rescore'] is False
-          bad=d['identity_failures']; rows=d['rows']; a=d['aggregate']; calls=sum(v['fused']['sticky_calls'] for v in rows.values()); checks=sum(v['fused']['frame_identity_checks'] for v in rows.values()); fails=sum(v['fused']['frame_identity_failures'] for v in rows.values()); cpu=sum(v['fused']['sticky_encode_cpu_s'] for v in rows.values()); wall=sum(v['fused']['sticky_encode_wall_s'] for v in rows.values()); setup=sum(v['fused']['sticky_setup_cpu_s'] for v in rows.values())
-          print(json.dumps({'verdict':d['verdict'],'identity_failures':bad,'frame_checks':checks,'frame_failures':fails,'calls':calls,'encode_cpu_s':cpu,'encode_wall_s':wall,'setup_cpu_s':setup,'aggregate':a,'rows':{k:{'identity':v['identity'],'frame_failures':v['fused']['frame_identity_failures'],'first_mismatch':v['fused']['first_frame_mismatch'],'cpu_single_ratio':v['cpu_ratio_vs_single_independent'],'wall_single_ratio':v['wall_ratio_vs_single_independent']} for k,v in rows.items()}},sort_keys=True))
-          short='invalid' if bad or fails else ('closes' if d['verdict']=='FUSED_ENCODE_CLOSES_CREATION_DEBT' else 'exact')
+          d=json.load(open('benchmark-artifacts/v11.json'));r=d['rows'];a=d['aggregate'];ff=sum(x['fused']['frame_identity_failures'] for x in r.values());calls=sum(x['fused']['sticky_calls'] for x in r.values());cpu=sum(x['fused']['sticky_encode_cpu_s'] for x in r.values());wall=sum(x['fused']['sticky_encode_wall_s'] for x in r.values());bad=len(d['identity_failures']);print({'verdict':d['verdict'],'identity_failures':bad,'frame_failures':ff,'calls':calls,'native_cpu_s':cpu,'native_wall_s':wall,'aggregate':a})
           with open(os.environ['GITHUB_OUTPUT'],'a') as f:
-            for k,v in {'short':short,'id':len(bad),'ff':fails,'calls':calls,'cpu':f'{cpu:.3f}','wall':f'{wall:.3f}','cp':f"{a['cpu_ratio_vs_clean_portfolio']:.3f}",'wp':f"{a['wall_ratio_vs_clean_portfolio']:.3f}",'cs':f"{a['cpu_ratio_vs_single_independent']:.3f}",'ws':f"{a['wall_ratio_vs_single_independent']:.3f}",'fp':d['corpus_fingerprint'][:10]}.items(): f.write(f'{k}={v}\n')
+           for k,v in {'id':bad,'ff':ff,'calls':calls,'cpu':f'{cpu:.3f}','wall':f'{wall:.3f}','cs':f"{a['cpu_ratio_vs_single_independent']:.3f}",'ws':f"{a['wall_ratio_vs_single_independent']:.3f}"}.items():f.write(f'{k}={v}\n')
           PY
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: v030-pathdict-fused-v10-${{ steps.receipt.outputs.short || 'nosummary' }}-id${{ steps.receipt.outputs.id }}-ff${{ steps.receipt.outputs.ff }}-calls${{ steps.receipt.outputs.calls }}-cpu${{ steps.receipt.outputs.cpu }}-wall${{ steps.receipt.outputs.wall }}-cp${{ steps.receipt.outputs.cp }}-wp${{ steps.receipt.outputs.wp }}-cs${{ steps.receipt.outputs.cs }}-ws${{ steps.receipt.outputs.ws }}-fp${{ steps.receipt.outputs.fp }}-${{ github.sha }}
-          path: benchmark-artifacts/v030-pathdict-fused-v10.json
+          name: v030-pathdict-v11-id${{ steps.summary.outputs.id }}-ff${{ steps.summary.outputs.ff }}-calls${{ steps.summary.outputs.calls }}-cpu${{ steps.summary.outputs.cpu }}-wall${{ steps.summary.outputs.wall }}-cs${{ steps.summary.outputs.cs }}-ws${{ steps.summary.outputs.ws }}-${{ github.sha }}
+          path: benchmark-artifacts/v11.json
           if-no-files-found: error
           retention-days: 90
