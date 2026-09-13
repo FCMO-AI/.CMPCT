@@ -19,6 +19,23 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
+      - name: Wire frozen unit-test module in the CI workspace only
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path('native/cmpct-portable/src/lib.rs')
+          text = path.read_text()
+          module = '#[cfg(test)]\nmod implicit_v4_vector_tests;\n'
+          anchor = '#[cfg(test)]\nmod logs_preparity_tests;'
+          if module not in text:
+              if anchor not in text:
+                  raise SystemExit('portable test-module anchor missing; court invalid')
+              text = text.replace(anchor, module + anchor, 1)
+              path.write_text(text)
+          PY
+      - name: Prove portable baseline compiles before adjudication
+        run: cargo test --manifest-path native/cmpct-portable/Cargo.toml --release --no-run
       - name: Run independent implicit-v4 hardlink parity falsifier
         run: |
           cargo test --manifest-path native/cmpct-portable/Cargo.toml \
