@@ -19,6 +19,8 @@ jobs:
           ref: agent/v030-authoritative-integration
           fetch-depth: 0
       - uses: dtolnay/rust-toolchain@stable
+      - name: Install Python fixture dependency
+        run: python -m pip install --disable-pip-version-check msgpack
       - name: Apply the frozen shared-manifest repair only
         run: |
           python - <<'PY'
