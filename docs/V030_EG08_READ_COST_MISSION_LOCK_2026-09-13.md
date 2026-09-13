@@ -70,3 +70,7 @@ Otherwise the verdict is `EG08_READ_COST_DEBT`, preserving every losing row. A d
 ## Explicit non-goals
 
 This referee does not change the EG08 effort ladder, pack membership, selectors, locality bound, integrity/recovery semantics, frozen Genesis scores, numeric version or ONE status. It is an exported-cost measurement, not a new compression search.
+
+## Execution note — post-EG11
+
+The contract above remains byte-for-byte unchanged in meaning after EG11. EG11 proved that EG08's exact bytes can be created with less duplicate encoder work; it does not answer whether those bytes export reader cost. Re-execute this already-frozen hostile review before giving EG08/EG11 frontier promotion credit. No threshold, surface, repetition count or timing rule is changed by this note.
