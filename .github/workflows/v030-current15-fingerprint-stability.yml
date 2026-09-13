@@ -47,7 +47,7 @@ jobs:
           import json, os, re
           from pathlib import Path
           d=json.loads(Path('benchmark-artifacts/v030-current15-stability.json').read_text())
-          assert d['schema']=='cmpct-v030-current15-fingerprint-stability-v2'
+          assert d['schema']=='cmpct-v030-current15-fingerprint-stability-v3'
           assert d['experiment_valid'] is True
           assert d['release_credit'] is False
           assert d['corpus_mutated'] is False
