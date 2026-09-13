@@ -186,8 +186,10 @@ def _build_variants(source: Path, work: Path) -> dict:
 
     candidate = work / "derived-membership.cmpct"
     candidate_stats = MEMBERSHIP._write_candidate(derived, candidate)
+    verify_work = work / "candidate-verify"
+    verify_work.mkdir(parents=True, exist_ok=True)
     candidate_verify = MEMBERSHIP._verify_candidate(
-        candidate, derived_index, str(dv["tree_sha256"]), work / "candidate-verify"
+        candidate, derived_index, str(dv["tree_sha256"]), verify_work
     )
     parsed = MEMBERSHIP._parse_candidate_bytes(candidate.read_bytes())
     hostile = MEMBERSHIP._hostile_table(derived_index)
