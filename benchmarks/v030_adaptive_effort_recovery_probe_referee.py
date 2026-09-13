@@ -142,15 +142,48 @@ def _explicit_profile_controls(source: Path, profile: Path) -> tuple[bytes, dict
     return v1_raw, stats
 
 
+def _explicit_restore(archive: Path, destination: Path) -> dict:
+    """Restore an authenticated explicit-v1 control without routing through IFS4."""
+    control = H2.EG05._metadata_control(archive)
+    decoded = OFFICE.FS.decode_manifest(
+        control,
+        max_path_bytes=H2.EG05.MAX_PATH_BYTES,
+        max_entries=H2.EG05.MAX_MANIFEST_ENTRIES,
+    )
+    with H2.EG05._engine(archive.resolve()):
+        H2.EG05.V25.extract(destination)
+    OFFICE.FS.restore_manifest_tree(destination, decoded)
+    return decoded
+
+
+def _explicit_strong_verify(archive: Path, expected_tree: str) -> dict:
+    """Equivalent EG05 verification for an explicit-v1 authenticated control."""
+    with H2.EG05._engine(archive.resolve()):
+        inner = dict(H2.EG05.V25.strong_verify())
+    with tempfile.TemporaryDirectory(prefix="cmpct-h-effort-3-explicit-verify-") as td:
+        restored = Path(td) / "restored"
+        decoded = _explicit_restore(archive, restored)
+        tree = H2.EG05._treehash(restored)
+    if tree != expected_tree:
+        raise RuntimeError(f"canonical user-tree mismatch: {tree} != {expected_tree}")
+    return {
+        "ok": True,
+        "profile": "h-effort-3-explicit-v1-control",
+        "canonical_user_tree_sha256": tree,
+        "filesystem_entries": len(decoded["manifest"]["entries"]),
+        "inner": inner,
+    }
+
+
 def _research_verify(label: str, archive: Path, source: Path, v1_raw: bytes) -> dict:
     """Verify selector transfer while exposing, not forgiving, geometry debt."""
     expected_tree = H2.EG05._treehash(source)
-    verify = H2.EG05.strong_verify(archive, expected_tree=expected_tree)
+    verify = _explicit_strong_verify(archive, expected_tree)
     locality = H2.EG05.locality_report(archive)
 
     with tempfile.TemporaryDirectory(prefix=f"{label}-extract-") as td:
         restored = Path(td) / "restored"
-        _, cpu, wall = OFFICE.timed(lambda: H2.EG05.extract(archive, restored))
+        _, cpu, wall = OFFICE.timed(lambda: _explicit_restore(archive, restored))
         fidelity = OFFICE.fidelity_raw(restored) == v1_raw
         if not fidelity:
             raise RuntimeError(f"{label} filesystem fidelity mismatch")
@@ -163,7 +196,7 @@ def _research_verify(label: str, archive: Path, source: Path, v1_raw: bytes) -> 
     raw[H2.EG05.V25.HDR.size] ^= 0x01
     corrupt.write_bytes(raw)
     try:
-        recovery = H2.EG05.strong_verify(corrupt, expected_tree=expected_tree)["ok"]
+        recovery = _explicit_strong_verify(corrupt, expected_tree)["ok"]
     finally:
         corrupt.unlink(missing_ok=True)
     if not recovery:
@@ -278,7 +311,7 @@ def main():
         else "RECOVERY_PROBE_NOT_READY"
     )
     out = {
-        "schema": "cmpct-v030-adaptive-effort-recovery-probe-v4",
+        "schema": "cmpct-v030-adaptive-effort-recovery-probe-v5",
         "status": "selector-transfer research evidence; no release, locality, geometry, filesystem-control, or R4 credit",
         "historical_policy_blob": blob,
         "substrate_names": list(EXPECTED_CURRENT15_NAMES),
