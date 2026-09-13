@@ -4,10 +4,15 @@ from __future__ import annotations
 
 Mission lock: docs/V030_OFFICE_PHYSICAL_ECONOMICS_MISSION_LOCK_2026-09-13.md
 
-B and C are deliberately built from one immutable physical archive.  They therefore
+B and C are deliberately built from one immutable physical archive. They therefore
 share byte-identical physical packs and reconstruction membership; only the
 filesystem-control bytes embedded in authenticated primary/tail metadata differ.
 If that invariant does not hold the experiment is invalid, not a product loss.
+
+The v0.29 comparator is the exact Genesis product surface, not the shipping r24
+Builder. Genesis froze ``experiments/entropygraph_v029_residual_strict.py`` at
+02b8b27... and source-sealed every loaded ``cmpct`` module to that checkout. This
+referee repeats that semantic identity and records the observed provenance.
 """
 
 import argparse
@@ -30,6 +35,7 @@ from experiments import entropygraph_v030_fs_implicit_v4 as IFS4
 from experiments import entropygraph_v030_product_fs as FS
 
 V029_SHA = "02b8b27cb2d97af7c6e0797984a898e8fa8a8e5d"
+V029_MODULE = "experiments/entropygraph_v029_residual_strict.py"
 CONTROL_KEY = EG05.EMBEDDED_FS_KEY
 
 
@@ -65,8 +71,17 @@ def profile_controls(source: Path, profile: Path) -> tuple[bytes, bytes, dict]:
         max_profile_logical_bytes=EG05.MAX_PROFILE_LOGICAL_BYTES,
         max_entries=EG05.MAX_MANIFEST_ENTRIES,
     )
-    implicit = IFS4.encode_v1(v1_raw, max_path_bytes=EG05.MAX_PATH_BYTES, max_entries=EG05.MAX_MANIFEST_ENTRIES)
-    if not IFS4.semantics_equal(v1_raw, implicit, max_path_bytes=EG05.MAX_PATH_BYTES, max_entries=EG05.MAX_MANIFEST_ENTRIES):
+    implicit = IFS4.encode_v1(
+        v1_raw,
+        max_path_bytes=EG05.MAX_PATH_BYTES,
+        max_entries=EG05.MAX_MANIFEST_ENTRIES,
+    )
+    if not IFS4.semantics_equal(
+        v1_raw,
+        implicit,
+        max_path_bytes=EG05.MAX_PATH_BYTES,
+        max_entries=EG05.MAX_MANIFEST_ENTRIES,
+    ):
         raise RuntimeError("implicit-v4 changed canonical filesystem semantics")
     profile.mkdir(parents=True, exist_ok=True)
     for src, rel in regular_sources:
@@ -124,7 +139,11 @@ def explicit_control(archive: Path) -> bytes:
 
 
 def restore_explicit(profile: Path, raw: bytes) -> dict:
-    decoded = FS.decode_manifest(raw, max_path_bytes=EG05.MAX_PATH_BYTES, max_entries=EG05.MAX_MANIFEST_ENTRIES)
+    decoded = FS.decode_manifest(
+        raw,
+        max_path_bytes=EG05.MAX_PATH_BYTES,
+        max_entries=EG05.MAX_MANIFEST_ENTRIES,
+    )
     FS.restore_manifest_tree(profile, decoded)
     return decoded
 
@@ -188,7 +207,10 @@ def verify_controlled(label: str, archive: Path, source: Path, v1_raw: bytes, *,
             with tempfile.TemporaryDirectory(prefix="office-explicit-recovery-") as td:
                 restored = Path(td) / "restored"
                 extract_explicit(corrupt, restored)
-                recovery = EG05._treehash(restored) == expected_tree and fidelity_raw(restored) == v1_raw
+                recovery = (
+                    EG05._treehash(restored) == expected_tree
+                    and fidelity_raw(restored) == v1_raw
+                )
     finally:
         corrupt.unlink(missing_ok=True)
     if not recovery:
@@ -209,7 +231,7 @@ def verify_controlled(label: str, archive: Path, source: Path, v1_raw: bytes, *,
         "mean_selective_amplification": total_decoded / max(1, total_logical),
         "max_decode_unit_bytes": int(locality["max_decode_unit_bytes"]),
         "member_count": len(rows),
-        "p95_member_amplification": amps[min(len(amps)-1, int(0.95 * len(amps)))] if amps else 0.0,
+        "p95_member_amplification": amps[min(len(amps) - 1, int(0.95 * len(amps)))] if amps else 0.0,
     }
 
 
@@ -227,26 +249,106 @@ def build_stage(module, source: Path, archive: Path) -> dict:
 
 
 def frozen_v029(source: Path, out: Path, checkout: Path) -> dict:
+    """Run the exact frozen Genesis v0.29 research product in a fresh process.
+
+    The historical Genesis worker identifies v0.29 as
+    experiments/entropygraph_v029_residual_strict.py, not cmpct.builder.Builder.
+    The subprocess loads that facade directly and then fails closed if any loaded
+    cmpct module resolves outside the frozen checkout.
+    """
+
     checkout = checkout.resolve()
-    srcdir = (checkout / "src").resolve()
+    expected_module = (checkout / V029_MODULE).resolve()
+    srcdir = (checkout / "src" / "cmpct").resolve()
+    if not expected_module.is_file():
+        raise RuntimeError(f"frozen v0.29 Genesis module missing: {expected_module}")
+
     code = r'''
-import hashlib,json,os,sys,time
+import hashlib,importlib.util,json,os,sys,time
 from pathlib import Path
+
 frozen=Path(sys.argv[1]).resolve(); source=Path(sys.argv[2]).resolve(); out=Path(sys.argv[3]).resolve()
+expected_sha=sys.argv[4]; rel_module=sys.argv[5]
+module_path=(frozen/rel_module).resolve(); pkg=(frozen/'src'/'cmpct').resolve()
+
+# Seal historical sibling imports and the canonical cmpct package before loading the facade.
 sys.path.insert(0,str((frozen/'src').resolve()))
-import cmpct
-loaded=Path(cmpct.__file__).resolve()
-if (frozen/'src').resolve() not in loaded.parents:
-    raise SystemExit(f"SOURCE_SEAL_FAILURE:{loaded}")
-from cmpct.builder import Builder
-c0=time.process_time(); w0=time.perf_counter(); Builder(source).build(out); cpu=time.process_time()-c0; wall=time.perf_counter()-w0
-print(json.dumps({'source_sha':os.environ.get('V029_SHA'),'cmpct_module':str(loaded),'archive_bytes':out.stat().st_size,'create_cpu_s':cpu,'create_wall_s':wall}))
+sys.path.insert(0,str((frozen/'experiments').resolve()))
+sys.path.insert(0,str(frozen))
+
+name='cmpct_office_frozen_v029_'+expected_sha[:12]
+spec=importlib.util.spec_from_file_location(name,module_path)
+if spec is None or spec.loader is None:
+    raise SystemExit('FROZEN_V029_LOAD_FAILURE')
+mod=importlib.util.module_from_spec(spec); sys.modules[name]=mod; spec.loader.exec_module(mod)
+
+def inside(path, root):
+    try: path.relative_to(root); return True
+    except ValueError: return False
+
+observed={}; escaped={}
+for modname,module in sorted(sys.modules.items()):
+    if modname!='cmpct' and not modname.startswith('cmpct.'):
+        continue
+    raw=getattr(module,'__file__',None)
+    if not raw: continue
+    path=Path(raw).resolve(); observed[modname]=str(path)
+    if not inside(path,pkg): escaped[modname]=str(path)
+if escaped:
+    raise SystemExit('SOURCE_SEAL_FAILURE:'+json.dumps(escaped,sort_keys=True))
+
+c0=time.process_time(); w0=time.perf_counter(); stats=mod.build(source,out); cpu=time.process_time()-c0; wall=time.perf_counter()-w0
+if not out.is_file():
+    raise SystemExit('FROZEN_V029_NO_ARCHIVE')
+# Re-check after build because lazy imports are possible.
+escaped={}
+for modname,module in sorted(sys.modules.items()):
+    if modname!='cmpct' and not modname.startswith('cmpct.'):
+        continue
+    raw=getattr(module,'__file__',None)
+    if not raw: continue
+    path=Path(raw).resolve(); observed[modname]=str(path)
+    if not inside(path,pkg): escaped[modname]=str(path)
+if escaped:
+    raise SystemExit('SOURCE_SEAL_FAILURE:'+json.dumps(escaped,sort_keys=True))
+
+data=out.read_bytes()
+print(json.dumps({
+    'source_sha':expected_sha,
+    'product_module':rel_module,
+    'product_module_path':str(module_path),
+    'cmpct_import_roots':observed,
+    'archive_bytes':len(data),
+    'archive_sha256':hashlib.sha256(data).hexdigest(),
+    'create_cpu_s':cpu,
+    'create_wall_s':wall,
+    'product_stats':stats,
+},default=str,sort_keys=True))
 '''
-    env = dict(os.environ); env["V029_SHA"] = V029_SHA; env["PYTHONNOUSERSITE"] = "1"
-    p = subprocess.run([sys.executable, "-c", code, str(checkout), str(source), str(out)], check=True, capture_output=True, text=True, env=env)
+    env = dict(os.environ)
+    env["PYTHONNOUSERSITE"] = "1"
+    p = subprocess.run(
+        [sys.executable, "-c", code, str(checkout), str(source), str(out), V029_SHA, V029_MODULE],
+        check=True,
+        capture_output=True,
+        text=True,
+        env=env,
+    )
     row = json.loads(p.stdout.strip().splitlines()[-1])
-    if not str(Path(row["cmpct_module"]).resolve()).startswith(str(srcdir) + os.sep):
-        raise RuntimeError("frozen v0.29 source seal escaped checkout")
+    if row.get("source_sha") != V029_SHA:
+        raise RuntimeError("frozen v0.29 SHA provenance mismatch")
+    if row.get("product_module") != V029_MODULE:
+        raise RuntimeError("frozen v0.29 product-surface mismatch")
+    if Path(row.get("product_module_path", "")).resolve() != expected_module:
+        raise RuntimeError("frozen v0.29 module path escaped checkout")
+    imports = row.get("cmpct_import_roots") or {}
+    if not imports:
+        raise RuntimeError("frozen v0.29 emitted no cmpct import provenance")
+    for path in imports.values():
+        try:
+            Path(path).resolve().relative_to(srcdir)
+        except ValueError as exc:
+            raise RuntimeError(f"frozen v0.29 source seal escaped checkout: {path}") from exc
     return row
 
 
@@ -271,14 +373,20 @@ def main() -> None:
         b_frame = embedded_copy(base, b, v1_raw)
         c_frame = embedded_copy(base, c, implicit_raw)
         bp, cp = parsed(b), parsed(c)
-        same_payload = bp["physical_sha256"] == cp["physical_sha256"] and bp["physical_region_bytes"] == cp["physical_region_bytes"]
+        same_payload = (
+            bp["physical_sha256"] == cp["physical_sha256"]
+            and bp["physical_region_bytes"] == cp["physical_region_bytes"]
+        )
         same_membership = bp["membership_sha256"] == cp["membership_sha256"]
         if not same_payload or not same_membership:
-            verdict = "OFFICE_ATTRIBUTION_INVALID"
-            raise RuntimeError(f"{verdict}: B/C physical identity failed")
+            raise RuntimeError("OFFICE_ATTRIBUTION_INVALID: B/C physical identity failed")
 
-        vb, vb_cpu, vb_wall = timed(lambda: verify_controlled("B", b, source, v1_raw, implicit=False))
-        vc, vc_cpu, vc_wall = timed(lambda: verify_controlled("C", c, source, v1_raw, implicit=True))
+        vb, vb_cpu, vb_wall = timed(
+            lambda: verify_controlled("B", b, source, v1_raw, implicit=False)
+        )
+        vc, vc_cpu, vc_wall = timed(
+            lambda: verify_controlled("C", c, source, v1_raw, implicit=True)
+        )
 
         a = build_stage(EG01, source, work / "A-eg01.cmpct")
         d = build_stage(EG07, source, work / "D-eg07.cmpct")
@@ -298,15 +406,29 @@ def main() -> None:
             verdict = "OFFICE_REGRET_MIXED"
 
         out = {
-            "schema": "v030-office-physical-economics-v1",
+            "schema": "v030-office-physical-economics-v2",
             "verdict": verdict,
             "office_tree_sha256": office_manifest["tree_sha256"],
             "logical_bytes": office_manifest["logical_bytes"],
             "files": office_manifest["files"],
             "frozen_v029": v029,
             "A_federated_explicit_physical": a,
-            "B_same_physical_explicit_control": {"components": bp, "framing": b_frame, "create_shared_base_cpu_s": base_cpu, "create_shared_base_wall_s": base_wall, "verification": vb, "verify_cpu_s": vb_cpu, "verify_wall_s": vb_wall},
-            "C_same_physical_implicit_v4": {"components": cp, "framing": c_frame, "verification": vc, "verify_cpu_s": vc_cpu, "verify_wall_s": vc_wall},
+            "B_same_physical_explicit_control": {
+                "components": bp,
+                "framing": b_frame,
+                "create_shared_base_cpu_s": base_cpu,
+                "create_shared_base_wall_s": base_wall,
+                "verification": vb,
+                "verify_cpu_s": vb_cpu,
+                "verify_wall_s": vb_wall,
+            },
+            "C_same_physical_implicit_v4": {
+                "components": cp,
+                "framing": c_frame,
+                "verification": vc,
+                "verify_cpu_s": vc_cpu,
+                "verify_wall_s": vc_wall,
+            },
             "D_product_valid_eg07": d,
             "bc_same_physical_payload": same_payload,
             "bc_same_membership": same_membership,
