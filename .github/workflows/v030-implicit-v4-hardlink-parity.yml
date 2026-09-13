@@ -18,7 +18,15 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
       - uses: dtolnay/rust-toolchain@stable
+      - name: Install frozen-vector Python environment
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[test]'
       - name: Wire frozen unit-test module in the CI workspace only
         run: |
           python - <<'PY'
@@ -36,8 +44,8 @@ jobs:
           PY
       - name: Prove portable baseline compiles before adjudication
         run: cargo test --manifest-path native/cmpct-portable/Cargo.toml --release --no-run
-      - name: Run independent implicit-v4 hardlink parity falsifier
+      - name: Run independent implicit-v4 hardlink parity court
         run: |
           cargo test --manifest-path native/cmpct-portable/Cargo.toml \
-            implicit_v4_rejects_hardlink_metadata_divergence_from_owner \
+            implicit_v4_vector_tests \
             --release -- --nocapture
