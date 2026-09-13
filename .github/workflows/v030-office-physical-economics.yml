@@ -46,30 +46,68 @@ jobs:
         run: python -m pip install -e '.[test]'
 
       - name: Run causal Office attribution referee
+        id: referee
+        continue-on-error: true
+        shell: bash
         run: |
           mkdir -p evidence
+          set +e
           python -m benchmarks.v030_office_physical_economics_referee \
             --v029-checkout .frozen-v029 \
-            --out evidence/office-physical-economics.json
+            --out evidence/office-physical-economics.json \
+            > >(tee evidence/stdout.txt) \
+            2> >(tee evidence/stderr.txt >&2)
+          code=$?
+          echo "exit_code=$code" >> "$GITHUB_OUTPUT"
+          exit 0
 
-      - name: Bind receipt to exact head
+      - name: Bind and classify receipt
+        id: classify
         if: always()
+        shell: bash
         run: |
           python - <<'PY'
-          import json, os
+          import json, os, re
           from pathlib import Path
-          p=Path('evidence/office-physical-economics.json')
-          if p.exists():
-              d=json.loads(p.read_text())
+          out = Path(os.environ['GITHUB_OUTPUT'])
+          receipt = Path('evidence/office-physical-economics.json')
+          stderr = Path('evidence/stderr.txt')
+          code = int('${{ steps.referee.outputs.exit_code || 1 }}')
+          if receipt.exists():
+              d=json.loads(receipt.read_text())
               d['candidate_sha']=os.environ['GITHUB_SHA']
               d['candidate_ref']=os.environ['GITHUB_REF_NAME']
-              p.write_text(json.dumps(d,indent=2,sort_keys=True))
+              receipt.write_text(json.dumps(d,indent=2,sort_keys=True))
+              verdict=str(d.get('verdict','UNKNOWN'))
+              b=d.get('B_same_physical_explicit_control',{}).get('components',{}).get('archive_bytes','na')
+              c=d.get('C_same_physical_implicit_v4',{}).get('components',{}).get('archive_bytes','na')
+              v29=d.get('frozen_v029',{}).get('archive_bytes','na')
+              delta=d.get('bc_control_only_total_delta_bytes','na')
+              label=f"{verdict}-b{b}-c{c}-v29{v29}-delta{delta}"
+          else:
+              lines=[x.strip() for x in stderr.read_text(errors='replace').splitlines() if x.strip()] if stderr.exists() else []
+              msg=lines[-1] if lines else 'no-receipt-no-stderr'
+              msg=re.sub(r'[^A-Za-z0-9_.-]+','-',msg).strip('-')[:110]
+              label=f"HARNESS_FAIL-{msg}"
+          label=re.sub(r'[^A-Za-z0-9_.-]+','-',label)[:180]
+          with out.open('a') as f:
+              f.write(f"label={label}\n")
+              f.write(f"exit_code={code}\n")
           PY
 
-      - name: Upload exact-head receipt
+      - name: Upload exact-head referee evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: v030-office-physical-economics-${{ github.sha }}
-          path: evidence/office-physical-economics.json
-          if-no-files-found: warn
+          name: v030-office-${{ steps.classify.outputs.label }}-${{ github.sha }}
+          path: |
+            evidence/office-physical-economics.json
+            evidence/stdout.txt
+            evidence/stderr.txt
+          if-no-files-found: error
+
+      - name: Enforce scientific referee exit
+        if: always()
+        shell: bash
+        run: |
+          test "${{ steps.classify.outputs.exit_code }}" = "0"
