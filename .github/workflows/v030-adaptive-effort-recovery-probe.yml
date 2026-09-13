@@ -39,6 +39,15 @@ jobs:
           rc=$?
           echo "$rc" > evidence/adaptive-effort-recovery-probe.exitcode.txt
           exit $rc
+      - name: Surface referee diagnostics
+        if: always()
+        run: |
+          echo '=== H-EFFORT-3 exit code ==='
+          cat evidence/adaptive-effort-recovery-probe.exitcode.txt 2>/dev/null || true
+          echo '=== H-EFFORT-3 stderr ==='
+          cat evidence/adaptive-effort-recovery-probe.stderr.txt 2>/dev/null || true
+          echo '=== H-EFFORT-3 stdout ==='
+          cat evidence/adaptive-effort-recovery-probe.stdout.txt 2>/dev/null || true
       - name: Preserve exact-head metadata
         if: always()
         run: |
