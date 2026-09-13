@@ -88,10 +88,12 @@ jobs:
           import json
           from pathlib import Path
           d=json.loads(Path('benchmark-artifacts/v030-r24-micropack-same-grammar.json').read_text())
-          assert d['schema']=='cmpct-v030-r24-micropack-same-grammar-attribution-v1'
+          assert d['schema']=='cmpct-v030-r24-micropack-same-grammar-attribution-v2'
+          assert d['control']=='shared-release-scan-plus-noop-micropack-v2'
           assert d['experiment_valid'] is True and d['release_credit'] is False
           assert d['canonical_builder_changed'] is False and d['locality_budget']==8.0
           assert len(d['sources'])==7
+          assert all(row['control']=='shared-release-scan-plus-noop-micropack-v2' for row in d['sources'].values())
           assert d['verdict'] in {
               'SAME_GRAMMAR_MICROPACK_CAUSAL_WIN',
               'MICROPACK_REQUIRES_EXACT_ECONOMIC_ADMISSION',
