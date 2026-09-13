@@ -85,11 +85,12 @@ class BufferReuseProxyGateBuilder(V14.ProxyGateBuilder):
     def _zcd_exact_reuse(self, data: bytes, dictionary: bytes) -> bytes:
         if not data:
             return b''
-        self._ensure_exact_state(dictionary, len(data))
-        # Size is explicit, so embedded NULs are safe; avoid copying source into a
-        # fresh ctypes buffer on every call.
-        src = ctypes.c_char_p(data)
+        # The timer spans the same logical operation as v14's C.zcd call: state/buffer
+        # preparation, native compression, and materializing the returned bytes. The
+        # independent reference comparison below is deliberately outside this timer.
         c0 = time.process_time(); w0 = time.perf_counter()
+        self._ensure_exact_state(dictionary, len(data))
+        src = ctypes.c_char_p(data)
         n = C._zck(_using_dict(
             self._exact_ctx,
             self._exact_dst,
@@ -100,10 +101,10 @@ class BufferReuseProxyGateBuilder(V14.ProxyGateBuilder):
             len(dictionary),
             12,
         ))
+        out = self._exact_dst.raw[:n]
         self._reuse_exact_cpu_s += time.process_time() - c0
         self._reuse_exact_wall_s += time.perf_counter() - w0
         self._reuse_exact_calls += 1
-        out = self._exact_dst.raw[:n]
         if self._verify_frames:
             ref = C.zcd(data, dictionary, 12)
             self._frame_checks += 1
@@ -230,8 +231,6 @@ def _one(source, root):
     remaining_cpu = V1.SEL._confirmed_regression({'median_read_wall_s':candidate_portfolio_cpu},{'median_read_wall_s':clean_i['cpu_s']})
     remaining_wall = V1.SEL._confirmed_regression({'median_read_wall_s':candidate_portfolio_wall},{'median_read_wall_s':clean_i['wall_s']})
 
-    # Preserve the historical referee aggregate contract so V1.run can combine rows;
-    # detailed v14/v16 data remains alongside these compatibility fields.
     clean_portfolio_cpu = clean_i['cpu_s'] + clean_d['cpu_s']
     clean_portfolio_wall = clean_i['wall_s'] + clean_d['wall_s']
     fused = {
