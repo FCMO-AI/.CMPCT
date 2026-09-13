@@ -72,6 +72,9 @@ def main() -> None:
         for family,root,item in surfaces:
             w=work/f"{family}-{item['name']}"; w.mkdir(); rows.append(one(family,root/item['name'],item,w))
         c8=sum(float(r['eg08_cpu_s']) for r in rows); c9=sum(float(r['eg09_cpu_s']) for r in rows); w8=sum(float(r['eg08_wall_s']) for r in rows); w9=sum(float(r['eg09_wall_s']) for r in rows)
+        mismatches=[{"family":r['family'],"name":r['name'],"byte_delta":r['byte_delta'],"eg08_bytes":r['eg08_bytes'],"eg09_bytes":r['eg09_bytes']} for r in rows if not r['complete_archive_identity'] or r['byte_delta']!=0]
+        aggregate_delta=sum(int(r['byte_delta']) for r in rows)
+        aggregate_abs_delta=sum(abs(int(r['byte_delta'])) for r in rows)
         conditions={
             "nine_workloads":len(rows)==9,
             "all_complete_archive_identity":all(r['complete_archive_identity'] for r in rows),
@@ -85,7 +88,7 @@ def main() -> None:
             "zero_confirmed_wall_regressions":not any(r['confirmed_wall_regression'] for r in rows),
         }
         verdict="EG09_FUSED_FINAL_PACK_PASSES" if all(conditions.values()) else "EG09_FUSED_FINAL_PACK_BLOCKED"
-        out={"schema":"v030-eg09-fused-final-pack-v1","verdict":verdict,"conditions":conditions,"workloads":rows,"aggregate_eg08_cpu_s":c8,"aggregate_eg09_cpu_s":c9,"aggregate_cpu_ratio":c9/max(c8,1e-12),"aggregate_eg08_wall_s":w8,"aggregate_eg09_wall_s":w9,"aggregate_wall_ratio":w9/max(w8,1e-12),"max_positive_rss_delta_kib":max(0,max(int(r['rss_delta_kib']) for r in rows))}
+        out={"schema":"v030-eg09-fused-final-pack-v2","verdict":verdict,"conditions":conditions,"workloads":rows,"identity_mismatches":mismatches,"aggregate_byte_delta":aggregate_delta,"aggregate_abs_byte_delta":aggregate_abs_delta,"aggregate_eg08_cpu_s":c8,"aggregate_eg09_cpu_s":c9,"aggregate_cpu_ratio":c9/max(c8,1e-12),"aggregate_eg08_wall_s":w8,"aggregate_eg09_wall_s":w9,"aggregate_wall_ratio":w9/max(w8,1e-12),"max_positive_rss_delta_kib":max(0,max(int(r['rss_delta_kib']) for r in rows))}
         args.out.parent.mkdir(parents=True,exist_ok=True); args.out.write_text(json.dumps(out,indent=2,sort_keys=True),encoding='utf-8'); print(json.dumps(out,indent=2,sort_keys=True))
 
 if __name__=='__main__': main()
