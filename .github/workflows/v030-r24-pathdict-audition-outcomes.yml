@@ -1,0 +1,70 @@
+name: CMPCT v0.30 pathdict audition outcome attribution
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [agent/v030-authoritative-integration]
+    paths:
+      - benchmarks/v030_r24_pathdict_audition_outcome_attribution.py
+      - benchmarks/v030_r24_pathdict_fused_encode_referee.py
+      - benchmarks/v030_r24_pathdict_fused_encode_referee_v6.py
+      - benchmarks/v030_r24_pathblind_dictionary_referee.py
+      - benchmarks/v030_r24_micropack_same_grammar_attribution.py
+      - benchmarks/v030_r24_micropack_current15_transfer.py
+      - benchmarks/v030_current15_stable_corpus.py
+      - benchmarks/neutral_hostile_corpus_v1.py
+      - benchmarks/resemblance_hostile_corpus_v1.py
+      - src/cmpct/**
+      - .github/workflows/v030-r24-pathdict-audition-outcomes.yml
+
+permissions:
+  contents: read
+
+jobs:
+  attribution:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+        with: {fetch-depth: 1}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install benchmark dependencies
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y zstd gcc ffmpeg libsndfile1
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[audio,test]'
+      - name: Compile referee
+        run: python -m py_compile benchmarks/v030_r24_pathdict_audition_outcome_attribution.py
+      - name: Execute attribution
+        run: |
+          mkdir -p benchmark-artifacts
+          python -m benchmarks.v030_r24_pathdict_audition_outcome_attribution \
+            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-pathdict-outcome-work" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-pathdict-outcome.json"
+      - name: Validate and expose receipt
+        id: receipt
+        run: |
+          python - <<'PY'
+          import json,os
+          from pathlib import Path
+          d=json.loads(Path('benchmark-artifacts/v030-pathdict-outcome.json').read_text())
+          assert d['schema']=='cmpct-v030-r24-pathdict-audition-outcome-v1'
+          assert d['release_credit'] is False and d['canonical_builder_changed'] is False and d['genesis_rescore'] is False
+          assert not d['identity_failures'], d['identity_failures']
+          a=d['aggregate']
+          print(json.dumps({'aggregate':a,'rows':{k:{'delta':v['artifact_delta_bytes'],'outcomes':v['outcomes']} for k,v in d['rows'].items()}},sort_keys=True))
+          with open(os.environ['GITHUB_OUTPUT'],'a',encoding='utf-8') as fh:
+            for k,v in {'a':a['auditions'],'w':a['winners'],'wf':f"{a['winner_fraction']:.3f}",'cpu':f"{a['audition_cpu_s']:.3f}",'wall':f"{a['audition_wall_s']:.3f}",'fp':d['corpus_fingerprint'][:10]}.items(): fh.write(f'{k}={v}\n')
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: v030-pathdict-outcomes-a${{ steps.receipt.outputs.a }}-w${{ steps.receipt.outputs.w }}-wf${{ steps.receipt.outputs.wf }}-cpu${{ steps.receipt.outputs.cpu }}-wall${{ steps.receipt.outputs.wall }}-fp${{ steps.receipt.outputs.fp }}-${{ github.sha }}
+          path: benchmark-artifacts/v030-pathdict-outcome.json
+          if-no-files-found: error
+          retention-days: 90
