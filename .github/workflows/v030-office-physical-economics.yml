@@ -1,0 +1,75 @@
+name: CMPCT v0.30 Office physical economics
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - agent/v030-authoritative-integration
+    paths:
+      - benchmarks/v030_office_physical_economics_referee.py
+      - benchmarks/v030_current15_stable_corpus.py
+      - experiments/entropygraph_v030_federated_candidate.py
+      - experiments/entropygraph_v030_federated_embedded_fs_candidate_v5.py
+      - experiments/entropygraph_v030_federated_embedded_fs_candidate_v6.py
+      - experiments/entropygraph_v030_federated_embedded_fs_candidate_v7.py
+      - experiments/entropygraph_v030_fs_implicit_v4.py
+      - experiments/entropygraph_v030_product_fs.py
+      - docs/V030_OFFICE_PHYSICAL_ECONOMICS_MISSION_LOCK_2026-09-13.md
+      - .github/workflows/v030-office-physical-economics.yml
+
+permissions:
+  contents: read
+
+jobs:
+  office-physical-economics:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout exact candidate
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Checkout frozen v0.29 comparator source
+        uses: actions/checkout@v4
+        with:
+          ref: 02b8b27cb2d97af7c6e0797984a898e8fa8a8e5d
+          path: .frozen-v029
+          fetch-depth: 1
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install exact-head benchmark dependencies
+        run: python -m pip install -e '.[test]'
+
+      - name: Run causal Office attribution referee
+        run: |
+          mkdir -p evidence
+          python -m benchmarks.v030_office_physical_economics_referee \
+            --v029-checkout .frozen-v029 \
+            --out evidence/office-physical-economics.json
+
+      - name: Bind receipt to exact head
+        if: always()
+        run: |
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          p=Path('evidence/office-physical-economics.json')
+          if p.exists():
+              d=json.loads(p.read_text())
+              d['candidate_sha']=os.environ['GITHUB_SHA']
+              d['candidate_ref']=os.environ['GITHUB_REF_NAME']
+              p.write_text(json.dumps(d,indent=2,sort_keys=True))
+          PY
+
+      - name: Upload exact-head receipt
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: v030-office-physical-economics-${{ github.sha }}
+          path: evidence/office-physical-economics.json
+          if-no-files-found: warn
