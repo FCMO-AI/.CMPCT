@@ -28,7 +28,7 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           python -m pip install -e .
-          python -m pip install reportlab python-docx openpyxl pillow
+          python -m pip install numpy reportlab python-docx openpyxl pillow python-pptx
       - name: Run H-EFFORT-3 referee
         id: referee
         continue-on-error: true
