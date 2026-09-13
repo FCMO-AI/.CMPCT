@@ -228,6 +228,10 @@ def _one(source: Path, item: dict, work: Path) -> dict:
 
     residual_rows.sort(key=lambda x: x["residual_bytes"], reverse=True)
     residual_total = sum(x["residual_bytes"] for x in residual_rows)
+    hot_residual_rows = [x for x in residual_rows if x["hot_stream_root"]]
+    cold_residual_rows = [x for x in residual_rows if not x["hot_stream_root"]]
+    hot_residual = sum(x["residual_bytes"] for x in hot_residual_rows)
+    cold_residual = sum(x["residual_bytes"] for x in cold_residual_rows)
     top5_residual = sum(x["residual_bytes"] for x in residual_rows[:5])
     current_total = int(components["archive_bytes"])
     policy_total = current_total - l1_physical + policy_physical
@@ -275,6 +279,12 @@ def _one(source: Path, item: dict, work: Path) -> dict:
         "observation_only_9_15_missed_bytes": sum(x["missed_bytes"] for x in intermediate_missed),
         "observation_only_9_15_misses": intermediate_missed,
         "residual_pack_count": len(residual_rows),
+        "hot_residual_pack_count": len(hot_residual_rows),
+        "hot_residual_bytes": hot_residual,
+        "hot_residual_share": hot_residual / residual_total if residual_total > 0 else 0.0,
+        "cold_residual_pack_count": len(cold_residual_rows),
+        "cold_residual_bytes": cold_residual,
+        "cold_residual_share": cold_residual / residual_total if residual_total > 0 else 0.0,
         "top5_residual_bytes": top5_residual,
         "top5_residual_share": top5_residual / residual_total if residual_total > 0 else 0.0,
         "largest_residual_packs": residual_rows[:20],
