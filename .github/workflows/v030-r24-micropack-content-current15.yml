@@ -42,7 +42,7 @@ jobs:
       - name: Execute exact content-economic current15 transfer
         run: |
           mkdir -p benchmark-artifacts
-          python benchmarks/v030_r24_micropack_content_current15_transfer.py \
+          python -m benchmarks.v030_r24_micropack_content_current15_transfer \
             --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-content-current15-work" \
             --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-content-current15.json"
       - name: Validate and expose receipt
