@@ -114,10 +114,19 @@ jobs:
               'LOCALITY_DERIVED_MICROPACK_NEEDS_ECONOMIC_ADMISSION':'needs-economic-admission',
               'RETIRE_LOCALITY_DERIVED_MICROPACK_TRANSFER':'retire',
           }[d['verdict']]
+          names=('balanced_structured_text','skewed_structured_text','incompressible_text_labeled','duplicate_forest','singleton_buckets')
+          abbr={'balanced_structured_text':'bal','skewed_structured_text':'skew','incompressible_text_labeled':'noise','duplicate_forest':'dup','singleton_buckets':'single'}
+          codes={
+              'derived_locality_pass':'L','derived_strong_tree_exact':'D',
+              'independent_strong_tree_exact':'I','candidate_strong_tree_exact':'C',
+              'candidate_payload_unchanged':'P','candidate_tail_recovery':'R',
+              'candidate_hostile_fail_closed_when_applicable':'H',
+          }
           parts=[]
-          for name in ('balanced_structured_text','skewed_structured_text','incompressible_text_labeled','duplicate_forest','singleton_buckets'):
-              key={'balanced_structured_text':'bal','skewed_structured_text':'skew','incompressible_text_labeled':'noise','duplicate_forest':'dup','singleton_buckets':'single'}[name]
-              parts.append(f"{key}{d['families'][name]['candidate_delta_vs_independent_bytes']}")
+          for name in names:
+              row=d['families'][name]
+              failed=''.join(code for key,code in codes.items() if not row['invariants'][key]) or 'ok'
+              parts.append(f"{abbr[name]}{row['candidate_delta_vs_independent_bytes']}f{failed}")
           print('artifact_name=v030-hostile-'+short+'-'+'-'.join(parts))
           PY
       - run: python tools/check_ci_topology.py .github/workflows/v030-r24-locality-derived-micropack-hostile-transfer.yml
