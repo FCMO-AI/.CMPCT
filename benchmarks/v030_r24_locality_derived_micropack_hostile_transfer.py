@@ -33,12 +33,14 @@ def _deterministic_bytes(label: str, size: int) -> bytes:
 def _structured(label: str, size: int) -> bytes:
     lines = []
     i = 0
-    while sum(map(len, lines)) < size:
+    total = 0
+    while total < size:
         line = (
             f'{{"kind":"record","family":"{label}","index":{i},'
             f'"enabled":{str(i % 3 != 0).lower()},"value":"item-{i % 17:02d}"}}\n'
         ).encode("utf-8")
         lines.append(line)
+        total += len(line)
         i += 1
     return b"".join(lines)[:size]
 
@@ -105,6 +107,7 @@ def _one(source: Path, work: Path) -> dict:
     candidate_vs_independent = int(candidate["archive_bytes"]) - int(independent["archive_bytes"])
     candidate_vs_cc = int(candidate["archive_bytes"]) - int(cc["archive_bytes"])
     hostile_applicable = group_count > 0
+    hostile_table = dict(candidate.get("hostile_fail_closed", {}))
     hostile_ok = bool(candidate.get("hostile_all_pass")) if hostile_applicable else True
 
     invariants = {
@@ -137,6 +140,7 @@ def _one(source: Path, work: Path) -> dict:
         "candidate_open_expand_cpu_s": float(candidate["median_open_expand_cpu_s"]),
         "candidate_open_expand_wall_s": float(candidate["median_open_expand_wall_s"]),
         "hostile_applicable": hostile_applicable,
+        "hostile_fail_closed": hostile_table,
         "invariants": invariants,
         "invariants_pass": all(invariants.values()),
         "candidate_no_larger_than_independent": candidate_vs_independent <= 0,
@@ -209,6 +213,11 @@ def main() -> None:
         "deltas_vs_independent": {
             name: row["candidate_delta_vs_independent_bytes"]
             for name, row in result["families"].items()
+        },
+        "hostile_fail_closed": {
+            name: row["hostile_fail_closed"]
+            for name, row in result["families"].items()
+            if row["hostile_applicable"]
         },
     }
     print(json.dumps(summary, indent=2, sort_keys=True), flush=True)
