@@ -1,0 +1,131 @@
+# ci-lane: deep
+# ci-pr-scope: latest-head-commit-gate
+# ci-cancel-policy: preserve-running-exact-receipt
+name: CMPCT v0.30 same-grammar micropack attribution
+
+on:
+  push:
+    branches: [agent/v030-authoritative-integration]
+    paths:
+      - 'benchmarks/v030_r24_micropack_same_grammar_attribution.py'
+      - 'docs/V030_R24_MICROPACK_SAME_GRAMMAR_ATTRIBUTION_2026-09-12.md'
+      - '.github/workflows/v030-r24-micropack-same-grammar-attribution.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'benchmarks/v030_r24_micropack_same_grammar_attribution.py'
+      - 'docs/V030_R24_MICROPACK_SAME_GRAMMAR_ATTRIBUTION_2026-09-12.md'
+      - '.github/workflows/v030-r24-micropack-same-grammar-attribution.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+concurrency:
+  group: cmpct-v030-micropack-same-grammar-${{ github.event.pull_request.head.sha || github.sha }}
+  cancel-in-progress: false
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+
+jobs:
+  latest-head-impact:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      run_deep: ${{ steps.scope.outputs.run_deep }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 2
+      - id: scope
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          if [ "$EVENT_NAME" = workflow_dispatch ]; then echo 'run_deep=true' >> "$GITHUB_OUTPUT"; exit 0; fi
+          git diff-tree --no-commit-id --name-only -r HEAD > /tmp/files
+          if grep -Eq '^(benchmarks/v030_r24_micropack_same_grammar_attribution\.py|docs/V030_R24_MICROPACK_SAME_GRAMMAR_ATTRIBUTION_2026-09-12\.md|\.github/workflows/v030-r24-micropack-same-grammar-attribution\.yml)$' /tmp/files; then
+            echo 'run_deep=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'run_deep=false' >> "$GITHUB_OUTPUT"
+          fi
+
+  same-grammar-attribution:
+    needs: latest-head-impact
+    if: needs.latest-head-impact.outputs.run_deep == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install corpus dependencies
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y zstd gcc ffmpeg libsndfile1
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[audio,test]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
+      - run: python -m py_compile benchmarks/v030_r24_micropack_same_grammar_attribution.py
+      - name: Execute same-grammar referee
+        run: |
+          mkdir -p benchmark-artifacts
+          python benchmarks/v030_r24_micropack_same_grammar_attribution.py \
+            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-r24-micropack-same-grammar-work" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-r24-micropack-same-grammar.json"
+      - name: Enforce receipt integrity, not scientific victory
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          d=json.loads(Path('benchmark-artifacts/v030-r24-micropack-same-grammar.json').read_text())
+          assert d['schema']=='cmpct-v030-r24-micropack-same-grammar-attribution-v1'
+          assert d['experiment_valid'] is True and d['release_credit'] is False
+          assert d['canonical_builder_changed'] is False and d['locality_budget']==8.0
+          assert len(d['sources'])==7
+          assert d['verdict'] in {
+              'SAME_GRAMMAR_MICROPACK_CAUSAL_WIN',
+              'MICROPACK_REQUIRES_EXACT_ECONOMIC_ADMISSION',
+              'RETIRE_SAME_GRAMMAR_MICROPACK',
+          }
+          PY
+      - name: Expose decisive deltas
+        id: receipt
+        run: |
+          python - <<'PY' >> "$GITHUB_OUTPUT"
+          import json
+          from pathlib import Path
+          d=json.loads(Path('benchmark-artifacts/v030-r24-micropack-same-grammar.json').read_text())
+          short={
+              'SAME_GRAMMAR_MICROPACK_CAUSAL_WIN':'causal-win',
+              'MICROPACK_REQUIRES_EXACT_ECONOMIC_ADMISSION':'needs-admission',
+              'RETIRE_SAME_GRAMMAR_MICROPACK':'retire',
+          }[d['verdict']]
+          keys=(
+              ('origin_developer','dev'),('origin_tiny_files','tiny'),
+              ('hostile_balanced_structured_text','bal'),('hostile_skewed_structured_text','skew'),
+              ('hostile_incompressible_text_labeled','noise'),('hostile_duplicate_forest','dup'),
+              ('hostile_singleton_buckets','single'),
+          )
+          parts=[f"{abbr}{d['sources'][name]['same_grammar_delta_bytes']}" for name,abbr in keys]
+          print('artifact_name=v030-same-grammar-'+short+'-'+'-'.join(parts))
+          PY
+      - run: python tools/check_ci_topology.py .github/workflows/v030-r24-micropack-same-grammar-attribution.yml
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: ${{ steps.receipt.outputs.artifact_name || 'v030-same-grammar-no-summary' }}-${{ env.EVIDENCE_HEAD }}
+          path: benchmark-artifacts/v030-r24-micropack-same-grammar.json
+          if-no-files-found: error
+          retention-days: 90
+
+# Research-only. Green means receipt integrity, not scientific victory.
