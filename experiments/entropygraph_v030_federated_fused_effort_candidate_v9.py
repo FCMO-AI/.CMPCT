@@ -10,16 +10,15 @@ EG07's capped level-1 behavior for probes, cold stream slabs and metadata; only 
 
 from contextlib import contextmanager
 from pathlib import Path
-import tempfile
 
 from experiments import entropygraph_v030_federated_embedded_fs_candidate_v7 as EG07
-from experiments import entropygraph_v030_federated_adaptive_effort_candidate_v8 as EG08
 
 E5 = EG07.EG06.EG05
 V25 = E5.V25
 MAGIC = EG07.MAGIC
 TAIL_MAGIC = EG07.TAIL_MAGIC
-EFFORT_LEVELS = EG08.EFFORT_LEVELS
+# Frozen by the EG08 mechanism/mission lock; keep local so an upstream symbol rename cannot silently change EG09.
+EFFORT_LEVELS = (3, 6, 12, 19)
 PH = V25.PH
 
 
@@ -38,7 +37,7 @@ def _fused_final_pack_engine(archive: Path, profile: Path | None = None):
         def fused(raw: bytes, level: int = 19) -> bytes:
             requested = int(level)
             incumbent = original_zc(raw, min(requested, E5.LEVEL_CAP))
-            # V25 requested-level 19 is the ordinary final object-pack emission path.  Preserve EG07's
+            # V25 requested-level 19 is the ordinary final object-pack emission path. Preserve EG07's
             # raw/compressed admission exactly: EG08 never upgrades a pack that EG07 stored RAW.
             if requested != 19 or len(incumbent) + 8 >= len(raw):
                 return incumbent
@@ -66,7 +65,7 @@ def _fused_final_pack_engine(archive: Path, profile: Path | None = None):
 
 @contextmanager
 def _variant():
-    # EG07 -> EG06 -> EG05 eventually resolves EG05._engine dynamically.  Replace only that narrow engine
+    # EG07 -> EG06 -> EG05 eventually resolves EG05._engine dynamically. Replace only that narrow engine
     # boundary while preserving all existing EG07 identity/IFS/open_ar variants around it.
     old_engine = E5._engine
     E5._engine = _fused_final_pack_engine
@@ -97,7 +96,7 @@ def build(source: Path, archive: Path) -> dict:
     archive = archive.resolve()
     with _variant():
         result = dict(EG07.build(source, archive))
-    # Re-read with the ordinary EG07 reader after the build-time fusion patch has been removed.  This proves
+    # Re-read with the ordinary EG07 reader after the build-time fusion patch has been removed. This proves
     # that no special decode state is required by the fused artifact.
     verified = strong_verify(archive, expected_tree=_treehash(source))
     locality = locality_report(archive)
