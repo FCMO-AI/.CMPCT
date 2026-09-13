@@ -59,6 +59,27 @@ The remaining B regret is overwhelmingly physical: B's physical region alone is 
 
 This result does **not** prove that the 484 KiB is caused specifically by the locality ceiling. The current candidate also deliberately caps the inherited EntropyGraph encoder's Zstd requests at level 1 to preserve v0.30 creation speed, while the mature inherited v0.25 path uses stronger compression effort on ordinary packs. `OFFICE_PHYSICAL_LOCALITY_DOMINATES_REGRET` is therefore a mission-lock classification: the regret lives outside the filesystem control plane, in physical representation / packing / compression-effort economics. The next referee must separate those causes before changing pack geometry.
 
+## Independent repeat on later exact head
+
+A second hosted execution was triggered after the comparator-semantic identity was sealed explicitly in the mission lock, with no change to the Office mechanism or frozen comparator semantics:
+
+- candidate head: `3651927eeaee0b18c25e2e7c75f6491af87115ab`;
+- run: `34771048261`;
+- artifact: `10322101698`;
+- artifact digest: `sha256:66e1e069bbb28ae32a74ac1afc98c71889503f9d5885019b3fd8ee7b61acc21a`;
+- verdict: **`OFFICE_PHYSICAL_LOCALITY_DOMINATES_REGRET`** again.
+
+The repeat reproduced the exact Office tree SHA, exact physical-region SHA/size (`6,434,597 B`), exact membership SHA, and exact frozen-v0.29 artifact (`5,954,929 B`, SHA-256 `59157c8301ce168354802ded12b20f0e93ad2b76850bab2a3e86d1f1784d89cb`). It again preserved filesystem fidelity, tail recovery and the same `4.00113x` / `524,288 B` selective geometry.
+
+The complete B/C totals differed by a few bytes across the two hosted runs even though their raw metadata sizes and the physical/membership identities were unchanged:
+
+- first run: B `6,439,399 B`, C `6,437,555 B`, B->C `1,844 B`;
+- repeat: B `6,439,395 B`, C `6,437,559 B`, B->C `1,836 B`.
+
+The source blobs responsible for `_embed_control` and the inherited v0.25 Zstd wrapper are identical between the two candidate heads. The variation is confined to the compressed metadata frame sizes (`2343 -> 2341 B` for B and `1421 -> 1423 B` for C) and is therefore treated as a **hosted compression-environment reproducibility signal**, not as a causal product delta. It does not affect the conclusion: the control-plane recovery fraction remains about `0.38%`, orders of magnitude below the preregistered `10%` disproof threshold.
+
+Before any future claim depends on a handful of metadata bytes across different hosted runners, the receipt should record/pin the relevant libzstd identity or reproduce on one controlled runner. Same-run B↔C attribution remains valid because both sides share one process/dependency environment.
+
 ## Next falsifiable question
 
 Hold the current Office pack membership and raw pack bytes fixed, then recompress those exact decode units at the current level-1 effort and at the mature inherited effort. Measure the counterfactual stored-byte floor and CPU cost without changing relationships, grouping, locality, recovery semantics, or filesystem control.
