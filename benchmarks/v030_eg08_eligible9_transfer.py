@@ -28,6 +28,8 @@ HOSTILE_NAMES = {
     "05_incompressible",
 }
 ANALYTICS = "04_analytics_and_database"
+EG07_MODULE = "experiments.entropygraph_v030_federated_embedded_fs_candidate_v7"
+EG08_MODULE = "experiments.entropygraph_v030_federated_adaptive_effort_candidate_v8"
 
 
 def tail_recovery(archive: Path, source: Path, work: Path) -> bool:
@@ -37,20 +39,29 @@ def tail_recovery(archive: Path, source: Path, work: Path) -> bool:
     finally: corrupt.unlink(missing_ok=True)
 
 
+def _current_source_sealed(build: dict, module: str) -> bool:
+    expected=(Path.cwd()/Path(*module.split("."))).with_suffix(".py").resolve()
+    observed=Path(str(build.get("module_path", ""))).resolve()
+    return observed == expected
+
+
 def one(family: str, source: Path, item: dict, work: Path, v029_checkout: Path | None) -> tuple[dict, dict | None]:
-    b7=fresh_build("experiments.entropygraph_v030_federated_embedded_fs_candidate_v7",source,work/"eg07.cmpct")
-    b8=fresh_build("experiments.entropygraph_v030_federated_adaptive_effort_candidate_v8",source,work/"eg08.cmpct")
+    b7=fresh_build(EG07_MODULE,source,work/"eg07.cmpct")
+    b8=fresh_build(EG08_MODULE,source,work/"eg08.cmpct")
     l7=b7["result"]["locality"]; l8=b8["result"]["locality"]
     same=(l7["member_count"]==l8["member_count"] and l7["max_decode_unit_bytes"]==l8["max_decode_unit_bytes"] and l7["max_member_read_amplification"]==l8["max_member_read_amplification"])
     saved=int(b7["archive_bytes"])-int(b8["archive_bytes"]); cpu_ratio=float(b8["create_cpu_s"])/max(float(b7["create_cpu_s"]),1e-9)
+    clean_verify=bool((b8["result"].get("verified") or {}).get("ok"))
+    current_source_sealed=_current_source_sealed(b7,EG07_MODULE) and _current_source_sealed(b8,EG08_MODULE)
     rec=tail_recovery(work/"eg08.cmpct",source,work); effort=b8["result"]["adaptive_effort"]
     row={
         "family":family,"name":item["name"],"tree_sha256":item["tree_sha256"],"logical_bytes":item["logical_bytes"],"files":item["files"],
+        "eg07_module_path":b7["module_path"],"eg08_module_path":b8["module_path"],"current_source_sealed":current_source_sealed,
         "eg07_bytes":b7["archive_bytes"],"eg08_bytes":b8["archive_bytes"],"saved_bytes":saved,
         "eg07_cpu_s":b7["create_cpu_s"],"eg08_cpu_s":b8["create_cpu_s"],"cpu_ratio":cpu_ratio,
         "eg07_wall_s":b7["create_wall_s"],"eg08_wall_s":b8["create_wall_s"],
         "eg07_peak_rss_kib":b7["peak_rss_kib"],"eg08_peak_rss_kib":b8["peak_rss_kib"],"rss_delta_kib":int(b8["peak_rss_kib"])-int(b7["peak_rss_kib"]),
-        "geometry_same":same,"tail_recovery":rec,"max_amp":l8["max_member_read_amplification"],"max_decode_unit_bytes":l8["max_decode_unit_bytes"],"member_count":l8["member_count"],
+        "strong_verify":clean_verify,"geometry_same":same,"tail_recovery":rec,"max_amp":l8["max_member_read_amplification"],"max_decode_unit_bytes":l8["max_decode_unit_bytes"],"member_count":l8["member_count"],
         "changed_packs":effort["changed_packs"],"effort_attempts":effort["effort_attempts"],"early_stops":effort["early_stops"],"selected_levels":effort["selected_levels"],"repack_cpu_s":effort["repack_cpu_s"],
     }
     v29=None
@@ -81,6 +92,8 @@ def main() -> None:
         analytics=next(r for r in rows if r["name"]==ANALYTICS)
         conditions={
             "nine_workloads":len(rows)==9,
+            "all_current_sources_sealed":all(r["current_source_sealed"] for r in rows),
+            "all_strong_verify":all(r["strong_verify"] for r in rows),
             "zero_stored_byte_regressions":all(r["saved_bytes"]>=0 for r in rows),
             "all_locality_geometry_unchanged":all(r["geometry_same"] for r in rows),
             "all_tail_recovery":all(r["tail_recovery"] for r in rows),
@@ -91,7 +104,7 @@ def main() -> None:
         }
         verdict="EG08_ELIGIBLE9_TRANSFER_PASSES" if all(conditions.values()) else "EG08_ELIGIBLE9_TRANSFER_BLOCKED"
         out={
-            "schema":"v030-eg08-eligible9-transfer-v1","verdict":verdict,"conditions":conditions,"workloads":rows,"non_office_strict_win_count":non_office_wins,
+            "schema":"v030-eg08-eligible9-transfer-v2","verdict":verdict,"conditions":conditions,"workloads":rows,"non_office_strict_win_count":non_office_wins,
             "aggregate_eg07_bytes":sum(int(r["eg07_bytes"]) for r in rows),"aggregate_eg08_bytes":sum(int(r["eg08_bytes"]) for r in rows),"aggregate_saved_bytes":sum(int(r["saved_bytes"]) for r in rows),
             "worst_cpu_ratio":max(float(r["cpu_ratio"]) for r in rows),"max_positive_rss_delta_kib":max(0,max(int(r["rss_delta_kib"]) for r in rows)),"analytics_frozen_v029":analytics_v29,
         }
