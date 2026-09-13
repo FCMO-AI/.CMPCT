@@ -4,6 +4,13 @@ from __future__ import annotations
 
 Mission: docs/V030_R24_MICROPACK_SAME_GRAMMAR_ATTRIBUTION_2026-09-12.md
 Research-only. Both physical alternatives pay the exact same membership-v1 grammar.
+
+Important control law: the promoted v0.30 research surface installs a locality-aware
+``Builder.scan`` dispatcher whose container-pack geometry is allowed to inspect
+``micro_pack_max_file``. Therefore setting that knob to zero *before scan* does not
+isolate micro-packing; it changes an earlier physical policy too. The independent
+control below keeps the release knob identical to the candidate during scan and
+turns only ``_build_micro_packs`` into a no-op. That makes the ablation one-variable.
 """
 
 import argparse
@@ -14,6 +21,13 @@ import shutil
 from benchmarks import v030_compact_pack_control_attribution as ATTR
 from benchmarks import v030_r24_locality_derived_micropack_hostile_transfer as HOST
 from benchmarks import v030_r24_locality_derived_micropack_referee as BASE
+
+
+class NoMicroPackBuilder(BASE.BUILDER.Builder):
+    """Exact shared-scan control: disable only the micro-pack construction stage."""
+
+    def _build_micro_packs(self):
+        self._no_micro_pack_control = True
 
 
 def _candidate(source_r24: Path, out: Path, work: Path) -> dict:
@@ -40,14 +54,7 @@ def _candidate(source_r24: Path, out: Path, work: Path) -> dict:
 
 
 def _noop_candidate(path: Path, data_bytes: int, verify: dict) -> dict:
-    """Represent an exact no-op when the new mechanism emitted zero groups.
-
-    Some mature r24 workloads contain inherited S_PACK locality debt unrelated to
-    this experiment. Running membership-v1's global eligibility audit over such an
-    untouched artifact would make an unchanged workload look like a regression.
-    A zero-group transfer therefore receives only vacuous/no-op credit: the two
-    artifacts must be byte-identical and already strong-verify.
-    """
+    """Represent an exact no-op when the new mechanism emitted zero groups."""
     return {
         "archive_bytes": path.stat().st_size,
         "physical_data_bytes": data_bytes,
@@ -64,10 +71,12 @@ def _noop_candidate(path: Path, data_bytes: int, verify: dict) -> dict:
 
 def _one(source: Path, work: Path) -> dict:
     work.mkdir(parents=True, exist_ok=True)
+    release_max = int(BASE.PRODUCT.R24_RELEASE_MICRO_MAX_FILE_BYTES)
 
     independent = work / "independent-r24.cmpct"
-    ib = BASE.BUILDER.Builder(source, deflate_reuse_min=0, workers=1)
-    ib.micro_pack_max_file = 0
+    ib = NoMicroPackBuilder(source, deflate_reuse_min=0, workers=1)
+    # Keep scan policy identical to the candidate. Only _build_micro_packs differs.
+    ib.micro_pack_max_file = release_max
     independent_build = BASE._build_with(ib, independent)
     independent_index, independent_data = BASE._parse_r24(independent)
     independent_verify = BASE.PRODUCT.strong_verify(independent)
@@ -76,7 +85,7 @@ def _one(source: Path, work: Path) -> dict:
 
     derived = work / "derived-r24.cmpct"
     db = BASE.LocalityDerivedBuilder(source, deflate_reuse_min=0, workers=1)
-    db.micro_pack_max_file = BASE.PRODUCT.R24_RELEASE_MICRO_MAX_FILE_BYTES
+    db.micro_pack_max_file = release_max
     derived_build = BASE._build_with(db, derived)
     derived_groups = list(getattr(db, "_locality_derived_groups", []))
     derived_index, derived_data = BASE._parse_r24(derived)
@@ -89,7 +98,7 @@ def _one(source: Path, work: Path) -> dict:
 
     if group_count == 0:
         if independent.read_bytes() != derived.read_bytes():
-            raise RuntimeError("zero-group derived builder changed artifact bytes")
+            raise RuntimeError("zero-group derived builder changed artifact bytes after shared-scan control")
         independent_candidate = _noop_candidate(
             independent, len(independent_data), independent_verify
         )
@@ -125,6 +134,8 @@ def _one(source: Path, work: Path) -> dict:
     }
 
     return {
+        "control": "shared-release-scan-plus-noop-micropack-v2",
+        "scan_micro_pack_max_file": release_max,
         "plain_independent_r24_bytes": int(independent_build["archive_bytes"]),
         "plain_derived_r24_bytes": int(derived_build["archive_bytes"]),
         "plain_delta_bytes": int(derived_build["archive_bytes"]) - int(independent_build["archive_bytes"]),
@@ -185,10 +196,11 @@ def run(work_root: Path) -> dict:
         verdict = "SAME_GRAMMAR_MICROPACK_CAUSAL_WIN"
 
     return {
-        "schema": "cmpct-v030-r24-micropack-same-grammar-attribution-v1",
+        "schema": "cmpct-v030-r24-micropack-same-grammar-attribution-v2",
         "experiment_valid": True,
         "release_credit": False,
         "canonical_builder_changed": False,
+        "control": "shared-release-scan-plus-noop-micropack-v2",
         "locality_budget": BASE.LOCALITY_BUDGET,
         "sources": rows,
         "invariant_failures": invariant_failures,
@@ -215,6 +227,7 @@ def main() -> None:
     args.output.write_text(json.dumps(result, indent=2, sort_keys=True) + "\n")
     print(json.dumps({
         "verdict": result["verdict"],
+        "control": result["control"],
         "invariant_failures": result["invariant_failures"],
         "economic_failures": result["economic_failures"],
         "same_grammar_deltas": {
