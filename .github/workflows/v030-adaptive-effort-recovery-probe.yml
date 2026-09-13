@@ -33,6 +33,7 @@ jobs:
         id: referee
         continue-on-error: true
         run: |
+          mkdir -p evidence
           set +e
           python benchmarks/v030_adaptive_effort_recovery_probe_referee.py --out evidence/adaptive-effort-recovery-probe.json > evidence/adaptive-effort-recovery-probe.stdout.txt 2> evidence/adaptive-effort-recovery-probe.stderr.txt
           rc=$?
