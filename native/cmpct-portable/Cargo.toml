@@ -38,3 +38,7 @@ tempfile = "3"
 thiserror = "2"
 zstd = "0.13"
 zip = { version = "2", default-features = false, features = ["deflate"] }
+
+[dev-dependencies]
+base64 = "0.22"
+serde_json = "1"
