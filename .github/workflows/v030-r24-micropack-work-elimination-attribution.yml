@@ -1,0 +1,125 @@
+# ci-lane: deep
+# ci-pr-scope: latest-head-commit-gate
+# ci-cancel-policy: preserve-running-exact-receipt
+name: CMPCT v0.30 micropack work-elimination attribution
+
+on:
+  push:
+    branches: [agent/v030-authoritative-integration]
+    paths:
+      - 'benchmarks/v030_r24_micropack_work_elimination_attribution.py'
+      - 'benchmarks/v030_r24_micropack_fresh_process_economics.py'
+      - 'benchmarks/v030_r24_locality_derived_micropack_referee.py'
+      - '.github/workflows/v030-r24-micropack-work-elimination-attribution.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'benchmarks/v030_r24_micropack_work_elimination_attribution.py'
+      - 'benchmarks/v030_r24_micropack_fresh_process_economics.py'
+      - 'benchmarks/v030_r24_locality_derived_micropack_referee.py'
+      - '.github/workflows/v030-r24-micropack-work-elimination-attribution.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+concurrency:
+  group: cmpct-v030-micropack-work-attribution-${{ github.event.pull_request.head.sha || github.sha }}
+  cancel-in-progress: false
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+
+jobs:
+  latest-head-impact:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      run_deep: ${{ steps.scope.outputs.run_deep }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 2
+      - id: scope
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          if [ "$EVENT_NAME" = workflow_dispatch ]; then echo 'run_deep=true' >> "$GITHUB_OUTPUT"; exit 0; fi
+          git diff-tree --no-commit-id --name-only -r HEAD > /tmp/files
+          if grep -Eq '^(benchmarks/v030_r24_micropack_work_elimination_attribution\.py|benchmarks/v030_r24_micropack_fresh_process_economics\.py|benchmarks/v030_r24_locality_derived_micropack_referee\.py|\.github/workflows/v030-r24-micropack-work-elimination-attribution\.yml)$' /tmp/files; then
+            echo 'run_deep=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'run_deep=false' >> "$GITHUB_OUTPUT"
+          fi
+
+  work-attribution:
+    needs: latest-head-impact
+    if: needs.latest-head-impact.outputs.run_deep == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install corpus dependencies
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y zstd gcc ffmpeg libsndfile1
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[audio,test]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
+      - run: python -m py_compile benchmarks/v030_r24_micropack_work_elimination_attribution.py benchmarks/v030_r24_micropack_fresh_process_economics.py benchmarks/v030_r24_locality_derived_micropack_referee.py
+      - name: Execute work-elimination attribution
+        run: |
+          mkdir -p benchmark-artifacts
+          python benchmarks/v030_r24_micropack_work_elimination_attribution.py \
+            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-micropack-work-elimination-work" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-micropack-work-elimination.json"
+      - name: Enforce receipt integrity, not performance credit
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          d=json.loads(Path('benchmark-artifacts/v030-micropack-work-elimination.json').read_text())
+          assert d['schema']=='cmpct-v030-r24-micropack-work-elimination-attribution-v1'
+          assert d['experiment_valid'] is True
+          assert d['release_credit'] is False
+          assert d['performance_credit'] is False
+          assert d['canonical_builder_changed'] is False
+          assert len(d['targets']) == 3
+          assert d['verdict'] in {
+              'MICROPACK_HAS_CONCRETE_WORK_ELIMINATION_PATH',
+              'MICROPACK_SPEED_CAUSE_STILL_UNEXPLAINED',
+          }
+          PY
+      - name: Expose receipt summary
+        id: receipt
+        run: |
+          python - <<'PY' >> "$GITHUB_OUTPUT"
+          import json
+          from pathlib import Path
+          d=json.loads(Path('benchmark-artifacts/v030-micropack-work-elimination.json').read_text())
+          a=d['aggregate']
+          short='explained' if d['verdict']=='MICROPACK_HAS_CONCRETE_WORK_ELIMINATION_PATH' else 'unexplained'
+          print(f"artifact_name=v030-micropack-work-{short}-dc{a['candidate_count_delta']}-ds{a['dictionary_sample_count_delta']}-dg{a['dictionary_gates_closed']}")
+          PY
+      - run: python tools/check_ci_topology.py .github/workflows/v030-r24-micropack-work-elimination-attribution.yml
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: ${{ steps.receipt.outputs.artifact_name || 'v030-micropack-work-no-summary' }}-${{ env.EVIDENCE_HEAD }}
+          path: benchmark-artifacts/v030-micropack-work-elimination.json
+          if-no-files-found: error
+          retention-days: 90
+
+# Diagnostic only. The fresh-process economics referee owns timing credit; this
+# lane only attributes eliminated work and dictionary-training opportunity.
