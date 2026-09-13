@@ -77,7 +77,6 @@ class BufferReuseProxyGateBuilder(V14.ProxyGateBuilder):
             self._exact_dict_key = key
         need = int(C._z.ZSTD_compressBound(src_len))
         if need > self._exact_dst_cap:
-            # Geometric growth prevents reallocating when candidate sizes rise gradually.
             cap = max(need, max(65536, self._exact_dst_cap * 2))
             self._exact_dst = ctypes.create_string_buffer(cap)
             self._exact_dst_cap = cap
@@ -87,8 +86,8 @@ class BufferReuseProxyGateBuilder(V14.ProxyGateBuilder):
         if not data:
             return b''
         self._ensure_exact_state(dictionary, len(data))
-        # c_char_p keeps the immutable bytes object alive for the native call and avoids
-        # create_string_buffer(data), while size remains explicit so embedded NULs are safe.
+        # Size is explicit, so embedded NULs are safe; avoid copying source into a
+        # fresh ctypes buffer on every call.
         src = ctypes.c_char_p(data)
         c0 = time.process_time(); w0 = time.perf_counter()
         n = C._zck(_using_dict(
@@ -136,7 +135,6 @@ class BufferReuseProxyGateBuilder(V14.ProxyGateBuilder):
                 self._proxy_rejects += 1
                 return normal
             exact = self._zcd_exact_reuse(c.raw, d)
-            # Keep v14's externally visible gate counters for direct equality checks.
             self._exact_calls += 1
             if len(exact) + len(dm) < normal_n:
                 return CODEC_ZSTDDICT, exact, dm
@@ -197,23 +195,21 @@ def _one(source, root):
         bd = V1._build_obj(baseline, root/'v14-baseline.cmpct')
     finally:
         baseline.close_native_state()
+    baseline_gate = baseline.gate_stats()
 
     proof = _clone(seed, source, cache, True)
     pd = _build(proof, root/'v16-proof.cmpct')
-    proof_stats = proof.reuse_stats()
-    proof_gate = proof.gate_stats()
+    proof_stats = proof.reuse_stats(); proof_gate = proof.gate_stats()
 
     candidate = _clone(seed, source, cache, False)
     cd = _build(candidate, root/'v16-candidate.cmpct')
-    cand_stats = candidate.reuse_stats()
-    cand_gate = candidate.gate_stats()
+    cand_stats = candidate.reuse_stats(); cand_gate = candidate.gate_stats()
 
     baseline_portfolio_cpu = scan_cpu + ri['cpu_s'] + bd['cpu_s']
     baseline_portfolio_wall = scan_wall + ri['wall_s'] + bd['wall_s']
     candidate_portfolio_cpu = scan_cpu + ri['cpu_s'] + cd['cpu_s']
     candidate_portfolio_wall = scan_wall + ri['wall_s'] + cd['wall_s']
-    baseline_exact_cpu = baseline.gate_stats()['exact_cpu_s']
-    baseline_exact_wall = baseline.gate_stats()['exact_wall_s']
+    baseline_exact_cpu = baseline_gate['exact_cpu_s']; baseline_exact_wall = baseline_gate['exact_wall_s']
 
     identity = {
         'independent_exact': clean_i['sha256'] == ri['sha256'] and clean_i['bytes'] == ri['bytes'],
@@ -221,9 +217,9 @@ def _one(source, root):
         'proof_dictionary_exact': clean_d['sha256'] == pd['sha256'] and clean_d['bytes'] == pd['bytes'],
         'candidate_dictionary_exact': clean_d['sha256'] == cd['sha256'] and clean_d['bytes'] == cd['bytes'],
         'proof_all_frames_exact': proof_stats['frame_checks'] == proof_stats['exact_calls'] and proof_stats['frame_mismatches'] == 0,
-        'gate_calls_equal': baseline.gate_stats()['exact_calls'] == proof_gate['exact_calls'] == cand_gate['exact_calls'],
-        'proxy_rejects_equal': baseline.gate_stats()['proxy_rejects'] == proof_gate['proxy_rejects'] == cand_gate['proxy_rejects'],
-        'exact_rejects_equal': baseline.gate_stats()['exact_rejects_after_proxy_accept'] == proof_gate['exact_rejects_after_proxy_accept'] == cand_gate['exact_rejects_after_proxy_accept'],
+        'gate_calls_equal': baseline_gate['exact_calls'] == proof_gate['exact_calls'] == cand_gate['exact_calls'],
+        'proxy_rejects_equal': baseline_gate['proxy_rejects'] == proof_gate['proxy_rejects'] == cand_gate['proxy_rejects'],
+        'exact_rejects_equal': baseline_gate['exact_rejects_after_proxy_accept'] == proof_gate['exact_rejects_after_proxy_accept'] == cand_gate['exact_rejects_after_proxy_accept'],
         'cache_miss_free': candidate._fused_misses == 0 and proof._fused_misses == 0,
     }
     exact_cpu_ratio = cand_stats['exact_cpu_s']/baseline_exact_cpu if baseline_exact_cpu else None
@@ -231,13 +227,35 @@ def _one(source, root):
     portfolio_cpu_ratio = candidate_portfolio_cpu/baseline_portfolio_cpu if baseline_portfolio_cpu else None
     portfolio_wall_ratio = candidate_portfolio_wall/baseline_portfolio_wall if baseline_portfolio_wall else None
     earned = all(identity.values()) and exact_cpu_ratio is not None and portfolio_cpu_ratio is not None and exact_cpu_ratio <= 0.85 and portfolio_cpu_ratio <= 0.97
+    remaining_cpu = V1.SEL._confirmed_regression({'median_read_wall_s':candidate_portfolio_cpu},{'median_read_wall_s':clean_i['cpu_s']})
+    remaining_wall = V1.SEL._confirmed_regression({'median_read_wall_s':candidate_portfolio_wall},{'median_read_wall_s':clean_i['wall_s']})
+
+    # Preserve the historical referee aggregate contract so V1.run can combine rows;
+    # detailed v14/v16 data remains alongside these compatibility fields.
+    clean_portfolio_cpu = clean_i['cpu_s'] + clean_d['cpu_s']
+    clean_portfolio_wall = clean_i['wall_s'] + clean_d['wall_s']
+    fused = {
+        'scan_cpu_s': scan_cpu, 'scan_wall_s': scan_wall,
+        'clone_cpu_s': 0.0, 'clone_wall_s': 0.0,
+        'cache_hits': candidate._fused_hits, 'cache_misses': candidate._fused_misses,
+        'independent': ri, 'dictionary': cd,
+        'portfolio_cpu_s': candidate_portfolio_cpu,
+        'portfolio_wall_s': candidate_portfolio_wall,
+    }
     return {
-        'clean': {'independent': clean_i, 'dictionary': clean_d},
-        'baseline_v14': {'dictionary': bd, 'gate': baseline.gate_stats(), 'portfolio_cpu_s': baseline_portfolio_cpu, 'portfolio_wall_s': baseline_portfolio_wall},
+        'clean': {'independent': clean_i, 'dictionary': clean_d, 'portfolio_cpu_s': clean_portfolio_cpu, 'portfolio_wall_s': clean_portfolio_wall},
+        'fused': fused,
+        'baseline_v14': {'dictionary': bd, 'gate': baseline_gate, 'portfolio_cpu_s': baseline_portfolio_cpu, 'portfolio_wall_s': baseline_portfolio_wall},
         'proof_v16': {'dictionary': pd, 'reuse': proof_stats, 'gate': proof_gate},
         'candidate_v16': {'dictionary': cd, 'reuse': cand_stats, 'gate': cand_gate, 'portfolio_cpu_s': candidate_portfolio_cpu, 'portfolio_wall_s': candidate_portfolio_wall},
         'identity': identity,
         'identity_pass': all(identity.values()),
+        'cpu_ratio_vs_clean_portfolio': candidate_portfolio_cpu/clean_portfolio_cpu if clean_portfolio_cpu else None,
+        'wall_ratio_vs_clean_portfolio': candidate_portfolio_wall/clean_portfolio_wall if clean_portfolio_wall else None,
+        'cpu_ratio_vs_single_independent': candidate_portfolio_cpu/clean_i['cpu_s'] if clean_i['cpu_s'] else None,
+        'wall_ratio_vs_single_independent': candidate_portfolio_wall/clean_i['wall_s'] if clean_i['wall_s'] else None,
+        'remaining_cpu_debt': remaining_cpu,
+        'remaining_wall_debt': remaining_wall,
         'exact_cpu_ratio_vs_v14': exact_cpu_ratio,
         'exact_wall_ratio_vs_v14': exact_wall_ratio,
         'portfolio_cpu_ratio_vs_v14': portfolio_cpu_ratio,
@@ -250,7 +268,6 @@ V1._one = _one
 
 
 def main():
-    # V1 owns the frozen five-target corpus, receipt schema and strong verification.
     V1.main()
 
 
