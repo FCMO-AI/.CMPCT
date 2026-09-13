@@ -88,10 +88,13 @@ jobs:
                   stop_b=row.get('stop_rule_missed_bytes','na')
                   obs_n=row.get('observation_only_9_15_better_pack_count','na')
                   obs_b=row.get('observation_only_9_15_missed_bytes','na')
+                  hot=row.get('hot_residual_bytes','na')
+                  cold=row.get('cold_residual_bytes','na')
                   top5=float(row.get('top5_residual_share',0.0))*100.0
                   parts.append(
                       f"{name}-sh{share:.1f}-cpu{ratio:.1f}-r{residual}"
-                      f"-stop{stop_n}.{stop_b}-obs{obs_n}.{obs_b}-top5{top5:.1f}"
+                      f"-hot{hot}-cold{cold}-stop{stop_n}.{stop_b}"
+                      f"-obs{obs_n}.{obs_b}-top5{top5:.1f}"
                   )
               label=verdict+'-'+'-'.join(parts)
           else:
