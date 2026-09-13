@@ -8,6 +8,7 @@ on:
       - benchmarks/v030_r24_micropack_content_current15_transfer.py
       - benchmarks/v030_r24_micropack_content_economic_admission.py
       - benchmarks/v030_r24_micropack_current15_transfer.py
+      - benchmarks/v030_current15_stable_corpus.py
       - benchmarks/v030_r24_locality_derived_micropack_referee.py
       - benchmarks/v030_r24_micropack_same_grammar_attribution.py
       - benchmarks/neutral_hostile_corpus_v1.py
