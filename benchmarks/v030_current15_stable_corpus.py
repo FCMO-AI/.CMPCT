@@ -124,8 +124,10 @@ def build(root: Path) -> dict:
     os.environ["SOURCE_DATE_EPOCH"] = _FIXED_EPOCH
 
     # ReportLab's PDFDocument derives CreationDate/ModDate and the document ID from
-    # the wall clock unless invariant mode is enabled.  The office workload is meant
-    # to vary by deterministic content, not by when CI happened to create the PDF.
+    # the wall clock unless invariant mode is enabled.  Setting the global config was
+    # insufficient on hosted CI: file-level attribution still isolated client_report.pdf.
+    # Force the invariant argument at the exact Canvas constructor used by the shared
+    # corpus producer, then restore both the constructor and global config afterwards.
     try:
         from reportlab import rl_config
         previous_invariant = rl_config.invariant
@@ -134,9 +136,17 @@ def build(root: Path) -> dict:
         rl_config = None
         previous_invariant = None
 
+    original_canvas = BASE.canvas.Canvas
+
+    def deterministic_canvas(*args, **kwargs):
+        kwargs["invariant"] = 1
+        return original_canvas(*args, **kwargs)
+
+    BASE.canvas.Canvas = deterministic_canvas
     try:
         manifest = BASE.build(root)
     finally:
+        BASE.canvas.Canvas = original_canvas
         if rl_config is not None:
             rl_config.invariant = previous_invariant
         if previous_epoch is None:
