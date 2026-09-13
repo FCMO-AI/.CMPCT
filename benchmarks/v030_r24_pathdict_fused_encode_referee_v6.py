@@ -29,9 +29,7 @@ import msgpack
 
 from cmpct.codec import CODEC_RAW, CODEC_ZSTDDICT, TEXT_EXT, zcd
 from benchmarks import v030_r24_pathdict_fused_encode_referee as V1
-from benchmarks import v030_r24_pathdict_fused_encode_referee_v3 as V3
 from benchmarks.v030_r24_pathdict_fused_encode_referee_v4 import (
-    TimedFusedPathBlindDictionaryBuilder,
     TimedRecordingIndependentBuilder,
 )
 
@@ -41,7 +39,10 @@ class CanonicalRecordingIndependentBuilder(TimedRecordingIndependentBuilder):
         dictionary = self.dictionary
         self.dictionary = b''
         try:
-            normal = super(TimedRecordingIndependentBuilder, self)._encode_candidate(h, c)
+            # Bypass RecordingIndependentBuilder's historical manual dictionary
+            # replay and ask the actual canonical r24 implementation for the
+            # no-dictionary candidate we want to cache.
+            normal = V1.SAME.NoMicroPackBuilder._encode_candidate(self, h, c)
         finally:
             self.dictionary = dictionary
 
