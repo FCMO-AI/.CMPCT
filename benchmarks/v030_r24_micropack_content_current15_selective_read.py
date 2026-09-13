@@ -3,14 +3,17 @@ from __future__ import annotations
 """Current-15 selective-read transfer for path-blind content-economic micro-packs.
 
 The focused Developer/Tiny referee survived, but the full current-15 density
-transfer exposed a larger legal decode unit (938,064 B).  This referee owns that
-new risk directly: build the exact unchanged content-economic candidate and
+transfer exposed a larger legal decode unit (938,064 B). This referee owns that
+risk directly: build the exact unchanged content-economic candidate and
 same-grammar independent control for every current workload, select the most
 expensive content-packed members by decoded context, and time identical fixed
 range reads.
 
-No locality threshold, range size, builder policy, comparator or timing envelope
-is changed. Execution faults remain separate from product debt. Research-only.
+The referee also attributes any timing debt to physical work on those exact probes:
+decoded-context bytes and compressed payload bytes touched.  That attribution is
+observational only; no locality threshold, range size, builder policy, comparator
+or timing envelope is changed. Execution faults remain separate from product debt.
+Research-only.
 """
 
 import argparse
@@ -23,6 +26,10 @@ from benchmarks import v030_r24_micropack_current15_transfer as CUR
 from benchmarks import v030_r24_micropack_content_selective_read_referee as SEL
 from benchmarks import v030_r24_micropack_same_grammar_attribution as SAME
 from benchmarks.v030_r24_micropack_content_economic_admission import ContentEconomicBuilder
+
+
+def _ratio(candidate: float, base: float) -> float | None:
+    return float(candidate) / float(base) if float(base) > 0 else None
 
 
 def _one(source: Path, root: Path) -> dict:
@@ -62,6 +69,19 @@ def _one(source: Path, root: Path) -> dict:
         (x for x in timings["content_economic"]["charges"]),
         key=lambda x: int(x["decoded_context_bytes"]),
     )
+    ind_t = timings["independent"]
+    con_t = timings["content_economic"]
+    physical_work = {
+        "independent_sum_decoded_context_bytes": int(ind_t["sum_decoded_context_bytes"]),
+        "content_sum_decoded_context_bytes": int(con_t["sum_decoded_context_bytes"]),
+        "decoded_context_ratio": _ratio(con_t["sum_decoded_context_bytes"], ind_t["sum_decoded_context_bytes"]),
+        "independent_sum_compressed_payload_bytes_touched": int(ind_t["sum_compressed_payload_bytes_touched"]),
+        "content_sum_compressed_payload_bytes_touched": int(con_t["sum_compressed_payload_bytes_touched"]),
+        "compressed_payload_ratio": _ratio(con_t["sum_compressed_payload_bytes_touched"], ind_t["sum_compressed_payload_bytes_touched"]),
+        "independent_max_decoded_context_bytes": int(ind_t["max_decoded_context_bytes"]),
+        "content_max_decoded_context_bytes": int(con_t["max_decoded_context_bytes"]),
+        "wall_time_ratio": _ratio(con_t["median_read_wall_s"], ind_t["median_read_wall_s"]),
+    }
     return {
         "grouped": True,
         "variants": clean,
@@ -70,6 +90,7 @@ def _one(source: Path, root: Path) -> dict:
         "content_vs_independent": debt,
         "timing_debt": bool(debt["confirmed_regression"]),
         "max_probe": max_probe,
+        "physical_work": physical_work,
         "invariants": invariants,
         "invariants_pass": all(invariants.values()),
     }
@@ -101,6 +122,9 @@ def run(work_root: Path) -> dict:
         key=lambda k: int(rows[k]["variants"]["content_economic"]["max_decode_unit_bytes"]),
         default=None,
     )
+    debt_attribution = {
+        key: rows[key]["physical_work"] for key in timing_debt if "physical_work" in rows[key]
+    }
     if execution_errors:
         verdict = "CONTENT_CURRENT15_SELECTIVE_EXECUTION_BLOCKED"
     elif invariant_failures:
@@ -111,7 +135,7 @@ def run(work_root: Path) -> dict:
         verdict = "CONTENT_CURRENT15_SELECTIVE_SURVIVES"
 
     return {
-        "schema": "cmpct-v030-r24-content-current15-selective-v1",
+        "schema": "cmpct-v030-r24-content-current15-selective-v2",
         "experiment_valid": not execution_errors,
         "release_credit": False,
         "canonical_builder_changed": False,
@@ -124,6 +148,7 @@ def run(work_root: Path) -> dict:
         "completed_workloads": len(rows),
         "grouped_workloads": grouped,
         "timing_debt": timing_debt,
+        "timing_debt_attribution": debt_attribution,
         "invariant_failures": invariant_failures,
         "max_decode_workload": max_decode_key,
         "max_decode_unit_bytes": int(rows[max_decode_key]["variants"]["content_economic"]["max_decode_unit_bytes"]) if max_decode_key else 0,
@@ -149,6 +174,7 @@ def main() -> None:
         "completed_workloads": result["completed_workloads"],
         "grouped_workloads": result["grouped_workloads"],
         "timing_debt": result["timing_debt"],
+        "timing_debt_attribution": result["timing_debt_attribution"],
         "invariant_failures": result["invariant_failures"],
         "execution_errors": result["execution_errors"],
         "max_decode_workload": result["max_decode_workload"],
@@ -158,6 +184,8 @@ def main() -> None:
                 "independent": row["timings"]["independent"]["median_read_wall_ms_per_probe"],
                 "content": row["timings"]["content_economic"]["median_read_wall_ms_per_probe"],
                 "max_decode": row["variants"]["content_economic"]["max_decode_unit_bytes"],
+                "decoded_ratio": row.get("physical_work", {}).get("decoded_context_ratio"),
+                "compressed_ratio": row.get("physical_work", {}).get("compressed_payload_ratio"),
             }
             for name, row in result["rows"].items() if row["grouped"]
         },
