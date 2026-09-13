@@ -23,19 +23,19 @@ before any compression result is accepted, so future corpus drift cannot silentl
 change the transfer court. No threshold learned from Office/Analytics is permitted.
 
 Important separation: H-EFFORT-3 changes only codec effort over already-fixed
-physical units; it cannot change membership, pack geometry, locality or decode-unit
-size. Primary Office/Analytics therefore retain the strict product locality gate
-already earned by their physical candidate. Held-out surfaces retain strong
-verification, filesystem fidelity and tail recovery, while their pre-existing
-locality state is measured and reported rather than used to reject a selector-only
-transfer experiment. A held-out geometry outside release bounds receives no product
-or locality credit; it can still falsify whether the effort selector itself
-transfers without density regression.
+physical units; it cannot change filesystem-control representation, membership,
+pack geometry, locality or decode-unit size. Office/Analytics retain their admitted
+implicit-v4 control and strict locality gate. Held-out surfaces retain their exact
+explicit filesystem control when implicit-v4 is not semantics-preserving; the same
+regular-file profile still produces the physical units under test. Strong verify,
+filesystem fidelity and tail recovery remain mandatory. Held-out locality is
+measured and reported rather than gifted product credit.
 """
 
 import argparse
 import json
-from pathlib import Path
+import os
+from pathlib import Path, PurePosixPath
 import shutil
 import statistics
 import tempfile
@@ -122,6 +122,26 @@ def _timed_probe(units: list[dict], hot: set[int]):
     return first, stats0, statistics.median(cpus), statistics.median(walls)
 
 
+def _explicit_profile_controls(source: Path, profile: Path) -> tuple[bytes, dict]:
+    """Build the same regular-file physical profile without changing FS semantics."""
+    v1_raw, regular_sources, stats = OFFICE.FS.capture_filesystem_manifest(
+        source,
+        max_path_bytes=H2.EG05.MAX_PATH_BYTES,
+        max_profile_files=H2.EG05.MAX_PROFILE_FILES,
+        max_profile_logical_bytes=H2.EG05.MAX_PROFILE_LOGICAL_BYTES,
+        max_entries=H2.EG05.MAX_MANIFEST_ENTRIES,
+    )
+    profile.mkdir(parents=True, exist_ok=True)
+    for src, rel in regular_sources:
+        dst = profile.joinpath(*PurePosixPath(rel).parts)
+        dst.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            os.link(src, dst, follow_symlinks=False)
+        except OSError:
+            shutil.copyfile(src, dst)
+    return v1_raw, stats
+
+
 def _research_verify(label: str, archive: Path, source: Path, v1_raw: bytes) -> dict:
     """Verify selector transfer while exposing, not forgiving, geometry debt."""
     expected_tree = H2.EG05._treehash(source)
@@ -171,11 +191,18 @@ def _research_verify(label: str, archive: Path, source: Path, v1_raw: bytes) -> 
 
 def _one(source: Path, item: dict, work: Path) -> dict:
     profile = work / "profile"
-    v1_raw, implicit_raw, _ = OFFICE.profile_controls(source, profile)
+    if item["name"] in PRIMARY:
+        v1_raw, control_raw, _ = OFFICE.profile_controls(source, profile)
+        control_kind = "implicit-v4"
+    else:
+        v1_raw, _ = _explicit_profile_controls(source, profile)
+        control_raw = v1_raw
+        control_kind = "explicit-v1"
+
     base = work / "base.cmpct"
     OFFICE.physical_base(profile, base)
     current = work / "current.cmpct"
-    OFFICE.embedded_copy(base, current, implicit_raw)
+    OFFICE.embedded_copy(base, current, control_raw)
     if item["name"] in PRIMARY:
         verify = OFFICE.verify_controlled("h-effort-3", current, source, v1_raw, implicit=True)
         verify["within_release_bounds"] = True
@@ -196,6 +223,7 @@ def _one(source: Path, item: dict, work: Path) -> dict:
     return {
         "name": item["name"],
         "tree_sha256": item["tree_sha256"],
+        "filesystem_control": control_kind,
         "verify": verify,
         "pack_count": len(units),
         "hot_pack_count": len(hot),
@@ -238,9 +266,7 @@ def main():
                 "current15 substrate drift: "
                 f"expected={expected_names!r} observed={observed_names!r}"
             )
-        rows = []
-        for name in TARGETS:
-            rows.append(_one(corpus / name, by[name], root / name))
+        rows = [_one(corpus / name, by[name], root / name) for name in TARGETS]
     primary = [r for r in rows if r["name"] in PRIMARY]
     held = [r for r in rows if r["name"] in HELD_OUT]
     primary_ok = all(r["probe_share_of_oracle"] >= 0.90 for r in primary)
@@ -252,8 +278,8 @@ def main():
         else "RECOVERY_PROBE_NOT_READY"
     )
     out = {
-        "schema": "cmpct-v030-adaptive-effort-recovery-probe-v3",
-        "status": "selector-transfer research evidence; no release, locality, geometry, or R4 credit",
+        "schema": "cmpct-v030-adaptive-effort-recovery-probe-v4",
+        "status": "selector-transfer research evidence; no release, locality, geometry, filesystem-control, or R4 credit",
         "historical_policy_blob": blob,
         "substrate_names": list(EXPECTED_CURRENT15_NAMES),
         "targets": list(TARGETS),
@@ -268,8 +294,9 @@ def main():
         },
         "note": (
             "threshold-free one-probe falsifier; exact current15 substrate asserted; all non-primary "
-            "workloads held out; selector decisions contain no workload/path identity; held-out locality "
-            "is measured as pre-existing geometry debt and confers no product credit"
+            "workloads held out; selector decisions contain no workload/path identity; primary uses admitted "
+            "implicit-v4 while held-outs preserve explicit-v1 filesystem semantics; held-out locality is measured "
+            "as pre-existing geometry debt and confers no product credit"
         ),
     }
     args.out.parent.mkdir(parents=True, exist_ok=True)
