@@ -1,0 +1,100 @@
+name: CMPCT v0.30 content-economic fresh process
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [agent/v030-authoritative-integration]
+    paths:
+      - benchmarks/v030_r24_micropack_content_fresh_process.py
+      - benchmarks/v030_r24_micropack_content_economic_admission.py
+      - benchmarks/v030_r24_locality_derived_micropack_referee.py
+      - benchmarks/v030_r24_micropack_same_grammar_attribution.py
+      - benchmarks/v030_compact_pack_control_attribution.py
+      - src/cmpct/**
+      - .github/workflows/v030-r24-micropack-content-fresh-process.yml
+
+permissions:
+  contents: read
+
+jobs:
+  fresh-process:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install exact-head dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[test]'
+      - name: Compile referee
+        run: python -m py_compile benchmarks/v030_r24_micropack_content_fresh_process.py
+      - name: Execute fresh-process economics
+        run: |
+          mkdir -p benchmark-artifacts
+          python -m benchmarks.v030_r24_micropack_content_fresh_process \
+            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-content-fresh-work" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-content-fresh.json"
+      - name: Validate and expose receipt
+        id: receipt
+        run: |
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          d=json.loads(Path('benchmark-artifacts/v030-content-fresh.json').read_text())
+          assert d['schema']=='cmpct-v030-r24-content-micropack-fresh-process-v1'
+          assert d['experiment_valid'] is True
+          assert d['release_credit'] is False
+          assert d['canonical_builder_changed'] is False
+          assert d['path_signal_used'] is False
+          assert d['source_commit']=='${{ github.sha }}'
+          assert d['rounds']==3
+          assert d['verdict'] in {
+              'CONTENT_FRESH_PROCESS_ECONOMICS_SURVIVE',
+              'CONTENT_FRESH_PROCESS_REHABILITATION_REQUIRED',
+              'RETIRE_CONTENT_FRESH_PROCESS',
+          }
+          short={
+              'CONTENT_FRESH_PROCESS_ECONOMICS_SURVIVE':'survive',
+              'CONTENT_FRESH_PROCESS_REHABILITATION_REQUIRED':'rehab',
+              'RETIRE_CONTENT_FRESH_PROCESS':'retire',
+          }[d['verdict']]
+          def arm(src, name): return d['sources'][src]['arms'][name]
+          dev=d['sources']['origin_developer']; tiny=d['sources']['origin_tiny_files']
+          outputs={
+              'short':short,
+              'ddi':str(dev['delta_vs_independent_bytes']),
+              'tdi':str(tiny['delta_vs_independent_bytes']),
+              'dic':f"{arm('origin_developer','independent')['median_cpu_s']:.3f}",
+              'dcc':f"{arm('origin_developer','content_economic')['median_cpu_s']:.3f}",
+              'diw':f"{arm('origin_developer','independent')['median_wall_s']:.3f}",
+              'dcw':f"{arm('origin_developer','content_economic')['median_wall_s']:.3f}",
+              'tic':f"{arm('origin_tiny_files','independent')['median_cpu_s']:.3f}",
+              'tcc':f"{arm('origin_tiny_files','content_economic')['median_cpu_s']:.3f}",
+              'tiw':f"{arm('origin_tiny_files','independent')['median_wall_s']:.3f}",
+              'tcw':f"{arm('origin_tiny_files','content_economic')['median_wall_s']:.3f}",
+              'dir':str(arm('origin_developer','independent')['median_peak_rss_kib']),
+              'dcr':str(arm('origin_developer','content_economic')['median_peak_rss_kib']),
+              'tir':str(arm('origin_tiny_files','independent')['median_peak_rss_kib']),
+              'tcr':str(arm('origin_tiny_files','content_economic')['median_peak_rss_kib']),
+              'dd':str(arm('origin_developer','content_economic')['max_decode_unit_bytes']),
+              'td':str(arm('origin_tiny_files','content_economic')['max_decode_unit_bytes']),
+          }
+          with open(os.environ['GITHUB_OUTPUT'],'a',encoding='utf-8') as fh:
+              for k,v in outputs.items(): fh.write(f'{k}={v}\n')
+          print(json.dumps({'verdict':d['verdict'],'density_losses':d['density_losses_vs_independent'],'timing_debt':d['timing_debt_vs_independent'],'sources':d['sources']},sort_keys=True))
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: v030-fresh-${{ steps.receipt.outputs.short || 'nosummary' }}-ddi${{ steps.receipt.outputs.ddi }}-tdi${{ steps.receipt.outputs.tdi }}-dcpu${{ steps.receipt.outputs.dic }}-${{ steps.receipt.outputs.dcc }}-dwall${{ steps.receipt.outputs.diw }}-${{ steps.receipt.outputs.dcw }}-tcpu${{ steps.receipt.outputs.tic }}-${{ steps.receipt.outputs.tcc }}-twall${{ steps.receipt.outputs.tiw }}-${{ steps.receipt.outputs.tcw }}-drss${{ steps.receipt.outputs.dir }}-${{ steps.receipt.outputs.dcr }}-trss${{ steps.receipt.outputs.tir }}-${{ steps.receipt.outputs.tcr }}-decode${{ steps.receipt.outputs.dd }}-${{ steps.receipt.outputs.td }}-${{ github.sha }}
+          path: benchmark-artifacts/v030-content-fresh.json
+          if-no-files-found: error
+          retention-days: 90
+
+# Research-only; RSS remains diagnostic until runtime/import attribution.
