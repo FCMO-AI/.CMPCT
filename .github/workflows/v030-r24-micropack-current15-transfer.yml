@@ -9,6 +9,8 @@ on:
     paths:
       - 'benchmarks/v030_r24_micropack_current15_transfer.py'
       - 'benchmarks/v030_r24_micropack_same_grammar_attribution.py'
+      - 'benchmarks/v030_r24_locality_derived_micropack_referee.py'
+      - 'benchmarks/v030_r25_membership_complete_artifact_referee.py'
       - 'docs/V030_R24_MICROPACK_CURRENT15_TRANSFER_2026-09-12.md'
       - '.github/workflows/v030-r24-micropack-current15-transfer.yml'
   pull_request:
@@ -16,6 +18,8 @@ on:
     paths:
       - 'benchmarks/v030_r24_micropack_current15_transfer.py'
       - 'benchmarks/v030_r24_micropack_same_grammar_attribution.py'
+      - 'benchmarks/v030_r24_locality_derived_micropack_referee.py'
+      - 'benchmarks/v030_r25_membership_complete_artifact_referee.py'
       - 'docs/V030_R24_MICROPACK_CURRENT15_TRANSFER_2026-09-12.md'
       - '.github/workflows/v030-r24-micropack-current15-transfer.yml'
   workflow_dispatch:
@@ -49,7 +53,7 @@ jobs:
           test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
           if [ "$EVENT_NAME" = workflow_dispatch ]; then echo 'run_deep=true' >> "$GITHUB_OUTPUT"; exit 0; fi
           git diff-tree --no-commit-id --name-only -r HEAD > /tmp/files
-          if grep -Eq '^(benchmarks/v030_r24_micropack_current15_transfer\.py|benchmarks/v030_r24_micropack_same_grammar_attribution\.py|docs/V030_R24_MICROPACK_CURRENT15_TRANSFER_2026-09-12\.md|\.github/workflows/v030-r24-micropack-current15-transfer\.yml)$' /tmp/files; then
+          if grep -Eq '^(benchmarks/v030_r24_micropack_current15_transfer\.py|benchmarks/v030_r24_micropack_same_grammar_attribution\.py|benchmarks/v030_r24_locality_derived_micropack_referee\.py|benchmarks/v030_r25_membership_complete_artifact_referee\.py|docs/V030_R24_MICROPACK_CURRENT15_TRANSFER_2026-09-12\.md|\.github/workflows/v030-r24-micropack-current15-transfer\.yml)$' /tmp/files; then
             echo 'run_deep=true' >> "$GITHUB_OUTPUT"
           else
             echo 'run_deep=false' >> "$GITHUB_OUTPUT"
@@ -77,7 +81,7 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -e '.[audio,test]'
           python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
-      - run: python -m py_compile benchmarks/v030_r24_micropack_current15_transfer.py benchmarks/v030_r24_micropack_same_grammar_attribution.py
+      - run: python -m py_compile benchmarks/v030_r24_micropack_current15_transfer.py benchmarks/v030_r24_micropack_same_grammar_attribution.py benchmarks/v030_r24_locality_derived_micropack_referee.py benchmarks/v030_r25_membership_complete_artifact_referee.py
       - name: Execute current-fingerprint transfer referee
         run: |
           mkdir -p benchmark-artifacts
@@ -130,3 +134,5 @@ jobs:
           retention-days: 90
 
 # Research-only. Current-fingerprint evidence is never a frozen Genesis rescore.
+# Keep shared physical/membership helpers in the exact-head trigger surface: a repair
+# to the mechanism must invalidate and rerun this transfer rather than leaving stale evidence.
