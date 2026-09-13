@@ -1,0 +1,26 @@
+name: v030 implicit-v4 hardlink metadata parity
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [agent/v030-authoritative-integration]
+    paths:
+      - 'native/cmpct-portable/src/manifest.rs'
+      - 'native/cmpct-portable/src/implicit_v4_vector_tests.rs'
+      - '.github/workflows/v030-implicit-v4-hardlink-parity.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  hardlink-parity:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Run independent implicit-v4 hardlink parity falsifier
+        run: |
+          cargo test --manifest-path native/cmpct-portable/Cargo.toml \
+            implicit_v4_rejects_hardlink_metadata_divergence_from_owner \
+            --release -- --nocapture
