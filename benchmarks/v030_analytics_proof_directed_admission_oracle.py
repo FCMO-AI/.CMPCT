@@ -57,6 +57,34 @@ def _observables(raw: bytes, cheap_csize: int) -> dict:
     }
 
 
+def _decode_pack(f, entry: tuple) -> bytes:
+    """Decode one CMPNX5 physical pack from the authoritative open_ar() pack table.
+
+    Keep this local to the referee instead of inventing a helper on the frozen research engine:
+    open_ar() already returns the exact payload offset and authenticated pack metadata used by
+    extract().  This mirrors extract()'s pack path while additionally checking the stored SHA-256,
+    because cross-level raw-pack identity is the premise of this oracle.
+    """
+    off, codec, usize, csize, crc, hh = entry
+    f.seek(int(off))
+    payload = f.read(int(csize))
+    if len(payload) != int(csize):
+        raise RuntimeError("truncated physical pack payload")
+    if int(codec) == 1:
+        raw = V25.zd(payload, int(usize))
+    elif int(codec) == 0:
+        raw = payload
+    else:
+        raise RuntimeError(f"unsupported physical pack codec {codec}")
+    if len(raw) != int(usize):
+        raise RuntimeError("physical pack size drift")
+    if (binascii.crc32(raw) & 0xFFFFFFFF) != int(crc):
+        raise RuntimeError("physical pack CRC drift")
+    if V25.H(raw) != bytes(hh):
+        raise RuntimeError("physical pack SHA drift")
+    return raw
+
+
 def _build(stage: Path, root: Path, level: int) -> dict:
     old_cap = CANON.LEVEL_CAP
     CANON.LEVEL_CAP = level
@@ -70,11 +98,10 @@ def _build(stage: Path, root: Path, level: int) -> dict:
     f, meta, po = V25.open_ar()
     try:
         packs = []
-        for pi, (_off, codec, usize, csize, crc, hh) in enumerate(po):
+        for pi, entry in enumerate(po):
+            _off, codec, usize, csize, crc, hh = entry
             # Decode from the archive itself. This makes feature extraction independent of source paths.
-            raw = V25.read_pack(pi)
-            if len(raw) != int(usize) or (binascii.crc32(raw) & 0xFFFFFFFF) != int(crc):
-                raise RuntimeError(f"pack decode/integrity drift at {pi}")
+            raw = _decode_pack(f, entry)
             packs.append({
                 "pi": int(pi), "codec": int(codec), "usize": int(usize), "csize": int(csize),
                 "crc32": int(crc), "sha256": bytes(hh).hex(), "raw": raw,
