@@ -55,6 +55,7 @@ def _probe_once(units: list[dict], hot_indices: set[int]) -> tuple[list[tuple[in
     for row in units:
         pi = int(row["index"])
         best_codec = int(row["codec"]); best_payload = row["payload"]; best_size = len(best_payload)
+        probe_used = False
         if pi not in hot_indices:
             for level in H2.POLICY_LEVELS:
                 attempts += 1
@@ -64,9 +65,11 @@ def _probe_once(units: list[dict], hot_indices: set[int]) -> tuple[list[tuple[in
                     if size < best_size:
                         best_codec, best_payload, best_size = codec, payload, size
                     continue
-                # Exactly one fixed recovery observation. Level 9 is observation-only
-                # in H2 and therefore was not selected from target residual thresholds.
-                if level < 9:
+                # Exactly one fixed recovery observation per pack. Level 9 is
+                # observation-only in H2 and therefore was not selected from target
+                # residual thresholds. Once spent, a later worse rung stops normally.
+                if level < 9 and not probe_used:
+                    probe_used = True
                     probes += 1; attempts += 1
                     pcodec, ppayload = H1._encode(row["raw"], 9)
                     psize = len(ppayload)
