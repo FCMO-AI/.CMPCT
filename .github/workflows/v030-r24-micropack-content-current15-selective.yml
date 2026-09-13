@@ -52,7 +52,7 @@ jobs:
           import json, os, re
           from pathlib import Path
           d=json.loads(Path('benchmark-artifacts/v030-content-current15-selective.json').read_text())
-          assert d['schema']=='cmpct-v030-r24-content-current15-selective-v1'
+          assert d['schema']=='cmpct-v030-r24-content-current15-selective-v2'
           assert d['release_credit'] is False
           assert d['canonical_builder_changed'] is False
           assert d['genesis_rescore'] is False
@@ -73,15 +73,23 @@ jobs:
           }[d['verdict']]
           def slug_key(key):
               tail=key.split('/',1)[-1]
-              return re.sub(r'[^A-Za-z0-9_-]+','-',tail)[:18]
-          debt_parts=[]
-          debt_detail={}
+              return re.sub(r'[^A-Za-z0-9_-]+','-',tail)[:16]
+          debt_parts=[]; debt_detail={}
           for key in d['timing_debt'][:3]:
               row=d['rows'][key]
               i=row['timings']['independent']['median_read_wall_ms_per_probe']
               c=row['timings']['content_economic']['median_read_wall_ms_per_probe']
-              debt_parts.append(f"{slug_key(key)}-{i:.3f}to{c:.3f}")
-              debt_detail[key]={'independent_ms_per_probe':i,'content_ms_per_probe':c,'max_decode_unit_bytes':row['variants']['content_economic']['max_decode_unit_bytes']}
+              p=row.get('physical_work',{})
+              dr=p.get('decoded_context_ratio'); cr=p.get('compressed_payload_ratio')
+              drs='na' if dr is None else f'{dr:.1f}x'
+              crs='na' if cr is None else f'{cr:.1f}x'
+              debt_parts.append(f"{slug_key(key)}-{i:.3f}to{c:.3f}-d{drs}-c{crs}")
+              debt_detail[key]={
+                  'independent_ms_per_probe':i,
+                  'content_ms_per_probe':c,
+                  'max_decode_unit_bytes':row['variants']['content_economic']['max_decode_unit_bytes'],
+                  'physical_work':p,
+              }
           outs={
               'short':short,
               'grouped':str(len(d['grouped_workloads'])),
