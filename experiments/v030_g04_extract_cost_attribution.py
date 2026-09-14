@@ -146,6 +146,20 @@ def run(work_root: Path) -> dict:
             sample["rep"] = rep
             samples[op].append(sample)
 
+    # Timing comparisons are admissible only if every measured path reconstructs/verifies the same logical object.
+    # This prevents a faster operation from receiving causal credit for silently doing semantically different work.
+    expected_logical_bytes = int(samples["strong_verify"][0]["logical_bytes"])
+    for op, values in samples.items():
+        for sample in values:
+            if int(sample["logical_bytes"]) != expected_logical_bytes:
+                raise RuntimeError(
+                    f"semantic logical-byte drift in {op}: {sample['logical_bytes']} != {expected_logical_bytes}"
+                )
+            if sample.get("tree_sha256") != historical_tree:
+                raise RuntimeError(
+                    f"semantic tree drift in {op}: {sample.get('tree_sha256')} != {historical_tree}"
+                )
+
     summaries = {
         op: {
             "median_wall_s": statistics.median(v["wall_s"] for v in values),
@@ -181,6 +195,7 @@ def run(work_root: Path) -> dict:
             "repetitions_per_operation": REPETITIONS,
             "fresh_process_per_sample": True,
             "same_archive_all_operations": True,
+            "semantic_identity_checked": True,
             "product_code_changed": False,
             "release_thresholds_changed": False
         },
