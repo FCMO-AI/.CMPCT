@@ -229,7 +229,8 @@ jobs:
               assert c['same_archive_all_operations'] is True
               assert c['semantic_identity_checked_at_equivalent_layers'] is True
               assert c['content_graph_tree_sha256']
-              assert c['historical_user_tree_sha256']
+              assert c['historical_substrate_tree_sha256']
+              assert c['semantic_user_tree_sha256']
               assert c['content_graph_logical_bytes'] > 0
               assert c['expected_user_regular_bytes'] > 0
               assert c['product_code_changed'] is False
