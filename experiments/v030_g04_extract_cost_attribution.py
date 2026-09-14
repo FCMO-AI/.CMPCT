@@ -216,6 +216,10 @@ def run(work_root: Path) -> dict:
         "contract": {
             "suite": SUITE,
             "workload": TARGET,
+            "identity_layers": {
+                "content_graph": "strong_verify.content_graph_tree_sha256 == verified_staging.tree_sha256",
+                "user_tree": "strong_verify.user_tree_sha256 == full_extract.treehash == accepted historical tree"
+            },
             "historical_user_tree_sha256": historical_tree,
             "content_graph_tree_sha256": verify_graph_tree,
             "content_graph_logical_bytes": verify_graph_bytes,
