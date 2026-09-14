@@ -78,7 +78,7 @@ jobs:
           PY
           )"
           python - <<'PY'
-          import io, json, os, time, urllib.request, urllib.error, zipfile
+          import io, json, os, time, urllib.error, urllib.request, zipfile
           token=os.environ['GH_TOKEN']
           repo=os.environ['GITHUB_REPOSITORY']
           branch=os.environ.get('GITHUB_HEAD_REF') or os.environ.get('GITHUB_REF_NAME')
@@ -89,9 +89,25 @@ jobs:
           def get_json(url):
               req=urllib.request.Request(url, headers=headers)
               with urllib.request.urlopen(req, timeout=30) as r: return json.load(r)
+          class NoRedirect(urllib.request.HTTPRedirectHandler):
+              def redirect_request(self, req, fp, code, msg, hdrs, newurl):
+                  return None
           def get_bytes(url):
+              # GitHub authenticates the API request and redirects to a short-lived signed object-store URL.
+              # Do not forward the GitHub Authorization header to that second host: Azure rejects it with 401.
               req=urllib.request.Request(url, headers=headers)
-              with urllib.request.urlopen(req, timeout=60) as r: return r.read()
+              opener=urllib.request.build_opener(NoRedirect)
+              try:
+                  with opener.open(req, timeout=30) as r:
+                      return r.read()
+              except urllib.error.HTTPError as exc:
+                  if exc.code not in {301,302,303,307,308}:
+                      raise
+                  location=exc.headers.get('Location')
+                  if not location:
+                      raise
+                  with urllib.request.urlopen(location, timeout=60) as r:
+                      return r.read()
           def matching_receipt():
               runs=get_json(f'https://api.github.com/repos/{repo}/actions/workflows/android.yml/runs?branch={branch}&per_page=50')['workflow_runs']
               saw_failed_exact=False
@@ -197,7 +213,7 @@ jobs:
           # Physical-device success is only one half of the release matrix. Accept only hosted evidence whose
           # embedded source SHA, release fingerprint, and pinned native dependency graph match this checkout.
           python - <<'PY'
-          import io, json, os, pathlib, urllib.request, zipfile
+          import io, json, os, pathlib, urllib.error, urllib.request, zipfile
           token=os.environ['GH_TOKEN']
           repo=os.environ['GITHUB_REPOSITORY']
           branch=os.environ.get('GITHUB_HEAD_REF') or os.environ.get('GITHUB_REF_NAME')
@@ -208,9 +224,23 @@ jobs:
           def get_json(url):
               req=urllib.request.Request(url, headers=headers)
               with urllib.request.urlopen(req, timeout=30) as r: return json.load(r)
+          class NoRedirect(urllib.request.HTTPRedirectHandler):
+              def redirect_request(self, req, fp, code, msg, hdrs, newurl):
+                  return None
           def get_bytes(url):
               req=urllib.request.Request(url, headers=headers)
-              with urllib.request.urlopen(req, timeout=60) as r: return r.read()
+              opener=urllib.request.build_opener(NoRedirect)
+              try:
+                  with opener.open(req, timeout=30) as r:
+                      return r.read()
+              except urllib.error.HTTPError as exc:
+                  if exc.code not in {301,302,303,307,308}:
+                      raise
+                  location=exc.headers.get('Location')
+                  if not location:
+                      raise
+                  with urllib.request.urlopen(location, timeout=60) as r:
+                      return r.read()
           runs=get_json(f'https://api.github.com/repos/{repo}/actions/workflows/android.yml/runs?status=success&branch={branch}&per_page=50')['workflow_runs']
           found=None
           for run in runs:
