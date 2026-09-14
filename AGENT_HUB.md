@@ -20,15 +20,15 @@ FCMO-authorized agents with organization access can resolve:
 
 - Hub repository: `FCMO-AI/FCMO-Agent-Hub`
 - Canonical universal Core: `standard/CORE.md`
-- Canonical task-gated moral policy: `policy/FCMO_ETHICAL_MORAL_CONSTITUTION_V1.md`
+- Canonical task-gated policy: resolve through the Hub's current entrypoint and policy routing rather than copying an internal artifact path into this public repository
 - Ecosystem map: `ecosystem/REPOSITORIES.md`
 - Machine registry: `ecosystem/repositories.json`
 - Living Commons: `commons/LIVING_COMMONS.md`
 - Knowledge freshness: `governance/KNOWLEDGE_FRESHNESS.md`
 
-This public repository deliberately records repository coordinates rather than depending on a private URL. If the Hub is accessible, use its live Core as the canonical FCMO-wide engineering/operational source and this repository's adapted Standard as the local integration layer. If a genuine material moral/value conflict appears, an FCMO-authorized agent with Hub access should use the live promoted Ethical & Moral Constitution v1.0 rather than treating old proposal/red-team material as policy. The policy promotion does **not** change CMPCT's adopted Core v1.0 status or public product authority.
+This public repository deliberately records only public-safe navigation coordinates rather than depending on private artifact provenance. If the Hub is accessible, use its live Core as the canonical FCMO-wide engineering/operational source and this repository's adapted Standard as the local integration layer. If a genuine material value/policy conflict appears, an FCMO-authorized agent with Hub access should use the Hub's current promoted task-gated policy rather than treating old proposal/red-team material as policy. That upstream policy state does **not** change CMPCT's adopted Core status or public product authority.
 
-If the Hub is not accessible, continue from the pinned local v1 doctrine and CMPCT canon. Do not replace CMPCT's local AGI Engineering Standard, quality ratchet, benchmark ethics, format law, or release gates merely because a more general Hub document exists.
+If the Hub is not accessible, continue from the pinned local doctrine and CMPCT canon. Do not replace CMPCT's local AGI Engineering Standard, quality ratchet, benchmark ethics, format law, or release gates merely because a more general Hub document exists.
 
 ## Optional institutional learning and stewardship
 
@@ -38,7 +38,7 @@ When an FCMO-authorized agent with legitimate Hub access discovers a material CM
 
 Authorized agents may also use the Hub's Living Commons for useful optional stewardship—field notes, shared non-normative helpers, navigation repairs, workbench experiments, or proposed/tested improvements to any Hub surface. Do not copy changing CMPCT benchmark/release/project state upstream just to make the Hub look current; link the authoritative public evidence and attach temporal scope when a present-state claim is necessary.
 
-Hub proposals remain non-canonical until Governance and legitimate human promotion say otherwise. They cannot override CMPCT's local benchmark, format, release, or public-surface law merely by existing.
+Hub proposals remain non-canonical until Governance and legitimate promotion say otherwise. They cannot override CMPCT's local benchmark, format, release, or public-surface law merely by existing.
 
 ## Reciprocity
 
