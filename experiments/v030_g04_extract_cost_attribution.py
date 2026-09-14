@@ -59,9 +59,8 @@ def _worker(archive: Path, destination: Path, operation: str) -> int:
         if not result.get("ok"):
             raise RuntimeError(f"strong verification failed: {result!r}")
         logical_bytes = int(result.get("logical_bytes", 0))
-        # Canonical r25 strong verification authenticates the internal content graph. Its historical
-        # ``tree_sha256`` is therefore a content-graph identity, not a restored user-tree identity.
-        content_graph_tree_sha = result.get("content_graph_tree_sha256") or result.get("tree_sha256")
+        content_graph_tree_sha = result.get("content_graph_tree_sha256")
+        user_tree_sha = result.get("user_tree_sha256") or result.get("tree_sha256")
     elif operation == "verified_staging":
         if destination.exists():
             shutil.rmtree(destination)
@@ -99,6 +98,8 @@ def _worker(archive: Path, destination: Path, operation: str) -> int:
 
 
 def run(work_root: Path) -> dict:
+    from experiments import entropygraph_v030_release_product as CANON
+
     shutil.rmtree(work_root, ignore_errors=True)
     work_root.mkdir(parents=True)
     accepted = PERF.GENERAL._accepted_v029_rows()
@@ -124,11 +125,13 @@ def run(work_root: Path) -> dict:
     if pack.get("build_stats", {}).get("selected") != "g04-overlay":
         raise RuntimeError(f"target no longer selects G04: {pack.get('build_stats', {}).get('selected')!r}")
 
-    # Retain accepted-v0.29 provenance for the exact source identity without treating this oracle as a baseline run.
+    # Keep the accepted benchmark's historical content-tree identity as substrate provenance, but compare promoted
+    # r25 operations with the promoted semantic-tree identity. These are intentionally different hash contracts.
     expected = accepted[(SUITE, TARGET)]
     historical_tree = PERF.GENERAL._historical_treehash(source)
     if historical_tree != expected["tree_sha256"]:
         raise RuntimeError(f"historical source drift: {historical_tree} != {expected['tree_sha256']}")
+    semantic_user_tree = CANON.treehash(source)
     expected_user_regular_bytes = sum(
         p.stat().st_size for p in source.rglob("*") if p.is_file() and not p.is_symlink()
     )
@@ -154,10 +157,9 @@ def run(work_root: Path) -> dict:
             sample["rep"] = rep
             samples[op].append(sample)
 
-    # Compare identity only at equivalent layers. Verified staging is the authenticated *content graph* and still
-    # contains the internal filesystem manifest; full_extract is the restored *user tree*. Strong verification
-    # authenticates the graph but does not itself restore the user tree, so it must not be misread as a user-tree
-    # oracle. The public full extraction independently has to reproduce the accepted historical user tree.
+    # Compare identity only at equivalent layers. Strong verification bridges the authenticated content graph and
+    # the promoted r25 semantic user tree. Verified staging is still the internal content graph; full_extract is the
+    # restored user tree. The historical benchmark hash remains a separate provenance identity for the same source.
     verify_graph_bytes = int(samples["strong_verify"][0]["logical_bytes"])
     verify_graph_tree = samples["strong_verify"][0]["content_graph_tree_sha256"]
     if not verify_graph_tree:
@@ -167,6 +169,10 @@ def run(work_root: Path) -> dict:
             raise RuntimeError("strong-verification logical-byte identity drift across repetitions")
         if sample.get("content_graph_tree_sha256") != verify_graph_tree:
             raise RuntimeError("strong-verification content-graph identity drift across repetitions")
+        if sample.get("user_tree_sha256") != semantic_user_tree:
+            raise RuntimeError(
+                f"strong-verification semantic-user-tree drift: {sample.get('user_tree_sha256')} != {semantic_user_tree}"
+            )
     for sample in samples["verified_staging"]:
         if int(sample["logical_bytes"]) != verify_graph_bytes:
             raise RuntimeError(
@@ -181,9 +187,9 @@ def run(work_root: Path) -> dict:
             raise RuntimeError(
                 f"full-extract user-byte drift: {sample['logical_bytes']} != {expected_user_regular_bytes}"
             )
-        if sample.get("user_tree_sha256") != historical_tree:
+        if sample.get("user_tree_sha256") != semantic_user_tree:
             raise RuntimeError(
-                f"full-extract user-tree drift: {sample.get('user_tree_sha256')} != {historical_tree}"
+                f"full-extract semantic-user-tree drift: {sample.get('user_tree_sha256')} != {semantic_user_tree}"
             )
 
     summaries = {
@@ -215,10 +221,12 @@ def run(work_root: Path) -> dict:
             "suite": SUITE,
             "workload": TARGET,
             "identity_layers": {
+                "historical_substrate": "historical benchmark tree hash == accepted v0.29 tree hash",
                 "content_graph": "strong_verify.content_graph_tree_sha256 == verified_staging.tree_sha256",
-                "user_tree": "full_extract.treehash == accepted historical user tree"
+                "semantic_user_tree": "strong_verify.user_tree_sha256 == full_extract.treehash == source semantic treehash"
             },
-            "historical_user_tree_sha256": historical_tree,
+            "historical_substrate_tree_sha256": historical_tree,
+            "semantic_user_tree_sha256": semantic_user_tree,
             "content_graph_tree_sha256": verify_graph_tree,
             "content_graph_logical_bytes": verify_graph_bytes,
             "expected_user_regular_bytes": expected_user_regular_bytes,
