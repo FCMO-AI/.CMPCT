@@ -45,12 +45,13 @@ jobs:
           python experiments/v030_generalization_fallback_cliff_oracle.py \
             --work-root "$RUNNER_TEMP/v030-fallback-cliff" \
             --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-fallback-cliff.json"
-      - name: Validate evidence boundary
+      - name: Validate evidence boundary and decomposition identities
         run: |
           python - <<'PY'
           import json
           from pathlib import Path
           d=json.loads(Path('benchmark-artifacts/v030-fallback-cliff.json').read_text())
+          assert d['schema']=='cmpct-v030-generalization-fallback-cliff-oracle-v2'
           assert d['status']=='PASS', d.get('error')
           assert d['product_release_credit'] is False
           assert d['contract']['target_rows']==6
@@ -62,6 +63,24 @@ jobs:
               assert r['inner_selected']=='v029-fallback'
               assert r['raw_g04_overlay_bytes'] >= r['staged_v029_base_bytes']
               assert r['strict_inner_win_bridge_bytes'] == r['raw_g04_overlay_bytes'] - r['staged_v029_base_bytes'] + 1
+              assert r['pre_overlay_graph_delta_vs_staged_base_bytes'] == r['pre_overlay_graph_bytes'] - r['staged_v029_base_bytes']
+              assert r['overlay_improvement_vs_prefallback_graph_bytes'] == r['pre_overlay_graph_bytes'] - r['raw_g04_overlay_bytes']
+          totals=d['totals']
+          summed={
+              'accepted_v029_bytes': sum(r['accepted_v029_bytes'] for r in d['rows']),
+              'staged_v029_base_bytes': sum(r['staged_v029_base_bytes'] for r in d['rows']),
+              'pre_overlay_graph_bytes': sum(r['pre_overlay_graph_bytes'] for r in d['rows']),
+              'raw_g04_overlay_bytes': sum(r['raw_g04_overlay_bytes'] for r in d['rows']),
+              'staging_exported_cost_vs_original_v029_bytes': sum(r['staging_exported_cost_vs_original_v029_bytes'] for r in d['rows']),
+              'pre_overlay_graph_delta_vs_staged_base_bytes': sum(r['pre_overlay_graph_delta_vs_staged_base_bytes'] for r in d['rows']),
+              'overlay_improvement_vs_prefallback_graph_bytes': sum(r['overlay_improvement_vs_prefallback_graph_bytes'] for r in d['rows']),
+              'raw_overlay_delta_vs_staged_base_bytes': sum(r['raw_overlay_delta_vs_staged_base_bytes'] for r in d['rows']),
+              'strict_inner_win_bridge_bytes': sum(r['strict_inner_win_bridge_bytes'] for r in d['rows']),
+              'transform_payload_saving_bytes': sum(r['transform_payload_saving_bytes'] for r in d['rows']),
+              'hierarchical_incremental_saving_bytes': sum(r['hierarchical_incremental_saving_bytes'] for r in d['rows']),
+          }
+          for key, value in summed.items():
+              assert totals[key] == value, (key, totals[key], value)
           PY
       - uses: actions/upload-artifact@v6
         if: always()
