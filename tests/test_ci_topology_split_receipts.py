@@ -116,3 +116,28 @@ jobs:
     )
     errors = C.validate(workflow)
     assert any("split exact-receipt policy" in error for error in errors)
+
+
+def test_physical_android_has_branch_local_premerge_request_route() -> None:
+    """A branch-new workflow cannot rely only on pull_request:labeled before it exists on main.
+
+    The physical-device workflow was historically unreachable pre-merge because GitHub evaluates the
+    pull_request workflow definition from the default branch. Keep a branch-local push admission route and gate
+    the scarce device behind an exact hosted-Android prerequisite so future label choreography cannot silently
+    become the only way to request physical evidence again.
+    """
+
+    physical = (ROOT / ".github/workflows/android-physical-arm64.yml").read_text(encoding="utf-8")
+    hosted = (ROOT / ".github/workflows/android.yml").read_text(encoding="utf-8")
+    marker = "docs/v030-coordination/requests/physical-arm64.request"
+
+    assert "push:" in physical
+    assert "branches: [agent/v030-authoritative-integration]" in physical
+    assert marker in physical
+    assert "hosted-prerequisite:" in physical
+    assert "physical-arm64:\n    needs: hosted-prerequisite" in physical
+
+    # The same marker must wake hosted Android first, otherwise the physical lane could queue a scarce runner
+    # while waiting for evidence that no workflow is capable of producing for the exact requested SHA.
+    assert marker in hosted
+    assert "cmpct-android-receipt-${{ github.event.pull_request.head.sha || github.sha }}" in hosted
