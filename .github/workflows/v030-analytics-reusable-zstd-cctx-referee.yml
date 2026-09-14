@@ -1,0 +1,73 @@
+name: CMPCT v0.30 Analytics reusable Zstd CCtx referee
+
+on:
+  push:
+    branches: [agent/v030-authoritative-integration]
+    paths:
+      - benchmarks/v030_analytics_reusable_zstd_cctx_referee.py
+      - .github/workflows/v030-analytics-reusable-zstd-cctx-referee.yml
+      - benchmarks/v030_v025_canonical_fs_level1_oracle.py
+      - benchmarks/v030_external_competitors.py
+      - benchmarks/v030_release_generalization.py
+      - experiments/entropygraph_v025.py
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  analytics-reusable-cctx:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      PYTHONPATH: ${{ github.workspace }}
+      EVIDENCE_HEAD: ${{ github.sha }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.sha }}
+      - name: Bind exact head
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install benchmark dependencies
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y zstd gcc ffmpeg libsndfile1
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[audio,test]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
+      - name: Compile referee
+        run: python -m py_compile benchmarks/v030_analytics_reusable_zstd_cctx_referee.py
+      - name: Execute reusable-context referee
+        run: |
+          mkdir -p benchmark-artifacts
+          python benchmarks/v030_analytics_reusable_zstd_cctx_referee.py \
+            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-analytics-reusable-cctx-work" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-analytics-reusable-cctx.json"
+      - name: Validate frozen contract
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          d=json.loads(Path('benchmark-artifacts/v030-analytics-reusable-cctx.json').read_text())
+          assert d['schema']=='cmpct-v030-analytics-reusable-zstd-cctx-v1'
+          assert d['release_credit'] is False and d['rounds']==5
+          assert d['frozen_gate']=={
+            'advance_zc_cpu_reduction_fraction':0.20,
+            'retire_at_or_below_fraction':0.05,
+            'exact_payload_identity_required':True,
+          }
+          assert d['decision'] in {'ADVANCE_REUSABLE_CCTX','RETIRE_REUSABLE_CCTX','AMBIGUOUS_REUSABLE_CCTX'}
+          PY
+      - name: Check workflow topology
+        run: python tools/check_ci_topology.py .github/workflows/v030-analytics-reusable-zstd-cctx-referee.yml
+      - uses: actions/upload-artifact@v6
+        with:
+          name: v030-analytics-reusable-cctx-${{ github.sha }}
+          path: benchmark-artifacts/v030-analytics-reusable-cctx.json
+          if-no-files-found: error
+          retention-days: 90
