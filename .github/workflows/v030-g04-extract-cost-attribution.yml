@@ -1,0 +1,84 @@
+# ci-lane: research-oracle
+name: CMPCT v0.30 G04 extraction cost attribution
+
+on:
+  push:
+    branches:
+      - agent/v030-authoritative-integration
+    paths:
+      - 'experiments/v030_g04_extract_cost_attribution.py'
+      - '.github/workflows/v030-g04-extract-cost-attribution.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+
+jobs:
+  g04-extract-cost:
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    concurrency:
+      group: cmpct-v030-g04-extract-cost-${{ github.sha }}
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v6
+      - name: Bind exact experiment head
+        run: test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install corpus and codec dependencies
+        run: |
+          set -euo pipefail
+          test -f /etc/apt/sources.list.d/ubuntu.sources
+          sudo apt-get -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" -o Dir::Etc::sourceparts="-" update
+          sudo apt-get -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" -o Dir::Etc::sourceparts="-" install -y zstd gcc ffmpeg
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[test,audio]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
+      - name: Compile oracle
+        run: python -m py_compile experiments/v030_g04_extract_cost_attribution.py
+      - name: Run G04 extraction decomposition
+        run: |
+          mkdir -p benchmark-artifacts
+          python experiments/v030_g04_extract_cost_attribution.py \
+            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/g04-extract-cost-work" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/g04-extract-cost.json"
+      - name: Validate evidence contract
+        if: always()
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          p=Path('benchmark-artifacts/g04-extract-cost.json')
+          assert p.is_file(), 'oracle did not publish evidence'
+          d=json.loads(p.read_text())
+          assert d['engine']=='v030-g04-extract-cost-attribution-v1'
+          assert d['evidence_class']=='research-oracle'
+          assert d['product_release_credit'] is False
+          if d.get('status') == 'PASS':
+              c=d['contract']
+              assert c['suite']=='neutral_hostile_v1'
+              assert c['workload']=='09_ml_artifacts'
+              assert c['v030_selected']=='g04-overlay'
+              assert c['fresh_process_per_sample'] is True
+              assert c['same_archive_all_operations'] is True
+              assert c['product_code_changed'] is False
+              assert c['release_thresholds_changed'] is False
+              for op in ('strong_verify','verified_staging','full_extract'):
+                  assert len(d['samples'][op])==3
+          else:
+              raise AssertionError(f"oracle status is {d.get('status')}: {d.get('error')}")
+          PY
+      - name: Upload attribution evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: v030-g04-extract-cost-${{ github.sha }}
+          path: benchmark-artifacts/g04-extract-cost.json
+          if-no-files-found: error
+          retention-days: 90
