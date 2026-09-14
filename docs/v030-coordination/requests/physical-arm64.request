@@ -3,3 +3,5 @@ CMPCT physical ARM64 acceptance request
 Purpose: request exact-SHA hosted Android regeneration followed by physical ARM64 acceptance for the current authoritative integration head.
 
 This coordination marker is intentionally outside the v0.30 release fingerprint. Its content carries no product or release claim; the workflows independently bind all evidence to the exact checkout SHA, release fingerprint, and native dependency lock.
+
+Refresh reason: regenerate hosted Android plus physical ARM64 custody after a public-surface-only cleanup changed the authoritative integration SHA without changing the release fingerprint.
