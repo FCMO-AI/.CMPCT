@@ -59,8 +59,9 @@ def _worker(archive: Path, destination: Path, operation: str) -> int:
         if not result.get("ok"):
             raise RuntimeError(f"strong verification failed: {result!r}")
         logical_bytes = int(result.get("logical_bytes", 0))
-        content_graph_tree_sha = result.get("content_graph_tree_sha256")
-        user_tree_sha = result.get("user_tree_sha256") or result.get("tree_sha256")
+        # Canonical r25 strong verification authenticates the internal content graph. Its historical
+        # ``tree_sha256`` is therefore a content-graph identity, not a restored user-tree identity.
+        content_graph_tree_sha = result.get("content_graph_tree_sha256") or result.get("tree_sha256")
     elif operation == "verified_staging":
         if destination.exists():
             shutil.rmtree(destination)
@@ -154,8 +155,9 @@ def run(work_root: Path) -> dict:
             samples[op].append(sample)
 
     # Compare identity only at equivalent layers. Verified staging is the authenticated *content graph* and still
-    # contains the internal filesystem manifest; full_extract is the restored *user tree*. Conflating those two
-    # identities would reject correct behavior. Strong verification exposes both and therefore bridges the proof.
+    # contains the internal filesystem manifest; full_extract is the restored *user tree*. Strong verification
+    # authenticates the graph but does not itself restore the user tree, so it must not be misread as a user-tree
+    # oracle. The public full extraction independently has to reproduce the accepted historical user tree.
     verify_graph_bytes = int(samples["strong_verify"][0]["logical_bytes"])
     verify_graph_tree = samples["strong_verify"][0]["content_graph_tree_sha256"]
     if not verify_graph_tree:
@@ -165,10 +167,6 @@ def run(work_root: Path) -> dict:
             raise RuntimeError("strong-verification logical-byte identity drift across repetitions")
         if sample.get("content_graph_tree_sha256") != verify_graph_tree:
             raise RuntimeError("strong-verification content-graph identity drift across repetitions")
-        if sample.get("user_tree_sha256") != historical_tree:
-            raise RuntimeError(
-                f"strong-verification user-tree drift: {sample.get('user_tree_sha256')} != {historical_tree}"
-            )
     for sample in samples["verified_staging"]:
         if int(sample["logical_bytes"]) != verify_graph_bytes:
             raise RuntimeError(
@@ -218,7 +216,7 @@ def run(work_root: Path) -> dict:
             "workload": TARGET,
             "identity_layers": {
                 "content_graph": "strong_verify.content_graph_tree_sha256 == verified_staging.tree_sha256",
-                "user_tree": "strong_verify.user_tree_sha256 == full_extract.treehash == accepted historical tree"
+                "user_tree": "full_extract.treehash == accepted historical user tree"
             },
             "historical_user_tree_sha256": historical_tree,
             "content_graph_tree_sha256": verify_graph_tree,
