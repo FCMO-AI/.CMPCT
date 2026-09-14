@@ -3,15 +3,15 @@
   "id": "native-r25",
   "status": "pass",
   "owner_task": "T01",
-  "candidate_fingerprint": "67c5f6009d3fa34c56c6d1706597060f56196eca4019a64f97ca5735021a68fa",
+  "candidate_fingerprint": "e617b854ae2af6997dce59d1d69a7dec583c03355e637a7c3a3b8749318e98c3",
   "candidate_fingerprint_source": {
     "evidence_index": 0,
     "json_path": "candidate_fingerprint"
   },
   "evidence": [
     {
-      "path": "docs/v030-release-evidence/native-r25-52ebabc63c7ea74a1665a5720359977e552ad5c2.json",
-      "sha256": "0a537409833c146f765696e0b9fbca86a75d9d952223b0d978896f06d1cddcf2"
+      "path": "docs/v030-release-evidence/native-r25-0a9447d0b3dbedd289ca661418386031e689021a.json",
+      "sha256": "fef2e859f0d64d2f802cb178233ed94b8e5c66fc2dd17c1581d148dff9424475"
     }
   ],
   "facts": {
