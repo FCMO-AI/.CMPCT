@@ -1,0 +1,115 @@
+# ci-lane: deep
+# ci-pr-scope: isolated-research-branch
+# ci-cancel-policy: preserve-result
+name: CMPCT Domination canonical Office competitor falsifier
+
+on:
+  push:
+    branches: [agent/domination-canonical-office-falsifier]
+    paths:
+      - '.github/workflows/domination-canonical-office-falsifier.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+
+jobs:
+  canonical-office:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install exact competitor dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y zstd gcc ffmpeg
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[test,audio]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
+      - name: Measure canonical product on frozen Office against strict competitors
+        shell: bash
+        run: |
+          mkdir -p benchmark-artifacts
+          python - <<'PY'
+          import json, shutil, statistics, tempfile, time
+          from pathlib import Path
+          from benchmarks import v030_release_generalization as GENERAL
+          from benchmarks import v030_external_competitors as EXT
+          from experiments import entropygraph_v030_release_product as CANON
+          from experiments import entropygraph_v030_release_lock_strict as LOCK
+
+          work = Path('benchmark-artifacts/domination-office')
+          shutil.rmtree(work, ignore_errors=True)
+          work.mkdir(parents=True)
+          accepted = GENERAL._accepted_v029_rows()
+          neutral = GENERAL.V029._load(GENERAL.V029.ROOT / 'benchmarks' / 'neutral_hostile_corpus_v1.py', 'domination_office_neutral')
+          repair = GENERAL.V029._load(GENERAL.V029.REPAIR_PATH, 'domination_office_repair')
+          repair.install_generation_hooks(neutral)
+          corpus = work / 'neutral'
+          neutral.build(corpus)
+          repair.normalize_root(corpus)
+          source = corpus / '02_office_workspace'
+          expected = accepted[('neutral_hostile_v1', '02_office_workspace')]
+          assert EXT._tree(source) == expected['tree_sha256']
+
+          candidate_samples=[]; zip_samples=[]; zstd_samples=[]
+          candidate_sizes=set(); zip_sizes=set(); zstd_sizes=set(); selected=[]
+          rounds=[]
+          for i in range(3):
+              with tempfile.TemporaryDirectory(prefix=f'domination-office-{i}-', dir=work) as td:
+                  root=Path(td)
+                  stage=EXT._normalized_stage(source, root/'normalized')
+                  order=('cmpct','zip','zstd') if i % 2 == 0 else ('zstd','zip','cmpct')
+                  row={'round': i, 'order': list(order)}
+                  for name in order:
+                      if name=='cmpct':
+                          archive=root/'candidate.cmpct'
+                          started=time.perf_counter(); stats=CANON.build(stage, archive); elapsed=time.perf_counter()-started
+                          verified=CANON.strong_verify(archive)
+                          assert verified.get('ok') is True
+                          candidate_samples.append(elapsed); candidate_sizes.add(archive.stat().st_size); selected.append(stats.get('selected'))
+                          row['cmpct_create_s']=elapsed
+                      elif name=='zip':
+                          r=EXT._zip(stage, root/'archive.zip', root/'zip-out'); EXT._verify_extracted(root/'zip-out', EXT._tree(stage), 'zip')
+                          zip_samples.append(float(r['create_s'])); zip_sizes.add(int(r['archive_bytes'])); row['zip_create_s']=float(r['create_s'])
+                      else:
+                          lane=root/'zstd'; lane.mkdir()
+                          r=EXT._tar_zstd(stage, lane/'archive.tar.zst', lane/'out', lane); assert r.get('available'); EXT._verify_extracted(lane/'out', EXT._tree(stage), 'zstd19')
+                          zstd_samples.append(float(r['create_s'])); zstd_sizes.add(int(r['archive_bytes'])); row['zstd19_create_s']=float(r['create_s'])
+                  rounds.append(row)
+          assert len(candidate_sizes)==len(zip_sizes)==len(zstd_sizes)==1
+          fp,_=LOCK.CORE.fingerprint(LOCK.load_manifest_strict())
+          out={
+            'schema':'cmpct-domination-canonical-office-falsifier-v1',
+            'claim_boundary':'Research-only repeated same-input Office falsifier. No release credit.',
+            'candidate_fingerprint':fp,
+            'source':{'suite':'neutral_hostile_v1','name':'02_office_workspace','tree_sha256':expected['tree_sha256']},
+            'cmpct':{'archive_bytes':next(iter(candidate_sizes)),'create_s':candidate_samples,'median_create_s':statistics.median(candidate_samples),'selected':selected},
+            'zip_deflate9':{'archive_bytes':next(iter(zip_sizes)),'create_s':zip_samples,'median_create_s':statistics.median(zip_samples)},
+            'tar_zstd19_solid':{'archive_bytes':next(iter(zstd_sizes)),'create_s':zstd_samples,'median_create_s':statistics.median(zstd_samples)},
+            'strict':{
+              'beats_zip_size':next(iter(candidate_sizes)) < next(iter(zip_sizes)),
+              'beats_zstd19_size':next(iter(candidate_sizes)) < next(iter(zstd_sizes)),
+              'median_create_beats_zip':statistics.median(candidate_samples) < statistics.median(zip_samples),
+              'median_create_beats_zstd19':statistics.median(candidate_samples) < statistics.median(zstd_samples),
+            },
+            'rounds':rounds,
+          }
+          Path('benchmark-artifacts/domination-canonical-office.json').write_text(json.dumps(out,indent=2)+'\n')
+          print(json.dumps(out,indent=2), flush=True)
+          PY
+      - name: Upload falsifier evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: domination-canonical-office-${{ github.sha }}
+          path: benchmark-artifacts/domination-canonical-office.json
+          if-no-files-found: error
+          retention-days: 30
