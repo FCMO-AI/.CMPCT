@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import importlib
 import subprocess
 import sys
 import textwrap
@@ -15,9 +16,9 @@ def test_canonical_import_does_not_rebind_research_modules() -> None:
     """Prove import isolation in a fresh interpreter instead of inheriting pytest collection state.
 
     The repository intentionally retains historical/provisional research modules whose own tests may exercise
-    temporary profile bindings.  A release-isolation test must therefore own its import order rather than
+    temporary profile bindings. A release-isolation test must therefore own its import order rather than
     snapshotting mutable module globals during pytest collection and comparing them much later after unrelated
-    tests have run.  The child process gives this invariant the exact clean import boundary it is meant to test.
+    tests have run. The child process gives this invariant the exact clean import boundary it is meant to test.
     """
     script = textwrap.dedent(
         """
@@ -64,6 +65,65 @@ def test_canonical_import_does_not_rebind_research_modules() -> None:
         check=False,
     )
     assert result.returncode == 0, result.stderr or result.stdout
+
+
+def test_private_canonical_import_context_never_rebinds_public_import_graph() -> None:
+    package = importlib.import_module("experiments")
+    g04_name = canonical.PROFILE_ISOLATION.G04_SOURCE
+    pg_name = canonical.PROFILE_ISOLATION.PG_SOURCE
+    g04_attr = g04_name.rsplit(".", 1)[-1]
+    pg_attr = pg_name.rsplit(".", 1)[-1]
+
+    before = (
+        sys.modules[g04_name],
+        sys.modules[pg_name],
+        getattr(package, g04_attr),
+        getattr(package, pg_attr),
+    )
+    assert before == (research_g04, research_pg, research_g04, research_pg)
+
+    entered = threading.Event()
+    release = threading.Event()
+    failure: list[BaseException] = []
+
+    def hold_canonical_import_view() -> None:
+        try:
+            with canonical.PROFILE_ISOLATION.canonical_import_context():
+                entered.set()
+                if not release.wait(timeout=5):
+                    raise AssertionError("test synchronization timeout")
+        except BaseException as exc:  # pragma: no cover - surfaced below.
+            failure.append(exc)
+            entered.set()
+
+    worker = threading.Thread(target=hold_canonical_import_view, name="canonical-import-view-test")
+    worker.start()
+    assert entered.wait(timeout=5)
+    try:
+        # This is the exact race the old sys.modules/package-attribute aliasing allowed: a normal research caller
+        # inspects/imports while the canonical loader is active. Public process state must remain ordinary research.
+        during = (
+            sys.modules[g04_name],
+            sys.modules[pg_name],
+            getattr(package, g04_attr),
+            getattr(package, pg_attr),
+            importlib.import_module(g04_name),
+            importlib.import_module(pg_name),
+        )
+        assert during == (
+            research_g04,
+            research_pg,
+            research_g04,
+            research_pg,
+            research_g04,
+            research_pg,
+        )
+    finally:
+        release.set()
+        worker.join(timeout=5)
+
+    assert not worker.is_alive()
+    assert not failure
 
 
 def test_active_canonical_profile_context_is_invisible_to_concurrent_research_callers() -> None:
