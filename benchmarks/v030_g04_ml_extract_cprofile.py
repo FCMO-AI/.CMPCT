@@ -5,8 +5,9 @@ from __future__ import annotations
 The profile is diagnostic, not a performance benchmark: profiler overhead invalidates wall-time
 comparison. The canonical archive is built and strongly verified before profiling; one unprofiled
 warm-up extraction is performed; then exactly one shipping PRODUCT.extract() call is profiled into a
-fresh destination and checked for strong tree identity. No product bytes, thresholds, or release law
-are changed.
+fresh destination and checked for strong tree identity. The same authenticated metadata is also used
+to count direct/full-record nodes whose node digest duplicates an already-verified physical-record
+digest. That census is explanatory headroom only. No product bytes, thresholds, or release law change.
 """
 
 import argparse
@@ -40,6 +41,51 @@ def _row(key, value, total_tt: float) -> dict:
     }
 
 
+def _redundant_direct_hash_census(archive: Path) -> dict:
+    stream, meta, record_start, offsets, _merkle, _tail = RR._g04_open(archive)
+    headers = []
+    try:
+        for rel in offsets:
+            stream.seek(int(record_start) + int(rel))
+            raw = stream.read(RR.PH.size)
+            if len(raw) != RR.PH.size:
+                raise RuntimeError("short physical header during hash census")
+            _codec, usize, _csize, _crc, original_sha = RR.PH.unpack(raw)
+            headers.append((int(usize), original_sha))
+    finally:
+        stream.close()
+    full_record_direct_nodes = 0
+    full_record_direct_bytes = 0
+    digest_equivalent_nodes = 0
+    digest_equivalent_bytes = 0
+    direct_nodes = 0
+    direct_bytes = 0
+    for desc in meta["nodes"]:
+        if desc[0] != "direct":
+            continue
+        direct_nodes += 1
+        _, record_id, offset, length, expected = desc
+        length = int(length)
+        direct_bytes += length
+        usize, original_sha = headers[int(record_id)]
+        if int(offset) == 0 and length == usize:
+            full_record_direct_nodes += 1
+            full_record_direct_bytes += length
+            if expected == original_sha:
+                digest_equivalent_nodes += 1
+                digest_equivalent_bytes += length
+    return {
+        "direct_nodes": direct_nodes,
+        "direct_node_bytes": direct_bytes,
+        "full_record_direct_nodes": full_record_direct_nodes,
+        "full_record_direct_bytes": full_record_direct_bytes,
+        "digest_equivalent_full_record_nodes": digest_equivalent_nodes,
+        "digest_equivalent_full_record_bytes": digest_equivalent_bytes,
+        "digest_equivalent_fraction_of_direct_bytes": digest_equivalent_bytes / max(direct_bytes, 1),
+        "claim_boundary": "Static authenticated-metadata census only. Digest equivalence shows where a node hash may be logically redundant after record integrity succeeds; it does not prove measurable runtime savings or authorize removing an integrity check.",
+    }
+
+
 def run(work_root: Path) -> dict:
     shutil.rmtree(work_root, ignore_errors=True)
     work_root.mkdir(parents=True)
@@ -57,6 +103,7 @@ def run(work_root: Path) -> dict:
         verified = PRODUCT.strong_verify(archive)
         if not verified.get("ok") or verified.get("tree_sha256") != source_tree:
             raise RuntimeError("shipping strong verification failed before profile")
+        hash_census = _redundant_direct_hash_census(archive)
 
         warm = work_root / "warm"
         PRODUCT.extract(archive, warm)
@@ -80,7 +127,7 @@ def run(work_root: Path) -> dict:
     by_cumulative = sorted(rows, key=lambda row: row["cumulative_s"], reverse=True)[:TOP_N]
     top3_self_fraction = sum(row["self_fraction"] for row in by_self[:3])
     return {
-        "schema": "cmpct-v030-g04-ml-extract-cprofile-v1",
+        "schema": "cmpct-v030-g04-ml-extract-cprofile-v2",
         "target": "/".join(TARGET),
         "shipping_build": built,
         "archive_bytes": archive.stat().st_size,
@@ -90,10 +137,11 @@ def run(work_root: Path) -> dict:
         "profile_total_self_s": total_tt,
         "top_self_function_fraction": float(by_self[0]["self_fraction"] if by_self else 0.0),
         "top3_self_fraction": float(top3_self_fraction),
+        "redundant_direct_hash_census": hash_census,
         "top_by_self": by_self,
         "top_by_cumulative": by_cumulative,
         "release_credit": False,
-        "claim_boundary": "cProfile diagnostic ownership only. Profiled wall time includes profiler overhead and is not release-performance evidence. Function attribution may route the next experiment but cannot promote a mechanism.",
+        "claim_boundary": "cProfile diagnostic ownership only. Profiled wall time includes profiler overhead and is not release-performance evidence. Function attribution and the static hash census may route the next experiment but cannot promote a mechanism.",
     }
 
 
@@ -112,6 +160,7 @@ def main() -> None:
         "profile_total_self_s": result["profile_total_self_s"],
         "top_self_function_fraction": result["top_self_function_fraction"],
         "top3_self_fraction": result["top3_self_fraction"],
+        "redundant_direct_hash_census": result["redundant_direct_hash_census"],
         "top_by_self": result["top_by_self"][:15],
         "release_credit": False,
     }, indent=2), flush=True)
