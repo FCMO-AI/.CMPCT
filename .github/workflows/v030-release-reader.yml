@@ -41,7 +41,7 @@ jobs:
             exit 0
           fi
           git diff-tree --no-commit-id --name-only -r HEAD > /tmp/latest-head-files.txt
-          if grep -Eq '^(src/cmpct/|experiments/entropygraph_v030_(geometry|hierarchical_geometry|geometry_overlay|geometry_overlay_g04|geometry_overlay_g04_publish|prefixgraph|prefixgraph_parallel|release|release_reader|release_reader_policy|release_candidate|release_product|release_product_base|zipfactor_recovery_product_candidate)([^/]*)\.py$|tests/test_v030_(geometry|hierarchical_geometry|geometry_overlay|geometry_overlay_g04|g04_publish|prefixgraph|prefixgraph_parallel_release|release_reader|release_reader_policy|release_candidate|zipfactor_recovery_product_candidate)\.py$|tests/test_v029_parallel_portfolio\.py$|pyproject\.toml$|\.github/workflows/v030-release-reader\.yml$)' /tmp/latest-head-files.txt; then
+          if grep -Eq '^(src/cmpct/|experiments/entropygraph_v030_(geometry|hierarchical_geometry|geometry_overlay|geometry_overlay_g04|geometry_overlay_g04_publish|prefixgraph|prefixgraph_parallel|release|release_reader|release_reader_policy|release_candidate|release_product|release_product_base|verified_restore|zipfactor_recovery_product_candidate)([^/]*)\.py$|tests/test_v030_(geometry|hierarchical_geometry|geometry_overlay|geometry_overlay_g04|g04_publish|prefixgraph|prefixgraph_parallel_release|release_reader|release_reader_policy|release_candidate|zipfactor_recovery_product_candidate)\.py$|tests/test_v029_parallel_portfolio\.py$|pyproject\.toml$|\.github/workflows/v030-release-reader\.yml$)' /tmp/latest-head-files.txt; then
             echo "should_run=true" >> "$GITHUB_OUTPUT"
           else
             echo "should_run=false" >> "$GITHUB_OUTPUT"
@@ -85,6 +85,7 @@ jobs:
             experiments/entropygraph_v030_release_reader_policy.py \
             experiments/entropygraph_v030_release_candidate.py \
             experiments/entropygraph_v030_release.py \
+            experiments/entropygraph_v030_verified_restore.py \
             experiments/entropygraph_v030_zipfactor_recovery_product_candidate.py
 
       - name: Run direct-reader, promotion-policy, recovery, locality and publication tests
