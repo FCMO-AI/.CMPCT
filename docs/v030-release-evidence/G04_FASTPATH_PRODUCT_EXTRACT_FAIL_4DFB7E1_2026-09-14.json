@@ -1,0 +1,49 @@
+{
+  "schema": "cmpct-v030-g04-fastpath-product-extract-oracle-v1",
+  "recorded_date": "2026-09-14",
+  "status": "PASS",
+  "evidence_class": "focused-complete-product-runtime-oracle",
+  "product_release_credit": false,
+  "source": {
+    "repository": "FCMO-AI/.CMPCT",
+    "branch": "agent/v030-authoritative-integration",
+    "candidate_sha": "4dfb7e1a3c46a5b9940e8d5d6e1179d5219663a8",
+    "workflow_run_id": 34838373931,
+    "workflow_job_id": 103957349393,
+    "artifact_id": 10345241140,
+    "artifact_name": "v030-g04-fastpath-product-extract-4dfb7e1a3c46a5b9940e8d5d6e1179d5219663a8",
+    "artifact_sha256": "4f1448f4bdaff0d22d5c99315246c7b38ff2650ad44715432fb93613a26eda6a"
+  },
+  "contract": {
+    "suite": "neutral_hostile_v1",
+    "workload": "09_ml_artifacts",
+    "repetitions_each": 3,
+    "fresh_process_each_extract": true,
+    "shipping_v030_frontdoor": "experiments.entropygraph_v030_release_product",
+    "accepted_v029_frontdoor": "experiments.entropygraph_v029_release",
+    "frozen_runtime_thresholds_changed": false,
+    "full_runtime_gate_replaced": false
+  },
+  "measurements": {
+    "v029_extract_s": [0.10318743399997743, 0.10171603900002424, 0.10256965100001025],
+    "v030_extract_s": [0.19181742200001395, 0.1904856569999822, 0.19120706399999676],
+    "v029_median_extract_s": 0.10256965100001025,
+    "v030_median_extract_s": 0.19120706399999676,
+    "v030_over_v029_extract_ratio": 1.8641680276359491,
+    "v029_max_rss_kib": 122848,
+    "v030_max_rss_kib": 122848,
+    "v030_over_v029_max_rss_ratio": 1.0,
+    "v030_archive_bytes": 13674820,
+    "v030_selected": "g04-overlay",
+    "v030_format_revision": 25,
+    "v030_format_profile": "geometry-g04",
+    "v030_r24_product_bytes": 14004200,
+    "v030_r25_product_bytes": 13674820
+  },
+  "adjudication": {
+    "result": "PRODUCT_EXTRACTION_STILL_RED_AFTER_FASTPATH_PROMOTION",
+    "reason": "The promoted dependency-free DGO1 inverse is exact and materially faster in isolation, but the shipping v0.30 ML extraction remains 86.4% slower than accepted v0.29 in this focused fresh-process comparison. The focused extraction RSS samples tie exactly, so this measurement does not reproduce the earlier whole-suite RSS loss; it neither clears nor weakens the frozen full runtime/RSS gate.",
+    "strongest_counterevidence": "Transform-level speedup did not translate proportionally to complete-product extraction, so the remaining owner is outside, around, or redundantly repeating the DGO1 inverse. Another inverse-loop optimization is not justified until that boundary is measured.",
+    "next_question": "On the same shipping archive, what is the fresh-process end-to-end extraction delta when only the promoted inverse is toggled back to the preserved historical inverse? If the delta is small, localize manifest/policy verification/materialization; if large, determine why the observed v0.29 gap remains despite the recovered transform time."
+  }
+}
