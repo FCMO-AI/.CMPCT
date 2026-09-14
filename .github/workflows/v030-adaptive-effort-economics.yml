@@ -1,4 +1,5 @@
 name: v030 adaptive effort economics
+# ci-lane: deep
 
 on:
   workflow_dispatch:
@@ -11,6 +12,10 @@ on:
 
 permissions:
   contents: read
+
+concurrency:
+  group: cmpct-v030-adaptive-effort-economics-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   referee:
