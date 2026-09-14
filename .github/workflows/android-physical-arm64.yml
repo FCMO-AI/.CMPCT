@@ -2,11 +2,11 @@
 name: CMPCT physical Android ARM64 acceptance
 
 on:
-  # Footnote: label-triggering makes the physical gate usable before merge, when the exact v0.30 candidate still
-  # lives on PR #56. Merely synchronizing the PR never queues a scarce self-hosted device runner; the executor
-  # deliberately adds/re-adds `v030-physical-arm64` only after the candidate is otherwise frozen and hosted
-  # Android evidence for that exact source fingerprint is green. Path scope keeps this release lane compliant
-  # with the repository topology ratchet and prevents unrelated labeled PRs from touching scarce hardware.
+  # `pull_request:labeled` remains useful once this workflow exists on the default branch, but a pre-merge workflow
+  # definition cannot rely on that route: GitHub resolves pull_request workflow definitions from the default branch.
+  # The branch-local request path below is therefore the authoritative pre-merge route. The request file is outside
+  # the release fingerprint; both hosted Android and this workflow consume the same request commit SHA, and a hosted
+  # prerequisite job keeps the scarce physical runner idle until exact-SHA/fingerprint emulator evidence exists.
   pull_request:
     types: [labeled]
     paths:
@@ -17,6 +17,11 @@ on:
       - 'experiments/entropygraph_v030_*'
       - 'docs/V030_RELEASE_LOCK.json'
       - '.github/workflows/android.yml'
+      - '.github/workflows/android-physical-arm64.yml'
+  push:
+    branches: [agent/v030-authoritative-integration]
+    paths:
+      - 'docs/v030-coordination/requests/physical-arm64.request'
       - '.github/workflows/android-physical-arm64.yml'
   workflow_dispatch:
     inputs:
@@ -36,9 +41,112 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  physical-arm64:
+  hosted-prerequisite:
     if: >-
       github.event_name == 'workflow_dispatch' ||
+      github.event_name == 'push' ||
+      (github.event.action == 'labeled' && github.event.label.name == 'v030-physical-arm64')
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          clean: true
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install exact-candidate fingerprint dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[test]'
+      - name: Wait for matching hosted Android receipt without occupying the physical runner
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          git ls-files --error-unmatch native/cmpct-portable/Cargo.lock >/dev/null
+          python -m experiments.entropygraph_v030_release_lock_strict --print-fingerprint \
+            > "$RUNNER_TEMP/cmpct-v030-fingerprint.json"
+          export CMPCT_CANDIDATE_SHA="$(git rev-parse HEAD)"
+          export CMPCT_NATIVE_DEPENDENCY_LOCK_SHA256="$(sha256sum native/cmpct-portable/Cargo.lock | awk '{print $1}')"
+          export CMPCT_CANDIDATE_FINGERPRINT="$(python - <<'PY'
+          import json, os, pathlib
+          data=json.loads((pathlib.Path(os.environ['RUNNER_TEMP'])/'cmpct-v030-fingerprint.json').read_text())
+          print(data['candidate_fingerprint'])
+          PY
+          )"
+          python - <<'PY'
+          import io, json, os, time, urllib.request, urllib.error, zipfile
+          token=os.environ['GH_TOKEN']
+          repo=os.environ['GITHUB_REPOSITORY']
+          branch=os.environ.get('GITHUB_HEAD_REF') or os.environ.get('GITHUB_REF_NAME')
+          candidate=os.environ['CMPCT_CANDIDATE_SHA']
+          fingerprint=os.environ['CMPCT_CANDIDATE_FINGERPRINT']
+          lock_sha=os.environ['CMPCT_NATIVE_DEPENDENCY_LOCK_SHA256']
+          headers={'Authorization':f'Bearer {token}','Accept':'application/vnd.github+json','X-GitHub-Api-Version':'2022-11-28'}
+          def get_json(url):
+              req=urllib.request.Request(url, headers=headers)
+              with urllib.request.urlopen(req, timeout=30) as r: return json.load(r)
+          def get_bytes(url):
+              req=urllib.request.Request(url, headers=headers)
+              with urllib.request.urlopen(req, timeout=60) as r: return r.read()
+          def matching_receipt():
+              runs=get_json(f'https://api.github.com/repos/{repo}/actions/workflows/android.yml/runs?branch={branch}&per_page=50')['workflow_runs']
+              saw_failed_exact=False
+              for run in runs:
+                  if run.get('head_sha') != candidate:
+                      continue
+                  if run.get('status') == 'completed' and run.get('conclusion') not in (None, 'success'):
+                      saw_failed_exact=True
+                  if run.get('status') != 'completed' or run.get('conclusion') != 'success':
+                      continue
+                  artifacts=get_json(f"https://api.github.com/repos/{repo}/actions/runs/{run['id']}/artifacts?per_page=100")['artifacts']
+                  for artifact in artifacts:
+                      if artifact.get('expired') or not artifact['name'].startswith('cmpct-android-debug-'):
+                          continue
+                      raw=get_bytes(artifact['archive_download_url'])
+                      with zipfile.ZipFile(io.BytesIO(raw)) as z:
+                          names=[n for n in z.namelist() if n.endswith('cmpct-hosted-android-evidence.json')]
+                          if not names:
+                              continue
+                          evidence=json.loads(z.read(names[0]))
+                      facts=evidence.get('facts',{})
+                      if (
+                          evidence.get('schema') == 'cmpct-v030-hosted-android-evidence-v2'
+                          and evidence.get('candidate_sha') == candidate
+                          and evidence.get('candidate_fingerprint') == fingerprint
+                          and evidence.get('native_dependency_lock_sha256') == lock_sha
+                          and evidence.get('native_dependency_lock_tracked') is True
+                          and evidence.get('cargo_resolution_locked') is True
+                          and evidence.get('native_dependency_lock_stable_during_run') is True
+                          and facts.get('hosted_android_emulator_green') is True
+                          and facts.get('canonical_r25_portable_dispatch_green') is True
+                          and facts.get('implicit_v4_portable_dispatch_green') is True
+                          and facts.get('logs_inverse_portable_dispatch_green') is True
+                          and facts.get('compact_control_portable_dispatch_green') is True
+                      ):
+                          return {'run_id':run['id'],'artifact_id':artifact['id']}, saw_failed_exact
+              return None, saw_failed_exact
+          for attempt in range(65):
+              found, saw_failed = matching_receipt()
+              if found:
+                  print(json.dumps({'matched_hosted_android':found,'candidate_sha':candidate,'candidate_fingerprint':fingerprint}, indent=2))
+                  raise SystemExit(0)
+              if saw_failed:
+                  raise SystemExit('hosted Android completed unsuccessfully for this exact candidate; physical acceptance will not run')
+              if attempt == 64:
+                  break
+              time.sleep(60)
+          raise SystemExit('timed out waiting for exact-SHA/fingerprint hosted Android evidence')
+          PY
+
+  physical-arm64:
+    needs: hosted-prerequisite
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      github.event_name == 'push' ||
       (github.event.action == 'labeled' && github.event.label.name == 'v030-physical-arm64')
     # A runner gets this label only when it is physically attached to the dedicated acceptance device.
     # This prevents an emulator or unrelated cloud ARM VM from satisfying the production-device gate.
@@ -86,10 +194,8 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          # Footnote: physical-device success is only one half of the release matrix. Rather than trusting a
-          # typed run id, inspect successful hosted Android artifacts and accept only one whose *embedded* source
-          # SHA, release fingerprint, and pinned native dependency graph match this checkout exactly. Synthetic PR
-          # merge SHAs and hosted builds whose Cargo graph drifted cannot satisfy the physical release gate.
+          # Physical-device success is only one half of the release matrix. Accept only hosted evidence whose
+          # embedded source SHA, release fingerprint, and pinned native dependency graph match this checkout.
           python - <<'PY'
           import io, json, os, pathlib, urllib.request, zipfile
           token=os.environ['GH_TOKEN']
@@ -153,8 +259,6 @@ jobs:
           test "$(adb -s "$ANDROID_SERIAL" get-state)" = device
           ABI="$(adb -s "$ANDROID_SERIAL" shell getprop ro.product.cpu.abi | tr -d '\r')"
           test "$ABI" = arm64-v8a
-          # Footnote: ro.kernel.qemu=1 is an explicit disqualifier. An ARM64 emulator, ARM cloud VM or hosted
-          # x86 emulator can test portability but can never manufacture the physical-device release fact.
           test "$(adb -s "$ANDROID_SERIAL" shell getprop ro.kernel.qemu | tr -d '\r')" != 1
           echo "CMPCT_ANDROID_ABI=$ABI" >> "$GITHUB_ENV"
 
@@ -292,10 +396,7 @@ jobs:
           if-no-files-found: error
           retention-days: 90
 
-# Footnote: owning an ARM64 build is not physical-device acceptance. This workflow requires a self-hosted
-# Linux/ARM64 runner with the dedicated physical-device label, rejects QEMU explicitly, reuses the exact same APK
-# build path as hosted CI, and refuses to combine its device result with hosted evidence from another candidate or
-# native dependency graph. Hosted and physical receipts bind the same tracked Cargo.lock SHA-256 and locked Cargo
-# resolution. The final receipt carries canonical r25/implicit-v4 plus promoted-dispatch proof from the exact hosted
-# candidate; the physical lane can verify those facts but cannot manufacture them when matching emulator evidence
-# is absent.
+# Owning an ARM64 build is not physical-device acceptance. This workflow requires a self-hosted Linux/ARM64 runner
+# with the dedicated physical-device label, rejects QEMU explicitly, and refuses to combine its device result with
+# hosted evidence from another candidate or native dependency graph. Pre-merge branch-local requests first wait on a
+# GitHub-hosted prerequisite, so a scarce device is never occupied merely waiting for the emulator receipt to exist.
