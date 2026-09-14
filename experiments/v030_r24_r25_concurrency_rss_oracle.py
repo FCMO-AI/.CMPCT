@@ -2,24 +2,29 @@ from __future__ import annotations
 
 """Research-only attribution of canonical product create RSS to r24/r25 concurrency.
 
-The shipping canonical builder intentionally constructs complete r24 and r25 candidates concurrently before
-choosing the smaller valid product. The frozen runtime gate's worst measured pack-RSS regression is
-`resemblance_hostile_v1/01_shifted_versions`, so this oracle targets that exact release workload. It changes
-*only scheduling* in a separate diagnostic process: the control runs the real concurrent builder; the treatment
-monkeypatches the builder's ThreadPoolExecutor with an API-compatible synchronous executor. All product builders,
-grammars, selectors, thresholds, and verification remain unchanged.
+The shipping canonical builder intentionally overlaps canonical r24 work with manifest capture and later runs the
+finished r24 floor against the r25 tournament through a top-level product ThreadPoolExecutor. The frozen runtime
+gate's worst measured pack-RSS regression is `resemblance_hostile_v1/01_shifted_versions`, so this oracle targets
+that exact release workload.
+
+The control runs the shipping schedule unchanged. The treatment changes *only those two shipping overlap seams*:
+(1) it restores the original profile-tree preparation so no r24 prebuild overlaps manifest capture, and (2) it
+serializes only the top-level `cmpct-v030-product` executor while delegating every inner executor to the original
+ThreadPoolExecutor. Product builders, candidate-internal scheduling, grammars, selectors, thresholds and
+verification remain unchanged.
 
 Promotion criteria are deliberately absent: this experiment receives zero release credit. Its sole question is
 causal attribution. If serial scheduling materially lowers peak RSS while emitting byte-identical archives,
-concurrency owns measurable memory debt; if not, the memory search must move deeper into candidate construction.
+product-level overlap owns measurable memory debt; if not, the memory search must move deeper into candidate
+construction.
 
-The top-level harness deliberately persists structured failure evidence before returning nonzero. A broken
-oracle must remain red, but it must not become an opaque red check that erases the causal information needed by
-the next zero-history agent.
+The top-level harness deliberately persists structured failure evidence before returning nonzero. A broken oracle
+must remain red, but it must not become an opaque red check that erases the causal information needed by the next
+zero-history agent.
 """
 
 import argparse
-from concurrent.futures import Future
+from concurrent.futures import Future, ThreadPoolExecutor as RealThreadPoolExecutor
 import hashlib
 import json
 import os
@@ -35,9 +40,10 @@ import traceback
 from benchmarks import mosaic_v029_generalization_bench as V029
 from benchmarks import v030_release_generalization as GATE
 
-ENGINE = "v030-r24-r25-concurrency-rss-oracle-v1"
+ENGINE = "v030-r24-r25-concurrency-rss-oracle-v2"
 SUITE = "resemblance_hostile_v1"
 TARGET = "01_shifted_versions"
+PRODUCT_POOL_PREFIX = "cmpct-v030-product"
 
 
 class SerialExecutor:
@@ -59,13 +65,29 @@ class SerialExecutor:
         return future
 
 
+def _shipping_executor_with_serial_product_pool(max_workers: int | None = None, **kwargs):
+    """Serialize only the top-level r24/r25 product pool; preserve every inner scheduler."""
+    if kwargs.get("thread_name_prefix") == PRODUCT_POOL_PREFIX:
+        return SerialExecutor(max_workers=max_workers, **kwargs)
+    return RealThreadPoolExecutor(max_workers=max_workers, **kwargs)
+
+
 def _worker(root: Path, out: Path, mode: str) -> int:
     # Import after process startup so both modes pay the same module-loading footprint.
-    from experiments import entropygraph_v030_canonical_final_impl as IMPL
     from experiments import entropygraph_v030_release_product as CANON
 
+    treatment = "shipping-concurrent-control"
     if mode == "serial":
-        IMPL.ThreadPoolExecutor = SerialExecutor
+        base = CANON._BASE_IMPL
+        canonical = base.C
+
+        # Shipping release_product_base patches canonical-final at runtime. Disable only the two overlap seams:
+        # prebuild overlap and the top-level product pool. Use the currently promoted r24 builder so bytes/policy
+        # stay identical, including release_product's dead-dictionary post-pass.
+        canonical._prepare_profile_tree = base._ORIGINAL_PREPARE_PROFILE_TREE
+        canonical._r24_build = base._locality_bounded_r24_build
+        canonical.ThreadPoolExecutor = _shipping_executor_with_serial_product_pool
+        treatment = "serial-r24-prebuild-plus-top-level-product-pool"
     elif mode != "concurrent":
         raise ValueError(mode)
 
@@ -79,6 +101,7 @@ def _worker(root: Path, out: Path, mode: str) -> int:
         raise RuntimeError(f"strong verification failed: {verified!r}")
     payload = {
         "mode": mode,
+        "treatment": treatment,
         "wall_s": wall,
         "ru_maxrss_kib": int(after),
         "ru_maxrss_before_kib": int(before),
@@ -97,7 +120,17 @@ def _worker(root: Path, out: Path, mode: str) -> int:
 
 
 def _run_child(root: Path, out: Path, mode: str) -> dict:
-    cmd = [sys.executable, str(Path(__file__).resolve()), "--worker", "--root", str(root), "--archive", str(out), "--mode", mode]
+    cmd = [
+        sys.executable,
+        str(Path(__file__).resolve()),
+        "--worker",
+        "--root",
+        str(root),
+        "--archive",
+        str(out),
+        "--mode",
+        mode,
+    ]
     env = dict(os.environ)
     env["PYTHONHASHSEED"] = "0"
     proc = subprocess.run(cmd, text=True, capture_output=True, env=env, check=False)
@@ -144,8 +177,15 @@ def run(work_root: Path, repetitions: int) -> dict:
             print(json.dumps(sample), flush=True)
 
     identities = {
-        (sample["archive_bytes"], sample["archive_sha256"], sample["tree_sha256"], sample["format_revision"], sample["format_profile"])
-        for mode in samples.values() for sample in mode
+        (
+            sample["archive_bytes"],
+            sample["archive_sha256"],
+            sample["tree_sha256"],
+            sample["format_revision"],
+            sample["format_profile"],
+        )
+        for mode in samples.values()
+        for sample in mode
     }
     byte_identical = len(identities) == 1
     summaries = {}
@@ -159,6 +199,7 @@ def run(work_root: Path, repetitions: int) -> dict:
             "format_revision": values[0]["format_revision"],
             "format_profile": values[0]["format_profile"],
             "selected": values[0]["selected"],
+            "treatment": values[0]["treatment"],
         }
     c = summaries["concurrent"]
     s = summaries["serial"]
@@ -174,13 +215,18 @@ def run(work_root: Path, repetitions: int) -> dict:
         "status": "PASS",
         "evidence_class": "research-oracle",
         "product_release_credit": False,
-        "claim": "causal attribution of canonical create RSS to concurrent versus serial r24/r25 construction",
+        "claim": "causal attribution of canonical create RSS to shipping product-level r24/r25 overlap",
         "contract": {
             "suite": SUITE,
             "workload": TARGET,
             "historical_tree_sha256": historical_tree,
             "accepted_v029_bytes": int(accepted["accepted_v029_bytes"]),
             "repetitions_per_mode": repetitions,
+            "serial_treatment": [
+                "disable-r24-prebuild-overlap-with-profile-tree-capture",
+                "serialize-only-cmpct-v030-product-threadpool",
+            ],
+            "inner_candidate_schedulers_preserved": True,
             "only_scheduling_changed": True,
             "product_grammar_changed": False,
             "selector_changed": False,
@@ -203,11 +249,16 @@ def _failure_payload(args: argparse.Namespace, exc: BaseException) -> dict:
         "status": "HARNESS_FAILURE",
         "evidence_class": "research-oracle",
         "product_release_credit": False,
-        "claim": "causal attribution of canonical create RSS to concurrent versus serial r24/r25 construction",
+        "claim": "causal attribution of canonical create RSS to shipping product-level r24/r25 overlap",
         "contract": {
             "suite": SUITE,
             "workload": TARGET,
             "repetitions_per_mode": int(args.repetitions),
+            "serial_treatment": [
+                "disable-r24-prebuild-overlap-with-profile-tree-capture",
+                "serialize-only-cmpct-v030-product-threadpool",
+            ],
+            "inner_candidate_schedulers_preserved": True,
             "only_scheduling_changed": True,
             "product_grammar_changed": False,
             "selector_changed": False,
@@ -239,7 +290,6 @@ def main() -> None:
     try:
         result = run(args.work_root, args.repetitions)
     except BaseException as exc:
-        # Preserve failure as structured evidence while retaining a red process exit.
         _write_result(args.output, _failure_payload(args, exc))
         raise
 
