@@ -12,6 +12,7 @@ on:
       - 'benchmarks/v030_release_performance.py'
       - 'experiments/entropygraph_v030_geometry_overlay_g04.py'
       - 'experiments/entropygraph_v030_hierarchical_geometry.py'
+      - 'experiments/v030_g04_extract_cost_attribution.py'
       - '.github/workflows/v030-g04-record-audition-parallel.yml'
   pull_request:
     branches: [main]
@@ -21,6 +22,7 @@ on:
       - 'benchmarks/v030_release_performance.py'
       - 'experiments/entropygraph_v030_geometry_overlay_g04.py'
       - 'experiments/entropygraph_v030_hierarchical_geometry.py'
+      - 'experiments/v030_g04_extract_cost_attribution.py'
       - '.github/workflows/v030-g04-record-audition-parallel.yml'
   workflow_dispatch:
 
@@ -40,7 +42,9 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     outputs:
-      run_deep: ${{ steps.scope.outputs.run_deep }}
+      run_parallel: ${{ steps.scope.outputs.run_parallel }}
+      run_extract: ${{ steps.scope.outputs.run_extract }}
+      run_selfcheck: ${{ steps.scope.outputs.run_selfcheck }}
     steps:
       - uses: actions/checkout@v6
         with:
@@ -54,21 +58,44 @@ jobs:
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
           if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
-            echo 'run_deep=true' >> "$GITHUB_OUTPUT"
+            echo 'run_parallel=true' >> "$GITHUB_OUTPUT"
+            echo 'run_extract=true' >> "$GITHUB_OUTPUT"
+            echo 'run_selfcheck=true' >> "$GITHUB_OUTPUT"
             exit 0
           fi
           git diff-tree --no-commit-id --name-only -r HEAD > /tmp/latest-head-files.txt
           cat /tmp/latest-head-files.txt
-          if grep -Eq '^(benchmarks/\.v030-research-trigger|benchmarks/v030_g04_record_audition_parallel_oracle\.py|benchmarks/v030_release_performance\.py|experiments/entropygraph_v030_geometry_overlay_g04\.py|experiments/entropygraph_v030_hierarchical_geometry\.py|\.github/workflows/v030-g04-record-audition-parallel\.yml)$' /tmp/latest-head-files.txt; then
-            echo 'run_deep=true' >> "$GITHUB_OUTPUT"
+          if grep -Eq '^(benchmarks/\.v030-research-trigger|benchmarks/v030_g04_record_audition_parallel_oracle\.py|benchmarks/v030_release_performance\.py|experiments/entropygraph_v030_geometry_overlay_g04\.py|experiments/entropygraph_v030_hierarchical_geometry\.py)$' /tmp/latest-head-files.txt; then
+            echo 'run_parallel=true' >> "$GITHUB_OUTPUT"
           else
-            echo 'run_deep=false' >> "$GITHUB_OUTPUT"
-            echo 'Accumulated PR paths matched, but newest exact commit does not affect the G04 parallel-audition frontier.'
+            echo 'run_parallel=false' >> "$GITHUB_OUTPUT"
           fi
+          if grep -Eq '^experiments/v030_g04_extract_cost_attribution\.py$' /tmp/latest-head-files.txt; then
+            echo 'run_extract=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'run_extract=false' >> "$GITHUB_OUTPUT"
+          fi
+          if grep -Eq '^\.github/workflows/v030-g04-record-audition-parallel\.yml$' /tmp/latest-head-files.txt; then
+            echo 'run_selfcheck=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'run_selfcheck=false' >> "$GITHUB_OUTPUT"
+          fi
+
+  workflow-self-check:
+    needs: latest-head-impact
+    if: needs.latest-head-impact.outputs.run_selfcheck == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - name: Validate registered G04 workflow topology
+        run: python tools/check_ci_topology.py .github/workflows/v030-g04-record-audition-parallel.yml
 
   bounded-parallel-audition:
     needs: latest-head-impact
-    if: needs.latest-head-impact.outputs.run_deep == 'true'
+    if: needs.latest-head-impact.outputs.run_parallel == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 75
     steps:
@@ -149,6 +176,75 @@ jobs:
           if-no-files-found: warn
           retention-days: 90
 
+  extraction-cost-attribution:
+    needs: latest-head-impact
+    if: needs.latest-head-impact.outputs.run_extract == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - name: Bind exact experiment head
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install corpus and codec dependencies
+        run: |
+          set -euo pipefail
+          test -f /etc/apt/sources.list.d/ubuntu.sources
+          sudo apt-get -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" -o Dir::Etc::sourceparts="-" update
+          sudo apt-get -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" -o Dir::Etc::sourceparts="-" install -y zstd gcc ffmpeg
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[test,audio]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
+      - name: Compile extraction attribution oracle
+        run: python -m py_compile experiments/v030_g04_extract_cost_attribution.py
+      - name: Run G04 extraction decomposition
+        run: |
+          mkdir -p benchmark-artifacts
+          python experiments/v030_g04_extract_cost_attribution.py \
+            --work-root "$RUNNER_TEMP/v030-g04-extract-cost" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/g04-extract-cost.json"
+      - name: Validate evidence contract
+        if: always()
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          p=Path('benchmark-artifacts/g04-extract-cost.json')
+          assert p.is_file(), 'oracle did not publish evidence'
+          d=json.loads(p.read_text())
+          assert d['engine']=='v030-g04-extract-cost-attribution-v2'
+          assert d['evidence_class']=='research-oracle'
+          assert d['product_release_credit'] is False
+          if d.get('status') == 'PASS':
+              c=d['contract']
+              assert c['suite']=='neutral_hostile_v1'
+              assert c['workload']=='09_ml_artifacts'
+              assert c['v030_selected']=='g04-overlay'
+              assert c['fresh_process_per_sample'] is True
+              assert c['same_archive_all_operations'] is True
+              assert c['semantic_identity_checked'] is True
+              assert c['product_code_changed'] is False
+              assert c['release_thresholds_changed'] is False
+              for op in ('strong_verify','verified_staging','full_extract'):
+                  assert len(d['samples'][op])==3
+          else:
+              raise AssertionError(f"oracle status is {d.get('status')}: {d.get('error')}")
+          PY
+      - name: Upload extraction attribution evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: v030-g04-extract-cost-${{ env.EVIDENCE_HEAD }}
+          path: benchmark-artifacts/g04-extract-cost.json
+          if-no-files-found: error
+          retention-days: 90
+
 # Research-only mechanism frontier. Graph construction is intentionally excluded from the isolated audition timer,
 # but no such exclusion is allowed in complete-product release authority. Positive evidence merely nominates a
 # byte-identical bounded-parallel product candidate for full v0.29/runtime/external/recovery/native/Android proof.
+# Extraction attribution is also research-only: it decomposes one measured regression and receives zero release credit.
