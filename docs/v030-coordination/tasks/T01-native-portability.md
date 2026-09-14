@@ -114,6 +114,16 @@ Disproof remains strict: any ZIP round-trip/member-tree mismatch, candidate-fing
 
 No archive grammar, product code, selector rule, benchmark corpus, threshold, locality ceiling, integrity/recovery requirement, platform requirement, release score, or version is changed by this request.
 
+### Post-Android-route exact-fingerprint revalidation request — 2026-09-14
+
+The persisted `native-r25` and `zip-portability` receipts bind fingerprint `e617b854ae2af6997dce59d1d69a7dec583c03355e637a7c3a3b8749318e98c3` to evidence produced before later release-critical Android workflow changes. After source `0a9447d0b3dbedd289ca661418386031e689021a`, `.github/workflows/android.yml` and `.github/workflows/android-physical-arm64.yml` changed; both paths are explicitly part of `docs/V030_RELEASE_LOCK.json` fingerprint scope. The strict release front door must therefore treat the persisted `e617...` receipts as historical mechanism evidence for current release authority. They must not be rebound to the current candidate.
+
+The current branch head before this coordination-only request was `23314823ec15e4c12a34f33c3dc2904d5eca99bc`. This task file is intentionally outside release fingerprint scope and is the repository-designed admission hook for a fresh result-bearing native-authority and ZIP-portability wave on the unchanged current product candidate. The purpose of this request is to recover the actual current candidate fingerprint from execution, not to infer or type it from history.
+
+Credit remains fail-closed: mint or refresh strict receipts only if the full native and ZIP matrices finish green, independently emit the same current fingerprint, bind their exact source/evidence hashes, and preserve every existing recovery/locality/dependency-lock assertion. Hosted Android and real physical ARM64 acceptance remain separate mandatory evidence and are not implied by native/ZIP success.
+
+No archive byte, product implementation, selector rule, benchmark corpus, comparator setting, threshold, timing boundary, locality ceiling, integrity/recovery rule, platform requirement, version or release score changes in this request.
+
 ## Current continuation rule
 
 Work directly on the authoritative branch. Preserve useful earlier implementation/evidence provenance where it still applies, but rerun every normative native/platform receipt on the final reconciled fingerprint. Historical or pre-fingerprint greens prove mechanisms only.
