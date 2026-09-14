@@ -22,16 +22,16 @@ jobs:
       - name: Install exact oracle dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y zstd libzstd1 libdeflate0
+          sudo apt-get install -y zstd libzstd1 libdeflate0 ffmpeg
           python -m pip install --upgrade pip
-          python -m pip install -e '.[test]'
+          python -m pip install -e '.[test,audio]'
       - name: Compare retain-all, mature cutoff and selected-member retention
         env:
           PYTHONPATH: ${{ github.workspace }}
         run: |
           python - <<'PY'
           from __future__ import annotations
-          import json, shutil, tempfile, zipfile
+          import json, tempfile, zipfile
           from pathlib import Path
 
           from benchmarks import v030_release_generalization as B
