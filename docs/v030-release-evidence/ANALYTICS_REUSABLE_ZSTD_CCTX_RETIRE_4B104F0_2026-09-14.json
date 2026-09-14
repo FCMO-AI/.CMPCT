@@ -1,0 +1,35 @@
+{
+  "schema": "cmpct-v030-research-negative-v1",
+  "date_utc": "2026-09-14",
+  "source_head": "4b104f0a47cc844b94c13aeb5faa7cb8b641f038",
+  "target": "neutral_hostile_v1/04_analytics_and_database",
+  "hypothesis": "Reusing one ZSTD_CCtx for repeated level-19 pack compression materially reduces Zstd CPU cost while preserving byte-identical output.",
+  "frozen_gate": {
+    "advance_zc_cpu_reduction_fraction": 0.20,
+    "retire_at_or_below_fraction": 0.05,
+    "exact_payload_identity_required": true
+  },
+  "measurement": {
+    "rounds": 5,
+    "archive_bytes_oneshot": 6135703,
+    "archive_bytes_reuse": 6135703,
+    "zc_calls": 52,
+    "zc_byte_mismatches": 0,
+    "median_zc_cpu_s_oneshot": 5.800086130000022,
+    "median_zc_cpu_s_reuse": 5.795219023999948,
+    "zc_cpu_reduction_fraction": 0.0008391437456246092,
+    "median_total_wall_s_oneshot": 6.203300822999978,
+    "median_total_wall_s_reuse": 6.206946928999997,
+    "total_wall_reduction_fraction": -0.0005877686902593177,
+    "byte_identity": true
+  },
+  "decision": "RETIRE_REUSABLE_CCTX",
+  "interpretation": "The reusable context preserved exact bytes but reduced measured Zstd CPU by only ~0.084%, far below the frozen 5% retirement boundary, while median wall time was slightly worse. Context allocation/reinitialization is not a material owner of Analytics level-19 creation cost. Do not spend further effort on simple CCtx reuse as a speed rescue for the L19 path unless materially new evidence changes the mechanism.",
+  "claim_boundary": "Research-only execution-architecture negative; no format, admission, product, benchmark-win, or release credit.",
+  "github_actions": {
+    "run_id": 34860103790,
+    "artifact_id": 10354717863,
+    "artifact_name": "v030-analytics-reusable-cctx-4b104f0a47cc844b94c13aeb5faa7cb8b641f038",
+    "artifact_digest": "sha256:3b194436626635dfb70107ca7c4f0d62dddce431e586f3ba35af11801264788b"
+  }
+}
