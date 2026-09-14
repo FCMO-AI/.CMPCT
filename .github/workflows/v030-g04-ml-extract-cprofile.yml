@@ -63,11 +63,13 @@ jobs:
           import hashlib, json, os
           from pathlib import Path
           p=Path('benchmark-artifacts/v030-g04-ml-extract-cprofile.json'); d=json.loads(p.read_text())
-          assert d['schema']=='cmpct-v030-g04-ml-extract-cprofile-v1'
+          assert d['schema']=='cmpct-v030-g04-ml-extract-cprofile-v2'
           assert d['target']=='neutral_hostile_v1/09_ml_artifacts'
           assert d['release_credit'] is False
           assert d['top_by_self'] and d['top_by_cumulative']
-          receipt={'schema':'cmpct-v030-g04-ml-extract-cprofile-receipt-v1','source_commit':os.environ['EVIDENCE_HEAD'],'scientific_data_sha256':hashlib.sha256(p.read_bytes()).hexdigest(),'release_credit':False}
+          census=d['redundant_direct_hash_census']
+          assert int(census['digest_equivalent_full_record_bytes']) <= int(census['full_record_direct_bytes']) <= int(census['direct_node_bytes'])
+          receipt={'schema':'cmpct-v030-g04-ml-extract-cprofile-receipt-v2','source_commit':os.environ['EVIDENCE_HEAD'],'scientific_data_sha256':hashlib.sha256(p.read_bytes()).hexdigest(),'release_credit':False}
           Path('benchmark-artifacts/v030-g04-ml-extract-cprofile-receipt.json').write_text(json.dumps(receipt,indent=2)+'\n')
           PY
       - name: CI topology self-check
