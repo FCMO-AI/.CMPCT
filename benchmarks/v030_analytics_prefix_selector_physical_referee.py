@@ -33,6 +33,11 @@ MAX_RATIO_PPM = 700_000
 ROUNDS = 5
 
 
+def _stored_size(raw: bytes, compressed: bytes) -> int:
+    """Mirror CMPNX5's physical-pack STORE-vs-Zstd admission exactly."""
+    return len(compressed) if len(compressed) + 8 < len(raw) else len(raw)
+
+
 def _prepare(work_root: Path):
     neutral = BASE.GENERAL.V029._load(
         BASE.GENERAL.V029.ROOT / "benchmarks" / "neutral_hostile_corpus_v1.py",
@@ -58,8 +63,30 @@ def _prepare(work_root: Path):
         a, b = lo[hh], hi[hh]
         if a["raw"] != b["raw"] or a["usize"] != b["usize"] or a["crc32"] != b["crc32"]:
             raise RuntimeError(f"raw pack proof drift for {hh}")
-        rows.append({"sha256": hh, "raw": a["raw"], "l15": a["csize"], "l19": b["csize"]})
+        raw = a["raw"]
+        z15 = BASE.V25.zc(raw, 15)
+        z19 = BASE.V25.zc(raw, 19)
+        final15 = _stored_size(raw, z15)
+        final19 = _stored_size(raw, z19)
+        # _build() reports the selected physical payload size, which can be raw
+        # bytes when Zstd expands a pack.  Prove that distinction explicitly.
+        if final15 != a["csize"]:
+            raise RuntimeError(f"L15 selected-payload drift for {hh}: {final15} != {a['csize']}")
+        if final19 != b["csize"]:
+            raise RuntimeError(f"L19 selected-payload drift for {hh}: {final19} != {b['csize']}")
+        rows.append(
+            {
+                "sha256": hh,
+                "raw": raw,
+                "z15": len(z15),
+                "z19": len(z19),
+                "l15": final15,
+                "l19": final19,
+            }
+        )
     overhead = int(low["archive_bytes"] - sum(r["l15"] for r in rows))
+    if overhead != int(high["archive_bytes"] - sum(r["l19"] for r in rows)):
+        raise RuntimeError("non-payload archive overhead drift across effort controls")
     return rows, overhead, low, high
 
 
@@ -72,13 +99,18 @@ def _prefix_admits(raw: bytes, sample_c: zstd.ZstdCompressor) -> bool:
 
 
 def _full_l15_admits(raw: bytes, l15_payload: bytes) -> bool:
-    return len(raw) >= MIN_SIZE and int(1_000_000 * len(l15_payload) / len(raw)) <= MAX_RATIO_PPM
+    # Match the prior oracle's effective payload semantics: a failed Zstd
+    # compression attempt contributes STORE/raw size, not its larger output.
+    effective = _stored_size(raw, l15_payload)
+    return len(raw) >= MIN_SIZE and int(1_000_000 * effective / len(raw)) <= MAX_RATIO_PPM
 
 
-def _compress_checked(raw: bytes, level: int, expected: int) -> bytes:
+def _compress_checked(raw: bytes, level: int, expected_compressed: int) -> bytes:
     payload = BASE.V25.zc(raw, level)
-    if len(payload) != expected:
-        raise RuntimeError(f"zstd deterministic-size drift at L{level}: {len(payload)} != {expected}")
+    if len(payload) != expected_compressed:
+        raise RuntimeError(
+            f"zstd deterministic-size drift at L{level}: {len(payload)} != {expected_compressed}"
+        )
     return payload
 
 
@@ -88,25 +120,29 @@ def _round(rows: list[dict], overhead: int, mode: str, sample_c: zstd.ZstdCompre
     admitted = 0
     if mode == "l15":
         for r in rows:
-            final_sizes.append(len(_compress_checked(r["raw"], 15, r["l15"])))
+            payload = _compress_checked(r["raw"], 15, r["z15"])
+            final_sizes.append(_stored_size(r["raw"], payload))
     elif mode == "l19":
         for r in rows:
-            final_sizes.append(len(_compress_checked(r["raw"], 19, r["l19"])))
+            payload = _compress_checked(r["raw"], 19, r["z19"])
+            final_sizes.append(_stored_size(r["raw"], payload))
     elif mode == "double":
         for r in rows:
-            low = _compress_checked(r["raw"], 15, r["l15"])
+            low = _compress_checked(r["raw"], 15, r["z15"])
             if _full_l15_admits(r["raw"], low):
                 admitted += 1
-                final_sizes.append(len(_compress_checked(r["raw"], 19, r["l19"])))
+                high = _compress_checked(r["raw"], 19, r["z19"])
+                final_sizes.append(_stored_size(r["raw"], high))
             else:
-                final_sizes.append(len(low))
+                final_sizes.append(_stored_size(r["raw"], low))
     elif mode == "prefix":
         for r in rows:
             if _prefix_admits(r["raw"], sample_c):
                 admitted += 1
-                final_sizes.append(len(_compress_checked(r["raw"], 19, r["l19"])))
+                payload = _compress_checked(r["raw"], 19, r["z19"])
             else:
-                final_sizes.append(len(_compress_checked(r["raw"], 15, r["l15"])))
+                payload = _compress_checked(r["raw"], 15, r["z15"])
+            final_sizes.append(_stored_size(r["raw"], payload))
     else:
         raise ValueError(mode)
     wall = time.perf_counter() - t0
@@ -124,7 +160,7 @@ def run(work_root: Path) -> dict:
     full_set = set()
     for r in rows:
         # Label-time payload is outside timing only for identity comparison; timed 'double' recomputes it.
-        p = _compress_checked(r["raw"], 15, r["l15"])
+        p = _compress_checked(r["raw"], 15, r["z15"])
         if _full_l15_admits(r["raw"], p):
             full_set.add(r["sha256"])
     if prefix_set != full_set:
@@ -212,6 +248,7 @@ def run(work_root: Path) -> dict:
             "no_full_pack_compression_feature": True,
             "complete_create_required_for_next_credit": True,
             "heldout_transfer_required_before_productization": True,
+            "zstd_attempt_bytes_separated_from_selected_store_bytes": True,
         },
     }
 
