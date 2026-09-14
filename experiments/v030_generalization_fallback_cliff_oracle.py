@@ -3,13 +3,13 @@ from __future__ import annotations
 """Research-only direct measurement of the six-row v0.30 generalization fallback cliff.
 
 The frozen product failure showed that six rows first retain an inner v0.29 fallback and then publish a larger
-canonical r24 fallback.  This oracle does not change that law.  It rebuilds exactly those six frozen source rows,
-adds the canonical filesystem staging layer, and measures the *raw* G04 overlay versus the staged v0.29 incumbent.
-The purpose is to quantify the actual byte bridge required for a canonical G04 artifact to win the inner tournament,
-rather than confusing the later multi-megabyte r24 fallback penalty with compression headroom that must be invented.
+canonical r24 fallback. This oracle does not change that law. It rebuilds exactly those six frozen source rows,
+adds the canonical filesystem staging layer, and decomposes the complete G04 tournament into: staged v0.29 base,
+Attempt-5 pre-fallback graph, and final raw G04 overlay. That decomposition distinguishes inherited graph debt from
+Geometry's recovery and from later outer fallback amplification.
 
 Workload names are used only to select frozen benchmark cases for measurement; no product dispatch observes them.
-All thresholds, grammars, admission rules, source identities and product code remain unchanged.  This earns zero
+All thresholds, grammars, admission rules, source identities and product code remain unchanged. This earns zero
 release credit.
 """
 
@@ -71,6 +71,7 @@ def run(work_root: Path) -> dict:
                 active_g04_magic = bytes(C.RC.G04.MAG)
                 stats = dict(C.RC.G04.build(staged, out))
             staged_base = int(stats["v029_bytes"])
+            pre_graph = int(stats["pre_overlay_graph_bytes"])
             raw_overlay = int(stats["overlay_bytes"])
             selected_bytes = int(stats["archive_bytes"])
             bridge = max(0, raw_overlay - staged_base + 1)
@@ -85,8 +86,11 @@ def run(work_root: Path) -> dict:
                 "filesystem_manifest_entries": int(prepared["entries"]),
                 "staged_v029_base_bytes": staged_base,
                 "staging_exported_cost_vs_original_v029_bytes": staged_base - expected_floor,
+                "pre_overlay_graph_bytes": pre_graph,
+                "pre_overlay_graph_delta_vs_staged_base_bytes": pre_graph - staged_base,
                 "raw_g04_overlay_bytes": raw_overlay,
                 "raw_overlay_delta_vs_staged_base_bytes": raw_overlay - staged_base,
+                "overlay_improvement_vs_prefallback_graph_bytes": pre_graph - raw_overlay,
                 "strict_inner_win_bridge_bytes": bridge,
                 "inner_selected": stats["selected"],
                 "inner_selected_bytes": selected_bytes,
@@ -96,6 +100,8 @@ def run(work_root: Path) -> dict:
                 "transformed_records": int(stats.get("transformed_records", 0)),
                 "delimiter_records": int(stats.get("delimiter_records", 0)),
                 "hierarchical_total_records": int(stats.get("hierarchical_total_records", 0)),
+                "transform_payload_saving_bytes": int(stats.get("transform_payload_saving_bytes", 0)),
+                "hierarchical_incremental_saving_bytes": int(stats.get("hierarchical_incremental_saving_bytes", 0)),
                 "max_selected_member_read_amplification": float(stats.get("max_selected_member_read_amplification", 0.0)),
                 "overlay_meta_raw_bytes": int(stats.get("overlay_meta_raw_bytes", 0)),
                 "overlay_meta_comp_bytes": int(stats.get("overlay_meta_comp_bytes", 0)),
@@ -107,7 +113,7 @@ def run(work_root: Path) -> dict:
         raise RuntimeError(f"target coverage drift: got {[(r['suite'], r['name']) for r in rows]}")
 
     return {
-        "schema": "cmpct-v030-generalization-fallback-cliff-oracle-v1",
+        "schema": "cmpct-v030-generalization-fallback-cliff-oracle-v2",
         "status": "PASS",
         "evidence_class": "research-oracle-direct-current-substrate",
         "product_release_credit": False,
@@ -122,10 +128,15 @@ def run(work_root: Path) -> dict:
         "totals": {
             "accepted_v029_bytes": sum(r["accepted_v029_bytes"] for r in rows),
             "staged_v029_base_bytes": sum(r["staged_v029_base_bytes"] for r in rows),
+            "pre_overlay_graph_bytes": sum(r["pre_overlay_graph_bytes"] for r in rows),
             "raw_g04_overlay_bytes": sum(r["raw_g04_overlay_bytes"] for r in rows),
             "staging_exported_cost_vs_original_v029_bytes": sum(r["staging_exported_cost_vs_original_v029_bytes"] for r in rows),
+            "pre_overlay_graph_delta_vs_staged_base_bytes": sum(r["pre_overlay_graph_delta_vs_staged_base_bytes"] for r in rows),
+            "overlay_improvement_vs_prefallback_graph_bytes": sum(r["overlay_improvement_vs_prefallback_graph_bytes"] for r in rows),
             "raw_overlay_delta_vs_staged_base_bytes": sum(r["raw_overlay_delta_vs_staged_base_bytes"] for r in rows),
             "strict_inner_win_bridge_bytes": sum(r["strict_inner_win_bridge_bytes"] for r in rows),
+            "transform_payload_saving_bytes": sum(r["transform_payload_saving_bytes"] for r in rows),
+            "hierarchical_incremental_saving_bytes": sum(r["hierarchical_incremental_saving_bytes"] for r in rows),
         },
     }
 
@@ -139,7 +150,7 @@ def main() -> None:
         payload = run(args.work_root)
     except BaseException as exc:
         payload = {
-            "schema": "cmpct-v030-generalization-fallback-cliff-oracle-v1",
+            "schema": "cmpct-v030-generalization-fallback-cliff-oracle-v2",
             "status": "HARNESS_FAILURE",
             "evidence_class": "research-oracle-direct-current-substrate",
             "product_release_credit": False,
