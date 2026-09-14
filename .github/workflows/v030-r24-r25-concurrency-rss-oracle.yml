@@ -58,17 +58,24 @@ jobs:
           p=Path('benchmark-artifacts/concurrency-rss.json')
           assert p.is_file(), 'oracle did not publish evidence'
           d=json.loads(p.read_text())
-          assert d['engine']=='v030-r24-r25-concurrency-rss-oracle-v1'
+          assert d['engine']=='v030-r24-r25-concurrency-rss-oracle-v2'
           assert d['evidence_class']=='research-oracle'
           assert d['product_release_credit'] is False
-          assert d['contract']['only_scheduling_changed'] is True
-          assert d['contract']['product_grammar_changed'] is False
-          assert d['contract']['selector_changed'] is False
-          assert d['contract']['release_thresholds_changed'] is False
-          assert d['contract']['repetitions_per_mode']==3
-          assert len(d['samples']['concurrent'])==3
-          assert len(d['samples']['serial'])==3
-          assert d['comparison']['byte_identical_outputs'] is True
+          if d.get('status') == 'PASS':
+              c=d['contract']
+              assert c['suite']=='resemblance_hostile_v1'
+              assert c['workload']=='01_shifted_versions'
+              assert c['inner_candidate_schedulers_preserved'] is True
+              assert c['only_scheduling_changed'] is True
+              assert c['product_grammar_changed'] is False
+              assert c['selector_changed'] is False
+              assert c['release_thresholds_changed'] is False
+              assert c['repetitions_per_mode']==3
+              assert len(d['samples']['concurrent'])==3
+              assert len(d['samples']['serial'])==3
+              assert d['comparison']['byte_identical_outputs'] is True
+          else:
+              raise AssertionError(f"oracle status is {d.get('status')}: {d.get('error')}")
           PY
       - name: Upload oracle evidence
         if: always()
