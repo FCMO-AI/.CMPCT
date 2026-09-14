@@ -31,6 +31,7 @@ on:
       - 'tests/test_v030_native_authority_custody.py'
       - 'experiments/entropygraph_v030_logs_inverse_profile*.py'
       - 'experiments/entropygraph_v030_r24_compact_control_profile.py'
+      - 'docs/v030-coordination/requests/physical-arm64.request'
       - '.github/workflows/android.yml'
       - '.github/workflows/android-physical-arm64.yml'
   workflow_dispatch:
@@ -74,7 +75,7 @@ jobs:
           fi
           git diff-tree --no-commit-id --name-only -r HEAD > /tmp/latest-head-files.txt
           cat /tmp/latest-head-files.txt
-          if grep -Eq '^(integrations/android/|native/cmpct-(core|portable)/|tests/conformance/|tests/generate_v030_(logs|compact_control)_android_vector\.py|tests/test_v030_native_authority_custody\.py|experiments/entropygraph_v030_(logs_inverse_profile.*|r24_compact_control_profile)\.py|\.github/workflows/android(-physical-arm64)?\.yml)' /tmp/latest-head-files.txt; then
+          if grep -Eq '^(integrations/android/|native/cmpct-(core|portable)/|tests/conformance/|tests/generate_v030_(logs|compact_control)_android_vector\.py|tests/test_v030_native_authority_custody\.py|experiments/entropygraph_v030_(logs_inverse_profile.*|r24_compact_control_profile)\.py|docs/v030-coordination/requests/physical-arm64\.request|\.github/workflows/android(-physical-arm64)?\.yml)' /tmp/latest-head-files.txt; then
             echo 'run_android=true' >> "$GITHUB_OUTPUT"
           else
             echo 'run_android=false' >> "$GITHUB_OUTPUT"
@@ -330,6 +331,6 @@ jobs:
 # while preserving every admitted hosted-emulator receipt for its exact source SHA. Physical ARM64 remains separate.
 # The authoritative integration branch has the same path-scoped push admission because scheduled/API commits do not
 # reliably emit pull_request synchronization; hosted evidence remains exact-SHA and physical ARM64 remains separate.
-# A deliberate `v030-physical-arm64` PR label also admits hosted Android for the same source. The physical workflow
-# independently requires that matching hosted artifact, so the request can regenerate stale exact-fingerprint hosted
-# evidence before physical acceptance without widening ordinary automatic Android execution to unrelated commits.
+# A branch-local non-fingerprint physical request marker also admits hosted Android on the exact requested SHA. This
+# avoids relying on `pull_request:labeled` definitions that GitHub resolves from the default branch during pre-merge
+# convergence. The physical workflow independently waits for this matching hosted artifact before taking the device.
