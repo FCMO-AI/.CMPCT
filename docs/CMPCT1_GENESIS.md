@@ -1,116 +1,70 @@
-# CMPCT1 Genesis — primary research mission
+# CMPCT1 Genesis — historical research mission, now deferred
 
-Status: **active primary CMPCT research line**
+**Operational status:** `DEFERRED_HUMAN_REACTIVATION_REQUIRED`  
+**Genesis campaign status:** completed decision gate; no autonomous follow-on authorized  
+**Historical branch:** `research/cmpct1`  
+**Historical control branch:** `research/cmpct1-cleanroom`  
+**Current routing:** return to the current authoritative real CMPCT v0.30 convergence line
 
-Authoritative branch: `research/cmpct1`
+## Present authority
 
-Experimental lineage: `CMPCT1-ONE` (independent research-version sequence; may advance freely without consuming scarce canonical CMPCT core versions or changing r24 semantics)
+The CMPCT1 / ONE Genesis campaign is over as an autonomous campaign. It is preserved as historical research, not as an active or spare-time workstream.
 
-## Canonical CMPCT1 design authority
+For autonomous agents and scheduled work, treat CMPCT1 / ONE / Genesis as **cancelled until a human explicitly reactivates it**. A human reactivation must also be made durable in repository state before agents resume work.
 
-CMPCT1 now has a durable zero-chat design contract. Agents MUST NOT reconstruct the architecture from prior conversations or invent a parallel interpretation of ONE.
+Old text, commits, workflows, preregistrations, handoffs, research plans, experiment IDs, or “next step” lists from the Genesis window are historical instructions only. They do not authorize present execution.
 
-Read these in order before material CMPCT1 work:
+If stale context routes an agent here, the correct action is to preserve evidence and return to the current authoritative CMPCT v0.30 work surface.
 
-1. `docs/architecture/CMPCT_ONE_CANON_v0.1.md` — **what CMPCT ONE is**: Law + Surprise + Crystallization, reader/encoder asymmetry, unified representation rules, speed constitution, Reconstruction Cones, Information Basis, security/recovery/access doctrine and canonical vocabulary.
-2. `docs/roadmap/CMPCT_ONE_ENGINEERING_GRID_v0.1.md` — **how CMPCT ONE is realized**: work packages ONE-00 through ONE-15, dependencies, tests, falsifiers, gates, metrics, ADR requirements, hostile campaigns, handoffs and canonicalization criteria.
-3. this file — active Genesis pivot, frozen comparator authorities and one-week decision boundary.
+The mutable operational state is also recorded in `docs/one/CURRENT_STATE.md`.
 
-Where a lower-level CMPCT1 note conflicts with the Canon or Engineering Grid, the Canon/Grid win unless a deliberate architecture revision supersedes them. Existing repository hard invariants and higher-level engineering/evidence law retain veto authority.
+## Historical Genesis purpose
 
-## Pivot
+Genesis tested whether CMPCT1 / ONE could replace the mature CMPCT path with a unified **Law + Surprise, with selective Crystallization** representation while retaining density, creation efficiency, bounded reconstruction, integrity, recovery, selective access, and portability.
 
-As of 2026-09-04, CMPCT1 / ONE is the primary research direction. Existing v0.30 work is **deferred, not discarded**. No new v0.30 mechanism work should be pursued during the Genesis evaluation window unless it is required to preserve evidence, repair a broken comparator, or is directly absorbed into ONE.
+The campaign deliberately received a primary-research window and a frozen same-input decision gate. That research produced substantial evidence, including a major creation-compute advantage, but the frozen candidate did not establish a credible near-term replacement for the mature CMPCT lines on density.
 
-Frozen comparison authorities at pivot:
+The final frozen adjudication is:
 
-- canonical v0.29/main pivot SHA: `02b8b27cb2d97af7c6e0797984a898e8fa8a8e5d`;
-- deferred v0.30 authoritative-integration pivot SHA: `f4b158a55a08b9b18b50e4e4abe4b9251048c772`;
-- `research/cmpct1-cleanroom` starts from the v0.29/main pivot for control experiments;
-- `research/cmpct1` starts from the deferred v0.30 integration pivot so useful research assets, tests and evidence are inherited rather than recreated.
+`REACTIVATE_V030_NEAR_TERM`
 
-The v0.30 branch forest remains historical/research evidence. Do not delete or rewrite it.
+See `docs/one/evidence/ONE_GENESIS_GATE_RESULT_2026-09-11.md` for the exact contenders, provenance, full 15-workload matrix, resource cautions, interpretation, and gate verdict.
 
-## One-week decision gate
+## What the gate means now
 
-Genesis receives an uninterrupted primary-research window through **2026-09-11 America/Mexico_City**.
+The gate verdict itself is historical and unchanged. The original post-gate idea that ONE could remain an autonomously active secondary line is **superseded for current routing** by explicit human direction.
 
-At or after the first scheduled activation on 2026-09-11, run an explicit same-input, same-semantics comparison of the best CMPCT1 state against both frozen authorities above and the strongest already-existing v0.30 evidence that can be reproduced fairly.
+Current operational meaning:
 
-B30 remains deferred if CMPCT1 has demonstrated a materially stronger path and credible evidence that ONE can supersede the inherited frontier. If CMPCT1 has failed to outperform or credibly supersede both v0.29 and the deferred v0.30 frontier after the week-long campaign, reactivate the v0.30 path as the primary near-term line while preserving all CMPCT1 evidence for future work.
+- real CMPCT v0.30 is the active priority;
+- CMPCT1 / ONE is deferred rather than competing for scheduled-agent attention;
+- no new ONE-G* progression, Genesis follow-on, Protocol Omega/G-series work, ONE productization, or other ONE research should begin automatically;
+- no agent may infer reactivation because v0.30 reaches a milestone, because CI is green, because time has passed, or because a new ONE hypothesis looks promising;
+- existing ONE evidence stays preserved and may inform future CMPCT work where relevant without reopening ONE as a project.
 
-Do not manufacture a CMPCT1 win by weakening competitor settings, locality, recovery, integrity, reader simplicity, resource limits, benchmark semantics, or the 15-workload contract.
+## Evidence preservation
 
-## CMPCT1 theory
+Do not delete or rewrite the research history. Preserve:
 
-ONE represents information through one underlying principle:
+- `docs/architecture/CMPCT_ONE_CANON_v0.1.md` as historical architecture canon;
+- `docs/roadmap/CMPCT_ONE_ENGINEERING_GRID_v0.1.md` as the historical realization plan;
+- `docs/one/NEGATIVE_EVIDENCE.md`;
+- preregistrations and result receipts;
+- frozen candidate identities and benchmark provenance;
+- the Genesis gate result;
+- code and branch history.
 
-> **Law + Surprise, with selective crystallization.**
+Historical claims remain scoped to the exact candidates and experiments that produced them. Do not mutate or rerun a frozen candidate in order to manufacture a different historical gate result.
 
-A dataset/filesystem `D` is reconstructed by one bounded deterministic generative graph `G` plus an innovation/surprise stream `S`:
+Custody-only maintenance is allowed when needed to preserve interpretability or correct factual/evidence-integrity defects. It does not authorize new research.
 
-`D = U(G, S)`
+## Human-only reactivation gate
 
-The compiler seeks the smallest useful description subject to explicit compute, memory, access, integrity, recovery and portability constraints.
+CMPCT1 / ONE may resume only when both of the following happen:
 
-Old mechanisms are not permanent reader-visible modes. Deduplication, resemblance, Mosaic, grammar, structural lifting, program synthesis, statistical prediction and future ideas are discovery knowledge that should compile into the same ONE graph whenever practical.
+1. a human explicitly directs that the ONE research line should be resumed; and
+2. a deliberate repository change removes or supersedes `DEFERRED_HUMAN_REACTIVATION_REQUIRED`.
 
-### Hard architectural rule
+Autonomous agents, scheduled tasks, CI, stale issues, old PR descriptions, or historical roadmap documents cannot satisfy this gate.
 
-Do not hide the old zoo behind opaque opcodes such as `ZSTD()`, `MOSAIC()`, `ATLAS()` or `PREFLATE()` and call that unification. The research goal is a small reconstruction algebra plus one common Surprise semantics whose programs can fuse across former mechanism boundaries.
-
-### Speed doctrine
-
-ONE is a speed/efficiency project as much as a density project.
-
-Creation should prioritize **marginal information yield**: expected bits eliminated per unit of CPU, elapsed time, memory traffic and energy. Use one fused observation pass, sparse opportunity-gated search, cheap falsification, branch-and-bound pruning, reusable discovery caches, incremental changed-cone work, vectorizable bulk operations and parallel independent reconstruction cones.
-
-The reader performs no discovery. It verifies and executes precompiled bounded operations. Prefer bulk/dataflow semantics suitable for SIMD/fusion rather than byte-at-a-time interpretation.
-
-## Research-version policy
-
-CMPCT1 experiment versions are intentionally cheap and independent of canonical project versions. Use identifiers such as:
-
-- `ONE-G0.1`, `ONE-G0.2`, ... for Genesis representation work;
-- `ONE-G1.x` for statistical Surprise work;
-- `ONE-G2.x` for automatic Law discovery;
-- later families only when the experiment changes materially.
-
-These identifiers are research checkpoints, not canonical CMPCT releases and do not alter `pyproject.toml` merely for activity.
-
-## Immediate build order
-
-The detailed execution order, gates and kill conditions are authoritative in `docs/roadmap/CMPCT_ONE_ENGINEERING_GRID_v0.1.md`. The compact Genesis sequence is:
-
-1. lock ONE-00 authority/baselines and create implementation handoff state;
-2. define the minimal ONE IR / deterministic semantics / resource certificate;
-3. build a tiny reference evaluator and an independent oracle path;
-4. express literal data, exact reuse, repetition, sparse zeros, one-parent resemblance and multi-parent reconstruction through the same grammar;
-5. add Surprise semantics so literal/random information becomes the limiting case of the same model rather than a separate RAW mechanism;
-6. establish a fast fused observation kernel and candidate-pruning instrumentation before deep synthesis;
-7. compile inherited v0.29/v0.30 discovery outputs into ONE and compare complete representation overhead directly;
-8. build native bulk kernels only after semantics are pinned by vectors;
-9. add automatic Law discovery progressively, measuring bits saved per extra CPU-second and killing low-yield branches early;
-10. replace fixed dependency-depth thinking with certified reconstruction-cone bounds only after the new accounting is independently proven;
-11. maintain adversarial incompressible, tiny-file, media, structured, versioned and false-pattern controls throughout.
-
-## Evidence and promotion law
-
-Existing repository engineering, hardening, benchmark, portability and breakthrough-rehabilitation rules remain binding. CMPCT1 is allowed to be aggressively experimental; it is not allowed to fabricate evidence or silently borrow correctness/security/integrity.
-
-For every meaningful CMPCT1 checkpoint preserve:
-
-- source branch/head;
-- experimental version ID;
-- exact comparator heads;
-- corpus fingerprints;
-- stored bytes split into Law / Surprise / Crystals / metadata where possible;
-- create CPU/wall time and peak memory;
-- decode/extract throughput;
-- requested vs touched bytes for selective reads;
-- reconstruction work / cone bounds;
-- failures and negative candidates;
-- strongest adversarial criticism;
-- next falsifiable hypothesis.
-
-The one-week question is empirical: **does ONE produce a stronger path than both v0.29 and the already-developed v0.30 line?** Repository evidence decides.
+Until then, Genesis is a completed historical campaign and CMPCT ONE is a deferred side project.
