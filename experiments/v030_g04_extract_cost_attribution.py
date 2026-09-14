@@ -28,7 +28,7 @@ import traceback
 
 from benchmarks import v030_release_performance as PERF
 
-ENGINE = "v030-g04-extract-cost-attribution-v2"
+ENGINE = "v030-g04-extract-cost-attribution-v3"
 SUITE = "neutral_hostile_v1"
 TARGET = "09_ml_artifacts"
 REPETITIONS = 3
@@ -52,12 +52,15 @@ def _worker(archive: Path, destination: Path, operation: str) -> int:
     from experiments import entropygraph_v030_release_product as CANON
 
     started = time.perf_counter()
+    content_graph_tree_sha = None
+    user_tree_sha = None
     if operation == "strong_verify":
         result = dict(CANON.strong_verify(archive))
         if not result.get("ok"):
             raise RuntimeError(f"strong verification failed: {result!r}")
         logical_bytes = int(result.get("logical_bytes", 0))
-        tree_sha = result.get("tree_sha256")
+        content_graph_tree_sha = result.get("content_graph_tree_sha256")
+        user_tree_sha = result.get("user_tree_sha256") or result.get("tree_sha256")
     elif operation == "verified_staging":
         if destination.exists():
             shutil.rmtree(destination)
@@ -66,7 +69,7 @@ def _worker(archive: Path, destination: Path, operation: str) -> int:
         if not result.get("ok"):
             raise RuntimeError(f"verified staging failed: {result!r}")
         logical_bytes = int(result.get("logical_bytes", 0))
-        tree_sha = result.get("tree_sha256")
+        content_graph_tree_sha = result.get("tree_sha256")
     elif operation == "full_extract":
         if destination.exists():
             shutil.rmtree(destination)
@@ -74,7 +77,7 @@ def _worker(archive: Path, destination: Path, operation: str) -> int:
         logical_bytes = sum(
             p.stat().st_size for p in destination.rglob("*") if p.is_file() and not p.is_symlink()
         )
-        tree_sha = CANON.treehash(destination)
+        user_tree_sha = CANON.treehash(destination)
     else:
         raise ValueError(operation)
     wall = time.perf_counter() - started
@@ -84,7 +87,8 @@ def _worker(archive: Path, destination: Path, operation: str) -> int:
                 "operation": operation,
                 "wall_s": wall,
                 "logical_bytes": logical_bytes,
-                "tree_sha256": tree_sha,
+                "content_graph_tree_sha256": content_graph_tree_sha,
+                "user_tree_sha256": user_tree_sha,
             },
             separators=(",", ":"),
         ),
@@ -124,6 +128,9 @@ def run(work_root: Path) -> dict:
     historical_tree = PERF.GENERAL._historical_treehash(source)
     if historical_tree != expected["tree_sha256"]:
         raise RuntimeError(f"historical source drift: {historical_tree} != {expected['tree_sha256']}")
+    expected_user_regular_bytes = sum(
+        p.stat().st_size for p in source.rglob("*") if p.is_file() and not p.is_symlink()
+    )
 
     operations = ("strong_verify", "verified_staging", "full_extract")
     samples = {op: [] for op in operations}
@@ -146,19 +153,40 @@ def run(work_root: Path) -> dict:
             sample["rep"] = rep
             samples[op].append(sample)
 
-    # Timing comparisons are admissible only if every measured path reconstructs/verifies the same logical object.
-    # This prevents a faster operation from receiving causal credit for silently doing semantically different work.
-    expected_logical_bytes = int(samples["strong_verify"][0]["logical_bytes"])
-    for op, values in samples.items():
-        for sample in values:
-            if int(sample["logical_bytes"]) != expected_logical_bytes:
-                raise RuntimeError(
-                    f"semantic logical-byte drift in {op}: {sample['logical_bytes']} != {expected_logical_bytes}"
-                )
-            if sample.get("tree_sha256") != historical_tree:
-                raise RuntimeError(
-                    f"semantic tree drift in {op}: {sample.get('tree_sha256')} != {historical_tree}"
-                )
+    # Compare identity only at equivalent layers. Verified staging is the authenticated *content graph* and still
+    # contains the internal filesystem manifest; full_extract is the restored *user tree*. Conflating those two
+    # identities would reject correct behavior. Strong verification exposes both and therefore bridges the proof.
+    verify_graph_bytes = int(samples["strong_verify"][0]["logical_bytes"])
+    verify_graph_tree = samples["strong_verify"][0]["content_graph_tree_sha256"]
+    if not verify_graph_tree:
+        raise RuntimeError("strong verification did not expose authenticated content-graph identity")
+    for sample in samples["strong_verify"]:
+        if int(sample["logical_bytes"]) != verify_graph_bytes:
+            raise RuntimeError("strong-verification logical-byte identity drift across repetitions")
+        if sample.get("content_graph_tree_sha256") != verify_graph_tree:
+            raise RuntimeError("strong-verification content-graph identity drift across repetitions")
+        if sample.get("user_tree_sha256") != historical_tree:
+            raise RuntimeError(
+                f"strong-verification user-tree drift: {sample.get('user_tree_sha256')} != {historical_tree}"
+            )
+    for sample in samples["verified_staging"]:
+        if int(sample["logical_bytes"]) != verify_graph_bytes:
+            raise RuntimeError(
+                f"verified-staging graph-byte drift: {sample['logical_bytes']} != {verify_graph_bytes}"
+            )
+        if sample.get("content_graph_tree_sha256") != verify_graph_tree:
+            raise RuntimeError(
+                f"verified-staging content-graph drift: {sample.get('content_graph_tree_sha256')} != {verify_graph_tree}"
+            )
+    for sample in samples["full_extract"]:
+        if int(sample["logical_bytes"]) != expected_user_regular_bytes:
+            raise RuntimeError(
+                f"full-extract user-byte drift: {sample['logical_bytes']} != {expected_user_regular_bytes}"
+            )
+        if sample.get("user_tree_sha256") != historical_tree:
+            raise RuntimeError(
+                f"full-extract user-tree drift: {sample.get('user_tree_sha256')} != {historical_tree}"
+            )
 
     summaries = {
         op: {
@@ -188,14 +216,17 @@ def run(work_root: Path) -> dict:
         "contract": {
             "suite": SUITE,
             "workload": TARGET,
-            "historical_tree_sha256": historical_tree,
+            "historical_user_tree_sha256": historical_tree,
+            "content_graph_tree_sha256": verify_graph_tree,
+            "content_graph_logical_bytes": verify_graph_bytes,
+            "expected_user_regular_bytes": expected_user_regular_bytes,
             "accepted_v029_bytes": int(expected["accepted_v029_bytes"]),
             "v030_archive_bytes": int(pack["archive_bytes"]),
             "v030_selected": pack["build_stats"]["selected"],
             "repetitions_per_operation": REPETITIONS,
             "fresh_process_per_sample": True,
             "same_archive_all_operations": True,
-            "semantic_identity_checked": True,
+            "semantic_identity_checked_at_equivalent_layers": True,
             "product_code_changed": False,
             "release_thresholds_changed": False
         },
