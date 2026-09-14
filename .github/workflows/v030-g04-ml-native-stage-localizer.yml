@@ -66,10 +66,12 @@ jobs:
           import hashlib, json, os
           from pathlib import Path
           p=Path('benchmark-artifacts/v030-g04-ml-native-stage.json'); d=json.loads(p.read_text())
-          assert d['schema']=='cmpct-v030-g04-ml-native-stage-localizer-v1'
+          assert d['schema']=='cmpct-v030-g04-ml-native-stage-localizer-v2'
           assert d['target']=='neutral_hostile_v1/09_ml_artifacts'
           assert d['release_credit'] is False
-          receipt={'schema':'cmpct-v030-g04-ml-native-stage-localizer-receipt-v1','source_commit':os.environ['EVIDENCE_HEAD'],'scientific_data_sha256':hashlib.sha256(p.read_bytes()).hexdigest(),'release_credit':False}
+          for stage in ('corpus','shipping_build','shipping_strong_verify'):
+              assert float(d['stage_elapsed_s'][stage]) >= 0.0
+          receipt={'schema':'cmpct-v030-g04-ml-native-stage-localizer-receipt-v2','source_commit':os.environ['EVIDENCE_HEAD'],'scientific_data_sha256':hashlib.sha256(p.read_bytes()).hexdigest(),'release_credit':False}
           Path('benchmark-artifacts/v030-g04-ml-native-stage-receipt.json').write_text(json.dumps(receipt,indent=2)+'\n')
           PY
       - name: CI topology self-check
