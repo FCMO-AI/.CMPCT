@@ -12,6 +12,10 @@ selectors, thresholds, and verification remain unchanged.
 Promotion criteria are deliberately absent: this experiment receives zero release credit.  Its sole question is
 causal attribution.  If serial scheduling materially lowers peak RSS while emitting byte-identical archives,
 concurrency owns measurable memory debt; if not, the memory search must move deeper into candidate construction.
+
+The top-level harness deliberately persists structured failure evidence before returning nonzero.  A broken
+oracle must remain red, but it must not become an opaque red check that erases the causal information needed by
+the next zero-history agent.
 """
 
 import argparse
@@ -27,6 +31,7 @@ import subprocess
 import sys
 import tempfile
 import time
+import traceback
 
 from benchmarks import mosaic_v029_generalization_bench as V029
 from benchmarks import v030_release_generalization as GATE
@@ -165,6 +170,7 @@ def run(work_root: Path, repetitions: int) -> dict:
     }
     return {
         "engine": ENGINE,
+        "status": "PASS",
         "evidence_class": "research-oracle",
         "product_release_credit": False,
         "claim": "causal attribution of canonical create RSS to concurrent versus serial r24/r25 construction",
@@ -185,6 +191,35 @@ def run(work_root: Path, repetitions: int) -> dict:
     }
 
 
+def _write_result(path: Path, payload: dict) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+
+
+def _failure_payload(args: argparse.Namespace, exc: BaseException) -> dict:
+    return {
+        "engine": ENGINE,
+        "status": "HARNESS_FAILURE",
+        "evidence_class": "research-oracle",
+        "product_release_credit": False,
+        "claim": "causal attribution of canonical create RSS to concurrent versus serial r24/r25 construction",
+        "contract": {
+            "suite": "neutral_hostile_v1",
+            "workload": TARGET,
+            "repetitions_per_mode": int(args.repetitions),
+            "only_scheduling_changed": True,
+            "product_grammar_changed": False,
+            "selector_changed": False,
+            "release_thresholds_changed": False,
+        },
+        "error": {
+            "type": type(exc).__name__,
+            "message": str(exc),
+            "traceback": traceback.format_exc(limit=24),
+        },
+    }
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--worker", action="store_true")
@@ -199,9 +234,15 @@ def main() -> None:
         if args.root is None or args.archive is None or args.mode is None:
             parser.error("--worker requires --root, --archive, and --mode")
         raise SystemExit(_worker(args.root, args.archive, args.mode))
-    result = run(args.work_root, args.repetitions)
-    args.output.parent.mkdir(parents=True, exist_ok=True)
-    args.output.write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8")
+
+    try:
+        result = run(args.work_root, args.repetitions)
+    except BaseException as exc:
+        # Preserve failure as structured evidence while retaining a red process exit.
+        _write_result(args.output, _failure_payload(args, exc))
+        raise
+
+    _write_result(args.output, result)
     print(json.dumps(result["comparison"], indent=2), flush=True)
 
 
