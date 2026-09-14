@@ -6,6 +6,10 @@ This diagnostic intentionally does not run the multi-round performance oracle. I
 canonical ML archive once, proves shipping strong identity, then times metadata-only native open/list
 and each member's native reconstruction independently behind a fixed timeout. A timeout is reported as
 censored evidence, never converted into a fabricated duration. No release credit or product mutation.
+
+Every expensive boundary emits a flushed progress record before and after execution. This matters because
+older native-reader oracles had no marker between corpus generation, shipping build/verify and native warm-up;
+therefore cancellation of those old runs cannot legitimately be attributed to the native reader itself.
 """
 
 import argparse
@@ -24,23 +28,37 @@ MEMBER_TIMEOUT_S = 30.0
 METADATA_TIMEOUT_S = 10.0
 
 
-def _run(cli: Path, args: list[str], timeout_s: float) -> dict:
+def _mark(stage: str, event: str, *, elapsed_s: float | None = None, detail: str | None = None) -> None:
+    row: dict[str, object] = {"stage_marker": stage, "event": event}
+    if elapsed_s is not None:
+        row["elapsed_s"] = float(elapsed_s)
+    if detail is not None:
+        row["detail"] = detail
+    print(json.dumps(row, sort_keys=True), flush=True)
+
+
+def _run(cli: Path, args: list[str], timeout_s: float, *, stage: str) -> dict:
+    _mark(stage, "start", detail=" ".join(args[:2]))
     started = time.perf_counter()
     try:
         completed = subprocess.run(
             [str(cli), *args], capture_output=True, text=True, timeout=timeout_s, check=False
         )
     except subprocess.TimeoutExpired as exc:
+        elapsed = time.perf_counter() - started
+        _mark(stage, "timeout", elapsed_s=elapsed)
         return {
             "status": "timeout",
-            "elapsed_s_lower_bound": float(time.perf_counter() - started),
+            "elapsed_s_lower_bound": float(elapsed),
             "timeout_s": float(timeout_s),
             "stdout_tail": (exc.stdout or "")[-1000:] if isinstance(exc.stdout, str) else "",
             "stderr_tail": (exc.stderr or "")[-1000:] if isinstance(exc.stderr, str) else "",
         }
     elapsed = time.perf_counter() - started
+    status = "ok" if completed.returncode == 0 else "error"
+    _mark(stage, status, elapsed_s=elapsed)
     return {
-        "status": "ok" if completed.returncode == 0 else "error",
+        "status": status,
         "elapsed_s": float(elapsed),
         "returncode": int(completed.returncode),
         "stdout": completed.stdout,
@@ -54,30 +72,56 @@ def run(work_root: Path, native_cli: Path) -> dict:
         raise RuntimeError(f"native CLI not found: {native_cli}")
     shutil.rmtree(work_root, ignore_errors=True)
     work_root.mkdir(parents=True)
+
+    _mark("corpus", "start")
+    started = time.perf_counter()
     roots = PERF._build_corpora(work_root / "corpus")
+    corpus_s = time.perf_counter() - started
+    _mark("corpus", "ok", elapsed_s=corpus_s)
+
     source = roots[TARGET]
     source_tree = PRODUCT.treehash(source)
     archive = work_root / "ml.cmpct"
     with PRODUCT.C._revision25_profile_context():
+        _mark("shipping_build", "start")
+        started = time.perf_counter()
         built = PRODUCT.build(source, archive)
+        shipping_build_s = time.perf_counter() - started
+        _mark("shipping_build", "ok", elapsed_s=shipping_build_s)
         if archive.read_bytes()[:8] != RR.G04.MAG:
             raise RuntimeError("ML target did not select canonical G0-G4")
+
+        _mark("shipping_strong_verify", "start")
+        started = time.perf_counter()
         strong = PRODUCT.strong_verify(archive)
+        shipping_verify_s = time.perf_counter() - started
+        _mark("shipping_strong_verify", "ok" if strong.get("ok") else "error", elapsed_s=shipping_verify_s)
     if not strong.get("ok") or strong.get("tree_sha256") != source_tree:
         raise RuntimeError("shipping strong verification failed before native localization")
 
-    info = _run(native_cli, ["info", str(archive)], METADATA_TIMEOUT_S)
-    listing = _run(native_cli, ["list", str(archive)], METADATA_TIMEOUT_S)
+    info = _run(native_cli, ["info", str(archive)], METADATA_TIMEOUT_S, stage="native_info")
+    listing = _run(native_cli, ["list", str(archive)], METADATA_TIMEOUT_S, stage="native_list")
+    common = {
+        "schema": "cmpct-v030-g04-ml-native-stage-localizer-v2",
+        "target": "/".join(TARGET),
+        "shipping_build": built,
+        "archive_bytes": archive.stat().st_size,
+        "source_tree_sha256": source_tree,
+        "stage_elapsed_s": {
+            "corpus": float(corpus_s),
+            "shipping_build": float(shipping_build_s),
+            "shipping_strong_verify": float(shipping_verify_s),
+        },
+        "metadata_timeout_s": METADATA_TIMEOUT_S,
+        "member_timeout_s": MEMBER_TIMEOUT_S,
+        "info": info,
+        "release_credit": False,
+    }
     if info["status"] != "ok" or listing["status"] != "ok":
         return {
-            "schema": "cmpct-v030-g04-ml-native-stage-localizer-v1",
-            "target": "/".join(TARGET),
-            "shipping_build": built,
-            "archive_bytes": archive.stat().st_size,
-            "info": info,
+            **common,
             "list": listing,
             "members": [],
-            "release_credit": False,
             "claim_boundary": "Censored stage-localization diagnostic only; metadata/open failure prevents member attribution.",
         }
 
@@ -92,22 +136,17 @@ def run(work_root: Path, native_cli: Path) -> dict:
         row = {"index": int(index), "kind": int(kind), "logical_bytes": int(size), "path": path}
         if int(kind) == 0:
             row["native_member_stats"] = _run(
-                native_cli, ["member-stats", str(archive), path], MEMBER_TIMEOUT_S
+                native_cli,
+                ["member-stats", str(archive), path],
+                MEMBER_TIMEOUT_S,
+                stage=f"native_member:{path}",
             )
         members.append(row)
 
     return {
-        "schema": "cmpct-v030-g04-ml-native-stage-localizer-v1",
-        "target": "/".join(TARGET),
-        "shipping_build": built,
-        "archive_bytes": archive.stat().st_size,
-        "source_tree_sha256": source_tree,
-        "metadata_timeout_s": METADATA_TIMEOUT_S,
-        "member_timeout_s": MEMBER_TIMEOUT_S,
-        "info": info,
+        **common,
         "list": {k: v for k, v in listing.items() if k != "stdout"},
         "members": members,
-        "release_credit": False,
         "claim_boundary": "Research-only per-member localization of current native G0-G4 execution. Timeouts are lower bounds, not completed timings; no release or performance-promotion credit.",
     }
 
