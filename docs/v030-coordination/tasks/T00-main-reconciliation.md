@@ -11,11 +11,23 @@ Reconcile every canonical-main commit that postdates the current integration mer
 
 ## Current status
 
+### Zero-drift main checkpoint — 2026-09-13
+
+Canonical `main` moved to `605f3ab4d1490e407bca2c94e127e67605841476` with `docs: normalize CSTD transcription to Zstd` after the authoritative branch had independently received the byte-identical normalization at `bce2b0b9adc579c00e5e2f08c247ff3d80969a01`.
+
+Before reconciliation, `compare main...agent/v030-authoritative-integration` reported the integration branch **1 commit behind**. The two commits introduced the same sole file, `docs/TRANSCRIPTION_NORMALIZATION.md`, with the same blob SHA `cf62863e79471e8eb1d12c6908ebc13eea3597b4`; therefore there was no semantic conflict and no reason to perturb the release candidate.
+
+Merge commit `ddfee427f4df7708219bbd0546194b5f9b26ce69` was created with the exact pre-merge integration tree `a628053206f7801123ceea8070cd06bb404f6a15` and both parents (`bce2b0b9...`, `605f3ab4...`). This intentionally reconciles ancestry **without changing any repository byte in the candidate tree**. Post-merge comparison reports **0 commits behind main** with `605f3ab4...` as merge base.
+
+Because the tree is byte-identical to the pre-merge candidate, this checkpoint does not change the release-critical content fingerprint or invalidate content-bound evidence. It is an ancestry/custody reconciliation only. T00 remains `CLAIMED`: current exact-head fast checks and final same-candidate T01–T03 evidence still must satisfy the completion list below.
+
+### Prior reconciliation checkpoint
+
 Canonical main reconciliation was refreshed at integration merge commit `0313258a25f1a87f78fdddfbb445d4a41e25f734` against main `dd0c12cd6ee2dbb859464ea5c6be221ad34b9fdf` through reconciliation PR #85.
 
-`compare main...agent/v030-authoritative-integration` reports **0 commits behind** at this checkpoint; `dd0c12c...` is the merge base. The newly imported main delta comprised 29 commits / 11 effective paths and adds the canonical v0.29 Shipping-vs-Frontier public benchmark/surface at `SURFACE_REVISION` 0.29.l.
+At that checkpoint, `compare main...agent/v030-authoritative-integration` reported **0 commits behind**; `dd0c12c...` was the merge base. The imported main delta comprised 29 commits / 11 effective paths and added the canonical v0.29 Shipping-vs-Frontier public benchmark/surface at `SURFACE_REVISION` 0.29.l.
 
-Semantic overlap decisions for this checkpoint:
+Semantic overlap decisions for that checkpoint:
 
 - `tools/check_public_surface.py`: the integration branch wins. Its exact-canonical-line legal attribution exception is a stricter safety implementation than main's broader label/path allowlist and therefore preserves main's public-attribution intent without widening the disclosure exemption.
 - `tests/test_public_attribution.py`: current main wins. Its only delta from the integration copy updates the asserted public surface revision from 0.29.k to the imported canonical 0.29.l state.
@@ -29,7 +41,7 @@ An earlier reconciliation checkpoint at `851b2ec3a4c1134c965302330fd0f908c57f481
 - `tests/test_v029_parallel_portfolio.py`: current main won because it included the integration assertions plus overwrite/durability regression coverage.
 - `benchmarks/history/2026-08-17-mosaic-v029-category.json`: current main won because it was the same evidence/provenance in canonical compact JSON form.
 
-Since `main` can continue moving during v0.30 completion, this checkpoint is not the final reconciliation receipt. The executor must compare and reconcile again immediately before the final exact-candidate evidence wave.
+Since `main` can continue moving during v0.30 completion, no reconciliation checkpoint is the final receipt until the final exact-candidate evidence wave. The executor must compare and reconcile again immediately before that wave.
 
 ## Owned paths
 
