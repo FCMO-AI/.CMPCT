@@ -1,7 +1,7 @@
 """Isolated canonical-profile module graph for CMPCT v0.30.
 
 The research implementations remain the semantic owners of Geometry, PrefixGraph and the streamed reader, but
-the release product must not rewrite their module globals in-place merely to select revision-25 magics.  This
+the release product must not rewrite their module globals in-place merely to select revision-25 magics. This
 module loads those exact source files into private module namespaces, wires their dependencies to one another,
 and binds the canonical r25 profile only inside that isolated graph.
 
@@ -9,18 +9,18 @@ The result preserves one source implementation per mechanism while removing proc
 research imports keep their historical CMPNX identities, canonical imports always see CMP25 identities, and
 concurrent calls cannot observe one another's profile state.
 
-Footnote: this is source reuse, not parser duplication.  Each clone executes the same repository source file;
-there is no second handwritten reader/encoder grammar to drift.  The private module names exist only to give
+Footnote: this is source reuse, not parser duplication. Each clone executes the same repository source file;
+there is no second handwritten reader/encoder grammar to drift. The private module names exist only to give
 those existing functions independent global namespaces for immutable release-profile configuration.
 """
 from __future__ import annotations
 
-from contextlib import contextmanager
+import builtins
 import importlib
 import importlib.util
 import sys
 from types import ModuleType
-from typing import Iterator, Mapping
+from typing import Mapping
 
 G04_SOURCE = "experiments.entropygraph_v030_geometry_overlay_g04"
 PG_SOURCE = "experiments.entropygraph_v030_prefixgraph"
@@ -37,43 +37,52 @@ PG_MAGIC = b"CMP25PG\0"
 PG_TAIL = b"C25PGTL\0"
 
 _MISSING = object()
+_REAL_IMPORT = builtins.__import__
 
 
-@contextmanager
-def _temporary_aliases(aliases: Mapping[str, ModuleType]) -> Iterator[None]:
-    """Temporarily make absolute ``experiments.X`` imports resolve to private clone modules.
+def _private_importer(aliases: Mapping[str, ModuleType]):
+    """Return an import function that resolves selected dependencies without touching global import state.
 
-    Footnote: both ``sys.modules`` and the package attribute are changed because ``from experiments import X``
-    may consult either cache.  Every prior value is restored in ``finally`` so loading the release graph cannot
-    leave ordinary research imports redirected after initialization.
+    The previous loader temporarily replaced ``sys.modules`` entries and attributes on the public ``experiments``
+    package. Even with perfect restoration, another thread could observe a private canonical clone during that
+    window because an already-loaded module can be returned without waiting on Python's import lock. A namespace-
+    local ``__import__`` hook gives cloned source the same dependency substitution while leaving the process-wide
+    import graph unchanged at every instant.
     """
-    package = importlib.import_module("experiments")
-    saved_modules: dict[str, object] = {}
-    saved_attrs: dict[str, object] = {}
-    try:
-        for fullname, module in aliases.items():
-            attr = fullname.rsplit(".", 1)[-1]
-            saved_modules[fullname] = sys.modules.get(fullname, _MISSING)
-            saved_attrs[attr] = getattr(package, attr, _MISSING)
-            sys.modules[fullname] = module
-            setattr(package, attr, module)
-        yield
-    finally:
-        for fullname in reversed(tuple(aliases)):
-            attr = fullname.rsplit(".", 1)[-1]
-            previous_module = saved_modules[fullname]
-            if previous_module is _MISSING:
-                sys.modules.pop(fullname, None)
-            else:
-                sys.modules[fullname] = previous_module  # type: ignore[assignment]
-            previous_attr = saved_attrs[attr]
-            if previous_attr is _MISSING:
-                try:
-                    delattr(package, attr)
-                except AttributeError:
-                    pass
-            else:
-                setattr(package, attr, previous_attr)
+
+    def local_import(name, globals=None, locals=None, fromlist=(), level=0):
+        if level == 0:
+            if name == "experiments" and fromlist:
+                package = _REAL_IMPORT(name, globals, locals, fromlist, level)
+                replacements = {
+                    attr: aliases[f"experiments.{attr}"]
+                    for attr in fromlist
+                    if isinstance(attr, str) and f"experiments.{attr}" in aliases
+                }
+                if replacements:
+                    proxy = ModuleType(package.__name__)
+                    proxy.__dict__.update(package.__dict__)
+                    proxy.__dict__.update(replacements)
+                    return proxy
+            if name in aliases:
+                module = aliases[name]
+                if fromlist:
+                    return module
+                package_name, attr = name.rsplit(".", 1)
+                package = _REAL_IMPORT(package_name, globals, locals, (), level)
+                proxy = ModuleType(package.__name__)
+                proxy.__dict__.update(package.__dict__)
+                setattr(proxy, attr, module)
+                return proxy
+        return _REAL_IMPORT(name, globals, locals, fromlist, level)
+
+    return local_import
+
+
+def _private_builtins(aliases: Mapping[str, ModuleType]) -> dict[str, object]:
+    values: dict[str, object] = dict(vars(builtins))
+    values["__import__"] = _private_importer(aliases)
+    return values
 
 
 def _clone(source_name: str, clone_name: str, *, aliases: Mapping[str, ModuleType] | None = None) -> ModuleType:
@@ -86,16 +95,19 @@ def _clone(source_name: str, clone_name: str, *, aliases: Mapping[str, ModuleTyp
         raise RuntimeError(f"cannot construct v0.30 isolated module spec: {source_name}")
     module = importlib.util.module_from_spec(clone_spec)
     sys.modules[clone_name] = module
+    private_builtins = _private_builtins(aliases or {})
     try:
-        with _temporary_aliases(aliases or {}):
-            clone_spec.loader.exec_module(module)
+        # Source functions retain this private builtins dictionary, so any later imports performed by those exact
+        # functions remain inside the canonical dependency view. No public ``experiments.X`` binding is replaced.
+        module.__dict__["__builtins__"] = private_builtins
+        clone_spec.loader.exec_module(module)
     except Exception:
         sys.modules.pop(clone_name, None)
         raise
     return module
 
 
-# Build the private dependency graph in dependency order.  Only the private clones receive canonical profile
+# Build the private dependency graph in dependency order. Only the private clones receive canonical profile
 # identities; the ordinary research modules loaded elsewhere in the process remain untouched.
 G04 = _clone(G04_SOURCE, "experiments._v030_canonical_g04")
 G04.MAG = G04_MAGIC
@@ -158,11 +170,36 @@ CANONICAL_ALIASES: dict[str, ModuleType] = {
 }
 
 
-@contextmanager
-def canonical_import_context() -> Iterator[None]:
-    """Expose the isolated graph only while importing the canonical implementation module."""
-    with _temporary_aliases(CANONICAL_ALIASES):
-        yield
+class _CanonicalImportContext:
+    """Give one executing module a private import view without publishing aliases process-wide."""
+
+    def __init__(self) -> None:
+        self._namespace: dict[str, object] | None = None
+        self._previous: object = _MISSING
+
+    def __enter__(self) -> None:
+        # ``with canonical_import_context(): exec(..., globals(), globals())`` is intentionally the only caller.
+        # Replacing that module namespace's builtins makes the executed functions capture the private importer,
+        # while unrelated threads continue to see the untouched public import graph.
+        namespace = sys._getframe(1).f_globals
+        self._namespace = namespace
+        self._previous = namespace.get("__builtins__", _MISSING)
+        namespace["__builtins__"] = _private_builtins(CANONICAL_ALIASES)
+
+    def __exit__(self, exc_type, exc, tb) -> bool:
+        assert self._namespace is not None
+        if self._previous is _MISSING:
+            self._namespace.pop("__builtins__", None)
+        else:
+            self._namespace["__builtins__"] = self._previous
+        self._namespace = None
+        self._previous = _MISSING
+        return False
+
+
+def canonical_import_context() -> _CanonicalImportContext:
+    """Expose private dependencies only to the canonical implementation's execution namespace."""
+    return _CanonicalImportContext()
 
 
 def assert_research_modules_unchanged() -> None:
