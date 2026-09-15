@@ -152,3 +152,15 @@ PR #56 head `ea7f62c40b5d14331bf27d0caf11dd2cd9e9a21c` produced a fresh `CMPCT v
 The same exact-head run remains **red overall** because `authority-runtime` failed. Its prerequisites passed, but the promoted-product runtime gate failed; the unchanged-policy enforcement failed; the whole-process-tree RSS companion ran and also failed its unchanged-policy enforcement. The runtime artifact was still uploaded as `v030-authority-v2-runtime-ea7f62c40b5d14331bf27d0caf11dd2cd9e9a21c` (artifact `10377997083`, digest `sha256:944681087bdd9b0a83cd6e39d61ed2d93cb834fe2257d5836c66ac178658f321`) so the red evidence is preserved rather than narrated away. The green generalization artifact is `10377889404`, digest `sha256:8d967da29d81ca96ea3e0442c7c54c8194ad8ba249f089e9dd9d07bbf7dd6b52`.
 
 No runtime ratio is inferred from job status alone. The next highest-value T02 action is to inspect the preserved runtime JSON, identify the exact failing create/extract/RSS rows and selected profiles, then attack the measured owner without changing the 1.10 / 1.25 ceilings, workload semantics, timing boundary, or RSS custody. Until that artifact-level diagnosis is complete and a repaired exact-head run is green, `runtime-memory-selective` remains open and v0.30 remains release/merge locked.
+
+## Artifact-level runtime diagnosis — 2026-09-15
+
+The preserved authority-v2 runtime artifact `10377997083` has now been inspected directly rather than inferred from CI status. It contains both the original process-local RSS record (`runtime-v2.json`) and the whole-process-tree RSS companion (`runtime-tree-rss.json`). The companion changes the causal picture materially:
+
+- **Shifted:** create `1.0585x`, extract `0.9101x`, pack RSS `0.9538x`; runtime/RSS are within the frozen per-row limits.
+- **Logs:** create `0.00854x`, extract `1.3342x`, pack RSS `0.6295x`; the real release debt is extraction latency, not creation or whole-tree memory.
+- **ML artifacts:** create `1.4162x`, extract `2.0339x`, pack RSS `0.7297x`; this row independently violates both create and extract limits while whole-tree memory is comfortably below the cap.
+- Whole-tree maximum RSS is `1.0x`, so the earlier process-local `2.1099x` RSS red is a measurement-boundary artifact rather than evidence of a product memory regression. The tree-RSS companion correctly passes the unchanged `1.25x` memory law.
+- Aggregate timing still fails honestly: median create `1.0585x` passes, but max create `1.4162x` fails; median extract `1.3342x` and max extract `2.0339x` both fail. No size regression occurred on these three rows.
+
+This narrows the next product work to two concrete owners: the ML canonical build/extract path first because it violates two independent runtime dimensions, then Logs extraction. Do **not** spend effort optimizing Shifted or memory merely because the older wrapper made RSS look red. The next decisive experiment should retain the exact current candidate and separately attribute ML pack and extract time by selected representation/phase, with an r24 exact-fallback control, so the fix targets duplicated/redundant work rather than tuning a threshold or abandoning the byte gain.
