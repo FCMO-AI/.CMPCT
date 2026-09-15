@@ -1,0 +1,44 @@
+name: v0.30 Foundry A01 synthetic-basis O0
+
+on:
+  push:
+    branches:
+      - agent/foundry-a01-synthetic-basis-o0
+    paths:
+      - benchmarks/v030_foundry_a01_synthetic_basis_o0.py
+      - docs/v030-rnd/A01_SYNTHETIC_BASIS_O0_PREREG.md
+      - .github/workflows/v030-foundry-a01-synthetic-basis-o0.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  oracle:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Execute frozen oracle
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts
+          python benchmarks/v030_foundry_a01_synthetic_basis_o0.py | tee artifacts/a01-synthetic-basis-o0.json
+          python - <<'PY'
+          import hashlib, json
+          p='artifacts/a01-synthetic-basis-o0.json'
+          raw=open(p,'rb').read(); obj=json.loads(raw)
+          print('decision=',obj['decision'])
+          print('corpus_fingerprint=',obj['corpus_fingerprint'])
+          print('result_sha256=',hashlib.sha256(raw).hexdigest())
+          assert all(r['roundtrip'] for r in obj['rows'].values())
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: v030-foundry-a01-synthetic-basis-o0-${{ github.sha }}
+          path: artifacts/a01-synthetic-basis-o0.json
+          if-no-files-found: error
+          retention-days: 90
