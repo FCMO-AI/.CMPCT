@@ -3,8 +3,8 @@ from __future__ import annotations
 """Research-only exact-ML A/B for a faster G04 delimiter inverse.
 
 The candidate changes no archive bytes and is injected only into the reader's owning Geometry module after a
-canonical shipping ML archive has been built and strongly verified. Control and candidate extract the same
-archive to fresh destinations; every output must equal the same semantic source tree. Timing is mechanism
+canonical revision-25 shipping ML archive has been built and strongly verified. Control and candidate extract the
+same archive to fresh destinations; every output must equal the same semantic source tree. Timing is mechanism
 attribution only and receives no release credit.
 """
 
@@ -18,7 +18,6 @@ import time
 from benchmarks import v030_release_performance as PERF
 from experiments import entropygraph_v030_geometry_overlay_g04 as G04
 from experiments import entropygraph_v030_release_product as PRODUCT
-from experiments import entropygraph_v030_release_reader as RR
 
 TARGET = ("neutral_hostile_v1", "09_ml_artifacts")
 ROUNDS = 9
@@ -81,6 +80,16 @@ def delimiter_inverse_banded(encoded: bytes, logical_size: int) -> bytes:
     return bytes(out)
 
 
+def _assert_nested_g04_selected(built: dict) -> None:
+    # Canonical r25 is the outer archive grammar. G04 is a nested physical-record strategy, so checking the outer
+    # archive magic against G04.MAG is category-wrong and previously caused an infrastructure false negative.
+    g04 = built.get("r25", {}).get("g04", {})
+    auditions = g04.get("auditions", [])
+    selected = [row for row in auditions if row.get("selected") not in (None, "none")]
+    if not selected:
+        raise RuntimeError("canonical ML r25 archive did not select any G04 overlay records")
+
+
 def run(work_root: Path) -> dict:
     shutil.rmtree(work_root, ignore_errors=True)
     work_root.mkdir(parents=True)
@@ -88,14 +97,12 @@ def run(work_root: Path) -> dict:
     source_tree = PRODUCT.treehash(source)
     archive = work_root / "ml.cmpct"
     built = PRODUCT.build(source, archive)
-    if archive.read_bytes()[:8] != RR.G04.MAG:
-        raise RuntimeError("canonical ML target did not select G04")
+    _assert_nested_g04_selected(built)
     verified = PRODUCT.strong_verify(archive)
     if not verified.get("ok") or verified.get("tree_sha256") != source_tree:
         raise RuntimeError("canonical ML archive failed strong verification")
 
     original = G04.O.delimiter_inverse
-    # Candidate must be a total drop-in for every selected delimiter descriptor in the exact archive.
     control: list[float] = []
     candidate: list[float] = []
     try:
@@ -135,7 +142,7 @@ def run(work_root: Path) -> dict:
         "product_source_changed": False,
         "archive_bytes_changed": False,
         "release_thresholds_changed": False,
-        "claim_boundary": "Exact-archive reader mechanism A/B only. Promotion requires production implementation plus fresh-process authority-v2 and full correctness/platform evidence.",
+        "claim_boundary": "Exact-archive reader mechanism A/B only. Promotion requires guarded production implementation plus fresh-process authority-v2 and full correctness/platform evidence.",
     }
 
 
