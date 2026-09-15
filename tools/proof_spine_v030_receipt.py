@@ -12,9 +12,19 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import sys
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+
+# Footnote: ``python tools/proof_spine_v030_receipt.py`` sets sys.path[0] to
+# ``tools/`` rather than the repository root. Tests import this module as a package,
+# so they would not expose that CLI-only path difference. Bind the repo root here so
+# the adapter can invoke CMPCT's authoritative ``experiments`` module identically in
+# local shells and GitHub Actions without weakening or duplicating release law.
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
 
 from experiments import entropygraph_v030_release_lock_strict as STRICT
 
