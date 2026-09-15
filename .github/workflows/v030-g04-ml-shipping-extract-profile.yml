@@ -1,6 +1,6 @@
 # ci-lane: deep
 # ci-pr-scope: latest-head-commit-gate
-# ci-cancel-policy: preserve-running-exact-receipt
+# ci-cancel-policy: split-classifier-preserve-receipts
 name: CMPCT v0.30 G04 ML shipping extraction profile
 
 on:
@@ -29,10 +29,6 @@ on:
 permissions:
   contents: read
 
-concurrency:
-  group: cmpct-v030-g04-ml-shipping-extract-profile-${{ github.event.pull_request.head.sha || github.sha }}
-  cancel-in-progress: false
-
 env:
   PYTHONPATH: ${{ github.workspace }}
   EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
@@ -41,6 +37,9 @@ jobs:
   latest-head-impact:
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    concurrency:
+      group: cmpct-v030-g04-ml-shipping-profile-route-${{ github.event.pull_request.number || github.ref }}
+      cancel-in-progress: true
     outputs:
       run_deep: ${{ steps.scope.outputs.run_deep }}
     steps:
@@ -67,6 +66,9 @@ jobs:
     if: needs.latest-head-impact.outputs.run_deep == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 25
+    concurrency:
+      group: cmpct-v030-g04-ml-shipping-profile-receipt-${{ github.event.pull_request.head.sha || github.sha }}
+      cancel-in-progress: false
     steps:
       - uses: actions/checkout@v6
         with:
