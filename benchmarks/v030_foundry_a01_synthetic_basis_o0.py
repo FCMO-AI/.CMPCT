@@ -5,7 +5,6 @@ Research only. Discovery/search wall time is gifted; every representation byte i
 """
 from __future__ import annotations
 import hashlib, itertools, json, random, sys, zlib
-from dataclasses import dataclass
 
 SEED = 0xA01C0DE
 N = 8
@@ -21,11 +20,16 @@ def uvarint(n: int) -> bytes:
     while n >= 0x80:
         out.append((n & 0x7F) | 0x80); n >>= 7
     out.append(n)
-    return bytes(out + bytes([n]))
+    return bytes(out)
 
 
 def terminal(b: bytes) -> bytes:
     return zlib.compress(b, 9)
+
+
+def random_bytes(seed: int, n: int) -> bytes:
+    rng = random.Random(seed)
+    return bytes(rng.randrange(256) for _ in range(n))
 
 
 def mutate(src: bytes, rate: float, rng: random.Random) -> bytes:
@@ -87,8 +91,7 @@ def one_root_cost(root, ms, root_id=0):
 
 
 def best_real(ms):
-    vals=[(one_root_cost(r,ms,i),i) for i,r in enumerate(ms)]
-    return min(vals)
+    return min((one_root_cost(r,ms,i),i) for i,r in enumerate(ms))
 
 
 def best_two_real(ms):
@@ -112,14 +115,13 @@ def synth_root(ms):
 
 
 def families():
-    rng=random.Random(SEED)
-    proto=bytes(rng.randrange(256) for _ in range(SIZE))
+    proto=random_bytes(SEED,SIZE)
     pos=[mutate(proto,POS_RATE,random.Random(SEED+100+i)) for i in range(N)]
     near=mutate(proto,MEDOID_RATE,random.Random(SEED+500))
     med=[near]+[mutate(proto,POS_RATE,random.Random(SEED+600+i)) for i in range(N-1)]
     p2=mutate(proto,0.20,random.Random(SEED+700))
     clu=[mutate(proto,CLUSTER_RATE,random.Random(SEED+800+i)) for i in range(N//2)] + [mutate(p2,CLUSTER_RATE,random.Random(SEED+900+i)) for i in range(N//2)]
-    ind=[bytes(random.Random(SEED+1000+i).randrange(256) for _ in range(SIZE)) for i in range(N)]
+    ind=[random_bytes(SEED+1000+i,SIZE) for i in range(N)]
     return {"ancestral_sparse_edits":pos,"biased_observed_medoid":med,"two_cluster":clu,"independent_random":ind}
 
 
@@ -139,9 +141,9 @@ def main():
     fs=families(); rows={}; invalid=False
     for name,ms in fs.items():
         sr=synth_root(ms)
-        if not verify(sr,ms): invalid=True
+        ok=verify(sr,ms); invalid |= not ok
         d=direct_cost(ms); br,bri=best_real(ms); bt,bti=best_two_real(ms); sc=one_root_cost(sr,ms,0)
-        rows[name]={"direct":d,"best_real":br,"best_real_index":bri,"best_two_real":bt,"best_two_real_indices":bti,"synthetic":sc,"synthetic_vs_real_bytes":sc-br,"synthetic_vs_real_frac":(sc-br)/br,"synthetic_vs_two_real_bytes":sc-bt,"synthetic_vs_two_real_frac":(sc-bt)/bt,"roundtrip":verify(sr,ms)}
+        rows[name]={"direct":d,"best_real":br,"best_real_index":bri,"best_two_real":bt,"best_two_real_indices":bti,"synthetic":sc,"synthetic_vs_real_bytes":sc-br,"synthetic_vs_real_frac":(sc-br)/br,"synthetic_vs_two_real_bytes":sc-bt,"synthetic_vs_two_real_frac":(sc-bt)/bt,"roundtrip":ok}
     if invalid: decision="INSTRUMENT_INVALID"
     else:
         p=rows["ancestral_sparse_edits"]; rnd=rows["independent_random"]
