@@ -5,15 +5,17 @@ name: CMPCT v0.30 G04 delimiter inverse A/B
 
 on:
   push:
-    branches: [agent/v030-authoritative-integration]
+    branches: [agent/v030-authoritative-integration, agent/v030-ml-delimiter-inverse-product]
     paths:
       - 'experiments/v030_g04_delimiter_inverse_ab.py'
       - '.github/workflows/v030-g04-delimiter-inverse-ab.yml'
+      - 'docs/v030-coordination/requests/ml-delimiter-inverse-productization.request'
   pull_request:
-    branches: [main]
+    branches: [main, agent/v030-authoritative-integration]
     paths:
       - 'experiments/v030_g04_delimiter_inverse_ab.py'
       - '.github/workflows/v030-g04-delimiter-inverse-ab.yml'
+      - 'docs/v030-coordination/requests/ml-delimiter-inverse-productization.request'
   workflow_dispatch:
 
 permissions:
@@ -45,7 +47,7 @@ jobs:
           test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
           if [ "$EVENT_NAME" = workflow_dispatch ]; then echo 'run_deep=true' >> "$GITHUB_OUTPUT"; exit 0; fi
           git diff-tree --no-commit-id --name-only -r HEAD > /tmp/files
-          if grep -Eq '^(experiments/v030_g04_delimiter_inverse_ab\.py|\.github/workflows/v030-g04-delimiter-inverse-ab\.yml)$' /tmp/files; then echo 'run_deep=true' >> "$GITHUB_OUTPUT"; else echo 'run_deep=false' >> "$GITHUB_OUTPUT"; fi
+          if grep -Eq '^(experiments/v030_g04_delimiter_inverse_ab\.py|\.github/workflows/v030-g04-delimiter-inverse-ab\.yml|docs/v030-coordination/requests/ml-delimiter-inverse-productization\.request)$' /tmp/files; then echo 'run_deep=true' >> "$GITHUB_OUTPUT"; else echo 'run_deep=false' >> "$GITHUB_OUTPUT"; fi
 
   exact-ml-ab:
     needs: latest-head-impact
