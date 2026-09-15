@@ -199,3 +199,9 @@ def test_isolation_loader_restores_normal_import_resolution() -> None:
     assert g04_again is research_g04
     assert pg_again is research_pg
     assert rc_again is research_rc
+
+
+def test_r3_neutral_worker_is_bound_to_the_shared_portfolios_invoked_scheduler_seam() -> None:
+    """Prevent a silent no-op binding that leaves canonical attempt-5 on the historical discovery scheduler."""
+    isolation = canonical.PROFILE_ISOLATION
+    assert isolation.SHARED.V029_SCHED is isolation.DISCOVERY_WORKER
