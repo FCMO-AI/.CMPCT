@@ -5,9 +5,12 @@ from __future__ import annotations
 The profile is diagnostic, not a performance benchmark: profiler overhead invalidates wall-time
 comparison. The canonical archive is built and strongly verified before profiling; one unprofiled
 warm-up extraction is performed; then exactly one shipping PRODUCT.extract() call is profiled into a
-fresh destination and checked for strong tree identity. The same authenticated metadata is also used
-to count direct/full-record nodes whose node digest duplicates an already-verified physical-record
-digest. That census is explanatory headroom only. No product bytes, thresholds, or release law change.
+fresh destination and checked for strong tree identity. Critically, build/verify/extract all use the
+ordinary shipping product front door: this diagnostic must not wrap calls in the private revision-25
+profile context, because that setup previously stalled before extraction and produced no ownership
+signal. The same authenticated metadata is also used to count direct/full-record nodes whose node
+digest duplicates an already-verified physical-record digest. That census is explanatory headroom
+only. No product bytes, thresholds, or release law change.
 
 The output path is also used as a durable progress checkpoint. If CI kills the diagnostic before the
 final profile is available, the last completed stage remains inspectable instead of turning a timeout
@@ -120,51 +123,50 @@ def run(work_root: Path, checkpoint_path: Path | None = None) -> dict:
     _checkpoint(checkpoint_path, "corpus_ready", started=started, source_tree_sha256=source_tree)
 
     archive = work_root / "ml.cmpct"
-    with PRODUCT.C._revision25_profile_context():
-        _checkpoint(checkpoint_path, "shipping_build_started", started=started)
-        build_started = time.perf_counter()
-        built = PRODUCT.build(source, archive)
-        build_s = time.perf_counter() - build_started
-        if archive.read_bytes()[:8] != RR.G04.MAG:
-            raise RuntimeError("canonical ML target did not select G0-G4")
-        _checkpoint(
-            checkpoint_path,
-            "shipping_build_complete",
-            started=started,
-            build_elapsed_s_context_only=float(build_s),
-            archive_bytes=archive.stat().st_size,
-        )
+    _checkpoint(checkpoint_path, "shipping_build_started", started=started)
+    build_started = time.perf_counter()
+    built = PRODUCT.build(source, archive)
+    build_s = time.perf_counter() - build_started
+    if archive.read_bytes()[:8] != RR.G04.MAG:
+        raise RuntimeError("canonical ML target did not select G0-G4")
+    _checkpoint(
+        checkpoint_path,
+        "shipping_build_complete",
+        started=started,
+        build_elapsed_s_context_only=float(build_s),
+        archive_bytes=archive.stat().st_size,
+    )
 
-        verified = PRODUCT.strong_verify(archive)
-        if not verified.get("ok") or verified.get("tree_sha256") != source_tree:
-            raise RuntimeError("shipping strong verification failed before profile")
-        _checkpoint(checkpoint_path, "strong_verify_complete", started=started)
+    verified = PRODUCT.strong_verify(archive)
+    if not verified.get("ok") or verified.get("tree_sha256") != source_tree:
+        raise RuntimeError("shipping strong verification failed before profile")
+    _checkpoint(checkpoint_path, "strong_verify_complete", started=started)
 
-        hash_census = _redundant_direct_hash_census(archive)
-        _checkpoint(checkpoint_path, "hash_census_complete", started=started, redundant_direct_hash_census=hash_census)
+    hash_census = _redundant_direct_hash_census(archive)
+    _checkpoint(checkpoint_path, "hash_census_complete", started=started, redundant_direct_hash_census=hash_census)
 
-        warm = work_root / "warm"
-        PRODUCT.extract(archive, warm)
-        if PRODUCT.treehash(warm) != source_tree:
-            raise RuntimeError("warm-up extraction identity failure")
-        _checkpoint(checkpoint_path, "warm_extract_complete", started=started)
+    warm = work_root / "warm"
+    PRODUCT.extract(archive, warm)
+    if PRODUCT.treehash(warm) != source_tree:
+        raise RuntimeError("warm-up extraction identity failure")
+    _checkpoint(checkpoint_path, "warm_extract_complete", started=started)
 
-        profiled = work_root / "profiled"
-        profile = cProfile.Profile()
-        _checkpoint(checkpoint_path, "profile_extract_started", started=started)
-        wall_started = time.perf_counter()
-        profile.enable()
-        PRODUCT.extract(archive, profiled)
-        profile.disable()
-        profiled_wall_s = time.perf_counter() - wall_started
-        if PRODUCT.treehash(profiled) != source_tree:
-            raise RuntimeError("profiled extraction identity failure")
-        _checkpoint(
-            checkpoint_path,
-            "profile_extract_complete",
-            started=started,
-            profiled_extract_wall_s_context_only=float(profiled_wall_s),
-        )
+    profiled = work_root / "profiled"
+    profile = cProfile.Profile()
+    _checkpoint(checkpoint_path, "profile_extract_started", started=started)
+    wall_started = time.perf_counter()
+    profile.enable()
+    PRODUCT.extract(archive, profiled)
+    profile.disable()
+    profiled_wall_s = time.perf_counter() - wall_started
+    if PRODUCT.treehash(profiled) != source_tree:
+        raise RuntimeError("profiled extraction identity failure")
+    _checkpoint(
+        checkpoint_path,
+        "profile_extract_complete",
+        started=started,
+        profiled_extract_wall_s_context_only=float(profiled_wall_s),
+    )
 
     stats = pstats.Stats(profile)
     total_tt = float(stats.total_tt)
@@ -173,8 +175,9 @@ def run(work_root: Path, checkpoint_path: Path | None = None) -> dict:
     by_cumulative = sorted(rows, key=lambda row: row["cumulative_s"], reverse=True)[:TOP_N]
     top3_self_fraction = sum(row["self_fraction"] for row in by_self[:3])
     return {
-        "schema": "cmpct-v030-g04-ml-extract-cprofile-v2",
+        "schema": "cmpct-v030-g04-ml-extract-cprofile-v3",
         "target": "/".join(TARGET),
+        "shipping_front_door_unwrapped": True,
         "shipping_build": built,
         "archive_bytes": archive.stat().st_size,
         "source_tree_sha256": source_tree,
@@ -201,6 +204,7 @@ def main() -> None:
     args.output.write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8")
     print(json.dumps({
         "schema": result["schema"],
+        "shipping_front_door_unwrapped": result["shipping_front_door_unwrapped"],
         "archive_bytes": result["archive_bytes"],
         "build_elapsed_s_context_only": result["build_elapsed_s_context_only"],
         "profile_total_self_s": result["profile_total_self_s"],
