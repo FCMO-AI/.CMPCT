@@ -56,12 +56,9 @@ jobs:
         continue-on-error: true
         run: |
           mkdir -p benchmark-artifacts
-          # Run 7 proved the previous 15-minute envelope was below the cost of constructing the
-          # exact shipping ML archive: the preserved checkpoint stopped at shipping_build_started.
-          # This is a one-shot diagnostic of extraction ownership, so allow the exact build to
-          # finish while still reserving job time for checkpoint validation/upload. SIGINT gives
-          # Python a chance to flush the latest atomic checkpoint. A timeout remains a failed
-          # diagnostic and never becomes release evidence.
+          # Earlier evidence showed the private revision-25 profiling context could stall during
+          # construction and never reach extraction. The diagnostic now exercises the ordinary
+          # shipping front door and keeps a bounded envelope plus durable checkpoints.
           timeout --signal=INT --kill-after=30s 52m \
             python benchmarks/v030_g04_ml_extract_cprofile.py \
               --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-g04-ml-extract-cprofile-work" \
@@ -76,9 +73,10 @@ jobs:
           if not p.exists():
               raise RuntimeError('profiler produced neither final result nor progress checkpoint')
           d=json.loads(p.read_text())
-          completed = d.get('schema') == 'cmpct-v030-g04-ml-extract-cprofile-v2'
+          completed = d.get('schema') == 'cmpct-v030-g04-ml-extract-cprofile-v3'
           if completed:
               assert d['target']=='neutral_hostile_v1/09_ml_artifacts'
+              assert d['shipping_front_door_unwrapped'] is True
               assert d['release_credit'] is False
               assert d['top_by_self'] and d['top_by_cumulative']
               census=d['redundant_direct_hash_census']
@@ -89,10 +87,11 @@ jobs:
               assert d['target']=='neutral_hostile_v1/09_ml_artifacts'
               assert d['release_credit'] is False
           receipt={
-              'schema':'cmpct-v030-g04-ml-extract-cprofile-receipt-v3',
+              'schema':'cmpct-v030-g04-ml-extract-cprofile-receipt-v4',
               'source_commit':os.environ['EVIDENCE_HEAD'],
               'scientific_data_sha256':hashlib.sha256(p.read_bytes()).hexdigest(),
               'completed':completed,
+              'shipping_front_door_unwrapped':bool(d.get('shipping_front_door_unwrapped', False)) if completed else False,
               'profile_step_outcome':os.environ.get('PROFILE_OUTCOME','unknown'),
               'release_credit':False,
           }
