@@ -41,14 +41,7 @@ _REAL_IMPORT = builtins.__import__
 
 
 def _private_importer(aliases: Mapping[str, ModuleType]):
-    """Return an import function that resolves selected dependencies without touching global import state.
-
-    The previous loader temporarily replaced ``sys.modules`` entries and attributes on the public ``experiments``
-    package. Even with perfect restoration, another thread could observe a private canonical clone during that
-    window because an already-loaded module can be returned without waiting on Python's import lock. A namespace-
-    local ``__import__`` hook gives cloned source the same dependency substitution while leaving the process-wide
-    import graph unchanged at every instant.
-    """
+    """Return an import function that resolves selected dependencies without touching global import state."""
 
     def local_import(name, globals=None, locals=None, fromlist=(), level=0):
         if level == 0:
@@ -97,8 +90,6 @@ def _clone(source_name: str, clone_name: str, *, aliases: Mapping[str, ModuleTyp
     sys.modules[clone_name] = module
     private_builtins = _private_builtins(aliases or {})
     try:
-        # Source functions retain this private builtins dictionary, so any later imports performed by those exact
-        # functions remain inside the canonical dependency view. No public ``experiments.X`` binding is replaced.
         module.__dict__["__builtins__"] = private_builtins
         clone_spec.loader.exec_module(module)
     except Exception:
@@ -107,8 +98,6 @@ def _clone(source_name: str, clone_name: str, *, aliases: Mapping[str, ModuleTyp
     return module
 
 
-# Build the private dependency graph in dependency order. Only the private clones receive canonical profile
-# identities; the ordinary research modules loaded elsewhere in the process remain untouched.
 G04 = _clone(G04_SOURCE, "experiments._v030_canonical_g04")
 G04.MAG = G04_MAGIC
 G04.TAIL = G04_TAIL
@@ -138,13 +127,12 @@ SHARED = _clone(
     aliases={G04_SOURCE: G04},
 )
 
-# Transfer v3 proved that the historical position-independent discovery source contributes no selected bytes on
-# the complete frozen release-runtime matrix while exporting measurable attempt-5 search cost. Bind the accepted
-# R3 neutralization only inside this private canonical shared clone. The provider itself scopes the override to
-# the spawned attempt-5 child and restores it in ``finally``; ordinary v0.29/research imports keep their historical
-# worker and discovery source untouched, preserving them as independent byte/evidence oracles.
+# Transfer v3 and the frozen R3 Builder proved that the historical position-independent discovery source can be
+# removed at the v0.30 attempt-5 child boundary without changing selected bytes or hard product invariants. Keep
+# that accepted scheduler private to the canonical clone; ordinary v0.29/research imports remain untouched.
 DISCOVERY_WORKER = importlib.import_module(DISCOVERY_WORKER_SOURCE)
-SHARED.V029_SCHED = DISCOVERY_WORKER
+SHARED.V030_SCHED = DISCOVERY_WORKER
+SHARED.CHILD_RESULT_TIMEOUT_S = DISCOVERY_WORKER.CHILD_RESULT_TIMEOUT_S
 
 RC = _clone(
     RC_SOURCE,
@@ -152,8 +140,6 @@ RC = _clone(
     aliases={G04_SOURCE: SHARED, PG_SOURCE: PG, POLICY_SOURCE: POLICY},
 )
 
-# The release-only admission helpers are a stricter replacement for the older research selector helpers.
-# Bind them once inside the private graph rather than rewriting the public research module on every operation.
 RC.G04 = SHARED
 RC.PG = PG
 RC.READER = POLICY
@@ -178,9 +164,6 @@ class _CanonicalImportContext:
         self._previous: object = _MISSING
 
     def __enter__(self) -> None:
-        # ``with canonical_import_context(): exec(..., globals(), globals())`` is intentionally the only caller.
-        # Replacing that module namespace's builtins makes the executed functions capture the private importer,
-        # while unrelated threads continue to see the untouched public import graph.
         namespace = sys._getframe(1).f_globals
         self._namespace = namespace
         self._previous = namespace.get("__builtins__", _MISSING)
