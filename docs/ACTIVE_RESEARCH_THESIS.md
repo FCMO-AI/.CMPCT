@@ -1,147 +1,131 @@
 # CMPCT Active Fundamental Research Thesis
 
-Status: **no active primary Foundry thesis — F-01 retired after hostile review**
+Status: **A01 active at post-O0 / pre-valid-O1 causal-transfer stage**.
 
-Constitutional authority: `docs/FUNDAMENTAL_RESEARCH_DOCTRINE.md`. Frozen experiment authority lives under `docs/v030-rnd/`.
+Constitutional authority: `docs/FUNDAMENTAL_RESEARCH_DOCTRINE.md`. Frozen experiment authority and result custody live under `docs/v030-rnd/`.
 
-## Most recent thesis
+## Active thesis — A01 latent physical basis
 
-**F-01 — General Reversible Structure Compiler**
+> A family of exact objects may sometimes have a cheaper complete physical description through a fully charged synthetic basis that never existed as a logical source object, provided generic content-derived evidence can identify when that ownership model beats the strongest observed-root/multi-root alternatives.
 
-> Lossless representation can sometimes be discovered as a bounded exact reconstruction program synthesized from a small typed set of reversible primitives, with search performed only by the encoder/research process and the resolved program stored for deterministic bounded decode.
+This thesis is deliberately narrower than “synthetic references work.” Artificial/consensus references are established prior art in specialized genomic compression. CMPCT's open question is whether the ownership idea transfers to arbitrary computer data with content-derived applicability, exact reconstruction, bounded discovery/admission, safe fallback, and full product accounting.
 
-F-01 produced real exact composition headroom and causal evidence, but its first frozen structural-transfer/AOM challenge fired a preregistered hostile falsifier. The required hostile thesis review is now complete in `docs/v030-rnd/F01_HOSTILE_THESIS_REVIEW.md`.
+External boundary: `docs/v030-rnd/A01_EXTERNAL_PRIOR_ART_BOUNDARY.md`.
 
-**Terminal thesis decision: `FAMILY_RETIRED` as the active primary thesis.**
+## Accepted O0 evidence
 
-This does not claim that reversible composition or program synthesis is useless. It means the tested F-01 causal/generalization claim does not justify continuation, operator/grid expansion, productization or another result-bearing oracle without a genuinely new preregistered causal predictor.
+`docs/v030-rnd/A01_SYNTHETIC_BASIS_O0_RESULT.md` is accepted Foundry O0 evidence with frozen decision **`O0_HEADROOM`**.
 
-## Accepted evidence
+Immutable receipt:
 
-### O0.1 headroom
+- result-bearing PR head: `37c07359bd809a138ee3255625fa576376aa3a6c`;
+- workflow run: `34973331703`;
+- job: `104394742586`;
+- raw JSON SHA-256: `c01647717574a2a9045d3c317b55a083a02708cbaa60198c79076a203f2f625b`;
+- corpus fingerprint: `2682a21c86bf9abfa7521075dd45b3afa17d7370a5c3b6848630bd4e40396ec0`.
 
-Accepted decisive receipt:
+On the frozen ancestral sparse-edit family, a fully charged synthetic root measured **169,811 B** versus **193,697 B** for the best observed single root: **23,886 B / 12.33% smaller**. Exact reconstruction passed.
 
-- source: `c3ef298bcc3fb7f95a65245c9341f112581aa175`;
-- run: `33465582063`;
-- artifact digest: `sha256:3c4a5ed2195e8f9e0d3937a4f12863645e8f8bd152a49dc615dcac056f881323`;
-- decision: **`ADVANCE_COMPOSITION`**.
+Hostile behavior mattered:
 
-Material exact wins after full program-byte charging:
+- independent random: synthetic root was **10.55% worse** than best real root;
+- two-cluster: two observed roots beat one synthetic root by **34,088 B / 11.18%**;
+- near-observed-medoid control still left a smaller **5,167 B / 3.01%** synthetic advantage.
 
-- `SPLIT(LANE[8]+DELIM[10])`: 2090 -> 1538 B, **-552 B / -26.41%**;
-- `SPLIT(LANE[8]+LANE[16])`: 3086 -> 2525 B, **-561 B / -18.18%**;
-- post-freeze transfer `SPLIT(LANE[8]+DELIM[103])`: 1843 -> 1416 B, **-427 B / -23.17%**.
+Interpretation: the observed-object-only root assumption is false within this charged O0 regime. This is possibility/headroom evidence, not prevalence or product evidence.
 
-Hostile false wins: **0**. Exact reconstruction: all cases.
+## Inherited negative constraint
 
-### Causal ablation
+The v0.29 shared-context family remains rejected: a stored trained Zstandard dictionary bought only **6,340 net bytes** and failed its frozen 128 KiB promotion gate; one-hop reference context found zero admissible profitable targets. A01 must show reconstruction/ownership value beyond ordinary shared entropy context rather than relabel that closed family.
 
-Accepted causal receipt:
+See `docs/v030-rnd/A01_PRIOR_NEGATIVE_RECONCILIATION.md`.
 
-- source: `2876698d311b13f296a6f11f23d89eaab51cd09c`;
-- run: `33468986162`;
-- artifact digest: `sha256:e910165ad51b2501f44a8531dab39ccbd697a1a1b150f9d958fb03290d33f2b6`;
-- decision: **`CAUSAL_SEED`**.
+## O1a result — not promoted
 
-Causal facts within the frozen grammar:
+The first causal-predictor transfer run is preserved in `docs/v030-rnd/A01_O1A_CAUSAL_PREDICTOR_RESULT.md`.
 
-- removing SPLIT restored the exact one-stage manual control on all three accepted composition winners;
-- removing LANE cost 13,587 B, 27,317 B and 15,125 B on the three winners;
-- removing DELIM cost a small but strictly positive 13 B and 16 B on the LANE+DELIM winners;
-- LANE widths 2 and 4 were inactive on the seed while widths 8 and 16 were active.
+Raw decision: **`PREDICTOR_FALSE_NEGATIVE`**. Post-run referee classification: **`INSTRUMENT_SPEC_CONTRADICTION`**. No predictor promotion is authorized.
 
-Durable interpretation: `docs/v030-rnd/F01_CAUSAL_RESULT.md`.
+The frozen predictor separated the intended unimodal latent families from random, near-medoid and multimodal cases in the expected direction, but the preregistered outcome law was internally inconsistent. It defined `ACTUAL_LATENT_MATERIAL` only against the best *single* observed root while separately requiring two-cluster data to be judged against the stronger two-root control.
 
-### Frozen structural transfer + AOM
+The contradictory ordering occurred exactly:
 
-Accepted transfer receipt:
+`BEST_TWO_REAL_ROOTS 302,143 B < SYNTHETIC_ROOT 336,541 B < BEST_REAL_ROOT 342,593 B`.
 
-- source: `0f1acdd91a11169c87c41bc2a384046c785b5dcb`;
-- run: `33471421991`;
-- job: `99741875994`;
-- artifact ZIP SHA-256: `1475579970f850826bd26fc4a1b54b33bb9c4eda8e250b67bf2326e9edd8f929`;
-- corpus fingerprint: `0e56cccb5068f9bb17958a9bc5f52203333e97062d83ad411b7066773a31c5dd`;
-- frozen decision: **`TRANSFER_FAIL`**.
+That made the two-cluster family “latent-positive” under the frozen single-root flag while the predictor correctly classified it as observed/multimodal because two real roots were cheaper. The raw decision is preserved; the experiment is not reinterpreted as success.
 
-Positive evidence survived strongly:
+This evaluator-composition defect should have been caught before execution. It is durable negative evidence about the experiment design.
 
-- 6 material winners across both `lane+record` and `lane+lane`;
-- winning scales 32/64/96/128 KiB;
-- 11,378 B material saving on the synthetic winner set;
-- synthetic conditional saving ~23.05%.
+## Current causal claim
 
-But the preregistered hostile falsifier fired:
+Supported:
 
-- hostile material false-win count: **1**;
-- hostile false-win bytes: **65,536 B**;
-- hostile case saving: **3,900 B / 55.79%** versus its manual control.
+1. a fully charged non-observed root can expose material exact family-level description headroom in aligned same-length sparse-substitution regimes;
+2. the opportunity is not universal: random data rejects it and multimodal families can prefer multiple observed roots;
+3. a sampled consensus-deficit statistic is a plausible causal observable worth a clean superseding test, but is **not validated** by O1a because the frozen adjudicator was contradictory.
 
-The seed-derived `{8,16}` pruning also failed exact transfer: it reduced generated/costed states from 2,064 to 1,311 (~36.48%) but did **not** preserve every exact optimum because LANE[4], inactive on the seed, became useful on transfer cases.
+Unsupported:
 
-Full result: `docs/v030-rnd/F01_TRANSFER_AOM_RESULT.md`.
-
-## Hostile review conclusion
-
-The one-stage assumption remains falsified: exact composition is a real representational capability. What failed is the stronger claim that the current grammar plus the current human structural labels define a trustworthy general opportunity class.
-
-The hostile off-grid win shows that the compiler can exploit useful heterogeneity outside the intended label boundary. The failed pruning result independently shows that seed-local operator inactivity cannot be promoted into a general simplification rule.
-
-The review considered relabeling the hostile case, moving/densifying the split grid, adding operators, treating measured compression gain as the only admission predicate, and introducing a pre-search structural predictor. The first three are result-driven rescue moves and are rejected. Exact measured gain alone is an encoder tournament fact, not yet the missing causal account. A pre-result structural predictor could support a future superseding thesis, but repository evidence does not yet establish one.
-
-Therefore no new F-01 freeze is authorized now. See `docs/v030-rnd/F01_HOSTILE_THESIS_REVIEW.md`.
-
-## Scoped negative constraint
-
-Within the tested F-01 grammar and transfer regime:
-
-1. the human `lane+record` / `lane+lane` labels are not a valid general admission boundary for composition headroom;
-2. seed-local operator inactivity is not sufficient for global grammar pruning;
-3. further operator/grid expansion is not justified without new causal evidence.
-
-Reopening requires a new observable, content-derived predictor of composition headroom stated before result-bearing execution, with generator-distinct predicted-positive and predicted-negative transfer, fully charged representation bytes, exact reconstruction, hostile false-positive law and global carrying-cost accounting.
+- prevalence on arbitrary real files;
+- variable-length / insertion-deletion / reorder transfer;
+- superiority to canonical CMPCT Mosaic/resemblance ownership;
+- superiority to charged shared-context alternatives on real families;
+- generic discovery/admission economics;
+- locality, recovery, integrity, native/platform or release viability;
+- any v0.30 release credit.
 
 ## Oracle Gift Ledger
 
-Gifted historically:
+Gifted at O0:
 
-- O0 discovery/search wall time;
-- causal-ablation search wall time;
-- structural-transfer/AOM search wall time.
+- synthetic-root search/discovery wall time;
+- temporary analysis memory.
 
 Never gifted:
 
-- representation/program/control bytes;
-- literals/terminal streams;
-- required bases;
-- exact reconstruction;
-- structural AOM labels.
+- synthetic root bytes;
+- residual bytes;
+- descriptors;
+- terminal bytes;
+- exact reconstruction.
 
-Unsupported/deferred under the retired thesis:
+O1a predictor computation was bounded and content-derived, but its decision law was defective and therefore earns no admission credit.
 
-- independent/public real-data AOM;
-- generic admission/discovery economics;
-- canonical framing/index;
-- locality/recovery/integrity;
-- hostile parser/fuzz;
-- native/Android/platform;
-- product runtime and complete release authority.
+## Scoped negative / no-rescue law
 
-These debts are not scheduled because F-01 did not reach Foundry handoff.
+Do not tune O1a's 8% threshold, reuse its six families as unseen validation, or relabel the two-cluster row to manufacture a pass.
 
-## Foundry state
+A superseding result-bearing freeze must:
 
-There is currently **no active primary thesis**. This is intentional and permitted by the finalized doctrine. Do not manufacture a thesis to satisfy hourly activity.
+1. use fresh generator-distinct families/seeds;
+2. define latent opportunity against the **strongest relevant observed ownership control**, including multi-root where applicable;
+3. keep multimodal cases explicit negatives when multi-root wins;
+4. preserve random and near-medoid hostile controls;
+5. separate latent-root reconstruction value from charged shared entropy context;
+6. keep exact reconstruction and complete decoder-visible byte charging;
+7. expose a bounded content-derived predictor before expensive candidate construction.
 
-A future Foundry heartbeat should inspect the Assumption Ledger, scoped negatives and newly exposed residual costs. A01/A02/A03/A04/A05/A06 remain idea territories; none is promoted automatically by F-01 retirement. A04/A05 specifically inherit the constraint that a new campaign must explain *when and why* reversible composition creates description-length headroom rather than merely enlarging the synthesis grammar.
+Only after that causal gate survives should A01 spend effort on variable-length alignment, public/independent real families, canonical product semantics, locality/recovery, native implementation or full performance economics.
+
+## Previous thesis — F-01 retired
+
+F-01 General Reversible Structure Compiler remains **`FAMILY_RETIRED`** as an active primary thesis after its frozen structural-transfer/AOM hostile falsifier fired. Its composition headroom and causal evidence remain valid scoped research; its stronger generalization claim does not.
+
+Authority:
+
+- `docs/v030-rnd/F01_CAUSAL_RESULT.md`;
+- `docs/v030-rnd/F01_TRANSFER_AOM_RESULT.md`;
+- `docs/v030-rnd/F01_HOSTILE_THESIS_REVIEW.md`.
+
+Do not reopen F-01 through operator/grid expansion or result-driven relabeling without a genuinely new preregistered causal predictor.
 
 ## Forge separation
 
-F-01 grants no v0.30 release credit and its retirement does not revoke independently proven product mechanisms.
+A01 grants **no v0.30 release credit** and must not perturb the release fingerprint merely to preserve research harnesses. The accepted A01 custody artifacts are intentionally stored under `docs/v030-rnd/`; result-bearing benchmark/workflow mutations were not merged into the authoritative integration line because `benchmarks/v030_*` and `.github/workflows/v030-*` are release-fingerprinted paths.
 
-The r25 implicit-v4 manifest mechanism has crossed its canonical Python D5 landing boundary and continues through Forge: malformed/recovery parity, shared native semantics, Android/platform parity, genuine-r24 product-floor selection, exact all-workload competitor authority and strict release authority.
+Forge remains independently responsible for the current v0.30 release lock, exact-head receipts, physical ARM64 Android evidence, performance/competitor authority and final release state.
 
 ## Immediate next action
 
-> **Foundry:** remain thesis-idle unless a candidate clears the doctrine's Thesis Initiation Gate; preserve F-01's compiler/evidence as a reusable instrument and scoped negative.  
-> **Forge:** close implicit-v4 native/recovery/platform parity and complete exact current-fingerprint performance/competitor/release authority without treating classifier-only workflow greens as evidence.
+> **Foundry:** design a superseding A01 causal-transfer freeze whose positive label is defined against the strongest observed ownership portfolio, then test it on fresh generator-distinct families without changing O1a thresholds or reusing O1a families as unseen evidence.  
+> **Forge:** continue the current release-lock priority landscape independently; do not invalidate release receipts for Foundry harness churn.
