@@ -59,7 +59,8 @@ def main():
     else:
         miss=[n for n,r in rows.items() if r['actual_latent_material'] and r['predictor']['prediction']!='PREDICT_LATENT']
         fp_rows=[n for n,r in rows.items() if not r['actual_latent_material'] and r['predictor']['prediction']=='PREDICT_LATENT']
-        if miss: decision='PREDICTOR_FALSE_NEGATIVE'
+        if rows['independent_random']['actual_latent_material']: decision='PREDICTOR_FALSE_POSITIVE'
+        elif miss: decision='PREDICTOR_FALSE_NEGATIVE'
         elif len(fp_rows)>1: decision='PREDICTOR_FALSE_POSITIVE'
         else: decision='CAUSAL_PREDICTOR_SEED'
     print(json.dumps({'schema':'cmpct-a01-o1b-strong-control-v1','seed':SEED,'threshold':THRESHOLD,'sample_offset':OFFSET,'sample_stride':STRIDE,'corpus_fingerprint':fp(fs),'rows':rows,'decision':decision},sort_keys=True,indent=2)); return 2 if invalid else 0
