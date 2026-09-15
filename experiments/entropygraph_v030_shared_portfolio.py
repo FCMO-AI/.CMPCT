@@ -38,6 +38,7 @@ import time
 
 from experiments import entropygraph_v029_parallel_portfolio as V029_SCHED
 from experiments import entropygraph_v029_residual_fast as V029_ACCEPTED
+from experiments import entropygraph_v030_discovery_neutral_worker as V030_SCHED
 from experiments import entropygraph_v030_geometry_overlay_g04 as G
 from experiments import entropygraph_v030_geometry_overlay_g04_publish as PUB
 
@@ -59,7 +60,7 @@ strict = G.strict
 HG = G.HG
 O = G.O
 
-CHILD_RESULT_TIMEOUT_S = V029_SCHED.CHILD_RESULT_TIMEOUT_S
+CHILD_RESULT_TIMEOUT_S = V030_SCHED.CHILD_RESULT_TIMEOUT_S
 
 
 def _sha256_file(path: Path) -> bytes:
@@ -82,8 +83,8 @@ def _build_shared_candidates(root: Path, temp: Path) -> dict:
     ctx = mp.get_context("spawn")
     queue = ctx.Queue()
     processes = [
-        ctx.Process(target=V029_SCHED._worker, args=("v028", str(root), str(v028_path), queue)),
-        ctx.Process(target=V029_SCHED._worker, args=("attempt5", str(root), str(graph_path), queue)),
+        ctx.Process(target=V030_SCHED._worker, args=("v028", str(root), str(v028_path), queue)),
+        ctx.Process(target=V030_SCHED._worker, args=("attempt5", str(root), str(graph_path), queue)),
     ]
     for process in processes:
         process.start()
@@ -146,8 +147,8 @@ def _build_shared_candidates(root: Path, temp: Path) -> dict:
         "mosaic": by_kind["attempt5"]["stats"],
         "fast_reject_reason": fast_reject,
         "fast_reject_logical_files": logical_files,
-        "scheduler_mode": "v030-shared-v028-attempt5-spawn",
-        "accepted_engine": V029_SCHED.ACCEPTED_ENGINE,
+        "scheduler_mode": "v030-shared-v028-attempt5-spawn-r3-neutral",
+        "accepted_engine": V030_SCHED.ACCEPTED_ENGINE,
         "selection_materialization": "retained-candidate-reference",
         "selection_extra_payload_write_bytes": 0,
     }
@@ -292,8 +293,8 @@ def build(root: Path, out: Path) -> dict:
             "shared_candidate_build_s": float(shared["shared_build_s"]),
             "v028_child_s": float(shared["v029_stats"]["v028_child_s"]),
             "attempt5_child_s": float(shared["v029_stats"]["attempt5_child_s"]),
-            "integration_order": "shared(v028,attempt5-graph) -> G0-G4-overlay -> byte+locality tournament",
-            "shared_analysis_mode": "attempt5-graph-built-once",
+            "integration_order": "shared(v028,attempt5-graph-r3-neutral) -> G0-G4-overlay -> byte+locality tournament",
+            "shared_analysis_mode": "attempt5-graph-built-once-r3-neutral",
             "attempt5_graph_build_count": 1,
             "selection_materialization": "same-filesystem-atomic-move",
             "selection_extra_payload_write_bytes": 0,
