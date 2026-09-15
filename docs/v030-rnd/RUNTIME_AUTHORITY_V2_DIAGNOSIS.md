@@ -36,10 +36,21 @@ The same authority receipt also narrows creation without a new timing boundary. 
 
 The selected G04 overlay transforms 9 physical records (8 lane + 1 delimiter) and buys about `161.8 KiB`. Any creation optimization must preserve that exact byte result/locality or prove a stronger complete-product trade; skipping G04 wholesale is not rehabilitation.
 
+## Derived minimum rehabilitation bounds
+
+The frozen aggregate and per-workload gates interact; clearing each red row to merely `1.25x` is not sufficient. Using the exact whole-tree receipt medians:
+
+- ML create must fall from `37.89634 s` to at most `33.44985 s` to satisfy its `1.25x` row ceiling: at least `4.44649 s` / `11.73%` of current ML creation must be removed or overlapped.
+- ML extract must fall from `0.181171 s` to at most `0.111342 s`: at least `69.83 ms` / `38.54%` of current ML extraction must be recovered.
+- Logs extract needs only `3.22 ms` / `6.31%` recovery to cross its own `1.25x` row ceiling, **but that would still leave the three-row median extract above the frozen `1.10x` aggregate ceiling** because Shifted is the only already-green ratio below `1.10x`.
+- If ML remains above `1.10x`, Logs must therefore reach at most `1.10x`, or `0.042112 s` against its `0.038283 s` v0.29 control. That requires about `8.97 ms` / `17.56%` recovery from the current `0.051079 s` Logs median. Conversely, a sub-`1.10x` ML extraction could carry a Logs result between `1.10x` and `1.25x`, but current evidence makes that the harder route.
+
+This matters for mechanism selection: a Logs idea with a credible 4–7% complete-extraction win can clear the local row yet still fail the release receipt. The current planning target should be the stronger aggregate-aware bound unless another row is independently driven below `1.10x`. Thresholds are not being changed; this is a derivation from the existing frozen thresholds.
+
 ## Next falsifiable actions
 
 1. Harvest the shipping-route ML extraction profile and use function-level ownership to attack the authenticated verify/reconstruction layer; do not reopen restore-syscall fusion.
 2. Attribute the `~10.7 s` post-shared-build ML creation cost inside G04 audition/overlay/publication before changing admission or parallelism.
-3. Keep logs extraction independent: its `~1.334x` debt and tiny byte margin make carrying-cost/admission a separate decision, not evidence that an ML fix will transfer.
+3. Keep logs extraction independent: its `~1.334x` debt and tiny byte margin make carrying-cost/admission a separate decision, not evidence that an ML fix will transfer. Prefer mechanisms with plausible `>=17.6%` complete-extraction headroom unless ML is independently brought below `1.10x`.
 
 `runtime-memory-selective` remains open and v0.30 remains merge/release locked.
