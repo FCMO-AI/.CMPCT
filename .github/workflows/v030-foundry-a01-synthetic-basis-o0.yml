@@ -1,19 +1,21 @@
-name: v0.30 Foundry A01 synthetic-basis O0
+name: v0.30 Foundry A01 synthetic-basis research
 
 on:
   push:
-    branches:
-      - agent/foundry-a01-synthetic-basis-o0
+    branches: [agent/foundry-a01-synthetic-basis-o0]
     paths:
       - benchmarks/v030_foundry_a01_synthetic_basis_o0.py
+      - benchmarks/v030_foundry_a01_o1a_causal_predictor.py
       - docs/v030-rnd/A01_SYNTHETIC_BASIS_O0_PREREG.md
+      - docs/v030-rnd/A01_O1A_CAUSAL_PREDICTOR_PREREG.md
       - .github/workflows/v030-foundry-a01-synthetic-basis-o0.yml
   pull_request:
-    branches:
-      - agent/v030-authoritative-integration
+    branches: [agent/v030-authoritative-integration]
     paths:
       - benchmarks/v030_foundry_a01_synthetic_basis_o0.py
+      - benchmarks/v030_foundry_a01_o1a_causal_predictor.py
       - docs/v030-rnd/A01_SYNTHETIC_BASIS_O0_PREREG.md
+      - docs/v030-rnd/A01_O1A_CAUSAL_PREDICTOR_PREREG.md
       - .github/workflows/v030-foundry-a01-synthetic-basis-o0.yml
   workflow_dispatch:
 
@@ -23,29 +25,35 @@ permissions:
 jobs:
   oracle:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - name: Execute frozen oracle
+      - name: Execute frozen O0 oracle
         run: |
           set -euo pipefail
           mkdir -p artifacts
           python benchmarks/v030_foundry_a01_synthetic_basis_o0.py | tee artifacts/a01-synthetic-basis-o0.json
+      - name: Execute frozen O1a causal predictor
+        run: |
+          set -euo pipefail
+          python benchmarks/v030_foundry_a01_o1a_causal_predictor.py | tee artifacts/a01-o1a-causal-predictor.json
+      - name: Validate receipts
+        run: |
           python - <<'PY'
-          import hashlib, json
-          p='artifacts/a01-synthetic-basis-o0.json'
-          raw=open(p,'rb').read(); obj=json.loads(raw)
-          print('decision=',obj['decision'])
-          print('corpus_fingerprint=',obj['corpus_fingerprint'])
-          print('result_sha256=',hashlib.sha256(raw).hexdigest())
-          assert all(r['roundtrip'] for r in obj['rows'].values())
+          import hashlib,json
+          for p in ('artifacts/a01-synthetic-basis-o0.json','artifacts/a01-o1a-causal-predictor.json'):
+              raw=open(p,'rb').read(); obj=json.loads(raw)
+              print(p,'decision=',obj['decision'])
+              print(p,'corpus_fingerprint=',obj['corpus_fingerprint'])
+              print(p,'result_sha256=',hashlib.sha256(raw).hexdigest())
+              assert all(r['roundtrip'] for r in obj['rows'].values())
           PY
       - uses: actions/upload-artifact@v4
         with:
-          name: v030-foundry-a01-synthetic-basis-o0-${{ github.sha }}
-          path: artifacts/a01-synthetic-basis-o0.json
+          name: v030-foundry-a01-research-${{ github.sha }}
+          path: artifacts/*.json
           if-no-files-found: error
           retention-days: 90
