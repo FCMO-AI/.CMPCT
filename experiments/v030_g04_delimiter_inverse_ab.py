@@ -80,6 +80,28 @@ def delimiter_inverse_banded(encoded: bytes, logical_size: int) -> bytes:
     return bytes(out)
 
 
+def _property_check() -> int:
+    """Differently shaped exactness controls before any timing claim."""
+    O = G04.O
+    cases = [
+        (b"", 0),
+        (b"single-member", 0),
+        (b"a,b,c,d", ord(",")),
+        (b",leading,,empty,trailing,", ord(",")),
+        (b"x" * 4096 + b"|" + b"y" * 3 + b"|" + b"z" * 1024, ord("|")),
+        (b"\x00".join(bytes((index,)) * (index % 17) for index in range(1, 128)), 0),
+    ]
+    checked = 0
+    for raw, delimiter in cases:
+        encoded = O.delimiter_forward(raw, delimiter)
+        control = O.delimiter_inverse(encoded, len(raw))
+        candidate = delimiter_inverse_banded(encoded, len(raw))
+        if control != raw or candidate != raw or candidate != control:
+            raise RuntimeError("delimiter inverse property-control mismatch")
+        checked += 1
+    return checked
+
+
 def _assert_nested_g04_selected(built: dict) -> None:
     # Canonical r25 is the outer archive grammar. G04 is a nested physical-record strategy, so checking the outer
     # archive magic against G04.MAG is category-wrong and previously caused an infrastructure false negative.
@@ -93,6 +115,7 @@ def _assert_nested_g04_selected(built: dict) -> None:
 def run(work_root: Path) -> dict:
     shutil.rmtree(work_root, ignore_errors=True)
     work_root.mkdir(parents=True)
+    property_cases_checked = _property_check()
     source = PERF._build_corpora(work_root / "corpus")[TARGET]
     source_tree = PRODUCT.treehash(source)
     archive = work_root / "ml.cmpct"
@@ -127,6 +150,7 @@ def run(work_root: Path) -> dict:
         "schema": "cmpct-v030-g04-delimiter-inverse-ab-v1",
         "target": "/".join(TARGET),
         "release_credit": False,
+        "property_cases_checked": property_cases_checked,
         "archive_bytes": archive.stat().st_size,
         "source_tree_sha256": source_tree,
         "shipping_build": built,
@@ -154,7 +178,7 @@ def main() -> None:
     result = run(args.work_root)
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8")
-    print(json.dumps({k: result[k] for k in ("control_median_s", "candidate_median_s", "candidate_ratio", "speedup_fraction", "promotion_signal", "release_credit")}, indent=2))
+    print(json.dumps({k: result[k] for k in ("property_cases_checked", "control_median_s", "candidate_median_s", "candidate_ratio", "speedup_fraction", "promotion_signal", "release_credit")}, indent=2))
 
 
 if __name__ == "__main__":
