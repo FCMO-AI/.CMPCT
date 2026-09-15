@@ -50,12 +50,12 @@ All decoder-visible bytes remain charged. Search/discovery wall time for constru
 
 Return:
 
-- `CAUSAL_PREDICTOR_SEED` iff every material latent-positive family is predicted LATENT, every non-material family is predicted OBSERVED/MULTIMODAL except at most one false positive, independent random is non-material, and all roundtrips pass;
+- `CAUSAL_PREDICTOR_SEED` iff every material latent-positive family is predicted LATENT, every non-material family is predicted OBSERVED/MULTIMODAL except at most one false positive, **independent random is non-material**, and all roundtrips pass;
 - `PREDICTOR_FALSE_NEGATIVE` if any material latent-positive family is not predicted LATENT;
-- `PREDICTOR_FALSE_POSITIVE` if more than one non-material family is predicted LATENT;
+- `PREDICTOR_FALSE_POSITIVE` if more than one non-material family is predicted LATENT **or if `independent_random` itself becomes material under the synthetic representation**;
 - `INSTRUMENT_INVALID` on reconstruction/accounting failure.
 
-No family-specific override exists.
+No positive family-specific override exists. The explicit hostile-random branch above was added by pre-execution adversarial review while the first workflow job was still queued and had executed zero steps; no result-bearing output existed. It closes an otherwise uncovered `CAUSAL_PREDICTOR_SEED` path without changing any predictor or corpus parameter.
 
 ## Disproof / quality-ratchet
 
