@@ -40,7 +40,9 @@ def _assert_identity(source: Path, tmp_path: Path, stem: str) -> None:
     assert new_stats["pre_overlay_graph_bytes"] == old_stats["pre_overlay_graph_bytes"]
     assert new_stats["overlay_bytes"] == old_stats["overlay_bytes"]
     assert new_stats["attempt5_graph_build_count"] == 1
-    assert new_stats["shared_analysis_mode"] == "attempt5-graph-built-once"
+    # The R3 convergence seam deliberately adds a diagnostic suffix while preserving the
+    # same single-build invariant. Lock the invariant, not an obsolete telemetry spelling.
+    assert new_stats["shared_analysis_mode"].startswith("attempt5-graph-built-once")
     assert new_stats["selection_extra_payload_write_bytes"] == 0
     assert new_stats["publication_identity_check"] == "streamed-sha256"
     assert new_stats["max_selected_member_read_amplification"] <= shared.MAX_MEMBER_READ_AMP
