@@ -14,11 +14,39 @@ _REVIEWED_WRAPPER = Path(__file__).with_name("entropygraph_v030_canonical_final_
 _REVIEWED_SOURCE = _REVIEWED_WRAPPER.read_bytes()
 exec(compile(_REVIEWED_SOURCE, str(_REVIEWED_WRAPPER), "exec"), globals(), globals())
 
-# The reviewed bulk-v1 inverse is retained as the fallback/oracle. Its dense-prefix optimization is excellent when
-# every segment is non-empty, but one empty/short segment collapses min_len and sends the entire ragged rectangle
+# The reviewed bulk-v1 inverse is retained as the semantic oracle. Its dense-prefix optimization is excellent when
+# every segment is non-empty, but one empty/short segment collapses min_len and sends the remaining ragged rectangle
 # through the historical Python cell loop. The banded arm bulk-copies equal-active-row intervals instead. A cheap
-# structural cost guard keeps bulk-v1 when many unique lengths would create too many Python slice operations.
+# structural cost guard keeps the reviewed reconstruction shape when many unique lengths would create too many
+# Python slice operations.
 _BULK_V1_DELIMITER_INVERSE = _bulk_delimiter_inverse
+
+
+def _bulk_from_parsed(delimiter: int, lengths: list[int], body: bytes) -> bytes:
+    """Reviewed bulk-v1 reconstruction using an already validated descriptor parse."""
+    count = len(lengths)
+    parts = [bytearray(length) for length in lengths]
+    body_offset = 0
+    min_len = min(lengths, default=0)
+    if min_len:
+        dense_bytes = count * min_len
+        dense = body[:dense_bytes]
+        if len(dense) != dense_bytes:
+            raise RuntimeError("Geometry overlay delimiter dense-prefix underflow")
+        for index, part in enumerate(parts):
+            part[:min_len] = dense[index::count]
+        body_offset = dense_bytes
+    max_len = max(lengths, default=0)
+    for column in range(min_len, max_len):
+        for index, length in enumerate(lengths):
+            if column < length:
+                if body_offset >= len(body):
+                    raise RuntimeError("Geometry overlay delimiter body underflow")
+                parts[index][column] = body[body_offset]
+                body_offset += 1
+    if body_offset != len(body):
+        raise RuntimeError("Geometry overlay delimiter trailing body")
+    return bytes([delimiter]).join(bytes(part) for part in parts)
 
 
 def _banded_delimiter_inverse(encoded: bytes, logical_size: int) -> bytes:
@@ -57,11 +85,10 @@ def _banded_delimiter_inverse(encoded: bytes, logical_size: int) -> bytes:
     active_counts = [sum(length >= end for length in lengths) for end in ends if end > 0]
     # Banded work pays one full length scan per distinct positive endpoint plus one strided assignment per active
     # row/band. Require a conservative >=4x reduction in Python-level operations versus the bulk-v1 ragged cell
-    # loop; otherwise preserve the reviewed implementation. The fallback re-parses only on shapes for which this
-    # arm explicitly declines promotion, keeping worst-case behavior bounded and semantically independent.
+    # loop; otherwise reconstruct from the already parsed descriptor with the reviewed bulk-v1 algorithm.
     band_python_ops = len(active_counts) * count + sum(active_counts)
     if cell_scans < 64 or band_python_ops * 4 > cell_scans:
-        return _BULK_V1_DELIMITER_INVERSE(encoded, logical_size)
+        return _bulk_from_parsed(delimiter, lengths, body)
 
     starts: list[int] = []
     cursor = 0
@@ -100,4 +127,4 @@ if getattr(POLICY.R.G04, "O", None) is not None:
     POLICY.R.G04.O.delimiter_inverse = _banded_delimiter_inverse
 
 DELIMITER_INVERSE_IMPLEMENTATION = "guarded-banded-v2"
-DELIMITER_INVERSE_FALLBACK = "bulk-rectangular-prefix-v1"
+DELIMITER_INVERSE_FALLBACK = "bulk-rectangular-prefix-v1-parsed"
