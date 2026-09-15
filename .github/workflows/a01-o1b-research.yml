@@ -1,0 +1,36 @@
+name: A01 O1b strong-control research
+on:
+  pull_request:
+    branches: [agent/v030-authoritative-integration]
+    paths:
+      - docs/v030-rnd/A01_O1B_STRONG_CONTROL_PREREG.md
+      - docs/v030-rnd/instruments/a01_o1b_strong_control.py
+      - .github/workflows/a01-o1b-research.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  oracle:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.12'}
+      - name: Execute frozen O1b
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts
+          python docs/v030-rnd/instruments/a01_o1b_strong_control.py | tee artifacts/a01-o1b.json
+          python - <<'PY'
+          import hashlib,json
+          p='artifacts/a01-o1b.json'; raw=open(p,'rb').read(); o=json.loads(raw)
+          print('decision=',o['decision']); print('corpus_fingerprint=',o['corpus_fingerprint']); print('result_sha256=',hashlib.sha256(raw).hexdigest())
+          assert all(r['roundtrip'] for r in o['rows'].values())
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: a01-o1b-${{ github.sha }}
+          path: artifacts/a01-o1b.json
+          if-no-files-found: error
+          retention-days: 90
