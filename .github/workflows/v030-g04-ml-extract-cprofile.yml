@@ -27,7 +27,7 @@ env:
 jobs:
   profile:
     runs-on: ubuntu-24.04
-    timeout-minutes: 25
+    timeout-minutes: 65
     steps:
       - uses: actions/checkout@v6
         with:
@@ -56,10 +56,13 @@ jobs:
         continue-on-error: true
         run: |
           mkdir -p benchmark-artifacts
-          # Keep the diagnostic inside the job budget so checkpoint validation/upload can still run.
-          # SIGINT gives Python a chance to flush; the script already atomically rewrites its JSON
-          # checkpoint after every completed stage. A timeout remains a failed diagnostic, not a win.
-          timeout --signal=INT --kill-after=30s 15m \
+          # Run 7 proved the previous 15-minute envelope was below the cost of constructing the
+          # exact shipping ML archive: the preserved checkpoint stopped at shipping_build_started.
+          # This is a one-shot diagnostic of extraction ownership, so allow the exact build to
+          # finish while still reserving job time for checkpoint validation/upload. SIGINT gives
+          # Python a chance to flush the latest atomic checkpoint. A timeout remains a failed
+          # diagnostic and never becomes release evidence.
+          timeout --signal=INT --kill-after=30s 52m \
             python benchmarks/v030_g04_ml_extract_cprofile.py \
               --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-g04-ml-extract-cprofile-work" \
               --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-g04-ml-extract-cprofile.json"
