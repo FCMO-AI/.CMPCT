@@ -124,6 +124,14 @@ Credit remains fail-closed: mint or refresh strict receipts only if the full nat
 
 No archive byte, product implementation, selector rule, benchmark corpus, comparator setting, threshold, timing boundary, locality ceiling, integrity/recovery rule, platform requirement, version or release score changes in this request.
 
+### Post-release-lock native assertion revalidation request — 2026-09-15
+
+The current release manifest now requires `implicit_v4_native_parity`, `implicit_v4_recovery_green`, and `r24_fallback_native_verify_green` as explicit native-r25 receipt facts. The branch head `3865c809fe708caa1b43f14c7c0c69e35b2ee008` correctly taught the native-authority workflow that a release-lock mutation is itself a native-authority input, but the persisted `native-r25.json` still predates these mandatory receipt fields and binds historical fingerprint `e617b854...`.
+
+This coordination-only mutation is outside the release fingerprint and deliberately re-admits the result-bearing native-authority and ZIP-portability lanes without changing product semantics. The falsifier is exact: if either substantive matrix fails, the emitted fingerprints disagree, or the new native evidence cannot independently support all three newly normative facts, no receipt may be refreshed and T01 remains `CLAIMED`. Classifier-only success is not evidence.
+
+No archive bytes, parser semantics, selector policy, benchmark corpus, thresholds, locality/recovery bounds, Android requirement, version, or release score change here.
+
 ## Current continuation rule
 
 Work directly on the authoritative branch. Preserve useful earlier implementation/evidence provenance where it still applies, but rerun every normative native/platform receipt on the final reconciled fingerprint. Historical or pre-fingerprint greens prove mechanisms only.
