@@ -8,6 +8,13 @@ on:
       - benchmarks/v030_foundry_a01_synthetic_basis_o0.py
       - docs/v030-rnd/A01_SYNTHETIC_BASIS_O0_PREREG.md
       - .github/workflows/v030-foundry-a01-synthetic-basis-o0.yml
+  pull_request:
+    branches:
+      - agent/v030-authoritative-integration
+    paths:
+      - benchmarks/v030_foundry_a01_synthetic_basis_o0.py
+      - docs/v030-rnd/A01_SYNTHETIC_BASIS_O0_PREREG.md
+      - .github/workflows/v030-foundry-a01-synthetic-basis-o0.yml
   workflow_dispatch:
 
 permissions:
