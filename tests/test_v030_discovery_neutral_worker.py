@@ -14,10 +14,19 @@ def test_canonical_shared_clone_uses_private_discovery_worker_only():
     from experiments import entropygraph_v030_discovery_neutral_worker as worker
     from experiments import entropygraph_v030_profile_isolation as isolation
 
-    assert isolation.SHARED.V029_SCHED is worker
+    assert isolation.SHARED.V030_SCHED is worker
     assert historical is not worker
     assert historical._worker is not worker._worker
     assert historical.ACCEPTED_ENGINE == worker.ACCEPTED_ENGINE
+
+
+def test_shared_candidate_builder_dispatches_through_r3_worker(monkeypatch, tmp_path):
+    from experiments import entropygraph_v030_discovery_neutral_worker as worker
+    from experiments import entropygraph_v030_shared_portfolio as shared
+
+    assert shared.V030_SCHED is worker
+    assert shared.CHILD_RESULT_TIMEOUT_S == worker.CHILD_RESULT_TIMEOUT_S
+    assert shared.V029_SCHED is not worker
 
 
 def test_attempt5_worker_neutralizes_and_restores_discovery_source(monkeypatch, tmp_path):
