@@ -51,28 +51,54 @@ jobs:
           cargo build --manifest-path native/preflate-bridge/Cargo.toml --release
       - name: Compile profiler
         run: python -m py_compile benchmarks/v030_g04_ml_extract_cprofile.py
-      - name: Profile shipping ML extraction
+      - name: Profile shipping ML extraction with bounded diagnostic budget
+        id: profile
+        continue-on-error: true
         run: |
           mkdir -p benchmark-artifacts
-          python benchmarks/v030_g04_ml_extract_cprofile.py \
-            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-g04-ml-extract-cprofile-work" \
-            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-g04-ml-extract-cprofile.json"
-      - name: Validate research-only profile receipt
+          # Keep the diagnostic inside the job budget so checkpoint validation/upload can still run.
+          # SIGINT gives Python a chance to flush; the script already atomically rewrites its JSON
+          # checkpoint after every completed stage. A timeout remains a failed diagnostic, not a win.
+          timeout --signal=INT --kill-after=30s 15m \
+            python benchmarks/v030_g04_ml_extract_cprofile.py \
+              --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-g04-ml-extract-cprofile-work" \
+              --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-g04-ml-extract-cprofile.json"
+      - name: Validate profile result or non-credit progress checkpoint
+        if: always()
         run: |
           python - <<'PY'
           import hashlib, json, os
           from pathlib import Path
-          p=Path('benchmark-artifacts/v030-g04-ml-extract-cprofile.json'); d=json.loads(p.read_text())
-          assert d['schema']=='cmpct-v030-g04-ml-extract-cprofile-v2'
-          assert d['target']=='neutral_hostile_v1/09_ml_artifacts'
-          assert d['release_credit'] is False
-          assert d['top_by_self'] and d['top_by_cumulative']
-          census=d['redundant_direct_hash_census']
-          assert int(census['digest_equivalent_full_record_bytes']) <= int(census['full_record_direct_bytes']) <= int(census['direct_node_bytes'])
-          receipt={'schema':'cmpct-v030-g04-ml-extract-cprofile-receipt-v2','source_commit':os.environ['EVIDENCE_HEAD'],'scientific_data_sha256':hashlib.sha256(p.read_bytes()).hexdigest(),'release_credit':False}
+          p=Path('benchmark-artifacts/v030-g04-ml-extract-cprofile.json')
+          if not p.exists():
+              raise RuntimeError('profiler produced neither final result nor progress checkpoint')
+          d=json.loads(p.read_text())
+          completed = d.get('schema') == 'cmpct-v030-g04-ml-extract-cprofile-v2'
+          if completed:
+              assert d['target']=='neutral_hostile_v1/09_ml_artifacts'
+              assert d['release_credit'] is False
+              assert d['top_by_self'] and d['top_by_cumulative']
+              census=d['redundant_direct_hash_census']
+              assert int(census['digest_equivalent_full_record_bytes']) <= int(census['full_record_direct_bytes']) <= int(census['direct_node_bytes'])
+          else:
+              assert d['schema']=='cmpct-v030-g04-ml-extract-cprofile-progress-v1'
+              assert d['status']=='IN_PROGRESS'
+              assert d['target']=='neutral_hostile_v1/09_ml_artifacts'
+              assert d['release_credit'] is False
+          receipt={
+              'schema':'cmpct-v030-g04-ml-extract-cprofile-receipt-v3',
+              'source_commit':os.environ['EVIDENCE_HEAD'],
+              'scientific_data_sha256':hashlib.sha256(p.read_bytes()).hexdigest(),
+              'completed':completed,
+              'profile_step_outcome':os.environ.get('PROFILE_OUTCOME','unknown'),
+              'release_credit':False,
+          }
           Path('benchmark-artifacts/v030-g04-ml-extract-cprofile-receipt.json').write_text(json.dumps(receipt,indent=2)+'\n')
           PY
+        env:
+          PROFILE_OUTCOME: ${{ steps.profile.outcome }}
       - name: CI topology self-check
+        if: always()
         run: python tools/check_ci_topology.py .github/workflows/v030-g04-ml-extract-cprofile.yml
       - name: Upload profile evidence
         if: always()
@@ -84,5 +110,10 @@ jobs:
             benchmark-artifacts/v030-g04-ml-extract-cprofile-receipt.json
           if-no-files-found: error
           retention-days: 90
+      - name: Preserve diagnostic failure after evidence upload
+        if: always() && steps.profile.outcome != 'success'
+        run: |
+          echo "Profiler did not complete successfully; checkpoint artifact was preserved for routing." >&2
+          exit 1
 
 # Diagnostic only. Profiled timings include profiler overhead and cannot satisfy release-performance gates.
