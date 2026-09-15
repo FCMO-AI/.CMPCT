@@ -92,7 +92,10 @@ jobs:
           PY
 
       - name: CI topology self-check
-        run: python tools/ci_topology_selfcheck.py --workflow .github/workflows/v030-discovery-r3-product-ab.yml
+        # The repository-wide checker is the current topology authority. The historical
+        # ci_topology_selfcheck.py helper no longer exists, so calling it turns valid product
+        # evidence into an infrastructure false negative after the expensive A/B has completed.
+        run: python tools/check_ci_topology.py .github/workflows/v030-discovery-r3-product-ab.yml
 
       - name: Public-surface guard
         run: python tools/public_surface_guard.py
