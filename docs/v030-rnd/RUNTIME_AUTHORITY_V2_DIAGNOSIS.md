@@ -18,18 +18,28 @@ Runtime debt is concentrated in two rows:
 
 All three measured rows remained byte-nonregressing.
 
-## Diagnostic contamination found
+## Existing extraction decomposition narrows the owner
 
-`benchmarks/v030_g04_ml_extract_cprofile.py` wraps the shipping `PRODUCT.build()` and `PRODUCT.extract()` route in the private `PRODUCT.C._revision25_profile_context()`. The authoritative fresh-process worker does not do this; the shipping product owns its internal profile context. The diagnostic previously failed to get past `shipping_build_started` within a 15-minute envelope even though authority-v2 builds the same ML product in roughly 38 seconds. That mismatch is strong evidence that the profiler perturbs the route it is supposed to diagnose.
+The preserved G04 extraction-cost receipt from run `34823485696`, artifact `10338664126`, is research/oracle evidence on the same canonical ML workload. Its three fresh-process medians were: strong verify `0.14683 s`, verified staging `0.14828 s`, full extract `0.16061 s`. Thus strong verification / authenticated G04 decode accounts for about `91.4%` of full extraction wall time in that receipt; physical staging adds only about `1.46 ms`, and the remaining restoration/publication layer about `12.33 ms`.
 
-Do **not** optimize product code from the profiler's timeout/checkpoint. First rerun ownership profiling through the unwrapped shipping front door. The diagnostic remains research/evidence-enablement only; cProfile wall time itself receives no release credit.
+That independently explains why verified-restore syscall fusion was correctly retired: the measured restore layer is too small to close an approximately `90 ms` v0.30-vs-v0.29 ML extraction gap. The next extraction intervention belongs inside authenticated G04 verification/reconstruction unless newer evidence contradicts this decomposition.
 
-## Next falsifiable action
+## Profiler route correction to test, not assume
 
-1. Remove the external private r25 context from the ML extraction profiler while leaving the shipping product unchanged.
-2. Require the diagnostic archive to remain G04 and strong-verify to the exact source tree before profiling.
-3. Profile exactly one `PRODUCT.extract()` after one unprofiled warm extraction.
-4. Use function-level ownership to choose the smallest product change capable of closing the `~2.03x` ML extraction debt without weakening authentication, verified restoration, transactionality, path semantics, or output budgets.
-5. Separately attribute the ML creation delta (`~10.6 s`) from shipping build stats; do not mix that investigation with extraction unless the same owner is demonstrated.
+The older `benchmarks/v030_g04_ml_extract_cprofile.py` wraps shipping `PRODUCT.build()` / `PRODUCT.extract()` calls in the private `PRODUCT.C._revision25_profile_context()`, while the authoritative fresh-process worker calls the shipping product front door directly. Its preserved 15-minute checkpoint never advanced beyond `shipping_build_started`, whereas authority-v2 builds ML in tens of seconds. That discrepancy proves the old profiler does not currently provide extraction ownership evidence; it does **not by itself prove** which setup detail caused the stall.
+
+A separate shipping-route profiler now exists specifically to test the unwrapped product front door while preserving exact G04 selection and strong tree identity. Until it lands a valid profile, treat function-level extraction ownership below the strong-verify layer as unknown. cProfile wall time itself receives no release credit.
+
+## ML creation owner from authority build stats
+
+The same authority receipt also narrows creation without a new timing boundary. The ML shared v0.29/attempt5 candidate build is about `26.46 s`, essentially the same scale as the v0.29 product's `~26.5 s`; complete v0.30 creation is about `37.2–37.6 s`. The extra `~10.7 s` is therefore downstream of the shared base candidate and associated with the G04 overlay/tournament/publication path, not the inherited v0.29 base build.
+
+The selected G04 overlay transforms 9 physical records (8 lane + 1 delimiter) and buys about `161.8 KiB`. Any creation optimization must preserve that exact byte result/locality or prove a stronger complete-product trade; skipping G04 wholesale is not rehabilitation.
+
+## Next falsifiable actions
+
+1. Harvest the shipping-route ML extraction profile and use function-level ownership to attack the authenticated verify/reconstruction layer; do not reopen restore-syscall fusion.
+2. Attribute the `~10.7 s` post-shared-build ML creation cost inside G04 audition/overlay/publication before changing admission or parallelism.
+3. Keep logs extraction independent: its `~1.334x` debt and tiny byte margin make carrying-cost/admission a separate decision, not evidence that an ML fix will transfer.
 
 `runtime-memory-selective` remains open and v0.30 remains merge/release locked.
