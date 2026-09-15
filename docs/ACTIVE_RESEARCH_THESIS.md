@@ -23,15 +23,17 @@ Hostile controls were useful: independent random made synthesis 10.55% worse; a 
 
 This proves possibility in that regime. It does not establish product headroom.
 
-### O1a — no promotion
+### O1a / O1b — no promotion
 
-`docs/v030-rnd/A01_O1A_CAUSAL_PREDICTOR_RESULT.md` preserves raw decision `PREDICTOR_FALSE_NEGATIVE`, but post-run review found an **instrument specification contradiction**: the frozen material label compared synthetic only against the best single observed root while the same preregistration expected multimodal data to be judged against the stronger two-root control.
+`docs/v030-rnd/A01_O1A_CAUSAL_PREDICTOR_RESULT.md` preserves raw O1a decision `PREDICTOR_FALSE_NEGATIVE`, but post-run review found an **instrument specification contradiction**: the frozen material label compared synthetic only against the best single observed root while the same preregistration expected multimodal data to be judged against the stronger two-root control.
 
-The exact hostile ordering was:
+The exact O1a hostile ordering was:
 
 `BEST_TWO_REAL_ROOTS 302,143 B < SYNTHETIC_ROOT 336,541 B < BEST_REAL_ROOT 342,593 B`.
 
-The raw output is preserved and receives no causal-predictor credit. A planned O1b repair was closed before result-bearing execution once stronger inherited evidence was recovered.
+A corrected O1b research PR was then closed once stronger inherited R4 evidence was recovered. Its GitHub-hosted job had already started and completed after closure; `docs/v030-rnd/A01_O1B_POSTCLOSURE_RESULT.md` preserves that output. Raw O1b decision was again **`PREDICTOR_FALSE_NEGATIVE`**. This time a fresh three-cluster family measured synthetic 404,596 B versus a frozen best-two-root portfolio of 409,519 B (-4,923 B / -1.20%), while the low 0.83% consensus statistic predicted multimodal. The deeper lesson is that a two-root cap was not a structurally strongest observed control for three clusters. No threshold was changed and no O1c is authorized.
+
+O1a/O1b receive no causal-predictor or product credit.
 
 ### Decisive inherited R4 evidence
 
@@ -81,6 +83,8 @@ Do not reopen through operator/grid expansion or result-driven relabeling withou
 ## Foundry next-action law
 
 Do **not** immediately invent another named thesis merely to keep Foundry busy. Re-open the Assumption Ledger and current product/evidence landscape, then choose the highest-headroom falsifiable assumption that is not already covered by stronger preserved evidence. A new thesis must pass the initiation gate in `docs/FUNDAMENTAL_RESEARCH_DOCTRINE.md` before expensive work.
+
+A15 (universal reconstruction IR) has only a **candidate initiation audit** on branch `agent/foundry-a15-initiation-audit`; it is not active and has no evidence credit. The cheap next step is semantic projection/inventory, not product code.
 
 ## Forge separation
 
