@@ -127,12 +127,13 @@ SHARED = _clone(
     aliases={G04_SOURCE: G04},
 )
 
-# Transfer v3 and the frozen R3 Builder proved that the historical position-independent discovery source can be
-# removed at the v0.30 attempt-5 child boundary without changing selected bytes or hard product invariants. Keep
-# that accepted scheduler private to the canonical clone; ordinary v0.29/research imports remain untouched.
+# Transfer v3 proved that the historical position-independent discovery source contributes no selected bytes on
+# the complete frozen release-runtime matrix while exporting measurable attempt-5 search cost. Bind the accepted
+# R3 neutralization at the scheduler seam that the shared portfolio actually invokes. The provider scopes the
+# override to the spawned attempt-5 child and restores it in ``finally``; ordinary v0.29/research imports keep
+# their historical worker and discovery source untouched, preserving them as independent byte/evidence oracles.
 DISCOVERY_WORKER = importlib.import_module(DISCOVERY_WORKER_SOURCE)
-SHARED.V030_SCHED = DISCOVERY_WORKER
-SHARED.CHILD_RESULT_TIMEOUT_S = DISCOVERY_WORKER.CHILD_RESULT_TIMEOUT_S
+SHARED.V029_SCHED = DISCOVERY_WORKER
 
 RC = _clone(
     RC_SOURCE,
