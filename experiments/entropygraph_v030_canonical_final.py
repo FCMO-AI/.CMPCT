@@ -65,15 +65,17 @@ def _banded_delimiter_inverse(encoded: bytes, logical_size: int) -> bytes:
 
     lengths: list[int] = []
     logical_members = 0
+    length_counts: dict[int, int] = {}
     for _ in range(count):
         length, pos = O._get_varint(encoded, pos)
         if length > O.MAX_OVERLAY_RECORD or logical_members + length > O.MAX_OVERLAY_RECORD:
             raise RuntimeError("Geometry overlay delimiter length budget")
         lengths.append(length)
         logical_members += length
+        length_counts[length] = length_counts.get(length, 0) + 1
     if logical_members + count - 1 != logical_size:
         raise RuntimeError("Geometry overlay delimiter logical-size mismatch")
-    max_len = max(lengths, default=0)
+    max_len = max(length_counts, default=0)
     cell_scans = count * max_len
     if cell_scans > O.MAX_DELIMITER_CELL_SCANS:
         raise RuntimeError("Geometry overlay delimiter cell-work budget")
@@ -81,11 +83,18 @@ def _banded_delimiter_inverse(encoded: bytes, logical_size: int) -> bytes:
     if len(body) != logical_members:
         raise RuntimeError("Geometry overlay delimiter body-size mismatch")
 
-    ends = sorted(set(lengths))
-    active_counts = [sum(length >= end for length in lengths) for end in ends if end > 0]
+    ends = sorted(length_counts)
+    active = count - length_counts.get(0, 0)
+    active_counts: list[int] = []
+    for end in ends:
+        if end <= 0:
+            continue
+        active_counts.append(active)
+        active -= length_counts[end]
     # Banded work pays one full length scan per distinct positive endpoint plus one strided assignment per active
-    # row/band. Require a conservative >=4x reduction in Python-level operations versus the bulk-v1 ragged cell
-    # loop; otherwise reconstruct from the already parsed descriptor with the reviewed bulk-v1 algorithm.
+    # row/band. Compute the guard from the histogram so a rejected high-cardinality shape does not itself pay the
+    # O(unique_lengths * count) scan we are trying to avoid. Require a conservative >=4x reduction in estimated
+    # Python-level operations versus the bulk-v1 ragged cell loop.
     band_python_ops = len(active_counts) * count + sum(active_counts)
     if cell_scans < 64 or band_python_ops * 4 > cell_scans:
         return _bulk_from_parsed(delimiter, lengths, body)
@@ -107,13 +116,13 @@ def _banded_delimiter_inverse(encoded: bytes, logical_size: int) -> bytes:
         width = end - previous
         if width <= 0:
             continue
-        active = [index for index, length in enumerate(lengths) if length >= end]
-        active_count = len(active)
+        active_indices = [index for index, length in enumerate(lengths) if length >= end]
+        active_count = len(active_indices)
         band_bytes = active_count * width
         band = body[body_offset : body_offset + band_bytes]
         if len(band) != band_bytes:
             raise RuntimeError("Geometry overlay delimiter band underflow")
-        for rank, index in enumerate(active):
+        for rank, index in enumerate(active_indices):
             out[starts[index] + previous : starts[index] + end] = band[rank::active_count]
         body_offset += band_bytes
         previous = end
