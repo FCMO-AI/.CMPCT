@@ -108,10 +108,13 @@ jobs:
           import json
           from pathlib import Path
           p=json.loads(Path('benchmark-artifacts/v030-g04-ml-shipping-extract-profile.json').read_text())
-          assert p['schema']=='cmpct-v030-g04-ml-shipping-extract-profile-v1'
+          assert p['schema']=='cmpct-v030-g04-ml-shipping-extract-profile-v2'
           assert p['release_credit'] is False
-          assert p['diagnostic_route']=='shipping-product-front-door-no-external-r25-context-v1'
+          assert p['diagnostic_route']=='shipping-product-front-door-vs-exact-r24-control-v2'
           assert p['archive_bytes'] > 0 and p['top_by_self'] and p['top_by_cumulative']
+          assert p['r24_control']['archive_bytes'] > 0
+          assert p['r24_control']['unprofiled_extract_median_s'] > 0
+          assert p['shipping_to_r24_extract_ratio'] > 0
           d=json.loads(Path('benchmark-artifacts/v030-g04-delimiter-cost-counterfactual.json').read_text())
           assert d['schema']=='cmpct-v030-g04-delimiter-cost-counterfactual-v1'
           assert d['release_credit'] is False
