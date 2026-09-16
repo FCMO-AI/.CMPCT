@@ -2,10 +2,10 @@ from __future__ import annotations
 
 """Research-only ownership profile for canonical ML extraction through the real shipping front door.
 
-Unlike the older profiler, this instrument does not hold the private revision-25 profile context around
-PRODUCT.build/extract. The product owns its own internal contexts. Construction is evidence setup only;
-only one post-warmup PRODUCT.extract call is cProfile-instrumented. Profiled wall time receives no
-release credit. Exact G04 selection and source/destination tree identity are mandatory.
+The instrument profiles one warm shipping extraction and also measures repeated unprofiled extraction and
+post-extract treehash separately. The latter bridges function ownership to the frozen runtime worker, whose timed
+extract operation includes both engine.extract and the external exact-tree hash. None of these diagnostics earns
+release credit.
 """
 
 import argparse
@@ -14,6 +14,7 @@ import json
 from pathlib import Path
 import pstats
 import shutil
+import statistics
 import time
 
 from benchmarks import v030_release_performance as PERF
@@ -21,6 +22,7 @@ from experiments import entropygraph_v030_release_product as PRODUCT
 from experiments import entropygraph_v030_release_reader as RR
 
 TARGET = ("neutral_hostile_v1", "09_ml_artifacts")
+ROUNDS = 7
 
 
 def run(work: Path) -> dict:
@@ -44,6 +46,23 @@ def run(work: Path) -> dict:
     PRODUCT.extract(archive, warm)
     if PRODUCT.treehash(warm) != source_tree:
         raise RuntimeError("warm extraction identity failure")
+
+    extract_samples: list[float] = []
+    treehash_samples: list[float] = []
+    combined_samples: list[float] = []
+    for round_index in range(ROUNDS):
+        dst = work / f"timed-{round_index}"
+        started = time.perf_counter()
+        PRODUCT.extract(archive, dst)
+        extract_s = time.perf_counter() - started
+        hash_started = time.perf_counter()
+        got = PRODUCT.treehash(dst)
+        treehash_s = time.perf_counter() - hash_started
+        if got != source_tree:
+            raise RuntimeError("timed extraction identity failure")
+        extract_samples.append(extract_s)
+        treehash_samples.append(treehash_s)
+        combined_samples.append(extract_s + treehash_s)
 
     dst = work / "profiled"
     profile = cProfile.Profile()
@@ -73,12 +92,19 @@ def run(work: Path) -> dict:
         "archive_bytes": archive.stat().st_size,
         "source_tree_sha256": source_tree,
         "build_elapsed_s_context_only": build_s,
+        "unprofiled_rounds": ROUNDS,
+        "unprofiled_extract_s": extract_samples,
+        "unprofiled_treehash_s": treehash_samples,
+        "unprofiled_combined_s": combined_samples,
+        "unprofiled_extract_median_s": float(statistics.median(extract_samples)),
+        "unprofiled_treehash_median_s": float(statistics.median(treehash_samples)),
+        "unprofiled_combined_median_s": float(statistics.median(combined_samples)),
         "profiled_extract_wall_s_context_only": profiled_wall_s,
         "profile_total_self_s": total,
         "shipping_build": built,
         "top_by_self": sorted(rows, key=lambda r: r["self_s"], reverse=True)[:60],
         "top_by_cumulative": sorted(rows, key=lambda r: r["cumulative_s"], reverse=True)[:60],
-        "claim_boundary": "Function-ownership diagnostic only; cProfile timing is not release performance evidence.",
+        "claim_boundary": "Function ownership plus extract/treehash phase diagnostic only; no timing here is release performance evidence.",
     }
 
 
@@ -94,6 +120,9 @@ def main() -> None:
         "schema": result["schema"],
         "archive_bytes": result["archive_bytes"],
         "build_elapsed_s_context_only": result["build_elapsed_s_context_only"],
+        "unprofiled_extract_median_s": result["unprofiled_extract_median_s"],
+        "unprofiled_treehash_median_s": result["unprofiled_treehash_median_s"],
+        "unprofiled_combined_median_s": result["unprofiled_combined_median_s"],
         "profiled_extract_wall_s_context_only": result["profiled_extract_wall_s_context_only"],
         "top_by_self": result["top_by_self"][:15],
         "release_credit": False,
