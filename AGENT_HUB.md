@@ -20,7 +20,7 @@ FCMO-authorized agents with organization access can resolve:
 
 - Hub repository: `FCMO-AI/FCMO-Agent-Hub`
 - Canonical universal Core: `standard/CORE.md`
-- Canonical task-gated moral policy: `policy/FCMO_ETHICAL_MORAL_CONSTITUTION_V1.md`
+- Canonical task-gated moral policy: the live Ethical & Moral Constitution v1.0 routed by the Hub entrypoint
 - Ecosystem map: `ecosystem/REPOSITORIES.md`
 - Machine registry: `ecosystem/repositories.json`
 - Living Commons: `commons/LIVING_COMMONS.md`
