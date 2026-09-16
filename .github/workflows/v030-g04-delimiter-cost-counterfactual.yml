@@ -1,0 +1,39 @@
+name: v0.30 G04 delimiter-cost counterfactual
+
+on:
+  push:
+    branches: [agent/v030-authoritative-integration]
+    paths:
+      - 'benchmarks/v030_g04_delimiter_cost_counterfactual.py'
+      - '.github/workflows/v030-g04-delimiter-cost-counterfactual.yml'
+  pull_request:
+    paths:
+      - 'benchmarks/v030_g04_delimiter_cost_counterfactual.py'
+      - '.github/workflows/v030-g04-delimiter-cost-counterfactual.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  counterfactual:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Run exact-head counterfactual
+        run: |
+          mkdir -p artifacts/v030-g04-delimiter-cost
+          python -m benchmarks.v030_g04_delimiter_cost_counterfactual \
+            --json-out artifacts/v030-g04-delimiter-cost/result.json
+      - name: Preserve result
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: v030-g04-delimiter-cost-${{ github.sha }}
+          path: artifacts/v030-g04-delimiter-cost/
+          if-no-files-found: error
+          retention-days: 30
