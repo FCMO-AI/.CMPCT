@@ -23,6 +23,7 @@ shape-check before metadata", not removed; DGO1 reconstruction remains exact and
 """
 from __future__ import annotations
 
+from array import array
 import os
 from pathlib import Path, PurePosixPath
 import shutil
@@ -90,22 +91,23 @@ def release_single_buffer_delimiter_inverse(encoded: bytes, logical_size: int) -
     # The row partition is invariant across columns.  The earlier promoted implementation rediscovered these
     # equal-length runs inside every column, turning a tokenizer-like record with ~53k segments and only a handful
     # of runs into roughly one million redundant Python length/index comparisons.  Compute the exact same ordered
-    # partition once, then only test whether each run is active for the current column.  This changes neither the
-    # descriptor nor scatter geometry and preserves the existing cell-work bound.
-    runs: list[tuple[int, int, int]] = []
-    first = 0
-    while first < count:
-        length = lengths[first]
-        end = first + 1
-        while end < count and lengths[end] == length:
-            end += 1
-        runs.append((first, end, length))
-        first = end
+    # partition once, then only test whether each run is active for the current column.  Store only run starts in
+    # a compact unsigned-int array: hostile descriptors may contain tens of thousands of one-row runs, and Python
+    # tuple/int metadata would otherwise export several MiB of avoidable reader RSS for a speed optimization.
+    run_starts = array("I", [0])
+    for index in range(1, count):
+        if lengths[index] != lengths[index - 1]:
+            run_starts.append(index)
+    run_starts.append(count)
 
     body_cursor = 0
     active_cells = 0
+    run_count = len(run_starts) - 1
     for column in range(max_len):
-        for first, end, length in runs:
+        for run_index in range(run_count):
+            first = run_starts[run_index]
+            end = run_starts[run_index + 1]
+            length = lengths[first]
             if length <= column:
                 continue
             run_len = end - first
