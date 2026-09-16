@@ -1,6 +1,9 @@
+# ci-lane: deep
 name: v0.30 G04 delimiter-cost counterfactual
 
 on:
+  # The long-lived integration PR has a very broad accumulated diff; PR path matching would duplicate this
+  # one-shot research control on every later commit. The branch-local push is the narrow first-run route.
   push:
     branches: [agent/v030-authoritative-integration]
     paths:
@@ -12,7 +15,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: v030-g04-delimiter-cost-${{ github.ref }}
+  group: v030-g04-delimiter-cost-${{ github.event_name }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
