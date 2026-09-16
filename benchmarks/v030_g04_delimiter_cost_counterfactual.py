@@ -44,13 +44,14 @@ def run(work: Path) -> dict:
     baseline_transforms = _selected_transforms(baseline_build)
     if "delimiter" not in baseline_transforms: raise RuntimeError("exact-head ML shipping route no longer selects DGO1; counterfactual is stale")
 
-    # PRODUCT.build delegates r25 construction through the preserved base module. Its process-pool worker imports a
-    # fresh release-product module in each child, so a parent-only monkeypatch of the canonical audition helper cannot
-    # disable DGO1 there. Keep this research control in the parent process by temporarily rejecting G04 process-pool
-    # eligibility, then replace the one canonical semantic audition helper. Build wall is diagnostic-only below, so
-    # changing scheduler topology cannot earn speed credit; archive bytes/extraction remain the causal measurements.
+    # ML bypasses the base product builder after shared source preflight and enters CANONICAL.build directly. Its G04
+    # process-pool worker imports a fresh canonical/release-product module in each child, so a parent-only monkeypatch
+    # of the semantic audition helper cannot disable DGO1 there. Keep this research control at the actual canonical
+    # worker owner by temporarily rejecting CANONICAL's process-pool eligibility, then replace the one canonical
+    # semantic audition helper. Build wall is diagnostic-only below because scheduler topology intentionally differs;
+    # exact archive bytes and extraction are the causal measurements.
     original_audition = CANONICAL.SHARED.G._audition_record
-    original_process_pool_eligible = PRODUCT._BASE_IMPL._g04_process_pool_eligible
+    original_process_pool_eligible = CANONICAL._g04_process_pool_eligible
     def no_delimiter_audition(record_id, record, users):
         raw, transform, stats = original_audition(record_id, record, users)
         if transform != "delimiter":
@@ -59,12 +60,12 @@ def run(work: Path) -> dict:
 
     candidate_archive = work / "no-delimiter.cmpct"
     try:
-        PRODUCT._BASE_IMPL._g04_process_pool_eligible = lambda _graph_path, _graph_records: False
+        CANONICAL._g04_process_pool_eligible = lambda _graph_path, _graph_records: False
         CANONICAL.SHARED.G._audition_record = no_delimiter_audition
         started = time.perf_counter(); candidate_build = PRODUCT.build(source, candidate_archive); candidate_build_s = time.perf_counter() - started
     finally:
         CANONICAL.SHARED.G._audition_record = original_audition
-        PRODUCT._BASE_IMPL._g04_process_pool_eligible = original_process_pool_eligible
+        CANONICAL._g04_process_pool_eligible = original_process_pool_eligible
     candidate_verify = PRODUCT.strong_verify(candidate_archive)
     if not candidate_verify.get("ok") or candidate_verify.get("tree_sha256") != source_tree: raise RuntimeError("no-delimiter candidate failed exact verification")
     candidate_transforms = _selected_transforms(candidate_build)
@@ -82,13 +83,13 @@ def run(work: Path) -> dict:
     baseline_bytes = baseline_archive.stat().st_size; candidate_bytes = candidate_archive.stat().st_size
     baseline_median = float(statistics.median(baseline_samples)); banded_median = float(statistics.median(banded_samples)); candidate_median = float(statistics.median(candidate_samples))
     return {
-        "schema":"cmpct-v030-g04-delimiter-cost-counterfactual-v1","controls_version":4,"release_credit":False,"target":"/".join(TARGET),"source_tree_sha256":source_tree,"rounds":ROUNDS,
+        "schema":"cmpct-v030-g04-delimiter-cost-counterfactual-v1","controls_version":5,"release_credit":False,"target":"/".join(TARGET),"source_tree_sha256":source_tree,"rounds":ROUNDS,
         "fresh_process_import_rss_kib_context_only":import_rss,"fresh_process_import_rss_ratio_context_only":import_rss["v030_release_product"]/import_rss["v029_release"],
         "baseline":{"archive_bytes":baseline_bytes,"build_wall_s_context_only":baseline_build_s,"selected_transforms":baseline_transforms,"extract_s":baseline_samples,"median_extract_s":baseline_median},
         "banded_same_archive_bytes":{"archive_bytes":baseline_bytes,"inverse":"guarded-banded-v2","extract_s":banded_samples,"median_extract_s":banded_median,"median_extract_ratio_vs_shipping":banded_median/baseline_median,"median_extract_speedup_vs_shipping":baseline_median/banded_median},
         "no_delimiter":{"archive_bytes":candidate_bytes,"build_wall_s_context_only":candidate_build_s,"selected_transforms":candidate_transforms,"extract_s":candidate_samples,"median_extract_s":candidate_median},
         "no_delimiter_delta":{"archive_bytes":candidate_bytes-baseline_bytes,"archive_pct":(candidate_bytes/baseline_bytes-1.0)*100.0,"build_wall_s_context_only":candidate_build_s-baseline_build_s,"build_ratio_context_only":candidate_build_s/baseline_build_s,"median_extract_s":candidate_median-baseline_median,"median_extract_ratio":candidate_median/baseline_median,"median_extract_speedup":baseline_median/candidate_median},
-        "claim_boundary":"Research controls only: same-source shipping, same-byte reviewed inverse swap, and no-DGO1 rebuild. The no-DGO1 rebuild forces parent-process audition only so the research monkeypatch cannot be bypassed by fresh process imports. No release threshold, evaluator, grammar, or comparator is changed. Build wall and import RSS are diagnostic context, not release credit."
+        "claim_boundary":"Research controls only: same-source shipping, same-byte reviewed inverse swap, and no-DGO1 rebuild. The no-DGO1 rebuild forces parent-process audition at CANONICAL's actual G04 worker owner so the research monkeypatch cannot be bypassed by fresh process imports. No release threshold, evaluator, grammar, or comparator is changed. Build wall and import RSS are diagnostic context, not release credit."
     }
 
 def main() -> None:
