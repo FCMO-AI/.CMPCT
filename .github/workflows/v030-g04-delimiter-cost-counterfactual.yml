@@ -51,11 +51,13 @@ jobs:
           }
           (root/'manifest.json').write_text(json.dumps(manifest, indent=2)+'\n', encoding='utf-8')
           PY
-      - name: Preserve result
+      - name: Preserve decision evidence only
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: v030-g04-delimiter-cost-${{ github.sha }}
-          path: artifacts/v030-g04-delimiter-cost/
+          path: |
+            artifacts/v030-g04-delimiter-cost/result.json
+            artifacts/v030-g04-delimiter-cost/manifest.json
           if-no-files-found: error
           retention-days: 30
