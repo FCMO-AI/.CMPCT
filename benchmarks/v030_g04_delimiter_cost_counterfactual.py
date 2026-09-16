@@ -20,7 +20,6 @@ import time
 
 from benchmarks import v030_release_performance as PERF
 from experiments import entropygraph_v030_canonical_final as CANONICAL
-from experiments import entropygraph_v030_geometry_overlay as G04
 from experiments import entropygraph_v030_release_product as PRODUCT
 
 TARGET = ("neutral_hostile_v1", "09_ml_artifacts")
@@ -80,15 +79,16 @@ def run(work: Path) -> dict:
     if "delimiter" not in baseline_transforms:
         raise RuntimeError("exact-head ML shipping route no longer selects DGO1; counterfactual is stale")
 
-    original_rank = G04._delimiter_rank
+    shipping_g04 = CANONICAL.SHARED.G
+    original_rank = shipping_g04._delimiter_rank
     candidate_archive = work / "no-delimiter.cmpct"
     try:
-        G04._delimiter_rank = lambda _raw: []
+        shipping_g04._delimiter_rank = lambda _raw: []
         started = time.perf_counter()
         candidate_build = PRODUCT.build(source, candidate_archive)
         candidate_build_s = time.perf_counter() - started
     finally:
-        G04._delimiter_rank = original_rank
+        shipping_g04._delimiter_rank = original_rank
     candidate_verify = PRODUCT.strong_verify(candidate_archive)
     if not candidate_verify.get("ok") or candidate_verify.get("tree_sha256") != source_tree:
         raise RuntimeError("no-delimiter candidate failed exact verification")
@@ -97,12 +97,12 @@ def run(work: Path) -> dict:
         raise RuntimeError("delimiter transform survived disabled delimiter audition")
 
     baseline_samples = _timed_extracts(baseline_archive, source_tree, work, "baseline")
-    original_inverse = G04.O.delimiter_inverse
+    original_inverse = shipping_g04.O.delimiter_inverse
     try:
-        G04.O.delimiter_inverse = CANONICAL._banded_delimiter_inverse
+        shipping_g04.O.delimiter_inverse = CANONICAL._banded_delimiter_inverse
         banded_samples = _timed_extracts(baseline_archive, source_tree, work, "banded-same-bytes")
     finally:
-        G04.O.delimiter_inverse = original_inverse
+        shipping_g04.O.delimiter_inverse = original_inverse
     candidate_samples = _timed_extracts(candidate_archive, source_tree, work, "candidate")
 
     baseline_bytes = baseline_archive.stat().st_size
