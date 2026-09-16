@@ -1,0 +1,70 @@
+name: v030 G04 delimiter cost counterfactual
+
+on:
+  pull_request:
+    paths:
+      - 'benchmarks/v030_g04_delimiter_cost_counterfactual.py'
+      - 'experiments/entropygraph_v030_geometry_overlay.py'
+      - 'experiments/entropygraph_v030_verified_restore.py'
+      - 'experiments/entropygraph_v030_release_product.py'
+      - 'experiments/entropygraph_v030_release_product_base.py'
+      - 'experiments/entropygraph_v030_release_reader.py'
+      - '.github/workflows/v030-g04-delimiter-cost-counterfactual.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: v030-g04-delimiter-cost-counterfactual-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+
+jobs:
+  counterfactual:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install benchmark dependencies
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y zstd gcc ffmpeg libsndfile1
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[audio,test]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
+      - name: Compile diagnostic
+        run: python -m py_compile benchmarks/v030_g04_delimiter_cost_counterfactual.py
+      - name: Run same-source causal counterfactual
+        run: |
+          mkdir -p benchmark-artifacts
+          python benchmarks/v030_g04_delimiter_cost_counterfactual.py \
+            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-g04-delimiter-cost-counterfactual-work" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-g04-delimiter-cost-counterfactual.json"
+      - name: Validate non-credit receipt
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          d=json.loads(Path('benchmark-artifacts/v030-g04-delimiter-cost-counterfactual.json').read_text())
+          assert d['schema']=='cmpct-v030-g04-delimiter-cost-counterfactual-v1'
+          assert d['release_credit'] is False
+          assert d['baseline']['archive_bytes'] > 0 and d['no_delimiter']['archive_bytes'] > 0
+          assert 'delimiter' in d['baseline']['selected_transforms']
+          assert 'delimiter' not in d['no_delimiter']['selected_transforms']
+          PY
+      - name: Check workflow topology
+        run: python tools/check_ci_topology.py .github/workflows/v030-g04-delimiter-cost-counterfactual.yml
+      - uses: actions/upload-artifact@v6
+        with:
+          name: v030-g04-delimiter-cost-counterfactual-${{ github.sha }}
+          path: benchmark-artifacts/v030-g04-delimiter-cost-counterfactual.json
+          if-no-files-found: error
+          retention-days: 90
