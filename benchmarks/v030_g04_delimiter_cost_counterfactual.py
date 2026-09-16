@@ -3,10 +3,11 @@ from __future__ import annotations
 """Research-only causal counterfactual for the v0.30 ML extraction bottleneck.
 
 The exact-head shipping profile identifies DGO1 delimiter inversion as the dominant extraction owner on
-neutral_hostile_v1/09_ml_artifacts.  This instrument changes no archive grammar or release threshold: it builds the
+neutral_hostile_v1/09_ml_artifacts. This instrument changes no archive grammar or release threshold: it builds the
 ordinary shipping product, then rebuilds the same source with delimiter auditions disabled while leaving lane and
-all other G0-G4 mechanisms intact.  It measures complete archive bytes and warm extraction wall time for both,
-with exact user-tree identity checked after every timed extraction.  Results are research evidence only.
+all other G0-G4 mechanisms intact. It measures complete archive bytes, build wall time, and warm extraction wall
+time for both, with exact user-tree identity checked after every timed extraction. Results are research evidence
+only; build timings are same-process causal diagnostics rather than release-performance credit.
 """
 
 import argparse
@@ -53,7 +54,9 @@ def run(work: Path) -> dict:
     source_tree = PRODUCT.treehash(source)
 
     baseline_archive = work / "shipping.cmpct"
+    started = time.perf_counter()
     baseline_build = PRODUCT.build(source, baseline_archive)
+    baseline_build_s = time.perf_counter() - started
     baseline_verify = PRODUCT.strong_verify(baseline_archive)
     if not baseline_verify.get("ok") or baseline_verify.get("tree_sha256") != source_tree:
         raise RuntimeError("baseline shipping archive failed exact verification")
@@ -65,7 +68,9 @@ def run(work: Path) -> dict:
     candidate_archive = work / "no-delimiter.cmpct"
     try:
         G04._delimiter_rank = lambda _raw: []
+        started = time.perf_counter()
         candidate_build = PRODUCT.build(source, candidate_archive)
+        candidate_build_s = time.perf_counter() - started
     finally:
         G04._delimiter_rank = original_rank
     candidate_verify = PRODUCT.strong_verify(candidate_archive)
@@ -89,12 +94,14 @@ def run(work: Path) -> dict:
         "rounds": ROUNDS,
         "baseline": {
             "archive_bytes": baseline_bytes,
+            "build_wall_s_context_only": baseline_build_s,
             "selected_transforms": baseline_transforms,
             "extract_s": baseline_samples,
             "median_extract_s": baseline_median,
         },
         "no_delimiter": {
             "archive_bytes": candidate_bytes,
+            "build_wall_s_context_only": candidate_build_s,
             "selected_transforms": candidate_transforms,
             "extract_s": candidate_samples,
             "median_extract_s": candidate_median,
@@ -102,11 +109,13 @@ def run(work: Path) -> dict:
         "delta": {
             "archive_bytes": candidate_bytes - baseline_bytes,
             "archive_pct": (candidate_bytes / baseline_bytes - 1.0) * 100.0,
+            "build_wall_s_context_only": candidate_build_s - baseline_build_s,
+            "build_ratio_context_only": candidate_build_s / baseline_build_s,
             "median_extract_s": candidate_median - baseline_median,
             "median_extract_ratio": candidate_median / baseline_median,
             "median_extract_speedup": baseline_median / candidate_median,
         },
-        "claim_boundary": "Causal research counterfactual only: same source and shipping product with DGO1 auditions removed; no release threshold, evaluator, grammar, or comparator is changed.",
+        "claim_boundary": "Causal research counterfactual only: same source and shipping product with DGO1 auditions removed; no release threshold, evaluator, grammar, or comparator is changed. Build wall is diagnostic context, not release credit.",
     }
 
 
