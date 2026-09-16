@@ -29,10 +29,24 @@ jobs:
           python-version: '3.12'
       - name: Run exact-head counterfactual
         run: |
+          set -euo pipefail
           mkdir -p artifacts/v030-g04-delimiter-cost/work
           python -m benchmarks.v030_g04_delimiter_cost_counterfactual \
             --work-root artifacts/v030-g04-delimiter-cost/work \
             --output artifacts/v030-g04-delimiter-cost/result.json
+          python - <<'PY'
+          import hashlib, json, os, pathlib, subprocess
+          root = pathlib.Path('artifacts/v030-g04-delimiter-cost')
+          benchmark = pathlib.Path('benchmarks/v030_g04_delimiter_cost_counterfactual.py')
+          manifest = {
+              'schema': 'cmpct-v030-g04-delimiter-cost-artifact-v1',
+              'candidate_sha': subprocess.check_output(['git','rev-parse','HEAD'], text=True).strip(),
+              'benchmark_sha256': hashlib.sha256(benchmark.read_bytes()).hexdigest(),
+              'result_sha256': hashlib.sha256((root/'result.json').read_bytes()).hexdigest(),
+              'release_credit': False,
+          }
+          (root/'manifest.json').write_text(json.dumps(manifest, indent=2)+'\n', encoding='utf-8')
+          PY
       - name: Preserve result
         if: always()
         uses: actions/upload-artifact@v4
