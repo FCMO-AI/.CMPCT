@@ -21,12 +21,16 @@ concurrency:
 jobs:
   counterfactual:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
         with:
           python-version: '3.12'
+      - name: Install repository dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[test]'
       - name: Run exact-head counterfactual
         run: |
           set -euo pipefail
@@ -35,7 +39,7 @@ jobs:
             --work-root artifacts/v030-g04-delimiter-cost/work \
             --output artifacts/v030-g04-delimiter-cost/result.json
           python - <<'PY'
-          import hashlib, json, os, pathlib, subprocess
+          import hashlib, json, pathlib, subprocess
           root = pathlib.Path('artifacts/v030-g04-delimiter-cost')
           benchmark = pathlib.Path('benchmarks/v030_g04_delimiter_cost_counterfactual.py')
           manifest = {
