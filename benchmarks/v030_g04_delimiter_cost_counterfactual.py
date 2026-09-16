@@ -1,13 +1,12 @@
 from __future__ import annotations
 
-"""Research-only causal counterfactual for the v0.30 ML extraction bottleneck.
+"""Research-only causal controls for the v0.30 ML extraction bottleneck.
 
 The exact-head shipping profile identifies DGO1 delimiter inversion as the dominant extraction owner on
-neutral_hostile_v1/09_ml_artifacts. This instrument changes no archive grammar or release threshold: it builds the
-ordinary shipping product, then rebuilds the same source with delimiter auditions disabled while leaving lane and
-all other G0-G4 mechanisms intact. It measures complete archive bytes, build wall time, warm extraction wall time,
-and fresh-process import RSS floors. Results are research evidence only; none of these diagnostics receives release
-credit or changes the frozen evaluator.
+neutral_hostile_v1/09_ml_artifacts. This instrument compares (1) ordinary shipping, (2) the exact same archive
+bytes decoded with the already-reviewed guarded-banded inverse, and (3) a rebuild with delimiter auditions disabled
+while every other G0-G4 mechanism remains intact. It also records build wall and fresh-process import RSS floors.
+All results are research evidence only; no release threshold, grammar, comparator, or evaluator is changed.
 """
 
 import argparse
@@ -20,6 +19,7 @@ import sys
 import time
 
 from benchmarks import v030_release_performance as PERF
+from experiments import entropygraph_v030_canonical_final as CANONICAL
 from experiments import entropygraph_v030_geometry_overlay as G04
 from experiments import entropygraph_v030_release_product as PRODUCT
 
@@ -97,13 +97,24 @@ def run(work: Path) -> dict:
         raise RuntimeError("delimiter transform survived disabled delimiter audition")
 
     baseline_samples = _timed_extracts(baseline_archive, source_tree, work, "baseline")
+
+    # Strong simpler control: keep byte-identical shipping archive and swap only the DGO1 inverse to the reviewed
+    # guarded-banded implementation that canonical-final already retains as a semantic oracle/research control.
+    original_inverse = G04.O.delimiter_inverse
+    try:
+        G04.O.delimiter_inverse = CANONICAL._banded_delimiter_inverse
+        banded_samples = _timed_extracts(baseline_archive, source_tree, work, "banded-same-bytes")
+    finally:
+        G04.O.delimiter_inverse = original_inverse
+
     candidate_samples = _timed_extracts(candidate_archive, source_tree, work, "candidate")
     baseline_bytes = baseline_archive.stat().st_size
     candidate_bytes = candidate_archive.stat().st_size
     baseline_median = float(statistics.median(baseline_samples))
+    banded_median = float(statistics.median(banded_samples))
     candidate_median = float(statistics.median(candidate_samples))
     return {
-        "schema": "cmpct-v030-g04-delimiter-cost-counterfactual-v1",
+        "schema": "cmpct-v030-g04-delimiter-cost-counterfactual-v2",
         "release_credit": False,
         "target": "/".join(TARGET),
         "source_tree_sha256": source_tree,
@@ -117,6 +128,14 @@ def run(work: Path) -> dict:
             "extract_s": baseline_samples,
             "median_extract_s": baseline_median,
         },
+        "banded_same_archive_bytes": {
+            "archive_bytes": baseline_bytes,
+            "inverse": "guarded-banded-v2",
+            "extract_s": banded_samples,
+            "median_extract_s": banded_median,
+            "median_extract_ratio_vs_shipping": banded_median / baseline_median,
+            "median_extract_speedup_vs_shipping": baseline_median / banded_median,
+        },
         "no_delimiter": {
             "archive_bytes": candidate_bytes,
             "build_wall_s_context_only": candidate_build_s,
@@ -124,7 +143,7 @@ def run(work: Path) -> dict:
             "extract_s": candidate_samples,
             "median_extract_s": candidate_median,
         },
-        "delta": {
+        "no_delimiter_delta": {
             "archive_bytes": candidate_bytes - baseline_bytes,
             "archive_pct": (candidate_bytes / baseline_bytes - 1.0) * 100.0,
             "build_wall_s_context_only": candidate_build_s - baseline_build_s,
@@ -133,7 +152,7 @@ def run(work: Path) -> dict:
             "median_extract_ratio": candidate_median / baseline_median,
             "median_extract_speedup": baseline_median / candidate_median,
         },
-        "claim_boundary": "Causal research counterfactual only: same source and shipping product with DGO1 auditions removed; no release threshold, evaluator, grammar, or comparator is changed. Build wall and import RSS are diagnostic context, not release credit.",
+        "claim_boundary": "Research controls only: same-source shipping, same-byte reviewed inverse swap, and no-DGO1 rebuild. No release threshold, evaluator, grammar, or comparator is changed. Build wall and import RSS are diagnostic context, not release credit.",
     }
 
 
@@ -145,7 +164,7 @@ def main() -> None:
     result = run(args.work_root)
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8")
-    print(json.dumps({"import_rss": result["fresh_process_import_rss_kib_context_only"], "baseline": result["baseline"], "no_delimiter": result["no_delimiter"], "delta": result["delta"], "release_credit": False}, indent=2))
+    print(json.dumps({"import_rss": result["fresh_process_import_rss_kib_context_only"], "baseline": result["baseline"], "banded_same_archive_bytes": result["banded_same_archive_bytes"], "no_delimiter": result["no_delimiter"], "no_delimiter_delta": result["no_delimiter_delta"], "release_credit": False}, indent=2))
 
 
 if __name__ == "__main__":
