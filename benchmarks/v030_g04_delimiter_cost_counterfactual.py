@@ -44,22 +44,32 @@ def run(work: Path) -> dict:
     baseline_transforms = _selected_transforms(baseline_build)
     if "delimiter" not in baseline_transforms: raise RuntimeError("exact-head ML shipping route no longer selects DGO1; counterfactual is stale")
 
-    # Canonical-final runs in an isolated dependency graph. SHARED.G is the private G04 integration module; its O
-    # member is the private flat-geometry module that owns both delimiter nomination and inversion.
-    shipping_overlay = CANONICAL.SHARED.G.O
-    original_rank = shipping_overlay._delimiter_rank
+    # PRODUCT.build delegates r25 construction through the preserved base module.  Its canonical-final alias is the
+    # same isolated module object as CANONICAL, but the G04 builder calls the parallel-overlay helper captured in the
+    # preserved implementation globals.  Patching only O._delimiter_rank is therefore too shallow: the retained
+    # audition helper can still nominate DGO1 through its own bound callable.  Replace the semantic audition helper
+    # at the canonical build boundary and reject delimiter outcomes there.  This changes no archive grammar or
+    # shipping policy; it is a research-only no-DGO1 control and is restored before any timed extraction.
+    original_audition = CANONICAL.SHARED.G._audition_record
+    def no_delimiter_audition(record_id, record, users):
+        raw, transform, stats = original_audition(record_id, record, users)
+        if transform != "delimiter":
+            return raw, transform, stats
+        return record, None, {**stats, "selected": "none", "counterfactual_rejected": "delimiter"}
+
     candidate_archive = work / "no-delimiter.cmpct"
     try:
-        shipping_overlay._delimiter_rank = lambda _raw: []
+        CANONICAL.SHARED.G._audition_record = no_delimiter_audition
         started = time.perf_counter(); candidate_build = PRODUCT.build(source, candidate_archive); candidate_build_s = time.perf_counter() - started
     finally:
-        shipping_overlay._delimiter_rank = original_rank
+        CANONICAL.SHARED.G._audition_record = original_audition
     candidate_verify = PRODUCT.strong_verify(candidate_archive)
     if not candidate_verify.get("ok") or candidate_verify.get("tree_sha256") != source_tree: raise RuntimeError("no-delimiter candidate failed exact verification")
     candidate_transforms = _selected_transforms(candidate_build)
     if "delimiter" in candidate_transforms: raise RuntimeError("delimiter transform survived disabled delimiter audition")
 
     baseline_samples = _timed_extracts(baseline_archive, source_tree, work, "baseline")
+    shipping_overlay = CANONICAL.SHARED.G.O
     original_inverse = shipping_overlay.delimiter_inverse
     try:
         shipping_overlay.delimiter_inverse = CANONICAL._banded_delimiter_inverse
@@ -70,7 +80,7 @@ def run(work: Path) -> dict:
     baseline_bytes = baseline_archive.stat().st_size; candidate_bytes = candidate_archive.stat().st_size
     baseline_median = float(statistics.median(baseline_samples)); banded_median = float(statistics.median(banded_samples)); candidate_median = float(statistics.median(candidate_samples))
     return {
-        "schema":"cmpct-v030-g04-delimiter-cost-counterfactual-v1","controls_version":2,"release_credit":False,"target":"/".join(TARGET),"source_tree_sha256":source_tree,"rounds":ROUNDS,
+        "schema":"cmpct-v030-g04-delimiter-cost-counterfactual-v1","controls_version":3,"release_credit":False,"target":"/".join(TARGET),"source_tree_sha256":source_tree,"rounds":ROUNDS,
         "fresh_process_import_rss_kib_context_only":import_rss,"fresh_process_import_rss_ratio_context_only":import_rss["v030_release_product"]/import_rss["v029_release"],
         "baseline":{"archive_bytes":baseline_bytes,"build_wall_s_context_only":baseline_build_s,"selected_transforms":baseline_transforms,"extract_s":baseline_samples,"median_extract_s":baseline_median},
         "banded_same_archive_bytes":{"archive_bytes":baseline_bytes,"inverse":"guarded-banded-v2","extract_s":banded_samples,"median_extract_s":banded_median,"median_extract_ratio_vs_shipping":banded_median/baseline_median,"median_extract_speedup_vs_shipping":baseline_median/banded_median},
