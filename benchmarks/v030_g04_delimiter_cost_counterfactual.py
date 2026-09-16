@@ -44,35 +44,28 @@ def run(work: Path) -> dict:
     baseline_transforms = _selected_transforms(baseline_build)
     if "delimiter" not in baseline_transforms: raise RuntimeError("exact-head ML shipping route no longer selects DGO1; counterfactual is stale")
 
-    # The canonical release-candidate G04 module directly resolves its module-global `_audition_record` inside build().
-    # Canonical-final may also route retained-overlay auditions through its private shared G owner. Patch both exact
-    # owner objects (deduplicated by identity) and restore them in finally. G04 descriptors are structured lists, so
-    # DGO1 identity is descriptor[0] == "delimiter"; stats.selected is only a reporting string.
-    owner_candidates = [CANONICAL.RC.G04, CANONICAL.SHARED.G]
-    owners = []
-    for owner in owner_candidates:
-        if all(owner is not prior for prior in owners):
-            owners.append(owner)
-    originals = [(owner, owner._audition_record) for owner in owners]
-    def make_no_delimiter(original):
-        def no_delimiter_audition(record_id, record, users):
-            raw, transform, stats = original(record_id, record, users)
-            is_delimiter = transform == "delimiter" or (
-                isinstance(transform, (list, tuple)) and bool(transform) and transform[0] == "delimiter"
-            )
-            if not is_delimiter:
-                return raw, transform, stats
-            return record, None, {**stats, "selected": "none", "counterfactual_rejected": "delimiter"}
-        return no_delimiter_audition
+    # The shared portfolio's retained-overlay path resolves G._audition_record at call time. Patch that exact private
+    # G04 semantic owner and restore it in finally. Do not patch RC.G04 itself: profile isolation intentionally binds
+    # RC.G04 to the shared portfolio facade, which has no _audition_record and delegates the audition to its G owner.
+    # G04 descriptors are structured lists, so DGO1 identity is descriptor[0] == "delimiter"; stats.selected is only
+    # a reporting string.
+    owner = CANONICAL.SHARED.G
+    original = owner._audition_record
+    def no_delimiter_audition(record_id, record, users):
+        raw, transform, stats = original(record_id, record, users)
+        is_delimiter = transform == "delimiter" or (
+            isinstance(transform, (list, tuple)) and bool(transform) and transform[0] == "delimiter"
+        )
+        if not is_delimiter:
+            return raw, transform, stats
+        return record, None, {**stats, "selected": "none", "counterfactual_rejected": "delimiter"}
 
     candidate_archive = work / "no-delimiter.cmpct"
     try:
-        for owner, original in originals:
-            owner._audition_record = make_no_delimiter(original)
+        owner._audition_record = no_delimiter_audition
         started = time.perf_counter(); candidate_build = PRODUCT.build(source, candidate_archive); candidate_build_s = time.perf_counter() - started
     finally:
-        for owner, original in originals:
-            owner._audition_record = original
+        owner._audition_record = original
     candidate_verify = PRODUCT.strong_verify(candidate_archive)
     if not candidate_verify.get("ok") or candidate_verify.get("tree_sha256") != source_tree: raise RuntimeError("no-delimiter candidate failed exact verification")
     candidate_transforms = _selected_transforms(candidate_build)
@@ -90,13 +83,13 @@ def run(work: Path) -> dict:
     baseline_bytes = baseline_archive.stat().st_size; candidate_bytes = candidate_archive.stat().st_size
     baseline_median = float(statistics.median(baseline_samples)); banded_median = float(statistics.median(banded_samples)); candidate_median = float(statistics.median(candidate_samples))
     return {
-        "schema":"cmpct-v030-g04-delimiter-cost-counterfactual-v1","controls_version":8,"release_credit":False,"target":"/".join(TARGET),"source_tree_sha256":source_tree,"rounds":ROUNDS,
+        "schema":"cmpct-v030-g04-delimiter-cost-counterfactual-v1","controls_version":9,"release_credit":False,"target":"/".join(TARGET),"source_tree_sha256":source_tree,"rounds":ROUNDS,
         "fresh_process_import_rss_kib_context_only":import_rss,"fresh_process_import_rss_ratio_context_only":import_rss["v030_release_product"]/import_rss["v029_release"],
         "baseline":{"archive_bytes":baseline_bytes,"build_wall_s_context_only":baseline_build_s,"selected_transforms":baseline_transforms,"extract_s":baseline_samples,"median_extract_s":baseline_median},
         "banded_same_archive_bytes":{"archive_bytes":baseline_bytes,"inverse":"guarded-banded-v2","extract_s":banded_samples,"median_extract_s":banded_median,"median_extract_ratio_vs_shipping":banded_median/baseline_median,"median_extract_speedup_vs_shipping":baseline_median/banded_median},
         "no_delimiter":{"archive_bytes":candidate_bytes,"build_wall_s_context_only":candidate_build_s,"selected_transforms":candidate_transforms,"extract_s":candidate_samples,"median_extract_s":candidate_median},
         "no_delimiter_delta":{"archive_bytes":candidate_bytes-baseline_bytes,"archive_pct":(candidate_bytes/baseline_bytes-1.0)*100.0,"build_wall_s_context_only":candidate_build_s-baseline_build_s,"build_ratio_context_only":candidate_build_s/baseline_build_s,"median_extract_s":candidate_median-baseline_median,"median_extract_ratio":candidate_median/baseline_median,"median_extract_speedup":baseline_median/candidate_median},
-        "claim_boundary":"Research controls only: same-source shipping, same-byte reviewed inverse swap, and no-DGO1 rebuild. The no-DGO1 rebuild patches the direct canonical RC.G04 audition owner plus the canonical shared G owner and rejects the actual structured DGO1 descriptor; scheduling is unchanged. No release threshold, evaluator, grammar, or comparator is changed. Build wall and import RSS remain diagnostic context, not release credit."
+        "claim_boundary":"Research controls only: same-source shipping, same-byte reviewed inverse swap, and no-DGO1 rebuild. The no-DGO1 rebuild patches the exact private G04 semantic owner used by the shared portfolio retained-overlay path and rejects the actual structured DGO1 descriptor; scheduling is unchanged. No release threshold, evaluator, grammar, or comparator is changed. Build wall and import RSS remain diagnostic context, not release credit."
     }
 
 def main() -> None:
