@@ -62,7 +62,12 @@ jobs:
       - uses: actions/checkout@v6
         with:
           ref: ${{ env.EVIDENCE_HEAD }}
-          fetch-depth: 128
+          # R36 binds an R32 commit more than 128 commits behind the current
+          # convergence frontier. A shallow checkout makes the ancestry guard
+          # fail before the experiment even starts, which is infrastructure
+          # failure rather than evidence. Fetch full history so the frozen
+          # ancestor and per-path object checks are actually testable.
+          fetch-depth: 0
       - name: Bind frozen R32 substrate and R36 grammar
         shell: bash
         run: |
