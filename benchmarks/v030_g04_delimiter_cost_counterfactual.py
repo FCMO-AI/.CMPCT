@@ -97,61 +97,32 @@ def run(work: Path) -> dict:
         raise RuntimeError("delimiter transform survived disabled delimiter audition")
 
     baseline_samples = _timed_extracts(baseline_archive, source_tree, work, "baseline")
-
-    # Strong simpler control: keep byte-identical shipping archive and swap only the DGO1 inverse to the reviewed
-    # guarded-banded implementation that canonical-final already retains as a semantic oracle/research control.
     original_inverse = G04.O.delimiter_inverse
     try:
         G04.O.delimiter_inverse = CANONICAL._banded_delimiter_inverse
         banded_samples = _timed_extracts(baseline_archive, source_tree, work, "banded-same-bytes")
     finally:
         G04.O.delimiter_inverse = original_inverse
-
     candidate_samples = _timed_extracts(candidate_archive, source_tree, work, "candidate")
+
     baseline_bytes = baseline_archive.stat().st_size
     candidate_bytes = candidate_archive.stat().st_size
     baseline_median = float(statistics.median(baseline_samples))
     banded_median = float(statistics.median(banded_samples))
     candidate_median = float(statistics.median(candidate_samples))
     return {
-        "schema": "cmpct-v030-g04-delimiter-cost-counterfactual-v2",
+        "schema": "cmpct-v030-g04-delimiter-cost-counterfactual-v1",
+        "controls_version": 2,
         "release_credit": False,
         "target": "/".join(TARGET),
         "source_tree_sha256": source_tree,
         "rounds": ROUNDS,
         "fresh_process_import_rss_kib_context_only": import_rss,
         "fresh_process_import_rss_ratio_context_only": import_rss["v030_release_product"] / import_rss["v029_release"],
-        "baseline": {
-            "archive_bytes": baseline_bytes,
-            "build_wall_s_context_only": baseline_build_s,
-            "selected_transforms": baseline_transforms,
-            "extract_s": baseline_samples,
-            "median_extract_s": baseline_median,
-        },
-        "banded_same_archive_bytes": {
-            "archive_bytes": baseline_bytes,
-            "inverse": "guarded-banded-v2",
-            "extract_s": banded_samples,
-            "median_extract_s": banded_median,
-            "median_extract_ratio_vs_shipping": banded_median / baseline_median,
-            "median_extract_speedup_vs_shipping": baseline_median / banded_median,
-        },
-        "no_delimiter": {
-            "archive_bytes": candidate_bytes,
-            "build_wall_s_context_only": candidate_build_s,
-            "selected_transforms": candidate_transforms,
-            "extract_s": candidate_samples,
-            "median_extract_s": candidate_median,
-        },
-        "no_delimiter_delta": {
-            "archive_bytes": candidate_bytes - baseline_bytes,
-            "archive_pct": (candidate_bytes / baseline_bytes - 1.0) * 100.0,
-            "build_wall_s_context_only": candidate_build_s - baseline_build_s,
-            "build_ratio_context_only": candidate_build_s / baseline_build_s,
-            "median_extract_s": candidate_median - baseline_median,
-            "median_extract_ratio": candidate_median / baseline_median,
-            "median_extract_speedup": baseline_median / candidate_median,
-        },
+        "baseline": {"archive_bytes": baseline_bytes, "build_wall_s_context_only": baseline_build_s, "selected_transforms": baseline_transforms, "extract_s": baseline_samples, "median_extract_s": baseline_median},
+        "banded_same_archive_bytes": {"archive_bytes": baseline_bytes, "inverse": "guarded-banded-v2", "extract_s": banded_samples, "median_extract_s": banded_median, "median_extract_ratio_vs_shipping": banded_median / baseline_median, "median_extract_speedup_vs_shipping": baseline_median / banded_median},
+        "no_delimiter": {"archive_bytes": candidate_bytes, "build_wall_s_context_only": candidate_build_s, "selected_transforms": candidate_transforms, "extract_s": candidate_samples, "median_extract_s": candidate_median},
+        "no_delimiter_delta": {"archive_bytes": candidate_bytes - baseline_bytes, "archive_pct": (candidate_bytes / baseline_bytes - 1.0) * 100.0, "build_wall_s_context_only": candidate_build_s - baseline_build_s, "build_ratio_context_only": candidate_build_s / baseline_build_s, "median_extract_s": candidate_median - baseline_median, "median_extract_ratio": candidate_median / baseline_median, "median_extract_speedup": baseline_median / candidate_median},
         "claim_boundary": "Research controls only: same-source shipping, same-byte reviewed inverse swap, and no-DGO1 rebuild. No release threshold, evaluator, grammar, or comparator is changed. Build wall and import RSS are diagnostic context, not release credit.",
     }
 
