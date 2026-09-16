@@ -6,14 +6,14 @@ on:
     paths:
       - 'benchmarks/v030_g04_delimiter_cost_counterfactual.py'
       - '.github/workflows/v030-g04-delimiter-cost-counterfactual.yml'
-  pull_request:
-    paths:
-      - 'benchmarks/v030_g04_delimiter_cost_counterfactual.py'
-      - '.github/workflows/v030-g04-delimiter-cost-counterfactual.yml'
   workflow_dispatch:
 
 permissions:
   contents: read
+
+concurrency:
+  group: v030-g04-delimiter-cost-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   counterfactual:
