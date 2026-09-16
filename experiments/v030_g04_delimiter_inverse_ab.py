@@ -1,11 +1,10 @@
 from __future__ import annotations
 
-"""Research-only exact-ML A/B for a faster G04 delimiter inverse.
+"""Research-only exact-ML A/B for the shipping guarded G04 delimiter inverse.
 
-The candidate changes no archive bytes and is injected only into the reader's owning Geometry module after a
-canonical revision-25 shipping ML archive has been built and strongly verified. Control and candidate extract the
-same archive to fresh destinations; every output must equal the same semantic source tree. Timing is mechanism
-attribution only and receives no release credit.
+The earlier unguarded banded candidate was ~50% slower and is durably retired. This follow-up tests the actual
+shipping guarded implementation against its reviewed bulk-v1 semantic predecessor on the same canonical revision-25
+ML archive. Archive bytes and release thresholds are unchanged; this is mechanism attribution only.
 """
 
 import argparse
@@ -24,65 +23,19 @@ ROUNDS = 9
 MIN_SPEEDUP = 0.15
 
 
-def delimiter_inverse_banded(encoded: bytes, logical_size: int) -> bytes:
-    O = G04.O
-    if not encoded.startswith(b"DGO1") or len(encoded) < 6 or logical_size < 0 or logical_size > O.MAX_OVERLAY_RECORD:
-        raise RuntimeError("invalid Geometry overlay delimiter descriptor")
-    delimiter = encoded[4]
-    count, pos = O._get_varint(encoded, 5)
-    if count < 1 or count > O.MAX_DELIMITER_SEGMENTS:
-        raise RuntimeError("Geometry overlay delimiter segment count")
-    lengths: list[int] = []
-    logical_members = 0
-    for _ in range(count):
-        length, pos = O._get_varint(encoded, pos)
-        if length > O.MAX_OVERLAY_RECORD or logical_members + length > O.MAX_OVERLAY_RECORD:
-            raise RuntimeError("Geometry overlay delimiter length budget")
-        lengths.append(length)
-        logical_members += length
-    if logical_members + count - 1 != logical_size:
-        raise RuntimeError("Geometry overlay delimiter logical-size mismatch")
-    if count * max(lengths, default=0) > O.MAX_DELIMITER_CELL_SCANS:
-        raise RuntimeError("Geometry overlay delimiter cell-work budget")
-    body = encoded[pos:]
-    if len(body) != logical_members:
-        raise RuntimeError("Geometry overlay delimiter body-size mismatch")
-
-    starts: list[int] = []
-    cursor = 0
-    for index, length in enumerate(lengths):
-        starts.append(cursor)
-        cursor += length + (1 if index + 1 < count else 0)
-    if cursor != logical_size:
-        raise RuntimeError("Geometry overlay delimiter output-size mismatch")
-    out = bytearray(logical_size)
-    for index in range(count - 1):
-        out[starts[index] + lengths[index]] = delimiter
-
-    body_offset = 0
-    previous = 0
-    for end in sorted(set(lengths)):
-        width = end - previous
-        if width <= 0:
-            continue
-        active = [index for index, length in enumerate(lengths) if length >= end]
-        active_count = len(active)
-        band_bytes = active_count * width
-        band = body[body_offset:body_offset + band_bytes]
-        if len(band) != band_bytes:
-            raise RuntimeError("Geometry overlay delimiter band underflow")
-        for rank, index in enumerate(active):
-            out[starts[index] + previous:starts[index] + end] = band[rank::active_count]
-        body_offset += band_bytes
-        previous = end
-    if body_offset != len(body):
-        raise RuntimeError("Geometry overlay delimiter trailing body")
-    return bytes(out)
+def _implementations():
+    canonical = PRODUCT.C
+    candidate = getattr(canonical, "_banded_delimiter_inverse", None)
+    control = getattr(canonical, "_BULK_V1_DELIMITER_INVERSE", None)
+    if candidate is None or control is None:
+        raise RuntimeError("canonical guarded/bulk delimiter implementations unavailable")
+    return control, candidate
 
 
 def _property_check() -> int:
     """Differently shaped exactness controls before any timing claim."""
     O = G04.O
+    control, candidate = _implementations()
     cases = [
         (b"", 0),
         (b"single-member", 0),
@@ -94,17 +47,15 @@ def _property_check() -> int:
     checked = 0
     for raw, delimiter in cases:
         encoded = O.delimiter_forward(raw, delimiter)
-        control = O.delimiter_inverse(encoded, len(raw))
-        candidate = delimiter_inverse_banded(encoded, len(raw))
-        if control != raw or candidate != raw or candidate != control:
+        baseline = control(encoded, len(raw))
+        guarded = candidate(encoded, len(raw))
+        if baseline != raw or guarded != raw or guarded != baseline:
             raise RuntimeError("delimiter inverse property-control mismatch")
         checked += 1
     return checked
 
 
 def _assert_nested_g04_selected(built: dict) -> None:
-    # Canonical r25 is the outer archive grammar. G04 is a nested physical-record strategy, so checking the outer
-    # archive magic against G04.MAG is category-wrong and previously caused an infrastructure false negative.
     g04 = built.get("r25", {}).get("g04", {})
     auditions = g04.get("auditions", [])
     selected = [row for row in auditions if row.get("selected") not in (None, "none")]
@@ -125,6 +76,7 @@ def run(work_root: Path) -> dict:
     if not verified.get("ok") or verified.get("tree_sha256") != source_tree:
         raise RuntimeError("canonical ML archive failed strong verification")
 
+    control_impl, candidate_impl = _implementations()
     original = G04.O.delimiter_inverse
     control: list[float] = []
     candidate: list[float] = []
@@ -132,7 +84,7 @@ def run(work_root: Path) -> dict:
         for round_index in range(ROUNDS):
             order = ("control", "candidate") if round_index % 2 == 0 else ("candidate", "control")
             for arm in order:
-                G04.O.delimiter_inverse = original if arm == "control" else delimiter_inverse_banded
+                G04.O.delimiter_inverse = control_impl if arm == "control" else candidate_impl
                 dst = work_root / f"{arm}-{round_index}"
                 started = time.perf_counter()
                 PRODUCT.extract(archive, dst)
@@ -155,6 +107,8 @@ def run(work_root: Path) -> dict:
         "source_tree_sha256": source_tree,
         "shipping_build": built,
         "rounds": ROUNDS,
+        "control_implementation": "reviewed-bulk-rectangular-prefix-v1",
+        "candidate_implementation": getattr(PRODUCT.C, "DELIMITER_INVERSE_IMPLEMENTATION", "guarded-banded-v2"),
         "control_s": control,
         "candidate_s": candidate,
         "control_median_s": control_median,
@@ -166,7 +120,7 @@ def run(work_root: Path) -> dict:
         "product_source_changed": False,
         "archive_bytes_changed": False,
         "release_thresholds_changed": False,
-        "claim_boundary": "Exact-archive reader mechanism A/B only. Promotion requires guarded production implementation plus fresh-process authority-v2 and full correctness/platform evidence.",
+        "claim_boundary": "Exact-archive reader mechanism A/B only. The candidate is already present in the research release branch; release credit still requires fresh authority-v2 and full correctness/platform evidence.",
     }
 
 
@@ -178,7 +132,7 @@ def main() -> None:
     result = run(args.work_root)
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8")
-    print(json.dumps({k: result[k] for k in ("property_cases_checked", "control_median_s", "candidate_median_s", "candidate_ratio", "speedup_fraction", "promotion_signal", "release_credit")}, indent=2))
+    print(json.dumps({k: result[k] for k in ("property_cases_checked", "control_implementation", "candidate_implementation", "control_median_s", "candidate_median_s", "candidate_ratio", "speedup_fraction", "promotion_signal", "release_credit")}, indent=2))
 
 
 if __name__ == "__main__":
