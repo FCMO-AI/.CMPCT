@@ -1,0 +1,129 @@
+# ci-lane: deep
+# ci-cancel-policy: split-classifier-preserve-receipts
+# ci-pr-scope: latest-head-commit-gate
+name: CMPCT v0.30 r24 operation-scoped dictionary-policy repair
+
+on:
+  push:
+    branches: [agent/v030-authoritative-integration]
+    paths:
+      - 'src/cmpct/v030_worker_policy_capture.py'
+      - 'src/cmpct/__init__.py'
+      - 'docs/v030-rnd/R25_R24_OPERATION_SCOPED_DICT_POLICY_REPAIR_PREREG.md'
+      - 'benchmarks/v030_r24_operation_scoped_dict_policy_repair.py'
+      - '.github/workflows/v030-r24-operation-scoped-dict-policy-repair.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'src/cmpct/v030_worker_policy_capture.py'
+      - 'src/cmpct/__init__.py'
+      - 'docs/v030-rnd/R25_R24_OPERATION_SCOPED_DICT_POLICY_REPAIR_PREREG.md'
+      - 'benchmarks/v030_r24_operation_scoped_dict_policy_repair.py'
+      - '.github/workflows/v030-r24-operation-scoped-dict-policy-repair.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+
+jobs:
+  latest-head-impact:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    concurrency:
+      group: cmpct-v030-r24-dict-policy-repair-classifier-${{ github.event.pull_request.number || github.ref }}
+      cancel-in-progress: true
+    outputs:
+      run_deep: ${{ steps.scope.outputs.run_deep }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 2
+      - id: scope
+        name: Bind exact head and classify repair impact
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          if [ "$EVENT_NAME" = workflow_dispatch ]; then echo 'run_deep=true' >> "$GITHUB_OUTPUT"; exit 0; fi
+          git diff-tree --no-commit-id --name-only -r HEAD > /tmp/latest-head-files.txt
+          if grep -Eq '^(src/cmpct/(v030_worker_policy_capture\.py|__init__\.py)|docs/v030-rnd/R25_R24_OPERATION_SCOPED_DICT_POLICY_REPAIR_PREREG\.md|benchmarks/v030_r24_operation_scoped_dict_policy_repair\.py|\.github/workflows/v030-r24-operation-scoped-dict-policy-repair\.yml)$' /tmp/latest-head-files.txt; then
+            echo 'run_deep=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'run_deep=false' >> "$GITHUB_OUTPUT"
+          fi
+
+  exact-repair:
+    needs: latest-head-impact
+    if: needs.latest-head-impact.outputs.run_deep == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    concurrency:
+      group: cmpct-v030-r24-dict-policy-repair-receipt-${{ github.event.pull_request.head.sha || github.sha }}
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - id: candidate
+        name: Bind exact candidate
+        run: |
+          set -euo pipefail
+          actual="$(git rev-parse HEAD)"; test "$actual" = "$EVIDENCE_HEAD"; echo "sha=$actual" >> "$GITHUB_OUTPUT"
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install exact dependencies from Ubuntu only
+        run: |
+          set -euo pipefail
+          test -f /etc/apt/sources.list.d/ubuntu.sources
+          sudo apt-get -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" -o Dir::Etc::sourceparts="-" update
+          sudo apt-get -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" -o Dir::Etc::sourceparts="-" install -y zstd
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[test]'
+      - name: Compile exact repair validator
+        run: python -m py_compile src/cmpct/v030_worker_policy_capture.py benchmarks/v030_r24_operation_scoped_dict_policy_repair.py
+      - name: Run exact repair validator
+        run: |
+          mkdir -p benchmark-artifacts
+          python -m benchmarks.v030_r24_operation_scoped_dict_policy_repair \
+            --work-root "$RUNNER_TEMP/v030-r24-operation-scoped-dict-policy-repair" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-r24-operation-scoped-dict-policy-repair.json"
+      - name: Ratchet frozen repair decision
+        run: |
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          e=json.loads(Path('benchmark-artifacts/v030-r24-operation-scoped-dict-policy-repair.json').read_text())
+          assert e['schema']=='cmpct-v030-r24-operation-scoped-dict-policy-repair-v1'
+          assert e['source_commit']==os.environ['EVIDENCE_HEAD']
+          assert e['target']==['resemblance_hostile_v1','01_shifted_versions']
+          assert e['release_credit'] is False
+          i=e['identity']
+          assert i['all_strong_verified'] is True
+          assert i['release_worker_counts_exact'] is True
+          assert e['decision']=='REPAIR_CAUSALLY_VALID', e['decision']
+          assert i['release_four_equals_one'] is True
+          assert i['release_dictionary_live'] is True
+          assert i['historical_repaired_equals_unpatched'] is True
+          PY
+      - name: CI topology self-check
+        run: python tools/check_ci_topology.py .github/workflows/v030-r24-operation-scoped-dict-policy-repair.yml
+      - name: Record exact candidate fingerprint
+        run: printf '%s\n' '${{ steps.candidate.outputs.sha }}' > benchmark-artifacts/v030-r24-operation-scoped-dict-policy-repair-candidate.txt
+      - name: Upload repair evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: v030-r24-operation-scoped-dict-policy-repair-${{ steps.candidate.outputs.sha || github.sha }}
+          path: |
+            benchmark-artifacts/v030-r24-operation-scoped-dict-policy-repair.json
+            benchmark-artifacts/v030-r24-operation-scoped-dict-policy-repair-candidate.txt
+          if-no-files-found: warn
+          retention-days: 90

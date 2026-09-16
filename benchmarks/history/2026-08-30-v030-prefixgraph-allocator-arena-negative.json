@@ -1,0 +1,36 @@
+{
+  "schema": "cmpct-v030-negative-evidence-v1",
+  "source_commit": "1bac14e3a4ceeb64f237bf328bf681dc9d76494c",
+  "workflow_run_id": 33350093302,
+  "artifact_digest": "sha256:740a30e45f0b1eba0db6c6190cbd3f9dd9617a8ba2200074d8823c0fcecec1af",
+  "target": "resemblance_hostile_v1/01_shifted_versions",
+  "hypothesis": "Capping glibc malloc arenas can preserve the exact four-worker PrefixGraph candidate/tournament while materially reducing the thread-count-scaled build RSS regression.",
+  "result": "falsified_as_material_rss_fix",
+  "baseline": {
+    "archive_bytes": 1700242,
+    "archive_sha256": "8994cb83c2f62944795144ee775d9395147681bb1156892d72d4cc5d4ca417fe",
+    "median_build_s": 6.675062723499998,
+    "median_incremental_build_peak_rss_kib": 302470.0
+  },
+  "arms": {
+    "arena-4": {
+      "exact_archive_identity": true,
+      "wall_ratio_to_baseline": 1.0834909605475262,
+      "rss_ratio_to_baseline": 0.9180877442390981
+    },
+    "arena-2": {
+      "exact_archive_identity": true,
+      "wall_ratio_to_baseline": 1.0964970194560604,
+      "rss_ratio_to_baseline": 1.119925943068734
+    },
+    "arena-1": {
+      "exact_archive_identity": true,
+      "wall_ratio_to_baseline": 1.0497277802096752,
+      "rss_ratio_to_baseline": 1.0197374946275664
+    }
+  },
+  "conclusion": "Allocator arena retention is not the dominant Shifted RSS cause. The best cap saved only about 8.2 percent RSS while costing about 8.3 percent wall time; tighter caps increased observed RSS. Combined with the near-linear 1/2/4 worker RSS frontier, the remaining high-value target is the live memory footprint/ownership of concurrent anchor auditions and their compressed candidate material, not glibc arena tuning.",
+  "release_credit": false,
+  "release_thresholds_changed": false,
+  "benchmark_identity_dispatch": false
+}

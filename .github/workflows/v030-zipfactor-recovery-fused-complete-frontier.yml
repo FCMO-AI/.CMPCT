@@ -1,0 +1,116 @@
+# ci-lane: deep
+# ci-cancel-policy: preserve-running-exact-receipt
+name: CMPCT v0.30 ZIP-factor recovery fused complete frontier
+
+on:
+  push:
+    branches: [agent/v030-authoritative-integration]
+    paths:
+      - 'benchmarks/v030_zipfactor_recovery_fused_complete_frontier.py'
+      - 'benchmarks/v030_zipfactor_v3_recovery_budget_oracle.py'
+      - 'benchmarks/v030_zipfactor_recovery_oracle.py'
+      - 'benchmarks/v030_external_competitors.py'
+      - 'experiments/entropygraph_v030_zipfactor_eocd_parser.py'
+      - 'experiments/entropygraph_v030_zipfactor_fused.py'
+      - 'experiments/entropygraph_v030_zipfactor_compact_v3.py'
+      - 'experiments/entropygraph_v030_zipfactor_compact_v3_fused_finalize.py'
+      - '.github/workflows/v030-zipfactor-recovery-fused-complete-frontier.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-v030-zipfactor-recovery-fused-complete-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.sha }}
+
+jobs:
+  recovery-fused-complete-frontier:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - name: Bind exact candidate head
+        id: candidate
+        run: |
+          set -euo pipefail
+          actual="$(git rev-parse HEAD)"
+          test "$actual" = "$EVIDENCE_HEAD"
+          echo "sha=$actual" >> "$GITHUB_OUTPUT"
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install exact comparator dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y zstd
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[test]'
+      - name: Compile exact recovery complete frontier
+        run: |
+          python -m py_compile experiments/entropygraph_v030_zipfactor_eocd_parser.py
+          python -m py_compile experiments/entropygraph_v030_zipfactor_fused.py
+          python -m py_compile experiments/entropygraph_v030_zipfactor_compact_v3_fused_finalize.py
+          python -m py_compile benchmarks/v030_zipfactor_recovery_fused_complete_frontier.py
+      - name: Run recovered candidate against ZIP and Zstd-19
+        run: |
+          mkdir -p benchmark-artifacts
+          python -m benchmarks.v030_zipfactor_recovery_fused_complete_frontier \
+            --work-root "$RUNNER_TEMP/v030-zipfactor-recovery-fused-complete" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-zipfactor-recovery-fused-complete.json"
+      - name: Ratchet exact recovery productization boundary
+        run: |
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          p=Path('benchmark-artifacts/v030-zipfactor-recovery-fused-complete.json')
+          e=json.loads(p.read_text())
+          assert e['schema']=='cmpct-v030-zipfactor-recovery-fused-complete-frontier-v1'
+          c=e['contract']
+          assert c['rounds']==9
+          assert c['level']==3 and c['group_size']==7
+          assert c['ties_fail'] is True
+          assert c['selector_change'] is False and c['release_credit'] is False
+          assert c['archive_bytes_changed_from_recovery_candidate'] is False
+          assert e['release_credit'] is False
+          assert e['experiment_valid'] is True
+          assert len(e['samples_s']['cmpct'])==len(e['samples_s']['zip'])==len(e['samples_s']['zstd19'])==9
+          assert len(e['cmpct_phase_samples_s']['build'])==len(e['cmpct_phase_samples_s']['verify'])==9
+          assert e['sizes']['cmpct'] < e['sizes']['zip']
+          assert e['sizes']['cmpct'] < e['sizes']['zstd19']
+          assert e['candidate']['payload_body_copies']==1
+          assert e['candidate']['control_copies']==2
+          assert e['candidate']['fused_group_finalize'] is True
+          assert e['candidate']['max_member_read_amplification'] <= 8.0
+          assert e['candidate']['max_decode_unit_bytes'] <= 8 * 1024 * 1024
+          assert e['promotion_signal'] is e['strict_four_way_win']
+          if e['promotion_signal']:
+              assert e['medians_s']['cmpct'] < e['medians_s']['zip']
+              assert e['medians_s']['cmpct'] < e['medians_s']['zstd19']
+          Path('benchmark-artifacts/v030-zipfactor-recovery-fused-candidate.txt').write_text(os.environ['EVIDENCE_HEAD']+'\n')
+          PY
+      - name: Public-surface guard
+        run: python tools/check_public_surface.py
+      - name: Upload evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: v030-zipfactor-recovery-fused-complete-${{ steps.candidate.outputs.sha || github.sha }}
+          path: |
+            benchmark-artifacts/v030-zipfactor-recovery-fused-complete.json
+            benchmark-artifacts/v030-zipfactor-recovery-fused-candidate.txt
+          if-no-files-found: warn
+          retention-days: 90
+      - name: CI topology self-check
+        run: python tools/check_ci_topology.py .github/workflows/v030-zipfactor-recovery-fused-complete-frontier.yml
+
+# Research-only productization boundary. Recovery is fully charged inside CMPCT verified creation timing. Relevant
+# semantic changes re-run it; unrelated integration commits do not. Exact receipts are preserved rather than canceled.
+# A positive result may advance to native/platform dispatch work, but this lane alone grants no selector/release credit.

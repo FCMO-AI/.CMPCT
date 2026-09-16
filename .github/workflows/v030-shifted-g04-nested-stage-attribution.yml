@@ -1,0 +1,153 @@
+# ci-lane: deep
+# ci-cancel-policy: preserve-running-exact-receipt
+# ci-pr-scope: latest-head-commit-gate
+name: CMPCT v0.30 Shifted G04 nested-stage attribution
+
+on:
+  push:
+    branches: [agent/v030-authoritative-integration]
+    paths:
+      - 'benchmarks/v030_shifted_g04_nested_stage_attribution.py'
+      - 'benchmarks/v030_release_performance.py'
+      - 'benchmarks/resemblance_hostile_corpus_v1.py'
+      - 'benchmarks/neutral_hostile_determinism_repair_v6.py'
+      - 'experiments/entropygraph_v028.py'
+      - 'experiments/entropygraph_v028_strict.py'
+      - 'experiments/entropygraph_v029_mosaic_strict.py'
+      - 'experiments/entropygraph_v029_residual_pack.py'
+      - 'experiments/entropygraph_v029_residual_fast.py'
+      - 'docs/v030-rnd/R25_SHIFTED_G04_NESTED_STAGE_ATTRIBUTION_PREREG.md'
+      - 'docs/v030-rnd/R25_SHIFTED_ATTEMPT5_PHASE_OWNERSHIP_V1_PREREG.md'
+      - 'docs/v030-rnd/R25_SHIFTED_ATTEMPT5_PHASE_OWNERSHIP_V1_RESULT.md'
+      - '.github/workflows/v030-shifted-g04-nested-stage-attribution.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.sha }}
+
+concurrency:
+  group: cmpct-v030-shifted-g04-nested-stage-${{ github.sha }}
+  cancel-in-progress: false
+
+jobs:
+  latest-head-impact:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    concurrency:
+      group: cmpct-v030-shifted-g04-nested-stage-classifier-${{ github.ref }}
+      cancel-in-progress: true
+    outputs:
+      run_deep: ${{ steps.scope.outputs.run_deep }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 2
+      - name: Bind exact head and classify newest commit only
+        id: scope
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            echo 'run_deep=true' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          git diff-tree --no-commit-id --name-only -r HEAD > /tmp/latest-head-files.txt
+          cat /tmp/latest-head-files.txt
+          if grep -Eq '^(benchmarks/v030_shifted_g04_nested_stage_attribution\.py|benchmarks/v030_release_performance\.py|benchmarks/resemblance_hostile_corpus_v1\.py|benchmarks/neutral_hostile_determinism_repair_v6\.py|experiments/entropygraph_v028(_strict)?\.py|experiments/entropygraph_v029_(mosaic_strict|residual_pack|residual_fast)\.py|docs/v030-rnd/R25_SHIFTED_G04_NESTED_STAGE_ATTRIBUTION_PREREG\.md|docs/v030-rnd/R25_SHIFTED_ATTEMPT5_PHASE_OWNERSHIP_V1_(PREREG|RESULT)\.md|\.github/workflows/v030-shifted-g04-nested-stage-attribution\.yml)$' /tmp/latest-head-files.txt; then
+            echo 'run_deep=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'run_deep=false' >> "$GITHUB_OUTPUT"
+          fi
+
+  attribution:
+    needs: latest-head-impact
+    if: needs.latest-head-impact.outputs.run_deep == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+    concurrency:
+      group: cmpct-v030-shifted-g04-nested-stage-receipt-${{ github.sha }}
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - name: Bind exact scientific head
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install deterministic runtime dependencies
+        run: |
+          set -euo pipefail
+          test -f /etc/apt/sources.list.d/ubuntu.sources
+          sudo apt-get -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" -o Dir::Etc::sourceparts="-" update
+          sudo apt-get -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" -o Dir::Etc::sourceparts="-" install -y zstd gcc
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[test]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
+      - name: Compile frozen nested-stage instrument
+        run: python -m py_compile benchmarks/v030_shifted_g04_nested_stage_attribution.py
+      - name: Run three fresh-process nested-stage repetitions
+        run: |
+          mkdir -p benchmark-artifacts
+          python benchmarks/v030_shifted_g04_nested_stage_attribution.py \
+            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-shifted-g04-nested-stage-work" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-shifted-g04-nested-stage.json"
+      - name: Enforce frozen nested-stage grammar
+        if: always()
+        run: |
+          test -f benchmark-artifacts/v030-shifted-g04-nested-stage.json
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          d=json.loads(Path('benchmark-artifacts/v030-shifted-g04-nested-stage.json').read_text())
+          assert d['schema']=='cmpct-v030-shifted-g04-nested-stage-attribution-v1'
+          assert d['source_commit']==os.environ['EVIDENCE_HEAD']
+          assert d['target']=='resemblance_hostile_v1/01_shifted_versions'
+          assert len(d['rows'])==3
+          c=d['contract']
+          assert c['repetitions']==3
+          assert float(c['stage_dominant_ratio'])==0.80
+          assert float(c['material_secondary_ratio'])==0.20
+          assert int(c['expected_v028_bytes'])==1761927
+          assert int(c['expected_attempt5_bytes'])==1723391
+          assert c['instrumentation_only'] is True and c['product_changed'] is False
+          assert c['release_credit'] is False and d['release_credit'] is False
+          allowed={
+            'SHIFTED_G04_SHARED_NESTED_GRAPH_CONSTRUCTION_OWNS',
+            'SHIFTED_G04_SHARED_V028_LEGACY_STAGE_MATERIAL',
+            'SHIFTED_G04_SHARED_ATTEMPT5_RESIDUAL_STAGE_MATERIAL',
+            'SHIFTED_G04_SHARED_NESTED_STAGE_MIXED',
+            'INVALID',
+          }
+          assert d['decision'] in allowed
+          if d['decision'] != 'INVALID':
+              assert not d['invalid_reasons']
+              for row in d['rows']:
+                  assert all(row['v028']['checks'].values())
+                  assert all(row['attempt5']['checks'].values())
+          PY
+      - name: CI topology self-check
+        if: always()
+        run: python tools/check_ci_topology.py .github/workflows/v030-shifted-g04-nested-stage-attribution.yml
+      - name: Public-surface guard
+        if: always()
+        run: python tools/check_public_surface.py
+      - name: Upload exact nested-stage evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: v030-shifted-g04-nested-stage-${{ env.EVIDENCE_HEAD }}
+          path: benchmark-artifacts/v030-shifted-g04-nested-stage.json
+          if-no-files-found: error
+          retention-days: 90
+
+# D1 instrumentation-only attribution. No result here grants product or release credit.

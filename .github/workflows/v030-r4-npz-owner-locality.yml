@@ -1,0 +1,80 @@
+# ci-lane: deep
+# ci-pr-scope: latest-head-commit-gate
+# ci-cancel-policy: preserve-running-exact-receipt
+name: CMPCT v0.30 R4 NPZ owner locality falsifier
+
+on:
+  push:
+    branches: [agent/v030-authoritative-integration]
+    paths:
+      - 'benchmarks/v030_r4_npz_owner_locality_oracle.py'
+      - 'benchmarks/v030_r4_analytics_dual_owner_oracle.py'
+      - 'benchmarks/neutral_hostile_corpus_v1.py'
+      - '.github/workflows/v030-r4-npz-owner-locality.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.sha }}
+
+concurrency:
+  group: cmpct-v030-r4-npz-locality-${{ github.sha }}
+  cancel-in-progress: false
+
+jobs:
+  locality:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - name: Bind exact evidence head
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install dependencies
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y zstd gcc ffmpeg libsndfile1
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[audio,test]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
+      - name: Compile locality falsifier
+        run: python -m py_compile benchmarks/v030_r4_npz_owner_locality_oracle.py
+      - name: Run NPZ owner locality falsifier
+        run: |
+          mkdir -p benchmark-artifacts
+          python benchmarks/v030_r4_npz_owner_locality_oracle.py \
+            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-r4-npz-locality-work" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-r4-npz-locality.json"
+      - name: Enforce receipt integrity only
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          d=json.loads(Path('benchmark-artifacts/v030-r4-npz-locality.json').read_text())
+          assert d['schema']=='cmpct-v030-r4-npz-owner-locality-v1'
+          assert d['contract']['diagnostic_only'] and not d['contract']['release_credit']
+          assert d['contract']['same_exact_npz_npy_relation']
+          assert d['contract']['optimistic_bound_ignores_zip_framing_and_authentication']
+          assert d['contract']['current_wrapper_authenticates_whole_npz_component']
+          assert d['contract']['no_physical_range_io_claim'] and d['contract']['no_threshold_sweep']
+          assert len(d['requests'])==3
+          print(json.dumps({'zip_member':d['zip_member'],'max_optimistic_member_payload_amplification':d['max_optimistic_member_payload_amplification'],'max_current_wrapper_cold_stored_amplification':d['max_current_wrapper_cold_stored_amplification'],'hypothesis':d['hypothesis']},sort_keys=True))
+          PY
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: v030-r4-npz-owner-locality-${{ env.EVIDENCE_HEAD }}
+          path: benchmark-artifacts/v030-r4-npz-locality.json
+          if-no-files-found: error
+          retention-days: 90
+
+# Green means receipt integrity only. A red scientific hypothesis is an accepted negative result.

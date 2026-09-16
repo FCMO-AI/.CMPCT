@@ -1,0 +1,297 @@
+# ci-lane: deep
+name: CMPCT v0.30 r24 compact-control terminal admission
+
+on:
+  push:
+    branches: [agent/v030-authoritative-integration]
+    paths:
+      - 'benchmarks/v030_r24_compact_control_terminal_admission.py'
+      - 'benchmarks/v030_r24_compact_control_terminal_generalization.py'
+      - 'benchmarks/v030_r24_compact_control_profile_productization.py'
+      - 'experiments/entropygraph_v030_r24_compact_control_profile.py'
+      - 'experiments/entropygraph_v030_release_product.py'
+      - 'tests/test_v030_r24_compact_control_shipping_selector.py'
+      - 'benchmarks/v030_external_competitors.py'
+      - '.github/workflows/v030-r24-compact-control-terminal-admission.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-v030-r24-compact-control-terminal-admission-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.sha }}
+
+jobs:
+  admission:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - name: Verify exact evidence head
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install benchmark dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y zstd gcc ffmpeg
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[test]' soundfile
+      - name: Compile admission proofs
+        run: |
+          python -m py_compile benchmarks/v030_r24_compact_control_terminal_admission.py
+          python -m py_compile benchmarks/v030_r24_compact_control_terminal_generalization.py
+      - name: Ratchet promoted shipping dispatch
+        run: pytest -q tests/test_v030_r24_compact_control_shipping_selector.py
+
+      - name: Run exact all-15 structural admission proof
+        run: |
+          python -m benchmarks.v030_r24_compact_control_terminal_admission \
+            --work-root "$RUNNER_TEMP/v030-cc-terminal" \
+            --output "$RUNNER_TEMP/v030-cc-terminal.json"
+      - name: Retain all-15 admission evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: v030-r24-compact-control-terminal-admission-${{ env.EVIDENCE_HEAD }}
+          path: ${{ runner.temp }}/v030-cc-terminal.json
+          if-no-files-found: error
+          retention-days: 90
+      - name: Ratchet all-15 evidence semantics without erasing valid negative rows
+        if: always()
+        run: |
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          p=Path(os.environ['RUNNER_TEMP'])/'v030-cc-terminal.json'
+          assert p.is_file(), 'compact-control all-15 receipt missing'
+          e=json.loads(p.read_text())
+          assert e['schema']=='cmpct-v030-r24-compact-control-terminal-admission-v2'
+          c=e['contract']; g=e['gate']
+          assert c['predicate_inputs']==['logical_bytes','regular_files','r24_bytes','candidate_bytes']
+          assert set(c['forbidden_inputs'])=={'workload_name','path','filename','suffix','content_hash','archive_hash','pack_hash'}
+          assert c['release_credit'] is False and c['selector_change'] is False
+          assert c['profile_ineligibility_is_negative_evidence'] is True
+          assert c['min_logical_bytes']==1048576
+          assert c['min_regular_files']==32
+          assert c['min_r24_to_logical']==0.98
+          assert c['max_candidate_to_r24']==0.9995
+          assert c['rounds']==5
+          assert len(e['rows'])==15 and g['all15_complete'] is True
+          assert g['zero_counterexamples'] is True
+          assert g['all_admitted_payloads_unchanged'] is True
+          assert g['all_admitted_two_control_copies'] is True
+          assert e['counterexamples']==[]
+          ineligible=set(e['profile_ineligible_rows'])
+          for row in e['rows']:
+              assert (row['workload'] in ineligible) is (not row['profile_eligible'])
+              if not row['profile_eligible']:
+                  assert row['admitted'] is False
+                  assert row['candidate_bytes'] is None
+                  assert row['profile_reject_reason']
+              if row['admitted']:
+                  assert row['candidate_no_larger_than_full_product'] is True
+                  assert row['strict_four_way_win'] is True
+                  assert row['competitors']['strict_four_way_win'] is True
+                  assert len(row['competitors']['samples']) == 5
+          assert e['target_profile_eligible'] is g['target_profile_eligible']
+          assert e['target_admitted'] is g['target_admitted']
+          PY
+
+      - name: Run unseen/adversarial selector generalization
+        if: always()
+        run: |
+          python -m benchmarks.v030_r24_compact_control_terminal_generalization \
+            --work-root "$RUNNER_TEMP/v030-cc-terminal-generalization" \
+            --output "$RUNNER_TEMP/v030-cc-terminal-generalization.json"
+      - name: Retain unseen/adversarial evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: v030-r24-compact-control-terminal-generalization-${{ env.EVIDENCE_HEAD }}
+          path: ${{ runner.temp }}/v030-cc-terminal-generalization.json
+          if-no-files-found: error
+          retention-days: 90
+      - name: Ratchet unseen/adversarial evidence semantics
+        if: always()
+        run: |
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          p=Path(os.environ['RUNNER_TEMP'])/'v030-cc-terminal-generalization.json'
+          assert p.is_file(), 'compact-control generalization receipt missing'
+          e=json.loads(p.read_text())
+          assert e['schema']=='cmpct-v030-r24-compact-control-terminal-generalization-v3'
+          c=e['contract']; g=e['gate']
+          assert c['predicate_inputs']==['logical_bytes','regular_files','r24_bytes','candidate_bytes']
+          assert set(c['forbidden_inputs'])=={'workload_name','path','filename','suffix','content_hash','archive_hash','pack_hash'}
+          assert c['selector_change'] is False and c['release_credit'] is False
+          assert c['profile_ineligibility_is_negative_evidence'] is True
+          assert c['min_logical_bytes']==1048576
+          assert c['min_regular_files']==32
+          assert c['min_r24_to_logical']==0.98
+          assert c['max_candidate_to_r24']==0.9995
+          assert c['comparator_rounds']==5
+          assert len(e['rows'])==10 and g['all_cases_complete'] is True
+          ineligible=set(e['profile_ineligible_cases'])
+          measured_counterexamples={
+              row['case'] for row in e['rows']
+              if row['admitted'] and not row.get('strict_four_way_win', False)
+          }
+          assert set(e['counterexamples']) == measured_counterexamples
+          for row in e['rows']:
+              assert (row['case'] in ineligible) is (not row['profile_eligible'])
+              if not row['profile_eligible']:
+                  assert row['admitted'] is False
+                  assert row['candidate_bytes'] is None
+                  assert row['profile_reject_reason']
+              if row['admitted']:
+                  assert row['payload_unchanged'] is True
+                  assert row['two_control_copies'] is True
+                  assert len(row['competitors']['samples']) == 5
+          PY
+
+      - name: Evaluate identity-free source prefilter without converting negative evidence into a crash
+        if: always()
+        run: |
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          root=Path(os.environ['RUNNER_TEMP'])
+          frozen=json.loads((root/'v030-cc-terminal.json').read_text())
+          general=json.loads((root/'v030-cc-terminal-generalization.json').read_text())
+          min_regular_files=1200
+          min_average_regular_bytes=4096.0
+          def prefilter(row):
+              files=int(row['regular_files']); logical=int(row['logical_bytes'])
+              return files >= min_regular_files and logical / max(1, files) >= min_average_regular_bytes
+          frozen_admitted=[r for r in frozen['rows'] if r['admitted']]
+          unseen_strict=[r for r in general['rows'] if r['admitted'] and r.get('strict_four_way_win', False)]
+          counterexamples=[r for r in general['rows'] if r['case'] in set(general['counterexamples'])]
+          retained_frozen=[r for r in frozen_admitted if prefilter(r)]
+          retained_unseen=[r for r in unseen_strict if prefilter(r)]
+          leaked=[r for r in counterexamples if prefilter(r)]
+          ineligible_resurrected=[r for r in frozen['rows'] if not r['profile_eligible'] and prefilter(r) and r['admitted']]
+          result={
+              'schema':'cmpct-v030-r24-compact-control-prefilter-refinement-v2',
+              'candidate':{
+                  'predicate_inputs':['regular_files','logical_bytes'],
+                  'min_regular_files':min_regular_files,
+                  'min_average_regular_bytes':min_average_regular_bytes,
+                  'forbidden_inputs':['workload_name','path','filename','suffix','content_hash','archive_hash','pack_hash'],
+                  'release_credit':False,
+                  'selector_change':False,
+              },
+              'evidence':{
+                  'frozen_admitted_count':len(frozen_admitted),
+                  'frozen_retained_count':len(retained_frozen),
+                  'unseen_strict_count':len(unseen_strict),
+                  'unseen_strict_retained_count':len(retained_unseen),
+                  'counterexample_count':len(counterexamples),
+                  'counterexample_leaks':[r['case'] for r in leaked],
+                  'ineligible_resurrections':[r['workload'] for r in ineligible_resurrected],
+              },
+          }
+          result['gate']={
+              'retains_all_existing_frozen_admissions':len(retained_frozen)==len(frozen_admitted),
+              'retains_unseen_strict_win':bool(retained_unseen),
+              'rejects_all_current_counterexamples':not leaked,
+              'never_resurrects_profile_ineligible_row':not ineligible_resurrected,
+          }
+          result['gate']['passed']=all(result['gate'].values())
+          out=root/'v030-cc-prefilter-refinement.json'
+          out.write_text(json.dumps(result, indent=2, sort_keys=True)+'\n')
+          print(json.dumps(result, indent=2, sort_keys=True))
+          PY
+      - name: Retain prefilter refinement evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: v030-r24-compact-control-prefilter-refinement-${{ env.EVIDENCE_HEAD }}
+          path: ${{ runner.temp }}/v030-cc-prefilter-refinement.json
+          if-no-files-found: error
+          retention-days: 90
+
+      - name: Record actual shipping-envelope result
+        if: always()
+        run: |
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          from experiments import entropygraph_v030_release_product as product
+          root=Path(os.environ['RUNNER_TEMP'])
+          general=json.loads((root/'v030-cc-terminal-generalization.json').read_text())
+          broad=set(general['counterexamples'])
+          shipping=[]; shipping_counterexamples=[]; rejected_counterexamples=[]
+          for row in general['rows']:
+              shape={
+                  'logical_bytes':int(row['logical_bytes']),
+                  'regular_files':int(row['regular_files']),
+                  'average_regular_bytes':int(row['logical_bytes'])/max(1,int(row['regular_files'])),
+              }
+              if not row['profile_eligible'] or not product._compact_control_source_prefilter(shape):
+                  if row['case'] in broad: rejected_counterexamples.append(row['case'])
+                  continue
+              if not product._compact_control_admitted(shape,int(row['r24_bytes']),int(row['candidate_bytes'])):
+                  if row['case'] in broad: rejected_counterexamples.append(row['case'])
+                  continue
+              shipping.append(row)
+              if not row.get('strict_four_way_win',False): shipping_counterexamples.append(row['case'])
+          result={
+              'schema':'cmpct-v030-r24-compact-control-shipping-envelope-v2',
+              'shipping_admitted':[r['case'] for r in shipping],
+              'shipping_counterexamples':shipping_counterexamples,
+              'broad_counterexamples':sorted(broad),
+              'shipping_rejected_broad_counterexamples':sorted(rejected_counterexamples),
+              'gate':{
+                  'all_broad_counterexamples_rejected':set(rejected_counterexamples)==broad,
+                  'zero_shipping_counterexamples':not shipping_counterexamples,
+                  'at_least_one_shipping_admission':bool(shipping),
+                  'all_shipping_admissions_strict':all(r.get('strict_four_way_win',False) for r in shipping),
+              },
+              'release_credit':False,
+          }
+          result['gate']['passed']=all(result['gate'].values())
+          (root/'v030-cc-shipping-envelope.json').write_text(json.dumps(result,indent=2,sort_keys=True)+'\n')
+          print(json.dumps(result,indent=2,sort_keys=True))
+          PY
+      - name: Retain shipping-envelope evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: v030-r24-compact-control-shipping-envelope-${{ env.EVIDENCE_HEAD }}
+          path: ${{ runner.temp }}/v030-cc-shipping-envelope.json
+          if-no-files-found: error
+          retention-days: 90
+
+      - name: Enforce promotion gate only after all negative and generalization evidence is preserved
+        if: always()
+        run: |
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          root=Path(os.environ['RUNNER_TEMP'])
+          frozen=json.loads((root/'v030-cc-terminal.json').read_text())
+          general=json.loads((root/'v030-cc-terminal-generalization.json').read_text())
+          prefilter=json.loads((root/'v030-cc-prefilter-refinement.json').read_text())
+          shipping=json.loads((root/'v030-cc-shipping-envelope.json').read_text())
+          assert frozen['gate']['passed'] is True, 'frozen compact-control promotion prerequisites remain red'
+          assert general['gate']['passed'] is True, 'unseen compact-control generalization prerequisites remain red'
+          assert prefilter['gate']['passed'] is True, 'identity-free prefilter refinement remains red'
+          assert shipping['gate']['passed'] is True, 'shipping compact-control envelope remains red'
+          PY
+      - name: CI topology self-check
+        if: always()
+        run: python tools/check_ci_topology.py .github/workflows/v030-r24-compact-control-terminal-admission.yml
+
+# Negative locality/profile evidence is preserved and the shipping terminal is retired. The two-hour campaign stays
+# reproducible for relevant changes, but unrelated PR synchronizations no longer retrigger it. No gate is weakened.

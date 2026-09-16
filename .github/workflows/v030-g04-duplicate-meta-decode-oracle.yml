@@ -1,0 +1,104 @@
+# ci-lane: focused
+name: CMPCT v0.30 G04 duplicate metadata decode oracle
+
+on:
+  push:
+    branches:
+      - agent/v030-authoritative-integration
+    paths:
+      - 'benchmarks/v030_g04_duplicate_meta_decode_oracle.py'
+      - 'benchmarks/v030_release_performance.py'
+      - 'benchmarks/v030_perf_worker.py'
+      - 'experiments/entropygraph_v030_release_reader.py'
+      - 'experiments/entropygraph_v030_release_product.py'
+      - 'experiments/entropygraph_v030_release_product_base.py'
+      - 'experiments/entropygraph_v030_geometry_overlay_g04.py'
+      - '.github/workflows/v030-g04-duplicate-meta-decode-oracle.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-v030-g04-meta-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  exact-ab:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      PYTHONPATH: ${{ github.workspace }}
+    steps:
+      - name: Check out exact candidate
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+
+      - name: Install deterministic benchmark dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[audio,test]'
+          python -m pip install pillow reportlab python-docx openpyxl python-pptx numpy
+
+      - name: Run exact G04 duplicate-metadata A/B
+        run: |
+          mkdir -p benchmark-artifacts
+          set -o pipefail
+          python benchmarks/v030_g04_duplicate_meta_decode_oracle.py \
+            --work-root benchmark-artifacts/v030-g04-meta-open-work \
+            --output benchmark-artifacts/v030-g04-meta-open.json \
+            2>&1 | tee benchmark-artifacts/v030-g04-meta-open.stdout.txt
+
+      - name: Bind evidence to exact head and frozen oracle law
+        if: always()
+        run: |
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          out=Path('benchmark-artifacts/v030-g04-meta-open.json')
+          if not out.exists():
+              raise SystemExit('oracle did not emit evidence')
+          d=json.loads(out.read_text())
+          assert d['schema']=='cmpct-v030-g04-duplicate-meta-decode-oracle-v1'
+          assert d['research_only'] is True
+          assert d['target']==['neutral_hostile_v1','09_ml_artifacts']
+          assert d['gates']['archive_bytes_unchanged'] is True
+          assert d['gates']['healthy_semantic_identity'] is True
+          assert d['gates']['healthy_baseline_decodes_two'] is True
+          assert d['gates']['healthy_candidate_decodes_one'] is True
+          assert d['gates']['corruption_semantics_identical'] is True
+          assert d['gates']['corruption_never_reuses_invalid_copy'] is True
+          assert d['gates']['open_speedup_at_least_10pct'] is True
+          assert d['gates']['passed'] is True
+          receipt={
+              'schema':'cmpct-v030-g04-duplicate-meta-decode-receipt-v1',
+              'candidate_sha':os.environ['GITHUB_SHA'],
+              'oracle_sha256':__import__('hashlib').sha256(out.read_bytes()).hexdigest(),
+              'archive_sha256':d['archive_sha256'],
+              'candidate_to_baseline_ratio':d['timing']['candidate_to_baseline_ratio'],
+              'passed':True,
+          }
+          Path('benchmark-artifacts/v030-g04-meta-open-receipt.json').write_text(json.dumps(receipt,indent=2)+'\n')
+          print(json.dumps(receipt,indent=2))
+          PY
+
+      - name: Upload exact G04 evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: v030-g04-duplicate-meta-${{ github.sha }}
+          path: |
+            benchmark-artifacts/v030-g04-meta-open.json
+            benchmark-artifacts/v030-g04-meta-open-receipt.json
+            benchmark-artifacts/v030-g04-meta-open.stdout.txt
+          if-no-files-found: warn
+
+# Research-only: green is permission to attempt canonical productization, never release credit by itself.

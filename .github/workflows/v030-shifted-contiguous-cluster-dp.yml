@@ -1,0 +1,143 @@
+# ci-lane: deep
+# ci-cancel-policy: preserve-running-exact-receipt
+# ci-pr-scope: latest-head-commit-gate
+name: CMPCT v0.30 Shifted contiguous cluster DP
+
+on:
+  push:
+    branches: [agent/v030-authoritative-integration]
+    paths:
+      - 'benchmarks/v030_shifted_contiguous_cluster_dp_oracle.py'
+      - '.github/workflows/v030-shifted-contiguous-cluster-dp.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'benchmarks/v030_shifted_contiguous_cluster_dp_oracle.py'
+      - 'benchmarks/v030_shifted_cluster_owned_pack_oracle.py'
+      - 'benchmarks/v030_external_competitors.py'
+      - 'benchmarks/v030_release_performance.py'
+      - 'experiments/entropygraph_v030_prefixgraph.py'
+      - 'experiments/entropygraph_v030_canonical_final_impl.py'
+      - '.github/workflows/v030-shifted-contiguous-cluster-dp.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-v030-shifted-contiguous-cluster-dp-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: false
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+
+jobs:
+  latest-head-impact:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      run_deep: ${{ steps.scope.outputs.run_deep }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 2
+      - name: Bind exact head and classify newest commit only
+        id: scope
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            echo 'run_deep=true' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          git diff-tree --no-commit-id --name-only -r HEAD > /tmp/latest-head-files.txt
+          cat /tmp/latest-head-files.txt
+          if grep -Eq '^(benchmarks/v030_shifted_(contiguous_cluster_dp_oracle|cluster_owned_pack_oracle)\.py|benchmarks/v030_(external_competitors|release_performance)\.py|experiments/entropygraph_v030_(prefixgraph|canonical_final_impl)\.py|\.github/workflows/v030-shifted-contiguous-cluster-dp\.yml)$' /tmp/latest-head-files.txt; then
+            echo 'run_deep=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'run_deep=false' >> "$GITHUB_OUTPUT"
+          fi
+
+  exact-contiguous-dp:
+    needs: latest-head-impact
+    if: needs.latest-head-impact.outputs.run_deep == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - name: Bind exact candidate head
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install deterministic dependencies from canonical Ubuntu feed
+        run: |
+          set -euo pipefail
+          test -f /etc/apt/sources.list.d/ubuntu.sources
+          sudo apt-get -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" -o Dir::Etc::sourceparts="-" update
+          sudo apt-get -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" -o Dir::Etc::sourceparts="-" install -y zstd ffmpeg libsndfile1
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[test,audio]'
+      - name: Static and policy ratchet
+        run: |
+          python -m py_compile benchmarks/v030_shifted_contiguous_cluster_dp_oracle.py
+          python tools/check_ci_topology.py .github/workflows/v030-shifted-contiguous-cluster-dp.yml
+          python tools/check_public_surface.py
+      - name: Run exact optimal contiguous cluster capacity oracle
+        run: |
+          mkdir -p benchmark-artifacts
+          python -m benchmarks.v030_shifted_contiguous_cluster_dp_oracle \
+            --work-root "$RUNNER_TEMP/v030-shifted-contiguous-cluster-dp" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-shifted-contiguous-cluster-dp.json"
+      - name: Enforce exact capacity and domination boundary
+        if: always()
+        run: |
+          test -f benchmark-artifacts/v030-shifted-contiguous-cluster-dp.json
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          d=json.loads(Path('benchmark-artifacts/v030-shifted-contiguous-cluster-dp.json').read_text())
+          assert d['schema']=='cmpct-v030-shifted-contiguous-cluster-dp-oracle-v2'
+          assert d['source_commit']==os.environ['EVIDENCE_HEAD']
+          assert d['files'] > 2 and d['cluster_count'] >= 1
+          assert d['artifact_reparsed_from_bytes'] is True
+          assert d['payload_boundaries_authenticated'] is True
+          assert d['intervals_compressed'] >= d['files']
+          assert d['trial_raw_bytes'] >= d['source_bytes']
+          assert d['search_work_amplification_vs_source'] >= 1.0
+          assert d['zstd19_compression_seconds'] > 0.0
+          assert d['within_decode_unit'] is True and d['max_cluster_raw_bytes'] <= 8*1024*1024
+          assert d['within_locality_amplification'] is True and d['max_decoded_context_amplification'] <= 8.0
+          assert d['tree_sha256']==d['verified_tree_sha256']
+          assert d['archive_bytes'] > 0 and len(d['archive_sha256'])==64
+          assert d['zip_bytes'] > 0 and d['zstd19_bytes'] > 0
+          assert d['release_credit'] is False and d['product_create_time_claim'] is False
+          a=d['domination_audit']
+          assert a['diagnosis']=='D4' and a['radicality']=='R4'
+          assert set(['S2','S3','S4']).issubset(a['active_saturation'])
+          assert a['research_priority_score'] >= 80
+          assert a['measured_gap_change_bytes']==d['measured_gap_change_bytes']
+          assert a['terminal_decision'] in {'PROMOTE_NEXT_PREREQUISITE','ESCALATE_RADICALITY','RETIRE_FAMILY'}
+          if d['strict_size_win_vs_zip_and_zstd19']:
+              assert a['terminal_decision']=='PROMOTE_NEXT_PREREQUISITE'
+          PY
+      - name: Upload exact R4 evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: v030-shifted-contiguous-cluster-dp-${{ env.EVIDENCE_HEAD }}
+          path: benchmark-artifacts/v030-shifted-contiguous-cluster-dp.json
+          if-no-files-found: error
+          retention-days: 90
+
+# R4 research only. This computes the exact minimum compressed payload among every admissible lexical contiguous
+# cluster partition under the frozen locality/decode-unit laws. The complete artifact is reparsed from authenticated
+# bytes before comparison. A size failure is terminal for that scope; a size win advances to bounded construction
+# timing and still earns zero release credit here.

@@ -1,0 +1,171 @@
+# ci-lane: deep
+# ci-pr-scope: latest-head-commit-gate
+# ci-cancel-policy: split-classifier-preserve-receipts
+name: CMPCT v0.30 exact semantic-owner RSS v2
+
+on:
+  push:
+    branches: [agent/v030-authoritative-integration]
+    paths:
+      - 'experiments/entropygraph_v030_*.py'
+      - 'benchmarks/v030_r25_semantic_owner_rss_*.py'
+      - 'docs/v030-rnd/R25_CANDIDATE_PHASE_RSS_RESULT.md'
+      - '.github/workflows/v030-r25-semantic-owner-rss-v2.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'experiments/entropygraph_v030_*.py'
+      - 'benchmarks/v030_r25_semantic_owner_rss_*.py'
+      - 'docs/v030-rnd/R25_CANDIDATE_PHASE_RSS_RESULT.md'
+      - '.github/workflows/v030-r25-semantic-owner-rss-v2.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+
+jobs:
+  latest-head-scope:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    concurrency:
+      group: cmpct-v030-r25-semantic-owner-rss-v2-classifier-${{ github.event.pull_request.number || github.ref }}
+      cancel-in-progress: true
+    outputs:
+      should_run: ${{ steps.scope.outputs.should_run }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 2
+      - id: scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          if [ "${{ github.event_name }}" != "pull_request" ]; then
+            echo "should_run=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          git diff-tree --no-commit-id --name-only -r HEAD > /tmp/latest-head-files.txt
+          if grep -Eq '^(experiments/entropygraph_v030_.*\.py$|benchmarks/v030_r25_semantic_owner_rss_.*\.py$|docs/v030-rnd/R25_CANDIDATE_PHASE_RSS_RESULT\.md$|\.github/workflows/v030-r25-semantic-owner-rss-v2\.yml$)' /tmp/latest-head-files.txt; then
+            echo "should_run=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "should_run=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  semantic-owner-rss-v2:
+    needs: latest-head-scope
+    if: needs.latest-head-scope.outputs.should_run == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 210
+    concurrency:
+      group: cmpct-v030-r25-semantic-owner-rss-v2-receipt-${{ github.event.pull_request.head.sha || github.sha }}
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install corpus dependencies from Ubuntu only
+        run: |
+          set -euo pipefail
+          test -f /etc/apt/sources.list.d/ubuntu.sources
+          sudo apt-get -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" -o Dir::Etc::sourceparts="-" update
+          sudo apt-get -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" -o Dir::Etc::sourceparts="-" install -y zstd gcc ffmpeg libsndfile1
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[test,audio]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
+      - name: Compile superseding semantic-owner instrument
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          python -m py_compile \
+            benchmarks/v030_r25_semantic_owner_rss_worker.py \
+            benchmarks/v030_r25_semantic_owner_rss_oracle.py \
+            experiments/entropygraph_v030_profile_isolation.py \
+            experiments/entropygraph_v030_canonical_final.py \
+            experiments/entropygraph_v030_release_candidate.py \
+            experiments/entropygraph_v030_release_product.py
+      - name: Measure exact canonical semantic-owner RSS in fresh processes
+        run: |
+          mkdir -p benchmark-artifacts
+          python benchmarks/v030_r25_semantic_owner_rss_oracle.py \
+            --work-root benchmark-artifacts/v030-r25-semantic-owner-rss-v2-work \
+            --output benchmark-artifacts/v030-r25-semantic-owner-rss-v2.json
+      - name: Ratchet exact semantic-owner and diagnostic-only boundary
+        if: always()
+        run: |
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+
+          path = Path('benchmark-artifacts/v030-r25-semantic-owner-rss-v2.json')
+          assert path.is_file(), 'semantic-owner RSS v2 did not publish evidence'
+          data = json.loads(path.read_text())
+          assert data['schema'] == 'cmpct-v030-r25-semantic-owner-rss-v2'
+          assert data['source_commit'] == os.environ['EVIDENCE_HEAD']
+          assert data['promotion_signal'] is False
+          assert data['release_credit'] is False
+          supersedes = data['supersedes']
+          assert supersedes['record'] == 'docs/v030-rnd/R25_CANDIDATE_PHASE_RSS_RESULT.md'
+          assert supersedes['v1_source'] == 'c2bbfdce215113790124c01fb96f69bf09b8962e'
+          assert supersedes['v1_workflow_run'] == 33589815780
+          assert supersedes['v1_artifact_id'] == 9831560776
+          assert 'parallel research wrapper' in supersedes['reason']
+
+          contract = data['contract']
+          assert contract['fresh_process_per_measurement'] is True
+          assert contract['exact_canonical_semantic_owner_identity_required'] is True
+          assert contract['strong_verification_outside_pack_timer'] is True
+          assert contract['candidate_bytes_are_not_combined_or_credited'] is True
+          assert contract['release_boundary_attribution_uses_total_fresh_process_peak_rss'] is True
+          assert contract['baseline_subtracted_ru_maxrss_is_diagnostic_only'] is True
+          for key in ('selector_changed','admission_changed','scheduling_changed','grammar_changed','integrity_changed','locality_limit_changed','decode_unit_limit_changed','recovery_changed'):
+              assert contract[key] is False
+
+          assert len(data['rows']) == 2
+          if data['experiment_valid'] is True:
+              assert data['worker_failures'] == []
+              for row in data['rows']:
+                  assert row['shipping_median_peak_rss_kib'] is not None
+                  assert row['g04_median_peak_rss_kib'] is not None
+                  assert len(row['repetitions']) == 2
+                  for repetition in row['repetitions']:
+                      for mode in ('shipping', 'g04', 'prefixgraph'):
+                          receipt = repetition[mode]
+                          owners = receipt.get('semantic_owners') or {}
+                          assert owners.get('identity_exact') is True
+                          assert owners.get('rc_pg_module') == 'experiments._v030_canonical_prefixgraph'
+                          assert owners.get('rc_g04_module') == 'experiments._v030_canonical_shared_portfolio'
+                          if receipt.get('eligible') is True:
+                              assert receipt['verified_tree_sha256'] == receipt['expected_verification_tree_sha256']
+                              assert receipt['archive_bytes'] > 0
+                          else:
+                              assert mode == 'prefixgraph'
+                              assert receipt.get('reject_reason')
+          else:
+              assert data['worker_failures'], 'invalid v2 evidence must preserve concrete failures'
+              raise SystemExit('semantic-owner RSS v2 is invalid; inspect worker_failures')
+          PY
+      - name: CI topology self-check
+        if: always()
+        run: python tools/check_ci_topology.py .github/workflows/v030-r25-semantic-owner-rss-v2.yml
+      - name: Upload exact semantic-owner evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: v030-r25-semantic-owner-rss-v2-${{ env.EVIDENCE_HEAD }}
+          path: benchmark-artifacts/v030-r25-semantic-owner-rss-v2.json
+          if-no-files-found: error
+          retention-days: 90
+
+# Superseding causal diagnostic only. V1 remains immutable historical evidence of an implementation-identity
+# mismatch. This lane can support a Forge ownership decision only when every isolated arm proves exact object
+# identity with the private canonical semantic owner used by shipping; it grants no release credit itself.

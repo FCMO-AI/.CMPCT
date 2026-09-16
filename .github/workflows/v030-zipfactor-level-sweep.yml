@@ -1,0 +1,87 @@
+# ci-lane: deep
+name: CMPCT v0.30 ZIP-factor level sweep
+
+# Exact evidence on de1683ec swept levels 1/2/3/4/5/6/7/9 with identical verified bytes.
+# Levels >=2 beat Zstd-19 size and every arm beat Zstd-19 creation time, but no level beat ZIP
+# creation once mandatory verification was charged. Preserve this negative oracle for manual use;
+# automatic PR reruns would consume capacity without a new architectural hypothesis.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-v030-zf-level-sweep-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+
+jobs:
+  level-sweep:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install deterministic dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y zstd
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[test]'
+      - name: Compile level-sweep surface
+        run: |
+          python -m py_compile \
+            experiments/entropygraph_v030_zipfactor_compact_v3.py \
+            benchmarks/v030_zipfactor_level_sweep_oracle.py
+      - name: Run repeated exact level sweep
+        run: |
+          mkdir -p benchmark-artifacts
+          python benchmarks/v030_zipfactor_level_sweep_oracle.py \
+            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-zf-level-sweep-work" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-zf-level-sweep.json" \
+            --rounds 9
+      - name: Independently enforce exactness and promotion boundary
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          d=json.loads(Path('benchmark-artifacts/v030-zf-level-sweep.json').read_text())
+          assert d['schema']=='cmpct-v030-zipfactor-level-sweep-v2'
+          assert d['rounds']==9
+          assert d['gate']['experiment_valid'] is True
+          assert d['gate']['release_credit'] is False
+          assert d['gate']['passed'] is True
+          assert len(d['levels']) == 8
+          assert all(row['all_rounds_exact'] for row in d['levels'])
+          if d['gate']['promotion_signal']:
+              assert d['gate']['four_way_level_found'] is True
+              best=d['best_four_way']
+              assert best is not None
+              assert best['beats_zip_size'] is True
+              assert best['beats_zstd19_size'] is True
+              assert best['beats_zip_create_median'] is True
+              assert best['beats_zstd19_create_median'] is True
+              assert best['all_rounds_exact'] is True
+          else:
+              assert d['gate']['four_way_level_found'] is False
+              assert d['best_four_way'] is None
+          PY
+      - name: CI topology self-check
+        run: python tools/check_ci_topology.py .github/workflows/v030-zipfactor-level-sweep.yml
+      - name: Upload level-sweep evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: v030-zf-level-sweep-${{ github.sha }}
+          path: benchmark-artifacts/v030-zf-level-sweep.json
+          if-no-files-found: warn
+          retention-days: 90
+
+# Research-only. Historical negative evidence is preserved but no automatic release/promotion credit exists.
+# Native/Android/recovery/version/merge/tag/site/final release authorities remain independently mandatory.

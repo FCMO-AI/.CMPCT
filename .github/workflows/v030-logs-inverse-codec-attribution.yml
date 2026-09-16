@@ -1,0 +1,116 @@
+# ci-lane: deep
+# ci-cancel-policy: preserve-running-exact-receipt
+name: CMPCT v0.30 Logs inverse-codec attribution
+
+on:
+  push:
+    branches: [agent/v030-authoritative-integration]
+    paths:
+      - 'docs/v030-rnd/R25_LOGS_INVERSE_CODEC_ATTRIBUTION_PREREG.md'
+      - 'benchmarks/v030_logs_inverse_codec_attribution.py'
+      - 'experiments/entropygraph_v030_logs_inverse_profile_v3.py'
+      - 'experiments/entropygraph_v030_logs_inverse_profile_v2.py'
+      - 'experiments/entropygraph_v030_logs_fused_extract.py'
+      - 'experiments/entropygraph_v030_release_product_logs_candidate.py'
+      - 'experiments/entropygraph_v030_release_product_logs_runtime.py'
+      - '.github/workflows/v030-logs-inverse-codec-attribution.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.sha }}
+
+concurrency:
+  group: cmpct-v030-logs-inverse-codec-attribution-${{ github.sha }}
+  cancel-in-progress: false
+
+jobs:
+  inverse-codec-attribution:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install deterministic dependencies
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y zstd gcc
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[test]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
+      - name: Compile frozen instrument
+        run: python -m py_compile benchmarks/v030_logs_inverse_codec_attribution.py
+      - name: Run exact inverse-codec attribution
+        run: |
+          mkdir -p benchmark-artifacts
+          python -m benchmarks.v030_logs_inverse_codec_attribution \
+            --work-root "$RUNNER_TEMP/v030-logs-inverse-codec" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-logs-inverse-codec.json"
+      - name: Ratchet frozen contract
+        run: |
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          d=json.loads(Path('benchmark-artifacts/v030-logs-inverse-codec.json').read_text())
+          assert d['schema']=='cmpct-v030-logs-inverse-codec-attribution-v1'
+          assert d['target']=='neutral_hostile_v1/05_logs_and_telemetry'
+          assert d['selected']=='logs-inverse'
+          assert d['rounds']==15
+          assert len(d['control_s'])==15 and len(d['instrumented_rows'])==15
+          assert d['experiment_valid'] is True
+          assert d['instrumentation_wall_ratio']<=1.10
+          assert d['expected_codec_calls']=={'gzip':2,'zstd':1,'xz':0}
+          assert d['observed_codec_call_sets']=={'gzip':[2],'zstd':[1],'xz':[0]}
+          assert d['unknown_codec_calls_absent'] is True
+          assert d['call_geometry_exact'] is True
+          assert d['material_absolute_floor_s']==0.002
+          assert d['material_share_floor']==0.05
+          assert d['maximum_instrumentation_wall_ratio']==1.10
+          assert d['release_credit'] is False and d['production_source_changed'] is False
+          assert d['decode_output_substituted_or_cached'] is False
+          assert d['strong_verify']['ok'] is True
+          allowed={
+              'GZIP_INVERSE_DECODE_HEADROOM',
+              'ZSTD_INVERSE_DECODE_HEADROOM',
+              'XZ_INVERSE_DECODE_HEADROOM',
+          }
+          if d['decision']=='TRACKED_INVERSE_CODECS_INSUFFICIENT':
+              assert not any(d['codec_material'].values())
+          else:
+              parts=d['decision'].split('+')
+              assert parts and all(part in allowed for part in parts)
+              codec_for={
+                  'GZIP_INVERSE_DECODE_HEADROOM':'gzip',
+                  'ZSTD_INVERSE_DECODE_HEADROOM':'zstd',
+                  'XZ_INVERSE_DECODE_HEADROOM':'xz',
+              }
+              assert all(d['codec_material'][codec_for[part]] is True for part in parts)
+          Path('benchmark-artifacts/v030-logs-inverse-codec-candidate.txt').write_text(os.environ['EVIDENCE_HEAD']+'\n')
+          PY
+      - name: CI topology self-check
+        if: always()
+        run: python tools/check_ci_topology.py .github/workflows/v030-logs-inverse-codec-attribution.yml
+      - name: Public-surface guard
+        if: always()
+        run: python tools/check_public_surface.py
+      - name: Upload exact evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: v030-logs-inverse-codec-${{ github.sha }}
+          path: |
+            benchmark-artifacts/v030-logs-inverse-codec.json
+            benchmark-artifacts/v030-logs-inverse-codec-candidate.txt
+          if-no-files-found: warn
+          retention-days: 90
+
+# Attribution only: no archive bytes, codec semantics, integrity/recovery/locality requirements or release thresholds change.

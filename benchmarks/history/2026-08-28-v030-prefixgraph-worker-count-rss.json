@@ -1,0 +1,64 @@
+{
+  "schema": "cmpct-v030-prefixgraph-worker-count-rss-history-v2",
+  "source_commit": "b4d6f3ae130ddbebcfa2a158b3733c98f6acc015",
+  "workflow_run": 33166300205,
+  "artifact_id": 9683906318,
+  "artifact_digest": "sha256:09c5b63c175fad5e910f4454d823e5b7db23035a7d1f892966d18df0e3ab698a",
+  "target": "resemblance_hostile_v1/01_shifted_versions",
+  "fresh_process_per_measurement": true,
+  "exact_archive_identity_all_arms": true,
+  "archive_bytes": 1700242,
+  "archive_sha256": "8994cb83c2f62944795144ee775d9395147681bb1156892d72d4cc5d4ca417fe",
+  "tree_sha256": "d9106dcdc8f965d45236c241d6c45f773e10b84ac204acc3c3521d889cd3a8fd",
+  "arms": {
+    "1": {
+      "median_incremental_peak_rss_kib": 63550,
+      "median_wall_s": 10.934672856500015,
+      "rss_ratio_vs_4_workers": 0.21356175984299597,
+      "wall_ratio_vs_4_workers": 1.4996727266139038
+    },
+    "2": {
+      "median_incremental_peak_rss_kib": 145070,
+      "median_wall_s": 7.626779147500002,
+      "rss_ratio_vs_4_workers": 0.48751226593899966,
+      "wall_ratio_vs_4_workers": 1.0460004455107568
+    },
+    "4": {
+      "median_incremental_peak_rss_kib": 297572,
+      "median_wall_s": 7.29137275250001,
+      "rss_ratio_vs_4_workers": 1.0,
+      "wall_ratio_vs_4_workers": 1.0
+    }
+  },
+  "initial_decision": {
+    "production_cap": 2,
+    "policy": "global-two-worker-rss-bound-v1",
+    "reason": "Two workers retained exact candidate/archive/tree identity while reducing median incremental RSS by about 51.25% versus four workers at only about 4.60% median wall-time cost. One worker reduced memory further but cost about 49.97% wall time versus four workers.",
+    "content_agnostic": true,
+    "benchmark_identity_dispatch": false
+  },
+  "product_boundary_reassessment": {
+    "source_commit": "7cb093edf72f876a8b8ffb1c23758bdfbbc8c0a8",
+    "product_phase_rss_workflow_run": 33169932606,
+    "product_phase_rss_artifact_id": 9685425663,
+    "product_phase_rss_artifact_digest": "sha256:7d7f72637ec25ef7c2949869cbb4e032bd2411af562c4c3e654aaf667585223f",
+    "shifted_shipping_median_incremental_peak_rss_kib": 273618,
+    "shifted_shipping_median_operation_peak_rss_kib": 396754,
+    "authoritative_runtime_workflow_run": 33169932887,
+    "authoritative_runtime_artifact_id": 9686292205,
+    "authoritative_runtime_artifact_digest": "sha256:37ecf028fc8ed3cb949672f47a7055dfff4ffa3ba20f88d28da312caa23387d9",
+    "result": "isolated-rss-win-did-not-transfer-materially-to-shipping-product",
+    "supersedes_initial_production_cap": true,
+    "replacement_policy": "global-four-worker-throughput-bounded-retention-v2",
+    "reason": "The two-worker product remained far above the frozen RSS limit while paying the measured 4.60% isolated PrefixGraph wall-time penalty. Four workers are restored globally; winner-plus-bounded-inflight ownership remains mandatory."
+  },
+  "contract": {
+    "candidate_set_changed": false,
+    "serializer_changed": false,
+    "tie_law_changed": false,
+    "strong_verification_preserved": true,
+    "threshold_changed": false,
+    "candidate_retention_remains_bounded": true
+  },
+  "claim_boundary": "The isolated worker-count experiment remains valid evidence about PrefixGraph in isolation. Its original two-worker production decision is superseded by exact shipping product evidence; neither the original nor replacement policy earns release credit without regenerated exact-head authority."
+}

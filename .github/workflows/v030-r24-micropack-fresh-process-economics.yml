@@ -1,0 +1,144 @@
+# ci-lane: deep
+# ci-pr-scope: latest-head-commit-gate
+# ci-cancel-policy: preserve-running-exact-receipt
+name: CMPCT v0.30 micropack fresh-process economics
+
+on:
+  push:
+    branches: [agent/v030-authoritative-integration]
+    paths:
+      - 'benchmarks/v030_r24_micropack_fresh_process_economics.py'
+      - 'benchmarks/v030_r24_locality_derived_micropack_referee.py'
+      - 'benchmarks/v030_r24_micropack_same_grammar_attribution.py'
+      - 'benchmarks/v030_r24_micropack_current15_transfer.py'
+      - 'benchmarks/v030_r25_membership_complete_artifact_referee.py'
+      - '.github/workflows/v030-r24-micropack-fresh-process-economics.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'benchmarks/v030_r24_micropack_fresh_process_economics.py'
+      - 'benchmarks/v030_r24_locality_derived_micropack_referee.py'
+      - 'benchmarks/v030_r24_micropack_same_grammar_attribution.py'
+      - 'benchmarks/v030_r24_micropack_current15_transfer.py'
+      - 'benchmarks/v030_r25_membership_complete_artifact_referee.py'
+      - '.github/workflows/v030-r24-micropack-fresh-process-economics.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-v030-micropack-fresh-economics-${{ github.event.pull_request.head.sha || github.sha }}
+  cancel-in-progress: false
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+
+jobs:
+  latest-head-impact:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      run_deep: ${{ steps.scope.outputs.run_deep }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 2
+      - id: scope
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          if [ "$EVENT_NAME" = workflow_dispatch ]; then echo 'run_deep=true' >> "$GITHUB_OUTPUT"; exit 0; fi
+          git diff-tree --no-commit-id --name-only -r HEAD > /tmp/files
+          if grep -Eq '^(benchmarks/v030_r24_micropack_fresh_process_economics\.py|benchmarks/v030_r24_locality_derived_micropack_referee\.py|benchmarks/v030_r24_micropack_same_grammar_attribution\.py|benchmarks/v030_r24_micropack_current15_transfer\.py|benchmarks/v030_r25_membership_complete_artifact_referee\.py|\.github/workflows/v030-r24-micropack-fresh-process-economics\.yml)$' /tmp/files; then
+            echo 'run_deep=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'run_deep=false' >> "$GITHUB_OUTPUT"
+          fi
+
+  fresh-process-economics:
+    needs: latest-head-impact
+    if: needs.latest-head-impact.outputs.run_deep == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install corpus dependencies
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y zstd gcc ffmpeg libsndfile1
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[audio,test]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
+      - name: Compile exact referee surface
+        run: |
+          python -m py_compile \
+            benchmarks/v030_r24_micropack_fresh_process_economics.py \
+            benchmarks/v030_r24_locality_derived_micropack_referee.py \
+            benchmarks/v030_r24_micropack_same_grammar_attribution.py \
+            benchmarks/v030_r24_micropack_current15_transfer.py \
+            benchmarks/v030_r25_membership_complete_artifact_referee.py
+      - name: Execute fresh-process economics referee
+        run: |
+          set -euo pipefail
+          mkdir -p benchmark-artifacts
+          python benchmarks/v030_r24_micropack_fresh_process_economics.py \
+            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-r24-micropack-fresh-process-work" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-r24-micropack-fresh-process.json"
+      - name: Enforce receipt integrity, not scientific victory
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          p=Path('benchmark-artifacts/v030-r24-micropack-fresh-process.json')
+          d=json.loads(p.read_text())
+          assert d['schema']=='cmpct-v030-r24-micropack-fresh-process-economics-v1'
+          assert d['experiment_valid'] is True
+          assert d['release_credit'] is False
+          assert d['canonical_builder_changed'] is False
+          assert d['rounds_per_contender']==3
+          assert d['rss_gate']=='diagnostic-only-until-runtime-import-attribution'
+          assert d['verdict'] in {
+              'MICROPACK_FRESH_PROCESS_INVARIANT_OR_DENSITY_FAIL',
+              'MICROPACK_DENSITY_WIN_WITH_CREATION_DEBT',
+              'MICROPACK_DENSITY_AND_CREATION_DOMINATE',
+          }
+          assert len(d['rows'])==3
+          PY
+      - name: Expose receipt summary
+        id: receipt
+        run: |
+          python - <<'PY' >> "$GITHUB_OUTPUT"
+          import json
+          from pathlib import Path
+          d=json.loads(Path('benchmark-artifacts/v030-r24-micropack-fresh-process.json').read_text())
+          short={
+              'MICROPACK_FRESH_PROCESS_INVARIANT_OR_DENSITY_FAIL':'fail',
+              'MICROPACK_DENSITY_WIN_WITH_CREATION_DEBT':'creation-debt',
+              'MICROPACK_DENSITY_AND_CREATION_DOMINATE':'dominate',
+          }[d['verdict']]
+          a=d['aggregate']
+          print(f"artifact_name=v030-micropack-fresh-{short}-db{a['delta_bytes']}")
+          PY
+      - run: python tools/check_ci_topology.py .github/workflows/v030-r24-micropack-fresh-process-economics.yml
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: ${{ steps.receipt.outputs.artifact_name || 'v030-micropack-fresh-no-summary' }}-${{ env.EVIDENCE_HEAD }}
+          path: benchmark-artifacts/v030-r24-micropack-fresh-process.json
+          if-no-files-found: error
+          retention-days: 90
+
+# Research-only. Green means receipt integrity, never automatic scientific promotion.

@@ -1,0 +1,83 @@
+# ci-lane: deep
+name: CMPCT v0.30 r24 wide-chunk oracle
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'benchmarks/v030_r24_wide_chunk_oracle.py'
+      - 'src/cmpct/builder.py'
+      - 'src/cmpct/codec.py'
+      - 'experiments/entropygraph_v030_release_product.py'
+      - '.github/workflows/v030-r24-wide-chunk-oracle.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-v030-r24-wide-chunk-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+
+jobs:
+  r24-wide-chunk-oracle:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install corpus dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y zstd gcc ffmpeg libsndfile1
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[audio,test]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
+      - name: Compile oracle
+        run: python -m py_compile benchmarks/v030_r24_wide_chunk_oracle.py
+      - name: Run exact-r24 wide-chunk A/B
+        run: |
+          mkdir -p benchmark-artifacts
+          python benchmarks/v030_r24_wide_chunk_oracle.py \
+            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-r24-wide-work" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-r24-wide.json"
+      - name: Enforce evidence honesty
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          d=json.loads(Path('benchmark-artifacts/v030-r24-wide.json').read_text())
+          assert d['schema']=='cmpct-v030-r24-wide-chunk-oracle-v1'
+          assert d['claim_boundary'].startswith('research-only')
+          assert d['wide_chunk_bytes']==8*1024*1024
+          assert d['summary']['workloads']==15
+          assert d['summary']['all_verified'] is True
+          assert d['summary']['all_decode_units_green'] is True
+          for row in d['rows']:
+              if not row['eligible']:
+                  continue
+              assert row['baseline']['strong_verify'] is True
+              assert row['wide']['strong_verify'] is True
+              assert row['baseline']['tree_sha256']==row['wide']['tree_sha256']
+              assert row['max_decode_unit_bytes']<=8*1024*1024
+              assert row['byte_delta']==row['wide']['archive_bytes']-row['baseline']['archive_bytes']
+              expected=row['wide_strictly_smaller'] and row['wide_strictly_faster']
+              assert row['wide_pareto_win'] is expected
+          PY
+      - name: Upload oracle evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: v030-r24-wide-chunk-${{ github.sha }}
+          path: benchmark-artifacts/v030-r24-wide.json
+          if-no-files-found: error
+          retention-days: 90
+
+# Encoder-policy research only. The format stays exact r24, but promotion still requires complete no-regression
+# evidence across the frozen corpus and every existing release authority; a local Pareto win cannot bypass them.

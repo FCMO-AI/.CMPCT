@@ -1,0 +1,92 @@
+# ci-lane: deep
+name: CMPCT v0.30 r24 medium-pack generalization
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'experiments/entropygraph_v030_release_product.py'
+      - 'src/cmpct/v030_release_locality.py'
+      - 'benchmarks/v030_r24_medium_binary_pack_generalization.py'
+      - 'benchmarks/neutral_hostile_corpus_v1.py'
+      - 'benchmarks/resemblance_hostile_corpus_v1.py'
+      - 'benchmarks/neutral_hostile_determinism_repair_v6.py'
+      - '.github/workflows/v030-r24-medium-binary-pack-generalization.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-v030-r24-medium-pack-generalization-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+
+jobs:
+  frozen-suite-ratchet:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install deterministic corpus dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y zstd gcc ffmpeg libsndfile1
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[audio,test]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
+      - name: Compile promotion, locality boundary and ratchet
+        run: |
+          python -m py_compile \
+            experiments/entropygraph_v030_release_product.py \
+            src/cmpct/v030_release_locality.py \
+            benchmarks/v030_r24_medium_binary_pack_generalization.py
+      - name: Run full 15-workload canonical-r24 causal A/B
+        run: |
+          mkdir -p benchmark-artifacts
+          python benchmarks/v030_r24_medium_binary_pack_generalization.py \
+            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-r24-medium-pack-generalization-work" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-r24-medium-pack-generalization.json"
+      - name: Independently enforce zero-row regression with locality held constant
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          d=json.loads(Path('benchmark-artifacts/v030-r24-medium-pack-generalization.json').read_text())
+          assert d['schema']=='cmpct-v030-r24-medium-binary-pack-generalization-v2'
+          assert len(d['rows'])==15
+          assert d['contract']['held_constant'].startswith('release nested-container locality repair')
+          assert d['gate']['exact_workload_count'] is True
+          assert d['gate']['all_verified_tree_equal'] is True
+          assert d['gate']['locality_constant_on_both_sides'] is True
+          assert d['gate']['zero_r24_byte_regressions'] is True
+          assert d['gate']['aggregate_no_regression'] is True
+          assert d['gate']['at_least_one_material_improvement'] is True
+          assert d['totals']['regressed_rows']==0
+          assert all(row['candidate']['format_revision']==24 for row in d['rows'])
+          assert all(row['baseline']['format_revision']==24 for row in d['rows'])
+          assert all(row['candidate']['release_locality_forced_for_causal_isolation'] is True for row in d['rows'])
+          assert all(row['baseline']['release_locality_forced_for_causal_isolation'] is True for row in d['rows'])
+          assert d['gate']['passed'] is True
+          PY
+      - name: Public-surface guard
+        if: always()
+        run: python tools/check_public_surface.py
+      - name: Upload exact A/B evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: v030-r24-medium-pack-generalization-${{ github.sha }}
+          path: benchmark-artifacts/v030-r24-medium-pack-generalization.json
+          if-no-files-found: warn
+          retention-days: 90
+
+# This is a zero-regression causal ratchet, not a release shortcut. Both sides use the current immutable <=8x
+# nested-container locality repair; only medium-binary S_PACK admission differs. The separate locality causality
+# gate retains the historical-vs-shipping byte delta so this isolation cannot hide the safety cost.

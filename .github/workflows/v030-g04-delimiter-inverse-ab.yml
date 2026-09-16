@@ -1,0 +1,107 @@
+# ci-lane: deep
+# ci-pr-scope: latest-head-commit-gate
+# ci-cancel-policy: split-classifier-preserve-receipts
+name: CMPCT v0.30 G04 delimiter inverse A/B
+
+on:
+  push:
+    branches: [agent/v030-authoritative-integration]
+    paths:
+      - 'experiments/v030_g04_delimiter_inverse_ab.py'
+      - '.github/workflows/v030-g04-delimiter-inverse-ab.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'experiments/v030_g04_delimiter_inverse_ab.py'
+      - '.github/workflows/v030-g04-delimiter-inverse-ab.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+
+jobs:
+  latest-head-impact:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    concurrency:
+      group: cmpct-v030-g04-delimiter-ab-route-${{ github.event.pull_request.number || github.ref }}
+      cancel-in-progress: true
+    outputs:
+      run_deep: ${{ steps.scope.outputs.run_deep }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 2
+      - id: scope
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          if [ "$EVENT_NAME" = workflow_dispatch ]; then echo 'run_deep=true' >> "$GITHUB_OUTPUT"; exit 0; fi
+          git diff-tree --no-commit-id --name-only -r HEAD > /tmp/files
+          if grep -Eq '^(experiments/v030_g04_delimiter_inverse_ab\.py|\.github/workflows/v030-g04-delimiter-inverse-ab\.yml)$' /tmp/files; then echo 'run_deep=true' >> "$GITHUB_OUTPUT"; else echo 'run_deep=false' >> "$GITHUB_OUTPUT"; fi
+
+  exact-ml-ab:
+    needs: latest-head-impact
+    if: needs.latest-head-impact.outputs.run_deep == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    concurrency:
+      group: cmpct-v030-g04-delimiter-ab-receipt-${{ github.event.pull_request.head.sha || github.sha }}
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - name: Bind exact head
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install exact corpus dependencies
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y zstd gcc ffmpeg libsndfile1
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[audio,test]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
+      - name: Compile oracle
+        run: python -m py_compile experiments/v030_g04_delimiter_inverse_ab.py
+      - name: Run exact-archive A/B
+        run: |
+          mkdir -p benchmark-artifacts
+          python experiments/v030_g04_delimiter_inverse_ab.py \
+            --work-root "$RUNNER_TEMP/v030-g04-delimiter-inverse-ab" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-g04-delimiter-inverse-ab.json"
+      - name: Validate research boundary
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          d=json.loads(Path('benchmark-artifacts/v030-g04-delimiter-inverse-ab.json').read_text())
+          assert d['schema']=='cmpct-v030-g04-delimiter-inverse-ab-v1'
+          assert d['target']=='neutral_hostile_v1/09_ml_artifacts'
+          assert d['release_credit'] is False and d['product_source_changed'] is False
+          assert d['archive_bytes_changed'] is False and d['release_thresholds_changed'] is False
+          assert len(d['control_s'])==9 and len(d['candidate_s'])==9
+          assert d['archive_bytes'] > 0 and d['source_tree_sha256']
+          PY
+      - name: Check workflow topology
+        run: python tools/check_ci_topology.py .github/workflows/v030-g04-delimiter-inverse-ab.yml
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: v030-g04-delimiter-inverse-ab-${{ env.EVIDENCE_HEAD }}
+          path: benchmark-artifacts/v030-g04-delimiter-inverse-ab.json
+          if-no-files-found: error
+          retention-days: 90
+
+# Research-only exact-archive A/B. Green validates receipt integrity, not product promotion.

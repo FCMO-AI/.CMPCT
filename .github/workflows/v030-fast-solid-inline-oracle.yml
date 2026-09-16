@@ -1,0 +1,79 @@
+# ci-lane: deep
+name: CMPCT v0.30 inline solid candidate oracle
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'benchmarks/v030_fast_solid_inline_oracle.py'
+      - 'benchmarks/v030_external_competitors.py'
+      - 'benchmarks/v030_release_generalization.py'
+      - '.github/workflows/v030-fast-solid-inline-oracle.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-v030-inline-solid-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+
+jobs:
+  inline-solid-oracle:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install corpus and competitor dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y zstd gcc ffmpeg libsndfile1
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[audio,test]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
+      - name: Compile oracle
+        run: python -m py_compile benchmarks/v030_fast_solid_inline_oracle.py
+      - name: Run exact-tree inline-solid sweep
+        run: |
+          mkdir -p benchmark-artifacts
+          python benchmarks/v030_fast_solid_inline_oracle.py \
+            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-inline-solid-work" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-inline-solid.json"
+      - name: Enforce evidence honesty
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          d=json.loads(Path('benchmark-artifacts/v030-inline-solid.json').read_text())
+          assert d['schema']=='cmpct-v030-fast-solid-inline-oracle-v3'
+          assert d['claim_boundary'].startswith('research-only')
+          assert d['summary']['workloads']==15 and len(d['rows'])==15
+          assert set(d['variants'])=={'inline-path','inline-ext'}
+          for row in d['rows']:
+              assert row['timing_boundary']=='source-scan+inline-metadata-pack+payload-sha256+zstd-compress+archive-write'
+              assert all(c['tree_verified'] is True for c in row['candidates'])
+              for c in row['candidates']:
+                  assert abs(c['create_s']-(c['pack_source_s']+c['compression_hash_write_s'])) < 1e-9
+                  expected=all(c[k] for k in ('beats_zip_size','beats_zstd19_size','beats_zip_create','beats_zstd19_create'))
+                  assert c['viable'] is expected
+                  if c['threads'] == 4:
+                      assert c['level'] in (12,15,19)
+          PY
+      - name: Upload oracle evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: v030-inline-solid-${{ github.sha }}
+          path: benchmark-artifacts/v030-inline-solid.json
+          if-no-files-found: error
+          retention-days: 90
+
+# Research only. A positive result does not authorize release: canonical r25 framing, <=8x locality, strong/member
+# integrity, native/Android parity, exact product accounting and every unchanged release gate remain mandatory.

@@ -1,0 +1,31 @@
+{
+  "schema": "cmpct-v030-release-receipt-v1",
+  "id": "zip-portability",
+  "status": "pass",
+  "owner_task": "T01",
+  "candidate_fingerprint": "e617b854ae2af6997dce59d1d69a7dec583c03355e637a7c3a3b8749318e98c3",
+  "candidate_fingerprint_source": {
+    "evidence_index": 0,
+    "json_path": "candidate_fingerprint"
+  },
+  "evidence": [
+    {
+      "path": "docs/v030-release-evidence/zip-portability-0a9447d0b3dbedd289ca661418386031e689021a.json",
+      "sha256": "9603175e06cc066ef11fa8f46251ed18676b9d39ab3ade4050165ad464a8dbcf"
+    }
+  ],
+  "facts": {
+    "stock_zip_extract_tree_equal": true,
+    "r24_fallback_export": true,
+    "g04_export": true,
+    "prefixgraph_export": true,
+    "atomic_publication": true
+  },
+  "fact_sources": {
+    "facts.stock_zip_extract_tree_equal": {"evidence_index": 0, "json_path": "facts.stock_zip_extract_tree_equal"},
+    "facts.r24_fallback_export": {"evidence_index": 0, "json_path": "facts.r24_fallback_export"},
+    "facts.g04_export": {"evidence_index": 0, "json_path": "facts.g04_export"},
+    "facts.prefixgraph_export": {"evidence_index": 0, "json_path": "facts.prefixgraph_export"},
+    "facts.atomic_publication": {"evidence_index": 0, "json_path": "facts.atomic_publication"}
+  }
+}

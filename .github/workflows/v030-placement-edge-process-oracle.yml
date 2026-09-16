@@ -1,0 +1,104 @@
+# ci-lane: deep
+name: CMPCT v0.30 Placement edge process oracle
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'benchmarks/v030_placement_edge_process_oracle.py'
+      - 'experiments/entropygraph_v029_*.py'
+      - 'experiments/entropygraph_v030_*.py'
+      - '.github/workflows/v030-placement-edge-process-oracle.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-v030-placement-edge-oracle-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+
+jobs:
+  large-mixed-edge-process:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+
+      - name: Install deterministic dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y zstd gcc ffmpeg libsndfile1
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[audio,test]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
+
+      - name: Compile exact-edge oracle
+        run: python -m py_compile benchmarks/v030_placement_edge_process_oracle.py
+
+      - name: Run pathological large-binary edge oracle
+        continue-on-error: true
+        run: |
+          mkdir -p benchmark-artifacts
+          python benchmarks/v030_placement_edge_process_oracle.py \
+            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-placement-edge-process-work" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-placement-edge-process.json"
+
+      - name: Independently enforce exact-byte research contract
+        if: always()
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          p=Path('benchmark-artifacts/v030-placement-edge-process.json')
+          if not p.is_file():
+              raise SystemExit('placement edge oracle evidence missing')
+          d=json.loads(p.read_text())
+          assert d['schema']=='cmpct-v030-placement-edge-process-oracle-v1'
+          c=d['contract']; g=d['gate']
+          assert c['exact_graph_bytes_required'] is True
+          assert c['strong_verify_required'] is True
+          assert c['nested_spawn_topology'] is True
+          assert c['exploratory_only'] is True
+          assert c['no_release_threshold_changed'] is True
+          assert c['minimum_improvement_pct']==30.0
+          assert c['minimum_saved_s']==120.0
+          assert g['exact_target_shape'] is True
+          assert g['byte_identical'] is True
+          assert g['tree_identical'] is True
+          assert d['baseline']['archive_bytes']==d['candidate']['archive_bytes']
+          assert d['baseline']['archive_sha256']==d['candidate']['archive_sha256']
+          assert d['candidate']['cache']['edges'] > 0
+          # A marginal result is durable negative evidence, not a permanent CI failure and not permission to ship
+          # extra process topology. Promotion remains exactly the original huge 30% + 120 s hurdle.
+          earned = (
+              float(d['improvement_pct']) >= float(c['minimum_improvement_pct'])
+              and float(d['saved_s']) >= float(c['minimum_saved_s'])
+          )
+          assert g['material_speedup'] is earned
+          assert g['passed'] is earned
+          PY
+
+      - name: Public-surface guard
+        if: always()
+        run: python tools/check_public_surface.py
+
+      - name: Upload exact-edge evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: v030-placement-edge-process-oracle-${{ github.sha }}
+          path: benchmark-artifacts/v030-placement-edge-process.json
+          if-no-files-found: warn
+          retention-days: 90
+
+# Exploratory deep research only. Exact negative evidence is a valid completed experiment, but only a candidate that
+# still clears the original >=30% AND >=120 s threshold can justify production integration. This lane never changes
+# shipping bytes, runtime authority, or release credit by itself.

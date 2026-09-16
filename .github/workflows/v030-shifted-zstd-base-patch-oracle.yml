@@ -1,0 +1,145 @@
+# ci-lane: deep
+# ci-pr-scope: latest-head-commit-gate
+# ci-cancel-policy: preserve-running-exact-receipt
+name: CMPCT v0.30 Shifted Zstd base-patch oracle
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'benchmarks/v030_shifted_zstd_patch_oracle.py'
+      - 'benchmarks/resemblance_hostile_corpus_v1.py'
+      - 'benchmarks/v030_external_competitors.py'
+      - 'benchmarks/v030_release_generalization.py'
+      - '.github/workflows/v030-shifted-zstd-base-patch-oracle.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-v030-shifted-zstd-base-patch-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: false
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+
+jobs:
+  admission:
+    runs-on: ubuntu-24.04
+    outputs:
+      run_deep: ${{ steps.scope.outputs.run_deep }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 2
+      - name: Bind exact candidate head
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+      - name: Classify newest exact HEAD commit
+        id: scope
+        shell: bash
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            echo 'run_deep=true' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          changed="$(git diff-tree --no-commit-id --name-only -r HEAD)"
+          printf '%s\n' "$changed"
+          if printf '%s\n' "$changed" | grep -Eq '^(benchmarks/v030_shifted_zstd_patch_oracle\.py|benchmarks/resemblance_hostile_corpus_v1\.py|benchmarks/v030_external_competitors\.py|benchmarks/v030_release_generalization\.py|\.github/workflows/v030-shifted-zstd-base-patch-oracle\.yml)$'; then
+            echo 'run_deep=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'run_deep=false' >> "$GITHUB_OUTPUT"
+          fi
+
+  shifted-base-patch:
+    needs: admission
+    if: needs.admission.outputs.run_deep == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - name: Bind exact candidate head
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install deterministic dependencies
+        run: |
+          sudo apt-get update \
+            -o Dir::Etc::sourcelist='sources.list.d/ubuntu.sources' \
+            -o Dir::Etc::sourceparts='-' \
+            -o APT::Get::List-Cleanup='0'
+          sudo apt-get install -y \
+            -o Dir::Etc::sourcelist='sources.list.d/ubuntu.sources' \
+            -o Dir::Etc::sourceparts='-' \
+            zstd
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[test]'
+      - name: Compile R4 oracle
+        run: python -m py_compile benchmarks/v030_shifted_zstd_patch_oracle.py
+      - name: Run complete-artifact base-patch oracle
+        run: |
+          mkdir -p benchmark-artifacts
+          python benchmarks/v030_shifted_zstd_patch_oracle.py \
+            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-shifted-base-patch-work" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-shifted-base-patch.json"
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          p=Path('benchmark-artifacts/v030-shifted-base-patch.json')
+          d=json.loads(p.read_text())
+          # Evidence custody is separate from representation policy: bind the receipt to the exact checkout
+          # after the benchmark so source identity cannot influence compression or timing decisions.
+          d['evidence_source_sha']=os.environ['EVIDENCE_HEAD']
+          p.write_text(json.dumps(d, indent=2)+'\n')
+          PY
+      - name: Enforce exact research boundary
+        if: always()
+        run: |
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          p=Path('benchmark-artifacts/v030-shifted-base-patch.json')
+          assert p.exists(), 'Shifted base-patch evidence missing'
+          d=json.loads(p.read_text())
+          assert d['schema']=='cmpct-v030-shifted-zstd-base-patch-oracle-v1'
+          assert d['target']=='resemblance_hostile_v1/01_shifted_versions'
+          assert d['evidence_source_sha']==os.environ['EVIDENCE_HEAD']
+          assert len(d['evidence_source_sha'])==40
+          assert d['contract']['benchmark_identity_used_in_representation'] is False
+          assert d['contract']['single_complete_artifact'] is True
+          assert d['contract']['creation_includes_source_scan_anchor_selection_patch_construction_framing_hashing_publication'] is True
+          assert d['contract']['research_only'] is True
+          assert d['contract']['release_credit'] is False
+          assert d['summary']['release_credit'] is False
+          assert len(d['arms'])==4
+          for arm in d['arms']:
+              assert arm['tree_verified'] is True
+              assert arm['tree_sha256']==d['tree_sha256']
+              assert len(arm['artifact_sha256'])==64
+              if arm['strict']['five_way_win']:
+                  assert arm['strict']['beats_v029_size'] is True
+                  assert arm['strict']['beats_zip_size'] is True
+                  assert arm['strict']['beats_zstd19_size'] is True
+                  assert arm['strict']['beats_zip_create'] is True
+                  assert arm['strict']['beats_zstd19_create'] is True
+          PY
+      - name: CI topology self-check
+        if: always()
+        run: python tools/check_ci_topology.py .github/workflows/v030-shifted-zstd-base-patch-oracle.yml
+      - name: Upload exact-head R4 evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: v030-shifted-zstd-base-patch-${{ env.EVIDENCE_HEAD }}
+          path: benchmark-artifacts/v030-shifted-base-patch.json
+          if-no-files-found: error
+          retention-days: 90
+
+# Research-only R4 representation. A positive result is only a signal to build a generic bounded admission/reader
+# prerequisite. It cannot change canonical selector, archive grammar, recovery, native/Android, or release authority.

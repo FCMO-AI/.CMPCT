@@ -1,0 +1,124 @@
+# ci-lane: deep
+# ci-pr-scope: latest-head-commit-gate
+# ci-cancel-policy: preserve-running-exact-receipt
+name: CMPCT v0.30 R4 OOXML VZIP oracle
+
+on:
+  push:
+    branches: [agent/v030-authoritative-integration]
+    paths:
+      - 'benchmarks/v030_r4_ooxml_vzip_oracle.py'
+      - 'benchmarks/neutral_hostile_corpus_v1.py'
+      - 'benchmarks/neutral_hostile_determinism_repair_v*.py'
+      - 'src/cmpct/builder.py'
+      - 'src/cmpct/reader.py'
+      - 'src/cmpct/codec.py'
+      - 'src/cmpct/validation.py'
+      - '.github/workflows/v030-r4-ooxml-vzip-oracle.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'benchmarks/v030_r4_ooxml_vzip_oracle.py'
+      - 'benchmarks/neutral_hostile_corpus_v1.py'
+      - 'benchmarks/neutral_hostile_determinism_repair_v*.py'
+      - 'src/cmpct/builder.py'
+      - 'src/cmpct/reader.py'
+      - 'src/cmpct/codec.py'
+      - 'src/cmpct/validation.py'
+      - '.github/workflows/v030-r4-ooxml-vzip-oracle.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-v030-r4-ooxml-vzip-${{ github.event.pull_request.head.sha || github.sha }}
+  cancel-in-progress: false
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+
+jobs:
+  latest-head-impact:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      run_deep: ${{ steps.scope.outputs.run_deep }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 2
+      - name: Bind exact head and classify only its changed files
+        id: scope
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then echo 'run_deep=true' >> "$GITHUB_OUTPUT"; exit 0; fi
+          git diff-tree --no-commit-id --name-only -r HEAD > /tmp/latest-head-files.txt
+          if grep -Eq '^(benchmarks/v030_r4_ooxml_vzip_oracle\.py|benchmarks/neutral_hostile_corpus_v1\.py|benchmarks/neutral_hostile_determinism_repair_v[^/]*\.py|src/cmpct/(builder|reader|codec|validation)\.py|\.github/workflows/v030-r4-ooxml-vzip-oracle\.yml)$' /tmp/latest-head-files.txt; then echo 'run_deep=true' >> "$GITHUB_OUTPUT"; else echo 'run_deep=false' >> "$GITHUB_OUTPUT"; fi
+
+  ooxml-vzip-oracle:
+    needs: latest-head-impact
+    if: needs.latest-head-impact.outputs.run_deep == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - name: Bind exact candidate head
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install frozen-corpus dependencies
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y zstd gcc ffmpeg libsndfile1
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[audio,test]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
+      - name: Compile exact OOXML VZIP oracle
+        run: python -m py_compile benchmarks/v030_r4_ooxml_vzip_oracle.py
+      - name: Measure unchanged S_VZIP on OOXML
+        run: |
+          mkdir -p benchmark-artifacts
+          python benchmarks/v030_r4_ooxml_vzip_oracle.py \
+            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-r4-ooxml-vzip-work" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-r4-ooxml-vzip.json"
+      - name: Enforce diagnostic contract
+        run: |
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          d=json.loads(Path('benchmark-artifacts/v030-r4-ooxml-vzip.json').read_text())
+          assert d['schema']=='cmpct-v030-r4-ooxml-vzip-oracle-v1'
+          assert d['source_commit']==os.environ['EVIDENCE_HEAD']
+          assert d['workload']=='02_office_workspace'
+          assert d['ooxml_file_count']==6
+          assert d['control']['archive_bytes']>0 and d['probe_existing_s_vzip']['archive_bytes']>0
+          assert d['control']['restored_content_tree_sha256']==d['original_content_tree_sha256']
+          assert d['probe_existing_s_vzip']['restored_content_tree_sha256']==d['original_content_tree_sha256']
+          assert d['hostile_fake_zip_fell_back']
+          h=d['hypothesis']; assert h['existing_s_vzip_is_exact_for_ooxml']; assert h['control_did_not_virtualize_ooxml']; assert h['hostile_malformed_container_rejected']; assert isinstance(h['material_size_win'], bool); assert isinstance(h['supported_for_content_signature_admission_oracle'], bool)
+          c=d['contract']; assert c['diagnostic_only'] and c['release_credit'] is False; assert c['production_builder_changed'] is False; assert c['suffix_dispatch_proposed'] is False; assert c['path_lengths_matched_between_control_and_probe']
+          PY
+      - name: CI topology self-check
+        run: python tools/check_ci_topology.py .github/workflows/v030-r4-ooxml-vzip-oracle.yml
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: v030-r4-ooxml-vzip-${{ env.EVIDENCE_HEAD }}
+          path: benchmark-artifacts/v030-r4-ooxml-vzip.json
+          if-no-files-found: error
+          retention-days: 90
+
+# Diagnostic only. Renaming is an instrument to route the unchanged Builder through an already-readable S_VZIP
+# representation. A positive result authorizes only bounded content-signature ZIP discovery; suffix dispatch and
+# workload identity are explicitly not proposed.

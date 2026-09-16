@@ -1,0 +1,94 @@
+# ci-lane: deep
+name: CMPCT v0.30 federated hybrid-RLE frontier
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'experiments/entropygraph_v030_federated_embedded_fs_candidate_v6.py'
+      - 'experiments/entropygraph_v030_federated_embedded_fs_candidate_v7.py'
+      - 'experiments/entropygraph_v030_fs_implicit_v5.py'
+      - 'experiments/entropygraph_v030_fs_implicit_v6.py'
+      - 'benchmarks/v030_federated_embedded_fs_v7_effort_oracle.py'
+      - 'benchmarks/v030_federated_selective_effort_oracle.py'
+      - 'benchmarks/v030_federated_selective_effort_oracle_v4.py'
+      - 'tests/test_v030_fs_implicit_v6.py'
+      - '.github/workflows/v030-federated-hybrid-rle-v7-effort.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-v030-eg07-hybrid-rle-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+
+jobs:
+  hybrid-rle-frontier:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 360
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install deterministic corpus and competitor dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y zstd gcc ffmpeg libsndfile1
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[audio,test]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
+      - name: Compile candidate and oracle
+        run: |
+          python -m py_compile \
+            experiments/entropygraph_v030_fs_implicit_v6.py \
+            experiments/entropygraph_v030_federated_embedded_fs_candidate_v7.py \
+            benchmarks/v030_federated_embedded_fs_v7_effort_oracle.py
+      - name: Run bounded filesystem-control regressions
+        run: python -m pytest -q tests/test_v030_fs_implicit_v6.py
+      - name: Run exact office/analytics selective-effort frontier
+        run: |
+          mkdir -p benchmark-artifacts
+          python benchmarks/v030_federated_embedded_fs_v7_effort_oracle.py \
+            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-eg07-work" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-eg07-effort.json"
+      - name: Independently enforce immutable evidence identity
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          d=json.loads(Path('benchmark-artifacts/v030-eg07-effort.json').read_text())
+          assert d['schema']=='cmpct-v030-federated-eg07-hybrid-rle-effort-v1'
+          assert d['measurement_gate']['passed'] is True
+          c=d['candidate_identity']; o=d['office_decision']
+          assert c['magic_ascii']=='C25EG07'
+          assert c['separate_filesystem_pack'] is False
+          assert c['patched_candidate_restored'] is True
+          assert c['patched_prepare_restored'] is True
+          assert c['patched_build_restored'] is True
+          assert o['accepted_v029_bytes']==5954026
+          assert o['predecessor_eg06_all_best_floor_bytes']==5954067
+          assert o['saving_vs_eg06_all_best_bytes']==o['predecessor_eg06_all_best_floor_bytes']-o['eg07_all_best_floor_bytes']
+          assert o['remaining_bytes_to_strict_v029_win']==max(0,o['eg07_all_best_floor_bytes']-o['accepted_v029_bytes']+1)
+          for row in d['rows']:
+              assert row['measured_zip_budget_policy']['locality']['within_release_bounds'] is True
+          PY
+      - name: Public-surface guard
+        if: always()
+        run: python tools/check_public_surface.py
+      - name: Upload exact evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: v030-eg07-hybrid-rle-${{ github.sha }}
+          path: benchmark-artifacts/v030-eg07-effort.json
+          if-no-files-found: warn
+          retention-days: 90
+
+# C25EG07 is research-only. Even a strict v0.29 byte win cannot authorize selector/native/Android promotion or
+# change any release threshold; all ordinary all-15 external/generalization/runtime/native/final gates remain decisive.

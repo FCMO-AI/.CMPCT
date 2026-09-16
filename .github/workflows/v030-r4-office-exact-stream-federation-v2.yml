@@ -1,0 +1,60 @@
+# ci-lane: deep
+# ci-pr-scope: latest-head-commit-gate
+# ci-cancel-policy: preserve-running-exact-receipt
+name: CMPCT v0.30 R4 Office exact stream federation v2
+on:
+  push:
+    branches: [agent/v030-authoritative-integration]
+    paths:
+      - 'benchmarks/v030_r4_office_exact_stream_federation_v2.py'
+      - '.github/workflows/v030-r4-office-exact-stream-federation-v2.yml'
+  workflow_dispatch:
+permissions: {contents: read}
+env:
+  PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.sha }}
+concurrency:
+  group: cmpct-v030-r4-office-exact-stream-federation-v2-${{ github.sha }}
+  cancel-in-progress: false
+jobs:
+  federation-v2:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v6
+        with: {ref: '${{ env.EVIDENCE_HEAD }}'}
+      - name: Bind exact evidence head
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+      - uses: actions/setup-python@v6
+        with: {python-version: '3.11', cache: pip}
+      - name: Install corpus dependencies
+        run: |
+          set -euo pipefail
+          sudo apt-get update && sudo apt-get install -y zstd gcc ffmpeg libsndfile1
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[audio,test]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
+      - name: Compile compact federation falsifier
+        run: python -m py_compile benchmarks/v030_r4_office_exact_stream_federation_v2.py
+      - name: Run compact indexed Office federation falsifier
+        run: |
+          mkdir -p benchmark-artifacts
+          python benchmarks/v030_r4_office_exact_stream_federation_v2.py --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-r4-office-sfv2-work" --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-r4-office-sfv2.json"
+      - name: Enforce receipt integrity only
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          d=json.loads(Path('benchmark-artifacts/v030-r4-office-sfv2.json').read_text())
+          assert d['schema']=='cmpct-v030-r4-office-exact-stream-federation-v2'
+          c=d['contract']; assert c['diagnostic_only'] and not c['release_credit'] and c['exact_compressed_stream_identity_only'] and c['same_semantic_tree_verified'] and c['indexed_binary_literal_pool'] and c['ideal_pool_touch_not_physical_io'] and c['no_mode2_regeneration'] and c['no_threshold_sweep']
+          print(json.dumps({'baseline_v030_bytes':d['baseline_v030_bytes'],'candidate_bytes':d['candidate_bytes'],'accepted_v029_office_bytes':d['accepted_v029_office_bytes'],'saving_vs_v030_bytes':d['saving_vs_v030_bytes'],'margin_vs_v029_bytes':d['margin_vs_v029_bytes'],'hypothesis':d['hypothesis'],'components':d['candidate']['component_bytes'],'max_ideal_pool_touch_amplification':d['candidate']['max_ideal_pool_touch_amplification']},sort_keys=True))
+          PY
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: v030-r4-office-exact-stream-federation-v2-${{ env.EVIDENCE_HEAD }}
+          path: benchmark-artifacts/v030-r4-office-sfv2.json
+          if-no-files-found: error
+          retention-days: 90
+# Green means receipt integrity only. Actual physical range-I/O/recovery/native parity remains unpaid.
