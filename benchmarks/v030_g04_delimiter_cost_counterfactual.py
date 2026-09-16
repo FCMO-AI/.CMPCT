@@ -44,29 +44,35 @@ def run(work: Path) -> dict:
     baseline_transforms = _selected_transforms(baseline_build)
     if "delimiter" not in baseline_transforms: raise RuntimeError("exact-head ML shipping route no longer selects DGO1; counterfactual is stale")
 
-    # The shared portfolio's retained-overlay path resolves G._audition_record at call time. Patch that exact private
-    # G04 semantic owner and restore it in finally. Do not patch RC.G04 itself: profile isolation intentionally binds
-    # RC.G04 to the shared portfolio facade, which has no _audition_record and delegates the audition to its G owner.
-    # G04 descriptors are structured lists, so DGO1 identity is descriptor[0] == "delimiter"; stats.selected is only
-    # a reporting string. Time the inherited audition inside the same counterfactual build so creator-side diagnosis
-    # gains per-record attribution without paying for another full ML build; these timings remain context-only.
+    # The shipping ML route may replace canonical-final's local thread overlay with the preserved release base's
+    # ProcessPoolExecutor. Spawned children import a fresh product module, so a parent-process audition monkeypatch
+    # cannot cross that boundary. This research-only control therefore disables exactly that scheduler eligibility
+    # seam while patching the private canonical G04 semantic owner. Scheduling is deliberately changed only to make
+    # the semantic counterfactual observable; candidate build wall remains context-only and earns no product credit.
     owner = CANONICAL.SHARED.G
     original = owner._audition_record
+    base_impl = PRODUCT._BASE_IMPL
+    original_process_pool_eligible = base_impl._g04_process_pool_eligible
     audition_timings = []
+    wrapper_invocations = 0
     def no_delimiter_audition(record_id, record, users):
+        nonlocal wrapper_invocations
+        wrapper_invocations += 1
         audition_started = time.perf_counter()
         raw, transform, stats = original(record_id, record, users)
         audition_elapsed = time.perf_counter() - audition_started
+        is_delimiter = transform == "delimiter" or (
+            isinstance(transform, (list, tuple)) and bool(transform) and transform[0] == "delimiter"
+        )
         audition_timings.append({
             "record_id": int(record_id),
             "raw_bytes": int(stats.get("raw_bytes", 0)),
             "selected_before_counterfactual": str(stats.get("selected", "none")),
+            "selected_after_counterfactual": "none" if is_delimiter else str(stats.get("selected", "none")),
             "payload_saving_bytes": int(stats.get("payload_saving_bytes", 0)),
             "audition_wall_s_context_only": audition_elapsed,
+            "counterfactual_rejected_delimiter": bool(is_delimiter),
         })
-        is_delimiter = transform == "delimiter" or (
-            isinstance(transform, (list, tuple)) and bool(transform) and transform[0] == "delimiter"
-        )
         if not is_delimiter:
             return raw, transform, stats
         return record, None, {**stats, "selected": "none", "counterfactual_rejected": "delimiter"}
@@ -74,14 +80,28 @@ def run(work: Path) -> dict:
     candidate_archive = work / "no-delimiter.cmpct"
     try:
         owner._audition_record = no_delimiter_audition
+        base_impl._g04_process_pool_eligible = lambda graph_path, graph_records: False
         started = time.perf_counter(); candidate_build = PRODUCT.build(source, candidate_archive); candidate_build_s = time.perf_counter() - started
     finally:
+        base_impl._g04_process_pool_eligible = original_process_pool_eligible
         owner._audition_record = original
     candidate_verify = PRODUCT.strong_verify(candidate_archive)
     if not candidate_verify.get("ok") or candidate_verify.get("tree_sha256") != source_tree: raise RuntimeError("no-delimiter candidate failed exact verification")
     candidate_transforms = _selected_transforms(candidate_build)
-    if "delimiter" in candidate_transforms: raise RuntimeError("delimiter transform survived disabled delimiter audition")
     audition_timings.sort(key=lambda row: row["record_id"])
+    counterfactual_effective = wrapper_invocations > 0 and any(row["counterfactual_rejected_delimiter"] for row in audition_timings) and "delimiter" not in candidate_transforms
+
+    # Persist enough falsification state in the returned receipt that a future ownership miss is diagnosable from
+    # the artifact. The workflow validates counterfactual_effective after this JSON is written by main().
+    if not counterfactual_effective:
+        return {
+            "schema":"cmpct-v030-g04-delimiter-cost-counterfactual-v1","controls_version":11,"release_credit":False,"target":"/".join(TARGET),"source_tree_sha256":source_tree,"rounds":ROUNDS,
+            "fresh_process_import_rss_kib_context_only":import_rss,
+            "baseline":{"archive_bytes":baseline_archive.stat().st_size,"build_wall_s_context_only":baseline_build_s,"selected_transforms":baseline_transforms},
+            "no_delimiter":{"archive_bytes":candidate_archive.stat().st_size,"build_wall_s_context_only":candidate_build_s,"selected_transforms":candidate_transforms,"wrapper_invocations":wrapper_invocations,"audition_timing_context_only":audition_timings,"strong_verify":candidate_verify},
+            "counterfactual_effective":False,
+            "claim_boundary":"Research control invalid: diagnostic state is persisted before workflow falsification. No size, extraction, build-wall, or release claim may be credited."
+        }
 
     baseline_samples = _timed_extracts(baseline_archive, source_tree, work, "baseline")
     shipping_overlay = CANONICAL.SHARED.G.O
@@ -95,17 +115,20 @@ def run(work: Path) -> dict:
     baseline_bytes = baseline_archive.stat().st_size; candidate_bytes = candidate_archive.stat().st_size
     baseline_median = float(statistics.median(baseline_samples)); banded_median = float(statistics.median(banded_samples)); candidate_median = float(statistics.median(candidate_samples))
     return {
-        "schema":"cmpct-v030-g04-delimiter-cost-counterfactual-v1","controls_version":10,"release_credit":False,"target":"/".join(TARGET),"source_tree_sha256":source_tree,"rounds":ROUNDS,
+        "schema":"cmpct-v030-g04-delimiter-cost-counterfactual-v1","controls_version":11,"release_credit":False,"target":"/".join(TARGET),"source_tree_sha256":source_tree,"rounds":ROUNDS,
         "fresh_process_import_rss_kib_context_only":import_rss,"fresh_process_import_rss_ratio_context_only":import_rss["v030_release_product"]/import_rss["v029_release"],
         "baseline":{"archive_bytes":baseline_bytes,"build_wall_s_context_only":baseline_build_s,"selected_transforms":baseline_transforms,"extract_s":baseline_samples,"median_extract_s":baseline_median},
         "banded_same_archive_bytes":{"archive_bytes":baseline_bytes,"inverse":"guarded-banded-v2","extract_s":banded_samples,"median_extract_s":banded_median,"median_extract_ratio_vs_shipping":banded_median/baseline_median,"median_extract_speedup_vs_shipping":baseline_median/banded_median},
-        "no_delimiter":{"archive_bytes":candidate_bytes,"build_wall_s_context_only":candidate_build_s,"selected_transforms":candidate_transforms,"audition_timing_context_only":audition_timings,"extract_s":candidate_samples,"median_extract_s":candidate_median},
+        "no_delimiter":{"archive_bytes":candidate_bytes,"build_wall_s_context_only":candidate_build_s,"selected_transforms":candidate_transforms,"wrapper_invocations":wrapper_invocations,"audition_timing_context_only":audition_timings,"extract_s":candidate_samples,"median_extract_s":candidate_median},
         "no_delimiter_delta":{"archive_bytes":candidate_bytes-baseline_bytes,"archive_pct":(candidate_bytes/baseline_bytes-1.0)*100.0,"build_wall_s_context_only":candidate_build_s-baseline_build_s,"build_ratio_context_only":candidate_build_s/baseline_build_s,"median_extract_s":candidate_median-baseline_median,"median_extract_ratio":candidate_median/baseline_median,"median_extract_speedup":baseline_median/candidate_median},
-        "claim_boundary":"Research controls only: same-source shipping, same-byte reviewed inverse swap, and no-DGO1 rebuild. The no-DGO1 rebuild patches the exact private G04 semantic owner used by the shared portfolio retained-overlay path and rejects the actual structured DGO1 descriptor; scheduling is unchanged. Per-record audition wall times are captured around the unchanged inherited audition during that same build and are diagnostic context only. No release threshold, evaluator, grammar, or comparator is changed. Build wall and import RSS remain diagnostic context, not release credit."
+        "counterfactual_effective":True,
+        "claim_boundary":"Research controls only: same-source shipping, same-byte reviewed inverse swap, and no-DGO1 rebuild. The no-DGO1 rebuild forces only the preserved release-base G04 process-pool eligibility seam off so the parent private audition wrapper is observable, then rejects the actual structured DGO1 descriptor; both hooks are restored in finally. Per-record audition wall times and candidate build wall are diagnostic context only. No release threshold, evaluator, grammar, or comparator is changed."
     }
 
 def main() -> None:
     ap=argparse.ArgumentParser(); ap.add_argument("--work-root",type=Path,required=True); ap.add_argument("--output",type=Path,required=True); args=ap.parse_args()
     result=run(args.work_root); args.output.parent.mkdir(parents=True,exist_ok=True); args.output.write_text(json.dumps(result,indent=2)+"\n",encoding="utf-8")
-    print(json.dumps({"import_rss":result["fresh_process_import_rss_kib_context_only"],"baseline":result["baseline"],"banded_same_archive_bytes":result["banded_same_archive_bytes"],"no_delimiter":result["no_delimiter"],"no_delimiter_delta":result["no_delimiter_delta"],"release_credit":False},indent=2))
+    if not result.get("counterfactual_effective"):
+        raise RuntimeError("no-DGO1 counterfactual did not reach and reject the shipping delimiter owner; inspect persisted receipt")
+    print(json.dumps({"import_rss":result["fresh_process_import_rss_kib_context_only"],"baseline":result["baseline"],"banded_same_archive_bytes":result["banded_same_archive_bytes"],"no_delimiter":result["no_delimiter"],"no_delimiter_delta":result["no_delimiter_delta"],"counterfactual_effective":True,"release_credit":False},indent=2))
 if __name__ == "__main__": main()
