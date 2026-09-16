@@ -1,5 +1,7 @@
 # v0.30 G04 delimiter-inverse negative — 2026-09-15
 
+> **Custody correction:** this historical run patched the public research Geometry module while timing the release product. Canonical r25 uses a private profile-isolated Geometry module, so the intervention was not proven to reach the shipping reader. Preserve the measurements below, but do **not** use the ~1.50x result to retire or promote a shipping-reader implementation. See `g04-delimiter-ab-custody-correction-20260915.md`; a corrected A/B now patches the canonical private reader explicitly.
+
 Authority base: `agent/v030-authoritative-integration` @ `f264926994c4b473ac28bbfda48cffa5f7b24421`.
 Research exact head: `bf1cba9106568e3dfa22db62a6072aa670cf980f`.
 Workflow run: `35034826327`; artifact: `v030-g04-delimiter-inverse-ab-bf1cba9106568e3dfa22db62a6072aa670cf980f`.
@@ -14,6 +16,6 @@ Direct result:
 - promotion signal: `false`
 - release credit: `false`
 
-Decision: **retire the banded Python delimiter-inverse candidate for the current ML runtime debt.** It misses the inherited `minimum_speedup_fraction = 0.15` floor in the wrong direction by a large margin (~50.2% slower). Do not lower the floor, productize this implementation, or treat the green research workflow as product evidence.
+Historical decision at recording time: **retire the banded Python delimiter-inverse candidate for the current ML runtime debt.** It missed the inherited `minimum_speedup_fraction = 0.15` floor in the wrong direction by a large margin (~50.2% slower). The later custody audit narrows that conclusion: the numbers remain real harness observations, but the run did not establish that the intended implementation was the one used by the isolated shipping reader.
 
-Scope: this falsifies this implementation strategy, not the broader claim that G04/Geometry decode owns material ML extraction time. The next action should use the existing shipping extraction ownership profile to select a differently rooted optimization or measure a narrower phase boundary. No release threshold, archive byte, format, workload, or public claim changed.
+Current scope: custody-confounded historical mechanism evidence only. It does not falsify the shipping inverse. No release threshold, archive byte, format, workload, or public claim changed.
