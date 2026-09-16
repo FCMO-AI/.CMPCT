@@ -5,9 +5,9 @@ from __future__ import annotations
 The exact-head shipping profile identifies DGO1 delimiter inversion as the dominant extraction owner on
 neutral_hostile_v1/09_ml_artifacts. This instrument changes no archive grammar or release threshold: it builds the
 ordinary shipping product, then rebuilds the same source with delimiter auditions disabled while leaving lane and
-all other G0-G4 mechanisms intact. It measures complete archive bytes, build wall time, and warm extraction wall
-time for both, with exact user-tree identity checked after every timed extraction. Results are research evidence
-only; build timings are same-process causal diagnostics rather than release-performance credit.
+all other G0-G4 mechanisms intact. It measures complete archive bytes, build wall time, warm extraction wall time,
+and fresh-process import RSS floors. Results are research evidence only; none of these diagnostics receives release
+credit or changes the frozen evaluator.
 """
 
 import argparse
@@ -15,6 +15,8 @@ import json
 from pathlib import Path
 import shutil
 import statistics
+import subprocess
+import sys
 import time
 
 from benchmarks import v030_release_performance as PERF
@@ -28,6 +30,16 @@ ROUNDS = 7
 def _selected_transforms(build_stats: dict) -> list[str]:
     auditions = build_stats.get("r25", {}).get("g04", {}).get("auditions", [])
     return [str(row.get("selected")) for row in auditions if row.get("selected") not in (None, "none")]
+
+
+def _import_rss_kib(module: str) -> int:
+    code = (
+        "import importlib,json,resource;"
+        f"importlib.import_module({module!r});"
+        "print(json.dumps({'rss_kib':int(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss)}))"
+    )
+    proc = subprocess.run([sys.executable, "-c", code], check=True, capture_output=True, text=True)
+    return int(json.loads(proc.stdout.strip().splitlines()[-1])["rss_kib"])
 
 
 def _timed_extracts(archive: Path, source_tree: str, root: Path, label: str) -> list[float]:
@@ -48,6 +60,10 @@ def _timed_extracts(archive: Path, source_tree: str, root: Path, label: str) -> 
 
 
 def run(work: Path) -> dict:
+    import_rss = {
+        "v029_release": _import_rss_kib("experiments.entropygraph_v029_release"),
+        "v030_release_product": _import_rss_kib("experiments.entropygraph_v030_release_product"),
+    }
     shutil.rmtree(work, ignore_errors=True)
     work.mkdir(parents=True)
     source = PERF._build_corpora(work / "corpus")[TARGET]
@@ -92,6 +108,8 @@ def run(work: Path) -> dict:
         "target": "/".join(TARGET),
         "source_tree_sha256": source_tree,
         "rounds": ROUNDS,
+        "fresh_process_import_rss_kib_context_only": import_rss,
+        "fresh_process_import_rss_ratio_context_only": import_rss["v030_release_product"] / import_rss["v029_release"],
         "baseline": {
             "archive_bytes": baseline_bytes,
             "build_wall_s_context_only": baseline_build_s,
@@ -115,7 +133,7 @@ def run(work: Path) -> dict:
             "median_extract_ratio": candidate_median / baseline_median,
             "median_extract_speedup": baseline_median / candidate_median,
         },
-        "claim_boundary": "Causal research counterfactual only: same source and shipping product with DGO1 auditions removed; no release threshold, evaluator, grammar, or comparator is changed. Build wall is diagnostic context, not release credit.",
+        "claim_boundary": "Causal research counterfactual only: same source and shipping product with DGO1 auditions removed; no release threshold, evaluator, grammar, or comparator is changed. Build wall and import RSS are diagnostic context, not release credit.",
     }
 
 
@@ -127,7 +145,7 @@ def main() -> None:
     result = run(args.work_root)
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8")
-    print(json.dumps({"baseline": result["baseline"], "no_delimiter": result["no_delimiter"], "delta": result["delta"], "release_credit": False}, indent=2))
+    print(json.dumps({"import_rss": result["fresh_process_import_rss_kib_context_only"], "baseline": result["baseline"], "no_delimiter": result["no_delimiter"], "delta": result["delta"], "release_credit": False}, indent=2))
 
 
 if __name__ == "__main__":
