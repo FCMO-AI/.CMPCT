@@ -2,16 +2,10 @@ from __future__ import annotations
 
 """Final-authority fresh-process worker for the v0.30 paired runtime gate.
 
-The v0.29 side remains the accepted historical release baseline.  The v0.30 side must exercise the one promoted
-product front door, ``entropygraph_v030_release_product``: that surface owns canonical r24/r25 selection, the
-current bounded/ordered Geometry scheduler, revision-25 filesystem semantics, and exact r24 fallback.  Benchmarking
-the demoted ``entropygraph_v030_authoritative`` research facade would measure a historical convergence adapter
-that the release itself does not ship and would therefore make runtime evidence non-authoritative.
-
-Only the requested codec operation is timed. Source/destination tree hashing is correctness evidence and runs
-after the operation clock stops, matching the canonical worker and keeping both engines inside the same timing
-boundary. Including an extra full-tree scan in pack/extract time would measure evidence bookkeeping rather than
-creation/extraction performance and can disproportionately penalize the richer canonical product identity.
+The ordinary path is frozen release evidence. ``--diagnostic-sequential-r24`` is an explicitly non-credit
+counterfactual used only by the authority adapter after the frozen run: it removes the r24/manifest overlap while
+preserving candidate bytes and selection law, so we can test whether overlapping independent builders owns the
+measured pack-RSS debt. The default operation/timing boundary is unchanged.
 """
 
 import argparse
@@ -43,9 +37,18 @@ def main() -> None:
     parser.add_argument("--source", type=Path)
     parser.add_argument("--archive", type=Path, required=True)
     parser.add_argument("--destination", type=Path)
+    parser.add_argument("--diagnostic-sequential-r24", action="store_true")
     args = parser.parse_args()
 
     engine = _engine(args.engine)
+    if args.diagnostic_sequential_r24:
+        if args.engine != "v030" or args.op != "pack":
+            raise SystemExit("--diagnostic-sequential-r24 is valid only for v030 pack")
+        from experiments import entropygraph_v030_release_product_base as base
+        # Research-only counterfactual: same builders/bytes/selection, but no r24 build overlaps manifest/r25 prep.
+        base.C._prepare_profile_tree = base._ORIGINAL_PREPARE_PROFILE_TREE
+        base.C._r24_build = engine._locality_bounded_r24_build
+
     started = time.perf_counter()
     if args.op == "pack":
         if args.source is None:
@@ -54,16 +57,8 @@ def main() -> None:
         stats = engine.build(args.source, args.archive)
         operation_wall_s = time.perf_counter() - started
         operation_peak_rss_kib = _rss_kib()
-        # Identity validation is intentionally outside the timer. The build result is retained verbatim and the
-        # independently recomputed tree is still emitted, so moving this scan cannot hide a correctness failure.
         source_tree = engine.treehash(args.source)
-        result = {
-            "engine": args.engine,
-            "op": args.op,
-            "archive_bytes": args.archive.stat().st_size,
-            "tree_sha256": source_tree,
-            "build_stats": stats,
-        }
+        result = {"engine": args.engine,"op": args.op,"archive_bytes": args.archive.stat().st_size,"tree_sha256": source_tree,"build_stats": stats}
     elif args.op == "verify":
         verified = engine.strong_verify(args.archive)
         operation_wall_s = time.perf_counter() - started
@@ -84,6 +79,7 @@ def main() -> None:
 
     result["wall_s"] = operation_wall_s
     result["peak_rss_kib"] = operation_peak_rss_kib
+    result["diagnostic_sequential_r24"] = bool(args.diagnostic_sequential_r24)
     print(json.dumps(result, separators=(",", ":"), default=str), flush=True)
 
 
