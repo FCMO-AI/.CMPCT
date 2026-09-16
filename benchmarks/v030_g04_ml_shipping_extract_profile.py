@@ -32,7 +32,7 @@ def _measure_balanced(shipping_archive:Path,r24_archive:Path,source_tree:str,wor
 
 def run(work:Path)->dict:
     shutil.rmtree(work,ignore_errors=True); work.mkdir(parents=True); source=PERF._build_corpora(work/"corpus")[TARGET]; source_tree=PRODUCT.treehash(source); archive=work/"ml.cmpct"; t=time.perf_counter(); built=PRODUCT.build(source,archive); build_s=time.perf_counter()-t
-    if built.get("selected")!="r25" or built.get("r25",{}).get("selected")!="g04-overlay": raise RuntimeError(f"shipping ML target did not select r25/G04: {built.get('selected')!r}/{built.get('r25',{}).get('selected')!r}")
+    if built.get("selected")!="g04-overlay" or built.get("r25",{}).get("selected")!="g04-overlay": raise RuntimeError(f"shipping ML target did not select G04 overlay: {built.get('selected')!r}/{built.get('r25',{}).get('selected')!r}")
     verified=PRODUCT.strong_verify(archive)
     if not verified.get("ok") or verified.get("tree_sha256")!=source_tree: raise RuntimeError("shipping archive failed exact strong verification")
     r24=work/"ml-r24-control.cmpct"; r24_stats=dict(PRODUCT._locality_bounded_r24_build(source,r24)); r24_verified=PRODUCT.strong_verify(r24)
