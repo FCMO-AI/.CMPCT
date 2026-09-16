@@ -44,12 +44,10 @@ def run(work: Path) -> dict:
     baseline_transforms = _selected_transforms(baseline_build)
     if "delimiter" not in baseline_transforms: raise RuntimeError("exact-head ML shipping route no longer selects DGO1; counterfactual is stale")
 
-    # Canonical-final replaces the historical G04 overlay owner with a bounded thread-pool implementation. The
-    # research control must therefore patch the exact private G owner reached by RC.G04.build, not the obsolete base
-    # process-pool scheduler. Profile isolation can expose that owner through more than one module path, so patch each
-    # distinct owner object and restore every one in finally. Threads share these module objects; no scheduler change
-    # is needed, so candidate build wall remains comparable context (still non-release-credit).
-    owner_candidates = [CANONICAL.SHARED.G, CANONICAL.RC.G04.SHARED.G]
+    # The canonical release-candidate G04 module directly resolves its module-global `_audition_record` inside build().
+    # Canonical-final may also route retained-overlay auditions through its private shared G owner. Patch both exact
+    # owner objects (deduplicated by identity) and restore them in finally. No scheduler, grammar or evaluator changes.
+    owner_candidates = [CANONICAL.RC.G04, CANONICAL.SHARED.G]
     owners = []
     for owner in owner_candidates:
         if all(owner is not prior for prior in owners):
@@ -88,13 +86,13 @@ def run(work: Path) -> dict:
     baseline_bytes = baseline_archive.stat().st_size; candidate_bytes = candidate_archive.stat().st_size
     baseline_median = float(statistics.median(baseline_samples)); banded_median = float(statistics.median(banded_samples)); candidate_median = float(statistics.median(candidate_samples))
     return {
-        "schema":"cmpct-v030-g04-delimiter-cost-counterfactual-v1","controls_version":6,"release_credit":False,"target":"/".join(TARGET),"source_tree_sha256":source_tree,"rounds":ROUNDS,
+        "schema":"cmpct-v030-g04-delimiter-cost-counterfactual-v1","controls_version":7,"release_credit":False,"target":"/".join(TARGET),"source_tree_sha256":source_tree,"rounds":ROUNDS,
         "fresh_process_import_rss_kib_context_only":import_rss,"fresh_process_import_rss_ratio_context_only":import_rss["v030_release_product"]/import_rss["v029_release"],
         "baseline":{"archive_bytes":baseline_bytes,"build_wall_s_context_only":baseline_build_s,"selected_transforms":baseline_transforms,"extract_s":baseline_samples,"median_extract_s":baseline_median},
         "banded_same_archive_bytes":{"archive_bytes":baseline_bytes,"inverse":"guarded-banded-v2","extract_s":banded_samples,"median_extract_s":banded_median,"median_extract_ratio_vs_shipping":banded_median/baseline_median,"median_extract_speedup_vs_shipping":baseline_median/banded_median},
         "no_delimiter":{"archive_bytes":candidate_bytes,"build_wall_s_context_only":candidate_build_s,"selected_transforms":candidate_transforms,"extract_s":candidate_samples,"median_extract_s":candidate_median},
         "no_delimiter_delta":{"archive_bytes":candidate_bytes-baseline_bytes,"archive_pct":(candidate_bytes/baseline_bytes-1.0)*100.0,"build_wall_s_context_only":candidate_build_s-baseline_build_s,"build_ratio_context_only":candidate_build_s/baseline_build_s,"median_extract_s":candidate_median-baseline_median,"median_extract_ratio":candidate_median/baseline_median,"median_extract_speedup":baseline_median/candidate_median},
-        "claim_boundary":"Research controls only: same-source shipping, same-byte reviewed inverse swap, and no-DGO1 rebuild. The no-DGO1 rebuild patches every distinct canonical private G04 audition owner reached by the shipping ML path; canonical's bounded thread scheduler is unchanged. No release threshold, evaluator, grammar, or comparator is changed. Build wall and import RSS remain diagnostic context, not release credit."
+        "claim_boundary":"Research controls only: same-source shipping, same-byte reviewed inverse swap, and no-DGO1 rebuild. The no-DGO1 rebuild patches the direct canonical RC.G04 audition owner plus the canonical shared G owner, deduplicated by object identity; scheduling is unchanged. No release threshold, evaluator, grammar, or comparator is changed. Build wall and import RSS remain diagnostic context, not release credit."
     }
 
 def main() -> None:
