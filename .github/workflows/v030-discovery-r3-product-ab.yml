@@ -1,4 +1,6 @@
 # ci-lane: deep
+# ci-pr-scope: latest-head-commit-gate
+# ci-cancel-policy: split-classifier-preserve-receipts
 name: CMPCT v0.30 discovery R3 product A/B
 
 on:
@@ -20,20 +22,57 @@ on:
 permissions:
   contents: read
 
-concurrency:
-  group: cmpct-v030-discovery-r3-product-ab-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
+env:
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
 
 jobs:
+  latest-head-impact:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    concurrency:
+      group: cmpct-v030-discovery-r3-product-ab-route-${{ github.event.pull_request.number || github.ref }}
+      cancel-in-progress: true
+    outputs:
+      run_deep: ${{ steps.scope.outputs.run_deep }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 2
+      - id: scope
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          if [ "$EVENT_NAME" = workflow_dispatch ]; then
+            echo 'run_deep=true' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          git diff-tree --no-commit-id --name-only -r HEAD > /tmp/files
+          if grep -Eq '^(experiments/entropygraph_v030_discovery_neutral_worker\.py|experiments/entropygraph_v030_profile_isolation\.py|experiments/entropygraph_v030_shared_portfolio\.py|benchmarks/v030_discovery_r3_product_ab\.py|benchmarks/mosaic_v029_generalization_bench\.py|benchmarks/neutral_hostile_corpus_v1\.py|benchmarks/resemblance_hostile_corpus_v1\.py|benchmarks/neutral_hostile_determinism_repair_v5\.py|benchmarks/neutral_hostile_determinism_repair_v6\.py|docs/v030-rnd/R25_DISCOVERY_SOURCE_GENERIC_R3_BUILDER_PREREG\.md|\.github/workflows/v030-discovery-r3-product-ab\.yml)$' /tmp/files; then
+            echo 'run_deep=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'run_deep=false' >> "$GITHUB_OUTPUT"
+          fi
+
   product-ab:
+    needs: latest-head-impact
+    if: needs.latest-head-impact.outputs.run_deep == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 150
+    concurrency:
+      group: cmpct-v030-discovery-r3-product-ab-receipt-${{ github.event.pull_request.head.sha || github.sha }}
+      cancel-in-progress: false
     steps:
       - name: Check out exact candidate head
         uses: actions/checkout@v6
         with:
           fetch-depth: 0
-          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          ref: ${{ env.EVIDENCE_HEAD }}
+
+      - name: Bind exact head
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
 
       - name: Set up Python
         uses: actions/setup-python@v6
@@ -92,9 +131,6 @@ jobs:
           PY
 
       - name: CI topology self-check
-        # The repository-wide checker is the current topology authority. The historical
-        # ci_topology_selfcheck.py helper no longer exists, so calling it turns valid product
-        # evidence into an infrastructure false negative after the expensive A/B has completed.
         run: python tools/check_ci_topology.py .github/workflows/v030-discovery-r3-product-ab.yml
 
       - name: Public-surface guard
@@ -102,9 +138,9 @@ jobs:
 
       - name: Upload exact Builder receipt
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
-          name: v030-discovery-r3-product-ab-${{ github.event.pull_request.head.sha || github.sha }}
+          name: v030-discovery-r3-product-ab-${{ env.EVIDENCE_HEAD }}
           path: |
             benchmark-artifacts/v030-discovery-r3-product-ab.json
             benchmark-artifacts/v030-discovery-r3-product-ab.stdout.txt
