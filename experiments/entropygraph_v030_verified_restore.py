@@ -72,9 +72,6 @@ def release_single_buffer_delimiter_inverse(encoded: bytes, logical_size: int) -
     body = encoded[pos:]
     if len(body) != logical_members:
         raise RuntimeError("Geometry overlay delimiter body-size mismatch")
-    # The scatter loop may execute tens of thousands of short runs.  A bytes slice allocates/copies on every run;
-    # a read-only memoryview keeps the exact same bounded source while making each RHS slice a zero-copy view.
-    body_view = memoryview(body)
 
     starts = [0] * count
     output_cursor = 0
@@ -110,7 +107,7 @@ def release_single_buffer_delimiter_inverse(encoded: bytes, logical_size: int) -
                 raise RuntimeError("short Geometry overlay delimiter body")
             target_start = starts[first] + column
             target_stop = starts[index - 1] + column + 1
-            out[target_start:target_stop:length + 1] = body_view[body_cursor:source_end]
+            out[target_start:target_stop:length + 1] = body[body_cursor:source_end]
             body_cursor = source_end
             active_cells += run_len
 
