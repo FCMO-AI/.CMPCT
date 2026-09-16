@@ -87,26 +87,33 @@ def release_single_buffer_delimiter_inverse(encoded: bytes, logical_size: int) -
     for index in range(count - 1):
         out[starts[index] + lengths[index]] = delimiter
 
+    # The row partition is invariant across columns.  The earlier promoted implementation rediscovered these
+    # equal-length runs inside every column, turning a tokenizer-like record with ~53k segments and only a handful
+    # of runs into roughly one million redundant Python length/index comparisons.  Compute the exact same ordered
+    # partition once, then only test whether each run is active for the current column.  This changes neither the
+    # descriptor nor scatter geometry and preserves the existing cell-work bound.
+    runs: list[tuple[int, int, int]] = []
+    first = 0
+    while first < count:
+        length = lengths[first]
+        end = first + 1
+        while end < count and lengths[end] == length:
+            end += 1
+        runs.append((first, end, length))
+        first = end
+
     body_cursor = 0
     active_cells = 0
     for column in range(max_len):
-        index = 0
-        while index < count:
-            while index < count and lengths[index] <= column:
-                index += 1
-            if index >= count:
-                break
-            length = lengths[index]
-            first = index
-            index += 1
-            while index < count and lengths[index] == length:
-                index += 1
-            run_len = index - first
+        for first, end, length in runs:
+            if length <= column:
+                continue
+            run_len = end - first
             source_end = body_cursor + run_len
             if source_end > len(body):
                 raise RuntimeError("short Geometry overlay delimiter body")
             target_start = starts[first] + column
-            target_stop = starts[index - 1] + column + 1
+            target_stop = starts[end - 1] + column + 1
             out[target_start:target_stop:length + 1] = body[body_cursor:source_end]
             body_cursor = source_end
             active_cells += run_len
