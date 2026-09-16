@@ -32,7 +32,7 @@ from experiments import entropygraph_v030_product_fs as FS
 
 
 _PRE_RELEASE_DELIMITER_INVERSE = C.SHARED.G.O.delimiter_inverse
-_MAX_PRECOMPUTED_DELIMITER_RUNS = 4096
+_MAX_PRECOMPUTED_DELIMITER_RUNS = 1024
 
 
 def release_single_buffer_delimiter_inverse(encoded: bytes, logical_size: int) -> bytes:
