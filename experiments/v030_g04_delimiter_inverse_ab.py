@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-"""Research-only exact-ML A/B for the shipping guarded G04 delimiter inverse.
+"""Research-only exact-ML A/B for the shipping G04 delimiter inverse.
 
-The earlier unguarded banded candidate was ~50% slower and is durably retired. This follow-up tests the actual
-shipping guarded implementation against its reviewed bulk-v1 semantic predecessor on the same canonical revision-25
-ML archive. Archive bytes and release thresholds are unchanged; this is mechanism attribution only.
+The release product owns a private canonical Geometry module graph. This oracle therefore patches that exact
+shipping reader object, not the public historical Geometry module. Control is the reviewed bulk-v1 predecessor;
+candidate is the currently installed release single-buffer inverse. Archive bytes and thresholds are unchanged.
 """
 
 import argparse
@@ -15,7 +15,6 @@ import statistics
 import time
 
 from benchmarks import v030_release_performance as PERF
-from experiments import entropygraph_v030_geometry_overlay_g04 as G04
 from experiments import entropygraph_v030_release_product as PRODUCT
 
 TARGET = ("neutral_hostile_v1", "09_ml_artifacts")
@@ -25,16 +24,16 @@ MIN_SPEEDUP = 0.15
 
 def _implementations():
     canonical = PRODUCT.C
-    candidate = getattr(canonical, "_banded_delimiter_inverse", None)
     control = getattr(canonical, "_BULK_V1_DELIMITER_INVERSE", None)
-    if candidate is None or control is None:
-        raise RuntimeError("canonical guarded/bulk delimiter implementations unavailable")
+    candidate = canonical.SHARED.G.O.delimiter_inverse
+    if control is None or candidate is None:
+        raise RuntimeError("canonical delimiter implementations unavailable")
     return control, candidate
 
 
 def _property_check() -> int:
     """Differently shaped exactness controls before any timing claim."""
-    O = G04.O
+    O = PRODUCT.C.SHARED.G.O
     control, candidate = _implementations()
     cases = [
         (b"", 0),
@@ -48,8 +47,8 @@ def _property_check() -> int:
     for raw, delimiter in cases:
         encoded = O.delimiter_forward(raw, delimiter)
         baseline = control(encoded, len(raw))
-        guarded = candidate(encoded, len(raw))
-        if baseline != raw or guarded != raw or guarded != baseline:
+        shipping = candidate(encoded, len(raw))
+        if baseline != raw or shipping != raw or shipping != baseline:
             raise RuntimeError("delimiter inverse property-control mismatch")
         checked += 1
     return checked
@@ -77,14 +76,20 @@ def run(work_root: Path) -> dict:
         raise RuntimeError("canonical ML archive failed strong verification")
 
     control_impl, candidate_impl = _implementations()
-    original = G04.O.delimiter_inverse
+    canonical_o = PRODUCT.C.SHARED.G.O
+    policy_o = getattr(PRODUCT.C.POLICY.R.G04, "O", None)
+    original_canonical = canonical_o.delimiter_inverse
+    original_policy = None if policy_o is None else policy_o.delimiter_inverse
     control: list[float] = []
     candidate: list[float] = []
     try:
         for round_index in range(ROUNDS):
             order = ("control", "candidate") if round_index % 2 == 0 else ("candidate", "control")
             for arm in order:
-                G04.O.delimiter_inverse = control_impl if arm == "control" else candidate_impl
+                implementation = control_impl if arm == "control" else candidate_impl
+                canonical_o.delimiter_inverse = implementation
+                if policy_o is not None:
+                    policy_o.delimiter_inverse = implementation
                 dst = work_root / f"{arm}-{round_index}"
                 started = time.perf_counter()
                 PRODUCT.extract(archive, dst)
@@ -93,7 +98,9 @@ def run(work_root: Path) -> dict:
                     raise RuntimeError(f"{arm} extraction identity failure")
                 (control if arm == "control" else candidate).append(elapsed)
     finally:
-        G04.O.delimiter_inverse = original
+        canonical_o.delimiter_inverse = original_canonical
+        if policy_o is not None:
+            policy_o.delimiter_inverse = original_policy
 
     control_median = float(statistics.median(control))
     candidate_median = float(statistics.median(candidate))
@@ -108,7 +115,8 @@ def run(work_root: Path) -> dict:
         "shipping_build": built,
         "rounds": ROUNDS,
         "control_implementation": "reviewed-bulk-rectangular-prefix-v1",
-        "candidate_implementation": getattr(PRODUCT.C, "DELIMITER_INVERSE_IMPLEMENTATION", "guarded-banded-v2"),
+        "candidate_implementation": getattr(candidate_impl, "__name__", "shipping-delimiter-inverse"),
+        "patched_reader_scope": "isolated-canonical-shared-and-policy-g04",
         "control_s": control,
         "candidate_s": candidate,
         "control_median_s": control_median,
@@ -120,7 +128,7 @@ def run(work_root: Path) -> dict:
         "product_source_changed": False,
         "archive_bytes_changed": False,
         "release_thresholds_changed": False,
-        "claim_boundary": "Exact-archive reader mechanism A/B only. The candidate is already present in the research release branch; release credit still requires fresh authority-v2 and full correctness/platform evidence.",
+        "claim_boundary": "Exact-archive shipping-reader mechanism A/B only. Release credit still requires fresh authority-v2 and full correctness/platform evidence.",
     }
 
 
@@ -132,7 +140,7 @@ def main() -> None:
     result = run(args.work_root)
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8")
-    print(json.dumps({k: result[k] for k in ("property_cases_checked", "control_implementation", "candidate_implementation", "control_median_s", "candidate_median_s", "candidate_ratio", "speedup_fraction", "promotion_signal", "release_credit")}, indent=2))
+    print(json.dumps({k: result[k] for k in ("property_cases_checked", "control_implementation", "candidate_implementation", "patched_reader_scope", "control_median_s", "candidate_median_s", "candidate_ratio", "speedup_fraction", "promotion_signal", "release_credit")}, indent=2))
 
 
 if __name__ == "__main__":
