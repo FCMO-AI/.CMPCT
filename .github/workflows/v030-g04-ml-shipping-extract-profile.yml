@@ -8,6 +8,7 @@ on:
     branches: [agent/v030-authoritative-integration]
     paths:
       - 'benchmarks/v030_g04_ml_shipping_extract_profile.py'
+      - 'benchmarks/v030_g04_delimiter_cost_counterfactual.py'
       - '.github/workflows/v030-g04-ml-shipping-extract-profile.yml'
       - 'experiments/entropygraph_v030_release_product.py'
       - 'experiments/entropygraph_v030_release_product_base.py'
@@ -18,6 +19,7 @@ on:
     branches: [main]
     paths:
       - 'benchmarks/v030_g04_ml_shipping_extract_profile.py'
+      - 'benchmarks/v030_g04_delimiter_cost_counterfactual.py'
       - '.github/workflows/v030-g04-ml-shipping-extract-profile.yml'
       - 'experiments/entropygraph_v030_release_product.py'
       - 'experiments/entropygraph_v030_release_product_base.py'
@@ -55,7 +57,7 @@ jobs:
           test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
           if [ "$EVENT_NAME" = workflow_dispatch ]; then echo 'run_deep=true' >> "$GITHUB_OUTPUT"; exit 0; fi
           git diff-tree --no-commit-id --name-only -r HEAD > /tmp/files
-          if grep -Eq '^(benchmarks/v030_g04_ml_shipping_extract_profile\.py|\.github/workflows/v030-g04-ml-shipping-extract-profile\.yml|experiments/entropygraph_v030_release_product\.py|experiments/entropygraph_v030_release_product_base\.py|experiments/entropygraph_v030_verified_restore\.py|experiments/entropygraph_v030_release_reader\.py|benchmarks/v030_release_performance\.py)$' /tmp/files; then
+          if grep -Eq '^(benchmarks/v030_g04_ml_shipping_extract_profile\.py|benchmarks/v030_g04_delimiter_cost_counterfactual\.py|\.github/workflows/v030-g04-ml-shipping-extract-profile\.yml|experiments/entropygraph_v030_release_product\.py|experiments/entropygraph_v030_release_product_base\.py|experiments/entropygraph_v030_verified_restore\.py|experiments/entropygraph_v030_release_reader\.py|benchmarks/v030_release_performance\.py)$' /tmp/files; then
             echo 'run_deep=true' >> "$GITHUB_OUTPUT"
           else
             echo 'run_deep=false' >> "$GITHUB_OUTPUT"
@@ -87,24 +89,34 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -e '.[audio,test]'
           python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
-      - name: Compile diagnostic
-        run: python -m py_compile benchmarks/v030_g04_ml_shipping_extract_profile.py
+      - name: Compile diagnostics
+        run: python -m py_compile benchmarks/v030_g04_ml_shipping_extract_profile.py benchmarks/v030_g04_delimiter_cost_counterfactual.py
       - name: Profile exact shipping extraction route
         run: |
           mkdir -p benchmark-artifacts
           python benchmarks/v030_g04_ml_shipping_extract_profile.py \
             --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-g04-ml-shipping-extract-profile-work" \
             --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-g04-ml-shipping-extract-profile.json"
-      - name: Validate non-credit receipt
+      - name: Run DGO1 causal counterfactual
+        run: |
+          python benchmarks/v030_g04_delimiter_cost_counterfactual.py \
+            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-g04-delimiter-cost-counterfactual-work" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-g04-delimiter-cost-counterfactual.json"
+      - name: Validate non-credit receipts
         run: |
           python - <<'PY'
           import json
           from pathlib import Path
-          d=json.loads(Path('benchmark-artifacts/v030-g04-ml-shipping-extract-profile.json').read_text())
-          assert d['schema']=='cmpct-v030-g04-ml-shipping-extract-profile-v1'
+          p=json.loads(Path('benchmark-artifacts/v030-g04-ml-shipping-extract-profile.json').read_text())
+          assert p['schema']=='cmpct-v030-g04-ml-shipping-extract-profile-v1'
+          assert p['release_credit'] is False
+          assert p['diagnostic_route']=='shipping-product-front-door-no-external-r25-context-v1'
+          assert p['archive_bytes'] > 0 and p['top_by_self'] and p['top_by_cumulative']
+          d=json.loads(Path('benchmark-artifacts/v030-g04-delimiter-cost-counterfactual.json').read_text())
+          assert d['schema']=='cmpct-v030-g04-delimiter-cost-counterfactual-v1'
           assert d['release_credit'] is False
-          assert d['diagnostic_route']=='shipping-product-front-door-no-external-r25-context-v1'
-          assert d['archive_bytes'] > 0 and d['top_by_self'] and d['top_by_cumulative']
+          assert 'delimiter' in d['baseline']['selected_transforms']
+          assert 'delimiter' not in d['no_delimiter']['selected_transforms']
           PY
       - name: Check workflow topology
         run: python tools/check_ci_topology.py .github/workflows/v030-g04-ml-shipping-extract-profile.yml
@@ -112,8 +124,10 @@ jobs:
         if: always()
         with:
           name: v030-g04-ml-shipping-extract-profile-${{ env.EVIDENCE_HEAD }}
-          path: benchmark-artifacts/v030-g04-ml-shipping-extract-profile.json
+          path: |
+            benchmark-artifacts/v030-g04-ml-shipping-extract-profile.json
+            benchmark-artifacts/v030-g04-delimiter-cost-counterfactual.json
           if-no-files-found: error
           retention-days: 90
 
-# Research-only function ownership. Green means receipt integrity, never release credit.
+# Research-only function ownership and causal counterfactual. Green means receipt integrity, never release credit.
