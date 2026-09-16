@@ -48,11 +48,22 @@ def run(work: Path) -> dict:
     # G04 semantic owner and restore it in finally. Do not patch RC.G04 itself: profile isolation intentionally binds
     # RC.G04 to the shared portfolio facade, which has no _audition_record and delegates the audition to its G owner.
     # G04 descriptors are structured lists, so DGO1 identity is descriptor[0] == "delimiter"; stats.selected is only
-    # a reporting string.
+    # a reporting string. Time the inherited audition inside the same counterfactual build so creator-side diagnosis
+    # gains per-record attribution without paying for another full ML build; these timings remain context-only.
     owner = CANONICAL.SHARED.G
     original = owner._audition_record
+    audition_timings = []
     def no_delimiter_audition(record_id, record, users):
+        audition_started = time.perf_counter()
         raw, transform, stats = original(record_id, record, users)
+        audition_elapsed = time.perf_counter() - audition_started
+        audition_timings.append({
+            "record_id": int(record_id),
+            "raw_bytes": int(stats.get("raw_bytes", 0)),
+            "selected_before_counterfactual": str(stats.get("selected", "none")),
+            "payload_saving_bytes": int(stats.get("payload_saving_bytes", 0)),
+            "audition_wall_s_context_only": audition_elapsed,
+        })
         is_delimiter = transform == "delimiter" or (
             isinstance(transform, (list, tuple)) and bool(transform) and transform[0] == "delimiter"
         )
@@ -70,6 +81,7 @@ def run(work: Path) -> dict:
     if not candidate_verify.get("ok") or candidate_verify.get("tree_sha256") != source_tree: raise RuntimeError("no-delimiter candidate failed exact verification")
     candidate_transforms = _selected_transforms(candidate_build)
     if "delimiter" in candidate_transforms: raise RuntimeError("delimiter transform survived disabled delimiter audition")
+    audition_timings.sort(key=lambda row: row["record_id"])
 
     baseline_samples = _timed_extracts(baseline_archive, source_tree, work, "baseline")
     shipping_overlay = CANONICAL.SHARED.G.O
@@ -83,13 +95,13 @@ def run(work: Path) -> dict:
     baseline_bytes = baseline_archive.stat().st_size; candidate_bytes = candidate_archive.stat().st_size
     baseline_median = float(statistics.median(baseline_samples)); banded_median = float(statistics.median(banded_samples)); candidate_median = float(statistics.median(candidate_samples))
     return {
-        "schema":"cmpct-v030-g04-delimiter-cost-counterfactual-v1","controls_version":9,"release_credit":False,"target":"/".join(TARGET),"source_tree_sha256":source_tree,"rounds":ROUNDS,
+        "schema":"cmpct-v030-g04-delimiter-cost-counterfactual-v1","controls_version":10,"release_credit":False,"target":"/".join(TARGET),"source_tree_sha256":source_tree,"rounds":ROUNDS,
         "fresh_process_import_rss_kib_context_only":import_rss,"fresh_process_import_rss_ratio_context_only":import_rss["v030_release_product"]/import_rss["v029_release"],
         "baseline":{"archive_bytes":baseline_bytes,"build_wall_s_context_only":baseline_build_s,"selected_transforms":baseline_transforms,"extract_s":baseline_samples,"median_extract_s":baseline_median},
         "banded_same_archive_bytes":{"archive_bytes":baseline_bytes,"inverse":"guarded-banded-v2","extract_s":banded_samples,"median_extract_s":banded_median,"median_extract_ratio_vs_shipping":banded_median/baseline_median,"median_extract_speedup_vs_shipping":baseline_median/banded_median},
-        "no_delimiter":{"archive_bytes":candidate_bytes,"build_wall_s_context_only":candidate_build_s,"selected_transforms":candidate_transforms,"extract_s":candidate_samples,"median_extract_s":candidate_median},
+        "no_delimiter":{"archive_bytes":candidate_bytes,"build_wall_s_context_only":candidate_build_s,"selected_transforms":candidate_transforms,"audition_timing_context_only":audition_timings,"extract_s":candidate_samples,"median_extract_s":candidate_median},
         "no_delimiter_delta":{"archive_bytes":candidate_bytes-baseline_bytes,"archive_pct":(candidate_bytes/baseline_bytes-1.0)*100.0,"build_wall_s_context_only":candidate_build_s-baseline_build_s,"build_ratio_context_only":candidate_build_s/baseline_build_s,"median_extract_s":candidate_median-baseline_median,"median_extract_ratio":candidate_median/baseline_median,"median_extract_speedup":baseline_median/candidate_median},
-        "claim_boundary":"Research controls only: same-source shipping, same-byte reviewed inverse swap, and no-DGO1 rebuild. The no-DGO1 rebuild patches the exact private G04 semantic owner used by the shared portfolio retained-overlay path and rejects the actual structured DGO1 descriptor; scheduling is unchanged. No release threshold, evaluator, grammar, or comparator is changed. Build wall and import RSS remain diagnostic context, not release credit."
+        "claim_boundary":"Research controls only: same-source shipping, same-byte reviewed inverse swap, and no-DGO1 rebuild. The no-DGO1 rebuild patches the exact private G04 semantic owner used by the shared portfolio retained-overlay path and rejects the actual structured DGO1 descriptor; scheduling is unchanged. Per-record audition wall times are captured around the unchanged inherited audition during that same build and are diagnostic context only. No release threshold, evaluator, grammar, or comparator is changed. Build wall and import RSS remain diagnostic context, not release credit."
     }
 
 def main() -> None:
