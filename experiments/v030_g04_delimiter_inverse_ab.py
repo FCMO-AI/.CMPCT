@@ -22,6 +22,16 @@ ROUNDS = 9
 MIN_SPEEDUP = 0.15
 
 
+def delimiter_inverse_banded(encoded: bytes, logical_size: int) -> bytes:
+    """Stable regression seam for the formerly named banded candidate.
+
+    The banded research implementation was superseded by the release-owned single-buffer inverse, but the hostile
+    exactness tests intentionally remain as differently rooted fixtures.  Route them through the current promoted
+    implementation instead of leaving a dead import that prevents the full regression suite from collecting.
+    """
+    return PRODUCT.C.SHARED.G.O.delimiter_inverse(encoded, logical_size)
+
+
 def _implementations():
     canonical = PRODUCT.C
     control = getattr(canonical, "_BULK_V1_DELIMITER_INVERSE", None)
