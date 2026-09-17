@@ -1,0 +1,55 @@
+name: CMPCT v0.30 R42 ML shipping extraction profile
+# ci-lane: deep
+on:
+  push:
+    branches: [agent/v030-r42-ml-shipping-profile]
+    paths: [.github/workflows/v030-r42-ml-shipping-profile.yml]
+permissions: {contents: read}
+env:
+  EVIDENCE_HEAD: ${{ github.sha }}
+jobs:
+  profile:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with: {ref: '${{ env.EVIDENCE_HEAD }}', fetch-depth: 1}
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.11'}
+      - name: Install product dependencies
+        run: |
+          sudo apt-get update && sudo apt-get install -y zstd gcc ffmpeg libsndfile1
+          python -m pip install -e '.[audio]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
+      - name: Run exact shipping-front-door versus r24 diagnostic
+        run: |
+          mkdir -p benchmark-artifacts
+          python benchmarks/v030_g04_ml_shipping_extract_profile.py \
+            --work-root benchmark-artifacts/r42-work \
+            --output benchmark-artifacts/r42-ml-shipping-profile.json
+      - name: Emit causal summary without release credit
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          p=Path('benchmark-artifacts/r42-ml-shipping-profile.json'); d=json.loads(p.read_text())
+          assert d['release_credit'] is False
+          print(json.dumps({
+            'schema':d['schema'],
+            'candidate_sha':'${{ env.EVIDENCE_HEAD }}',
+            'shipping_extract_median_s':d['unprofiled_extract_median_s'],
+            'r24_extract_median_s':d['r24_control']['unprofiled_extract_median_s'],
+            'shipping_to_r24_extract_ratio':d['shipping_to_r24_extract_ratio'],
+            'shipping_minus_r24_extract_s':d['shipping_minus_r24_extract_s'],
+            'shipping_minus_r24_archive_bytes':d['shipping_minus_r24_archive_bytes'],
+            'top_by_self':d['top_by_self'][:20],
+            'top_by_cumulative':d['top_by_cumulative'][:20],
+            'release_credit':False,
+          },indent=2))
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: v030-r42-ml-shipping-profile-${{ env.EVIDENCE_HEAD }}
+          path: benchmark-artifacts/r42-ml-shipping-profile.json
+          if-no-files-found: error
