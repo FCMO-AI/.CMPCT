@@ -3,6 +3,10 @@ name: CMPCT v0.30 R36 project wait-owner attribution
 # ci-cancel-policy: split-classifier-preserve-receipts
 # ci-pr-scope: latest-head-commit-gate
 # Diagnostic only. R36 resolves R35's Condition.wait sink to a CMPCT-owned frame; no release credit.
+# pull_request intentionally has no paths filter: this integration PR spans thousands of commits and
+# hundreds of changed paths, so GitHub's changed-file filter window can hide a newly-added workflow.
+# The exact-head classifier below is the scope gate and keeps ordinary synchronizations cheap.
+# This synchronization is intentionally workflow-only: the frozen R36 instrument/preregistration are unchanged.
 
 on:
   pull_request:
@@ -31,7 +35,6 @@ jobs:
       cancel-in-progress: true
     outputs:
       run_receipt: ${{ steps.scope.outputs.run_receipt }}
-      run_r37: ${{ steps.scope.outputs.run_r37 }}
     steps:
       - uses: actions/checkout@v6
         with:
@@ -43,14 +46,13 @@ jobs:
         run: |
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          if [ "$GITHUB_EVENT_NAME" = workflow_dispatch ]; then
+            echo 'run_receipt=true' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
           changed="$(git diff-tree --no-commit-id --name-only -r HEAD)"
           printf '%s\n' "$changed"
-          if printf '%s\n' "$changed" | grep -Eq '^(experiments/v030_r37_batched_encode_probe\.py|\.github/workflows/v030-r37-batched-encode-probe\.yml|\.github/workflows/v030-r36-project-wait-owner\.yml)$'; then
-            echo 'run_r37=true' >> "$GITHUB_OUTPUT"
-          else
-            echo 'run_r37=false' >> "$GITHUB_OUTPUT"
-          fi
-          if [ "$GITHUB_EVENT_NAME" = workflow_dispatch ] || printf '%s\n' "$changed" | grep -Eq '^(benchmarks/v030_r36_regenerable_deflate_project_wait_owner\.py|docs/v030-rnd/R36_REGENERABLE_DEFLATE_PROJECT_WAIT_OWNER_PREREG\.md)$'; then
+          if printf '%s\n' "$changed" | grep -Eq '^(benchmarks/v030_r36_regenerable_deflate_project_wait_owner\.py|docs/v030-rnd/R36_REGENERABLE_DEFLATE_PROJECT_WAIT_OWNER_PREREG\.md|\.github/workflows/v030-r36-project-wait-owner\.yml|\.github/workflows/engineering-evidence\.yml)$'; then
             echo 'run_receipt=true' >> "$GITHUB_OUTPUT"
           else
             echo 'run_receipt=false' >> "$GITHUB_OUTPUT"
@@ -61,85 +63,73 @@ jobs:
     if: needs.classify-latest-head.outputs.run_receipt == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 120
+    concurrency:
+      group: cmpct-v030-r36-attribution-${{ github.event.pull_request.head.sha || github.sha }}
+      cancel-in-progress: false
     steps:
       - uses: actions/checkout@v6
         with:
           ref: ${{ env.EVIDENCE_HEAD }}
           fetch-depth: 0
+      - name: Bind frozen R32 substrate and R36 grammar
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          git merge-base --is-ancestor 0b1f3cd653f0e2489964b93cdd19fa8324adda2e HEAD
+          for path in src/cmpct/builder.py src/cmpct/codec.py experiments/entropygraph_v030_release_product.py benchmarks/neutral_hostile_corpus_v1.py benchmarks/neutral_hostile_determinism_repair_v1.py benchmarks/v030_release_ablation_canonical.py benchmarks/v030_r32_regenerable_deflate_output_dead_zstd_elision.py; do
+            test "$(git rev-parse 0b1f3cd653f0e2489964b93cdd19fa8324adda2e:$path)" = "$(git rev-parse HEAD:$path)" || { echo "R36 R32-substrate drift: $path" >&2; exit 1; }
+          done
       - uses: actions/setup-python@v6
         with:
           python-version: '3.11'
           cache: pip
       - name: Install frozen dependencies
+        shell: bash
         run: |
+          set -euo pipefail
           sudo apt-get update
           sudo apt-get install -y zstd gcc ffmpeg libsndfile1
           python -m pip install --upgrade pip
           python -m pip install -e '.[audio,test]'
           python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
+      - name: Compile frozen R36 instrument
+        run: python -m py_compile benchmarks/v030_r36_regenerable_deflate_project_wait_owner.py
       - name: Run frozen R36 project wait-owner attribution
         env:
           CMPCT_EVIDENCE_HEAD: ${{ env.EVIDENCE_HEAD }}
         run: |
           mkdir -p benchmark-artifacts
           python benchmarks/v030_r36_regenerable_deflate_project_wait_owner.py --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/r36-work" --output "$GITHUB_WORKSPACE/benchmark-artifacts/r36-project-wait-owner.json"
-      - uses: actions/upload-artifact@v6
+      - name: Enforce frozen R36 completeness and decision law
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          d=json.loads(Path('benchmark-artifacts/r36-project-wait-owner.json').read_text())
+          assert d['schema']=='cmpct-v030-r36-regenerable-deflate-project-wait-owner-v1'
+          assert d['evidence_head']==os.environ['EVIDENCE_HEAD']
+          assert d['repetitions']==3
+          assert set(d['targets'])=={'full-backups','nested-only'}
+          assert d['decision'] in {'PROJECT_WAIT_OWNER_LOCALIZED','PROJECT_WAIT_OWNER_DISTRIBUTED_OR_BELOW_FLOOR','PROJECT_WAIT_OWNER_UNRESOLVED','WAIT_INSTRUMENTATION_UNRESOLVED','SUBSTRATE_OR_SAME_RUN_IDENTITY_FAILURE'}
+          for target in d['targets'].values():
+              assert set(target['arms'])=={'release-all-exact','full-search','no-ordinary-zstd'}
+              for arm in target['arms'].values():
+                  assert len(arm['repetitions'])==3
+                  assert all(row['strong_verify_ok'] for row in arm['repetitions'])
+          if d['decision'] not in {'SUBSTRATE_OR_SAME_RUN_IDENTITY_FAILURE'}:
+              assert d['same_run_identity_ok']
+          if d['decision']=='PROJECT_WAIT_OWNER_LOCALIZED':
+              assert d['wait_instrumentation_ok'] and d['localized_project_owners']
+              assert all(x['nested_wait_time_delta_s']>=0.010 and x['full_wait_time_delta_s']>0 for x in d['localized_project_owners'])
+          PY
+      - name: CI topology self-check
+        run: python tools/check_ci_topology.py .github/workflows/v030-r36-project-wait-owner.yml
+      - name: Upload immutable R36 evidence
+        uses: actions/upload-artifact@v6
         with:
           name: v030-r36-project-wait-owner-${{ env.EVIDENCE_HEAD }}
           path: benchmark-artifacts/r36-project-wait-owner.json
-          if-no-files-found: error
-          retention-days: 90
-
-  r37-batched-encode:
-    needs: classify-latest-head
-    if: needs.classify-latest-head.outputs.run_r37 == 'true'
-    runs-on: ubuntu-24.04
-    timeout-minutes: 60
-    steps:
-      - uses: actions/checkout@v6
-        with:
-          ref: ${{ env.EVIDENCE_HEAD }}
-          fetch-depth: 2
-      - uses: actions/setup-python@v6
-        with:
-          python-version: '3.11'
-          cache: pip
-      - name: Install dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y zstd gcc ffmpeg libsndfile1
-          python -m pip install --upgrade pip
-          python -m pip install -e '.[audio,test]'
-          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
-      - name: Build frozen R34/R36 source trees and run R37
-        run: |
-          mkdir -p benchmark-artifacts
-          python - <<'PY'
-          import json
-          from pathlib import Path
-          from benchmarks import v030_r34_regenerable_deflate_same_run_phase_attribution as R34
-          full,nested,identity=R34.build_sources(Path('benchmark-artifacts/r37-work'))
-          Path('benchmark-artifacts/sources.txt').write_text(str(full.resolve())+'\n'+str(nested.resolve())+'\n'+json.dumps(identity,sort_keys=True)+'\n')
-          PY
-          mapfile -t src < benchmark-artifacts/sources.txt
-          python experiments/v030_r37_batched_encode_probe.py "${src[0]}" --workers 8 --repetitions 7 --output benchmark-artifacts/r37-full.json
-          python experiments/v030_r37_batched_encode_probe.py "${src[1]}" --workers 8 --repetitions 7 --output benchmark-artifacts/r37-nested.json
-      - name: Enforce identity and emit decision
-        run: |
-          python - <<'PY'
-          import json
-          from pathlib import Path
-          rows={n:json.loads(Path(f'benchmark-artifacts/r37-{n}.json').read_text()) for n in ('full','nested')}
-          assert all(r['identity'] for r in rows.values())
-          decision='BATCHING_TRANSFERS' if all(r['median_seconds_saved']>0 for r in rows.values()) else 'BATCHING_DOES_NOT_TRANSFER'
-          out={'schema':'cmpct-v030-r37-batched-encode-result-v1','decision':decision,'targets':rows}
-          Path('benchmark-artifacts/r37-result.json').write_text(json.dumps(out,indent=2,sort_keys=True)+'\n')
-          print(json.dumps(out,indent=2,sort_keys=True))
-          print(f"::notice title=R37 {decision}::full_ratio={rows['full']['batched_over_itemwise_ratio']:.6f} full_saved_s={rows['full']['median_seconds_saved']:.6f} nested_ratio={rows['nested']['batched_over_itemwise_ratio']:.6f} nested_saved_s={rows['nested']['median_seconds_saved']:.6f} identity=true")
-          PY
-      - uses: actions/upload-artifact@v6
-        with:
-          name: v030-r37-batched-encode-${{ env.EVIDENCE_HEAD }}
-          path: benchmark-artifacts/r37-*.json
           if-no-files-found: error
           retention-days: 90
