@@ -1,10 +1,8 @@
 name: CMPCT v0.30 R40 dynamic-pull resource gate
 # ci-lane: deep
+# ci-pr-scope: latest-head-commit-gate
 on:
-  # R40 is a one-hypothesis research branch. Branch-local push execution avoids long-lived-PR
-  # accumulated-path ambiguity while concurrency cancels superseded revisions before authority.
-  push:
-    branches: [agent/v030-r40-dynamic-pull-productization]
+  pull_request:
     paths:
       - 'experiments/v030_r40_dynamic_pull_resource_probe.py'
       - 'docs/research/v030-r40-dynamic-pull-resource-prereg.md'
@@ -12,7 +10,7 @@ on:
   workflow_dispatch:
 permissions: {contents: read}
 concurrency:
-  group: cmpct-r40-${{ github.ref }}
+  group: cmpct-r40-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 jobs:
   r40-resource:
@@ -20,15 +18,27 @@ jobs:
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@v6
+        with: {fetch-depth: 2}
+      - name: Classify newest commit only
+        id: scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          changed="$(git diff-tree --no-commit-id --name-only -r HEAD)"
+          printf '%s\n' "$changed"
+          if grep -Eq '^(experiments/v030_r40_dynamic_pull_resource_probe.py|docs/research/v030-r40-dynamic-pull-resource-prereg.md|.github/workflows/v030-r40-dynamic-pull-resource.yml)$' <<<"$changed"; then echo 'run=true' >> "$GITHUB_OUTPUT"; else echo 'run=false' >> "$GITHUB_OUTPUT"; fi
       - uses: actions/setup-python@v6
+        if: steps.scope.outputs.run == 'true' || github.event_name == 'workflow_dispatch'
         with: {python-version: '3.11', cache: pip}
       - name: Install dependencies
+        if: steps.scope.outputs.run == 'true' || github.event_name == 'workflow_dispatch'
         run: |
           sudo apt-get update && sudo apt-get install -y zstd gcc ffmpeg libsndfile1
           python -m pip install --upgrade pip
           python -m pip install -e '.[audio,test]'
           python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
       - name: Build frozen sources
+        if: steps.scope.outputs.run == 'true' || github.event_name == 'workflow_dispatch'
         run: |
           mkdir -p benchmark-artifacts
           python - <<'PY'
@@ -38,6 +48,7 @@ jobs:
           Path('benchmark-artifacts/sources.txt').write_text(str(full.resolve())+'\n'+str(nested.resolve())+'\n')
           PY
       - name: Run isolated alternating repetitions
+        if: steps.scope.outputs.run == 'true' || github.event_name == 'workflow_dispatch'
         run: |
           mapfile -t src < benchmark-artifacts/sources.txt
           for target in full nested; do
@@ -51,6 +62,7 @@ jobs:
             done
           done
       - name: Enforce frozen decision
+        if: steps.scope.outputs.run == 'true' || github.event_name == 'workflow_dispatch'
         run: |
           python - <<'PY'
           import json,statistics
@@ -68,7 +80,7 @@ jobs:
           if not passed:raise SystemExit(1)
           PY
       - name: Upload immutable evidence
-        if: always()
+        if: always() && (steps.scope.outputs.run == 'true' || github.event_name == 'workflow_dispatch')
         uses: actions/upload-artifact@v6
         with:
           name: v030-r40-dynamic-pull-resource-${{ github.sha }}
