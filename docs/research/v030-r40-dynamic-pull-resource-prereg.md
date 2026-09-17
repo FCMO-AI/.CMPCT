@@ -17,6 +17,8 @@ No codec, representation, admission, source, worker count, archive layout, compa
 ## Frozen evidence
 Use frozen R34/R36 full-backups and nested-only source builders, reproducible mode, 8 workers, and **7 independent subprocess repetitions per arm per target**, alternating arm order. Each subprocess reports complete-build wall time, process-tree CPU (`user + system`, including child helpers), conservative available process-tree peak RSS, archive bytes and SHA-256. Every baseline/candidate archive pair must be byte-identical. Summaries use medians.
 
+The resource gate executes on GitHub's `ubuntu-24.04` Linux runner so `resource.ru_maxrss` has one fixed KiB interpretation. Parent and sequential child-helper maxima are both observed and the larger is charged; this is intentionally conservative for the current Builder helper topology and is not claimed as a portable cross-OS RSS API.
+
 ## Decision
 `RESOURCE_GATE_PASSES` only if on **both** targets: exact archive identity on every repetition; candidate median wall time is at least **2 ms faster**; candidate median process-tree CPU is not more than **3% slower**; candidate median peak RSS is not more than **5% higher**. Otherwise emit `RESOURCE_GATE_FAILS`. Bounds are frozen before result and may not move afterward.
 
