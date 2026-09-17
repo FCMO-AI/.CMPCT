@@ -1,0 +1,13 @@
+diff --git a/src/cmpct/builder.py b/src/cmpct/builder.py
+--- a/src/cmpct/builder.py
++++ b/src/cmpct/builder.py
+@@
+ from .codec import *
+ from .codec import _audio_modules, _compressed_payload, _hash_sparse, _sparse_data_extents, _wav_parts
++from ._ordered_pull import ordered_worker_pull
+@@
+-        if self.encode_workers>1 and len(ordered)>1:
+-            with concurrent.futures.ThreadPoolExecutor(max_workers=self.encode_workers,thread_name_prefix='cmpct-encode') as pool:
+-                encoded=list(pool.map(encode,ordered))
+-        else:encoded=[encode(item) for item in ordered]
++        encoded=ordered_worker_pull(encode,ordered,self.encode_workers)
