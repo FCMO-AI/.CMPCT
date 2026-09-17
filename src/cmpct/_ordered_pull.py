@@ -21,9 +21,9 @@ def ordered_worker_pull(fn: Callable[[_T], _R], items: Sequence[_T], workers: in
 
     Workers claim canonical indices under a tiny lock, execute ``fn`` outside the
     lock, and publish into fixed result slots. The first observed failure closes
-    the claim gate so already-running calls may unwind but no new candidate work
-    starts. If several in-flight calls fail, the lowest canonical-index exception
-    is raised, matching ordered ``Executor.map`` result semantics.
+    the claim gate before failure bookkeeping so already-running calls may unwind
+    but no later claim starts. If several in-flight calls fail, the lowest
+    canonical-index exception is raised, matching ordered ``Executor.map`` results.
     """
     count = len(items)
     if count == 0:
@@ -35,23 +35,23 @@ def ordered_worker_pull(fn: Callable[[_T], _R], items: Sequence[_T], workers: in
     results: list[_R | None] = [None] * count
     failures: list[tuple[int, BaseException]] = []
     next_index = 0
-    aborted = False
+    abort_event = threading.Event()
     claim_lock = threading.Lock()
 
     def pull() -> None:
-        nonlocal next_index, aborted
+        nonlocal next_index
         while True:
             with claim_lock:
-                if aborted or next_index >= count:
+                if abort_event.is_set() or next_index >= count:
                     return
                 index = next_index
                 next_index = index + 1
             try:
                 result = fn(items[index])
             except BaseException as exc:
+                abort_event.set()
                 with claim_lock:
                     failures.append((index, exc))
-                    aborted = True
                 return
             results[index] = result
 
