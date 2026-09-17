@@ -3,6 +3,7 @@ name: CMPCT v0.30 R36 project wait-owner attribution
 # ci-cancel-policy: split-classifier-preserve-receipts
 # ci-pr-scope: latest-head-commit-gate
 # Diagnostic only. R36 resolves R35's Condition.wait sink to a CMPCT-owned frame; no release credit.
+# Execution-enablement retrigger after repairing the frozen-ancestor checkout route.
 
 on:
   pull_request:
