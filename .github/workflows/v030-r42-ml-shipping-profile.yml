@@ -1,4 +1,4 @@
-name: CMPCT v0.30 R42 ML shipping extraction profile
+name: CMPCT v0.30 R42 ML shipping owner diagnosis
 # ci-lane: deep
 on:
   push:
@@ -9,48 +9,56 @@ env:
   EVIDENCE_HEAD: ${{ github.sha }}
   PYTHONPATH: .
 jobs:
-  profile:
+  diagnose:
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
         with: {ref: '${{ env.EVIDENCE_HEAD }}', fetch-depth: 1}
       - uses: actions/setup-python@v5
-        with: {python-version: '3.11'}
+        with: {python-version: '3.12'}
       - name: Install product dependencies
         run: |
           sudo apt-get update && sudo apt-get install -y zstd gcc ffmpeg libsndfile1
           python -m pip install -e '.[audio]'
           python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
-      - name: Run exact shipping-front-door versus r24 diagnostic
+      - name: Run shipping-front-door versus r24 profile
         run: |
-          mkdir -p benchmark-artifacts
-          python benchmarks/v030_g04_ml_shipping_extract_profile.py \
-            --work-root benchmark-artifacts/r42-work \
+          mkdir -p benchmark-artifacts/profile-work
+          python -m benchmarks.v030_g04_ml_shipping_extract_profile \
+            --work-root benchmark-artifacts/profile-work \
             --output benchmark-artifacts/r42-ml-shipping-profile.json
+      - name: Run exact-head delimiter cost counterfactual
+        run: |
+          mkdir -p benchmark-artifacts/counterfactual-work
+          python -m benchmarks.v030_g04_delimiter_cost_counterfactual \
+            --work-root benchmark-artifacts/counterfactual-work \
+            --output benchmark-artifacts/r42-delimiter-cost.json
       - name: Emit causal summary without release credit
         run: |
           python - <<'PY'
           import json
           from pathlib import Path
-          p=Path('benchmark-artifacts/r42-ml-shipping-profile.json'); d=json.loads(p.read_text())
-          assert d['release_credit'] is False
+          p=json.loads(Path('benchmark-artifacts/r42-ml-shipping-profile.json').read_text())
+          c=json.loads(Path('benchmark-artifacts/r42-delimiter-cost.json').read_text())
+          assert p['release_credit'] is False and c['release_credit'] is False
           print(json.dumps({
-            'schema':d['schema'],
             'candidate_sha':'${{ env.EVIDENCE_HEAD }}',
-            'shipping_extract_median_s':d['unprofiled_extract_median_s'],
-            'r24_extract_median_s':d['r24_control']['unprofiled_extract_median_s'],
-            'shipping_to_r24_extract_ratio':d['shipping_to_r24_extract_ratio'],
-            'shipping_minus_r24_extract_s':d['shipping_minus_r24_extract_s'],
-            'shipping_minus_r24_archive_bytes':d['shipping_minus_r24_archive_bytes'],
-            'top_by_self':d['top_by_self'][:20],
-            'top_by_cumulative':d['top_by_cumulative'][:20],
+            'shipping_extract_median_s':p['unprofiled_extract_median_s'],
+            'r24_extract_median_s':p['r24_control']['unprofiled_extract_median_s'],
+            'shipping_to_r24_extract_ratio':p['shipping_to_r24_extract_ratio'],
+            'shipping_minus_r24_extract_s':p['shipping_minus_r24_extract_s'],
+            'shipping_minus_r24_archive_bytes':p['shipping_minus_r24_archive_bytes'],
+            'profile_top_self':p['top_by_self'][:12],
+            'delimiter_counterfactual':c,
             'release_credit':False,
           },indent=2))
           PY
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: v030-r42-ml-shipping-profile-${{ env.EVIDENCE_HEAD }}
-          path: benchmark-artifacts/r42-ml-shipping-profile.json
+          name: v030-r42-ml-owner-diagnosis-${{ env.EVIDENCE_HEAD }}
+          path: |
+            benchmark-artifacts/r42-ml-shipping-profile.json
+            benchmark-artifacts/r42-delimiter-cost.json
           if-no-files-found: error
