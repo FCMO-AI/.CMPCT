@@ -4,6 +4,11 @@
 name: CMPCT v0.30 external competitor frontier
 
 on:
+  push:
+    branches:
+      - agent/v030-current-benchmark-20260917
+    paths:
+      - '.github/workflows/v030-external-competitors.yml'
   pull_request:
     branches:
       - main
