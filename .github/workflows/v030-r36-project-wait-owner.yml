@@ -115,10 +115,11 @@ jobs:
         run: |
           mkdir -p benchmark-artifacts
           python - <<'PY'
+          import json
           from pathlib import Path
           from benchmarks import v030_r34_regenerable_deflate_same_run_phase_attribution as R34
           full,nested,identity=R34.build_sources(Path('benchmark-artifacts/r37-work'))
-          Path('benchmark-artifacts/sources.txt').write_text(str(full.resolve())+'\n'+str(nested.resolve())+'\n'+identity+'\n')
+          Path('benchmark-artifacts/sources.txt').write_text(str(full.resolve())+'\n'+str(nested.resolve())+'\n'+json.dumps(identity,sort_keys=True)+'\n')
           PY
           mapfile -t src < benchmark-artifacts/sources.txt
           python experiments/v030_r37_batched_encode_probe.py "${src[0]}" --workers 8 --repetitions 7 --output benchmark-artifacts/r37-full.json
@@ -134,6 +135,7 @@ jobs:
           out={'schema':'cmpct-v030-r37-batched-encode-result-v1','decision':decision,'targets':rows}
           Path('benchmark-artifacts/r37-result.json').write_text(json.dumps(out,indent=2,sort_keys=True)+'\n')
           print(json.dumps(out,indent=2,sort_keys=True))
+          print(f"::notice title=R37 {decision}::full_ratio={rows['full']['batched_over_itemwise_ratio']:.6f} full_saved_s={rows['full']['median_seconds_saved']:.6f} nested_ratio={rows['nested']['batched_over_itemwise_ratio']:.6f} nested_saved_s={rows['nested']['median_seconds_saved']:.6f} identity=true")
           PY
       - uses: actions/upload-artifact@v6
         with:
