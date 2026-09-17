@@ -6,6 +6,7 @@ name: CMPCT v0.30 R36 project wait-owner attribution
 # pull_request intentionally has no paths filter: this integration PR spans thousands of commits and
 # hundreds of changed paths, so GitHub's changed-file filter window can hide a newly-added workflow.
 # The exact-head classifier below is the scope gate and keeps ordinary synchronizations cheap.
+# This synchronization is intentionally workflow-only: the frozen R36 instrument/preregistration are unchanged.
 
 on:
   pull_request:
