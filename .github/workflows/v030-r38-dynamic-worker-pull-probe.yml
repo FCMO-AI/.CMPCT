@@ -1,0 +1,73 @@
+name: CMPCT v0.30 R38 dynamic worker-pull falsifier
+# ci-lane: deep
+# ci-auto-policy: bounded-research-pr
+on:
+  pull_request:
+    branches: [agent/v030-authoritative-integration]
+    paths:
+      - 'experiments/v030_r38_dynamic_worker_pull_probe.py'
+      - 'docs/v030-rnd/R38_DYNAMIC_WORKER_PULL_PREREG.md'
+      - '.github/workflows/v030-r38_dynamic_worker_pull_probe.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+env:
+  PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+jobs:
+  r38-probe:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 2
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y zstd gcc ffmpeg libsndfile1
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[audio,test]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
+      - name: Compile probe
+        run: python -m py_compile experiments/v030_r38_dynamic_worker_pull_probe.py
+      - name: Build frozen R34/R36 source trees
+        run: |
+          mkdir -p benchmark-artifacts
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          from benchmarks import v030_r34_regenerable_deflate_same_run_phase_attribution as R34
+          full,nested,identity=R34.build_sources(Path('benchmark-artifacts/r38-work'))
+          Path('benchmark-artifacts/sources.txt').write_text(str(full.resolve())+'\n'+str(nested.resolve())+'\n'+json.dumps(identity,sort_keys=True)+'\n')
+          PY
+      - name: Run R38 on full and nested targets
+        run: |
+          mapfile -t src < benchmark-artifacts/sources.txt
+          python experiments/v030_r38_dynamic_worker_pull_probe.py "${src[0]}" --workers 8 --repetitions 9 --output benchmark-artifacts/r38-full.json
+          python experiments/v030_r38_dynamic_worker_pull_probe.py "${src[1]}" --workers 8 --repetitions 9 --output benchmark-artifacts/r38-nested.json
+      - name: Enforce identity and frozen decision
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          rows={n:json.loads(Path(f'benchmark-artifacts/r38-{n}.json').read_text()) for n in ('full','nested')}
+          assert all(r['identity'] for r in rows.values())
+          ok=all(r['median_seconds_saved']>=0.002 for r in rows.values())
+          decision='DYNAMIC_PULL_TRANSFERS' if ok else 'DYNAMIC_PULL_DOES_NOT_TRANSFER'
+          out={'schema':'cmpct-v030-r38-dynamic-worker-pull-result-v1','decision':decision,'targets':rows}
+          Path('benchmark-artifacts/r38-result.json').write_text(json.dumps(out,indent=2,sort_keys=True)+'\n')
+          print(json.dumps(out,indent=2,sort_keys=True))
+          PY
+      - name: Upload immutable R38 evidence
+        uses: actions/upload-artifact@v6
+        with:
+          name: v030-r38-dynamic-worker-pull-${{ env.EVIDENCE_HEAD }}
+          path: benchmark-artifacts/r38-*.json
+          if-no-files-found: error
+          retention-days: 90
