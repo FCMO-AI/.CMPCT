@@ -1,0 +1,58 @@
+name: Current v0.30 vs release v0.29 A/B
+
+on:
+  push:
+    branches:
+      - agent/v030-current-benchmark-20260917
+    paths:
+      - '.github/workflows/current-v030-vs-v029.yml'
+      - 'benchmarks/current_v030_vs_v029.py'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  compare:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 240
+    steps:
+      - name: Checkout current measurement branch
+        uses: actions/checkout@v6
+        with:
+          path: current
+      - name: Checkout frozen v0.29 release commit
+        uses: actions/checkout@v6
+        with:
+          ref: 291423c604642b21a4b84d2500a12eeaac7bd9e0
+          path: v029-src
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - name: Install shared dependencies
+        working-directory: current
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[test,audio]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
+      - name: Compile benchmark
+        working-directory: current
+        run: python -m py_compile benchmarks/current_v030_vs_v029.py
+      - name: Run exact same-corpus A/B
+        working-directory: current
+        env:
+          PYTHONPATH: ${{ github.workspace }}/current
+        run: |
+          mkdir -p benchmark-artifacts
+          python benchmarks/current_v030_vs_v029.py \
+            --work-root "$GITHUB_WORKSPACE/current/benchmark-artifacts/current-v030-v029-work" \
+            --v029-src "$GITHUB_WORKSPACE/v029-src" \
+            --output "$GITHUB_WORKSPACE/current/benchmark-artifacts/current-v030-v029.json"
+      - name: Upload evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: current-v030-v029-${{ github.sha }}
+          path: current/benchmark-artifacts/current-v030-v029.json
+          if-no-files-found: error
+          retention-days: 30
