@@ -7,6 +7,7 @@ on:
 permissions: {contents: read}
 env:
   EVIDENCE_HEAD: ${{ github.sha }}
+  PYTHONPATH: .
 jobs:
   profile:
     runs-on: ubuntu-24.04
