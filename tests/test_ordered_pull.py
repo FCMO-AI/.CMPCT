@@ -38,6 +38,25 @@ def test_parallel_completion_order_cannot_reorder_results():
     assert completed != expected
 
 
+def test_worker_concurrency_never_exceeds_requested_bound():
+    active = peak = 0
+    lock = threading.Lock()
+
+    def encode(value: int) -> int:
+        nonlocal active, peak
+        with lock:
+            active += 1
+            peak = max(peak, active)
+        time.sleep(0.002)
+        with lock:
+            active -= 1
+        return value
+
+    items = list(range(80))
+    assert ordered_worker_pull(encode, items, 5) == items
+    assert 1 < peak <= 5
+
+
 def test_worker_exception_propagates_to_caller():
     def encode(value: int) -> int:
         if value == 5:
