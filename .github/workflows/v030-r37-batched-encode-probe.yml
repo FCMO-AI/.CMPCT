@@ -1,0 +1,76 @@
+name: CMPCT v0.30 R37 batched encode falsifier
+# ci-lane: deep
+# ci-cancel-policy: preserve-receipts
+# Research-only: tests R36's scheduling-granularity hypothesis; no release credit.
+
+on:
+  pull_request:
+    paths:
+      - 'experiments/v030_r37_batched_encode_probe.py'
+      - '.github/workflows/v030-r37-batched-encode-probe.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+
+jobs:
+  r37-probe:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 2
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y zstd gcc ffmpeg libsndfile1
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[audio,test]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
+      - name: Compile probe
+        run: python -m py_compile experiments/v030_r37_batched_encode_probe.py
+      - name: Build frozen R34/R36 source trees
+        run: |
+          mkdir -p benchmark-artifacts
+          python - <<'PY'
+          from pathlib import Path
+          from benchmarks import v030_r34_regenerable_deflate_same_run_phase_attribution as R34
+          full,nested,identity=R34.build_sources(Path('benchmark-artifacts/r37-work'))
+          Path('benchmark-artifacts/sources.txt').write_text(str(full.resolve())+'\n'+str(nested.resolve())+'\n'+identity+'\n')
+          PY
+      - name: Run R37 on full and nested targets
+        run: |
+          mapfile -t src < benchmark-artifacts/sources.txt
+          python experiments/v030_r37_batched_encode_probe.py "${src[0]}" --workers 8 --repetitions 7 --output benchmark-artifacts/r37-full.json
+          python experiments/v030_r37_batched_encode_probe.py "${src[1]}" --workers 8 --repetitions 7 --output benchmark-artifacts/r37-nested.json
+      - name: Enforce identity and emit decision
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          rows={n:json.loads(Path(f'benchmark-artifacts/r37-{n}.json').read_text()) for n in ('full','nested')}
+          assert all(r['identity'] for r in rows.values())
+          # This is intentionally a falsifier, not a promotion threshold. Require transfer in direction
+          # only; product Builder work must later earn full uninstrumented runtime gates.
+          decision='BATCHING_TRANSFERS' if all(r['median_seconds_saved']>0 for r in rows.values()) else 'BATCHING_DOES_NOT_TRANSFER'
+          out={'schema':'cmpct-v030-r37-batched-encode-result-v1','decision':decision,'targets':rows}
+          Path('benchmark-artifacts/r37-result.json').write_text(json.dumps(out,indent=2,sort_keys=True)+'\n')
+          print(json.dumps(out,indent=2,sort_keys=True))
+          PY
+      - name: Upload immutable R37 evidence
+        uses: actions/upload-artifact@v6
+        with:
+          name: v030-r37-batched-encode-${{ env.EVIDENCE_HEAD }}
+          path: benchmark-artifacts/r37-*.json
+          if-no-files-found: error
+          retention-days: 90
