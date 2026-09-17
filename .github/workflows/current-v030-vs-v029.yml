@@ -30,6 +30,10 @@ jobs:
       - uses: actions/setup-python@v6
         with:
           python-version: '3.11'
+      - name: Install frozen-corpus media dependency
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y ffmpeg
       - name: Install shared dependencies
         working-directory: current
         run: |
