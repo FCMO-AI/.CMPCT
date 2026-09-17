@@ -1,0 +1,57 @@
+name: CMPCT v0.30 R42 reader hash-dedup oracle
+# ci-lane: deep
+on:
+  push:
+    branches: [agent/v030-r42-reader-hash-dedup]
+    paths: [.github/workflows/v030-r42-hash-dedup-oracle.yml]
+permissions: {contents: read}
+env: {PYTHONPATH: .}
+jobs:
+  oracle:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.12'}
+      - run: |
+          sudo apt-get update && sudo apt-get install -y zstd
+          python -m pip install -e '.[test]'
+      - name: Quantify exact duplicate-SHA opportunity on frozen ML shipping archive
+        run: |
+          mkdir -p benchmark-artifacts
+          python - <<'PY'
+          import json, shutil
+          from pathlib import Path
+          from benchmarks import v030_release_generalization as GENERAL
+          from experiments import entropygraph_v030_release_product as PRODUCT
+          from experiments import entropygraph_v030_release_reader as RR
+          root=Path('benchmark-artifacts/r42-hash-work'); shutil.rmtree(root,ignore_errors=True); root.mkdir(parents=True)
+          neutral=GENERAL.V029._load(GENERAL.V029.ROOT/'benchmarks'/'neutral_hostile_corpus_v1.py','cmpct_r42_hash_neutral')
+          repair=GENERAL.V029._load(GENERAL.V029.REPAIR_PATH,'cmpct_r42_hash_repair'); repair.install_generation_hooks(neutral)
+          neutral.corpus_ml(root); repair.normalize_root(root); source=root/'09_ml_artifacts'
+          expected=GENERAL._accepted_v029_rows()[('neutral_hostile_v1','09_ml_artifacts')]['tree_sha256']; observed=GENERAL._historical_treehash(source)
+          if observed!=expected: raise SystemExit(f'frozen source drift: {observed} != {expected}')
+          archive=root/'shipping.cmpct'; PRODUCT.build(source,archive)
+          stream,meta,record_start,offsets,_merkle,_tail=RR._g04_open(archive)
+          try:
+              rows=[]; eligible_bytes=0; eligible_records=0; total_payload=0
+              for rid,rel in enumerate(offsets):
+                  stream.seek(record_start+rel); header=stream.read(RR.PH.size); codec,usize,csize,crc,original_sha=RR.PH.unpack(header); payload=stream.read(csize); transform=meta['physical_geometry'][rid]
+                  total_payload += csize
+                  eligible=(codec==RR.G04.O.CODEC_RAW and transform is None)
+                  if eligible:
+                      eligible_records+=1; eligible_bytes+=csize
+                      leaf=meta['record_leaf_sha256'][rid]
+                      if leaf != original_sha: raise SystemExit('eligible raw/no-transform digest declarations differ')
+                  rows.append({'record_id':rid,'codec':int(codec),'usize':int(usize),'csize':int(csize),'transform':None if transform is None else transform[0],'duplicate_sha_eligible':eligible})
+          finally: stream.close()
+          out={'schema':'cmpct-v030-r42-hash-dedup-headroom-v1','release_credit':False,'archive_bytes':archive.stat().st_size,'records':len(offsets),'raw_no_transform_records':eligible_records,'raw_no_transform_payload_bytes':eligible_bytes,'physical_payload_bytes':total_payload,'eligible_payload_fraction':eligible_bytes/max(1,total_payload),'semantic_argument':'For raw + no-transform records, record_leaf_sha256 == original_sha256 authenticates the same exact bytes. One SHA-256 pass can satisfy both declarations if the two authenticated digest declarations are first compared; CRC32 remains independently checked.','rows':rows}
+          Path('benchmark-artifacts/r42-hash-dedup-headroom.json').write_text(json.dumps(out,indent=2)+'\n'); print(json.dumps({k:v for k,v in out.items() if k!='rows'},indent=2))
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: v030-r42-hash-dedup-${{ github.sha }}
+          path: benchmark-artifacts/r42-hash-dedup-headroom.json
+          if-no-files-found: error
