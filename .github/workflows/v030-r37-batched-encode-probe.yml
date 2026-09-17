@@ -43,10 +43,11 @@ jobs:
         run: |
           mkdir -p benchmark-artifacts
           python - <<'PY'
+          import json
           from pathlib import Path
           from benchmarks import v030_r34_regenerable_deflate_same_run_phase_attribution as R34
           full,nested,identity=R34.build_sources(Path('benchmark-artifacts/r37-work'))
-          Path('benchmark-artifacts/sources.txt').write_text(str(full.resolve())+'\n'+str(nested.resolve())+'\n'+identity+'\n')
+          Path('benchmark-artifacts/sources.txt').write_text(str(full.resolve())+'\n'+str(nested.resolve())+'\n'+json.dumps(identity,sort_keys=True)+'\n')
           PY
       - name: Run R37 on full and nested targets
         run: |
