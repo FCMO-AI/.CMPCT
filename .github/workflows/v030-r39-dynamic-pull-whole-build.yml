@@ -1,19 +1,13 @@
 name: CMPCT v0.30 R39 dynamic-pull whole-build gate
 # ci-lane: deep
-# ci-auto-policy: bounded-research-pr
+# ci-auto-policy: manual-only
 on:
-  pull_request:
-    branches: [agent/v030-authoritative-integration]
-    paths:
-      - 'experiments/v030_r39_dynamic_pull_whole_build_probe.py'
-      - 'docs/v030-rnd/R39_DYNAMIC_PULL_WHOLE_BUILD_PREREG.md'
-      - '.github/workflows/v030-r39-dynamic-pull-whole-build.yml'
   workflow_dispatch:
 permissions:
   contents: read
 env:
   PYTHONPATH: ${{ github.workspace }}
-  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+  EVIDENCE_HEAD: ${{ github.sha }}
 jobs:
   r39-whole-build:
     runs-on: ubuntu-24.04
