@@ -1,0 +1,45 @@
+name: CMPCT v0.30 R42 pre-R41 ML build control
+# ci-lane: deep
+on:
+  push:
+    branches: [agent/v030-r42-pre-r41-ml-build-control]
+    paths: [.github/workflows/v030-r42-pre-r41-ml-build-control.yml]
+permissions: {contents: read}
+env: {PYTHONPATH: .}
+jobs:
+  control:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.12'}
+      - run: |
+          sudo apt-get update && sudo apt-get install -y zstd
+          python -m pip install -e '.[test]'
+      - name: Build exact frozen ML shipping archive once
+        run: |
+          mkdir -p benchmark-artifacts
+          python - <<'PY'
+          import json,shutil,time
+          from pathlib import Path
+          from benchmarks import v030_release_generalization as GENERAL
+          from experiments import entropygraph_v030_release_product as PRODUCT
+          root=Path('benchmark-artifacts/r42-control'); shutil.rmtree(root,ignore_errors=True); root.mkdir(parents=True)
+          neutral=GENERAL.V029._load(GENERAL.V029.ROOT/'benchmarks'/'neutral_hostile_corpus_v1.py','cmpct_r42_control_neutral')
+          repair=GENERAL.V029._load(GENERAL.V029.REPAIR_PATH,'cmpct_r42_control_repair'); repair.install_generation_hooks(neutral)
+          neutral.corpus_ml(root); repair.normalize_root(root); source=root/'09_ml_artifacts'
+          expected=GENERAL._accepted_v029_rows()[('neutral_hostile_v1','09_ml_artifacts')]['tree_sha256']; observed=GENERAL._historical_treehash(source)
+          if observed!=expected: raise SystemExit(f'frozen source drift: {observed} != {expected}')
+          archive=root/'shipping.cmpct'; started=time.perf_counter(); stats=PRODUCT.build(source,archive); wall=time.perf_counter()-started
+          verify=PRODUCT.strong_verify(archive)
+          if not verify.get('ok'): raise SystemExit('verify failed')
+          out={'schema':'cmpct-v030-r42-pre-r41-ml-build-control-v1','source_head':'94dd456ff508ae4e60ba9230bc071fdc9cc4708d','release_credit':False,'tree_sha256':observed,'archive_bytes':archive.stat().st_size,'build_wall_s':wall,'build_stats':stats}
+          Path('benchmark-artifacts/r42-pre-r41-ml-build-control.json').write_text(json.dumps(out,indent=2)+'\n'); print(json.dumps(out,indent=2))
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: v030-r42-pre-r41-ml-build-control-${{ github.sha }}
+          path: benchmark-artifacts/r42-pre-r41-ml-build-control.json
+          if-no-files-found: error
