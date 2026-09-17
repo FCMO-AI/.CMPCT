@@ -23,3 +23,5 @@ R38's candidate-encoding gain survives the complete `Builder.build()` boundary. 
 This is still research evidence, not product/release credit. It authorizes the minimal product implementation of the same execution architecture, followed by differently rooted archive-identity tests and whole-system CPU/RSS/I/O + canonical runtime-matrix validation. The product patch must not alter codecs, admission, candidate ordering, worker count, archive layout, release thresholds, or benchmark semantics.
 
 Strongest caveat: the full-build gain is ~1.7% on full-backups and ~1.4% on nested-only. That is real under this frozen A/B, but small enough that broader workloads/noise may erase it. Productization is justified as a causal work-elimination candidate, not yet as a release-gate victory.
+
+The PR conversation now carries the repository-required engineering-evidence dossier sections; this commit exists to make the reconciled dossier part of a fresh exact-head PR event rather than relying on a stale pre-result event payload.
