@@ -1,0 +1,88 @@
+name: CMPCT R41 frozen Builder product A/B
+# ci-lane: deep
+on:
+  push:
+    branches: [agent/v030-r41-builder-dynamic-pull]
+    paths: [.github/workflows/r41-product-ab.yml]
+permissions: {contents: read}
+env:
+  BASE_SHA: 94dd456ff508ae4e60ba9230bc071fdc9cc4708d
+  CANDIDATE_SHA: 055925617d0ce14b5ad272bc2fcd04af5db34126
+jobs:
+  product-ab:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with: {ref: '055925617d0ce14b5ad272bc2fcd04af5db34126', path: candidate, fetch-depth: 1}
+      - uses: actions/checkout@v4
+        with: {ref: '94dd456ff508ae4e60ba9230bc071fdc9cc4708d', path: baseline, fetch-depth: 1}
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.11'}
+      - name: Install runtime dependencies
+        run: |
+          sudo apt-get update && sudo apt-get install -y zstd gcc ffmpeg libsndfile1
+          python -m pip install -e './candidate[audio]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
+      - name: Build the frozen R40 sources once
+        run: |
+          mkdir -p evidence
+          cd candidate
+          python - <<'PY'
+          from pathlib import Path
+          from benchmarks import v030_r34_regenerable_deflate_same_run_phase_attribution as R34
+          full,nested,_=R34.build_sources(Path('../evidence/r41-work'))
+          Path('../evidence/sources.txt').write_text(str(full.resolve())+'\n'+str(nested.resolve())+'\n')
+          PY
+      - name: Run seven alternating isolated repetitions per arm and target
+        shell: bash
+        run: |
+          set -euo pipefail
+          mapfile -t src < evidence/sources.txt
+          cat > /tmp/probe.py <<'PY'
+          import hashlib,json,resource,sys,time
+          from pathlib import Path
+          from cmpct.builder import Builder
+          source=Path(sys.argv[1]); output=Path(sys.argv[2]); arm=sys.argv[3]
+          def cpu(r): return r.ru_utime+r.ru_stime
+          s0=resource.getrusage(resource.RUSAGE_SELF); c0=resource.getrusage(resource.RUSAGE_CHILDREN); t0=time.perf_counter()
+          Builder(source,workers=8,reproducible=True).build(output)
+          wall=time.perf_counter()-t0; s1=resource.getrusage(resource.RUSAGE_SELF); c1=resource.getrusage(resource.RUSAGE_CHILDREN)
+          print(json.dumps({'arm':arm,'wall_seconds':wall,'cpu_seconds':(cpu(s1)-cpu(s0))+(cpu(c1)-cpu(c0)),'peak_rss_kib':max(s1.ru_maxrss,c1.ru_maxrss),'archive_bytes':output.stat().st_size,'archive_sha256':hashlib.sha256(output.read_bytes()).hexdigest()},sort_keys=True))
+          PY
+          for target in full nested; do
+            if [ "$target" = full ]; then source="${src[0]}"; else source="${src[1]}"; fi
+            : > "evidence/r41-${target}.jsonl"
+            for rep in 0 1 2 3 4 5 6; do
+              if (( rep % 2 == 0 )); then arms='baseline candidate'; else arms='candidate baseline'; fi
+              for arm in $arms; do
+                if [ "$arm" = baseline ]; then root="$PWD/baseline"; else root="$PWD/candidate"; fi
+                PYTHONPATH="$root/src:$root" python /tmp/probe.py "$source" "evidence/r41-${target}-${rep}-${arm}.cmpct" "$arm" >> "evidence/r41-${target}.jsonl"
+              done
+            done
+          done
+      - name: Enforce unchanged frozen R40 product criterion
+        run: |
+          python - <<'PY'
+          import json,statistics
+          from pathlib import Path
+          result={'schema':'cmpct-r41-product-ab-v1','base_sha':'94dd456ff508ae4e60ba9230bc071fdc9cc4708d','candidate_sha':'055925617d0ce14b5ad272bc2fcd04af5db34126','targets':{}}; passed=True
+          for target in ('full','nested'):
+            rows=[json.loads(x) for x in Path(f'evidence/r41-{target}.jsonl').read_text().splitlines()]
+            by={a:[r for r in rows if r['arm']==a] for a in ('baseline','candidate')}
+            identity=len({(r['archive_bytes'],r['archive_sha256']) for r in rows})==1
+            med={a:{k:statistics.median(r[k] for r in rs) for k in ('wall_seconds','cpu_seconds','peak_rss_kib')} for a,rs in by.items()}
+            wall_saved=med['baseline']['wall_seconds']-med['candidate']['wall_seconds']; cpu_ratio=med['candidate']['cpu_seconds']/med['baseline']['cpu_seconds']; rss_ratio=med['candidate']['peak_rss_kib']/med['baseline']['peak_rss_kib']
+            ok=identity and wall_saved>=0.002 and cpu_ratio<=1.03 and rss_ratio<=1.05; passed &= ok
+            result['targets'][target]={'archive_identity':identity,'medians':med,'wall_seconds_saved':wall_saved,'cpu_ratio':cpu_ratio,'rss_ratio':rss_ratio,'passes':ok}
+          result['decision']='PRODUCT_GATE_PASSES' if passed else 'PRODUCT_GATE_FAILS'
+          Path('evidence/r41-product-result.json').write_text(json.dumps(result,indent=2,sort_keys=True)+'\n'); print(json.dumps(result,indent=2,sort_keys=True))
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: r41-product-ab-055925617d0ce14b5ad272bc2fcd04af5db34126
+          path: |
+            evidence/r41-*.jsonl
+            evidence/r41-product-result.json
+          if-no-files-found: error
