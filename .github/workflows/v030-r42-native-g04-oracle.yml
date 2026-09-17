@@ -23,16 +23,21 @@ jobs:
         run: |
           mkdir -p oracle
           python - <<'PY'
-          import json
+          import json, shutil
           from pathlib import Path
-          from benchmarks import v030_release_performance as PERF
+          from benchmarks import v030_release_generalization as GENERAL
           from experiments import entropygraph_v030_release_product as PRODUCT
-          target=('neutral_hostile_v1','09_ml_artifacts'); root=Path('oracle')
-          source=PERF._build_corpora(root/'corpus')[target]; archive=root/'shipping.cmpct'
-          stats=PRODUCT.build(source,archive)
+          root=Path('oracle'); corpus=root/'corpus'; shutil.rmtree(corpus,ignore_errors=True); corpus.mkdir(parents=True)
+          neutral=GENERAL.V029._load(GENERAL.V029.ROOT/'benchmarks'/'neutral_hostile_corpus_v1.py','cmpct_r42_native_neutral')
+          repair=GENERAL.V029._load(GENERAL.V029.REPAIR_PATH,'cmpct_r42_native_repair'); repair.install_generation_hooks(neutral)
+          neutral.corpus_ml(corpus); repair.normalize_root(corpus)
+          source=corpus/'09_ml_artifacts'; target=('neutral_hostile_v1','09_ml_artifacts')
+          expected=GENERAL._accepted_v029_rows()[target]['tree_sha256']; historical=GENERAL._historical_treehash(source)
+          if historical != expected: raise SystemExit(f'frozen ML source drift: {historical} != {expected}')
+          archive=root/'shipping.cmpct'; stats=PRODUCT.build(source,archive)
           tree=PRODUCT.treehash(source); verify=PRODUCT.strong_verify(archive)
           if not verify.get('ok') or verify.get('tree_sha256') != tree: raise SystemExit('shipping archive verification failed')
-          (root/'setup.json').write_text(json.dumps({'tree_sha256':tree,'archive_bytes':archive.stat().st_size,'build_stats':stats,'setup_release_credit':False},indent=2)+'\n')
+          (root/'setup.json').write_text(json.dumps({'historical_tree_sha256':historical,'tree_sha256':tree,'archive_bytes':archive.stat().st_size,'build_stats':stats,'setup_release_credit':False},indent=2)+'\n')
           PY
       - name: Build shared native portable reader
         run: cargo build --manifest-path native/cmpct-portable/Cargo.toml --release --bin cmpct-portable
