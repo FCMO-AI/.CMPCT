@@ -1,0 +1,15 @@
+{
+  "research_lane": "R41",
+  "productization_commit": "45b1754d92bfe5d5f7774e8e50021c7605320b9c",
+  "mechanism": "bounded ordered worker-pull in Builder file-candidate hashing",
+  "staged_patch": "experiments/r41_builder_productization.patch",
+  "transport_workflow_self_removed": true,
+  "product_evidence": false,
+  "promotion_criterion": {
+    "archive_identity": "exact",
+    "median_wall_saving_ms_each_frozen_r40_target": 2.0,
+    "process_tree_cpu_ratio_max": 1.03,
+    "peak_rss_ratio_max": 1.05
+  },
+  "note": "This receipt binds source identity only. It grants no performance credit; the frozen R40 product A/B remains required."
+}
