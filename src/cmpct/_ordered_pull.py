@@ -20,10 +20,11 @@ def ordered_worker_pull(fn: Callable[[_T], _R], items: Sequence[_T], workers: in
     """Map *fn* over *items* with bounded futures and ordered results.
 
     Workers claim canonical indices under a tiny lock, execute ``fn`` outside the
-    lock, and publish into fixed result slots. The first observed failure closes
-    the claim gate before failure bookkeeping so already-running calls may unwind
-    but no later claim starts. If several in-flight calls fail, the lowest
-    canonical-index exception is raised, matching ordered ``Executor.map`` results.
+    lock, and publish into fixed result slots. Failure closes the claim gate while
+    holding the same lock used for claims, so once a failure is recorded no later
+    candidate can be claimed. Already-claimed calls may unwind. If several such
+    calls fail, the lowest canonical-index exception is raised, matching ordered
+    ``Executor.map`` result observation.
     """
     count = len(items)
     if count == 0:
@@ -49,9 +50,12 @@ def ordered_worker_pull(fn: Callable[[_T], _R], items: Sequence[_T], workers: in
             try:
                 result = fn(items[index])
             except BaseException as exc:
-                abort_event.set()
+                # Failure publication and claim closure share the claim lock. This removes the
+                # check/set race where another worker could observe an open gate after this call
+                # had already failed but before abort_event.set() became visible.
                 with claim_lock:
                     failures.append((index, exc))
+                    abort_event.set()
                 return
             results[index] = result
 
