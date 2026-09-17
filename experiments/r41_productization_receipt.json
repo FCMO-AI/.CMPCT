@@ -6,6 +6,7 @@
   "staging_patch_consumed_and_removed": true,
   "product_evidence": true,
   "engineering_evidence_dossier_reconciled": true,
+  "merge_condition": "final exact-head generic CI must be green",
   "evidence_run_id": 35250937875,
   "evidence_artifact_id": 10509298835,
   "evidence_artifact_sha256": "fc87f951e155350731f69c4db1c45c30b64576cfe5bd4ebca1188685de5dc0eb",
