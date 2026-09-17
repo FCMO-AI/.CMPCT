@@ -55,7 +55,10 @@ jobs:
           fi
           changed="$(git diff-tree --no-commit-id --name-only -r HEAD)"
           printf '%s\n' "$changed"
-          if printf '%s\n' "$changed" | grep -Eq '^(benchmarks/v030_r36_regenerable_deflate_project_wait_owner\.py|docs/v030-rnd/R36_REGENERABLE_DEFLATE_PROJECT_WAIT_OWNER_PREREG\.md|\.github/workflows/v030-r36-project-wait-owner\.yml)$'; then
+          # engineering-evidence.yml is the durable discovery bridge for R36 while R36 is absent
+          # from the default branch. Including it here bootstraps/repairs that route without making
+          # unrelated future PR synchronizations run the expensive receipt.
+          if printf '%s\n' "$changed" | grep -Eq '^(benchmarks/v030_r36_regenerable_deflate_project_wait_owner\.py|docs/v030-rnd/R36_REGENERABLE_DEFLATE_PROJECT_WAIT_OWNER_PREREG\.md|\.github/workflows/v030-r36-project-wait-owner\.yml|\.github/workflows/engineering-evidence\.yml)$'; then
             echo 'run_receipt=true' >> "$GITHUB_OUTPUT"
           else
             echo 'run_receipt=false' >> "$GITHUB_OUTPUT"
