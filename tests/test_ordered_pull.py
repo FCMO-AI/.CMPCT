@@ -61,14 +61,24 @@ def test_worker_concurrency_never_exceeds_requested_bound():
     assert 1 < peak <= 5
 
 
-def test_worker_exception_propagates_to_caller():
+def test_worker_exception_propagates_and_stops_new_claims():
+    workers = 4
+    first_wave = threading.Barrier(workers)
+    started = []
+    lock = threading.Lock()
+
     def encode(value: int) -> int:
-        if value == 5:
+        with lock:
+            started.append(value)
+        first_wave.wait(timeout=2)
+        if value == 0:
             raise RuntimeError("sentinel encode failure")
+        time.sleep(0.01)
         return value
 
     with pytest.raises(RuntimeError, match="sentinel encode failure"):
-        ordered_worker_pull(encode, list(range(12)), 4)
+        ordered_worker_pull(encode, list(range(40)), workers)
+    assert sorted(started) == list(range(workers))
 
 
 def test_repeated_parallel_runs_are_deterministic():
