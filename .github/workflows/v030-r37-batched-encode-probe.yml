@@ -1,13 +1,9 @@
 name: CMPCT v0.30 R37 batched encode falsifier
 # ci-lane: deep
-# ci-cancel-policy: preserve-receipts
-# Research-only: tests R36's scheduling-granularity hypothesis; no release credit.
+# ci-auto-policy: retired-manual-only
+# Research-only completed falsifier; retained for exact manual replay, no release credit.
 
 on:
-  pull_request:
-    paths:
-      - 'experiments/v030_r37_batched_encode_probe.py'
-      - '.github/workflows/v030-r37-batched-encode-probe.yml'
   workflow_dispatch:
 
 permissions:
@@ -15,7 +11,7 @@ permissions:
 
 env:
   PYTHONPATH: ${{ github.workspace }}
-  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+  EVIDENCE_HEAD: ${{ github.sha }}
 
 jobs:
   r37-probe:
@@ -61,8 +57,6 @@ jobs:
           from pathlib import Path
           rows={n:json.loads(Path(f'benchmark-artifacts/r37-{n}.json').read_text()) for n in ('full','nested')}
           assert all(r['identity'] for r in rows.values())
-          # This is intentionally a falsifier, not a promotion threshold. Require transfer in direction
-          # only; product Builder work must later earn full uninstrumented runtime gates.
           decision='BATCHING_TRANSFERS' if all(r['median_seconds_saved']>0 for r in rows.values()) else 'BATCHING_DOES_NOT_TRANSFER'
           out={'schema':'cmpct-v030-r37-batched-encode-result-v1','decision':decision,'targets':rows}
           Path('benchmark-artifacts/r37-result.json').write_text(json.dumps(out,indent=2,sort_keys=True)+'\n')
