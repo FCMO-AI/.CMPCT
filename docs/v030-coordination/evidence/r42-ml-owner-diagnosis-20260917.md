@@ -36,6 +36,12 @@ The no-DGO1 build-wall number is context-only and not product-creditable because
 
 Same-byte guarded-banded-v2 was decisively worse than the installed shipping inverse: `0.278497 s` median, **2.1333x slower** than shipping. Do not reopen that family.
 
+## Derived bound
+
+Against the same-run r24 median, the shipping absolute extraction debt is about **105.05 ms**. The exact no-DGO1 gift removes **40.49 ms**, or only **38.54%** of that debt. Even after surrendering DGO1 entirely, extraction would remain about **3.533x r24**. Therefore delimiter selection alone cannot retire the release-performance blocker.
+
+The no-DGO1 archive would still be **277,178 B / 1.98% smaller than r24**, so a representation fallback remains a technically valid emergency Pareto point if implementation repair fails. It is not the preferred next action because it gives back an already-earned 52,189 B and still leaves most of the extraction debt intact.
+
 ## Decision
 
 DGO1 currently buys only about **52 KiB / 0.38%** on this ML archive while owning about **40.5 ms** of complete extraction wall versus the exact no-DGO1 counterfactual. That is a real representation/product tradeoff, not a microbenchmark artifact. However, deleting DGO1 would still leave extraction far above r24, so DGO1 alone is not the whole residual owner.
