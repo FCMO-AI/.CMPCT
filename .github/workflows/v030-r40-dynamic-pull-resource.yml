@@ -9,6 +9,8 @@ on:
       - '.github/workflows/v030-r40-dynamic-pull-resource.yml'
   workflow_dispatch:
 permissions: {contents: read}
+env:
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
 concurrency:
   group: cmpct-r40-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
@@ -18,15 +20,18 @@ jobs:
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@v6
-        with: {fetch-depth: 2}
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 2
       - name: Classify newest commit only
         id: scope
         shell: bash
         run: |
           set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
           changed="$(git diff-tree --no-commit-id --name-only -r HEAD)"
           printf '%s\n' "$changed"
-          if grep -Eq '^(experiments/v030_r40_dynamic_pull_resource_probe.py|docs/research/v030-r40-dynamic-pull-resource-prereg.md|.github/workflows/v030-r40-dynamic-pull-resource.yml)$' <<<"$changed"; then echo 'run=true' >> "$GITHUB_OUTPUT"; else echo 'run=false' >> "$GITHUB_OUTPUT"; fi
+          if grep -Eq '^(experiments/v030_r40_dynamic_pull_resource_probe.py|docs/research/v030-r40-dynamic-pull-resource-prereg.md|\.github/workflows/v030-r40-dynamic-pull-resource.yml)$' <<<"$changed"; then echo 'run=true' >> "$GITHUB_OUTPUT"; else echo 'run=false' >> "$GITHUB_OUTPUT"; fi
       - uses: actions/setup-python@v6
         if: steps.scope.outputs.run == 'true' || github.event_name == 'workflow_dispatch'
         with: {python-version: '3.11', cache: pip}
@@ -83,7 +88,7 @@ jobs:
         if: always() && (steps.scope.outputs.run == 'true' || github.event_name == 'workflow_dispatch')
         uses: actions/upload-artifact@v6
         with:
-          name: v030-r40-dynamic-pull-resource-${{ github.sha }}
+          name: v030-r40-dynamic-pull-resource-${{ env.EVIDENCE_HEAD }}
           path: |
             benchmark-artifacts/r40-*.jsonl
             benchmark-artifacts/r40-result.json
