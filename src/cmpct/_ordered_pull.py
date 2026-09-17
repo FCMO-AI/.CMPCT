@@ -20,9 +20,10 @@ def ordered_worker_pull(fn: Callable[[_T], _R], items: Sequence[_T], workers: in
     """Map *fn* over *items* with bounded futures and ordered results.
 
     Workers claim canonical indices under a tiny lock, execute ``fn`` outside the
-    lock, and publish into fixed result slots. The first worker failure closes the
-    claim gate so already-running calls may unwind but no new candidate work is
-    started. ``future.result()`` propagates the original worker exception.
+    lock, and publish into fixed result slots. The first observed failure closes
+    the claim gate so already-running calls may unwind but no new candidate work
+    starts. If several in-flight calls fail, the lowest canonical-index exception
+    is raised, matching ordered ``Executor.map`` result semantics.
     """
     count = len(items)
     if count == 0:
@@ -32,6 +33,7 @@ def ordered_worker_pull(fn: Callable[[_T], _R], items: Sequence[_T], workers: in
         return [fn(item) for item in items]
 
     results: list[_R | None] = [None] * count
+    failures: list[tuple[int, BaseException]] = []
     next_index = 0
     aborted = False
     claim_lock = threading.Lock()
@@ -46,10 +48,11 @@ def ordered_worker_pull(fn: Callable[[_T], _R], items: Sequence[_T], workers: in
                 next_index = index + 1
             try:
                 result = fn(items[index])
-            except BaseException:
+            except BaseException as exc:
                 with claim_lock:
+                    failures.append((index, exc))
                     aborted = True
-                raise
+                return
             results[index] = result
 
     with concurrent.futures.ThreadPoolExecutor(
@@ -59,4 +62,6 @@ def ordered_worker_pull(fn: Callable[[_T], _R], items: Sequence[_T], workers: in
         for future in futures:
             future.result()
 
+    if failures:
+        raise min(failures, key=lambda item: item[0])[1]
     return cast(list[_R], results)
