@@ -26,16 +26,20 @@ def test_fewer_items_than_workers_preserves_canonical_order():
 def test_parallel_completion_order_cannot_reorder_results():
     completed = []
     lock = threading.Lock()
+    release_zero = threading.Event()
 
     def encode(value: int) -> int:
-        time.sleep((8 - value) * 0.001)
+        if value == 0:
+            assert release_zero.wait(timeout=2)
         with lock:
             completed.append(value)
+            if value == 1:
+                release_zero.set()
         return value
 
     expected = list(range(8))
     assert ordered_worker_pull(encode, expected, 4) == expected
-    assert completed != expected
+    assert completed.index(1) < completed.index(0)
 
 
 def test_worker_concurrency_never_exceeds_requested_bound():
