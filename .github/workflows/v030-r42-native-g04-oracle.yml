@@ -29,11 +29,10 @@ jobs:
           from experiments import entropygraph_v030_release_product as PRODUCT
           target=('neutral_hostile_v1','09_ml_artifacts'); root=Path('oracle')
           source=PERF._build_corpora(root/'corpus')[target]; archive=root/'shipping.cmpct'
-          # Diagnostic setup only: force the already-proven parent-process scheduling
-          # seam so setup cannot strand a process pool. Archive semantics are verified.
-          base=PRODUCT._BASE_IMPL; old=base._g04_process_pool_eligible; base._g04_process_pool_eligible=lambda _root: False
-          try: stats=PRODUCT.build(source,archive)
-          finally: base._g04_process_pool_eligible=old
+          # Use the shipping builder exactly as shipped. The prior attempt forced the
+          # parent-process G04 seam off and converted setup into a >30 minute serial
+          # bottleneck; that was instrumentation damage, not product evidence.
+          stats=PRODUCT.build(source,archive)
           tree=PRODUCT.treehash(source); verify=PRODUCT.strong_verify(archive)
           if not verify.get('ok') or verify.get('tree_sha256') != tree: raise SystemExit('shipping archive verification failed')
           (root/'setup.json').write_text(json.dumps({'tree_sha256':tree,'archive_bytes':archive.stat().st_size,'build_stats':stats,'setup_release_credit':False},indent=2)+'\n')
