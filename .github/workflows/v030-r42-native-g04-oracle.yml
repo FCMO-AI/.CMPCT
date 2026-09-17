@@ -3,7 +3,9 @@ name: CMPCT v0.30 R42 native G04 extraction oracle
 on:
   push:
     branches: [agent/v030-r42-native-oracle-authority]
-    paths: [.github/workflows/v030-r42-native-g04-oracle.yml]
+    paths:
+      - .github/workflows/v030-r42-native-g04-oracle.yml
+      - benchmarks/v030_g04_ml_native_reader_oracle.py
 permissions: {contents: read}
 env: {PYTHONPATH: .}
 jobs:
@@ -14,59 +16,22 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with: {python-version: '3.12'}
-      - name: Install Python product dependencies
+      - name: Install product dependencies
         run: |
           sudo apt-get update && sudo apt-get install -y zstd gcc ffmpeg libsndfile1
           python -m pip install -e '.[audio]'
           python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
-      - name: Build exact shipping ML archive for extraction-only oracle
-        run: |
-          mkdir -p oracle
-          python - <<'PY'
-          import json, shutil
-          from pathlib import Path
-          from benchmarks import v030_release_generalization as GENERAL
-          from experiments import entropygraph_v030_release_product as PRODUCT
-          root=Path('oracle'); corpus=root/'corpus'; shutil.rmtree(corpus,ignore_errors=True); corpus.mkdir(parents=True)
-          neutral=GENERAL.V029._load(GENERAL.V029.ROOT/'benchmarks'/'neutral_hostile_corpus_v1.py','cmpct_r42_native_neutral')
-          repair=GENERAL.V029._load(GENERAL.V029.REPAIR_PATH,'cmpct_r42_native_repair'); repair.install_generation_hooks(neutral)
-          neutral.corpus_ml(corpus); repair.normalize_root(corpus)
-          source=corpus/'09_ml_artifacts'; target=('neutral_hostile_v1','09_ml_artifacts')
-          expected=GENERAL._accepted_v029_rows()[target]['tree_sha256']; historical=GENERAL._historical_treehash(source)
-          if historical != expected: raise SystemExit(f'frozen ML source drift: {historical} != {expected}')
-          archive=root/'shipping.cmpct'; stats=PRODUCT.build(source,archive)
-          tree=PRODUCT.treehash(source); verify=PRODUCT.strong_verify(archive)
-          if not verify.get('ok') or verify.get('tree_sha256') != tree: raise SystemExit('shipping archive verification failed')
-          (root/'setup.json').write_text(json.dumps({'historical_tree_sha256':historical,'tree_sha256':tree,'archive_bytes':archive.stat().st_size,'build_stats':stats,'setup_release_credit':False},indent=2)+'\n')
-          PY
-      - name: Build shared native portable reader
+      - name: Build shared portable reader
         run: cargo build --manifest-path native/cmpct-portable/Cargo.toml --release --bin cmpct-portable
-      - name: Symmetric process-surface extraction oracle
+      - name: Run existing fail-closed native-reader A/B on exact frozen ML input
         run: |
-          python - <<'PY'
-          import json,shutil,statistics,subprocess,sys,time
-          from pathlib import Path
-          from experiments import entropygraph_v030_release_product as PRODUCT
-          root=Path('oracle'); archive=root/'shipping.cmpct'; native=Path('native/cmpct-portable/target/release/cmpct-portable').resolve(); expected=json.loads((root/'setup.json').read_text())['tree_sha256']
-          def run(cmd,dst):
-              shutil.rmtree(dst,ignore_errors=True); t=time.perf_counter(); subprocess.run(cmd,check=True); elapsed=time.perf_counter()-t
-              if PRODUCT.treehash(dst)!=expected: raise RuntimeError(f'identity failure: {dst}')
-              return elapsed
-          pycode='from pathlib import Path; from experiments import entropygraph_v030_release_product as P; P.extract(Path(%r),Path(%r))'
-          samples={'python_process':[],'native_process':[]}
-          for rep in range(7):
-              order=('python_process','native_process') if rep%2==0 else ('native_process','python_process')
-              for arm in order:
-                  dst=root/f'{arm}-{rep}'
-                  if arm=='python_process': cmd=[sys.executable,'-c',pycode%(str(archive.resolve()),str(dst.resolve()))]
-                  else: cmd=[str(native),'extract',str(archive.resolve()),str(dst.resolve())]
-                  samples[arm].append(run(cmd,dst))
-          med={k:statistics.median(v) for k,v in samples.items()}; result={'schema':'cmpct-v030-r42-native-g04-oracle-v1','release_credit':False,'authority_base':'285ff0cf5efed1352260f8dc07a2ce9d665024b4','archive_bytes':archive.stat().st_size,'samples_s':samples,'medians_s':med,'native_to_python_process_ratio':med['native_process']/med['python_process'],'native_speedup_vs_python':med['python_process']/med['native_process']}
-          (root/'native-oracle.json').write_text(json.dumps(result,indent=2)+'\n'); print(json.dumps(result,indent=2))
-          PY
+          python -m benchmarks.v030_g04_ml_native_reader_oracle \
+            --native-cli native/cmpct-portable/target/release/cmpct-portable \
+            --work-root benchmark-artifacts/r42-native-authority-work \
+            --output benchmark-artifacts/r42-native-authority.json
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: v030-r42-native-g04-oracle-${{ github.sha }}
-          path: oracle/native-oracle.json
+          path: benchmark-artifacts/r42-native-authority.json
           if-no-files-found: error
