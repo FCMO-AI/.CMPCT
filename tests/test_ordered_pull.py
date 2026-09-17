@@ -81,6 +81,23 @@ def test_worker_exception_propagates_and_stops_new_claims():
     assert sorted(started) == list(range(workers))
 
 
+def test_multiple_inflight_failures_raise_lowest_canonical_index():
+    first_wave = threading.Barrier(2)
+    one_failed = threading.Event()
+
+    def encode(value: int) -> int:
+        first_wave.wait(timeout=2)
+        if value == 1:
+            one_failed.set()
+            raise RuntimeError("index one failed first")
+        assert value == 0
+        assert one_failed.wait(timeout=2)
+        raise RuntimeError("index zero is canonical")
+
+    with pytest.raises(RuntimeError, match="index zero is canonical"):
+        ordered_worker_pull(encode, [0, 1], 2)
+
+
 @pytest.mark.parametrize("workers", [1, 2, 8])
 def test_worker_counts_preserve_ordered_semantics(workers: int):
     items = list(range(41))
