@@ -1,0 +1,86 @@
+name: CMPCT v0.30 R40 dynamic-pull resource gate
+# ci-lane: deep
+on:
+  pull_request:
+    paths:
+      - 'experiments/v030_r40_dynamic_pull_resource_probe.py'
+      - 'docs/research/v030-r40-dynamic-pull-resource-prereg.md'
+      - '.github/workflows/v030-r40-dynamic-pull-resource.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: cmpct-r40-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+jobs:
+  r40-resource:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y zstd gcc ffmpeg libsndfile1
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[audio,test]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
+      - name: Build frozen R34/R36 source trees
+        run: |
+          mkdir -p benchmark-artifacts
+          python - <<'PY'
+          from pathlib import Path
+          from benchmarks import v030_r34_regenerable_deflate_same_run_phase_attribution as R34
+          full,nested,_=R34.build_sources(Path('benchmark-artifacts/r40-work'))
+          Path('benchmark-artifacts/sources.txt').write_text(str(full.resolve())+'\n'+str(nested.resolve())+'\n')
+          PY
+      - name: Run isolated alternating resource repetitions
+        run: |
+          mapfile -t src < benchmark-artifacts/sources.txt
+          for target in full nested; do
+            if [ "$target" = full ]; then source="${src[0]}"; else source="${src[1]}"; fi
+            : > "benchmark-artifacts/r40-${target}.jsonl"
+            for rep in 0 1 2 3 4 5 6; do
+              if (( rep % 2 == 0 )); then arms='baseline dynamic'; else arms='dynamic baseline'; fi
+              for arm in $arms; do
+                python experiments/v030_r40_dynamic_pull_resource_probe.py "$source" "benchmark-artifacts/r40-${target}-${rep}-${arm}.cmpct" --arm "$arm" --workers 8 >> "benchmark-artifacts/r40-${target}.jsonl"
+              done
+            done
+          done
+      - name: Enforce frozen decision
+        run: |
+          python - <<'PY'
+          import json,statistics
+          from pathlib import Path
+          result={'schema':'cmpct-v030-r40-resource-result-v1','targets':{}}
+          passed=True
+          for target in ('full','nested'):
+            rows=[json.loads(x) for x in Path(f'benchmark-artifacts/r40-{target}.jsonl').read_text().splitlines()]
+            by={a:[r for r in rows if r['arm']==a] for a in ('baseline','dynamic')}
+            identity=len({(r['archive_bytes'],r['archive_sha256']) for r in rows})==1
+            med={a:{k:statistics.median(r[k] for r in rs) for k in ('wall_seconds','cpu_seconds','peak_rss_kib')} for a,rs in by.items()}
+            wall_saved=med['baseline']['wall_seconds']-med['dynamic']['wall_seconds']
+            cpu_ratio=med['dynamic']['cpu_seconds']/med['baseline']['cpu_seconds']
+            rss_ratio=med['dynamic']['peak_rss_kib']/med['baseline']['peak_rss_kib']
+            ok=identity and wall_saved>=0.002 and cpu_ratio<=1.03 and rss_ratio<=1.05
+            passed &= ok
+            result['targets'][target]={'archive_identity':identity,'medians':med,'wall_seconds_saved':wall_saved,'cpu_ratio':cpu_ratio,'rss_ratio':rss_ratio,'passes':ok}
+          result['decision']='RESOURCE_GATE_PASSES' if passed else 'RESOURCE_GATE_FAILS'
+          Path('benchmark-artifacts/r40-result.json').write_text(json.dumps(result,indent=2,sort_keys=True)+'\n')
+          print(json.dumps(result,indent=2,sort_keys=True))
+          if not passed:raise SystemExit(1)
+          PY
+      - name: Upload immutable R40 evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: v030-r40-dynamic-pull-resource-${{ github.sha }}
+          path: |
+            benchmark-artifacts/r40-*.jsonl
+            benchmark-artifacts/r40-result.json
+          if-no-files-found: error
+          retention-days: 90
