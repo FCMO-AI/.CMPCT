@@ -1,12 +1,18 @@
 name: CMPCT v0.30 R40 dynamic-pull resource gate
 # ci-lane: deep
 on:
-  pull_request:
-    paths: ['experiments/v030_r40_dynamic_pull_resource_probe.py','docs/research/v030-r40-dynamic-pull-resource-prereg.md','.github/workflows/v030-r40-dynamic-pull-resource.yml']
+  # R40 is a one-hypothesis research branch. Branch-local push execution avoids long-lived-PR
+  # accumulated-path ambiguity while concurrency cancels superseded revisions before authority.
+  push:
+    branches: [agent/v030-r40-dynamic-pull-productization]
+    paths:
+      - 'experiments/v030_r40_dynamic_pull_resource_probe.py'
+      - 'docs/research/v030-r40-dynamic-pull-resource-prereg.md'
+      - '.github/workflows/v030-r40-dynamic-pull-resource.yml'
   workflow_dispatch:
 permissions: {contents: read}
 concurrency:
-  group: cmpct-r40-${{ github.event.pull_request.number || github.ref }}
+  group: cmpct-r40-${{ github.ref }}
   cancel-in-progress: true
 jobs:
   r40-resource:
