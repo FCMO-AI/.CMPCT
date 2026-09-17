@@ -5,6 +5,9 @@ from __future__ import annotations
 The primitive keeps only O(workers) futures resident while preserving input order.
 It intentionally lives below Builder policy so the product patch can replace eager
 Executor.map submission without changing archive ordering or codec semantics.
+
+This module is release-critical product code: changes to its scheduling semantics
+must be covered by the exact-head release authority, not only a mechanism-local A/B.
 """
 
 import concurrent.futures
