@@ -3,8 +3,9 @@ name: CMPCT v0.30 R36 project wait-owner attribution
 # ci-cancel-policy: split-classifier-preserve-receipts
 # ci-pr-scope: latest-head-commit-gate
 # Diagnostic only. R36 resolves R35's Condition.wait sink to a CMPCT-owned frame; no release credit.
-# Execution-enablement: edits to this diagnostic on the authoritative frontier self-trigger by push,
-# avoiding dependence on default-branch workflow discovery while preserving latest-head classification.
+# Execution-enablement: this workflow is also callable from the established engineering-evidence
+# workflow so a research workflow that is not yet present on the default branch can still obtain a
+# result-bearing exact-head receipt without weakening any R36 scientific gate.
 
 on:
   pull_request:
@@ -19,6 +20,7 @@ on:
       - 'benchmarks/v030_r36_regenerable_deflate_project_wait_owner.py'
       - 'docs/v030-rnd/R36_REGENERABLE_DEFLATE_PROJECT_WAIT_OWNER_PREREG.md'
       - '.github/workflows/v030-r36-project-wait-owner.yml'
+  workflow_call:
   workflow_dispatch:
 
 permissions:
