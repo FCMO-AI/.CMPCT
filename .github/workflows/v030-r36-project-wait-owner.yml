@@ -3,16 +3,12 @@ name: CMPCT v0.30 R36 project wait-owner attribution
 # ci-cancel-policy: split-classifier-preserve-receipts
 # ci-pr-scope: latest-head-commit-gate
 # Diagnostic only. R36 resolves R35's Condition.wait sink to a CMPCT-owned frame; no release credit.
-# Execution-enablement: this workflow is also callable from the established engineering-evidence
-# workflow so a research workflow that is not yet present on the default branch can still obtain a
-# result-bearing exact-head receipt without weakening any R36 scientific gate.
+# pull_request intentionally has no paths filter: this integration PR spans thousands of commits and
+# hundreds of changed paths, so GitHub's changed-file filter window can hide a newly-added workflow.
+# The exact-head classifier below is the scope gate and keeps ordinary synchronizations cheap.
 
 on:
   pull_request:
-    paths:
-      - 'benchmarks/v030_r36_regenerable_deflate_project_wait_owner.py'
-      - 'docs/v030-rnd/R36_REGENERABLE_DEFLATE_PROJECT_WAIT_OWNER_PREREG.md'
-      - '.github/workflows/v030-r36-project-wait-owner.yml'
   push:
     branches:
       - 'agent/v030-authoritative-integration'
@@ -55,9 +51,6 @@ jobs:
           fi
           changed="$(git diff-tree --no-commit-id --name-only -r HEAD)"
           printf '%s\n' "$changed"
-          # engineering-evidence.yml is the durable discovery bridge for R36 while R36 is absent
-          # from the default branch. Including it here bootstraps/repairs that route without making
-          # unrelated future PR synchronizations run the expensive receipt.
           if printf '%s\n' "$changed" | grep -Eq '^(benchmarks/v030_r36_regenerable_deflate_project_wait_owner\.py|docs/v030-rnd/R36_REGENERABLE_DEFLATE_PROJECT_WAIT_OWNER_PREREG\.md|\.github/workflows/v030-r36-project-wait-owner\.yml|\.github/workflows/engineering-evidence\.yml)$'; then
             echo 'run_receipt=true' >> "$GITHUB_OUTPUT"
           else
