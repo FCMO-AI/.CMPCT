@@ -1,0 +1,48 @@
+name: Current v0.30 vs ZIP and Zstd-19
+
+on:
+  push:
+    branches:
+      - agent/v030-current-benchmark-20260917
+    paths:
+      - '.github/workflows/current-v030-zip-zstd.yml'
+      - 'benchmarks/current_v030_zip_zstd.py'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  compare:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - name: Install focused comparator dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y ffmpeg zstd
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[test,audio]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
+      - name: Compile focused benchmark
+        run: python -m py_compile benchmarks/current_v030_zip_zstd.py
+      - name: Run focused exact matrix
+        env:
+          PYTHONPATH: ${{ github.workspace }}
+        run: |
+          mkdir -p benchmark-artifacts
+          python benchmarks/current_v030_zip_zstd.py \
+            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/current-v030-zip-zstd-work" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/current-v030-zip-zstd.json"
+      - name: Upload evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: current-v030-zip-zstd-${{ github.sha }}
+          path: benchmark-artifacts/current-v030-zip-zstd.json
+          if-no-files-found: error
+          retention-days: 30
