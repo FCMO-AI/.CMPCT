@@ -22,4 +22,8 @@ The resource gate executes on GitHub's `ubuntu-24.04` Linux runner so `resource.
 ## Decision
 `RESOURCE_GATE_PASSES` only if on **both** targets: exact archive identity on every repetition; candidate median wall time is at least **2 ms faster**; candidate median process-tree CPU is not more than **3% slower**; candidate median peak RSS is not more than **5% higher**. Otherwise emit `RESOURCE_GATE_FAILS`. Bounds are frozen before result and may not move afterward.
 
-A pass authorizes the minimal Builder product patch plus canonical runtime/release-matrix validation. A fail narrows or retires productization according to measured exported cost; it does not erase R38/R39 mechanism evidence.
+**Disproof:** any byte mismatch or failure of any one frozen wall/CPU/RSS bound on either target falsifies the R40 productization gate.
+
+**Quality-ratchet:** a pass does not itself change product authority. It authorizes only the minimal Builder patch, which must independently preserve exact bytes and survive broader canonical runtime/release validation without weakening inherited gates.
+
+A fail narrows or retires productization according to measured exported cost; it does not erase R38/R39 mechanism evidence.
