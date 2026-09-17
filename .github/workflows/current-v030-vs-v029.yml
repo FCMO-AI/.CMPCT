@@ -1,3 +1,4 @@
+# measurement-only workflow; product sources remain unchanged from authoritative v0.30 head
 name: Current v0.30 vs release v0.29 A/B
 
 on:
