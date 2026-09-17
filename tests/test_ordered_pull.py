@@ -81,6 +81,13 @@ def test_worker_exception_propagates_and_stops_new_claims():
     assert sorted(started) == list(range(workers))
 
 
+@pytest.mark.parametrize("workers", [1, 2, 8])
+def test_worker_counts_preserve_ordered_semantics(workers: int):
+    items = list(range(41))
+    expected = [x * x for x in items]
+    assert ordered_worker_pull(lambda x: x * x, items, workers) == expected
+
+
 def test_repeated_parallel_runs_are_deterministic():
     items = list(range(97))
     expected = [x * x for x in items]
