@@ -17,11 +17,11 @@ jobs:
       - run: |
           sudo apt-get update && sudo apt-get install -y zstd
           python -m pip install -e '.[test]'
-      - name: Quantify exact duplicate-SHA opportunity on frozen ML shipping archive
+      - name: Quantify and time exact duplicate-SHA opportunity on frozen ML shipping archive
         run: |
           mkdir -p benchmark-artifacts
           python - <<'PY'
-          import json, shutil
+          import json, shutil, statistics, time
           from pathlib import Path
           from benchmarks import v030_release_generalization as GENERAL
           from experiments import entropygraph_v030_release_product as PRODUCT
@@ -32,22 +32,38 @@ jobs:
           neutral.corpus_ml(root); repair.normalize_root(root); source=root/'09_ml_artifacts'
           expected=GENERAL._accepted_v029_rows()[('neutral_hostile_v1','09_ml_artifacts')]['tree_sha256']; observed=GENERAL._historical_treehash(source)
           if observed!=expected: raise SystemExit(f'frozen source drift: {observed} != {expected}')
-          archive=root/'shipping.cmpct'; PRODUCT.build(source,archive)
+          archive=root/'shipping.cmpct'; PRODUCT.build(source,archive); source_tree=PRODUCT.treehash(source)
           stream,meta,record_start,offsets,_merkle,_tail=RR._g04_open(archive)
           try:
-              rows=[]; eligible_bytes=0; eligible_records=0; total_payload=0
+              eligible_bytes=eligible_records=total_payload=0
               for rid,rel in enumerate(offsets):
-                  stream.seek(record_start+rel); header=stream.read(RR.PH.size); codec,usize,csize,crc,original_sha=RR.PH.unpack(header); payload=stream.read(csize); transform=meta['physical_geometry'][rid]
-                  total_payload += csize
-                  eligible=(codec==RR.G04.O.CODEC_RAW and transform is None)
-                  if eligible:
+                  stream.seek(record_start+rel); codec,usize,csize,crc,original_sha=RR.PH.unpack(stream.read(RR.PH.size)); payload=stream.read(csize); transform=meta['physical_geometry'][rid]; total_payload+=csize
+                  if codec==RR.G04.O.CODEC_RAW and transform is None:
                       eligible_records+=1; eligible_bytes+=csize
-                      leaf=meta['record_leaf_sha256'][rid]
-                      if leaf != original_sha: raise SystemExit('eligible raw/no-transform digest declarations differ')
-                  rows.append({'record_id':rid,'codec':int(codec),'usize':int(usize),'csize':int(csize),'transform':None if transform is None else transform[0],'duplicate_sha_eligible':eligible})
+                      if meta['record_leaf_sha256'][rid] != original_sha: raise SystemExit('eligible digest declarations differ')
           finally: stream.close()
-          out={'schema':'cmpct-v030-r42-hash-dedup-headroom-v1','release_credit':False,'archive_bytes':archive.stat().st_size,'records':len(offsets),'raw_no_transform_records':eligible_records,'raw_no_transform_payload_bytes':eligible_bytes,'physical_payload_bytes':total_payload,'eligible_payload_fraction':eligible_bytes/max(1,total_payload),'semantic_argument':'For raw + no-transform records, record_leaf_sha256 == original_sha256 authenticates the same exact bytes. One SHA-256 pass can satisfy both declarations if the two authenticated digest declarations are first compared; CRC32 remains independently checked.','rows':rows}
-          Path('benchmark-artifacts/r42-hash-dedup-headroom.json').write_text(json.dumps(out,indent=2)+'\n'); print(json.dumps({k:v for k,v in out.items() if k!='rows'},indent=2))
+          original_H=RR.H
+          class ConsecutiveIdentityHash:
+              def __init__(self): self.last_obj=None; self.last_digest=None; self.hits=0; self.hit_bytes=0
+              def __call__(self,data):
+                  if data is self.last_obj:
+                      self.hits+=1; self.hit_bytes+=len(data); return self.last_digest
+                  digest=original_H(data); self.last_obj=data; self.last_digest=digest; return digest
+          samples={'baseline_s':[],'dedup_oracle_s':[]}; hit_samples=[]; hit_byte_samples=[]
+          for rep in range(7):
+              for arm in (('baseline_s','dedup_oracle_s') if rep%2==0 else ('dedup_oracle_s','baseline_s')):
+                  dst=root/f'{arm}-{rep}'; shutil.rmtree(dst,ignore_errors=True)
+                  memo=ConsecutiveIdentityHash()
+                  RR.H=original_H if arm=='baseline_s' else memo
+                  started=time.perf_counter(); result=RR._stream_g04(archive,dst,RR.MAX_DECLARED_LOGICAL_BYTES); elapsed=time.perf_counter()-started
+                  RR.H=original_H
+                  if not result.get('ok') or result.get('tree_sha256')!=source_tree or PRODUCT.treehash(dst)!=source_tree: raise SystemExit(f'identity failure {arm}')
+                  samples[arm].append(elapsed)
+                  if arm=='dedup_oracle_s': hit_samples.append(memo.hits); hit_byte_samples.append(memo.hit_bytes)
+                  shutil.rmtree(dst,ignore_errors=True)
+          med={k:statistics.median(v) for k,v in samples.items()}; improvement=1-med['dedup_oracle_s']/med['baseline_s']
+          out={'schema':'cmpct-v030-r42-hash-dedup-headroom-v2','release_credit':False,'archive_bytes':archive.stat().st_size,'records':len(offsets),'raw_no_transform_records':eligible_records,'raw_no_transform_payload_bytes':eligible_bytes,'physical_payload_bytes':total_payload,'eligible_payload_fraction':eligible_bytes/max(1,total_payload),'samples_s':samples,'medians_s':med,'dedup_oracle_improvement_fraction':improvement,'dedup_hash_hits':hit_samples,'dedup_hash_hit_bytes':hit_byte_samples,'semantic_argument':'For raw + no-transform records, payload bytes and original bytes are the same object/value. If authenticated record_leaf_sha256 equals authenticated original_sha256, one SHA-256 computation can satisfy both declarations; CRC32 remains independently checked. The memoized-H arm is a research timing oracle for exactly that redundant second hash, not product code.'}
+          Path('benchmark-artifacts/r42-hash-dedup-headroom.json').write_text(json.dumps(out,indent=2)+'\n'); print(json.dumps({k:v for k,v in out.items() if k!='samples_s'},indent=2))
           PY
       - uses: actions/upload-artifact@v4
         if: always()
