@@ -13,7 +13,6 @@ import concurrent.futures
 import hashlib
 import json
 import statistics
-import tempfile
 import time
 from pathlib import Path
 
