@@ -27,14 +27,13 @@ jobs:
           from pathlib import Path
           from benchmarks import v030_release_performance as PERF
           from experiments import entropygraph_v030_release_product as PRODUCT
-          from experiments import entropygraph_v030_verified_restore as VR
           target=('neutral_hostile_v1','09_ml_artifacts'); root=Path('oracle')
           source=PERF._build_corpora(root/'corpus')[target]; archive=root/'shipping.cmpct'
-          # Diagnostic setup only: keep creation in the parent process so the oracle
-          # cannot hang on process-pool transport. Archive semantics remain verified.
-          old=VR._G04_PROCESS_POOL_DISABLED; VR._G04_PROCESS_POOL_DISABLED=True
+          # Diagnostic setup only: force the already-proven parent-process scheduling
+          # seam so setup cannot strand a process pool. Archive semantics are verified.
+          base=PRODUCT._BASE_IMPL; old=base._g04_process_pool_eligible; base._g04_process_pool_eligible=lambda _root: False
           try: stats=PRODUCT.build(source,archive)
-          finally: VR._G04_PROCESS_POOL_DISABLED=old
+          finally: base._g04_process_pool_eligible=old
           tree=PRODUCT.treehash(source); verify=PRODUCT.strong_verify(archive)
           if not verify.get('ok') or verify.get('tree_sha256') != tree: raise SystemExit('shipping archive verification failed')
           (root/'setup.json').write_text(json.dumps({'tree_sha256':tree,'archive_bytes':archive.stat().st_size,'build_stats':stats,'setup_release_credit':False},indent=2)+'\n')
