@@ -3,10 +3,18 @@ name: CMPCT v0.30 R36 project wait-owner attribution
 # ci-cancel-policy: split-classifier-preserve-receipts
 # ci-pr-scope: latest-head-commit-gate
 # Diagnostic only. R36 resolves R35's Condition.wait sink to a CMPCT-owned frame; no release credit.
-# Execution-enablement retrigger after repairing the frozen-ancestor checkout route.
+# Execution-enablement: edits to this diagnostic on the authoritative frontier self-trigger by push,
+# avoiding dependence on default-branch workflow discovery while preserving latest-head classification.
 
 on:
   pull_request:
+    paths:
+      - 'benchmarks/v030_r36_regenerable_deflate_project_wait_owner.py'
+      - 'docs/v030-rnd/R36_REGENERABLE_DEFLATE_PROJECT_WAIT_OWNER_PREREG.md'
+      - '.github/workflows/v030-r36-project-wait-owner.yml'
+  push:
+    branches:
+      - 'agent/v030-authoritative-integration'
     paths:
       - 'benchmarks/v030_r36_regenerable_deflate_project_wait_owner.py'
       - 'docs/v030-rnd/R36_REGENERABLE_DEFLATE_PROJECT_WAIT_OWNER_PREREG.md'
@@ -63,11 +71,6 @@ jobs:
       - uses: actions/checkout@v6
         with:
           ref: ${{ env.EVIDENCE_HEAD }}
-          # R36 binds an R32 commit more than 128 commits behind the current
-          # convergence frontier. A shallow checkout makes the ancestry guard
-          # fail before the experiment even starts, which is infrastructure
-          # failure rather than evidence. Fetch full history so the frozen
-          # ancestor and per-path object checks are actually testable.
           fetch-depth: 0
       - name: Bind frozen R32 substrate and R36 grammar
         shell: bash
