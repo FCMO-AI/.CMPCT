@@ -1,14 +1,14 @@
 diff --git a/src/cmpct/builder.py b/src/cmpct/builder.py
 --- a/src/cmpct/builder.py
 +++ b/src/cmpct/builder.py
-@@
+@@ -7 +7 @@
 -import base64, binascii, concurrent.futures, ctypes, ctypes.util, hashlib, io, json, os, shutil, stat, struct, subprocess, tempfile, time, zipfile, zlib
 +import base64, binascii, ctypes, ctypes.util, hashlib, io, json, os, shutil, stat, struct, subprocess, tempfile, time, zipfile, zlib
-@@
+@@ -12,2 +12,3 @@
  from .codec import *
  from .codec import _audio_modules, _compressed_payload, _hash_sparse, _sparse_data_extents, _wav_parts
 +from ._ordered_pull import ordered_worker_pull
-@@
+@@ -270,4 +271 @@
 -        if self.encode_workers>1 and len(ordered)>1:
 -            with concurrent.futures.ThreadPoolExecutor(max_workers=self.encode_workers,thread_name_prefix='cmpct-encode') as pool:
 -                encoded=list(pool.map(encode,ordered))
