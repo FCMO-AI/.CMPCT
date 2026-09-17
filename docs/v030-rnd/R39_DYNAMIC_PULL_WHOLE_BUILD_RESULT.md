@@ -24,4 +24,4 @@ This is still research evidence, not product/release credit. It authorizes the m
 
 Strongest caveat: the full-build gain is ~1.7% on full-backups and ~1.4% on nested-only. That is real under this frozen A/B, but small enough that broader workloads/noise may erase it. Productization is justified as a causal work-elimination candidate, not yet as a release-gate victory.
 
-The PR conversation now carries the repository-required engineering-evidence dossier sections; this commit exists to make the reconciled dossier part of a fresh exact-head PR event rather than relying on a stale pre-result event payload.
+The PR conversation carries the repository-required engineering-evidence dossier. Its explicit **disproof** rule is archive mismatch or <2 ms saving on either target; its **quality-ratchet** requires the product patch to preserve exact bytes and pass whole-system resource/runtime gates without weakening thresholds.
