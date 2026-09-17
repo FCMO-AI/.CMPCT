@@ -34,6 +34,13 @@ jobs:
           path: evidence-artifacts/engineering-evidence.txt
           if-no-files-found: warn
 
+  # New research workflows can exist on a long-lived frontier before GitHub registers them from the
+  # default branch. Route R36 through this already-established PR workflow; R36's own exact-head
+  # classifier decides whether the material receipt runs, so ordinary synchronizations pay only the
+  # cheap classifier and all frozen scientific gates remain inside the called workflow.
+  r36-project-wait-owner:
+    uses: ./.github/workflows/v030-r36-project-wait-owner.yml
+
 # Footnote: this gate validates that material work exposes a falsifiable evidence surface. It does not
 # assign a numeric “genius” score; benchmark, conformance, safety and expert review remain the actual
 # arbiters of technical quality. The retained diagnostic makes a failed structural gate independently
