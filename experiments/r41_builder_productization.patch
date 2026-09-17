@@ -2,6 +2,9 @@ diff --git a/src/cmpct/builder.py b/src/cmpct/builder.py
 --- a/src/cmpct/builder.py
 +++ b/src/cmpct/builder.py
 @@
+-import base64, binascii, concurrent.futures, ctypes, ctypes.util, hashlib, io, json, os, shutil, stat, struct, subprocess, tempfile, time, zipfile, zlib
++import base64, binascii, ctypes, ctypes.util, hashlib, io, json, os, shutil, stat, struct, subprocess, tempfile, time, zipfile, zlib
+@@
  from .codec import *
  from .codec import _audio_modules, _compressed_payload, _hash_sparse, _sparse_data_extents, _wav_parts
 +from ._ordered_pull import ordered_worker_pull
