@@ -19,7 +19,7 @@ jobs:
           sudo apt-get update && sudo apt-get install -y zstd gcc ffmpeg libsndfile1
           python -m pip install -e '.[audio]'
           python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
-      - name: Build exact shipping ML archive
+      - name: Build exact shipping ML archive for extraction-only oracle
         run: |
           mkdir -p oracle
           python - <<'PY'
@@ -28,10 +28,15 @@ jobs:
           from benchmarks import v030_release_performance as PERF
           from experiments import entropygraph_v030_release_product as PRODUCT
           target=('neutral_hostile_v1','09_ml_artifacts'); root=Path('oracle')
-          source=PERF._build_corpora(root/'corpus')[target]; archive=root/'shipping.cmpct'; stats=PRODUCT.build(source,archive)
+          source=PERF._build_corpora(root/'corpus')[target]; archive=root/'shipping.cmpct'
+          # Diagnostic setup only: keep creation in the parent process so the oracle
+          # cannot hang on process-pool transport. Archive semantics remain verified.
+          old=PRODUCT._G04_PROCESS_POOL_DISABLED; PRODUCT._G04_PROCESS_POOL_DISABLED=True
+          try: stats=PRODUCT.build(source,archive)
+          finally: PRODUCT._G04_PROCESS_POOL_DISABLED=old
           tree=PRODUCT.treehash(source); verify=PRODUCT.strong_verify(archive)
           if not verify.get('ok') or verify.get('tree_sha256') != tree: raise SystemExit('shipping archive verification failed')
-          (root/'setup.json').write_text(json.dumps({'tree_sha256':tree,'archive_bytes':archive.stat().st_size,'build_stats':stats},indent=2)+'\n')
+          (root/'setup.json').write_text(json.dumps({'tree_sha256':tree,'archive_bytes':archive.stat().st_size,'build_stats':stats,'setup_release_credit':False},indent=2)+'\n')
           PY
       - name: Build shared native portable reader
         run: cargo build --manifest-path native/cmpct-portable/Cargo.toml --release --bin cmpct-portable
