@@ -15,16 +15,26 @@ permissions:
 
 jobs:
   office-v025-locality:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-python@v6
         with:
-          python-version: '3.12'
-      - name: Install benchmark dependencies
+          # Match the accepted repair-v6 corpus substrate. Office bytes are
+          # dependency-sensitive, so an unpinned interpreter/library stack is
+          # not evidence for the frozen Office tree.
+          python-version: '3.11'
+      - name: Install pinned corpus dependencies
         run: |
-          python -m pip install --disable-pip-version-check msgpack numpy pillow reportlab python-docx openpyxl python-pptx
+          python -m pip install --disable-pip-version-check \
+            msgpack \
+            pillow==12.3.0 \
+            reportlab==5.0.0 \
+            python-docx==1.2.0 \
+            openpyxl==3.1.5 \
+            python-pptx==1.0.2 \
+            numpy==2.4.6
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends ffmpeg libzstd1
       - name: Run exact Office compact-floor locality falsifier
