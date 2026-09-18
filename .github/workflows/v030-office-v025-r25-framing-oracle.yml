@@ -1,4 +1,6 @@
 # ci-lane: deep
+# ci-pr-scope: exact-head-preserved-receipt
+# ci-cancel-policy: exact-sha-pending-run-custody
 name: CMPCT v0.30 Office v0.25 r25 framing oracle
 
 on:
@@ -21,13 +23,14 @@ permissions:
 env:
   EVIDENCE_HEAD: ${{ github.sha }}
 
+concurrency:
+  group: cmpct-office-v025-r25-framing-receipt-${{ github.sha }}
+  cancel-in-progress: false
+
 jobs:
   oracle:
     runs-on: ubuntu-24.04
     timeout-minutes: 20
-    concurrency:
-      group: cmpct-office-v025-r25-framing-receipt-${{ github.sha }}
-      cancel-in-progress: false
     steps:
       - uses: actions/checkout@v6
         with:
@@ -70,4 +73,4 @@ jobs:
         run: python tools/check_ci_topology.py .github/workflows/v030-office-v025-r25-framing-oracle.yml
 
 # Research-only causal/oracle evidence. Green means receipt integrity, never release credit.
-# The integration-branch push is exact-commit scoped; each admitted source gets immutable receipt custody.
+# Exact-SHA concurrency preserves each admitted source receipt; later integration commits cannot cancel it.
