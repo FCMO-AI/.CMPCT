@@ -69,6 +69,5 @@ def build(root: Path, out: Path) -> dict:
         return stats
 
 
-extract = G04.extract
 strong_verify = G04.strong_verify
 treehash = G04.treehash
