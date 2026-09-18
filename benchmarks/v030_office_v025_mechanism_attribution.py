@@ -150,6 +150,10 @@ def main():
                 "amplification": decoded / max(1, lb),
             })
 
+        # Decoded-byte ownership deliberately ignores compressed payload size. It tells us
+        # which bounded decode units a mechanism depends on; it does not pretend those
+        # units disappear if the mechanism is removed. Marginal archive savings require
+        # a separately built counterfactual.
         pack_decoded = {i: int(row[2]) for i, row in enumerate(po)}
         exclusive = Counter()
         shared = 0
