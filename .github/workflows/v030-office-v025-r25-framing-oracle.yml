@@ -1,11 +1,9 @@
 # ci-lane: deep
-# ci-pr-scope: latest-head-commit-gate
-# ci-cancel-policy: split-classifier-preserve-receipts
 name: CMPCT v0.30 Office v0.25 r25 framing oracle
 
 on:
-  pull_request:
-    branches: [main]
+  push:
+    branches: [agent/v030-authoritative-integration]
     paths:
       - 'benchmarks/v030_office_v025_r25_framing_oracle.py'
       - 'benchmarks/neutral_hostile_corpus_v1.py'
@@ -21,45 +19,14 @@ permissions:
   contents: read
 
 env:
-  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+  EVIDENCE_HEAD: ${{ github.sha }}
 
 jobs:
-  latest-head-impact:
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    concurrency:
-      group: cmpct-office-v025-r25-framing-classifier-${{ github.event.pull_request.number || github.ref }}
-      cancel-in-progress: true
-    outputs:
-      relevant: ${{ steps.classify.outputs.relevant }}
-    steps:
-      - uses: actions/checkout@v6
-        with:
-          ref: ${{ env.EVIDENCE_HEAD }}
-          fetch-depth: 2
-      - id: classify
-        shell: bash
-        run: |
-          set -euo pipefail
-          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
-          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
-            echo 'relevant=true' >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-          git diff-tree --no-commit-id --name-only -r HEAD > /tmp/latest-head-files.txt
-          if grep -Eq '^(benchmarks/v030_office_v025_r25_framing_oracle\.py|benchmarks/neutral_hostile_corpus_v1\.py|benchmarks/neutral_hostile_determinism_repair_v6\.py|experiments/entropygraph_v025\.py|experiments/entropygraph_v030_canonical_final_impl\.py|experiments/entropygraph_v030_product_fs\.py|experiments/entropygraph_v030_r25_manifest_admission\.py|\.github/workflows/v030-office-v025-r25-framing-oracle\.yml)$' /tmp/latest-head-files.txt; then
-            echo 'relevant=true' >> "$GITHUB_OUTPUT"
-          else
-            echo 'relevant=false' >> "$GITHUB_OUTPUT"
-          fi
-
   oracle:
-    needs: latest-head-impact
-    if: needs.latest-head-impact.outputs.relevant == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     concurrency:
-      group: cmpct-office-v025-r25-framing-receipt-${{ github.event.pull_request.head.sha || github.sha }}
+      group: cmpct-office-v025-r25-framing-receipt-${{ github.sha }}
       cancel-in-progress: false
     steps:
       - uses: actions/checkout@v6
@@ -103,5 +70,4 @@ jobs:
         run: python tools/check_ci_topology.py .github/workflows/v030-office-v025-r25-framing-oracle.yml
 
 # Research-only causal/oracle evidence. Green means receipt integrity, never release credit.
-# The classifier is disposable routing work; once admitted, the exact-source causal receipt is preserved so
-# unrelated integration commits cannot destroy the result before the framing hypothesis is decided.
+# The integration-branch push is exact-commit scoped; each admitted source gets immutable receipt custody.
