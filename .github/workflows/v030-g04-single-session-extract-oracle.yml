@@ -7,6 +7,11 @@ on:
     paths:
       - 'benchmarks/v030_g04_single_session_extract_oracle.py'
       - '.github/workflows/v030-g04-single-session-extract-oracle.yml'
+  pull_request:
+    branches: [agent/v030-authoritative-integration]
+    paths:
+      - 'benchmarks/v030_g04_single_session_extract_oracle.py'
+      - '.github/workflows/v030-g04-single-session-extract-oracle.yml'
   workflow_dispatch:
 
 permissions:
