@@ -1,5 +1,6 @@
 # ci-lane: deep
 # ci-cancel-policy: preserve-running-exact-receipt
+# v2 preserves the PrefixGraph process callable identity; inner ownership is observed at safe seams only.
 name: CMPCT v0.30 runtime phase attribution
 
 on:
