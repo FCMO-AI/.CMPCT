@@ -43,7 +43,7 @@ def run(work: Path) -> dict:
             arms[arm]=build_control(source,out) if arm=="control" else build_reuse(source,out,root)
         c,r=arms["control"],arms["reuse"]
         if c["archive_sha256"]!=r["archive_sha256"] or c["tree_sha256"]!=r["tree_sha256"]: raise RuntimeError("final G04 identity mismatch")
-        if c["attempt5_second_build"]["bytes"]!=r["retained_attempt5"]["bytes"]: raise RuntimeError("retained attempt5 size mismatch")
+        if c["attempt5_second_build"]["sha256"]!=r["retained_attempt5"].get("sha256"): raise RuntimeError("retained attempt5 identity mismatch")
         if r["retained_attempt5"].get("payload_write_bytes") != 0: raise RuntimeError("retention unexpectedly rewrote payload bytes")
         saving=1-r["wall_s"]/c["wall_s"]
         pairs.append({"pair":i,"order":list(order),"control":c,"reuse":r,"wall_saving_fraction":saving,"wall_saving_s":c["wall_s"]-r["wall_s"]})
