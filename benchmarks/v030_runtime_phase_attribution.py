@@ -40,10 +40,11 @@ def _g04_economics(build_stats):
     if not isinstance(build_stats,dict): return None
     r25=build_stats.get("r25")
     if not isinstance(r25,dict): return None
-    # RC returns the shared G04 result directly when PrefixGraph does not beat it, and keeps G04's v0.29/overlay
-    # accounting fields even when another r25 contender wins. Preserve only bounded scalar evidence; never copy
-    # the per-record audition corpus into the receipt.
-    return {k:r25[k] for k in G04_ECON_KEYS if k in r25 and isinstance(r25[k],(str,int,float,bool,type(None)))}
+    g04=r25.get("g04")
+    if not isinstance(g04,dict): return None
+    # Release-candidate accounting nests the owning shared-portfolio receipt under r25.g04 even when PrefixGraph
+    # wins the r25 tournament. Preserve only bounded scalar evidence; never copy the per-record audition corpus.
+    return {k:g04[k] for k in G04_ECON_KEYS if k in g04 and isinstance(g04[k],(str,int,float,bool,type(None)))}
 
 def _run_target(source,work):
     source_tree=PRODUCT.treehash(source); archive=work/"archive.cmpct"; build_rounds=[]; extract_rounds=[]; build_stats=None
