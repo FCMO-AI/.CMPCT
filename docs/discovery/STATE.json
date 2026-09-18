@@ -8,24 +8,22 @@
   },
   "active_product_bottleneck": {
     "id": "v030-runtime-rehabilitation",
-    "observation": "PR #132 localizes ML create debt to G04. PR #135 falsified outer PrefixGraph contention as an ML owner: shipping `_prefixgraph_eligibility` rejects ML before PG construction, so ML runs G04-only. Code review exposes a stronger ownership gap: G04 first builds the accepted v0.29 portfolio, whose scheduler already constructs the attempt-5 graph, then calls A5.build_graph again for Geometry overlay input. On ML the first attempt-5 graph loses the v0.29 floor by only 122 B but is exactly the substrate whose Geometry overlay later wins by 161,841 B.",
+    "observation": "PR #135 falsified outer PrefixGraph contention as an ML owner because shipping eligibility excludes PrefixGraph on ML. PR #138 then proved a stronger D2/R2 ownership defect: G04 discards the exact attempt-5 graph already built inside the v0.29 portfolio and reconstructs it serially for Geometry. A balanced exact-identity reuse A/B removed a median 33.31% of complete G04 wall (32.34-35.83%) while retaining exact attempt-5 and final G04 bytes/tree.",
     "evidence": [
-      "PR #132 exact-head child/economics receipt run 35377667509 / artifact 10561395000",
-      "PR #135 diagnostic run 35394905579 at aff9385fd261fd4f332e4d68bc68665ddf13c8fe",
-      "PR #135 comment 5736212812",
-      "PR #138 retained-intermediate preregistration and A/B",
-      "experiments/entropygraph_v030_release_candidate.py eligibility/build control flow",
-      "experiments/entropygraph_v030_geometry_overlay_g04.py G04 build control flow",
-      "experiments/entropygraph_v029_parallel_portfolio.py candidate lifetime"
+      "PR #132 run 35377667509 / artifact 10561395000",
+      "PR #135 run 35394905579 / comment 5736212812",
+      "PR #138 run 35395493475 at 603c78a470ea167a6e38126fb3eeed3cb4ab4e8b",
+      "PR #138 artifact 10568026221 digest sha256:c918f6b094af8efd3ce3d61cfdf0ee374da9a9fd7de9727158367bb244995b1b",
+      "PR #138 result comment 5736329443"
     ],
-    "next_discriminator": "Retain/reuse the exact attempt-5 candidate already constructed inside the accepted v0.29 portfolio as G04's Geometry overlay substrate; A/B against current G04 on ML with exact final archive SHA/tree identity and charged wall/resource accounting."
+    "next_discriminator": "Productize the smallest exact retained-candidate ownership handoff with process-tree CPU/RSS/temp-I/O accounting and byte/tree identity; then rerun unchanged fresh-process product authority."
   },
   "primary_question": {
     "id": "g04-attempt5-artifact-reuse",
     "family": "execution-architecture / ownership-boundary",
-    "hypothesis": "G04 rebuilds an exact attempt-5 graph that its v0.29-floor stage already constructed and discarded. Preserving that losing intermediate across the ownership boundary can remove a multi-second serial rebuild while retaining byte-identical v0.29 floor, overlay candidate and final G04 selection, plausibly closing the ~10.1% ML product create gap.",
-    "kill": "A reuse A/B fails exact final byte/tree identity, or retained-intermediate wall/resource savings are too small to materially approach the unchanged ML release ceiling after full carrying costs.",
-    "status": "RUNNING"
+    "hypothesis": "Retaining the exact attempt-5 graph across the v0.29/G04 ownership boundary removes a redundant serial reconstruction with enough headroom to close the decisive ML create gap.",
+    "result": "REUSE_HEADROOM: four balanced pairs saved 32.34-35.83% complete G04 wall, median 33.31%, with exact retained attempt-5 SHA/size and exact final G04 archive/tree identity. Redundant second attempt-5 build cost 19.23-20.38 s; charged retention copy cost 3.27-3.41 ms.",
+    "status": "EARNED_PRODUCTIZATION"
   },
   "frontier_candidates": [
     {
@@ -35,13 +33,25 @@
       "status": "QUEUED"
     },
     {
+      "id": "ml-verified-stream-extract",
+      "family": "reader/execution-architecture",
+      "question": "After create productization, what exact work owns the still-red ML verified-stream extraction path?",
+      "status": "QUEUED"
+    },
+    {
       "id": "shifted-outer-contention-secondary",
       "family": "execution-scheduling",
-      "question": "PrefixGraph is eligible on Shifted, so outer contention may exist there, but it is secondary because it cannot explain the decisive ML gap.",
+      "question": "PrefixGraph is eligible on Shifted, so outer contention may exist there, but Shifted create is not the decisive ML blocker.",
       "status": "DEFERRED"
     }
   ],
-  "protected_seeds": [],
+  "protected_seeds": [
+    {
+      "id": "g04-attempt5-retained-intermediate",
+      "reason": "Exact-identity research A/B shows large causal runtime headroom; preserve while paying CPU/RSS/temp-I/O/productization debt.",
+      "evidence": "PR #138 run 35395493475 / artifact 10568026221"
+    }
+  ],
   "saturated_families": [
     {
       "family": "v0.29 rejected physical-context/residual variants",
@@ -54,25 +64,19 @@
       "source": "PR #135 run 35394905579 + shipping release-candidate eligibility control flow"
     }
   ],
-  "pending_jobs": [
-    {
-      "provider": "GitHub Actions",
-      "run_id": 35395493475,
-      "job_id": 105763299712,
-      "source_sha": "603c78a470ea167a6e38126fb3eeed3cb4ab4e8b",
-      "question": "g04-attempt5-artifact-reuse",
-      "expected_artifact": "v030-g04-attempt5-reuse-603c78a470ea167a6e38126fb3eeed3cb4ab4e8b / g04-reuse.json",
-      "decision_unlocked": "Whether exact retained attempt-5 reuse has enough charged ML wall headroom to productize. A workflow-only replay at later SHA is infrastructure replay, not independent replication."
-    }
-  ],
+  "pending_jobs": [],
   "process_lessons": [
     {
       "lesson": "Before timing scheduler contention, prove from shipping admission/control flow that the alleged competitor actually executes on the decisive workload.",
-      "evidence": "PR #135: direct PG timing failed on ML because PG exceeds its file ceiling; shipping code had already made that contention impossible. This discriminator would have killed the family before CI."
+      "evidence": "PR #135: direct PG timing failed on ML because PG exceeds its file ceiling; shipping code had already made that contention impossible."
+    },
+    {
+      "lesson": "When a portfolio loser is an immediate downstream transform substrate, test lifetime/ownership reuse before optimizing either producer: exact intermediate reuse can remove a whole serial rebuild while preserving all candidate bytes.",
+      "evidence": "PR #138: retained attempt-5 identity was exact and median complete-G04 wall fell 33.31%."
     }
   ],
-  "next_action": "Inspect run 35395493475 only when mature; do not duplicate the same A/B. While it runs, advance the dependency-diverse charged reconstruction-oracle backup or another non-colliding lane. If reuse evidence is positive, productize the smallest ownership seam and return to unchanged fresh-process authority; if negative, retire/narrow it.",
-  "last_reconciled": "2026-09-18T21:15:00Z",
+  "next_action": "Continue PR #138 from research headroom into the smallest productizable retained-candidate ownership seam. Add process-tree CPU/RSS and temporary-I/O accounting; prefer same-filesystem handoff/link/rename semantics over payload recopy only if crash/durability and cleanup semantics remain correct; preserve exact v0.29 floor, attempt-5 graph and final G04 bytes/tree. If the product seam survives, rerun unchanged fresh-process runtime authority. Do not claim release credit from the research A/B.",
+  "last_reconciled": "2026-09-18T21:21:00Z",
   "concurrency": {
     "protocol": "docs/discovery/CONCURRENCY_PROTOCOL.md",
     "state_semantics": "staleable-cache-not-lock",
@@ -86,6 +90,6 @@
     "question": "What fully charged exact reconstruction relationship remains unexploited after current graph/transform families, with enough oracle headroom for a new grammar?",
     "kill": "A fully charged oracle shows immaterial general headroom, or apparent savings depend on gifted decoder-visible facts or benchmark-specific identity.",
     "status": "READY",
-    "reason": "Dependency-diverse representation-family fallback while the ownership-boundary A/B executes independently."
+    "reason": "Dependency-diverse fallback if productization blocks or runs independently."
   }
 }
