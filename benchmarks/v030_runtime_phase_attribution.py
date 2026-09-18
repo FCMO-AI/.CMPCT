@@ -63,8 +63,11 @@ class PhaseRecorder:
 @contextlib.contextmanager
 def instrumented_phases(recorder: PhaseRecorder):
     patches = []
-    # Parent phases plus the inner canonical owners that can distinguish D1 polishing from D2/D3 architecture.
-    # Nested timers intentionally overlap; they are ownership attribution, not additive accounting.
+    # Parent phases plus inner canonical owners. Nested timers intentionally overlap; they are ownership
+    # attribution, not additive accounting. PrefixGraph.build itself is deliberately not monkeypatched: the
+    # shipping one-shot process executor validates that callable's module/name identity before dispatch, so
+    # replacing it would mutate execution semantics instead of merely observing them. The enclosing r25
+    # release-candidate timer still prices the complete PrefixGraph/G0-G4 tournament honestly.
     for owner, name, label in (
         (PRODUCT, "_shared_frontdoor_preflight", "build.frontdoor_preflight"),
         (LOGS_PRODUCT, "_parallel_candidates", "build.logs_parallel_candidates"),
@@ -73,7 +76,6 @@ def instrumented_phases(recorder: PhaseRecorder):
         (BASE.C, "_r24_build", "build.canonical.r24_floor"),
         (BASE.C, "_r25_build", "build.canonical.r25_tournament"),
         (BASE.C.RC, "build", "build.canonical.r25.release_candidate"),
-        (BASE.C.RC.PG, "build", "build.canonical.r25.prefixgraph"),
         (BASE.C.RC.G04, "build", "build.canonical.r25.g04"),
         (BASE, "_locality_bounded_r24_build", "build.r24_candidate"),
         (BASE.POLICY, "extract_verified_into_staging", "extract.r25_verified_stream"),
