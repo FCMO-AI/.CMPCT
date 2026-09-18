@@ -4,8 +4,8 @@
 Question: is the ~5.95 MB inherited v0.25-style Office floor cheap because it
 violates the current <=8x selected-member decoded-context contract?
 
-Research bound only. Build the accepted deterministic Office tree with the
-*current checked-in* inherited EntropyGraph v0.25 engine, verify exact
+Research bound only. Build the accepted deterministic repair-v6 Office tree
+with the *current checked-in* inherited EntropyGraph v0.25 engine, verify exact
 reconstruction, then charge every physical pack reachable from each independent
 logical-member request. Historical byte identity is reported as provenance, not
 asserted: the current nested tournament and the immutable historical v0.28
@@ -21,6 +21,7 @@ def load(path:Path,name:str):
  if spec is None or spec.loader is None: raise RuntimeError(f"cannot load {path}")
  mod=importlib.util.module_from_spec(spec); spec.loader.exec_module(mod); return mod
 N=load(ROOT/'benchmarks'/'neutral_hostile_corpus_v1.py','cmpct_neutral_office_oracle')
+REPAIR=load(ROOT/'benchmarks'/'neutral_hostile_determinism_repair_v6.py','cmpct_neutral_office_repair_v6')
 V025=load(ROOT/'experiments'/'entropygraph_v025.py','cmpct_v025_office_oracle')
 EXPECTED_TREE='aac7de772b9fae0f9791a8f2884cebb29a2ba85df9e4db21ea78482afb378a57'
 EXPECTED_LOGICAL=16_063_798; EXPECTED_FILES=20
@@ -66,7 +67,15 @@ def logical_size(d):
 
 def main():
  with tempfile.TemporaryDirectory(prefix='cmpct-office-v025-locality-') as td:
-  work=Path(td); corpus_root=work/'corpus'; N.corpus_office(corpus_root); office=corpus_root/'02_office_workspace'
+  work=Path(td); corpus_root=work/'corpus'
+  # The accepted benchmark identity is repair-v6, not raw neutral_hostile_corpus_v1.
+  # Install producer hooks before generation and normalize the finished Office tree;
+  # otherwise ReportLab path identity, Office ZIP metadata, and PDF dates/IDs can drift
+  # while still looking like a valid Office workload.
+  REPAIR.install_generation_hooks(N)
+  N.corpus_office(corpus_root)
+  office=corpus_root/'02_office_workspace'
+  REPAIR.normalize_workload(office)
   files=sorted(p for p in office.rglob('*') if p.is_file()); logical=sum(p.stat().st_size for p in files); tree=V025.treehash(office)
   if tree!=EXPECTED_TREE or logical!=EXPECTED_LOGICAL or len(files)!=EXPECTED_FILES: raise RuntimeError({'tree':tree,'logical':logical,'files':len(files)})
   V025.ROOT=office; V025.OUT=work/'office-v025.cmpct'; build=V025.build(); archive_bytes=V025.OUT.stat().st_size; verify=V025.strong_verify()
@@ -77,6 +86,6 @@ def main():
    rows.append({'path':path,'recipe':fd[path][0],'logical_bytes':lb,'decoded_physical_bytes':decoded,'physical_packs':sorted(packs),'amplification':amp,'within_8x':amp<=LOCALITY_LIMIT})
   worst=max(rows,key=lambda r:r['amplification']); failing=[r for r in rows if not r['within_8x']]
   weighted=sum(r['decoded_physical_bytes'] for r in rows)/max(1,sum(r['logical_bytes'] for r in rows))
-  result={'schema':'cmpct-v030-office-v025-locality-oracle-v1','claim_boundary':'research bound only; current checked-in v0.25-style engine, not canonical product credit','office_tree_sha256':tree,'files':len(files),'logical_bytes':logical,'archive_bytes':archive_bytes,'historical_v028_floor_bytes':HISTORICAL_V028_FLOOR_BYTES,'observed_current_nested_floor_bytes':OBSERVED_CURRENT_NESTED_FLOOR_BYTES,'delta_vs_historical_floor_bytes':archive_bytes-HISTORICAL_V028_FLOOR_BYTES,'delta_vs_observed_nested_floor_bytes':archive_bytes-OBSERVED_CURRENT_NESTED_FLOOR_BYTES,'build':build,'strong_verify':verify,'locality_limit':LOCALITY_LIMIT,'max_member_amplification':worst['amplification'],'worst_member':worst,'weighted_member_amplification':weighted,'members_over_8x':len(failing),'locality_verdict':'PASS' if not failing else 'FAIL','rows':rows,'decision':'COMPACT_FLOOR_SURVIVES_LOCALITY_FALSIFIER' if not failing else 'COMPACT_FLOOR_LOCALITY_DEBT_CONFIRMED'}
+  result={'schema':'cmpct-v030-office-v025-locality-oracle-v1','claim_boundary':'research bound only; accepted repair-v6 Office tree plus current checked-in v0.25-style engine, not canonical product credit','substrate':'neutral-hostile-determinism-repair-v6','office_tree_sha256':tree,'files':len(files),'logical_bytes':logical,'archive_bytes':archive_bytes,'historical_v028_floor_bytes':HISTORICAL_V028_FLOOR_BYTES,'observed_current_nested_floor_bytes':OBSERVED_CURRENT_NESTED_FLOOR_BYTES,'delta_vs_historical_floor_bytes':archive_bytes-HISTORICAL_V028_FLOOR_BYTES,'delta_vs_observed_nested_floor_bytes':archive_bytes-OBSERVED_CURRENT_NESTED_FLOOR_BYTES,'build':build,'strong_verify':verify,'locality_limit':LOCALITY_LIMIT,'max_member_amplification':worst['amplification'],'worst_member':worst,'weighted_member_amplification':weighted,'members_over_8x':len(failing),'locality_verdict':'PASS' if not failing else 'FAIL','rows':rows,'decision':'COMPACT_FLOOR_SURVIVES_LOCALITY_FALSIFIER' if not failing else 'COMPACT_FLOOR_LOCALITY_DEBT_CONFIRMED'}
   print(json.dumps(result,indent=2,sort_keys=True))
 if __name__=='__main__': main()
