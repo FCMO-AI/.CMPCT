@@ -135,6 +135,10 @@ miracle away; preserve it and attack the exported cost as the next engineering m
 - A breakthrough seed that improves one strategic metric dramatically while regressing another must open explicit regression debt. First attempt adaptive portfolio/fallback selection, then isolate exported cost, then change representation boundaries or invent a counter-mechanism. Do not optimize the breakthrough back out merely to make an intermediate matrix green.
 - Before completion, perform the adversarial self-review and completion dossier defined in `docs/AGI_ENGINEERING_STANDARD.md`.
 
+## Recursive discovery discipline
+
+For material research/experiment selection, read and apply `docs/RECURSIVE_DISCOVERY_ENGINE.md`. It is a thin meta-science layer over the existing CMPCT evidence system, not a second project-state database. Use `research/discovery_episodes.jsonl` only for material prediction/outcome/counterfactual episodes; preserve predictions before observing results, distinguish product/science/discovery evidence, use cheap honest oracle rungs to kill low-headroom families early, and use counterfactual replay only when it yields a prospectively recognizable transferable decision rule. Never award product credit to oracle/replay evidence, optimize a scalar research score, or create ledger activity for its own sake. PARETOBONK the mechanism itself if carrying cost exceeds demonstrated research leverage.
+
 ## Benchmark rule
 
 Any numeric core release must commit a durable public benchmark record containing, when available:
