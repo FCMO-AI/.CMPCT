@@ -56,7 +56,7 @@ jobs:
           import json
           from pathlib import Path
           data=json.loads(Path('benchmark-artifacts/v030-runtime-phase-attribution.json').read_text())
-          assert data['schema']=='cmpct-v030-runtime-phase-attribution-v1'
+          assert data['schema']=='cmpct-v030-runtime-phase-attribution-v2'
           assert data['release_credit'] is False
           assert len(data['targets'])==3
           for row in data['targets']:
