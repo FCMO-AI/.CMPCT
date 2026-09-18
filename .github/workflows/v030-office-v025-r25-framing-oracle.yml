@@ -88,7 +88,7 @@ jobs:
           sudo apt-get install -y --no-install-recommends ffmpeg libzstd1
       - name: Run full-charge framing oracle
         env:
-          PYTHONPATH: .
+          PYTHONPATH: .:src
         run: |
           mkdir -p benchmark-artifacts
           python benchmarks/v030_office_v025_r25_framing_oracle.py | tee benchmark-artifacts/v030-office-v025-r25-framing-oracle.json
