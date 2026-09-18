@@ -68,6 +68,12 @@ def instrumented_phases(recorder: PhaseRecorder):
     # shipping one-shot process executor validates that callable's module/name identity before dispatch, so
     # replacing it would mutate execution semantics instead of merely observing them. The enclosing r25
     # release-candidate timer still prices the complete PrefixGraph/G0-G4 tournament honestly.
+    #
+    # v3 additionally splits the now-proven dominant G04 owner at stable semantic seams. In particular, record
+    # audition is timed as an aggregate of real calls rather than replaced with a different scheduler. This lets
+    # the next causal A/B distinguish inherited-v0.29 construction, attempt-5 graph construction, transform
+    # search, overlay materialization and verification without changing any candidate bytes or selection law.
+    G04 = BASE.C.RC.G04
     for owner, name, label in (
         (PRODUCT, "_shared_frontdoor_preflight", "build.frontdoor_preflight"),
         (LOGS_PRODUCT, "_parallel_candidates", "build.logs_parallel_candidates"),
@@ -76,7 +82,12 @@ def instrumented_phases(recorder: PhaseRecorder):
         (BASE.C, "_r24_build", "build.canonical.r24_floor"),
         (BASE.C, "_r25_build", "build.canonical.r25_tournament"),
         (BASE.C.RC, "build", "build.canonical.r25.release_candidate"),
-        (BASE.C.RC.G04, "build", "build.canonical.r25.g04"),
+        (G04, "build", "build.canonical.r25.g04"),
+        (G04.BASE, "build", "build.canonical.r25.g04.v029_floor"),
+        (G04.A5, "build_graph", "build.canonical.r25.g04.attempt5_graph"),
+        (G04, "_audition_record", "build.canonical.r25.g04.record_audition"),
+        (G04, "_write_overlay", "build.canonical.r25.g04.overlay_write"),
+        (G04, "strong_verify", "build.canonical.r25.g04.overlay_verify"),
         (BASE, "_locality_bounded_r24_build", "build.r24_candidate"),
         (BASE.POLICY, "extract_verified_into_staging", "extract.r25_verified_stream"),
         (BASE.VERIFIED_RESTORE, "restore_verified_manifest_tree", "extract.r25_fs_restore"),
@@ -140,14 +151,15 @@ def run(work_root: Path) -> dict:
         row = _run_target(corpora[(suite, name)], target_work)
         rows.append({"suite": suite, "name": name, **row})
     return {
-        "schema": "cmpct-v030-runtime-phase-attribution-v2",
+        "schema": "cmpct-v030-runtime-phase-attribution-v3",
         "release_credit": False,
         "rounds": ROUNDS,
         "targets": rows,
         "claim_boundary": (
             "Research-only in-process semantic-phase ownership on the exact promoted product front door. "
-            "Nested phase times overlap and are not additive. It preserves exact archive/tree semantics but is "
-            "not fresh-process release timing and cannot unlock v0.30."
+            "Nested phase times overlap and are not additive. v3 splits G04 into inherited-floor, attempt-5 graph, "
+            "record-audition, overlay-write and overlay-verification owners without changing scheduler or bytes. "
+            "It preserves exact archive/tree semantics but is not fresh-process release timing and cannot unlock v0.30."
         ),
     }
 
