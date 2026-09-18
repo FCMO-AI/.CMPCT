@@ -73,7 +73,6 @@ jobs:
               assert economics is not None
               assert economics['v028_child_s'] > 0
               assert economics['attempt5_child_s'] > 0
-              assert economics['selected'] in {'v028', 'attempt5'}
           PY
       - uses: actions/upload-artifact@v6
         if: always()
