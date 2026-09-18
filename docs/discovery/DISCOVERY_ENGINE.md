@@ -65,6 +65,10 @@ Use docs/discovery/STATE.json as a compact machine-readable index, not a narrati
 
 Detailed truth remains in PRs, benchmark records, experiment docs, receipts and code. STATE.json links; it does not duplicate.
 
+## Concurrent activations
+
+Scheduled activations may overlap. Follow `docs/discovery/CONCURRENCY_PROTOCOL.md` whenever concurrent agents, PRs, CI, or human work can touch the same discovery surface. In particular, treat `STATE.json` as a staleable cache rather than a lock; preserve causal history append-only; inspect active claims before substantial implementation; and prefer independent, dependency-safe questions over duplicate implementations. Scientific evidence must survive coordination conflicts intact.
+
 ## Activation protocol
 
 Every scheduled activation:
