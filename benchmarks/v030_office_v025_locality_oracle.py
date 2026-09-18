@@ -1,19 +1,17 @@
 #!/usr/bin/env python3
-"""Office compact-floor locality oracle.
+"""Office compact-floor locality + mechanism-ownership oracle.
 
-Question: is the ~5.95 MB inherited v0.25-style Office floor cheap because it
+Question 1: is the ~5.95 MB inherited v0.25-style Office floor cheap because it
 violates the current <=8x selected-member decoded-context contract?
+Question 2: which reconstruction recipe families own the logical bytes and bounded
+physical decode units behind that floor, so the next causal ablation targets the
+right mechanism instead of porting the historical engine wholesale?
 
-Research bound only. Build the accepted deterministic repair-v6 Office tree
-with the *current checked-in* inherited EntropyGraph v0.25 engine, verify exact
-reconstruction, then charge every physical pack reachable from each independent
-logical-member request. Historical byte identity is reported as provenance, not
-asserted: the current nested tournament and the immutable historical v0.28
-receipt differ by a few hundred bytes, and conflating those engines would turn
-a locality falsifier into a stale-source test.
+Research bound only. Ownership is descriptive, not a marginal-saving claim.
 """
 from __future__ import annotations
 import importlib.util, json, tempfile
+from collections import Counter, defaultdict
 from pathlib import Path
 ROOT=Path(__file__).resolve().parents[1]
 def load(path:Path,name:str):
@@ -68,24 +66,35 @@ def logical_size(d):
 def main():
  with tempfile.TemporaryDirectory(prefix='cmpct-office-v025-locality-') as td:
   work=Path(td); corpus_root=work/'corpus'
-  # The accepted benchmark identity is repair-v6, not raw neutral_hostile_corpus_v1.
-  # Install producer hooks before generation and normalize the finished Office tree;
-  # otherwise ReportLab path identity, Office ZIP metadata, and PDF dates/IDs can drift
-  # while still looking like a valid Office workload.
-  REPAIR.install_generation_hooks(N)
-  N.corpus_office(corpus_root)
-  office=corpus_root/'02_office_workspace'
-  REPAIR.normalize_workload(office)
+  REPAIR.install_generation_hooks(N); N.corpus_office(corpus_root)
+  office=corpus_root/'02_office_workspace'; REPAIR.normalize_workload(office)
   files=sorted(p for p in office.rglob('*') if p.is_file()); logical=sum(p.stat().st_size for p in files); tree=V025.treehash(office)
   if tree!=EXPECTED_TREE or logical!=EXPECTED_LOGICAL or len(files)!=EXPECTED_FILES: raise RuntimeError({'tree':tree,'logical':logical,'files':len(files)})
   V025.ROOT=office; V025.OUT=work/'office-v025.cmpct'; build=V025.build(); archive_bytes=V025.OUT.stat().st_size; verify=V025.strong_verify()
   if not verify.get('ok') or verify.get('tree_sha256')!=EXPECTED_TREE: raise RuntimeError('v0.25 exact verification failed')
   f,meta,po=V025.open_ar(); f.close(); fd=expand_files(meta); rows=[]
+  recipe_counts=Counter(); recipe_logical=Counter(); recipe_pack_refs=defaultdict(set); pack_users=defaultdict(set)
   for path in sorted(fd):
-   packs=physical_packs_for(path,fd,meta); decoded=sum(int(po[i][2]) for i in packs); lb=logical_size(fd[path]); amp=decoded/max(1,lb)
-   rows.append({'path':path,'recipe':fd[path][0],'logical_bytes':lb,'decoded_physical_bytes':decoded,'physical_packs':sorted(packs),'amplification':amp,'within_8x':amp<=LOCALITY_LIMIT})
+   packs=physical_packs_for(path,fd,meta); decoded=sum(int(po[i][2]) for i in packs); lb=logical_size(fd[path]); amp=decoded/max(1,lb); typ=str(fd[path][0])
+   recipe_counts[typ]+=1; recipe_logical[typ]+=lb; recipe_pack_refs[typ]|=packs
+   for pi in packs: pack_users[pi].add(typ)
+   rows.append({'path':path,'recipe':typ,'logical_bytes':lb,'decoded_physical_bytes':decoded,'physical_packs':sorted(packs),'amplification':amp,'within_8x':amp<=LOCALITY_LIMIT})
   worst=max(rows,key=lambda r:r['amplification']); failing=[r for r in rows if not r['within_8x']]
   weighted=sum(r['decoded_physical_bytes'] for r in rows)/max(1,sum(r['logical_bytes'] for r in rows))
-  result={'schema':'cmpct-v030-office-v025-locality-oracle-v1','claim_boundary':'research bound only; accepted repair-v6 Office tree plus current checked-in v0.25-style engine, not canonical product credit','substrate':'neutral-hostile-determinism-repair-v6','office_tree_sha256':tree,'files':len(files),'logical_bytes':logical,'archive_bytes':archive_bytes,'historical_v028_floor_bytes':HISTORICAL_V028_FLOOR_BYTES,'observed_current_nested_floor_bytes':OBSERVED_CURRENT_NESTED_FLOOR_BYTES,'delta_vs_historical_floor_bytes':archive_bytes-HISTORICAL_V028_FLOOR_BYTES,'delta_vs_observed_nested_floor_bytes':archive_bytes-OBSERVED_CURRENT_NESTED_FLOOR_BYTES,'build':build,'strong_verify':verify,'locality_limit':LOCALITY_LIMIT,'max_member_amplification':worst['amplification'],'worst_member':worst,'weighted_member_amplification':weighted,'members_over_8x':len(failing),'locality_verdict':'PASS' if not failing else 'FAIL','rows':rows,'decision':'COMPACT_FLOOR_SURVIVES_LOCALITY_FALSIFIER' if not failing else 'COMPACT_FLOOR_LOCALITY_DEBT_CONFIRMED'}
+
+  # Decoded-byte ownership is intentionally not called byte saving. A pack reachable only from one
+  # recipe family is exclusive *decode ownership*; only a separately built counterfactual can prove
+  # that removing that recipe would remove the same stored bytes.
+  pack_decoded={i:int(row[2]) for i,row in enumerate(po)}; exclusive=Counter(); shared=0
+  for pi,users in pack_users.items():
+   if len(users)==1: exclusive[next(iter(users))]+=pack_decoded[pi]
+   else: shared+=pack_decoded[pi]
+  mechanisms={}
+  for typ in sorted(recipe_counts):
+   union=recipe_pack_refs[typ]
+   mechanisms[typ]={'files':recipe_counts[typ],'logical_bytes':recipe_logical[typ],'logical_fraction':recipe_logical[typ]/logical,'reachable_unique_decoded_bytes':sum(pack_decoded[i] for i in union),'exclusive_decoded_bytes':exclusive[typ],'physical_pack_count':len(union)}
+  dominant=max(mechanisms,key=lambda k:mechanisms[k]['logical_bytes'])
+
+  result={'schema':'cmpct-v030-office-v025-locality-oracle-v2','claim_boundary':'research bound only; accepted repair-v6 Office tree plus current checked-in v0.25-style engine, not canonical product credit; mechanism ownership is not marginal saving','substrate':'neutral-hostile-determinism-repair-v6','office_tree_sha256':tree,'files':len(files),'logical_bytes':logical,'archive_bytes':archive_bytes,'historical_v028_floor_bytes':HISTORICAL_V028_FLOOR_BYTES,'observed_current_nested_floor_bytes':OBSERVED_CURRENT_NESTED_FLOOR_BYTES,'delta_vs_historical_floor_bytes':archive_bytes-HISTORICAL_V028_FLOOR_BYTES,'delta_vs_observed_nested_floor_bytes':archive_bytes-OBSERVED_CURRENT_NESTED_FLOOR_BYTES,'build':build,'strong_verify':verify,'locality_limit':LOCALITY_LIMIT,'max_member_amplification':worst['amplification'],'worst_member':worst,'weighted_member_amplification':weighted,'members_over_8x':len(failing),'locality_verdict':'PASS' if not failing else 'FAIL','mechanisms':mechanisms,'dominant_logical_owner':dominant,'shared_cross_recipe_decoded_bytes':shared,'rows':rows,'decision':'COMPACT_FLOOR_SURVIVES_LOCALITY_FALSIFIER_ATTRIBUTION_READY' if not failing else 'COMPACT_FLOOR_LOCALITY_DEBT_CONFIRMED'}
   print(json.dumps(result,indent=2,sort_keys=True))
 if __name__=='__main__': main()
