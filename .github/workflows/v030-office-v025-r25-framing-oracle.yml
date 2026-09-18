@@ -35,7 +35,9 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  EVIDENCE_HEAD: ${{ github.sha }}
+  # pull_request github.sha is GitHub's synthetic merge checkout, not the candidate source. Bind evidence to the
+  # actual PR head; push/dispatch naturally fall back to github.sha.
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
 
 jobs:
   latest-head-impact:
@@ -85,6 +87,8 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends ffmpeg libzstd1
       - name: Run full-charge framing oracle
+        env:
+          PYTHONPATH: .
         run: |
           mkdir -p benchmark-artifacts
           python benchmarks/v030_office_v025_r25_framing_oracle.py | tee benchmark-artifacts/v030-office-v025-r25-framing-oracle.json
