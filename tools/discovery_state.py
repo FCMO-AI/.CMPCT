@@ -26,7 +26,7 @@ def main() -> None:
 
     if data.get("schema") != SCHEMA:
         fail(f"schema must be {SCHEMA!r}")
-    for key in ("authority", "active_product_bottleneck", "primary_question", "frontier_candidates",
+    for key in ("authority", "active_product_bottleneck", "primary_question", "backup_question", "frontier_candidates",
                 "saturated_families", "pending_jobs", "process_lessons", "next_action"):
         if key not in data:
             fail(f"missing {key}")
@@ -37,6 +37,17 @@ def main() -> None:
             fail(f"primary_question missing {key}")
     if primary["status"] not in ALLOWED:
         fail(f"unknown primary status {primary['status']!r}")
+
+    backup = data["backup_question"]
+    for key in ("id", "family", "question", "kill", "status"):
+        if not backup.get(key):
+            fail(f"backup_question missing {key}")
+    if backup["status"] not in ALLOWED:
+        fail(f"unknown backup status {backup['status']!r}")
+    if backup["id"] == primary["id"]:
+        fail("backup_question must differ from primary_question")
+    if backup["family"] == primary["family"]:
+        fail("backup_question must use a dependency/solution family distinct from primary_question")
 
     frontier = data["frontier_candidates"]
     if not isinstance(frontier, list) or len(frontier) > 3:
