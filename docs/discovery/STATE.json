@@ -30,12 +30,6 @@
       "status": "QUEUED"
     },
     {
-      "id": "charged-reconstruction-oracle",
-      "family": "representation",
-      "question": "What fully charged exact reconstruction relationship remains unexploited after current graph/transform families, with enough oracle headroom for a new grammar?",
-      "status": "QUEUED"
-    },
-    {
       "id": "proof-carrying-admission",
       "family": "search/proof",
       "question": "Can conservative bounds certify losing candidates before construction while preserving exact fallback and generality?",
@@ -57,7 +51,7 @@
       "evidence": "existing CMPCT v0.29/v0.30 research history"
     }
   ],
-  "next_action": "Read exact current PR #132 / authoritative head evidence, obtain pending child attribution if available, and PARETOBONK the cheapest causal experiment on the owning child.",
+  "next_action": "Execute the current primary winner-proof-cost discriminator. If that lane blocks or is independently running, switch immediately to the representation-family charged-reconstruction-oracle backup rather than spending the activation on blocker handling.",
   "last_reconciled": "2026-09-18",
   "concurrency": {
     "protocol": "docs/discovery/CONCURRENCY_PROTOCOL.md",
@@ -65,5 +59,13 @@
     "causal_history": "research/discovery_episodes.jsonl",
     "collision_check": "python tools/discovery_claims.py --family <family> --question '<question>'",
     "rule": "reconcile current GitHub truth immediately before shared discovery-state writes; preserve evidence over cache freshness"
+  },
+  "backup_question": {
+    "id": "charged-reconstruction-oracle",
+    "family": "representation",
+    "question": "What fully charged exact reconstruction relationship remains unexploited after current graph/transform families, with enough oracle headroom for a new grammar?",
+    "kill": "A fully charged oracle shows immaterial general headroom, or apparent savings depend on gifted decoder-visible facts or benchmark-specific identity.",
+    "status": "READY",
+    "reason": "Dependency-diverse fallback when runtime/candidate-selection work blocks, dispatches, or becomes temporarily non-executable."
   }
 }
