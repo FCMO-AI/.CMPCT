@@ -9,6 +9,7 @@ on:
     branches: [agent/v030-g04-attempt5-reuse]
     paths:
       - 'benchmarks/v030_g04_attempt5_reuse_ab.py'
+      - 'experiments/entropygraph_v030_geometry_overlay_g04_retained.py'
       - '.github/workflows/v030-g04-attempt5-reuse-ab.yml'
   workflow_dispatch:
 
@@ -40,7 +41,7 @@ jobs:
           if [ "$GITHUB_EVENT_NAME" = workflow_dispatch ]; then echo 'run_receipt=true' >> "$GITHUB_OUTPUT"; exit 0; fi
           changed="$(git diff-tree --no-commit-id --name-only -r HEAD)"
           printf '%s\n' "$changed"
-          if printf '%s\n' "$changed" | grep -Eq '^(benchmarks/v030_g04_attempt5_reuse_ab\.py|\.github/workflows/v030-g04-attempt5-reuse-ab\.yml)$'; then echo 'run_receipt=true' >> "$GITHUB_OUTPUT"; else echo 'run_receipt=false' >> "$GITHUB_OUTPUT"; fi
+          if printf '%s\n' "$changed" | grep -Eq '^(benchmarks/v030_g04_attempt5_reuse_ab\.py|experiments/entropygraph_v030_geometry_overlay_g04_retained\.py|\.github/workflows/v030-g04-attempt5-reuse-ab\.yml)$'; then echo 'run_receipt=true' >> "$GITHUB_OUTPUT"; else echo 'run_receipt=false' >> "$GITHUB_OUTPUT"; fi
 
   reuse-ab:
     needs: classify-latest-head
@@ -63,8 +64,8 @@ jobs:
         run: |
           sudo apt-get update && sudo apt-get install -y zstd gcc ffmpeg libsndfile1
           python -m pip install -e '.[audio,test]'
-      - name: Compile oracle
-        run: python -m py_compile benchmarks/v030_g04_attempt5_reuse_ab.py
+      - name: Compile productization experiment and oracle
+        run: python -m py_compile experiments/entropygraph_v030_geometry_overlay_g04_retained.py benchmarks/v030_g04_attempt5_reuse_ab.py
       - name: Run balanced ML retained-intermediate A/B
         run: |
           mkdir -p benchmark-artifacts
@@ -75,11 +76,12 @@ jobs:
           import json
           from pathlib import Path
           d=json.loads(Path('benchmark-artifacts/g04-reuse.json').read_text())
-          assert d['schema']=='cmpct-v030-g04-attempt5-reuse-ab-v1' and d['release_credit'] is False and len(d['pairs'])==4
+          assert d['schema']=='cmpct-v030-g04-attempt5-retained-productization-ab-v2' and d['release_credit'] is False and len(d['pairs'])==4
           for p in d['pairs']:
               c,r=p['control'],p['reuse']
               assert c['archive_sha256']==r['archive_sha256'] and c['tree_sha256']==r['tree_sha256']
               assert c['attempt5_second_build']['sha256']==r['retained_attempt5']['sha256']
+              assert r['retained_attempt5']['payload_write_bytes']==0
           PY
       - uses: actions/upload-artifact@v6
         if: always()
@@ -89,4 +91,4 @@ jobs:
           if-no-files-found: error
           retention-days: 90
 
-# Research-only exact-intermediate reuse oracle; green never grants release credit.
+# Research productization evidence only; green never grants release credit.
