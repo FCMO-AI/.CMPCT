@@ -1,0 +1,83 @@
+# ci-lane: deep
+# ci-cancel-policy: preserve-running-exact-receipt
+name: CMPCT v0.30 scheduler contention A/B
+
+on:
+  push:
+    branches: [agent/cdr-scheduler-contention-ab]
+    paths:
+      - 'benchmarks/v030_scheduler_contention_worker.py'
+      - 'benchmarks/v030_scheduler_contention_ab.py'
+      - '.github/workflows/v030-scheduler-contention-ab.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.sha }}
+
+concurrency:
+  group: cmpct-v030-scheduler-contention-ab-${{ github.sha }}
+  cancel-in-progress: true
+
+jobs:
+  contention:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - name: Bind exact head
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install benchmark dependencies
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y zstd gcc ffmpeg libsndfile1
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[audio,test]'
+      - name: Compile oracle
+        run: |
+          python -m py_compile             benchmarks/v030_scheduler_contention_worker.py             benchmarks/v030_scheduler_contention_ab.py
+      - name: Run balanced exact-candidate contention A/B
+        run: |
+          mkdir -p benchmark-artifacts
+          python benchmarks/v030_scheduler_contention_ab.py             --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-scheduler-contention-work"             --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-scheduler-contention.json"
+      - name: Validate non-credit receipt
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          p=Path('benchmark-artifacts/v030-scheduler-contention.json')
+          data=json.loads(p.read_text())
+          assert data['schema']=='cmpct-v030-scheduler-contention-oracle-v1'
+          assert data['release_credit'] is False
+          assert len(data['pair_orders'])==4
+          assert len(data['rows'])==2
+          names={row['name'] for row in data['rows']}
+          assert names=={'09_ml_artifacts','01_shifted_versions'}
+          for row in data['rows']:
+              assert len(row['pairs'])==4
+              assert row['selected_candidate'] in {'g04','prefixgraph'}
+              for pair in row['pairs']:
+                  c=pair['concurrent']; s=pair['solo']
+                  assert c['selected_sha256']==s['physical_sha256']
+                  assert int(c['selected_bytes'])==int(s['archive_bytes'])
+                  assert pair['selected_candidate_contention_ratio'] > 0
+          PY
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: v030-scheduler-contention-${{ env.EVIDENCE_HEAD }}
+          path: benchmark-artifacts/v030-scheduler-contention.json
+          if-no-files-found: error
+          retention-days: 90
+
+# Research-only causal oracle. Green means the receipt is internally valid, never release authority.
