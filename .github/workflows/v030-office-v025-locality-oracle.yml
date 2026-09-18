@@ -1,3 +1,4 @@
+# ci-lane: deep
 name: CMPCT v0.30 Office compact-floor locality oracle
 
 on:
@@ -13,6 +14,10 @@ on:
 
 permissions:
   contents: read
+
+concurrency:
+  group: cmpct-office-v025-locality-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 env:
   EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
