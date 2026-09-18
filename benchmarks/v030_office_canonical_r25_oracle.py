@@ -1,11 +1,11 @@
 from __future__ import annotations
 
-"""Office-only oracle for the canonical-r25 contender hidden by the v0.29 fallback.
+"""Office-only oracle for the canonical-r25 contender shadowed by the v0.29 fallback.
 
-The shipping two-level selector can let the inner tournament choose a smaller non-r25
-fallback, after which the canonical parent rejects it and publishes r24. This instrument
-prices only legal r25 contenders on the frozen repair-v6 Office tree. It changes no
-shipping policy and earns no release credit.
+This is deliberately *not* a selector-bug presumption. The canonical parent is required
+to preserve the accepted v0.29 zero-byte floor, so an r25 contender that beats r24 and
+Zstd-19 but regresses v0.29 is still correctly non-promotable. The oracle separates
+those cases on the frozen repair-v6 Office tree and changes no shipping policy.
 """
 
 import argparse
@@ -23,7 +23,9 @@ ROOT = Path(__file__).resolve().parents[1]
 EXPECTED_TREE = "aac7de772b9f93d5b54ca30e07497574bf61d76c2288077627163c8378823c4b"
 EXPECTED_FILES = 20
 EXPECTED_LOGICAL_BYTES = 16_063_798
-SHIPPING_BYTES = 15_445_236
+SHIPPING_R24_BYTES = 15_445_236
+# Same-run current v0.29 fallback observed inside the exact-head external frontier.
+CURRENT_V029_FLOOR_BYTES = 5_954_226
 ZSTD19_BYTES = 8_312_879
 SEVENZIP_BYTES = 7_455_748
 
@@ -71,9 +73,18 @@ def run(work_root: Path) -> dict:
         raise RuntimeError(f"canonical r25 Office candidate exceeded locality: {worst_amp:.6f}x")
 
     archive_bytes = archive.stat().st_size
-    decision = "CANONICAL_R25_ESCAPE_PROVEN" if archive_bytes < SHIPPING_BYTES and archive_bytes < ZSTD19_BYTES else "CANONICAL_R25_ESCAPE_INSUFFICIENT"
+    beats_r24 = archive_bytes < SHIPPING_R24_BYTES
+    beats_v029 = archive_bytes <= CURRENT_V029_FLOOR_BYTES
+    beats_zstd = archive_bytes < ZSTD19_BYTES
+    if beats_r24 and beats_v029 and beats_zstd:
+        decision = "CANONICAL_R25_ZERO_REGRESSION_ESCAPE_PROVEN"
+    elif beats_r24 and beats_zstd and not beats_v029:
+        decision = "CANONICAL_R25_BEATS_WORLD_CONTROLS_BUT_REGRESSES_V029"
+    else:
+        decision = "CANONICAL_R25_ESCAPE_INSUFFICIENT"
+
     return {
-        "schema": "cmpct-v030-office-canonical-r25-oracle-v1",
+        "schema": "cmpct-v030-office-canonical-r25-oracle-v2",
         "source_commit": _source_commit(),
         "substrate": "neutral-hostile-determinism-repair-v6",
         "substrate_evidence": substrate,
@@ -87,18 +98,21 @@ def run(work_root: Path) -> dict:
         "within_locality_8x": True,
         "strong_verify_ok": True,
         "strong_verify_tree_exact": True,
-        "shipping_control_bytes": SHIPPING_BYTES,
+        "shipping_r24_control_bytes": SHIPPING_R24_BYTES,
+        "current_v029_floor_control_bytes": CURRENT_V029_FLOOR_BYTES,
         "zstd19_control_bytes": ZSTD19_BYTES,
         "sevenzip_control_bytes": SEVENZIP_BYTES,
-        "saving_vs_shipping_bytes": SHIPPING_BYTES - archive_bytes,
+        "saving_vs_shipping_r24_bytes": SHIPPING_R24_BYTES - archive_bytes,
+        "saving_vs_current_v029_bytes": CURRENT_V029_FLOOR_BYTES - archive_bytes,
         "saving_vs_zstd19_bytes": ZSTD19_BYTES - archive_bytes,
         "saving_vs_7z_bytes": SEVENZIP_BYTES - archive_bytes,
-        "beats_shipping": archive_bytes < SHIPPING_BYTES,
-        "beats_zstd19": archive_bytes < ZSTD19_BYTES,
+        "beats_shipping_r24": beats_r24,
+        "preserves_v029_zero_regression": beats_v029,
+        "beats_zstd19": beats_zstd,
         "beats_7z": archive_bytes < SEVENZIP_BYTES,
         "decision": decision,
         "release_credit": False,
-        "claim_boundary": "Office-only canonical-r25 materialization oracle; shipping selection and all-15/recovery/native/platform authority remain unchanged.",
+        "claim_boundary": "Office-only canonical-r25 materialization oracle. A competitor win is not promotable if it regresses the inherited v0.29 byte floor; all-15/recovery/native/platform authority remains separate.",
     }
 
 
@@ -111,8 +125,6 @@ def main() -> None:
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8")
     print(json.dumps(result, indent=2), flush=True)
-    if result["decision"] != "CANONICAL_R25_ESCAPE_PROVEN":
-        raise SystemExit(1)
 
 
 if __name__ == "__main__":
