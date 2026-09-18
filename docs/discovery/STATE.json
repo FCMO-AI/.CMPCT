@@ -9,7 +9,10 @@
   "active_product_bottleneck": {
     "id": "v030-runtime-rehabilitation",
     "observation": "v0.30 compression/generalization evidence is ahead of promoted-product runtime; PR #132 localizes dominant create cost into shared candidate construction.",
-    "evidence": ["PR #132", "docs/v030-coordination/tasks/T02-evidence-performance.md"],
+    "evidence": [
+      "PR #132",
+      "docs/v030-coordination/tasks/T02-evidence-performance.md"
+    ],
     "next_discriminator": "Reconcile exact-head v028_child_s versus attempt5_child_s attribution, then test cheaper proof/admission/reuse/early-termination of the selected-winner fact."
   },
   "primary_question": {
@@ -20,18 +23,47 @@
     "status": "READY"
   },
   "frontier_candidates": [
-    {"id":"ownership-boundary","family":"execution-architecture","question":"Can shared intermediate representations or changed ownership remove duplicate candidate work rather than accelerating it?","status":"QUEUED"},
-    {"id":"charged-reconstruction-oracle","family":"representation","question":"What fully charged exact reconstruction relationship remains unexploited after current graph/transform families, with enough oracle headroom for a new grammar?","status":"QUEUED"},
-    {"id":"proof-carrying-admission","family":"search/proof","question":"Can conservative bounds certify losing candidates before construction while preserving exact fallback and generality?","status":"QUEUED"}
+    {
+      "id": "ownership-boundary",
+      "family": "execution-architecture",
+      "question": "Can shared intermediate representations or changed ownership remove duplicate candidate work rather than accelerating it?",
+      "status": "QUEUED"
+    },
+    {
+      "id": "charged-reconstruction-oracle",
+      "family": "representation",
+      "question": "What fully charged exact reconstruction relationship remains unexploited after current graph/transform families, with enough oracle headroom for a new grammar?",
+      "status": "QUEUED"
+    },
+    {
+      "id": "proof-carrying-admission",
+      "family": "search/proof",
+      "question": "Can conservative bounds certify losing candidates before construction while preserving exact fallback and generality?",
+      "status": "QUEUED"
+    }
   ],
   "protected_seeds": [],
   "saturated_families": [
-    {"family":"v0.29 rejected physical-context/residual variants","reopen_only_if":"changed evidence, conditions, hypothesis, or materially different mechanism","source":"docs/CURRENT_STATE.md and v0.29 release evidence"}
+    {
+      "family": "v0.29 rejected physical-context/residual variants",
+      "reopen_only_if": "changed evidence, conditions, hypothesis, or materially different mechanism",
+      "source": "docs/CURRENT_STATE.md and v0.29 release evidence"
+    }
   ],
   "pending_jobs": [],
   "process_lessons": [
-    {"lesson":"Prefer causal owner localization and generous charged oracles before expensive productization.","evidence":"existing CMPCT v0.29/v0.30 research history"}
+    {
+      "lesson": "Prefer causal owner localization and generous charged oracles before expensive productization.",
+      "evidence": "existing CMPCT v0.29/v0.30 research history"
+    }
   ],
   "next_action": "Read exact current PR #132 / authoritative head evidence, obtain pending child attribution if available, and PARETOBONK the cheapest causal experiment on the owning child.",
-  "last_reconciled": "2026-09-18"
+  "last_reconciled": "2026-09-18",
+  "concurrency": {
+    "protocol": "docs/discovery/CONCURRENCY_PROTOCOL.md",
+    "state_semantics": "staleable-cache-not-lock",
+    "causal_history": "research/discovery_episodes.jsonl",
+    "collision_check": "python tools/discovery_claims.py --family <family> --question '<question>'",
+    "rule": "reconcile current GitHub truth immediately before shared discovery-state writes; preserve evidence over cache freshness"
+  }
 }
