@@ -13,6 +13,8 @@ ROOT = Path(__file__).resolve().parents[1]
 EXPECTED_TREE = "aac7de772b9fae0f9791a8f2884cebb29a2ba85df9e4db21ea78482afb378a57"
 EXPECTED_LOGICAL = 16_063_798
 EXPECTED_FILES = 20
+# Frozen direct ablation on this exact repair-v6 Office identity: disabling v0.25 ZIP-stream admission cost 9,354,720 B.
+PROVEN_ZIPSTREAM_VALUE_BYTES = 9_354_720
 
 
 def load(path: Path, name: str):
@@ -64,6 +66,7 @@ def main() -> None:
         selected_manifest = bytes(prepared["selected_manifest_raw"])
         source_manifest = bytes(prepared["source_manifest_raw"])
         delta = f["archive_bytes"] - c["archive_bytes"]
+        residual_zipstream_value = PROVEN_ZIPSTREAM_VALUE_BYTES - max(0, delta)
         result = {
             "schema": "cmpct-v030-office-v025-r25-framing-oracle-v1",
             "release_credit": False,
@@ -87,7 +90,10 @@ def main() -> None:
             "v025_on_r25_prepared_tree": f,
             "r25_framing_minus_original_v025_bytes": delta,
             "r25_framing_overhead_pct_of_original_v025": (100.0 * delta / c["archive_bytes"]) if c["archive_bytes"] else 0.0,
-            "decision": "R25_FRAMING_PRESERVES_ZIPSTREAM_HEADROOM" if delta < 1_000_000 else "R25_FRAMING_COST_MATERIAL_REQUIRES_ATTRIBUTION",
+            "prior_exact_zipstream_ablation_value_bytes": PROVEN_ZIPSTREAM_VALUE_BYTES,
+            "framing_cost_pct_of_prior_zipstream_value": (100.0 * max(0, delta) / PROVEN_ZIPSTREAM_VALUE_BYTES),
+            "residual_prior_zipstream_value_after_framing_cost_bytes": residual_zipstream_value,
+            "decision": "FRAMING_COST_BELOW_PROVEN_ZIPSTREAM_VALUE" if residual_zipstream_value > 0 else "FRAMING_COST_CONSUMES_PROVEN_ZIPSTREAM_VALUE",
         }
         print(json.dumps(result, indent=2, sort_keys=True))
 
