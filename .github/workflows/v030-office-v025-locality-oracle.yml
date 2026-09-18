@@ -33,6 +33,18 @@ jobs:
           set -euo pipefail
           mkdir -p benchmark-artifacts
           python benchmarks/v030_office_v025_locality_oracle.py | tee benchmark-artifacts/v030-office-v025-locality.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          p = Path('benchmark-artifacts/v030-office-v025-locality.json')
+          if p.stat().st_size == 0:
+              raise SystemExit('Office locality oracle emitted an empty receipt')
+          data = json.loads(p.read_text())
+          if data.get('schema') != 'cmpct-v030-office-v025-locality-oracle-v1':
+              raise SystemExit(f"unexpected Office locality receipt schema: {data.get('schema')!r}")
+          if data.get('locality_verdict') not in {'PASS', 'FAIL'}:
+              raise SystemExit('Office locality receipt lacks a terminal PASS/FAIL verdict')
+          PY
       - name: Upload oracle result
         if: always()
         uses: actions/upload-artifact@v6
