@@ -14,19 +14,6 @@ on:
       - 'experiments/entropygraph_v030_release_admission.py'
       - 'experiments/entropygraph_v030_release_candidate.py'
       - '.github/workflows/v030-office-canonical-r25-oracle.yml'
-  pull_request:
-    branches: [main]
-    paths:
-      - 'benchmarks/v030_office_canonical_r25_oracle.py'
-      - 'benchmarks/neutral_hostile_corpus_v1.py'
-      - 'benchmarks/neutral_hostile_determinism_repair_v6.py'
-      - 'experiments/entropygraph_v030_canonical_final_impl.py'
-      - 'experiments/entropygraph_v030_canonical_manifest_candidate.py'
-      - 'experiments/entropygraph_v030_r25_manifest_admission.py'
-      - 'experiments/entropygraph_v030_product_fs.py'
-      - 'experiments/entropygraph_v030_release_admission.py'
-      - 'experiments/entropygraph_v030_release_candidate.py'
-      - '.github/workflows/v030-office-canonical-r25-oracle.yml'
   workflow_dispatch:
 
 permissions:
@@ -34,14 +21,14 @@ permissions:
 
 env:
   PYTHONPATH: ${{ github.workspace }}
-  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+  EVIDENCE_HEAD: ${{ github.sha }}
 
 jobs:
   office-canonical-r25:
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     concurrency:
-      group: cmpct-v030-office-canonical-r25-${{ github.event.pull_request.head.sha || github.sha }}
+      group: cmpct-v030-office-canonical-r25-${{ github.sha }}
       cancel-in-progress: false
     steps:
       - uses: actions/checkout@v6
