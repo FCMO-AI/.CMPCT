@@ -48,5 +48,6 @@
     "Agent Hub CDR work may inform evolution but is not required for CMPCT runtime.",
     "STATE is a cache, never scientific authority."
   ],
-  "deployment_mode": "SHADOW"
+  "deployment_mode": "SHADOW",
+  "adapter_scope": "LOCAL_PROJECTION"
 }
