@@ -1,0 +1,37 @@
+{
+  "schema": "cmpct-discovery-state-v1",
+  "status": "BOOTSTRAP",
+  "authority": {
+    "canonical_release": "v0.29.0 / r24 on main",
+    "active_frontier": "agent/v030-authoritative-integration",
+    "source": "PR #56 and current repository authority; reconcile every activation"
+  },
+  "active_product_bottleneck": {
+    "id": "v030-runtime-rehabilitation",
+    "observation": "v0.30 compression/generalization evidence is ahead of promoted-product runtime; PR #132 localizes dominant create cost into shared candidate construction.",
+    "evidence": ["PR #132", "docs/v030-coordination/tasks/T02-evidence-performance.md"],
+    "next_discriminator": "Reconcile exact-head v028_child_s versus attempt5_child_s attribution, then test cheaper proof/admission/reuse/early-termination of the selected-winner fact."
+  },
+  "primary_question": {
+    "id": "winner-proof-cost",
+    "family": "execution-proof / candidate-selection",
+    "hypothesis": "A material fraction of candidate-construction work can be avoided while proving the same selected archive bytes.",
+    "kill": "Causal A/B shows exact byte retention requires essentially all measured candidate work or exported costs erase the runtime gain.",
+    "status": "READY"
+  },
+  "frontier_candidates": [
+    {"id":"ownership-boundary","family":"execution-architecture","question":"Can shared intermediate representations or changed ownership remove duplicate candidate work rather than accelerating it?","status":"QUEUED"},
+    {"id":"charged-reconstruction-oracle","family":"representation","question":"What fully charged exact reconstruction relationship remains unexploited after current graph/transform families, with enough oracle headroom for a new grammar?","status":"QUEUED"},
+    {"id":"proof-carrying-admission","family":"search/proof","question":"Can conservative bounds certify losing candidates before construction while preserving exact fallback and generality?","status":"QUEUED"}
+  ],
+  "protected_seeds": [],
+  "saturated_families": [
+    {"family":"v0.29 rejected physical-context/residual variants","reopen_only_if":"changed evidence, conditions, hypothesis, or materially different mechanism","source":"docs/CURRENT_STATE.md and v0.29 release evidence"}
+  ],
+  "pending_jobs": [],
+  "process_lessons": [
+    {"lesson":"Prefer causal owner localization and generous charged oracles before expensive productization.","evidence":"existing CMPCT v0.29/v0.30 research history"}
+  ],
+  "next_action": "Read exact current PR #132 / authoritative head evidence, obtain pending child attribution if available, and PARETOBONK the cheapest causal experiment on the owning child.",
+  "last_reconciled": "2026-09-18"
+}
