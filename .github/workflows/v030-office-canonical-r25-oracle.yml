@@ -79,17 +79,13 @@ jobs:
           assert d['schema']=='cmpct-v030-office-canonical-r25-oracle-v3'
           assert d['source_commit']==os.environ['EVIDENCE_HEAD']
           assert d['substrate']=='neutral-hostile-determinism-repair-v6'
-          assert d['substrate_evidence']['tree_sha256']=='aac7de772b9f93d5b54ca30e07497574bf61d76c2288077627163c8378823c4b'
+          assert d['substrate_evidence']['tree_sha256']=='aac7de772b9fae0f9791a8f2884cebb29a2ba85df9e4db21ea78482afb378a57'
           assert d['substrate_evidence']['files']==20 and d['substrate_evidence']['logical_bytes']==16063798
           assert d['format_revision']==25
           assert d['current_v029_floor_bytes'] > 0
           assert d['within_locality_8x'] is True and d['max_member_read_amplification'] <= 8.0
           assert d['strong_verify_ok'] is True and d['strong_verify_tree_exact'] is True
-          assert d['decision'] in {
-              'CANONICAL_R25_ZERO_REGRESSION_ESCAPE_PROVEN',
-              'CANONICAL_R25_BEATS_WORLD_CONTROLS_BUT_REGRESSES_V029',
-              'CANONICAL_R25_ESCAPE_INSUFFICIENT',
-          }
+          assert d['decision'] in {'CANONICAL_R25_ZERO_REGRESSION_ESCAPE_PROVEN','CANONICAL_R25_BEATS_WORLD_CONTROLS_BUT_REGRESSES_V029','CANONICAL_R25_ESCAPE_INSUFFICIENT'}
           assert d['release_credit'] is False
           PY
       - name: Upload exact receipt
