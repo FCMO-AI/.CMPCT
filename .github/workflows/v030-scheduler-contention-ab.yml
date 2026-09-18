@@ -88,3 +88,4 @@ jobs:
           retention-days: 90
 
 # Research-only causal oracle. Green means the receipt is internally valid, never release authority.
+# Child-PR execution marker: no scientific semantics changed.
