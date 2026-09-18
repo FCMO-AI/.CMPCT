@@ -63,7 +63,6 @@ class PhaseRecorder:
 @contextlib.contextmanager
 def instrumented_phases(recorder: PhaseRecorder):
     patches = []
-    # Shared shipping front-door owners.
     for owner, name, label in (
         (PRODUCT, "_shared_frontdoor_preflight", "build.frontdoor_preflight"),
         (LOGS_PRODUCT, "_parallel_candidates", "build.logs_parallel_candidates"),
@@ -74,7 +73,6 @@ def instrumented_phases(recorder: PhaseRecorder):
         (LOGS_FUSED, "_restore_filesystem_metadata", "extract.logs_fs_restore"),
     ):
         patches.append((owner, name, recorder.wrap(owner, name, label)))
-    # Logs Archive session restoration is the decode/reconstruction owner inside fused extraction.
     patches.append((LOGS_FUSED.LOGS.Archive, "_restore_session", recorder.wrap(LOGS_FUSED.LOGS.Archive, "_restore_session", "extract.logs_restore_session")))
     try:
         yield
@@ -99,7 +97,6 @@ def _run_target(source: Path, work: Path) -> dict:
             raise RuntimeError("instrumented build failed exact strong verification")
         build_rounds.append({"round": index, "wall_s": wall, "phases": recorder.summary()})
 
-    # Keep one verified archive and attribute extraction separately so build instrumentation cannot contaminate it.
     for index in range(ROUNDS):
         dst = work / f"extract-{index}"
         shutil.rmtree(dst, ignore_errors=True)
