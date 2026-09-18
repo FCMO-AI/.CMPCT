@@ -18,13 +18,16 @@ env:
   PYTHONPATH: ${{ github.workspace }}
   EVIDENCE_HEAD: ${{ github.sha }}
 
+# Exact-SHA grouping means a newer head never cancels an older evidence receipt; only a duplicate run of the
+# same immutable commit is superseded. This satisfies the topology ratchet without destroying pending custody.
+concurrency:
+  group: cmpct-v030-runtime-phase-attribution-${{ github.sha }}
+  cancel-in-progress: true
+
 jobs:
   attribution:
     runs-on: ubuntu-24.04
     timeout-minutes: 25
-    concurrency:
-      group: cmpct-v030-runtime-phase-attribution-${{ github.sha }}
-      cancel-in-progress: false
     steps:
       - uses: actions/checkout@v6
         with:
