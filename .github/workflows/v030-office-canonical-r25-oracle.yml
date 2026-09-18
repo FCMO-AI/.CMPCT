@@ -1,0 +1,98 @@
+name: CMPCT v0.30 Office canonical-r25 escape oracle
+
+on:
+  push:
+    branches: [agent/v030-authoritative-integration]
+    paths:
+      - 'benchmarks/v030_office_canonical_r25_oracle.py'
+      - 'benchmarks/neutral_hostile_corpus_v1.py'
+      - 'benchmarks/neutral_hostile_determinism_repair_v6.py'
+      - 'experiments/entropygraph_v030_canonical_final_impl.py'
+      - 'experiments/entropygraph_v030_canonical_manifest_candidate.py'
+      - 'experiments/entropygraph_v030_r25_manifest_admission.py'
+      - 'experiments/entropygraph_v030_product_fs.py'
+      - 'experiments/entropygraph_v030_release_admission.py'
+      - 'experiments/entropygraph_v030_release_candidate.py'
+      - '.github/workflows/v030-office-canonical-r25-oracle.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'benchmarks/v030_office_canonical_r25_oracle.py'
+      - 'benchmarks/neutral_hostile_corpus_v1.py'
+      - 'benchmarks/neutral_hostile_determinism_repair_v6.py'
+      - 'experiments/entropygraph_v030_canonical_final_impl.py'
+      - 'experiments/entropygraph_v030_canonical_manifest_candidate.py'
+      - 'experiments/entropygraph_v030_r25_manifest_admission.py'
+      - 'experiments/entropygraph_v030_product_fs.py'
+      - 'experiments/entropygraph_v030_release_admission.py'
+      - 'experiments/entropygraph_v030_release_candidate.py'
+      - '.github/workflows/v030-office-canonical-r25-oracle.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+
+jobs:
+  office-canonical-r25:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    concurrency:
+      group: cmpct-v030-office-canonical-r25-${{ github.event.pull_request.head.sha || github.sha }}
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - name: Bind exact head
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install frozen repair-v6 environment
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y zstd ffmpeg libsndfile1
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[test,audio]'
+          python -m pip install 'numpy==2.4.6' 'Pillow==12.3.0' 'reportlab==5.0.0' 'python-docx==1.2.0' 'openpyxl==3.1.5' 'python-pptx==1.0.2'
+      - name: Run exact Office canonical-r25 oracle
+        run: |
+          set -euo pipefail
+          mkdir -p benchmark-artifacts
+          python benchmarks/v030_office_canonical_r25_oracle.py \
+            --work-root "$RUNNER_TEMP/v030-office-canonical-r25" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-office-canonical-r25.json" \
+            | tee benchmark-artifacts/v030-office-canonical-r25.stdout.json
+          test -s benchmark-artifacts/v030-office-canonical-r25.json
+      - name: Enforce receipt contract
+        run: |
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          d=json.loads(Path('benchmark-artifacts/v030-office-canonical-r25.json').read_text())
+          assert d['schema']=='cmpct-v030-office-canonical-r25-oracle-v1'
+          assert d['source_commit']==os.environ['EVIDENCE_HEAD']
+          assert d['substrate']=='neutral-hostile-determinism-repair-v6'
+          assert d['substrate_evidence']['tree_sha256']=='aac7de772b9f93d5b54ca30e07497574bf61d76c2288077627163c8378823c4b'
+          assert d['substrate_evidence']['files']==20 and d['substrate_evidence']['logical_bytes']==16063798
+          assert d['format_revision']==25
+          assert d['within_locality_8x'] is True and d['max_member_read_amplification'] <= 8.0
+          assert d['strong_verify_ok'] is True and d['strong_verify_tree_exact'] is True
+          assert d['decision']=='CANONICAL_R25_ESCAPE_PROVEN'
+          assert d['beats_shipping'] is True and d['beats_zstd19'] is True
+          assert d['release_credit'] is False
+          PY
+      - name: Upload exact receipt
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: v030-office-canonical-r25-${{ env.EVIDENCE_HEAD }}
+          path: benchmark-artifacts/v030-office-canonical-r25.json
+          if-no-files-found: error
+          retention-days: 90
