@@ -11,25 +11,17 @@ on:
       - 'benchmarks/neutral_hostile_determinism_repair_v6.py'
       - 'experiments/entropygraph_v025.py'
       - '.github/workflows/v030-office-v025-zipstreams-ablation.yml'
-  pull_request:
-    branches: [main]
-    paths:
-      - 'benchmarks/v030_office_v025_zipstreams_ablation.py'
-      - 'benchmarks/neutral_hostile_corpus_v1.py'
-      - 'benchmarks/neutral_hostile_determinism_repair_v6.py'
-      - 'experiments/entropygraph_v025.py'
-      - '.github/workflows/v030-office-v025-zipstreams-ablation.yml'
   workflow_dispatch:
 
 permissions:
   contents: read
 
 concurrency:
-  group: cmpct-office-v025-zipstreams-ablation-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
+  group: cmpct-office-v025-zipstreams-ablation-${{ github.event_name }}-${{ github.ref }}
   cancel-in-progress: true
 
 env:
-  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+  EVIDENCE_HEAD: ${{ github.sha }}
 
 jobs:
   latest-head-impact:
@@ -45,16 +37,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          if [ "${{ github.event_name }}" != pull_request ]; then
-            echo 'relevant=true' >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-          changed="$(git diff-tree --no-commit-id --name-only -r HEAD^1..HEAD)"
-          if grep -Eq '^(benchmarks/v030_office_v025_zipstreams_ablation\.py|benchmarks/neutral_hostile_corpus_v1\.py|benchmarks/neutral_hostile_determinism_repair_v6\.py|experiments/entropygraph_v025\.py|\.github/workflows/v030-office-v025-zipstreams-ablation\.yml)$' <<<"$changed"; then
-            echo 'relevant=true' >> "$GITHUB_OUTPUT"
-          else
-            echo 'relevant=false' >> "$GITHUB_OUTPUT"
-          fi
+          echo 'relevant=true' >> "$GITHUB_OUTPUT"
 
   ablation:
     needs: latest-head-impact
