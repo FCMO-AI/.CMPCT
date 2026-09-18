@@ -1,4 +1,4 @@
-# ci-lane: deep
+# ci-lane: fast
 name: CMPCT v0.30 G04 single-session extraction oracle
 
 on:
@@ -17,10 +17,17 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: v030-g04-single-session-oracle-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+
 jobs:
   oracle:
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-python@v6
