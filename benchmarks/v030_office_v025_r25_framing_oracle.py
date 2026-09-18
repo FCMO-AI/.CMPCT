@@ -7,6 +7,8 @@ import json
 from pathlib import Path
 import tempfile
 
+from experiments import entropygraph_v030_canonical_final_impl as final
+
 ROOT = Path(__file__).resolve().parents[1]
 EXPECTED_TREE = "aac7de772b9fae0f9791a8f2884cebb29a2ba85df9e4db21ea78482afb378a57"
 EXPECTED_LOGICAL = 16_063_798
@@ -37,7 +39,6 @@ def main() -> None:
     repair = load(ROOT / "benchmarks" / "neutral_hostile_determinism_repair_v6.py", "cmpct_repair_office_r25_framing")
     control = load(ROOT / "experiments" / "entropygraph_v025.py", "cmpct_v025_office_r25_framing_control")
     framed = load(ROOT / "experiments" / "entropygraph_v025.py", "cmpct_v025_office_r25_framing_framed")
-    final = load(ROOT / "experiments" / "entropygraph_v030_canonical_final_impl.py", "cmpct_r25_framing_final")
 
     with tempfile.TemporaryDirectory(prefix="cmpct-office-v025-r25-framing-") as td:
         work = Path(td)
