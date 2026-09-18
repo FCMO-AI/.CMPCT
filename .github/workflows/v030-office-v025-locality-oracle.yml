@@ -13,12 +13,20 @@ on:
 permissions:
   contents: read
 
+env:
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+
 jobs:
   office-v025-locality:
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v6
+      - name: Check out exact candidate
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - name: Bind exact evidence head
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
       - uses: actions/setup-python@v6
         with:
           # Match the accepted repair-v6 corpus substrate. Office bytes are
@@ -59,6 +67,6 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v6
         with:
-          name: v030-office-v025-locality-${{ github.sha }}
+          name: v030-office-v025-locality-${{ env.EVIDENCE_HEAD }}
           path: benchmark-artifacts/v030-office-v025-locality.json
           if-no-files-found: error
