@@ -82,15 +82,13 @@ def instrumented_phases(recorder: PhaseRecorder):
         (BASE.VERIFIED_RESTORE, "restore_verified_manifest_tree", "extract.r25_fs_restore"),
         (LOGS_FUSED, "_restore_filesystem_metadata", "extract.logs_fs_restore"),
     ]
-    # The canonical profile uses a private shared-portfolio clone, not the public historical G04 module. Resolve
-    # only seams that actually exist on that clone. This is both more truthful and more robust than assuming the
-    # public module layout: the previous v3 attempt failed before measurement because it asked the shared clone
-    # for a top-level `_audition_record` that correctly lives on its `G` component.
+    # The canonical profile uses a private clone of entropygraph_v030_shared_portfolio. Its stable owners are
+    # shared candidate construction, retained-graph overlay work, the owning Geometry audition/write functions,
+    # and final strong verification. Resolve them from the clone instead of assuming the historical G04 layout.
     optional_specs = [
-        (getattr(G04, "BASE", None), "build", "build.canonical.r25.g04.v029_floor"),
-        (getattr(G04, "A5", None), "build_graph", "build.canonical.r25.g04.attempt5_graph"),
-        (getattr(G04, "G", None), "_audition_record", "build.canonical.r25.g04.record_audition"),
+        (G04, "_build_shared_candidates", "build.canonical.r25.g04.shared_candidates"),
         (G04, "_overlay_retained_graph", "build.canonical.r25.g04.overlay_pipeline"),
+        (getattr(G04, "G", None), "_audition_record", "build.canonical.r25.g04.record_audition"),
         (getattr(G04, "G", None), "_write_overlay", "build.canonical.r25.g04.overlay_write"),
         (G04, "strong_verify", "build.canonical.r25.g04.overlay_verify"),
     ]
@@ -160,9 +158,9 @@ def run(work_root: Path) -> dict:
         "targets": rows,
         "claim_boundary": (
             "Research-only in-process semantic-phase ownership on the exact promoted product front door. "
-            "Nested phase times overlap and are not additive. v3 resolves available stable seams inside the "
-            "canonical private G04/shared-portfolio clone without changing scheduler or bytes. It preserves exact "
-            "archive/tree semantics but is not fresh-process release timing and cannot unlock v0.30."
+            "Nested phase times overlap and are not additive. v3 resolves stable shared-candidate and overlay seams "
+            "inside the canonical private G04/shared-portfolio clone without changing scheduler or bytes. It preserves "
+            "exact archive/tree semantics but is not fresh-process release timing and cannot unlock v0.30."
         ),
     }
 
