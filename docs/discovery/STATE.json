@@ -8,32 +8,36 @@
   },
   "active_product_bottleneck": {
     "id": "v030-runtime-rehabilitation",
-    "observation": "Current PR #132 evidence shows ML/Shifted create debt is concentrated in nested candidate construction and the outer G04+PrefixGraph release tournament. Child attribution is complete: ML v0.28 and attempt-5 are nearly co-critical; Shifted G04 is wasted CPU but not proven wall owner because PrefixGraph wins concurrently.",
+    "observation": "PR #132 localizes ML create debt to G04. PR #135 then falsified outer PrefixGraph contention as an ML owner: shipping `_prefixgraph_eligibility` rejects ML before PG construction, so ML runs G04-only. Code review exposes a stronger ownership gap: G04 first builds the accepted v0.29 portfolio, whose scheduler already constructs the attempt-5 graph, then calls A5.build_graph again for Geometry overlay input. On ML the first attempt-5 graph loses the v0.29 floor by only 122 B but is exactly the substrate whose Geometry overlay later wins by 161,841 B.",
     "evidence": [
       "PR #132 exact-head child/economics receipt run 35377667509 / artifact 10561395000",
-      "PR #132 comments 5734196310, 5734253552, 5734267706, 5734284713"
+      "PR #135 diagnostic run 35394905579 at aff9385fd261fd4f332e4d68bc68665ddf13c8fe",
+      "PR #135 comment 5736212812",
+      "experiments/entropygraph_v030_release_candidate.py eligibility/build control flow",
+      "experiments/entropygraph_v030_geometry_overlay_g04.py G04 build control flow",
+      "experiments/entropygraph_v029_parallel_portfolio.py candidate lifetime"
     ],
-    "next_discriminator": "Balanced paired scheduler-contention A/B on ML first: compare byte-identical selected-candidate solo wall with current co-scheduled tournament while recording G04/PrefixGraph walls, process-tree CPU/RSS and worker topology; then Shifted."
+    "next_discriminator": "Retain/reuse the exact attempt-5 candidate already constructed inside the accepted v0.29 portfolio as G04's Geometry overlay substrate; A/B against current G04 on ML with exact final archive SHA/tree identity and complete wall/resource accounting."
   },
   "primary_question": {
-    "id": "candidate-scheduler-contention",
-    "family": "execution-scheduling / resource-ownership",
-    "hypothesis": "Nested PrefixGraph (up to 4 anchor threads) plus G04 (2 spawned child processes) materially delays the selected candidate under the current outer tournament; coordinating the shared CPU budget can reduce ML create wall enough to approach the unchanged 1.25x release ceiling without changing candidate bytes.",
-    "kill": "On the preregistered paired ML control, the exact selected candidate's solo wall is not materially lower than its co-scheduled wall, or the resulting whole-create reduction is below the ~10.1% product gap and no reusable contention mechanism is evidenced.",
+    "id": "g04-attempt5-artifact-reuse",
+    "family": "execution-architecture / ownership-boundary",
+    "hypothesis": "G04 rebuilds an exact attempt-5 graph that its v0.29-floor stage already constructed and discarded. Preserving that losing intermediate across the ownership boundary can remove a multi-second serial rebuild while retaining byte-identical v0.29 floor, overlay candidate and final G04 selection, plausibly closing the ~10.1% ML product create gap.",
+    "kill": "A reuse A/B fails exact final byte/tree identity, or retained-intermediate wall/resource savings are too small to materially approach the unchanged ML release ceiling after full carrying costs.",
     "status": "READY"
   },
   "frontier_candidates": [
     {
-      "id": "ownership-boundary",
-      "family": "execution-architecture",
-      "question": "Can shared intermediate representations or changed ownership remove duplicate candidate work rather than accelerating it?",
+      "id": "proof-carrying-admission",
+      "family": "search/proof",
+      "question": "Can conservative content-derived bounds avoid complete losing candidate construction while preserving exact fallback and generality?",
       "status": "QUEUED"
     },
     {
-      "id": "proof-carrying-admission",
-      "family": "search/proof",
-      "question": "Can conservative bounds certify losing candidates before construction while preserving exact fallback and generality?",
-      "status": "QUEUED"
+      "id": "shifted-outer-contention-secondary",
+      "family": "execution-scheduling",
+      "question": "PrefixGraph is eligible on Shifted, so outer contention may exist there, but it is secondary because it cannot explain the decisive ML gap.",
+      "status": "DEFERRED"
     }
   ],
   "protected_seeds": [],
@@ -42,17 +46,22 @@
       "family": "v0.29 rejected physical-context/residual variants",
       "reopen_only_if": "changed evidence, conditions, hypothesis, or materially different mechanism",
       "source": "docs/CURRENT_STATE.md and v0.29 release evidence"
+    },
+    {
+      "family": "ML outer G04/PrefixGraph scheduler contention",
+      "reopen_only_if": "shipping PrefixGraph eligibility changes for ML-like trees",
+      "source": "PR #135 run 35394905579 + shipping release-candidate eligibility control flow"
     }
   ],
   "pending_jobs": [],
   "process_lessons": [
     {
-      "lesson": "Prefer causal owner localization and generous charged oracles before expensive productization.",
-      "evidence": "existing CMPCT v0.29/v0.30 research history"
+      "lesson": "Before timing scheduler contention, prove from shipping admission/control flow that the alleged competitor actually executes on the decisive workload.",
+      "evidence": "PR #135: direct PG timing failed on ML because PG exceeds its file ceiling; shipping code had already made that contention impossible. This discriminator would have killed the family before CI."
     }
   ],
-  "next_action": "Preregister and execute/dispatch the balanced ML-first candidate-scheduler-contention A/B from current PR #132 evidence. Preserve exact candidate hashes/tree identity and report distance to the unchanged release ceiling. If unavailable or independently running, switch to the charged reconstruction-oracle backup.",
-  "last_reconciled": "2026-09-18T19:49:54Z",
+  "next_action": "Preregister the ML-first G04 attempt-5 retained-intermediate reuse A/B. Preserve both original v0.29 portfolio candidates long enough to reuse the exact attempt-5 bytes for Geometry, charge retention/materialization/RSS, require final archive SHA/tree identity with current G04, and only then consider productization. If independently claimed or blocked, switch to the charged reconstruction-oracle backup.",
+  "last_reconciled": "2026-09-18T21:10:00Z",
   "concurrency": {
     "protocol": "docs/discovery/CONCURRENCY_PROTOCOL.md",
     "state_semantics": "staleable-cache-not-lock",
@@ -66,6 +75,6 @@
     "question": "What fully charged exact reconstruction relationship remains unexploited after current graph/transform families, with enough oracle headroom for a new grammar?",
     "kill": "A fully charged oracle shows immaterial general headroom, or apparent savings depend on gifted decoder-visible facts or benchmark-specific identity.",
     "status": "READY",
-    "reason": "Dependency-diverse representation-family fallback if the scheduler-contention A/B is running independently, blocked, or awaiting runner evidence."
+    "reason": "Dependency-diverse representation-family fallback if the ownership-boundary A/B is independently running, blocked, or awaiting runner evidence."
   }
 }
