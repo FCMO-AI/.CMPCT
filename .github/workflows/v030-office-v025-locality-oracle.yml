@@ -24,11 +24,13 @@ jobs:
           python-version: '3.12'
       - name: Install benchmark dependencies
         run: |
-          python -m pip install --disable-pip-version-check msgpack pillow
+          python -m pip install --disable-pip-version-check msgpack numpy pillow reportlab python-docx openpyxl python-pptx
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends ffmpeg libzstd1
       - name: Run exact Office compact-floor locality falsifier
+        shell: bash
         run: |
+          set -euo pipefail
           mkdir -p benchmark-artifacts
           python benchmarks/v030_office_v025_locality_oracle.py | tee benchmark-artifacts/v030-office-v025-locality.json
       - name: Upload oracle result
