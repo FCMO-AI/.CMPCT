@@ -38,6 +38,7 @@ def build(root: Path, out: Path) -> dict:
                 "mode": "same-filesystem-hardlink",
                 "payload_write_bytes": 0,
                 "bytes": retained.stat().st_size,
+                "sha256": scheduler._sha256(retained),
                 "retain_s": time.perf_counter() - started,
             })
             return original_replace(chosen, destination)
