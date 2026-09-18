@@ -58,6 +58,8 @@ def main() -> None:
         staging = work / "r25-staging"
         with final._revision25_profile_context():
             prepared = final._prepare_profile_tree(office, staging)
+        staged_files = sorted(p for p in staging.rglob("*") if p.is_file())
+        staged_logical = sum(p.stat().st_size for p in staged_files)
         f = run_v025(framed, staging, work / "framed.cmpct")
         selected_manifest = bytes(prepared["selected_manifest_raw"])
         source_manifest = bytes(prepared["source_manifest_raw"])
@@ -77,7 +79,9 @@ def main() -> None:
                 "filesystem_v1_manifest_bytes": len(source_manifest),
                 "selected_manifest_bytes": len(selected_manifest),
                 "manifest_control_saving_bytes": int(prepared["manifest_control_saving_bytes"]),
-                "staged_files": sum(1 for p in staging.rglob("*") if p.is_file()),
+                "staged_files": len(staged_files),
+                "staged_logical_bytes": staged_logical,
+                "staged_minus_source_logical_bytes": staged_logical - logical,
                 "tree_sha256": framed.treehash(staging),
             },
             "v025_on_r25_prepared_tree": f,
