@@ -36,8 +36,13 @@ def _worker(mode: str, source: Path, work: Path) -> dict:
     env["PYTHONPATH"]=str(ROOT)+(os.pathsep+env["PYTHONPATH"] if env.get("PYTHONPATH") else "")
     cp=subprocess.run(
         [sys.executable,str(WORKER),"--mode",mode,"--source",str(source),"--work",str(work)],
-        cwd=ROOT,env=env,check=True,capture_output=True,text=True,
+        cwd=ROOT,env=env,check=False,capture_output=True,text=True,
     )
+    if cp.returncode:
+        raise RuntimeError(
+            f"worker failed mode={mode!r} source={source} rc={cp.returncode}; "
+            f"stdout={cp.stdout!r}; stderr={cp.stderr!r}"
+        )
     lines=[x for x in cp.stdout.splitlines() if x.strip()]
     if not lines: raise RuntimeError(f"worker emitted no JSON: {cp.stderr!r}")
     return json.loads(lines[-1])
