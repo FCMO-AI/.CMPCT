@@ -2,8 +2,8 @@
 name: CMPCT v0.30 Placement edge process oracle
 
 on:
-  pull_request:
-    branches: [main]
+  push:
+    branches: [agent/v030-authoritative-integration]
     paths:
       - 'benchmarks/v030_placement_edge_process_oracle.py'
       - 'experiments/entropygraph_v029_*.py'
