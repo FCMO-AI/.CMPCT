@@ -69,6 +69,10 @@ jobs:
               phases=round_row['phases']
               assert 'build.canonical.r25.g04' in phases
               assert any(key.startswith('build.canonical.r25.g04.') for key in phases)
+              shared=phases['build.canonical.r25.g04.shared_candidate']
+              assert shared['v028_child_s'] > 0
+              assert shared['attempt5_child_s'] > 0
+              assert shared['selected'] in {'v028', 'attempt5'}
           PY
       - uses: actions/upload-artifact@v6
         if: always()
