@@ -1,5 +1,4 @@
 # ci-lane: deep
-# ci-pr-scope: latest-head-commit-gate
 name: CMPCT v0.30 Office v0.25 ZIP-stream ablation
 
 on:
