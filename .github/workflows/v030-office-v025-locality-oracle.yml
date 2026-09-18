@@ -41,7 +41,9 @@ jobs:
             echo 'relevant=true' >> "$GITHUB_OUTPUT"
             exit 0
           fi
-          changed="$(git diff-tree --no-commit-id --name-only -r HEAD)"
+          # Compare the delivered head against its first parent. Plain `diff-tree HEAD`
+          # is empty on merge commits unless -m/-c is supplied and can false-skip evidence.
+          changed="$(git diff-tree --no-commit-id --name-only -r HEAD^1..HEAD)"
           if grep -Eq '^(benchmarks/v030_office_v025_locality_oracle\.py|benchmarks/neutral_hostile_corpus_v1\.py|benchmarks/neutral_hostile_determinism_repair_v6\.py|experiments/entropygraph_v025\.py|\.github/workflows/v030-office-v025-locality-oracle\.yml)$' <<<"$changed"; then
             echo 'relevant=true' >> "$GITHUB_OUTPUT"
           else
