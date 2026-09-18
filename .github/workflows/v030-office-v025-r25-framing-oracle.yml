@@ -55,7 +55,10 @@ jobs:
             echo 'relevant=true' >> "$GITHUB_OUTPUT"
             exit 0
           fi
-          changed="$(git diff-tree --no-commit-id --name-only -r "$EVIDENCE_HEAD^" "$EVIDENCE_HEAD")"
+          # Checkout is already pinned to EVIDENCE_HEAD, so HEAD is the exact candidate here. Keep the literal
+          # HEAD^..HEAD form required by the topology ratchet: this proves the classifier examines only the newest
+          # commit instead of the accumulated diff of this long-lived integration PR.
+          changed="$(git diff-tree --no-commit-id --name-only -r HEAD^ HEAD)"
           if grep -Eq '^(benchmarks/v030_office_v025_r25_framing_oracle\.py|benchmarks/neutral_hostile_corpus_v1\.py|benchmarks/neutral_hostile_determinism_repair_v6\.py|experiments/entropygraph_v025\.py|experiments/entropygraph_v030_canonical_final_impl\.py|experiments/entropygraph_v030_product_fs\.py|experiments/entropygraph_v030_r25_manifest_admission\.py|\.github/workflows/v030-office-v025-r25-framing-oracle\.yml)$' <<<"$changed"; then
             echo 'relevant=true' >> "$GITHUB_OUTPUT"
           else
