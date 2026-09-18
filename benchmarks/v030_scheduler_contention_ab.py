@@ -4,7 +4,7 @@ from __future__ import annotations
 
 Research-only. It compares the exact shipping candidate builders under current co-scheduling
 versus fresh-process isolation. Candidate hashes/tree identity must match. No product/release
-credit is granted by this oracle.
+credit is granted by this oracle. Worker failures retain stderr so infrastructure defects are causal.
 """
 import argparse
 import json
