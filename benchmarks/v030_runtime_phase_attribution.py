@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 """Research-only phase attribution for the exact-head v0.30 runtime blockers."""
-import argparse, contextlib, json, shutil, statistics, time
+import argparse, contextlib, functools, json, shutil, statistics, time
 from pathlib import Path
 from benchmarks import v030_release_performance as PERF
 from experiments import entropygraph_v030_release_product as PRODUCT
@@ -16,6 +16,7 @@ class PhaseRecorder:
     def __init__(self): self.samples={}
     def wrap(self,owner,name,label):
         original=getattr(owner,name)
+        @functools.wraps(original)
         def timed(*args,**kwargs):
             started=time.perf_counter()
             try: return original(*args,**kwargs)
