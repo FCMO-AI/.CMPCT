@@ -4,7 +4,7 @@ This repository is the canonical CMPCT project.
 
 ## Continuous Discovery Engine
 
-For autonomous/recurrent research activations, `docs/discovery/DISCOVERY_ENGINE.md` and `docs/discovery/STATE.json` are the persistent scientific-search layer. They do not replace repository authority, current convergence/release law, or evidence records. Use them to PARETOBONK competing research actions, select the cheapest decisive falsification, preserve negative knowledge, and make successive activations compound. Reconcile `STATE.json` against current GitHub truth before trusting it; project truth always wins.
+For autonomous/recurrent research activations, `docs/discovery/DISCOVERY_ENGINE.md` and `docs/discovery/STATE.json` are the persistent scientific-search layer. They do not replace repository authority, current convergence/release law, or evidence records. Use them to PARETOBONK competing research actions, select the cheapest decisive falsification, preserve negative knowledge, and make successive activations compound. Reconcile `STATE.json` against current GitHub truth before trusting it; project truth always wins. When activations can overlap, also read `docs/discovery/CONCURRENCY_PROTOCOL.md`; inspect active discovery surfaces before substantial implementation, treat `STATE.json` as a staleable cache rather than a lock, and preserve append-only causal evidence instead of overwriting a concurrent activation.
 
 ## Required orientation before development
 
