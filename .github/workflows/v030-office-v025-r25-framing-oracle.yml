@@ -15,25 +15,12 @@ on:
       - 'experiments/entropygraph_v030_product_fs.py'
       - 'experiments/entropygraph_v030_r25_manifest_admission.py'
       - '.github/workflows/v030-office-v025-r25-framing-oracle.yml'
-  push:
-    branches: [agent/v030-authoritative-integration]
-    paths:
-      - 'benchmarks/v030_office_v025_r25_framing_oracle.py'
-      - 'benchmarks/neutral_hostile_corpus_v1.py'
-      - 'benchmarks/neutral_hostile_determinism_repair_v6.py'
-      - 'experiments/entropygraph_v025.py'
-      - 'experiments/entropygraph_v030_canonical_final_impl.py'
-      - 'experiments/entropygraph_v030_product_fs.py'
-      - 'experiments/entropygraph_v030_r25_manifest_admission.py'
-      - '.github/workflows/v030-office-v025-r25-framing-oracle.yml'
   workflow_dispatch:
 
 permissions:
   contents: read
 
 env:
-  # pull_request github.sha is GitHub's synthetic merge checkout, not the candidate source. Bind evidence to the
-  # actual PR head; push/dispatch naturally fall back to github.sha.
   EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
 
 jobs:
