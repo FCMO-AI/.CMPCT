@@ -14,9 +14,9 @@ import json
 from pathlib import Path
 import shutil
 import subprocess
-import tempfile
 import time
 
+from benchmarks import neutral_hostile_corpus_v1 as CORPUS
 from benchmarks import neutral_hostile_determinism_repair_v6 as REPAIR
 from experiments import entropygraph_v030_canonical_final_impl as CANON
 from experiments import entropygraph_v030_canonical_manifest_candidate as CAND
@@ -35,20 +35,22 @@ def _source_commit() -> str:
     return subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip()
 
 
-def _build_office(root: Path) -> dict:
-    REPAIR._install_producer_hooks()
-    REPAIR.BASE.corpus_office(root)
-    REPAIR._normalize_workload("office_workspace", root)
-    files = sorted(p for p in root.rglob("*") if p.is_file())
+def _build_office(work_root: Path) -> tuple[Path, dict]:
+    # repair-v6 composes v5/v1 producer hooks. Install them on the actual neutral corpus module,
+    # generate through that producer, then keep the idempotent post-pass as a second guard.
+    REPAIR.install_generation_hooks(CORPUS)
+    CORPUS.corpus_office(work_root)
+    source = work_root / "02_office_workspace"
+    REPAIR.normalize_workload(source)
+    files = sorted(p for p in source.rglob("*") if p.is_file())
     logical = sum(p.stat().st_size for p in files)
-    tree = REPAIR.BASE.treehash(root)
+    tree = CORPUS.tree_hash(source)
     if tree != EXPECTED_TREE or len(files) != EXPECTED_FILES or logical != EXPECTED_LOGICAL_BYTES:
         raise RuntimeError(f"Office substrate drift: tree={tree} files={len(files)} logical={logical}")
-    return {"tree_sha256": tree, "files": len(files), "logical_bytes": logical}
+    return source, {"tree_sha256": tree, "files": len(files), "logical_bytes": logical}
 
 
 def _current_v029_floor(source: Path, work_root: Path) -> tuple[int, dict]:
-    # Reproduce the exact inner comparator used by the canonical parent rather than trusting a copied number.
     staged = work_root / "current-floor-stage"
     CANON._prepare_profile_tree(source, staged)
     archive = work_root / "current-inner-tournament.cmpct"
@@ -63,10 +65,7 @@ def _current_v029_floor(source: Path, work_root: Path) -> tuple[int, dict]:
 def run(work_root: Path) -> dict:
     shutil.rmtree(work_root, ignore_errors=True)
     work_root.mkdir(parents=True)
-    source = work_root / "office_workspace"
-    source.mkdir()
-    substrate = _build_office(source)
-
+    source, substrate = _build_office(work_root)
     current_v029_floor, floor_stats = _current_v029_floor(source, work_root)
 
     archive = work_root / "office-canonical-r25-only.cmpct"
