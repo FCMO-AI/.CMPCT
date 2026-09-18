@@ -67,15 +67,16 @@ jobs:
               assert row['archive_bytes'] > 0
               assert len(row['build_rounds'])==3 and len(row['extract_rounds'])==3
               assert row['build_wall_median_s'] > 0 and row['extract_wall_median_s'] > 0
-          ml=next(row for row in data['targets'] if row['name']=='09_ml_artifacts')
-          for round_row in ml['build_rounds']:
-              phases=round_row['phases']
-              assert 'build.canonical.r25.g04' in phases
-              assert 'build.canonical.r25.g04.shared_candidates' in phases
-              economics=round_row['g04_economics']
-              assert economics is not None
-              assert economics['v028_child_s'] > 0
-              assert economics['attempt5_child_s'] > 0
+          create_blockers={'01_shifted_versions','09_ml_artifacts'}
+          for target in (row for row in data['targets'] if row['name'] in create_blockers):
+              for round_row in target['build_rounds']:
+                  phases=round_row['phases']
+                  assert 'build.canonical.r25.g04' in phases
+                  assert 'build.canonical.r25.g04.shared_candidates' in phases
+                  economics=round_row['g04_economics']
+                  assert economics is not None
+                  assert economics['v028_child_s'] > 0
+                  assert economics['attempt5_child_s'] > 0
           PY
       - uses: actions/upload-artifact@v6
         if: always()
