@@ -23,24 +23,7 @@ env:
   EVIDENCE_HEAD: ${{ github.sha }}
 
 jobs:
-  latest-head-impact:
-    runs-on: ubuntu-latest
-    outputs:
-      relevant: ${{ steps.classify.outputs.relevant }}
-    steps:
-      - uses: actions/checkout@v6
-        with:
-          ref: ${{ env.EVIDENCE_HEAD }}
-          fetch-depth: 2
-      - id: classify
-        shell: bash
-        run: |
-          set -euo pipefail
-          echo 'relevant=true' >> "$GITHUB_OUTPUT"
-
   ablation:
-    needs: latest-head-impact
-    if: needs.latest-head-impact.outputs.relevant == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
