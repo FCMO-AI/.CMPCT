@@ -105,3 +105,4 @@ jobs:
           retention-days: 90
 
 # Research-only causal/oracle evidence. Green means receipt integrity, never release credit.
+# Active exact-head experiment: quantify whether current r25 filesystem framing itself destroys the proven v0.25 ZIP-stream floor.
