@@ -88,8 +88,9 @@ Every scheduled activation:
 
 One agent means concurrency through asynchronous instruments, not parallel identities.
 
-- One primary active question at a time.
-- Up to three queued frontier hypotheses, materially different families unless evidence justifies concentration.
+- One primary active question at a time, plus one explicitly dependency-diverse backup that is executable without the primary lane's dominant blocker.
+- If the primary completes, blocks, dispatches independently, or must wait, switch to the backup when useful rather than turning blocker handling into the activation.
+- Up to three additional queued frontier hypotheses, materially different families unless evidence justifies concentration.
 - At most one expensive deep experiment for a question before cheap disproof layers are exhausted.
 - While CI/compute runs independently, do useful dependency-safe work; never babysit.
 - Three consecutive activations on the same blocker/family without decision-changing evidence trigger frame review: materially different route, one bounded final attempt, or retirement/nonblocking debt.
