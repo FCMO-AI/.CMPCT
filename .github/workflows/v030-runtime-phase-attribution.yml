@@ -68,11 +68,12 @@ jobs:
           for round_row in ml['build_rounds']:
               phases=round_row['phases']
               assert 'build.canonical.r25.g04' in phases
-              assert any(key.startswith('build.canonical.r25.g04.') for key in phases)
-              shared=phases['build.canonical.r25.g04.shared_candidate']
-              assert shared['v028_child_s'] > 0
-              assert shared['attempt5_child_s'] > 0
-              assert shared['selected'] in {'v028', 'attempt5'}
+              assert 'build.canonical.r25.g04.shared_candidates' in phases
+              economics=round_row['g04_economics']
+              assert economics is not None
+              assert economics['v028_child_s'] > 0
+              assert economics['attempt5_child_s'] > 0
+              assert economics['selected'] in {'v028', 'attempt5'}
           PY
       - uses: actions/upload-artifact@v6
         if: always()
