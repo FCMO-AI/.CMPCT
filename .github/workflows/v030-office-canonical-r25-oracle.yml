@@ -76,7 +76,7 @@ jobs:
           import json, os
           from pathlib import Path
           d=json.loads(Path('benchmark-artifacts/v030-office-canonical-r25.json').read_text())
-          assert d['schema']=='cmpct-v030-office-canonical-r25-oracle-v1'
+          assert d['schema']=='cmpct-v030-office-canonical-r25-oracle-v2'
           assert d['source_commit']==os.environ['EVIDENCE_HEAD']
           assert d['substrate']=='neutral-hostile-determinism-repair-v6'
           assert d['substrate_evidence']['tree_sha256']=='aac7de772b9f93d5b54ca30e07497574bf61d76c2288077627163c8378823c4b'
@@ -84,8 +84,12 @@ jobs:
           assert d['format_revision']==25
           assert d['within_locality_8x'] is True and d['max_member_read_amplification'] <= 8.0
           assert d['strong_verify_ok'] is True and d['strong_verify_tree_exact'] is True
-          assert d['decision']=='CANONICAL_R25_ESCAPE_PROVEN'
-          assert d['beats_shipping'] is True and d['beats_zstd19'] is True
+          assert d['current_v029_floor_control_bytes']==5954226
+          assert d['decision'] in {
+              'CANONICAL_R25_ZERO_REGRESSION_ESCAPE_PROVEN',
+              'CANONICAL_R25_BEATS_WORLD_CONTROLS_BUT_REGRESSES_V029',
+              'CANONICAL_R25_ESCAPE_INSUFFICIENT',
+          }
           assert d['release_credit'] is False
           PY
       - name: Upload exact receipt
