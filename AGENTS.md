@@ -220,3 +220,8 @@ represented in code/tests/research history until it earns promotion.
 Footnote: `tools/check_version_discipline.py` enforces the separation. It rejects numeric bumps without
 archive/engine participation, requires benchmark/release evidence for a core release, validates the
 alphabetic surface line, and prevents surface work from masquerading as a new core version.
+
+
+## Recursive discovery integration
+
+For substantive research selection and experiment-design work, read `docs/RECURSIVE_DISCOVERY_ENGINE.md` after the normal authority/current-state orientation. It is a thin meta-learning layer over the existing Foundry/Forge/Custody system: use it to preserve pre-result predictions, causal outcomes, counterfactual discriminators and evidence-backed improvements to the research policy. Its append-only ledger is `research/discovery_episodes.jsonl`; validate/summarize it with `tools/discovery_ledger.py`. Do not turn the ledger into a second project-state database, do not log trivial work, and do not let RDE evidence weaken product/release/evaluator gates.
