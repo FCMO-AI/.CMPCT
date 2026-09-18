@@ -66,15 +66,9 @@ def instrumented_phases(recorder: PhaseRecorder):
     # Parent phases plus inner canonical owners. Nested timers intentionally overlap; they are ownership
     # attribution, not additive accounting. PrefixGraph.build itself is deliberately not monkeypatched: the
     # shipping one-shot process executor validates that callable's module/name identity before dispatch, so
-    # replacing it would mutate execution semantics instead of merely observing them. The enclosing r25
-    # release-candidate timer still prices the complete PrefixGraph/G0-G4 tournament honestly.
-    #
-    # v3 additionally splits the now-proven dominant G04 owner at stable semantic seams. In particular, record
-    # audition is timed as an aggregate of real calls rather than replaced with a different scheduler. This lets
-    # the next causal A/B distinguish inherited-v0.29 construction, attempt-5 graph construction, transform
-    # search, overlay materialization and verification without changing any candidate bytes or selection law.
+    # replacing it would mutate execution semantics instead of merely observing them.
     G04 = BASE.C.RC.G04
-    for owner, name, label in (
+    specs = [
         (PRODUCT, "_shared_frontdoor_preflight", "build.frontdoor_preflight"),
         (LOGS_PRODUCT, "_parallel_candidates", "build.logs_parallel_candidates"),
         (BASE.C, "build", "build.canonical_final"),
@@ -83,16 +77,25 @@ def instrumented_phases(recorder: PhaseRecorder):
         (BASE.C, "_r25_build", "build.canonical.r25_tournament"),
         (BASE.C.RC, "build", "build.canonical.r25.release_candidate"),
         (G04, "build", "build.canonical.r25.g04"),
-        (G04.BASE, "build", "build.canonical.r25.g04.v029_floor"),
-        (G04.A5, "build_graph", "build.canonical.r25.g04.attempt5_graph"),
-        (G04, "_audition_record", "build.canonical.r25.g04.record_audition"),
-        (G04, "_write_overlay", "build.canonical.r25.g04.overlay_write"),
-        (G04, "strong_verify", "build.canonical.r25.g04.overlay_verify"),
         (BASE, "_locality_bounded_r24_build", "build.r24_candidate"),
         (BASE.POLICY, "extract_verified_into_staging", "extract.r25_verified_stream"),
         (BASE.VERIFIED_RESTORE, "restore_verified_manifest_tree", "extract.r25_fs_restore"),
         (LOGS_FUSED, "_restore_filesystem_metadata", "extract.logs_fs_restore"),
-    ):
+    ]
+    # The canonical profile uses a private shared-portfolio clone, not the public historical G04 module. Resolve
+    # only seams that actually exist on that clone. This is both more truthful and more robust than assuming the
+    # public module layout: the previous v3 attempt failed before measurement because it asked the shared clone
+    # for a top-level `_audition_record` that correctly lives on its `G` component.
+    optional_specs = [
+        (getattr(G04, "BASE", None), "build", "build.canonical.r25.g04.v029_floor"),
+        (getattr(G04, "A5", None), "build_graph", "build.canonical.r25.g04.attempt5_graph"),
+        (getattr(G04, "G", None), "_audition_record", "build.canonical.r25.g04.record_audition"),
+        (G04, "_overlay_retained_graph", "build.canonical.r25.g04.overlay_pipeline"),
+        (getattr(G04, "G", None), "_write_overlay", "build.canonical.r25.g04.overlay_write"),
+        (G04, "strong_verify", "build.canonical.r25.g04.overlay_verify"),
+    ]
+    specs.extend((owner, name, label) for owner, name, label in optional_specs if owner is not None and hasattr(owner, name))
+    for owner, name, label in specs:
         patches.append((owner, name, recorder.wrap(owner, name, label)))
     patches.append((LOGS_FUSED.LOGS.Archive, "_restore_session", recorder.wrap(LOGS_FUSED.LOGS.Archive, "_restore_session", "extract.logs_restore_session")))
     try:
@@ -157,9 +160,9 @@ def run(work_root: Path) -> dict:
         "targets": rows,
         "claim_boundary": (
             "Research-only in-process semantic-phase ownership on the exact promoted product front door. "
-            "Nested phase times overlap and are not additive. v3 splits G04 into inherited-floor, attempt-5 graph, "
-            "record-audition, overlay-write and overlay-verification owners without changing scheduler or bytes. "
-            "It preserves exact archive/tree semantics but is not fresh-process release timing and cannot unlock v0.30."
+            "Nested phase times overlap and are not additive. v3 resolves available stable seams inside the "
+            "canonical private G04/shared-portfolio clone without changing scheduler or bytes. It preserves exact "
+            "archive/tree semantics but is not fresh-process release timing and cannot unlock v0.30."
         ),
     }
 
