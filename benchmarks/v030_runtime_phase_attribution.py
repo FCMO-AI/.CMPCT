@@ -2,10 +2,10 @@ from __future__ import annotations
 
 """Research-only phase attribution for the exact-head v0.30 runtime blockers.
 
-This instrument does not alter the frozen release gate.  It runs the real promoted product front door on the
+This instrument does not alter the frozen release gate. It runs the real promoted product front door on the
 three authority-v2 runtime targets, records wall time owned by product-level semantic phases, and verifies exact
-user-tree identity after every operation.  The goal is to decide whether the current 39-50% ML/logs debt is large
-enough inside a local owner to justify optimization, or whether Forge should escalate architecture instead.
+user-tree identity after every operation. The goal is to decide whether the current runtime debt is large enough
+inside a local owner to justify optimization, or whether Forge should escalate architecture instead.
 """
 
 import argparse
@@ -63,10 +63,18 @@ class PhaseRecorder:
 @contextlib.contextmanager
 def instrumented_phases(recorder: PhaseRecorder):
     patches = []
+    # Parent phases plus the inner canonical owners that can distinguish D1 polishing from D2/D3 architecture.
+    # Nested timers intentionally overlap; they are ownership attribution, not additive accounting.
     for owner, name, label in (
         (PRODUCT, "_shared_frontdoor_preflight", "build.frontdoor_preflight"),
         (LOGS_PRODUCT, "_parallel_candidates", "build.logs_parallel_candidates"),
         (BASE.C, "build", "build.canonical_final"),
+        (BASE.C, "_prepare_profile_tree", "build.canonical.prepare_profile_tree"),
+        (BASE.C, "_r24_build", "build.canonical.r24_floor"),
+        (BASE.C, "_r25_build", "build.canonical.r25_tournament"),
+        (BASE.C.RC, "build", "build.canonical.r25.release_candidate"),
+        (BASE.C.RC.PG, "build", "build.canonical.r25.prefixgraph"),
+        (BASE.C.RC.G04, "build", "build.canonical.r25.g04"),
         (BASE, "_locality_bounded_r24_build", "build.r24_candidate"),
         (BASE.POLICY, "extract_verified_into_staging", "extract.r25_verified_stream"),
         (BASE.VERIFIED_RESTORE, "restore_verified_manifest_tree", "extract.r25_fs_restore"),
@@ -130,13 +138,14 @@ def run(work_root: Path) -> dict:
         row = _run_target(corpora[(suite, name)], target_work)
         rows.append({"suite": suite, "name": name, **row})
     return {
-        "schema": "cmpct-v030-runtime-phase-attribution-v1",
+        "schema": "cmpct-v030-runtime-phase-attribution-v2",
         "release_credit": False,
         "rounds": ROUNDS,
         "targets": rows,
         "claim_boundary": (
             "Research-only in-process semantic-phase ownership on the exact promoted product front door. "
-            "It preserves exact archive/tree semantics but is not fresh-process release timing and cannot unlock v0.30."
+            "Nested phase times overlap and are not additive. It preserves exact archive/tree semantics but is "
+            "not fresh-process release timing and cannot unlock v0.30."
         ),
     }
 
