@@ -1,0 +1,75 @@
+# ci-lane: deep
+# ci-cancel-policy: preserve-running-exact-receipt
+name: CMPCT v0.30 runtime phase attribution
+
+on:
+  push:
+    branches: [agent/v030-runtime-phase-attribution]
+    paths:
+      - 'benchmarks/v030_runtime_phase_attribution.py'
+      - '.github/workflows/v030-runtime-phase-attribution.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.sha }}
+
+jobs:
+  attribution:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    concurrency:
+      group: cmpct-v030-runtime-phase-attribution-${{ github.sha }}
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - name: Bind exact head
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install benchmark dependencies
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y zstd gcc ffmpeg libsndfile1
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[audio,test]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
+      - name: Compile instrument
+        run: python -m py_compile benchmarks/v030_runtime_phase_attribution.py
+      - name: Attribute exact promoted runtime phases
+        run: |
+          mkdir -p benchmark-artifacts
+          python benchmarks/v030_runtime_phase_attribution.py \
+            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-runtime-phase-attribution-work" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-runtime-phase-attribution.json"
+      - name: Validate non-credit receipt
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          data=json.loads(Path('benchmark-artifacts/v030-runtime-phase-attribution.json').read_text())
+          assert data['schema']=='cmpct-v030-runtime-phase-attribution-v1'
+          assert data['release_credit'] is False
+          assert len(data['targets'])==3
+          for row in data['targets']:
+              assert row['archive_bytes'] > 0
+              assert len(row['build_rounds'])==3 and len(row['extract_rounds'])==3
+              assert row['build_wall_median_s'] > 0 and row['extract_wall_median_s'] > 0
+          PY
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: v030-runtime-phase-attribution-${{ env.EVIDENCE_HEAD }}
+          path: benchmark-artifacts/v030-runtime-phase-attribution.json
+          if-no-files-found: error
+          retention-days: 90
+
+# Diagnostic only. Green means the receipt is internally valid, never release authority.
