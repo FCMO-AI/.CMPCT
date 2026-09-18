@@ -1,3 +1,4 @@
+# ci-lane: deep
 name: CMPCT v0.30 Office canonical-r25 escape oracle
 
 on:
@@ -19,6 +20,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: cmpct-v030-office-canonical-r25-${{ github.ref }}
+  cancel-in-progress: true
+
 env:
   PYTHONPATH: ${{ github.workspace }}
   EVIDENCE_HEAD: ${{ github.sha }}
@@ -27,9 +32,6 @@ jobs:
   office-canonical-r25:
     runs-on: ubuntu-24.04
     timeout-minutes: 45
-    concurrency:
-      group: cmpct-v030-office-canonical-r25-${{ github.sha }}
-      cancel-in-progress: false
     steps:
       - uses: actions/checkout@v6
         with:
