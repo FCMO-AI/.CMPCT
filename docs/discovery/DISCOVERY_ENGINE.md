@@ -65,6 +65,10 @@ Use docs/discovery/STATE.json as a compact machine-readable index, not a narrati
 
 Detailed truth remains in PRs, benchmark records, experiment docs, receipts and code. STATE.json links; it does not duplicate.
 
+## Concurrent activations
+
+Scheduled activations may overlap. Follow `docs/discovery/CONCURRENCY_PROTOCOL.md` whenever concurrent agents, PRs, CI, or human work can touch the same discovery surface. In particular, treat `STATE.json` as a staleable cache rather than a lock; preserve causal history append-only; inspect active claims before substantial implementation; and prefer independent, dependency-safe questions over duplicate implementations. Scientific evidence must survive coordination conflicts intact.
+
 ## Activation protocol
 
 Every scheduled activation:
@@ -84,8 +88,9 @@ Every scheduled activation:
 
 One agent means concurrency through asynchronous instruments, not parallel identities.
 
-- One primary active question at a time.
-- Up to three queued frontier hypotheses, materially different families unless evidence justifies concentration.
+- One primary active question at a time, plus one explicitly dependency-diverse backup that is executable without the primary lane's dominant blocker.
+- If the primary completes, blocks, dispatches independently, or must wait, switch to the backup when useful rather than turning blocker handling into the activation.
+- Up to three additional queued frontier hypotheses, materially different families unless evidence justifies concentration.
 - At most one expensive deep experiment for a question before cheap disproof layers are exhausted.
 - While CI/compute runs independently, do useful dependency-safe work; never babysit.
 - Three consecutive activations on the same blocker/family without decision-changing evidence trigger frame review: materially different route, one bounded final attempt, or retirement/nonblocking debt.

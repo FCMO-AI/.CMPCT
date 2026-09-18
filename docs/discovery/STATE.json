@@ -8,30 +8,88 @@
   },
   "active_product_bottleneck": {
     "id": "v030-runtime-rehabilitation",
-    "observation": "v0.30 compression/generalization evidence is ahead of promoted-product runtime; PR #132 localizes dominant create cost into shared candidate construction.",
-    "evidence": ["PR #132", "docs/v030-coordination/tasks/T02-evidence-performance.md"],
-    "next_discriminator": "Reconcile exact-head v028_child_s versus attempt5_child_s attribution, then test cheaper proof/admission/reuse/early-termination of the selected-winner fact."
+    "observation": "PR #135 falsified outer PrefixGraph contention as an ML owner because shipping eligibility excludes PrefixGraph on ML. PR #138 then proved a stronger D2/R2 ownership defect: G04 discards the exact attempt-5 graph already built inside the v0.29 portfolio and reconstructs it serially for Geometry. A balanced exact-identity reuse A/B removed a median 33.31% of complete G04 wall (32.34-35.83%) while retaining exact attempt-5 and final G04 bytes/tree.",
+    "evidence": [
+      "PR #132 run 35377667509 / artifact 10561395000",
+      "PR #135 run 35394905579 / comment 5736212812",
+      "PR #138 run 35395493475 at 603c78a470ea167a6e38126fb3eeed3cb4ab4e8b",
+      "PR #138 artifact 10568026221 digest sha256:c918f6b094af8efd3ce3d61cfdf0ee374da9a9fd7de9727158367bb244995b1b",
+      "PR #138 result comment 5736329443"
+    ],
+    "next_discriminator": "Productize the smallest exact retained-candidate ownership handoff with process-tree CPU/RSS/temp-I/O accounting and byte/tree identity; then rerun unchanged fresh-process product authority."
   },
   "primary_question": {
-    "id": "winner-proof-cost",
-    "family": "execution-proof / candidate-selection",
-    "hypothesis": "A material fraction of candidate-construction work can be avoided while proving the same selected archive bytes.",
-    "kill": "Causal A/B shows exact byte retention requires essentially all measured candidate work or exported costs erase the runtime gain.",
-    "status": "READY"
+    "id": "g04-attempt5-artifact-reuse",
+    "family": "execution-architecture / ownership-boundary",
+    "hypothesis": "Retaining the exact attempt-5 graph across the v0.29/G04 ownership boundary removes a redundant serial reconstruction with enough headroom to close the decisive ML create gap.",
+    "result": "REUSE_HEADROOM: four balanced pairs saved 32.34-35.83% complete G04 wall, median 33.31%, with exact retained attempt-5 SHA/size and exact final G04 archive/tree identity. Redundant second attempt-5 build cost 19.23-20.38 s; charged retention copy cost 3.27-3.41 ms.",
+    "status": "EARNED_PRODUCTIZATION"
   },
   "frontier_candidates": [
-    {"id":"ownership-boundary","family":"execution-architecture","question":"Can shared intermediate representations or changed ownership remove duplicate candidate work rather than accelerating it?","status":"QUEUED"},
-    {"id":"charged-reconstruction-oracle","family":"representation","question":"What fully charged exact reconstruction relationship remains unexploited after current graph/transform families, with enough oracle headroom for a new grammar?","status":"QUEUED"},
-    {"id":"proof-carrying-admission","family":"search/proof","question":"Can conservative bounds certify losing candidates before construction while preserving exact fallback and generality?","status":"QUEUED"}
+    {
+      "id": "proof-carrying-admission",
+      "family": "search/proof",
+      "question": "Can conservative content-derived bounds avoid complete losing candidate construction while preserving exact fallback and generality?",
+      "status": "QUEUED"
+    },
+    {
+      "id": "ml-verified-stream-extract",
+      "family": "reader/execution-architecture",
+      "question": "After create productization, what exact work owns the still-red ML verified-stream extraction path?",
+      "status": "QUEUED"
+    },
+    {
+      "id": "shifted-outer-contention-secondary",
+      "family": "execution-scheduling",
+      "question": "PrefixGraph is eligible on Shifted, so outer contention may exist there, but Shifted create is not the decisive ML blocker.",
+      "status": "DEFERRED"
+    }
   ],
-  "protected_seeds": [],
+  "protected_seeds": [
+    {
+      "id": "g04-attempt5-retained-intermediate",
+      "reason": "Exact-identity research A/B shows large causal runtime headroom; preserve while paying CPU/RSS/temp-I/O/productization debt.",
+      "evidence": "PR #138 run 35395493475 / artifact 10568026221"
+    }
+  ],
   "saturated_families": [
-    {"family":"v0.29 rejected physical-context/residual variants","reopen_only_if":"changed evidence, conditions, hypothesis, or materially different mechanism","source":"docs/CURRENT_STATE.md and v0.29 release evidence"}
+    {
+      "family": "v0.29 rejected physical-context/residual variants",
+      "reopen_only_if": "changed evidence, conditions, hypothesis, or materially different mechanism",
+      "source": "docs/CURRENT_STATE.md and v0.29 release evidence"
+    },
+    {
+      "family": "ML outer G04/PrefixGraph scheduler contention",
+      "reopen_only_if": "shipping PrefixGraph eligibility changes for ML-like trees",
+      "source": "PR #135 run 35394905579 + shipping release-candidate eligibility control flow"
+    }
   ],
   "pending_jobs": [],
   "process_lessons": [
-    {"lesson":"Prefer causal owner localization and generous charged oracles before expensive productization.","evidence":"existing CMPCT v0.29/v0.30 research history"}
+    {
+      "lesson": "Before timing scheduler contention, prove from shipping admission/control flow that the alleged competitor actually executes on the decisive workload.",
+      "evidence": "PR #135: direct PG timing failed on ML because PG exceeds its file ceiling; shipping code had already made that contention impossible."
+    },
+    {
+      "lesson": "When a portfolio loser is an immediate downstream transform substrate, test lifetime/ownership reuse before optimizing either producer: exact intermediate reuse can remove a whole serial rebuild while preserving all candidate bytes.",
+      "evidence": "PR #138: retained attempt-5 identity was exact and median complete-G04 wall fell 33.31%."
+    }
   ],
-  "next_action": "Read exact current PR #132 / authoritative head evidence, obtain pending child attribution if available, and PARETOBONK the cheapest causal experiment on the owning child.",
-  "last_reconciled": "2026-09-18"
+  "next_action": "Continue PR #138 from research headroom into the smallest productizable retained-candidate ownership seam. Add process-tree CPU/RSS and temporary-I/O accounting; prefer same-filesystem handoff/link/rename semantics over payload recopy only if crash/durability and cleanup semantics remain correct; preserve exact v0.29 floor, attempt-5 graph and final G04 bytes/tree. If the product seam survives, rerun unchanged fresh-process runtime authority. Do not claim release credit from the research A/B.",
+  "last_reconciled": "2026-09-18T21:21:00Z",
+  "concurrency": {
+    "protocol": "docs/discovery/CONCURRENCY_PROTOCOL.md",
+    "state_semantics": "staleable-cache-not-lock",
+    "causal_history": "research/discovery_episodes.jsonl",
+    "collision_check": "python tools/discovery_claims.py --family <family> --question '<question>'",
+    "rule": "reconcile current GitHub truth immediately before shared discovery-state writes; preserve evidence over cache freshness"
+  },
+  "backup_question": {
+    "id": "charged-reconstruction-oracle",
+    "family": "representation",
+    "question": "What fully charged exact reconstruction relationship remains unexploited after current graph/transform families, with enough oracle headroom for a new grammar?",
+    "kill": "A fully charged oracle shows immaterial general headroom, or apparent savings depend on gifted decoder-visible facts or benchmark-specific identity.",
+    "status": "READY",
+    "reason": "Dependency-diverse fallback if productization blocks or runs independently."
+  }
 }

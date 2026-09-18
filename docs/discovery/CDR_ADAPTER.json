@@ -1,0 +1,53 @@
+{
+  "schema": "fcmo-cdr-adapter-v0.1",
+  "status": "EXPERIMENTAL_LOCAL_PROJECTION",
+  "project": "FCMO-AI/.CMPCT",
+  "admission": "FULL",
+  "admission_reason": "CMPCT has a standing scientific/product frontier, persistent uncertainty, expensive experiments, negative knowledge, asynchronous evidence and overlapping activations.",
+  "authority": {
+    "entrypoints": [
+      "AGENTS.md",
+      "AGENT_HUB.md"
+    ],
+    "canonical_state": "docs/CURRENT_STATE.md",
+    "promotion_law": "Discover current repository/release law through AGENTS.md every activation."
+  },
+  "topologies": [
+    "single_schedule",
+    "interleaved_schedules",
+    "continuous_agent",
+    "swarm"
+  ],
+  "capabilities": {
+    "executable_frontier": "LOCAL",
+    "causal_episodes": "LOCAL",
+    "coordination": "LOCAL",
+    "independent_jobs": "LOCAL",
+    "recursive_learning": "LOCAL",
+    "absorption_control": "LOCAL"
+  },
+  "surfaces": {
+    "runtime": "docs/discovery/DISCOVERY_ENGINE.md",
+    "frontier": "docs/discovery/STATE.json",
+    "episodes": "research/discovery_episodes.jsonl",
+    "coordination": "docs/discovery/CONCURRENCY_PROTOCOL.md",
+    "state_validator": "tools/discovery_state.py",
+    "collision_inspector": "tools/discovery_claims.py",
+    "activation_profile": "docs/discovery/SCHEDULE_PROFILE.json"
+  },
+  "local_precedence": [
+    "repository/release/frozen law",
+    "direct exact-head product/evidence receipts",
+    "append-only causal outcomes",
+    "active claims and durable independent jobs",
+    "discovery STATE cache"
+  ],
+  "notes": [
+    "Generic CDR deployment is SHADOW; CMPCT's local Discovery Engine remains independently local and may be used by its scheduled task under repository law.",
+    "This adapter is descriptive and creates no merge/release authority.",
+    "Agent Hub CDR work may inform evolution but is not required for CMPCT runtime.",
+    "STATE is a cache, never scientific authority."
+  ],
+  "deployment_mode": "SHADOW",
+  "adapter_scope": "LOCAL_PROJECTION"
+}

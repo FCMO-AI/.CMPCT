@@ -1,0 +1,15 @@
+{
+  "schema": "fcmo-cdr-schedule-profile-v0.1",
+  "mode": "bounded_activation",
+  "minimum_productive_minutes": 20,
+  "landing_window_start_minutes": 20,
+  "start_nothing_new_after_minutes": 24,
+  "early_exit_classes": [
+    "platform_termination",
+    "total_unrecoverable_access",
+    "unsafe_continuation"
+  ],
+  "blocked_lane_is_early_exit": false,
+  "idle_or_padding_allowed": false,
+  "switch_to_dependency_safe_work": true
+}
