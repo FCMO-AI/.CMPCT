@@ -4,8 +4,9 @@ from __future__ import annotations
 
 This is deliberately *not* a selector-bug presumption. The canonical parent is required
 to preserve the accepted v0.29 zero-byte floor, so an r25 contender that beats r24 and
-Zstd-19 but regresses v0.29 is still correctly non-promotable. The oracle separates
-those cases on the frozen repair-v6 Office tree and changes no shipping policy.
+Zstd-19 but regresses v0.29 is still correctly non-promotable. The oracle derives that
+floor from the current tournament on the same frozen repair-v6 Office tree, then prices
+only legal r25 contenders. It changes no shipping policy and earns no release credit.
 """
 
 import argparse
@@ -13,19 +14,19 @@ import json
 from pathlib import Path
 import shutil
 import subprocess
+import tempfile
 import time
 
 from benchmarks import neutral_hostile_determinism_repair_v6 as REPAIR
 from experiments import entropygraph_v030_canonical_final_impl as CANON
 from experiments import entropygraph_v030_canonical_manifest_candidate as CAND
+from experiments import entropygraph_v030_release_candidate as RC
 
 ROOT = Path(__file__).resolve().parents[1]
 EXPECTED_TREE = "aac7de772b9f93d5b54ca30e07497574bf61d76c2288077627163c8378823c4b"
 EXPECTED_FILES = 20
 EXPECTED_LOGICAL_BYTES = 16_063_798
 SHIPPING_R24_BYTES = 15_445_236
-# Same-run current v0.29 fallback observed inside the exact-head external frontier.
-CURRENT_V029_FLOOR_BYTES = 5_954_226
 ZSTD19_BYTES = 8_312_879
 SEVENZIP_BYTES = 7_455_748
 
@@ -46,11 +47,28 @@ def _build_office(root: Path) -> dict:
     return {"tree_sha256": tree, "files": len(files), "logical_bytes": logical}
 
 
+def _current_v029_floor(source: Path, work_root: Path) -> tuple[int, dict]:
+    # Reproduce the exact inner comparator used by the canonical parent rather than trusting a copied number.
+    staged = work_root / "current-floor-stage"
+    CANON._prepare_profile_tree(source, staged)
+    archive = work_root / "current-inner-tournament.cmpct"
+    with CANON._revision25_profile_context():
+        stats = dict(RC.build(staged, archive, post_publish_verify=False, defer_preselection_verify=True))
+    floor = int(stats["v029_bytes"])
+    if floor <= 0:
+        raise RuntimeError("current v0.29 floor was not materialized")
+    return floor, stats
+
+
 def run(work_root: Path) -> dict:
     shutil.rmtree(work_root, ignore_errors=True)
+    work_root.mkdir(parents=True)
     source = work_root / "office_workspace"
-    source.mkdir(parents=True)
+    source.mkdir()
     substrate = _build_office(source)
+
+    current_v029_floor, floor_stats = _current_v029_floor(source, work_root)
+
     archive = work_root / "office-canonical-r25-only.cmpct"
     started = time.perf_counter()
     stats = CAND.build_ablation(source, archive, "combined")
@@ -74,17 +92,17 @@ def run(work_root: Path) -> dict:
 
     archive_bytes = archive.stat().st_size
     beats_r24 = archive_bytes < SHIPPING_R24_BYTES
-    beats_v029 = archive_bytes <= CURRENT_V029_FLOOR_BYTES
+    preserves_v029 = archive_bytes <= current_v029_floor
     beats_zstd = archive_bytes < ZSTD19_BYTES
-    if beats_r24 and beats_v029 and beats_zstd:
+    if beats_r24 and preserves_v029 and beats_zstd:
         decision = "CANONICAL_R25_ZERO_REGRESSION_ESCAPE_PROVEN"
-    elif beats_r24 and beats_zstd and not beats_v029:
+    elif beats_r24 and beats_zstd and not preserves_v029:
         decision = "CANONICAL_R25_BEATS_WORLD_CONTROLS_BUT_REGRESSES_V029"
     else:
         decision = "CANONICAL_R25_ESCAPE_INSUFFICIENT"
 
     return {
-        "schema": "cmpct-v030-office-canonical-r25-oracle-v2",
+        "schema": "cmpct-v030-office-canonical-r25-oracle-v3",
         "source_commit": _source_commit(),
         "substrate": "neutral-hostile-determinism-repair-v6",
         "substrate_evidence": substrate,
@@ -99,20 +117,21 @@ def run(work_root: Path) -> dict:
         "strong_verify_ok": True,
         "strong_verify_tree_exact": True,
         "shipping_r24_control_bytes": SHIPPING_R24_BYTES,
-        "current_v029_floor_control_bytes": CURRENT_V029_FLOOR_BYTES,
+        "current_v029_floor_bytes": current_v029_floor,
+        "current_v029_floor_selected": floor_stats.get("g04_selected"),
         "zstd19_control_bytes": ZSTD19_BYTES,
         "sevenzip_control_bytes": SEVENZIP_BYTES,
         "saving_vs_shipping_r24_bytes": SHIPPING_R24_BYTES - archive_bytes,
-        "saving_vs_current_v029_bytes": CURRENT_V029_FLOOR_BYTES - archive_bytes,
+        "saving_vs_current_v029_bytes": current_v029_floor - archive_bytes,
         "saving_vs_zstd19_bytes": ZSTD19_BYTES - archive_bytes,
         "saving_vs_7z_bytes": SEVENZIP_BYTES - archive_bytes,
         "beats_shipping_r24": beats_r24,
-        "preserves_v029_zero_regression": beats_v029,
+        "preserves_v029_zero_regression": preserves_v029,
         "beats_zstd19": beats_zstd,
         "beats_7z": archive_bytes < SEVENZIP_BYTES,
         "decision": decision,
         "release_credit": False,
-        "claim_boundary": "Office-only canonical-r25 materialization oracle. A competitor win is not promotable if it regresses the inherited v0.29 byte floor; all-15/recovery/native/platform authority remains separate.",
+        "claim_boundary": "Office-only canonical-r25 materialization oracle. A competitor win is not promotable if it regresses the same-tree inherited v0.29 floor; all-15/recovery/native/platform authority remains separate.",
     }
 
 
