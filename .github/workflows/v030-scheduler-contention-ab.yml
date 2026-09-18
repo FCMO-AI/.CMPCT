@@ -5,12 +5,15 @@ name: CMPCT v0.30 scheduler contention A/B
 on:
   push:
     branches: [agent/cdr-scheduler-contention-ab]
-    paths: &contention_paths
+    paths:
       - 'benchmarks/v030_scheduler_contention_worker.py'
       - 'benchmarks/v030_scheduler_contention_ab.py'
       - '.github/workflows/v030-scheduler-contention-ab.yml'
   pull_request:
-    paths: *contention_paths
+    paths:
+      - 'benchmarks/v030_scheduler_contention_worker.py'
+      - 'benchmarks/v030_scheduler_contention_ab.py'
+      - '.github/workflows/v030-scheduler-contention-ab.yml'
   workflow_dispatch:
 
 permissions:
@@ -21,7 +24,7 @@ env:
   EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
 
 concurrency:
-  group: cmpct-v030-scheduler-contention-ab-${{ env.EVIDENCE_HEAD }}
+  group: cmpct-v030-scheduler-contention-ab-${{ github.event.pull_request.head.sha || github.sha }}
   cancel-in-progress: true
 
 jobs:
