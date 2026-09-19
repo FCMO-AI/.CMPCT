@@ -8,7 +8,12 @@ ROOT=Path(__file__).resolve().parents[1]; ORDERS=(("control","fast"),("fast","co
 
 def worker(arm,source,archive):
     C=PRODUCT._BASE_IMPL.C; counts={"fast_rejects":0,"fallback_original":0}
-    if arm=="fast": counts=install_fast_reject()
+    if arm=="fast":
+        # Canonical-final intentionally isolates dependency graphs.  Bind the public SHARED.G
+        # handle to the exact module object captured by the build function before installing
+        # the research hook; this is evidence plumbing only, not product behavior.
+        C.SHARED.G=C.SHARED.build.__globals__["G"]
+        counts=install_fast_reject()
     start_cpu=time.process_time(); start=time.perf_counter(); stats=C.SHARED.build(source,archive); wall=time.perf_counter()-start; cpu=time.process_time()-start_cpu
     verified=C.SHARED.strong_verify(archive)
     if not verified.get('ok'): raise RuntimeError(f'G04 verify failed: {verified}')
