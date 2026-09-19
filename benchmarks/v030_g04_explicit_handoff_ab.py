@@ -37,10 +37,11 @@ def run(work: Path) -> dict:
         if c["archive_sha256"]!=e["archive_sha256"] or c["tree_sha256"]!=e["tree_sha256"]: raise RuntimeError("final identity mismatch")
         if e["stats"].get("global_monkeypatches") != 0 or e["stats"].get("ownership") != "explicit-artifact-handoff": raise RuntimeError("explicit ownership contract missing")
         if ret.get("payload_write_bytes") != 0 or ret.get("mode") != "same-filesystem-hardlink": raise RuntimeError("retention exported payload-write cost")
+        if ret.get("retained_disk_occupancy_bytes") != ret.get("bytes") or not ret.get("bytes",0): raise RuntimeError("retained artifact occupancy not charged")
         pairs.append({"pair":i,"order":list(order),"control":c,"explicit":e,"wall_saving_fraction":1-e["wall_s"]/c["wall_s"],"cpu_saving_fraction":1-e["cpu_s"]/c["cpu_s"]})
     w=[p["wall_saving_fraction"] for p in pairs]; cpu=[p["cpu_saving_fraction"] for p in pairs]
     return {"schema":"cmpct-v030-g04-explicit-handoff-ab-v1","release_credit":False,"pairs":pairs,"median_wall_saving_fraction":statistics.median(w),
-            "median_cpu_saving_fraction":statistics.median(cpu),"claim_boundary":"Explicit-ownership research evidence only. maxrss is process-tree high-water observation, not paired incremental RSS; fresh-process authority remains required."}
+            "median_cpu_saving_fraction":statistics.median(cpu),"claim_boundary":"Explicit-ownership research evidence only. Hardlink rewrite I/O is zero but retained temporary disk occupancy is charged explicitly. maxrss is process-tree high-water observation, not paired incremental RSS; fresh-process authority remains required."}
 
 def main():
     ap=argparse.ArgumentParser(); ap.add_argument("--work-root",type=Path,required=True); ap.add_argument("--output",type=Path,required=True); a=ap.parse_args()
