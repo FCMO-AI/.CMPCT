@@ -81,9 +81,11 @@ def test_explicit_handoff_retains_exact_attempt5_child_on_independent_corpus(tmp
     independently_built = tmp_path / "independent-attempt5.cmpct"
     stats = HOFF.build_parallel_with_attempt5(root, out, retained)
     HOFF.S.accepted.build_graph(root, independently_built)
+    retention = stats["retained_attempt5"]
 
     assert retained.read_bytes() == independently_built.read_bytes()
-    assert retained.stat().st_size == stats["attempt5_retention"]["bytes"]
-    assert stats["attempt5_retention"]["payload_write_bytes"] == 0
-    assert stats["attempt5_retention"]["mode"] == "same-filesystem-hardlink"
+    assert retained.stat().st_size == retention["bytes"]
+    assert retention["payload_write_bytes"] == 0
+    assert retention["mode"] == "same-filesystem-hardlink"
+    assert stats["attempt5_graph_build_count"] == 1
     assert out.exists()
