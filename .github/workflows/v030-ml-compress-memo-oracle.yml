@@ -1,0 +1,67 @@
+# ci-lane: deep
+# ci-cancel-policy: preserve-running-exact-receipt
+name: CMPCT v0.30 ML compression memo oracle
+
+on:
+  push:
+    branches: [agent/v030-ml-common-prefix-profile]
+    paths:
+      - 'benchmarks/v030_ml_compress_memo_oracle.py'
+      - '.github/workflows/v030-ml-compress-memo-oracle.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.sha }}
+
+concurrency:
+  group: cmpct-v030-ml-compress-memo-oracle-${{ github.sha }}
+  cancel-in-progress: true
+
+jobs:
+  oracle:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v6
+        with: {ref: '${{ env.EVIDENCE_HEAD }}'}
+      - name: Bind exact head
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+      - uses: actions/setup-python@v6
+        with: {python-version: '3.11', cache: pip}
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y zstd gcc ffmpeg libsndfile1
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[audio,test]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
+      - name: Compile
+        run: python -m py_compile benchmarks/v030_ml_compress_memo_oracle.py
+      - name: Run exact-byte memo oracle
+        run: |
+          mkdir -p benchmark-artifacts
+          python benchmarks/v030_ml_compress_memo_oracle.py --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/work" --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-ml-compress-memo-oracle.json"
+      - name: Validate
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          d=json.loads(Path('benchmark-artifacts/v030-ml-compress-memo-oracle.json').read_text())
+          assert d['schema']=='cmpct-v030-ml-compress-memo-oracle-v1' and d['release_credit'] is False
+          for k in ('v028','attempt5'):
+              r=d[k]; assert r['baseline_s']>0 and r['memo_s']>0 and r['cache_entries']>0
+              assert len(r['archive_sha256'])==64
+          PY
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: v030-ml-compress-memo-oracle-${{ env.EVIDENCE_HEAD }}
+          path: benchmark-artifacts/v030-ml-compress-memo-oracle.json
+          if-no-files-found: error
+          retention-days: 90
+
+# Research headroom only; cache memory is charged and green is never release authority.
