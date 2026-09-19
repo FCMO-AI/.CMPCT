@@ -75,7 +75,8 @@ def _portfolio(candidate: bool, source: Path, out: Path) -> dict:
         for p in ps: p.join(30)
         if any(not r.get('ok') for r in rows) or any(p.exitcode != 0 for p in ps):
             raise RuntimeError(f'child failure rows={rows!r} exitcodes={[p.exitcode for p in ps]!r}')
-        winner = min(paths.values(), key=lambda p: (p.stat().st_size, p.name))
+        # Match the accepted scheduler exactly: attempt-5 must be strictly smaller; ties fall back to v0.28.
+        winner = paths['attempt5'] if paths['attempt5'].stat().st_size < paths['v028'].stat().st_size else paths['v028']
         shutil.copyfile(winner, out)
     return {'candidate': candidate, 'wall_s': time.perf_counter()-started,
             'parent_cpu_s': time.process_time()-started_cpu,
