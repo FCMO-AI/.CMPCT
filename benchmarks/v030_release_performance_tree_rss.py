@@ -72,11 +72,7 @@ B._run_worker = _run_worker_with_tree_receipt
 
 
 def _rss_gate(base_gate: dict) -> dict:
-    """Return the companion's actual authority: identity/size prerequisites plus whole-tree RSS.
-
-    The inherited timing booleans remain in the artifact for diagnosis and comparison, but are intentionally not
-    promotion authority here.  The unchanged non-sampling release-performance job owns those thresholds.
-    """
+    """Return the companion's actual authority: identity/size prerequisites plus whole-tree RSS."""
     gate = {
         "exact_target_count": bool(base_gate["exact_target_count"]),
         "no_size_regressions": bool(base_gate["no_size_regressions"]),
@@ -90,6 +86,8 @@ def run(work_root: Path) -> dict:
     fingerprint = _candidate_fingerprint()
     _RECEIPTS.clear()
     result = dict(B.run(work_root))
+    # Preserve the inherited full gate shape for artifact/schema compatibility and diagnostics. It is not the
+    # companion's exit authority because its timing measurements are instrumented. ``rss_gate`` below is.
     base_gate = dict(result["gate"])
     result["schema"] = SCHEMA
     result["engine"] = "experiments/entropygraph_v030_release_product.py"
@@ -109,8 +107,8 @@ def run(work_root: Path) -> dict:
         "release_credit": False,
     }
     result["tree_rss_receipts"] = list(_RECEIPTS)
-    result["diagnostic_base_gate"] = base_gate
-    result["gate"] = _rss_gate(base_gate)
+    result["gate"] = base_gate
+    result["rss_gate"] = _rss_gate(base_gate)
     return result
 
 
@@ -122,8 +120,8 @@ def main() -> None:
     result = run(args.work_root)
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8")
-    print(json.dumps({"candidate_fingerprint": result["candidate_fingerprint"], "totals": result["totals"], "gate": result["gate"], "diagnostic_base_gate": result["diagnostic_base_gate"], "rss_accounting": result["rss_accounting"]}, indent=2), flush=True)
-    if not result["gate"]["passed"]:
+    print(json.dumps({"candidate_fingerprint": result["candidate_fingerprint"], "totals": result["totals"], "diagnostic_gate": result["gate"], "rss_gate": result["rss_gate"], "rss_accounting": result["rss_accounting"]}, indent=2), flush=True)
+    if not result["rss_gate"]["passed"]:
         raise SystemExit("v0.30 whole-process-tree RSS companion failed RSS/identity custody")
 
 
