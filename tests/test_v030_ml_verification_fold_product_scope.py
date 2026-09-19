@@ -33,11 +33,7 @@ def test_record_scope_payload_auth_and_rollback(tmp_path: Path) -> None:
     expected_graph_tree = _graph_tree(archive)
 
     bad = tmp_path / "record-logical-sha-only.cmpct"
-    hostile._rewrite_header(
-        archive,
-        bad,
-        lambda codec, usize, csize, crc, digest: (codec, usize, csize, crc, _flip32(digest)),
-    )
+    hostile._rewrite_header(archive, bad, lambda c, u, s, r, h: (c, u, s, r, _flip32(h)))
     staging = tmp_path / "verified-staging"
     result = POLICY.extract_verified_into_staging(bad, staging)
     assert result["ok"] is True
@@ -52,15 +48,12 @@ def test_record_scope_payload_auth_and_rollback(tmp_path: Path) -> None:
     with pytest.raises(Exception):
         PRODUCT.read_member(bad, member)
 
-    # Folding semantic hashes must never fold physical payload authentication or transactional safety.
     bad_payload = tmp_path / "bad-payload.cmpct"
     hostile._mutate_payload(archive, bad_payload)
     rollback = hostile._assert_destination_rollback(bad_payload, tmp_path / "rollback-dst")
-    assert rollback["failed_closed"] is True
-    assert rollback["destination_tree_preserved"] is True
+    assert rollback["failed_closed"] is True and rollback["destination_tree_preserved"] is True
     post_crc = hostile._post_crc_fault(archive, tmp_path / "post-crc-out")
-    assert post_crc["failed_closed"] is True
-    assert post_crc["fault_injected"] is True
+    assert post_crc["failed_closed"] is True and post_crc["fault_injected"] is True
 
 
 def test_node_and_file_semantic_sha_are_deferred_only_by_verified_staging(tmp_path: Path, monkeypatch) -> None:
@@ -81,14 +74,19 @@ def test_node_and_file_semantic_sha_are_deferred_only_by_verified_staging(tmp_pa
             scoped.setattr(R, "_g04_open", opened)
             staging = tmp_path / f"staging-{label}"
             result = POLICY.extract_verified_into_staging(archive, staging)
-            assert result["ok"] is True
-            assert result["tree_sha256"] == expected_graph_tree
+            assert result["ok"] is True and result["tree_sha256"] == expected_graph_tree
             with pytest.raises(RuntimeError):
                 R._stream_g04(archive, None, R.MAX_DECLARED_LOGICAL_BYTES)
 
     def mutate_node(meta: dict) -> None:
-        assert meta["nodes"]
-        meta["nodes"][0][-1] = _flip32(meta["nodes"][0][-1])
+        referenced = None
+        for rel in sorted(meta["files"]):
+            desc = meta["files"][rel]
+            if desc[0] != "preflate" and desc[1]:
+                referenced = int(desc[1][0])
+                break
+        assert referenced is not None
+        meta["nodes"][referenced][-1] = _flip32(meta["nodes"][referenced][-1])
 
     def mutate_file(meta: dict) -> None:
         rel = sorted(meta["files"])[0]
