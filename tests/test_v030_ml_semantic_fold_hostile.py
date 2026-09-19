@@ -1,3 +1,4 @@
+"""Hostile research gate for ML verification folding; never release authority by itself."""
 from pathlib import Path
 
 from benchmarks import v030_ml_semantic_fold_hostile as hostile
