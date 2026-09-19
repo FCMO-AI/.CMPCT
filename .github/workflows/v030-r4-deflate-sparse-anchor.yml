@@ -2,9 +2,16 @@
 name: CMPCT v0.30 R4 sparse-anchor DEFLATE oracle
 
 # Historical lower-bound research oracle. Its hypothesis and durable result are preserved,
-# but it is not current v0.30 product/release authority. Keep it manually reproducible
-# without charging every long-lived integration-PR commit a hosted classifier job.
+# but it is not current v0.30 product/release authority. Avoid long-lived-PR admission;
+# retain a narrow push route while this workflow is absent from the default branch, because
+# GitHub only honors workflow_dispatch when the workflow file exists on the default branch.
 on:
+  push:
+    branches:
+      - 'agent/v030-*'
+    paths:
+      - 'benchmarks/v030_r4_deflate_sparse_anchor_oracle.py'
+      - '.github/workflows/v030-r4-deflate-sparse-anchor.yml'
   workflow_dispatch:
 
 permissions:
