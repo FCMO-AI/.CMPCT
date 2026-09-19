@@ -32,9 +32,9 @@ def _sha(path: Path) -> str:
 
 
 def _worker(kind: str, candidate: bool, source: str, out: str, q) -> None:
+    # These are the exact pack-plan owners exercised by the accepted v0.28 and attempt-5 children.
     owner = A5.BASE.P.PARENT.V028 if kind == 'attempt5' else A5.V028
     old_choose = owner._choose_pack_plan
-    old_position = None
     try:
         if candidate:
             def cached_choose(nodes, sketches, roots):
@@ -43,9 +43,8 @@ def _worker(kind: str, candidate: bool, source: str, out: str, q) -> None:
                 return chosen, trials
             owner._choose_pack_plan = cached_choose
         if kind == 'attempt5':
-            position_owner = A5.BASE.P
-            old_position = position_owner._position_independent_candidates
-            position_owner._position_independent_candidates = lambda _s, _n: []
+            # Unlike the earlier owner-isolation A/B, whole-product transfer must execute the complete accepted
+            # attempt-5 child, including its position-independent candidate path.
             stats = A5.build_graph(Path(source), Path(out))
         elif kind == 'v028':
             stats = A5.V028.build(Path(source), Path(out))
@@ -56,8 +55,6 @@ def _worker(kind: str, candidate: bool, source: str, out: str, q) -> None:
         q.put({'kind': kind, 'ok': False, 'error': repr(exc)})
     finally:
         owner._choose_pack_plan = old_choose
-        if old_position is not None:
-            A5.BASE.P._position_independent_candidates = old_position
 
 
 def _portfolio(candidate: bool, source: Path, out: Path) -> dict:
@@ -108,7 +105,7 @@ def run(work: Path, pairs: int) -> dict:
     vals=sorted(x['wall_improvement_pct'] for x in rows)
     return {'schema':'cmpct-v030-pack-cache-parallel-product-v1','release_credit':False,'pairs':pairs,'rows':rows,
             'median_wall_improvement_pct':vals[len(vals)//2],
-            'claim_boundary':'Whole parallel-portfolio topology A/B on ML corpus; exact bytes mandatory; authoritative release runtime remains unpaid.'}
+            'claim_boundary':'Whole accepted parallel-portfolio topology A/B on ML corpus; exact bytes mandatory; authoritative release runtime remains unpaid.'}
 
 
 def main():
