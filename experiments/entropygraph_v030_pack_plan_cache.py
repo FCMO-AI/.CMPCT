@@ -1,12 +1,11 @@
 """Bounded exact compressed-length reuse for the v0.30 pack-plan product experiment.
 
-This module deliberately changes no archive grammar or selector semantics.  It caches only the
+This module deliberately changes no archive grammar or selector semantics. It caches only the
 exact stored payload length for structurally identical groups during one six-limit pack-plan
-tournament.  Raw/compressed bytes are never retained across trials.
+tournament. Raw/compressed bytes are never retained across trials.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass
 import importlib.util
 from pathlib import Path
 from typing import Callable
@@ -27,18 +26,24 @@ def _load_v028():
 V028 = _load_v028()
 
 
-@dataclass
 class CacheStats:
-    hits: int = 0
-    misses: int = 0
+    """Tiny mutable counter; intentionally avoids adding retained payload state."""
+    __slots__ = ("hits", "misses")
+
+    def __init__(self) -> None:
+        self.hits = 0
+        self.misses = 0
+
+    def __eq__(self, other: object) -> bool:
+        return isinstance(other, CacheStats) and (self.hits, self.misses) == (other.hits, other.misses)
 
 
 def choose_pack_plan_cached(nodes: list[bytes], sketches, root_ids: list[int], *,
                             compress_record: Callable[[bytes], tuple[int, bytes]] | None = None):
     """Return the inherited pack choice while reusing only exact payload lengths.
 
-    Cache identity is the ordered tuple of node IDs.  That identity is sufficient inside one
-    invocation because `nodes` and compression level are immutable for the tournament.  The cache
+    Cache identity is the ordered tuple of node IDs. That identity is sufficient inside one
+    invocation because `nodes` and compression level are immutable for the tournament. The cache
     dies with this call, bounding retained state to O(number of distinct trial groups) integers.
     """
     compress = compress_record or V028._compress_record
@@ -76,16 +81,15 @@ def choose_pack_plan_cached(nodes: list[bytes], sketches, root_ids: list[int], *
         logical_weight = 0
         for group in groups:
             key = tuple(group)
-            payload_len = lengths.get(key)
-            if payload_len is None:
+            if key in lengths:
+                payload_len = lengths[key]
+                stats.hits += 1
+            else:
                 raw = b"".join(nodes[i] for i in group)
                 _, payload = compress(raw)
                 payload_len = len(payload)
                 lengths[key] = payload_len
                 stats.misses += 1
-            else:
-                raw = None
-                stats.hits += 1
             bytes_cost += V028.PH.size + payload_len
             group_raw_len = sum(len(nodes[i]) for i in group)
             for i in group:
