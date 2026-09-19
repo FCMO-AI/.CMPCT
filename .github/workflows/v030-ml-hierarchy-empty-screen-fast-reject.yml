@@ -5,6 +5,7 @@ on:
     branches: [agent/v030-ml-hierarchy-empty-screen-fast-reject]
     paths:
       - 'benchmarks/v030_ml_hierarchy_empty_screen_fast_reject.py'
+      - 'benchmarks/v030_ml_hierarchy_empty_screen_fast_reject_direct.py'
       - '.github/workflows/v030-ml-hierarchy-empty-screen-fast-reject.yml'
   workflow_dispatch:
 permissions:
@@ -31,11 +32,11 @@ jobs:
           sudo apt-get update && sudo apt-get install -y zstd gcc
           python -m pip install -e .
           python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
-      - run: python -m py_compile benchmarks/v030_ml_hierarchy_empty_screen_fast_reject.py
-      - run: python benchmarks/v030_ml_hierarchy_empty_screen_fast_reject.py
+      - run: python -m py_compile benchmarks/v030_ml_hierarchy_empty_screen_fast_reject.py benchmarks/v030_ml_hierarchy_empty_screen_fast_reject_direct.py
+      - run: python benchmarks/v030_ml_hierarchy_empty_screen_fast_reject_direct.py
       - uses: actions/upload-artifact@v6
         with:
           name: v030-ml-hierarchy-empty-screen-${{ env.EVIDENCE_HEAD }}
-          path: benchmark-artifacts/v030-ml-hierarchy-empty-screen.json
+          path: benchmark-artifacts/v030-ml-hierarchy-empty-direct.json
           if-no-files-found: error
           retention-days: 30
