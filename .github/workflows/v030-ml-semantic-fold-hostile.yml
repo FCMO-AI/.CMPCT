@@ -1,0 +1,25 @@
+# ci-lane: fast
+name: CMPCT v0.30 ML semantic-fold hostile proof
+on:
+  push:
+    branches: [agent/v030-ml-verification-fold-hostile]
+    paths: ['benchmarks/v030_ml_semantic_fold_hostile.py','.github/workflows/v030-ml-semantic-fold-hostile.yml']
+  workflow_dispatch:
+permissions: {contents: read}
+env: {PYTHONPATH: '${{ github.workspace }}', EVIDENCE_HEAD: '${{ github.sha }}'}
+concurrency: {group: 'v030-ml-semantic-fold-hostile-${{ github.ref }}', cancel-in-progress: true}
+jobs:
+  hostile:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.12'}
+      - run: pip install -r requirements.txt
+      - run: python benchmarks/v030_ml_semantic_fold_hostile.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: v030-ml-semantic-fold-hostile-${{ github.sha }}
+          path: benchmark-artifacts/v030-ml-semantic-fold-hostile.json
