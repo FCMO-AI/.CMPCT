@@ -2,9 +2,10 @@ from __future__ import annotations
 
 """Fresh-process A/B for explicit G04 attempt-5 custody.
 
-Research evidence only. Each measured arm runs in a new Python process so allocator/import state and
-``ru_maxrss`` are scoped to one build rather than accumulated across an in-process A/B. The parent owns
-balanced ordering and exact identity checks. This does not replace the full v0.30 release-performance gate.
+Research evidence only. Each measured arm runs in a new Python process so allocator/import state does not
+accumulate across an in-process A/B. ``ru_maxrss`` is retained only as a per-arm high-water observation; it is
+not a simultaneous process-tree RSS meter. The parent owns balanced ordering and exact identity checks. This
+does not replace the full v0.30 release-performance gate.
 """
 
 import argparse
@@ -38,7 +39,7 @@ def _usage() -> dict:
     child_usage = resource.getrusage(resource.RUSAGE_CHILDREN)
     return {
         "cpu_s": self_usage.ru_utime + self_usage.ru_stime + child_usage.ru_utime + child_usage.ru_stime,
-        "peak_rss_kib": max(int(self_usage.ru_maxrss), int(child_usage.ru_maxrss)),
+        "rss_highwater_kib_observed": max(int(self_usage.ru_maxrss), int(child_usage.ru_maxrss)),
     }
 
 
@@ -65,7 +66,7 @@ def _worker(arm: str, source: Path, out: Path) -> dict:
         "arm": arm,
         "wall_s": wall,
         "cpu_s": after["cpu_s"] - before["cpu_s"],
-        "peak_rss_kib": after["peak_rss_kib"],
+        "rss_highwater_kib_observed": after["rss_highwater_kib_observed"],
         "archive_bytes": out.stat().st_size,
         "archive_sha256": _sha256(out),
         "tree_sha256": verified.get("tree_sha256"),
@@ -119,7 +120,7 @@ def run(work: Path) -> dict:
             "explicit": explicit,
             "wall_saving_fraction": 1.0 - explicit["wall_s"] / control["wall_s"],
             "cpu_saving_fraction": 1.0 - explicit["cpu_s"] / control["cpu_s"],
-            "rss_ratio": explicit["peak_rss_kib"] / max(1, control["peak_rss_kib"]),
+            "rss_highwater_ratio_observed": explicit["rss_highwater_kib_observed"] / max(1, control["rss_highwater_kib_observed"]),
         })
     return {
         "schema": "cmpct-v030-g04-explicit-fresh-process-v1",
@@ -127,8 +128,8 @@ def run(work: Path) -> dict:
         "pairs": pairs,
         "median_wall_saving_fraction": statistics.median(p["wall_saving_fraction"] for p in pairs),
         "median_cpu_saving_fraction": statistics.median(p["cpu_saving_fraction"] for p in pairs),
-        "max_rss_ratio": max(p["rss_ratio"] for p in pairs),
-        "claim_boundary": "Fresh-process ML mechanism evidence only; full promoted-product three-target and 15-workload authorities remain required.",
+        "max_rss_highwater_ratio_observed": max(p["rss_highwater_ratio_observed"] for p in pairs),
+        "claim_boundary": "Fresh-process ML mechanism evidence only. ru_maxrss is a per-arm high-water observation, not simultaneous process-tree RSS; full promoted-product three-target and 15-workload authorities remain required.",
     }
 
 
