@@ -1,0 +1,23 @@
+{
+  "schema": "cmpct-v030-shared-build-rehab-evidence-v1",
+  "provenance": {
+    "workflow_run_id": 35420528763,
+    "artifact_id": 10577562422,
+    "artifact_zip_sha256": "acda12d7f37de1111dfc79a35b9ec24f198b8c711b428a22a98e711e352404e7",
+    "full_evidence_json_sha256": "7856a1152b3b7adaae420cf3403a31a65782e2aaf7a9eedf5d4d003abe986850",
+    "source_sha": "4a44115797be18e4975417a1792dc1884868a7e6",
+    "candidate_fingerprint": "de41a1705e2c5099563982bf355a274e35a25f2b9395c5fab5a4c969d5536e41"
+  },
+  "source_surface": "experiments/entropygraph_v030_shared_portfolio.py",
+  "control_surface": "experiments/entropygraph_v030_geometry_overlay_g04_publish.py",
+  "control_contract": "duplicated-attempt5 + streamed-publication-sha256",
+  "workload": "neutral_hostile_v1/09_ml_artifacts",
+  "contract": {"minimum_wallclock_improvement_pct": 20.0, "minimum_wallclock_improvement_s": 5.0, "attempt5_graph_build_count": 1},
+  "facts": {"byte_identical": true, "wallclock_improvement_pct": 34.179643104128075, "wallclock_improvement_s": 25.851210563500025, "attempt5_graph_build_count": 1},
+  "pairs": [
+    {"rep":0,"execution_order":["duplicated","shared"],"duplicated":{"wall_s":75.27295904200001,"cpu_s":101.912183,"rss_highwater_kib_observed":162052,"archive_bytes":13674596,"archive_sha256":"d8a871d84de626dcac4809fef97c6fb74ef68744f07d47553c2f896fe7affb9f","tree_sha256":"efc09910fea8ef67d24cd8957d3d576df3a7cc7f10f14585e3a3ae269017901d"},"shared":{"wall_s":49.590758478,"cpu_s":76.563203,"rss_highwater_kib_observed":162304,"archive_bytes":13674596,"archive_sha256":"d8a871d84de626dcac4809fef97c6fb74ef68744f07d47553c2f896fe7affb9f","tree_sha256":"efc09910fea8ef67d24cd8957d3d576df3a7cc7f10f14585e3a3ae269017901d","attempt5_graph_build_count":1,"selection_extra_payload_write_bytes":0},"wallclock_improvement_s":25.682200564000013,"wallclock_improvement_pct":34.118760429851214,"cpu_improvement_pct":24.873355916632654,"rss_ratio_observed":1.0015550564016489},
+    {"rep":1,"execution_order":["shared","duplicated"],"duplicated":{"wall_s":75.99246790600003,"cpu_s":102.948641,"rss_highwater_kib_observed":162208,"archive_bytes":13674596,"archive_sha256":"d8a871d84de626dcac4809fef97c6fb74ef68744f07d47553c2f896fe7affb9f","tree_sha256":"efc09910fea8ef67d24cd8957d3d576df3a7cc7f10f14585e3a3ae269017901d"},"shared":{"wall_s":49.97224734299999,"cpu_s":77.06057100000001,"rss_highwater_kib_observed":162056,"archive_bytes":13674596,"archive_sha256":"d8a871d84de626dcac4809fef97c6fb74ef68744f07d47553c2f896fe7affb9f","tree_sha256":"efc09910fea8ef67d24cd8957d3d576df3a7cc7f10f14585e3a3ae269017901d","attempt5_graph_build_count":1,"selection_extra_payload_write_bytes":0},"wallclock_improvement_s":26.020220563000038,"wallclock_improvement_pct":34.24052577840494,"cpu_improvement_pct":25.14658741342684,"rss_ratio_observed":0.9990629315446834}
+  ],
+  "gate":{"passed":true},
+  "claim_boundary":"Programmatically derived from the exact uploaded artifact; release credit remains owned by strict receipt validation."
+}
