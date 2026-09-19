@@ -45,6 +45,6 @@ def build_parallel_with_attempt5(root: Path, out: Path, retained: Path) -> dict:
         chosen,selected=(a5,"mosaic") if ab < vb else (v028,"v028-fallback")
         durability=S._durable_replace(chosen,out); by={r["kind"]:r for r in rows}
         return {"selected":selected,"archive_bytes":out.stat().st_size,"archive_sha256":S._sha256(out),"parallel_create_s":time.perf_counter()-started,
-                "v028_child_s":by["v028"]["elapsed_s"],"attempt5_child_s":by["attempt5"]["elapsed_s"],"v028_bytes":vb,"attempt5_graph_bytes":ab,
-                "scheduler_mode":"parallel-independent-portfolio-explicit-handoff","selection_durability":durability,"accepted_engine":S.ACCEPTED_ENGINE,
-                "retained_attempt5":retention}
+                "v028_child_s":by["v028"]["elapsed_s"],"attempt5_child_s":by["attempt5"]["elapsed_s"],"attempt5_graph_build_count":1,
+                "v028_bytes":vb,"attempt5_graph_bytes":ab,"scheduler_mode":"parallel-independent-portfolio-explicit-handoff",
+                "selection_durability":durability,"accepted_engine":S.ACCEPTED_ENGINE,"retained_attempt5":retention}
