@@ -6,6 +6,9 @@ on:
     paths: ['.github/workflows/v030-pr152-scope-repair-apply.yml']
 permissions:
   contents: write
+concurrency:
+  group: pr152-scope-repair-${{ github.ref }}
+  cancel-in-progress: true
 jobs:
   apply:
     runs-on: ubuntu-24.04
@@ -57,7 +60,7 @@ jobs:
           replace_once(test,
               'assert R.release_single_buffer_delimiter_inverse(encoded, len(raw)) == raw\n    assert R._PRE_RELEASE_DELIMITER_INVERSE(encoded, len(raw)) == raw',
               'assert R.release_single_buffer_delimiter_inverse(encoded, len(raw)) == raw\n    assert R.release_bulk_one_byte_table_delimiter_inverse(encoded, len(raw)) == raw\n    assert R._PRE_RELEASE_DELIMITER_INVERSE(encoded, len(raw)) == raw')
-          # The replacement above occurs in the one-byte test only; explicit multi-byte and malformed tests keep\n          # exercising the default and historical controls. Add the bulk callable to multi-byte fallback too.\n          needle='assert R.release_single_buffer_delimiter_inverse(encoded, len(raw)) == raw\n    assert R._PRE_RELEASE_DELIMITER_INVERSE(encoded, len(raw)) == raw'
+          needle='assert R.release_single_buffer_delimiter_inverse(encoded, len(raw)) == raw\n    assert R._PRE_RELEASE_DELIMITER_INVERSE(encoded, len(raw)) == raw'
           p=Path(test); s=p.read_text(); assert needle in s
           p.write_text(s.replace(needle, 'assert R.release_single_buffer_delimiter_inverse(encoded, len(raw)) == raw\n    assert R.release_bulk_one_byte_table_delimiter_inverse(encoded, len(raw)) == raw\n    assert R._PRE_RELEASE_DELIMITER_INVERSE(encoded, len(raw)) == raw', 1))
           PY
