@@ -257,8 +257,9 @@ def extract_verified_into_staging(
     staging.mkdir(parents=True, exist_ok=True)
     magic = R._magic(archive)
     if magic == R.G04.MAG:
-        # Only this unpublished verified-staging owner may defer nested semantic SHA.
-        return R._stream_g04(archive, staging, max_output_bytes, verify_nested_semantic_sha=False)
+        # Verified unpublished staging alone owns both deferrals; no process-global parser mutation.
+        from experiments import entropygraph_v030_verified_restore as VR
+        return R._stream_g04(archive, staging, max_output_bytes, verify_nested_semantic_sha=False, delimiter_inverse=VR.release_bulk_one_byte_table_delimiter_inverse)
     if magic == R.PG.MAGIC:
         return R._stream_pg(archive, staging, max_output_bytes)
     raise RuntimeError("verified staging extraction accepts canonical r25 graph profiles only")

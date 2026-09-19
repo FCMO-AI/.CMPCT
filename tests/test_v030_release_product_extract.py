@@ -11,7 +11,7 @@ def test_verified_staging_streams_without_nested_transaction(tmp_path, monkeypat
     archive = tmp_path / "candidate.cmpct"
     archive.write_bytes(b"fixture")
     staging = tmp_path / "staging"
-    calls: list[tuple[Path, Path, int, bool]] = []
+    calls: list[tuple[Path, Path, int, bool, object]] = []
 
     monkeypatch.setattr(policy.R, "_magic", lambda _archive: policy.R.G04.MAG)
 
@@ -21,8 +21,9 @@ def test_verified_staging_streams_without_nested_transaction(tmp_path, monkeypat
         budget: int,
         *,
         verify_nested_semantic_sha: bool = True,
+        delimiter_inverse=None,
     ) -> dict:
-        calls.append((Path(source), Path(target), int(budget), bool(verify_nested_semantic_sha)))
+        calls.append((Path(source), Path(target), int(budget), bool(verify_nested_semantic_sha), delimiter_inverse))
         target.mkdir(parents=True, exist_ok=True)
         (target / "payload.bin").write_bytes(b"verified")
         return {"ok": True, "tree_sha256": "fixture"}
@@ -39,7 +40,11 @@ def test_verified_staging_streams_without_nested_transaction(tmp_path, monkeypat
     result = policy.extract_verified_into_staging(archive, staging, max_output_bytes=123)
 
     assert result["ok"] is True
-    assert calls == [(archive, staging, 123, False)]
+    assert len(calls) == 1
+    source, target, budget, nested_sha, inverse = calls[0]
+    assert (source, target, budget, nested_sha) == (archive, staging, 123, False)
+    from experiments import entropygraph_v030_verified_restore as verified_restore
+    assert inverse is verified_restore.release_bulk_one_byte_table_delimiter_inverse
     assert (staging / "payload.bin").read_bytes() == b"verified"
 
 

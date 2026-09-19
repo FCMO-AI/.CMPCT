@@ -35,7 +35,9 @@ _PRE_RELEASE_DELIMITER_INVERSE = C.SHARED.G.O.delimiter_inverse
 _MAX_PRECOMPUTED_DELIMITER_RUNS = 1024
 
 
-def release_single_buffer_delimiter_inverse(encoded: bytes, logical_size: int) -> bytes:
+def release_single_buffer_delimiter_inverse(
+    encoded: bytes, logical_size: int, *, bulk_one_byte_table: bool = False
+) -> bytes:
     """Invert exact DGO1 into one bounded logical buffer without per-segment output objects.
 
     DGO1 stores active segment bytes column-major.  For one column, any contiguous run of source segments having
@@ -56,16 +58,27 @@ def release_single_buffer_delimiter_inverse(encoded: bytes, logical_size: int) -
     if count < 1 or count > O.MAX_DELIMITER_SEGMENTS:
         raise RuntimeError("Geometry overlay delimiter segment count")
 
-    lengths: list[int] = []
-    logical_members = 0
-    max_len = 0
-    for _ in range(count):
-        length, pos = O._get_varint(encoded, pos)
-        if length > O.MAX_OVERLAY_RECORD or logical_members + length > O.MAX_OVERLAY_RECORD:
+    # A one-byte varint has its continuation bit clear.  Prove the entire length table in one C-level scan and
+    # materialize it directly; any high-bit byte or short slice falls back to the historical parser unchanged.
+    table = encoded[pos : pos + count]
+    if bulk_one_byte_table and len(table) == count and table.isascii():
+        lengths = list(table)
+        pos += count
+        logical_members = sum(lengths)
+        if logical_members > O.MAX_OVERLAY_RECORD:
             raise RuntimeError("Geometry overlay delimiter length budget")
-        lengths.append(length)
-        logical_members += length
-        max_len = max(max_len, length)
+        max_len = max(lengths, default=0)
+    else:
+        lengths = []
+        logical_members = 0
+        max_len = 0
+        for _ in range(count):
+            length, pos = O._get_varint(encoded, pos)
+            if length > O.MAX_OVERLAY_RECORD or logical_members + length > O.MAX_OVERLAY_RECORD:
+                raise RuntimeError("Geometry overlay delimiter length budget")
+            lengths.append(length)
+            logical_members += length
+            max_len = max(max_len, length)
     if logical_members + count - 1 != logical_size:
         raise RuntimeError("Geometry overlay delimiter logical-size mismatch")
     if count * max_len > O.MAX_DELIMITER_CELL_SCANS:
@@ -150,6 +163,11 @@ def release_single_buffer_delimiter_inverse(encoded: bytes, logical_size: int) -
     return bytes(out)
 
 
+def release_bulk_one_byte_table_delimiter_inverse(encoded: bytes, logical_size: int) -> bytes:
+    """Verified-staging-only DGO1 inverse with bulk one-byte length-table parsing."""
+    return release_single_buffer_delimiter_inverse(encoded, logical_size, bulk_one_byte_table=True)
+
+
 # Release-only installation.  Canonical-final has already isolated its dependency graph before this module is
 # imported by the release product front door.  Research modules therefore remain byte-oracle controls rather than
 # being silently rewritten along with the promoted implementation.
@@ -171,7 +189,7 @@ def restore_verified_manifest_tree(staging: Path, decoded: dict, *, safe_symlink
     if internal.exists() or internal.is_symlink():
         shutil.rmtree(internal, ignore_errors=True)
 
-    # Preserve a cheap structural guard after authenticated streaming.  The generic FS entry point continues to
+    # Preserve a cheap structural guard after authenticated streaming. The generic FS entry point continues to
     # perform its independent digest pass for callers without verified-stream provenance.
     for row in entries:
         rel, kind = row[0], row[1]
@@ -182,6 +200,9 @@ def restore_verified_manifest_tree(staging: Path, decoded: dict, *, safe_symlink
         if not target.is_file() or target.is_symlink() or target.stat().st_size != int(size):
             raise RuntimeError(f"r25 extracted regular-file shape mismatch: {rel}")
 
+    # Restore children before directory metadata so child creation cannot perturb directory mtimes. These are
+    # the exact operations owned by product_fs.restore_manifest_tree; only its redundant regular-file hash pass is
+    # intentionally absent here.
     for row in entries:
         rel, kind = row[0], row[1]
         target = staging.joinpath(*PurePosixPath(rel).parts)
@@ -203,9 +224,6 @@ def restore_verified_manifest_tree(staging: Path, decoded: dict, *, safe_symlink
             target.unlink(missing_ok=True)
             os.link(owner, target)
 
-    # Restore children before directory metadata so child creation cannot perturb directory mtimes.  These are
-    # the exact operations owned by product_fs.restore_manifest_tree; only its redundant regular-file hash pass is
-    # intentionally absent here.
     for row in entries:
         rel, kind, mode, mtime_ns, uid, gid, xattrs, _extra = row
         if kind == "d":
