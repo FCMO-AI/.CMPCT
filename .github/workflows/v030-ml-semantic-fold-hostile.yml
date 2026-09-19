@@ -2,19 +2,25 @@
 # Research-only hostile proof; no release credit.
 name: CMPCT v0.30 ML semantic-fold hostile proof
 on:
+  pull_request:
+    paths:
+      - 'benchmarks/v030_ml_semantic_fold_hostile.py'
+      - 'tests/test_v030_ml_semantic_fold_hostile.py'
+      - '.github/workflows/v030-ml-semantic-fold-hostile.yml'
   push:
     branches: [agent/v030-ml-verification-fold-hostile]
     paths:
       - 'benchmarks/v030_ml_semantic_fold_hostile.py'
+      - 'tests/test_v030_ml_semantic_fold_hostile.py'
       - '.github/workflows/v030-ml-semantic-fold-hostile.yml'
   workflow_dispatch:
 permissions:
   contents: read
 env:
   PYTHONPATH: ${{ github.workspace }}
-  EVIDENCE_HEAD: ${{ github.sha }}
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
 concurrency:
-  group: v030-ml-semantic-fold-hostile-${{ github.ref }}
+  group: v030-ml-semantic-fold-hostile-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 jobs:
   hostile:
