@@ -1,0 +1,97 @@
+# ci-lane: deep
+# ci-cancel-policy: preserve-running-exact-receipt
+name: CMPCT v0.30 G0-G4 ML record-cache policy oracle
+
+on:
+  push:
+    branches:
+      - agent/v030-authoritative-integration
+    paths:
+      - 'benchmarks/v030_g04_ml_record_cache_policy_oracle.py'
+      - 'experiments/entropygraph_v030_release_reader.py'
+      - 'experiments/entropygraph_v030_release_product.py'
+      - '.github/workflows/v030-g04-ml-record-cache-policy.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: v030-g04-ml-record-cache-${{ github.ref }}
+  # This exact A/B legitimately needs ~20+ minutes. Branch-push path filtering means unrelated integration commits
+  # no longer enqueue it at all; if another relevant ML change arrives, preserve the running exact receipt and leave
+  # only the newest relevant push pending. Research evidence never substitutes for final exact-candidate authority.
+  cancel-in-progress: false
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.sha }}
+
+jobs:
+  ml-record-cache-policy:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - name: Bind exact candidate head
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install deterministic runtime dependencies from Ubuntu only
+        run: |
+          set -euo pipefail
+          test -f /etc/apt/sources.list.d/ubuntu.sources
+          sudo apt-get -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" -o Dir::Etc::sourceparts="-" update
+          sudo apt-get -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" -o Dir::Etc::sourceparts="-" install -y zstd gcc ffmpeg libsndfile1
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[audio,test]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
+      - name: Compile exact reader experiment
+        run: python -m py_compile benchmarks/v030_g04_ml_record_cache_policy_oracle.py
+      - name: Run same-memory record-cache A/B
+        run: |
+          mkdir -p benchmark-artifacts
+          python -m benchmarks.v030_g04_ml_record_cache_policy_oracle \
+            --work-root benchmark-artifacts/v030-g04-ml-record-cache-work \
+            --output benchmark-artifacts/v030-g04-ml-record-cache.json
+      - name: Independently enforce unchanged memory and material speed evidence
+        if: always()
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          p=Path('benchmark-artifacts/v030-g04-ml-record-cache.json')
+          assert p.exists(), 'ML record-cache evidence missing'
+          d=json.loads(p.read_text())
+          assert d['schema']=='cmpct-v030-g04-ml-record-cache-policy-v1'
+          assert d['target']=='neutral_hostile_v1/09_ml_artifacts'
+          assert d['memory_budget_change_bytes']==0
+          assert d['cache_policy_inputs']==['authenticated_physical_record_reference_counts']
+          assert d['canonical_profile_binding']['revision']==25
+          assert d['canonical_profile_binding']['operation_scoped'] is True
+          assert d['contract']['node_cache_limit_bytes']==32*1024*1024
+          assert d['contract']['record_cache_limit_bytes']==64*1024*1024
+          g=d['gate']
+          assert g['same_node_cache_limit'] is True
+          assert g['same_record_cache_limit'] is True
+          assert g['one_shot_records_actually_skipped'] is True
+          assert g['physical_record_reads_not_increased'] is True
+          assert d['verify_improvement_fraction'] >= d['contract']['minimum_verify_improvement_fraction']
+          assert d['extract_improvement_fraction'] >= d['contract']['minimum_extract_improvement_fraction']
+          assert g['passed'] is True
+          PY
+      - name: CI topology self-check
+        if: always()
+        run: python tools/check_ci_topology.py .github/workflows/v030-g04-ml-record-cache-policy.yml
+      - name: Upload ML record-cache evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: v030-g04-ml-record-cache-${{ env.EVIDENCE_HEAD }}
+          path: benchmark-artifacts/v030-g04-ml-record-cache.json
+          if-no-files-found: error
+          retention-days: 90

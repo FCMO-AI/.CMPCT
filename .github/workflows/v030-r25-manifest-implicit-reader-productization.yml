@@ -1,0 +1,159 @@
+# ci-lane: deep
+# ci-pr-scope: latest-head-commit-gate
+# ci-cancel-policy: split-classifier-preserve-receipts
+name: CMPCT v0.30 r25 manifest implicit reader productization
+
+on:
+  push:
+    branches: [agent/v030-authoritative-integration]
+    paths:
+      - 'src/cmpct/**'
+      - 'benchmarks/v030_r25_manifest_derived_identity_oracle.py'
+      - 'benchmarks/v030_r25_manifest_implicit_reader_productization.py'
+      - 'benchmarks/v030_release_generalization.py'
+      - 'experiments/entropygraph_v030_product_fs.py'
+      - 'experiments/entropygraph_v030_fs_implicit_v4.py'
+      - 'experiments/entropygraph_v030_canonical_final_impl.py'
+      - 'experiments/entropygraph_v030_release_candidate.py'
+      - 'tests/test_v030_fs_implicit_v4.py'
+      - '.github/workflows/v030-r25-manifest-implicit-reader-productization.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'src/cmpct/**'
+      - 'benchmarks/v030_r25_manifest_derived_identity_oracle.py'
+      - 'benchmarks/v030_r25_manifest_implicit_reader_productization.py'
+      - 'benchmarks/v030_release_generalization.py'
+      - 'experiments/entropygraph_v030_product_fs.py'
+      - 'experiments/entropygraph_v030_fs_implicit_v4.py'
+      - 'experiments/entropygraph_v030_canonical_final_impl.py'
+      - 'experiments/entropygraph_v030_release_candidate.py'
+      - 'tests/test_v030_fs_implicit_v4.py'
+      - '.github/workflows/v030-r25-manifest-implicit-reader-productization.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+
+jobs:
+  latest-head-impact:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    concurrency:
+      group: cmpct-v030-r25-manifest-implicit-reader-classifier-${{ github.event.pull_request.number || github.ref }}
+      cancel-in-progress: true
+    outputs:
+      run_deep: ${{ steps.scope.outputs.run_deep }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 2
+      - name: Bind exact head and classify only its changed files
+        id: scope
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            echo 'run_deep=true' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          git diff-tree --no-commit-id --name-only -r HEAD > /tmp/latest-head-files.txt
+          cat /tmp/latest-head-files.txt
+          if grep -Eq '^(src/cmpct/.*|benchmarks/v030_r25_manifest_(derived_identity_oracle|implicit_reader_productization)\.py|benchmarks/v030_release_generalization\.py|experiments/entropygraph_v030_(product_fs|fs_implicit_v4|canonical_final_impl|release_candidate)\.py|tests/test_v030_fs_implicit_v4\.py|\.github/workflows/v030-r25-manifest-implicit-reader-productization\.yml)$' /tmp/latest-head-files.txt; then
+            echo 'run_deep=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'run_deep=false' >> "$GITHUB_OUTPUT"
+            echo 'Accumulated PR paths matched, but newest exact commit cannot affect implicit-v4 reader productization.'
+          fi
+
+  reader-productization:
+    needs: latest-head-impact
+    if: needs.latest-head-impact.outputs.run_deep == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    concurrency:
+      group: cmpct-v030-r25-manifest-implicit-reader-receipt-${{ github.event.pull_request.head.sha || github.sha }}
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - name: Bind exact candidate head
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install exact corpus dependencies from canonical Ubuntu feed
+        run: |
+          set -euo pipefail
+          test -f /etc/apt/sources.list.d/ubuntu.sources
+          sudo apt-get -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" -o Dir::Etc::sourceparts="-" update
+          sudo apt-get -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" -o Dir::Etc::sourceparts="-" install -y zstd ffmpeg libsndfile1
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[test,audio]'
+      - name: Compile and ratchet implicit-v4 grammar
+        run: |
+          python -m py_compile \
+            benchmarks/v030_r25_manifest_derived_identity_oracle.py \
+            benchmarks/v030_r25_manifest_implicit_reader_productization.py \
+            experiments/entropygraph_v030_fs_implicit_v4.py
+          python -m pytest -q tests/test_v030_fs_implicit_v4.py
+      - name: Run archive-resident reader productization proof
+        run: |
+          mkdir -p benchmark-artifacts
+          python -m benchmarks.v030_r25_manifest_implicit_reader_productization \
+            --work-root "$RUNNER_TEMP/v030-r25-manifest-implicit-reader" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-r25-manifest-implicit-reader.json"
+      - name: Enforce productization boundary without release credit
+        run: |
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          d=json.loads(Path('benchmark-artifacts/v030-r25-manifest-implicit-reader.json').read_text())
+          assert d['schema']=='cmpct-v030-r25-manifest-implicit-reader-productization-v3'
+          assert d['source_commit']==os.environ['EVIDENCE_HEAD']
+          assert d['archive_bytes'] > 0
+          assert d['regular_members_verified'] > 0
+          assert d['control_member_exact'] is True
+          assert d['graph_control_identity_exact'] is True
+          assert d['filesystem_v1_semantics_exact'] is True
+          assert d['regular_identities_exact'] is True
+          assert d['hardlink_semantics_exact'] is True
+          assert d['user_tree_exact'] is True
+          assert d['within_release_locality_bounds'] is True
+          assert d['max_member_read_amplification'] <= 8.0
+          assert d['research_profile_context_only'] is True
+          assert d['shipping_profile_fail_closed_unchanged'] is True
+          assert d['release_credit'] is False
+          assert d['selector_change'] is False
+          assert d['canonical_grammar_change'] is False
+          PY
+      - name: CI topology self-check
+        if: always()
+        run: python tools/check_ci_topology.py .github/workflows/v030-r25-manifest-implicit-reader-productization.yml
+      - name: Public-surface guard
+        if: always()
+        run: python tools/check_public_surface.py
+      - name: Upload exact reader-productization evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: v030-r25-manifest-implicit-reader-${{ env.EVIDENCE_HEAD }}
+          path: benchmark-artifacts/v030-r25-manifest-implicit-reader.json
+          if-no-files-found: error
+          retention-days: 90
+
+# Research-only projection reader. The proof may enable the existing bounded revision-25 research context but
+# shipping profile classification remains fail closed. Recovery, native, Android, all-15 authority and final
+# release credit remain separate gates. The installed core package is part of the reader behavior, and split
+# classifier/exact-receipt custody cancels obsolete routing while preserving every admitted exact-SHA proof.

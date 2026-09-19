@@ -1,0 +1,193 @@
+name: CMPCT v0.30 ZIP portability authority
+# ci-lane: release
+# ci-cancel-policy: split-classifier-preserve-receipts
+# ci-pr-scope: latest-head-commit-gate
+
+on:
+  push:
+    branches:
+      - agent/v030-authoritative-integration
+    paths:
+      - 'native/cmpct-portable/**'
+      - 'native/cmpct-core/**'
+      - 'src/cmpct/**'
+      - 'tests/native_v030_zip_portability.py'
+      - 'tests/generate_v030_canonical_goldens.py'
+      - 'experiments/entropygraph_v030_release_lock_strict.py'
+      - 'docs/FORMAT.md'
+      - 'docs/PORTABILITY.md'
+      - 'docs/V030_RELEASE_LOCK.json'
+      - 'docs/v030-coordination/tasks/T01-native-portability.md'
+      - 'tools/check_ci_topology.py'
+      - 'pyproject.toml'
+      - '.github/workflows/v030-zip-portability.yml'
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'native/cmpct-portable/**'
+      - 'native/cmpct-core/**'
+      - 'src/cmpct/**'
+      - 'tests/native_v030_zip_portability.py'
+      - 'tests/generate_v030_canonical_goldens.py'
+      - 'experiments/entropygraph_v030_release_lock_strict.py'
+      - 'docs/FORMAT.md'
+      - 'docs/PORTABILITY.md'
+      - 'docs/V030_RELEASE_LOCK.json'
+      - 'docs/v030-coordination/tasks/T01-native-portability.md'
+      - 'tools/check_ci_topology.py'
+      - 'pyproject.toml'
+      - '.github/workflows/v030-zip-portability.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+
+jobs:
+  latest-head-impact:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    concurrency:
+      group: cmpct-v030-zip-portability-classifier-${{ github.event.pull_request.number || github.ref }}
+      cancel-in-progress: true
+    outputs:
+      run_portability: ${{ steps.scope.outputs.run_portability }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 2
+      - name: Bind exact head and classify newest commit only
+        id: scope
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          HEAD_REF: ${{ github.head_ref }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            echo 'run_portability=true' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if [ "$EVENT_NAME" = "pull_request" ] && [ "$HEAD_REF" = "agent/v030-authoritative-integration" ]; then
+            echo 'run_portability=false' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          git diff-tree --no-commit-id --name-only -r HEAD > /tmp/latest-head-files.txt
+          cat /tmp/latest-head-files.txt
+          if grep -Eq '^(native/cmpct-(portable|core)/|src/cmpct/|tests/(native_v030_zip_portability|generate_v030_canonical_goldens)\.py|experiments/entropygraph_v030_release_lock_strict\.py|docs/(FORMAT|PORTABILITY)\.md|docs/V030_RELEASE_LOCK\.json|docs/v030-coordination/tasks/T01-native-portability\.md|tools/check_ci_topology\.py|pyproject\.toml|\.github/workflows/v030-zip-portability\.yml)' /tmp/latest-head-files.txt; then
+            echo 'run_portability=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'run_portability=false' >> "$GITHUB_OUTPUT"
+          fi
+
+  zip-portability:
+    needs: latest-head-impact
+    if: needs.latest-head-impact.outputs.run_portability == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    concurrency:
+      group: cmpct-v030-zip-portability-receipt-${{ github.event.pull_request.head.sha || github.sha }}
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - name: Bind exact clean candidate and portable dependency graph
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          git ls-files --error-unmatch native/cmpct-portable/Cargo.lock >/dev/null
+          cp native/cmpct-portable/Cargo.lock "$RUNNER_TEMP/Cargo.lock.clean"
+          sha256sum native/cmpct-portable/Cargo.lock | tee "$RUNNER_TEMP/Cargo.lock.clean.sha256"
+          python -m experiments.entropygraph_v030_release_lock_strict --print-fingerprint \
+            > "$RUNNER_TEMP/cmpct-v030-fingerprint.clean.json"
+          test -z "$(git status --porcelain=v1)"
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install deterministic dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y zstd
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[test]'
+      - name: Build shared native portable CLI with frozen dependency graph
+        working-directory: native/cmpct-portable
+        run: cargo build --release --locked
+      - name: Prove r24/G04/PrefixGraph stock-ZIP parity and transactional failure
+        run: |
+          python tests/native_v030_zip_portability.py \
+            --binary native/cmpct-portable/target/release/cmpct-portable
+      - name: Prove release identity and Cargo resolution did not drift
+        run: |
+          set -euo pipefail
+          cmp native/cmpct-portable/Cargo.lock "$RUNNER_TEMP/Cargo.lock.clean"
+          git diff --exit-code -- native/cmpct-portable/Cargo.lock
+          python -m experiments.entropygraph_v030_release_lock_strict --print-fingerprint \
+            > "$RUNNER_TEMP/cmpct-v030-fingerprint.after.json"
+          python - <<'PY'
+          import json, os, pathlib
+          temp = pathlib.Path(os.environ['RUNNER_TEMP'])
+          before = json.loads((temp / 'cmpct-v030-fingerprint.clean.json').read_text())['candidate_fingerprint']
+          after = json.loads((temp / 'cmpct-v030-fingerprint.after.json').read_text())['candidate_fingerprint']
+          if before != after:
+              raise SystemExit(f'release fingerprint mutated during ZIP portability: {before} -> {after}')
+          print(before)
+          PY
+      - name: Record exact-candidate ZIP portability evidence
+        run: |
+          python - <<'PY'
+          import hashlib, json, os, pathlib, subprocess
+          temp = pathlib.Path(os.environ['RUNNER_TEMP'])
+          lock = pathlib.Path('native/cmpct-portable/Cargo.lock')
+          fingerprint = json.loads((temp / 'cmpct-v030-fingerprint.clean.json').read_text())['candidate_fingerprint']
+          candidate_sha = subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip()
+          evidence = {
+              'schema': 'cmpct-v030-zip-portability-evidence-v2',
+              'candidate_sha': candidate_sha,
+              'candidate_fingerprint': fingerprint,
+              'native_dependency_lock_sha256': hashlib.sha256(lock.read_bytes()).hexdigest(),
+              'native_dependency_lock_bytes': lock.stat().st_size,
+              'native_dependency_lock_frozen': True,
+              'workflow': 'v030-zip-portability.yml',
+              'run_id': int(os.environ['GITHUB_RUN_ID']),
+              'run_attempt': int(os.environ['GITHUB_RUN_ATTEMPT']),
+              'facts': {
+                  'stock_zip_extract_tree_equal': True,
+                  'r24_fallback_export': True,
+                  'g04_export': True,
+                  'prefixgraph_export': True,
+                  'atomic_publication': True,
+              },
+          }
+          out = temp / 'cmpct-v030-zip-portability-evidence.json'
+          out.write_text(json.dumps(evidence, indent=2) + '\n')
+          print(json.dumps(evidence, indent=2))
+          PY
+      - name: CI topology self-check
+        run: python tools/check_ci_topology.py .github/workflows/v030-zip-portability.yml
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: cmpct-v030-zip-portability-${{ env.EVIDENCE_HEAD }}
+          path: |
+            ${{ runner.temp }}/cmpct-v030-zip-portability-evidence.json
+            ${{ runner.temp }}/Cargo.lock.clean.sha256
+          if-no-files-found: warn
+          retention-days: 30
+
+# This lane proves the strict `zip-portability` receipt facts and nothing else. The legacy `zip-parity.yml` workflow
+# remains an r24 core/performance regression gate and must not be promoted into r25 ZIP evidence. Successful parity
+# is tested independently for genuine r24 fallback, G0-G4 and PrefixGraph. A canonical link-bearing r25 archive must
+# fail closed without modifying an existing destination or leaking transaction files, so interoperability cannot be
+# manufactured by silently dropping filesystem semantics. The classifier is cheap/cancellable; every admitted
+# result-bearing receipt remains preserved and exact-SHA-bound. The candidate fingerprint is captured before Cargo or
+# test tooling runs, the committed portable lock is mandatory, every Cargo build uses --locked, and the receipt proves
+# both lock bytes and the complete release fingerprint stayed unchanged. T01 is deliberately outside the release
+# fingerprint, so its coordination-state updates provide a fingerprint-neutral request hook after the candidate is
+# frozen; this avoids changing product/evidence-critical bytes merely to regenerate a strict current-fingerprint ZIP receipt.

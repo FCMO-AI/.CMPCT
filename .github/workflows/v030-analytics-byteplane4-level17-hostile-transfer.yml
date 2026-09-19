@@ -1,0 +1,109 @@
+# ci-lane: deep
+# ci-pr-scope: latest-head-commit-gate
+# ci-cancel-policy: preserve-running-exact-receipt
+name: CMPCT v0.30 BytePlane4 level17 hostile transfer
+
+on:
+  push:
+    branches: [agent/v030-authoritative-integration]
+    paths:
+      - 'benchmarks/v030_analytics_byteplane4_level17_hostile_transfer.py'
+      - 'docs/V030_ANALYTICS_BYTEPLANE4_LEVEL17_HOSTILE_TRANSFER_MISSION_2026-09-12.md'
+      - '.github/workflows/v030-analytics-byteplane4-level17-hostile-transfer.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'benchmarks/v030_analytics_byteplane4_level17_hostile_transfer.py'
+      - 'docs/V030_ANALYTICS_BYTEPLANE4_LEVEL17_HOSTILE_TRANSFER_MISSION_2026-09-12.md'
+      - '.github/workflows/v030-analytics-byteplane4-level17-hostile-transfer.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+concurrency:
+  group: cmpct-v030-bp4-l17-hostile-${{ github.event.pull_request.head.sha || github.sha }}
+  cancel-in-progress: false
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+
+jobs:
+  latest-head-impact:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      run_deep: ${{ steps.scope.outputs.run_deep }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 2
+      - id: scope
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          if [ "$EVENT_NAME" = workflow_dispatch ]; then echo 'run_deep=true' >> "$GITHUB_OUTPUT"; exit 0; fi
+          git diff-tree --no-commit-id --name-only -r HEAD > /tmp/files
+          if grep -Eq '^(benchmarks/v030_analytics_byteplane4_level17_hostile_transfer\.py|docs/V030_ANALYTICS_BYTEPLANE4_LEVEL17_HOSTILE_TRANSFER_MISSION_2026-09-12\.md|\.github/workflows/v030-analytics-byteplane4-level17-hostile-transfer\.yml)$' /tmp/files; then
+            echo 'run_deep=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'run_deep=false' >> "$GITHUB_OUTPUT"
+          fi
+
+  hostile-transfer:
+    needs: latest-head-impact
+    if: needs.latest-head-impact.outputs.run_deep == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install frozen-corpus dependencies
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y zstd gcc ffmpeg libsndfile1
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[audio,test]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
+      - run: python -m py_compile benchmarks/v030_analytics_byteplane4_level17_hostile_transfer.py
+      - name: Execute generator-distinct hostile transfer
+        run: |
+          mkdir -p benchmark-artifacts
+          python benchmarks/v030_analytics_byteplane4_level17_hostile_transfer.py \
+            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-bp4-l17-hostile-work" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-bp4-l17-hostile.json"
+      - name: Enforce receipt integrity, not scientific victory
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          d=json.loads(Path('benchmark-artifacts/v030-bp4-l17-hostile.json').read_text())
+          assert d['schema']=='cmpct-v030-analytics-bp4-l17-hostile-transfer-v1'
+          assert d['experiment_valid'] is True and d['release_credit'] is False
+          assert set(d['fixtures'])=={'counter32','mixed32','random32','precompressed'}
+          assert d['contract']['level17_width4_gate_frozen_from_seed'] is True
+          assert d['contract']['generator_distinct'] is True
+          assert d['contract']['no_level_width_threshold_sweep'] is True
+          assert d['gate']['exact_tree_all_modes'] is True
+          assert d['verdict'] in {'LEVEL17_BP4_GENERATOR_TRANSFER','RETIRE_BP4_L17_GENERALIZATION_CLAIM'}
+          PY
+      - run: python tools/check_ci_topology.py .github/workflows/v030-analytics-byteplane4-level17-hostile-transfer.yml
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: v030-bp4-l17-hostile-${{ env.EVIDENCE_HEAD }}
+          path: benchmark-artifacts/v030-bp4-l17-hostile.json
+          if-no-files-found: error
+          retention-days: 90
+
+# Research-only hostile transfer. Green means receipt integrity, not a positive scientific verdict.

@@ -8,6 +8,8 @@ on:
       - ".github/AGENTS.md"
       - "docs/CI_ARCHITECTURE.md"
       - "tools/check_ci_topology.py"
+      - "tests/test_ci_topology.py"
+      - "tests/test_ci_topology_split_receipts.py"
   push:
     branches: [main]
     paths:
@@ -15,6 +17,8 @@ on:
       - ".github/AGENTS.md"
       - "docs/CI_ARCHITECTURE.md"
       - "tools/check_ci_topology.py"
+      - "tests/test_ci_topology.py"
+      - "tests/test_ci_topology_split_receipts.py"
   workflow_dispatch:
 
 permissions:
@@ -24,15 +28,27 @@ concurrency:
   group: cmpct-ci-topology-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
+env:
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+
 jobs:
   topology:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - name: Check out repository history
+      - name: Check out exact candidate history
         uses: actions/checkout@v6
         with:
+          ref: ${{ env.EVIDENCE_HEAD }}
           fetch-depth: 0
+      - name: Bind exact candidate head
+        run: |
+          set -euo pipefail
+          actual="$(git rev-parse HEAD)"
+          test "$actual" = "$EVIDENCE_HEAD"
+
+      - name: Install topology test dependencies
+        run: python -m pip install --disable-pip-version-check -e '.[test]'
 
       - name: Select workflow files that this change actually touched
         id: changed
@@ -41,10 +57,13 @@ jobs:
           BEFORE: ${{ github.event.before }}
         run: |
           set -euo pipefail
-          if [ "${{ github.event_name }}" = "pull_request" ] && [ -n "${PR_BASE:-}" ]; then
-            base="$PR_BASE"
-          elif [ -n "${BEFORE:-}" ] && [ "$BEFORE" != "0000000000000000000000000000000000000000" ]; then
+          # Pull-request synchronize payloads expose the previous head as `before`; prefer that so a long-lived
+          # integration PR does not re-ratchet every historical workflow edit on each new commit. Initial/opened
+          # events may not have a usable before SHA, in which case the PR base is the correct first-diff boundary.
+          if [ -n "${BEFORE:-}" ] && [ "$BEFORE" != "0000000000000000000000000000000000000000" ]; then
             base="$BEFORE"
+          elif [ "${{ github.event_name }}" = "pull_request" ] && [ -n "${PR_BASE:-}" ]; then
+            base="$PR_BASE"
           else
             base="HEAD^"
           fi
@@ -57,5 +76,13 @@ jobs:
           mapfile -t files < /tmp/changed-workflows.txt
           python tools/check_ci_topology.py "${files[@]}"
 
-# Footnote: this ratchet deliberately checks only new/materially edited workflow files. Existing legacy
-# workflows are migration debt, not precedent; touching one makes the new topology contract apply.
+      - name: Ratchet topology checker policy
+        run: |
+          python -m pytest -q \
+            tests/test_ci_topology.py \
+            tests/test_ci_topology_split_receipts.py
+
+# This ratchet deliberately checks the latest synchronization/push delta. Existing workflow debt is not precedent,
+# but it is also not reintroduced work: touching a workflow makes the current topology contract apply immediately.
+# Split classifier/receipt custody is itself executable policy: its focused tests must run whenever either the checker
+# or split-policy test changes so queue-pressure fixes cannot silently weaken exact-source evidence custody.

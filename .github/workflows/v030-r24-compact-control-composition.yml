@@ -1,0 +1,104 @@
+# ci-lane: deep
+# ci-auto-policy: retired-manual-only
+name: CMPCT v0.30 r24 compact-control composition
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.sha }}
+
+jobs:
+  compact-control-composition:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 240
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - name: Bind exact candidate head
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install exact corpus/compressor dependencies from canonical Ubuntu feed
+        run: |
+          set -euo pipefail
+          test -f /etc/apt/sources.list.d/ubuntu.sources
+          sudo apt-get -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" -o Dir::Etc::sourceparts="-" update
+          sudo apt-get -o Dir::Etc::sourcelist="sources.list.d/ubuntu.sources" -o Dir::Etc::sourceparts="-" install -y zstd gcc ffmpeg libsndfile1
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[audio,test]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
+      - name: Compile proof surface
+        run: |
+          python -m py_compile benchmarks/v030_r24_compact_control_oracle.py
+          python -m py_compile benchmarks/v030_r24_compact_control_composition_oracle.py
+          python -m py_compile benchmarks/v030_r24_compact_control_composition_oracle_v2.py
+          python -m py_compile tests/test_v030_r24_compact_control_composition.py
+      - name: Run focused semantic ratchet
+        run: pytest -q tests/test_v030_r24_compact_control_composition.py
+      - name: Run all-15 historical composition frontier
+        run: |
+          mkdir -p benchmark-artifacts
+          python benchmarks/v030_r24_compact_control_composition_oracle_v2.py \
+            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-r24-compact-control-composition-work" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-r24-compact-control-composition.json"
+      - name: Enforce exact historical evidence with zero promotion credit
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          p=Path('benchmark-artifacts/v030-r24-compact-control-composition.json')
+          if not p.is_file():
+              raise SystemExit('compact-control composition evidence missing')
+          d=json.loads(p.read_text())
+          assert d['schema']=='cmpct-v030-r24-compact-control-composition-v2'
+          a=d['all15']
+          assert a['workloads']==15
+          assert a['zero_projected_byte_regressions'] is True
+          assert a['all_semantics_preserved'] is True
+          assert a['improved_workloads']==15
+          assert a['aggregate_projected_bytes'] < a['aggregate_shipping_bytes']
+          assert a['aggregate_saving_bytes']==a['aggregate_shipping_bytes']-a['aggregate_projected_bytes']
+          assert all(row['payload_records_unchanged'] and row['two_control_copies'] for row in a['rows'])
+          assert all(int(row['saving_bytes'])>0 for row in a['rows'])
+          t=d['encrypted_like']
+          assert t['rounds']==5
+          assert t['shipping_size_deterministic'] is True
+          assert t['projected_size_deterministic'] is True
+          assert t['competitor_sizes_deterministic'] is True
+          assert t['dead_dictionary_elision_observed'] is True
+          assert t['compact_control_saving_bytes'] > 0
+          assert t['smaller_than_zip'] is True
+          assert t['faster_than_zstd19'] is True
+          potential = t['smaller_than_zip'] and t['smaller_than_zstd19'] and t['faster_than_zip'] and t['faster_than_zstd19']
+          assert t['strict_four_way_potential'] is potential
+          assert d['historical_four_way_potential'] is potential
+          assert d['experiment_valid'] is True
+          assert d['promotion_signal'] is False
+          assert d['selector_change'] is False
+          assert d['release_credit'] is False
+          PY
+      - name: Public-surface guard
+        if: always()
+        run: python tools/check_public_surface.py
+      - name: CI topology self-check
+        if: always()
+        run: python tools/check_ci_topology.py .github/workflows/v030-r24-compact-control-composition.yml
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: v030-r24-compact-control-composition-${{ env.EVIDENCE_HEAD }}
+          path: benchmark-artifacts/v030-r24-compact-control-composition.json
+          if-no-files-found: error
+          retention-days: 90
+
+# Historical zero-credit composition proof retained for manual reproduction. The later shipping terminal was
+# explicitly retired after exact authority found no valid admission envelope, so replaying this four-hour ancestor
+# automatically cannot advance v0.30 and materially delays current release-critical evidence.

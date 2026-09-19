@@ -3,7 +3,7 @@ package ai.fcmo.cmpct;
 import java.io.Closeable;
 import java.io.IOException;
 
-/** Thin Java ownership layer over the shared revision-24 native core. */
+/** Thin Java ownership layer over the shared CMPCT r24/r25 portable native reader. */
 final class CmpctNative {
     static final int KIND_FILE = 0;
     static final int KIND_DIR = 1;
@@ -12,8 +12,8 @@ final class CmpctNative {
     static final int MAX_BRIDGE_READ = 1024 * 1024;
 
     static {
-        // Footnote: cmpct_android is only a JNI shim. It links libcmpct_core.so so Android uses the
-        // same parser/range-read implementation and conformance boundary as every other platform.
+        // Footnote: cmpct_android is only a JNI shim. It links libcmpct_portable.so so Android uses the
+        // same r24 delegation, canonical-r25 admission/recovery checks and range semantics as desktop.
         System.loadLibrary("cmpct_android");
     }
 
@@ -53,6 +53,11 @@ final class CmpctNative {
         int revision() throws IOException {
             ensureOpen();
             return nativeRevision(handle);
+        }
+
+        void verify() throws IOException {
+            ensureOpen();
+            nativeVerify(handle);
         }
 
         int entryCount() throws IOException {
@@ -101,8 +106,13 @@ final class CmpctNative {
     private static native long nativeOpen(String path) throws IOException;
     private static native void nativeClose(long handle);
     private static native int nativeRevision(long handle) throws IOException;
+    private static native void nativeVerify(long handle) throws IOException;
     private static native int nativeEntryCount(long handle) throws IOException;
     private static native String nativeEntryPath(long handle, int index) throws IOException;
     private static native long[] nativeEntryInfo(long handle, int index) throws IOException;
     private static native byte[] nativeReadRange(long handle, int index, long offset, int length) throws IOException;
 }
+
+// Footnote: archive import calls the same complete portable verifier as desktop before registering a DocumentsUI
+// root. A valid magic/index with corrupted payload is therefore rejected rather than becoming a broken Android
+// filesystem root that fails only when the user later opens a member.

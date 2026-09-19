@@ -1,0 +1,124 @@
+# ci-lane: deep
+# ci-pr-scope: latest-head-commit-gate
+# ci-cancel-policy: preserve-running-exact-receipt
+name: CMPCT v0.30 micropack extension-value attribution
+
+on:
+  push:
+    branches: [agent/v030-authoritative-integration]
+    paths:
+      - 'benchmarks/v030_r24_micropack_extension_value_attribution.py'
+      - 'benchmarks/v030_r24_micropack_extension_bucket_ablation.py'
+      - 'benchmarks/v030_r24_locality_derived_micropack_referee.py'
+      - 'benchmarks/v030_r24_micropack_same_grammar_attribution.py'
+      - '.github/workflows/v030-r24-micropack-extension-value-attribution.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'benchmarks/v030_r24_micropack_extension_value_attribution.py'
+      - 'benchmarks/v030_r24_micropack_extension_bucket_ablation.py'
+      - 'benchmarks/v030_r24_locality_derived_micropack_referee.py'
+      - 'benchmarks/v030_r24_micropack_same_grammar_attribution.py'
+      - '.github/workflows/v030-r24-micropack-extension-value-attribution.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+concurrency:
+  group: cmpct-v030-micropack-extension-value-${{ github.event.pull_request.head.sha || github.sha }}
+  cancel-in-progress: false
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+
+jobs:
+  latest-head-impact:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      run_deep: ${{ steps.scope.outputs.run_deep }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 2
+      - id: scope
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          if [ "$EVENT_NAME" = workflow_dispatch ]; then echo 'run_deep=true' >> "$GITHUB_OUTPUT"; exit 0; fi
+          git diff-tree --no-commit-id --name-only -r HEAD > /tmp/files
+          if grep -Eq '^(benchmarks/v030_r24_micropack_extension_value_attribution\.py|benchmarks/v030_r24_micropack_extension_bucket_ablation\.py|benchmarks/v030_r24_locality_derived_micropack_referee\.py|benchmarks/v030_r24_micropack_same_grammar_attribution\.py|\.github/workflows/v030-r24-micropack-extension-value-attribution\.yml)$' /tmp/files; then
+            echo 'run_deep=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'run_deep=false' >> "$GITHUB_OUTPUT"
+          fi
+
+  extension-value-attribution:
+    needs: latest-head-impact
+    if: needs.latest-head-impact.outputs.run_deep == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install dependencies
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y zstd gcc ffmpeg libsndfile1
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[audio,test]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
+      - run: python -m py_compile benchmarks/v030_r24_micropack_extension_value_attribution.py benchmarks/v030_r24_micropack_extension_bucket_ablation.py benchmarks/v030_r24_locality_derived_micropack_referee.py benchmarks/v030_r24_micropack_same_grammar_attribution.py
+      - name: Execute attribution
+        run: |
+          mkdir -p benchmark-artifacts
+          python benchmarks/v030_r24_micropack_extension_value_attribution.py \
+            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-micropack-extension-value-work" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-micropack-extension-value.json"
+      - name: Enforce diagnostic receipt integrity
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          d=json.loads(Path('benchmark-artifacts/v030-micropack-extension-value.json').read_text())
+          assert d['schema']=='cmpct-v030-r24-micropack-extension-value-attribution-v1'
+          assert d['experiment_valid'] is True
+          assert d['release_credit'] is False
+          assert d['canonical_builder_changed'] is False
+          assert d['path_blind_delta_bytes'] == 10954
+          assert d['verdict'] in {
+              'EXTENSION_VALUE_ATTRIBUTED_TO_CROSS_FAMILY_GROUPING',
+              'EXTENSION_VALUE_NOT_YET_ATTRIBUTED',
+          }
+          PY
+      - name: Expose receipt summary
+        id: receipt
+        run: |
+          python - <<'PY' >> "$GITHUB_OUTPUT"
+          import json
+          from pathlib import Path
+          d=json.loads(Path('benchmark-artifacts/v030-micropack-extension-value.json').read_text())
+          short='cross-family' if d['verdict'].endswith('CROSS_FAMILY_GROUPING') else 'unattributed'
+          print(f"artifact_name=v030-extension-value-{short}-delta{d['path_blind_delta_bytes']}-eg{d['extension_group_count']}-pg{d['path_blind_group_count']}-mixed{d['path_blind_mixed_group_count']}")
+          PY
+      - run: python tools/check_ci_topology.py .github/workflows/v030-r24-micropack-extension-value-attribution.yml
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: ${{ steps.receipt.outputs.artifact_name || 'v030-extension-value-no-summary' }}-${{ env.EVIDENCE_HEAD }}
+          path: benchmark-artifacts/v030-micropack-extension-value.json
+          if-no-files-found: error
+          retention-days: 90
+
+# Diagnostic only: extension labels are allowed only in post-hoc attribution.

@@ -1,8 +1,54 @@
 # Native CMPCT core frontier
 
-Status: **active portability/conformance work / format revision 24 unchanged**.
+Status: **released interoperability floor r24; provisional shared r24/r25 portability layer active on the v0.30 integration branch**.
 
-`native/cmpct-core/` is the shared memory-safe read-only foundation intended to back the future native CLI, Android document provider, desktop archive browsers, Apple document integrations, Linux helpers, and eventually other bindings. Platform shells must not grow independent parsers once this core can supply the required operation.
+`native/cmpct-core/` remains the mature memory-safe revision-24 read-only foundation. `native/cmpct-portable/` is the provisional v0.30 shared dispatcher that places genuine r24 fallback and the fixed canonical revision-25 profiles behind one native process/C ABI surface. Platform shells must not grow independent parsers when either shared native layer can supply the required operation.
+
+## Provisional v0.30 shared portable layer
+
+The v0.30 integration branch adds `native/cmpct-portable/` as the release-facing native boundary for every representation the canonical selector may publish:
+
+- genuine revision 24 `CMPCT24\0`, delegated to the mature `cmpct-core` semantics rather than reinterpreted as r25;
+- revision-25 Geometry-Mosaic `CMP25G4\0` / `C25G4TL\0`;
+- revision-25 PrefixGraph depth-1 `CMP25PG\0` / `C25PGTL\0`;
+- explicit refusal of research-only `CMPNX*` identities as canonical product input.
+
+The portable crate supplies one dispatcher, a native CLI (`cmpct-portable`), and an opaque C ABI for archive open/profile detection, logical entry enumeration, bounded member reads, verification, extraction/export operations and locality statistics. Canonical r25 parsing shares the same bounded MessagePack/path/resource policy across native operations rather than letting Android or another platform shell reproduce the grammar.
+
+Revision-25 filesystem semantics are authenticated through the reserved manifest described in `docs/FORMAT.md`. Native open cross-checks manifest-declared regular-file identities against the authenticated content graph before exposing the public tree. Direct regular files and hardlink owners stream through the selected Geometry/PrefixGraph reader; symlink and directory semantics remain manifest-owned.
+
+### r25 materialization safety
+
+The shared native materializer repeats safety rules at the final publication boundary rather than relying only on parser preflight:
+
+- symlink targets are checked under **both POSIX and Windows lexical separator rules** independent of the host running extraction;
+- absolute/rooted/drive/UNC-like targets and any `..` component under slash or backslash interpretation are rejected by safe extraction;
+- `mtime_ns` remains a bounded **signed i64** through restoration, using checked add/sub around the Unix epoch so pre-1970 values cannot wrap through an unsigned cast into the distant future;
+- uid/gid/xattr application remains best-effort where host privilege/APIs cannot represent it, while authenticated archive metadata itself is never fabricated or silently rewritten.
+
+Footnote: parser safety and materializer safety are intentionally both tested. A target admitted safely on Linux must not become traversal-capable when the same bytes are later extracted on Windows, and accepting a signed timestamp in the manifest is incomplete if the extractor cannot preserve its sign.
+
+### r25 independent evidence surface
+
+The release-facing native gate is `.github/workflows/v030-native-authority.yml`. Its intended exact-candidate evidence includes:
+
+1. Python canonical product-boundary and profile-isolation tests;
+2. builder-independent fixed revision-25 golden reproduction from `tests/conformance/v030-r25-canonical.json` via `tests/generate_v030_canonical_goldens.py --check`;
+3. Rust formatting and `cargo clippy --all-targets -- -D warnings`;
+4. Rust hostile/parser/materializer tests and release build;
+5. canonical CMP25 CLI/C-ABI recovery and filesystem acceptance through `tests/native_v030_canonical.py`;
+6. complete revision-24 verification and truthful locality through `tests/native_v030_r24_verify_authority.py`;
+7. CI-topology self-validation.
+
+The canonical Python wrapper, preserved implementation module, profile-isolation loader and native crate are all trigger paths because changing any of them can alter the profile/dispatch contract native code must match.
+
+The presence of this code is **not yet release authority**. T01 stays open until the exact frozen v0.30 candidate has durable native/recovery/ZIP/platform receipts and the strict release lock accepts them.
+
+---
+
+## Revision-24 native foundation
+
+The remainder of this document preserves the detailed r24 capability/conformance record. It remains relevant because genuine r24 is the v0.30 product floor and fallback path.
 
 ## Implemented read surface
 
@@ -85,7 +131,7 @@ The important property is provenance: fixed bytes are acceptance targets, not re
 13. builder-independent virtual-ZIP component coverage for ZIP_STORED plus retained exact Deflate mode 1, and the mode-0 authenticated physical-Deflate component against its fixed oracle, including exact reconstruction/ranges, locality, corruption refusal, explicit resource bounds and malformed/ungated-representation refusal;
 14. builder-independent ZIP_STORED and Deflate-mode-1 virtual-ZIP archive reads through the public C ABI, plus the mode-0 negative ABI contract, including exact known ranges for supported modes, complete nested-ZIP SHA-256, typed bounds refusal, complete-read payload corruption refusal, and typed `Unsupported` for mode 0 until physical-source projection is wired.
 
-## Next implementation order
+## Revision-24 next implementation order
 
 1. wire the already-frozen virtual-ZIP Deflate stream mode 0 through archive dispatch by extending projection segments with an explicit source kind and routing physical codec-4 slices through the existing authenticated `deflate_physical` primitive; preserve the current negative ABI gate until that path passes the fixed oracle end-to-end;
 2. freeze an independent revision-24 vector for virtual-ZIP Deflate stream mode 2 and prove byte-identical zlib-compatible RFC-1951 generation for the recorded level before enabling it;
@@ -97,4 +143,4 @@ The important property is provenance: fixed bytes are acceptance targets, not re
 
 The native CLI should continue to be benchmarked against mature ZIP tools using CLI-vs-CLI/process-start semantics; do not mix its results with in-process library measurements.
 
-No item above requires a format revision unless implementing it reveals that revision-24 bytes are insufficient to express the required reader semantics. In that case the normal specification/version/conformance gate applies.
+No r24 item above requires a format revision unless implementing it reveals that revision-24 bytes are insufficient to express the required reader semantics. The provisional r25 layer is separately governed by `docs/FORMAT.md`, `docs/V030_RELEASE_GATES.md`, `docs/V030_CANONICAL_PRODUCT_ARCHITECTURE.md` and the strict v0.30 release lock.

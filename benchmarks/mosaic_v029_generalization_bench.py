@@ -6,14 +6,14 @@ The campaign-specific 18-workload gate has already passed. This harness returns 
 workloads that supported v0.28 and asks whether the research compiler preserves that frontier while
 improving at least one workload and staying inside the preregistered creation-cost/locality envelopes.
 
-Four neutral/hostile workloads now use the separately proven repair-v5 benchmark identity. Repair-v5 is
+Five neutral/hostile workloads now use the separately proven repair-v6 benchmark identity. Repair-v6 is
 not a candidate-only normalization: two independent GitHub runners matched every file manifest and exact
-v0.28 measurement before this harness was allowed to adopt the identity. The other eleven rows retain
+v0.28 measurement before this harness was allowed to adopt the identity. The other ten rows retain
 their historical v0.28 identities.
 
 Footnote: both embedded v0.28 and attempt #5 consume the exact same repaired source tree. Historical
 records remain immutable, and the performance/locality gate is unchanged; only the benchmark identity
-needed to remove a proven media-producer nondeterminism has advanced.
+needed to remove proven producer/toolchain nondeterminism has advanced.
 """
 
 import argparse
@@ -29,8 +29,8 @@ import time
 ROOT = Path(__file__).resolve().parents[1]
 ENGINE_PATH = ROOT / "experiments" / "entropygraph_v029_residual_strict.py"
 V028_HISTORY = ROOT / "benchmarks" / "history" / "2026-08-16-entropygraph-v028.json"
-REPAIR_HISTORY = ROOT / "benchmarks" / "history" / "2026-08-17-neutral-hostile-determinism-repair-v5.json"
-REPAIR_PATH = ROOT / "benchmarks" / "neutral_hostile_determinism_repair_v5.py"
+REPAIR_HISTORY = ROOT / "benchmarks" / "history" / "2026-08-19-neutral-hostile-determinism-repair-v6.json"
+REPAIR_PATH = ROOT / "benchmarks" / "neutral_hostile_determinism_repair_v6.py"
 CATEGORY_BASE_PATH = ROOT / "benchmarks" / "entropygraph_v028_bench.py"
 
 
@@ -62,8 +62,8 @@ def _preserved_rows() -> dict[tuple[str, str], dict]:
         rows[(row["suite"], row["name"])] = copy
 
     repair = json.loads(REPAIR_HISTORY.read_text(encoding="utf-8"))
-    if repair.get("schema") != "cmpct-neutral-hostile-v1-determinism-repair-v5-accepted-v1" or repair.get("accepted") is not True:
-        raise RuntimeError("portable neutral/hostile repair-v5 evidence is missing or unaccepted")
+    if repair.get("schema") != "cmpct-neutral-hostile-v1-determinism-repair-v6-accepted-v1" or repair.get("accepted") is not True:
+        raise RuntimeError("portable neutral/hostile repair-v6 evidence is missing or unaccepted")
     for fixed in repair["rows"]:
         key = ("neutral_hostile_v1", fixed["name"])
         inherited = dict(rows[key])
@@ -71,7 +71,7 @@ def _preserved_rows() -> dict[tuple[str, str], dict]:
             "tree_sha256": fixed["tree_sha256"],
             "candidate_bytes": int(fixed["v028_candidate_bytes"]),
             "logical_bytes": int(fixed["logical_bytes"]),
-            "baseline_identity": "neutral-hostile-repair-v5",
+            "baseline_identity": "neutral-hostile-repair-v6",
         })
         rows[key] = inherited
     return rows
@@ -174,7 +174,7 @@ def run(work_root: Path, *, with_category_baselines: bool = False) -> dict:
     preserved = _preserved_rows()
     neutral = _load(ROOT / "benchmarks" / "neutral_hostile_corpus_v1.py", "cmpct_v029_general_neutral_v3")
     hostile = _load(ROOT / "benchmarks" / "resemblance_hostile_corpus_v1.py", "cmpct_v029_general_hostile_v3")
-    repair = _load(REPAIR_PATH, "cmpct_v029_general_repair_v5")
+    repair = _load(REPAIR_PATH, "cmpct_v029_general_repair_v6")
     repair.install_generation_hooks(neutral)
 
     rows = []
@@ -219,7 +219,7 @@ def run(work_root: Path, *, with_category_baselines: bool = False) -> dict:
     totals = {
         "workloads": len(rows),
         "historical_baseline_rows": sum(row["baseline_identity"] == "historical-v0.28" for row in rows),
-        "repaired_baseline_rows": sum(row["baseline_identity"] == "neutral-hostile-repair-v5" for row in rows),
+        "repaired_baseline_rows": sum(row["baseline_identity"] == "neutral-hostile-repair-v6" for row in rows),
         "v028_bytes": v028_total,
         "candidate_bytes": candidate_total,
         "smaller_than_v028_pct": (
@@ -263,12 +263,12 @@ def run(work_root: Path, *, with_category_baselines: bool = False) -> dict:
     return {
         "schema": "cmpct-v029-generalization-v3",
         "claim_boundary": (
-            "attempt-5 generalization versus exact embedded v0.28 on 11 historical identities plus 4 portable repair-v5 identities"
+            "attempt-5 generalization versus exact embedded v0.28 on 10 historical identities plus 5 portable repair-v6 identities"
         ),
         "engine": "experiments/entropygraph_v029_residual_strict.py",
         "preserved_baselines": [
             "benchmarks/history/2026-08-16-entropygraph-v028.json",
-            "benchmarks/history/2026-08-17-neutral-hostile-determinism-repair-v5.json",
+            "benchmarks/history/2026-08-19-neutral-hostile-determinism-repair-v6.json",
         ],
         "category_baseline_contract": category_contract,
         "rows": rows,

@@ -1,0 +1,82 @@
+# ci-lane: deep
+name: CMPCT v0.30 locality-bounded solid oracle
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'benchmarks/v030_segmented_solid_oracle.py'
+      - 'benchmarks/v030_external_competitors.py'
+      - 'benchmarks/v030_release_generalization.py'
+      - '.github/workflows/v030-segmented-solid-oracle.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmpct-v030-segmented-solid-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+
+jobs:
+  segmented-solid-oracle:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install corpus and competitor dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y zstd gcc ffmpeg libsndfile1
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[audio,test]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
+      - name: Compile oracle
+        run: python -m py_compile benchmarks/v030_segmented_solid_oracle.py
+      - name: Run exact-tree locality-bounded solid sweep
+        run: |
+          mkdir -p benchmark-artifacts
+          python benchmarks/v030_segmented_solid_oracle.py \
+            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-segmented-solid-work" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-segmented-solid.json"
+      - name: Enforce evidence honesty and locality invariants
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          d=json.loads(Path('benchmark-artifacts/v030-segmented-solid.json').read_text())
+          assert d['schema']=='cmpct-v030-segmented-solid-oracle-v1'
+          assert d['claim_boundary'].startswith('research-only')
+          assert d['max_member_read_amplification']==8.0
+          assert d['max_decode_unit_bytes']==8*1024*1024
+          assert d['summary']['workloads']==15 and len(d['rows'])==15
+          assert d['summary']['all_candidates_locality_green'] is True
+          for row in d['rows']:
+              assert row['timing_boundary']=='source-scan+segment-plan+zstd-segments+manifest+sha256+archive-write'
+              assert all(c['tree_verified'] is True for c in row['candidates'])
+              for c in row['candidates']:
+                  assert c['max_member_read_amplification'] <= 8.0
+                  assert c['max_decode_unit_bytes'] <= 8*1024*1024
+                  assert c['locality_green'] is True
+                  assert abs(c['create_s']-(c['pack_source_s']+c['compress_manifest_hash_write_s'])) < 1e-9
+                  expected=all(c[k] for k in ('beats_zip_size','beats_zstd19_size','beats_zip_create','beats_zstd19_create'))
+                  assert c['viable'] is expected
+          PY
+      - name: Upload oracle evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: v030-segmented-solid-${{ github.sha }}
+          path: benchmark-artifacts/v030-segmented-solid.json
+          if-no-files-found: error
+          retention-days: 90
+
+# Research only. This lane deliberately enforces the shipping locality/decode-unit ceilings, but it cannot satisfy
+# release authority until the winning structure exists as canonical r25 with full integrity and platform parity.

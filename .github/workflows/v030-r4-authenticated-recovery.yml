@@ -1,0 +1,69 @@
+# ci-lane: deep
+# ci-cancel-policy: preserve-running-exact-receipt
+name: CMPCT v0.30 R4 authenticated recovery
+on:
+  push:
+    branches: [agent/v030-authoritative-integration]
+    paths:
+      - 'benchmarks/v030_r4_authenticated_recovery_reader.py'
+      - 'benchmarks/v030_r4_authenticated_recovery_gate.py'
+      - '.github/workflows/v030-r4-authenticated-recovery.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+env:
+  PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.sha }}
+concurrency:
+  group: cmpct-v030-r4-auth-recovery-${{ github.sha }}
+  cancel-in-progress: false
+jobs:
+  authenticated-recovery:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install exact corpus dependencies
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y zstd gcc ffmpeg libsndfile1
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[audio,test]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
+      - name: Compile frozen candidate and durable gate
+        run: |
+          python -m py_compile benchmarks/v030_r4_authenticated_recovery_reader.py
+          python -m py_compile benchmarks/v030_r4_authenticated_recovery_gate.py
+      - name: Run authenticated recovery experiment
+        run: |
+          set -euo pipefail
+          mkdir -p benchmark-artifacts
+          python benchmarks/v030_r4_authenticated_recovery_gate.py \
+            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-r4-auth-recovery-work" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-r4-auth-recovery-gate.json"
+          python - <<'PY'
+          import json, os
+          d = json.load(open('benchmark-artifacts/v030-r4-auth-recovery-gate.json'))
+          assert d['schema'] == 'cmpct-v030-r4-authenticated-recovery-gate-v1'
+          assert d['source_commit'] == os.environ['EVIDENCE_HEAD']
+          assert d['experiment_completed']
+          assert d['contract']['candidate_frozen'] and not d['contract']['release_credit']
+          print(json.dumps({'scientific_pass': d['scientific_pass'], 'candidate_exception': d['candidate_exception'], 'storage': d['candidate']['storage'] if d['candidate'] else None, 'elapsed_wall_s': d['elapsed_wall_s']}, sort_keys=True))
+          PY
+      - run: python tools/check_ci_topology.py .github/workflows/v030-r4-authenticated-recovery.yml
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: v030-r4-authenticated-recovery-${{ env.EVIDENCE_HEAD }}
+          path: benchmark-artifacts/v030-r4-auth-recovery-gate.json
+          if-no-files-found: error
+          retention-days: 90
+# Green means the frozen experiment completed and was recorded; inspect scientific_pass.

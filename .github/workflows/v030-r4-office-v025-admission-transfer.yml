@@ -1,0 +1,106 @@
+# ci-lane: deep
+# ci-pr-scope: latest-head-commit-gate
+# ci-cancel-policy: preserve-running-exact-receipt
+name: CMPCT v0.30 R4 Office v0.25 admission transfer
+
+on:
+  push:
+    branches: [agent/v030-authoritative-integration]
+    paths:
+      - 'benchmarks/v030_r4_office_v025_admission_transfer.py'
+      - '.github/workflows/v030-r4-office-v025-admission-transfer.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.sha }}
+
+concurrency:
+  group: cmpct-v030-r4-office-v025-admission-${{ github.sha }}
+  cancel-in-progress: false
+
+jobs:
+  latest-head-impact:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      run_deep: ${{ steps.scope.outputs.run_deep }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 2
+      - id: scope
+        env: {EVENT_NAME: '${{ github.event_name }}'}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          if [ "$EVENT_NAME" = workflow_dispatch ]; then echo run_deep=true >> "$GITHUB_OUTPUT"; exit 0; fi
+          git diff-tree --no-commit-id --name-only -r HEAD > /tmp/files
+          if grep -Eq '^(benchmarks/v030_r4_office_v025_admission_transfer\.py|\.github/workflows/v030-r4-office-v025-admission-transfer\.yml)$' /tmp/files; then echo run_deep=true >> "$GITHUB_OUTPUT"; else echo run_deep=false >> "$GITHUB_OUTPUT"; fi
+
+  admission-transfer-referee:
+    needs: latest-head-impact
+    if: needs.latest-head-impact.outputs.run_deep == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 2
+      - run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+      - uses: actions/setup-python@v6
+        with: {python-version: '3.11', cache: pip}
+      - name: Install exact research dependencies
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y zstd gcc ffmpeg libsndfile1
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[audio,test]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx msgpack zstandard
+      - run: python -m py_compile benchmarks/v030_r4_office_v025_admission_transfer.py
+      - name: Run mature v0.25 admission transfer
+        run: |
+          set -euo pipefail
+          mkdir -p benchmark-artifacts
+          python benchmarks/v030_r4_office_v025_admission_transfer.py \
+            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-r4-office-v025-admission-transfer-work" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-r4-office-v025-admission-transfer.json"
+          python - <<'PY'
+          import json, os
+          d=json.load(open('benchmark-artifacts/v030-r4-office-v025-admission-transfer.json'))
+          assert d['schema']=='cmpct-v030-r4-office-v025-admission-transfer-v1'
+          assert d['source_commit']==os.environ['EVIDENCE_HEAD']
+          k=d['contract']
+          assert k['diagnostic_only'] and not k['release_credit'] and not k['locality_credit']
+          assert k['rejected_containers_remain_in_ordinary_base_artifact']
+          assert k['no_workload_name_path_hash_dispatch']
+          assert d['hypothesis']['exact_tree']
+          print(json.dumps({
+            'sfv4':d['sfv4'],
+            'candidate':{x:y for x,y in d['candidate'].items() if x!='admission_rows'},
+            'saving_vs_sfv4_bytes':d['saving_vs_sfv4_bytes'],
+            'margin_vs_v029_bytes':d['margin_vs_v029_bytes'],
+            'candidate_create_cpu_s':d['candidate_create_cpu_s'],
+            'candidate_create_wall_s':d['candidate_create_wall_s'],
+            'hosted_process_peak_rss_kib':d['hosted_process_peak_rss_kib'],
+            'max_derived_physical_amplification_without_auth_index':d['max_derived_physical_amplification_without_auth_index'],
+            'max_derived_reconstruction_amplification':d['max_derived_reconstruction_amplification'],
+            'hypothesis':d['hypothesis'],
+          },sort_keys=True))
+          PY
+      - run: python tools/check_ci_topology.py .github/workflows/v030-r4-office-v025-admission-transfer.yml
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: v030-r4-office-v025-admission-${{ env.EVIDENCE_HEAD }}
+          path: benchmark-artifacts/v030-r4-office-v025-admission-transfer.json
+          if-no-files-found: error
+          retention-days: 90
+
+# Green means the diagnostic completed and its exact-tree guard held. It does not grant locality or release credit.

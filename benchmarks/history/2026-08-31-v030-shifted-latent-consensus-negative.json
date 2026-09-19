@@ -1,0 +1,46 @@
+{
+  "schema": "cmpct-v030-shifted-latent-consensus-negative-v1",
+  "source_commit": "c47f68d0fd57230669eba420d5df9c70ce6bad24",
+  "evidence_run_id": 33413744812,
+  "evidence_job_id": 99560001409,
+  "strict_target": "15/15: every frozen workload strictly smaller and faster to create than ZIP/Deflate and solid Zstd-19; ties fail",
+  "workload": {
+    "files": 18,
+    "logical_bytes": 33525242,
+    "tree_sha256": "d9106dcdc8f965d45236c241d6c45f773e10b84ac204acc3c3521d889cd3a8fd"
+  },
+  "diagnosis": "D4",
+  "radicality": "R4",
+  "rps": 96,
+  "saturation_inherited": ["S1", "S3", "S4"],
+  "candidate": {
+    "archive_bytes": 1744064,
+    "artifact_sha256": "07666d55fbbecef0baeddeb1a08f037a6e098bb6507f6f7365d5bb0e79b2bdd3",
+    "create_seconds": 12.151439290000006,
+    "payload_floor_bytes": 1743034,
+    "max_chain_depth": 1,
+    "max_decode_unit_bytes": 1862620,
+    "max_member_read_amplification": 1.9984713388108122,
+    "tree_verified": true
+  },
+  "comparators": {
+    "solid_zstd19": {"bytes": 1694672, "create_seconds": 0.7682157389999986},
+    "zip_deflate9": {"bytes": 30283112, "create_seconds": 0.8721442199999956}
+  },
+  "decision": {
+    "archive_zstd_gap_bytes": 49392,
+    "payload_floor_zstd_gap_bytes": 48362,
+    "strict_four_way_win": false,
+    "release_credit": false,
+    "terminal": "RETIRE_FAMILY"
+  },
+  "referee": {
+    "causal_hypothesis": "private edits in every stored logical base waste the shared physical basis; a latent consensus can remove that tax",
+    "disproof": "optimistic latent plus patch payload floor is greater than or equal to exact solid Zstd-19 bytes",
+    "strongest_failure": "solid Zstd already approximates the common latent source closely enough that explicit edit programs add more bytes and work than they save"
+  },
+  "hostile_review": {
+    "result": "The failure survives the optimistic payload-floor test before ordinary archive overhead. The family therefore cannot satisfy the strict size contract by metadata shaving or implementation tuning.",
+    "next_action": "Do not tune this latent-consensus family. Move Shifted work to a different R4 physical/semantic representation or another independently supported structural frontier."
+  }
+}

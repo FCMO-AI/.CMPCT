@@ -1,0 +1,136 @@
+# ci-lane: deep
+# ci-pr-scope: latest-head-commit-gate
+# ci-cancel-policy: split-classifier-preserve-receipts
+name: CMPCT v0.30 G04 ML shipping extraction profile
+
+on:
+  push:
+    branches: [agent/v030-authoritative-integration]
+    paths:
+      - 'benchmarks/v030_g04_ml_shipping_extract_profile.py'
+      - 'benchmarks/v030_g04_delimiter_cost_counterfactual.py'
+      - '.github/workflows/v030-g04-ml-shipping-extract-profile.yml'
+      - 'experiments/entropygraph_v030_release_product.py'
+      - 'experiments/entropygraph_v030_release_product_base.py'
+      - 'experiments/entropygraph_v030_verified_restore.py'
+      - 'experiments/entropygraph_v030_release_reader.py'
+      - 'benchmarks/v030_release_performance.py'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'benchmarks/v030_g04_ml_shipping_extract_profile.py'
+      - 'benchmarks/v030_g04_delimiter_cost_counterfactual.py'
+      - '.github/workflows/v030-g04-ml-shipping-extract-profile.yml'
+      - 'experiments/entropygraph_v030_release_product.py'
+      - 'experiments/entropygraph_v030_release_product_base.py'
+      - 'experiments/entropygraph_v030_verified_restore.py'
+      - 'experiments/entropygraph_v030_release_reader.py'
+      - 'benchmarks/v030_release_performance.py'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+
+jobs:
+  latest-head-impact:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    concurrency:
+      group: cmpct-v030-g04-ml-shipping-profile-route-${{ github.event.pull_request.number || github.ref }}
+      cancel-in-progress: true
+    outputs:
+      run_deep: ${{ steps.scope.outputs.run_deep }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 2
+      - id: scope
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          if [ "$EVENT_NAME" = workflow_dispatch ]; then echo 'run_deep=true' >> "$GITHUB_OUTPUT"; exit 0; fi
+          git diff-tree --no-commit-id --name-only -r HEAD > /tmp/files
+          if grep -Eq '^(benchmarks/v030_g04_ml_shipping_extract_profile\.py|benchmarks/v030_g04_delimiter_cost_counterfactual\.py|\.github/workflows/v030-g04-ml-shipping-extract-profile\.yml|experiments/entropygraph_v030_release_product\.py|experiments/entropygraph_v030_release_product_base\.py|experiments/entropygraph_v030_verified_restore\.py|experiments/entropygraph_v030_release_reader\.py|benchmarks/v030_release_performance\.py)$' /tmp/files; then
+            echo 'run_deep=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'run_deep=false' >> "$GITHUB_OUTPUT"
+          fi
+
+  profile:
+    needs: latest-head-impact
+    if: needs.latest-head-impact.outputs.run_deep == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    concurrency:
+      group: cmpct-v030-g04-ml-shipping-profile-receipt-${{ github.event.pull_request.head.sha || github.sha }}
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - name: Bind exact head
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install benchmark dependencies
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y zstd gcc ffmpeg libsndfile1
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[audio,test]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
+      - name: Compile diagnostics
+        run: python -m py_compile benchmarks/v030_g04_ml_shipping_extract_profile.py benchmarks/v030_g04_delimiter_cost_counterfactual.py
+      - name: Profile exact shipping extraction route
+        run: |
+          mkdir -p benchmark-artifacts
+          python benchmarks/v030_g04_ml_shipping_extract_profile.py \
+            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-g04-ml-shipping-extract-profile-work" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-g04-ml-shipping-extract-profile.json"
+      - name: Run DGO1 causal counterfactual
+        run: |
+          python benchmarks/v030_g04_delimiter_cost_counterfactual.py \
+            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/v030-g04-delimiter-cost-counterfactual-work" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-g04-delimiter-cost-counterfactual.json"
+      - name: Validate non-credit receipts
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          p=json.loads(Path('benchmark-artifacts/v030-g04-ml-shipping-extract-profile.json').read_text())
+          assert p['schema']=='cmpct-v030-g04-ml-shipping-extract-profile-v2'
+          assert p['release_credit'] is False
+          assert p['diagnostic_route']=='shipping-product-front-door-vs-exact-r24-control-v2'
+          assert p['archive_bytes'] > 0 and p['top_by_self'] and p['top_by_cumulative']
+          assert p['r24_control']['archive_bytes'] > 0
+          assert p['r24_control']['unprofiled_extract_median_s'] > 0
+          assert p['shipping_to_r24_extract_ratio'] > 0
+          d=json.loads(Path('benchmark-artifacts/v030-g04-delimiter-cost-counterfactual.json').read_text())
+          assert d['schema']=='cmpct-v030-g04-delimiter-cost-counterfactual-v1'
+          assert d['release_credit'] is False
+          assert 'delimiter' in d['baseline']['selected_transforms']
+          assert 'delimiter' not in d['no_delimiter']['selected_transforms']
+          PY
+      - name: Check workflow topology
+        run: python tools/check_ci_topology.py .github/workflows/v030-g04-ml-shipping-extract-profile.yml
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: v030-g04-ml-shipping-extract-profile-${{ env.EVIDENCE_HEAD }}
+          path: |
+            benchmark-artifacts/v030-g04-ml-shipping-extract-profile.json
+            benchmark-artifacts/v030-g04-delimiter-cost-counterfactual.json
+          if-no-files-found: error
+          retention-days: 90
+
+# Research-only function ownership and causal counterfactual. Green means receipt integrity, never release credit.
