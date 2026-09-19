@@ -11,68 +11,42 @@ residual packing and accepted-v0.29 floor selection remain unchanged. Every temp
 the child exits so historical/research imports remain independent byte/evidence oracles.
 """
 from __future__ import annotations
-
 from pathlib import Path
 import time
-
 from experiments import entropygraph_v029_parallel_portfolio as _HISTORICAL_SCHED
 from experiments import entropygraph_v029_residual_fast as accepted
 from experiments import entropygraph_v030_pack_plan_cache as _PACK_CACHE
-
 CHILD_RESULT_TIMEOUT_S = _HISTORICAL_SCHED.CHILD_RESULT_TIMEOUT_S
 ACCEPTED_ENGINE = _HISTORICAL_SCHED.ACCEPTED_ENGINE
 
-
-def _no_position_independent_candidates(_sketches, _nodes):
-    return []
-
+def _no_position_independent_candidates(_sketches, _nodes): return []
 
 def _install_pack_cache(owner):
-    """Install one child-local exact-length selector and return the inherited selector for restoration."""
     original = owner._choose_pack_plan
-
     def cached_choose(nodes, sketches, root_ids):
         chosen, trials, _stats = _PACK_CACHE.choose_pack_plan_cached(
-            nodes, sketches, root_ids, compress_record=owner._compress_record
-        )
+            nodes, sketches, root_ids, owner=owner, compress_record=owner._compress_record)
         return chosen, trials
-
     owner._choose_pack_plan = cached_choose
     return original
 
-
 def _worker(kind: str, root_s: str, out_s: str, queue) -> None:
-    """Build one canonical shared candidate with all v0.30-only execution policy scoped to this child."""
-    root = Path(root_s)
-    out = Path(out_s)
-    started = time.perf_counter()
-    pack_owner = None
-    original_choose = None
-    position_owner = None
-    original_position = None
+    root=Path(root_s); out=Path(out_s); started=time.perf_counter()
+    pack_owner=original_choose=position_owner=original_position=None
     try:
         if kind == "v028":
-            pack_owner = accepted.V028
-            original_choose = _install_pack_cache(pack_owner)
-            stats = accepted.V028.build(root, out)
+            pack_owner=accepted.V028; original_choose=_install_pack_cache(pack_owner); stats=accepted.V028.build(root,out)
         elif kind == "attempt5":
-            # attempt-5 reaches its isolated v0.28 pack owner through the accepted mosaic chain.
-            pack_owner = accepted.BASE.P.PARENT.V028
-            original_choose = _install_pack_cache(pack_owner)
-            position_owner = accepted.BASE.P
-            original_position = position_owner._position_independent_candidates
-            position_owner._position_independent_candidates = _no_position_independent_candidates
-            stats = accepted.build_graph(root, out)
-        else:
-            raise ValueError(kind)
-        queue.put({"kind": kind, "ok": True, "elapsed_s": time.perf_counter() - started, "stats": stats})
+            pack_owner=accepted.BASE.P.PARENT.V028; original_choose=_install_pack_cache(pack_owner)
+            position_owner=accepted.BASE.P; original_position=position_owner._position_independent_candidates
+            position_owner._position_independent_candidates=_no_position_independent_candidates
+            stats=accepted.build_graph(root,out)
+        else: raise ValueError(kind)
+        queue.put({"kind":kind,"ok":True,"elapsed_s":time.perf_counter()-started,"stats":stats})
     except BaseException as exc:
-        queue.put({"kind": kind, "ok": False, "elapsed_s": time.perf_counter() - started, "error": repr(exc)})
+        queue.put({"kind":kind,"ok":False,"elapsed_s":time.perf_counter()-started,"error":repr(exc)})
     finally:
-        if position_owner is not None and original_position is not None:
-            position_owner._position_independent_candidates = original_position
-        if pack_owner is not None and original_choose is not None:
-            pack_owner._choose_pack_plan = original_choose
+        if position_owner is not None and original_position is not None: position_owner._position_independent_candidates=original_position
+        if pack_owner is not None and original_choose is not None: pack_owner._choose_pack_plan=original_choose
 
-
-__all__ = ["CHILD_RESULT_TIMEOUT_S", "ACCEPTED_ENGINE", "_worker"]
+__all__=["CHILD_RESULT_TIMEOUT_S","ACCEPTED_ENGINE","_worker"]
