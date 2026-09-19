@@ -22,13 +22,13 @@ def test_explicit_handoff_rejects_cross_filesystem_without_copy(monkeypatch, tmp
     monkeypatch.setattr(HOFF.S.accepted, "_logical_file_count", lambda _root: 2)
     real_stat = HOFF.os.stat
 
-    def fake_stat(path):
-        path = Path(path)
-        if path == out_parent:
+    def fake_stat(path, *args, **kwargs):
+        probe = Path(path)
+        if probe == out_parent:
             return SimpleNamespace(st_dev=101)
-        if path == retained_parent:
+        if probe == retained_parent:
             return SimpleNamespace(st_dev=202)
-        return real_stat(path)
+        return real_stat(path, *args, **kwargs)
 
     monkeypatch.setattr(HOFF.os, "stat", fake_stat)
     with pytest.raises(RuntimeError, match="same filesystem"):
