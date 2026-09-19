@@ -81,4 +81,4 @@ jobs:
           path: benchmark-artifacts/explicit-handoff.json
           if-no-files-found: error
           retention-days: 90
-# Research evidence only; green never grants release credit.
+# Research evidence only; green never grants release credit. Exact-head identity and zero-copy custody are mandatory.
