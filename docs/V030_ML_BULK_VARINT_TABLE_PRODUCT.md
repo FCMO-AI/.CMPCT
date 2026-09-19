@@ -1,6 +1,6 @@
 # v0.30 ML DGO1 bulk one-byte length-table parsing — productization preregistration
 
-Status: **productization attempt earned; release credit unpaid**.
+Status: **product implementation landed; release credit unpaid**.
 
 Parent authority: `agent/v030-authoritative-integration@e9028dd9e9e6a6c47c1228d9da32a37bf5fc378e`; production remains v0.29.0/r24.
 
@@ -10,7 +10,7 @@ Post-#146 profile run `35439292455` attributed 0.08546 s cumulative to `release_
 
 ## Product seam
 
-Inside `release_single_buffer_delimiter_inverse`, after decoding and bounding `count`:
+Implemented on PR #152 at source `ca89d296888fdb4ae096b7d9f890419be462dccb` in the release-only verified restore owner. Inside `release_single_buffer_delimiter_inverse`, after decoding and bounding `count`:
 
 1. inspect exactly the next `count` encoded bytes;
 2. use `bytes.isascii()` as a C-level proof that every byte has continuation bit clear (`< 0x80`);
@@ -22,11 +22,11 @@ This changes no archive grammar. It is a parser route for the already-valid one-
 
 ## Hostile proof already earned
 
-The same exact-head artifact constructs a DGO1 descriptor containing explicit multi-byte lengths 130 and 257. Candidate reconstruction equals the historical inverse byte-for-byte. Four malformed truncations are rejected by both historical and candidate paths. Result: PASS.
+The same exact-head research artifact constructs a DGO1 descriptor containing explicit multi-byte lengths 130 and 257. Candidate reconstruction equals the historical inverse byte-for-byte. Four malformed truncations are rejected by both historical and candidate paths. Result: PASS. Product exact-head regression still owes independent confirmation on the shipping implementation.
 
 ## Completion gates
 
-- [ ] implement the bounded route in the release-only verified restore owner;
+- [x] implement the bounded route in the release-only verified restore owner;
 - [ ] regression: one-byte table equivalence, explicit multi-byte fallback, malformed/truncated equivalence, maximum-count/resource bounds;
 - [ ] fresh-process product A/B preserves exact tree and materially transfers the ~23.86% oracle gain;
 - [ ] exact-head normal CI remains green;
