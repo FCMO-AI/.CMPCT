@@ -25,12 +25,12 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p benchmark-artifacts
-          python benchmarks/v030_rss_component_owner.py --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/work" --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-rss-component-owner.json"
+          python benchmarks/v030_rss_component_owner.py --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/work" --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-rss-component-owner.json" 2>&1 | tee benchmark-artifacts/run.log
       - uses: actions/upload-artifact@v6
         if: always()
         with:
           name: v030-rss-component-owner-${{ github.sha }}
-          path: benchmark-artifacts/v030-rss-component-owner.json
-          if-no-files-found: warn
+          path: benchmark-artifacts/
+          if-no-files-found: error
           retention-days: 90
-# Diagnostic only. Never release credit. Dispatch marker after workflow creation.
+# Diagnostic only. Never release credit. Failure logs are evidence too.
