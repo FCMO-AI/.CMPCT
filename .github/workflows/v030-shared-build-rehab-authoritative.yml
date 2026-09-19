@@ -1,0 +1,115 @@
+# ci-lane: release
+# ci-cancel-policy: split-classifier-preserve-receipts
+# ci-pr-scope: latest-head-commit-gate
+name: CMPCT v0.30 authoritative shared-build rehabilitation
+
+on:
+  push:
+    branches: [agent/v030-authoritative-g04-owned-workspace]
+    paths:
+      - 'benchmarks/v030_shared_build_rehab_authoritative.py'
+      - 'experiments/entropygraph_v030_shared_portfolio.py'
+      - 'experiments/entropygraph_v030_geometry_overlay_g04.py'
+      - '.github/workflows/v030-shared-build-rehab-authoritative.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.sha }}
+
+jobs:
+  classify-latest-head:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    concurrency:
+      group: cmpct-v030-shared-rehab-classifier-${{ github.ref }}
+      cancel-in-progress: true
+    outputs:
+      run_receipt: ${{ steps.scope.outputs.run_receipt }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 2
+      - id: scope
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          if [ "$GITHUB_EVENT_NAME" = workflow_dispatch ]; then echo 'run_receipt=true' >> "$GITHUB_OUTPUT"; exit 0; fi
+          changed="$(git diff-tree --no-commit-id --name-only -r HEAD)"
+          if printf '%s\n' "$changed" | grep -Eq '^(benchmarks/v030_shared_build_rehab_authoritative\.py|experiments/entropygraph_v030_shared_portfolio\.py|experiments/entropygraph_v030_geometry_overlay_g04\.py|\.github/workflows/v030-shared-build-rehab-authoritative\.yml)$'; then
+            echo 'run_receipt=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'run_receipt=false' >> "$GITHUB_OUTPUT"
+          fi
+
+  shared-build-rehab:
+    needs: classify-latest-head
+    if: needs.classify-latest-head.outputs.run_receipt == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    concurrency:
+      group: cmpct-v030-shared-rehab-receipt-${{ github.sha }}
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install frozen workload dependencies
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y zstd gcc ffmpeg libsndfile1
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[audio,test]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
+      - name: Compile evidence and owners
+        run: python -m py_compile benchmarks/v030_shared_build_rehab_authoritative.py experiments/entropygraph_v030_shared_portfolio.py experiments/entropygraph_v030_geometry_overlay_g04.py
+      - name: Run exact-source fresh-process shared-build rehabilitation
+        run: |
+          mkdir -p benchmark-artifacts
+          python benchmarks/v030_shared_build_rehab_authoritative.py \
+            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/work" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/shared-build-rehab.json"
+      - name: Enforce frozen shared-build contract
+        if: always()
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          from tools import check_v030_release_lock as release_lock
+          p=Path('benchmark-artifacts/shared-build-rehab.json')
+          assert p.is_file(), 'shared-build evidence missing'
+          d=json.loads(p.read_text())
+          expected,_=release_lock.fingerprint(release_lock.load_manifest())
+          assert d['schema']=='cmpct-v030-shared-build-rehab-authoritative-v1'
+          assert d['candidate_fingerprint']==expected
+          assert d['release_credit'] is False
+          f=d['facts']
+          assert f['byte_identical'] is True
+          assert f['wallclock_improvement_pct'] >= 20.0
+          assert f['wallclock_improvement_s'] >= 5.0
+          assert f['attempt5_graph_build_count'] == 1
+          assert d['gate']['passed'] is True
+          for pair in d['pairs']:
+              assert pair['duplicated']['archive_sha256']==pair['shared']['archive_sha256']
+              assert pair['duplicated']['tree_sha256']==pair['shared']['tree_sha256']
+              assert pair['shared']['stats']['selection_extra_payload_write_bytes']==0
+          PY
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: v030-authoritative-shared-build-rehab-${{ env.EVIDENCE_HEAD }}
+          path: benchmark-artifacts/shared-build-rehab.json
+          if-no-files-found: error
+          retention-days: 90
+
+# Green establishes exact-source evidence only. Promotion remains owned by the strict release lock and accepted receipt custody.
