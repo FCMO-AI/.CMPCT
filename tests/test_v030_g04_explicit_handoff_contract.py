@@ -67,3 +67,23 @@ def test_explicit_handoff_preserves_single_file_fast_reject(monkeypatch, tmp_pat
 
     assert not out.exists()
     assert not retained.exists()
+
+
+def test_explicit_handoff_retains_exact_attempt5_child_on_independent_corpus(tmp_path: Path) -> None:
+    """Custody must name the real accepted attempt-5 child, not merely an archive that verifies."""
+    root = tmp_path / "corpus"
+    root.mkdir()
+    (root / "a.bin").write_bytes((b"alpha-beta-gamma\n" * 1200) + b"tail-a")
+    (root / "b.bin").write_bytes((b"alpha-beta-delta\n" * 1200) + b"tail-b")
+
+    out = tmp_path / "selected.cmpct"
+    retained = tmp_path / "retained-attempt5.cmpct"
+    independently_built = tmp_path / "independent-attempt5.cmpct"
+    stats = HOFF.build_parallel_with_attempt5(root, out, retained)
+    HOFF.S.accepted.build_graph(root, independently_built)
+
+    assert retained.read_bytes() == independently_built.read_bytes()
+    assert retained.stat().st_size == stats["attempt5_retention"]["bytes"]
+    assert stats["attempt5_retention"]["payload_write_bytes"] == 0
+    assert stats["attempt5_retention"]["mode"] == "same-filesystem-hardlink"
+    assert out.exists()
