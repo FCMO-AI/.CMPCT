@@ -1,6 +1,6 @@
 {
   "schema": "cmpct-discovery-state-v1",
-  "status": "BOOTSTRAP",
+  "status": "ACTIVE",
   "authority": {
     "canonical_release": "v0.29.0 / r24 on main",
     "active_frontier": "agent/v030-authoritative-integration",
@@ -8,30 +8,34 @@
   },
   "active_product_bottleneck": {
     "id": "v030-runtime-rehabilitation",
-    "observation": "v0.30 compression/generalization evidence is ahead of promoted-product runtime; PR #132 localizes dominant create cost into shared candidate construction.",
-    "evidence": ["PR #132", "docs/v030-coordination/tasks/T02-evidence-performance.md"],
-    "next_discriminator": "Reconcile exact-head v028_child_s versus attempt5_child_s attribution, then test cheaper proof/admission/reuse/early-termination of the selected-winner fact."
+    "observation": "Fresh-process evidence now proves that G04 can reuse the exact attempt-5 candidate already built by the accepted v0.29 portfolio, eliminating one redundant graph build while preserving final archive/tree identity and writing 0 B of retained payload. The remaining create-side debt is productization: fold ownership into the authoritative scheduler without duplicate scheduler code or global interception, then re-run exact-fingerprint authority. Extraction debt remains a separate owner.",
+    "evidence": ["PR #139", "GitHub Actions run 35415287116", "PR #56"],
+    "next_discriminator": "Implement caller-owned attempt-5 workspace/output in the authoritative scheduler/G04 path, then falsify with exact archive/tree identity, attempt5_graph_build_count=1, fresh-process wall/CPU/RSS/temp-I/O and current-fingerprint release evidence."
   },
   "primary_question": {
-    "id": "winner-proof-cost",
-    "family": "execution-proof / candidate-selection",
-    "hypothesis": "A material fraction of candidate-construction work can be avoided while proving the same selected archive bytes.",
-    "kill": "Causal A/B shows exact byte retention requires essentially all measured candidate work or exported costs erase the runtime gain.",
+    "id": "authoritative-owned-intermediate",
+    "family": "execution-architecture / ownership",
+    "hypothesis": "The authoritative v0.29 portfolio can expose its already-built immutable attempt-5 candidate to G04 through caller-owned same-filesystem lifetime/ownership, preserving exact selected bytes while eliminating the downstream rebuild without hardlink-specific product semantics, duplicate scheduler code, or global monkeypatching.",
+    "kill": "Exact-identity A/B on the authoritative path shows the ownership fold materially loses the fresh-process gain, requires archive-sized payload copying, changes selection/bytes, or exports disqualifying memory/I/O/portability cost.",
     "status": "READY"
   },
   "frontier_candidates": [
-    {"id":"ownership-boundary","family":"execution-architecture","question":"Can shared intermediate representations or changed ownership remove duplicate candidate work rather than accelerating it?","status":"QUEUED"},
+    {"id":"extraction-owner","family":"reconstruction/execution","question":"After create-side ownership is folded, what reconstruction/verification/data-movement owner explains the remaining ML/Logs extraction debt, given session-fusion's ~2.09% result is insufficient?","status":"QUEUED"},
     {"id":"charged-reconstruction-oracle","family":"representation","question":"What fully charged exact reconstruction relationship remains unexploited after current graph/transform families, with enough oracle headroom for a new grammar?","status":"QUEUED"},
     {"id":"proof-carrying-admission","family":"search/proof","question":"Can conservative bounds certify losing candidates before construction while preserving exact fallback and generality?","status":"QUEUED"}
   ],
-  "protected_seeds": [],
+  "protected_seeds": [
+    {"id":"g04-retained-attempt5","status":"EARNED_PRODUCTIZATION","evidence":"PR #139; fresh-process run 35415287116","result":"Exact final archive/tree identity with one attempt-5 graph build; median fresh-process wall improvement ~34.67%, CPU ~26.36%, retained payload rewrite 0 B. Research evidence only until authoritative fold and release gates."}
+  ],
   "saturated_families": [
-    {"family":"v0.29 rejected physical-context/residual variants","reopen_only_if":"changed evidence, conditions, hypothesis, or materially different mechanism","source":"docs/CURRENT_STATE.md and v0.29 release evidence"}
+    {"family":"v0.29 rejected physical-context/residual variants","reopen_only_if":"changed evidence, conditions, hypothesis, or materially different mechanism","source":"docs/CURRENT_STATE.md and v0.29 release evidence"},
+    {"family":"extraction session/wrapper fusion as primary rehabilitation","reopen_only_if":"new causal evidence shows materially larger end-to-end headroom than the measured ~2.09%","source":"v0.30 extraction attribution evidence"}
   ],
   "pending_jobs": [],
   "process_lessons": [
-    {"lesson":"Prefer causal owner localization and generous charged oracles before expensive productization.","evidence":"existing CMPCT v0.29/v0.30 research history"}
+    {"lesson":"Prefer causal owner localization and generous charged oracles before expensive productization.","evidence":"existing CMPCT v0.29/v0.30 research history"},
+    {"lesson":"When downstream reconstruction needs an immutable candidate that upstream already computed, inspect intermediate custody/lifetime before optimizing either computation internally; duplicate ownership can dominate wall time while preserving byte semantics.","evidence":"PR #139 and fresh-process run 35415287116"}
   ],
-  "next_action": "Read exact current PR #132 / authoritative head evidence, obtain pending child attribution if available, and PARETOBONK the cheapest causal experiment on the owning child.",
-  "last_reconciled": "2026-09-18"
+  "next_action": "Fold caller-owned attempt-5 lifetime/output into the authoritative scheduler/G04 path on a narrow branch from PR #56, delete the need for duplicate handoff scheduler semantics, and require exact identity plus fresh-process resource accounting before any release credit.",
+  "last_reconciled": "2026-09-19"
 }
