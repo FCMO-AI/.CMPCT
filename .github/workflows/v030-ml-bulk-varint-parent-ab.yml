@@ -1,0 +1,46 @@
+# ci-lane: fast
+name: CMPCT v0.30 ML bulk varint exact-parent A/B
+on:
+  push:
+    branches: [agent/v030-ml-bulk-varint-table-product]
+    paths:
+      - 'experiments/entropygraph_v030_verified_restore.py'
+      - 'benchmarks/v030_ml_bulk_varint_parent_ab.py'
+      - '.github/workflows/v030-ml-bulk-varint-parent-ab.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+env:
+  PYTHONPATH: '${{ github.workspace }}'
+  EVIDENCE_HEAD: '${{ github.sha }}'
+  CONTROL_HEAD: 'e9028dd9e9e6a6c47c1228d9da32a37bf5fc378e'
+concurrency:
+  group: 'v030-ml-bulk-varint-parent-${{ github.ref }}'
+  cancel-in-progress: true
+jobs:
+  parent-ab:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: '${{ env.EVIDENCE_HEAD }}'
+      - uses: actions/checkout@v6
+        with:
+          ref: '${{ env.CONTROL_HEAD }}'
+          path: control
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - run: |
+          sudo apt-get update && sudo apt-get install -y zstd gcc
+          python -m pip install -e .
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
+      - run: python -m py_compile benchmarks/v030_ml_bulk_varint_parent_ab.py experiments/entropygraph_v030_verified_restore.py
+      - run: python benchmarks/v030_ml_bulk_varint_parent_ab.py --control-root control
+      - uses: actions/upload-artifact@v6
+        with:
+          name: v030-ml-bulk-varint-parent-${{ env.EVIDENCE_HEAD }}
+          path: benchmark-artifacts/v030-ml-bulk-varint-parent.json
+          if-no-files-found: error
+          retention-days: 30
