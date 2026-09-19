@@ -15,7 +15,7 @@ from pathlib import Path
 import numpy as np
 
 from benchmarks import v030_release_performance as PERF
-from cmpct.resemblance import GEAR, MASK64, Chunk, fastcdc
+from cmpct.resemblance import GEAR, Chunk, fastcdc
 
 GEAR_NP = np.asarray(GEAR, dtype=np.uint64)
 
@@ -38,7 +38,7 @@ def _scan_exact(vals: np.ndarray, mask: int, h0: int = 0) -> tuple[int | None, i
         hashes[:upto] += np.uint64(h0) * powers
         peak_scratch = max(peak_scratch, int(vals.nbytes + hashes.nbytes + powers.nbytes))
     for shift in range(1, min(64, m)):
-        # NumPy performs uint64 wraparound, exactly matching '& MASK64'.
+        # NumPy performs uint64 wraparound, exactly matching the scalar '& MASK64'.
         hashes[shift:] += vals[:-shift] << np.uint64(shift)
     hits = np.flatnonzero((hashes & np.uint64(mask)) == 0)
     if hits.size:
