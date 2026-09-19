@@ -25,12 +25,11 @@ def _flip32(value: bytes) -> bytes:
     return bytes([value[0] ^ 1]) + value[1:]
 
 
-def test_record_logical_sha_deferral_is_verified_staging_only(tmp_path: Path) -> None:
+def test_record_scope_payload_auth_and_rollback(tmp_path: Path) -> None:
     src = PERF._build_corpora(tmp_path / "corpora")[("neutral_hostile_v1", "09_ml_artifacts")]
     archive = tmp_path / "ml.cmpct"
     PRODUCT.build(src, archive)
-    strict_valid = PRODUCT.strong_verify(archive)
-    assert strict_valid["ok"] is True
+    assert PRODUCT.strong_verify(archive)["ok"] is True
     expected_graph_tree = _graph_tree(archive)
 
     bad = tmp_path / "record-logical-sha-only.cmpct"
@@ -39,7 +38,6 @@ def test_record_logical_sha_deferral_is_verified_staging_only(tmp_path: Path) ->
         bad,
         lambda codec, usize, csize, crc, digest: (codec, usize, csize, crc, _flip32(digest)),
     )
-
     staging = tmp_path / "verified-staging"
     result = POLICY.extract_verified_into_staging(bad, staging)
     assert result["ok"] is True
@@ -50,10 +48,19 @@ def test_record_logical_sha_deferral_is_verified_staging_only(tmp_path: Path) ->
         R.extract(bad, ordinary)
     assert not ordinary.exists()
     assert PRODUCT.strong_verify(bad)["ok"] is False
-
     member = next(row["path"] for row in PRODUCT.list_members(archive) if row.get("kind") == "file")
     with pytest.raises(Exception):
         PRODUCT.read_member(bad, member)
+
+    # Folding semantic hashes must never fold physical payload authentication or transactional safety.
+    bad_payload = tmp_path / "bad-payload.cmpct"
+    hostile._mutate_payload(archive, bad_payload)
+    rollback = hostile._assert_destination_rollback(bad_payload, tmp_path / "rollback-dst")
+    assert rollback["failed_closed"] is True
+    assert rollback["destination_tree_preserved"] is True
+    post_crc = hostile._post_crc_fault(archive, tmp_path / "post-crc-out")
+    assert post_crc["failed_closed"] is True
+    assert post_crc["fault_injected"] is True
 
 
 def test_node_and_file_semantic_sha_are_deferred_only_by_verified_staging(tmp_path: Path, monkeypatch) -> None:
