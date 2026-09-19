@@ -10,12 +10,18 @@ ROOT=Path(__file__).resolve().parents[1]
 def _git_sha(root: Path) -> str:
     return subprocess.check_output(['git','-C',str(root),'rev-parse','HEAD'],text=True).strip()
 
+def _sha(path: Path) -> str:
+    h=hashlib.sha256()
+    with path.open('rb') as f:
+        for b in iter(lambda:f.read(1<<20),b''): h.update(b)
+    return h.hexdigest()
+
 def _run(root: Path, source: Path, archive: Path) -> dict:
     env={**os.environ,'PYTHONPATH':str(root)}
     p=subprocess.run([sys.executable,str(root/'benchmarks/v030_perf_worker.py'),'--engine','v030','--op','pack',
                       '--source',str(source),'--archive',str(archive)],cwd=root,env=env,check=True,
                      capture_output=True,text=True)
-    return json.loads([x for x in p.stdout.splitlines() if x.strip()][-1])
+    row=json.loads([x for x in p.stdout.splitlines() if x.strip()][-1]); row['archive_sha256']=_sha(archive); return row
 
 def main():
     p=argparse.ArgumentParser(); p.add_argument('--control-root',type=Path,required=True); p.add_argument('--work-root',type=Path,required=True)
@@ -29,8 +35,8 @@ def main():
             root=a.control_root if arm=='control' else ROOT
             got[arm]=_run(root,source,a.work_root/f'{i}-{arm}.cmpct')
         c,n=got['control'],got['candidate']
-        if c['archive_bytes']!=n['archive_bytes'] or c['tree_sha256']!=n['tree_sha256']:
-            raise RuntimeError('canonical pack cache changed archive size or user-tree identity')
+        if (c['archive_bytes'],c['tree_sha256'],c['archive_sha256']) != (n['archive_bytes'],n['tree_sha256'],n['archive_sha256']):
+            raise RuntimeError('canonical pack cache changed physical archive or user-tree identity')
         rows.append({'order':order,'control':c,'candidate':n,
                      'wall_improvement_pct':(c['wall_s']-n['wall_s'])/c['wall_s']*100,
                      'rss_change_pct':(n['peak_rss_kib']-c['peak_rss_kib'])/max(1,c['peak_rss_kib'])*100})
