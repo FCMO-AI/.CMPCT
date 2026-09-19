@@ -5,6 +5,7 @@ on:
     branches: [agent/v030-ml-bulk-varint-table-oracle]
     paths:
       - 'benchmarks/v030_ml_bulk_varint_table_oracle.py'
+      - 'benchmarks/v030_ml_bulk_varint_table_hostile.py'
       - '.github/workflows/v030-ml-bulk-varint-table-oracle.yml'
   workflow_dispatch:
 permissions:
@@ -31,11 +32,14 @@ jobs:
           sudo apt-get update && sudo apt-get install -y zstd gcc
           python -m pip install -e .
           python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
-      - run: python -m py_compile benchmarks/v030_ml_bulk_varint_table_oracle.py
+      - run: python -m py_compile benchmarks/v030_ml_bulk_varint_table_oracle.py benchmarks/v030_ml_bulk_varint_table_hostile.py
       - run: python benchmarks/v030_ml_bulk_varint_table_oracle.py
+      - run: python benchmarks/v030_ml_bulk_varint_table_hostile.py
       - uses: actions/upload-artifact@v6
         with:
           name: v030-ml-bulk-varint-${{ env.EVIDENCE_HEAD }}
-          path: benchmark-artifacts/v030-ml-bulk-varint.json
+          path: |
+            benchmark-artifacts/v030-ml-bulk-varint.json
+            benchmark-artifacts/v030-ml-bulk-varint-hostile.json
           if-no-files-found: error
           retention-days: 30
