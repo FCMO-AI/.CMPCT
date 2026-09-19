@@ -1,0 +1,103 @@
+name: CMPCT v0.30 apply scoped ML fold product patch
+
+on:
+  push:
+    branches:
+      - agent/v030-ml-verification-fold-product
+    paths:
+      - .github/workflows/v030-apply-ml-fold-product.yml
+
+permissions:
+  contents: write
+
+concurrency:
+  group: v030-apply-ml-fold-product-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/v030-ml-verification-fold-product
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Apply narrow strict-default reader policy
+        shell: python
+        run: |
+          from pathlib import Path
+
+          reader = Path('experiments/entropygraph_v030_release_reader.py')
+          s = reader.read_text()
+          replacements = [
+              (
+                  'class _G04Session:\n    def __init__(self, archive: Path):\n        self.stream, self.meta, self.record_start, self.offsets, _merkle, self.tail_authenticated = _g04_open(archive)',
+                  'class _G04Session:\n    def __init__(self, archive: Path, *, verify_nested_semantic_sha: bool = True):\n        self.stream, self.meta, self.record_start, self.offsets, _merkle, self.tail_authenticated = _g04_open(archive)\n        self.verify_nested_semantic_sha = bool(verify_nested_semantic_sha)'
+              ),
+              (
+                  '        if (binascii.crc32(original) & 0xFFFFFFFF) != crc or H(original) != original_sha:\n            raise RuntimeError("G0-G4 inverse record integrity")',
+                  '        if (binascii.crc32(original) & 0xFFFFFFFF) != crc:\n            raise RuntimeError("G0-G4 inverse record CRC")\n        if self.verify_nested_semantic_sha and H(original) != original_sha:\n            raise RuntimeError("G0-G4 inverse record SHA-256")'
+              ),
+              (
+                  '        if len(raw) > A5.MAX_CHUNK or H(raw) != expected:\n            raise RuntimeError("G0-G4 logical node integrity")',
+                  '        if len(raw) > A5.MAX_CHUNK:\n            raise RuntimeError("G0-G4 logical node size")\n        if self.verify_nested_semantic_sha and H(raw) != expected:\n            raise RuntimeError("G0-G4 logical node SHA-256")'
+              ),
+              (
+                  'def _consume_g04_file(session: _G04Session, rel: str, desc: list, tree, target_root: Path | None) -> int:',
+                  'def _consume_g04_file(\n    session: _G04Session,\n    rel: str,\n    desc: list,\n    tree,\n    target_root: Path | None,\n    *,\n    verify_file_sha: bool = True,\n) -> int:'
+              ),
+              (
+                  '    file_hash = hashlib.sha256()\n    written = 0',
+                  '    file_hash = hashlib.sha256() if verify_file_sha else None\n    written = 0'
+              ),
+              (
+                  '            file_hash.update(raw)\n            tree.update(raw)',
+                  '            if file_hash is not None:\n                file_hash.update(raw)\n            tree.update(raw)'
+              ),
+              (
+                  '    if written != expected_size or file_hash.digest() != expected_hash:\n        raise RuntimeError("G0-G4 streamed file integrity")',
+                  '    if written != expected_size:\n        raise RuntimeError("G0-G4 streamed file size")\n    if file_hash is not None and file_hash.digest() != expected_hash:\n        raise RuntimeError("G0-G4 streamed file SHA-256")'
+              ),
+              (
+                  'def _stream_g04(archive: Path, target_root: Path | None, max_output_bytes: int) -> dict:\n    session = _G04Session(archive)',
+                  'def _stream_g04(\n    archive: Path,\n    target_root: Path | None,\n    max_output_bytes: int,\n    *,\n    verify_nested_semantic_sha: bool = True,\n) -> dict:\n    session = _G04Session(archive, verify_nested_semantic_sha=verify_nested_semantic_sha)'
+              ),
+              (
+                  '            logical += _consume_g04_file(session, rel, session.meta["files"][rel], tree, target_root)',
+                  '            logical += _consume_g04_file(\n                session,\n                rel,\n                session.meta["files"][rel],\n                tree,\n                target_root,\n                verify_file_sha=verify_nested_semantic_sha,\n            )'
+              ),
+          ]
+          for old, new in replacements:
+              count = s.count(old)
+              if count != 1:
+                  raise SystemExit(f'reader replacement cardinality {count}: {old[:80]!r}')
+              s = s.replace(old, new)
+          reader.write_text(s)
+
+          policy = Path('experiments/entropygraph_v030_release_reader_policy.py')
+          p = policy.read_text()
+          old = '    if magic == R.G04.MAG:\n        return R._stream_g04(archive, staging, max_output_bytes)'
+          new = ('    if magic == R.G04.MAG:\n'
+                 '        # This caller owns an unpublished staging tree and requires terminal tree identity before publication.\n'
+                 '        # Nested semantic SHA proofs are therefore redundant here only; every ordinary reader surface stays strict.\n'
+                 '        return R._stream_g04(\n'
+                 '            archive, staging, max_output_bytes, verify_nested_semantic_sha=False\n'
+                 '        )')
+          if p.count(old) != 1:
+              raise SystemExit('policy replacement cardinality mismatch')
+          policy.write_text(p.replace(old, new))
+      - name: Compile and run focused reader tests
+        run: |
+          python -m py_compile experiments/entropygraph_v030_release_reader.py experiments/entropygraph_v030_release_reader_policy.py
+          python -m pytest -q tests/test_entropygraph_v030_release_reader.py tests/test_entropygraph_v030_release_reader_policy.py
+      - name: Commit product patch
+        run: |
+          git config user.name 'cmpct-ci-productizer'
+          git config user.email 'actions@users.noreply.github.com'
+          git add experiments/entropygraph_v030_release_reader.py experiments/entropygraph_v030_release_reader_policy.py
+          git diff --cached --check
+          git commit -m 'product: scope nested SHA folding to verified staging'
+          git push origin HEAD:agent/v030-ml-verification-fold-product
