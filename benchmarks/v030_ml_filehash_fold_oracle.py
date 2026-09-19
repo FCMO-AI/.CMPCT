@@ -9,8 +9,12 @@ ORDER=(("control","fold-file"),("fold-file","control"),("control","fold-semantic
 def _install_fold(mode:str):
  from experiments import entropygraph_v030_verified_restore as VR
  R=VR.C.POLICY.R; G=R.G04; A5=R.A5; P=R.P
- def folded_file(session,rel,desc,tree,target_root):
+ def folded_file(session,rel,desc,tree,target_root,*,verify_file_sha=True):
   safe=R._safe_relpath(rel); expected_size=int(desc[2]); rb=rel.encode(); tree.update(len(rb).to_bytes(4,"little")); tree.update(rb); tree.update(expected_size.to_bytes(8,"little")); written=0; output=None
+  file_sha=None
+  if verify_file_sha:
+   import hashlib
+   file_sha=hashlib.sha256()
   try:
    if target_root is not None: target=target_root.joinpath(*safe.parts); target.parent.mkdir(parents=True,exist_ok=True); output=target.open("wb")
    chunks=[session.record(int(desc[1]))] if desc[0]=="preflate" else (session.node(int(n)) for n in desc[1])
@@ -18,10 +22,12 @@ def _install_fold(mode:str):
     written+=len(raw)
     if written>expected_size: raise RuntimeError("streamed file exceeds size")
     tree.update(raw)
+    if file_sha is not None: file_sha.update(raw)
     if output is not None: output.write(raw)
   finally:
    if output is not None: output.close()
   if written!=expected_size: raise RuntimeError("streamed file size mismatch")
+  if file_sha is not None and len(desc)>3 and file_sha.digest()!=desc[3]: raise RuntimeError("streamed file SHA mismatch")
   return written
  R._consume_g04_file=folded_file
  if mode!="fold-semantic": return
