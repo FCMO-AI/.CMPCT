@@ -1,23 +1,11 @@
 # ci-lane: deep
-# ci-pr-scope: latest-head-commit-gate
 # ci-cancel-policy: preserve-running-exact-receipt
 name: CMPCT v0.30 R4 integrated content ZIP Builder
 
 on:
   push:
-    branches: [agent/v030-authoritative-integration]
-    paths:
-      - 'experiments/v030_r4_content_zip_builder.py'
-      - 'benchmarks/v030_r4_content_zip_builder_oracle.py'
-      - 'benchmarks/neutral_hostile_corpus_v1.py'
-      - 'benchmarks/neutral_hostile_determinism_repair_v*.py'
-      - 'src/cmpct/builder.py'
-      - 'src/cmpct/reader.py'
-      - 'src/cmpct/codec.py'
-      - 'experiments/entropygraph_v030_release_product.py'
-      - '.github/workflows/v030-r4-content-zip-builder-oracle.yml'
-  pull_request:
-    branches: [main]
+    branches:
+      - 'agent/v030-*'
     paths:
       - 'experiments/v030_r4_content_zip_builder.py'
       - 'benchmarks/v030_r4_content_zip_builder_oracle.py'
@@ -32,11 +20,11 @@ on:
 permissions:
   contents: read
 concurrency:
-  group: cmpct-v030-r4-content-zip-builder-${{ github.event.pull_request.head.sha || github.sha }}
+  group: cmpct-v030-r4-content-zip-builder-${{ github.sha }}
   cancel-in-progress: false
 env:
   PYTHONPATH: ${{ github.workspace }}
-  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+  EVIDENCE_HEAD: ${{ github.sha }}
 
 jobs:
   latest-head-impact:
