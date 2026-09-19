@@ -189,6 +189,8 @@ def restore_verified_manifest_tree(staging: Path, decoded: dict, *, safe_symlink
     if internal.exists() or internal.is_symlink():
         shutil.rmtree(internal, ignore_errors=True)
 
+    # Preserve a cheap structural guard after authenticated streaming. The generic FS entry point continues to
+    # perform its independent digest pass for callers without verified-stream provenance.
     for row in entries:
         rel, kind = row[0], row[1]
         if kind != "f":
@@ -198,6 +200,9 @@ def restore_verified_manifest_tree(staging: Path, decoded: dict, *, safe_symlink
         if not target.is_file() or target.is_symlink() or target.stat().st_size != int(size):
             raise RuntimeError(f"r25 extracted regular-file shape mismatch: {rel}")
 
+    # Restore children before directory metadata so child creation cannot perturb directory mtimes. These are
+    # the exact operations owned by product_fs.restore_manifest_tree; only its redundant regular-file hash pass is
+    # intentionally absent here.
     for row in entries:
         rel, kind = row[0], row[1]
         target = staging.joinpath(*PurePosixPath(rel).parts)
