@@ -1,16 +1,11 @@
 # ci-lane: deep
-# ci-pr-scope: latest-head-commit-gate
 # ci-cancel-policy: preserve-running-exact-receipt
 name: CMPCT v0.30 R4 physical DEFLATE range oracle
 
 on:
   push:
-    branches: [agent/v030-authoritative-integration]
-    paths:
-      - 'benchmarks/v030_r4_deflate_physical_range_oracle.py'
-      - '.github/workflows/v030-r4-deflate-physical-range.yml'
-  pull_request:
-    branches: [main]
+    branches:
+      - 'agent/v030-*'
     paths:
       - 'benchmarks/v030_r4_deflate_physical_range_oracle.py'
       - '.github/workflows/v030-r4-deflate-physical-range.yml'
@@ -21,10 +16,10 @@ permissions:
 
 env:
   PYTHONPATH: ${{ github.workspace }}
-  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+  EVIDENCE_HEAD: ${{ github.sha }}
 
 concurrency:
-  group: cmpct-v030-r4-deflate-physical-${{ github.event.pull_request.head.sha || github.sha }}
+  group: cmpct-v030-r4-deflate-physical-${{ github.sha }}
   cancel-in-progress: false
 
 jobs:
