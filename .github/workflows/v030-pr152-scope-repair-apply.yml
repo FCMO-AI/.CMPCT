@@ -1,0 +1,70 @@
+name: PR152 scoped reader capability applicator
+# ci-lane: deep
+on:
+  push:
+    branches: [agent/v030-ml-bulk-varint-table-product]
+    paths: ['.github/workflows/v030-pr152-scope-repair-apply.yml']
+permissions:
+  contents: write
+jobs:
+  apply:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: agent/v030-ml-bulk-varint-table-product
+          fetch-depth: 0
+      - name: Apply exact scoped capability patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+
+          def replace_once(path, old, new):
+              p=Path(path); s=p.read_text()
+              assert s.count(old)==1, (path, s.count(old), old[:80])
+              p.write_text(s.replace(old,new,1))
+
+          rr='experiments/entropygraph_v030_release_reader.py'
+          replace_once(rr,
+              'def __init__(self, archive: Path, *, verify_nested_semantic_sha: bool = True):\n        self.stream, self.meta, self.record_start, self.offsets, _merkle, self.tail_authenticated = _g04_open(archive)\n        self.verify_nested_semantic_sha = bool(verify_nested_semantic_sha)\n',
+              'def __init__(self, archive: Path, *, verify_nested_semantic_sha: bool = True, delimiter_inverse=None):\n        self.stream, self.meta, self.record_start, self.offsets, _merkle, self.tail_authenticated = _g04_open(archive)\n        self.verify_nested_semantic_sha = bool(verify_nested_semantic_sha)\n        # Capability ownership is per session: strict/default callers inherit the promoted global inverse,\n        # while verified unpublished staging may explicitly supply a stronger implementation without mutating\n        # process-global reader/create state.\n        self.delimiter_inverse = G04.O.delimiter_inverse if delimiter_inverse is None else delimiter_inverse\n')
+          replace_once(rr,
+              'original = G04.O.delimiter_inverse(physical, int(transform[2]))',
+              'original = self.delimiter_inverse(physical, int(transform[2]))')
+          replace_once(rr,
+              '    *,\n    verify_nested_semantic_sha: bool = True,\n) -> dict:\n    session = _G04Session(archive, verify_nested_semantic_sha=verify_nested_semantic_sha)\n',
+              '    *,\n    verify_nested_semantic_sha: bool = True,\n    delimiter_inverse=None,\n) -> dict:\n    session = _G04Session(\n        archive,\n        verify_nested_semantic_sha=verify_nested_semantic_sha,\n        delimiter_inverse=delimiter_inverse,\n    )\n')
+
+          vr='experiments/entropygraph_v030_verified_restore.py'
+          replace_once(vr,
+              'def release_single_buffer_delimiter_inverse(encoded: bytes, logical_size: int) -> bytes:',
+              'def release_single_buffer_delimiter_inverse(\n    encoded: bytes, logical_size: int, *, bulk_one_byte_table: bool = False\n) -> bytes:')
+          replace_once(vr,
+              '    table = encoded[pos : pos + count]\n    if len(table) == count and table.isascii():',
+              '    table = encoded[pos : pos + count]\n    if bulk_one_byte_table and len(table) == count and table.isascii():')
+          marker='\n\n# Release-only installation.  Canonical-final has already isolated its dependency graph before this module is\n'
+          insert='''\n\ndef release_bulk_one_byte_table_delimiter_inverse(encoded: bytes, logical_size: int) -> bytes:\n    """Verified-staging-only DGO1 inverse with bulk one-byte length-table parsing."""\n    return release_single_buffer_delimiter_inverse(encoded, logical_size, bulk_one_byte_table=True)\n'''
+          replace_once(vr, marker, insert+marker)
+
+          pol='experiments/entropygraph_v030_release_reader_policy.py'
+          replace_once(pol,
+              '        # Only this unpublished verified-staging owner may defer nested semantic SHA.\n        return R._stream_g04(archive, staging, max_output_bytes, verify_nested_semantic_sha=False)\n',
+              '        # Only this unpublished verified-staging owner may defer nested semantic SHA and opt into\n        # bulk one-byte DGO1 table parsing. Import lazily to avoid changing module-initialization ownership.\n        from experiments import entropygraph_v030_verified_restore as VR\n        return R._stream_g04(\n            archive,\n            staging,\n            max_output_bytes,\n            verify_nested_semantic_sha=False,\n            delimiter_inverse=VR.release_bulk_one_byte_table_delimiter_inverse,\n        )\n')
+
+          test='tests/test_v030_ml_bulk_varint_product.py'
+          replace_once(test,
+              'assert R.release_single_buffer_delimiter_inverse(encoded, len(raw)) == raw\n    assert R._PRE_RELEASE_DELIMITER_INVERSE(encoded, len(raw)) == raw',
+              'assert R.release_single_buffer_delimiter_inverse(encoded, len(raw)) == raw\n    assert R.release_bulk_one_byte_table_delimiter_inverse(encoded, len(raw)) == raw\n    assert R._PRE_RELEASE_DELIMITER_INVERSE(encoded, len(raw)) == raw')
+          # The replacement above occurs in the one-byte test only; explicit multi-byte and malformed tests keep\n          # exercising the default and historical controls. Add the bulk callable to multi-byte fallback too.\n          needle='assert R.release_single_buffer_delimiter_inverse(encoded, len(raw)) == raw\n    assert R._PRE_RELEASE_DELIMITER_INVERSE(encoded, len(raw)) == raw'
+          p=Path(test); s=p.read_text(); assert needle in s
+          p.write_text(s.replace(needle, 'assert R.release_single_buffer_delimiter_inverse(encoded, len(raw)) == raw\n    assert R.release_bulk_one_byte_table_delimiter_inverse(encoded, len(raw)) == raw\n    assert R._PRE_RELEASE_DELIMITER_INVERSE(encoded, len(raw)) == raw', 1))
+          PY
+          python -m py_compile experiments/entropygraph_v030_release_reader.py experiments/entropygraph_v030_verified_restore.py experiments/entropygraph_v030_release_reader_policy.py tests/test_v030_ml_bulk_varint_product.py
+          git rm .github/workflows/v030-pr152-scope-repair-apply.yml
+          git config user.name 'cmpct-automation'
+          git config user.email 'cmpct-automation@users.noreply.github.com'
+          git add experiments/entropygraph_v030_release_reader.py experiments/entropygraph_v030_verified_restore.py experiments/entropygraph_v030_release_reader_policy.py tests/test_v030_ml_bulk_varint_product.py
+          git commit -m 'product: scope bulk DGO1 parser to verified staging'
+          git push origin HEAD:agent/v030-ml-bulk-varint-table-product
