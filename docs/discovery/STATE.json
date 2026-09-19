@@ -9,8 +9,8 @@
   "active_product_bottleneck": {
     "id": "v030-runtime-rehabilitation",
     "observation": "Fresh-process evidence now proves that G04 can reuse the exact attempt-5 candidate already built by the accepted v0.29 portfolio, eliminating one redundant graph build while preserving final archive/tree identity and writing 0 B of retained payload. The research mechanism exceeds both numerical shared-build-rehab hurdles (>=20% and >=5 s): two fresh-process pairs save 23.491 s and 23.227 s, median 23.359 s / 34.665%. The remaining create-side debt is productization: fold ownership into the authoritative scheduler without duplicate scheduler code or global interception, then re-run exact-fingerprint authority. Extraction debt remains a separate owner.",
-    "evidence": ["PR #139", "GitHub Actions run 35415287116", "docs/V030_RELEASE_LOCK.json shared-build-rehab", "PR #56"],
-    "next_discriminator": "Implement caller-owned attempt-5 workspace/output in the authoritative scheduler/G04 path, then falsify with exact archive/tree identity, attempt5_graph_build_count=1, fresh-process wall/CPU/RSS/temp-I/O and current-fingerprint release evidence."
+    "evidence": ["PR #139", "GitHub Actions run 35415287116", "docs/V030_RELEASE_LOCK.json shared-build-rehab", "docs/v030-coordination/tasks/T03-graph-productization.md", "PR #56"],
+    "next_discriminator": "Implement caller-owned attempt-5 workspace/output directly on agent/v030-authoritative-integration as required by T03, then falsify with exact archive/tree identity, attempt5_graph_build_count=1 on the proven multi-file path, fresh-process wall/CPU/RSS/temp-I/O and current-fingerprint release evidence."
   },
   "primary_question": {
     "id": "authoritative-owned-intermediate",
@@ -38,6 +38,6 @@
     {"lesson":"Prefer causal owner localization and generous charged oracles before expensive productization.","evidence":"existing CMPCT v0.29/v0.30 research history"},
     {"lesson":"When downstream reconstruction needs an immutable candidate that upstream already computed, inspect intermediate custody/lifetime before optimizing either computation internally; duplicate ownership can dominate wall time while preserving byte semantics.","evidence":"PR #139 and fresh-process run 35415287116"}
   ],
-  "next_action": "Fold caller-owned attempt-5 lifetime/output into the authoritative scheduler/G04 path on a narrow branch from PR #56, delete the need for duplicate handoff scheduler semantics, and require exact identity plus fresh-process resource accounting before any release credit. Independently consume the already-dispatched r24 performance retry without blocking the ownership fold.",
+  "next_action": "Per T03's continuation rule, fold caller-owned attempt-5 lifetime/output directly into agent/v030-authoritative-integration, delete the need for duplicate handoff scheduler semantics, and require exact identity plus fresh-process resource accounting before any release credit. Then generate current-fingerprint strict JSON evidence and the shared-build-rehab receipt only if the authoritative gate passes. Independently consume the already-dispatched r24 performance retry without blocking the ownership fold.",
   "last_reconciled": "2026-09-19"
 }
