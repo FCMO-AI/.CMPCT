@@ -1,12 +1,12 @@
-# v0.30 r24 streamed materialization — product preregistration
+# v0.30 r24 streamed materialization — parked product optimization
 
-Status: **DRAFT / NO RELEASE CREDIT**
+Status: **DRAFT / NONBLOCKING / NO RELEASE CREDIT**
 
-## Baseline
+## Authority and baseline
 
-Unchanged authoritative runtime `35437105192` reports pack-RSS ratios of 2.1333x on Shifted and 1.6587x on ML against the frozen 1.25x ceiling. Import-only PR #156 ruled out module footprint as the primary owner.
+The controlling authoritative whole-process-tree companion is run `35437119021`, artifact `10582612465`. It reports `max_peak_rss_ratio = 1.0`; therefore the frozen 1.25x RSS release gate is already **GREEN**. Parent/self-RSS ratios from the companion runtime are mechanism-localization signals only and may not override that authority.
 
-PR #157 run `35450761900` measured r24-only versus r25-only construction, but a later baseline instrument found that the child process had imported the heavy corpus-builder harness before measuring product work. Run `35450870427` therefore narrows the trustworthy statement: from the same 123,324 KiB prebuild high-water, Shifted r24 added **115,200 KiB** while r25 added **23,024 KiB**. That is already enough to establish r24 Builder as the primary Shifted component. ML was partly masked by the harness high-water and must not be assigned from that run. Source `eacdb018…` removes the corpus-builder import from child mode; its clean run controls ML attribution.
+PR #157 still found a real product-memory opportunity. From the same 123,324 KiB prebuild high-water, Shifted r24 construction added **115,200 KiB** while r25 added **23,024 KiB**. A later child-harness refinement showed that import/prebuild baselines themselves can mask component increments, so ML ownership was deliberately left unresolved rather than forced. PR #157 and the earlier import diagnostic #156 are closed as decision-complete provenance.
 
 ## Mechanism
 
@@ -26,32 +26,17 @@ Consume encoded results in bounded canonical order. For each result, preserve on
 
 The first primitive is implemented on this branch: `ordered_worker_iter()` limits scheduled/completed results to O(workers), preserves canonical observation order, and closes its claim gate immediately when an already-submitted worker fails. Dedicated tests cover reverse completion, bounded claims, latent later-worker failure and lowest-index exception observation. It is not wired into Builder yet, so it earns no RSS/product claim.
 
-The completed implementation must preserve:
+The completed implementation must preserve exact candidate order/codec competition, exact archive SHA/bytes, deterministic failure ordering, current worker bound, publication semantics, format/readers/selectors/thresholds/corpora/dependencies/public APIs. A temporary disk spool is acceptable only with complete temp-I/O and wall accounting; a memory spool that silently grows to archive size is not a win.
 
-- exact candidate order and codec competition;
-- exact archive SHA/bytes on every control corpus;
-- deterministic failure ordering and fail-closed claim behavior;
-- current worker bound and no unbounded future/result queue;
-- current atomic/product publication boundary;
-- no format, reader, selector, threshold, corpus, dependency or public API change.
+## Priority
 
-A temporary disk spool is acceptable only if complete temp-I/O bytes and wall cost are measured. A memory spool that silently grows to archive size is not a win.
+This lane is parked behind controlling timing work: PR #155 (ML create) and PR #152 (extraction scoping) have higher current release leverage. Resume only when those lanes are independently blocked/pending or after timing gates close, unless later authoritative evidence makes RSS controlling again.
 
-## Cheapest decisive evidence ladder
+## Evidence ladder when resumed
 
 1. Finish Builder wiring: ordered iterator + raw release + deterministic record spool + streamed final assembly.
-2. Same-source A/B on frozen Shifted and ML r24-only construction: archive SHA/bytes must be identical; record wall/CPU, pack peak RSS, temp bytes and I/O.
-3. Kill if Shifted peak does not fall enough to make the full-product 1.25x RSS ceiling credible, or if wall/temp-I/O cost materially erases product value.
-4. Treat ML independently according to the clean PR #157 discriminator; do not extrapolate Shifted ownership.
-5. If the component hurdle clears, run unchanged full concurrent r24/r25 product RSS/runtime authority. Component peaks do not earn release credit.
+2. Same-source A/B on frozen Shifted and ML r24-only construction: exact archive SHA/bytes; wall/CPU, peak RSS, temp bytes and I/O.
+3. Run unchanged full concurrent product RSS/runtime authority; component peaks never earn release credit.
+4. Retire/narrow if exact identity/failure semantics change or carrying cost exceeds measured whole-product value.
 
-## Controls / alternatives
-
-- Merely lowering worker count is weaker: it may reduce transient codec workspace but leaves the retained archive generations.
-- Replacing exact codecs/levels is prohibited because it can alter bytes/selection.
-- Serializing r24 and r25 exports create-wall cost and does not cure the measured isolated Shifted r24 working set.
-- r25/G04 memory work remains a separate route if the clean ML discriminator assigns ML there.
-
-## Disproof / retirement
-
-Retire or narrow this route if exact archive identity changes, deterministic failure semantics cannot be preserved, temp-I/O/wall cost dominates the RSS gain, or a correctly measured implementation cannot materially reduce Shifted r24 RSS. Do not relax the frozen 1.25x RSS ceiling.
+No frozen RSS threshold may move.
