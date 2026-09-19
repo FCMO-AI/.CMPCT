@@ -19,7 +19,7 @@ def test_verified_staging_injects_bulk_inverse_without_global_mutation(tmp_path,
     def fake_stream(archive_arg, staging_arg, max_output_bytes, **kwargs):
         assert archive_arg == archive
         assert staging_arg == staging
-        assert max_output_bytes is None
+        assert max_output_bytes == P.R.DEFAULT_MAX_EXTRACT_BYTES
         captured.update(kwargs)
         return {"ok": True}
 
@@ -46,7 +46,7 @@ def test_verified_staging_bulk_inverse_is_concurrently_isolated(tmp_path, monkey
     def blocked_stream(archive_arg, staging_arg, max_output_bytes, **kwargs):
         assert archive_arg == archive
         assert staging_arg == staging
-        assert max_output_bytes is None
+        assert max_output_bytes == P.R.DEFAULT_MAX_EXTRACT_BYTES
         captured.update(kwargs)
         entered.set()
         assert release.wait(timeout=5)
