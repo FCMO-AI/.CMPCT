@@ -1,0 +1,76 @@
+# ci-lane: deep
+# ci-cancel-policy: preserve-running-exact-receipt
+name: CMPCT v0.30 pack-cache parallel product
+
+on:
+  push:
+    branches: [agent/v030-pack-plan-size-cache-product]
+    paths:
+      - 'benchmarks/v030_pack_plan_cache_parallel_product.py'
+      - '.github/workflows/v030-pack-plan-cache-parallel-product.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.sha }}
+
+concurrency:
+  group: cmpct-v030-pack-cache-parallel-${{ github.sha }}
+  cancel-in-progress: false
+
+jobs:
+  parallel-ab:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - name: Bind exact head
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install benchmark dependencies
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y zstd gcc ffmpeg libsndfile1
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[audio,test]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
+      - name: Compile
+        run: python -m py_compile benchmarks/v030_pack_plan_cache_parallel_product.py
+      - name: Run balanced whole-parallel A/B
+        run: |
+          mkdir -p benchmark-artifacts
+          python benchmarks/v030_pack_plan_cache_parallel_product.py \
+            --pairs 3 \
+            --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/work" \
+            --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-pack-cache-parallel-product.json"
+      - name: Validate exact identity
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          d=json.loads(Path('benchmark-artifacts/v030-pack-cache-parallel-product.json').read_text())
+          assert d['schema']=='cmpct-v030-pack-cache-parallel-product-v1' and d['release_credit'] is False
+          assert len(d['rows'])==3
+          for r in d['rows']:
+              assert r['control']['archive_sha256']==r['candidate']['archive_sha256']
+              assert r['control']['archive_bytes']==r['candidate']['archive_bytes']
+          PY
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: v030-pack-cache-parallel-product-${{ env.EVIDENCE_HEAD }}
+          path: benchmark-artifacts/v030-pack-cache-parallel-product.json
+          if-no-files-found: error
+          retention-days: 90
+
+# Evidence only. This measures transfer through the accepted independent-child portfolio shape;
+# authoritative release runtime and the v0.30 strict lock remain unchanged.
