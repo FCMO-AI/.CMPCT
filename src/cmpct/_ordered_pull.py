@@ -23,12 +23,12 @@ _R = TypeVar("_R")
 def ordered_worker_iter(fn: Callable[[_T], _R], items: Sequence[_T], workers: int) -> Iterator[_R]:
     """Yield mapped results in canonical order with at most O(workers) results resident.
 
-    A fixed initial window is submitted.  Each canonical result is awaited and yielded
+    A fixed initial window is submitted. Each canonical result is awaited and yielded
     before one replacement item is submitted, so a slow early item cannot create an
-    unbounded completed-result backlog.  Exceptions are observed in canonical index
-    order: already-submitted later calls may finish, but no replacement is submitted
-    after the first observed failure.  This matches the material failure boundary of
-    the retained-list mapper while allowing callers to release each result promptly.
+    unbounded completed-result backlog. Any submitted worker failure closes the claim
+    gate immediately; already-submitted calls may unwind, and exceptions are still
+    observed in canonical index order. This matches the retained mapper's material
+    failure boundary while allowing callers to release each successful result promptly.
     """
     count = len(items)
     if count == 0:
@@ -39,24 +39,43 @@ def ordered_worker_iter(fn: Callable[[_T], _R], items: Sequence[_T], workers: in
             yield fn(item)
         return
 
+    abort_event = threading.Event()
+
+    def close_on_failure(future: concurrent.futures.Future[_R]) -> None:
+        if future.cancelled():
+            return
+        try:
+            failed = future.exception() is not None
+        except concurrent.futures.CancelledError:
+            return
+        if failed:
+            abort_event.set()
+
     with concurrent.futures.ThreadPoolExecutor(
         max_workers=worker_count, thread_name_prefix="cmpct-encode"
     ) as pool:
-        futures: dict[int, concurrent.futures.Future[_R]] = {
-            index: pool.submit(fn, items[index]) for index in range(worker_count)
-        }
+        futures: dict[int, concurrent.futures.Future[_R]] = {}
+
+        def submit(index: int) -> None:
+            future = pool.submit(fn, items[index])
+            future.add_done_callback(close_on_failure)
+            futures[index] = future
+
+        for index in range(worker_count):
+            submit(index)
         next_submit = worker_count
         for index in range(count):
             future = futures.pop(index)
             try:
                 result = future.result()
             except BaseException:
+                abort_event.set()
                 for pending in futures.values():
                     pending.cancel()
                 raise
             yield result
-            if next_submit < count:
-                futures[next_submit] = pool.submit(fn, items[next_submit])
+            if next_submit < count and not abort_event.is_set():
+                submit(next_submit)
                 next_submit += 1
 
 
