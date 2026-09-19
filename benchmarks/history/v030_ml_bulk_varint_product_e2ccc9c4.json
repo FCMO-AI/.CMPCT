@@ -1,0 +1,18 @@
+{
+  "schema":"cmpct-v030-ml-bulk-varint-product-evidence-v1",
+  "release_credit":false,
+  "candidate_sha":"e2ccc9c46bfaa9fcfc4473ad6820ebb3782b4743",
+  "control_sha":"e9028dd9e9e6a6c47c1228d9da32a37bf5fc378e",
+  "run_id":35442048869,
+  "artifact_id":10583998125,
+  "artifact_digest":"sha256:6e4f433458d00cbe1cf624a1c2ca4528eb5f9eabc8f2094efdac327e0ecc1ee0",
+  "wall_improvement_pct":[23.549816441957244,23.042741903206217,21.66860215018332,24.631134310449625],
+  "cpu_improvement_pct":[23.559116067590104,23.03968836899629,21.667607823546057,24.61234531430236],
+  "median_wall_improvement_pct":23.29627917258173,
+  "median_cpu_improvement_pct":23.299402218293196,
+  "research_oracle_median_wall_improvement_pct":23.8592,
+  "oracle_headroom_transfer_fraction":0.976406,
+  "required_relative_improvement_for_median_1_10":8.038808244732154,
+  "tree_sha256":"be519eeaaf422fd7af605958fc56b56cfe8b2d7e3c67dc82863c3833facc22cc",
+  "claim_boundary":"Fresh-process candidate release product versus exact authoritative parent checkout. Exact tree every arm. Earlier 65% historical-control instrument is inadmissible for incremental attribution. Authoritative runtime remains unpaid."
+}
