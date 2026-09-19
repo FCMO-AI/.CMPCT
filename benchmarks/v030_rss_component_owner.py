@@ -27,8 +27,9 @@ def main():
     if a.child: child(a.child,a.source,a.archive); return
     shutil.rmtree(a.work_root,ignore_errors=True); a.work_root.mkdir(parents=True)
     corp=PERF._build_corpora(a.work_root/'corpus'); rows={}
-    for name in ('01_shifted_versions','09_ml_artifacts'):
-        source=corp[('neutral_hostile_v1',name)]; rows[name]={}
+    targets=(('resemblance_hostile_v1','01_shifted_versions'),('neutral_hostile_v1','09_ml_artifacts'))
+    for suite,name in targets:
+        source=corp[(suite,name)]; rows[name]={}
         for mode in ('r24','r25'): rows[name][mode]=invoke(mode,source,a.work_root/f'{name}-{mode}.cmpct')
     d={'schema':'cmpct-v030-rss-component-owner-v1','release_credit':False,'rows':rows,
        'claim_boundary':'Fresh-process component peak attribution only; child-process aggregate/live RSS and full product gates remain separate.'}
