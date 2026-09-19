@@ -1,0 +1,37 @@
+# ci-lane: deep
+# ci-cancel-policy: preserve-running-exact-receipt
+name: CMPCT v0.30 import RSS discriminator
+
+on:
+  push:
+    branches: [agent/v030-rss-import-owner-diagnostic]
+    paths:
+      - 'benchmarks/v030_import_rss_diagnostic.py'
+      - '.github/workflows/v030-import-rss-diagnostic.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  import-rss:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install project
+        run: python -m pip install -e '.[audio,test]'
+      - name: Measure fresh-process import floor
+        run: python benchmarks/v030_import_rss_diagnostic.py | tee v030-import-rss-diagnostic.json
+      - uses: actions/upload-artifact@v6
+        with:
+          name: v030-import-rss-diagnostic-${{ github.sha }}
+          path: v030-import-rss-diagnostic.json
+          if-no-files-found: error
+          retention-days: 90
+
+# Diagnostic only: never release credit. It decides whether to attack module/profile footprint or build working set.
