@@ -17,6 +17,9 @@ def test_verified_staging_injects_bulk_inverse_without_global_mutation(tmp_path,
     assert P.R.G04.O.delimiter_inverse is promoted_default
 
     def fake_stream(archive_arg, staging_arg, max_output_bytes, **kwargs):
+        assert archive_arg == archive
+        assert staging_arg == staging
+        assert max_output_bytes is None
         captured.update(kwargs)
         return {"ok": True}
 
@@ -41,6 +44,9 @@ def test_verified_staging_bulk_inverse_is_concurrently_isolated(tmp_path, monkey
     promoted_default = VR.release_single_buffer_delimiter_inverse
 
     def blocked_stream(archive_arg, staging_arg, max_output_bytes, **kwargs):
+        assert archive_arg == archive
+        assert staging_arg == staging
+        assert max_output_bytes is None
         captured.update(kwargs)
         entered.set()
         assert release.wait(timeout=5)
