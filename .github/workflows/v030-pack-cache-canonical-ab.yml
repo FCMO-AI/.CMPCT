@@ -61,3 +61,4 @@ jobs:
           if-no-files-found: error
           retention-days: 90
 # Direct product A/B only; unchanged full runtime/RSS/release gates remain authoritative.
+# Dispatch marker after workflow creation.
