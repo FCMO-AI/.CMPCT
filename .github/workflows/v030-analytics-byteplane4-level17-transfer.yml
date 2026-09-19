@@ -1,17 +1,11 @@
 # ci-lane: deep
-# ci-pr-scope: latest-head-commit-gate
 # ci-cancel-policy: preserve-running-exact-receipt
 name: CMPCT v0.30 Analytics BytePlane4 level17 transfer
 
 on:
   push:
-    branches: [agent/v030-authoritative-integration]
-    paths:
-      - 'benchmarks/v030_analytics_byteplane4_level17_transfer_referee.py'
-      - 'docs/V030_ANALYTICS_BYTEPLANE4_LEVEL17_TRANSFER_MISSION_2026-09-12.md'
-      - '.github/workflows/v030-analytics-byteplane4-level17-transfer.yml'
-  pull_request:
-    branches: [main]
+    branches:
+      - 'agent/v030-*'
     paths:
       - 'benchmarks/v030_analytics_byteplane4_level17_transfer_referee.py'
       - 'docs/V030_ANALYTICS_BYTEPLANE4_LEVEL17_TRANSFER_MISSION_2026-09-12.md'
@@ -21,12 +15,12 @@ on:
 permissions:
   contents: read
 concurrency:
-  group: cmpct-v030-analytics-bp4-l17-${{ github.event.pull_request.head.sha || github.sha }}
+  group: cmpct-v030-analytics-bp4-l17-${{ github.sha }}
   cancel-in-progress: false
 
 env:
   PYTHONPATH: ${{ github.workspace }}
-  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+  EVIDENCE_HEAD: ${{ github.sha }}
 
 jobs:
   latest-head-impact:
