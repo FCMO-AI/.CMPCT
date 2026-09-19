@@ -7,6 +7,7 @@ ROOT=Path(__file__).resolve().parents[1]
 
 def child(mode:str,source:Path,out:Path):
     from experiments import entropygraph_v030_release_product_base as RP
+    prebuild_peak=int(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss)
     started=time.perf_counter()
     if mode=='r24': stats=RP._locality_bounded_r24_build(source,out)
     elif mode=='r25':
@@ -17,7 +18,8 @@ def child(mode:str,source:Path,out:Path):
     pack_peak=int(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss)
     verified=RP.strong_verify(out)
     post_verify_peak=int(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss)
-    print(json.dumps({'mode':mode,'pack_wall_s':pack_wall,'pack_peak_rss_kib':pack_peak,'post_verify_peak_rss_kib':post_verify_peak,
+    print(json.dumps({'mode':mode,'prebuild_peak_rss_kib':prebuild_peak,'pack_wall_s':pack_wall,'pack_peak_rss_kib':pack_peak,
+                      'pack_incremental_peak_kib':max(0,pack_peak-prebuild_peak),'post_verify_peak_rss_kib':post_verify_peak,
                       'archive_bytes':out.stat().st_size,'selected':stats.get('selected'),'verify_ok':bool(verified.get('ok'))},separators=(',',':')))
 
 def invoke(mode,source,out):
@@ -35,6 +37,6 @@ def main():
         source=corp[(suite,name)]; rows[name]={}
         for mode in ('r24','r25'): rows[name][mode]=invoke(mode,source,a.work_root/f'{name}-{mode}.cmpct')
     d={'schema':'cmpct-v030-rss-component-owner-v1','release_credit':False,'rows':rows,
-       'claim_boundary':'Fresh-process component pack high-water attribution; verification is reported separately; child-process aggregate/live RSS and full product gates remain separate.'}
+       'claim_boundary':'Fresh-process component pack high-water attribution with per-process prebuild baselines; verification is reported separately; overlap/live aggregate and full product gates remain separate.'}
     a.output.parent.mkdir(parents=True,exist_ok=True); a.output.write_text(json.dumps(d,indent=2)+'\n'); print(json.dumps(d,indent=2))
 if __name__=='__main__': main()
