@@ -75,3 +75,5 @@ jobs:
           git diff --cached --check
           git commit -m 'product: scope nested SHA folding to verified staging'
           git push origin HEAD:agent/v030-ml-verification-fold-product
+
+# Temporary transactional applicator: remove after the product source commit is durable.
