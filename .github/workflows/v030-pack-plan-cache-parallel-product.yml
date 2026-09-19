@@ -74,3 +74,4 @@ jobs:
 
 # Evidence only. This measures transfer through the accepted independent-child portfolio shape;
 # authoritative release runtime and the v0.30 strict lock remain unchanged.
+# This edit intentionally dispatches the first exact-head run after workflow creation.
