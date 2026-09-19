@@ -24,6 +24,10 @@ This changes no archive grammar. It is a parser route for the already-valid one-
 
 The same exact-head research artifact constructs a DGO1 descriptor containing explicit multi-byte lengths 130 and 257. Candidate reconstruction equals the historical inverse byte-for-byte. Four malformed truncations are rejected by both historical and candidate paths. Result: PASS. Product exact-head regression still owes independent confirmation on the shipping implementation.
 
+## Evidence custody
+
+The first implementation synchronize correctly exposed that the PR body did not yet match the repository's exact material-evidence section contract. The dossier is now aligned to `tools/check_pr_evidence.py`; this follow-up commit exists so CI evaluates the corrected event payload. That earlier red is process/evidence debt, not a waived product gate.
+
 ## Completion gates
 
 - [x] implement the bounded route in the release-only verified restore owner;
