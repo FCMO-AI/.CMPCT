@@ -17,6 +17,13 @@ def _expect_fail(label, fn):
     raise RuntimeError(f"{label}: corruption unexpectedly accepted")
 
 
+def _expect_strong_reject(label, archive: Path):
+    result = PRODUCT.strong_verify(archive)
+    if not isinstance(result, dict) or result.get("ok") is not False:
+        raise RuntimeError(f"{label}: strong_verify unexpectedly accepted: {result!r}")
+    return {"label": label, "failed_closed": True, "error": "structured-verify-failure", "message": str(result.get("error", ""))[:240]}
+
+
 def _first_record_layout(archive: Path):
     stream, _meta, start, offsets, _merkle, _tail = R._g04_open(archive)
     try:
@@ -118,7 +125,7 @@ def run(root: Path):
 
     post_crc = _post_crc_fault(archive, root / "post-crc-out")
     rollback = _assert_destination_rollback(bad_payload, root / "rollback-dst")
-    strong_payload = _expect_fail("strong-verify-corrupt-payload", lambda: PRODUCT.strong_verify(bad_payload))
+    strong_payload = _expect_strong_reject("strong-verify-corrupt-payload", bad_payload)
 
     bad_logical_sha = root / "bad-logical-sha.cmpct"
     _rewrite_header(archive, bad_logical_sha, lambda c,u,s,r,h:(c,u,s,r,bytes([h[0]^1])+h[1:]))
@@ -126,14 +133,11 @@ def run(root: Path):
     PRODUCT.extract(bad_logical_sha, folded_dst)
     if PRODUCT.treehash(folded_dst) != expected_tree:
         raise RuntimeError("logical-SHA scope probe changed logical tree")
-    strong_scope_accepted = True
-    try:
-        PRODUCT.strong_verify(bad_logical_sha)
-    except Exception:
-        strong_scope_accepted = False
+    strong_scope = PRODUCT.strong_verify(bad_logical_sha)
+    strong_scope_accepted = bool(isinstance(strong_scope, dict) and strong_scope.get("ok") is True)
 
     return {
-        "schema": "cmpct-v030-ml-semantic-fold-hostile-v4",
+        "schema": "cmpct-v030-ml-semantic-fold-hostile-v5",
         "release_credit": False,
         "valid_tree_sha256": expected_tree,
         "checks": [payload, usize, csize, crc, post_crc, rollback, strong_payload],
@@ -141,6 +145,7 @@ def run(root: Path):
             "mutation": "record logical SHA only",
             "folded_full_extract_tree_identical": True,
             "strong_verify_accepted_under_global_oracle": strong_scope_accepted,
+            "strong_verify_result": strong_scope,
             "product_requirement": "strong_verify must retain nested SHA; use default-false extraction-only policy rather than global session replacement",
         },
         "preserved_claim": [
