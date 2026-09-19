@@ -7,6 +7,19 @@ import textwrap
 import pytest
 
 
+def test_side_effect_free_owner_matches_promoted_banded_inverse() -> None:
+    from experiments import entropygraph_v030_canonical_final as canonical
+    from experiments import entropygraph_v030_delimiter_inverse as neutral
+
+    # Three ragged rows: columns are [a,b,d], [c,e], [f]. One-byte varints keep the fixture transparent.
+    encoded = b"DGO1" + b"|" + bytes((3, 1, 2, 3)) + b"abdcef"
+    expected = b"a|bc|def"
+    assert neutral.banded_delimiter_inverse(encoded, len(expected)) == expected
+    assert neutral.banded_delimiter_inverse(encoded, len(expected)) == canonical._banded_delimiter_inverse(
+        encoded, len(expected)
+    )
+
+
 @pytest.mark.xfail(
     strict=True,
     reason="T03 P1: canonical-final still rewrites the historical Geometry delimiter inverse at import time",
