@@ -1,0 +1,41 @@
+# ci-lane: fast
+name: CMPCT v0.30 ML empty-hierarchy fast reject
+on:
+  push:
+    branches: [agent/v030-ml-hierarchy-empty-screen-fast-reject]
+    paths:
+      - 'benchmarks/v030_ml_hierarchy_empty_screen_fast_reject.py'
+      - '.github/workflows/v030-ml-hierarchy-empty-screen-fast-reject.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+env:
+  PYTHONPATH: '${{ github.workspace }}'
+  EVIDENCE_HEAD: '${{ github.sha }}'
+concurrency:
+  group: 'v030-ml-hierarchy-empty-${{ github.ref }}'
+  cancel-in-progress: true
+jobs:
+  oracle:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: '${{ env.EVIDENCE_HEAD }}'
+      - run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - run: |
+          sudo apt-get update && sudo apt-get install -y zstd gcc
+          python -m pip install -e .
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
+      - run: python -m py_compile benchmarks/v030_ml_hierarchy_empty_screen_fast_reject.py
+      - run: python benchmarks/v030_ml_hierarchy_empty_screen_fast_reject.py
+      - uses: actions/upload-artifact@v6
+        with:
+          name: v030-ml-hierarchy-empty-screen-${{ env.EVIDENCE_HEAD }}
+          path: benchmark-artifacts/v030-ml-hierarchy-empty-screen.json
+          if-no-files-found: error
+          retention-days: 30
