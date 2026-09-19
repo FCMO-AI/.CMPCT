@@ -1,22 +1,11 @@
 # ci-lane: deep
-# ci-pr-scope: latest-head-commit-gate
 # ci-cancel-policy: preserve-running-exact-receipt
 name: CMPCT v0.30 R4 page-level DEFLATE ownership oracle
 
 on:
   push:
-    branches: [agent/v030-authoritative-integration]
-    paths:
-      - 'benchmarks/v030_r4_deflate_page_dependency_oracle.py'
-      - 'benchmarks/v030_r4_deflate_sparse_dependency_oracle.py'
-      - 'benchmarks/v030_r4_deflate_dependency_cone_oracle.py'
-      - 'benchmarks/v030_r4_analytics_dual_owner_oracle.py'
-      - 'benchmarks/mosaic_v029_generalization_bench.py'
-      - 'benchmarks/neutral_hostile_corpus_v1.py'
-      - 'benchmarks/neutral_hostile_determinism_repair_v*.py'
-      - '.github/workflows/v030-r4-deflate-page-dependency.yml'
-  pull_request:
-    branches: [main]
+    branches:
+      - 'agent/v030-*'
     paths:
       - 'benchmarks/v030_r4_deflate_page_dependency_oracle.py'
       - 'benchmarks/v030_r4_deflate_sparse_dependency_oracle.py'
@@ -33,10 +22,10 @@ permissions:
 
 env:
   PYTHONPATH: ${{ github.workspace }}
-  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+  EVIDENCE_HEAD: ${{ github.sha }}
 
 concurrency:
-  group: cmpct-v030-r4-deflate-page-${{ github.event.pull_request.head.sha || github.sha }}
+  group: cmpct-v030-r4-deflate-page-${{ github.sha }}
   cancel-in-progress: false
 
 jobs:
