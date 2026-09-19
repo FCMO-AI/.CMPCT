@@ -9,7 +9,11 @@ ORDER=(("control","fold-file"),("fold-file","control"),("control","fold-semantic
 def _install_fold(mode:str):
  from experiments import entropygraph_v030_verified_restore as VR
  R=VR.C.POLICY.R; G=R.G04; A5=R.A5; P=R.P
- def folded_file(session,rel,desc,tree,target_root):
+ def folded_file(session,rel,desc,tree,target_root,*,verify_file_sha=True):
+  # This is a historical research oracle whose purpose is to remove the file-SHA pass. Accept the production
+  # reader's newer scoped keyword so the oracle remains executable, but deliberately ignore it here rather than
+  # silently changing the experiment that produced the preserved headroom evidence.
+  _=verify_file_sha
   safe=R._safe_relpath(rel); expected_size=int(desc[2]); rb=rel.encode(); tree.update(len(rb).to_bytes(4,"little")); tree.update(rb); tree.update(expected_size.to_bytes(8,"little")); written=0; output=None
   try:
    if target_root is not None: target=target_root.joinpath(*safe.parts); target.parent.mkdir(parents=True,exist_ok=True); output=target.open("wb")

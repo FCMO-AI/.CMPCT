@@ -257,7 +257,8 @@ def extract_verified_into_staging(
     staging.mkdir(parents=True, exist_ok=True)
     magic = R._magic(archive)
     if magic == R.G04.MAG:
-        return R._stream_g04(archive, staging, max_output_bytes)
+        # Only this unpublished verified-staging owner may defer nested semantic SHA.
+        return R._stream_g04(archive, staging, max_output_bytes, verify_nested_semantic_sha=False)
     if magic == R.PG.MAGIC:
         return R._stream_pg(archive, staging, max_output_bytes)
     raise RuntimeError("verified staging extraction accepts canonical r25 graph profiles only")

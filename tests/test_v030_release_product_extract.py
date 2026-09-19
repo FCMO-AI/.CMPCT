@@ -11,12 +11,18 @@ def test_verified_staging_streams_without_nested_transaction(tmp_path, monkeypat
     archive = tmp_path / "candidate.cmpct"
     archive.write_bytes(b"fixture")
     staging = tmp_path / "staging"
-    calls: list[tuple[Path, Path, int]] = []
+    calls: list[tuple[Path, Path, int, bool]] = []
 
     monkeypatch.setattr(policy.R, "_magic", lambda _archive: policy.R.G04.MAG)
 
-    def stream(source: Path, target: Path, budget: int) -> dict:
-        calls.append((Path(source), Path(target), int(budget)))
+    def stream(
+        source: Path,
+        target: Path,
+        budget: int,
+        *,
+        verify_nested_semantic_sha: bool = True,
+    ) -> dict:
+        calls.append((Path(source), Path(target), int(budget), bool(verify_nested_semantic_sha)))
         target.mkdir(parents=True, exist_ok=True)
         (target / "payload.bin").write_bytes(b"verified")
         return {"ok": True, "tree_sha256": "fixture"}
@@ -33,7 +39,7 @@ def test_verified_staging_streams_without_nested_transaction(tmp_path, monkeypat
     result = policy.extract_verified_into_staging(archive, staging, max_output_bytes=123)
 
     assert result["ok"] is True
-    assert calls == [(archive, staging, 123)]
+    assert calls == [(archive, staging, 123, False)]
     assert (staging / "payload.bin").read_bytes() == b"verified"
 
 

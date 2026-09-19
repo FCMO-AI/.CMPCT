@@ -415,8 +415,9 @@ def _g04_open(archive: Path) -> tuple[object, dict, int, list[int], bytes, bool]
 
 
 class _G04Session:
-    def __init__(self, archive: Path):
+    def __init__(self, archive: Path, *, verify_nested_semantic_sha: bool = True):
         self.stream, self.meta, self.record_start, self.offsets, _merkle, self.tail_authenticated = _g04_open(archive)
+        self.verify_nested_semantic_sha = bool(verify_nested_semantic_sha)
         self.leaves = self.meta["record_leaf_sha256"]
         self.transforms = self.meta["physical_geometry"]
         self.nodes = self.meta["nodes"]
@@ -475,8 +476,10 @@ class _G04Session:
             original = G04.HG.hierarchy_inverse(physical, logical_size)
         else:  # pragma: no cover - schema admission rejects this before session construction.
             raise RuntimeError("unknown G0-G4 transform")
-        if (binascii.crc32(original) & 0xFFFFFFFF) != crc or H(original) != original_sha:
-            raise RuntimeError("G0-G4 inverse record integrity")
+        if (binascii.crc32(original) & 0xFFFFFFFF) != crc:
+            raise RuntimeError("G0-G4 inverse record CRC")
+        if self.verify_nested_semantic_sha and H(original) != original_sha:
+            raise RuntimeError("G0-G4 inverse record SHA-256")
         self.physical_record_reads += 1
         self.max_physical_record_bytes = max(self.max_physical_record_bytes, len(original))
         _cache_put(self.record_cache, self.record_cache_bytes, record_id, original, MAX_RECORD_CACHE_BYTES)
@@ -533,14 +536,24 @@ class _G04Session:
             )
         else:  # pragma: no cover - schema admission rejects this first.
             raise RuntimeError("unknown G0-G4 node kind")
-        if len(raw) > A5.MAX_CHUNK or H(raw) != expected:
-            raise RuntimeError("G0-G4 logical node integrity")
+        if len(raw) > A5.MAX_CHUNK:
+            raise RuntimeError("G0-G4 logical node size")
+        if self.verify_nested_semantic_sha and H(raw) != expected:
+            raise RuntimeError("G0-G4 logical node SHA-256")
         self.max_logical_node_bytes = max(self.max_logical_node_bytes, len(raw))
         _cache_put(self.node_cache, self.node_cache_bytes, node_id, raw, MAX_NODE_CACHE_BYTES)
         return raw
 
 
-def _consume_g04_file(session: _G04Session, rel: str, desc: list, tree, target_root: Path | None) -> int:
+def _consume_g04_file(
+    session: _G04Session,
+    rel: str,
+    desc: list,
+    tree,
+    target_root: Path | None,
+    *,
+    verify_file_sha: bool = True,
+) -> int:
     safe = _safe_relpath(rel)
     expected_size = int(desc[2])
     expected_hash = desc[3]
@@ -548,7 +561,7 @@ def _consume_g04_file(session: _G04Session, rel: str, desc: list, tree, target_r
     tree.update(len(rel_bytes).to_bytes(4, "little"))
     tree.update(rel_bytes)
     tree.update(expected_size.to_bytes(8, "little"))
-    file_hash = hashlib.sha256()
+    file_hash = hashlib.sha256() if verify_file_sha else None
     written = 0
     output = None
     try:
@@ -564,26 +577,42 @@ def _consume_g04_file(session: _G04Session, rel: str, desc: list, tree, target_r
             written += len(raw)
             if written > expected_size:
                 raise RuntimeError("G0-G4 streamed file exceeds declared size")
-            file_hash.update(raw)
+            if file_hash is not None:
+                file_hash.update(raw)
             tree.update(raw)
             if output is not None:
                 output.write(raw)
     finally:
         if output is not None:
             output.close()
-    if written != expected_size or file_hash.digest() != expected_hash:
-        raise RuntimeError("G0-G4 streamed file integrity")
+    if written != expected_size:
+        raise RuntimeError("G0-G4 streamed file size")
+    if file_hash is not None and file_hash.digest() != expected_hash:
+        raise RuntimeError("G0-G4 streamed file SHA-256")
     return written
 
 
-def _stream_g04(archive: Path, target_root: Path | None, max_output_bytes: int) -> dict:
-    session = _G04Session(archive)
+def _stream_g04(
+    archive: Path,
+    target_root: Path | None,
+    max_output_bytes: int,
+    *,
+    verify_nested_semantic_sha: bool = True,
+) -> dict:
+    session = _G04Session(archive, verify_nested_semantic_sha=verify_nested_semantic_sha)
     tree = hashlib.sha256()
     logical = 0
     files = 0
     try:
         for rel in sorted(session.meta["files"]):
-            logical += _consume_g04_file(session, rel, session.meta["files"][rel], tree, target_root)
+            logical += _consume_g04_file(
+                session,
+                rel,
+                session.meta["files"][rel],
+                tree,
+                target_root,
+                verify_file_sha=verify_nested_semantic_sha,
+            )
             if logical > max_output_bytes:
                 raise RuntimeError("G0-G4 extraction exceeds caller output budget")
             files += 1
