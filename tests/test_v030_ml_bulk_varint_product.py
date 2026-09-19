@@ -31,4 +31,6 @@ def test_truncated_descriptor_rejection_matches_historical_reader() -> None:
         with pytest.raises(RuntimeError):
             R.release_single_buffer_delimiter_inverse(damaged, len(raw))
         with pytest.raises(RuntimeError):
+            R.release_bulk_one_byte_table_delimiter_inverse(damaged, len(raw))
+        with pytest.raises(RuntimeError):
             R._PRE_RELEASE_DELIMITER_INVERSE(damaged, len(raw))
