@@ -1,5 +1,5 @@
 from __future__ import annotations
-import binascii, json, shutil, struct, tempfile
+import json, shutil
 from pathlib import Path
 from benchmarks import v030_release_performance as PERF
 from benchmarks import v030_ml_semantic_fold_bounded_oracle as FOLD
@@ -44,10 +44,18 @@ def _mutate_payload(src: Path, dst: Path):
 def _mutate_header_bound(src: Path, dst: Path):
     shutil.copy2(src, dst)
     pos, codec, _usize, csize, crc, logical_sha = _first_record_layout(dst)
-    bad_usize = R.G04.MAX_DECODE_UNIT + 1
     with dst.open("r+b") as f:
         f.seek(pos)
-        f.write(R.PH.pack(codec, bad_usize, csize, crc, logical_sha))
+        f.write(R.PH.pack(codec, R.G04.MAX_DECODE_UNIT + 1, csize, crc, logical_sha))
+
+
+def _mutate_logical_sha(src: Path, dst: Path):
+    shutil.copy2(src, dst)
+    pos, codec, usize, csize, crc, logical_sha = _first_record_layout(dst)
+    bad = bytes([logical_sha[0] ^ 1]) + logical_sha[1:]
+    with dst.open("r+b") as f:
+        f.seek(pos)
+        f.write(R.PH.pack(codec, usize, csize, crc, bad))
 
 
 def _assert_destination_rollback(archive: Path, dst: Path):
@@ -72,8 +80,9 @@ def run(root: Path):
     PRODUCT.build(src, archive)
     expected_tree = PRODUCT.treehash(src)
 
-    # Install exactly the corrected bounded research fold. This is still an oracle:
-    # it must fail hostile proof before any product integration can earn credit.
+    # Install exactly the corrected bounded research fold. This is intentionally
+    # global and therefore is NOT the desired product policy; the scope probe below
+    # exists to prove why productization must be target-root/default-false scoped.
     FOLD.install_bounded_fold()
 
     valid_dst = root / "valid"
@@ -88,28 +97,47 @@ def run(root: Path):
     bad_bound = root / "bad-bound.cmpct"
     _mutate_header_bound(archive, bad_bound)
     bound = _expect_fail("physical-usize-bound", lambda: PRODUCT.extract(bad_bound, root / "bad-bound-out"))
-
     rollback = _assert_destination_rollback(bad_payload, root / "rollback-dst")
+    strong_payload = _expect_fail("strong-verify-corrupt-payload", lambda: PRODUCT.strong_verify(bad_payload))
 
-    # Scope proof: a fresh strong_verify call is deliberately made after the fold is installed.
-    # The fold only replaces the release-reader session used by this process, so corruption must
-    # still be rejected by strong verification rather than silently accepted.
-    strong = _expect_fail("strong-verify-corrupt-payload", lambda: PRODUCT.strong_verify(bad_payload))
+    # Decision-changing scope discriminator: corrupt only the reconstructed-record SHA
+    # in the physical header. The terminal tree still describes the correct logical
+    # bytes, so folded full extraction may accept it; strong_verify must NOT inherit
+    # that deferral. The research monkeypatch is global, so record the expected scope
+    # gap rather than laundering it into product evidence.
+    bad_logical_sha = root / "bad-logical-sha.cmpct"
+    _mutate_logical_sha(archive, bad_logical_sha)
+    folded_dst = root / "folded-logical-sha"
+    PRODUCT.extract(bad_logical_sha, folded_dst)
+    if PRODUCT.treehash(folded_dst) != expected_tree:
+        raise RuntimeError("logical-SHA scope probe changed logical tree")
+    strong_scope_accepted = True
+    try:
+        PRODUCT.strong_verify(bad_logical_sha)
+    except Exception:
+        strong_scope_accepted = False
 
     return {
-        "schema": "cmpct-v030-ml-semantic-fold-hostile-v1",
+        "schema": "cmpct-v030-ml-semantic-fold-hostile-v2",
         "release_credit": False,
         "valid_tree_sha256": expected_tree,
-        "checks": [payload, bound, rollback, strong],
+        "checks": [payload, bound, rollback, strong_payload],
+        "scope_probe": {
+            "mutation": "record logical SHA only",
+            "folded_full_extract_tree_identical": True,
+            "strong_verify_accepted_under_global_oracle": strong_scope_accepted,
+            "product_requirement": "strong_verify must retain nested SHA; use default-false extraction-only policy rather than global session replacement",
+        },
         "preserved_claim": [
             "payload SHA fails closed",
             "physical usize bound fails closed",
             "transactional destination rollback survives failure",
-            "strong_verify rejects corrupted payload",
+            "strong_verify rejects payload corruption",
         ],
         "unpaid": [
+            "product-scoped strong_verify nested-SHA rejection",
             "post-CRC logical-node corruption",
-            "file/path/size hostile metadata under authenticated fixture mutation",
+            "authenticated metadata path/file/size hostile mutation",
             "selective-read nested-SHA scope proof",
             "product-owner implementation and fresh-process release evidence",
         ],
