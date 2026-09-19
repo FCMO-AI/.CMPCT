@@ -16,6 +16,9 @@ concurrency:
   group: v030-ml-verification-fold-product-ab-${{ github.ref }}
   cancel-in-progress: true
 
+env:
+  PYTHONPATH: ${{ github.workspace }}
+
 jobs:
   ab:
     runs-on: ubuntu-latest
