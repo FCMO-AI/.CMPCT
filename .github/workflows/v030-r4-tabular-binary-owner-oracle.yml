@@ -1,24 +1,11 @@
 # ci-lane: deep
-# ci-pr-scope: latest-head-commit-gate
 # ci-cancel-policy: preserve-running-exact-receipt
 name: CMPCT v0.30 R4 tabular binary owner oracle
 
 on:
   push:
-    branches: [agent/v030-authoritative-integration]
-    paths:
-      - 'benchmarks/v030_r4_tabular_binary_owner_oracle.py'
-      - 'benchmarks/v030_r4_tabular_owner_oracle.py'
-      - 'benchmarks/v030_r4_tabular_owner_range_oracle.py'
-      - 'benchmarks/v030_r4_zstd_parameter_decomposition.py'
-      - 'benchmarks/v030_external_competitors.py'
-      - 'benchmarks/v030_release_generalization.py'
-      - 'benchmarks/neutral_hostile_corpus_v1.py'
-      - 'benchmarks/neutral_hostile_determinism_repair_v*.py'
-      - 'experiments/entropygraph_v030_release_product.py'
-      - '.github/workflows/v030-r4-tabular-binary-owner-oracle.yml'
-  pull_request:
-    branches: [main]
+    branches:
+      - 'agent/v030-*'
     paths:
       - 'benchmarks/v030_r4_tabular_binary_owner_oracle.py'
       - 'benchmarks/v030_r4_tabular_owner_oracle.py'
@@ -36,12 +23,12 @@ permissions:
   contents: read
 
 concurrency:
-  group: cmpct-v030-r4-tabular-binary-owner-${{ github.event.pull_request.head.sha || github.sha }}
+  group: cmpct-v030-r4-tabular-binary-owner-${{ github.sha }}
   cancel-in-progress: false
 
 env:
   PYTHONPATH: ${{ github.workspace }}
-  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+  EVIDENCE_HEAD: ${{ github.sha }}
 
 jobs:
   latest-head-impact:
