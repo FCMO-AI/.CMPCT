@@ -17,6 +17,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: cmpct-v030-r4-sparse-anchor-${{ github.ref }}
+  cancel-in-progress: true
+
 env:
   PYTHONPATH: ${{ github.workspace }}
   EVIDENCE_HEAD: ${{ github.sha }}
