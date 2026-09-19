@@ -63,7 +63,7 @@ jobs:
           assert d['large_file_count'] > 0 and d['large_file_bytes'] > 0
           assert d['all_boundaries_identical'] is True
           assert d['baseline_total_s'] > 0 and d['vector_total_s'] > 0
-          assert d['max_transient_scratch_bytes'] >= 0
+          assert d['max_transient_scratch_bytes_conservative'] >= 0
           PY
       - uses: actions/upload-artifact@v6
         if: always()
