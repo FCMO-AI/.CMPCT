@@ -1,11 +1,23 @@
 from __future__ import annotations
 
 from pathlib import Path
-from types import SimpleNamespace
 
 import pytest
 
 from experiments import entropygraph_v029_parallel_portfolio_handoff as HOFF
+
+
+class _StatWithDevice:
+    """Delegate a real stat result while overriding only the device identity under test."""
+    def __init__(self, base, device: int):
+        self._base = base
+        self.st_dev = device
+
+    def __getattr__(self, name):
+        return getattr(self._base, name)
+
+    def __getitem__(self, item):
+        return self._base[item]
 
 
 def test_explicit_handoff_rejects_cross_filesystem_without_copy(monkeypatch, tmp_path: Path) -> None:
@@ -23,12 +35,13 @@ def test_explicit_handoff_rejects_cross_filesystem_without_copy(monkeypatch, tmp
     real_stat = HOFF.os.stat
 
     def fake_stat(path, *args, **kwargs):
+        base = real_stat(path, *args, **kwargs)
         probe = Path(path)
         if probe == out_parent:
-            return SimpleNamespace(st_dev=101)
+            return _StatWithDevice(base, 101)
         if probe == retained_parent:
-            return SimpleNamespace(st_dev=202)
-        return real_stat(path, *args, **kwargs)
+            return _StatWithDevice(base, 202)
+        return base
 
     monkeypatch.setattr(HOFF.os, "stat", fake_stat)
     with pytest.raises(RuntimeError, match="same filesystem"):
