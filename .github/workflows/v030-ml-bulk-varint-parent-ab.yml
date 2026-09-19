@@ -1,4 +1,5 @@
 # ci-lane: fast
+# Strongest control is the exact authoritative parent checkout, not the historical pre-release inverse.
 name: CMPCT v0.30 ML bulk varint exact-parent A/B
 on:
   push:
