@@ -22,6 +22,8 @@ jobs:
           python -m pip install -e '.[audio,test]'
           python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
       - name: Run component RSS discriminator
+        env:
+          PYTHONPATH: ${{ github.workspace }}
         run: |
           set -euo pipefail
           mkdir -p benchmark-artifacts
