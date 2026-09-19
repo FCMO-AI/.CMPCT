@@ -1,0 +1,36 @@
+# ci-lane: deep
+# ci-cancel-policy: preserve-running-exact-receipt
+name: CMPCT v0.30 r24-r25 RSS owner
+on:
+  push:
+    branches: [agent/v030-rss-r24-r25-owner-diagnostic]
+    paths: ['benchmarks/v030_rss_component_owner.py','.github/workflows/v030-rss-component-owner.yml']
+  workflow_dispatch:
+permissions: {contents: read}
+jobs:
+  rss-owner:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with: {python-version: '3.11', cache: pip}
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y zstd gcc ffmpeg libsndfile1
+          python -m pip install -e '.[audio,test]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
+      - name: Run component RSS discriminator
+        run: |
+          set -euo pipefail
+          mkdir -p benchmark-artifacts
+          python benchmarks/v030_rss_component_owner.py --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/work" --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-rss-component-owner.json"
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: v030-rss-component-owner-${{ github.sha }}
+          path: benchmark-artifacts/v030-rss-component-owner.json
+          if-no-files-found: warn
+          retention-days: 90
+# Diagnostic only. Never release credit.
