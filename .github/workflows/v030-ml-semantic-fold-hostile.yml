@@ -1,4 +1,5 @@
 # ci-lane: fast
+# Research-only hostile proof; no release credit.
 name: CMPCT v0.30 ML semantic-fold hostile proof
 on:
   push:
