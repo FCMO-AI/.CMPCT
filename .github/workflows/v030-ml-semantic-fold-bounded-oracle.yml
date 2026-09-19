@@ -1,4 +1,5 @@
 # ci-lane: fast
+# Confirms the headroom result after restoring the omitted physical resource-bound checks.
 name: CMPCT v0.30 ML bounded semantic-fold oracle
 on:
   push:
