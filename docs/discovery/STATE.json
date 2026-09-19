@@ -7,21 +7,21 @@
     "source": "PR #56 and current repository authority; reconcile every activation"
   },
   "active_product_bottleneck": {
-    "id": "v030-runtime-rehabilitation",
-    "observation": "Fresh-process evidence now proves that G04 can reuse the exact attempt-5 candidate already built by the accepted v0.29 portfolio, eliminating one redundant graph build while preserving final archive/tree identity and writing 0 B of retained payload. The research mechanism exceeds both numerical shared-build-rehab hurdles (>=20% and >=5 s): two fresh-process pairs save 23.491 s and 23.227 s, median 23.359 s / 34.665%. The remaining create-side debt is productization: fold ownership into the authoritative scheduler without duplicate scheduler code or global interception, then re-run exact-fingerprint authority. Extraction debt remains a separate owner.",
-    "evidence": ["PR #139", "GitHub Actions run 35415287116", "docs/V030_RELEASE_LOCK.json shared-build-rehab", "docs/v030-coordination/tasks/T03-graph-productization.md", "PR #56"],
-    "next_discriminator": "Implement caller-owned attempt-5 workspace/output directly on agent/v030-authoritative-integration as required by T03, then falsify with exact archive/tree identity, attempt5_graph_build_count=1 on the proven multi-file path, fresh-process wall/CPU/RSS/temp-I/O and current-fingerprint release evidence."
+    "id": "canonical-r24-product-floor",
+    "observation": "Current authoritative canonical build can publish r25 after comparing only against the accepted-v0.29 research floor; it deliberately does not build genuine canonical r24 on successful r25 paths. This directly conflicts with the normative T03 P0 product-boundary rule that complete canonical r25 bytes must compete against complete genuine canonical r24 bytes for the same original filesystem tree and ties retain r24. Correctness/product-floor law outranks runtime optimization. Separately, G04 retained-attempt5 reuse remains a protected earned-productization seed with large measured runtime headroom.",
+    "evidence": ["experiments/entropygraph_v030_canonical.py build()", "docs/v030-coordination/reviews/graph-productization.md P0 canonical r25 vs genuine r24", "docs/v030-coordination/tasks/T03-graph-productization.md", "PR #56"],
+    "next_discriminator": "Fix canonical selection directly on agent/v030-authoritative-integration so genuine r24 and candidate r25 are complete same-input products, exact ties retain r24, and stats expose both product byte counts; preserve create economics through safe concurrency/shared work rather than skipping the r24 floor. Then test the staged-r25-wins-research-but-loses-r24 adversarial case required by T03."
   },
   "primary_question": {
-    "id": "authoritative-owned-intermediate",
-    "family": "execution-architecture / ownership",
-    "hypothesis": "The authoritative v0.29 portfolio can expose its already-built immutable attempt-5 candidate to G04 through caller-owned same-filesystem lifetime/ownership, preserving exact selected bytes while eliminating the downstream rebuild without hardlink-specific product semantics, duplicate scheduler code, or global monkeypatching.",
-    "kill": "Exact-identity A/B on the authoritative path shows the ownership fold materially loses the fresh-process gain, requires archive-sized payload copying, changes selection/bytes, or exports disqualifying memory/I/O/portability cost.",
+    "id": "genuine-r24-vs-r25-floor",
+    "family": "product-boundary / correctness",
+    "hypothesis": "Canonical r25 can preserve its earned representation while enforcing a genuine same-tree r24 no-regression floor; concurrent independent candidate construction or safely shared byte-identical analysis can contain the added create cost without weakening selection semantics.",
+    "kill": "Any implementation that publishes r25 without complete genuine-r24 comparison, changes the original user-tree semantics between arms, treats the v0.29 research floor as r24, or resolves runtime cost by weakening the P0 product floor is invalid.",
     "status": "READY"
   },
   "frontier_candidates": [
-    {"id":"extraction-owner","family":"reconstruction/execution","question":"After create-side ownership is folded, what reconstruction/verification/data-movement owner explains the remaining ML/Logs extraction debt, given session-fusion's ~2.09% result is insufficient?","status":"QUEUED"},
-    {"id":"charged-reconstruction-oracle","family":"representation","question":"What fully charged exact reconstruction relationship remains unexploited after current graph/transform families, with enough oracle headroom for a new grammar?","status":"QUEUED"},
+    {"id":"authoritative-owned-intermediate","family":"execution-architecture/ownership","question":"After the P0 product floor is correct, fold the proven retained-attempt5 reuse directly into the authoritative scheduler/G04 path without duplicate scheduler code, hardlink-specific product semantics, or global mutation.","status":"QUEUED_PROTECTED_SEED"},
+    {"id":"extraction-owner","family":"reconstruction/execution","question":"What reconstruction/verification/data-movement owner explains the remaining ML/Logs extraction debt, given session-fusion's ~2.09% result is insufficient?","status":"QUEUED"},
     {"id":"proof-carrying-admission","family":"search/proof","question":"Can conservative bounds certify losing candidates before construction while preserving exact fallback and generality?","status":"QUEUED"}
   ],
   "protected_seeds": [
@@ -36,8 +36,9 @@
   ],
   "process_lessons": [
     {"lesson":"Prefer causal owner localization and generous charged oracles before expensive productization.","evidence":"existing CMPCT v0.29/v0.30 research history"},
-    {"lesson":"When downstream reconstruction needs an immutable candidate that upstream already computed, inspect intermediate custody/lifetime before optimizing either computation internally; duplicate ownership can dominate wall time while preserving byte semantics.","evidence":"PR #139 and fresh-process run 35415287116"}
+    {"lesson":"When downstream reconstruction needs an immutable candidate that upstream already computed, inspect intermediate custody/lifetime before optimizing either computation internally; duplicate ownership can dominate wall time while preserving byte semantics.","evidence":"PR #139 and fresh-process run 35415287116"},
+    {"lesson":"Re-read normative product-boundary reviews before optimizing a release blocker: a large runtime win is subordinate to a still-open correctness floor, and product economics must be solved without skipping the comparator required by release law.","evidence":"current entropygraph_v030_canonical.py versus T03 graph-productization P0 review"}
   ],
-  "next_action": "Per T03's continuation rule, fold caller-owned attempt-5 lifetime/output directly into agent/v030-authoritative-integration, delete the need for duplicate handoff scheduler semantics, and require exact identity plus fresh-process resource accounting before any release credit. Then generate current-fingerprint strict JSON evidence and the shared-build-rehab receipt only if the authoritative gate passes. Independently consume the already-dispatched r24 performance retry without blocking the ownership fold.",
+  "next_action": "Per T03's continuation rule, fix the genuine r24-vs-r25 complete-product floor directly on agent/v030-authoritative-integration and add the required adversarial selection regression. Preserve the G04 ownership breakthrough as the next protected runtime productization lane rather than overwriting it. Independently consume the already-dispatched r24 performance retry without blocking correctness work.",
   "last_reconciled": "2026-09-19"
 }
