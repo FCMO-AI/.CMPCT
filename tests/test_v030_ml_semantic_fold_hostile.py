@@ -2,13 +2,14 @@
 from pathlib import Path
 
 from benchmarks import v030_ml_semantic_fold_hostile as hostile
+from experiments import entropygraph_v030_verified_restore as VR
 
 
 def test_ml_semantic_fold_hostile_matrix(tmp_path: Path) -> None:
     # The historical research oracle intentionally installs process-global reader replacements because its
     # standalone worker exits immediately afterwards.  Pytest does not: restore those globals so this research
     # probe cannot weaken strict-reader tests that happen to execute later in the same interpreter.
-    reader = hostile.FOLD.VR.C.POLICY.R
+    reader = VR.C.POLICY.R
     original_session = reader._G04Session
     original_consume_file = reader._consume_g04_file
     try:
