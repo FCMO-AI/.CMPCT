@@ -10,17 +10,24 @@ on:
       - 'experiments/entropygraph_v029_parallel_portfolio_handoff.py'
       - 'experiments/entropygraph_v030_geometry_overlay_g04_explicit_handoff.py'
       - '.github/workflows/v030-g04-explicit-fresh-process.yml'
+  pull_request:
+    types: [opened, synchronize, reopened]
+    paths:
+      - 'benchmarks/v030_g04_explicit_fresh_process.py'
+      - 'experiments/entropygraph_v029_parallel_portfolio_handoff.py'
+      - 'experiments/entropygraph_v030_geometry_overlay_g04_explicit_handoff.py'
+      - '.github/workflows/v030-g04-explicit-fresh-process.yml'
   workflow_dispatch:
 permissions: {contents: read}
 env:
   PYTHONPATH: ${{ github.workspace }}
-  EVIDENCE_HEAD: ${{ github.sha }}
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
 jobs:
   fresh-process-ab:
     runs-on: ubuntu-24.04
     timeout-minutes: 25
     concurrency:
-      group: cmpct-v030-g04-explicit-fresh-${{ github.sha }}
+      group: cmpct-v030-g04-explicit-fresh-${{ env.EVIDENCE_HEAD }}
       cancel-in-progress: false
     steps:
       - uses: actions/checkout@v6
