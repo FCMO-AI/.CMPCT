@@ -43,7 +43,7 @@ jobs:
           fi
           git diff --name-only HEAD^ HEAD > /tmp/latest-head-files.txt
           cat /tmp/latest-head-files.txt
-          if grep -Eq '^(src/cmpct/|experiments/|benchmarks/v030_(perf_worker|release_performance)|tests/test_v030_(perf_worker|release_reader|member_reader|release_candidate|shared_portfolio|prefixgraph_process_executor_paths)|pyproject\.toml$|\.github/workflows/v030-release-performance\.yml$)' /tmp/latest-head-files.txt; then
+          if grep -Eq '^(src/cmpct/|experiments/|benchmarks/v030_(perf_worker|release_performance)|tests/test_v030_(perf_worker|release_reader|member_reader|release_candidate|shared_portfolio|prefixgraph_process_executor_paths)|pyproject\.toml$|\.github/workflows/v030-release-performance\.yml$|\.github/v030-runtime-revalidate\.token$)' /tmp/latest-head-files.txt; then
             echo 'run_authority=true' >> "$GITHUB_OUTPUT"
           else
             echo 'run_authority=false' >> "$GITHUB_OUTPUT"
@@ -260,3 +260,5 @@ jobs:
 # whole-process-tree RSS instrument because RUSAGE_SELF gifts descendant memory once PrefixGraph uses a bounded child.
 # That companion inherits the same target matrix and thresholds, explicitly grants zero release credit, and exists
 # only to establish D5 product memory truth before further rehabilitation. A miss is debt, never a policy edit.
+# `.github/v030-runtime-revalidate.token` is intentionally outside the release fingerprint. Changing only that token
+# can re-run this unchanged frozen evaluator against the same candidate fingerprint without manufacturing a product mutation.
