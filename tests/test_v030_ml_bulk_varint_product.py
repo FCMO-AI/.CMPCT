@@ -3,10 +3,8 @@ import pytest
 from experiments import entropygraph_v030_verified_restore as R
 
 
-def _descriptor(raw: bytes):
-    encoded = R.C.SHARED.G.O.delimiter_forward(raw)
-    assert encoded is not None
-    return encoded
+def _descriptor(raw: bytes) -> bytes:
+    return R.C.SHARED.G.O.delimiter_forward(raw, ord(","))
 
 
 def test_bulk_one_byte_table_matches_historical_inverse() -> None:
