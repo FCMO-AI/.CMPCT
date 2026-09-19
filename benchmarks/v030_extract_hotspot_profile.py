@@ -49,7 +49,7 @@ def run(work_root: Path) -> dict:
     work_root.mkdir(parents=True)
     roots = PERF._build_corpora(work_root / "corpora")
     wanted = (("09_ml_artifacts", roots[("neutral_hostile_v1", "09_ml_artifacts")]),
-              ("05_logs", roots[("neutral_hostile_v1", "05_logs")]))
+              ("05_logs_and_telemetry", roots[("neutral_hostile_v1", "05_logs_and_telemetry")]))
     return {"schema": "cmpct-v030-extract-hotspot-profile-v1",
             "results": [_profile_one(source, work_root, label) for label, source in wanted]}
 
