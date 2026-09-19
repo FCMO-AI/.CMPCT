@@ -5,7 +5,7 @@ name: CMPCT v0.30 authoritative shared-build rehabilitation
 
 on:
   push:
-    branches: [agent/v030-authoritative-g04-owned-workspace]
+    branches: [agent/v030-authoritative-integration]
     paths:
       - 'benchmarks/v030_shared_build_rehab_authoritative.py'
       - 'experiments/entropygraph_v030_shared_portfolio.py'
@@ -83,7 +83,7 @@ jobs:
         if: always()
         run: |
           python - <<'PY'
-          import json
+          import json, os
           from pathlib import Path
           from tools import check_v030_release_lock as release_lock
           p=Path('benchmark-artifacts/shared-build-rehab.json')
@@ -91,6 +91,7 @@ jobs:
           d=json.loads(p.read_text())
           expected,_=release_lock.fingerprint(release_lock.load_manifest())
           assert d['schema']=='cmpct-v030-shared-build-rehab-authoritative-v1'
+          assert d['source_sha']==os.environ['EVIDENCE_HEAD']
           assert d['candidate_fingerprint']==expected
           assert d['release_credit'] is False
           f=d['facts']
