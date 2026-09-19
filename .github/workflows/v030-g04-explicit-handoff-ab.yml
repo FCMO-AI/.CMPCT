@@ -26,7 +26,9 @@ jobs:
       run_receipt: ${{ steps.scope.outputs.run_receipt }}
     steps:
       - uses: actions/checkout@v6
-        with: {ref: '${{ env.EVIDENCE_HEAD }}', fetch-depth: 2}
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 2
       - id: scope
         shell: bash
         run: |
@@ -45,7 +47,8 @@ jobs:
       cancel-in-progress: false
     steps:
       - uses: actions/checkout@v6
-        with: {ref: '${{ env.EVIDENCE_HEAD }}'}
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
       - run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
       - uses: actions/setup-python@v6
         with: {python-version: '3.11', cache: pip}
