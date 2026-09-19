@@ -8,7 +8,9 @@ on:
   workflow_dispatch:
 permissions: {contents: read}
 env: {PYTHONPATH: '${{ github.workspace }}', EVIDENCE_HEAD: '${{ github.sha }}'}
-concurrency: {group: 'v030-ml-semantic-fold-bounded-${{ github.ref }}', cancel-in-progress: true}
+concurrency:
+  group: v030-ml-semantic-fold-bounded-${{ github.ref }}
+  cancel-in-progress: true
 jobs:
   oracle:
     runs-on: ubuntu-24.04
