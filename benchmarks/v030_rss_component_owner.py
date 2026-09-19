@@ -13,8 +13,11 @@ def child(mode:str,source:Path,out:Path):
         with tempfile.TemporaryDirectory(prefix='cmpct-r25-only-',dir=out.parent) as td:
             staged=Path(td)/'profile-tree'; RP._ORIGINAL_PREPARE_PROFILE_TREE(source,staged); stats=RP.C._r25_build(staged,out)
     else: raise ValueError(mode)
+    pack_wall=time.perf_counter()-started
+    pack_peak=int(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss)
     verified=RP.strong_verify(out)
-    print(json.dumps({'mode':mode,'wall_s':time.perf_counter()-started,'peak_rss_kib':int(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss),
+    post_verify_peak=int(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss)
+    print(json.dumps({'mode':mode,'pack_wall_s':pack_wall,'pack_peak_rss_kib':pack_peak,'post_verify_peak_rss_kib':post_verify_peak,
                       'archive_bytes':out.stat().st_size,'selected':stats.get('selected'),'verify_ok':bool(verified.get('ok'))},separators=(',',':')))
 
 def invoke(mode,source,out):
@@ -32,6 +35,6 @@ def main():
         source=corp[(suite,name)]; rows[name]={}
         for mode in ('r24','r25'): rows[name][mode]=invoke(mode,source,a.work_root/f'{name}-{mode}.cmpct')
     d={'schema':'cmpct-v030-rss-component-owner-v1','release_credit':False,'rows':rows,
-       'claim_boundary':'Fresh-process component peak attribution only; child-process aggregate/live RSS and full product gates remain separate.'}
+       'claim_boundary':'Fresh-process component pack high-water attribution; verification is reported separately; child-process aggregate/live RSS and full product gates remain separate.'}
     a.output.parent.mkdir(parents=True,exist_ok=True); a.output.write_text(json.dumps(d,indent=2)+'\n'); print(json.dumps(d,indent=2))
 if __name__=='__main__': main()
