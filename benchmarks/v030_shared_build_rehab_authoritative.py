@@ -3,9 +3,9 @@ from __future__ import annotations
 """Fresh-process shared-build rehabilitation evidence for the release-facing G04 owner.
 
 This compares the historical duplicated G04 implementation against the already-productized
-``entropygraph_v030_shared_portfolio`` on the frozen ML runtime workload.  It does not alter product code,
-timing boundaries, thresholds, corpus semantics, or archive grammar.  The result is research/release-evidence
-enablement until a strict fingerprint-bound receipt is deliberately accepted by the release lock.
+``entropygraph_v030_shared_portfolio`` on the frozen ML runtime workload. It changes no product behavior,
+timing boundary, threshold, corpus semantic, or archive grammar. Exact source SHA and release fingerprint
+are emitted so the result cannot be rebound to a later candidate.
 """
 
 import argparse
@@ -60,25 +60,17 @@ def _worker(arm: str, source: Path, out: Path) -> dict:
     verified = engine.strong_verify(out)
     if not verified.get("ok"):
         raise RuntimeError(f"{arm} strong verification failed: {verified!r}")
-    return {
-        "arm": arm,
-        "wall_s": wall_s,
-        "cpu_s": after_cpu - before_cpu,
-        "rss_highwater_kib_observed": rss,
-        "archive_bytes": out.stat().st_size,
-        "archive_sha256": _sha256(out),
-        "tree_sha256": verified["tree_sha256"],
-        "stats": stats,
-    }
+    return {"arm": arm, "wall_s": wall_s, "cpu_s": after_cpu - before_cpu,
+            "rss_highwater_kib_observed": rss, "archive_bytes": out.stat().st_size,
+            "archive_sha256": _sha256(out), "tree_sha256": verified["tree_sha256"], "stats": stats}
 
 
 def _run_fresh(arm: str, source: Path, out: Path) -> dict:
     env = os.environ.copy()
     env["PYTHONPATH"] = str(ROOT) + (os.pathsep + env["PYTHONPATH"] if env.get("PYTHONPATH") else "")
-    completed = subprocess.run(
-        [sys.executable, str(Path(__file__).resolve()), "--worker", arm, "--source", str(source), "--archive", str(out)],
-        cwd=ROOT, env=env, check=True, capture_output=True, text=True,
-    )
+    completed = subprocess.run([sys.executable, str(Path(__file__).resolve()), "--worker", arm,
+                                "--source", str(source), "--archive", str(out)], cwd=ROOT, env=env,
+                               check=True, capture_output=True, text=True)
     lines = [line for line in completed.stdout.splitlines() if line.strip()]
     if not lines:
         raise RuntimeError(f"fresh worker emitted no JSON: {completed.stderr!r}")
@@ -105,37 +97,27 @@ def run(work_root: Path) -> dict:
         if int(new["stats"].get("selection_extra_payload_write_bytes", -1)) != 0:
             raise RuntimeError("shared-build exported payload-copy cost")
         saving_s = old["wall_s"] - new["wall_s"]
-        saving_pct = saving_s / max(old["wall_s"], 1e-9) * 100.0
-        pairs.append({
-            "rep": rep, "execution_order": list(order), "duplicated": old, "shared": new,
-            "wallclock_improvement_s": saving_s,
-            "wallclock_improvement_pct": saving_pct,
-            "cpu_improvement_pct": (old["cpu_s"] - new["cpu_s"]) / max(old["cpu_s"], 1e-9) * 100.0,
-            "rss_ratio_observed": new["rss_highwater_kib_observed"] / max(old["rss_highwater_kib_observed"], 1),
-        })
+        pairs.append({"rep": rep, "execution_order": list(order), "duplicated": old, "shared": new,
+                      "wallclock_improvement_s": saving_s,
+                      "wallclock_improvement_pct": saving_s / max(old["wall_s"], 1e-9) * 100.0,
+                      "cpu_improvement_pct": (old["cpu_s"] - new["cpu_s"]) / max(old["cpu_s"], 1e-9) * 100.0,
+                      "rss_ratio_observed": new["rss_highwater_kib_observed"] / max(old["rss_highwater_kib_observed"], 1)})
     fingerprint, _ = RELEASE_LOCK.fingerprint(RELEASE_LOCK.load_manifest())
+    source_sha = subprocess.run(["git", "rev-parse", "HEAD"], cwd=ROOT, check=True, capture_output=True, text=True).stdout.strip()
     wall_s = statistics.median(p["wallclock_improvement_s"] for p in pairs)
     wall_pct = statistics.median(p["wallclock_improvement_pct"] for p in pairs)
-    facts = {
-        "byte_identical": True,
-        "wallclock_improvement_pct": wall_pct,
-        "wallclock_improvement_s": wall_s,
-        "attempt5_graph_build_count": 1,
-    }
+    facts = {"byte_identical": True, "wallclock_improvement_pct": wall_pct,
+             "wallclock_improvement_s": wall_s, "attempt5_graph_build_count": 1}
     passed = wall_pct >= MIN_WALL_PCT and wall_s >= MIN_WALL_S
-    return {
-        "schema": "cmpct-v030-shared-build-rehab-authoritative-v1",
-        "candidate_fingerprint": fingerprint,
-        "source_surface": "experiments/entropygraph_v030_shared_portfolio.py",
-        "control_surface": "experiments/entropygraph_v030_geometry_overlay_g04.py",
-        "workload": "neutral_hostile_v1/09_ml_artifacts",
-        "release_credit": False,
-        "contract": {"minimum_wallclock_improvement_pct": MIN_WALL_PCT, "minimum_wallclock_improvement_s": MIN_WALL_S, "attempt5_graph_build_count": 1},
-        "facts": facts,
-        "pairs": pairs,
-        "gate": {"passed": passed},
-        "rss_note": "ru_maxrss high-water observation only; runtime-memory-selective owns normative whole-process-tree RSS",
-    }
+    return {"schema": "cmpct-v030-shared-build-rehab-authoritative-v1", "source_sha": source_sha,
+            "candidate_fingerprint": fingerprint,
+            "source_surface": "experiments/entropygraph_v030_shared_portfolio.py",
+            "control_surface": "experiments/entropygraph_v030_geometry_overlay_g04.py",
+            "workload": "neutral_hostile_v1/09_ml_artifacts", "release_credit": False,
+            "contract": {"minimum_wallclock_improvement_pct": MIN_WALL_PCT,
+                         "minimum_wallclock_improvement_s": MIN_WALL_S, "attempt5_graph_build_count": 1},
+            "facts": facts, "pairs": pairs, "gate": {"passed": passed},
+            "rss_note": "ru_maxrss high-water observation only; runtime-memory-selective owns normative whole-process-tree RSS"}
 
 
 def main() -> None:
@@ -154,7 +136,8 @@ def main() -> None:
     result = run(args.work_root)
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8")
-    print(json.dumps({"candidate_fingerprint": result["candidate_fingerprint"], "facts": result["facts"], "gate": result["gate"]}, indent=2), flush=True)
+    print(json.dumps({"source_sha": result["source_sha"], "candidate_fingerprint": result["candidate_fingerprint"],
+                      "facts": result["facts"], "gate": result["gate"]}, indent=2), flush=True)
     if not result["gate"]["passed"]:
         raise SystemExit("shared-build rehabilitation gate failed")
 
