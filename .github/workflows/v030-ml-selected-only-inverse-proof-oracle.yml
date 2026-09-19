@@ -1,0 +1,32 @@
+# ci-lane: fast
+name: CMPCT v0.30 ML selected-only inverse proof
+on:
+  push:
+    branches: [agent/v030-ml-selected-only-inverse-proof-oracle]
+    paths: ['benchmarks/v030_ml_selected_only_inverse_proof_oracle.py','.github/workflows/v030-ml-selected-only-inverse-proof-oracle.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: 'v030-ml-selected-only-inverse-${{ github.ref }}'
+  cancel-in-progress: true
+jobs:
+  oracle:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with: {python-version: '3.12'}
+      - run: |
+          sudo apt-get update && sudo apt-get install -y zstd gcc
+          python -m pip install -e .
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
+      - run: python -m py_compile benchmarks/v030_ml_selected_only_inverse_proof_oracle.py
+      - run: python benchmarks/v030_ml_selected_only_inverse_proof_oracle.py
+      - uses: actions/upload-artifact@v6
+        with:
+          name: v030-ml-selected-only-inverse-${{ github.sha }}
+          path: benchmark-artifacts/v030-ml-selected-only-inverse.json
+          if-no-files-found: error
+          retention-days: 30
