@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 from pathlib import Path
 import resource
 import shutil
@@ -70,19 +69,12 @@ def _child(mode: str, archive: Path, dst: Path, expected_tree: str) -> dict:
 
 
 def _spawn(mode: str, archive: Path, dst: Path, expected_tree: str) -> dict:
-    cmd = [
-        sys.executable,
-        __file__,
-        "--child",
-        mode,
-        "--archive",
-        str(archive),
-        "--dst",
-        str(dst),
-        "--expected-tree",
-        expected_tree,
-    ]
-    proc = subprocess.run(cmd, check=True, text=True, capture_output=True)
+    proc = subprocess.run(
+        [sys.executable, __file__, "--child", mode, "--archive", str(archive), "--dst", str(dst), "--expected-tree", expected_tree],
+        check=True,
+        text=True,
+        capture_output=True,
+    )
     return json.loads(proc.stdout)
 
 
@@ -93,6 +85,7 @@ def run(root: Path, pairs: int = 4) -> dict:
     archive = root / "ml.cmpct"
     PRODUCT.build(src, archive)
     expected_tree = PRODUCT.treehash(src)
+    source_sha = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
 
     rows = []
     for pair in range(pairs):
@@ -113,7 +106,7 @@ def run(root: Path, pairs: int = 4) -> dict:
     return {
         "schema": "cmpct-v030-ml-verification-fold-product-ab-v1",
         "release_credit": False,
-        "source_sha": os.environ.get("GITHUB_SHA"),
+        "source_sha": source_sha,
         "pairs": pairs,
         "expected_tree_sha256": expected_tree,
         "rows": rows,
