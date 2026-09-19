@@ -1,20 +1,12 @@
 # ci-lane: deep
+# ci-auto-policy: retired-manual-only
 name: CMPCT v0.30 ML verification fold product A/B
 
 on:
-  push:
-    branches:
-      - agent/v030-ml-verification-fold-product
-    paths:
-      - .github/workflows/v030-ml-verification-fold-product-ab.yml
   workflow_dispatch:
 
 permissions:
   contents: read
-
-concurrency:
-  group: v030-ml-verification-fold-product-ab-${{ github.ref }}
-  cancel-in-progress: true
 
 env:
   PYTHONPATH: ${{ github.workspace }}
