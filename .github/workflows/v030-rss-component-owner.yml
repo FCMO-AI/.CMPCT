@@ -27,7 +27,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p benchmark-artifacts
-          python benchmarks/v030_rss_component_owner.py --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/work" --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-rss-component-owner.json" 2>&1 | tee benchmark-artifacts/run.log
+          python benchmarks/v030_rss_component_owner.py --work-root "$RUNNER_TEMP/cmpct-rss-owner" --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-rss-component-owner.json" 2>&1 | tee benchmark-artifacts/run.log
       - uses: actions/upload-artifact@v6
         if: always()
         with:
