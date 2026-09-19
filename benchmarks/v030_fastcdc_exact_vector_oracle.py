@@ -21,7 +21,7 @@ GEAR_NP = np.asarray(GEAR, dtype=np.uint64)
 
 
 def _scan_exact(vals: np.ndarray, mask: int, h0: int = 0) -> tuple[int | None, int, int]:
-    """Return (1-based cut length, final hash, peak scratch bytes).
+    """Return (1-based cut length, final hash, conservative transient bytes).
 
     h_i = 2*h_(i-1)+gear_i modulo 2**64. After 64 shifts, any
     pre-window contribution is multiplied by 2**64 and vanishes exactly, so
@@ -31,12 +31,15 @@ def _scan_exact(vals: np.ndarray, mask: int, h0: int = 0) -> tuple[int | None, i
     if m == 0:
         return None, h0, 0
     hashes = vals.astype(np.uint64, copy=True)
-    peak_scratch = int(vals.nbytes + hashes.nbytes)
+    # Charge vals + hashes + one full-size shifted temporary created by NumPy.
+    # This deliberately overstates the steady-state live set rather than gifting
+    # the vector oracle temporary memory.
+    peak_scratch = int(3 * vals.nbytes)
     if h0:
         upto = min(m, 63)
         powers = np.left_shift(np.uint64(1), np.arange(1, upto + 1, dtype=np.uint64))
         hashes[:upto] += np.uint64(h0) * powers
-        peak_scratch = max(peak_scratch, int(vals.nbytes + hashes.nbytes + powers.nbytes))
+        peak_scratch = max(peak_scratch, int(3 * vals.nbytes + powers.nbytes))
     for shift in range(1, min(64, m)):
         # NumPy performs uint64 wraparound, exactly matching the scalar '& MASK64'.
         hashes[shift:] += vals[:-shift] << np.uint64(shift)
@@ -136,7 +139,7 @@ def run(work_root: Path, repeats: int) -> dict:
         "baseline_total_s": total_base,
         "vector_total_s": total_vector,
         "aggregate_speedup": total_base / max(total_vector, 1e-12),
-        "max_transient_scratch_bytes": peak_scratch,
+        "max_transient_scratch_bytes_conservative": peak_scratch,
         "all_boundaries_identical": all(r["boundary_identity"] for r in rows),
         "rows": rows,
         "claim_boundary": "Research micro/oracle only. Exact boundary identity is required, but whole-child and whole-product wall/RSS must be measured before product credit.",
