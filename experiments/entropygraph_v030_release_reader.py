@@ -415,9 +415,11 @@ def _g04_open(archive: Path) -> tuple[object, dict, int, list[int], bytes, bool]
 
 
 class _G04Session:
-    def __init__(self, archive: Path, *, verify_nested_semantic_sha: bool = True):
+    def __init__(self, archive: Path, *, verify_nested_semantic_sha: bool = True, delimiter_inverse=None):
         self.stream, self.meta, self.record_start, self.offsets, _merkle, self.tail_authenticated = _g04_open(archive)
         self.verify_nested_semantic_sha = bool(verify_nested_semantic_sha)
+        # Per-session ownership keeps strict/create callers on the promoted default while verified staging may opt in.
+        self.delimiter_inverse = G04.O.delimiter_inverse if delimiter_inverse is None else delimiter_inverse
         self.leaves = self.meta["record_leaf_sha256"]
         self.transforms = self.meta["physical_geometry"]
         self.nodes = self.meta["nodes"]
@@ -465,7 +467,7 @@ class _G04Session:
         elif transform[0] == "lane":
             original = G04.O.lane_inverse(physical, int(transform[1]), int(transform[2]))
         elif transform[0] == "delimiter":
-            original = G04.O.delimiter_inverse(physical, int(transform[2]))
+            original = self.delimiter_inverse(physical, int(transform[2]))
         elif transform[0] == "hierarchical":
             primary, secondary = int(transform[1]), int(transform[2])
             prefix_planes = bool(int(transform[3]))
@@ -598,8 +600,9 @@ def _stream_g04(
     max_output_bytes: int,
     *,
     verify_nested_semantic_sha: bool = True,
+    delimiter_inverse=None,
 ) -> dict:
-    session = _G04Session(archive, verify_nested_semantic_sha=verify_nested_semantic_sha)
+    session = _G04Session(archive, verify_nested_semantic_sha=verify_nested_semantic_sha, delimiter_inverse=delimiter_inverse)
     tree = hashlib.sha256()
     logical = 0
     files = 0

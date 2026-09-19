@@ -35,7 +35,9 @@ _PRE_RELEASE_DELIMITER_INVERSE = C.SHARED.G.O.delimiter_inverse
 _MAX_PRECOMPUTED_DELIMITER_RUNS = 1024
 
 
-def release_single_buffer_delimiter_inverse(encoded: bytes, logical_size: int) -> bytes:
+def release_single_buffer_delimiter_inverse(
+    encoded: bytes, logical_size: int, *, bulk_one_byte_table: bool = False
+) -> bytes:
     """Invert exact DGO1 into one bounded logical buffer without per-segment output objects.
 
     DGO1 stores active segment bytes column-major.  For one column, any contiguous run of source segments having
@@ -59,7 +61,7 @@ def release_single_buffer_delimiter_inverse(encoded: bytes, logical_size: int) -
     # A one-byte varint has its continuation bit clear.  Prove the entire length table in one C-level scan and
     # materialize it directly; any high-bit byte or short slice falls back to the historical parser unchanged.
     table = encoded[pos : pos + count]
-    if len(table) == count and table.isascii():
+    if bulk_one_byte_table and len(table) == count and table.isascii():
         lengths = list(table)
         pos += count
         logical_members = sum(lengths)
@@ -159,6 +161,11 @@ def release_single_buffer_delimiter_inverse(encoded: bytes, logical_size: int) -
     if body_cursor != len(body) or active_cells != logical_members:
         raise RuntimeError("Geometry overlay delimiter trailing/body accounting mismatch")
     return bytes(out)
+
+
+def release_bulk_one_byte_table_delimiter_inverse(encoded: bytes, logical_size: int) -> bytes:
+    """Verified-staging-only DGO1 inverse with bulk one-byte length-table parsing."""
+    return release_single_buffer_delimiter_inverse(encoded, logical_size, bulk_one_byte_table=True)
 
 
 # Release-only installation.  Canonical-final has already isolated its dependency graph before this module is
