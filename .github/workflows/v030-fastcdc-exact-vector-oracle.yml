@@ -7,6 +7,7 @@ on:
     branches: [agent/v030-fastcdc-exact-vector-oracle]
     paths:
       - 'benchmarks/v030_fastcdc_exact_vector_oracle.py'
+      - 'tests/test_v030_fastcdc_exact_vector_oracle.py'
       - '.github/workflows/v030-fastcdc-exact-vector-oracle.yml'
   workflow_dispatch:
 
@@ -43,8 +44,10 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -e '.[test]'
           python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
-      - name: Compile oracle
-        run: python -m py_compile benchmarks/v030_fastcdc_exact_vector_oracle.py
+      - name: Compile and prove exact-boundary ratchet
+        run: |
+          python -m py_compile benchmarks/v030_fastcdc_exact_vector_oracle.py
+          python -m pytest -q tests/test_v030_fastcdc_exact_vector_oracle.py
       - name: Run exact-boundary ML oracle
         run: |
           mkdir -p benchmark-artifacts
