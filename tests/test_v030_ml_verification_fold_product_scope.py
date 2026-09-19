@@ -1,4 +1,5 @@
 """Product-scope regression for v0.30 full-extraction semantic-SHA folding."""
+from copy import deepcopy
 from pathlib import Path
 
 import pytest
@@ -20,6 +21,10 @@ def _graph_tree(archive: Path) -> str:
         stream.close()
 
 
+def _flip32(value: bytes) -> bytes:
+    return bytes([value[0] ^ 1]) + value[1:]
+
+
 def test_record_logical_sha_deferral_is_verified_staging_only(tmp_path: Path) -> None:
     src = PERF._build_corpora(tmp_path / "corpora")[("neutral_hostile_v1", "09_ml_artifacts")]
     archive = tmp_path / "ml.cmpct"
@@ -32,26 +37,55 @@ def test_record_logical_sha_deferral_is_verified_staging_only(tmp_path: Path) ->
     hostile._rewrite_header(
         archive,
         bad,
-        lambda codec, usize, csize, crc, digest: (
-            codec, usize, csize, crc, bytes([digest[0] ^ 1]) + digest[1:]
-        ),
+        lambda codec, usize, csize, crc, digest: (codec, usize, csize, crc, _flip32(digest)),
     )
 
-    # Only the unpublished verified-staging owner may fold the redundant nested proof.
     staging = tmp_path / "verified-staging"
     result = POLICY.extract_verified_into_staging(bad, staging)
     assert result["ok"] is True
     assert result["tree_sha256"] == expected_graph_tree
 
-    # Every other reader surface stays strict by default.
     ordinary = tmp_path / "ordinary"
     with pytest.raises(RuntimeError):
         R.extract(bad, ordinary)
     assert not ordinary.exists()
-
-    verified = PRODUCT.strong_verify(bad)
-    assert verified["ok"] is False
+    assert PRODUCT.strong_verify(bad)["ok"] is False
 
     member = next(row["path"] for row in PRODUCT.list_members(archive) if row.get("kind") == "file")
     with pytest.raises(Exception):
         PRODUCT.read_member(bad, member)
+
+
+def test_node_and_file_semantic_sha_are_deferred_only_by_verified_staging(tmp_path: Path, monkeypatch) -> None:
+    src = PERF._build_corpora(tmp_path / "corpora")[("neutral_hostile_v1", "09_ml_artifacts")]
+    archive = tmp_path / "ml.cmpct"
+    PRODUCT.build(src, archive)
+    expected_graph_tree = _graph_tree(archive)
+    original_open = R._g04_open
+
+    def exercise(label: str, mutate) -> None:
+        def opened(path: Path):
+            stream, meta, start, offsets, merkle, tail = original_open(path)
+            copied = deepcopy(meta)
+            mutate(copied)
+            return stream, copied, start, offsets, merkle, tail
+
+        with monkeypatch.context() as scoped:
+            scoped.setattr(R, "_g04_open", opened)
+            staging = tmp_path / f"staging-{label}"
+            result = POLICY.extract_verified_into_staging(archive, staging)
+            assert result["ok"] is True
+            assert result["tree_sha256"] == expected_graph_tree
+            with pytest.raises(RuntimeError):
+                R._stream_g04(archive, None, R.MAX_DECLARED_LOGICAL_BYTES)
+
+    def mutate_node(meta: dict) -> None:
+        assert meta["nodes"]
+        meta["nodes"][0][-1] = _flip32(meta["nodes"][0][-1])
+
+    def mutate_file(meta: dict) -> None:
+        rel = sorted(meta["files"])[0]
+        meta["files"][rel][3] = _flip32(meta["files"][rel][3])
+
+    exercise("node-sha", mutate_node)
+    exercise("file-sha", mutate_file)
