@@ -1,56 +1,66 @@
-# v0.30 ML DGO1 bulk one-byte length-table parsing — productization preregistration
+# v0.30 ML DGO1 bulk one-byte length-table parsing — productization evidence
 
-Status: **extraction mechanism proven; create-side scope debt blocks productization**.
+Status: **scoped product mechanism implemented; exact-parent extraction transfer earned; unchanged product gates still required before convergence**.
 
-Parent authority at experiment start: `agent/v030-authoritative-integration@e9028dd9e9e6a6c47c1228d9da32a37bf5fc378e`; production remains v0.29.0/r24. PR #148 subsequently advanced authoritative convergence independently; PR #152 must reconcile current authority before any merge.
+Current exact parent: `agent/v030-authoritative-integration@cab8e8dc21595b8bb342e0b39c18e06c91a16b7b`; production remains v0.29.0/r24 and v0.30 remains release-locked.
 
-Research provenance: PR #151. Exact-head run `35439489634`, source `cc710d5eecf2a6780f6d20b78a804559a85bffe6`, artifact `10582959452`, digest `sha256:75bbaaea1a9f207c467f3060435bde3fb367ae1ffa4c5769c037b6169c928a4d`. Four balanced fresh-process ML extraction pairs improved wall 23.7165%, 22.9895%, 24.1029%, 24.0018%; median **23.8592%**. CPU tracked wall and exact output tree identity held in every arm.
+## Mechanism and ownership
 
-Post-#146 profile run `35439292455` attributed 0.08546 s cumulative to `release_single_buffer_delimiter_inverse`, including 0.02254 s self across 45,980 `_get_varint` calls. The prior PR #142 per-call fastpath was only ~3.30%; this mechanism instead removes the Python call loop when the complete length table is provably one-byte varints.
+The promoted single-buffer delimiter inverse already belongs to the exact parent and remains the global/default behavior. PR #152 does **not** delete or replace that earned owner. Instead:
 
-## Mechanism
+1. `release_single_buffer_delimiter_inverse(..., bulk_one_byte_table=False)` preserves exact-parent default parsing;
+2. `release_bulk_one_byte_table_delimiter_inverse` opts into the bulk one-byte-table parser explicitly;
+3. `_G04Session` owns a delimiter-inverse callable per session and defaults to the promoted global inverse;
+4. `_stream_g04` propagates that explicit capability;
+5. only `extract_verified_into_staging()` injects the bulk callable for unpublished verified staging extraction.
 
-Inside `release_single_buffer_delimiter_inverse`, after decoding and bounding `count`:
+There is no temporary process-global mutation. Ordinary readers, selective reads, `strong_verify`, and create-side verification continue to observe the exact-parent promoted inverse even while a verified-staging extraction is in flight.
 
-1. inspect exactly the next `count` encoded bytes;
-2. use `bytes.isascii()` as a C-level proof that every byte has continuation bit clear (`< 0x80`);
-3. only then materialize lengths directly from those bytes and advance `pos` by `count`;
-4. if the slice is short or any byte has its high bit set, execute the unchanged generic `_get_varint` loop;
-5. preserve all existing logical-size, total-length, max-length, cell-work, body-size, output-shape and trailing/body accounting checks.
+For the bulk route, after decoding and bounding `count`, the parser inspects exactly the next `count` descriptor bytes. `bytes.isascii()` proves every byte has continuation bit clear (`<0x80`); only then are the lengths materialized directly. A short slice or any high-bit byte falls back to the unchanged generic `_get_varint` grammar. Logical-size, cumulative-length, cell-work, body-size, output-shape and trailing/body accounting remain mandatory.
 
-This changes no archive grammar. It is a parser route for the already-valid one-byte subset and exact fallback for the full varint language.
+## Evidence lineage
 
-## Strongest-control extraction evidence
+Research PR #151 run `35439489634`, artifact `10582959452`, first established 23.8592% median ML extraction headroom with exact output identity and explicit 130/257-byte multi-varint fallback.
 
-Run `35442048869`, candidate `e2ccc9c46bfaa9fcfc4473ad6820ebb3782b4743`, exact authoritative-parent control `e9028dd9e9e6a6c47c1228d9da32a37bf5fc378e`, artifact `10583998125`, digest `sha256:6e4f433458d00cbe1cf624a1c2ca4528eb5f9eabc8f2094efdac327e0ecc1ee0`: four balanced fresh-process pairs improved wall **23.5498%, 23.0427%, 21.6686%, 24.6311%**, median **23.2963%**; CPU median **23.2994%**; exact tree every arm. This preserves ~97.64% of the research headroom. The earlier ~65% historical-control instrument is inadmissible because it double-counted older inverse improvements.
+The earlier product run `35442048869` measured 23.2963% median wall / 23.2994% CPU against its then-exact parent, but its implementation exposed the bulk parser globally. Unchanged r24/ZIP run `35442276749` preserved archive bytes but found create regressions on media (+15.64%, +4.52 ms) and nested (+24.53%, +3.96 ms). That red is preserved as the causal reason global ownership is non-promotable.
 
-## Hostile / grammar proof
+Exact-parent audit then corrected an initially over-broad repair idea: deleting the global release inverse would itself revert the previously promoted single-buffer optimization. The correct repair is **parent default globally + staging-only bulk capability**, as implemented here.
 
-The research artifact constructs a DGO1 descriptor containing explicit multi-byte lengths 130 and 257. Candidate reconstruction equals the historical inverse byte-for-byte. Permanent product tests cover one-byte equivalence, explicit multi-byte fallback and malformed/truncated rejection equivalence. No integrity proof is removed.
+## Current strongest-control product evidence
 
-## Newly discovered scope debt
+Scoped exact-parent A/B run `35460272188`, candidate source `d9146e3c661f71f47c4f38b235c08d3003125a8c`, control `cab8e8dc21595b8bb342e0b39c18e06c91a16b7b`, durable record `benchmarks/history/v030_ml_bulk_varint_scope_parent_d9146e3c661f.json`:
 
-Exact-head r24/ZIP run `35442276749`, artifact `10584019391`, preserved archive bytes exactly but failed the frozen same-runner timing rule on two **create** rows:
+- wall improvements: **23.4353%, 23.4914%, 23.6272%, 22.9071%**;
+- median wall improvement: **23.4633%**;
+- median CPU improvement: **23.4590%**;
+- exact reconstructed tree SHA-256 in every arm;
+- fresh-process median `ru_maxrss` ratio: **1.0x**;
+- block-I/O deltas identical in every paired arm (`inblock=0`, `oublock=35512`).
 
-- media library create: `0.0288794 -> 0.0333948 s` (**+15.64%, +4.52 ms**);
-- nested library create: `0.0161620 -> 0.0201266 s` (**+24.53%, +3.96 ms**).
+Post-#155 authoritative runtime requires only **7.4722%** relative ML extraction improvement to bring ML to 1.10x and remove the current aggregate-median owner. The scoped product retains about 3.14x that hurdle in this exact-parent A/B. This is product evidence, not release credit: unchanged authoritative runtime after convergence owns the frozen release decision.
 
-Both clear the normative 5% **and** 3 ms regression thresholds. This red may not be waived as noise.
+## Hostile / concurrency proof
 
-Source tracing establishes a credible causal route. PR #152 currently installs the optimized inverse globally through `C.SHARED.G.O.delimiter_inverse`. The canonical G04 build path calls `strong_verify(overlay_path)` before selection; `_decode_overlay_records()` reconstructs delimiter transforms through that same shared `O.delimiter_inverse`. Therefore the supposed extraction-only optimization is demonstrably visible to create-side proof work.
+Permanent tests now cover:
 
-The repair is architectural scoping, not threshold tuning: preserve the shared Geometry inverse for writer/build/strong-control ownership and inject/select the bulk inverse only inside the verified release-extraction session. A safe implementation should make the inverse callable an explicit/default-strict `_G04Session` / `_stream_g04` dependency and opt into the bulk implementation only from `extract_verified_into_staging`, avoiding process-global mutation and concurrency hazards.
+- one-byte bulk equivalence against both the promoted single-buffer default and the historical independent inverse;
+- explicit multi-byte lengths 130 and 257 through exact generic fallback;
+- malformed/truncated rejection through default, bulk and historical readers;
+- staging-only capability injection without global mutation;
+- an in-flight verified-staging extraction blocked in another thread while shared strict/create-side inverse ownership remains the promoted default before, during and after the call.
+
+No selector, threshold, writer byte, format revision, benchmark identity, locality law or integrity check changes.
 
 ## Completion gates
 
 - [x] bounded one-byte mechanism and exact generic fallback;
-- [x] one-byte, explicit multi-byte and malformed/truncated equivalence regressions;
-- [x] strongest-control fresh-process extraction A/B with exact tree;
-- [x] identify exact-head create regression and causal shared-owner leak;
-- [ ] remove process-global inverse installation and scope the fast inverse to verified extraction only;
-- [ ] rerun extraction A/B and retain material headroom;
-- [ ] rerun unchanged r24/ZIP gate with zero byte regressions and no confirmed timing regression;
-- [ ] exact-head normal CI green after the scope repair;
-- [ ] authoritative runtime gate, not projection, decides whether aggregate median extraction reaches <=1.10x.
+- [x] preserve exact-parent promoted single-buffer inverse as global/default owner;
+- [x] scope only the bulk capability to verified staging;
+- [x] one-byte, 130/257 multi-byte and malformed/truncated equivalence regressions;
+- [x] concurrent strict/create-vs-fast-staging ownership proof;
+- [x] exact-parent fresh-process extraction A/B retains material headroom with exact tree, RSS and block-I/O accounting;
+- [ ] unchanged r24/ZIP gate green: zero byte regressions and no confirmed timing regression;
+- [ ] exact-head normal CI green after the final scoped product/evidence tree;
+- [ ] authoritative runtime gate after convergence decides the frozen extraction ceilings.
 
-No selector, threshold, writer byte, format revision, benchmark identity, locality law or integrity check may change.
+The mechanism must be retired or repaired rather than promoted if unchanged r24/ZIP or authoritative runtime remains red for a causally attributable product regression.
