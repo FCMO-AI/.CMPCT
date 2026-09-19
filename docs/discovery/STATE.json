@@ -1,44 +1,13 @@
 {
-  "schema": "cmpct-discovery-state-v1",
-  "status": "ACTIVE",
-  "authority": {
-    "canonical_release": "v0.29.0 / r24 on main",
-    "active_frontier": "agent/v030-authoritative-integration",
-    "source": "PR #56 and current repository authority; reconcile every activation"
-  },
-  "active_product_bottleneck": {
-    "id": "canonical-r24-product-floor",
-    "observation": "Current authoritative canonical build can publish r25 after comparing only against the accepted-v0.29 research floor; it deliberately does not build genuine canonical r24 on successful r25 paths. This directly conflicts with the normative T03 P0 product-boundary rule that complete canonical r25 bytes must compete against complete genuine canonical r24 bytes for the same original filesystem tree and ties retain r24. Correctness/product-floor law outranks runtime optimization. Separately, G04 retained-attempt5 reuse remains a protected earned-productization seed with large measured runtime headroom.",
-    "evidence": ["experiments/entropygraph_v030_canonical.py build()", "docs/v030-coordination/reviews/graph-productization.md P0 canonical r25 vs genuine r24", "docs/v030-coordination/tasks/T03-graph-productization.md", "PR #56"],
-    "next_discriminator": "Fix canonical selection directly on agent/v030-authoritative-integration so genuine r24 and candidate r25 are complete same-input products, exact ties retain r24, and stats expose both product byte counts; preserve create economics through safe concurrency/shared work rather than skipping the r24 floor. Then test the staged-r25-wins-research-but-loses-r24 adversarial case required by T03."
-  },
-  "primary_question": {
-    "id": "genuine-r24-vs-r25-floor",
-    "family": "product-boundary / correctness",
-    "hypothesis": "Canonical r25 can preserve its earned representation while enforcing a genuine same-tree r24 no-regression floor; concurrent independent candidate construction or safely shared byte-identical analysis can contain the added create cost without weakening selection semantics.",
-    "kill": "Any implementation that publishes r25 without complete genuine-r24 comparison, changes the original user-tree semantics between arms, treats the v0.29 research floor as r24, or resolves runtime cost by weakening the P0 product floor is invalid.",
-    "status": "READY"
-  },
-  "frontier_candidates": [
-    {"id":"authoritative-owned-intermediate","family":"execution-architecture/ownership","question":"After the P0 product floor is correct, fold the proven retained-attempt5 reuse directly into the authoritative scheduler/G04 path without duplicate scheduler code, hardlink-specific product semantics, or global mutation.","status":"QUEUED_PROTECTED_SEED"},
-    {"id":"extraction-owner","family":"reconstruction/execution","question":"What reconstruction/verification/data-movement owner explains the remaining ML/Logs extraction debt, given session-fusion's ~2.09% result is insufficient?","status":"QUEUED"},
-    {"id":"proof-carrying-admission","family":"search/proof","question":"Can conservative bounds certify losing candidates before construction while preserving exact fallback and generality?","status":"QUEUED"}
-  ],
-  "protected_seeds": [
-    {"id":"g04-retained-attempt5","status":"EARNED_PRODUCTIZATION","evidence":"PR #139; fresh-process run 35415287116","result":"Exact final archive/tree identity with one attempt-5 graph build; fresh-process pair wall savings 23.491 s and 23.227 s (median 23.359 s / 34.665%), median CPU improvement 26.355%, retained payload rewrite 0 B, max observed ru_maxrss ratio 0.999334. This clears the numerical shared-build-rehab research hurdles but remains research evidence only until authoritative fold and exact-fingerprint release gates."}
-  ],
-  "saturated_families": [
-    {"family":"v0.29 rejected physical-context/residual variants","reopen_only_if":"changed evidence, conditions, hypothesis, or materially different mechanism","source":"docs/CURRENT_STATE.md and v0.29 release evidence"},
-    {"family":"extraction session/wrapper fusion as primary rehabilitation","reopen_only_if":"new causal evidence shows materially larger end-to-end headroom than the measured ~2.09%","source":"v0.30 extraction attribution evidence"}
-  ],
-  "pending_jobs": [
-    {"id":"pr139-r24-gate-retry","kind":"evidence-replication","provider":"GitHub Actions","source_sha":"80dc67f2c30b9ef833eb6f99c92e41a2191af3f0","run":"35415465437 / failed job 105823159976 rerun","question":"Is the isolated canonical binary/CLI/create +7.01% result reproducible despite PR #139 changing no canonical src/cmpct or CLI code?","decision_unlocked":"Classify the original r24 gate failure as reproducible evidence debt versus runner/noise anomaly; never waive the gate from causality argument alone."}
-  ],
-  "process_lessons": [
-    {"lesson":"Prefer causal owner localization and generous charged oracles before expensive productization.","evidence":"existing CMPCT v0.29/v0.30 research history"},
-    {"lesson":"When downstream reconstruction needs an immutable candidate that upstream already computed, inspect intermediate custody/lifetime before optimizing either computation internally; duplicate ownership can dominate wall time while preserving byte semantics.","evidence":"PR #139 and fresh-process run 35415287116"},
-    {"lesson":"Re-read normative product-boundary reviews before optimizing a release blocker: a large runtime win is subordinate to a still-open correctness floor, and product economics must be solved without skipping the comparator required by release law.","evidence":"current entropygraph_v030_canonical.py versus T03 graph-productization P0 review"}
-  ],
-  "next_action": "Per T03's continuation rule, fix the genuine r24-vs-r25 complete-product floor directly on agent/v030-authoritative-integration and add the required adversarial selection regression. Preserve the G04 ownership breakthrough as the next protected runtime productization lane rather than overwriting it. Independently consume the already-dispatched r24 performance retry without blocking correctness work.",
-  "last_reconciled": "2026-09-19"
+  "schema":"cmpct-discovery-state-v1",
+  "status":"ACTIVE",
+  "authority":{"canonical_release":"v0.29.0 / r24 on main","active_frontier":"agent/v030-authoritative-integration","source":"PR #56; release-facing product owner is entropygraph_v030_canonical_final.py -> canonical_final_bulk_v1.py -> canonical_final_impl.py, not historical entropygraph_v030_canonical.py"},
+  "active_product_bottleneck":{"id":"v030-runtime-rehabilitation","observation":"Release-facing canonical_final_impl already enforces genuine same-tree r24-vs-r25 complete-product pricing, conservative r24 ties, both product byte counts, and semantic user-tree identity. The apparent P0 violation found in entropygraph_v030_canonical.py was a wrong-surface diagnosis and is retracted. G04 retained-attempt5 reuse remains the strongest measured actionable create-side seed.","evidence":["experiments/entropygraph_v030_canonical_final_impl.py","docs/V030_CANONICAL_PRODUCT_ARCHITECTURE.md","PR #139","run 35415287116"],"next_discriminator":"Fold caller-owned attempt-5 lifetime/output directly into the authoritative G04/v0.29 scheduler path without duplicate scheduler code, hardlink-specific product semantics or global interception; then rerun exact-fingerprint shared-build/runtime evidence."},
+  "primary_question":{"id":"authoritative-owned-intermediate","family":"execution-architecture/ownership","hypothesis":"The authoritative portfolio can expose its already-built immutable attempt-5 candidate to G04 through caller-owned same-filesystem lifetime while preserving exact selected bytes and the release-facing canonical product floor.","kill":"Authoritative exact-identity A/B materially loses the fresh-process gain, requires archive-sized copy, changes bytes/selection, or exports disqualifying resource cost.","status":"READY"},
+  "frontier_candidates":[{"id":"extraction-owner","family":"reconstruction/execution","status":"QUEUED"},{"id":"proof-carrying-admission","family":"search/proof","status":"QUEUED"}],
+  "protected_seeds":[{"id":"g04-retained-attempt5","status":"EARNED_PRODUCTIZATION","evidence":"PR #139; run 35415287116","result":"Exact archive/tree identity; one attempt-5 build; pair wall savings 23.491 s and 23.227 s, median 23.359 s / 34.665%; median CPU -26.355%; retained payload rewrite 0 B; max observed ru_maxrss ratio 0.999334. Research evidence only until authoritative fold."}],
+  "pending_jobs":[{"id":"pr139-r24-gate-retry","provider":"GitHub Actions","source_sha":"80dc67f2c30b9ef833eb6f99c92e41a2191af3f0","run":"35415465437","status":"RUNNING"}],
+  "process_lessons":[{"lesson":"When downstream needs an immutable candidate upstream already computed, inspect custody/lifetime before optimizing either computation internally.","evidence":"PR #139"},{"lesson":"Follow the architecture ownership map before diagnosing a normative violation; historical facades can intentionally lag the promoted release-facing owner.","evidence":"false P0 diagnosis from entropygraph_v030_canonical.py corrected by V030_CANONICAL_PRODUCT_ARCHITECTURE.md and canonical_final_impl.py"}],
+  "next_action":"Per T03, implement the retained-attempt5 ownership fold directly on agent/v030-authoritative-integration, then produce exact-identity fresh-process evidence and current-fingerprint shared-build/runtime receipts if green. Consume the independent r24 performance retry without blocking the fold.",
+  "last_reconciled":"2026-09-19"
 }
