@@ -1,16 +1,7 @@
 from __future__ import annotations
 
-"""Cheap fresh-process discriminator for the v0.30 pack-RSS failure.
-
-This is diagnostic evidence only. It asks whether the release-product RSS debt already exists immediately after
-import, before any corpus/build working set exists. If import-only v0.30 is already above 1.25x v0.29, module/profile
-footprint is a first-order owner; otherwise the build working set owns the debt and import refactors are a dead end.
-"""
-import argparse
-import json
-import resource
-import subprocess
-import sys
+"""Cheap fresh-process discriminator for the v0.30 pack-RSS failure."""
+import argparse, json, resource, subprocess, sys
 
 
 def _child(engine: str) -> None:
@@ -25,15 +16,19 @@ def _child(engine: str) -> None:
 
 
 def _run(engine: str) -> dict:
-    p=subprocess.run([sys.executable,__file__,'--child',engine],check=True,capture_output=True,text=True)
-    return json.loads(p.stdout.strip().splitlines()[-1])
+    p=subprocess.run([sys.executable,__file__,'--child',engine],check=False,capture_output=True,text=True)
+    if p.returncode != 0:
+        raise RuntimeError(f'import child {engine} failed rc={p.returncode}: {p.stderr[-4000:]}')
+    lines=[x for x in p.stdout.splitlines() if x.strip()]
+    if not lines:
+        raise RuntimeError(f'import child {engine} emitted no JSON; stderr={p.stderr[-4000:]}')
+    return json.loads(lines[-1])
 
 
 def main() -> None:
     p=argparse.ArgumentParser(); p.add_argument('--child',choices=('v029','v030')); a=p.parse_args()
     if a.child:
         _child(a.child); return
-    # Alternate order twice to expose host/order drift without conflating process allocator state.
     rows=[]
     for order in (('v029','v030'),('v030','v029')):
         rows.append({e:_run(e) for e in order})
