@@ -29,6 +29,15 @@ def _first_record_layout(archive: Path):
         stream.close()
 
 
+def _rewrite_header(src: Path, dst: Path, mutate):
+    shutil.copy2(src, dst)
+    pos, codec, usize, csize, crc, logical_sha = _first_record_layout(dst)
+    codec, usize, csize, crc, logical_sha = mutate(codec, usize, csize, crc, logical_sha)
+    with dst.open("r+b") as f:
+        f.seek(pos)
+        f.write(R.PH.pack(codec, usize, csize, crc, logical_sha))
+
+
 def _mutate_payload(src: Path, dst: Path):
     shutil.copy2(src, dst)
     pos, _codec, _usize, csize, _crc, _sha = _first_record_layout(dst)
@@ -39,23 +48,6 @@ def _mutate_payload(src: Path, dst: Path):
         b = f.read(1)
         f.seek(pos + R.PH.size)
         f.write(bytes([b[0] ^ 0x01]))
-
-
-def _mutate_header_bound(src: Path, dst: Path):
-    shutil.copy2(src, dst)
-    pos, codec, _usize, csize, crc, logical_sha = _first_record_layout(dst)
-    with dst.open("r+b") as f:
-        f.seek(pos)
-        f.write(R.PH.pack(codec, R.G04.MAX_DECODE_UNIT + 1, csize, crc, logical_sha))
-
-
-def _mutate_logical_sha(src: Path, dst: Path):
-    shutil.copy2(src, dst)
-    pos, codec, usize, csize, crc, logical_sha = _first_record_layout(dst)
-    bad = bytes([logical_sha[0] ^ 1]) + logical_sha[1:]
-    with dst.open("r+b") as f:
-        f.seek(pos)
-        f.write(R.PH.pack(codec, usize, csize, crc, bad))
 
 
 def _assert_destination_rollback(archive: Path, dst: Path):
@@ -80,9 +72,6 @@ def run(root: Path):
     PRODUCT.build(src, archive)
     expected_tree = PRODUCT.treehash(src)
 
-    # Install exactly the corrected bounded research fold. This is intentionally
-    # global and therefore is NOT the desired product policy; the scope probe below
-    # exists to prove why productization must be target-root/default-false scoped.
     FOLD.install_bounded_fold()
 
     valid_dst = root / "valid"
@@ -94,19 +83,26 @@ def run(root: Path):
     _mutate_payload(archive, bad_payload)
     payload = _expect_fail("payload-sha", lambda: PRODUCT.extract(bad_payload, root / "bad-payload-out"))
 
-    bad_bound = root / "bad-bound.cmpct"
-    _mutate_header_bound(archive, bad_bound)
-    bound = _expect_fail("physical-usize-bound", lambda: PRODUCT.extract(bad_bound, root / "bad-bound-out"))
+    bad_usize = root / "bad-usize.cmpct"
+    _rewrite_header(archive, bad_usize, lambda c,u,s,r,h:(c,R.G04.MAX_DECODE_UNIT+1,s,r,h))
+    usize = _expect_fail("physical-usize-bound", lambda: PRODUCT.extract(bad_usize, root / "bad-usize-out"))
+
+    bad_csize = root / "bad-csize.cmpct"
+    _rewrite_header(archive, bad_csize, lambda c,u,s,r,h:(c,u,R.G04.MAX_DECODE_UNIT+1024*1024+1,r,h))
+    csize = _expect_fail("physical-csize-bound", lambda: PRODUCT.extract(bad_csize, root / "bad-csize-out"))
+
+    bad_crc = root / "bad-crc.cmpct"
+    _rewrite_header(archive, bad_crc, lambda c,u,s,r,h:(c,u,s,r^1,h))
+    crc = _expect_fail("record-crc", lambda: PRODUCT.extract(bad_crc, root / "bad-crc-out"))
+
     rollback = _assert_destination_rollback(bad_payload, root / "rollback-dst")
     strong_payload = _expect_fail("strong-verify-corrupt-payload", lambda: PRODUCT.strong_verify(bad_payload))
 
-    # Decision-changing scope discriminator: corrupt only the reconstructed-record SHA
-    # in the physical header. The terminal tree still describes the correct logical
-    # bytes, so folded full extraction may accept it; strong_verify must NOT inherit
-    # that deferral. The research monkeypatch is global, so record the expected scope
-    # gap rather than laundering it into product evidence.
+    # Scope discriminator: only the reconstructed-record SHA changes. Folded complete
+    # extraction intentionally owns terminal tree identity, but strong_verify must retain
+    # nested SHA in the eventual product policy. The global research oracle may leak here.
     bad_logical_sha = root / "bad-logical-sha.cmpct"
-    _mutate_logical_sha(archive, bad_logical_sha)
+    _rewrite_header(archive, bad_logical_sha, lambda c,u,s,r,h:(c,u,s,r,bytes([h[0]^1])+h[1:]))
     folded_dst = root / "folded-logical-sha"
     PRODUCT.extract(bad_logical_sha, folded_dst)
     if PRODUCT.treehash(folded_dst) != expected_tree:
@@ -118,10 +114,10 @@ def run(root: Path):
         strong_scope_accepted = False
 
     return {
-        "schema": "cmpct-v030-ml-semantic-fold-hostile-v2",
+        "schema": "cmpct-v030-ml-semantic-fold-hostile-v3",
         "release_credit": False,
         "valid_tree_sha256": expected_tree,
-        "checks": [payload, bound, rollback, strong_payload],
+        "checks": [payload, usize, csize, crc, rollback, strong_payload],
         "scope_probe": {
             "mutation": "record logical SHA only",
             "folded_full_extract_tree_identical": True,
@@ -130,7 +126,8 @@ def run(root: Path):
         },
         "preserved_claim": [
             "payload SHA fails closed",
-            "physical usize bound fails closed",
+            "physical usize/csize bounds fail closed",
+            "record CRC fails closed",
             "transactional destination rollback survives failure",
             "strong_verify rejects payload corruption",
         ],
