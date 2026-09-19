@@ -99,17 +99,19 @@ Success is a changed map of what is possible: product improvement, decisive fals
 
 ## Current bootstrap target — temporal, not permanent doctrine
 
-At creation time, v0.30 convergence evidence identifies runtime rehabilitation as release-critical debt. PR #132 reports shared candidate construction owns most measured G04 creation time on Shifted and ML, with finer v0.28-child vs attempt-5-child attribution pending.
+At this reconciliation point, v0.30 runtime rehabilitation remains release-critical, but the create-side search question has changed decisively. PR #139 / fresh-process run `35415287116` demonstrates that G04 can reuse the exact attempt-5 candidate already paid for by the accepted v0.29 portfolio: exact final archive/tree identity, one graph build, 0 B retained payload rewrite, median wall saving 23.359 s / 34.665%, and median CPU saving 26.355%. This exceeds the numerical `shared-build-rehab` research hurdle but is not release credit because the proof still lives in an experimental ownership seam rather than the authoritative candidate fingerprint.
 
-The first cycle should exploit before wandering:
+The next cycle should therefore productize before reopening nearby create variants:
 
-1. reconcile exact-head child attribution;
-2. determine which child owns the critical wall;
-3. test whether the selected-winner fact can be proven materially cheaper via safe lower bounds, reuse, admission, or early termination;
-4. preserve exact selected bytes and frozen product semantics;
-5. if the expensive child is fundamentally required, escalate to changed ownership/execution architecture rather than wrapper micro-optimization.
+1. fold attempt-5 lifetime/output into the authoritative scheduler/G04 ownership boundary, preferably through caller-owned same-filesystem workspace semantics rather than duplicate scheduler code, hardlink-specific product semantics, or global interception;
+2. require exact archive/tree identity, `attempt5_graph_build_count == 1`, zero archive-sized retention copy, and fresh-process wall/CPU/RSS/temp-I/O accounting on the authoritative path;
+3. rebuild fingerprint-bound `shared-build-rehab` and full runtime evidence without weakening its thresholds;
+4. then return to extraction as a separate causal owner: wrapper/session fusion measured only ~2.09%, so do not repeat that family without new evidence—localize reconstruction/verification/data-movement cost instead;
+5. keep one cheap worldview-distance representation/proof hypothesis queued so Forge rehabilitation does not become a permanent local optimum.
 
-Keep one cheap worldview-distance hypothesis alive so runtime rehabilitation does not become a permanent local optimum. Update/remove this bootstrap section when repository truth changes.
+An isolated r24 binary/CLI timing failure on the experimental PR is evidence debt to replicate, not a reason to erase the ownership result or waive the gate. If a candidate branch changes no canonical CLI code, use replication and causal comparison to classify such a result; scientific evidence wins over convenience either way.
+
+Update/remove this bootstrap section whenever repository truth changes again.
 
 ## Completion criterion
 
