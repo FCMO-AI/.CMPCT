@@ -1,0 +1,46 @@
+# ci-lane: fast
+name: CMPCT v0.30 extraction hotspot profile
+
+on:
+  push:
+    branches: [agent/v030-extract-hotspot-profile]
+    paths:
+      - 'benchmarks/v030_extract_hotspot_profile.py'
+      - '.github/workflows/v030-extract-hotspot-profile.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: v030-extract-hotspot-profile-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+
+jobs:
+  profile:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - name: Install frozen-corpus dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y zstd gcc ffmpeg libsndfile1
+          python -m pip install -e '.[audio,test]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
+      - run: python -m py_compile benchmarks/v030_extract_hotspot_profile.py
+      - name: Profile exact canonical ML and Logs extraction
+        run: python benchmarks/v030_extract_hotspot_profile.py
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: v030-extract-hotspot-profile-${{ github.sha }}
+          path: benchmark-artifacts/v030-extract-hotspot-profile.json
+          if-no-files-found: error
+          retention-days: 30
