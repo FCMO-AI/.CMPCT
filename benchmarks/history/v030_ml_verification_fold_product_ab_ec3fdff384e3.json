@@ -1,0 +1,20 @@
+{
+  "schema": "cmpct-v030-ml-verification-fold-product-ab-v1",
+  "release_credit": false,
+  "source_sha": "ec3fdff384e399dc1aebc22333590026f1e4ea9c",
+  "run_id": 35433832412,
+  "artifact_id": 10581766895,
+  "artifact_digest": "sha256:c5c7ade9708df539c38d13023fe80bcc90f204194217792bd86fb8b22778d767",
+  "pairs": 4,
+  "expected_tree_sha256": "be519eeaaf422fd7af605958fc56b56cfe8b2d7e3c67dc82863c3833facc22cc",
+  "wall_improvement_pct": [26.65701958219573, 26.942401126681, 26.37828662542922, 26.486210993444143],
+  "cpu_improvement_pct": [26.67407428511733, 26.933900617207417, 26.375113143728274, 26.458603001102638],
+  "median_wall_improvement_pct": 26.571615287819938,
+  "median_cpu_improvement_pct": 26.566338643109987,
+  "maxrss_kib_all_arms": 240372,
+  "inblock_delta_all_arms": 0,
+  "oublock_delta_all_arms": 35512,
+  "projected_preserved_ml_ratio_from_1_421556": 1.0438256085790785,
+  "required_release_ratio_ceiling": 1.25,
+  "decision": "Fresh-process product seam preserves essentially all bounded-oracle headroom and exceeds the ~12.07% relative improvement required to close preserved ML extraction debt. This is product evidence only; unchanged release authority remains mandatory."
+}
