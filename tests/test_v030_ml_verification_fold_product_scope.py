@@ -13,6 +13,16 @@ POLICY = VR.C.POLICY
 R = POLICY.R
 
 
+@pytest.fixture(scope="module")
+def ml_archive(tmp_path_factory) -> Path:
+    root = tmp_path_factory.mktemp("v030-ml-fold-product")
+    src = PERF._build_corpora(root / "corpora")[("neutral_hostile_v1", "09_ml_artifacts")]
+    archive = root / "ml.cmpct"
+    PRODUCT.build(src, archive)
+    assert PRODUCT.strong_verify(archive)["ok"] is True
+    return archive
+
+
 def _graph_tree(archive: Path) -> str:
     stream, meta, _start, _offsets, _merkle, _tail = R._g04_open(archive)
     try:
@@ -25,19 +35,14 @@ def _flip32(value: bytes) -> bytes:
     return bytes([value[0] ^ 1]) + value[1:]
 
 
-def test_record_scope_payload_auth_and_rollback(tmp_path: Path) -> None:
-    src = PERF._build_corpora(tmp_path / "corpora")[("neutral_hostile_v1", "09_ml_artifacts")]
-    archive = tmp_path / "ml.cmpct"
-    PRODUCT.build(src, archive)
-    assert PRODUCT.strong_verify(archive)["ok"] is True
+def test_record_scope_payload_auth_and_rollback(ml_archive: Path, tmp_path: Path) -> None:
+    archive = ml_archive
     expected_graph_tree = _graph_tree(archive)
-
     bad = tmp_path / "record-logical-sha-only.cmpct"
     hostile._rewrite_header(archive, bad, lambda c, u, s, r, h: (c, u, s, r, _flip32(h)))
     staging = tmp_path / "verified-staging"
     result = POLICY.extract_verified_into_staging(bad, staging)
-    assert result["ok"] is True
-    assert result["tree_sha256"] == expected_graph_tree
+    assert result["ok"] is True and result["tree_sha256"] == expected_graph_tree
 
     ordinary = tmp_path / "ordinary"
     with pytest.raises(RuntimeError):
@@ -56,10 +61,10 @@ def test_record_scope_payload_auth_and_rollback(tmp_path: Path) -> None:
     assert post_crc["failed_closed"] is True and post_crc["fault_injected"] is True
 
 
-def test_node_and_file_semantic_sha_are_deferred_only_by_verified_staging(tmp_path: Path, monkeypatch) -> None:
-    src = PERF._build_corpora(tmp_path / "corpora")[("neutral_hostile_v1", "09_ml_artifacts")]
-    archive = tmp_path / "ml.cmpct"
-    PRODUCT.build(src, archive)
+def test_node_and_file_semantic_sha_are_deferred_only_by_verified_staging(
+    ml_archive: Path, tmp_path: Path, monkeypatch
+) -> None:
+    archive = ml_archive
     expected_graph_tree = _graph_tree(archive)
     original_open = R._g04_open
 
