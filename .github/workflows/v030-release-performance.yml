@@ -1,4 +1,5 @@
 # ci-lane: release
+# ci-cancel-policy: preserve-running-exact-receipt
 name: CMPCT v0.30 runtime promotion gate
 
 on:
@@ -11,7 +12,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: cmpct-v030-release-performance-${{ github.ref }}
+  group: cmpct-v030-release-performance-${{ github.sha }}
   cancel-in-progress: false
 
 env:
