@@ -73,6 +73,7 @@ jobs:
               assert c['archive_sha256']==e['archive_sha256'] and c['tree_sha256']==e['tree_sha256']
               assert e['stats']['global_monkeypatches']==0 and e['stats']['ownership']=='explicit-artifact-handoff'
               assert r['payload_write_bytes']==0 and r['mode']=='same-filesystem-hardlink'
+              assert r['retained_disk_occupancy_bytes']==r['bytes'] and r['bytes'] > 0
           PY
       - uses: actions/upload-artifact@v6
         if: always()
