@@ -1,8 +1,9 @@
 """Product-scope regression for v0.30 full-extraction semantic-SHA folding.
 
 The only surface allowed to defer nested record/node/file semantic SHA is the caller-owned
-verified staging extraction, whose mandatory terminal tree hash decides acceptance before
-publication. Every ordinary/diagnostic/selective reader surface remains strict.
+verified staging extraction, whose mandatory terminal graph-tree hash decides acceptance before
+filesystem metadata restoration/publication. Every ordinary/diagnostic/selective reader surface
+remains strict.
 """
 from pathlib import Path
 
@@ -21,7 +22,9 @@ def test_record_logical_sha_deferral_is_verified_staging_only(tmp_path: Path) ->
     src = PERF._build_corpora(tmp_path / "corpora")[("neutral_hostile_v1", "09_ml_artifacts")]
     archive = tmp_path / "ml.cmpct"
     PRODUCT.build(src, archive)
-    expected_tree = PRODUCT.treehash(src)
+    strict_valid = PRODUCT.strong_verify(archive)
+    assert strict_valid["ok"] is True
+    expected_graph_tree = strict_valid["tree_sha256"]
 
     bad = tmp_path / "record-logical-sha-only.cmpct"
     hostile._rewrite_header(
@@ -37,12 +40,11 @@ def test_record_logical_sha_deferral_is_verified_staging_only(tmp_path: Path) ->
     )
 
     # The promotion owner may fold this redundant nested proof because the complete
-    # reconstructed tree is still authenticated before the staging tree can publish.
+    # reconstructed graph tree is still authenticated before staging can publish.
     staging = tmp_path / "verified-staging"
     result = POLICY.extract_verified_into_staging(bad, staging)
     assert result["ok"] is True
-    assert result["tree_sha256"] == expected_tree
-    assert PRODUCT.treehash(staging) == expected_tree
+    assert result["tree_sha256"] == expected_graph_tree
 
     # Every other reader surface stays strict by default. A future refactor that infers
     # deferral from target_root (rather than the explicit policy) must fail here.
