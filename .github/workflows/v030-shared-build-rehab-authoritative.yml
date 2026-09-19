@@ -10,6 +10,7 @@ on:
       - 'benchmarks/v030_shared_build_rehab_authoritative.py'
       - 'experiments/entropygraph_v030_shared_portfolio.py'
       - 'experiments/entropygraph_v030_geometry_overlay_g04.py'
+      - 'experiments/entropygraph_v030_geometry_overlay_g04_publish.py'
       - '.github/workflows/v030-shared-build-rehab-authoritative.yml'
   workflow_dispatch:
 
@@ -40,7 +41,7 @@ jobs:
           test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
           if [ "$GITHUB_EVENT_NAME" = workflow_dispatch ]; then echo 'run_receipt=true' >> "$GITHUB_OUTPUT"; exit 0; fi
           changed="$(git diff-tree --no-commit-id --name-only -r HEAD)"
-          if printf '%s\n' "$changed" | grep -Eq '^(benchmarks/v030_shared_build_rehab_authoritative\.py|experiments/entropygraph_v030_shared_portfolio\.py|experiments/entropygraph_v030_geometry_overlay_g04\.py|\.github/workflows/v030-shared-build-rehab-authoritative\.yml)$'; then
+          if printf '%s\n' "$changed" | grep -Eq '^(benchmarks/v030_shared_build_rehab_authoritative\.py|experiments/entropygraph_v030_shared_portfolio\.py|experiments/entropygraph_v030_geometry_overlay_g04(_publish)?\.py|\.github/workflows/v030-shared-build-rehab-authoritative\.yml)$'; then
             echo 'run_receipt=true' >> "$GITHUB_OUTPUT"
           else
             echo 'run_receipt=false' >> "$GITHUB_OUTPUT"
@@ -72,7 +73,7 @@ jobs:
           python -m pip install -e '.[audio,test]'
           python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
       - name: Compile evidence and owners
-        run: python -m py_compile benchmarks/v030_shared_build_rehab_authoritative.py experiments/entropygraph_v030_shared_portfolio.py experiments/entropygraph_v030_geometry_overlay_g04.py
+        run: python -m py_compile benchmarks/v030_shared_build_rehab_authoritative.py experiments/entropygraph_v030_shared_portfolio.py experiments/entropygraph_v030_geometry_overlay_g04.py experiments/entropygraph_v030_geometry_overlay_g04_publish.py
       - name: Run exact-source fresh-process shared-build rehabilitation
         run: |
           mkdir -p benchmark-artifacts
@@ -93,6 +94,7 @@ jobs:
           assert d['schema']=='cmpct-v030-shared-build-rehab-authoritative-v1'
           assert d['source_sha']==os.environ['EVIDENCE_HEAD']
           assert d['candidate_fingerprint']==expected
+          assert d['control_surface']=='experiments/entropygraph_v030_geometry_overlay_g04_publish.py'
           assert d['release_credit'] is False
           f=d['facts']
           assert f['byte_identical'] is True
