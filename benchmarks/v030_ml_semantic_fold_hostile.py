@@ -99,6 +99,9 @@ def run(root: Path):
     archive = root / "ml.cmpct"
     PRODUCT.build(src, archive)
     expected_tree = PRODUCT.treehash(src)
+    members = PRODUCT.list_members(archive)
+    selected_member = next(row["path"] for row in members if row.get("kind") == "file")
+    expected_member = (src / selected_member).read_bytes()
 
     FOLD.install_bounded_fold()
 
@@ -135,9 +138,16 @@ def run(root: Path):
         raise RuntimeError("logical-SHA scope probe changed logical tree")
     strong_scope = PRODUCT.strong_verify(bad_logical_sha)
     strong_scope_accepted = bool(isinstance(strong_scope, dict) and strong_scope.get("ok") is True)
+    selective_scope_accepted = True
+    selective_scope_exact = False
+    try:
+        observed_member = PRODUCT.read_member(bad_logical_sha, selected_member)
+        selective_scope_exact = observed_member == expected_member
+    except Exception:
+        selective_scope_accepted = False
 
     return {
-        "schema": "cmpct-v030-ml-semantic-fold-hostile-v5",
+        "schema": "cmpct-v030-ml-semantic-fold-hostile-v6",
         "release_credit": False,
         "valid_tree_sha256": expected_tree,
         "checks": [payload, usize, csize, crc, post_crc, rollback, strong_payload],
@@ -146,7 +156,10 @@ def run(root: Path):
             "folded_full_extract_tree_identical": True,
             "strong_verify_accepted_under_global_oracle": strong_scope_accepted,
             "strong_verify_result": strong_scope,
-            "product_requirement": "strong_verify must retain nested SHA; use default-false extraction-only policy rather than global session replacement",
+            "selective_member": selected_member,
+            "selective_read_accepted_under_global_oracle": selective_scope_accepted,
+            "selective_read_bytes_exact": selective_scope_exact,
+            "product_requirement": "strong_verify/selective reads must retain nested SHA; use default-false extraction-only policy rather than global session replacement",
         },
         "preserved_claim": [
             "payload SHA fails closed",
@@ -158,8 +171,8 @@ def run(root: Path):
         ],
         "unpaid": [
             "product-scoped strong_verify nested-SHA rejection",
+            "product-scoped selective-read nested-SHA rejection",
             "authenticated metadata path/file/size hostile mutation",
-            "selective-read nested-SHA scope proof",
             "product-owner implementation and fresh-process release evidence",
         ],
     }
