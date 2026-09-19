@@ -20,4 +20,7 @@ def test_ml_semantic_fold_hostile_matrix(tmp_path: Path) -> None:
     assert all(row["failed_closed"] for row in checks.values())
     assert checks["post-crc-in-memory-record-fault"]["fault_injected"] is True
     assert checks["transactional-corrupt-payload"]["destination_tree_preserved"] is True
-    assert isinstance(result["scope_probe"]["strong_verify_accepted_under_global_oracle"], bool)
+    scope = result["scope_probe"]
+    assert isinstance(scope["strong_verify_accepted_under_global_oracle"], bool)
+    assert isinstance(scope["selective_read_accepted_under_global_oracle"], bool)
+    assert isinstance(scope["selective_read_bytes_exact"], bool)
