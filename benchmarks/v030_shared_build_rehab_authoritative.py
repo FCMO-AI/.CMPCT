@@ -2,10 +2,10 @@ from __future__ import annotations
 
 """Fresh-process shared-build rehabilitation evidence for the release-facing G04 owner.
 
-This compares the historical duplicated G04 implementation against the already-productized
-``entropygraph_v030_shared_portfolio`` on the frozen ML runtime workload. It changes no product behavior,
-timing boundary, threshold, corpus semantic, or archive grammar. Exact source SHA and release fingerprint
-are emitted so the result cannot be rebound to a later candidate.
+The control is the already-rehabilitated duplicated G04 publication wrapper, not the older research reactor whose
+``read_bytes`` publication check exports avoidable memory/materialization cost. This deliberately makes the control
+stronger: the measured delta isolates shared attempt-5 ownership instead of taking credit for an unrelated prior
+publication-hashing repair. No product behavior, timing boundary, threshold, corpus semantic, or archive grammar changes.
 """
 
 import argparse
@@ -40,14 +40,13 @@ def _sha256(path: Path) -> str:
 def _usage() -> tuple[float, int]:
     self_u = resource.getrusage(resource.RUSAGE_SELF)
     child_u = resource.getrusage(resource.RUSAGE_CHILDREN)
-    cpu = self_u.ru_utime + self_u.ru_stime + child_u.ru_utime + child_u.ru_stime
-    rss = max(int(self_u.ru_maxrss), int(child_u.ru_maxrss))
-    return cpu, rss
+    return (self_u.ru_utime + self_u.ru_stime + child_u.ru_utime + child_u.ru_stime,
+            max(int(self_u.ru_maxrss), int(child_u.ru_maxrss)))
 
 
 def _worker(arm: str, source: Path, out: Path) -> dict:
     if arm == "duplicated":
-        from experiments import entropygraph_v030_geometry_overlay_g04 as engine
+        from experiments import entropygraph_v030_geometry_overlay_g04_publish as engine
     elif arm == "shared":
         from experiments import entropygraph_v030_shared_portfolio as engine
     else:
@@ -80,8 +79,7 @@ def _run_fresh(arm: str, source: Path, out: Path) -> dict:
 def run(work_root: Path) -> dict:
     shutil.rmtree(work_root, ignore_errors=True)
     work_root.mkdir(parents=True)
-    roots = PERF._build_corpora(work_root / "corpora")
-    source = roots[("neutral_hostile_v1", "09_ml_artifacts")]
+    source = PERF._build_corpora(work_root / "corpora")[("neutral_hostile_v1", "09_ml_artifacts")]
     pairs = []
     for rep, order in enumerate(ORDER):
         measured = {}
@@ -108,15 +106,16 @@ def run(work_root: Path) -> dict:
     wall_pct = statistics.median(p["wallclock_improvement_pct"] for p in pairs)
     facts = {"byte_identical": True, "wallclock_improvement_pct": wall_pct,
              "wallclock_improvement_s": wall_s, "attempt5_graph_build_count": 1}
-    passed = wall_pct >= MIN_WALL_PCT and wall_s >= MIN_WALL_S
     return {"schema": "cmpct-v030-shared-build-rehab-authoritative-v1", "source_sha": source_sha,
             "candidate_fingerprint": fingerprint,
             "source_surface": "experiments/entropygraph_v030_shared_portfolio.py",
-            "control_surface": "experiments/entropygraph_v030_geometry_overlay_g04.py",
+            "control_surface": "experiments/entropygraph_v030_geometry_overlay_g04_publish.py",
+            "control_contract": "duplicated-attempt5 + streamed-publication-sha256",
             "workload": "neutral_hostile_v1/09_ml_artifacts", "release_credit": False,
             "contract": {"minimum_wallclock_improvement_pct": MIN_WALL_PCT,
                          "minimum_wallclock_improvement_s": MIN_WALL_S, "attempt5_graph_build_count": 1},
-            "facts": facts, "pairs": pairs, "gate": {"passed": passed},
+            "facts": facts, "pairs": pairs,
+            "gate": {"passed": wall_pct >= MIN_WALL_PCT and wall_s >= MIN_WALL_S},
             "rss_note": "ru_maxrss high-water observation only; runtime-memory-selective owns normative whole-process-tree RSS"}
 
 
