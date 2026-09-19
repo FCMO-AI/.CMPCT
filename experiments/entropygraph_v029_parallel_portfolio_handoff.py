@@ -38,7 +38,10 @@ def build_parallel_with_attempt5(root: Path, out: Path, retained: Path) -> dict:
             raise RuntimeError(f"parallel handoff child failure rows={rows!r} exitcodes={[p.exitcode for p in ps]!r}")
         vb,ab=v028.stat().st_size,a5.stat().st_size
         retain_started=time.perf_counter(); os.link(a5,retained)
-        retention={"mode":"same-filesystem-hardlink","payload_write_bytes":0,"bytes":ab,"sha256":S._sha256(retained),"retain_s":time.perf_counter()-retain_started}
+        # A hardlink writes no archive payload bytes, but it deliberately extends the lifetime of the existing
+        # attempt-5 inode. Keep those two costs separate: zero rewrite I/O is not zero temporary disk occupancy.
+        retention={"mode":"same-filesystem-hardlink","payload_write_bytes":0,"retained_disk_occupancy_bytes":ab,"bytes":ab,
+                   "sha256":S._sha256(retained),"retain_s":time.perf_counter()-retain_started}
         chosen,selected=(a5,"mosaic") if ab < vb else (v028,"v028-fallback")
         durability=S._durable_replace(chosen,out); by={r["kind"]:r for r in rows}
         return {"selected":selected,"archive_bytes":out.stat().st_size,"archive_sha256":S._sha256(out),"parallel_create_s":time.perf_counter()-started,
