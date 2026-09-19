@@ -8,6 +8,7 @@ on:
     branches: [agent/v030-g04-explicit-artifact-handoff]
     paths:
       - 'benchmarks/v030_g04_explicit_handoff_ab.py'
+      - 'benchmarks/v030_g04_explicit_fresh_process.py'
       - 'experiments/entropygraph_v029_parallel_portfolio_handoff.py'
       - 'experiments/entropygraph_v030_geometry_overlay_g04_explicit_handoff.py'
       - '.github/workflows/v030-g04-explicit-handoff-ab.yml'
@@ -36,7 +37,7 @@ jobs:
           test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
           if [ "$GITHUB_EVENT_NAME" = workflow_dispatch ]; then echo 'run_receipt=true' >> "$GITHUB_OUTPUT"; exit 0; fi
           changed="$(git diff-tree --no-commit-id --name-only -r HEAD)"
-          if printf '%s\n' "$changed" | grep -Eq '^(benchmarks/v030_g04_explicit_handoff_ab\.py|experiments/entropygraph_v029_parallel_portfolio_handoff\.py|experiments/entropygraph_v030_geometry_overlay_g04_explicit_handoff\.py|\.github/workflows/v030-g04-explicit-handoff-ab\.yml)$'; then echo 'run_receipt=true' >> "$GITHUB_OUTPUT"; else echo 'run_receipt=false' >> "$GITHUB_OUTPUT"; fi
+          if printf '%s\n' "$changed" | grep -Eq '^(benchmarks/v030_g04_explicit_handoff_ab\.py|benchmarks/v030_g04_explicit_fresh_process\.py|experiments/entropygraph_v029_parallel_portfolio_handoff\.py|experiments/entropygraph_v030_geometry_overlay_g04_explicit_handoff\.py|\.github/workflows/v030-g04-explicit-handoff-ab\.yml)$'; then echo 'run_receipt=true' >> "$GITHUB_OUTPUT"; else echo 'run_receipt=false' >> "$GITHUB_OUTPUT"; fi
   explicit-handoff-ab:
     needs: classify-latest-head
     if: needs.classify-latest-head.outputs.run_receipt == 'true'
@@ -80,6 +81,49 @@ jobs:
         with:
           name: v030-g04-explicit-handoff-${{ env.EVIDENCE_HEAD }}
           path: benchmark-artifacts/explicit-handoff.json
+          if-no-files-found: error
+          retention-days: 90
+  fresh-process-ab:
+    needs: classify-latest-head
+    if: needs.classify-latest-head.outputs.run_receipt == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    concurrency:
+      group: cmpct-v030-g04-explicit-fresh-${{ github.event.pull_request.head.sha || github.sha }}
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+      - uses: actions/setup-python@v6
+        with: {python-version: '3.11', cache: pip}
+      - run: |
+          sudo apt-get update && sudo apt-get install -y zstd gcc ffmpeg libsndfile1
+          python -m pip install -e '.[audio,test]'
+      - run: python -m py_compile benchmarks/v030_g04_explicit_fresh_process.py
+      - name: Run fresh-process ML A/B
+        run: |
+          mkdir -p benchmark-artifacts
+          python benchmarks/v030_g04_explicit_fresh_process.py --work-root "$GITHUB_WORKSPACE/benchmark-artifacts/fresh-work" --output "$GITHUB_WORKSPACE/benchmark-artifacts/fresh-process.json"
+      - name: Validate fresh-process research receipt
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          d=json.loads(Path('benchmark-artifacts/fresh-process.json').read_text())
+          assert d['schema']=='cmpct-v030-g04-explicit-fresh-process-v1' and d['release_credit'] is False and len(d['pairs'])==2
+          for p in d['pairs']:
+              c,e=p['control'],p['explicit']; r=e['stats']['attempt5_retention']
+              assert c['archive_sha256']==e['archive_sha256'] and c['tree_sha256']==e['tree_sha256']
+              assert e['stats']['global_monkeypatches']==0
+              assert r['payload_write_bytes']==0 and r['mode']=='same-filesystem-hardlink'
+          PY
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: v030-g04-explicit-fresh-${{ env.EVIDENCE_HEAD }}
+          path: benchmark-artifacts/fresh-process.json
           if-no-files-found: error
           retention-days: 90
 # Research evidence only; green never grants release credit. Exact-head identity and zero-copy custody are mandatory.
