@@ -29,7 +29,8 @@ def build(root: Path, out: Path) -> dict:
         return {"selected":selected,"archive_bytes":out.stat().st_size,"v029_bytes":base_bytes,"pre_overlay_graph_bytes":graph_bytes,"overlay_bytes":overlay_bytes,
                 "saving_vs_v029_bytes":base_bytes-out.stat().st_size,"tree_sha256":expected,"create_s":time.perf_counter()-started,
                 "transformed_records":len(transformed),"write":write_stats,"attempt5_retention":base_stats["retained_attempt5"],
-                "ownership":"explicit-artifact-handoff","global_monkeypatches":0,"release_credit":False}
+                "attempt5_graph_build_count":base_stats["attempt5_graph_build_count"],"ownership":"explicit-artifact-handoff",
+                "global_monkeypatches":0,"release_credit":False}
 
 strong_verify=G04.strong_verify
 treehash=G04.treehash
