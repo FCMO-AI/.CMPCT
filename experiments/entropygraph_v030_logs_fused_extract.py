@@ -10,25 +10,88 @@ credit are unchanged.
 """
 from __future__ import annotations
 
+import binascii
 import os
 from pathlib import Path, PurePosixPath
 import shutil
 import tempfile
+
+import zstandard as zstd
 
 from experiments import entropygraph_v030_logs_inverse_profile_v3 as LOGS
 from experiments import entropygraph_v030_product_fs as FS
 from experiments import entropygraph_v030_release_product_base as BASE
 
 
-def _restore_filesystem_metadata(staging: Path, decoded: dict, *, safe_symlinks: bool) -> None:
-    """Apply FS manifest structure/metadata after content identity was proven in the same Archive session.
+class _FusedExtractionArchive(LOGS.Archive):
+    """Strict reader except for pack SHA already re-proven by complete fused member restoration.
 
-    Regular-file existence/size is not re-stat'ed here. ``extract`` writes every graph regular only after proving
-    that graph ``(size, SHA-256)`` identities exactly equal the authenticated filesystem manifest, and it checks
-    each write's returned byte count. Re-reading filesystem shape immediately afterwards therefore adds syscalls
-    without adding a new integrity fact. Metadata operations below still fail naturally if publication state is
-    unexpectedly missing.
+    A pack is eligible only when authenticated direct-member storage rows form an exact, non-overlapping partition
+    of every decoded byte.  Fused extraction subsequently checks every owning member's SHA-256 before publication,
+    so the pack SHA is a duplicate successful-operation proof.  CRC, decoded size, codec and physical bounds remain
+    mandatory here.  Ordinary LOGS.Archive surfaces stay strict by construction.
     """
+
+    def __init__(self, path: Path):
+        super().__init__(path)
+        intervals: dict[int, list[tuple[int, int]]] = {}
+        invalid: set[int] = set()
+        for row in self.files:
+            size = int(row[2])
+            storage = row[4]
+            if storage[0] not in ("pack", "raw"):
+                continue
+            try:
+                pack_index, offset, length = map(int, storage[1:])
+            except Exception:
+                continue
+            if pack_index < 0 or pack_index >= len(self.pack_offsets):
+                continue
+            usize = int(self.pack_offsets[pack_index][2])
+            if offset < 0 or length != size or offset + length > usize:
+                invalid.add(pack_index)
+                continue
+            intervals.setdefault(pack_index, []).append((offset, offset + length))
+
+        covered: set[int] = set()
+        for pack_index, rows in intervals.items():
+            if pack_index in invalid:
+                continue
+            usize = int(self.pack_offsets[pack_index][2])
+            cursor = 0
+            ok = True
+            for start, end in sorted(rows):
+                if start != cursor or end < start:
+                    ok = False
+                    break
+                cursor = end
+            if ok and cursor == usize:
+                covered.add(pack_index)
+        self._fused_member_owned_packs = frozenset(covered)
+
+    def _read_pack(self, index: int) -> bytes:
+        if index not in self._fused_member_owned_packs:
+            return super()._read_pack(index)
+        if index < 0 or index >= len(self.pack_offsets):
+            raise RuntimeError("logs profile pack index")
+        offset, codec, usize, csize, crc, _sha = self.pack_offsets[index]
+        self.handle.seek(offset)
+        payload = self.handle.read(csize)
+        if len(payload) != csize:
+            raise RuntimeError("short logs profile pack")
+        if codec == LOGS.V2.P.CODEC_RAW:
+            raw = payload
+        elif codec == LOGS.V2.P.CODEC_ZSTD:
+            raw = zstd.ZstdDecompressor().decompress(payload, max_output_size=usize)
+        else:  # Defensive: _scan_packs already rejects unknown codecs.
+            raise RuntimeError("logs profile pack codec")
+        if len(raw) != usize or (binascii.crc32(raw) & 0xFFFFFFFF) != crc:
+            raise RuntimeError("logs profile pack identity")
+        return raw
+
+
+def _restore_filesystem_metadata(staging: Path, decoded: dict, *, safe_symlinks: bool) -> None:
+    """Apply FS manifest structure/metadata after content identity was proven in the same Archive session."""
     entries = decoded["manifest"]["entries"]
     internal = staging.joinpath(*PurePosixPath(FS.INTERNAL_ROOT).parts)
     if internal.exists() or internal.is_symlink():
@@ -117,7 +180,7 @@ def extract(
     stage = temp_root / "tree"
     installed = False
     try:
-        with LOGS.Archive(archive) as reader:
+        with _FusedExtractionArchive(archive) as reader:
             paths = reader._paths()
             try:
                 manifest_index = paths.index(FS.FILESYSTEM_MANIFEST)

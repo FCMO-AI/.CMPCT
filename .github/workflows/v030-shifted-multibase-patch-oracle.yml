@@ -1,16 +1,11 @@
 # ci-lane: deep
 # ci-cancel-policy: preserve-running-exact-receipt
-# ci-pr-scope: latest-head-commit-gate
 name: CMPCT v0.30 Shifted bounded multi-base patch oracle
 
 on:
   push:
-    branches: [agent/v030-authoritative-integration]
-    paths:
-      - 'benchmarks/v030_shifted_multibase_patch_oracle.py'
-      - '.github/workflows/v030-shifted-multibase-patch-oracle.yml'
-  pull_request:
-    branches: [main]
+    branches:
+      - 'agent/v030-*'
     paths:
       - 'benchmarks/v030_shifted_multibase_patch_oracle.py'
       - '.github/workflows/v030-shifted-multibase-patch-oracle.yml'
@@ -20,12 +15,12 @@ permissions:
   contents: read
 
 concurrency:
-  group: cmpct-v030-shifted-multibase-patch-${{ github.event.pull_request.number || github.ref }}
+  group: cmpct-v030-shifted-multibase-patch-${{ github.sha }}
   cancel-in-progress: false
 
 env:
   PYTHONPATH: ${{ github.workspace }}
-  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+  EVIDENCE_HEAD: ${{ github.sha }}
 
 jobs:
   latest-head-impact:

@@ -6,6 +6,11 @@ The base harness still owns the exact three targets, balanced ordering, archive/
 1.10/1.25 thresholds.  This binding swaps only the fresh operation worker for a companion that samples the
 worker plus every live descendant during the exact pack/verify/extract operation window.  Parent RUSAGE_SELF
 ru_maxrss remains a floor, so the stronger accounting can never make the inherited memory measurement smaller.
+
+Timing values produced here are diagnostic only. Sampling the live process tree adds work inside the operation
+window and can perturb create/extract timing even though the timer boundary itself is unchanged. The unchanged
+base runtime authority owns timing promotion; this zero-credit companion may fail only on its stronger RSS
+custody (plus shared identity/size prerequisites), never because its instrumented timing ratios differ.
 """
 
 import argparse
@@ -66,10 +71,24 @@ def _run_worker_with_tree_receipt(*args: str) -> dict:
 B._run_worker = _run_worker_with_tree_receipt
 
 
+def _rss_gate(base_gate: dict) -> dict:
+    """Return the companion's actual authority: identity/size prerequisites plus whole-tree RSS."""
+    gate = {
+        "exact_target_count": bool(base_gate["exact_target_count"]),
+        "no_size_regressions": bool(base_gate["no_size_regressions"]),
+        "peak_rss_ratio": bool(base_gate["peak_rss_ratio"]),
+    }
+    gate["passed"] = all(gate.values())
+    return gate
+
+
 def run(work_root: Path) -> dict:
     fingerprint = _candidate_fingerprint()
     _RECEIPTS.clear()
     result = dict(B.run(work_root))
+    # Preserve the inherited full gate shape for artifact/schema compatibility and diagnostics. It is not the
+    # companion's exit authority because its timing measurements are instrumented. ``rss_gate`` below is.
+    base_gate = dict(result["gate"])
     result["schema"] = SCHEMA
     result["engine"] = "experiments/entropygraph_v030_release_product.py"
     result["release_facade"] = "cmpct-v030-release-product-v1"
@@ -83,10 +102,13 @@ def run(work_root: Path) -> dict:
         "decisive_peak": "max(worker parent RUSAGE_SELF ru_maxrss, sampled live worker process-tree VmRSS)",
         "child_memory_gifted": False,
         "timing_boundary_changed": False,
+        "timing_release_credit": False,
         "peak_rss_threshold_changed": False,
         "release_credit": False,
     }
     result["tree_rss_receipts"] = list(_RECEIPTS)
+    result["gate"] = base_gate
+    result["rss_gate"] = _rss_gate(base_gate)
     return result
 
 
@@ -98,9 +120,9 @@ def main() -> None:
     result = run(args.work_root)
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8")
-    print(json.dumps({"candidate_fingerprint": result["candidate_fingerprint"], "totals": result["totals"], "gate": result["gate"], "rss_accounting": result["rss_accounting"]}, indent=2), flush=True)
-    if not result["gate"]["passed"]:
-        raise SystemExit("v0.30 whole-process-tree RSS runtime promotion gate failed")
+    print(json.dumps({"candidate_fingerprint": result["candidate_fingerprint"], "totals": result["totals"], "diagnostic_gate": result["gate"], "rss_gate": result["rss_gate"], "rss_accounting": result["rss_accounting"]}, indent=2), flush=True)
+    if not result["rss_gate"]["passed"]:
+        raise SystemExit("v0.30 whole-process-tree RSS companion failed RSS/identity custody")
 
 
 if __name__ == "__main__":
