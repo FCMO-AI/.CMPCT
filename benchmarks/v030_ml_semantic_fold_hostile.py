@@ -64,6 +64,27 @@ def _assert_destination_rollback(archive: Path, dst: Path):
     return failure
 
 
+def _post_crc_fault(archive: Path, dst: Path):
+    cls = R._G04Session
+    original = cls.record
+    fired = [False]
+    def corrupt_after_record_checks(self, rid):
+        value = original(self, rid)
+        if not fired[0] and value:
+            fired[0] = True
+            return bytes([value[0] ^ 1]) + value[1:]
+        return value
+    cls.record = corrupt_after_record_checks
+    try:
+        result = _expect_fail("post-crc-in-memory-record-fault", lambda: PRODUCT.extract(archive, dst))
+        result["fault_injected"] = fired[0]
+        if not fired[0]:
+            raise RuntimeError("post-CRC fault injector never reached a record")
+        return result
+    finally:
+        cls.record = original
+
+
 def run(root: Path):
     shutil.rmtree(root, ignore_errors=True)
     root.mkdir(parents=True)
@@ -95,12 +116,10 @@ def run(root: Path):
     _rewrite_header(archive, bad_crc, lambda c,u,s,r,h:(c,u,s,r^1,h))
     crc = _expect_fail("record-crc", lambda: PRODUCT.extract(bad_crc, root / "bad-crc-out"))
 
+    post_crc = _post_crc_fault(archive, root / "post-crc-out")
     rollback = _assert_destination_rollback(bad_payload, root / "rollback-dst")
     strong_payload = _expect_fail("strong-verify-corrupt-payload", lambda: PRODUCT.strong_verify(bad_payload))
 
-    # Scope discriminator: only the reconstructed-record SHA changes. Folded complete
-    # extraction intentionally owns terminal tree identity, but strong_verify must retain
-    # nested SHA in the eventual product policy. The global research oracle may leak here.
     bad_logical_sha = root / "bad-logical-sha.cmpct"
     _rewrite_header(archive, bad_logical_sha, lambda c,u,s,r,h:(c,u,s,r,bytes([h[0]^1])+h[1:]))
     folded_dst = root / "folded-logical-sha"
@@ -114,10 +133,10 @@ def run(root: Path):
         strong_scope_accepted = False
 
     return {
-        "schema": "cmpct-v030-ml-semantic-fold-hostile-v3",
+        "schema": "cmpct-v030-ml-semantic-fold-hostile-v4",
         "release_credit": False,
         "valid_tree_sha256": expected_tree,
-        "checks": [payload, usize, csize, crc, rollback, strong_payload],
+        "checks": [payload, usize, csize, crc, post_crc, rollback, strong_payload],
         "scope_probe": {
             "mutation": "record logical SHA only",
             "folded_full_extract_tree_identical": True,
@@ -128,12 +147,12 @@ def run(root: Path):
             "payload SHA fails closed",
             "physical usize/csize bounds fail closed",
             "record CRC fails closed",
+            "post-CRC in-memory record corruption is caught before publication",
             "transactional destination rollback survives failure",
             "strong_verify rejects payload corruption",
         ],
         "unpaid": [
             "product-scoped strong_verify nested-SHA rejection",
-            "post-CRC logical-node corruption",
             "authenticated metadata path/file/size hostile mutation",
             "selective-read nested-SHA scope proof",
             "product-owner implementation and fresh-process release evidence",
