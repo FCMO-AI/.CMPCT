@@ -43,12 +43,13 @@ def _usage() -> dict:
 
 
 def _worker(arm: str, source: Path, out: Path) -> dict:
+    from experiments import entropygraph_v030_geometry_overlay_g04 as verifier
+
     if arm == "control":
-        from experiments import entropygraph_v030_geometry_overlay_g04 as engine
-        build = engine.build
+        build = verifier.build
     elif arm == "explicit":
-        from experiments import entropygraph_v030_geometry_overlay_g04_explicit_handoff as engine
-        build = engine.build
+        from experiments import entropygraph_v030_geometry_overlay_g04_explicit_handoff as explicit
+        build = explicit.build
     else:
         raise ValueError(arm)
 
@@ -57,7 +58,7 @@ def _worker(arm: str, source: Path, out: Path) -> dict:
     stats = dict(build(source, out))
     wall = time.perf_counter() - started
     after = _usage()
-    verified = dict(engine.strong_verify(out))
+    verified = dict(verifier.strong_verify(out))
     if not verified.get("ok"):
         raise RuntimeError(f"{arm} strong verification failed: {verified!r}")
     return {
@@ -77,16 +78,7 @@ def _run_child(arm: str, source: Path, out: Path) -> dict:
     env = os.environ.copy()
     env["PYTHONPATH"] = str(ROOT) + (os.pathsep + env["PYTHONPATH"] if env.get("PYTHONPATH") else "")
     completed = subprocess.run(
-        [
-            sys.executable,
-            str(Path(__file__).resolve()),
-            "--worker-arm",
-            arm,
-            "--source",
-            str(source),
-            "--archive",
-            str(out),
-        ],
+        [sys.executable, str(Path(__file__).resolve()), "--worker-arm", arm, "--source", str(source), "--archive", str(out)],
         cwd=ROOT,
         env=env,
         check=True,
@@ -120,17 +112,15 @@ def run(work: Path) -> dict:
             raise RuntimeError("fresh-process explicit arm used global monkeypatching")
         if retention.get("payload_write_bytes") != 0 or retention.get("mode") != "same-filesystem-hardlink":
             raise RuntimeError("fresh-process retention exported payload-copy cost")
-        pairs.append(
-            {
-                "pair": pair,
-                "order": list(order),
-                "control": control,
-                "explicit": explicit,
-                "wall_saving_fraction": 1.0 - explicit["wall_s"] / control["wall_s"],
-                "cpu_saving_fraction": 1.0 - explicit["cpu_s"] / control["cpu_s"],
-                "rss_ratio": explicit["peak_rss_kib"] / max(1, control["peak_rss_kib"]),
-            }
-        )
+        pairs.append({
+            "pair": pair,
+            "order": list(order),
+            "control": control,
+            "explicit": explicit,
+            "wall_saving_fraction": 1.0 - explicit["wall_s"] / control["wall_s"],
+            "cpu_saving_fraction": 1.0 - explicit["cpu_s"] / control["cpu_s"],
+            "rss_ratio": explicit["peak_rss_kib"] / max(1, control["peak_rss_kib"]),
+        })
     return {
         "schema": "cmpct-v030-g04-explicit-fresh-process-v1",
         "release_credit": False,
