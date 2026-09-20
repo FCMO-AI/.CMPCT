@@ -1,7 +1,17 @@
 from __future__ import annotations
 from pathlib import Path
+import ctypes
 import hashlib
+import os
 import pytest
+
+# Issue #176 is a product loader defect, not a subprocess-boundary defect. The dedicated portability workflow
+# provides this CI-only image so Windows can exercise both direct and child r24 construction without weakening
+# the independent portability debt or pretending that shipping codec discovery is fixed here.
+if os.name == "nt":
+    _ci_zstd = Path.cwd() / "libzstd.so"
+    if _ci_zstd.is_file():
+        ctypes.CDLL(str(_ci_zstd.resolve()))
 
 from experiments.entropygraph_v030_r24_process_prebuild import R24PrebuildProcess
 
