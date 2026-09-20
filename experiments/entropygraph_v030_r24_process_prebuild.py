@@ -11,6 +11,7 @@ import os
 from pathlib import Path
 import subprocess
 import sys
+import time
 from typing import Any
 
 DEFAULT_TIMEOUT_S = 120.0
@@ -24,6 +25,7 @@ class R24PrebuildProcess:
         if self.timeout_s <= 0:
             raise ValueError("r24 prebuild timeout must be positive")
         self._proc: subprocess.Popen[str] | None = None
+        self._started_at: float | None = None
         self._result_collected = False
 
     def start(self) -> "R24PrebuildProcess":
@@ -34,6 +36,7 @@ class R24PrebuildProcess:
         # failing child or parent-abort cleanup to unlink bytes it did not create.
         if self.out.exists():
             raise FileExistsError(f"r24 prebuild output already exists: {self.out}")
+        self._started_at = time.monotonic()
         self._proc = subprocess.Popen(
             [sys.executable, "-m", __name__, "--worker", "--root", str(self.root), "--out", str(self.out)],
             stdin=subprocess.DEVNULL,
@@ -45,16 +48,17 @@ class R24PrebuildProcess:
         return self
 
     def result(self) -> dict[str, Any]:
-        if self._proc is None:
+        if self._proc is None or self._started_at is None:
             raise RuntimeError("r24 prebuild process was not started")
         proc = self._proc
+        remaining_s = max(0.0, self.timeout_s - (time.monotonic() - self._started_at))
         try:
-            stdout, stderr = proc.communicate(timeout=self.timeout_s)
+            stdout, stderr = proc.communicate(timeout=remaining_s)
         except subprocess.TimeoutExpired:
             proc.kill()
             proc.communicate()
             self.out.unlink(missing_ok=True)
-            raise TimeoutError(f"r24 prebuild exceeded {self.timeout_s:.3f}s")
+            raise TimeoutError(f"r24 prebuild exceeded {self.timeout_s:.3f}s total lifetime")
         if proc.returncode != 0:
             self.out.unlink(missing_ok=True)
             tail = stderr[-4000:].strip()
@@ -91,6 +95,7 @@ class R24PrebuildProcess:
         if self._proc is not None and not self._result_collected:
             self.out.unlink(missing_ok=True)
         self._proc = None
+        self._started_at = None
 
     def __enter__(self) -> "R24PrebuildProcess":
         return self.start()
