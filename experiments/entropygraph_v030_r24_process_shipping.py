@@ -16,9 +16,9 @@ from experiments.entropygraph_v030_r24_process_prebuild import R24PrebuildProces
 class R24ProcessPrebuildRegistry:
     """One-shot registry preserving the mature prebuild key/publication contract."""
 
-    def __init__(self, *, timeout_s: float = 120.0):
-        self.timeout_s = float(timeout_s)
-        if self.timeout_s <= 0:
+    def __init__(self, *, timeout_s: float | None = None):
+        self.timeout_s = None if timeout_s is None else float(timeout_s)
+        if self.timeout_s is not None and self.timeout_s <= 0:
             raise ValueError("r24 process registry timeout must be positive")
         self._lock = threading.Lock()
         self._pending: dict[str, tuple[R24PrebuildProcess, Path]] = {}
@@ -84,13 +84,18 @@ class R24ProcessPrebuildRegistry:
                 prebuilt.unlink(missing_ok=True)
 
 
-def install_into_release_base(base_impl, *, timeout_s: float = 120.0) -> R24ProcessPrebuildRegistry:
+def install_into_release_base(base_impl, *, timeout_s: float | None = None) -> R24ProcessPrebuildRegistry:
     """Replace the mature thread owner at its existing canonical-final seam.
 
     The preserved pre-profile function is used deliberately: calling the already-patched
     thread wrapper would create a duplicate r24 build. Profile-ineligible inputs keep the
     child alive because canonical-final immediately consumes r24 fallback. Other profile
     preparation failures kill the child and remove its staging artifact before propagating.
+
+    Shipping intentionally has no fixed child timeout by default. The inherited in-process
+    builder had no size-independent deadline either, and imposing one here would turn large
+    valid archives into a new correctness failure. Tests and bounded callers may opt into a
+    positive timeout explicitly.
     """
     registry = R24ProcessPrebuildRegistry(timeout_s=timeout_s)
     original_prepare = base_impl._ORIGINAL_PREPARE_PROFILE_TREE
