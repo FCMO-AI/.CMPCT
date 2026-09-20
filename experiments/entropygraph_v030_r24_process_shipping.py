@@ -99,7 +99,7 @@ def install_into_release_base(base_impl, *, timeout_s: float = 120.0) -> R24Proc
         registry.start(Path(root), Path(staging_root))
         try:
             return original_prepare(root, staging_root)
-        except base_impl.ProfileNotEligible:
+        except base_impl.C.ProfileNotEligible:
             raise
         except Exception:
             registry.discard(Path(staging_root))
