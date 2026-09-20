@@ -10,6 +10,11 @@ def _sha(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
+def _stable_stats(stats: dict) -> dict:
+    # Per-run timing belongs to the process that executed the build and is not an identity field.
+    return {k: v for k, v in stats.items() if "wall" not in k and "cpu" not in k and not k.endswith("_s")}
+
+
 def test_r24_process_prebuild_is_byte_identical(tmp_path: Path):
     from experiments import entropygraph_v030_release_product_base as product
 
@@ -22,7 +27,7 @@ def test_r24_process_prebuild_is_byte_identical(tmp_path: Path):
     direct_stats = product._locality_bounded_r24_build(root, direct)
     with R24PrebuildProcess(root, child, timeout_s=30) as proc:
         child_stats = proc.result()
-    assert child_stats == direct_stats
+    assert _stable_stats(child_stats) == _stable_stats(direct_stats)
     assert child.stat().st_size == direct.stat().st_size
     assert _sha(child) == _sha(direct)
 
