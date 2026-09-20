@@ -44,6 +44,20 @@ def test_r24_process_prebuild_is_byte_identical(tmp_path: Path):
     assert _sha(child) == _sha(direct)
 
 
+def test_r24_process_prebuild_is_independent_of_caller_cwd(tmp_path: Path, monkeypatch):
+    root = tmp_path / "src"
+    root.mkdir()
+    (root / "x.txt").write_text("cwd-independent child\n" * 200)
+    out = tmp_path / "child.cmpct"
+    elsewhere = tmp_path / "elsewhere"
+    elsewhere.mkdir()
+    monkeypatch.chdir(elsewhere)
+    with R24PrebuildProcess(root, out, timeout_s=30) as proc:
+        stats = proc.result()
+    assert out.is_file()
+    assert stats["format_revision"] == 24
+
+
 def test_r24_process_prebuild_failure_does_not_publish_candidate(tmp_path: Path):
     missing = tmp_path / "does-not-exist"
     out = tmp_path / "candidate.cmpct"
