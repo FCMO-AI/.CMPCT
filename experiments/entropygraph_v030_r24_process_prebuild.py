@@ -85,8 +85,11 @@ def _worker(root: Path, out: Path) -> None:
     out = Path(out)
     if not root.is_dir():
         raise FileNotFoundError(f"r24 prebuild source is not a directory: {root}")
-    # Import inside the child so the parent never owns Builder's r24 heap generations.
-    from experiments import entropygraph_v030_release_product_base as product
+    # Import the promoted product surface inside the child. Importing the preserved base directly would
+    # silently skip release-owned r24 post-passes (currently dead-dictionary elision) and make the process
+    # candidate depend on which modules happened to be imported in the parent. The child must construct the
+    # same shipping r24 bytes from a clean interpreter while the parent never owns Builder heap generations.
+    from experiments import entropygraph_v030_release_product as product
 
     stats = product._locality_bounded_r24_build(root, out)
     print(json.dumps({"schema": "cmpct-v030-r24-prebuild-process-v1", "stats": stats}, separators=(",", ":"), default=str))
