@@ -12,7 +12,7 @@ from cmpct._ordered_pull import ordered_worker_iter
 from cmpct.v030_release_locality import _shipping_release_builder
 
 SPOOL_MEMORY_LIMIT=16*1024*1024
-_ORIGINAL_BUILD=B.Builder.build
+_ORIGINAL_BUILD=getattr(B.Builder.build,'_cmpct_v030_materialization_original',B.Builder.build)
 
 class StreamedBuilder(B.Builder):
     def build(self,out:Path):
@@ -78,8 +78,12 @@ def _release_owned_build(self,out):
         return StreamedBuilder.build(self,out)
     return _ORIGINAL_BUILD(self,out)
 
+_release_owned_build._cmpct_v030_materialization_guard=True
+_release_owned_build._cmpct_v030_materialization_original=_ORIGINAL_BUILD
+
 def install_v030_release_materialization_guard()->None:
-    if B.Builder.build is not _release_owned_build:
-        B.Builder.build=_release_owned_build
+    if getattr(B.Builder.build,'_cmpct_v030_materialization_guard',False):
+        return
+    B.Builder.build=_release_owned_build
 
 install_v030_release_materialization_guard()
