@@ -27,6 +27,11 @@ def test_promoted_front_door_owns_process_seam():
     assert product._BASE_IMPL.C._r24_build.__module__ == "experiments.entropygraph_v030_r24_process_shipping"
 
 
+def test_shipping_registry_default_has_no_size_independent_deadline():
+    registry = R24ProcessPrebuildRegistry()
+    assert registry.timeout_s is None
+
+
 def test_registry_consumes_exact_promoted_r24_once(tmp_path: Path):
     from experiments import entropygraph_v030_release_product as product
 
