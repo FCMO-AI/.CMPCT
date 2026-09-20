@@ -84,7 +84,7 @@ jobs:
         run: |
           $src = 'C:\Program Files\Git\mingw64\bin\libzstd.dll'
           if (-not (Test-Path $src)) { throw "Git runner zstd library not found at $src" }
-          Copy-Item $src "$env:GITHUB_WORKSPACE\libzstd.so"
+          "CMPCT_CI_ZSTD_DLL=$src" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
       - name: Install focused test dependencies
         run: python -m pip install -e '.[test]'
       - name: Compile process boundary
