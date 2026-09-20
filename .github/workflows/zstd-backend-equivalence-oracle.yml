@@ -6,20 +6,11 @@ name: CMPCT zstd backend equivalence oracle
 on:
   pull_request:
     branches: [agent/v030-authoritative-integration]
-    paths:
-      - experiments/zstd_backend_equivalence_oracle.py
-      - experiments/zstd_full_archive_backend_oracle.py
-      - experiments/zstd_python_backend_fingerprint.py
-      - .github/workflows/zstd-backend-equivalence-oracle.yml
+    paths: [experiments/zstd_backend_equivalence_oracle.py, experiments/zstd_full_archive_backend_oracle.py, experiments/zstd_python_backend_fingerprint.py, .github/workflows/zstd-backend-equivalence-oracle.yml]
   push:
     branches: [agent/zstd-platform-loader]
-    paths:
-      - experiments/zstd_backend_equivalence_oracle.py
-      - experiments/zstd_full_archive_backend_oracle.py
-      - experiments/zstd_python_backend_fingerprint.py
-      - .github/workflows/zstd-backend-equivalence-oracle.yml
+    paths: [experiments/zstd_backend_equivalence_oracle.py, experiments/zstd_full_archive_backend_oracle.py, experiments/zstd_python_backend_fingerprint.py, .github/workflows/zstd-backend-equivalence-oracle.yml]
   workflow_dispatch:
-
 permissions: {contents: read}
 env:
   EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
@@ -30,8 +21,7 @@ jobs:
     concurrency:
       group: ${{ github.workflow }}-classifier-${{ github.event.pull_request.number || github.ref }}
       cancel-in-progress: true
-    outputs:
-      run_deep: ${{ steps.scope.outputs.run_deep }}
+    outputs: {run_deep: '${{ steps.scope.outputs.run_deep }}'}
     steps:
       - uses: actions/checkout@v6
         with: {ref: '${{ env.EVIDENCE_HEAD }}', fetch-depth: 2}
@@ -40,11 +30,7 @@ jobs:
         run: |
           test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
           files="$(git diff-tree --no-commit-id --name-only -r HEAD)"
-          if printf '%s\n' "$files" | grep -Eq '^(experiments/zstd_backend_equivalence_oracle.py|experiments/zstd_full_archive_backend_oracle.py|experiments/zstd_python_backend_fingerprint.py|\.github/workflows/zstd-backend-equivalence-oracle.yml)$'; then
-            echo 'run_deep=true' >> "$GITHUB_OUTPUT"
-          else
-            echo 'run_deep=false' >> "$GITHUB_OUTPUT"
-          fi
+          if printf '%s\n' "$files" | grep -Eq '^(experiments/zstd_backend_equivalence_oracle.py|experiments/zstd_full_archive_backend_oracle.py|experiments/zstd_python_backend_fingerprint.py|\.github/workflows/zstd-backend-equivalence-oracle.yml)$'; then echo 'run_deep=true' >> "$GITHUB_OUTPUT"; else echo 'run_deep=false' >> "$GITHUB_OUTPUT"; fi
 
   oracle:
     needs: classify
@@ -52,21 +38,17 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     concurrency:
-      group: ${{ github.workflow }}-receipt-${{ env.EVIDENCE_HEAD }}-linux-oracle
+      group: ${{ github.workflow }}-receipt-${{ github.event.pull_request.head.sha || github.sha }}-linux-oracle
       cancel-in-progress: false
     steps:
       - uses: actions/checkout@v6
         with: {ref: '${{ env.EVIDENCE_HEAD }}', fetch-depth: 1}
       - uses: actions/setup-python@v6
         with: {python-version: '3.11', cache: pip}
-      - name: Bind exact source
-        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
-      - name: Install project
-        run: python -m pip install -e .
-      - name: Run primitive equivalence oracle
-        run: python experiments/zstd_backend_equivalence_oracle.py | tee zstd-backend-equivalence.json
-      - name: Run full archive identity oracle
-        run: python experiments/zstd_full_archive_backend_oracle.py | tee zstd-full-archive-backend.json
+      - run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+      - run: python -m pip install -e .
+      - run: python experiments/zstd_backend_equivalence_oracle.py | tee zstd-backend-equivalence.json
+      - run: python experiments/zstd_full_archive_backend_oracle.py | tee zstd-full-archive-backend.json
       - uses: actions/upload-artifact@v6
         with:
           name: zstd-backend-equivalence-${{ env.EVIDENCE_HEAD }}
@@ -80,12 +62,11 @@ jobs:
     if: needs.classify.outputs.run_deep == 'true'
     strategy:
       fail-fast: false
-      matrix:
-        os: [ubuntu-24.04, macos-15, windows-2025]
+      matrix: {os: [ubuntu-24.04, macos-15, windows-2025]}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 10
     concurrency:
-      group: ${{ github.workflow }}-receipt-${{ env.EVIDENCE_HEAD }}-${{ matrix.os }}
+      group: ${{ github.workflow }}-receipt-${{ github.event.pull_request.head.sha || github.sha }}-${{ matrix.os }}
       cancel-in-progress: false
     steps:
       - uses: actions/checkout@v6
@@ -93,8 +74,7 @@ jobs:
       - uses: actions/setup-python@v6
         with: {python-version: '3.11', cache: pip}
       - run: python -m pip install 'zstandard>=0.22'
-      - name: Fingerprint packaged backend
-        shell: bash
+      - shell: bash
         run: python experiments/zstd_python_backend_fingerprint.py > "fingerprint-${{ matrix.os }}.json"
       - uses: actions/upload-artifact@v6
         with:
@@ -107,15 +87,14 @@ jobs:
     if: needs.classify.outputs.run_deep == 'true'
     runs-on: ubuntu-24.04
     concurrency:
-      group: ${{ github.workflow }}-receipt-${{ env.EVIDENCE_HEAD }}-compare
+      group: ${{ github.workflow }}-receipt-${{ github.event.pull_request.head.sha || github.sha }}-compare
       cancel-in-progress: false
     steps:
       - uses: actions/download-artifact@v7
         with:
           pattern: zstd-python-fingerprint-*-${{ env.EVIDENCE_HEAD }}
           merge-multiple: true
-      - name: Require identical cross-platform fingerprints
-        run: |
+      - run: |
           python - <<'PY'
           import json, pathlib
           paths=sorted(pathlib.Path('.').glob('fingerprint-*.json'))
