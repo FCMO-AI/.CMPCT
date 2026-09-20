@@ -1,0 +1,55 @@
+name: v0.30 Logs r24 process ownership probe
+
+on:
+  push:
+    branches:
+      - agent/v030-r24-process-productization
+  workflow_dispatch:
+
+concurrency:
+  group: v030-logs-r24-process-probe-${{ github.sha }}
+  cancel-in-progress: false
+
+jobs:
+  probe:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install exact project
+        run: python -m pip install -e .
+      - name: Build native core when available
+        run: |
+          cargo build --manifest-path cmpct-core/Cargo.toml --release
+          cp cmpct-core/target/release/libcmpct_core.so src/cmpct/libcmpct_core.so
+      - name: Run unchanged canonical-v2 thresholds with ownership probe
+        run: |
+          mkdir -p benchmark-artifacts
+          set +e
+          python benchmarks/v030_logs_r24_process_probe.py \
+            --work-root benchmark-artifacts/v030-logs-r24-process-probe-work \
+            --output benchmark-artifacts/v030-logs-r24-process-probe.json
+          rc=$?
+          set -e
+          test -s benchmark-artifacts/v030-logs-r24-process-probe.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          p = Path('benchmark-artifacts/v030-logs-r24-process-probe.json')
+          r = json.loads(p.read_text())
+          assert r['probe']['product_credit'] is False
+          assert r['probe']['thresholds_changed'] is False
+          print(json.dumps({'gate': r['gate'], 'totals': r['totals']}, indent=2))
+          PY
+          exit "$rc"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: v030-logs-r24-process-probe-${{ github.sha }}
+          path: benchmark-artifacts/v030-logs-r24-process-probe.json
+          if-no-files-found: error
