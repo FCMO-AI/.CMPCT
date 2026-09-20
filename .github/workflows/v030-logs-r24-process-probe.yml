@@ -29,13 +29,15 @@ jobs:
         run: |
           mkdir -p benchmark-artifacts
           set +e
+          set -o pipefail
           python benchmarks/v030_logs_r24_process_probe.py \
             --work-root benchmark-artifacts/v030-logs-r24-process-probe-work \
-            --output benchmark-artifacts/v030-logs-r24-process-probe.json
+            --output benchmark-artifacts/v030-logs-r24-process-probe.json \
+            2>&1 | tee benchmark-artifacts/v030-logs-r24-process-probe.log
           rc=$?
           set -e
-          test -s benchmark-artifacts/v030-logs-r24-process-probe.json
-          python - <<'PY'
+          if test -s benchmark-artifacts/v030-logs-r24-process-probe.json; then
+            python - <<'PY'
           import json
           from pathlib import Path
           p = Path('benchmark-artifacts/v030-logs-r24-process-probe.json')
@@ -44,10 +46,13 @@ jobs:
           assert r['probe']['thresholds_changed'] is False
           print(json.dumps({'gate': r['gate'], 'totals': r['totals']}, indent=2))
           PY
+          fi
           exit "$rc"
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: v030-logs-r24-process-probe-${{ github.sha }}
-          path: benchmark-artifacts/v030-logs-r24-process-probe.json
+          path: |
+            benchmark-artifacts/v030-logs-r24-process-probe.json
+            benchmark-artifacts/v030-logs-r24-process-probe.log
           if-no-files-found: error
