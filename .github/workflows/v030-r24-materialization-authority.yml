@@ -1,0 +1,77 @@
+# ci-lane: deep
+# ci-cancel-policy: preserve-receipts
+# ci-pr-scope: exact-head-product-authority
+name: CMPCT v0.30 r24 materialization product authority
+
+on:
+  push:
+    branches: [agent/v030-r24-streamed-materialization-rss-v2]
+    paths:
+      - src/cmpct/__init__.py
+      - src/cmpct/_ordered_pull.py
+      - src/cmpct/v030_release_materialization.py
+      - experiments/v030_r24_streamed_materialization.py
+      - .github/workflows/v030-r24-materialization-authority.yml
+  workflow_dispatch:
+
+permissions: {contents: read}
+env:
+  EVIDENCE_HEAD: ${{ github.sha }}
+  PYTHONPATH: ${{ github.workspace }}
+
+jobs:
+  runtime-authority:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 360
+    concurrency:
+      group: ${{ github.workflow }}-${{ github.sha }}
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 1
+      - uses: actions/setup-python@v6
+        with: {python-version: '3.11', cache: pip}
+      - name: Bind exact candidate head
+        shell: bash
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+      - name: Install canonical authority dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update && sudo apt-get install -y zstd gcc ffmpeg
+          python -m pip install -e '.[test,audio]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
+      - name: Build native core exactly as canonical authority
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo build --manifest-path native/cmpct-core/Cargo.toml --release
+          cp native/cmpct-core/target/release/libcmpct_core.so src/cmpct/
+      - name: Run unchanged frozen runtime authority
+        shell: bash
+        run: |
+          set -uo pipefail
+          mkdir -p benchmark-artifacts
+          rc=0
+          python benchmarks/v030_release_performance_v2.py \
+            --work-root benchmark-artifacts/runtime-v2-work \
+            --output benchmark-artifacts/runtime-v2.json || rc=$?
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          data=json.loads(Path('benchmark-artifacts/runtime-v2.json').read_text())
+          print(json.dumps({'candidate_fingerprint':data['candidate_fingerprint'],'totals':data['totals'],'gate':data['gate']}, sort_keys=True))
+          assert data['engine']=='experiments/entropygraph_v030_release_product.py'
+          assert data['release_facade']=='cmpct-v030-release-product-v1'
+          assert len(data['rows'])==3
+          PY
+          exit "$rc"
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: v030-r24-materialization-authority-${{ env.EVIDENCE_HEAD }}
+          path: benchmark-artifacts/runtime-v2.json
+          if-no-files-found: error
+          retention-days: 90
