@@ -1,0 +1,70 @@
+# ci-lane: deep
+# ci-cancel-policy: split-classifier-preserve-receipts
+# ci-pr-scope: latest-head-commit-gate
+name: CMPCT v0.30 wrapper live RSS attribution
+on:
+  pull_request:
+  push:
+    branches: [agent/v030-wrapper-live-rss-attribution]
+    paths: ['benchmarks/v030_wrapper_live_rss.py','.github/workflows/v030-wrapper-live-rss.yml']
+  workflow_dispatch:
+permissions: {contents: read}
+env:
+  PYTHONPATH: ${{ github.workspace }}
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+jobs:
+  classify-latest-head:
+    runs-on: ubuntu-24.04
+    concurrency:
+      group: cmpct-v030-wrapper-rss-classifier-${{ github.event.pull_request.number || github.ref }}
+      cancel-in-progress: true
+    outputs:
+      run_receipt: ${{ steps.scope.outputs.run_receipt }}
+    steps:
+      - uses: actions/checkout@v6
+        with: {ref: '${{ env.EVIDENCE_HEAD }}', fetch-depth: 2}
+      - id: scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          if [ "$GITHUB_EVENT_NAME" = workflow_dispatch ]; then echo 'run_receipt=true' >> "$GITHUB_OUTPUT"; exit 0; fi
+          changed="$(git diff-tree --no-commit-id --name-only -r HEAD)"
+          if printf '%s\n' "$changed" | grep -Eq '^(benchmarks/v030_wrapper_live_rss\.py|\.github/workflows/v030-wrapper-live-rss\.yml)$'; then
+            echo 'run_receipt=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'run_receipt=false' >> "$GITHUB_OUTPUT"
+          fi
+  live-rss:
+    needs: classify-latest-head
+    if: needs.classify-latest-head.outputs.run_receipt == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    concurrency:
+      group: cmpct-v030-wrapper-rss-${{ github.event.pull_request.head.sha || github.sha }}
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v6
+        with: {ref: '${{ env.EVIDENCE_HEAD }}', fetch-depth: 0}
+      - run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+      - uses: actions/setup-python@v6
+        with: {python-version: '3.11', cache: pip}
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y zstd gcc ffmpeg libsndfile1
+          python -m pip install -e '.[audio,test]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
+      - name: Run live parent-RSS attribution
+        run: |
+          set -euo pipefail
+          mkdir -p benchmark-artifacts
+          python benchmarks/v030_wrapper_live_rss.py --work-root "$RUNNER_TEMP/cmpct-wrapper-rss" --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-wrapper-live-rss.json" 2>&1 | tee benchmark-artifacts/run.log
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: v030-wrapper-live-rss-${{ env.EVIDENCE_HEAD }}
+          path: benchmark-artifacts/
+          if-no-files-found: error
+          retention-days: 90
+# Diagnostic only. Never release credit.
