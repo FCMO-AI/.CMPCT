@@ -78,22 +78,9 @@ jobs:
           brew list zstd >/dev/null 2>&1 || brew install zstd
           ln -sf "$(brew --prefix zstd)/lib/libzstd.dylib" "$RUNNER_TEMP/libzstd.so"
           echo "DYLD_LIBRARY_PATH=$RUNNER_TEMP" >> "$GITHUB_ENV"
-      - name: Expose runner zstd shared library on Windows
-        if: matrix.os == 'windows-2025'
-        shell: pwsh
-        run: |
-          $src = 'C:\Program Files\Git\mingw64\bin\libzstd.dll'
-          if (-not (Test-Path $src)) { throw "Git runner zstd library not found at $src" }
-          "CMPCT_CI_ZSTD_DLL=$src" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
       - name: Install focused test dependencies
         run: python -m pip install -e '.[test]'
       - name: Compile process boundary
         run: python -m py_compile experiments/entropygraph_v030_r24_process_prebuild.py tests/test_v030_r24_process_prebuild.py
       - name: Run focused process-boundary tests
-        if: matrix.os != 'windows-2025'
         run: python -m pytest -q tests/test_v030_r24_process_prebuild.py
-      - name: Run focused process-boundary tests with Windows loader debt isolated
-        if: matrix.os == 'windows-2025'
-        shell: pwsh
-        run: >-
-          python -c "import ctypes,os,pytest; ctypes.CDLL(os.environ['CMPCT_CI_ZSTD_DLL']); raise SystemExit(pytest.main(['-q','tests/test_v030_r24_process_prebuild.py']))"
