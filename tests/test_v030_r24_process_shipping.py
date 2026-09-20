@@ -4,7 +4,10 @@ import hashlib
 
 import pytest
 
-from experiments.entropygraph_v030_r24_process_shipping import R24ProcessPrebuildRegistry
+from experiments.entropygraph_v030_r24_process_shipping import (
+    R24ProcessPrebuildRegistry,
+    install_into_release_base,
+)
 
 
 def _sha(path: Path) -> str:
@@ -72,3 +75,32 @@ def test_registry_missing_prebuild_preserves_parent_fallback(tmp_path: Path):
     registry = R24ProcessPrebuildRegistry(timeout_s=30)
     out = tmp_path / "work" / "canonical-r24.cmpct"
     assert registry.consume(out) is None
+
+
+def test_installer_replaces_thread_seam_without_duplicate_parent_build(tmp_path: Path, monkeypatch):
+    from experiments import entropygraph_v030_release_product_base as base
+
+    root = tmp_path / "src"
+    _source(root)
+    staging = tmp_path / "work" / "profile"
+    staging.mkdir(parents=True)
+    out = tmp_path / "work" / "canonical-r24.cmpct"
+
+    original_prepare = base.C._prepare_profile_tree
+    original_r24 = base.C._r24_build
+    direct = tmp_path / "direct.cmpct"
+    base._locality_bounded_r24_build(root, direct)
+    registry = install_into_release_base(base, timeout_s=30)
+    try:
+        # The profile call starts exactly one child owner; canonical-final's later r24 call
+        # consumes that artifact rather than invoking the parent builder again.
+        base.C._prepare_profile_tree(root, staging)
+        stats = base.C._r24_build(root, out)
+        assert stats["r24_prebuild_owner"] == "child-process-v1"
+        assert stats["r24_prebuild_reused"] is True
+        assert out.stat().st_size == direct.stat().st_size
+        assert _sha(out) == _sha(direct)
+    finally:
+        registry.close_all()
+        base.C._prepare_profile_tree = original_prepare
+        base.C._r24_build = original_r24
