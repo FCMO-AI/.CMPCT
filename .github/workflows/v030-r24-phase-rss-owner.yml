@@ -19,6 +19,8 @@ jobs:
   materialization-rss:
     runs-on: ubuntu-24.04
     timeout-minutes: 25
+    env:
+      PYTHONPATH: ${{ github.workspace }}
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-python@v6
@@ -30,15 +32,14 @@ jobs:
           python -m pip install -e '.[audio,test]'
           python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
       - name: Prove local byte identity
-        run: pytest -q tests/test_ordered_worker_pull.py tests/test_v030_r24_streamed_materialization.py
+        run: |
+          mkdir -p benchmark-artifacts
+          pytest -q tests/test_ordered_worker_pull.py tests/test_v030_r24_streamed_materialization.py 2>&1 | tee benchmark-artifacts/tests.log
       - name: Run phase RSS falsifier
-        env: {PYTHONPATH: '${{ github.workspace }}'}
         run: |
           set -euo pipefail
-          mkdir -p benchmark-artifacts
           python benchmarks/v030_r24_phase_rss_owner.py --work-root "$RUNNER_TEMP/cmpct-r24-phase-rss" --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-r24-phase-rss-owner.json" 2>&1 | tee benchmark-artifacts/phase.log
       - name: Run exact-byte streamed A/B
-        env: {PYTHONPATH: '${{ github.workspace }}'}
         run: |
           set -euo pipefail
           python benchmarks/v030_r24_streamed_materialization_ab.py --work-root "$RUNNER_TEMP/cmpct-r24-stream-ab" --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-r24-streamed-materialization-ab.json" 2>&1 | tee benchmark-artifacts/ab.log
