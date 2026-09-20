@@ -61,10 +61,21 @@ def test_r24_process_prebuild_abandonment_removes_candidate(tmp_path: Path):
     (root / "x.txt").write_text("repeatable child output\n" * 500)
     out = tmp_path / "abandoned.cmpct"
     proc = R24PrebuildProcess(root, out, timeout_s=30).start()
-    # Wait through the ordinary result path so the child is known to have completed, then deliberately mark the
+    # Wait through the ordinary result path so the child is known to have completed, then deliberately leave the
     # receipt unclaimed to model a parent that never accepts ownership of the staging candidate.
     proc._proc.communicate(timeout=30)
     assert proc._proc.returncode == 0
     assert out.is_file()
     proc.close()
     assert not out.exists()
+
+
+def test_r24_process_prebuild_refuses_to_clobber_existing_output(tmp_path: Path):
+    root = tmp_path / "src"
+    root.mkdir()
+    (root / "x").write_bytes(b"x")
+    out = tmp_path / "owned-by-someone-else.cmpct"
+    out.write_bytes(b"preserve-me")
+    with pytest.raises(FileExistsError, match="output already exists"):
+        R24PrebuildProcess(root, out, timeout_s=30).start()
+    assert out.read_bytes() == b"preserve-me"
