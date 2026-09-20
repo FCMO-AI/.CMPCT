@@ -71,6 +71,13 @@ jobs:
       - name: Bind exact candidate head
         shell: bash
         run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+      - name: Expose zstd shared library on macOS
+        if: matrix.os == 'macos-15'
+        shell: bash
+        run: |
+          brew list zstd >/dev/null 2>&1 || brew install zstd
+          ln -sf "$(brew --prefix zstd)/lib/libzstd.dylib" "$RUNNER_TEMP/libzstd.so"
+          echo "DYLD_LIBRARY_PATH=$RUNNER_TEMP" >> "$GITHUB_ENV"
       - name: Install focused test dependencies
         run: python -m pip install -e '.[test]'
       - name: Compile process boundary
