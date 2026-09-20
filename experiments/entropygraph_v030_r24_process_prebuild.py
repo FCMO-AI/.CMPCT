@@ -16,6 +16,7 @@ import time
 from typing import Any
 
 DEFAULT_TIMEOUT_S = 120.0
+_REPO_ROOT = Path(__file__).resolve().parents[1]
 
 
 class R24PrebuildProcess:
@@ -38,6 +39,13 @@ class R24PrebuildProcess:
         if self.out.exists():
             raise FileExistsError(f"r24 prebuild output already exists: {self.out}")
         self._started_at = time.monotonic()
+        env = os.environ.copy()
+        # The v0.30 release surface still lives under experiments/ while convergence is merge-locked. Make the
+        # clean child resolve that exact source tree independently of the caller's current working directory.
+        inherited_pythonpath = env.get("PYTHONPATH")
+        env["PYTHONPATH"] = os.pathsep.join(
+            [os.fspath(_REPO_ROOT)] + ([inherited_pythonpath] if inherited_pythonpath else [])
+        )
         self._proc = subprocess.Popen(
             [sys.executable, "-m", __name__, "--worker", "--root", str(self.root), "--out", str(self.out)],
             stdin=subprocess.DEVNULL,
@@ -45,6 +53,7 @@ class R24PrebuildProcess:
             stderr=subprocess.PIPE,
             text=True,
             close_fds=(os.name != "nt"),
+            env=env,
         )
         return self
 
@@ -114,7 +123,7 @@ def _preload_windows_ci_zstd() -> None:
     """
     if os.name != "nt":
         return
-    candidate = Path.cwd() / "libzstd.so"
+    candidate = _REPO_ROOT / "libzstd.so"
     if candidate.is_file():
         ctypes.CDLL(str(candidate.resolve()))
 
