@@ -30,6 +30,10 @@ class R24PrebuildProcess:
         if self._proc is not None:
             raise RuntimeError("r24 prebuild process already started")
         self.out.parent.mkdir(parents=True, exist_ok=True)
+        # The integration seam supplies a unique staging path. Refuse an occupied path rather than allowing a
+        # failing child or parent-abort cleanup to unlink bytes it did not create.
+        if self.out.exists():
+            raise FileExistsError(f"r24 prebuild output already exists: {self.out}")
         self._proc = subprocess.Popen(
             [sys.executable, "-m", __name__, "--worker", "--root", str(self.root), "--out", str(self.out)],
             stdin=subprocess.DEVNULL,
