@@ -1,3 +1,4 @@
+import importlib
 from pathlib import Path
 
 import pytest
@@ -62,3 +63,16 @@ def test_missing_output_parent_matches_historical_failure(tmp_path: Path):
         _ORIGINAL_BUILD(Builder(src,**kwargs),tmp_path/'missing-base'/'x.cmpct')
     with pytest.raises(FileNotFoundError):
         StreamedBuilder(src,**kwargs).build(tmp_path/'missing-streamed'/'x.cmpct')
+
+
+def test_materialization_guard_reload_keeps_true_original(tmp_path: Path):
+    import cmpct.v030_release_materialization as materialization
+
+    original=materialization._ORIGINAL_BUILD
+    importlib.reload(materialization)
+    assert materialization._ORIGINAL_BUILD is original
+    assert getattr(Builder.build,'_cmpct_v030_materialization_guard',False)
+    src=_tree(tmp_path); out=tmp_path/'ordinary-after-reload.cmpct'
+    stats=Builder(src,workers=1,reproducible=True).build(out)
+    assert out.is_file()
+    assert set(stats)=={'bytes','logical_bytes','unique_blobs','logical_files','recipes','index_raw','index_comp','data_bytes','encode_workers','reproducible'}
