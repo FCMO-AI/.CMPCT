@@ -1,0 +1,41 @@
+# Temporary branch-only one-shot wiring helper. Delete after it lands the exact guarded edit.
+name: CMPCT v0.30 wire r24 process seam once
+on:
+  push:
+    branches: [agent/v030-r24-process-productization]
+    paths: [.github/workflows/v030-r24-process-wire-once.yml]
+permissions: {contents: write}
+jobs:
+  wire:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+        with: {ref: agent/v030-r24-process-productization, fetch-depth: 2}
+      - name: Apply exact guarded wiring edit
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p = Path('experiments/entropygraph_v030_release_product.py')
+          s = p.read_text()
+          import_old = 'from experiments import entropygraph_v030_r24_media_terminal as _R24_MEDIA\n'
+          import_new = import_old + 'from experiments import entropygraph_v030_r24_process_shipping as _R24_PROCESS_SHIPPING\n'
+          bind_old = '_BASE_IMPL._locality_bounded_r24_build = _locality_bounded_r24_build\n'
+          bind_new = bind_old + '_R24_PROCESS_REGISTRY = _R24_PROCESS_SHIPPING.install_into_release_base(_BASE_IMPL)\n'
+          if import_new in s or bind_new in s:
+              raise SystemExit('wiring already present; refusing ambiguous repeat')
+          if s.count(import_old) != 1 or s.count(bind_old) != 1:
+              raise SystemExit('release front door changed; guarded anchors are not unique')
+          s = s.replace(import_old, import_new).replace(bind_old, bind_new)
+          p.write_text(s)
+          PY
+          git diff --check
+          git diff -- experiments/entropygraph_v030_release_product.py
+      - name: Commit exact wiring
+        shell: bash
+        run: |
+          git config user.name 'cmpct-evidence-bot'
+          git config user.email 'actions@users.noreply.github.com'
+          git add experiments/entropygraph_v030_release_product.py
+          git commit -m 'productize: wire child-owned r24 prebuild seam'
+          git push origin HEAD:agent/v030-r24-process-productization
