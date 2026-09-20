@@ -33,21 +33,29 @@ jobs:
       run_deep: ${{ steps.scope.outputs.run_deep }}
     steps:
       - uses: actions/checkout@v6
-        with: {ref: '${{ env.EVIDENCE_HEAD }}', fetch-depth: 2}
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 2
       - id: scope
         name: Admit only latest-head process-boundary changes
         shell: bash
         run: |
           test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
           files="$(git diff-tree --no-commit-id --name-only -r HEAD)"
-          if printf '%s\n' "$files" | grep -Eq '^(experiments/entropygraph_v030_r24_process_prebuild.py|tests/test_v030_r24_process_prebuild.py|\.github/workflows/v030-r24-process-prebuild-portability.yml)$'; then echo 'run_deep=true' >> "$GITHUB_OUTPUT"; else echo 'run_deep=false' >> "$GITHUB_OUTPUT"; fi
+          printf '%s\n' "$files"
+          if printf '%s\n' "$files" | grep -Eq '^(experiments/entropygraph_v030_r24_process_prebuild.py|tests/test_v030_r24_process_prebuild.py|\.github/workflows/v030-r24-process-prebuild-portability.yml)$'; then
+            echo 'run_deep=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'run_deep=false' >> "$GITHUB_OUTPUT"
+          fi
 
   focused-portability:
     needs: classify
     if: needs.classify.outputs.run_deep == 'true'
     strategy:
       fail-fast: false
-      matrix: {os: [ubuntu-24.04, macos-15, windows-2025]}
+      matrix:
+        os: [ubuntu-24.04, macos-15, windows-2025]
     runs-on: ${{ matrix.os }}
     timeout-minutes: 15
     concurrency:
@@ -55,7 +63,9 @@ jobs:
       cancel-in-progress: false
     steps:
       - uses: actions/checkout@v6
-        with: {ref: '${{ env.EVIDENCE_HEAD }}', fetch-depth: 1}
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 1
       - uses: actions/setup-python@v6
         with: {python-version: '3.11', cache: pip}
       - name: Bind exact candidate head
@@ -79,10 +89,10 @@ jobs:
         run: python -m pip install -e '.[test]'
       - name: Compile process boundary
         run: python -m py_compile experiments/entropygraph_v030_r24_process_prebuild.py tests/test_v030_r24_process_prebuild.py
-      - name: Run focused process-boundary tests (POSIX)
+      - name: Run focused process-boundary tests
         if: matrix.os != 'windows-2025'
         run: python -m pytest -q tests/test_v030_r24_process_prebuild.py
-      - name: Run focused process-boundary tests (Windows, loader debt isolated)
+      - name: Run focused process-boundary tests with Windows loader debt isolated
         if: matrix.os == 'windows-2025'
         shell: pwsh
         run: >-
