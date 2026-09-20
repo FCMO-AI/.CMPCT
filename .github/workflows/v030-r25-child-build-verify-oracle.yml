@@ -1,0 +1,55 @@
+name: v0.30 r25 child build+verify RSS oracle
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'benchmarks/v030_r25_child_build_verify_oracle.py'
+      - '.github/workflows/v030-r25-child-build-verify-oracle.yml'
+      - 'experiments/entropygraph_v030_release_product.py'
+      - 'experiments/entropygraph_v030_release_product_base.py'
+      - 'experiments/entropygraph_v030_canonical_final*.py'
+      - 'experiments/entropygraph_v030_shared_portfolio.py'
+      - 'experiments/entropygraph_v030_geometry_overlay_g04.py'
+      - 'benchmarks/v030_release_performance.py'
+
+concurrency:
+  group: v030-r25-child-build-verify-oracle-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  oracle:
+    runs-on: ubuntu-latest
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: python -m pip install -e . zstandard
+      - name: Exact r25 parent-vs-child ownership A/B
+        run: |
+          mkdir -p benchmarks/current
+          python benchmarks/v030_r25_child_build_verify_oracle.py \
+            --work-root "$RUNNER_TEMP/r25-child-oracle" \
+            --output benchmarks/current/v030_r25_child_build_verify_oracle.json
+      - name: Validate causal contract
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          p=Path('benchmarks/current/v030_r25_child_build_verify_oracle.json')
+          d=json.loads(p.read_text())
+          assert d['release_credit'] is False
+          for name,row in d['rows'].items():
+              assert row['exact_identity'] is True, name
+              assert row['control']['archive_sha256'] == row['candidate']['archive_sha256'], name
+              assert row['control']['tree_sha256'] == row['candidate']['tree_sha256'], name
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: v030-r25-child-build-verify-oracle
+          path: benchmarks/current/v030_r25_child_build_verify_oracle.json
