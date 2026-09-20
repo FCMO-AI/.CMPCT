@@ -71,7 +71,7 @@ class StreamedBuilder(B.Builder):
                     if not chunk: break
                     dst.write(chunk)
                 dst.write(ic); dst.write(footer)
-        return {'bytes':out.stat().st_size,'logical_bytes':sum(x[4] for x in files if x[1]!=B.K_DIR),'unique_blobs':len(blobs),'logical_files':sum(x[1]!=B.K_DIR for x in files),'recipes':len(recipes),'index_raw':len(ib),'index_comp':len(ic),'data_bytes':offset,'encode_workers':self.encode_workers,'reproducible':self.reproducible,'materialization':'bounded-adaptive-record-spool-v2','spool_memory_limit':SPOOL_MEMORY_LIMIT}
+        return {'bytes':out.stat().st_size,'logical_bytes':sum(x[4] for x in files if x[1]!=B.K_DIR),'unique_blobs':len(blobs),'logical_files':sum(x[1]!=B.K_DIR for x in files),'recipes':len(recipes),'index_raw':len(ib),'index_comp':len(ic),'data_bytes':offset,'encode_workers':self.encode_workers,'reproducible':self.reproducible}
 
 def _release_owned_build(self,out):
     if _shipping_release_builder(self):
