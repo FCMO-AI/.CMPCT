@@ -1,6 +1,7 @@
 from pathlib import Path
 
 from cmpct.builder import Builder
+from cmpct.v030_release_locality import RELEASE_LOCALITY_MARKER
 from cmpct.v030_release_materialization import SPOOL_MEMORY_LIMIT, StreamedBuilder, _ORIGINAL_BUILD
 
 
@@ -29,7 +30,7 @@ def test_release_guard_is_explicitly_scoped(tmp_path: Path):
     normal=Builder(src,**kwargs)
     normal_stats=normal.build(ordinary)
     assert 'materialization' not in normal_stats
-    owned=Builder(src,**kwargs); owned._v030_release_locality_enabled=True
+    owned=Builder(src,**kwargs); setattr(owned,RELEASE_LOCALITY_MARKER,True)
     owned_stats=owned.build(release)
     assert owned_stats['materialization']=='bounded-adaptive-record-spool-v2'
     assert release.read_bytes()==ordinary.read_bytes()
