@@ -15,12 +15,8 @@ from experiments import entropygraph_v030_release_product as RP
 
 def bounded_parallel_deferred_overlay(graph_path: Path, overlay_path: Path) -> dict:
     shared = RP.C.SHARED
-    source_format, source_container, graph_meta, graph_records = shared.strict._read_source_records(graph_path)
+    source_format, _source_module, graph_meta, graph_records = shared.strict._read_source_records(graph_path)
     users = shared.O._record_member_lengths(graph_meta, len(graph_records))
-    # `_read_source_records` returns both decoded records and its source container.
-    # Audition consumes only records/meta; keeping the source container alive would
-    # defeat the ownership experiment by retaining a second source generation.
-    del source_container
     n = len(graph_records)
     records=[]; transforms=[]; auditions=[]
 
