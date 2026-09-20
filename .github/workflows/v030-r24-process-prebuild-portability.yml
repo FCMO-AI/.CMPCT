@@ -39,9 +39,7 @@ jobs:
       run_deep: ${{ steps.scope.outputs.run_deep }}
     steps:
       - uses: actions/checkout@v6
-        with:
-          ref: ${{ env.EVIDENCE_HEAD }}
-          fetch-depth: 2
+        with: {ref: '${{ env.EVIDENCE_HEAD }}', fetch-depth: 2}
       - id: scope
         name: Admit only latest-head process-boundary changes
         shell: bash
@@ -60,8 +58,7 @@ jobs:
     if: needs.classify.outputs.run_deep == 'true'
     strategy:
       fail-fast: false
-      matrix:
-        os: [ubuntu-24.04, macos-15, windows-2025]
+      matrix: {os: [ubuntu-24.04, macos-15, windows-2025]}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 15
     concurrency:
@@ -69,9 +66,7 @@ jobs:
       cancel-in-progress: false
     steps:
       - uses: actions/checkout@v6
-        with:
-          ref: ${{ env.EVIDENCE_HEAD }}
-          fetch-depth: 1
+        with: {ref: '${{ env.EVIDENCE_HEAD }}', fetch-depth: 1}
       - uses: actions/setup-python@v6
         with: {python-version: '3.11', cache: pip}
       - name: Bind exact candidate head
@@ -90,3 +85,59 @@ jobs:
         run: python -m py_compile experiments/entropygraph_v030_r24_process_prebuild.py experiments/entropygraph_v030_r24_process_shipping.py tests/test_v030_r24_process_prebuild.py tests/test_v030_r24_process_shipping.py
       - name: Run focused process-boundary tests
         run: python -m pytest -q tests/test_v030_r24_process_prebuild.py tests/test_v030_r24_process_shipping.py
+
+  runtime-authority:
+    needs: classify
+    if: needs.classify.outputs.run_deep == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 390
+    concurrency:
+      group: ${{ github.workflow }}-runtime-${{ github.event.pull_request.head.sha || github.sha }}
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v6
+        with: {ref: '${{ env.EVIDENCE_HEAD }}', fetch-depth: 1}
+      - uses: actions/setup-python@v6
+        with: {python-version: '3.11', cache: pip}
+      - name: Bind exact candidate head
+        shell: bash
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+      - name: Install canonical authority dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update && sudo apt-get install -y zstd gcc ffmpeg
+          python -m pip install -e '.[test,audio]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
+      - name: Run canonical v2 runtime authority
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p benchmark-artifacts
+          python benchmarks/v030_release_performance_v2.py --work-root benchmark-artifacts/runtime-v2-work --output benchmark-artifacts/runtime-v2.json
+          python benchmarks/v030_release_performance_tree_rss.py --work-root benchmark-artifacts/runtime-tree-rss-work --output benchmark-artifacts/runtime-tree-rss.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          for name in ('runtime-v2.json','runtime-tree-rss.json'):
+              data=json.loads((Path('benchmark-artifacts')/name).read_text())
+              print(name, json.dumps(data['totals'], sort_keys=True))
+              assert data['engine']=='experiments/entropygraph_v030_release_product.py'
+              assert data['release_facade']=='cmpct-v030-release-product-v1'
+              assert data['gate']['passed'] is True
+          tree=json.loads(Path('benchmark-artifacts/runtime-tree-rss.json').read_text())
+          assert tree['rss_accounting']=='whole-process-tree-vmrss-10ms-with-parent-rumaxrss-floor'
+          assert len(tree['tree_rss_receipts'])==18
+          for row in tree['tree_rss_receipts']:
+              assert row['decisive_peak_rss_kib'] >= row['parent_peak_rss_kib']
+              assert row['decisive_peak_rss_kib'] >= row['sampled_tree_peak_rss_kib']
+          PY
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: v030-r24-process-authority-${{ env.EVIDENCE_HEAD }}
+          path: |
+            benchmark-artifacts/runtime-v2.json
+            benchmark-artifacts/runtime-tree-rss.json
+          if-no-files-found: error
+          retention-days: 90
