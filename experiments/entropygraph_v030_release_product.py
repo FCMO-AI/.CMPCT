@@ -33,6 +33,7 @@ import types
 from experiments import entropygraph_v030_release_product_base as _BASE_IMPL
 from experiments import entropygraph_v030_r24_dead_dictionary as _R24_DEAD_DICT
 from experiments import entropygraph_v030_r24_media_terminal as _R24_MEDIA
+from experiments import entropygraph_v030_r24_process_shipping as _R24_PROCESS_SHIPPING
 
 _BASE_R24_BUILD = _BASE_IMPL._locality_bounded_r24_build
 
@@ -52,6 +53,7 @@ def _locality_bounded_r24_build(root, out):
 
 
 _BASE_IMPL._locality_bounded_r24_build = _locality_bounded_r24_build
+_R24_PROCESS_REGISTRY = _R24_PROCESS_SHIPPING.install_into_release_base(_BASE_IMPL)
 
 for _name in dir(_BASE_IMPL):
     if not _name.startswith("__"):
