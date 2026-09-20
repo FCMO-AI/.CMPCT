@@ -1,3 +1,5 @@
+# ci-lane: deep
+# ci-cancel-policy: preserve-running-exact-receipt
 name: v0.30 Logs r24 process ownership probe
 
 on:
@@ -5,6 +7,10 @@ on:
     branches:
       - agent/v030-r24-process-productization
   workflow_dispatch:
+
+permissions: {contents: read}
+env:
+  EVIDENCE_HEAD: ${{ github.sha }}
 
 concurrency:
   group: v030-logs-r24-process-probe-${{ github.sha }}
@@ -17,7 +23,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.sha }}
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - name: Bind exact candidate head
+        shell: bash
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
