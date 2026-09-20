@@ -1,21 +1,24 @@
 # ci-lane: deep
 # ci-cancel-policy: preserve-running-exact-receipt
-name: CMPCT v0.30 r24 phase RSS owner
+name: CMPCT v0.30 r24 materialization RSS
 on:
   push:
     branches: [agent/v030-r24-streamed-materialization-rss-v2]
     paths:
       - 'benchmarks/v030_r24_phase_rss_owner.py'
+      - 'benchmarks/v030_r24_streamed_materialization_ab.py'
+      - 'experiments/v030_r24_streamed_materialization.py'
+      - 'tests/test_v030_r24_streamed_materialization.py'
       - '.github/workflows/v030-r24-phase-rss-owner.yml'
   workflow_dispatch:
 permissions: {contents: read}
 concurrency:
-  group: v030-r24-phase-rss-owner-${{ github.ref }}-${{ github.sha }}
+  group: v030-r24-materialization-rss-${{ github.ref }}-${{ github.sha }}
   cancel-in-progress: false
 jobs:
-  phase-rss:
+  materialization-rss:
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-python@v6
@@ -26,18 +29,24 @@ jobs:
           sudo apt-get install -y zstd gcc ffmpeg libsndfile1
           python -m pip install -e '.[audio,test]'
           python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
+      - name: Prove local byte identity
+        run: pytest -q tests/test_ordered_worker_pull.py tests/test_v030_r24_streamed_materialization.py
       - name: Run phase RSS falsifier
-        env:
-          PYTHONPATH: ${{ github.workspace }}
+        env: {PYTHONPATH: '${{ github.workspace }}'}
         run: |
           set -euo pipefail
           mkdir -p benchmark-artifacts
-          python benchmarks/v030_r24_phase_rss_owner.py --work-root "$RUNNER_TEMP/cmpct-r24-phase-rss" --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-r24-phase-rss-owner.json" 2>&1 | tee benchmark-artifacts/run.log
+          python benchmarks/v030_r24_phase_rss_owner.py --work-root "$RUNNER_TEMP/cmpct-r24-phase-rss" --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-r24-phase-rss-owner.json" 2>&1 | tee benchmark-artifacts/phase.log
+      - name: Run exact-byte streamed A/B
+        env: {PYTHONPATH: '${{ github.workspace }}'}
+        run: |
+          set -euo pipefail
+          python benchmarks/v030_r24_streamed_materialization_ab.py --work-root "$RUNNER_TEMP/cmpct-r24-stream-ab" --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-r24-streamed-materialization-ab.json" 2>&1 | tee benchmark-artifacts/ab.log
       - uses: actions/upload-artifact@v6
         if: always()
         with:
-          name: v030-r24-phase-rss-owner-${{ github.sha }}
+          name: v030-r24-materialization-rss-${{ github.sha }}
           path: benchmark-artifacts/
           if-no-files-found: error
           retention-days: 90
-# Diagnostic only. Never release credit.
+# Diagnostic/research evidence only. Never release credit.
