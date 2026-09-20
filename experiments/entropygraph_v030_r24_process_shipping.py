@@ -1,9 +1,9 @@
 from __future__ import annotations
 """Shipping-seam adapter for child-owned canonical r24 prebuilds.
 
-This module is intentionally small: it replaces only the ownership primitive behind the
-existing release-product prebuild registry. Selection, publication, fallback, verification,
-and archive bytes remain owned by the mature release product.
+This module replaces only the ownership primitive behind the existing release-product
+prebuild seam. Selection, publication, fallback, verification, and archive bytes remain
+owned by the mature release product.
 """
 import os
 from pathlib import Path
@@ -82,3 +82,35 @@ class R24ProcessPrebuildRegistry:
                 proc.close()
             finally:
                 prebuilt.unlink(missing_ok=True)
+
+
+def install_into_release_base(base_impl, *, timeout_s: float = 120.0) -> R24ProcessPrebuildRegistry:
+    """Replace the mature thread owner at its existing canonical-final seam.
+
+    The preserved pre-profile function is used deliberately: calling the already-patched
+    thread wrapper would create a duplicate r24 build. Profile-ineligible inputs keep the
+    child alive because canonical-final immediately consumes r24 fallback. Other profile
+    preparation failures kill the child and remove its staging artifact before propagating.
+    """
+    registry = R24ProcessPrebuildRegistry(timeout_s=timeout_s)
+    original_prepare = base_impl._ORIGINAL_PREPARE_PROFILE_TREE
+
+    def prepare(root: Path, staging_root: Path) -> dict:
+        registry.start(Path(root), Path(staging_root))
+        try:
+            return original_prepare(root, staging_root)
+        except base_impl.ProfileNotEligible:
+            raise
+        except Exception:
+            registry.discard(Path(staging_root))
+            raise
+
+    def consume_or_build(root: Path, out: Path) -> dict:
+        stats = registry.consume(Path(out))
+        if stats is not None:
+            return stats
+        return base_impl._locality_bounded_r24_build(root, out)
+
+    base_impl.C._prepare_profile_tree = prepare
+    base_impl.C._r24_build = consume_or_build
+    return registry
