@@ -1,7 +1,7 @@
 from pathlib import Path
 
 from cmpct.builder import Builder
-from experiments.v030_r24_streamed_materialization import StreamedBuilder
+from experiments.v030_r24_streamed_materialization import SPOOL_MEMORY_LIMIT, StreamedBuilder
 
 
 def _tree(root: Path) -> Path:
@@ -20,4 +20,5 @@ def test_streamed_materialization_is_byte_identical(tmp_path: Path):
     assert streamed.read_bytes()==base.read_bytes()
     assert b['bytes']==a['bytes']
     assert b['data_bytes']==a['data_bytes']
-    assert b['materialization']=='bounded-record-spool-v1'
+    assert b['materialization']=='bounded-adaptive-record-spool-v2'
+    assert b['spool_memory_limit']==SPOOL_MEMORY_LIMIT==16*1024*1024
