@@ -78,6 +78,13 @@ jobs:
           brew list zstd >/dev/null 2>&1 || brew install zstd
           ln -sf "$(brew --prefix zstd)/lib/libzstd.dylib" "$RUNNER_TEMP/libzstd.so"
           echo "DYLD_LIBRARY_PATH=$RUNNER_TEMP" >> "$GITHUB_ENV"
+      - name: Expose runner zstd shared library on Windows
+        if: matrix.os == 'windows-2025'
+        shell: pwsh
+        run: |
+          $src = 'C:\Program Files\Git\mingw64\bin\libzstd.dll'
+          if (-not (Test-Path $src)) { throw "Git runner zstd library not found at $src" }
+          Copy-Item $src "$env:GITHUB_WORKSPACE\libzstd.so"
       - name: Install focused test dependencies
         run: python -m pip install -e '.[test]'
       - name: Compile process boundary
