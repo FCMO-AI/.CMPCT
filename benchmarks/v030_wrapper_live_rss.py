@@ -17,7 +17,7 @@ def child(source:Path,out:Path):
             with lock: samples.append({'t_s':time.perf_counter()-t0,'rss_kib':rss()})
             stop.wait(.01)
     op,or24,or25,opre=RP.C._prepare_profile_tree,RP.C._r24_build,RP.C._r25_build,RP._locality_bounded_r24_build
-    orpverify,ocverify=RP.strong_verify,RP.C.strong_verify
+    orpverify,ocverify,oreaderverify=RP.strong_verify,RP.C.strong_verify,RP.CMPCT.verify
     def wrap(name,fn):
         def inner(*a,**kw):
             mark(name,'start')
@@ -26,24 +26,26 @@ def child(source:Path,out:Path):
             mark(name,'done',selected=result.get('selected') if isinstance(result,dict) else None)
             return result
         return inner
-    # Current authority has distinct ownership windows: r24 prebuild overlaps profile capture, then canonical
-    # tournament may overlap r24-future consumption with r25. Medium-binary terminal admission bypasses the
-    # tournament entirely, so also mark release/canonical strong verification: a post-r24 peak there is a
-    # verification-lifetime problem, not evidence for r24/r25 overlap.
+    def reader_verify(self):
+        mark('r24-reader-verify','start',cache_entries=len(self.cache),cache_bytes=sum(len(v) for v in self.cache.values()),vcache_entries=len(self.vcache),vcache_bytes=sum(len(v) for v in self.vcache.values()))
+        try: result=oreaderverify(self)
+        except BaseException as exc: mark('r24-reader-verify','error',error=type(exc).__name__); raise
+        mark('r24-reader-verify','done',cache_entries=len(self.cache),cache_bytes=sum(len(v) for v in self.cache.values()),vcache_entries=len(self.vcache),vcache_bytes=sum(len(v) for v in self.vcache.values()))
+        return result
+    # Current authority has distinct ownership windows. Medium-binary terminal admission bypasses the tournament,
+    # so mark publication verification and quantify r24 reader cache residency without changing cache behavior.
     RP._locality_bounded_r24_build=wrap('r24-prebuild',opre)
     RP.C._prepare_profile_tree=wrap('profile-tree',op); RP.C._r24_build=wrap('r24-future',or24); RP.C._r25_build=wrap('r25',or25)
-    RP.C.strong_verify=wrap('canonical-strong-verify',ocverify)
-    RP.strong_verify=wrap('release-strong-verify',orpverify)
+    RP.C.strong_verify=wrap('canonical-strong-verify',ocverify); RP.strong_verify=wrap('release-strong-verify',orpverify)
+    RP.CMPCT.verify=reader_verify
     th=threading.Thread(target=sampler,daemon=True); mark('wrapper','start'); th.start(); started=time.perf_counter()
     try: stats=RP.build(source,out)
     finally: stop.set(); th.join(timeout=2)
     wall=time.perf_counter()-started; mark('wrapper','done',selected=stats.get('selected'))
     with lock: peak=max((x['rss_kib'] for x in samples),default=rss()); cm=list(marks); cs=list(samples)
-    # Restore the original release verifier for the post-measurement semantic check so the timeline covers build
-    # only and the final check cannot be mistaken for product-build RSS.
-    RP.strong_verify=orpverify; RP.C.strong_verify=ocverify
+    RP.strong_verify=orpverify; RP.C.strong_verify=ocverify; RP.CMPCT.verify=oreaderverify
     verified=RP.strong_verify(out)
-    print(json.dumps({'schema':'cmpct-v030-wrapper-live-rss-v3','release_credit':False,'source':source.name,'wall_s':wall,'peak_live_rss_kib':peak,'final_live_rss_kib':rss(),'archive_bytes':out.stat().st_size,'archive_sha256':hashlib.sha256(out.read_bytes()).hexdigest(),'selected':stats.get('selected'),'format_revision':stats.get('format_revision'),'terminal_r24':stats.get('terminal_r24'),'verify_ok':bool(verified.get('ok')),'marks':cm,'samples':cs,'claim_boundary':'10ms /proc/self/statm current-parent RSS across unchanged shipping build, distinguishing r24-prebuild/profile, r24-future/r25 and publication-verification windows; child RSS remains separately charged by whole-tree companion.'},separators=(',',':')))
+    print(json.dumps({'schema':'cmpct-v030-wrapper-live-rss-v4','release_credit':False,'source':source.name,'wall_s':wall,'peak_live_rss_kib':peak,'final_live_rss_kib':rss(),'archive_bytes':out.stat().st_size,'archive_sha256':hashlib.sha256(out.read_bytes()).hexdigest(),'selected':stats.get('selected'),'format_revision':stats.get('format_revision'),'terminal_r24':stats.get('terminal_r24'),'verify_ok':bool(verified.get('ok')),'marks':cm,'samples':cs,'claim_boundary':'10ms /proc/self/statm current-parent RSS across unchanged shipping build plus observational r24 verify-cache byte counts; no cache behavior or release semantics changed.'},separators=(',',':')))
 
 def invoke(source,out):
     env={**os.environ,'PYTHONPATH':str(ROOT)}; p=subprocess.run([sys.executable,__file__,'--child','--source',str(source),'--archive',str(out)],cwd=ROOT,env=env,check=True,capture_output=True,text=True)
@@ -55,5 +57,5 @@ def main():
     from benchmarks import v030_release_performance as PERF
     shutil.rmtree(a.work_root,ignore_errors=True); a.work_root.mkdir(parents=True); corp=PERF._build_corpora(a.work_root/'corpus'); rows={}
     for suite,name in (('neutral_hostile_v1','05_logs_and_telemetry'),('neutral_hostile_v1','09_ml_artifacts')): rows[name]=invoke(corp[(suite,name)],a.work_root/f'{name}.cmpct')
-    result={'schema':'cmpct-v030-wrapper-live-rss-suite-v3','release_credit':False,'rows':rows}; a.output.parent.mkdir(parents=True,exist_ok=True); a.output.write_text(json.dumps(result,indent=2)+'\n'); print(json.dumps(result,indent=2))
+    result={'schema':'cmpct-v030-wrapper-live-rss-suite-v4','release_credit':False,'rows':rows}; a.output.parent.mkdir(parents=True,exist_ok=True); a.output.write_text(json.dumps(result,indent=2)+'\n'); print(json.dumps(result,indent=2))
 if __name__=='__main__': main()
