@@ -84,7 +84,7 @@ def test_registry_missing_prebuild_preserves_parent_fallback(tmp_path: Path):
     assert registry.consume(out) is None
 
 
-def test_installer_replaces_thread_seam_without_duplicate_parent_build(tmp_path: Path, monkeypatch):
+def test_installer_replaces_thread_seam_without_duplicate_parent_build(tmp_path: Path):
     from experiments import entropygraph_v030_release_product_base as base
 
     root = tmp_path / "src"
@@ -107,5 +107,35 @@ def test_installer_replaces_thread_seam_without_duplicate_parent_build(tmp_path:
         assert _sha(out) == _sha(direct)
     finally:
         registry.close_all()
+        base.C._prepare_profile_tree = original_prepare
+        base.C._r24_build = original_r24
+
+
+def test_profile_ineligible_keeps_child_for_canonical_r24_fallback(tmp_path: Path):
+    from experiments import entropygraph_v030_release_product_base as base
+
+    root = tmp_path / "src"
+    _source(root)
+    staging = tmp_path / "work" / "profile"
+    staging.mkdir(parents=True)
+    out = tmp_path / "work" / "canonical-r24.cmpct"
+    original_prepare_attr = base._ORIGINAL_PREPARE_PROFILE_TREE
+    original_prepare = base.C._prepare_profile_tree
+    original_r24 = base.C._r24_build
+
+    def ineligible(_root, _staging):
+        raise base.C.ProfileNotEligible("forced ineligible profile")
+
+    base._ORIGINAL_PREPARE_PROFILE_TREE = ineligible
+    registry = install_into_release_base(base, timeout_s=30)
+    try:
+        with pytest.raises(base.C.ProfileNotEligible):
+            base.C._prepare_profile_tree(root, staging)
+        stats = base.C._r24_build(root, out)
+        assert stats["r24_prebuild_owner"] == "child-process-v1"
+        assert out.is_file()
+    finally:
+        registry.close_all()
+        base._ORIGINAL_PREPARE_PROFILE_TREE = original_prepare_attr
         base.C._prepare_profile_tree = original_prepare
         base.C._r24_build = original_r24
