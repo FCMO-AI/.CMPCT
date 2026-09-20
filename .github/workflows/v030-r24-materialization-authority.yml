@@ -1,5 +1,5 @@
 # ci-lane: deep
-# ci-cancel-policy: preserve-receipts
+# ci-cancel-policy: latest-head
 # ci-pr-scope: exact-head-product-authority
 name: CMPCT v0.30 r24 materialization product authority
 
@@ -15,6 +15,9 @@ on:
   workflow_dispatch:
 
 permissions: {contents: read}
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 env:
   EVIDENCE_HEAD: ${{ github.sha }}
   PYTHONPATH: ${{ github.workspace }}
@@ -23,9 +26,6 @@ jobs:
   runtime-authority:
     runs-on: ubuntu-24.04
     timeout-minutes: 360
-    concurrency:
-      group: ${{ github.workflow }}-${{ github.sha }}
-      cancel-in-progress: false
     steps:
       - uses: actions/checkout@v6
         with:
