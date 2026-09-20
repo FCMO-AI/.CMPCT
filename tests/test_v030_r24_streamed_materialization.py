@@ -53,3 +53,12 @@ def test_encode_failure_after_consumption_publishes_no_archive(tmp_path: Path, m
         builder.build(out)
     assert calls==2
     assert not out.exists()
+
+
+def test_missing_output_parent_matches_historical_failure(tmp_path: Path):
+    src=_tree(tmp_path)
+    kwargs=dict(workers=1,reproducible=True,reproducible_epoch_ns=1_700_000_000_000_000_000)
+    with pytest.raises(FileNotFoundError):
+        _ORIGINAL_BUILD(Builder(src,**kwargs),tmp_path/'missing-base'/'x.cmpct')
+    with pytest.raises(FileNotFoundError):
+        StreamedBuilder(src,**kwargs).build(tmp_path/'missing-streamed'/'x.cmpct')
