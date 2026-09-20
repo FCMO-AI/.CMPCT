@@ -36,14 +36,16 @@ fn rust_zstd_plain_matches_shipping_ctypes_vector() {
 }
 
 #[test]
-fn rust_zstd_raw_dictionary_matches_shipping_using_dict_vector() {
+fn rust_zstd_safe_exact_using_dict_matches_shipping_ctypes_vector() {
     let payload = structured_payload();
     let dictionary = raw_dictionary();
-    let mut compressor =
-        zstd::bulk::Compressor::with_dictionary(9, &dictionary).expect("raw dictionary compressor");
-    let encoded = compressor
-        .compress(&payload)
-        .expect("dictionary zstd encode");
+    let mut cctx = zstd::zstd_safe::CCtx::create();
+    let mut encoded = vec![0u8; zstd::zstd_safe::compress_bound(payload.len())];
+    let encoded_len = cctx
+        .compress_using_dict(&mut encoded[..], &payload, &dictionary, 9)
+        .expect("exact ZSTD_compress_usingDict wrapper");
+    encoded.truncate(encoded_len);
+
     // Exact shipping ctypes vector recovered from #177 artifact 10604540852.
     assert_eq!(encoded.len(), 104);
     assert_eq!(
