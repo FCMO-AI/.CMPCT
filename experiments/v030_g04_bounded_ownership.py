@@ -15,8 +15,12 @@ from experiments import entropygraph_v030_release_product as RP
 
 def bounded_parallel_deferred_overlay(graph_path: Path, overlay_path: Path) -> dict:
     shared = RP.C.SHARED
-    source_format, _source, graph_meta, graph_records = shared.strict._read_source_records(graph_path)
+    source_format, source_container, graph_meta, graph_records = shared.strict._read_source_records(graph_path)
     users = shared.O._record_member_lengths(graph_meta, len(graph_records))
+    # `_read_source_records` returns both decoded records and its source container.
+    # Audition consumes only records/meta; keeping the source container alive would
+    # defeat the ownership experiment by retaining a second source generation.
+    del source_container
     n = len(graph_records)
     records=[]; transforms=[]; auditions=[]
 
@@ -24,8 +28,7 @@ def bounded_parallel_deferred_overlay(graph_path: Path, overlay_path: Path) -> d
         workers=min(RP.G04_AUDITION_MAX_WORKERS,n,max(1,os.cpu_count() or 1)); window=max(workers,2*workers)
         ctx=mp.get_context('spawn')
         with ProcessPoolExecutor(max_workers=workers,mp_context=ctx) as pool:
-            pending={}
-            next_submit=0
+            pending={}; next_submit=0
             while next_submit<min(n,window):
                 rec=graph_records[next_submit]
                 pending[next_submit]=pool.submit(RP._g04_audition_worker,(next_submit,rec,users[next_submit]))
@@ -54,8 +57,6 @@ def bounded_parallel_deferred_overlay(graph_path: Path, overlay_path: Path) -> d
     else:
         workers=0; window=0; scheduler='empty'
 
-    # Drop the source-generation container before overlay serialization. The
-    # result generations are required by the current API and remain charged.
     graph_records.clear()
     annotated_meta=dict(graph_meta); annotated_meta['overlay_source_format']=source_format
     write_stats=shared.G._write_overlay(annotated_meta,records,transforms,overlay_path)
