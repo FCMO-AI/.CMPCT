@@ -94,7 +94,7 @@ jobs:
     needs: classify
     if: needs.classify.outputs.run_deep == 'true'
     runs-on: ubuntu-24.04
-    timeout-minutes: 390
+    timeout-minutes: 360
     concurrency:
       group: ${{ github.workflow }}-runtime-${{ github.event.pull_request.head.sha || github.sha }}
       cancel-in-progress: false
@@ -115,6 +115,12 @@ jobs:
           sudo apt-get update && sudo apt-get install -y zstd gcc ffmpeg
           python -m pip install -e '.[test,audio]'
           python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
+      - name: Build native core exactly as canonical authority
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo build --manifest-path native/cmpct-core/Cargo.toml --release
+          cp native/cmpct-core/target/release/libcmpct_core.so src/cmpct/
       - name: Run canonical v2 runtime authority
         shell: bash
         run: |
