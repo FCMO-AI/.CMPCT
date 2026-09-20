@@ -39,7 +39,9 @@ jobs:
       run_deep: ${{ steps.scope.outputs.run_deep }}
     steps:
       - uses: actions/checkout@v6
-        with: {ref: '${{ env.EVIDENCE_HEAD }}', fetch-depth: 2}
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 2
       - id: scope
         name: Admit only latest-head process-boundary changes
         shell: bash
@@ -66,7 +68,9 @@ jobs:
       cancel-in-progress: false
     steps:
       - uses: actions/checkout@v6
-        with: {ref: '${{ env.EVIDENCE_HEAD }}', fetch-depth: 1}
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 1
       - uses: actions/setup-python@v6
         with: {python-version: '3.11', cache: pip}
       - name: Bind exact candidate head
@@ -96,7 +100,9 @@ jobs:
       cancel-in-progress: false
     steps:
       - uses: actions/checkout@v6
-        with: {ref: '${{ env.EVIDENCE_HEAD }}', fetch-depth: 1}
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 1
       - uses: actions/setup-python@v6
         with: {python-version: '3.11', cache: pip}
       - name: Bind exact candidate head
