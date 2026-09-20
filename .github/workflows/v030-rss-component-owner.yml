@@ -5,6 +5,9 @@ on:
   push:
     branches: [agent/v030-rss-r24-r25-owner-diagnostic]
     paths: ['benchmarks/v030_rss_component_owner.py','.github/workflows/v030-rss-component-owner.yml']
+  pull_request:
+    branches: [agent/v030-authoritative-integration]
+    paths: ['benchmarks/v030_rss_component_owner.py','.github/workflows/v030-rss-component-owner.yml']
   workflow_dispatch:
 permissions: {contents: read}
 jobs:
