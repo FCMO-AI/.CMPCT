@@ -11,6 +11,8 @@ import msgpack
 import cmpct.builder as B
 from cmpct._ordered_pull import ordered_worker_iter
 
+SPOOL_MEMORY_LIMIT=16*1024*1024
+
 class StreamedBuilder(B.Builder):
     """Builder variant that spools records and releases candidate raw bytes promptly."""
     def build(self,out:Path):
@@ -23,17 +25,16 @@ class StreamedBuilder(B.Builder):
 
         blobs=[]; offset=0; href={}
         out=Path(out); out.parent.mkdir(parents=True,exist_ok=True)
-        # A real file, not BytesIO: record payloads should leave Python heap as soon as their
-        # canonical slot is materialized. Temporary I/O is an explicit exported cost to measure.
-        with tempfile.TemporaryFile(prefix='cmpct-r24-records-',dir=out.parent) as spool:
+        # Keep small record sets in a strictly bounded in-memory spool: their ordinary build already
+        # fits below the process import high-water, so forcing a disk round-trip buys no RSS. Larger
+        # sets roll to a real temporary file, bounding exported RAM while preserving exact bytes.
+        with tempfile.SpooledTemporaryFile(max_size=SPOOL_MEMORY_LIMIT,prefix='cmpct-r24-records-',dir=out.parent) as spool:
             for h,raw_len,crc,codec,comp,meta in ordered_worker_iter(encode,hashes,self.encode_workers):
                 rec_header=B.BHDR.pack(B.BMAGIC,codec,0,0,raw_len,len(comp),len(meta),crc,h)
                 idx=len(blobs); href[h]=idx
                 rec_len=len(rec_header)+len(meta)+len(comp)
                 blobs.append([offset,raw_len,len(comp),codec,len(meta)]); offset+=rec_len
                 spool.write(rec_header); spool.write(meta); spool.write(comp)
-                # Codec selection is complete and the record is durable in the spool. Drop the
-                # source generation now; hashes/recipes retain identity without retaining raw bytes.
                 self.cands[h].raw=b''
                 del comp,meta
 
@@ -82,4 +83,4 @@ class StreamedBuilder(B.Builder):
                     if not chunk: break
                     dst.write(chunk)
                 dst.write(ic); dst.write(footer)
-        return {'bytes':out.stat().st_size,'logical_bytes':sum(x[4] for x in files if x[1]!=B.K_DIR),'unique_blobs':len(blobs),'logical_files':sum(x[1]!=B.K_DIR for x in files),'recipes':len(recipes),'index_raw':len(ib),'index_comp':len(ic),'data_bytes':offset,'encode_workers':self.encode_workers,'reproducible':self.reproducible,'materialization':'bounded-record-spool-v1'}
+        return {'bytes':out.stat().st_size,'logical_bytes':sum(x[4] for x in files if x[1]!=B.K_DIR),'unique_blobs':len(blobs),'logical_files':sum(x[1]!=B.K_DIR for x in files),'recipes':len(recipes),'index_raw':len(ib),'index_comp':len(ic),'data_bytes':offset,'encode_workers':self.encode_workers,'reproducible':self.reproducible,'materialization':'bounded-adaptive-record-spool-v2','spool_memory_limit':SPOOL_MEMORY_LIMIT}
