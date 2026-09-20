@@ -23,7 +23,7 @@ class StreamedBuilder(B.Builder):
             codec,comp,meta=self._encode_candidate(h,c)
             return h,len(raw),binascii.crc32(raw)&0xffffffff,codec,comp,meta
         blobs=[]; offset=0; href={}; out=Path(out)
-        with tempfile.SpooledTemporaryFile(max_size=SPOOL_MEMORY_LIMIT,prefix='cmpct-r24-records-') as spool:
+        with tempfile.SpooledTemporaryFile(max_size=SPOOL_MEMORY_LIMIT,prefix='cmpct-r24-records-',dir=out.parent) as spool:
             for h,raw_len,crc,codec,comp,meta in ordered_worker_iter(encode,hashes,self.encode_workers):
                 rec_header=B.BHDR.pack(B.BMAGIC,codec,0,0,raw_len,len(comp),len(meta),crc,h)
                 idx=len(blobs); href[h]=idx; rec_len=len(rec_header)+len(meta)+len(comp)
