@@ -1,16 +1,7 @@
 from __future__ import annotations
 from pathlib import Path
-import ctypes
 import hashlib
-import os
 import pytest
-
-# Issue #176 is product loader debt, not a subprocess-boundary result. The workflow supplies the original
-# runner DLL path so its adjacent dependencies remain discoverable while this focused oracle stays isolated.
-if os.name == "nt":
-    _ci_zstd = os.environ.get("CMPCT_CI_ZSTD_DLL")
-    if _ci_zstd:
-        ctypes.CDLL(str(Path(_ci_zstd).resolve()))
 
 from experiments.entropygraph_v030_r24_process_prebuild import R24PrebuildProcess
 
@@ -36,11 +27,9 @@ def test_r24_process_prebuild_is_byte_identical(tmp_path: Path):
     (root / "b.bin").write_bytes(bytes(range(256)) * 32)
     direct = tmp_path / "direct.cmpct"
     child = tmp_path / "child.cmpct"
-
     direct_stats = product._locality_bounded_r24_build(root, direct)
     with R24PrebuildProcess(root, child, timeout_s=30) as proc:
         child_stats = proc.result()
-
     assert _stable_stats(child_stats) == _stable_stats(direct_stats)
     assert child.stat().st_size == direct.stat().st_size
     assert _sha(child) == _sha(direct)
@@ -54,10 +43,8 @@ def test_r24_process_prebuild_is_independent_of_caller_cwd(tmp_path: Path, monke
     elsewhere = tmp_path / "elsewhere"
     elsewhere.mkdir()
     monkeypatch.chdir(elsewhere)
-
     with R24PrebuildProcess(root, out, timeout_s=30) as proc:
         stats = proc.result()
-
     assert out.is_file()
     assert stats["format_revision"] == 24
 
@@ -107,7 +94,6 @@ def test_r24_process_prebuild_refuses_to_clobber_existing_output(tmp_path: Path)
     (root / "x").write_bytes(b"x")
     out = tmp_path / "owned-by-someone-else.cmpct"
     out.write_bytes(b"preserve-me")
-
     with pytest.raises(FileExistsError, match="output already exists"):
         R24PrebuildProcess(root, out, timeout_s=30).start()
     assert out.read_bytes() == b"preserve-me"
