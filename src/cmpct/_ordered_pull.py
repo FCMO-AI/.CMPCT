@@ -113,6 +113,9 @@ def ordered_worker_pull(fn: Callable[[_T], _R], items: Sequence[_T], workers: in
             try:
                 result = fn(items[index])
             except BaseException as exc:
+                # Failure publication and claim closure share the claim lock. This removes the
+                # check/set race where another worker could observe an open gate after this call
+                # had already failed but before abort_event.set() became visible.
                 with claim_lock:
                     failures.append((index, exc))
                     abort_event.set()
