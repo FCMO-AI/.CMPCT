@@ -12,7 +12,6 @@ on:
       - 'experiments/entropygraph_v030_shared_portfolio.py'
       - 'experiments/entropygraph_v030_geometry_overlay_g04.py'
       - 'benchmarks/v030_release_performance.py'
-
 concurrency:
   group: v030-r25-child-build-verify-oracle-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
@@ -27,15 +26,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-      - run: python -m pip install -e . zstandard
+        with: {python-version: '3.11'}
+      - run: python -m pip install -e . zstandard numpy pillow reportlab python-docx openpyxl python-pptx
       - name: Exact r25 parent-vs-child ownership A/B
         run: |
           mkdir -p benchmarks/current
-          python benchmarks/v030_r25_child_build_verify_oracle.py \
-            --work-root "$RUNNER_TEMP/r25-child-oracle" \
-            --output benchmarks/current/v030_r25_child_build_verify_oracle.json
+          python benchmarks/v030_r25_child_build_verify_oracle.py --work-root "$RUNNER_TEMP/r25-child-oracle" --output benchmarks/current/v030_r25_child_build_verify_oracle.json
       - name: Validate causal contract
         run: |
           python - <<'PY'
