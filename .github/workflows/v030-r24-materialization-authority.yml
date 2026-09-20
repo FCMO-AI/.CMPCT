@@ -4,6 +4,14 @@
 name: CMPCT v0.30 r24 materialization product authority
 
 on:
+  pull_request:
+    branches: [agent/v030-authoritative-integration]
+    paths:
+      - src/cmpct/__init__.py
+      - src/cmpct/_ordered_pull.py
+      - src/cmpct/v030_release_materialization.py
+      - experiments/v030_r24_streamed_materialization.py
+      - .github/workflows/v030-r24-materialization-authority.yml
   push:
     branches: [agent/v030-r24-streamed-materialization-rss-v2]
     paths:
@@ -16,10 +24,10 @@ on:
 
 permissions: {contents: read}
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 env:
-  EVIDENCE_HEAD: ${{ github.sha }}
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
   PYTHONPATH: ${{ github.workspace }}
 
 jobs:
