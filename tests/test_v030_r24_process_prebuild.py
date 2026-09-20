@@ -53,3 +53,18 @@ def test_r24_process_prebuild_rejects_double_start(tmp_path: Path):
             proc.start()
     finally:
         proc.close()
+
+
+def test_r24_process_prebuild_abandonment_removes_candidate(tmp_path: Path):
+    root = tmp_path / "src"
+    root.mkdir()
+    (root / "x.txt").write_text("repeatable child output\n" * 500)
+    out = tmp_path / "abandoned.cmpct"
+    proc = R24PrebuildProcess(root, out, timeout_s=30).start()
+    # Wait through the ordinary result path so the child is known to have completed, then deliberately mark the
+    # receipt unclaimed to model a parent that never accepts ownership of the staging candidate.
+    proc._proc.communicate(timeout=30)
+    assert proc._proc.returncode == 0
+    assert out.is_file()
+    proc.close()
+    assert not out.exists()
