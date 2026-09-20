@@ -8,13 +8,17 @@ on:
     branches: [agent/v030-authoritative-integration]
     paths:
       - experiments/entropygraph_v030_r24_process_prebuild.py
+      - experiments/entropygraph_v030_r24_process_shipping.py
       - tests/test_v030_r24_process_prebuild.py
+      - tests/test_v030_r24_process_shipping.py
       - .github/workflows/v030-r24-process-prebuild-portability.yml
   push:
     branches: [agent/v030-r24-process-productization]
     paths:
       - experiments/entropygraph_v030_r24_process_prebuild.py
+      - experiments/entropygraph_v030_r24_process_shipping.py
       - tests/test_v030_r24_process_prebuild.py
+      - tests/test_v030_r24_process_shipping.py
       - .github/workflows/v030-r24-process-prebuild-portability.yml
   workflow_dispatch:
 
@@ -43,7 +47,7 @@ jobs:
           test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
           files="$(git diff-tree --no-commit-id --name-only -r HEAD)"
           printf '%s\n' "$files"
-          if printf '%s\n' "$files" | grep -Eq '^(experiments/entropygraph_v030_r24_process_prebuild.py|tests/test_v030_r24_process_prebuild.py|\.github/workflows/v030-r24-process-prebuild-portability.yml)$'; then
+          if printf '%s\n' "$files" | grep -Eq '^(experiments/entropygraph_v030_r24_process_(prebuild|shipping)\.py|tests/test_v030_r24_process_(prebuild|shipping)\.py|\.github/workflows/v030-r24-process-prebuild-portability\.yml)$'; then
             echo 'run_deep=true' >> "$GITHUB_OUTPUT"
           else
             echo 'run_deep=false' >> "$GITHUB_OUTPUT"
@@ -81,6 +85,6 @@ jobs:
       - name: Install focused test dependencies
         run: python -m pip install -e '.[test]'
       - name: Compile process boundary
-        run: python -m py_compile experiments/entropygraph_v030_r24_process_prebuild.py tests/test_v030_r24_process_prebuild.py
+        run: python -m py_compile experiments/entropygraph_v030_r24_process_prebuild.py experiments/entropygraph_v030_r24_process_shipping.py tests/test_v030_r24_process_prebuild.py tests/test_v030_r24_process_shipping.py
       - name: Run focused process-boundary tests
-        run: python -m pytest -q tests/test_v030_r24_process_prebuild.py
+        run: python -m pytest -q tests/test_v030_r24_process_prebuild.py tests/test_v030_r24_process_shipping.py
