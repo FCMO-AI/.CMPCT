@@ -6,6 +6,17 @@ on:
   push:
     branches:
       - agent/v030-r24-process-productization
+    # Exact-receipt preservation is intentionally narrow: do not reserve an
+    # expensive run for unrelated commits on this long-lived research branch.
+    paths:
+      - ".github/workflows/v030-logs-r24-process-probe.yml"
+      - ".github/v030-logs-r24-process-probe.token"
+      - "benchmarks/v030_logs_r24_process_probe.py"
+      - "benchmarks/v030_logs_r24_process_worker_probe.py"
+      - "experiments/entropygraph_v030_r24_process_prebuild.py"
+      - "experiments/entropygraph_v030_r24_process_shipping.py"
+      - "experiments/entropygraph_v030_release_product.py"
+      - "src/cmpct/**"
   workflow_dispatch:
 
 permissions: {contents: read}
