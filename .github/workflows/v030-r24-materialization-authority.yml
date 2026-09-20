@@ -1,6 +1,6 @@
 # ci-lane: deep
-# ci-cancel-policy: latest-head
-# ci-pr-scope: exact-head-product-authority
+# ci-cancel-policy: split-classifier-preserve-receipts
+# ci-pr-scope: latest-head-commit-gate
 name: CMPCT v0.30 r24 materialization product authority
 
 on:
@@ -23,17 +23,44 @@ on:
   workflow_dispatch:
 
 permissions: {contents: read}
-concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
 env:
   EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
   PYTHONPATH: ${{ github.workspace }}
 
 jobs:
+  classify:
+    runs-on: ubuntu-24.04
+    concurrency:
+      group: ${{ github.workflow }}-classifier-${{ github.event.pull_request.number || github.ref }}
+      cancel-in-progress: true
+    outputs:
+      run_deep: ${{ steps.scope.outputs.run_deep }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 2
+      - id: scope
+        name: Admit only latest-head materialization changes
+        shell: bash
+        run: |
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          files="$(git diff-tree --no-commit-id --name-only -r HEAD)"
+          printf '%s\n' "$files"
+          if printf '%s\n' "$files" | grep -Eq '^(src/cmpct/(__init__|_ordered_pull|v030_release_materialization)\.py|experiments/v030_r24_streamed_materialization\.py|\.github/workflows/v030-r24-materialization-authority\.yml)$'; then
+            echo 'run_deep=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'run_deep=false' >> "$GITHUB_OUTPUT"
+          fi
+
   runtime-authority:
+    needs: classify
+    if: needs.classify.outputs.run_deep == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 360
+    concurrency:
+      group: ${{ github.workflow }}-receipt-${{ github.event.pull_request.head.sha || github.sha }}
+      cancel-in-progress: false
     steps:
       - uses: actions/checkout@v6
         with:
