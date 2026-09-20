@@ -49,6 +49,11 @@ def test_r24_process_prebuild_is_independent_of_caller_cwd(tmp_path: Path, monke
     assert stats["format_revision"] == 24
 
 
+def test_r24_process_prebuild_default_has_no_size_independent_deadline(tmp_path: Path):
+    proc = R24PrebuildProcess(tmp_path, tmp_path / "out.cmpct")
+    assert proc.timeout_s is None
+
+
 def test_r24_process_prebuild_rejects_nonpositive_timeout(tmp_path: Path):
     with pytest.raises(ValueError, match="timeout must be positive"):
         R24PrebuildProcess(tmp_path, tmp_path / "out.cmpct", timeout_s=0)
