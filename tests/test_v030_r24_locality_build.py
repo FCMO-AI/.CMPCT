@@ -292,5 +292,10 @@ def test_r24_prebuild_overlaps_filesystem_manifest_capture(tmp_path, monkeypatch
 
 
 def test_release_product_rebinds_canonical_build_hooks() -> None:
-    assert product.C._r24_build is product._consume_or_build_locality_bounded_r24
-    assert product.C._prepare_profile_tree is product._prepare_profile_tree_with_r24_overlap
+    # The public locality helpers remain as regression-testable mature primitives, but
+    # canonical-final must now be owned by the process-shipping adapter instead of the
+    # historical thread/future wrappers.
+    assert product.C._r24_build is not product._consume_or_build_locality_bounded_r24
+    assert product.C._prepare_profile_tree is not product._prepare_profile_tree_with_r24_overlap
+    assert product.C._r24_build.__module__ == "experiments.entropygraph_v030_r24_process_shipping"
+    assert product.C._prepare_profile_tree.__module__ == "experiments.entropygraph_v030_r24_process_shipping"
