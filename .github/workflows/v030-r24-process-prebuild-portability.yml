@@ -140,7 +140,11 @@ jobs:
               assert data['release_facade']=='cmpct-v030-release-product-v1'
           tree=json.loads(Path('benchmark-artifacts/runtime-tree-rss.json').read_text())
           assert tree['rss_accounting']=='whole-process-tree-vmrss-10ms-with-parent-rumaxrss-floor'
-          assert len(tree['tree_rss_receipts'])==18
+          # Every frozen row owns two balanced repetitions, two engines and three operations
+          # (pack/verify/extract). Derive receipt cardinality from the artifact rather than pinning
+          # a stale magic number that can reject complete evidence after the harness expands.
+          expected_receipts=sum(len(row['repetitions']) * 2 * 3 for row in tree['rows'])
+          assert len(tree['tree_rss_receipts']) == expected_receipts
           for row in tree['tree_rss_receipts']:
               assert row['decisive_peak_rss_kib'] >= row['parent_peak_rss_kib']
               assert row['decisive_peak_rss_kib'] >= row['sampled_tree_peak_rss_kib']
