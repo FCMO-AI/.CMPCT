@@ -14,16 +14,16 @@ import sys
 import time
 from typing import Any
 
-DEFAULT_TIMEOUT_S = 120.0
+DEFAULT_TIMEOUT_S: float | None = None
 _REPO_ROOT = Path(__file__).resolve().parents[1]
 
 
 class R24PrebuildProcess:
-    def __init__(self, root: Path, out: Path, *, timeout_s: float = DEFAULT_TIMEOUT_S):
+    def __init__(self, root: Path, out: Path, *, timeout_s: float | None = DEFAULT_TIMEOUT_S):
         self.root = Path(root)
         self.out = Path(out)
-        self.timeout_s = float(timeout_s)
-        if self.timeout_s <= 0:
+        self.timeout_s = None if timeout_s is None else float(timeout_s)
+        if self.timeout_s is not None and self.timeout_s <= 0:
             raise ValueError("r24 prebuild timeout must be positive")
         self._proc: subprocess.Popen[str] | None = None
         self._started_at: float | None = None
@@ -57,7 +57,11 @@ class R24PrebuildProcess:
         if self._proc is None or self._started_at is None:
             raise RuntimeError("r24 prebuild process was not started")
         proc = self._proc
-        remaining_s = max(0.0, self.timeout_s - (time.monotonic() - self._started_at))
+        remaining_s = (
+            None
+            if self.timeout_s is None
+            else max(0.0, self.timeout_s - (time.monotonic() - self._started_at))
+        )
         try:
             stdout, stderr = proc.communicate(timeout=remaining_s)
         except subprocess.TimeoutExpired:
