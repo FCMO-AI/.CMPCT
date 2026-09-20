@@ -6,7 +6,6 @@ its final staging path, and returns only the small build-stats mapping. No archi
 IPC. This module does not decide selection or release policy.
 """
 import argparse
-import ctypes
 import json
 import os
 from pathlib import Path
@@ -44,16 +43,7 @@ class R24PrebuildProcess:
         )
         self._started_at = time.monotonic()
         self._proc = subprocess.Popen(
-            [
-                sys.executable,
-                "-m",
-                __name__,
-                "--worker",
-                "--root",
-                str(self.root),
-                "--out",
-                str(self.out),
-            ],
+            [sys.executable, "-m", __name__, "--worker", "--root", str(self.root), "--out", str(self.out)],
             stdin=subprocess.DEVNULL,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
@@ -75,12 +65,9 @@ class R24PrebuildProcess:
             proc.communicate()
             self.out.unlink(missing_ok=True)
             raise TimeoutError(f"r24 prebuild exceeded {self.timeout_s:.3f}s total lifetime")
-
         if proc.returncode != 0:
             self.out.unlink(missing_ok=True)
-            raise RuntimeError(
-                f"r24 prebuild child failed rc={proc.returncode}: {stderr[-4000:].strip()}"
-            )
+            raise RuntimeError(f"r24 prebuild child failed rc={proc.returncode}: {stderr[-4000:].strip()}")
         rows = [line for line in stdout.splitlines() if line.strip()]
         if not rows:
             self.out.unlink(missing_ok=True)
@@ -119,23 +106,11 @@ class R24PrebuildProcess:
         self.close()
 
 
-def _preload_windows_ci_zstd() -> None:
-    """Isolate subprocess portability from known shipping codec-loader debt #176."""
-    if os.name != "nt":
-        return
-    raw = os.environ.get("CMPCT_CI_ZSTD_DLL")
-    if raw:
-        candidate = Path(raw)
-        if candidate.is_file():
-            ctypes.CDLL(str(candidate.resolve()))
-
-
 def _worker(root: Path, out: Path) -> None:
     root = Path(root)
     out = Path(out)
     if not root.is_dir():
         raise FileNotFoundError(f"r24 prebuild source is not a directory: {root}")
-    _preload_windows_ci_zstd()
     from experiments import entropygraph_v030_release_product as product
 
     stats = product._locality_bounded_r24_build(root, out)
