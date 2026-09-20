@@ -2,8 +2,8 @@ from __future__ import annotations
 """One-shot process owner for the shipping r24 prebuild.
 
 The child owns all r24 Builder heap generations, writes the canonical candidate directly to
-its final staging path, and returns only the small build-stats mapping.  No archive bytes cross
-IPC.  This module does not decide selection or release policy.
+its final staging path, and returns only the small build-stats mapping. No archive bytes cross
+IPC. This module does not decide selection or release policy.
 """
 import argparse
 import json
@@ -21,6 +21,8 @@ class R24PrebuildProcess:
         self.root = Path(root)
         self.out = Path(out)
         self.timeout_s = float(timeout_s)
+        if self.timeout_s <= 0:
+            raise ValueError("r24 prebuild timeout must be positive")
         self._proc: subprocess.Popen[str] | None = None
 
     def start(self) -> "R24PrebuildProcess":
@@ -45,7 +47,7 @@ class R24PrebuildProcess:
             stdout, stderr = proc.communicate(timeout=self.timeout_s)
         except subprocess.TimeoutExpired:
             proc.kill()
-            stdout, stderr = proc.communicate()
+            proc.communicate()
             self.out.unlink(missing_ok=True)
             raise TimeoutError(f"r24 prebuild exceeded {self.timeout_s:.3f}s")
         if proc.returncode != 0:
@@ -79,10 +81,14 @@ class R24PrebuildProcess:
 
 
 def _worker(root: Path, out: Path) -> None:
+    root = Path(root)
+    out = Path(out)
+    if not root.is_dir():
+        raise FileNotFoundError(f"r24 prebuild source is not a directory: {root}")
     # Import inside the child so the parent never owns Builder's r24 heap generations.
     from experiments import entropygraph_v030_release_product_base as product
 
-    stats = product._locality_bounded_r24_build(Path(root), Path(out))
+    stats = product._locality_bounded_r24_build(root, out)
     print(json.dumps({"schema": "cmpct-v030-r24-prebuild-process-v1", "stats": stats}, separators=(",", ":"), default=str))
 
 
