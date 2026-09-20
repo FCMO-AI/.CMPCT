@@ -1,0 +1,40 @@
+# ci-lane: deep
+# ci-cancel-policy: preserve-receipts
+# ci-pr-scope: exact-head-oracle
+name: CMPCT zstd backend equivalence oracle
+
+on:
+  push:
+    branches: [agent/zstd-platform-loader]
+    paths:
+      - experiments/zstd_backend_equivalence_oracle.py
+      - .github/workflows/zstd-backend-equivalence-oracle.yml
+  workflow_dispatch:
+
+permissions: {contents: read}
+
+jobs:
+  oracle:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    concurrency:
+      group: ${{ github.workflow }}-${{ github.sha }}
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 1
+      - uses: actions/setup-python@v6
+        with: {python-version: '3.11', cache: pip}
+      - name: Bind exact source
+        run: test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+      - name: Install project
+        run: python -m pip install -e .
+      - name: Run equivalence oracle
+        run: python experiments/zstd_backend_equivalence_oracle.py | tee zstd-backend-equivalence.json
+      - uses: actions/upload-artifact@v6
+        with:
+          name: zstd-backend-equivalence-${{ github.sha }}
+          path: zstd-backend-equivalence.json
+          if-no-files-found: error
