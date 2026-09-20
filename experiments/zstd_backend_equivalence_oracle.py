@@ -54,4 +54,9 @@ def run() -> dict:
 
 
 if __name__ == "__main__":
-    print(json.dumps(run(), sort_keys=True))
+    result = run()
+    print(json.dumps(result, sort_keys=True))
+    if not result["all_cross_decode_ok"]:
+        raise SystemExit("cross-decode failed")
+    if not result["all_plain_byte_identical"]:
+        raise SystemExit("transparent Python-zstandard encoder substitution is not byte-identical")
