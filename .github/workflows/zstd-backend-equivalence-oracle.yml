@@ -8,6 +8,7 @@ on:
     branches: [agent/zstd-platform-loader]
     paths:
       - experiments/zstd_backend_equivalence_oracle.py
+      - experiments/zstd_full_archive_backend_oracle.py
       - .github/workflows/zstd-backend-equivalence-oracle.yml
   workflow_dispatch:
 
@@ -31,10 +32,14 @@ jobs:
         run: test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
       - name: Install project
         run: python -m pip install -e .
-      - name: Run equivalence oracle
+      - name: Run primitive equivalence oracle
         run: python experiments/zstd_backend_equivalence_oracle.py | tee zstd-backend-equivalence.json
+      - name: Run full archive identity oracle
+        run: python experiments/zstd_full_archive_backend_oracle.py | tee zstd-full-archive-backend.json
       - uses: actions/upload-artifact@v6
         with:
           name: zstd-backend-equivalence-${{ github.sha }}
-          path: zstd-backend-equivalence.json
+          path: |
+            zstd-backend-equivalence.json
+            zstd-full-archive-backend.json
           if-no-files-found: error
