@@ -39,3 +39,4 @@ jobs:
           if-no-files-found: error
           retention-days: 90
 # Diagnostic only. Never release credit. Failure logs are evidence too.
+# Pull-request synchronization exists solely so diagnostic evidence can be produced before any merge.
