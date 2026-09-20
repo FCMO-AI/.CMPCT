@@ -16,7 +16,9 @@ def _stable_stats(stats: dict) -> dict:
 
 
 def test_r24_process_prebuild_is_byte_identical(tmp_path: Path):
-    from experiments import entropygraph_v030_release_product_base as product
+    # Compare clean-child construction to the promoted shipping surface, not the preserved base implementation.
+    # This catches release-owned r24 post-passes being accidentally omitted by subprocess isolation.
+    from experiments import entropygraph_v030_release_product as product
 
     root = tmp_path / "src"
     root.mkdir()
