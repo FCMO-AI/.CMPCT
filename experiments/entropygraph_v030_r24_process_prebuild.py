@@ -34,26 +34,16 @@ class R24PrebuildProcess:
         if self._proc is not None:
             raise RuntimeError("r24 prebuild process already started")
         self.out.parent.mkdir(parents=True, exist_ok=True)
-        # The integration seam supplies a unique staging path. Refuse an occupied path rather than allowing a
-        # failing child or parent-abort cleanup to unlink bytes it did not create.
         if self.out.exists():
             raise FileExistsError(f"r24 prebuild output already exists: {self.out}")
         self._started_at = time.monotonic()
         env = os.environ.copy()
-        # The v0.30 release surface still lives under experiments/ while convergence is merge-locked. Make the
-        # clean child resolve that exact source tree independently of the caller's current working directory.
         inherited_pythonpath = env.get("PYTHONPATH")
-        env["PYTHONPATH"] = os.pathsep.join(
-            [os.fspath(_REPO_ROOT)] + ([inherited_pythonpath] if inherited_pythonpath else [])
-        )
+        env["PYTHONPATH"] = os.pathsep.join([os.fspath(_REPO_ROOT)] + ([inherited_pythonpath] if inherited_pythonpath else []))
         self._proc = subprocess.Popen(
             [sys.executable, "-m", __name__, "--worker", "--root", str(self.root), "--out", str(self.out)],
-            stdin=subprocess.DEVNULL,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
-            close_fds=(os.name != "nt"),
-            env=env,
+            stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+            close_fds=(os.name != "nt"), env=env,
         )
         return self
 
@@ -65,30 +55,20 @@ class R24PrebuildProcess:
         try:
             stdout, stderr = proc.communicate(timeout=remaining_s)
         except subprocess.TimeoutExpired:
-            proc.kill()
-            proc.communicate()
-            self.out.unlink(missing_ok=True)
+            proc.kill(); proc.communicate(); self.out.unlink(missing_ok=True)
             raise TimeoutError(f"r24 prebuild exceeded {self.timeout_s:.3f}s total lifetime")
         if proc.returncode != 0:
             self.out.unlink(missing_ok=True)
-            tail = stderr[-4000:].strip()
-            raise RuntimeError(f"r24 prebuild child failed rc={proc.returncode}: {tail}")
+            raise RuntimeError(f"r24 prebuild child failed rc={proc.returncode}: {stderr[-4000:].strip()}")
         rows = [line for line in stdout.splitlines() if line.strip()]
         if not rows:
-            self.out.unlink(missing_ok=True)
-            raise RuntimeError("r24 prebuild child returned no receipt")
+            self.out.unlink(missing_ok=True); raise RuntimeError("r24 prebuild child returned no receipt")
         try:
             receipt = json.loads(rows[-1])
         except (json.JSONDecodeError, TypeError, ValueError) as exc:
-            self.out.unlink(missing_ok=True)
-            raise RuntimeError("r24 prebuild child returned malformed receipt") from exc
-        if (
-            not isinstance(receipt, dict)
-            or receipt.get("schema") != "cmpct-v030-r24-prebuild-process-v1"
-            or not isinstance(receipt.get("stats"), dict)
-        ):
-            self.out.unlink(missing_ok=True)
-            raise RuntimeError("r24 prebuild child returned malformed receipt")
+            self.out.unlink(missing_ok=True); raise RuntimeError("r24 prebuild child returned malformed receipt") from exc
+        if not isinstance(receipt, dict) or receipt.get("schema") != "cmpct-v030-r24-prebuild-process-v1" or not isinstance(receipt.get("stats"), dict):
+            self.out.unlink(missing_ok=True); raise RuntimeError("r24 prebuild child returned malformed receipt")
         if not self.out.is_file():
             raise RuntimeError("r24 prebuild child reported success without candidate")
         self._result_collected = True
@@ -97,63 +77,41 @@ class R24PrebuildProcess:
     def close(self) -> None:
         proc = self._proc
         if proc is not None and proc.poll() is None:
-            proc.kill()
-            proc.communicate()
-        # A candidate is owned by the caller only after a valid receipt has been collected. If the parent
-        # abandons the helper (exception, cancellation, timeout elsewhere) before result(), remove even a child
-        # that happened to finish between the last poll and cleanup so partial/unobserved bytes cannot linger.
+            proc.kill(); proc.communicate()
         if self._proc is not None and not self._result_collected:
             self.out.unlink(missing_ok=True)
-        self._proc = None
-        self._started_at = None
+        self._proc = None; self._started_at = None
 
-    def __enter__(self) -> "R24PrebuildProcess":
-        return self.start()
-
-    def __exit__(self, exc_type, exc, tb) -> None:
-        self.close()
+    def __enter__(self) -> "R24PrebuildProcess": return self.start()
+    def __exit__(self, exc_type, exc, tb) -> None: self.close()
 
 
 def _preload_windows_ci_zstd() -> None:
-    """Keep the subprocess portability oracle independent from known codec-loader debt #176.
-
-    Production codec loading is intentionally not fixed here. The portability workflow places a
-    CI-only libzstd image at the repository root; loading that exact path before importing the
-    shipping product lets Windows exercise this process boundary without pretending #176 is solved.
-    """
+    """Isolate subprocess portability from known shipping codec-loader debt #176."""
     if os.name != "nt":
         return
-    candidate = _REPO_ROOT / "libzstd.so"
-    if candidate.is_file():
-        ctypes.CDLL(str(candidate.resolve()))
+    raw = os.environ.get("CMPCT_CI_ZSTD_DLL")
+    if raw:
+        candidate = Path(raw)
+        if candidate.is_file():
+            ctypes.CDLL(str(candidate.resolve()))
 
 
 def _worker(root: Path, out: Path) -> None:
-    root = Path(root)
-    out = Path(out)
+    root = Path(root); out = Path(out)
     if not root.is_dir():
         raise FileNotFoundError(f"r24 prebuild source is not a directory: {root}")
     _preload_windows_ci_zstd()
-    # Import the promoted product surface inside the child. Importing the preserved base directly would
-    # silently skip release-owned r24 post-passes (currently dead-dictionary elision) and make the process
-    # candidate depend on which modules happened to be imported in the parent. The child must construct the
-    # same shipping r24 bytes from a clean interpreter while the parent never owns Builder heap generations.
     from experiments import entropygraph_v030_release_product as product
-
     stats = product._locality_bounded_r24_build(root, out)
     print(json.dumps({"schema": "cmpct-v030-r24-prebuild-process-v1", "stats": stats}, separators=(",", ":"), default=str))
 
 
 def main() -> None:
-    p = argparse.ArgumentParser()
-    p.add_argument("--worker", action="store_true")
-    p.add_argument("--root", type=Path)
-    p.add_argument("--out", type=Path)
+    p = argparse.ArgumentParser(); p.add_argument("--worker", action="store_true"); p.add_argument("--root", type=Path); p.add_argument("--out", type=Path)
     a = p.parse_args()
-    if not a.worker or a.root is None or a.out is None:
-        p.error("worker mode requires --root and --out")
+    if not a.worker or a.root is None or a.out is None: p.error("worker mode requires --root and --out")
     _worker(a.root, a.out)
 
 
-if __name__ == "__main__":
-    main()
+if __name__ == "__main__": main()
