@@ -6,6 +6,7 @@ its final staging path, and returns only the small build-stats mapping. No archi
 IPC. This module does not decide selection or release policy.
 """
 import argparse
+import ctypes
 import json
 import os
 from pathlib import Path
@@ -104,11 +105,26 @@ class R24PrebuildProcess:
         self.close()
 
 
+def _preload_windows_ci_zstd() -> None:
+    """Keep the subprocess portability oracle independent from known codec-loader debt #176.
+
+    Production codec loading is intentionally not fixed here. The portability workflow places a
+    CI-only libzstd image at the repository root; loading that exact path before importing the
+    shipping product lets Windows exercise this process boundary without pretending #176 is solved.
+    """
+    if os.name != "nt":
+        return
+    candidate = Path.cwd() / "libzstd.so"
+    if candidate.is_file():
+        ctypes.CDLL(str(candidate.resolve()))
+
+
 def _worker(root: Path, out: Path) -> None:
     root = Path(root)
     out = Path(out)
     if not root.is_dir():
         raise FileNotFoundError(f"r24 prebuild source is not a directory: {root}")
+    _preload_windows_ci_zstd()
     # Import the promoted product surface inside the child. Importing the preserved base directly would
     # silently skip release-owned r24 post-passes (currently dead-dictionary elision) and make the process
     # candidate depend on which modules happened to be imported in the parent. The child must construct the
