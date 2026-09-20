@@ -24,6 +24,7 @@ class R24PrebuildProcess:
         if self.timeout_s <= 0:
             raise ValueError("r24 prebuild timeout must be positive")
         self._proc: subprocess.Popen[str] | None = None
+        self._result_collected = False
 
     def start(self) -> "R24PrebuildProcess":
         if self._proc is not None:
@@ -58,12 +59,17 @@ class R24PrebuildProcess:
         if not rows:
             self.out.unlink(missing_ok=True)
             raise RuntimeError("r24 prebuild child returned no receipt")
-        receipt = json.loads(rows[-1])
+        try:
+            receipt = json.loads(rows[-1])
+        except (json.JSONDecodeError, TypeError, ValueError) as exc:
+            self.out.unlink(missing_ok=True)
+            raise RuntimeError("r24 prebuild child returned malformed receipt") from exc
         if receipt.get("schema") != "cmpct-v030-r24-prebuild-process-v1" or not isinstance(receipt.get("stats"), dict):
             self.out.unlink(missing_ok=True)
             raise RuntimeError("r24 prebuild child returned malformed receipt")
         if not self.out.is_file():
             raise RuntimeError("r24 prebuild child reported success without candidate")
+        self._result_collected = True
         return receipt["stats"]
 
     def close(self) -> None:
@@ -71,6 +77,11 @@ class R24PrebuildProcess:
         if proc is not None and proc.poll() is None:
             proc.kill()
             proc.communicate()
+        # A candidate is owned by the caller only after a valid receipt has been collected. If the parent
+        # abandons the helper (exception, cancellation, timeout elsewhere) before result(), remove even a child
+        # that happened to finish between the last poll and cleanup so partial/unobserved bytes cannot linger.
+        if self._proc is not None and not self._result_collected:
+            self.out.unlink(missing_ok=True)
         self._proc = None
 
     def __enter__(self) -> "R24PrebuildProcess":
