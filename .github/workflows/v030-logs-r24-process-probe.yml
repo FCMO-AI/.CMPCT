@@ -30,7 +30,9 @@ jobs:
           mkdir -p benchmark-artifacts
           set +e
           set -o pipefail
-          python benchmarks/v030_logs_r24_process_probe.py \
+          # Execute from the repository root as a module so the benchmark package is
+          # importable without adding an ad-hoc PYTHONPATH that could mask packaging bugs.
+          python -m benchmarks.v030_logs_r24_process_probe \
             --work-root benchmark-artifacts/v030-logs-r24-process-probe-work \
             --output benchmark-artifacts/v030-logs-r24-process-probe.json \
             2>&1 | tee benchmark-artifacts/v030-logs-r24-process-probe.log
