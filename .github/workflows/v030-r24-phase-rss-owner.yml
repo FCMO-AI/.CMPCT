@@ -5,6 +5,9 @@ on:
   push:
     branches: [agent/v030-r24-streamed-materialization-rss-v2]
     paths:
+      - 'src/cmpct/v030_release_materialization.py'
+      - 'src/cmpct/__init__.py'
+      - 'src/cmpct/_ordered_pull.py'
       - 'benchmarks/v030_r24_phase_rss_owner.py'
       - 'benchmarks/v030_r24_streamed_materialization_ab.py'
       - 'experiments/v030_r24_streamed_materialization.py'
@@ -32,11 +35,15 @@ jobs:
           sudo apt-get install -y zstd gcc ffmpeg libsndfile1
           python -m pip install -e '.[audio,test]'
           python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
-      - name: Prove local byte identity and iterator semantics
+      - name: Full regression suite
         run: |
           set -euo pipefail
           mkdir -p benchmark-artifacts
-          pytest -q tests/test_ordered_pull_iter.py tests/test_v030_r24_streamed_materialization.py 2>&1 | tee benchmark-artifacts/tests.log
+          pytest -q 2>&1 | tee benchmark-artifacts/full-tests.log
+      - name: Prove materialization-specific contracts
+        run: |
+          set -euo pipefail
+          pytest -q tests/test_ordered_pull_iter.py tests/test_v030_r24_streamed_materialization.py 2>&1 | tee benchmark-artifacts/materialization-tests.log
       - name: Run phase RSS falsifier
         run: |
           set -euo pipefail
@@ -45,6 +52,8 @@ jobs:
         run: |
           set -euo pipefail
           python benchmarks/v030_r24_streamed_materialization_ab.py --work-root "$RUNNER_TEMP/cmpct-r24-stream-ab" --output "$GITHUB_WORKSPACE/benchmark-artifacts/v030-r24-streamed-materialization-ab.json" 2>&1 | tee benchmark-artifacts/ab.log
+      - name: CI topology self-check
+        run: python tools/check_ci_topology.py
       - uses: actions/upload-artifact@v6
         if: always()
         with:
