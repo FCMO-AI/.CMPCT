@@ -67,6 +67,7 @@ def test_missing_output_parent_matches_historical_failure(tmp_path: Path):
 
 def test_materialization_guard_reload_keeps_true_original(tmp_path: Path):
     import cmpct.v030_release_materialization as materialization
+    import experiments.v030_r24_streamed_materialization as experiment
 
     original=materialization._ORIGINAL_BUILD
     importlib.reload(materialization)
@@ -76,3 +77,6 @@ def test_materialization_guard_reload_keeps_true_original(tmp_path: Path):
     stats=Builder(src,workers=1,reproducible=True).build(out)
     assert out.is_file()
     assert set(stats)=={'bytes','logical_bytes','unique_blobs','logical_files','recipes','index_raw','index_comp','data_bytes','encode_workers','reproducible'}
+    # Keep the research alias synchronized for later tests in the same interpreter.
+    importlib.reload(experiment)
+    assert experiment.StreamedBuilder is materialization.StreamedBuilder
