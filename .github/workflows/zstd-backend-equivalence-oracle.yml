@@ -1,9 +1,15 @@
 # ci-lane: deep
-# ci-cancel-policy: preserve-receipts
-# ci-pr-scope: exact-head-oracle
+# ci-cancel-policy: split-classifier-preserve-receipts
+# ci-pr-scope: latest-head-commit-gate
 name: CMPCT zstd backend equivalence oracle
 
 on:
+  pull_request:
+    branches: [agent/v030-authoritative-integration]
+    paths:
+      - experiments/zstd_backend_equivalence_oracle.py
+      - experiments/zstd_full_archive_backend_oracle.py
+      - .github/workflows/zstd-backend-equivalence-oracle.yml
   push:
     branches: [agent/zstd-platform-loader]
     paths:
@@ -13,23 +19,46 @@ on:
   workflow_dispatch:
 
 permissions: {contents: read}
+env:
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
 
 jobs:
+  classify:
+    runs-on: ubuntu-24.04
+    concurrency:
+      group: ${{ github.workflow }}-classifier-${{ github.event.pull_request.number || github.ref }}
+      cancel-in-progress: true
+    outputs:
+      run_deep: ${{ steps.scope.outputs.run_deep }}
+    steps:
+      - uses: actions/checkout@v6
+        with: {ref: '${{ env.EVIDENCE_HEAD }}', fetch-depth: 2}
+      - id: scope
+        shell: bash
+        run: |
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          files="$(git diff-tree --no-commit-id --name-only -r HEAD)"
+          if printf '%s\n' "$files" | grep -Eq '^(experiments/zstd_backend_equivalence_oracle.py|experiments/zstd_full_archive_backend_oracle.py|\.github/workflows/zstd-backend-equivalence-oracle.yml)$'; then
+            echo 'run_deep=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'run_deep=false' >> "$GITHUB_OUTPUT"
+          fi
+
   oracle:
+    needs: classify
+    if: needs.classify.outputs.run_deep == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     concurrency:
-      group: ${{ github.workflow }}-${{ github.sha }}
+      group: ${{ github.workflow }}-receipt-${{ env.EVIDENCE_HEAD }}
       cancel-in-progress: false
     steps:
       - uses: actions/checkout@v6
-        with:
-          ref: ${{ github.sha }}
-          fetch-depth: 1
+        with: {ref: '${{ env.EVIDENCE_HEAD }}', fetch-depth: 1}
       - uses: actions/setup-python@v6
         with: {python-version: '3.11', cache: pip}
       - name: Bind exact source
-        run: test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
       - name: Install project
         run: python -m pip install -e .
       - name: Run primitive equivalence oracle
@@ -38,7 +67,7 @@ jobs:
         run: python experiments/zstd_full_archive_backend_oracle.py | tee zstd-full-archive-backend.json
       - uses: actions/upload-artifact@v6
         with:
-          name: zstd-backend-equivalence-${{ github.sha }}
+          name: zstd-backend-equivalence-${{ env.EVIDENCE_HEAD }}
           path: |
             zstd-backend-equivalence.json
             zstd-full-archive-backend.json
