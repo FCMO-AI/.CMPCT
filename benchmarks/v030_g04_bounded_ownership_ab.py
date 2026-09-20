@@ -30,8 +30,11 @@ def main():
         pair={'rep':rep}
         for mode in order: pair[mode]=invoke(mode,source,a.work_root/f'ml-{rep}-{mode}.cmpct')
         pair['byte_identical']=pair['base']['archive_bytes']==pair['bounded']['archive_bytes'] and pair['base']['sha256']==pair['bounded']['sha256']
+        pair['selection_identical']=pair['base']['selected']==pair['bounded']['selected'] and pair['base']['format_revision']==pair['bounded']['format_revision']
         pair['rss_ratio']=pair['bounded']['peak_rss_kib']/pair['base']['peak_rss_kib']; pair['wall_ratio']=pair['bounded']['wall_s']/pair['base']['wall_s']; rows.append(pair)
+    exact=all(x['byte_identical'] and x['selection_identical'] for x in rows)
     result={'schema':'cmpct-v030-g04-bounded-ownership-ab-v1','release_credit':False,'rows':rows,
-      'all_byte_identical':all(x['byte_identical'] for x in rows),'claim_boundary':'ML frozen workload fresh-process whole promoted build; exact bytes + parent ru_maxrss + wall/CPU. Verification behavior is unchanged; release authority remains separate.'}
+      'all_exact':exact,'claim_boundary':'ML frozen workload fresh-process whole promoted build; exact bytes/selection + parent ru_maxrss + wall/CPU. Verification behavior is unchanged; release authority remains separate.'}
     a.output.parent.mkdir(parents=True,exist_ok=True); a.output.write_text(json.dumps(result,indent=2)+'\n'); print(json.dumps(result,indent=2))
+    if not exact: raise SystemExit('bounded G04 ownership changed product bytes/selection')
 if __name__=='__main__': main()
