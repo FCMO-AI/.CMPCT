@@ -1,0 +1,49 @@
+# ci-lane: deep
+# ci-cancel-policy: preserve-receipts
+# ci-pr-scope: latest-head-commit-gate
+name: CMPCT v0.30 r24 process product runtime authority
+on:
+  push:
+    branches: [agent/v030-r24-process-productization]
+    paths:
+      - experiments/entropygraph_v030_release_product.py
+      - experiments/entropygraph_v030_r24_process_prebuild.py
+      - experiments/entropygraph_v030_r24_process_shipping.py
+      - .github/workflows/v030-r24-process-product-runtime.yml
+  workflow_dispatch:
+permissions: {contents: read}
+env: {PYTHONPATH: '${{ github.workspace }}'}
+jobs:
+  runtime-authority:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    concurrency:
+      group: ${{ github.workflow }}-${{ github.sha }}
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v6
+        with: {ref: '${{ github.sha }}', fetch-depth: 1}
+      - uses: actions/setup-python@v6
+        with: {python-version: '3.11', cache: pip}
+      - name: Bind exact candidate head
+        shell: bash
+        run: test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+      - name: Install frozen runtime dependencies
+        shell: bash
+        run: |
+          sudo apt-get update && sudo apt-get install -y zstd gcc ffmpeg libsndfile1
+          python -m pip install -e '.[audio,test]'
+          python -m pip install numpy pillow reportlab python-docx openpyxl python-pptx
+      - name: Run unchanged three-workload runtime authority
+        shell: bash
+        run: |
+          set -o pipefail
+          mkdir -p benchmark-artifacts
+          python benchmarks/v030_release_performance.py --work-root "$RUNNER_TEMP/v030-runtime" --output benchmark-artifacts/v030-release-performance.json 2>&1 | tee benchmark-artifacts/v030-release-performance.log
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: v030-r24-process-product-runtime-${{ github.sha }}
+          path: benchmark-artifacts/
+          if-no-files-found: error
+          retention-days: 90
