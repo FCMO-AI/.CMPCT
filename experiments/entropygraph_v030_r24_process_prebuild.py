@@ -68,7 +68,11 @@ class R24PrebuildProcess:
         except (json.JSONDecodeError, TypeError, ValueError) as exc:
             self.out.unlink(missing_ok=True)
             raise RuntimeError("r24 prebuild child returned malformed receipt") from exc
-        if receipt.get("schema") != "cmpct-v030-r24-prebuild-process-v1" or not isinstance(receipt.get("stats"), dict):
+        if (
+            not isinstance(receipt, dict)
+            or receipt.get("schema") != "cmpct-v030-r24-prebuild-process-v1"
+            or not isinstance(receipt.get("stats"), dict)
+        ):
             self.out.unlink(missing_ok=True)
             raise RuntimeError("r24 prebuild child returned malformed receipt")
         if not self.out.is_file():
