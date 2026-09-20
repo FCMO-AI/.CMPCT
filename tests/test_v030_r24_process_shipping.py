@@ -20,6 +20,13 @@ def _source(root: Path) -> None:
     (root / "b.bin").write_bytes(bytes(range(256)) * 32)
 
 
+def test_promoted_front_door_owns_process_seam():
+    from experiments import entropygraph_v030_release_product as product
+
+    assert product._BASE_IMPL.C._prepare_profile_tree.__module__ == "experiments.entropygraph_v030_r24_process_shipping"
+    assert product._BASE_IMPL.C._r24_build.__module__ == "experiments.entropygraph_v030_r24_process_shipping"
+
+
 def test_registry_consumes_exact_promoted_r24_once(tmp_path: Path):
     from experiments import entropygraph_v030_release_product as product
 
@@ -92,8 +99,6 @@ def test_installer_replaces_thread_seam_without_duplicate_parent_build(tmp_path:
     base._locality_bounded_r24_build(root, direct)
     registry = install_into_release_base(base, timeout_s=30)
     try:
-        # The profile call starts exactly one child owner; canonical-final's later r24 call
-        # consumes that artifact rather than invoking the parent builder again.
         base.C._prepare_profile_tree(root, staging)
         stats = base.C._r24_build(root, out)
         assert stats["r24_prebuild_owner"] == "child-process-v1"
