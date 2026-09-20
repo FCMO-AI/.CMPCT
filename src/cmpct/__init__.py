@@ -8,7 +8,8 @@ __version__ = "0.24.0"
 # Encoder-only v0.30 release guards. They are inert for ordinary/historical Builder instances and
 # activate only under the promoted release-owned r24-v4 policy. Keeping installation here makes every
 # import order deterministic: release code cannot accidentally miss locality enforcement, operation-
-# scoped worker-policy transport, or bounded release materialization.
+# scoped worker-policy transport, or bounded release materialization. Materialization is release-owned
+# specifically so the frozen historical r24 comparator never inherits the candidate's memory change.
 from . import v030_release_locality as _v030_release_locality  # noqa: E402,F401
 from . import v030_worker_policy_capture as _v030_worker_policy_capture  # noqa: E402,F401
 from . import v030_release_materialization as _v030_release_materialization  # noqa: E402,F401
