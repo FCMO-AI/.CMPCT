@@ -34,7 +34,7 @@ def main():
     from benchmarks import v030_release_performance as PERF
     shutil.rmtree(a.work_root,ignore_errors=True); a.work_root.mkdir(parents=True)
     corp=PERF._build_corpora(a.work_root/'corpus'); rows={}
-    targets=(('resemblance_hostile_v1','01_shifted_versions'),('neutral_hostile_v1','09_ml_artifacts'))
+    targets=(('resemblance_hostile_v1','01_shifted_versions'),('neutral_hostile_v1','05_logs_and_telemetry'),('neutral_hostile_v1','09_ml_artifacts'))
     for suite,name in targets:
         source=corp[(suite,name)]; rows[name]={}
         for mode in ('r24','r25'): rows[name][mode]=invoke(mode,source,a.work_root/f'{name}-{mode}.cmpct')
