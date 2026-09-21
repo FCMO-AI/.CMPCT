@@ -13,23 +13,12 @@ ROW = re.compile(r"^level=(\d+) usize=(\d+) csize=(\d+) sha256=([0-9a-f]{64})$")
 
 
 def _payload() -> bytes:
-    out = bytearray()
-    phrase = b"cmpct exact raw dictionary ownership boundary\0"
-    while len(out) < 155_648:
-        i = len(out)
-        out += phrase
-        out += i.to_bytes(8, "little")
-        out += phrase[: (i // 17) % len(phrase)]
-    return bytes(out[:155_648])
+    # Exact structured payload that exposed the 104 B vs 105 B mismatch in #177.
+    return (b"structured-record\0" * 8192) + bytes(range(64)) * 128
 
 
 def _dictionary() -> bytes:
-    out = bytearray()
-    seed = b"cmpct exact raw dictionary ownership boundary\0"
-    while len(out) < 8192:
-        out += seed
-        out += len(out).to_bytes(4, "little")
-    return bytes(out[:8192])
+    return (b"alpha beta gamma delta structured-record\0" * 128)[:4096]
 
 
 def test_package_owned_low_level_zstd_matches_canonical_dictionary_bytes() -> None:
@@ -55,6 +44,8 @@ def test_package_owned_low_level_zstd_matches_canonical_dictionary_bytes() -> No
 
     src = _payload()
     dictionary = _dictionary()
+    assert len(src) == 155_648
+    assert len(dictionary) == 4096
     assert set(rust) == {1, 3, 9, 19}
     for level in sorted(rust):
         canonical = zcd(src, dictionary, level)
