@@ -10,6 +10,7 @@ on:
       - experiments/entropygraph_v030_release_product.py
       - experiments/entropygraph_v030_r24_process_prebuild.py
       - experiments/entropygraph_v030_r24_process_shipping.py
+      - experiments/entropygraph_v030_hierarchical_geometry.py
       - tests/test_v030_r24_process_prebuild.py
       - tests/test_v030_r24_process_shipping.py
       - .github/workflows/v030-r24-process-prebuild-portability.yml
@@ -19,6 +20,7 @@ on:
       - experiments/entropygraph_v030_release_product.py
       - experiments/entropygraph_v030_r24_process_prebuild.py
       - experiments/entropygraph_v030_r24_process_shipping.py
+      - experiments/entropygraph_v030_hierarchical_geometry.py
       - tests/test_v030_r24_process_prebuild.py
       - tests/test_v030_r24_process_shipping.py
       - .github/workflows/v030-r24-process-prebuild-portability.yml
@@ -43,13 +45,13 @@ jobs:
           ref: ${{ env.EVIDENCE_HEAD }}
           fetch-depth: 2
       - id: scope
-        name: Admit only latest-head process-boundary changes
+        name: Admit only latest-head process/runtime-authority changes
         shell: bash
         run: |
           test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
           files="$(git diff-tree --no-commit-id --name-only -r HEAD)"
           printf '%s\n' "$files"
-          if printf '%s\n' "$files" | grep -Eq '^(experiments/entropygraph_v030_release_product\.py|experiments/entropygraph_v030_r24_process_(prebuild|shipping)\.py|tests/test_v030_r24_process_(prebuild|shipping)\.py|\.github/workflows/v030-r24-process-prebuild-portability\.yml)$'; then
+          if printf '%s\n' "$files" | grep -Eq '^(experiments/entropygraph_v030_release_product\.py|experiments/entropygraph_v030_hierarchical_geometry\.py|experiments/entropygraph_v030_r24_process_(prebuild|shipping)\.py|tests/test_v030_r24_process_(prebuild|shipping)\.py|\.github/workflows/v030-r24-process-prebuild-portability\.yml)$'; then
             echo 'run_deep=true' >> "$GITHUB_OUTPUT"
           else
             echo 'run_deep=false' >> "$GITHUB_OUTPUT"
@@ -140,16 +142,12 @@ jobs:
               assert data['release_facade']=='cmpct-v030-release-product-v1'
           tree=json.loads(Path('benchmark-artifacts/runtime-tree-rss.json').read_text())
           assert tree['rss_accounting']=='whole-process-tree-vmrss-10ms-with-parent-rumaxrss-floor'
-          # Every frozen row owns two balanced repetitions, two engines and three operations
-          # (pack/verify/extract). Derive receipt cardinality from the artifact rather than pinning
-          # a stale magic number that can reject complete evidence after the harness expands.
           expected_receipts=sum(len(row['repetitions']) * 2 * 3 for row in tree['rows'])
           assert len(tree['tree_rss_receipts']) == expected_receipts
           for row in tree['tree_rss_receipts']:
               assert row['decisive_peak_rss_kib'] >= row['parent_peak_rss_kib']
               assert row['decisive_peak_rss_kib'] >= row['sampled_tree_peak_rss_kib']
           PY
-          # Preserve the unchanged authorities' own exit status after both receipts exist.
           if [ "$v2_rc" -ne 0 ] || [ "$tree_rc" -ne 0 ]; then
             exit 1
           fi
