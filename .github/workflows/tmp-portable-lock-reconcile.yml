@@ -1,0 +1,25 @@
+name: TEMP portable lock reconcile
+on:
+  push:
+    branches: [agent/v030-authoritative-integration]
+    paths: ['.github/workflows/tmp-portable-lock-reconcile.yml']
+jobs:
+  reconcile:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+      - name: Regenerate portable lock from authoritative manifests
+        working-directory: native/cmpct-portable
+        run: |
+          set -euo pipefail
+          rm Cargo.lock
+          cargo generate-lockfile
+          cargo check --locked
+          grep -A5 '^name = "zstd"' Cargo.lock
+          grep -A5 '^name = "zstd-safe"' Cargo.lock
+          grep -A5 '^name = "zstd-sys"' Cargo.lock
+      - uses: actions/upload-artifact@v6
+        with:
+          name: portable-lock-${{ github.sha }}
+          path: native/cmpct-portable/Cargo.lock
+          retention-days: 1
