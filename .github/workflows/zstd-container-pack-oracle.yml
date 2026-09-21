@@ -1,7 +1,7 @@
 # ci-lane: research
 # ci-cancel-policy: latest-head
 # ci-pr-scope: latest-head-commit-gate
-# discriminator: owned-1.5.7 blockSplitterLevel=1 pre-splitter control
+# discriminator: owned-1.5.7 blockSplitterLevel=1 pre-splitter control vs inherited ambient 1.5.5
 name: CMPCT Zstd container-pack byte oracle
 
 on:
@@ -45,42 +45,29 @@ jobs:
           system.ZSTD_compressBound.argtypes=[sz]; system.ZSTD_compressBound.restype=sz
           system.ZSTD_compress.argtypes=[ctypes.c_void_p,sz,ctypes.c_void_p,sz,ctypes.c_int]; system.ZSTD_compress.restype=sz
           system.ZSTD_isError.argtypes=[sz]; system.ZSTD_isError.restype=ctypes.c_uint
-          print("system_library",system_name,"system_zstd_version",system.ZSTD_versionString().decode())
+          inherited_version=system.ZSTD_versionString().decode()
+          print("system_library",system_name,"inherited_zstd_version",inherited_version)
+          assert inherited_version=="1.5.5", "oracle host changed; inherited comparator is no longer the proven 1.5.5 engine"
           core=ctypes.CDLL(str(Path("native/cmpct-core/target/release/libcmpct_core.so").resolve()))
           core.cmpct_codec_zstd_compress_bound.argtypes=[sz]; core.cmpct_codec_zstd_compress_bound.restype=sz
           core.cmpct_codec_zstd_compress.argtypes=[ctypes.c_void_p,sz,ctypes.c_int32,ctypes.c_void_p,sz,ctypes.POINTER(sz)]; core.cmpct_codec_zstd_compress.restype=ctypes.c_int32
-          src=ctypes.create_string_buffer(pack); diverged=False
+          src=ctypes.create_string_buffer(pack); all_equal=True
           for level in (15,12,9):
               cap=int(system.ZSTD_compressBound(len(pack))); a=ctypes.create_string_buffer(cap)
-              na=int(system.ZSTD_compress(a,cap,src,len(pack),level)); assert not system.ZSTD_isError(na); ambient=a.raw[:na]
+              na=int(system.ZSTD_compress(a,cap,src,len(pack),level)); assert not system.ZSTD_isError(na); inherited=a.raw[:na]
               b=ctypes.create_string_buffer(cap); nb=sz(); status=int(core.cmpct_codec_zstd_compress(src,len(pack),level,b,cap,ctypes.byref(nb))); assert status==0; owned=b.raw[:nb.value]
-              first=next((i for i,(x,y) in enumerate(zip(ambient,owned)) if x!=y),None)
-              if first is None and len(ambient)!=len(owned): first=min(len(ambient),len(owned))
-              equal=ambient==owned; diverged |= not equal
-              print("level",level,"ambient_bytes",len(ambient),"owned_bytes",len(owned),"delta",len(owned)-len(ambient),"ambient_sha256",hashlib.sha256(ambient).hexdigest(),"owned_sha256",hashlib.sha256(owned).hexdigest(),"equal",equal,"first_diff",first)
-          print("container_pack_diverged",diverged)
+              first=next((i for i,(x,y) in enumerate(zip(inherited,owned)) if x!=y),None)
+              if first is None and len(inherited)!=len(owned): first=min(len(inherited),len(owned))
+              equal=inherited==owned; all_equal &= equal
+              print("level",level,"inherited_bytes",len(inherited),"owned_bytes",len(owned),"delta",len(owned)-len(inherited),"inherited_sha256",hashlib.sha256(inherited).hexdigest(),"owned_sha256",hashlib.sha256(owned).hexdigest(),"equal",equal,"first_diff",first)
+          print("legacy_semantics_exact",all_equal)
+          assert all_equal, "bounded pre-splitter control failed exact-byte inheritance"
           PY
-      - name: Build current package-owned core
+      - name: Build owned 1.5.7 legacy-semantics candidate
         working-directory: native/cmpct-core
         run: cargo build --release --locked
-      - name: Compare current package engine
+      - name: Charge inherited-byte oracle
         run: PYTHONPATH=. python /tmp/probe.py
-      - name: Build inherited 1.5.5 package-owned control
-        working-directory: native/cmpct-core
-        run: |
-          cargo update -p zstd --precise 0.13.0
-          cargo update -p zstd-safe --precise 7.0.0
-          cargo update -p zstd-sys --precise '2.0.9+zstd.1.5.5'
-          cargo build --release
-          grep -A8 -E '^name = "zstd(-safe|-sys)?"$' Cargo.lock
-      - name: Compare inherited-generation package engine
-        run: PYTHONPATH=. python /tmp/probe.py
-      - name: Charge frozen codec vectors under inherited generation
+      - name: Charge frozen codec vectors
         working-directory: native/cmpct-core
         run: cargo test --test zstd_encode_equivalence
-      - name: Preserve candidate lock control
-        uses: actions/upload-artifact@v4
-        with:
-          name: zstd-1.5.5-owned-lock-${{ github.sha }}
-          path: native/cmpct-core/Cargo.lock
-          if-no-files-found: error
