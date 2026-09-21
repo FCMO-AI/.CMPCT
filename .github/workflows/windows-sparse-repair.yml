@@ -1,0 +1,31 @@
+name: CMPCT bounded Windows sparse extraction repair
+on:
+  pull_request:
+    paths: [".github/workflows/windows-sparse-repair.yml"]
+permissions:
+  contents: write
+jobs:
+  repair:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+      - name: Apply pwrite portability fallback
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p=Path('src/cmpct/reader.py'); s=p.read_text()
+          old="""                            while view:\n                                n=os.pwrite(fd,view,q);view=view[n:];q+=n"""
+          new="""                            while view:\n                                if hasattr(os,'pwrite'):\n                                    n=os.pwrite(fd,view,q)\n                                else:\n                                    os.lseek(fd,q,os.SEEK_SET);n=os.write(fd,view)\n                                view=view[n:];q+=n"""
+          assert s.count(old)==1,s.count(old)
+          p.write_text(s.replace(old,new))
+          PY
+          git diff --check
+          git diff -- src/cmpct/reader.py
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add src/cmpct/reader.py
+          git commit -m 'fix: restore sparse extraction on Windows'
+          git push origin HEAD:${{ github.event.pull_request.head.ref }}
