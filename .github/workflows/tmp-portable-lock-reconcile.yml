@@ -1,4 +1,4 @@
-name: TEMP portable lock reconcile
+name: TEMP post-integration custody cleanup
 on:
   push:
     branches: [agent/v030-authoritative-integration]
@@ -6,31 +6,40 @@ on:
 permissions:
   contents: write
 jobs:
-  reconcile:
+  cleanup:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v6
         with:
           ref: agent/v030-authoritative-integration
-      - name: Reconcile only stale Zstd entries in portable lock
-        working-directory: native/cmpct-portable
+      - name: Make pre-merge Android custody and desktop evidence exact-head aware
         run: |
           set -euo pipefail
-          cargo update -p zstd --precise 0.13.0
-          cargo update -p zstd-safe --precise 7.0.0
-          cargo update -p zstd-sys --precise '2.0.9+zstd.1.5.5'
-          cargo check --locked
-          grep -A5 '^name = "zstd"' Cargo.lock
-          grep -A5 '^name = "zstd-safe"' Cargo.lock
-          grep -A5 '^name = "zstd-sys"' Cargo.lock
-          git diff -- native/cmpct-portable/Cargo.lock
-      - name: Commit reconciled lock only
-        shell: bash
+          python - <<'PY'
+          from pathlib import Path
+          android=Path('.github/workflows/android.yml')
+          s=android.read_text()
+          old='pull_request:\n    branches: [main]\n'
+          new='pull_request:\n    branches: [main, agent/v030-authoritative-integration]\n'
+          assert s.count(old)==1, s.count(old)
+          android.write_text(s.replace(old,new,1))
+
+          package=Path('.github/workflows/installed-native-package.yml')
+          s=package.read_text()
+          old="'candidate_sha':os.environ['GITHUB_SHA'],"
+          new="'candidate_sha':__import__('subprocess').check_output(['git','rev-parse','HEAD'],text=True).strip(),"
+          assert s.count(old)==1, s.count(old)
+          package.write_text(s.replace(old,new,1))
+          PY
+          git rm docs/v030-coordination/requests/android-lock-repair.md
+          git diff --check
+          grep -n 'branches: \[main, agent/v030-authoritative-integration\]' .github/workflows/android.yml
+          grep -n "candidate_sha.*rev-parse" .github/workflows/installed-native-package.yml
+      - name: Commit permanent custody fixes only
         run: |
           set -euo pipefail
-          test -z "$(git status --porcelain --untracked-files=no | grep -v '^ M native/cmpct-portable/Cargo.lock$' || true)"
           git config user.name 'cmpct-ci'
           git config user.email 'cmpct-ci@users.noreply.github.com'
-          git add native/cmpct-portable/Cargo.lock
-          git commit -m 'fix(android): reconcile portable locked Zstd generation'
+          git add .github/workflows/android.yml .github/workflows/installed-native-package.yml docs/v030-coordination/requests/android-lock-repair.md
+          git commit -m 'ci: gate integration PRs on Android and bind package evidence head'
           git push origin HEAD:agent/v030-authoritative-integration
