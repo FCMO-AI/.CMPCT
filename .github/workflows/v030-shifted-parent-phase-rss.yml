@@ -73,10 +73,25 @@ jobs:
           python -m pip install pillow==12.3.0 reportlab==5.0.0 python-docx==1.2.0 openpyxl==3.1.5 python-pptx==1.0.2 numpy==2.4.6
       - name: Build native core
         run: cargo build --manifest-path native/cmpct-core/Cargo.toml --release --locked
-      - name: Incumbent Shifted attribution
+      - name: Materialize one shared frozen Shifted source
+        shell: bash
         run: |
           mkdir -p benchmark-artifacts
+          python - <<'PY'
+          import shutil
+          from pathlib import Path
+          from benchmarks import v030_release_performance as P
+          root=Path('benchmark-artifacts/source-generator')
+          corpora=P._build_corpora(root)
+          source=corpora[('neutral_hostile_v1','01_shifted_versions')]
+          target=Path('benchmark-artifacts/shared-shifted-source')
+          shutil.copytree(source,target,copy_function=shutil.copy2)
+          print(target)
+          PY
+      - name: Incumbent Shifted attribution
+        run: |
           python -m benchmarks.v030_shifted_parent_phase_rss \
+            --source-root benchmark-artifacts/shared-shifted-source \
             --work-root benchmark-artifacts/incumbent-work \
             --output benchmark-artifacts/incumbent.json \
             2>&1 | tee benchmark-artifacts/incumbent.log
@@ -84,6 +99,7 @@ jobs:
         run: |
           python -m benchmarks.v030_shifted_parent_phase_rss \
             --bounded-screen \
+            --source-root benchmark-artifacts/shared-shifted-source \
             --work-root benchmark-artifacts/bounded-work \
             --output benchmark-artifacts/bounded.json \
             2>&1 | tee benchmark-artifacts/bounded.log
@@ -95,10 +111,9 @@ jobs:
           from pathlib import Path
           a=json.loads(Path('benchmark-artifacts/incumbent.json').read_text())
           b=json.loads(Path('benchmark-artifacts/bounded.json').read_text())
-          assert a['selected']==b['selected'], (a['selected'],b['selected'])
-          assert a['format_revision']==b['format_revision'], (a['format_revision'],b['format_revision'])
-          assert a['archive_bytes']==b['archive_bytes'], (a['archive_bytes'],b['archive_bytes'])
-          print(json.dumps({'incumbent_peak':a['peak'],'bounded_peak':b['peak'],'archive_bytes':a['archive_bytes'],'selected':a['selected']},sort_keys=True))
+          for key in ('selected','format_revision','archive_bytes','archive_sha256'):
+              assert a[key]==b[key], (key,a[key],b[key])
+          print(json.dumps({'incumbent_peak':a['peak'],'bounded_peak':b['peak'],'archive_bytes':a['archive_bytes'],'archive_sha256':a['archive_sha256'],'selected':a['selected']},sort_keys=True))
           PY
       - uses: actions/upload-artifact@v4
         if: always()
