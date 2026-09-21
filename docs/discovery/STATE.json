@@ -3,55 +3,57 @@
   "status": "ACTIVE",
   "authority": {
     "canonical_release": "v0.29.0 / r24 on main",
-    "active_frontier": "PR #175 agent/v030-r24-process-productization",
-    "source": "PR #175; exact shipping head 4bdb6f761ea370b7f1c5a1bc11f2fa3ed0e79a8a; canonical+tree authority run 35571598470 artifact 10626681868"
+    "active_frontier": "PR #175 creator-memory closure -> PR #180 Windows native-zstd ownership",
+    "source": "PR #175 canonical+tree authority 35571598470/10626681868; PR #180 caller-buffer codec ABI seed"
   },
   "active_product_bottleneck": {
     "id": "v030-release-convergence-after-memory-closure",
-    "observation": "The sequential r24->Logs shipping mutation closed the final stable creator parent-RSS red under unchanged authority. Exact-head runtime-authority job 106244231094 passed. canonical-v2 passes all gates: Logs max parent pack RSS 1.001699x, Shifted 1.000x, ML 1.177117x; max create 1.231072x, max extract 1.152842x, zero size regressions. Whole-process-tree authority also passes: max tree RSS 1.0, max create 1.209960x, max extract 1.203647x. Candidate fingerprint d488f79621c59b6faec2168d732285680dc8beafb07fcc542fbd880d425c72fc.",
-    "next_discriminator": "Do not continue creator-memory tuning. Recompute release-convergence blockers from current repository authority, with Windows native-zstd packaging/portability issue #176 remaining explicit and separate from the now-closed memory mechanism."
+    "observation": "Creator-memory is closed under unchanged canonical authority. Windows package ownership of Zstd remains active product debt. PR #180 now has an independently compiled caller-buffer codec ABI seed that preserves the frozen 119 B plain and 104 B raw-dictionary Zstd fingerprints and round-trips exactly; it is not yet linked into the shipping cdylib and has zero product credit.",
+    "next_discriminator": "Link PR #180 codec_abi into the existing cmpct_core cdylib using canonical CmpctStatus, then prove the new symbols from a non-Rust caller. Any byte mismatch or native regression kills transparent substitution before packaging work."
   },
   "primary_question": {
-    "id": "post-memory-release-convergence",
+    "id": "windows-native-zstd-package-ownership",
     "family": "release-convergence/portability-evidence",
-    "status": "MEMORY_DEBT_CLOSED_REORIENT",
+    "status": "ABI_SEED_PROVEN_NOT_SHIPPING",
     "evidence": [
-      "35571598470/10626681868: exact-head runtime authority passed canonical-v2 and whole-tree on shipping sequential r24->Logs",
-      "canonical-v2: Shifted 1.000x, Logs 1.001699x, ML 1.177117x max parent pack RSS; all byte/create/extract/RSS gates pass",
-      "whole-tree: Logs 0.467988x, Shifted 0.943981x, ML 0.590879x max pack RSS; all gates pass",
-      "35566703880 attempts 1-2 predicted the causal direction; shipping authority now confirms product credit"
+      "35571598470/10626681868: creator-memory canonical-v2 and whole-tree gates all pass; Windows ambient-zstd remains separate debt #176",
+      "#178: low-level zstd_safe CCtx::compress_using_dict reproduces canonical dictionary bytes across Ubuntu/macOS/Windows",
+      "PR #180 native run 35587023627: independent caller-buffer module preserved 119 B plain / 104 B dictionary fingerprints, roundtrip identity and inherited native golden matrix before canonical-status refactor",
+      "PR #180 final canonical-status refactor is exact-rustfmt-clean at head 555671fa0740440af20339742e494c8d1878d353; final native matrix is pending"
     ],
-    "prediction": "Creator-memory rehabilitation should require no further mechanism changes; remaining work should be release/portability convergence rather than local RSS optimization.",
-    "kill": "Any exact same-candidate rerun that reproducibly reopens a byte, timing, parent-RSS, or whole-tree gate reopens causal diagnosis; otherwise do not spend discovery budget on this closed family."
+    "prediction": "The same package-owned zstd already linked into cmpct_core can replace ambient Python ctypes ownership without changing compressed bytes; linking the staged module should preserve all native goldens.",
+    "kill": "Any same-input compressed-byte mismatch, archive identity mismatch, native golden regression, or unavoidable exported dependency cost blocks transparent substitution; cross-decode alone is insufficient."
   },
   "frontier_candidates": [
-    {"id": "windows-native-zstd-package-ownership", "status": "ACTIVE_PRODUCT_DEBT", "evidence": "issue #176; Linux/macOS focused portability pass on 35571598470 while Windows fails the known ambient libzstd loader boundary"},
-    {"id": "release-evidence-convergence", "status": "NEXT", "evidence": "canonical-v2 and whole-tree are green at fingerprint d488f796...; discover remaining promotion law/evidence gaps before changing product code"},
-    {"id": "worldview-distance-representation-search", "status": "QUEUED_AFTER_RELEASE_CONVERGENCE", "evidence": "memory family is closed; reopen representation search only after current promotion debt is decision-complete"}
+    {"id": "windows-native-zstd-package-ownership", "status": "ACTIVE_PRODUCT_DEBT", "evidence": "#176/#180; exact caller-buffer seed exists but is not linked or packaged"},
+    {"id": "python-reader-ddict-ownership", "status": "NEW_SECOND_CONSUMER", "evidence": "reader.py caches ZSTD_DCtx/ZSTD_DDict from codec._z; writer-only migration cannot eliminate ambient zstd. After ABI linking, charge cached-DDict vs stateless package-owned decompress_using_dict before choosing stateful ABI debt."},
+    {"id": "release-evidence-custody", "status": "ACTIVE", "evidence": "#181: native public headers are outside V030_RELEASE_LOCK fingerprint_globs; #176 also records that strict release receipts do not yet explicitly assert clean installed desktop wheel codec closure"}
   ],
   "protected_seeds": [
     {"id": "shifted-hg-screen-buffer-lifetime", "status": "SHIPPING_CONFIRMED", "evidence": "35557126948;35563483707;35563173856;35571598470"},
     {"id": "ml-r24-process-lifetime", "status": "SHIPPING_CONFIRMED", "evidence": "35563173856;35571598470"},
-    {"id": "logs-sequential-exact-candidates", "status": "SHIPPING_CONFIRMED", "evidence": "35566703880 attempts1-2;35571598470/10626681868"}
+    {"id": "logs-sequential-exact-candidates", "status": "SHIPPING_CONFIRMED", "evidence": "35566703880 attempts1-2;35571598470"},
+    {"id": "package-owned-zstd-caller-buffer-abi", "status": "PROVEN_SEED_NOT_LINKED", "evidence": "#178;PR#180;35587023627"}
   ],
   "retired_or_narrowed": [
     {"id": "v030-creator-parent-rss-as-open-bottleneck", "reason": "35571598470 closes Shifted, Logs and ML under unchanged canonical-v2"},
     {"id": "logs-child-owner-as-preferred-fix", "reason": "replicated A/B exported cost to process tree; sequential shipping dominates"},
-    {"id": "logs-overlap-as-unproven-owner", "reason": "replicated A/B plus shipping canonical authority causally close the question"},
-    {"id": "timing-threshold-straddlers-as-current-blocker", "reason": "35571598470 all canonical-v2 and whole-tree timing gates pass"}
+    {"id": "python-zstandard-as-transparent-dictionary-substitute", "reason": "#177/#178 exact compressed-byte mismatch; low-level package-owned zstd is the surviving route"},
+    {"id": "os-specific-libzstd-name-gardening", "reason": "does not solve installed-package dependency ownership and is dominated by package-owned core"}
   ],
   "decision_evidence": {
-    "canonical_runtime": "35571598470/10626681868 fingerprint d488f796...: canonical-v2 gate passed; Logs parent RSS 1.001699x; max workload create 1.231072x; max extract 1.152842x; zero size regressions.",
-    "whole_tree": "35571598470/10626681868: tree gate passed; max pack RSS 1.0; max workload create 1.209960x; max extract 1.203647x.",
-    "logs_scheduling_ab": "35566703880 attempts1-2 predicted sequential parent/tree reduction at 17.0% and 15.9%; shipping authority confirms closure.",
-    "portability": "35571598470 focused Ubuntu/macOS pass; Windows failure remains issue #176 and is not evidence against the memory mechanism."
+    "canonical_runtime": "35571598470/10626681868 fingerprint d488f796...: canonical-v2 and whole-tree gates passed.",
+    "zstd_exact_primitive": "#178 and PR #180: low-level zstd_safe preserves frozen plain/dictionary fingerprints; high-level substitutions do not.",
+    "portability": "Linux/macOS focused process evidence is green; Windows ambient loader failure remains #176. PR #180 is implementation/evidence enablement only until linked and installed-package closure is proved."
   },
   "process_lessons": [
     {"lesson": "Prefer deleting avoidable overlap/retention over process relocation when exact serial recomputation stays inside timing margin.", "evidence": "35557126948;35566703880 attempts1-2;35571598470"},
     {"lesson": "Parent-only RSS can reward exported process cost; charge the process tree before productizing ownership boundaries.", "evidence": "35566703880 attempts1-2;35571598470"},
-    {"lesson": "A cheap causal A/B can accurately predict an expensive canonical product result when identity and exported costs are charged independently.", "evidence": "35566703880 attempts1-2 -> 35571598470"}
+    {"lesson": "For transparent codec ownership migration, exact compressed-byte identity is a stronger early discriminator than cross-decode compatibility.", "evidence": "#177;#178;PR#180"}
   ],
-  "pending_jobs": [],
-  "next_action": "Re-orient from current authority and enumerate the remaining release-convergence blockers rather than touching creator-memory code. Treat #176 Windows native-zstd package ownership as active product debt; use an installed-package/wheel boundary and exact codec/archive evidence across Linux/macOS/Windows. In parallel, verify the candidate has every release-law artifact required for eventual v0.30 promotion. Do not reopen closed RSS families without contradictory exact-candidate evidence.",
-  "last_reconciled": "2026-09-21T07:59Z"
+  "pending_jobs": [
+    {"provider":"github-actions","run":"35587724991","source_sha":"555671fa0740440af20339742e494c8d1878d353","question":"windows-native-zstd-package-ownership","expected":"native-core exact-head matrix after canonical-status refactor","decision_unlocked":"whether staged ABI remains green and ready for cdylib linking"}
+  ],
+  "next_action": "Consume native run 35587724991 without babysitting. If green, wire codec_abi into the existing cmpct_core cdylib and exercise the new symbols from a non-Rust caller; do not migrate Python yet. Then prove archive SHA/size identity. Separately measure reader cached-DDict vs stateless package-owned dictionary decode before deciding whether a stateful ABI is justified. Only after both writer and reader ownership are decision-complete should wheel-from-sdist packaging and Linux/macOS/Windows dependency-closure evidence begin. Correct #181 and machine-check desktop package closure before final release receipts.",
+  "last_reconciled": "2026-09-21T10:15Z"
 }
