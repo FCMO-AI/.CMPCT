@@ -34,7 +34,7 @@ fn dictionary() -> Vec<u8> {
     d
 }
 
-fn main() -> ExitCode {
+fn probe() -> Result<(), String> {
     let src = payload();
     let dict = dictionary();
     let mut cctx = CCtx::create();
@@ -43,32 +43,27 @@ fn main() -> ExitCode {
     for level in [1, 3, 9, 19] {
         let bound = zstd_safe::compress_bound(src.len());
         let mut compressed = vec![0u8; bound];
-        let n = match cctx.compress_using_dict(&mut compressed[..], &src, &dict, level) {
-            Ok(n) => n,
-            Err(code) => {
-                eprintln!(
+        let n = cctx
+            .compress_using_dict(&mut compressed[..], &src, &dict, level)
+            .map_err(|code| {
+                format!(
                     "compress_using_dict failed at level {level}: {}",
                     zstd_safe::get_error_name(code)
-                );
-                return ExitCode::FAILURE;
-            }
-        };
+                )
+            })?;
         compressed.truncate(n);
 
         let mut decoded = vec![0u8; src.len()];
-        let m = match dctx.decompress_using_dict(&mut decoded[..], &compressed, &dict) {
-            Ok(m) => m,
-            Err(code) => {
-                eprintln!(
+        let m = dctx
+            .decompress_using_dict(&mut decoded[..], &compressed, &dict)
+            .map_err(|code| {
+                format!(
                     "decompress_using_dict failed at level {level}: {}",
                     zstd_safe::get_error_name(code)
-                );
-                return ExitCode::FAILURE;
-            }
-        };
+                )
+            })?;
         if m != src.len() || decoded != src {
-            eprintln!("dictionary roundtrip mismatch at level {level}");
-            return ExitCode::FAILURE;
+            return Err(format!("dictionary roundtrip mismatch at level {level}"));
         }
         println!(
             "level={level} usize={} csize={}",
@@ -76,5 +71,25 @@ fn main() -> ExitCode {
             compressed.len()
         );
     }
-    ExitCode::SUCCESS
+    Ok(())
+}
+
+fn main() -> ExitCode {
+    match probe() {
+        Ok(()) => ExitCode::SUCCESS,
+        Err(error) => {
+            eprintln!("{error}");
+            ExitCode::FAILURE
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::probe;
+
+    #[test]
+    fn package_owned_dictionary_calls_roundtrip_discriminator() {
+        probe().unwrap();
+    }
 }
