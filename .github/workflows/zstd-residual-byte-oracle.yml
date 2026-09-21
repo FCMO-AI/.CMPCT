@@ -34,9 +34,9 @@ jobs:
       - uses: actions/setup-python@v6
         with:
           python-version: "3.11"
-      - name: Install package and build package-owned core
+      - name: Install runtime dependencies and build package-owned core
         run: |
-          python -m pip install -e .
+          python -m pip install msgpack numpy soundfile
           cargo build --release --locked --manifest-path native/cmpct-core/Cargo.toml
           cp native/cmpct-core/target/release/libcmpct_core.so src/cmpct/
       - name: Localize source/tiny residual
