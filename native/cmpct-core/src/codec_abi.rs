@@ -64,11 +64,21 @@ fn finish(result: Result<usize, c_int>, out_len: *mut usize) -> c_int {
     }
 }
 
+/// Return the maximum destination capacity required by Zstd for `input_len` bytes.
+///
+/// # Safety
+/// This function dereferences no caller pointer and has no additional safety preconditions.
 #[no_mangle]
 pub unsafe extern "C" fn cmpct_codec_zstd_compress_bound(input_len: usize) -> usize {
     zstd::zstd_safe::compress_bound(input_len)
 }
 
+/// Compress one byte string with the package-owned Zstd engine.
+///
+/// # Safety
+/// `input` must be readable for `input_len` bytes when non-zero; `output` must be writable for
+/// `output_cap` bytes when non-zero; `out_len` must be writable for one `usize`. Input and output
+/// storage must not overlap.
 #[no_mangle]
 pub unsafe extern "C" fn cmpct_codec_zstd_compress(
     input: *const u8,
@@ -94,6 +104,12 @@ pub unsafe extern "C" fn cmpct_codec_zstd_compress(
     }
 }
 
+/// Compress one byte string using the exact raw-dictionary call required by CMPCT archive identity.
+///
+/// # Safety
+/// `input`/`dict` must be readable for their declared non-zero lengths; `output` must be writable for
+/// `output_cap` bytes when non-zero; `out_len` must be writable for one `usize`. Caller buffers must
+/// not overlap in a way that violates Rust aliasing rules.
 #[no_mangle]
 pub unsafe extern "C" fn cmpct_codec_zstd_compress_using_dict(
     input: *const u8,
@@ -124,6 +140,12 @@ pub unsafe extern "C" fn cmpct_codec_zstd_compress_using_dict(
     }
 }
 
+/// Decompress one Zstd frame into caller-owned storage.
+///
+/// # Safety
+/// `input` must be readable for `input_len` bytes when non-zero; `output` must be writable for
+/// `output_cap` bytes when non-zero; `out_len` must be writable for one `usize`. Input and output
+/// storage must not overlap.
 #[no_mangle]
 pub unsafe extern "C" fn cmpct_codec_zstd_decompress(
     input: *const u8,
@@ -148,6 +170,12 @@ pub unsafe extern "C" fn cmpct_codec_zstd_decompress(
     }
 }
 
+/// Decompress one raw-dictionary Zstd frame into caller-owned storage.
+///
+/// # Safety
+/// `input`/`dict` must be readable for their declared non-zero lengths; `output` must be writable for
+/// `output_cap` bytes when non-zero; `out_len` must be writable for one `usize`. Caller buffers must
+/// not overlap in a way that violates Rust aliasing rules.
 #[no_mangle]
 pub unsafe extern "C" fn cmpct_codec_zstd_decompress_using_dict(
     input: *const u8,
