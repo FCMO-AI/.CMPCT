@@ -1,0 +1,63 @@
+# ci-lane: deep
+# ci-cancel-policy: preserve-running-exact-receipt
+name: v0.30 Shifted parent phase RSS attribution
+
+on:
+  push:
+    branches:
+      - agent/v030-r24-process-productization
+    paths:
+      - ".github/workflows/v030-shifted-parent-phase-rss.yml"
+      - "benchmarks/v030_shifted_parent_phase_rss.py"
+      - "experiments/entropygraph_v030_r24_process_prebuild.py"
+      - "experiments/entropygraph_v030_r24_process_shipping.py"
+      - "experiments/entropygraph_v030_release_product.py"
+      - "src/cmpct/**"
+  workflow_dispatch:
+
+permissions: {contents: read}
+env:
+  EVIDENCE_HEAD: ${{ github.sha }}
+
+concurrency:
+  group: v030-shifted-parent-phase-rss-${{ github.sha }}
+  cancel-in-progress: false
+
+jobs:
+  attribute:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+      - name: Bind exact candidate head
+        shell: bash
+        run: test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install canonical frozen-corpus environment
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y zstd gcc libsndfile1
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[audio,test]'
+          python -m pip install pillow==12.3.0 reportlab==5.0.0 python-docx==1.2.0 openpyxl==3.1.5 python-pptx==1.0.2 numpy==2.4.6
+      - name: Build native core
+        run: cargo build --manifest-path native/cmpct-core/Cargo.toml --release --locked
+      - name: Attribute Shifted parent high-water
+        run: |
+          mkdir -p benchmark-artifacts
+          python -m benchmarks.v030_shifted_parent_phase_rss \
+            --work-root benchmark-artifacts/v030-shifted-parent-phase-rss-work \
+            --output benchmark-artifacts/v030-shifted-parent-phase-rss.json \
+            2>&1 | tee benchmark-artifacts/v030-shifted-parent-phase-rss.log
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: v030-shifted-parent-phase-rss-${{ github.sha }}
+          path: |
+            benchmark-artifacts/v030-shifted-parent-phase-rss.json
+            benchmark-artifacts/v030-shifted-parent-phase-rss.log
+          if-no-files-found: error
