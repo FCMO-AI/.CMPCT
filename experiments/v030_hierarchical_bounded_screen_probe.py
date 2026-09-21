@@ -3,9 +3,14 @@ from __future__ import annotations
 """Research-only exact Hierarchical Geometry audition with O(finalists) transformed-byte retention.
 
 The canonical research owner currently stores every level-6 transformed candidate in ``screened`` even though
-only the best three are ever recompressed at level 19.  This probe preserves nomination, inverse checking, screen
+only the best three are ever recompressed at level 19. This probe preserves nomination, inverse checking, screen
 scores, sort/tie order and exact-finalist admission, but discards each screened transform after scoring and
-recomputes only the <=3 finalists.  It therefore tests a memory-ownership change, not a representation change.
+recomputes only the <=3 finalists. It therefore tests a memory-ownership change, not a representation change.
+
+Preregistered Shifted discriminator: exact receipt 35552595037 exposes ~62.5 MiB of raw_bytes*screened_candidates
+transformed-buffer retention across its auditions. With four workers, keeping only the current transform+inverse
+has a ~2.6 MiB core working-set proxy for the four largest observed records (about 24x smaller). Archive identity
+must remain exact and whole-build timing/RSS, not this derivation, decides whether the mechanism earns product use.
 """
 
 from experiments import entropygraph_v030_hierarchical_geometry as HG
