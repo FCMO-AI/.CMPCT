@@ -45,7 +45,7 @@ def main() -> None:
     shutil.rmtree(args.work_root, ignore_errors=True)
     args.work_root.mkdir(parents=True)
     if args.source_root is None:
-        source = PERF._build_corpora(args.work_root / "corpus")[("neutral_hostile_v1", "01_shifted_versions")]
+        source = PERF._build_corpora(args.work_root / "corpus")[("resemblance_hostile_v1", "01_shifted_versions")]
     else:
         source = Path(args.source_root)
         if not source.is_dir():
