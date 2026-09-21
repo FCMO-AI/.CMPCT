@@ -91,9 +91,6 @@ def primary_candidates(raw: bytes) -> list[int]:
         count = len(pos)
         if count < 64 or count + 1 > MAX_ROWS:
             continue
-
-        # Only complete recurrence intervals are statistically comparable.  Prefix/suffix fragments are
-        # left-censored/right-censored by the bounded node and must not steer structural nomination.
         gaps = [right - left - 1 for left, right in zip(pos, pos[1:])]
         if not gaps:
             continue
@@ -166,8 +163,6 @@ def _parse_shape(raw: bytes, primary: int, secondary: int) -> tuple[list[list[by
 
     cell_scans = len(fields) * max_fields
     if cell_scans > MAX_CELL_SCANS:
-        # Footnote: an expensive proposed transform is a losing candidate, not invalid user data.  Writers
-        # decline it and preserve the ordinary direct/Geometry fallback; readers enforce the same bound.
         raise ValueError("Hierarchical Geometry cell-work budget exceeded")
     return fields, max_fields, descriptors
 
@@ -294,8 +289,9 @@ def audition(raw: bytes) -> dict:
     """Price bounded hierarchical layouts against direct level-19 storage.
 
     Candidate pairs are screened cheaply at level 6; only the three best screen results are recompressed
-    at level 19.  This is intentional rehabilitation: discovery work is bounded independently of the number
-    of possible byte pairs, while the final admission decision still uses the exact target compressor.
+    at level 19. Screened transformed bytes are deliberately not retained: the <=3 finalists are rebuilt
+    deterministically after ranking. This preserves the exact candidate/tie/admission semantics while bounding
+    transformed-byte retention to the current candidate/finalist instead of every screened candidate.
     """
     base_codec, base_payload = G._compress_physical(raw)
     best = {
@@ -314,7 +310,7 @@ def audition(raw: bytes) -> dict:
     if len(raw) < MIN_NODE_BYTES:
         return best
 
-    screened: list[tuple[int, int, int, bool, bytes]] = []
+    screened: list[tuple[int, int, int, bool]] = []
     for primary in primary_candidates(raw):
         rows = raw.split(bytes((primary,)))
         for secondary in secondary_candidates(rows, primary):
@@ -326,11 +322,14 @@ def audition(raw: bytes) -> dict:
                 if hierarchy_inverse(transformed, len(raw)) != raw:
                     raise RuntimeError("Hierarchical Geometry candidate failed exact inverse")
                 screen_bytes = _compressed_size(transformed, SCREEN_LEVEL)
-                screened.append((screen_bytes, primary, secondary, prefix_planes, transformed))
+                screened.append((screen_bytes, primary, secondary, prefix_planes))
 
     screened.sort(key=lambda row: (row[0], row[3], row[1], row[2]))
     finalists = screened[:MAX_EXACT_FINALISTS]
-    for _, primary, secondary, prefix_planes, transformed in finalists:
+    for _, primary, secondary, prefix_planes in finalists:
+        transformed = hierarchy_forward(raw, primary, secondary, prefix_planes=prefix_planes)
+        if hierarchy_inverse(transformed, len(raw)) != raw:
+            raise RuntimeError("Hierarchical Geometry finalist failed exact inverse after recomputation")
         codec, payload = G._compress_physical(transformed)
         saving = len(base_payload) - len(payload)
         if saving < MIN_PAYLOAD_SAVING:
@@ -361,8 +360,6 @@ def audition(raw: bytes) -> dict:
     return best
 
 
-# Footnote: exported limits are part of the research contract so tests/benchmarks can assert the resource
-# budget without duplicating magic numbers and accidentally drifting from the implementation.
 RESOURCE_LIMITS = {
     "max_rows": MAX_ROWS,
     "max_fields_per_row": MAX_FIELDS_PER_ROW,
