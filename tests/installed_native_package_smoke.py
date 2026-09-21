@@ -34,18 +34,12 @@ try:
     try: assert decoder.decompress(via_shipping,len(payload))==payload
     finally: decoder.close()
 
-    # Exercise the actual installed archive boundary, not only codec symbols. The fixture deliberately
-    # mixes compressible text, deterministic incompressible bytes and nested paths while staying tiny
-    # enough for every desktop package job. Any ambient-Zstd lookup remains fatal under the guard above.
     from cmpct.builder import Builder
     from cmpct.reader import CMPCT
     with tempfile.TemporaryDirectory(prefix="cmpct-installed-smoke-") as td:
         root=Path(td); src=root/"src"; dst=root/"dst"; arc=root/"representative.cmpct"
         (src/"nested").mkdir(parents=True)
-        expected={
-            "readme.txt":(b"portable exact archive\n"*4096),
-            "nested/data.bin":bytes((i*73+19)&255 for i in range(128*1024)),
-        }
+        expected={"readme.txt":b"portable exact archive\n"*4096,"nested/data.bin":bytes((i*73+19)&255 for i in range(128*1024))}
         for rel,data in expected.items(): p=src/rel; p.parent.mkdir(parents=True,exist_ok=True); p.write_bytes(data)
         Builder(src,workers=1,reproducible=True,reproducible_epoch_ns=0).build(arc)
         archive_sha=hashlib.sha256(arc.read_bytes()).hexdigest()
@@ -53,7 +47,9 @@ try:
             assert reader.verify()==len(expected)
             for rel,data in expected.items(): assert reader.read(rel)==data
             reader.extractall(dst,metadata=False)
-        for rel,data in expected.items(): assert (dst/rel).read_bytes()==data
+        for rel,data in expected.items():
+            actual=(dst/rel).read_bytes()
+            assert actual==data,{"member":rel,"expected_len":len(data),"actual_len":len(actual),"expected_sha":hashlib.sha256(data).hexdigest(),"actual_sha":hashlib.sha256(actual).hexdigest(),"first_mismatch":next((i for i,(a,b) in enumerate(zip(data,actual)) if a!=b),None)}
 finally:
     ctypes.util.find_library=real_find_library
 
