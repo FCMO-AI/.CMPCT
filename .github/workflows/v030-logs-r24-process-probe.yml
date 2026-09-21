@@ -41,12 +41,21 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - name: Install exact project and frozen corpus dependency
+      - name: Install exact project and frozen corpus dependencies
         run: |
-          python -m pip install -e .
-          # neutral_hostile_corpus_v1 imports NumPy directly; install the same
-          # pinned version used by the established v0.29 research workflows.
-          python -m pip install numpy==2.4.6
+          # Mirror the established neutral-hostile corpus environment as one
+          # dependency surface instead of discovering imports one failure at a time.
+          sudo apt-get update
+          sudo apt-get install -y zstd gcc libsndfile1
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[audio,test]'
+          python -m pip install \
+            pillow==12.3.0 \
+            reportlab==5.0.0 \
+            python-docx==1.2.0 \
+            openpyxl==3.1.5 \
+            python-pptx==1.0.2 \
+            numpy==2.4.6
       - name: Build native core when available
         run: cargo build --manifest-path native/cmpct-core/Cargo.toml --release --locked
       - name: Run unchanged canonical-v2 thresholds with ownership probe
