@@ -5,7 +5,6 @@
 //! without changing the existing read-only platform ABI.
 
 use std::os::raw::c_int;
-use std::ptr;
 
 const OK: c_int = 0;
 const NULL: c_int = -1;
@@ -212,8 +211,16 @@ mod tests {
     #[test]
     fn null_and_capacity_contract_is_fail_closed() {
         let mut n = 99usize;
-        let status =
-            unsafe { cmpct_codec_zstd_compress(ptr::null(), 1, 3, ptr::null_mut(), 0, &mut n) };
+        let status = unsafe {
+            cmpct_codec_zstd_compress(
+                std::ptr::null(),
+                1,
+                3,
+                std::ptr::null_mut(),
+                0,
+                &mut n,
+            )
+        };
         assert_eq!(status, NULL);
         assert_eq!(n, 0);
     }
