@@ -116,14 +116,18 @@ jobs:
               found[os_name]=matches[0]
           platform={}
           for os_name,p in found.items():
-              s=json.loads((p/'installed-native-smoke.json').read_text())
+              smoke_files=list(p.rglob('installed-native-smoke.json'))
+              dep_files=list(p.rglob('installed-native-deps.txt'))
+              wheels=list(p.rglob('cmpct-*.whl'))
+              assert len(smoke_files)==1,(os_name,smoke_files)
+              assert len(dep_files)==1,(os_name,dep_files)
+              assert len(wheels)==1,(os_name,wheels)
+              s=json.loads(smoke_files[0].read_text())
               assert s['representative_archive_create_read_extract'] is True
               assert s['shipping_python_no_ambient_zstd'] is True
               assert s['python_zstandard_absent'] is True
               assert s['dict_vector_bytes']==104
-              assert (p/'installed-native-deps.txt').read_text().strip()
-              wheels=list(p.rglob('cmpct-*.whl'))
-              assert len(wheels)==1,(os_name,wheels)
+              assert dep_files[0].read_text().strip()
               wheel=wheels[0]
               platform[os_name]={
                   'archive_sha256':s['representative_archive_sha256'],
