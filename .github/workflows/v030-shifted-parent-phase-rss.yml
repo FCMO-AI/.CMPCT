@@ -8,6 +8,7 @@ on:
     branches: [agent/v030-authoritative-integration]
     paths:
       - benchmarks/v030_shifted_parent_phase_rss.py
+      - experiments/v030_hierarchical_bounded_screen_probe.py
       - .github/workflows/v030-shifted-parent-phase-rss.yml
       - experiments/entropygraph_v030_r24_process_prebuild.py
       - experiments/entropygraph_v030_r24_process_shipping.py
@@ -39,7 +40,7 @@ jobs:
           test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
           files="$(git diff-tree --no-commit-id --name-only -r HEAD)"
           printf '%s\n' "$files"
-          if printf '%s\n' "$files" | grep -Eq '^(benchmarks/v030_shifted_parent_phase_rss\.py|\.github/workflows/v030-shifted-parent-phase-rss\.yml|experiments/entropygraph_v030_(r24_process_prebuild|r24_process_shipping|release_product)\.py|src/cmpct/)'; then
+          if printf '%s\n' "$files" | grep -Eq '^(benchmarks/v030_shifted_parent_phase_rss\.py|experiments/v030_hierarchical_bounded_screen_probe\.py|\.github/workflows/v030-shifted-parent-phase-rss\.yml|experiments/entropygraph_v030_(r24_process_prebuild|r24_process_shipping|release_product)\.py|src/cmpct/)'; then
             echo 'run_deep=true' >> "$GITHUB_OUTPUT"
           else
             echo 'run_deep=false' >> "$GITHUB_OUTPUT"
@@ -49,7 +50,7 @@ jobs:
     needs: classify
     if: needs.classify.outputs.run_deep == 'true'
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    timeout-minutes: 45
     concurrency:
       group: ${{ github.workflow }}-receipt-${{ github.event.pull_request.head.sha || github.sha }}
       cancel-in-progress: false
@@ -72,18 +73,40 @@ jobs:
           python -m pip install pillow==12.3.0 reportlab==5.0.0 python-docx==1.2.0 openpyxl==3.1.5 python-pptx==1.0.2 numpy==2.4.6
       - name: Build native core
         run: cargo build --manifest-path native/cmpct-core/Cargo.toml --release --locked
-      - name: Attribute Shifted parent high-water
+      - name: Incumbent Shifted attribution
         run: |
           mkdir -p benchmark-artifacts
           python -m benchmarks.v030_shifted_parent_phase_rss \
-            --work-root benchmark-artifacts/v030-shifted-parent-phase-rss-work \
-            --output benchmark-artifacts/v030-shifted-parent-phase-rss.json \
-            2>&1 | tee benchmark-artifacts/v030-shifted-parent-phase-rss.log
+            --work-root benchmark-artifacts/incumbent-work \
+            --output benchmark-artifacts/incumbent.json \
+            2>&1 | tee benchmark-artifacts/incumbent.log
+      - name: Bounded-screen Shifted A/B
+        run: |
+          python -m benchmarks.v030_shifted_parent_phase_rss \
+            --bounded-screen \
+            --work-root benchmark-artifacts/bounded-work \
+            --output benchmark-artifacts/bounded.json \
+            2>&1 | tee benchmark-artifacts/bounded.log
+      - name: Require exact product identity between arms
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          a=json.loads(Path('benchmark-artifacts/incumbent.json').read_text())
+          b=json.loads(Path('benchmark-artifacts/bounded.json').read_text())
+          assert a['selected']==b['selected'], (a['selected'],b['selected'])
+          assert a['format_revision']==b['format_revision'], (a['format_revision'],b['format_revision'])
+          assert a['archive_bytes']==b['archive_bytes'], (a['archive_bytes'],b['archive_bytes'])
+          print(json.dumps({'incumbent_peak':a['peak'],'bounded_peak':b['peak'],'archive_bytes':a['archive_bytes'],'selected':a['selected']},sort_keys=True))
+          PY
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: v030-shifted-parent-phase-rss-${{ env.EVIDENCE_HEAD }}
           path: |
-            benchmark-artifacts/v030-shifted-parent-phase-rss.json
-            benchmark-artifacts/v030-shifted-parent-phase-rss.log
+            benchmark-artifacts/incumbent.json
+            benchmark-artifacts/incumbent.log
+            benchmark-artifacts/bounded.json
+            benchmark-artifacts/bounded.log
           if-no-files-found: error
