@@ -35,13 +35,15 @@ jobs:
           if-no-files-found: warn
 
   # New research workflows can exist on a long-lived frontier before GitHub registers them from the
-  # default branch. Route them through this already-established PR workflow; each called workflow owns
-  # an exact-head classifier, so ordinary synchronizations pay only the cheap classifier and preserved
-  # scientific receipts remain bound to the source SHA that admitted them.
+  # default branch. Route them through this already-established PR workflow only when the source head
+  # can have changed. Dossier-only metadata edits still run the cheap evidence validator above but must
+  # not enqueue duplicate preserved deep receipts for an unchanged SHA.
   r36-project-wait-owner:
+    if: github.event.action == 'opened' || github.event.action == 'synchronize' || github.event.action == 'reopened'
     uses: ./.github/workflows/v030-r36-project-wait-owner.yml
 
   shifted-parent-phase-rss:
+    if: github.event.action == 'opened' || github.event.action == 'synchronize' || github.event.action == 'reopened'
     uses: ./.github/workflows/v030-shifted-parent-phase-rss.yml
 
 # Footnote: this gate validates that material work exposes a falsifiable evidence surface. It does not
