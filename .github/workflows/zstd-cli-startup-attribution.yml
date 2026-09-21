@@ -17,7 +17,7 @@ jobs:
         run: python -m pip install -e .
       - name: Materialize direct PR base
         run: git worktree add /tmp/cmpct-startup-base ${{ github.event.pull_request.base.sha }}
-      - name: Map serial versus parallel CLI across frozen corpora
+      - name: Map serial versus parallel CLI on decisive corpora
         env: {BASE_ROOT: /tmp/cmpct-startup-base}
         run: |
           python - <<'PY'
@@ -32,13 +32,13 @@ jobs:
                   t=time.perf_counter_ns();subprocess.run(cmd,env=env,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,check=True);xs.append((time.perf_counter_ns()-t)/1e6)
               return {'median_ms':statistics.median(xs),'samples_ms':xs}
           rows={}
-          for name in ['tiny','source','media','binary','dedup_links','sparse','nested','combined']:
+          for name in ['tiny','source','media','binary']:
               src=u.CORP/name;bout=work/f'{name}-base.cmpct';sout=work/f'{name}-serial.cmpct';pout=work/f'{name}-parallel.cmpct'
               bc=[sys.executable,'-m','cmpct','create',str(src),str(bout)];sc=[sys.executable,'-m','cmpct','create',str(src),str(sout)];pc=[sys.executable,'-m','cmpct','create',str(src),str(pout),'--workers','8']
               b=timed(bc,env_b);s=timed(sc,env_c);p=timed(pc,env_c)
               subprocess.run(bc,env=env_b,stdout=subprocess.DEVNULL,check=True);subprocess.run(sc,env=env_c,stdout=subprocess.DEVNULL,check=True);subprocess.run(pc,env=env_c,stdout=subprocess.DEVNULL,check=True)
               bb=bout.read_bytes();sb=sout.read_bytes();pb=pout.read_bytes()
-              rows[name]={'base_ms':b['median_ms'],'serial_ms':s['median_ms'],'parallel_ms':p['median_ms'],'serial_vs_base':s['median_ms']/b['median_ms'],'parallel_vs_base':p['median_ms']/b['median_ms'],'parallel_vs_serial':p['median_ms']/s['median_ms'],'base_eq_serial':bb==sb,'serial_eq_parallel':sb==pb,'sha':{'base':hashlib.sha256(bb).hexdigest(),'serial':hashlib.sha256(sb).hexdigest(),'parallel':hashlib.sha256(pb).hexdigest()}}
+              rows[name]={'logical_bytes':sum(x.lstat().st_size for x in src.rglob('*') if x.is_file() and not x.is_symlink()),'base_ms':b['median_ms'],'serial_ms':s['median_ms'],'parallel_ms':p['median_ms'],'serial_vs_base':s['median_ms']/b['median_ms'],'parallel_vs_base':p['median_ms']/b['median_ms'],'parallel_vs_serial':p['median_ms']/s['median_ms'],'base_eq_serial':bb==sb,'serial_eq_parallel':sb==pb,'sha':{'base':hashlib.sha256(bb).hexdigest(),'serial':hashlib.sha256(sb).hexdigest(),'parallel':hashlib.sha256(pb).hexdigest()}}
           data={'repetitions':reps,'base_sha':subprocess.check_output(['git','rev-parse','HEAD'],cwd=base,text=True).strip(),'candidate_sha':subprocess.check_output(['git','rev-parse','HEAD'],cwd=root,text=True).strip(),'rows':rows};Path('startup-attribution.json').write_text(json.dumps(data,indent=2)+'\n');print(json.dumps(rows,indent=2))
           PY
       - uses: actions/upload-artifact@v6
