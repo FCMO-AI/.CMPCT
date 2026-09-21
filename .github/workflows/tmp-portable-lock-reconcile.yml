@@ -8,12 +8,14 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v6
-      - name: Regenerate portable lock from authoritative manifests
+      - name: Regenerate portable lock with proven archive-identity Zstd generation
         working-directory: native/cmpct-portable
         run: |
           set -euo pipefail
           rm Cargo.lock
           cargo generate-lockfile
+          cargo update -p zstd-safe --precise 7.0.0
+          cargo update -p zstd-sys --precise '2.0.9+zstd.1.5.5'
           cargo check --locked
           grep -A5 '^name = "zstd"' Cargo.lock
           grep -A5 '^name = "zstd-safe"' Cargo.lock
