@@ -3,6 +3,7 @@ from __future__ import annotations
 """Research-only parent live-RSS phase attribution/A-B for frozen Shifted on the #175 product surface."""
 
 import argparse
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -20,10 +21,19 @@ def rss_kib() -> int:
         return int(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss)
 
 
+def sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with Path(path).open("rb") as stream:
+        for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--work-root", type=Path, required=True)
     ap.add_argument("--output", type=Path, required=True)
+    ap.add_argument("--source-root", type=Path)
     ap.add_argument("--bounded-screen", action="store_true")
     args = ap.parse_args()
 
@@ -34,7 +44,12 @@ def main() -> None:
     shared = C.SHARED
     shutil.rmtree(args.work_root, ignore_errors=True)
     args.work_root.mkdir(parents=True)
-    source = PERF._build_corpora(args.work_root / "corpus")[("neutral_hostile_v1", "01_shifted_versions")]
+    if args.source_root is None:
+        source = PERF._build_corpora(args.work_root / "corpus")[("neutral_hostile_v1", "01_shifted_versions")]
+    else:
+        source = Path(args.source_root)
+        if not source.is_dir():
+            raise FileNotFoundError(source)
     archive = args.work_root / "shifted.cmpct"
 
     t0 = time.perf_counter()
@@ -142,13 +157,14 @@ def main() -> None:
         shared.G.HG.audition = hg_audition_original
 
     result = {
-        "schema": "cmpct-v030-shifted-parent-phase-rss-v4",
+        "schema": "cmpct-v030-shifted-parent-phase-rss-v5",
         "release_credit": False,
         "arm": "bounded-screen-recompute-finalists" if args.bounded_screen else "incumbent-retain-all-screened-transforms",
         "question": "does retaining every screened Hierarchical Geometry transform own Shifted parent high-water?",
         "selected": stats.get("selected") if stats else None,
         "format_revision": stats.get("format_revision") if stats else None,
         "archive_bytes": archive.stat().st_size if archive.exists() else None,
+        "archive_sha256": sha256_file(archive) if archive.exists() else None,
         "peak": peak,
         "events": events,
         "samples": samples,
@@ -156,7 +172,7 @@ def main() -> None:
     }
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8")
-    print(json.dumps({"arm": result["arm"], "peak": peak, "events": events, "selected": result["selected"], "archive_bytes": result["archive_bytes"]}, indent=2))
+    print(json.dumps({"arm": result["arm"], "peak": peak, "events": events, "selected": result["selected"], "archive_bytes": result["archive_bytes"], "archive_sha256": result["archive_sha256"]}, indent=2))
 
 
 if __name__ == "__main__":
