@@ -63,7 +63,7 @@ jobs:
         working-directory: native/cmpct-core
         run: cargo build --release --locked
       - name: Compare current package engine
-        run: python /tmp/probe.py
+        run: PYTHONPATH=. python /tmp/probe.py
       - name: Build inherited 1.5.5 package-owned control
         working-directory: native/cmpct-core
         run: |
@@ -74,7 +74,7 @@ jobs:
           cargo build --release
           grep -A8 -E '^name = "zstd(-safe|-sys)?"$' Cargo.lock
       - name: Compare inherited-generation package engine
-        run: python /tmp/probe.py
+        run: PYTHONPATH=. python /tmp/probe.py
       - name: Preserve candidate lock control
         uses: actions/upload-artifact@v4
         with:
