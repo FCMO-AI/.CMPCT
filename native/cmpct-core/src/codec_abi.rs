@@ -67,10 +67,9 @@ pub unsafe extern "C" fn cmpct_codec_zstd_compress_bound(input_len: usize) -> us
     zstd::zstd_safe::compress_bound(input_len)
 }
 
-/// Preserve CMPCT's inherited 1.5.5 encoder semantics on the package-owned 1.5.7 engine.
-/// Upstream v1.5.7 added first-stage splitting at levels 8..15. Its public static-only name
-/// `ZSTD_c_blockSplitterLevel` is a C macro for experimentalParam20, so Rust's generated bindings
-/// expose the enum under that stable-within-this-pinned-source spelling. Value 1 means no split.
+/// Preserve CMPCT's inherited writer boundary exactly: one-shot `ZSTD_compress` semantics on the
+/// package-owned, lock-pinned Zstd 1.5.5 generation. Newer encoder generations remain valid decoders
+/// and external comparators, but their output is not silently allowed to rewrite canonical archives.
 #[no_mangle]
 pub unsafe extern "C" fn cmpct_codec_zstd_compress(
     input: *const u8,
@@ -85,50 +84,7 @@ pub unsafe extern "C" fn cmpct_codec_zstd_compress(
     }
     let result = std::panic::catch_unwind(|| {
         let (src, dst) = slices(input, input_len, output, output_cap)?;
-        use zstd::zstd_safe::zstd_sys as sys;
-        let cctx = unsafe { sys::ZSTD_createCCtx() };
-        if cctx.is_null() {
-            return Err(status(CmpctStatus::Range));
-        }
-        struct Guard(*mut sys::ZSTD_CCtx);
-        impl Drop for Guard {
-            fn drop(&mut self) {
-                unsafe {
-                    sys::ZSTD_freeCCtx(self.0);
-                }
-            }
-        }
-        let _guard = Guard(cctx);
-        let a = unsafe {
-            sys::ZSTD_CCtx_setParameter(
-                cctx,
-                sys::ZSTD_cParameter::ZSTD_c_compressionLevel,
-                level,
-            )
-        };
-        if unsafe { sys::ZSTD_isError(a) } != 0 {
-            return Err(status(CmpctStatus::Range));
-        }
-        let b = unsafe {
-            sys::ZSTD_CCtx_setParameter(cctx, sys::ZSTD_cParameter::ZSTD_c_experimentalParam20, 1)
-        };
-        if unsafe { sys::ZSTD_isError(b) } != 0 {
-            return Err(status(CmpctStatus::Range));
-        }
-        let n = unsafe {
-            sys::ZSTD_compress2(
-                cctx,
-                dst.as_mut_ptr().cast(),
-                dst.len(),
-                src.as_ptr().cast(),
-                src.len(),
-            )
-        };
-        if unsafe { sys::ZSTD_isError(n) } != 0 {
-            Err(status(CmpctStatus::Range))
-        } else {
-            Ok(n)
-        }
+        zstd::zstd_safe::compress(dst, src, level).map_err(|_| status(CmpctStatus::Range))
     });
     match result {
         Ok(value) => finish(value, out_len),
