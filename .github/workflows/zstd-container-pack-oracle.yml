@@ -8,6 +8,10 @@ on:
   pull_request:
     paths:
       - ".github/workflows/zstd-container-pack-oracle.yml"
+      - "native/cmpct-core/Cargo.toml"
+      - "native/cmpct-core/Cargo.lock"
+      - "native/cmpct-core/src/codec_abi.rs"
+      - "native/cmpct-core/tests/zstd_encode_equivalence.rs"
   workflow_dispatch:
 
 permissions:
