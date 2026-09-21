@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import base64
 import ctypes
+import hashlib
 import json
 import tempfile
 from pathlib import Path
@@ -24,6 +25,33 @@ def _load_lib():
     lib.cmpct_entry_read_range.argtypes = [ctypes.c_void_p, ctypes.c_size_t, ctypes.c_uint64, ctypes.c_void_p, ctypes.c_size_t, ctypes.POINTER(ctypes.c_size_t)]
     lib.cmpct_entry_read_range.restype = ctypes.c_int32
     lib.cmpct_close.argtypes = [ctypes.c_void_p]
+
+    # Package-owned codec ABI: this gate deliberately resolves the symbols from the shipping cdylib
+    # through ctypes rather than compiling codec_abi.rs into a Rust test crate. That makes symbol
+    # export/linkage part of the evidence and catches the exact installed-caller boundary #176 needs.
+    lib.cmpct_codec_zstd_compress_bound.argtypes = [ctypes.c_size_t]
+    lib.cmpct_codec_zstd_compress_bound.restype = ctypes.c_size_t
+    lib.cmpct_codec_zstd_compress_using_dict.argtypes = [
+        ctypes.c_void_p,
+        ctypes.c_size_t,
+        ctypes.c_void_p,
+        ctypes.c_size_t,
+        ctypes.c_int32,
+        ctypes.c_void_p,
+        ctypes.c_size_t,
+        ctypes.POINTER(ctypes.c_size_t),
+    ]
+    lib.cmpct_codec_zstd_compress_using_dict.restype = ctypes.c_int32
+    lib.cmpct_codec_zstd_decompress_using_dict.argtypes = [
+        ctypes.c_void_p,
+        ctypes.c_size_t,
+        ctypes.c_void_p,
+        ctypes.c_size_t,
+        ctypes.c_void_p,
+        ctypes.c_size_t,
+        ctypes.POINTER(ctypes.c_size_t),
+    ]
+    lib.cmpct_codec_zstd_decompress_using_dict.restype = ctypes.c_int32
     return lib
 
 
@@ -49,10 +77,67 @@ def _read_range(lib, handle, offset: int, length: int):
     return status, got.value, out.raw[: got.value]
 
 
+def _codec_abi_exact_dictionary_gate(lib) -> None:
+    payload = b"structured-record\0" * 8192 + bytes(range(64)) * 128
+    seed = b"alpha beta gamma delta structured-record\0"
+    dictionary = (seed * ((4096 + len(seed) - 1) // len(seed)))[:4096]
+
+    capacity = lib.cmpct_codec_zstd_compress_bound(len(payload))
+    assert capacity >= 104
+    encoded = ctypes.create_string_buffer(capacity)
+    encoded_len = ctypes.c_size_t()
+    status = lib.cmpct_codec_zstd_compress_using_dict(
+        payload,
+        len(payload),
+        dictionary,
+        len(dictionary),
+        9,
+        encoded,
+        capacity,
+        ctypes.byref(encoded_len),
+    )
+    assert status == 0, status
+    compressed = encoded.raw[: encoded_len.value]
+    assert len(compressed) == 104
+    assert hashlib.sha256(compressed).hexdigest() == "0c265b0a03ec404b40749d13212420813cb546a6eecf5dcd0397f20ce15e23a6"
+
+    decoded = ctypes.create_string_buffer(len(payload))
+    decoded_len = ctypes.c_size_t()
+    status = lib.cmpct_codec_zstd_decompress_using_dict(
+        compressed,
+        len(compressed),
+        dictionary,
+        len(dictionary),
+        decoded,
+        len(decoded),
+        ctypes.byref(decoded_len),
+    )
+    assert status == 0, status
+    assert decoded_len.value == len(payload)
+    assert decoded.raw[: decoded_len.value] == payload
+
+    # Caller-buffer semantics must fail closed rather than allocating or partially succeeding.
+    too_small = ctypes.create_string_buffer(103)
+    too_small_len = ctypes.c_size_t(12345)
+    status = lib.cmpct_codec_zstd_compress_using_dict(
+        payload,
+        len(payload),
+        dictionary,
+        len(dictionary),
+        9,
+        too_small,
+        len(too_small),
+        ctypes.byref(too_small_len),
+    )
+    assert status == -6, status
+    assert too_small_len.value == 0
+
+
 def main() -> None:
     vector = json.loads(VECTOR.read_text())["vector"]
     archive_bytes = base64.b64decode(vector["archive_base64"])
     lib = _load_lib()
+    _codec_abi_exact_dictionary_gate(lib)
 
     with tempfile.TemporaryDirectory(prefix="cmpct-native-dictionary-") as td:
         root = Path(td)
