@@ -2,7 +2,7 @@ from __future__ import annotations
 
 """Thin Python owner for the package-local codec ABI.
 
-The archive format depends on Zstd, but Python must not rediscover an ambient libzstd.  Packaging
+The archive format depends on Zstd, but Python must not rediscover an ambient libzstd. Packaging
 places the existing cmpct_core cdylib beside this module; Rust owns Zstd and Python owns only caller
 buffers plus the lifetime of opaque decoder handles.
 """
@@ -11,7 +11,6 @@ import ctypes
 from pathlib import Path
 
 _sz = ctypes.c_size_t
-_u8p = ctypes.POINTER(ctypes.c_uint8)
 _voidpp = ctypes.POINTER(ctypes.c_void_p)
 
 
@@ -80,6 +79,17 @@ def decompress(data: bytes, usize: int) -> bytes:
     _check(_core.cmpct_codec_zstd_decompress(src, len(data), dst, usize, ctypes.byref(out)), "Zstd decompress")
     if out.value != usize:
         raise IOError(f"Zstd size mismatch: {out.value} != {usize}")
+    return dst.raw[: out.value]
+
+
+def decompress_using_dict(data: bytes, usize: int, dictionary: bytes) -> bytes:
+    """Compatibility helper for callers that need one-shot dictionary decode."""
+    if usize == 0:
+        return b""
+    src = _src(data); db = _src(dictionary); dst = ctypes.create_string_buffer(usize); out = _sz()
+    _check(_core.cmpct_codec_zstd_decompress_using_dict(src, len(data), db, len(dictionary), dst, usize, ctypes.byref(out)), "Zstd dictionary decompress")
+    if out.value != usize:
+        raise IOError(f"Zstd dictionary size mismatch: {out.value} != {usize}")
     return dst.raw[: out.value]
 
 
