@@ -46,7 +46,10 @@ fn main() -> ExitCode {
         let n = match cctx.compress_using_dict(&mut compressed[..], &src, &dict, level) {
             Ok(n) => n,
             Err(code) => {
-                eprintln!("compress_using_dict failed at level {level}: {}", zstd_safe::get_error_name(code));
+                eprintln!(
+                    "compress_using_dict failed at level {level}: {}",
+                    zstd_safe::get_error_name(code)
+                );
                 return ExitCode::FAILURE;
             }
         };
@@ -56,7 +59,10 @@ fn main() -> ExitCode {
         let m = match dctx.decompress_using_dict(&mut decoded[..], &compressed, &dict) {
             Ok(m) => m,
             Err(code) => {
-                eprintln!("decompress_using_dict failed at level {level}: {}", zstd_safe::get_error_name(code));
+                eprintln!(
+                    "decompress_using_dict failed at level {level}: {}",
+                    zstd_safe::get_error_name(code)
+                );
                 return ExitCode::FAILURE;
             }
         };
@@ -64,7 +70,11 @@ fn main() -> ExitCode {
             eprintln!("dictionary roundtrip mismatch at level {level}");
             return ExitCode::FAILURE;
         }
-        println!("level={level} usize={} csize={}", src.len(), compressed.len());
+        println!(
+            "level={level} usize={} csize={}",
+            src.len(),
+            compressed.len()
+        );
     }
     ExitCode::SUCCESS
 }
