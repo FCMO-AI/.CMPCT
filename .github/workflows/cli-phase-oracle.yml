@@ -1,0 +1,60 @@
+name: CMPCT research - CLI phase oracle
+on:
+  pull_request:
+    paths: [".github/workflows/cli-phase-oracle.yml"]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  oracle:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+        with: {fetch-depth: 0}
+      - uses: actions/setup-python@v6
+        with: {python-version: "3.11"}
+      - name: Prepare exact engines and corpus
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y zstd libsndfile1
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[audio,test]'
+          git worktree add --detach /tmp/cmpct-base "${{ github.event.pull_request.base.sha }}"
+          python - <<'PY'
+          import sys,shutil
+          from pathlib import Path
+          sys.path.insert(0,str(Path.cwd()/'benchmarks')); import universal_bench as u
+          root=Path('/tmp/cmpct-phase-corpus'); shutil.rmtree(root,ignore_errors=True); root.mkdir(); u.CORP=root; u.reset_rng(); u.make_corpora()
+          assert sum(p.stat().st_size for p in (root/'binary').rglob('*') if p.is_file())==50331648
+          PY
+      - name: Attribute fresh-process phases
+        run: |
+          cat >/tmp/fresh.py <<'PY'
+          import hashlib,json,sys,tempfile,time
+          from pathlib import Path
+          t0=time.perf_counter_ns(); repo=Path(sys.argv[1]); sys.path.insert(0,str(repo/'src'))
+          from cmpct.builder import Builder
+          t_import=time.perf_counter_ns(); out=Path(tempfile.mktemp(suffix='.cmpct'))
+          Builder(Path(sys.argv[2]),workers=1).build(out); t_build=time.perf_counter_ns()
+          print(json.dumps({'import_ns':t_import-t0,'build_ns':t_build-t_import,'sha':hashlib.sha256(out.read_bytes()).hexdigest(),'bytes':out.stat().st_size}))
+          PY
+          cat >/tmp/parent.py <<'PY'
+          import json,statistics,subprocess,sys,time
+          repos=['/tmp/cmpct-base',sys.argv[1]]; corpus='/tmp/cmpct-phase-corpus/binary'; rows={r:[] for r in repos}
+          for i in range(15):
+            for r in repos:
+              t=time.perf_counter_ns(); p=subprocess.run([sys.executable,'/tmp/fresh.py',r,corpus],capture_output=True,text=True,check=True); outer=time.perf_counter_ns()-t
+              x=json.loads(p.stdout); x['outer_ns']=outer; x['outside_child_ns']=outer-x['import_ns']-x['build_ns']; rows[r].append(x)
+          assert len({x['sha'] for rs in rows.values() for x in rs})==1
+          for r,rs in rows.items():
+            print(r,{k:statistics.median(x[k] for x in rs) for k in ('outer_ns','import_ns','build_ns','outside_child_ns')})
+          a,b=(rows[r] for r in repos)
+          for k in ('outer_ns','import_ns','build_ns','outside_child_ns'):
+            ma=statistics.median(x[k] for x in a); mb=statistics.median(x[k] for x in b); print('delta',k,mb-ma,'ratio',mb/ma)
+          open('/tmp/phase.json','w').write(json.dumps(rows))
+          PY
+          python /tmp/parent.py "$GITHUB_WORKSPACE"
+      - uses: actions/upload-artifact@v6
+        with:
+          name: cli-phase-${{ github.sha }}
+          path: /tmp/phase.json
