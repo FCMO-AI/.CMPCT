@@ -67,7 +67,6 @@ jobs:
       - name: Build inherited 1.5.5 package-owned control
         working-directory: native/cmpct-core
         run: |
-          sed -i 's/version = "0.13"/version = "=0.13.0"/' Cargo.toml
           cargo update -p zstd --precise 0.13.0
           cargo update -p zstd-safe --precise 7.0.0
           cargo update -p zstd-sys --precise '2.0.9+zstd.1.5.5'
@@ -75,11 +74,12 @@ jobs:
           grep -A8 -E '^name = "zstd(-safe|-sys)?"$' Cargo.lock
       - name: Compare inherited-generation package engine
         run: PYTHONPATH=. python /tmp/probe.py
+      - name: Charge frozen codec vectors under inherited generation
+        working-directory: native/cmpct-core
+        run: cargo test --test zstd_encode_equivalence
       - name: Preserve candidate lock control
         uses: actions/upload-artifact@v4
         with:
           name: zstd-1.5.5-owned-lock-${{ github.sha }}
-          path: |
-            native/cmpct-core/Cargo.toml
-            native/cmpct-core/Cargo.lock
+          path: native/cmpct-core/Cargo.lock
           if-no-files-found: error
