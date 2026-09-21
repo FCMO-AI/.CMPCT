@@ -131,6 +131,7 @@ def install_into_release_base(base_impl, *, timeout_s: float | None = None) -> R
     from experiments import entropygraph_v030_release_product_logs_candidate as logs_impl
 
     def sequential_logs_candidates(root: Path, temp: Path) -> tuple[dict, dict, Path, Path, float]:
+        """Materialize the two exact candidates without overlapping their live buffers."""
         r24_path = temp / "candidate-r24.cmpct"
         logs_path = temp / "candidate-logs.cmpct"
         started = time.perf_counter()
