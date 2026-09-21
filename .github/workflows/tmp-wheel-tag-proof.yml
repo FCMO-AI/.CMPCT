@@ -1,0 +1,71 @@
+name: TEMP generic Python wheel tag proof
+on:
+  push:
+    branches: [agent/wheel-tag-proof]
+    paths: ['.github/workflows/tmp-wheel-tag-proof.yml']
+permissions:
+  contents: read
+jobs:
+  same-artifact:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - name: Build sdist-first wheel once and retag generic Python/ABI-none
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install --upgrade pip build wheel
+          python -m build --sdist
+          mkdir -p "$RUNNER_TEMP/original" "$RUNNER_TEMP/generic"
+          python -m pip wheel --no-deps dist/*.tar.gz -w "$RUNNER_TEMP/original"
+          cp "$RUNNER_TEMP"/original/cmpct-*.whl "$RUNNER_TEMP/generic/"
+          cd "$RUNNER_TEMP/generic"
+          ORIGINAL=$(echo cmpct-*.whl)
+          python -m wheel tags --python-tag=py3 --abi-tag=none --remove "$ORIGINAL" | tee retagged-name.txt
+          GENERIC=$(cat retagged-name.txt)
+          test -f "$GENERIC"
+          sha256sum "$GENERIC" | tee generic-wheel.sha256
+          unzip -p "$GENERIC" '*/WHEEL' | tee wheel-metadata.txt
+          grep -q '^Tag: py3-none-' wheel-metadata.txt
+          unzip -l "$GENERIC" | grep 'cmpct/cmpct_core'
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.10'
+      - name: Install exact same generic artifact on Python 3.10 and run shipping smoke
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m venv "$RUNNER_TEMP/py310"
+          PY="$RUNNER_TEMP/py310/bin/python"
+          "$PY" -m pip install --upgrade pip
+          "$PY" -m pip install "$RUNNER_TEMP"/generic/cmpct-*.whl
+          (cd "$RUNNER_TEMP" && "$PY" "$GITHUB_WORKSPACE/tests/installed_native_package_smoke.py") | tee py310-smoke.json
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.14'
+      - name: Install the identical artifact on Python 3.14 and run shipping smoke
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m venv "$RUNNER_TEMP/py314"
+          PY="$RUNNER_TEMP/py314/bin/python"
+          "$PY" -m pip install --upgrade pip
+          "$PY" -m pip install "$RUNNER_TEMP"/generic/cmpct-*.whl
+          (cd "$RUNNER_TEMP" && "$PY" "$GITHUB_WORKSPACE/tests/installed_native_package_smoke.py") | tee py314-smoke.json
+          sha256sum "$RUNNER_TEMP"/generic/cmpct-*.whl | tee final-wheel.sha256
+          diff -u "$RUNNER_TEMP/generic/generic-wheel.sha256" final-wheel.sha256
+      - uses: actions/upload-artifact@v4
+        with:
+          name: generic-wheel-same-artifact-${{ github.sha }}
+          path: |
+            ${{ runner.temp }}/generic/cmpct-*.whl
+            ${{ runner.temp }}/generic/generic-wheel.sha256
+            ${{ runner.temp }}/generic/wheel-metadata.txt
+            py310-smoke.json
+            py314-smoke.json
+          if-no-files-found: error
+          retention-days: 7
