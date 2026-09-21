@@ -36,5 +36,8 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 sha2 = "0.10"
 thiserror = "2"
-zstd = "0.13"
+# CMPCT archive identity predates Zstd 1.5.7's level-8..15 pre-block splitter. The experimental
+# parameter surface is enabled so the package-owned writer can state that inherited semantic explicitly
+# instead of depending on whichever library generation happens to be installed on the host.
+zstd = { version = "0.13", features = ["experimental"] }
 flate2 = { version = "1", default-features = false, features = ["rust_backend"] }
