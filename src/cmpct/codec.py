@@ -59,20 +59,6 @@ try:
 except OSError:
     _ld=None
 
-def _zck(n:int)->int:
-    if _z.ZSTD_isError(n): raise RuntimeError(_z.ZSTD_getErrorName(n).decode())
-    return int(n)
-def zc(data:bytes, level:int)->bytes:
-    if not data:return b''
-    src=ctypes.create_string_buffer(data);cap=int(_z.ZSTD_compressBound(len(data)));dst=ctypes.create_string_buffer(cap)
-    n=_zck(_z.ZSTD_compress(dst,cap,src,len(data),level));return dst.raw[:n]
-def zd(data:bytes, usize:int)->bytes:
-    if usize==0:return b''
-    src=ctypes.create_string_buffer(data);dst=ctypes.create_string_buffer(usize)
-    n=_zck(_z.ZSTD_decompress(dst,usize,src,len(data)))
-    if n!=usize:raise IOError(f'Zstd size mismatch: {n} != {usize}')
-    return dst.raw[:n]
-
 def sha(b:bytes)->bytes:return hashlib.sha256(b).digest()
 
 # --- Content-defined chunking ----------------------------------------------
