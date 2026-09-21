@@ -27,73 +27,59 @@ jobs:
       - uses: actions/setup-python@v6
         with:
           python-version: "3.11"
-      - name: Build package-owned core
-        working-directory: native/cmpct-core
-        run: cargo build --release --locked
-      - name: Compare exact nested container-pack bytes
+      - name: Write exact nested-pack probe
         run: |
-          python - <<'PY'
+          cat > /tmp/probe.py <<'PY'
           import ctypes, ctypes.util, hashlib
           from pathlib import Path
           from benchmarks import universal_bench as ub
-
-          ub.reset()
-          ub.make_corpora()
-          nested = ub.CORP / "nested"
-          pack = b"".join(p.read_bytes() for p in sorted(nested.glob("*.zip")))
-          print("pack_bytes", len(pack), "pack_sha256", hashlib.sha256(pack).hexdigest())
-
-          sz = ctypes.c_size_t
-          system_name = ctypes.util.find_library("zstd") or "libzstd.so"
-          system = ctypes.CDLL(system_name)
-          system.ZSTD_versionString.argtypes = []
-          system.ZSTD_versionString.restype = ctypes.c_char_p
-          system.ZSTD_compressBound.argtypes = [sz]
-          system.ZSTD_compressBound.restype = sz
-          system.ZSTD_compress.argtypes = [ctypes.c_void_p, sz, ctypes.c_void_p, sz, ctypes.c_int]
-          system.ZSTD_compress.restype = sz
-          system.ZSTD_isError.argtypes = [sz]
-          system.ZSTD_isError.restype = ctypes.c_uint
-          print("system_library", system_name, "system_zstd_version", system.ZSTD_versionString().decode())
-
-          core_path = Path("native/cmpct-core/target/release/libcmpct_core.so").resolve()
-          core = ctypes.CDLL(str(core_path))
-          core.cmpct_codec_zstd_compress_bound.argtypes = [sz]
-          core.cmpct_codec_zstd_compress_bound.restype = sz
-          core.cmpct_codec_zstd_compress.argtypes = [ctypes.c_void_p, sz, ctypes.c_int32, ctypes.c_void_p, sz, ctypes.POINTER(sz)]
-          core.cmpct_codec_zstd_compress.restype = ctypes.c_int32
-
-          src = ctypes.create_string_buffer(pack)
-          diverged = False
-          for level in (15, 12, 9):
-              cap = int(system.ZSTD_compressBound(len(pack)))
-              a = ctypes.create_string_buffer(cap)
-              na = int(system.ZSTD_compress(a, cap, src, len(pack), level))
-              if system.ZSTD_isError(na):
-                  raise RuntimeError(f"system Zstd failed at level {level}")
-              ambient = a.raw[:na]
-
-              b = ctypes.create_string_buffer(cap)
-              nb = sz()
-              status = int(core.cmpct_codec_zstd_compress(src, len(pack), level, b, cap, ctypes.byref(nb)))
-              if status != 0:
-                  raise RuntimeError(f"package Zstd failed at level {level}: status={status}")
-              owned = b.raw[:nb.value]
-              first = next((i for i,(x,y) in enumerate(zip(ambient,owned)) if x != y), None)
-              if first is None and len(ambient) != len(owned):
-                  first = min(len(ambient), len(owned))
-              equal = ambient == owned
-              diverged |= not equal
-              print(
-                  "level", level,
-                  "ambient_bytes", len(ambient), "owned_bytes", len(owned), "delta", len(owned)-len(ambient),
-                  "ambient_sha256", hashlib.sha256(ambient).hexdigest(),
-                  "owned_sha256", hashlib.sha256(owned).hexdigest(),
-                  "equal", equal, "first_diff", first,
-              )
-
-          # This is a diagnostic oracle, not a promotion gate. A divergence is decision-changing evidence
-          # and should remain a successful workflow with explicit `diverged=True` output rather than being
-          # confused with infrastructure failure.
-          print("container_pack_diverged", diverged)
+          ub.reset(); ub.make_corpora()
+          pack=b"".join(p.read_bytes() for p in sorted((ub.CORP/"nested").glob("*.zip")))
+          pack_sha=hashlib.sha256(pack).hexdigest()
+          print("pack_bytes",len(pack),"pack_sha256",pack_sha)
+          assert len(pack)==845291 and pack_sha=="50a40c85effa6c321703d339e3897213ee945086aa15268a6c5535946d0757e4"
+          sz=ctypes.c_size_t
+          system_name=ctypes.util.find_library("zstd") or "libzstd.so"; system=ctypes.CDLL(system_name)
+          system.ZSTD_versionString.restype=ctypes.c_char_p
+          system.ZSTD_compressBound.argtypes=[sz]; system.ZSTD_compressBound.restype=sz
+          system.ZSTD_compress.argtypes=[ctypes.c_void_p,sz,ctypes.c_void_p,sz,ctypes.c_int]; system.ZSTD_compress.restype=sz
+          system.ZSTD_isError.argtypes=[sz]; system.ZSTD_isError.restype=ctypes.c_uint
+          print("system_library",system_name,"system_zstd_version",system.ZSTD_versionString().decode())
+          core=ctypes.CDLL(str(Path("native/cmpct-core/target/release/libcmpct_core.so").resolve()))
+          core.cmpct_codec_zstd_compress_bound.argtypes=[sz]; core.cmpct_codec_zstd_compress_bound.restype=sz
+          core.cmpct_codec_zstd_compress.argtypes=[ctypes.c_void_p,sz,ctypes.c_int32,ctypes.c_void_p,sz,ctypes.POINTER(sz)]; core.cmpct_codec_zstd_compress.restype=ctypes.c_int32
+          src=ctypes.create_string_buffer(pack); diverged=False
+          for level in (15,12,9):
+              cap=int(system.ZSTD_compressBound(len(pack))); a=ctypes.create_string_buffer(cap)
+              na=int(system.ZSTD_compress(a,cap,src,len(pack),level)); assert not system.ZSTD_isError(na); ambient=a.raw[:na]
+              b=ctypes.create_string_buffer(cap); nb=sz(); status=int(core.cmpct_codec_zstd_compress(src,len(pack),level,b,cap,ctypes.byref(nb))); assert status==0; owned=b.raw[:nb.value]
+              first=next((i for i,(x,y) in enumerate(zip(ambient,owned)) if x!=y),None)
+              if first is None and len(ambient)!=len(owned): first=min(len(ambient),len(owned))
+              equal=ambient==owned; diverged |= not equal
+              print("level",level,"ambient_bytes",len(ambient),"owned_bytes",len(owned),"delta",len(owned)-len(ambient),"ambient_sha256",hashlib.sha256(ambient).hexdigest(),"owned_sha256",hashlib.sha256(owned).hexdigest(),"equal",equal,"first_diff",first)
+          print("container_pack_diverged",diverged)
           PY
+      - name: Build current package-owned core
+        working-directory: native/cmpct-core
+        run: cargo build --release --locked
+      - name: Compare current package engine
+        run: python /tmp/probe.py
+      - name: Build inherited 1.5.5 package-owned control
+        working-directory: native/cmpct-core
+        run: |
+          sed -i 's/version = "0.13"/version = "=0.13.0"/' Cargo.toml
+          cargo update -p zstd --precise 0.13.0
+          cargo update -p zstd-safe --precise 7.0.0
+          cargo update -p zstd-sys --precise '2.0.9+zstd.1.5.5'
+          cargo build --release
+          grep -A8 -E '^name = "zstd(-safe|-sys)?"$' Cargo.lock
+      - name: Compare inherited-generation package engine
+        run: python /tmp/probe.py
+      - name: Preserve candidate lock control
+        uses: actions/upload-artifact@v4
+        with:
+          name: zstd-1.5.5-owned-lock-${{ github.sha }}
+          path: |
+            native/cmpct-core/Cargo.toml
+            native/cmpct-core/Cargo.lock
+          if-no-files-found: error
