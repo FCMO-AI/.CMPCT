@@ -1,0 +1,53 @@
+name: bounded shipping Zstd migration
+on:
+  push:
+    branches: [agent/windows-zstd-native-abi]
+    paths: [.github/workflows/_shipping-zstd-migration.yml]
+permissions:
+  contents: write
+jobs:
+  migrate:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: agent/windows-zstd-native-abi
+      - name: Apply exact bounded migration
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          p=Path('src/cmpct/codec.py'); s=p.read_text()
+          start=s.index('# --- Zstandard through the system library ----------------------------------')
+          end=s.index('# libdeflate is used only as a faster decoder', start)
+          new='''# --- Package-owned Zstandard ------------------------------------------------\n# Zstd is a format dependency, so the Python package owns its codec engine instead of rediscovering\n# an ambient OS library.  The thin ctypes boundary keeps exact historical bytes while Rust owns Zstd.\nfrom .native_codec import compress as zc, decompress as zd, compress_using_dict as zcd\n_sz=ctypes.c_size_t\n\n'''
+          s=s[:start]+new+s[end:]
+          # The old dictionary helpers sit after CDC and must not survive as a second owner.
+          a=s.index('def zcd(data:bytes, dictionary:bytes, level:int)->bytes:')
+          b=s.index('def _audio_modules():', a)
+          s=s[:a]+s[b:]
+          p.write_text(s)
+
+          p=Path('src/cmpct/reader.py'); s=p.read_text()
+          s=s.replace('from .codec import _hash_sparse, _wav_parts, _ld, _sz, _z, _zck', 'from .codec import _hash_sparse, _wav_parts, _ld, _sz\nfrom .native_codec import DictDecoder')
+          old="self._zdict_lock=threading.Lock();self._dctx=None;self._ddict=None;self._dict_bytes=None;self._inflate_lock=threading.Lock()"
+          new="self._zdict_lock=threading.Lock();self._zdict_decoder=None;self._inflate_lock=threading.Lock()"
+          assert s.count(old)==1
+          s=s.replace(old,new)
+          old="if self._ddict:_z.ZSTD_freeDDict(self._ddict);self._ddict=None\n        if self._dctx:_z.ZSTD_freeDCtx(self._dctx);self._dctx=None"
+          new="if self._zdict_decoder:self._zdict_decoder.close();self._zdict_decoder=None"
+          assert s.count(old)==1
+          s=s.replace(old,new)
+          a=s.index('    def _zdict_decode(self,comp:bytes,usize:int)->bytes:')
+          b=s.index('    def _blob(self,idx:int)->bytes:', a)
+          new='''    def _zdict_decode(self,comp:bytes,usize:int)->bytes:\n        # Load the archive dictionary once into the package-owned native DCtx.  This preserves the\n        # measured tiny-file lifetime benefit without retaining a second Python-owned DDict/buffer.\n        with self._zdict_lock:\n            if self._zdict_decoder is None:\n                if self.dict_idx is None:raise IOError('missing Zstd dictionary')\n                self._zdict_decoder=DictDecoder(self._blob(self.dict_idx))\n            return self._zdict_decoder.decompress(comp,usize)\n\n'''
+          s=s[:a]+new+s[b:]
+          p.write_text(s)
+          PY
+          git diff --check
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add src/cmpct/codec.py src/cmpct/reader.py
+          git commit -m 'portability: migrate shipping Zstd to package-owned core'
+          git push origin HEAD:agent/windows-zstd-native-abi
