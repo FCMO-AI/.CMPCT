@@ -10,6 +10,7 @@ on:
     paths:
       - benchmarks/v030_shifted_parent_phase_rss.py
       - experiments/v030_hierarchical_bounded_screen_probe.py
+      - experiments/entropygraph_v030_hierarchical_geometry.py
       - .github/workflows/v030-shifted-parent-phase-rss.yml
       - experiments/entropygraph_v030_r24_process_prebuild.py
       - experiments/entropygraph_v030_r24_process_shipping.py
@@ -41,7 +42,7 @@ jobs:
           test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
           files="$(git diff-tree --no-commit-id --name-only -r HEAD)"
           printf '%s\n' "$files"
-          if printf '%s\n' "$files" | grep -Eq '^(benchmarks/v030_shifted_parent_phase_rss\.py|experiments/v030_hierarchical_bounded_screen_probe\.py|\.github/workflows/v030-shifted-parent-phase-rss\.yml|experiments/entropygraph_v030_(r24_process_prebuild|r24_process_shipping|release_product)\.py|src/cmpct/)'; then
+          if printf '%s\n' "$files" | grep -Eq '^(benchmarks/v030_shifted_parent_phase_rss\.py|experiments/v030_hierarchical_bounded_screen_probe\.py|experiments/entropygraph_v030_hierarchical_geometry\.py|\.github/workflows/v030-shifted-parent-phase-rss\.yml|experiments/entropygraph_v030_(r24_process_prebuild|r24_process_shipping|release_product)\.py|src/cmpct/)'; then
             echo 'run_deep=true' >> "$GITHUB_OUTPUT"
           else
             echo 'run_deep=false' >> "$GITHUB_OUTPUT"
