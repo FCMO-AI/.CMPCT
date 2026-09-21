@@ -5,6 +5,12 @@
 //! production implementation of range planning while allowing integration tests to compile that pure layer
 //! without importing private `Archive`/`Storage` internals into the test crate root.
 
+// Packaging bridge: compile the independently proven caller-buffer codec ABI into the same shipping
+// cdylib. This declaration is intentionally private: the exported contract is the C ABI in
+// `cmpct_codec.h`, not a new Rust API. Keep archive grammar and the read-only `cmpct.h` contract separate.
+#[path = "codec_abi.rs"]
+mod codec_abi;
+
 #[path = "vzip_projection.rs"]
 mod projection;
 pub use projection::{execute_range, VirtualZipDispatchError};
