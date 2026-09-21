@@ -4,6 +4,7 @@
 name: v0.30 Shifted parent phase RSS attribution
 
 on:
+  workflow_call:
   pull_request:
     branches: [agent/v030-authoritative-integration]
     paths:
