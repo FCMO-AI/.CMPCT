@@ -94,7 +94,15 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          FP="$(python -m experiments.entropygraph_v030_release_lock_strict --print-fingerprint)"
+          python -m experiments.entropygraph_v030_release_lock_strict --print-fingerprint > "$RUNNER_TEMP/desktop-package-fingerprint.json"
+          FP="$(python - <<'PYFP'
+          import json, os, pathlib
+          data=json.loads((pathlib.Path(os.environ['RUNNER_TEMP'])/'desktop-package-fingerprint.json').read_text())
+          value=data.get('candidate_fingerprint')
+          assert isinstance(value,str) and len(value)==64,value
+          print(value)
+          PYFP
+          )"
           export FP
           python - <<'PY'
           import json, os
@@ -120,7 +128,7 @@ jobs:
           evidence={
               'schema':'cmpct-v030-desktop-package-evidence-v1',
               'candidate_fingerprint':os.environ['FP'].strip(),
-              'candidate_sha':os.environ['GITHUB_SHA'],
+              'candidate_sha':__import__('subprocess').check_output(['git','rev-parse','HEAD'],text=True).strip(),
               'facts':{
                   'sdist_first_wheel_build':True,
                   'linux_clean_install_green':True,

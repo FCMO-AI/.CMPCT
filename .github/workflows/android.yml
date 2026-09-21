@@ -5,7 +5,7 @@ name: CMPCT Android
 
 on:
   pull_request:
-    branches: [main]
+    branches: [main, agent/v030-authoritative-integration]
     types: [opened, synchronize, reopened, labeled]
     paths:
       - 'integrations/android/**'
@@ -123,6 +123,10 @@ jobs:
           print(value)
           PY
           test -z "$(git status --porcelain=v1)"
+
+      - name: Validate portable dependency lock before expensive Android setup
+        working-directory: native/cmpct-portable
+        run: cargo metadata --locked --format-version 1 > /dev/null
 
       - uses: actions/setup-java@v4
         with:
