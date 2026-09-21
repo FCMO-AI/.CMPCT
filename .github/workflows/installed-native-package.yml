@@ -37,13 +37,15 @@ jobs:
         run: |
           python -m pip install --upgrade pip build
           python -m build --sdist
-      - name: Clean-install from sdist and smoke installed cdylib
+      - name: Build wheel strictly from sdist, clean-install, smoke installed cdylib
         shell: bash
         run: |
           python -m venv "$RUNNER_TEMP/cmpct-installed"
           if [ "$RUNNER_OS" = "Windows" ]; then PY="$RUNNER_TEMP/cmpct-installed/Scripts/python.exe"; else PY="$RUNNER_TEMP/cmpct-installed/bin/python"; fi
           "$PY" -m pip install --upgrade pip
-          "$PY" -m pip install dist/*.tar.gz
+          mkdir -p "$RUNNER_TEMP/wheels"
+          "$PY" -m pip wheel --no-deps dist/*.tar.gz -w "$RUNNER_TEMP/wheels"
+          "$PY" -m pip install "$RUNNER_TEMP"/wheels/cmpct-*.whl
           (cd "$RUNNER_TEMP" && "$PY" "$GITHUB_WORKSPACE/tests/installed_native_package_smoke.py") | tee installed-native-smoke.json
       - name: Inspect installed dependency closure
         shell: bash
@@ -60,5 +62,6 @@ jobs:
           path: |
             installed-native-smoke.json
             installed-native-deps.txt
+            ${{ runner.temp }}/wheels/cmpct-*.whl
           if-no-files-found: error
           retention-days: 14
