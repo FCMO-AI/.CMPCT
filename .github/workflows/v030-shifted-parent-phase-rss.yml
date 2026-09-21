@@ -1,11 +1,10 @@
 # ci-lane: deep
-# ci-cancel-policy: preserve-running-exact-receipt
 name: v0.30 Shifted parent phase RSS attribution
 
 on:
-  push:
+  pull_request:
     branches:
-      - agent/v030-r24-process-productization
+      - agent/v030-authoritative-integration
     paths:
       - ".github/workflows/v030-shifted-parent-phase-rss.yml"
       - "benchmarks/v030_shifted_parent_phase_rss.py"
@@ -17,11 +16,13 @@ on:
 
 permissions: {contents: read}
 env:
-  EVIDENCE_HEAD: ${{ github.sha }}
+  EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
 
+# Attribution is reproducible and cheap enough to cancel when the PR head moves. Unlike a release receipt, a stale
+# observational run has no value that justifies consuming runner time after a newer exact source exists.
 concurrency:
-  group: v030-shifted-parent-phase-rss-${{ github.sha }}
-  cancel-in-progress: false
+  group: v030-shifted-parent-phase-rss-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 jobs:
   attribute:
@@ -56,7 +57,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: v030-shifted-parent-phase-rss-${{ github.sha }}
+          name: v030-shifted-parent-phase-rss-${{ env.EVIDENCE_HEAD }}
           path: |
             benchmark-artifacts/v030-shifted-parent-phase-rss.json
             benchmark-artifacts/v030-shifted-parent-phase-rss.log
