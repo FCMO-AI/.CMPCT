@@ -1,5 +1,5 @@
 from __future__ import annotations
-import ctypes, ctypes.util, hashlib, importlib.util, json
+import ctypes, ctypes.util, hashlib, importlib.util, json, tempfile
 from pathlib import Path
 
 spec=importlib.util.find_spec("cmpct"); assert spec and spec.submodule_search_locations
@@ -24,6 +24,7 @@ def guarded_find_library(name):
     if str(name).lower()=="zstd": raise AssertionError("shipping Python attempted ambient Zstd discovery")
     return real_find_library(name)
 ctypes.util.find_library=guarded_find_library
+archive_sha=None
 try:
     from cmpct.codec import zc, zcd, zd
     from cmpct.native_codec import DictDecoder
@@ -32,7 +33,28 @@ try:
     decoder=DictDecoder(dictionary)
     try: assert decoder.decompress(via_shipping,len(payload))==payload
     finally: decoder.close()
+
+    # Exercise the actual installed archive boundary, not only codec symbols. The fixture deliberately
+    # mixes compressible text, deterministic incompressible bytes and nested paths while staying tiny
+    # enough for every desktop package job. Any ambient-Zstd lookup remains fatal under the guard above.
+    from cmpct.builder import Builder
+    from cmpct.reader import CMPCT
+    with tempfile.TemporaryDirectory(prefix="cmpct-installed-smoke-") as td:
+        root=Path(td); src=root/"src"; dst=root/"dst"; arc=root/"representative.cmpct"
+        (src/"nested").mkdir(parents=True)
+        expected={
+            "readme.txt":(b"portable exact archive\n"*4096),
+            "nested/data.bin":bytes((i*73+19)&255 for i in range(128*1024)),
+        }
+        for rel,data in expected.items(): p=src/rel; p.parent.mkdir(parents=True,exist_ok=True); p.write_bytes(data)
+        Builder(src,workers=1,reproducible=True,reproducible_epoch_ns=0).build(arc)
+        archive_sha=hashlib.sha256(arc.read_bytes()).hexdigest()
+        with CMPCT(arc) as reader:
+            assert reader.verify()==len(expected)
+            for rel,data in expected.items(): assert reader.read(rel)==data
+            reader.extractall(dst,metadata=False)
+        for rel,data in expected.items(): assert (dst/rel).read_bytes()==data
 finally:
     ctypes.util.find_library=real_find_library
 
-print(json.dumps({"schema":"cmpct-installed-native-package-smoke-v3","library":str(candidates[0]),"symbols":"ok","dict_vector_bytes":104,"dict_vector_sha256":expected_sha,"roundtrip":True,"shipping_python_no_ambient_zstd":True,"python_zstandard_absent":True}))
+print(json.dumps({"schema":"cmpct-installed-native-package-smoke-v4","library":str(candidates[0]),"symbols":"ok","dict_vector_bytes":104,"dict_vector_sha256":expected_sha,"roundtrip":True,"representative_archive_create_read_extract":True,"representative_archive_sha256":archive_sha,"shipping_python_no_ambient_zstd":True,"python_zstandard_absent":True}))
