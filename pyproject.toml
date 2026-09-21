@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=68"]
+requires = ["setuptools>=68", "setuptools-rust>=1.12"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -41,6 +41,15 @@ package-dir = {"" = "src"}
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+# Build the existing cdylib into the Python package without introducing a second Rust/Python binding
+# architecture. Python owns the thin ctypes adapter; Rust owns Zstd and the existing C ABI. `--locked`
+# makes the package build consume the same committed dependency graph as native release evidence.
+[[tool.setuptools-rust.ext-modules]]
+target = "cmpct.cmpct_core"
+path = "native/cmpct-core/Cargo.toml"
+binding = "NoBinding"
+cargo-manifest-args = ["--locked"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
