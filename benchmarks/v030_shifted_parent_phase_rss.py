@@ -85,10 +85,16 @@ def main() -> None:
         out = read_records_original(*pos, **kw)
         graph_records = out[3]
         graph_path = Path(pos[0])
+        # Record tuples carry the authenticated uncompressed size in slot 1.  This is a decoder-visible fact,
+        # not an oracle: it lets the attribution compare compressed graph size with the raw bytes the parent-thread
+        # audition path may materialize.  No record is decoded merely for this diagnostic.
+        declared_raw = [int(record[1]) for record in graph_records]
         mark(
             "g04_read_records_end",
             graph_records=len(graph_records),
             graph_archive_bytes=graph_path.stat().st_size,
+            declared_raw_record_bytes=sum(declared_raw),
+            max_declared_raw_record_bytes=max(declared_raw, default=0),
             process_pool_eligible=bool(RP._g04_process_pool_eligible(graph_path, graph_records)),
             process_min_graph_bytes=int(RP.G04_PROCESS_MIN_GRAPH_BYTES),
             process_min_records=int(RP.G04_PROCESS_MIN_RECORDS),
@@ -138,7 +144,7 @@ def main() -> None:
         shared.strict._read_source_records = read_records_original
 
     result = {
-        "schema": "cmpct-v030-shifted-parent-phase-rss-v2",
+        "schema": "cmpct-v030-shifted-parent-phase-rss-v3",
         "release_credit": False,
         "question": "does the parent-thread G0-G4 retained-graph overlay own Shifted high-water after r24 child isolation?",
         "selected": stats.get("selected") if stats else None,
