@@ -1,3 +1,13 @@
+#[repr(C)]
+#[derive(Copy, Clone)]
+pub enum CmpctStatus {
+    Ok = 0,
+    Null = -1,
+    Format = -3,
+    Range = -6,
+    Panic = -127,
+}
+
 #[path = "../src/codec_abi.rs"]
 mod codec_abi;
 
