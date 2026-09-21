@@ -25,6 +25,7 @@ def test_promoted_front_door_owns_process_seam():
 
     assert product._BASE_IMPL.C._prepare_profile_tree.__module__ == "experiments.entropygraph_v030_r24_process_shipping"
     assert product._BASE_IMPL.C._r24_build.__module__ == "experiments.entropygraph_v030_r24_process_shipping"
+    assert product._LOGS_PROMOTED._parallel_candidates.__module__ == "experiments.entropygraph_v030_r24_process_shipping"
 
 
 def test_shipping_registry_default_has_no_size_independent_deadline():
