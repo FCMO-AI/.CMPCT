@@ -1,0 +1,86 @@
+# ci-lane: research
+# ci-cancel-policy: latest-head
+# ci-pr-scope: latest-head-commit-gate
+# discriminator: localize source/tiny residual bytes to payload data vs compressed index
+name: CMPCT Zstd residual-byte oracle
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/zstd-residual-byte-oracle.yml"
+      - "src/cmpct/builder.py"
+      - "src/cmpct/codec.py"
+      - "src/cmpct/native_codec.py"
+      - "native/cmpct-core/src/codec_abi.rs"
+      - "native/cmpct-core/Cargo.toml"
+      - "native/cmpct-core/Cargo.lock"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: zstd-residual-byte-oracle-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  oracle:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+      - name: Install package and build package-owned core
+        run: |
+          python -m pip install -e .
+          cargo build --release --locked --manifest-path native/cmpct-core/Cargo.toml
+          cp native/cmpct-core/target/release/libcmpct_core.so src/cmpct/
+      - name: Localize source/tiny residual
+        env:
+          PYTHONPATH: src
+          CMPCT_ENCODE_WORKERS: "1"
+          CMPCT_DEFLATE_REUSE_MIN: "65536"
+        run: |
+          python - <<'PY'
+          import ctypes, ctypes.util, hashlib, tempfile
+          from pathlib import Path
+          from benchmarks import universal_bench as ub
+          import cmpct.builder as builder
+          from cmpct.native_codec import compress as owned_zc
+
+          system = ctypes.CDLL(ctypes.util.find_library("zstd") or "libzstd.so.1")
+          sz = ctypes.c_size_t
+          system.ZSTD_versionString.restype = ctypes.c_char_p
+          system.ZSTD_compressBound.argtypes=[sz]; system.ZSTD_compressBound.restype=sz
+          system.ZSTD_compress.argtypes=[ctypes.c_void_p,sz,ctypes.c_void_p,sz,ctypes.c_int]; system.ZSTD_compress.restype=sz
+          system.ZSTD_isError.argtypes=[sz]; system.ZSTD_isError.restype=ctypes.c_uint
+          assert system.ZSTD_versionString().decode()=="1.5.5"
+          def inherited_zc(data, level):
+              if not data: return b""
+              src=ctypes.create_string_buffer(data); cap=int(system.ZSTD_compressBound(len(data))); dst=ctypes.create_string_buffer(cap)
+              n=int(system.ZSTD_compress(dst,cap,src,len(data),level)); assert not system.ZSTD_isError(n)
+              return dst.raw[:n]
+
+          ub.reset(); ub.make_corpora()
+          with tempfile.TemporaryDirectory(prefix="cmpct-residual-") as td:
+              td=Path(td)
+              for name in ("source","tiny"):
+                  rows={}
+                  for owner,zc in (("inherited",inherited_zc),("owned",owned_zc)):
+                      builder.zc=zc
+                      out=td/f"{name}-{owner}.cmpct"
+                      result=builder.Builder(ub.CORP/name, workers=1, reproducible=True).build(out)
+                      payload=out.read_bytes()
+                      rows[owner]=(result,payload)
+                      print(name,owner,"archive",len(payload),"sha256",hashlib.sha256(payload).hexdigest(),"index_comp",result["index_comp"],"data_bytes",result["data_bytes"],"unique_blobs",result["unique_blobs"])
+                  a,ab=rows["inherited"]; b,bb=rows["owned"]
+                  first=next((i for i,(x,y) in enumerate(zip(ab,bb)) if x!=y),None)
+                  if first is None and len(ab)!=len(bb): first=min(len(ab),len(bb))
+                  print(name,"archive_delta",len(bb)-len(ab),"index_comp_delta",b["index_comp"]-a["index_comp"],"data_bytes_delta",b["data_bytes"]-a["data_bytes"],"first_diff",first)
+                  assert len(bb)-len(ab)==-1, f"{name}: expected charged full-product residual -1 B"
+                  assert b["unique_blobs"]==a["unique_blobs"]
+          PY
