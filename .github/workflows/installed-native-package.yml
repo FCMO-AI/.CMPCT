@@ -54,7 +54,13 @@ jobs:
           LIB=$(cd "$RUNNER_TEMP" && "$PY" -c 'import importlib.util,pathlib; p=pathlib.Path(next(iter(importlib.util.find_spec("cmpct").submodule_search_locations))); print(next(x for x in p.glob("cmpct_core*") if x.is_file()))')
           echo "library=$LIB" | tee installed-native-deps.txt
           if [ "$RUNNER_OS" = "Linux" ]; then ldd "$LIB" | tee -a installed-native-deps.txt; ! ldd "$LIB" | grep -i 'libzstd'; fi
-          if [ "$RUNNER_OS" = "macOS" ]; then otool -L "$LIB" | tee -a installed-native-deps.txt; ! otool -L "$LIB" | grep -i 'libzstd'; fi
+          if [ "$RUNNER_OS" = "macOS" ]; then
+            otool -L "$LIB" | tee -a installed-native-deps.txt
+            ! otool -L "$LIB" | grep -i 'libzstd'
+            lipo -info "$LIB" | tee -a installed-native-deps.txt
+            lipo -info "$LIB" | grep -q 'arm64'
+            lipo -info "$LIB" | grep -q 'x86_64'
+          fi
           if [ "$RUNNER_OS" = "Windows" ]; then objdump -p "$LIB" | grep 'DLL Name:' | tee -a installed-native-deps.txt; ! objdump -p "$LIB" | grep -i 'libzstd'; fi
       - uses: actions/upload-artifact@v4
         with:
