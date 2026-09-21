@@ -56,8 +56,10 @@ jobs:
           "$PY" -m pip install --upgrade pip
           "$PY" -m pip install "$RUNNER_TEMP"/generic/cmpct-*.whl
           (cd "$RUNNER_TEMP" && "$PY" "$GITHUB_WORKSPACE/tests/installed_native_package_smoke.py") | tee py314-smoke.json
-          sha256sum "$RUNNER_TEMP"/generic/cmpct-*.whl | tee final-wheel.sha256
-          diff -u "$RUNNER_TEMP/generic/generic-wheel.sha256" final-wheel.sha256
+          ORIGINAL_SHA=$(cut -d' ' -f1 "$RUNNER_TEMP/generic/generic-wheel.sha256")
+          FINAL_SHA=$(sha256sum "$RUNNER_TEMP"/generic/cmpct-*.whl | cut -d' ' -f1)
+          test "$ORIGINAL_SHA" = "$FINAL_SHA"
+          printf '%s\n' "$FINAL_SHA" | tee final-wheel.sha256
       - uses: actions/upload-artifact@v4
         with:
           name: generic-wheel-same-artifact-${{ github.sha }}
@@ -67,5 +69,6 @@ jobs:
             ${{ runner.temp }}/generic/wheel-metadata.txt
             py310-smoke.json
             py314-smoke.json
+            final-wheel.sha256
           if-no-files-found: error
           retention-days: 7
