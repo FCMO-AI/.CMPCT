@@ -43,7 +43,7 @@ jobs:
           files="$(git diff-tree --no-commit-id --name-only -r HEAD)"
           printf '%s\n' "$files"
           if printf '%s\n' "$files" | grep -Eq '^(benchmarks/v030_shifted_parent_phase_rss\.py|experiments/v030_hierarchical_bounded_screen_probe\.py|experiments/entropygraph_v030_hierarchical_geometry\.py|experiments/entropygraph_v030_(r24_process_prebuild|r24_process_shipping|release_product)\.py|src/cmpct/)'; then echo 'run_shifted=true' >> "$GITHUB_OUTPUT"; else echo 'run_shifted=false' >> "$GITHUB_OUTPUT"; fi
-          if printf '%s\n' "$files" | grep -Eq '^(benchmarks/v030_logs_candidate_scheduling_ab\.py|experiments/entropygraph_v030_release_product_logs_candidate\.py|experiments/entropygraph_v030_release_product\.py|\.github/workflows/v030-shifted-parent-phase-rss\.yml)'; then echo 'run_logs=true' >> "$GITHUB_OUTPUT"; else echo 'run_logs=false' >> "$GITHUB_OUTPUT"; fi
+          if printf '%s\n' "$files" | grep -Eq '^(benchmarks/v030_logs_candidate_scheduling_ab\.py|experiments/entropygraph_v030_release_product_logs_candidate\.py|experiments/entropygraph_v030_r24_process_shipping\.py|experiments/entropygraph_v030_release_product\.py|\.github/workflows/v030-shifted-parent-phase-rss\.yml)'; then echo 'run_logs=true' >> "$GITHUB_OUTPUT"; else echo 'run_logs=false' >> "$GITHUB_OUTPUT"; fi
 
   shifted:
     needs: classify
