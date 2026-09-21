@@ -4,54 +4,53 @@
   "authority": {
     "canonical_release": "v0.29.0 / r24 on main",
     "active_frontier": "PR #175 agent/v030-r24-process-productization",
-    "source": "PR #175; exact product head a9e1d895ffe58c5de9221acf04e1e057a2efda2d; runtime run 35563173856 artifact 10623735108"
+    "source": "PR #175; last canonical product receipt 35563173856 / 10623735108; Logs scheduling decision 35566703880 / 10623994370"
   },
   "active_product_bottleneck": {
     "id": "v030-logs-parent-rss-overlap",
-    "observation": "Integrated bounded-screen HG closes Shifted under unchanged canonical-v2: Shifted parent pack RSS is 1.0x and whole-tree pack RSS 0.97326x. ML is also green at 1.17590x parent pack RSS and 1.22992x create. Logs is now the sole canonical-v2 red at 1.35250x parent pack RSS; timing is green at 0.00989x create and 1.17642x extract. Whole-tree Logs pack RSS is already green at 0.63535x, so the remaining failure is parent ownership/overlap rather than aggregate-memory growth.",
-    "next_discriminator": "On the same frozen Logs source compare current threaded r24/logs overlap against exact sequential candidate evaluation and the prior child-owner control. Preserve admission and bytes; charge parent RSS, process-tree RSS and wall/CPU."
+    "observation": "Canonical-v2 had one remaining red: Logs parent pack RSS 1.35250x. Exact A/B/C 35566703880 proves candidate overlap is causal: threaded parent/tree peak 168,828 KiB; sequential 140,132 KiB; r24-child parent 99,956 KiB but charged tree 188,624 KiB. All arms emitted byte-identical 3,550,343 B archives with SHA 2b24a3d8f622c8681c5d6b09f3725e1968ce48333df282e85b0386b1d52d77d7 and identical admission facts.",
+    "next_discriminator": "Productize exact sequential r24 then Logs candidate materialization without changing admission or format, then run unchanged canonical-v2 and whole-tree authority."
   },
   "primary_question": {
-    "id": "logs-candidate-overlap",
+    "id": "logs-sequential-productization",
     "family": "memory-ownership/candidate-scheduling",
-    "status": "PREREGISTERED_DECISIVE_AB_NEXT",
+    "status": "CAUSAL_AB_POSITIVE_PRODUCTIZATION_NEXT",
     "evidence": [
-      "35563173856 / 10623735108: canonical-v2 sole RSS red is Logs parent pack 1.3525007x; Shifted and ML are green",
-      "same exact-head whole-tree authority: all gates pass; Logs tree pack RSS 0.6353506x and total max tree RSS 1.0x",
-      "35552595037 / 10619510592: moving the Logs r24 control to a child makes parent pack RSS 1.0x with the same 267 B-class archive win, but parent-only evidence cannot earn product credit",
-      "#166 evidence places standalone Logs r24/r25 near ~122 MiB while whole-product parent was ~168.7 MiB",
-      "preserved Logs stats charge r24.logical_bytes=16,994,250; the logs candidate simultaneously retains source bytes plus a similarly sized transformed buffer, matching the scale of the overlap residual"
+      "35563173856 / 10623735108: Logs was sole canonical-v2 red at 1.3525007x parent pack RSS; all timing gates and whole-tree authority green",
+      "35566703880 / 10623994370 / sha256:b59818f70f42cf98636e281adfd6255f54d80170dd5075e20ec11e02f64c314f: threaded 168,828 KiB parent/tree; sequential 140,132 KiB parent/tree; r24-child 99,956 KiB parent but 188,624 KiB tree",
+      "all three scheduling arms: logs-inverse, 3,550,343 B, physical SHA 2b24a3d8f622c8681c5d6b09f3725e1968ce48333df282e85b0386b1d52d77d7, identical admission",
+      "sequential wall 0.6881 s versus threaded 0.5508 s (+24.9% locally), while inherited canonical Logs create ratio is only 0.00989x, leaving large release-gate margin"
     ],
-    "prediction": "Sequential exact r24/logs candidate evaluation should delete the parent overlap without IPC and bring Logs parent pack RSS <=1.25x while retaining exact archive identity and remaining far inside the 1.25 timing gate.",
-    "kill": "If sequential evaluation does not materially reduce Logs parent RSS, retire overlap as the owner. If it closes RSS but violates timing or bytes, reject it; only consider child ownership after charged process-tree evidence."
+    "prediction": "Shipping sequential candidate materialization should close Logs parent RSS under <=1.25x with no archive-byte or process-tree regression and remain inside timing gates.",
+    "kill": "If unchanged canonical-v2 fails RSS, bytes, or timing after exact sequential productization, canonical evidence wins and the mechanism is not promotable."
   },
   "frontier_candidates": [
-    {"id": "logs-sequential-exact-candidates", "status": "PRIMARY_CHEAP_FALSIFIER", "evidence": "preregistered on PR #175 after 35563173856"},
-    {"id": "logs-selector-r24-child-owner", "status": "PARENT_MECHANISM_PROVEN_TREE_AB_REQUIRED", "evidence": "35552595037 / 10619510592"},
-    {"id": "creator-import-cold-start", "status": "CONDITIONAL_ONLY", "evidence": "Logs extract is green at 1.17642x on 35563173856; pursue only if a future exact receipt reopens the timing failure"}
+    {"id": "logs-sequential-exact-candidates", "status": "CAUSALLY_PROVEN_PRODUCTIZE", "evidence": "35566703880 / 10623994370"},
+    {"id": "logs-selector-r24-child-owner", "status": "REJECT_AS_FIRST_PRODUCT_ROUTE", "evidence": "35566703880: parent 99,956 KiB but charged tree 188,624 KiB, worse than both threaded and sequential"},
+    {"id": "creator-import-cold-start", "status": "CONDITIONAL_ONLY", "evidence": "Logs extract green at 1.17642x on 35563173856"}
   ],
   "protected_seeds": [
-    {"id": "shifted-hg-screen-buffer-lifetime", "status": "SHIPPING_CONFIRMED", "evidence": "35557126948 causal A/B; 35563483707 exact-head focused identity; 35563173856 canonical-v2"},
-    {"id": "ml-r24-process-lifetime", "status": "SHIPPING_CONFIRMED", "evidence": "35563173856: ML parent pack RSS 1.17590x"},
-    {"id": "r24-streamed-materialization", "status": "REUSABLE_SEED_NOT_CURRENT_OWNER", "evidence": "PR #166"}
+    {"id": "shifted-hg-screen-buffer-lifetime", "status": "SHIPPING_CONFIRMED", "evidence": "35557126948; 35563483707; 35563173856"},
+    {"id": "ml-r24-process-lifetime", "status": "SHIPPING_CONFIRMED", "evidence": "35563173856"}
   ],
   "retired_or_narrowed": [
-    {"id": "shifted-hg-screen-buffer-lifetime-as-open-bottleneck", "reason": "35563173856 closes Shifted parent RSS under unchanged canonical-v2"},
-    {"id": "timing-threshold-straddlers-as-current-blocker", "reason": "35563173856 has all create/extract timing gates green; preserve history but do not optimize a non-failure"},
-    {"id": "lower-g04-process-threshold-as-first-fix", "reason": "bounded-screen lifetime deletion is simpler and now shipping-confirmed"}
+    {"id": "shifted-hg-screen-buffer-lifetime-as-open-bottleneck", "reason": "35563173856 closes Shifted"},
+    {"id": "logs-overlap-as-unproven-owner", "reason": "35566703880 causally confirms overlap and identifies sequential deletion as the simpler Pareto owner"},
+    {"id": "logs-child-owner-as-preferred-fix", "reason": "35566703880 exposes 188,624 KiB charged tree peak; it hides parent memory rather than deleting enough system cost"},
+    {"id": "timing-threshold-straddlers-as-current-blocker", "reason": "35563173856 has all create/extract timing gates green"}
   ],
   "decision_evidence": {
-    "canonical_runtime": "35563173856 / artifact 10623735108 / sha256:f3ee9da6abb889a34f9ddfe94cc455518152bcaf9cebd871fef2be3add4597f6 / fingerprint 4b849847ea3f098ef86e3674cd4a3f205e09814640b6ab6d234c2827b884236a: v2 fails only parent RSS via Logs 1.35250x; whole-tree passes all gates with max RSS 1.0x.",
-    "shifted_shipping": "35563483707 / artifact 10622704219 / sha256:2f0c950ea77ac2a47c6a779c2a7dc80c7d61a94782592c155d60a83df6e49ca8: shipping/oracle byte identity 1,700,664 B; current shipping high-water moves to strong verification rather than HG screening. Arm labels are stale after productization, so this is not a fresh causal A/B.",
-    "shifted_causal_ab": "35557126948 / artifact 10620102659: exact archive identity; live RSS -28.5%; ru_maxrss -27.4%; wall +0.38%.",
-    "logs_parent_control": "35552595037 / artifact 10619510592: Logs parent RSS 1.0x; no product credit without tree/whole-system comparison."
+    "canonical_runtime": "35563173856 / 10623735108: only Logs parent RSS red; whole-tree passes.",
+    "logs_scheduling_ab": "35566703880 / artifact 10623994370 / sha256:b59818f70f42cf98636e281adfd6255f54d80170dd5075e20ec11e02f64c314f: exact identity; sequential parent/tree -17.0% versus threaded; child parent lower but tree +11.7% versus threaded.",
+    "shifted_shipping": "35563483707 plus 35563173856: exact identity and canonical closure.",
+    "shifted_causal_ab": "35557126948: live RSS -28.5%; ru_maxrss -27.4%; wall +0.38%."
   },
   "process_lessons": [
-    {"lesson": "Prefer deleting avoidable retained work/memory over process relocation when exact recomputation is cheap.", "evidence": "35557126948 -> 35563173856"},
-    {"lesson": "A deep receipt classifier must include the shipping owner it claims to certify; otherwise a product mutation can silently skip its evidence.", "evidence": "3d8e4cb8597e9d6b53090c5e2aba4169fa28dd2b and 00389dbc607e7847de5c322c492b14ff7c4131e6"},
-    {"lesson": "PR-body edited events currently fan out duplicate preserved deep receipts at the same SHA; use comments during active evidence and tighten the caller after the current receipt set.", "evidence": "PR #175 runs 35563483707 and duplicate queued same-SHA calls"}
+    {"lesson": "Prefer deleting avoidable overlap/retention over process relocation when exact serial recomputation stays inside timing margin.", "evidence": "35557126948 and 35566703880"},
+    {"lesson": "Parent-only RSS can reward exported process cost; charge the process tree before productizing ownership boundaries.", "evidence": "35566703880: child parent 99,956 KiB versus tree 188,624 KiB"},
+    {"lesson": "Deep receipts must bind exact source and preserve raw artifacts; identity checks decide semantics before performance interpretation.", "evidence": "35566703880 / 10623994370"}
   ],
   "pending_jobs": [],
-  "next_action": "Build the smallest research A/B for Logs candidate scheduling: current threaded overlap versus exact sequential r24/logs evaluation, with the prior child-owner arm only as a charged ownership control. Preserve the exact admission formula and physical archive identity; measure parent RSS, sampled process-tree RSS and wall/CPU. Do not change thresholds or product code before the falsifier decides.",
-  "last_reconciled": "2026-09-21T05:18Z"
+  "next_action": "Productize only the exact sequential r24->Logs candidate scheduling seam, preserving the frozen threaded control in the research harness. Then run unchanged canonical-v2 plus whole-tree authority; do not alter thresholds or admission.",
+  "last_reconciled": "2026-09-21T06:06Z"
 }
