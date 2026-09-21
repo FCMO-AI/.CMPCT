@@ -1,4 +1,4 @@
-name: TEMP generic Python wheel tag proof
+name: TEMP CPython-major wheel tag proof
 on:
   push:
     branches: [agent/wheel-tag-proof]
@@ -14,7 +14,7 @@ jobs:
       - uses: actions/setup-python@v6
         with:
           python-version: '3.11'
-      - name: Build sdist-first wheel once and retag generic Python/ABI-none
+      - name: Build sdist-first wheel once and retag CPython-major/ABI-none
         shell: bash
         run: |
           set -euo pipefail
@@ -25,17 +25,17 @@ jobs:
           cp "$RUNNER_TEMP"/original/cmpct-*.whl "$RUNNER_TEMP/generic/"
           cd "$RUNNER_TEMP/generic"
           ORIGINAL=$(echo cmpct-*.whl)
-          python -m wheel tags --python-tag=py3 --abi-tag=none --remove "$ORIGINAL" | tee retagged-name.txt
+          python -m wheel tags --python-tag=cp3 --abi-tag=none --remove "$ORIGINAL" | tee retagged-name.txt
           GENERIC=$(cat retagged-name.txt)
           test -f "$GENERIC"
           sha256sum "$GENERIC" | tee generic-wheel.sha256
           unzip -p "$GENERIC" '*/WHEEL' | tee wheel-metadata.txt
-          grep -q '^Tag: py3-none-' wheel-metadata.txt
+          grep -q '^Tag: cp3-none-' wheel-metadata.txt
           unzip -l "$GENERIC" | grep 'cmpct/cmpct_core'
       - uses: actions/setup-python@v6
         with:
           python-version: '3.10'
-      - name: Install exact same generic artifact on Python 3.10 and run shipping smoke
+      - name: Install exact same CPython-major artifact on Python 3.10 and run shipping smoke
         shell: bash
         run: |
           set -euo pipefail
@@ -62,7 +62,7 @@ jobs:
           printf '%s\n' "$FINAL_SHA" | tee final-wheel.sha256
       - uses: actions/upload-artifact@v4
         with:
-          name: generic-wheel-same-artifact-${{ github.sha }}
+          name: cp3-wheel-same-artifact-${{ github.sha }}
           path: |
             ${{ runner.temp }}/generic/cmpct-*.whl
             ${{ runner.temp }}/generic/generic-wheel.sha256
