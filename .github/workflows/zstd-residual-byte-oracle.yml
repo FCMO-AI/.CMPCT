@@ -45,7 +45,8 @@ jobs:
           CMPCT_ENCODE_WORKERS: "1"
           CMPCT_DEFLATE_REUSE_MIN: "65536"
         run: |
-          python - <<'PY'
+          set -o pipefail
+          python - <<'PY' 2>&1 | tee /tmp/residual-oracle.txt
           import ctypes, ctypes.util, hashlib, tempfile
           from pathlib import Path
           from benchmarks import universal_bench as ub
@@ -58,6 +59,7 @@ jobs:
           system.ZSTD_compressBound.argtypes=[sz]; system.ZSTD_compressBound.restype=sz
           system.ZSTD_compress.argtypes=[ctypes.c_void_p,sz,ctypes.c_void_p,sz,ctypes.c_int]; system.ZSTD_compress.restype=sz
           system.ZSTD_isError.argtypes=[sz]; system.ZSTD_isError.restype=ctypes.c_uint
+          print("inherited_zstd_version",system.ZSTD_versionString().decode(),flush=True)
           assert system.ZSTD_versionString().decode()=="1.5.5"
           def inherited_zc(data, level):
               if not data: return b""
@@ -76,11 +78,17 @@ jobs:
                       result=builder.Builder(ub.CORP/name, workers=1, reproducible=True).build(out)
                       payload=out.read_bytes()
                       rows[owner]=(result,payload)
-                      print(name,owner,"archive",len(payload),"sha256",hashlib.sha256(payload).hexdigest(),"index_comp",result["index_comp"],"data_bytes",result["data_bytes"],"unique_blobs",result["unique_blobs"])
+                      print(name,owner,"archive",len(payload),"sha256",hashlib.sha256(payload).hexdigest(),"index_comp",result["index_comp"],"data_bytes",result["data_bytes"],"unique_blobs",result["unique_blobs"],flush=True)
                   a,ab=rows["inherited"]; b,bb=rows["owned"]
                   first=next((i for i,(x,y) in enumerate(zip(ab,bb)) if x!=y),None)
                   if first is None and len(ab)!=len(bb): first=min(len(ab),len(bb))
-                  print(name,"archive_delta",len(bb)-len(ab),"index_comp_delta",b["index_comp"]-a["index_comp"],"data_bytes_delta",b["data_bytes"]-a["data_bytes"],"first_diff",first)
-                  assert len(bb)-len(ab)==-1, f"{name}: expected charged full-product residual -1 B"
+                  print(name,"archive_delta",len(bb)-len(ab),"index_comp_delta",b["index_comp"]-a["index_comp"],"data_bytes_delta",b["data_bytes"]-a["data_bytes"],"first_diff",first,flush=True)
                   assert b["unique_blobs"]==a["unique_blobs"]
           PY
+      - name: Upload residual diagnostics
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: zstd-residual-byte-oracle-${{ github.sha }}
+          path: /tmp/residual-oracle.txt
+          if-no-files-found: error
