@@ -43,7 +43,7 @@ jobs:
         run: |
           set -o pipefail
           python - <<'PY' 2>&1 | tee /tmp/writer-overhead-oracle.txt
-          import ctypes, ctypes.util, hashlib, os, statistics, time
+          import ctypes, ctypes.util, hashlib, statistics, time
           from cmpct import native_codec as nc
 
           system = ctypes.CDLL(ctypes.util.find_library("zstd") or "libzstd.so.1")
@@ -82,10 +82,10 @@ jobs:
 
           for name,data in payloads.items():
               level=levels[name]
-              ref=inherited(data,level); owned=nc.compress(data,level); pre=owned_preallocated(data,level)
+              pre_call=owned_preallocated(data,level)
+              ref=inherited(data,level); owned=nc.compress(data,level); pre=pre_call()
               assert owned==ref==pre, (name,len(ref),len(owned),len(pre))
               loops=max(8,min(2000,8_000_000//len(data)))
-              pre_call=owned_preallocated(data,level)
               arms={"inherited":lambda: inherited(data,level),"owned_python":lambda: nc.compress(data,level),"owned_prealloc":pre_call}
               for fn in arms.values():
                   for _ in range(3): fn()
