@@ -75,3 +75,70 @@ jobs:
             ${{ runner.temp }}/wheels/cmpct-*.whl
           if-no-files-found: error
           retention-days: 14
+
+  desktop-package-evidence:
+    needs: installed-package
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - uses: actions/download-artifact@v5
+        with:
+          pattern: installed-native-*-${{ github.event.pull_request.head.sha || github.sha }}
+          path: installed-evidence
+      - name: Aggregate fingerprint-bound desktop package evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          FP="$(python -m experiments.entropygraph_v030_release_lock_strict --print-fingerprint)"
+          export FP
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          root=Path('installed-evidence')
+          expected={'ubuntu-24.04','macos-14','windows-2025'}
+          dirs={p.name.split('-'+os.environ.get('GITHUB_SHA',''))[0].removeprefix('installed-native-'):p for p in root.iterdir() if p.is_dir()}
+          # Artifact names contain the exact candidate SHA after the OS token; identify by stable OS prefixes.
+          found={}
+          for os_name in expected:
+              matches=[p for p in root.iterdir() if p.is_dir() and p.name.startswith('installed-native-'+os_name+'-')]
+              assert len(matches)==1,(os_name,matches)
+              found[os_name]=matches[0]
+          smoke={}
+          for os_name,p in found.items():
+              s=json.loads((p/'installed-native-smoke.json').read_text())
+              assert s['representative_archive_create_read_extract'] is True
+              assert s['shipping_python_no_ambient_zstd'] is True
+              assert s['python_zstandard_absent'] is True
+              assert s['dict_vector_bytes']==104
+              assert (p/'installed-native-deps.txt').read_text().strip()
+              smoke[os_name]=s
+          evidence={
+              'schema':'cmpct-v030-desktop-package-evidence-v1',
+              'candidate_fingerprint':os.environ['FP'].strip(),
+              'candidate_sha':os.environ['GITHUB_SHA'],
+              'facts':{
+                  'sdist_first_wheel_build':True,
+                  'linux_clean_install_green':True,
+                  'macos_clean_install_green':True,
+                  'windows_clean_install_green':True,
+                  'representative_archive_create_read_extract':True,
+                  'canonical_codec_vectors_green':True,
+                  'no_ambient_zstd_dependency':True,
+                  'platform_dependency_inspection_recorded':True,
+              },
+              'platform_smoke':{k:{'archive_sha256':v['representative_archive_sha256'],'dict_vector_sha256':v['dict_vector_sha256']} for k,v in smoke.items()},
+          }
+          Path('desktop-package-evidence.json').write_text(json.dumps(evidence,indent=2,sort_keys=True)+'\n')
+          print(json.dumps(evidence,sort_keys=True))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: desktop-package-evidence-${{ github.event.pull_request.head.sha || github.sha }}
+          path: desktop-package-evidence.json
+          if-no-files-found: error
+          retention-days: 14
