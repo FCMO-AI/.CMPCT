@@ -11,44 +11,37 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v6
-        with:
-          fetch-depth: 0
+        with: {fetch-depth: 0}
       - uses: actions/setup-python@v6
-        with:
-          python-version: '3.11'
+        with: {python-version: '3.11'}
       - name: Build optimized candidate editable package
         run: python -m pip install -e .
       - name: Materialize direct PR base
         run: git worktree add /tmp/cmpct-startup-base ${{ github.event.pull_request.base.sha }}
-      - name: Reproduce release binary corpus and test execution boundary
-        env:
-          BASE_ROOT: /tmp/cmpct-startup-base
+      - name: Map serial versus parallel CLI across frozen corpora
+        env: {BASE_ROOT: /tmp/cmpct-startup-base}
         run: |
           python - <<'PY'
           import json, os, statistics, subprocess, sys, tempfile, time
           from pathlib import Path
-          root=Path.cwd(); base=Path(os.environ['BASE_ROOT']); work=Path(tempfile.mkdtemp())
-          sys.path.insert(0,str(root/'benchmarks')); import universal_bench as u
-          u.WORK=work/'bench'; u.CORP=u.WORK/'corpora'; u.OUT=u.WORK/'out'; u.WORK.mkdir(); u.CORP.mkdir(); u.OUT.mkdir(); u.make_corpora(); src=u.CORP/'binary'
-          reps=15; env_c=os.environ.copy(); env_c['PYTHONPATH']=str(root/'src'); env_b=os.environ.copy(); env_b['PYTHONPATH']=str(base/'src')
-          def proc(cmd,env,n=reps):
+          root=Path.cwd(); base=Path(os.environ['BASE_ROOT']); work=Path(tempfile.mkdtemp()); sys.path.insert(0,str(root/'benchmarks')); import universal_bench as u
+          u.WORK=work/'bench';u.CORP=u.WORK/'corpora';u.OUT=u.WORK/'out';u.WORK.mkdir();u.CORP.mkdir();u.OUT.mkdir();u.make_corpora()
+          env_c=os.environ.copy();env_c['PYTHONPATH']=str(root/'src');env_b=os.environ.copy();env_b['PYTHONPATH']=str(base/'src');reps=7
+          def timed(cmd,env):
               xs=[]
-              for _ in range(n):
-                  t=time.perf_counter_ns(); subprocess.run(cmd,env=env,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,check=True); xs.append((time.perf_counter_ns()-t)/1e6)
+              for _ in range(reps):
+                  t=time.perf_counter_ns();subprocess.run(cmd,env=env,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,check=True);xs.append((time.perf_counter_ns()-t)/1e6)
               return {'median_ms':statistics.median(xs),'samples_ms':xs}
-          def pair(name,bcmd,ccmd):
-              b=proc(bcmd,env_b); c=proc(ccmd,env_c); return {'base':b,'candidate':c,'delta_ms':c['median_ms']-b['median_ms'],'ratio':c['median_ms']/b['median_ms']}
-          out_b=work/'base.cmpct'; out_c=work/'cand.cmpct'; out_p=work/'cand-par.cmpct'
-          base_cmd=[sys.executable,'-m','cmpct','create',str(src),str(out_b)]
-          cand_cmd=[sys.executable,'-m','cmpct','create',str(src),str(out_c)]
-          par_cmd=[sys.executable,'-m','cmpct','create',str(src),str(out_p),'--workers','8']
-          cases={'binary_cli_serial':pair('binary_cli_serial',base_cmd,cand_cmd)}
-          serial=cases['binary_cli_serial']['candidate']; par=proc(par_cmd,env_c)
-          cases['candidate_workers8_vs_candidate_serial']={'base':serial,'candidate':par,'delta_ms':par['median_ms']-serial['median_ms'],'ratio':par['median_ms']/serial['median_ms']}
-          subprocess.run(base_cmd,env=env_b,stdout=subprocess.DEVNULL,check=True); subprocess.run(cand_cmd,env=env_c,stdout=subprocess.DEVNULL,check=True); subprocess.run(par_cmd,env=env_c,stdout=subprocess.DEVNULL,check=True)
-          if out_b.read_bytes()!=out_c.read_bytes() or out_b.read_bytes()!=out_p.read_bytes(): raise SystemExit('archive identity changed')
-          data={'repetitions':reps,'base_sha':subprocess.check_output(['git','rev-parse','HEAD'],cwd=base,text=True).strip(),'candidate_sha':subprocess.check_output(['git','rev-parse','HEAD'],cwd=root,text=True).strip(),'logical_bytes':sum(p.stat().st_size for p in src.iterdir()),'cases':cases}
-          Path('startup-attribution.json').write_text(json.dumps(data,indent=2)+'\n'); print(json.dumps({k:{'base_ms':v['base']['median_ms'],'candidate_ms':v['candidate']['median_ms'],'delta_ms':v['delta_ms'],'ratio':v['ratio']} for k,v in cases.items()},indent=2))
+          rows={}
+          for name in ['tiny','source','media','binary','dedup_links','sparse','nested','combined']:
+              src=u.CORP/name;bout=work/f'{name}-base.cmpct';sout=work/f'{name}-serial.cmpct';pout=work/f'{name}-parallel.cmpct'
+              base_cmd=[sys.executable,'-m','cmpct','create',str(src),str(bout)];serial_cmd=[sys.executable,'-m','cmpct','create',str(src),str(sout)];par_cmd=[sys.executable,'-m','cmpct','create',str(src),str(pout),'--workers','8']
+              b=timed(base_cmd,env_b);s=timed(serial_cmd,env_c);p=timed(par_cmd,env_c)
+              subprocess.run(base_cmd,env=env_b,stdout=subprocess.DEVNULL,check=True);subprocess.run(serial_cmd,env=env_c,stdout=subprocess.DEVNULL,check=True);subprocess.run(par_cmd,env=env_c,stdout=subprocess.DEVNULL,check=True)
+              if bout.read_bytes()!=sout.read_bytes() or bout.read_bytes()!=pout.read_bytes():raise SystemExit(f'{name}: identity changed')
+              rows[name]={'base_ms':b['median_ms'],'serial_ms':s['median_ms'],'parallel_ms':p['median_ms'],'serial_vs_base':s['median_ms']/b['median_ms'],'parallel_vs_base':p['median_ms']/b['median_ms'],'parallel_vs_serial':p['median_ms']/s['median_ms']}
+          data={'repetitions':reps,'base_sha':subprocess.check_output(['git','rev-parse','HEAD'],cwd=base,text=True).strip(),'candidate_sha':subprocess.check_output(['git','rev-parse','HEAD'],cwd=root,text=True).strip(),'rows':rows}
+          Path('startup-attribution.json').write_text(json.dumps(data,indent=2)+'\n');print(json.dumps(rows,indent=2))
           PY
       - uses: actions/upload-artifact@v6
         with:
