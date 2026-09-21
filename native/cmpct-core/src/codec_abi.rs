@@ -4,13 +4,12 @@
 //! before being wired into the shipping cdylib so byte identity and error semantics can be falsified
 //! without changing the existing read-only platform ABI.
 
+use crate::CmpctStatus;
 use std::os::raw::c_int;
 
-const OK: c_int = 0;
-const NULL: c_int = -1;
-const FORMAT: c_int = -3;
-const RANGE: c_int = -6;
-const PANIC: c_int = -127;
+fn status(value: CmpctStatus) -> c_int {
+    value as c_int
+}
 
 fn slices<'a>(
     input: *const u8,
@@ -19,7 +18,7 @@ fn slices<'a>(
     output_cap: usize,
 ) -> Result<(&'a [u8], &'a mut [u8]), c_int> {
     if (input_len > 0 && input.is_null()) || (output_cap > 0 && output.is_null()) {
-        return Err(NULL);
+        return Err(status(CmpctStatus::Null));
     }
     let src = if input_len == 0 {
         &[]
@@ -36,7 +35,7 @@ fn slices<'a>(
 
 fn dictionary<'a>(dict: *const u8, dict_len: usize) -> Result<&'a [u8], c_int> {
     if dict_len > 0 && dict.is_null() {
-        return Err(NULL);
+        return Err(status(CmpctStatus::Null));
     }
     Ok(if dict_len == 0 {
         &[]
@@ -47,7 +46,7 @@ fn dictionary<'a>(dict: *const u8, dict_len: usize) -> Result<&'a [u8], c_int> {
 
 fn finish(result: Result<usize, c_int>, out_len: *mut usize) -> c_int {
     if out_len.is_null() {
-        return NULL;
+        return status(CmpctStatus::Null);
     }
     unsafe {
         *out_len = 0;
@@ -57,9 +56,9 @@ fn finish(result: Result<usize, c_int>, out_len: *mut usize) -> c_int {
             unsafe {
                 *out_len = n;
             }
-            OK
+            status(CmpctStatus::Ok)
         }
-        Err(status) => status,
+        Err(value) => value,
     }
 }
 
@@ -88,17 +87,17 @@ pub unsafe extern "C" fn cmpct_codec_zstd_compress(
     out_len: *mut usize,
 ) -> c_int {
     if out_len.is_null() {
-        return NULL;
+        return status(CmpctStatus::Null);
     }
     let result = std::panic::catch_unwind(|| {
         let (src, dst) = slices(input, input_len, output, output_cap)?;
-        zstd::zstd_safe::compress(dst, src, level).map_err(|_| RANGE)
+        zstd::zstd_safe::compress(dst, src, level).map_err(|_| status(CmpctStatus::Range))
     });
     match result {
         Ok(value) => finish(value, out_len),
         Err(_) => {
             *out_len = 0;
-            PANIC
+            status(CmpctStatus::Panic)
         }
     }
 }
@@ -121,20 +120,20 @@ pub unsafe extern "C" fn cmpct_codec_zstd_compress_using_dict(
     out_len: *mut usize,
 ) -> c_int {
     if out_len.is_null() {
-        return NULL;
+        return status(CmpctStatus::Null);
     }
     let result = std::panic::catch_unwind(|| {
         let (src, dst) = slices(input, input_len, output, output_cap)?;
         let dict = dictionary(dict, dict_len)?;
         let mut cctx = zstd::zstd_safe::CCtx::create();
         cctx.compress_using_dict(dst, src, dict, level)
-            .map_err(|_| RANGE)
+            .map_err(|_| status(CmpctStatus::Range))
     });
     match result {
         Ok(value) => finish(value, out_len),
         Err(_) => {
             *out_len = 0;
-            PANIC
+            status(CmpctStatus::Panic)
         }
     }
 }
@@ -154,17 +153,17 @@ pub unsafe extern "C" fn cmpct_codec_zstd_decompress(
     out_len: *mut usize,
 ) -> c_int {
     if out_len.is_null() {
-        return NULL;
+        return status(CmpctStatus::Null);
     }
     let result = std::panic::catch_unwind(|| {
         let (src, dst) = slices(input, input_len, output, output_cap)?;
-        zstd::zstd_safe::decompress(dst, src).map_err(|_| FORMAT)
+        zstd::zstd_safe::decompress(dst, src).map_err(|_| status(CmpctStatus::Format))
     });
     match result {
         Ok(value) => finish(value, out_len),
         Err(_) => {
             *out_len = 0;
-            PANIC
+            status(CmpctStatus::Panic)
         }
     }
 }
@@ -186,20 +185,20 @@ pub unsafe extern "C" fn cmpct_codec_zstd_decompress_using_dict(
     out_len: *mut usize,
 ) -> c_int {
     if out_len.is_null() {
-        return NULL;
+        return status(CmpctStatus::Null);
     }
     let result = std::panic::catch_unwind(|| {
         let (src, dst) = slices(input, input_len, output, output_cap)?;
         let dict = dictionary(dict, dict_len)?;
         let mut dctx = zstd::zstd_safe::DCtx::create();
         dctx.decompress_using_dict(dst, src, dict)
-            .map_err(|_| FORMAT)
+            .map_err(|_| status(CmpctStatus::Format))
     });
     match result {
         Ok(value) => finish(value, out_len),
         Err(_) => {
             *out_len = 0;
-            PANIC
+            status(CmpctStatus::Panic)
         }
     }
 }
@@ -211,7 +210,7 @@ mod tests {
     #[test]
     fn null_and_capacity_contract_is_fail_closed() {
         let mut n = 99usize;
-        let status = unsafe {
+        let result = unsafe {
             cmpct_codec_zstd_compress(
                 std::ptr::null(),
                 1,
@@ -221,7 +220,7 @@ mod tests {
                 &mut n,
             )
         };
-        assert_eq!(status, NULL);
+        assert_eq!(result, status(CmpctStatus::Null));
         assert_eq!(n, 0);
     }
 }
