@@ -1,33 +1,58 @@
 # ci-lane: deep
+# ci-cancel-policy: split-classifier-preserve-receipts
+# ci-pr-scope: latest-head-commit-gate
 name: v0.30 Shifted parent phase RSS attribution
 
 on:
   pull_request:
-    branches:
-      - agent/v030-authoritative-integration
+    branches: [agent/v030-authoritative-integration]
     paths:
-      - ".github/workflows/v030-shifted-parent-phase-rss.yml"
-      - "benchmarks/v030_shifted_parent_phase_rss.py"
-      - "experiments/entropygraph_v030_r24_process_prebuild.py"
-      - "experiments/entropygraph_v030_r24_process_shipping.py"
-      - "experiments/entropygraph_v030_release_product.py"
-      - "src/cmpct/**"
+      - benchmarks/v030_shifted_parent_phase_rss.py
+      - .github/workflows/v030-shifted-parent-phase-rss.yml
+      - experiments/entropygraph_v030_r24_process_prebuild.py
+      - experiments/entropygraph_v030_r24_process_shipping.py
+      - experiments/entropygraph_v030_release_product.py
+      - src/cmpct/**
   workflow_dispatch:
 
 permissions: {contents: read}
 env:
   EVIDENCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
 
-# Attribution is reproducible and cheap enough to cancel when the PR head moves. Unlike a release receipt, a stale
-# observational run has no value that justifies consuming runner time after a newer exact source exists.
-concurrency:
-  group: v030-shifted-parent-phase-rss-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
-
 jobs:
+  classify:
+    runs-on: ubuntu-24.04
+    concurrency:
+      group: ${{ github.workflow }}-classifier-${{ github.event.pull_request.number || github.ref }}
+      cancel-in-progress: true
+    outputs:
+      run_deep: ${{ steps.scope.outputs.run_deep }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EVIDENCE_HEAD }}
+          fetch-depth: 2
+      - id: scope
+        name: Admit only latest-head Shifted attribution changes
+        shell: bash
+        run: |
+          test "$(git rev-parse HEAD)" = "$EVIDENCE_HEAD"
+          files="$(git diff-tree --no-commit-id --name-only -r HEAD)"
+          printf '%s\n' "$files"
+          if printf '%s\n' "$files" | grep -Eq '^(benchmarks/v030_shifted_parent_phase_rss\.py|\.github/workflows/v030-shifted-parent-phase-rss\.yml|experiments/entropygraph_v030_(r24_process_prebuild|r24_process_shipping|release_product)\.py|src/cmpct/)'; then
+            echo 'run_deep=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'run_deep=false' >> "$GITHUB_OUTPUT"
+          fi
+
   attribute:
+    needs: classify
+    if: needs.classify.outputs.run_deep == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 30
+    concurrency:
+      group: ${{ github.workflow }}-receipt-${{ github.event.pull_request.head.sha || github.sha }}
+      cancel-in-progress: false
     steps:
       - uses: actions/checkout@v4
         with:
