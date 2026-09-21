@@ -4,104 +4,64 @@
   "authority": {
     "canonical_release": "v0.29.0 / r24 on main",
     "active_frontier": "PR #175 agent/v030-r24-process-productization",
-    "source": "PR #175; Logs receipt 35552595037; Shifted A/B run 35557126948 source 2149959f2402f1f4231ecf8d3903e2efbbc67fd6"
+    "source": "PR #175; Logs receipt 35552595037; Shifted A/B run 35557126948 artifact 10620102659"
   },
   "active_product_bottleneck": {
-    "id": "v030-residual-parent-pack-rss",
-    "observation": "#175 closes the promoted ML parent-RSS owner on shipping evidence. The exact-head Logs selector-r24 probe drives Logs to 1.0x parent pack RSS with exact bytes. Shifted remains the controlling parent-memory red at 1.3653865x. The timing reds seen in that later probe are not yet stable debt: the earlier shipping receipt had ML create 1.23961x and Logs extract 1.16313x, so both straddle the 1.25x threshold across unchanged relevant code and require replication before causal work.",
-    "next_discriminator": "Consume Shifted A/B run 35557126948. It compares incumbent Hierarchical Geometry screening, which retains every screened transformed buffer, against exact recomputation of only the <=3 finalists while preserving nomination, inverse checks, sort/tie order and physical archive identity."
+    "id": "v030-efficiency-convergence",
+    "observation": "#175 shipping closes ML parent RSS. The Logs selector-r24 oracle closes Logs parent RSS locally to 1.0x. Run 35557126948 now causally localizes and removes the Shifted parent high-water in a research A/B: exact same physical archive SHA/bytes/selection, parent live-RSS peak 169,516 -> 121,212 KiB (-28.5%), ru_maxrss 169,156 -> 122,876 KiB (-27.4%), whole build 50.794 -> 50.988 s (+0.38%). This predicts ~1.023x versus the frozen v0.29 Shifted parent peak (~120,088 KiB), below the unchanged 1.25x ceiling, but product credit still requires shipping integration + canonical-v2 repetition.",
+    "next_discriminator": "Productize the bounded-screen lifetime inside the canonical Hierarchical Geometry owner without changing nomination, inverse checks, sort/tie order, finalist count or representation; then rerun focused equivalence plus unchanged canonical-v2 whole-product gates."
   },
   "primary_question": {
     "id": "shifted-hg-screen-buffer-lifetime",
     "family": "memory-ownership/search-buffer-lifetime",
-    "status": "ACTIVE_AB_RUNNING",
+    "status": "DECISIVE_POSITIVE_RESEARCH_PRODUCTIZATION_NEXT",
     "evidence": [
       "35552595037: Shifted remains 1.3653865x parent pack RSS after r24 child isolation",
-      "same receipt diagnostics: Shifted G0-G4 pre-overlay graph is 1,717,743 B and auditions 14 records, so current 4 MiB + 18-record process admission keeps it on the parent thread path",
-      "same receipt diagnostics: four large Shifted records each screen 48 Hierarchical Geometry candidates; all 14 records ultimately select zero transforms",
-      "source inspection: incumbent HG.audition stores each full transformed candidate in the screened list before sorting, although only MAX_EXACT_FINALISTS=3 are exact-compressed",
-      "charged derivation from receipt raw_bytes*screened_candidates: incumbent can retain ~62.5 MiB of transformed candidate bytes across the observed Shifted auditions; the four-worker bounded transform+inverse proxy is ~2.6 MiB, ~24x smaller"
+      "incumbent source retains every full screened transformed candidate although only <=3 finalists are exact-compressed; observed Shifted exposure raw_bytes*screened_candidates ~62.5 MiB",
+      "35557126948 / artifact 10620102659 / digest sha256:f0fc700f102c282568346f8b439a462a53022bfd8dce9caa34ec1e3e504b129a: exact archive identity 1,700,666 B, SHA-256 4997228a9833b5bcb2345ffa486e0ede1833497cd2c0666d560f6bab3f0bf0d2, selected prefixgraph in both arms",
+      "same A/B: live RSS 169,516 -> 121,212 KiB; ru_maxrss 169,156 -> 122,876 KiB; build 50.794 -> 50.988 s",
+      "phase trace: incumbent high-water is inside G0-G4 overlay; bounded arm materially collapses it without a new process boundary"
     ],
-    "prediction": "If screened transformed-buffer retention is a material Shifted owner, the bounded-screen arm should preserve archive SHA/bytes/selection while materially lowering parent live-RSS peak, especially inside g04_overlay. If peak is unchanged, retire this mechanism and use the phase trace to move to the next owner.",
-    "kill": "Any archive SHA/selection difference, meaningful timing loss without commensurate memory value, or no material parent-RSS reduction kills productization. No threshold/evaluator changes."
+    "prediction": "Shipping bounded-screen recomputation should preserve bytes exactly and move Shifted parent RSS below the frozen 1.25x ceiling with sub-1% create overhead. Canonical-v2 decides product credit.",
+    "kill": "Any shipping archive identity drift, timing gate failure, aggregate-memory regression, or failure to reproduce the Shifted RSS win under unchanged canonical-v2 kills/reworks promotion."
   },
   "frontier_candidates": [
     {
       "id": "shifted-hg-screen-buffer-lifetime",
-      "status": "PRIMARY_AB_RUNNING",
-      "evidence": "GitHub Actions run 35557126948 / source 2149959f2402f1f4231ecf8d3903e2efbbc67fd6"
+      "status": "RESEARCH_PROVEN_PRODUCTIZATION_NEXT",
+      "evidence": "35557126948 / 10620102659"
     },
     {
       "id": "logs-selector-r24-child-owner",
       "status": "MECHANISM_PROVEN_PRODUCTIZATION_DEFERRED",
-      "evidence": "35552595037 / artifact 10619510592: Logs parent pack RSS 1.0x, exact bytes; suite closure false"
+      "evidence": "35552595037 / 10619510592: Logs parent pack RSS 1.0x; suite closure false"
     },
     {
       "id": "timing-threshold-straddlers",
       "status": "AMBIGUOUS_REPLICATION_REQUIRED",
-      "evidence": "ML create: 1.23961x in shipping receipt vs 1.27603x in Logs probe; Logs extract: 1.16313x vs 1.29021x. Relevant extraction/create product path unchanged by the Logs-only experimental seam."
+      "evidence": "ML create 1.23961x vs 1.27603x; Logs extract 1.16313x vs 1.29021x across receipts; replicate before causal work"
     }
   ],
   "protected_seeds": [
-    {
-      "id": "ml-r24-process-lifetime",
-      "status": "PR175_SHIPPING_PROVEN",
-      "evidence": "PR #175 canonical-v2 shipping receipt"
-    },
-    {
-      "id": "r24-streamed-materialization",
-      "status": "REUSABLE_SEED_NOT_CURRENT_RSS_OWNER",
-      "evidence": "PR #166 component win; whole-product falsifier 35515684113"
-    }
+    {"id": "ml-r24-process-lifetime", "status": "PR175_SHIPPING_PROVEN", "evidence": "PR #175 canonical-v2 shipping receipt"},
+    {"id": "r24-streamed-materialization", "status": "REUSABLE_SEED_NOT_CURRENT_RSS_OWNER", "evidence": "PR #166 component win; whole-product falsifier 35515684113"}
   ],
   "retired_or_narrowed": [
-    {
-      "id": "r24-streamed-materialization-as-standalone-rss-closure",
-      "reason": "35515684113 leaves whole-product Shifted 1.67015x; local Builder win does not control residual parent high-water"
-    },
-    {
-      "id": "logs-r24-child-as-suite-closure",
-      "reason": "35552595037 closes Logs parent RSS locally but unchanged suite still fails Shifted RSS"
-    },
-    {
-      "id": "rss-release-credit-reinterpretation",
-      "reason": "Diagnostic companions remain non-credit; frozen parent/self authority unchanged"
-    }
+    {"id": "r24-streamed-materialization-as-standalone-rss-closure", "reason": "35515684113 leaves whole-product Shifted red"},
+    {"id": "logs-r24-child-as-suite-closure", "reason": "35552595037 closes Logs RSS locally but not Shifted"},
+    {"id": "lower-g04-process-threshold-as-first-fix", "reason": "35557126948 proves a simpler stronger control: delete retained screened transformed buffers instead of moving them to another process"}
   ],
   "decision_evidence": {
-    "logs_probe": "35552595037 / artifact 10619510592 / sha256:366092688e72e7b48ea149a20dbc1dcc8f73de1f8ef526db1879e73e8cf583de: Logs RSS 1.0x; full gate false; no size regressions.",
-    "shifted": "35552595037 Shifted RSS 1.3653865x after #175; G0-G4 pre-overlay 1,717,743 B, 14 auditions, thread-path admission; four records screen 48 HG candidates each; observed screen retention exposure sums to ~62.5 MiB; no transform wins.",
-    "timing": "Treat ML-create and Logs-extract threshold crossings as ambiguous until replicated: they straddle 1.25x between the earlier shipping receipt and the later Logs probe while the relevant measured path is unchanged."
+    "logs_probe": "35552595037 / artifact 10619510592 / sha256:366092688e72e7b48ea149a20dbc1dcc8f73de1f8ef526db1879e73e8cf583de: Logs RSS 1.0x; no product credit.",
+    "shifted_ab": "35557126948 / artifact 10620102659 / sha256:f0fc700f102c282568346f8b439a462a53022bfd8dce9caa34ec1e3e504b129a: exact archive identity; live RSS -28.5%; ru_maxrss -27.4%; wall +0.38%.",
+    "timing": "ML-create and Logs-extract threshold crossings remain ambiguous until replicated."
   },
   "process_lessons": [
-    {
-      "lesson": "When a fail-honest full gate contains a strong local win and an overall red, separate mechanism localization from suite-level product credit instead of calling the experiment simply pass/fail.",
-      "evidence": "35552595037"
-    },
-    {
-      "lesson": "Mirror the canonical corpus dependency surface and exact suite/workload key before dispatching an expensive frozen-matrix probe; serial environment/key repair wastes activations without scientific information.",
-      "evidence": "Logs dependency sequence and Shifted run 35556654569 infrastructure-only KeyError"
-    },
-    {
-      "lesson": "A workflow file plus a source SHA is not a pending job. Record provider/run identity only after the provider exposes a real run; fail closed rather than inventing dispatch state.",
-      "evidence": "Shifted A/B workflow corrections after 35556654569"
-    },
-    {
-      "lesson": "New deep workflows on a long-lived PR can be routed through an already-registered PR workflow via workflow_call plus an exact-head classifier, matching the repository's existing R36 split-custody pattern.",
-      "evidence": "engineering-evidence.yml -> v030-shifted-parent-phase-rss.yml; run 35557126948"
-    }
+    {"lesson": "Prefer deleting avoidable retained work/memory over process relocation when exact recomputation is cheap.", "evidence": "35557126948"},
+    {"lesson": "Mirror canonical dependency and workload keys before expensive probes; infrastructure failures are not science.", "evidence": "35556654569 and preceding Logs harness failures"},
+    {"lesson": "New deep workflows can be routed through an established PR workflow via workflow_call + exact-head split custody.", "evidence": "35557126948"}
   ],
-  "pending_jobs": [
-    {
-      "provider": "GitHub Actions",
-      "run_id": 35557126948,
-      "job_id": 106202838481,
-      "source_sha": "2149959f2402f1f4231ecf8d3903e2efbbc67fd6",
-      "question": "Does retaining all screened HG transformed buffers own Shifted parent high-water?",
-      "expected_artifact": "v030-shifted-parent-phase-rss-2149959f2402f1f4231ecf8d3903e2efbbc67fd6",
-      "decision_unlocked": "Promote bounded-screen lifetime only if exact archive SHA/selection is preserved and parent RSS materially improves; otherwise retire and follow the phase trace."
-    }
-  ],
-  "next_action": "Consume run 35557126948 when complete; do not babysit it. If bounded-screen wins exactly, validate whole-product timing/RSS before productization; if not, use its incumbent phase trace to select the next parent owner. Do not start Logs timing work from one red repetition set; first replicate the threshold straddlers.",
-  "last_reconciled": "2026-09-21T03:20Z"
+  "pending_jobs": [],
+  "next_action": "Productize bounded-screen Hierarchical Geometry lifetime as the smallest semantics-preserving change, preserve the exact-equivalence controls including a known hierarchical winner, then run unchanged canonical-v2. Do not alter G0-G4 process thresholds or frozen evaluators. If shipping reproduces the A/B, reassess the remaining Pareto frontier from fresh whole-product evidence rather than assuming old Shifted/Logs debt remains.",
+  "last_reconciled": "2026-09-21T03:23Z"
 }
