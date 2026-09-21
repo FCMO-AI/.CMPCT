@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-import base64, ctypes, json, os, resource, statistics, subprocess, sys, tempfile, time, types
+import base64, ctypes, hashlib, json, resource, statistics, subprocess, sys, tempfile, time, types
 from pathlib import Path
 
 from cmpct.reader import CMPCT
@@ -28,8 +28,7 @@ def _install_native_decode(lib, archive: CMPCT):
     def decode(self, comp: bytes, usize: int) -> bytes:
         with self._zdict_lock:
             if state["handle"] is None:
-                dictionary = self._blob(self.dict_idx)
-                handle = ctypes.c_void_p()
+                dictionary = self._blob(self.dict_idx); handle = ctypes.c_void_p()
                 rc = lib.cmpct_codec_zstd_dict_decoder_create(dictionary, len(dictionary), ctypes.byref(handle))
                 if rc != 0 or not handle.value: raise IOError(f"native dictionary decoder init failed: {rc}")
                 state["handle"] = handle
@@ -41,18 +40,21 @@ def _install_native_decode(lib, archive: CMPCT):
     return state
 
 
-def _child(mode: str, path: Path, name: str, want: bytes):
+def _identity(got: bytes, vector: dict):
+    assert len(got) == vector["logical_size"]
+    assert hashlib.sha256(got).hexdigest() == vector["logical_sha256"]
+
+
+def _child(mode: str, path: Path, name: str, vector: dict):
     lib = _lib(); walls=[]; cpus=[]
     with CMPCT(path) as ar:
         state = _install_native_decode(lib, ar) if mode == "native" else None
         try:
-            assert ar.read(name) == want
+            _identity(ar.read(name), vector)
             for _ in range(REPEATS):
-                # Force the logical member through codec-3 every iteration; dictionary state remains load-once.
                 ar.cache.clear()
                 t0=time.perf_counter_ns(); c0=time.process_time_ns(); got=ar.read(name); c1=time.process_time_ns(); t1=time.perf_counter_ns()
-                assert got == want
-                walls.append(t1-t0); cpus.append(c1-c0)
+                _identity(got, vector); walls.append(t1-t0); cpus.append(c1-c0)
         finally:
             if state and state["handle"] is not None:
                 assert lib.cmpct_codec_zstd_dict_decoder_free(state["handle"]) == 0
@@ -60,10 +62,9 @@ def _child(mode: str, path: Path, name: str, want: bytes):
 
 
 def main():
-    vector=json.loads(VECTOR.read_text())["vector"]; archive_bytes=base64.b64decode(vector["archive_base64"]); want=base64.b64decode(vector["logical_base64"])
+    vector=json.loads(VECTOR.read_text())["vector"]; archive_bytes=base64.b64decode(vector["archive_base64"])
     with tempfile.TemporaryDirectory(prefix="cmpct-zstd-reader-ab-") as td:
-        path=Path(td)/"dictionary.cmpct"; path.write_bytes(archive_bytes)
-        samples={"ambient":[],"native":[]}
+        path=Path(td)/"dictionary.cmpct"; path.write_bytes(archive_bytes); samples={"ambient":[],"native":[]}
         for _ in range(ROUNDS):
             for mode in ("ambient","native"):
                 cp=subprocess.run([sys.executable,__file__,"--child",mode,str(path),vector["name"]],check=True,capture_output=True,text=True)
@@ -74,7 +75,6 @@ def main():
 
 
 if __name__ == "__main__":
-    if len(sys.argv)>1 and sys.argv[1]=="--child":
-        vector=json.loads(VECTOR.read_text())["vector"]
-        _child(sys.argv[2],Path(sys.argv[3]),sys.argv[4],base64.b64decode(vector["logical_base64"]))
+    vector=json.loads(VECTOR.read_text())["vector"]
+    if len(sys.argv)>1 and sys.argv[1]=="--child": _child(sys.argv[2],Path(sys.argv[3]),sys.argv[4],vector)
     else: main()
